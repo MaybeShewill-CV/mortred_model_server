@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(tesla_image_privacy_sdk)
+project(mm_ai_server)
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99")
@@ -16,18 +16,17 @@ ELSE()
 ENDIF(CMAKE_BUILD_TYPE MATCHES Debug)
 
 message(STATUS ">>>>>>>>>>>>>")
-message(STATUS "TESLA IMAGE PRIVACY SDK INFO:")
+message(STATUS "MM AI Server INFO:")
 message(STATUS "\tSystem: ${CMAKE_SYSTEM_NAME}")
 message(STATUS "\tProcessor: ${CMAKE_SYSTEM_PROCESSOR}")
 message(STATUS "\tBuild Path: ${CMAKE_CURRENT_BINARY_DIR}")
 
-set(EXECUTABLE_OUTPUT_PATH ${PROJECT_ROOT_DIR}/bin)
-set(LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_LIST_DIR}/lib)
+set(EXECUTABLE_OUTPUT_PATH ${PROJECT_ROOT_DIR}/_bin)
+set(LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_LIST_DIR}/_lib)
 
 # add subdirectory
 add_subdirectory(src/common)
-add_subdirectory(src/detector)
+add_subdirectory(src/models)
 add_subdirectory(src/factory)
-add_subdirectory(src/interface)
 add_subdirectory(src/server)
 add_subdirectory(src/apps)
