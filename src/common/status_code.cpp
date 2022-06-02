@@ -12,15 +12,15 @@ namespace common {
 
 namespace impl {
 std::map<int, std::string> _m_error_code_table = {
-        { StatusCode::OK, "OK" },
-        { StatusCode::MODEL_INIT_FAILED, "Model init failed" },
-        { StatusCode::COMPRESS_ERROR, "Compress Not Support" },
-        { StatusCode::UNCOMPRESS_ERROR, "Uncompress Error" },
-        { StatusCode::FILE_READ_ERROR, "File Read Error" },
-        { StatusCode::FILE_WRITE_ERROR, "File Write Error" },
-        { StatusCode::FILE_NOT_EXIST_ERROR, "File Not Exist Error" },
-        { StatusCode::JSON_DECODE_ERROR, "Decode Json Error" },
-        { StatusCode::JSON_ENCODE_ERROR, "Encode Json Error" },
+    { StatusCode::OK, "OK" },
+    { StatusCode::MODEL_INIT_FAILED, "Model init failed" },
+    { StatusCode::COMPRESS_ERROR, "Compress Not Support" },
+    { StatusCode::UNCOMPRESS_ERROR, "Uncompress Error" },
+    { StatusCode::FILE_READ_ERROR, "File Read Error" },
+    { StatusCode::FILE_WRITE_ERROR, "File Write Error" },
+    { StatusCode::FILE_NOT_EXIST_ERROR, "File Not Exist Error" },
+    { StatusCode::JSON_DECODE_ERROR, "Decode Json Error" },
+    { StatusCode::JSON_ENCODE_ERROR, "Encode Json Error" },
 };
 }
 
