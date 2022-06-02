@@ -9,7 +9,7 @@
 
 #include <common/base64.h>
 
-using ly::common::Base64;
+using morted::common::Base64;
 
 int main(int argc, char** argv) {
     std::cout << "hello world" << std::endl;

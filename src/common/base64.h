@@ -10,7 +10,7 @@
 
 #include <string>
 
-namespace ly {
+namespace morted {
 namespace common {
 class Base64 {
 public:

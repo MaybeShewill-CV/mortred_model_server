@@ -24,6 +24,7 @@ include_directories(${PROJECT_ROOT_DIR}/src)
 
 set(TEST_LIST
     base64_unittest
+    md5_unittest
 )
 
 foreach(src ${TEST_LIST})
