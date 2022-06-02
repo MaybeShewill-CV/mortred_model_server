@@ -32,7 +32,7 @@ std::map<int, std::string> _m_error_code_table = {
 std::string error_code_to_str(int error_code) {
     auto it = impl::_m_error_code_table.find(error_code);
     if(it == impl::_m_error_code_table.end()) {
-        return "unknown";
+        return "Unknown";
     }
     return it->second;
 };

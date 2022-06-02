@@ -1,4 +1,4 @@
-# build interface libs
+# build factory libs
 
 include_directories(
     ${PROJECT_ROOT_DIR}/3rd_party/include
