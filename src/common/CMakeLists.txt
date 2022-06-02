@@ -1,0 +1,16 @@
+# build common libs
+
+include_directories(
+    ${PROJECT_ROOT_DIR}/3rd_party/include
+)
+
+file(GLOB_RECURSE BOOST_LIBS ${PROJECT_ROOT_DIR}/3rd_party/libs/*boost*so)
+file(GLOB_RECURSE OPENCV_LIBS ${PROJECT_ROOT_DIR}/3rd_party/libs/*opencv*so)
+file(GLOB_RECURSE COMMON_LIB_SRC ${CMAKE_CURRENT_LIST_DIR}/*)
+add_library(common SHARED ${COMMON_LIB_SRC})
+target_link_libraries(
+    common
+    ${BOOST_LIBS}
+    ${OPENCV_LIBS}
+)
+set_target_properties(common PROPERTIES LINKER_LANGUAGE CXX)
