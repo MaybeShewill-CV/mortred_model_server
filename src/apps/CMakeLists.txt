@@ -16,3 +16,12 @@ target_link_libraries(
     test.out
     common
 )
+
+# add test tools
+add_executable(dbtext_test.out ./dbtext_test.cpp)
+target_link_libraries(
+    dbtext_test.out
+    common
+    models
+    ${GLOG_LIBS}
+)
