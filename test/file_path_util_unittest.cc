@@ -15,15 +15,15 @@ using morted::common::FilePathUtil;
 
 TEST(base64_unnittest, encode) {
 
-    std::string exist_file_path = "./demo_data/model_test_input/image_ocr/db_text/test.jpg";
-    std::string not_exist_file_path = "./demo_data/model_test_input/image_ocr/db_text/not_exist_test.jpg";
+    std::string exist_file_path = "../demo_data/model_test_input/image_ocr/db_text/test.jpg";
+    std::string not_exist_file_path = "../demo_data/model_test_input/image_ocr/db_text/not_exist_test.jpg";
 
-    std::string exist_dir_path = "./demo_data/model_test_input/image_ocr/db_text";
-    std::string not_exist_dir_path = "./demo_data/model_test_input/image_ocr/db_text_not_exist";
+    std::string exist_dir_path = "../demo_data/model_test_input/image_ocr/db_text";
+    std::string not_exist_dir_path = "../demo_data/model_test_input/image_ocr/db_text_not_exist";
 
-    std::string concat_a = "./demo_data/model_test_input/image_ocr";
+    std::string concat_a = "../demo_data/model_test_input/image_ocr";
     std::string concat_b = "db_text/test.jpg";
-    std::string concat_result = "./demo_data/model_test_input/image_ocr/db_text/test.jpg";
+    std::string concat_result = "../demo_data/model_test_input/image_ocr/db_text/test.jpg";
 
     EXPECT_EQ(FilePathUtil::is_file(exist_file_path), true);
     EXPECT_EQ(FilePathUtil::is_file(not_exist_file_path), false);
