@@ -78,7 +78,7 @@ public:
      */
     template<typename INPUT, typename OUTPUT,
             typename std::enable_if < std::is_same<INPUT, std::decay<dbtext_input> >::value,
-            common::StatusCode >::type* dummy = nullptr>
+            morted::common::StatusCode >::type* dummy = nullptr>
     morted::common::StatusCode
     run(const INPUT* input, OUTPUT* output) {
         LOG(INFO) << "run is same dbtext input";
@@ -87,7 +87,7 @@ public:
 
     template<typename INPUT, typename OUTPUT,
             typename std::enable_if < std::is_same<INPUT, std::string>::value,
-            common::StatusCode >::type* dummy = nullptr>
+            morted::common::StatusCode >::type* dummy = nullptr>
     morted::common::StatusCode
     run(const INPUT* input, OUTPUT* output) {
         LOG(INFO) << "run is same string input";
