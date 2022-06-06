@@ -179,28 +179,14 @@ StatusCode DBTextDetector::init(const decltype(toml::parse(""))& cfg) {
 * @return
 */
 template<class INPUT, class OUTPUT>
-typename std::enable_if <
-std::is_same<INPUT, dbtext_input>::value&& std::is_same<OUTPUT, dbtext_output>::value,
-    morted::common::StatusCode >::type
+typename std::enable_if < std::is_same<INPUT, dbtext_input>::value, morted::common::StatusCode >::type
 DBTextDetector::run(const INPUT* input, OUTPUT* output) {
     LOG(INFO) << "run is same dbtext input";
     return common::StatusCode::OK;
 }
 
-/***
-*
-* @param in_out
-* @return
-*/
-//template<class INPUT, class OUTPUT>
-//typename std::enable_if < !std::is_same<INPUT, dbtext_input>::value, StatusCode >::type
-//DBTextDetector::run(const INPUT* input, OUTPUT* output) {
-//    LOG(INFO) << "run is same common input";
-//    return common::StatusCode::OK;
-//}
-
 template<class INPUT, class OUTPUT>
-typename std::enable_if<std::is_same<INPUT, std::string>::value, morted::common::StatusCode>::type
+typename std::enable_if < std::is_same<INPUT, std::string>::value, morted::common::StatusCode >::type
 run(const INPUT* input, OUTPUT* output) {
     LOG(INFO) << "run is same string input";
     return common::StatusCode::OK;
