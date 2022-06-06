@@ -76,13 +76,23 @@ public:
      * @param output
      * @return
      */
-    template<class INPUT, class OUTPUT>
-    typename std::enable_if < std::is_same<INPUT, dbtext_input>::value, morted::common::StatusCode >::type
-    run(const INPUT* input, OUTPUT* output);
+    template<typename INPUT, typename OUTPUT,
+            typename std::enable_if < std::is_same<INPUT, std::decay<dbtext_input> >::value,
+            common::StatusCode >::type* dummy = nullptr>
+    morted::common::StatusCode
+    run(const INPUT* input, OUTPUT* output) {
+        LOG(INFO) << "run is same dbtext input";
+        return common::StatusCode::OK;
+    }
 
-    template<class INPUT, class OUTPUT>
-    typename std::enable_if < std::is_same<INPUT, std::string>::value, morted::common::StatusCode >::type
-    run(const INPUT* input, OUTPUT* output);
+    template<typename INPUT, typename OUTPUT,
+            typename std::enable_if < std::is_same<INPUT, std::string>::value,
+            common::StatusCode >::type* dummy = nullptr>
+    morted::common::StatusCode
+    run(const INPUT* input, OUTPUT* output) {
+        LOG(INFO) << "run is same string input";
+        return common::StatusCode::OK;
+    }
 
     /***
      * if db text detector successfully initialized

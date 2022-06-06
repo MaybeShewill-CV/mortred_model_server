@@ -30,12 +30,13 @@ int main(int argc, char** argv) {
     DBTextDetector dbtext_detector;
     dbtext_detector.init(cfg);
 
-    dbtext_input in{};
     dbtext_output out{};
+
+    dbtext_input in{};
     dbtext_detector.run(&in, &out);
 
-    std::string* input = nullptr;
-//    dbtext_detector.run(input, &out);
+    const std::string input;
+    dbtext_detector.run(&input, &out);
 
     return 1;
 }
