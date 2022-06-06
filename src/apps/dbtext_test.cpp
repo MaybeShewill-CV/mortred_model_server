@@ -32,13 +32,19 @@ int main(int argc, char** argv) {
 
     dbtext_input in{};
     dbtext_output out{};
+    dbtext_detector.run(&in, &out);
 
     struct tmp {};
     tmp tmp_in{};
     tmp tmp_out{};
-
-    dbtext_detector.run(&in, &out);
     dbtext_detector.run(&tmp_in, &tmp_out);
+
+    std::string input;
+    dbtext_detector.run(&input, &out);
+
+    std::vector<std::string> vec_input;
+    std::vector<std::string> vec_output;
+    dbtext_detector.run(&vec_input, &vec_output);
 
     return 1;
 }
