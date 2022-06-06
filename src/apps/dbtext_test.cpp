@@ -35,7 +35,7 @@ int main(int argc, char** argv) {
     dbtext_detector.run(&in, &out);
 
     std::string* input = nullptr;
-    dbtext_detector.run(input, &out);
+//    dbtext_detector.run(input, &out);
 
     return 1;
 }
