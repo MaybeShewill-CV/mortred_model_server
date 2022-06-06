@@ -77,7 +77,7 @@ public:
      * @return
      */
     template<typename INPUT, typename OUTPUT,
-            typename std::enable_if < std::is_same<INPUT, std::decay<dbtext_input> >::value,
+            typename std::enable_if < std::is_same<INPUT, std::decay<dbtext_input*> >::value,
             morted::common::StatusCode >::type* dummy = nullptr>
     morted::common::StatusCode
     run(const INPUT* input, OUTPUT* output) {
