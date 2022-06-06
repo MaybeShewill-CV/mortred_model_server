@@ -22,8 +22,7 @@ namespace image_ocr {
 
 /***************** Impl Function Sets ******************/
 
-template<class INPUT, class OUTPUT>
-class DBTextDetector<INPUT, OUTPUT>::Impl {
+class DBTextDetector::Impl {
 public:
     /***
      *
@@ -123,12 +122,12 @@ public:
      *
      * @param input_image_block
      */
-    std::vector<OUTPUT> parse_image_blocks(const cv::Mat& input_image_block) const;
+    std::vector<dbtext_output> parse_image_blocks(const cv::Mat& input_image_block) const;
 
     /***
      *
      */
-    std::vector<OUTPUT> postprocess_image_blocks() const;
+    std::vector<dbtext_output> postprocess_image_blocks() const;
 
     /***
      *
@@ -141,7 +140,7 @@ public:
      * @param seg_probs_mat
      * @return
      */
-    std::vector<OUTPUT> get_boxes_from_bitmap() const;
+    std::vector<dbtext_output> get_boxes_from_bitmap() const;
 };
 
 
@@ -150,8 +149,7 @@ public:
 * @param cfg_file_path
 * @return
 */
-template<class INPUT, class OUTPUT>
-StatusCode DBTextDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& cfg) {
+StatusCode DBTextDetector::Impl::init(const decltype(toml::parse(""))& cfg) {
 
     _m_successfully_initialized = true;
     LOG(INFO) << "DB_Text detection model: " << FilePathUtil::get_file_name(_m_model_file_path)
@@ -164,16 +162,14 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(
 /***
 *
 */
-template<class INPUT, class OUTPUT>
-DBTextDetector<INPUT, OUTPUT>::~DBTextDetector() = default;
+DBTextDetector::~DBTextDetector() = default;
 
 /***
 *
 * @param cfg_file_path
 * @return
 */
-template<class INPUT, class OUTPUT>
-StatusCode DBTextDetector<INPUT, OUTPUT>::init(const decltype(toml::parse(""))& cfg) {
+StatusCode DBTextDetector::init(const decltype(toml::parse(""))& cfg) {
     return _m_pimpl->init(cfg);
 }
 
@@ -183,23 +179,36 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::init(const decltype(toml::parse(""))& 
 * @return
 */
 template<class INPUT, class OUTPUT>
-typename std::enable_if<std::is_same<INPUT, dbtext_input>::value, StatusCode>::type
-DBTextDetector<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
+typename std::enable_if <
+std::is_same<INPUT, dbtext_input>::value&& std::is_same<OUTPUT, dbtext_output>::value,
+    morted::common::StatusCode >::type
+DBTextDetector::run(const INPUT* input, OUTPUT* output) {
     LOG(INFO) << "run is same dbtext input";
+    return common::StatusCode::OK;
+}
+
+/***
+*
+* @param in_out
+* @return
+*/
+template<class INPUT, class OUTPUT>
+typename std::enable_if < !std::is_same<INPUT, dbtext_input>::value, StatusCode >::type
+DBTextDetector::run(const INPUT* input, OUTPUT* output) {
+    LOG(INFO) << "run is same common input";
+    return common::StatusCode::OK;
 }
 
 /***
 *
 * @return
 */
-template<class INPUT, class OUTPUT>
-bool DBTextDetector<INPUT, OUTPUT>::is_successfully_initialized() const {
+bool DBTextDetector::is_successfully_initialized() const {
     return _m_pimpl->is_successfully_initialized();
 }
 
 
-template<class INPUT, class OUTPUT>
-DBTextDetector<INPUT, OUTPUT>::DBTextDetector() {
+DBTextDetector::DBTextDetector() {
     _m_pimpl = std::make_unique<Impl>();
 }
 

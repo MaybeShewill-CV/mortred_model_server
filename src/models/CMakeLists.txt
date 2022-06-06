@@ -6,8 +6,8 @@ include_directories(
 )
 
 file(GLOB MNN_LIBS ${PROJECT_ROOT_DIR}/3rd_party/libs/*MNN*so*)
-file(GLOB_RECURSE DETECTOR_LIB_SRC ${CMAKE_CURRENT_LIST_DIR}/*)
-add_library(models SHARED ${DETECTOR_LIB_SRC})
+file(GLOB_RECURSE MODELS_LIB_SRC ${CMAKE_CURRENT_LIST_DIR}/*)
+add_library(models SHARED ${MODELS_LIB_SRC})
 target_link_libraries(
     models
     common
