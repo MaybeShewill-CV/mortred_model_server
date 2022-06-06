@@ -82,9 +82,9 @@ public:
         morted::common::StatusCode >::type
         run(const INPUT* input, OUTPUT* output);
 
-    template<class INPUT, class OUTPUT>
-    typename std::enable_if < !std::is_same<INPUT, dbtext_input>::value, morted::common::StatusCode >::type
-    run(const INPUT* input, OUTPUT* output);
+//    template<class INPUT, class OUTPUT>
+//    typename std::enable_if < !std::is_same<INPUT, dbtext_input>::value, morted::common::StatusCode >::type
+//    run(const INPUT* input, OUTPUT* output);
 
     template<class INPUT, class OUTPUT>
     typename std::enable_if<std::is_same<INPUT, std::string>::value, morted::common::StatusCode>::type
