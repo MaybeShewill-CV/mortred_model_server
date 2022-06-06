@@ -7,6 +7,11 @@
 
 #include "http_utils.h"
 
+#include <algorithm>
+#include <random>
+#include <future>
+#include <fstream>
+
 namespace morted {
 namespace common {
 namespace http_util {
@@ -66,7 +71,7 @@ const std::string &MultipartParser::gen_body_content() {
         std::string filename;
         std::string content_type;
         std::string file_content = futures[i].get();
-        get_file_name_type(_m_files[i].second, &filename, &content_type);
+        get_file_name_type(_m_files[i].second, filename, content_type);
         _m_body_content += "\r\n--";
         _m_body_content += _m_boundary;
         _m_body_content += "\r\nContent-Disposition: form-data; name=\"";
