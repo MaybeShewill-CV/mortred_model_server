@@ -90,11 +90,11 @@ public:
     typename std::enable_if<std::is_same<INPUT, std::string>::value, morted::common::StatusCode>::type
     run(const INPUT* input, OUTPUT* output);
 
-    template<class INPUT, class OUTPUT>
-    morted::common::StatusCode run(const INPUT* input, OUTPUT* output) {
-        LOG(INFO) << "run is same no enable if input";
-        return morted::common::StatusCode::OK;
-    }
+//    template<class INPUT, class OUTPUT>
+//    morted::common::StatusCode run(const INPUT* input, OUTPUT* output) {
+//        LOG(INFO) << "run is same no enable if input";
+//        return morted::common::StatusCode::OK;
+//    }
 
     /***
      * if db text detector successfully initialized
