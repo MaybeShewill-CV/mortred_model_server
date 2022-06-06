@@ -192,12 +192,12 @@ DBTextDetector::run(const INPUT* input, OUTPUT* output) {
 * @param in_out
 * @return
 */
-template<class INPUT, class OUTPUT>
-typename std::enable_if < !std::is_same<INPUT, dbtext_input>::value, StatusCode >::type
-DBTextDetector::run(const INPUT* input, OUTPUT* output) {
-    LOG(INFO) << "run is same common input";
-    return common::StatusCode::OK;
-}
+//template<class INPUT, class OUTPUT>
+//typename std::enable_if < !std::is_same<INPUT, dbtext_input>::value, StatusCode >::type
+//DBTextDetector::run(const INPUT* input, OUTPUT* output) {
+//    LOG(INFO) << "run is same common input";
+//    return common::StatusCode::OK;
+//}
 
 template<class INPUT, class OUTPUT>
 typename std::enable_if<std::is_same<INPUT, std::string>::value, morted::common::StatusCode>::type
