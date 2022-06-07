@@ -8,6 +8,8 @@
 #ifndef MM_AI_SERVER_BASE_FACTORY_H
 #define MM_AI_SERVER_BASE_FACTORY_H
 
+#include <memory>
+
 #include "models/base_model.h"
 #include "models/image_ocr/db_text_detector.h"
 #include "models/image_object_detection/yolov5_detector.h"
@@ -22,24 +24,26 @@ public:
      *
      * @return
      */
-    virtual morted::models::BaseAiModel<INPUT, OUTPUT>* create_model() = 0;
+    virtual std::unique_ptr<morted::models::BaseAiModel<INPUT, OUTPUT> > create_model() = 0;
 
     virtual ~AiModelFactory() = default;
 };
 
 template<typename INPUT, typename OUTPUT>
 class DBTextModelFactory : public AiModelFactory<INPUT, OUTPUT> {
+typedef morted::models::image_ocr::DBTextDetector<INPUT, OUTPUT> DBTextModel
 public:
-    morted::models::image_ocr::DBTextDetector<INPUT, OUTPUT>* create_model() override {
-        return new morted::models::image_ocr::DBTextDetector<INPUT, OUTPUT>();
+    std::unique_ptr<DBTextModel> create_model() override {
+        return std::unique_ptr<DBTextModel>(new DBTextModel());
     }
 };
 
 template<typename INPUT, typename OUTPUT>
 class Yolov5ModelFactory : public AiModelFactory<INPUT, OUTPUT> {
+typedef morted::models::image_ocr::DBTextDetector<INPUT, OUTPUT> YoloV5Model
 public:
-    morted::models::image_object_detection::YoloV5Detector<INPUT, OUTPUT>* create_model() override {
-        return new morted::models::image_object_detection::YoloV5Detector<INPUT, OUTPUT>();
+    std::unique_ptr<YoloV5Model> create_model() override {
+        return std::unique_ptr<DBTextModel>(new YoloV5Model());
     }
 };
 }
