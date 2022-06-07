@@ -31,19 +31,18 @@ public:
 
 template<typename INPUT, typename OUTPUT>
 class DBTextModelFactory : public AiModelFactory<INPUT, OUTPUT> {
-typedef morted::models::image_ocr::DBTextDetector<INPUT, OUTPUT> DBTextModel
 public:
-    std::unique_ptr<DBTextModel> create_model() override {
-        return std::unique_ptr<DBTextModel>(new DBTextModel());
+    std::unique_ptr<DBTextModel<INPUT, OUTPUT> > create_model() override {
+        return std::unique_ptr<DBTextModel<INPUT, OUTPUT> >(new DBTextModel<INPUT, OUTPUT>());
     }
 };
 
 template<typename INPUT, typename OUTPUT>
 class Yolov5ModelFactory : public AiModelFactory<INPUT, OUTPUT> {
-typedef morted::models::image_ocr::DBTextDetector<INPUT, OUTPUT> YoloV5Model
 public:
-    std::unique_ptr<YoloV5Model> create_model() override {
-        return std::unique_ptr<DBTextModel>(new YoloV5Model());
+using YoloV5Model = morted::models::image_ocr::DBTextDetector<INPUT, OUTPUT>;
+    std::unique_ptr<YoloV5Model<INPUT, OUTPUT>> create_model() override {
+        return std::unique_ptr<YoloV5Model<INPUT, OUTPUT>>(new YoloV5Model<INPUT, OUTPUT>());
     }
 };
 }
