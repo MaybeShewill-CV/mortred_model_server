@@ -40,7 +40,7 @@ int main(int argc, char** argv) {
     std::vector<common_out> out;
 
     DBTextModelFactory<file_input, common_out> db_fin_creator;
-    auto db_text_1 = db_fin_creator.create_model();
+    auto db_text_1 = DBTextModelFactory<file_input, common_out>::create_model();
     db_text_1->init(cfg);
     Timestamp ts;
     for (int i = 0; i < 500; ++i) {
