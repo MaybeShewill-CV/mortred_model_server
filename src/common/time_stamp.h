@@ -91,7 +91,7 @@ public:
      * @return
      */
     static Timestamp invalid() {
-        return Timestamp();
+        return {};
     }
 
     static const int k_micro_sec_per_sec = 1000 * 1000;
@@ -105,7 +105,7 @@ private:
  * @param rhs
  * @return
  */
-inline bool operator<(Timestamp lhs, Timestamp rhs) {
+inline bool operator<(const Timestamp& lhs, const Timestamp& rhs) {
     return lhs.micro_sec_since_epoch() < rhs.micro_sec_since_epoch();
 }
 
@@ -115,7 +115,7 @@ inline bool operator<(Timestamp lhs, Timestamp rhs) {
  * @param rhs
  * @return
  */
-inline bool operator>(Timestamp lhs, Timestamp rhs) {
+inline bool operator>(const Timestamp& lhs, const Timestamp& rhs) {
     return lhs.micro_sec_since_epoch() > rhs.micro_sec_since_epoch();
 }
 
@@ -125,7 +125,7 @@ inline bool operator>(Timestamp lhs, Timestamp rhs) {
  * @param rhs
  * @return
  */
-inline bool operator<=(Timestamp lhs, Timestamp rhs) {
+inline bool operator<=(const Timestamp& lhs, const Timestamp& rhs) {
     return lhs.micro_sec_since_epoch() <= rhs.micro_sec_since_epoch();
 }
 
@@ -135,7 +135,7 @@ inline bool operator<=(Timestamp lhs, Timestamp rhs) {
  * @param rhs
  * @return
  */
-inline bool operator>=(Timestamp lhs, Timestamp rhs) {
+inline bool operator>=(const Timestamp& lhs, const Timestamp& rhs) {
     return lhs.micro_sec_since_epoch() >= rhs.micro_sec_since_epoch();
 }
 
@@ -145,7 +145,7 @@ inline bool operator>=(Timestamp lhs, Timestamp rhs) {
  * @param rhs
  * @return
  */
-inline bool operator==(Timestamp lhs, Timestamp rhs) {
+inline bool operator==(const Timestamp& lhs, const Timestamp& rhs) {
     return lhs.micro_sec_since_epoch() == rhs.micro_sec_since_epoch();
 }
 
@@ -155,7 +155,7 @@ inline bool operator==(Timestamp lhs, Timestamp rhs) {
  * @param rhs
  * @return
  */
-inline bool operator!=(Timestamp lhs, Timestamp rhs) {
+inline bool operator!=(const Timestamp& lhs, const Timestamp& rhs) {
     return lhs.micro_sec_since_epoch() != rhs.micro_sec_since_epoch();
 }
 
@@ -165,7 +165,7 @@ inline bool operator!=(Timestamp lhs, Timestamp rhs) {
  * @param ms
  * @return
  */
-inline Timestamp operator+(Timestamp lhs, uint64_t ms) {
+inline Timestamp operator+(const Timestamp& lhs, uint64_t ms) {
     return Timestamp(lhs.micro_sec_since_epoch() + ms);
 }
 
@@ -175,8 +175,8 @@ inline Timestamp operator+(Timestamp lhs, uint64_t ms) {
  * @param seconds
  * @return
  */
-inline Timestamp operator+(Timestamp lhs, double seconds) {
-    uint64_t delta = static_cast<uint64_t>(seconds * Timestamp::k_micro_sec_per_sec);
+inline Timestamp operator+(const Timestamp& lhs, double seconds) {
+    auto delta = static_cast<uint64_t>(seconds * Timestamp::k_micro_sec_per_sec);
     return Timestamp(lhs.micro_sec_since_epoch() + delta);
 }
 
@@ -186,7 +186,7 @@ inline Timestamp operator+(Timestamp lhs, double seconds) {
  * @param ms
  * @return
  */
-inline Timestamp operator-(Timestamp lhs, uint64_t ms) {
+inline Timestamp operator-(const Timestamp& lhs, uint64_t ms) {
     return Timestamp(lhs.micro_sec_since_epoch() - ms);
 }
 
@@ -196,8 +196,8 @@ inline Timestamp operator-(Timestamp lhs, uint64_t ms) {
  * @param seconds
  * @return
  */
-inline Timestamp operator-(Timestamp lhs, double seconds) {
-    uint64_t delta = static_cast<uint64_t>(seconds * Timestamp::k_micro_sec_per_sec);
+inline Timestamp operator-(const Timestamp& lhs, double seconds) {
+    auto delta = static_cast<uint64_t>(seconds * Timestamp::k_micro_sec_per_sec);
     return Timestamp(lhs.micro_sec_since_epoch() - delta);
 }
 
@@ -207,7 +207,7 @@ inline Timestamp operator-(Timestamp lhs, double seconds) {
  * @param low
  * @return
  */
-inline double operator-(Timestamp high, Timestamp low) {
+inline double operator-(const Timestamp& high, const Timestamp& low) {
     uint64_t diff = high.micro_sec_since_epoch() - low.micro_sec_since_epoch();
     return static_cast<double>(diff) / Timestamp::k_micro_sec_per_sec;
 }
