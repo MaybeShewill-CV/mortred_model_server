@@ -31,14 +31,14 @@ public:
     * 赋值构造函数
     * @param transformer
     */
-    BaseAiModel(const BaseAiModel& BaseAiModel) = delete;
+    BaseAiModel(const BaseAiModel& BaseAiModel) = default;
 
     /***
      * 复制构造函数
      * @param transformer
      * @return
      */
-    BaseAiModel& operator=(const BaseAiModel& transformer) = delete;
+    BaseAiModel& operator=(const BaseAiModel& transformer) = default;
 
     /***
      *
