@@ -17,10 +17,19 @@ target_link_libraries(
     common
 )
 
-# add test tools
+# add dbtext test tools
 add_executable(dbtext_test.out ./dbtext_test.cpp)
 target_link_libraries(
     dbtext_test.out
+    common
+    models
+    ${GLOG_LIBS}
+)
+
+# add yolov5 test tools
+add_executable(yolov5_test.out ./yolov5_test.cpp)
+target_link_libraries(
+    yolov5_test.out
     common
     models
     ${GLOG_LIBS}

@@ -18,6 +18,7 @@ namespace io_define {
 
 // common io
 namespace common_io {
+
 struct mat_input {
     cv::Mat input_image;
 };
@@ -33,10 +34,21 @@ struct base64_input {
 
 // image ocr
 namespace image_ocr {
+
 struct common_out {
     cv::Rect2f bbox;
     std::vector<cv::Point2f> polygon;
     float score;
+};
+}
+
+// image object detection
+namespace image_object_detection {
+
+struct common_out {
+    cv::Rect2f bbox;
+    float score;
+    int32_t class_id;
 };
 }
 
