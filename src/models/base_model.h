@@ -12,7 +12,8 @@
 
 namespace morted {
 namespace models {
-    
+
+template<typename INPUT, typename OUTPUT>
 class BaseAiModel {
 public:
     /***
@@ -52,7 +53,7 @@ public:
      * @param output
      * @return
      */
-    morted::common::StatusCode run(void* input, void* output);
+    virtual morted::common::StatusCode run(const INPUT& in, std::vector<OUTPUT>& out) = 0;
 
     /***
      *

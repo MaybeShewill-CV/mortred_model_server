@@ -13,21 +13,15 @@
 #include "toml/toml.hpp"
 
 #include "models/base_model.h"
+#include "models/model_io_define.h"
 #include "common/status_code.h"
 
 namespace morted {
 namespace models {
 namespace image_ocr {
 
-struct dbtext_input {
-
-};
-
-struct dbtext_output {
-
-};
-
-class DBTextDetector : public morted::models::BaseAiModel {
+template<typename INPUT, typename OUTPUT>
+class DBTextDetector : public morted::models::BaseAiModel<INPUT, OUTPUT> {
 public:
 
     /***
@@ -76,30 +70,14 @@ public:
      * @param output
      * @return
      */
-    template<typename INPUT, typename OUTPUT,
-            typename std::enable_if < std::is_same<INPUT, dbtext_input>::value,
-            morted::common::StatusCode >::type* dummy = nullptr>
-    morted::common::StatusCode
-    run(const INPUT* input, OUTPUT* output) {
-        LOG(INFO) << "run is same dbtext input";
-        return common::StatusCode::OK;
-    }
+    morted::common::StatusCode run(const INPUT& input, std::vector<OUTPUT>& output) override;
 
-    template<typename INPUT, typename OUTPUT,
-            typename std::enable_if < std::is_same<INPUT, std::string>::value,
-            morted::common::StatusCode >::type* dummy = nullptr>
-    morted::common::StatusCode
-    run(const INPUT* input, OUTPUT* output) {
-        LOG(INFO) << "run is same string input";
-        return common::StatusCode::OK;
-    }
 
     /***
      * if db text detector successfully initialized
      * @return
      */
     bool is_successfully_initialized() const override;
-
 
 private:
     class Impl;
