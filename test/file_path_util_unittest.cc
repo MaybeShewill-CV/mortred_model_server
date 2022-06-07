@@ -25,10 +25,10 @@ TEST(base64_unnittest, encode) {
     std::string concat_b = "db_text/test.jpg";
     std::string concat_result = "../demo_data/model_test_input/image_ocr/db_text/test.jpg";
 
-    EXPECT_EQ(FilePathUtil::is_file(exist_file_path), true);
-    EXPECT_EQ(FilePathUtil::is_file(not_exist_file_path), false);
-    EXPECT_EQ(FilePathUtil::is_dir(exist_dir_path), true);
-    EXPECT_EQ(FilePathUtil::is_dir(not_exist_dir_path), false);
+    EXPECT_EQ(FilePathUtil::is_file_exist(exist_file_path), true);
+    EXPECT_EQ(FilePathUtil::is_file_exist(not_exist_file_path), false);
+    EXPECT_EQ(FilePathUtil::is_dir_exist(exist_dir_path), true);
+    EXPECT_EQ(FilePathUtil::is_dir_exist(not_exist_dir_path), false);
     EXPECT_STREQ(FilePathUtil::get_file_name(exist_file_path).c_str(), "test.jpg");
     EXPECT_STREQ(FilePathUtil::get_file_suffix(exist_file_path).c_str(), "jpg");
     EXPECT_STREQ(FilePathUtil::concat_path(concat_a, concat_b).c_str(), concat_result.c_str());

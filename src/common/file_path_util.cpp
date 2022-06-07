@@ -60,12 +60,12 @@ std::string FilePathUtil::concat_path(const std::string& lhs, const std::string&
     return res;
 }
 
-bool FilePathUtil::is_dir(const std::string& path) {
+bool FilePathUtil::is_dir_exist(const std::string& path) {
     struct stat st{};
     return stat(path.c_str(), &st) >= 0 && S_ISDIR(st.st_mode);
 }
 
-bool FilePathUtil::is_file(const std::string& path) {
+bool FilePathUtil::is_file_exist(const std::string& path) {
     struct stat st{};
     return stat(path.c_str(), &st) >= 0 && S_ISREG(st.st_mode);
 }

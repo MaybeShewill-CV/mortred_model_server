@@ -19,14 +19,14 @@ public:
      * @param path
      * @return
      */
-    static bool is_dir(const std::string& path);
+    static bool is_dir_exist(const std::string& path);
 
     /***
      *
      * @param path
      * @return
      */
-    static bool is_file(const std::string& path);
+    static bool is_file_exist(const std::string& path);
 
     /***
      *

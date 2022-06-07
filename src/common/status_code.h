@@ -18,6 +18,8 @@ enum StatusCode {
 
     // model status
     MODEL_INIT_FAILED = 1,
+    MODEL_RUN_SESSION_FAILED = 2,
+    MODEL_EMPTY_INPUT_IMAGE = 3,
 
     // file status
     FILE_READ_ERROR = 30,
