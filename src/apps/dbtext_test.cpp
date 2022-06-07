@@ -5,6 +5,8 @@
 * Date: 22-6-6
 ************************************************/
 
+#include <memory>
+
 #include <glog/logging.h>
 #include <toml/toml.hpp>
 
@@ -16,6 +18,7 @@ using morted::models::io_define::common_io::file_input;
 using morted::models::io_define::common_io::mat_input;
 using morted::models::io_define::common_io::base64_input;
 using morted::models::io_define::image_ocr::common_out;
+using morted::models::image_ocr::DBTextDetector;
 using morted::factory::DBTextModelFactory;
 
 int main(int argc, char** argv) {
@@ -37,11 +40,11 @@ int main(int argc, char** argv) {
     std::vector<common_out> out;
 
     DBTextModelFactory<file_input, common_out> db_fin_creator;
-    auto db_text_1 = db_fin_creator.create_model_object();
-    db_text_1.init(cfg);
+    std::unique_ptr<DBTextDetector<file_input, common_out> > db_text_1(db_fin_creator.create_model());
+    db_text_1->init(cfg);
     Timestamp ts;
     for (int i = 0; i < 500; ++i) {
-        db_text_1.run(file_in, out);
+        db_text_1->run(file_in, out);
     }
     auto cost_time = Timestamp::now() - ts;
     LOG(INFO) << "db text file in cost time: " << cost_time << "s";
@@ -68,7 +71,6 @@ int main(int argc, char** argv) {
         LOG(INFO) << bbox.bbox << " " << bbox.score;
     }
 
-    delete db_text_1;
     delete db_text_2;
 
     return 1;

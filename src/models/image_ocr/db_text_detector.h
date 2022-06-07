@@ -39,14 +39,14 @@ public:
     * 赋值构造函数
     * @param transformer
     */
-    DBTextDetector(const DBTextDetector& transformer) = default;
+    DBTextDetector(const DBTextDetector& transformer) = delete;
 
     /***
      * 复制构造函数
      * @param transformer
      * @return
      */
-    DBTextDetector& operator=(const DBTextDetector& transformer) = default;
+    DBTextDetector& operator=(const DBTextDetector& transformer) = delete;
 
     /***
      *
