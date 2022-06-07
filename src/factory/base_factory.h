@@ -36,7 +36,11 @@ public:
 template<typename INPUT, typename OUTPUT>
 class DBTextModelFactory : public AiModelFactory<INPUT, OUTPUT> {
 public:
-    static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_model() override {
+    std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_model() override {
+        return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new DBTextDetector<INPUT, OUTPUT>());
+    }
+
+    static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_model() {
         return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new DBTextDetector<INPUT, OUTPUT>());
     }
 };
@@ -44,7 +48,7 @@ public:
 template<typename INPUT, typename OUTPUT>
 class Yolov5ModelFactory : public AiModelFactory<INPUT, OUTPUT> {
 public:
-    static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_model() override {
+    std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_model() override {
         return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new YoloV5Detector<INPUT, OUTPUT>());
     }
 };
