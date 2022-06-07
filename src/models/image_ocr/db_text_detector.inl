@@ -144,14 +144,14 @@ public:
     *
     * @param transformer
     */
-    Impl(const Impl& transformer) = delete;
+    Impl(const Impl& transformer) = default;
 
     /***
      *
      * @param transformer
      * @return
      */
-    Impl& operator=(const Impl& transformer) = delete;
+    Impl& operator=(const Impl& transformer) = default;
 
     /***
      *
