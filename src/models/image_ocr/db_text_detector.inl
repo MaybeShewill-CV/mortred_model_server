@@ -50,10 +50,12 @@ typename std::enable_if<std::is_same<INPUT, std::decay<file_input>::type>::value
 transform_input(const INPUT& in) {
     LOG(INFO) << "transform file input into internal input";
     internal_input result{};
+
     if (!FilePathUtil::is_file_exist(in.input_image_path)) {
         LOG(INFO) << "input image: " << in.input_image_path << " not exist";
         return result;
     }
+
     result.input_image = cv::imread(in.input_image_path, cv::IMREAD_UNCHANGED);
     return result;
 }
@@ -155,7 +157,7 @@ public:
      * @param cfg_file_path
      * @return
      */
-    StatusCode init(const decltype(toml::parse(""))& cfg);
+    StatusCode init(const decltype(toml::parse(""))& config);
 
     /***
      *
@@ -200,18 +202,6 @@ public:
         return StatusCode::OK;
     }
 
-    /***
-     *
-     */
-    inline void release_resource() {
-        if (_m_session != nullptr && _m_net != nullptr) {
-            _m_net->releaseModel();
-            _m_net->releaseSession(_m_session);
-        }
-
-        _m_successfully_initialized = false;
-    }
-
 private:
     // 模型文件存储路径
     std::string _m_model_file_path;
@@ -227,8 +217,6 @@ private:
     int _m_threads_nums = 4;
     // 得分阈值
     double _m_score_threshold = 0.4;
-    // nms阈值
-    double _m_nms_threshold = 0.35;
     // rotate bbox 短边阈值
     float _m_sside_threshold = 3;
     // top_k keep阈值
@@ -385,12 +373,6 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(
         _m_score_threshold = 0.4;
     } else {
         _m_score_threshold = cfg_content.at("model_score_threshold").as_floating();
-    }
-
-    if (!cfg_content.contains("model_nms_threshold")) {
-        _m_nms_threshold = 0.35;
-    } else {
-        _m_nms_threshold = cfg_content.at("model_nms_threshold").as_floating();
     }
 
     if (!cfg_content.contains("model_keep_top_k")) {

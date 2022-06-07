@@ -49,15 +49,6 @@ public:
     DBTextDetector& operator=(const DBTextDetector& transformer) = delete;
 
     /***
-    * get db text detector instance
-    * @return lp detector single instance
-    */
-    static DBTextDetector& get_instance() {
-        static DBTextDetector instance;
-        return instance;
-    }
-
-    /***
      *
      * @param toml
      * @return
@@ -84,7 +75,7 @@ private:
     std::unique_ptr<Impl> _m_pimpl;
 };
 
-};
+}
 }
 }
 
