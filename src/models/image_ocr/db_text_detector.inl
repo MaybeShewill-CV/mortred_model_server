@@ -23,9 +23,10 @@ using morted::common::Base64;
 using morted::models::io_define::common_io::mat_input;
 using morted::models::io_define::common_io::file_input;
 using morted::models::io_define::common_io::base64_input;
-using morted::models::io_define::image_ocr::common_out;
 
 namespace image_ocr {
+
+using morted::models::io_define::image_ocr::common_out;
 
 namespace dbtext_impl {
 

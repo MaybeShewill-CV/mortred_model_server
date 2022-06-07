@@ -25,9 +25,10 @@ using morted::common::Base64;
 using morted::models::io_define::common_io::mat_input;
 using morted::models::io_define::common_io::file_input;
 using morted::models::io_define::common_io::base64_input;
-using morted::models::io_define::image_object_detection::common_out;
 
 namespace image_object_detection {
+
+using morted::models::io_define::image_object_detection::common_out;
 
 namespace yolov5_impl {
 
