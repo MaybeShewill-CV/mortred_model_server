@@ -32,17 +32,18 @@ public:
 template<typename INPUT, typename OUTPUT>
 class DBTextModelFactory : public AiModelFactory<INPUT, OUTPUT> {
 public:
-    std::unique_ptr<DBTextModel<INPUT, OUTPUT> > create_model() override {
-        return std::unique_ptr<DBTextModel<INPUT, OUTPUT> >(new DBTextModel<INPUT, OUTPUT>());
+    std::unique_ptr<morted::models::image_ocr::DBTextDetector<INPUT, OUTPUT> > create_model() override {
+        return std::unique_ptr<morted::models::image_ocr::DBTextDetector<INPUT, OUTPUT> >(
+                new morted::models::image_ocr::DBTextDetector<INPUT, OUTPUT>());
     }
 };
 
 template<typename INPUT, typename OUTPUT>
 class Yolov5ModelFactory : public AiModelFactory<INPUT, OUTPUT> {
 public:
-using YoloV5Model = morted::models::image_ocr::DBTextDetector<INPUT, OUTPUT>;
-    std::unique_ptr<YoloV5Model<INPUT, OUTPUT>> create_model() override {
-        return std::unique_ptr<YoloV5Model<INPUT, OUTPUT>>(new YoloV5Model<INPUT, OUTPUT>());
+    std::unique_ptr<morted::models::image_object_detection::YoloV5Detector<INPUT, OUTPUT> > create_model() override {
+        return std::unique_ptr<morted::models::image_object_detection::YoloV5Detector<INPUT, OUTPUT> >(
+                new morted::models::image_object_detection::YoloV5Detector<INPUT, OUTPUT>());
     }
 };
 }
