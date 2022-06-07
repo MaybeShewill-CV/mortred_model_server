@@ -36,8 +36,7 @@ int main(int argc, char** argv) {
     base64_input base64_in{};
     std::vector<common_out> out;
 
-    Yolov5ModelFactory<file_input, common_out> yolov5_fin_creator;
-    auto yolov5_1 = yolov5_fin_creator.create_model();
+    auto yolov5_1 = Yolov5ModelFactory<file_input, common_out>::static_create_model();
     yolov5_1->init(cfg);
     Timestamp ts;
     for (int i = 0; i < 50; ++i) {
@@ -50,8 +49,7 @@ int main(int argc, char** argv) {
         LOG(INFO) << bbox.bbox << " " << bbox.score;
     }
 
-    Yolov5ModelFactory<mat_input, common_out> yolov5_min_creator;
-    auto yolov5_2 = yolov5_min_creator.create_model();
+    auto yolov5_2 = Yolov5ModelFactory<mat_input, common_out>::static_create_model();
     mat_in.input_image = cv::imread("../demo_data/model_test_input/image_ocr/db_text/test.jpg", cv::IMREAD_UNCHANGED);
     yolov5_2->init(cfg);
     out.clear();

@@ -39,8 +39,7 @@ int main(int argc, char** argv) {
     base64_input base64_in{};
     std::vector<common_out> out;
 
-    DBTextModelFactory<file_input, common_out> db_fin_creator;
-    auto db_text_1 = DBTextModelFactory<file_input, common_out>::create_model();
+    auto db_text_1 = DBTextModelFactory<file_input, common_out>::static_create_model();
     db_text_1->init(cfg);
     Timestamp ts;
     for (int i = 0; i < 500; ++i) {
@@ -52,8 +51,7 @@ int main(int argc, char** argv) {
         LOG(INFO) << bbox.bbox << " " << bbox.score;
     }
 
-    DBTextModelFactory<mat_input, common_out> db_min_creator;
-    auto db_text_2 = db_min_creator.create_model();
+    auto db_text_2 = DBTextModelFactory<mat_input, common_out>::static_create_model();
     mat_in.input_image = cv::imread("../demo_data/model_test_input/image_ocr/db_text/test.jpg", cv::IMREAD_UNCHANGED);
     db_text_2->init(cfg);
     out.clear();
