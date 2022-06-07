@@ -37,11 +37,11 @@ int main(int argc, char** argv) {
     std::vector<common_out> out;
 
     DBTextModelFactory<file_input, common_out> db_fin_creator;
-    auto* db_text_1 = db_fin_creator.create_model();
-    db_text_1->init(cfg);
+    auto db_text_1 = db_fin_creator.create_model_object();
+    db_text_1.init(cfg);
     Timestamp ts;
     for (int i = 0; i < 500; ++i) {
-        db_text_1->run(file_in, out);
+        db_text_1.run(file_in, out);
     }
     auto cost_time = Timestamp::now() - ts;
     LOG(INFO) << "db text file in cost time: " << cost_time << "s";

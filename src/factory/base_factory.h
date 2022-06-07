@@ -33,6 +33,10 @@ public:
     morted::models::image_ocr::DBTextDetector<INPUT, OUTPUT>* create_model() override {
         return new morted::models::image_ocr::DBTextDetector<INPUT, OUTPUT>();
     }
+
+    morted::models::image_ocr::DBTextDetector<INPUT, OUTPUT> create_model_object() {
+        return morted::models::image_ocr::DBTextDetector<INPUT, OUTPUT>();
+    }
 };
 
 template<typename INPUT, typename OUTPUT>
