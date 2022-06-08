@@ -38,40 +38,42 @@ int main(int argc, char** argv) {
     std::vector<common_out> out;
 
     auto model_fc = create_dbtext_detector<file_input, common_out>("dbtext_worker_1");
+    auto model_tmp = create_dbtext_detector<file_input, common_out>("dbtext_worker_tmp");
     if (model_fc == nullptr) {
         LOG(ERROR) << "empty model ptr";
         return -1;
     }
     model_fc->init(cfg);
-    Timestamp ts;
-    for (int i = 0; i < 500; ++i) {
-        model_fc->run(file_in, out);
-    }
-    auto cost_time = Timestamp::now() - ts;
-    LOG(INFO) << "db text file in cost time: " << cost_time << "s";
-    for (const auto& bbox : out) {
-        LOG(INFO) << bbox.bbox << " " << bbox.score;
-    }
+//    Timestamp ts;
+//    for (int i = 0; i < 500; ++i) {
+//        model_fc->run(file_in, out);
+//    }
+//    auto cost_time = Timestamp::now() - ts;
+//    LOG(INFO) << "db text file in cost time: " << cost_time << "s";
+//    for (const auto& bbox : out) {
+//        LOG(INFO) << bbox.bbox << " " << bbox.score;
+//    }
 
 
     auto model_mc = create_dbtext_detector<mat_input, common_out>("dbtext_worker_2");
-    mat_in.input_image = cv::imread(
-            "../demo_data/model_test_input/image_ocr/db_text/test.jpg",cv::IMREAD_UNCHANGED);
-    model_mc->init(cfg);
-    out.clear();
-
-    ts = Timestamp::now();
-    for (int i = 0; i < 500; ++i) {
-        model_mc->run(mat_in, out);
-    }
-    cost_time = Timestamp::now() - ts;
-    LOG(INFO) << "db text mat in cost time: " << cost_time << "s";
-    LOG(INFO) << "time stamp: " << ts.to_str();
-    LOG(INFO) << "time stamp format str: " << ts.to_format_str();
-
-    for (const auto& bbox : out) {
-        LOG(INFO) << bbox.bbox << " " << bbox.score;
-    }
+    auto model_mc_tmp = create_dbtext_detector<mat_input, common_out>("dbtext_worker_3");
+//    mat_in.input_image = cv::imread(
+//            "../demo_data/model_test_input/image_ocr/db_text/test.jpg",cv::IMREAD_UNCHANGED);
+//    model_mc->init(cfg);
+//    out.clear();
+//
+//    ts = Timestamp::now();
+//    for (int i = 0; i < 500; ++i) {
+//        model_mc->run(mat_in, out);
+//    }
+//    cost_time = Timestamp::now() - ts;
+//    LOG(INFO) << "db text mat in cost time: " << cost_time << "s";
+//    LOG(INFO) << "time stamp: " << ts.to_str();
+//    LOG(INFO) << "time stamp format str: " << ts.to_format_str();
+//
+//    for (const auto& bbox : out) {
+//        LOG(INFO) << bbox.bbox << " " << bbox.score;
+//    }
 
     return 1;
 }

@@ -72,7 +72,7 @@ public:
 
     void list_registered_models() {
         for (auto& model : _m_model_registry) {
-            LOG(INFO) << "registered model: " << model.first << ", address: " << model.second;
+            LOG(INFO) << "existed model registrar for: " << model.first << ", address: " << model.second;
         }
     }
 
