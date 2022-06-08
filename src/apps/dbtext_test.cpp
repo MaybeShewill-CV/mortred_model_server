@@ -5,21 +5,19 @@
 * Date: 22-6-6
 ************************************************/
 
-#include <memory>
-
 #include <glog/logging.h>
 #include <toml/toml.hpp>
 
 #include "common/time_stamp.h"
-#include "factory/base_factory.h"
+#include "models/model_io_define.h"
+#include "factory/image_ocr_task.h"
 
 using morted::common::Timestamp;
 using morted::models::io_define::common_io::file_input;
 using morted::models::io_define::common_io::mat_input;
 using morted::models::io_define::common_io::base64_input;
 using morted::models::io_define::image_ocr::common_out;
-using morted::models::image_ocr::DBTextDetector;
-using morted::factory::DBTextModelFactory;
+using morted::factory::image_ocr::create_dbtext_detector;
 
 int main(int argc, char** argv) {
 
@@ -39,11 +37,15 @@ int main(int argc, char** argv) {
     base64_input base64_in{};
     std::vector<common_out> out;
 
-    auto db_text_1 = DBTextModelFactory<file_input, common_out>::static_create_model();
-    db_text_1->init(cfg);
+    auto model_fc = create_dbtext_detector<file_input, common_out>("dbtext_worker_1");
+    if (model_fc == nullptr) {
+        LOG(ERROR) << "empty model ptr";
+        return -1;
+    }
+    model_fc->init(cfg);
     Timestamp ts;
     for (int i = 0; i < 500; ++i) {
-        db_text_1->run(file_in, out);
+        model_fc->run(file_in, out);
     }
     auto cost_time = Timestamp::now() - ts;
     LOG(INFO) << "db text file in cost time: " << cost_time << "s";
@@ -51,17 +53,19 @@ int main(int argc, char** argv) {
         LOG(INFO) << bbox.bbox << " " << bbox.score;
     }
 
-    auto db_text_2 = DBTextModelFactory<mat_input, common_out>::static_create_model();
-    mat_in.input_image = cv::imread("../demo_data/model_test_input/image_ocr/db_text/test.jpg", cv::IMREAD_UNCHANGED);
-    db_text_2->init(cfg);
+
+    auto model_mc = create_dbtext_detector<mat_input, common_out>("dbtext_worker_2");
+    mat_in.input_image = cv::imread(
+            "../demo_data/model_test_input/image_ocr/db_text/test.jpg",cv::IMREAD_UNCHANGED);
+    model_mc->init(cfg);
     out.clear();
 
     ts = Timestamp::now();
     for (int i = 0; i < 500; ++i) {
-        db_text_2->run(mat_in, out);
+        model_mc->run(mat_in, out);
     }
     cost_time = Timestamp::now() - ts;
-    LOG(INFO) << "yolov5 mat in cost time: " << cost_time << "s";
+    LOG(INFO) << "db text mat in cost time: " << cost_time << "s";
     LOG(INFO) << "time stamp: " << ts.to_str();
     LOG(INFO) << "time stamp format str: " << ts.to_format_str();
 

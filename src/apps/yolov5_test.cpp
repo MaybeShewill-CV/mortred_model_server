@@ -9,14 +9,15 @@
 #include <toml/toml.hpp>
 
 #include "common/time_stamp.h"
-#include "factory/base_factory.h"
+#include "models/model_io_define.h"
+#include "factory/image_object_detection_task.h"
 
 using morted::common::Timestamp;
 using morted::models::io_define::common_io::file_input;
 using morted::models::io_define::common_io::mat_input;
 using morted::models::io_define::common_io::base64_input;
 using morted::models::io_define::image_object_detection::common_out;
-using morted::factory::Yolov5ModelFactory;
+using morted::factory::image_object_detection::create_yolov5_detector;
 
 int main(int argc, char** argv) {
 
@@ -36,36 +37,38 @@ int main(int argc, char** argv) {
     base64_input base64_in{};
     std::vector<common_out> out;
 
-    auto yolov5_1 = Yolov5ModelFactory<file_input, common_out>::static_create_model();
-    yolov5_1->init(cfg);
-    Timestamp ts;
-    for (int i = 0; i < 50; ++i) {
-        yolov5_1->run(file_in, out);
-    }
-    auto cost_time = Timestamp::now() - ts;
-    LOG(INFO) << "yolov5 file in cost time: " << cost_time << "s";
-
-    for (const auto& bbox : out) {
-        LOG(INFO) << bbox.bbox << " " << bbox.score;
-    }
-
-    auto yolov5_2 = Yolov5ModelFactory<mat_input, common_out>::static_create_model();
-    mat_in.input_image = cv::imread("../demo_data/model_test_input/image_ocr/db_text/test.jpg", cv::IMREAD_UNCHANGED);
-    yolov5_2->init(cfg);
-    out.clear();
-
-    ts = Timestamp::now();
-    for (int i = 0; i < 50; ++i) {
-        yolov5_2->run(mat_in, out);
-    }
-    cost_time = Timestamp::now() - ts;
-    LOG(INFO) << "yolov5 mat in cost time: " << cost_time << "s";
-    LOG(INFO) << "time stamp: " << ts.to_str();
-    LOG(INFO) << "time stamp format str: " << ts.to_format_str();
-
-    for (const auto& bbox : out) {
-        LOG(INFO) << bbox.bbox << " " << bbox.score;
-    }
+    auto yolov5_worker_1 = create_yolov5_detector<file_input, common_out>("yolov5_fc_worker1");
+    auto yolov5_worker_4 = create_yolov5_detector<file_input, common_out>("yolov5_fc_worker2");
+//    yolov5_worker_1->init(cfg);
+//    Timestamp ts;
+//    for (int i = 0; i < 50; ++i) {
+//        yolov5_worker_1->run(file_in, out);
+//    }
+//    auto cost_time = Timestamp::now() - ts;
+//    LOG(INFO) << "yolov5 file in cost time: " << cost_time << "s";
+//
+//    for (const auto& bbox : out) {
+//        LOG(INFO) << bbox.bbox << " " << bbox.score;
+//    }
+//
+//    auto yolov5_worker_2 = create_yolov5_detector<mat_input, common_out>("yolov5_mc_worker2");
+//    mat_in.input_image = cv::imread(
+//            "../demo_data/model_test_input/image_ocr/db_text/test.jpg", cv::IMREAD_UNCHANGED);
+//    yolov5_worker_2->init(cfg);
+//    out.clear();
+//
+//    ts = Timestamp::now();
+//    for (int i = 0; i < 50; ++i) {
+//        yolov5_worker_2->run(mat_in, out);
+//    }
+//    cost_time = Timestamp::now() - ts;
+//    LOG(INFO) << "yolov5 mat in cost time: " << cost_time << "s";
+//    LOG(INFO) << "time stamp: " << ts.to_str();
+//    LOG(INFO) << "time stamp format str: " << ts.to_format_str();
+//
+//    for (const auto& bbox : out) {
+//        LOG(INFO) << bbox.bbox << " " << bbox.score;
+//    }
 
     return 1;
 }
