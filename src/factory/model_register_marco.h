@@ -17,8 +17,7 @@ using morted::models::image_ocr::DBTextDetector;
 using morted::factory::ModelRegistrar;
 
 #define REGISTER_AI_MODEL(MODEL, MODEL_NAME, INPUT, OUTPUT) \
-ModelRegistrar<BaseAiModel<INPUT, OUTPUT>, MODEL<INPUT, OUTPUT> > __xxx_##MODEL_##INPUT_##OUTPUT((MODEL_NAME)); \
-LOG(INFO) << "address: " << &__xxx_##MODEL_##INPUT_##OUTPUT((MODEL_NAME));
+ModelRegistrar<BaseAiModel<INPUT, OUTPUT>, MODEL<INPUT, OUTPUT> > __xxx_(MODEL)_(INPUT)_(OUTPUT)((MODEL_NAME));
 
 #define LIST_ALL_REGISTERED_AI_MODELS(INPUT, OUTPUT) \
 ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance().list_registered_models();
