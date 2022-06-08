@@ -9,53 +9,101 @@
 #define MM_AI_SERVER_BASE_FACTORY_H
 
 #include <memory>
+#include <map>
 
 #include "models/base_model.h"
-#include "models/image_ocr/db_text_detector.h"
-#include "models/image_object_detection/yolov5_detector.h"
 
 namespace morted {
 namespace factory {
 
 using morted::models::BaseAiModel;
-using morted::models::image_ocr::DBTextDetector;
-using morted::models::image_object_detection::YoloV5Detector;
 
-template<typename INPUT, typename OUTPUT>
-class AiModelFactory {
+/***
+ *
+ * @tparam BASE_AI_MODEL
+ */
+template<class BASE_AI_MODEL>
+class AiModelRegistrar {
 public:
-    /***
-     *
-     * @return
-     */
-    virtual std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_model() = 0;
+    virtual std::unique_ptr<BASE_AI_MODEL> create_model() = 0;
 
-    virtual ~AiModelFactory() = default;
+    AiModelRegistrar(const AiModelRegistrar& transformer) = delete;
+
+    AiModelRegistrar& operator=(const AiModelRegistrar& transformer) = delete;
+
+    AiModelRegistrar() = default;
+    virtual ~AiModelRegistrar() = default;
 };
 
-template<typename INPUT, typename OUTPUT>
-class DBTextModelFactory : public AiModelFactory<INPUT, OUTPUT> {
+/***
+ *
+ * @tparam BASE_AI_MODEL
+ */
+template<class BASE_AI_MODEL>
+class ModelFactory {
 public:
-    std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_model() override {
-        return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new DBTextDetector<INPUT, OUTPUT>());
+
+    ModelFactory(const ModelFactory& transformer) = delete;
+
+    ModelFactory& operator=(const ModelFactory& transformer) = delete;
+
+    static ModelFactory<BASE_AI_MODEL>& get_instance() {
+        static ModelFactory<BASE_AI_MODEL> instance;
+        return instance;
     }
 
-    static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > static_create_model() {
-        return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new DBTextDetector<INPUT, OUTPUT>());
+    void register_model(AiModelRegistrar<BASE_AI_MODEL>* registrar, const std::string& name) {
+        if (_m_model_registry.find(name) == _m_model_registry.end()) {
+            _m_model_registry.insert(std::make_pair(name, registrar));
+        } else {
+            _m_model_registry[name] = registrar;
+        }
+    }
+
+    std::unique_ptr<BASE_AI_MODEL> get_model(const std::string& name) {
+        if (_m_model_registry.find(name) != _m_model_registry.end()) {
+            auto* registry = _m_model_registry[name];
+            return registry->create_model();
+        }
+
+        LOG(ERROR) << "No model named: " << name << " was found";
+        return nullptr;
+    }
+
+    void list_registered_models() {
+        for (auto& model : _m_model_registry) {
+            LOG(INFO) << "registered model: " << model.first << ", address: " << model.second;
+        }
+    }
+
+private:
+    ModelFactory() = default;
+    ~ModelFactory() = default;
+
+    std::map<std::string, AiModelRegistrar<BASE_AI_MODEL>* > _m_model_registry;
+};
+
+/***
+ *
+ * @tparam BASE_AI_MODEL
+ * @tparam AI_MODEL
+ */
+template <typename BASE_AI_MODEL, typename AI_MODEL>
+class ModelRegistrar : public AiModelRegistrar<BASE_AI_MODEL> {
+public:
+    explicit ModelRegistrar(const std::string& name) {
+        ModelFactory<BASE_AI_MODEL>::get_instance().register_model(this, name);
+    }
+
+    std::unique_ptr<BASE_AI_MODEL> create_model() override {
+        return std::unique_ptr<BASE_AI_MODEL>(new AI_MODEL());
+    }
+
+    static void list_all_models() {
+        ModelFactory<BASE_AI_MODEL>::get_instance().list_registered_models();
     }
 };
 
-template<typename INPUT, typename OUTPUT>
-class Yolov5ModelFactory : public AiModelFactory<INPUT, OUTPUT> {
-public:
-    std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_model() override {
-        return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new YoloV5Detector<INPUT, OUTPUT>());
-    }
-
-    static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > static_create_model() {
-        return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new YoloV5Detector<INPUT, OUTPUT>());
-    }
-};
 }
 }
 
