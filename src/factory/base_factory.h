@@ -92,6 +92,7 @@ template <typename BASE_AI_MODEL, typename AI_MODEL>
 class ModelRegistrar : public AiModelRegistrar<BASE_AI_MODEL> {
 public:
     explicit ModelRegistrar(const std::string& name) {
+        LOG(INFO) << "registrar for: " << name << ", address: " << this;
         ModelFactory<BASE_AI_MODEL>::get_instance().register_model(this, name);
     }
 

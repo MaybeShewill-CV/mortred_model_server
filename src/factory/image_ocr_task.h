@@ -33,7 +33,6 @@ using morted::models::image_ocr::DBTextDetector;
 template<typename INPUT, typename OUTPUT>
 static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_dbtext_detector(const std::string& detector_name) {
     REGISTER_AI_MODEL(DBTextDetector, detector_name, INPUT, OUTPUT)
-    LIST_ALL_REGISTERED_AI_MODELS(INPUT, OUTPUT)
     return ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance().get_model(detector_name);
 }
 

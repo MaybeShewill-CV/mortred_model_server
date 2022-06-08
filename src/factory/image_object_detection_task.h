@@ -32,7 +32,6 @@ using morted::models::image_object_detection::YoloV5Detector;
 template<typename INPUT, typename OUTPUT>
 static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_yolov5_detector(const std::string& detector_name) {
     REGISTER_AI_MODEL(YoloV5Detector, detector_name, INPUT, OUTPUT)
-    LIST_ALL_REGISTERED_AI_MODELS(INPUT, OUTPUT)
     return ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance().get_model(detector_name);
 }
 
