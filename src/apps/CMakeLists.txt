@@ -15,6 +15,8 @@ add_executable(test.out ./test.cpp)
 target_link_libraries(
     test.out
     common
+    ${WORKFLOW_LIBS}
+    ${GLOG_LIBS}
 )
 
 # add dbtext test tools
