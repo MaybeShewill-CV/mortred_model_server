@@ -18,7 +18,7 @@
 
 namespace morted {
 namespace models {
-namespace image_ocr {
+namespace ocr {
 
 template<typename INPUT, typename OUTPUT>
 class DBTextDetector : public morted::models::BaseAiModel<INPUT, OUTPUT> {
@@ -79,6 +79,6 @@ private:
 }
 }
 
-#include "models/image_ocr/db_text_detector.inl"
+#include "db_text_detector.inl"
 
 #endif //MMAISERVER_DBTextDetector_H

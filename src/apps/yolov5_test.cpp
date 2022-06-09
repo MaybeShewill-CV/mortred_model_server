@@ -10,14 +10,14 @@
 
 #include "common/time_stamp.h"
 #include "models/model_io_define.h"
-#include "factory/image_object_detection_task.h"
+#include "factory/obj_detection_task.h"
 
 using morted::common::Timestamp;
 using morted::models::io_define::common_io::file_input;
 using morted::models::io_define::common_io::mat_input;
 using morted::models::io_define::common_io::base64_input;
-using morted::models::io_define::image_object_detection::common_out;
-using morted::factory::image_object_detection::create_yolov5_detector;
+using morted::models::io_define::object_detection::common_out;
+using morted::factory::object_detection::create_yolov5_detector;
 
 int main(int argc, char** argv) {
 

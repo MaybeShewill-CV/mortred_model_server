@@ -10,14 +10,14 @@
 
 #include "common/time_stamp.h"
 #include "models/model_io_define.h"
-#include "factory/image_ocr_task.h"
+#include "factory/ocr_task.h"
 
 using morted::common::Timestamp;
 using morted::models::io_define::common_io::file_input;
 using morted::models::io_define::common_io::mat_input;
 using morted::models::io_define::common_io::base64_input;
-using morted::models::io_define::image_ocr::common_out;
-using morted::factory::image_ocr::create_dbtext_detector;
+using morted::models::io_define::ocr::common_out;
+using morted::factory::ocr::create_dbtext_detector;
 
 int main(int argc, char** argv) {
 

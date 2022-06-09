@@ -1,13 +1,11 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: YoloV5Detector.cpp
-* Date: 22-6-7
+* File: DBTextDetector.cpp
+* Date: 22-6-6
 ************************************************/
 
-#include "yolov5_detector.h"
-
-#include <random>
+#include "db_text_detector.h"
 
 #include <opencv2/opencv.hpp>
 #include "glog/logging.h"
@@ -26,11 +24,11 @@ using morted::models::io_define::common_io::mat_input;
 using morted::models::io_define::common_io::file_input;
 using morted::models::io_define::common_io::base64_input;
 
-namespace image_object_detection {
+namespace ocr {
 
-using morted::models::io_define::image_object_detection::common_out;
+using morted::models::io_define::ocr::common_out;
 
-namespace yolov5_impl {
+namespace dbtext_impl {
 
 struct internal_input {
     cv::Mat input_image;
@@ -38,8 +36,8 @@ struct internal_input {
 
 struct internal_output {
     cv::Rect2f bbox;
+    std::vector<cv::Point2f> polygon;
     float score = 0.0;
-    int32_t class_id;
 };
 
 /***
@@ -111,134 +109,21 @@ transform_input(const INPUT& in) {
 */
 template<typename OUTPUT>
 typename std::enable_if<std::is_same<OUTPUT, std::decay<common_out>::type>::value, common_out>::type
-transform_output(const yolov5_impl::internal_output& internal_out) {
+transform_output(const dbtext_impl::internal_output& internal_out) {
     common_out result;
     result.bbox = internal_out.bbox;
+    result.polygon = internal_out.polygon;
     result.score = internal_out.score;
     return result;
 }
 
-/***
-*
-* @param class_counts
-* @return
-*/
-std::map<int, cv::Scalar> generate_color_map(int class_counts) {
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> distrib(0, 255);
-
-    std::set<int> color_set_r;
-    std::set<int> color_set_g;
-    std::set<int> color_set_b;
-    std::map<int, cv::Scalar> color_map;
-    int class_id = 0;
-
-    while (color_map.size() != class_counts) {
-        int r = distrib(gen);
-        int g = distrib(gen);
-        int b = distrib(gen);
-        cv::Scalar color(b, g, r);
-
-        if (color_set_r.find(r) != color_set_r.end() && color_set_g.find(g) != color_set_g.end()
-                && color_set_b.find(b) != color_set_b.end()) {
-            continue;
-        } else {
-            color_map.insert(std::make_pair(class_id, color));
-            color_set_r.insert(r);
-            color_set_g.insert(g);
-            color_set_b.insert(b);
-            class_id++;
-        }
-    }
-
-    return color_map;
-}
-
-/***
- *
- * @param box1
- * @param box2
- * @return
- */
-template<typename BBOX1, typename BBOX2>
-typename std::enable_if <
-std::is_same<BBOX1, std::decay<internal_output>::type>::value&&
-std::is_same<BBOX2, std::decay<internal_output>::type>::value, float >::type
-calc_iou(const BBOX1& box1, const BBOX2& box2) {
-    float x1 = std::max(box1.bbox.x, box2.bbox.x);
-    float y1 = std::max(box1.bbox.y, box2.bbox.y);
-    float x2 = std::min(box1.bbox.x + box1.bbox.width, box2.bbox.x + box2.bbox.width);
-    float y2 = std::min(box1.bbox.y + box1.bbox.height, box2.bbox.y + box2.bbox.height);
-    float w = std::max(0.0f, x2 - x1 + 1);
-    float h = std::max(0.0f, y2 - y1 + 1);
-    float over_area = w * h;
-    return over_area /
-           (box1.bbox.width * box1.bbox.height + box2.bbox.width * box2.bbox.height - over_area);
-}
-
-/***
- *
- * @param bboxes
- * @param nms_threshold
- * @return
- */
-std::vector<internal_output> nms_bboxes(std::vector<internal_output>& bboxes, double nms_threshold) {
-    std::vector<internal_output> result;
-
-    if (bboxes.empty()) {
-        return result;
-    }
-
-    std::map<int, std::vector<internal_output> > bboxes_split;
-
-    for (const auto& bbox : bboxes) {
-        auto cls_id = bbox.class_id;
-
-        if (bboxes_split.find(cls_id) == bboxes_split.end()) {
-            bboxes_split.insert(std::make_pair(cls_id, std::vector<internal_output>({bbox})));
-        } else {
-            bboxes_split[cls_id].push_back(bbox);
-        }
-    }
-
-    for (auto& iter : bboxes_split) {
-        auto tmp_bboxes = iter.second;
-        // sort the bounding boxes by the detection score
-        std::sort(tmp_bboxes.begin(), tmp_bboxes.end(),
-        [](const internal_output & box1, const internal_output & box2) {
-            return box1.score < box2.score;
-        });
-
-        while (!tmp_bboxes.empty()) {
-            auto last_elem = --std::end(tmp_bboxes);
-            const auto& rect1 = last_elem->bbox;
-
-            tmp_bboxes.erase(last_elem);
-
-            for (auto pos = std::begin(tmp_bboxes); pos != std::end(tmp_bboxes);) {
-                auto overlap = calc_iou(*last_elem, *pos);
-
-                if (overlap > nms_threshold) {
-                    pos = tmp_bboxes.erase(pos);
-                } else {
-                    ++pos;
-                }
-            }
-
-            result.push_back(*last_elem);
-        }
-    }
-
-    return result;
-}
 
 }
 
 /***************** Impl Function Sets ******************/
 
 template<typename INPUT, typename OUTPUT>
-class YoloV5Detector<INPUT, OUTPUT>::Impl {
+class DBTextDetector<INPUT, OUTPUT>::Impl {
 public:
     /***
      *
@@ -284,15 +169,14 @@ public:
     };
 
     /***
-    *
-    * @param in
-    * @param out
-    * @return
-    */
+     *
+     * @param in
+     * @param out
+     * @return
+     */
     StatusCode run(const INPUT& in, std::vector<OUTPUT>& out) {
         // transform external input into internal input
-        auto internal_in = yolov5_impl::transform_input(in);
-
+        auto internal_in = dbtext_impl::transform_input(in);
         if (!internal_in.input_image.data || internal_in.input_image.empty()) {
             return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
         }
@@ -308,26 +192,19 @@ public:
         _m_input_tensor->copyFromHostTensor(&input_tensor_user);
         _m_net->runSession(_m_session);
 
-        // decode output tensor
-        auto bbox_result = decode_output_tensor();
-
-        // do nms
-        std::vector<yolov5_impl::internal_output> nms_result = yolov5_impl::nms_bboxes(
-                bbox_result, _m_nms_threshold);
-        if (nms_result.size() > _m_keep_topk) {
-            nms_result.resize(_m_keep_topk);
-        }
+        // postprocess
+        auto bboxes = postprocess();
 
         // transform internal output into external output
         out.clear();
-        for (auto& bbox : nms_result) {
-            out.push_back(yolov5_impl::transform_output<OUTPUT>(bbox));
+        for (auto& bbox : bboxes) {
+            out.push_back(dbtext_impl::transform_output<OUTPUT>(bbox));
         }
 
         return StatusCode::OK;
     }
 
-public:
+private:
     // 模型文件存储路径
     std::string _m_model_file_path;
     // MNN Interpreter
@@ -336,28 +213,28 @@ public:
     MNN::Session* _m_session = nullptr;
     // MNN Input tensor node
     MNN::Tensor* _m_input_tensor = nullptr;
-    // MNN Loc Output tensor node
+    // MNN Output tensor node
     MNN::Tensor* _m_output_tensor = nullptr;
     // MNN后端使用线程数
     int _m_threads_nums = 4;
     // 得分阈值
     double _m_score_threshold = 0.4;
-    // nms阈值
-    double _m_nms_threshold = 0.35;
+    // rotate bbox 短边阈值
+    float _m_sside_threshold = 3;
     // top_k keep阈值
     long _m_keep_topk = 250;
-    // 模型类别数量
-    int _m_class_nums = 80;
     // 用户输入网络的图像尺寸
     cv::Size _m_input_size_user = cv::Size();
     //　计算图定义的输入node尺寸
     cv::Size _m_input_size_host = cv::Size();
-    // init color map
-    std::map<int, cv::Scalar> _m_color_map;
+    // segmentation prob mat
+    cv::Mat _m_seg_prob_mat;
+    // segmentation score map
+    cv::Mat _m_seg_score_mat;
     // 是否成功初始化标志位
     bool _m_successfully_initialized = false;
 
-public:
+private:
     /***
      * 图像预处理, 转换图像为CV_32FC3, 通过dst = src / 127.5 - 1.0来归一化图像到[-1.0, 1.0]
      * @param input_image : 输入图像
@@ -368,8 +245,22 @@ public:
      *
      * @return
      */
-    std::vector<yolov5_impl::internal_output> decode_output_tensor() const;
+    std::vector<dbtext_impl::internal_output> postprocess() const;
+
+    /***
+     *
+     * @return
+     */
+    void decode_segmentation_result_mat() const;
+
+    /***
+     *
+     * @param seg_probs_mat
+     * @return
+     */
+    std::vector<dbtext_impl::internal_output> get_boxes_from_bitmap() const;
 };
+
 
 /***
 *
@@ -377,14 +268,14 @@ public:
 * @return
 */
 template<typename INPUT, typename OUTPUT>
-StatusCode YoloV5Detector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& config) {
-    if (!config.contains("YOLOV5")) {
-        LOG(ERROR) << "Config文件没有YoloV5相关配置, 请重新检查配置文件";
+StatusCode DBTextDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& config) {
+    if (!config.contains("DB_TEXT")) {
+        LOG(ERROR) << "Config文件没有DB_TEXT相关配置, 请重新检查配置文件";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    toml::value cfg_content = config.at("YOLOV5");
+    toml::value cfg_content = config.at("DB_TEXT");
 
     // init threads
     if (!cfg_content.contains("model_threads_num")) {
@@ -404,16 +295,15 @@ StatusCode YoloV5Detector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(
     }
 
     if (!FilePathUtil::is_file_exist(_m_model_file_path)) {
-        LOG(ERROR) << "YoloV5 Detection model file: " << _m_model_file_path << " not exist";
+        LOG(ERROR) << "DB_TEXT Detection model file: " << _m_model_file_path << " not exist";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    _m_net = std::unique_ptr<MNN::Interpreter>(
-                 MNN::Interpreter::createFromFile(_m_model_file_path.c_str()));
+    _m_net = std::unique_ptr<MNN::Interpreter>(MNN::Interpreter::createFromFile(_m_model_file_path.c_str()));
 
     if (nullptr == _m_net) {
-        LOG(ERROR) << "Create yolov5 detection model interpreter failed";
+        LOG(ERROR) << "Create db_text detection model interpreter failed";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
@@ -446,28 +336,30 @@ StatusCode YoloV5Detector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(
     _m_session = _m_net->createSession(mnn_config);
 
     if (nullptr == _m_session) {
-        LOG(ERROR) << "Create obstacle detection model session failed";
+        LOG(ERROR) << "Create db_text detection model session failed";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    _m_input_tensor = _m_net->getSessionInput(_m_session, "images");
-    _m_output_tensor = _m_net->getSessionOutput(_m_session, "output");
+    _m_input_tensor = _m_net->getSessionInput(_m_session, "x");
+    _m_output_tensor = _m_net->getSessionOutput(_m_session, "sigmoid_0.tmp_0");
 
     if (_m_input_tensor == nullptr) {
-        LOG(ERROR) << "Fetch yolov5 detection model input node failed";
+        LOG(ERROR) << "Fetch db_text detection model input node failed";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
 
     if (_m_output_tensor == nullptr) {
-        LOG(ERROR) << "Fetch yolov5 detection model output node failed";
+        LOG(ERROR) << "Fetch db_text detection model loc output node failed";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
 
     _m_input_size_host.width = _m_input_tensor->width();
     _m_input_size_host.height = _m_input_tensor->height();
+    _m_seg_prob_mat.create(_m_input_size_host, CV_8UC1);
+    _m_seg_score_mat.create(_m_input_size_host, CV_32FC1);
 
     if (!cfg_content.contains("model_input_image_size")) {
         _m_input_size_user.width = 640;
@@ -485,45 +377,30 @@ StatusCode YoloV5Detector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(
         _m_score_threshold = cfg_content.at("model_score_threshold").as_floating();
     }
 
-    if (!cfg_content.contains("model_nms_threshold")) {
-        _m_nms_threshold = 0.35;
-    } else {
-        _m_nms_threshold = cfg_content.at("model_nms_threshold").as_floating();
-    }
-
     if (!cfg_content.contains("model_keep_top_k")) {
         _m_keep_topk = 250;
     } else {
         _m_keep_topk = cfg_content.at("model_keep_top_k").as_integer();
     }
 
-    if (!cfg_content.contains("model_class_nums")) {
-        _m_class_nums = 80;
-    } else {
-        _m_class_nums = static_cast<int>(cfg_content.at("model_class_nums").as_integer());
-    }
-
-    _m_color_map = yolov5_impl::generate_color_map(_m_class_nums);
-
     _m_successfully_initialized = true;
-    LOG(INFO) << "YoloV5 detection model: " << FilePathUtil::get_file_name(_m_model_file_path)
+    LOG(INFO) << "DB_Text detection model: " << FilePathUtil::get_file_name(_m_model_file_path)
               << " initialization complete!!!";
     return StatusCode::OK;
 }
 
 /***
  *
+ * @tparam INPUT
+ * @tparam OUTPUT
  * @param input_image
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-cv::Mat YoloV5Detector<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& input_image) const {
+cv::Mat DBTextDetector<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& input_image) const {
     // resize image
     cv::Mat tmp;
     cv::resize(input_image, tmp, _m_input_size_host);
-
-    // convert bgr 2 rgb
-    cv::cvtColor(tmp, tmp, cv::COLOR_BGR2RGB);
 
     // normalize
     if (tmp.type() != CV_32FC3) {
@@ -531,108 +408,124 @@ cv::Mat YoloV5Detector<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& inp
     }
 
     tmp /= 255.0;
+    cv::subtract(tmp, cv::Scalar(0.485, 0.456, 0.406), tmp);
+    cv::divide(tmp, cv::Scalar(0.229, 0.224, 0.225), tmp);
 
     return tmp;
 }
 
 /***
-*
-* @return
-*/
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ */
 template<typename INPUT, typename OUTPUT>
-std::vector<yolov5_impl::internal_output> YoloV5Detector<INPUT, OUTPUT>::Impl::decode_output_tensor() const {
-
+void DBTextDetector<INPUT, OUTPUT>::Impl::decode_segmentation_result_mat() const {
     // convert tensor format
     MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
     _m_output_tensor->copyToHostTensor(&output_tensor_user);
 
-    // fetch tensor data
-    std::vector<float> output_tensordata(output_tensor_user.elementSize());
-    ::memcpy(&output_tensordata[0], output_tensor_user.host<float>(),
-             output_tensor_user.elementSize() * sizeof(float));
+    // construct segmentation prob map
+    auto ele_size = output_tensor_user.elementSize();
+    std::vector<uchar> seg_mat_vec;
+    seg_mat_vec.resize(ele_size);
 
-    auto batch_nums = output_tensor_user.shape()[0];
-    auto raw_pred_bbox_nums = output_tensor_user.shape()[1];
-
-    std::vector<std::vector<float> > raw_output;
-    raw_output.resize(raw_pred_bbox_nums);
-
-    for (auto&& tmp : raw_output) {
-        tmp.resize(_m_class_nums + 5, 0.0);
-    }
-
-    for (auto index = 0; index < raw_pred_bbox_nums; ++index) {
-        for (auto idx = 0; idx < _m_class_nums + 5; idx++) {
-            raw_output[index][idx] = output_tensordata[index + raw_pred_bbox_nums * idx];
+    for (int index = 0; index < ele_size; ++index) {
+        if (output_tensor_user.host<float>()[index] >= _m_score_threshold) {
+            seg_mat_vec[index] = static_cast<uchar>(output_tensor_user.host<float>()[index] * 255.0);
+        } else {
+            seg_mat_vec[index] = static_cast<uchar>(0);
+            output_tensor_user.host<float>()[index] = 0.0;
         }
     }
 
-    std::vector<yolov5_impl::internal_output> decode_result;
+    ::memcpy(_m_seg_prob_mat.data, seg_mat_vec.data(), seg_mat_vec.size() * sizeof(uchar));
 
-    for (size_t batch_num = 0; batch_num < batch_nums; ++batch_num) {
-        for (size_t bbox_index = 0; bbox_index < raw_pred_bbox_nums; ++bbox_index) {
-            std::vector<float> raw_bbox_info = raw_output[bbox_index];
-            // thresh bboxes with lower score
-            int class_id = -1;
-            float max_cls_score = 0.0;
+    // construct segmentation score map
+    ::memcpy(_m_seg_score_mat.data, output_tensor_user.host<float>(), ele_size * sizeof(float));
+}
 
-            for (auto cls_idx = 0; cls_idx < _m_class_nums; ++cls_idx) {
-                if (raw_bbox_info[cls_idx + 5] > max_cls_score) {
-                    max_cls_score = raw_bbox_info[cls_idx + 5];
-                    class_id = cls_idx;
-                }
-            }
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @return
+ */
+template<typename INPUT, typename OUTPUT>
+std::vector<dbtext_impl::internal_output>
+DBTextDetector<INPUT, OUTPUT>::Impl::postprocess() const {
+    // decode seg prob mat
+    decode_segmentation_result_mat();
+    // get bboxes from bitmap
+    auto bbox_result = get_boxes_from_bitmap();
 
-            auto bbox_score = raw_bbox_info[4] * max_cls_score;
+    if (bbox_result.size() <= _m_keep_topk) {
+        return bbox_result;
+    } else {
+        std::vector<dbtext_impl::internal_output> keep_top_k(bbox_result.cbegin(), bbox_result.cbegin() + _m_keep_topk);
+        return keep_top_k;
+    }
+}
 
-            if (bbox_score < _m_score_threshold) {
-                continue;
-            }
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @return
+ */
+template<typename INPUT, typename OUTPUT>
+std::vector<dbtext_impl::internal_output>
+DBTextDetector<INPUT, OUTPUT>::Impl::get_boxes_from_bitmap() const {
+    std::vector<dbtext_impl::internal_output> result;
+    auto host_width = static_cast<float>(_m_input_size_host.width);
+    auto host_height = static_cast<float>(_m_input_size_host.height);
+    auto user_width = static_cast<float>(_m_input_size_user.width);
+    auto user_height = static_cast<float>(_m_input_size_user.height);
+    // contours analysis
+    std::vector<std::vector<cv::Point> > contours;
+    std::vector<cv::Vec4i> hierarchy;
+    cv::findContours(_m_seg_prob_mat, contours, hierarchy, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
 
-            // thresh invalid bboxes
-            if (raw_bbox_info[2] <= 0 || raw_bbox_info[3] <= 0) {
-                continue;
-            }
+    for (const auto& contour : contours) {
+        cv::RotatedRect r_bbox = cv::minAreaRect(contour);
+        cv::Rect2f r_bounding_box = r_bbox.boundingRect2f();
+        cv::Point2f r_vertices[4];
+        r_bbox.points(r_vertices);
+        auto sside = std::min(r_bbox.size.height, r_bbox.size.width);
 
-            auto bbox_area = std::sqrt(raw_bbox_info[2] * raw_bbox_info[3]);
-
-            if (bbox_area < 0 || bbox_area > std::numeric_limits<float>::max()) {
-                continue;
-            }
-
-            // rescale boxes from img_size to im0 size
-            std::vector<float> coords = {
-                raw_bbox_info[0] - raw_bbox_info[2] / 2.0f,
-                raw_bbox_info[1] - raw_bbox_info[3] / 2.0f,
-                raw_bbox_info[0] + raw_bbox_info[2] / 2.0f,
-                raw_bbox_info[1] + raw_bbox_info[3] / 2.0f
-            };
-            auto w_scale = static_cast<float>(_m_input_size_user.width) /
-                    static_cast<float>(_m_input_size_host.width);
-            auto h_scale = static_cast<float>(_m_input_size_user.height) /
-                    static_cast<float>(_m_input_size_host.height);
-            coords[0] *= w_scale;
-            coords[1] *= h_scale;
-            coords[2] *= w_scale;
-            coords[3] *= h_scale;
-
-            yolov5_impl::internal_output tmp_bbox;
-            tmp_bbox.class_id = class_id;
-            tmp_bbox.score = bbox_score;
-            tmp_bbox.bbox.x = coords[0];
-            tmp_bbox.bbox.y = coords[1];
-            tmp_bbox.bbox.width = coords[2] - coords[0];
-            tmp_bbox.bbox.height = coords[3] - coords[1];
-
-            if (tmp_bbox.bbox.area() < 5) {
-                continue;
-            }
-
-            decode_result.push_back(tmp_bbox);
+        // thresh those with short sside
+        if (sside < _m_sside_threshold) {
+            continue;
         }
+
+        // calculate rotated bbox score
+        auto valid_roi = r_bounding_box & cv::Rect2f(0, 0, _m_seg_score_mat.cols, _m_seg_score_mat.rows);
+        float score = static_cast<float>(cv::mean(_m_seg_score_mat(valid_roi))[0]);
+
+        if (score < _m_score_threshold) {
+            continue;
+        }
+
+        // rescale bbox coords to origin user image size
+        for (auto& pt : r_vertices) {
+            pt.x = pt.x * user_width / host_width;
+            pt.y = pt.y * user_height / host_height;
+        }
+
+        r_bounding_box.x = r_bounding_box.x * user_width / host_width;
+        r_bounding_box.y = r_bounding_box.y * user_height / host_height;
+        r_bounding_box.width = r_bounding_box.width * user_width / host_width;
+        r_bounding_box.height = r_bounding_box.height * user_height / host_height;
+
+        dbtext_impl::internal_output bbox;
+        bbox.bbox = r_bounding_box;
+        bbox.polygon = std::vector<cv::Point2f>(r_vertices, r_vertices + 4);
+        bbox.score = score;
+
+        result.push_back(bbox);
     }
 
-    return decode_result;
+    return result;
 }
 
 
@@ -644,7 +537,7 @@ std::vector<yolov5_impl::internal_output> YoloV5Detector<INPUT, OUTPUT>::Impl::d
  * @tparam OUTPUT
  */
 template<typename INPUT, typename OUTPUT>
-YoloV5Detector<INPUT, OUTPUT>::YoloV5Detector() {
+DBTextDetector<INPUT, OUTPUT>::DBTextDetector() {
     _m_pimpl = std::make_unique<Impl>();
 }
 
@@ -654,7 +547,7 @@ YoloV5Detector<INPUT, OUTPUT>::YoloV5Detector() {
  * @tparam OUTPUT
  */
 template<typename INPUT, typename OUTPUT>
-YoloV5Detector<INPUT, OUTPUT>::~YoloV5Detector() = default;
+DBTextDetector<INPUT, OUTPUT>::~DBTextDetector() = default;
 
 /***
  *
@@ -664,7 +557,7 @@ YoloV5Detector<INPUT, OUTPUT>::~YoloV5Detector() = default;
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode YoloV5Detector<INPUT, OUTPUT>::init(const decltype(toml::parse(""))& cfg) {
+StatusCode DBTextDetector<INPUT, OUTPUT>::init(const decltype(toml::parse(""))& cfg) {
     return _m_pimpl->init(cfg);
 }
 
@@ -675,7 +568,7 @@ StatusCode YoloV5Detector<INPUT, OUTPUT>::init(const decltype(toml::parse(""))& 
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-bool YoloV5Detector<INPUT, OUTPUT>::is_successfully_initialized() const {
+bool DBTextDetector<INPUT, OUTPUT>::is_successfully_initialized() const {
     return _m_pimpl->is_successfully_initialized();
 }
 
@@ -688,7 +581,7 @@ bool YoloV5Detector<INPUT, OUTPUT>::is_successfully_initialized() const {
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode YoloV5Detector<INPUT, OUTPUT>::run(const INPUT& input, std::vector<OUTPUT>& output) {
+StatusCode DBTextDetector<INPUT, OUTPUT>::run(const INPUT& input, std::vector<OUTPUT>& output) {
     return _m_pimpl->run(input, output);
 }
 

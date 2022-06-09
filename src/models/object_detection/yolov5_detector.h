@@ -18,7 +18,7 @@
 
 namespace morted {
 namespace models {
-namespace image_object_detection {
+namespace object_detection {
 
 template<typename INPUT, typename OUTPUT>
 class YoloV5Detector : public morted::models::BaseAiModel<INPUT, OUTPUT> {
