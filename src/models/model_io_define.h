@@ -33,7 +33,7 @@ struct base64_input {
 }
 
 // image ocr
-namespace image_ocr {
+namespace ocr {
 
 struct common_out {
     cv::Rect2f bbox;
@@ -43,12 +43,20 @@ struct common_out {
 }
 
 // image object detection
-namespace image_object_detection {
+namespace object_detection {
 
 struct common_out {
     cv::Rect2f bbox;
     float score;
     int32_t class_id;
+};
+}
+
+// image scene segmentation
+namespace scene_segmentation {
+
+struct common_out {
+    cv::Mat segmentation_result;
 };
 }
 

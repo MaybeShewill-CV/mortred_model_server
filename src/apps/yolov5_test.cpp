@@ -32,7 +32,7 @@ int main(int argc, char** argv) {
     auto cfg = toml::parse(argv[1]);
 
     file_input file_in{};
-    file_in.input_image_path = "../demo_data/model_test_input/image_ocr/db_text/test.jpg";
+    file_in.input_image_path = "../demo_data/model_test_input/ocr/db_text/test.jpg";
     mat_input mat_in{};
     base64_input base64_in{};
     std::vector<common_out> out;
@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
     auto yolov5_worker_2 = create_yolov5_detector<mat_input, common_out>("yolov5_fc_worker2");
 
     yolov5_worker_1->init(cfg);
-    Timestamp ts;
+    Timestamp ts = Timestamp::now();
     for (int i = 0; i < 50; ++i) {
         yolov5_worker_1->run(file_in, out);
     }
@@ -52,8 +52,7 @@ int main(int argc, char** argv) {
         LOG(INFO) << bbox.bbox << " " << bbox.score;
     }
 
-    mat_in.input_image = cv::imread(
-            "../demo_data/model_test_input/image_ocr/db_text/test.jpg", cv::IMREAD_UNCHANGED);
+    mat_in.input_image = cv::imread("../demo_data/model_test_input/ocr/db_text/test.jpg", cv::IMREAD_UNCHANGED);
     yolov5_worker_2->init(cfg);
     out.clear();
 
