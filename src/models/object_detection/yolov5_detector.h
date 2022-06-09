@@ -1,7 +1,7 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: YoloV5Detector.h
+* File: yolov5_detector.h
 * Date: 22-6-7
 ************************************************/
 
