@@ -34,3 +34,12 @@ target_link_libraries(
     models
     ${GLOG_LIBS}
 )
+
+# add bisenetv2 test tools
+add_executable(bisenetv2_test.out ./bisenetv2_test.cpp)
+target_link_libraries(
+    bisenetv2_test.out
+    common
+    models
+    ${GLOG_LIBS}
+)
