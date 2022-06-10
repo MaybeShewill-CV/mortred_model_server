@@ -7,7 +7,9 @@
 
 #include "file_path_util.h"
 
+#ifdef _WIN32
 #include <io.h>
+#endif
 #include <sys/stat.h>
 
 namespace morted {
