@@ -12,6 +12,7 @@
 #include "factory/register_marco.h"
 #include "models/base_model.h"
 #include "models/object_detection/yolov5_detector.h"
+#include "models/object_detection/nano_detector.h"
 
 namespace morted {
 namespace factory {
@@ -21,6 +22,7 @@ using morted::models::BaseAiModel;
 
 namespace object_detection {
 using morted::models::object_detection::YoloV5Detector;
+using morted::models::object_detection::NanoDetector;
 
 /***
  * create yolov5 object detection instance
@@ -32,6 +34,19 @@ using morted::models::object_detection::YoloV5Detector;
 template<typename INPUT, typename OUTPUT>
 static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_yolov5_detector(const std::string& detector_name) {
     REGISTER_AI_MODEL(YoloV5Detector, detector_name, INPUT, OUTPUT)
+    return ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance().get_model(detector_name);
+}
+
+/***
+ * create nanodet object detection instance
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param detector_name
+ * @return
+ */
+template<typename INPUT, typename OUTPUT>
+static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_nanodet_detector(const std::string& detector_name) {
+    REGISTER_AI_MODEL(NanoDetector, detector_name, INPUT, OUTPUT)
     return ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance().get_model(detector_name);
 }
 

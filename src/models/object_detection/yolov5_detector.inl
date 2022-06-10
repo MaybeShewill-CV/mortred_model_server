@@ -51,11 +51,10 @@ struct internal_output {
 template<typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<file_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
-    LOG(INFO) << "transform file input into internal input";
     internal_input result{};
 
     if (!FilePathUtil::is_file_exist(in.input_image_path)) {
-        LOG(INFO) << "input image: " << in.input_image_path << " not exist";
+        LOG(WARNING) << "input image: " << in.input_image_path << " not exist";
         return result;
     }
 
@@ -72,7 +71,6 @@ transform_input(const INPUT& in) {
 template<typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<mat_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
-    LOG(INFO) << "transform mat input into internal input";
     internal_input result{};
     result.input_image = in.input_image;
     return result;
@@ -87,13 +85,12 @@ transform_input(const INPUT& in) {
 template<typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<base64_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
-    LOG(INFO) << "transform base63 input into internal input";
     internal_input result{};
     auto image_decode_string = morted::common::Base64::base64_decode(in.input_image_content);
     std::vector<uchar> image_vec_data(image_decode_string.begin(), image_decode_string.end());
 
     if (image_vec_data.empty()) {
-        LOG(INFO) << "image data empty";
+        LOG(WARNING) << "image data empty";
         return result;
     } else {
         cv::Mat ret;
@@ -313,13 +310,15 @@ public:
 
         // do nms
         std::vector<yolov5_impl::internal_output> nms_result = yolov5_impl::nms_bboxes(
-                bbox_result, _m_nms_threshold);
+                    bbox_result, _m_nms_threshold);
+
         if (nms_result.size() > _m_keep_topk) {
             nms_result.resize(_m_keep_topk);
         }
 
         // transform internal output into external output
         out.clear();
+
         for (auto& bbox : nms_result) {
             out.push_back(yolov5_impl::transform_output<OUTPUT>(bbox));
         }
@@ -608,9 +607,9 @@ std::vector<yolov5_impl::internal_output> YoloV5Detector<INPUT, OUTPUT>::Impl::d
                 raw_bbox_info[1] + raw_bbox_info[3] / 2.0f
             };
             auto w_scale = static_cast<float>(_m_input_size_user.width) /
-                    static_cast<float>(_m_input_size_host.width);
+                           static_cast<float>(_m_input_size_host.width);
             auto h_scale = static_cast<float>(_m_input_size_user.height) /
-                    static_cast<float>(_m_input_size_host.height);
+                           static_cast<float>(_m_input_size_host.height);
             coords[0] *= w_scale;
             coords[1] *= h_scale;
             coords[2] *= w_scale;

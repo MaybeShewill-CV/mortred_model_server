@@ -46,11 +46,10 @@ struct internal_output {
 template<typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<file_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
-    LOG(INFO) << "transform file input into internal input";
     internal_input result{};
 
     if (!FilePathUtil::is_file_exist(in.input_image_path)) {
-        LOG(INFO) << "input image: " << in.input_image_path << " not exist";
+        LOG(WARNING) << "input image: " << in.input_image_path << " not exist";
         return result;
     }
 
@@ -67,7 +66,6 @@ transform_input(const INPUT& in) {
 template<typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<mat_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
-    LOG(INFO) << "transform mat input into internal input";
     internal_input result{};
     result.input_image = in.input_image;
     return result;
@@ -82,13 +80,12 @@ transform_input(const INPUT& in) {
 template<typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<base64_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
-    LOG(INFO) << "transform base63 input into internal input";
     internal_input result{};
     auto image_decode_string = morted::common::Base64::base64_decode(in.input_image_content);
     std::vector<uchar> image_vec_data(image_decode_string.begin(), image_decode_string.end());
 
     if (image_vec_data.empty()) {
-        LOG(INFO) << "image data empty";
+        LOG(WARNING) << "image data empty";
         return result;
     } else {
         cv::Mat ret;
@@ -201,17 +198,9 @@ public:
 
         for (auto row = 0; row < softmax_score_mat.rows; ++row) {
             for (auto col = 0; col < softmax_score_mat.cols; ++col) {
-                int cls_id = 0;
-                float max_score = -1.0;
-                auto softmax_socres = softmax_score_mat.ptr<float>(row, col);
-
-                for (auto index = 0; index < output_tensor_channels; ++index) {
-                    if (softmax_socres[index] > max_score) {
-                        max_score = softmax_socres[index];
-                        cls_id = index;
-                    }
-                }
-
+                auto* scores = softmax_score_mat.ptr<float>(row, col);
+                auto max_score_iter = std::max_element(scores, scores + output_tensor_channels);
+                int cls_id = static_cast<int>(std::distance(scores, max_score_iter));
                 result_image.at<int>(row, col) = cls_id;
             }
         }
@@ -309,12 +298,9 @@ StatusCode BiseNetV2<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))&
         mnn_config.type = MNN_FORWARD_CPU;
     } else {
         std::string compute_backend = cfg_content.at("compute_backend").as_string();
-
         if (std::strcmp(compute_backend.c_str(), "cuda") == 0) {
-            LOG(INFO) << "Using CUDA compute backend...";
             mnn_config.type = MNN_FORWARD_CUDA;
         } else if (std::strcmp(compute_backend.c_str(), "cpu") == 0) {
-            LOG(INFO) << "Using CPU compute backend...";
             mnn_config.type = MNN_FORWARD_CPU;
         } else {
             LOG(WARNING) << "Compute backend not support, using default backend cpu";

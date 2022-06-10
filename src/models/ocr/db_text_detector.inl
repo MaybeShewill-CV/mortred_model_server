@@ -49,11 +49,10 @@ struct internal_output {
 template<typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<file_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
-    LOG(INFO) << "transform file input into internal input";
     internal_input result{};
 
     if (!FilePathUtil::is_file_exist(in.input_image_path)) {
-        LOG(INFO) << "input image: " << in.input_image_path << " not exist";
+        LOG(WARNING) << "input image: " << in.input_image_path << " not exist";
         return result;
     }
 
@@ -70,7 +69,6 @@ transform_input(const INPUT& in) {
 template<typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<mat_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
-    LOG(INFO) << "transform mat input into internal input";
     internal_input result{};
     result.input_image = in.input_image;
     return result;
@@ -85,13 +83,12 @@ transform_input(const INPUT& in) {
 template<typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<base64_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
-    LOG(INFO) << "transform base63 input into internal input";
     internal_input result{};
     auto image_decode_string = morted::common::Base64::base64_decode(in.input_image_content);
     std::vector<uchar> image_vec_data(image_decode_string.begin(), image_decode_string.end());
 
     if (image_vec_data.empty()) {
-        LOG(INFO) << "image data empty";
+        LOG(WARNING) << "image data empty";
         return result;
     } else {
         cv::Mat ret;
@@ -177,6 +174,7 @@ public:
     StatusCode run(const INPUT& in, std::vector<OUTPUT>& out) {
         // transform external input into internal input
         auto internal_in = dbtext_impl::transform_input(in);
+
         if (!internal_in.input_image.data || internal_in.input_image.empty()) {
             return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
         }
@@ -197,6 +195,7 @@ public:
 
         // transform internal output into external output
         out.clear();
+
         for (auto& bbox : bboxes) {
             out.push_back(dbtext_impl::transform_output<OUTPUT>(bbox));
         }

@@ -22,6 +22,12 @@ namespace object_detection {
 
 template<typename INPUT, typename OUTPUT>
 class NanoDetector : public morted::models::BaseAiModel<INPUT, OUTPUT> {
+    typedef struct CenterPrior_ {
+        int x;
+        int y;
+        int stride;
+    } CenterPrior;
+
 public:
 
     /***

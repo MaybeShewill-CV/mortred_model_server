@@ -51,11 +51,10 @@ struct internal_output {
 template<typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<file_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
-    LOG(INFO) << "transform file input into internal input";
     internal_input result{};
 
     if (!FilePathUtil::is_file_exist(in.input_image_path)) {
-        LOG(INFO) << "input image: " << in.input_image_path << " not exist";
+        LOG(WARNING) << "input image: " << in.input_image_path << " not exist";
         return result;
     }
 
@@ -72,7 +71,6 @@ transform_input(const INPUT& in) {
 template<typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<mat_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
-    LOG(INFO) << "transform mat input into internal input";
     internal_input result{};
     result.input_image = in.input_image;
     return result;
@@ -87,13 +85,12 @@ transform_input(const INPUT& in) {
 template<typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<base64_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
-    LOG(INFO) << "transform base63 input into internal input";
     internal_input result{};
     auto image_decode_string = morted::common::Base64::base64_decode(in.input_image_content);
     std::vector<uchar> image_vec_data(image_decode_string.begin(), image_decode_string.end());
 
     if (image_vec_data.empty()) {
-        LOG(INFO) << "image data empty";
+        LOG(WARNING) << "image data empty";
         return result;
     } else {
         cv::Mat ret;
@@ -141,7 +138,7 @@ std::map<int, cv::Scalar> generate_color_map(int class_counts) {
         cv::Scalar color(b, g, r);
 
         if (color_set_r.find(r) != color_set_r.end() && color_set_g.find(g) != color_set_g.end()
-            && color_set_b.find(b) != color_set_b.end()) {
+                && color_set_b.find(b) != color_set_b.end()) {
             continue;
         } else {
             color_map.insert(std::make_pair(class_id, color));
@@ -163,8 +160,8 @@ std::map<int, cv::Scalar> generate_color_map(int class_counts) {
 */
 template<typename BBOX1, typename BBOX2>
 typename std::enable_if <
-        std::is_same<BBOX1, std::decay<internal_output>::type>::value&&
-        std::is_same<BBOX2, std::decay<internal_output>::type>::value, float >::type
+std::is_same<BBOX1, std::decay<internal_output>::type>::value&&
+std::is_same<BBOX2, std::decay<internal_output>::type>::value, float >::type
 calc_iou(const BBOX1& box1, const BBOX2& box2) {
     float x1 = std::max(box1.bbox.x, box2.bbox.x);
     float y1 = std::max(box1.bbox.y, box2.bbox.y);
@@ -206,9 +203,9 @@ std::vector<internal_output> nms_bboxes(std::vector<internal_output>& bboxes, do
         auto tmp_bboxes = iter.second;
         // sort the bounding boxes by the detection score
         std::sort(tmp_bboxes.begin(), tmp_bboxes.end(),
-                  [](const internal_output & box1, const internal_output & box2) {
-                      return box1.score < box2.score;
-                  });
+        [](const internal_output & box1, const internal_output & box2) {
+            return box1.score < box2.score;
+        });
 
         while (!tmp_bboxes.empty()) {
             auto last_elem = --std::end(tmp_bboxes);
@@ -297,14 +294,13 @@ public:
             return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
         }
 
-        // preprocess image
-        auto preprocessed_image = preprocess_image(internal_in.input_image);
-
+        // preprocess
+        cv::Mat input_image_copy = preprocess_image(internal_in.input_image);
         // run session
         MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
         auto input_tensor_data = input_tensor_user.host<float>();
         auto input_tensor_size = input_tensor_user.size();
-        ::memcpy(input_tensor_data, preprocessed_image.data, input_tensor_size);
+        ::memcpy(input_tensor_data, input_image_copy.data, input_tensor_size);
         _m_input_tensor->copyFromHostTensor(&input_tensor_user);
         _m_net->runSession(_m_session);
 
@@ -313,13 +309,15 @@ public:
 
         // do nms
         std::vector<nano_impl::internal_output> nms_result = nano_impl::nms_bboxes(
-                bbox_result, _m_nms_threshold);
+                    bbox_result, _m_nms_threshold);
+
         if (nms_result.size() > _m_keep_topk) {
             nms_result.resize(_m_keep_topk);
         }
 
         // transform internal output into external output
         out.clear();
+
         for (auto& bbox : nms_result) {
             out.push_back(nano_impl::transform_output<OUTPUT>(bbox));
         }
@@ -327,7 +325,7 @@ public:
         return StatusCode::OK;
     }
 
-public:
+private:
     // 模型文件存储路径
     std::string _m_model_file_path;
     // MNN Interpreter
@@ -352,12 +350,16 @@ public:
     cv::Size _m_input_size_user = cv::Size();
     //　计算图定义的输入node尺寸
     cv::Size _m_input_size_host = cv::Size();
-    // init color map
-    std::map<int, cv::Scalar> _m_color_map;
     // 是否成功初始化标志位
     bool _m_successfully_initialized = false;
+    // center priors
+    std::vector<CenterPrior> _m_center_priors;
+    // strides
+    std::vector<int> _m_strides = {8, 16, 32, 64};
+    // reg max origin
+    int _m_reg_max = 7;
 
-public:
+private:
     /***
      * 图像预处理, 转换图像为CV_32FC3, 通过dst = src / 127.5 - 1.0来归一化图像到[-1.0, 1.0]
      * @param input_image : 输入图像
@@ -369,6 +371,60 @@ public:
      * @return
      */
     std::vector<nano_impl::internal_output> decode_output_tensor() const;
+
+    /***
+     *
+     * @param preds
+     * @param ct_x
+     * @param ct_y
+     * @param stride
+     * @return
+     */
+    std::vector<float> refine_bbox_coords(const float* preds, int ct_x, int ct_y, int stride) const;
+
+    /***
+     *
+     * @param input_height
+     * @param input_width
+     * @param strides
+     * @param center_priors
+     */
+    void generate_grid_center_priors();
+
+    /***
+     *
+     * @param x
+     * @return
+     */
+    static inline float fast_exp(float x) {
+        union {
+            uint32_t i;
+            float f;
+        } v{};
+        v.i = (1 << 23) * (1.4426950409 * x + 126.93490512f);
+        return v.f;
+    }
+
+    /***
+     *
+     * @param src
+     * @param dst
+     * @param length
+     * @return
+     */
+    static void activation_function_softmax(const float* src, float* dst, int length) {
+        const float alpha = *std::max_element(src, src + length);
+        float denominator{0};
+
+        for (int i = 0; i < length; ++i) {
+            dst[i] = fast_exp(src[i] - alpha);
+            denominator += dst[i];
+        }
+
+        for (int i = 0; i < length; ++i) {
+            dst[i] /= denominator;
+        }
+    }
 };
 
 /***
@@ -378,63 +434,63 @@ public:
 */
 template<typename INPUT, typename OUTPUT>
 StatusCode NanoDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& config) {
-    if (!config.contains("YOLOV5")) {
-    LOG(ERROR) << "Config文件没有YoloV5相关配置, 请重新检查配置文件";
-    _m_successfully_initialized = false;
-    return StatusCode::MODEL_INIT_FAILED;
+    if (!config.contains("NanoDet")) {
+        LOG(ERROR) << "Config文件没有NanoDet相关配置, 请重新检查配置文件";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
 
-    toml::value cfg_content = config.at("YOLOV5");
+    toml::value cfg_content = config.at("NanoDet");
 
     // init threads
     if (!cfg_content.contains("model_threads_num")) {
-    LOG(WARNING) << "Config doesn\'t have model_threads_num field default 4";
-    _m_threads_nums = 4;
+        LOG(WARNING) << "Config doesn\'t have model_threads_num field default 4";
+        _m_threads_nums = 4;
     } else {
-    _m_threads_nums = static_cast<int>(cfg_content.at("model_threads_num").as_integer());
+        _m_threads_nums = static_cast<int>(cfg_content.at("model_threads_num").as_integer());
     }
 
     // init Interpreter
     if (!cfg_content.contains("model_file_path")) {
-    LOG(ERROR) << "Config doesn\'t have model_file_path field";
-    _m_successfully_initialized = false;
-    return StatusCode::MODEL_INIT_FAILED;
+        LOG(ERROR) << "Config doesn\'t have model_file_path field";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     } else {
-    _m_model_file_path = cfg_content.at("model_file_path").as_string();
+        _m_model_file_path = cfg_content.at("model_file_path").as_string();
     }
 
     if (!FilePathUtil::is_file_exist(_m_model_file_path)) {
-    LOG(ERROR) << "YoloV5 Detection model file: " << _m_model_file_path << " not exist";
-    _m_successfully_initialized = false;
-    return StatusCode::MODEL_INIT_FAILED;
+        LOG(ERROR) << "NanoDet Detection model file: " << _m_model_file_path << " not exist";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
 
     _m_net = std::unique_ptr<MNN::Interpreter>(
-    MNN::Interpreter::createFromFile(_m_model_file_path.c_str()));
+                 MNN::Interpreter::createFromFile(_m_model_file_path.c_str()));
 
     if (nullptr == _m_net) {
-    LOG(ERROR) << "Create yolov5 detection model interpreter failed";
-    _m_successfully_initialized = false;
-    return StatusCode::MODEL_INIT_FAILED;
+        LOG(ERROR) << "Create NanoDet detection model interpreter failed";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
 
     // init Session
     MNN::ScheduleConfig mnn_config;
 
     if (!cfg_content.contains("compute_backend")) {
-    LOG(WARNING) << "Config doesn\'t have compute_backend field default cpu";
-    mnn_config.type = MNN_FORWARD_CPU;
+        LOG(WARNING) << "Config doesn\'t have compute_backend field default cpu";
+        mnn_config.type = MNN_FORWARD_CPU;
     } else {
-    std::string compute_backend = cfg_content.at("compute_backend").as_string();
+        std::string compute_backend = cfg_content.at("compute_backend").as_string();
 
-    if (std::strcmp(compute_backend.c_str(), "cuda") == 0) {
-    mnn_config.type = MNN_FORWARD_CUDA;
-    } else if (std::strcmp(compute_backend.c_str(), "cpu") == 0) {
-    mnn_config.type = MNN_FORWARD_CPU;
-    } else {
-    LOG(WARNING) << "not supported compute backend use default cpu instead";
-    mnn_config.type = MNN_FORWARD_CPU;
-    }
+        if (std::strcmp(compute_backend.c_str(), "cuda") == 0) {
+            mnn_config.type = MNN_FORWARD_CUDA;
+        } else if (std::strcmp(compute_backend.c_str(), "cpu") == 0) {
+            mnn_config.type = MNN_FORWARD_CPU;
+        } else {
+            LOG(WARNING) << "not supported compute backend use default cpu instead";
+            mnn_config.type = MNN_FORWARD_CPU;
+        }
     }
 
     mnn_config.numThread = _m_threads_nums;
@@ -446,68 +502,69 @@ StatusCode NanoDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""
     _m_session = _m_net->createSession(mnn_config);
 
     if (nullptr == _m_session) {
-    LOG(ERROR) << "Create obstacle detection model session failed";
-    _m_successfully_initialized = false;
-    return StatusCode::MODEL_INIT_FAILED;
+        LOG(ERROR) << "Create obstacle detection model session failed";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
 
-    _m_input_tensor = _m_net->getSessionInput(_m_session, "images");
+    _m_input_tensor = _m_net->getSessionInput(_m_session, "data");
     _m_output_tensor = _m_net->getSessionOutput(_m_session, "output");
 
     if (_m_input_tensor == nullptr) {
-    LOG(ERROR) << "Fetch yolov5 detection model input node failed";
-    _m_successfully_initialized = false;
-    return StatusCode::MODEL_INIT_FAILED;
+        LOG(ERROR) << "Fetch yolov5 detection model input node failed";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
 
     if (_m_output_tensor == nullptr) {
-    LOG(ERROR) << "Fetch yolov5 detection model output node failed";
-    _m_successfully_initialized = false;
-    return StatusCode::MODEL_INIT_FAILED;
+        LOG(ERROR) << "Fetch yolov5 detection model output node failed";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
 
     _m_input_size_host.width = _m_input_tensor->width();
     _m_input_size_host.height = _m_input_tensor->height();
 
     if (!cfg_content.contains("model_input_image_size")) {
-    _m_input_size_user.width = 640;
-    _m_input_size_user.height = 640;
+        _m_input_size_user.width = 416;
+        _m_input_size_user.height = 416;
     } else {
-    _m_input_size_user.width = static_cast<int>(
-    cfg_content.at("model_input_image_size").as_array()[1].as_integer());
-    _m_input_size_user.height = static_cast<int>(
-    cfg_content.at("model_input_image_size").as_array()[0].as_integer());
+        _m_input_size_user.width = static_cast<int>(
+                                       cfg_content.at("model_input_image_size").as_array()[1].as_integer());
+        _m_input_size_user.height = static_cast<int>(
+                                        cfg_content.at("model_input_image_size").as_array()[0].as_integer());
     }
 
     if (!cfg_content.contains("model_score_threshold")) {
-    _m_score_threshold = 0.4;
+        _m_score_threshold = 0.4;
     } else {
-    _m_score_threshold = cfg_content.at("model_score_threshold").as_floating();
+        _m_score_threshold = cfg_content.at("model_score_threshold").as_floating();
     }
 
     if (!cfg_content.contains("model_nms_threshold")) {
-    _m_nms_threshold = 0.35;
+        _m_nms_threshold = 0.35;
     } else {
-    _m_nms_threshold = cfg_content.at("model_nms_threshold").as_floating();
+        _m_nms_threshold = cfg_content.at("model_nms_threshold").as_floating();
     }
 
     if (!cfg_content.contains("model_keep_top_k")) {
-    _m_keep_topk = 250;
+        _m_keep_topk = 250;
     } else {
-    _m_keep_topk = cfg_content.at("model_keep_top_k").as_integer();
+        _m_keep_topk = cfg_content.at("model_keep_top_k").as_integer();
     }
 
     if (!cfg_content.contains("model_class_nums")) {
-    _m_class_nums = 80;
+        _m_class_nums = 80;
     } else {
-    _m_class_nums = static_cast<int>(cfg_content.at("model_class_nums").as_integer());
+        _m_class_nums = static_cast<int>(cfg_content.at("model_class_nums").as_integer());
     }
 
-    _m_color_map = nano_impl::generate_color_map(_m_class_nums);
+    // generate center priors
+    generate_grid_center_priors();
 
     _m_successfully_initialized = true;
-    LOG(INFO) << "YoloV5 detection model: " << FilePathUtil::get_file_name(_m_model_file_path)
-    << " initialization complete!!!";
+    LOG(INFO) << "NanoDet detection model: " << FilePathUtil::get_file_name(_m_model_file_path)
+              << " initialization complete!!!";
     return StatusCode::OK;
 }
 
@@ -518,21 +575,20 @@ StatusCode NanoDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""
 */
 template<typename INPUT, typename OUTPUT>
 cv::Mat NanoDetector<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& input_image) const {
-// resize image
-cv::Mat tmp;
-cv::resize(input_image, tmp, _m_input_size_host);
+    // resize image
+    cv::Mat tmp;
+    cv::resize(input_image, tmp, _m_input_size_host);
 
-// convert bgr 2 rgb
-cv::cvtColor(tmp, tmp, cv::COLOR_BGR2RGB);
+    // normalize
+    if (tmp.type() != CV_32FC3) {
+        tmp.convertTo(tmp, CV_32FC3);
+    }
 
-// normalize
-if (tmp.type() != CV_32FC3) {
-tmp.convertTo(tmp, CV_32FC3);
-}
+    cv::divide(tmp, cv::Scalar(255.0f, 255.0f, 255.0f), tmp);
+    cv::subtract(tmp, cv::Scalar(0.406, 0.456, 0.485), tmp);
+    cv::divide(tmp, cv::Scalar(0.225, 0.224, 0.229), tmp);
 
-tmp /= 255.0;
-
-return tmp;
+    return tmp;
 }
 
 /***
@@ -541,98 +597,103 @@ return tmp;
 */
 template<typename INPUT, typename OUTPUT>
 std::vector<nano_impl::internal_output> NanoDetector<INPUT, OUTPUT>::Impl::decode_output_tensor() const {
+    // convert tensor format
+    MNN::Tensor tensor_preds_host(_m_output_tensor, _m_output_tensor->getDimensionType());
+    _m_output_tensor->copyToHostTensor(&tensor_preds_host);
 
-// convert tensor format
-MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
-_m_output_tensor->copyToHostTensor(&output_tensor_user);
+    // decode ouptut tensor
+    std::vector<nano_impl::internal_output> result;
+    const int num_points = static_cast<int>(_m_center_priors.size());
+    const int num_channels = _m_class_nums + (_m_reg_max + 1) * 4;
 
-// fetch tensor data
-std::vector<float> output_tensordata(output_tensor_user.elementSize());
-::memcpy(&output_tensordata[0], output_tensor_user.host<float>(),
- output_tensor_user.elementSize() * sizeof(float));
+    for (int idx = 0; idx < num_points; idx++) {
+        const int ct_x = _m_center_priors[idx].x;
+        const int ct_y = _m_center_priors[idx].y;
+        const int stride = _m_center_priors[idx].stride;
 
-auto batch_nums = output_tensor_user.shape()[0];
-auto raw_pred_bbox_nums = output_tensor_user.shape()[1];
+        const float* scores = tensor_preds_host.host<float>() + (idx * num_channels);
+        auto max_score_iter = std::max_element(scores, scores + _m_class_nums);
+        float score = *max_score_iter;
+        int cur_label = static_cast<int>(std::distance(scores, max_score_iter));
 
-std::vector<std::vector<float> > raw_output;
-raw_output.resize(raw_pred_bbox_nums);
-
-for (auto&& tmp : raw_output) {
-tmp.resize(_m_class_nums + 5, 0.0);
-}
-
-for (auto index = 0; index < raw_pred_bbox_nums; ++index) {
-for (auto idx = 0; idx < _m_class_nums + 5; idx++) {
-raw_output[index][idx] = output_tensordata[index + raw_pred_bbox_nums * idx];
-}
-}
-
-std::vector<nano_impl::internal_output> decode_result;
-
-for (size_t batch_num = 0; batch_num < batch_nums; ++batch_num) {
-for (size_t bbox_index = 0; bbox_index < raw_pred_bbox_nums; ++bbox_index) {
-std::vector<float> raw_bbox_info = raw_output[bbox_index];
-// thresh bboxes with lower score
-int class_id = -1;
-float max_cls_score = 0.0;
-
-for (auto cls_idx = 0; cls_idx < _m_class_nums; ++cls_idx) {
-    if (raw_bbox_info[cls_idx + 5] > max_cls_score) {
-        max_cls_score = raw_bbox_info[cls_idx + 5];
-        class_id = cls_idx;
+        if (score > _m_score_threshold) {
+            const float* bbox_pred = tensor_preds_host.host<float>() + idx * num_channels + _m_class_nums;
+            auto obj_box_coords = refine_bbox_coords(bbox_pred, ct_x, ct_y, stride);
+            nano_impl::internal_output obj_box;
+            obj_box.score = score;
+            obj_box.class_id = cur_label;
+            obj_box.bbox = cv::Rect2f(
+                               obj_box_coords[0], obj_box_coords[1],
+                               obj_box_coords[2], obj_box_coords[3]);
+            result.push_back(obj_box);
+        }
     }
+
+    return result;
 }
 
-auto bbox_score = raw_bbox_info[4] * max_cls_score;
+/***
+ *
+ * @param preds
+ * @param ct_x
+ * @param ct_y
+ * @param stride
+ * @return
+ */
+template<typename INPUT, typename OUTPUT>
+std::vector<float> NanoDetector<INPUT, OUTPUT>::Impl::refine_bbox_coords(const float* preds, int x, int y,
+        int stride) const {
+    auto ct_x = static_cast<float>(x * stride);
+    auto ct_y = static_cast<float>(y * stride);
+    std::vector<float> dis_pred;
+    dis_pred.resize(4);
 
-if (bbox_score < _m_score_threshold) {
-    continue;
+    for (int i = 0; i < 4; i++) {
+        float dis = 0;
+        auto* dis_after_sm = new float[_m_reg_max + 1];
+        activation_function_softmax(preds + i * (_m_reg_max + 1), dis_after_sm, _m_reg_max + 1);
+
+        for (int j = 0; j < _m_reg_max + 1; j++) {
+            dis += static_cast<float>(j) * dis_after_sm[j];
+        }
+
+        dis *= static_cast<float>(stride);
+        dis_pred[i] = dis;
+        delete[] dis_after_sm;
+    }
+
+    float xmin = std::max(ct_x - dis_pred[0], .0f);
+    float ymin = std::max(ct_y - dis_pred[1], .0f);
+    float xmax = std::min(ct_x + dis_pred[2], static_cast<float>(_m_input_size_host.width));
+    float ymax = std::min(ct_y + dis_pred[3], static_cast<float>(_m_input_size_host.height));
+
+    xmin *= static_cast<float>(_m_input_size_user.width) / static_cast<float>(_m_input_size_host.width);
+    ymin *= static_cast<float>(_m_input_size_user.height) / static_cast<float>(_m_input_size_host.height);
+    xmax *= static_cast<float>(_m_input_size_user.width) / static_cast<float>(_m_input_size_host.width);
+    ymax *= static_cast<float>(_m_input_size_user.height) / static_cast<float>(_m_input_size_host.height);
+
+    return {xmin, ymin, xmax - xmin, ymax - ymin};
 }
 
-// thresh invalid bboxes
-if (raw_bbox_info[2] <= 0 || raw_bbox_info[3] <= 0) {
-    continue;
-}
+/***
+ *
+ */
+template<typename INPUT, typename OUTPUT>
+void NanoDetector<INPUT, OUTPUT>::Impl::generate_grid_center_priors() {
+    for (const auto& stride : _m_strides) {
+        int feat_w = std::ceil(static_cast<float>(_m_input_size_host.width) / static_cast<float>(stride));
+        int feat_h = std::ceil(static_cast<float>(_m_input_size_host.height) / static_cast<float>(stride));
 
-auto bbox_area = std::sqrt(raw_bbox_info[2] * raw_bbox_info[3]);
-
-if (bbox_area < 0 || bbox_area > std::numeric_limits<float>::max()) {
-    continue;
-}
-
-// rescale boxes from img_size to im0 size
-std::vector<float> coords = {
-        raw_bbox_info[0] - raw_bbox_info[2] / 2.0f,
-        raw_bbox_info[1] - raw_bbox_info[3] / 2.0f,
-        raw_bbox_info[0] + raw_bbox_info[2] / 2.0f,
-        raw_bbox_info[1] + raw_bbox_info[3] / 2.0f
-};
-auto w_scale = static_cast<float>(_m_input_size_user.width) /
-               static_cast<float>(_m_input_size_host.width);
-auto h_scale = static_cast<float>(_m_input_size_user.height) /
-               static_cast<float>(_m_input_size_host.height);
-coords[0] *= w_scale;
-coords[1] *= h_scale;
-coords[2] *= w_scale;
-coords[3] *= h_scale;
-
-nano_impl::internal_output tmp_bbox;
-tmp_bbox.class_id = class_id;
-tmp_bbox.score = bbox_score;
-tmp_bbox.bbox.x = coords[0];
-tmp_bbox.bbox.y = coords[1];
-tmp_bbox.bbox.width = coords[2] - coords[0];
-tmp_bbox.bbox.height = coords[3] - coords[1];
-
-if (tmp_bbox.bbox.area() < 5) {
-    continue;
-}
-
-decode_result.push_back(tmp_bbox);
-}
-}
-
-return decode_result;
+        for (int y = 0; y < feat_h; y++) {
+            for (int x = 0; x < feat_w; x++) {
+                CenterPrior ct;
+                ct.x = x;
+                ct.y = y;
+                ct.stride = stride;
+                _m_center_priors.push_back(ct);
+            }
+        }
+    }
 }
 
 
@@ -665,7 +726,7 @@ NanoDetector<INPUT, OUTPUT>::~NanoDetector() = default;
  */
 template<typename INPUT, typename OUTPUT>
 StatusCode NanoDetector<INPUT, OUTPUT>::init(const decltype(toml::parse(""))& cfg) {
-return _m_pimpl->init(cfg);
+    return _m_pimpl->init(cfg);
 }
 
 /***
