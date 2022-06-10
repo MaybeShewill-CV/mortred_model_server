@@ -1,0 +1,4 @@
+ToolSet: 16.0 (local)@C:\Program Files (x86)\Microsoft Visual Studio\2019\Community
+Options: msvc.arch=x86
+
+Options:-DCMAKE_MAKE_PROGRAM=E:/CLion 2022.1.1/bin/ninja/win/ninja.exe

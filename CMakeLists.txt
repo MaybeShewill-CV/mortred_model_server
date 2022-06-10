@@ -26,7 +26,6 @@ set(LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_LIST_DIR}/_lib)
 
 # find package
 find_package(Threads REQUIRED)
-find_package(Boost REQUIRED COMPONENTS filesystem system)
 find_package(OpenCV 4.5.0 REQUIRED)
 
 # add subdirectory
