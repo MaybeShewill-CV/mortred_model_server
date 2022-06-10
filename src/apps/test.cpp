@@ -10,6 +10,7 @@
 
 #include "workflow/WFFacilities.h"
 #include "workflow/WFTaskFactory.h"
+#include "workflow/WFHttpServer.h"
 #include "glog/logging.h"
 
 #include "common/base64.h"
