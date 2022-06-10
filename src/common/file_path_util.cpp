@@ -7,6 +7,7 @@
 
 #include "file_path_util.h"
 
+#include <io.h>
 #include <sys/stat.h>
 
 namespace morted {
@@ -61,13 +62,23 @@ std::string FilePathUtil::concat_path(const std::string& lhs, const std::string&
 }
 
 bool FilePathUtil::is_dir_exist(const std::string& path) {
+#ifdef _WIN32
+    int n_ret = _access(path.c_str(), 0);
+    return n_ret == 0;
+#else
     struct stat st{};
     return stat(path.c_str(), &st) >= 0 && S_ISDIR(st.st_mode);
+#endif
 }
 
 bool FilePathUtil::is_file_exist(const std::string& path) {
+#ifdef _WIN32
+    int n_ret = _access(path.c_str(), 0);
+    return n_ret == 0;
+#else
     struct stat st{};
     return stat(path.c_str(), &st) >= 0 && S_ISREG(st.st_mode);
+#endif
 }
 }
 }
