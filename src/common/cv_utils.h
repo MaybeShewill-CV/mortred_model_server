@@ -71,20 +71,18 @@ public:
         auto color_map = generate_color_map(cls_nums);
 
         for (auto& obj : objs) {
+            auto bbox = obj.bbox;
+            auto conf = obj.score;
             int cls_id = obj.class_id;
-            auto obj_color = cv::Scalar(0, 0, 0);
-            float obj_score = obj.score;
-
+            cv::Scalar bbox_color(0, 0, 0);
             if (color_map.find(cls_id) != color_map.end()) {
-                obj_color = color_map[cls_id];
+                bbox_color = color_map[cls_id];
             }
-
-            cv::rectangle(input_image, obj.bbox, obj_color, 2);
-            cv::Point text_org(obj.bbox.x - 5, obj.bbox.y - 5);
-            std::string obj_str = "cls_id: " + std::to_string(cls_id) + ", score: " + std::to_string(obj_score);
-            cv::putText(
-                input_image, obj_str, text_org,
-                cv::FONT_HERSHEY_PLAIN, 1.0, obj_color, 1);
+            cv::rectangle(input_image, bbox, bbox_color, 3);
+            char buf[128];
+            sprintf(buf, "Score:%1.2f, Class: %d", conf, cls_id);
+            cv::putText(input_image, buf, cv::Point(bbox.x - 5, bbox.y - 5),
+                        cv::FONT_ITALIC, 0.8, bbox_color, 2);
         }
     }
 
@@ -97,9 +95,11 @@ public:
      */
     static void colorize_segmentation_mask(const cv::Mat& input_image, cv::Mat& output_image, int cls_nums) {
         auto color_map = generate_color_map(cls_nums);
+
         if (output_image.empty()) {
             output_image.create(input_image.size(), CV_8UC3);
         }
+
         assert(input_image.size() == output_image.size());
 
         for (auto row = 0; row < input_image.rows; ++ row) {
@@ -117,6 +117,83 @@ public:
             }
         }
     }
+
+    /***
+    *
+    * @param box1
+    * @param box2
+    * @return
+    */
+    template<typename T>
+    static float calc_iou(const T& box1, const T& box2) {
+        float x1 = std::max(box1.bbox.x, box2.bbox.x);
+        float y1 = std::max(box1.bbox.y, box2.bbox.y);
+        float x2 = std::min(box1.bbox.x + box1.bbox.width, box2.bbox.x + box2.bbox.width);
+        float y2 = std::min(box1.bbox.y + box1.bbox.height, box2.bbox.y + box2.bbox.height);
+        float w = std::max(0.0f, x2 - x1 + 1);
+        float h = std::max(0.0f, y2 - y1 + 1);
+        float over_area = w * h;
+        return over_area /
+               (box1.bbox.width * box1.bbox.height + box2.bbox.width * box2.bbox.height - over_area);
+    }
+
+    /***
+     *
+     * @tparam T
+     * @param bboxes
+     * @param nms_threshold
+     * @return
+     */
+    template<class T>
+    static std::vector<T> nms_bboxes(std::vector<T>& bboxes, double nms_threshold) {
+        std::vector<T> result;
+
+        if (bboxes.empty()) {
+            return result;
+        }
+
+        std::map<int, std::vector<T> > bboxes_split;
+
+        for (const auto& bbox : bboxes) {
+            auto cls_id = bbox.class_id;
+
+            if (bboxes_split.find(cls_id) == bboxes_split.end()) {
+                bboxes_split.insert(std::make_pair(cls_id, std::vector<T>({bbox})));
+            } else {
+                bboxes_split[cls_id].push_back(bbox);
+            }
+        }
+
+        for (auto& iter : bboxes_split) {
+            auto tmp_bboxes = iter.second;
+            // sort the bounding boxes by the detection score
+            std::sort(tmp_bboxes.begin(), tmp_bboxes.end(), [](const T & box1, const T & box2) {
+                return box1.score < box2.score;
+            });
+
+            while (!tmp_bboxes.empty()) {
+                auto last_elem = --std::end(tmp_bboxes);
+                const auto& rect1 = last_elem->bbox;
+
+                tmp_bboxes.erase(last_elem);
+
+                for (auto pos = std::begin(tmp_bboxes); pos != std::end(tmp_bboxes);) {
+                    auto overlap = calc_iou(*last_elem, *pos);
+
+                    if (overlap > nms_threshold) {
+                        pos = tmp_bboxes.erase(pos);
+                    } else {
+                        ++pos;
+                    }
+                }
+
+                result.push_back(*last_elem);
+            }
+        }
+
+        return result;
+    }
+
 };
 }
 }

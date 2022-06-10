@@ -13,8 +13,9 @@
 #include "glog/logging.h"
 #include "MNN/Interpreter.hpp"
 
-#include "common/file_path_util.h"
 #include "common/base64.h"
+#include "common/cv_utils.h"
+#include "common/file_path_util.h"
 
 namespace morted {
 namespace models {
@@ -22,6 +23,7 @@ namespace models {
 using morted::common::FilePathUtil;
 using morted::common::StatusCode;
 using morted::common::Base64;
+using morted::common::CvUtils;
 using morted::models::io_define::common_io::mat_input;
 using morted::models::io_define::common_io::file_input;
 using morted::models::io_define::common_io::base64_input;
@@ -112,121 +114,7 @@ transform_output(const nano_impl::internal_output& internal_out) {
     common_out result;
     result.bbox = internal_out.bbox;
     result.score = internal_out.score;
-    return result;
-}
-
-/***
-*
-* @param class_counts
-* @return
-*/
-std::map<int, cv::Scalar> generate_color_map(int class_counts) {
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> distrib(0, 255);
-
-    std::set<int> color_set_r;
-    std::set<int> color_set_g;
-    std::set<int> color_set_b;
-    std::map<int, cv::Scalar> color_map;
-    int class_id = 0;
-
-    while (color_map.size() != class_counts) {
-        int r = distrib(gen);
-        int g = distrib(gen);
-        int b = distrib(gen);
-        cv::Scalar color(b, g, r);
-
-        if (color_set_r.find(r) != color_set_r.end() && color_set_g.find(g) != color_set_g.end()
-                && color_set_b.find(b) != color_set_b.end()) {
-            continue;
-        } else {
-            color_map.insert(std::make_pair(class_id, color));
-            color_set_r.insert(r);
-            color_set_g.insert(g);
-            color_set_b.insert(b);
-            class_id++;
-        }
-    }
-
-    return color_map;
-}
-
-/***
-*
-* @param box1
-* @param box2
-* @return
-*/
-template<typename BBOX1, typename BBOX2>
-typename std::enable_if <
-std::is_same<BBOX1, std::decay<internal_output>::type>::value&&
-std::is_same<BBOX2, std::decay<internal_output>::type>::value, float >::type
-calc_iou(const BBOX1& box1, const BBOX2& box2) {
-    float x1 = std::max(box1.bbox.x, box2.bbox.x);
-    float y1 = std::max(box1.bbox.y, box2.bbox.y);
-    float x2 = std::min(box1.bbox.x + box1.bbox.width, box2.bbox.x + box2.bbox.width);
-    float y2 = std::min(box1.bbox.y + box1.bbox.height, box2.bbox.y + box2.bbox.height);
-    float w = std::max(0.0f, x2 - x1 + 1);
-    float h = std::max(0.0f, y2 - y1 + 1);
-    float over_area = w * h;
-    return over_area /
-           (box1.bbox.width * box1.bbox.height + box2.bbox.width * box2.bbox.height - over_area);
-}
-
-/***
-*
-* @param bboxes
-* @param nms_threshold
-* @return
-*/
-std::vector<internal_output> nms_bboxes(std::vector<internal_output>& bboxes, double nms_threshold) {
-    std::vector<internal_output> result;
-
-    if (bboxes.empty()) {
-        return result;
-    }
-
-    std::map<int, std::vector<internal_output> > bboxes_split;
-
-    for (const auto& bbox : bboxes) {
-        auto cls_id = bbox.class_id;
-
-        if (bboxes_split.find(cls_id) == bboxes_split.end()) {
-            bboxes_split.insert(std::make_pair(cls_id, std::vector<internal_output>({bbox})));
-        } else {
-            bboxes_split[cls_id].push_back(bbox);
-        }
-    }
-
-    for (auto& iter : bboxes_split) {
-        auto tmp_bboxes = iter.second;
-        // sort the bounding boxes by the detection score
-        std::sort(tmp_bboxes.begin(), tmp_bboxes.end(),
-        [](const internal_output & box1, const internal_output & box2) {
-            return box1.score < box2.score;
-        });
-
-        while (!tmp_bboxes.empty()) {
-            auto last_elem = --std::end(tmp_bboxes);
-            const auto& rect1 = last_elem->bbox;
-
-            tmp_bboxes.erase(last_elem);
-
-            for (auto pos = std::begin(tmp_bboxes); pos != std::end(tmp_bboxes);) {
-                auto overlap = calc_iou(*last_elem, *pos);
-
-                if (overlap > nms_threshold) {
-                    pos = tmp_bboxes.erase(pos);
-                } else {
-                    ++pos;
-                }
-            }
-
-            result.push_back(*last_elem);
-        }
-    }
-
+    result.class_id = internal_out.class_id;
     return result;
 }
 
@@ -295,6 +183,7 @@ public:
         }
 
         // preprocess
+        _m_input_size_user = internal_in.input_image.size();
         cv::Mat input_image_copy = preprocess_image(internal_in.input_image);
         // run session
         MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
@@ -308,9 +197,8 @@ public:
         auto bbox_result = decode_output_tensor();
 
         // do nms
-        std::vector<nano_impl::internal_output> nms_result = nano_impl::nms_bboxes(
-                    bbox_result, _m_nms_threshold);
-
+        std::vector<nano_impl::internal_output> nms_result = CvUtils::nms_bboxes(
+                bbox_result, _m_nms_threshold);
         if (nms_result.size() > _m_keep_topk) {
             nms_result.resize(_m_keep_topk);
         }
