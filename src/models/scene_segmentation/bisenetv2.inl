@@ -177,7 +177,7 @@ public:
         }
 
         // preprocess image
-        auto preprocessed_image = preprocess_image(internal_in.input_image);
+        cv::Mat preprocessed_image = preprocess_image(internal_in.input_image);
         // run session
         MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
         auto input_tensor_data = input_tensor_user.host<float>();
@@ -188,15 +188,38 @@ public:
         // fetch net output
         auto* output_tensor_user = new MNN::Tensor(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
         _m_output_tensor->copyToHostTensor(output_tensor_user);
-        auto host_data = output_tensor_user->host<int>();
+        auto host_data = output_tensor_user->host<float>();
 
-        for (auto i = 0; i < output_tensor_user->elementSize(); ++i) {
-            LOG(INFO) << output_tensor_user->host<int>()[i];
+        int output_tensor_height = output_tensor_user->shape()[0];
+        int output_tensor_width = output_tensor_user->shape()[1];
+        const int output_tensor_channels = output_tensor_user->shape()[2];
+        cv::Mat softmax_score_mat(
+            cv::Size(output_tensor_width, output_tensor_height),
+            CV_32FC(output_tensor_channels),
+            host_data);
+        cv::Mat result_image(softmax_score_mat.size(), CV_32SC1);
+
+        for (auto row = 0; row < softmax_score_mat.rows; ++row) {
+            for (auto col = 0; col < softmax_score_mat.cols; ++col) {
+                int cls_id = 0;
+                float max_score = -1.0;
+                auto softmax_socres = softmax_score_mat.ptr<float>(row, col);
+
+                for (auto index = 0; index < output_tensor_channels; ++index) {
+                    if (softmax_socres[index] > max_score) {
+                        max_score = softmax_socres[index];
+                        cls_id = index;
+                    }
+                }
+
+                result_image.at<int>(row, col) = cls_id;
+            }
         }
+
+        cv::resize(result_image, result_image, _m_input_size_user, 0.0, 0.0, cv::INTER_NEAREST);
 
         // transform internal output into external output
         bisenetv2_impl::internal_output internal_out;
-        cv::Mat result_image(_m_input_size_user, CV_32SC1, host_data);
         internal_out.segmentation_result = result_image;
         out.push_back(bisenetv2_impl::transform_output<OUTPUT>(internal_out));
 
@@ -316,8 +339,8 @@ StatusCode BiseNetV2<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))&
     }
 
     // 初始化graph input node和output node
-    _m_input_tensor = _m_net->getSessionInput(_m_session, "input_tensor:0");
-    _m_output_tensor = _m_net->getSessionOutput(_m_session, "final_output:0");
+    _m_input_tensor = _m_net->getSessionInput(_m_session, "input_tensor");
+    _m_output_tensor = _m_net->getSessionOutput(_m_session, "final_output");
 
     if (_m_input_tensor == nullptr) {
         LOG(ERROR) << "Fetch BiseNetv2 Input Node failed";
