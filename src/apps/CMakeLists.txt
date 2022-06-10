@@ -14,6 +14,7 @@ set(MODEL_BENCHMARK_LIST
     yolov5_benchmark
     nanodet_benchmark
     bisenetv2_benchmark
+    dbnet_benchmark
 )
 
 foreach(src ${MODEL_BENCHMARK_LIST})

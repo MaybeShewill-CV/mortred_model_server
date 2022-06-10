@@ -1,11 +1,11 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: bisenetv2_benchmark.cpp
+* File: dbnet_benchmark.cpp
 * Date: 22-6-10
 ************************************************/
 
-// bisenetv2 benckmark tool
+// dbnet benckmark tool
 
 #include <random>
 
@@ -16,14 +16,14 @@
 #include "common/file_path_util.h"
 #include "common/time_stamp.h"
 #include "models/model_io_define.h"
-#include "factory/scene_segmentation_task.h"
+#include "factory/ocr_task.h"
 
 using morted::common::FilePathUtil;
 using morted::common::Timestamp;
 using morted::common::CvUtils;
 using morted::models::io_define::common_io::mat_input;
-using morted::models::io_define::scene_segmentation::common_out;
-using morted::factory::scene_segmentation::create_bisenetv2_segmentor;
+using morted::models::io_define::ocr::common_out;
+using morted::factory::ocr::create_dbtext_detector;
 
 int main(int argc, char** argv) {
 
@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
         input_image_path = argv[2];
         LOG(INFO) << "input test image path: " << input_image_path;
     } else {
-        input_image_path = "../demo_data/model_test_input/scene_segmentation/cityscapes_test.png";
+        input_image_path = "../demo_data/model_test_input/ocr/coco_text_test.png";
         LOG(INFO) << "use default input test image path: " << input_image_path;
     }
 
@@ -63,34 +63,34 @@ int main(int argc, char** argv) {
     };
     std::vector<common_out> model_output{};
     // construct detector
-    auto segmentor = create_bisenetv2_segmentor<mat_input, common_out>("bisenetv2");
+    auto detector = create_dbtext_detector<mat_input, common_out>("dbnet");
     auto cfg = toml::parse(cfg_file_path);
-    segmentor->init(cfg);
-    if (!segmentor->is_successfully_initialized()) {
-        LOG(INFO) << "bisenetv2 segmentor init failed";
+    detector->init(cfg);
+
+    if (!detector->is_successfully_initialized()) {
+        LOG(INFO) << "dbnet detector init failed";
         return -1;
     }
 
     // run benchmark
     int loop_times = 100;
     LOG(INFO) << "input test image size: " << input_image.size();
-    LOG(INFO) << "segmentor run loop times: " << loop_times;
-    LOG(INFO) << "start bisenetv2 benchmark at: " << Timestamp::now().to_format_str();
+    LOG(INFO) << "detector run loop times: " << loop_times;
+    LOG(INFO) << "start dbnet benchmark at: " << Timestamp::now().to_format_str();
     auto ts = Timestamp::now();
+
     for (int i = 0; i < loop_times; ++i) {
-        segmentor->run(model_input, model_output);
+        detector->run(model_input, model_output);
     }
+
     auto cost_time = Timestamp::now() - ts;
     LOG(INFO) << "benchmark ends at: " << Timestamp::now().to_format_str();
     LOG(INFO) << "cost time: " << cost_time << "s, fps: " << loop_times / cost_time;
 
-    cv::Mat color_seg_result;
-    CvUtils::colorize_segmentation_mask(model_output[0].segmentation_result, color_seg_result, 80);
-    std::string output_path = "../demo_data/model_test_input/scene_segmentation/cityscapes_result.png";
-    cv::imwrite(output_path, color_seg_result);
-    LOG(INFO) << "segmentation result image has been written into: " << output_path;
+    CvUtils::vis_text_detection(input_image, model_output);
+    std::string output_path = "../demo_data/model_test_input/ocr/coco_text_dbnet_result.png";
+    cv::imwrite(output_path, input_image);
+    LOG(INFO) << "detection result image has been written into: " << output_path;
 
     return 1;
 }
-
-

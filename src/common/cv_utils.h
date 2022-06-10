@@ -75,13 +75,57 @@ public:
             auto conf = obj.score;
             int cls_id = obj.class_id;
             cv::Scalar bbox_color(0, 0, 0);
+
             if (color_map.find(cls_id) != color_map.end()) {
                 bbox_color = color_map[cls_id];
             }
+
             cv::rectangle(input_image, bbox, bbox_color, 3);
             char buf[128];
             sprintf(buf, "Score:%1.2f, Class: %d", conf, cls_id);
             cv::putText(input_image, buf, cv::Point(bbox.x - 5, bbox.y - 5),
+                        cv::FONT_ITALIC, 0.8, bbox_color, 2);
+        }
+    }
+
+    /***
+     *
+     * @tparam T
+     * @param input_image
+     * @param objs
+     * @param cls_nums
+     */
+    template<typename T>
+    static void vis_text_detection(cv::Mat& input_image, std::vector<T>& objs) {
+        cv::Rect image_roi = cv::Rect(0, 0, input_image.cols, input_image.rows);
+
+        for (auto& obj : objs) {
+            auto bbox_float = obj.bbox;
+            auto conf = obj.score;
+            auto bbox_int = cv::Rect(
+                                static_cast<int>(bbox_float.x), static_cast<int>(bbox_float.y),
+                                static_cast<int>(bbox_float.width), static_cast<int>(bbox_float.height));
+            auto bbox_roi = bbox_int & image_roi;
+
+            auto bbox_color = cv::Scalar(0, 0, 255);
+            auto r_polygon_color = cv::Scalar(0, 255, 0);
+            // draw bounding bbox
+            cv::rectangle(input_image, bbox_roi, bbox_color, 3);
+            // draw polygon
+            std::vector<cv::Point> polygon;
+
+            for (auto& pt : obj.polygon) {
+                cv::Point new_pt(pt);
+                polygon.push_back(new_pt);
+            }
+
+            std::vector<std::vector<cv::Point> > polygons = {polygon};
+            cv::polylines(
+                input_image, polygons, true, r_polygon_color, 3, cv::LINE_AA);
+            // draw text information
+            char buf[64];
+            sprintf(buf, "Score:%1.2f", conf);
+            cv::putText(input_image, buf, cv::Point(bbox_int.x - 5, bbox_int.y - 5),
                         cv::FONT_ITALIC, 0.8, bbox_color, 2);
         }
     }
