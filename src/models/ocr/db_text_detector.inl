@@ -174,15 +174,12 @@ public:
     StatusCode run(const INPUT& in, std::vector<OUTPUT>& out) {
         // transform external input into internal input
         auto internal_in = dbtext_impl::transform_input(in);
-
         if (!internal_in.input_image.data || internal_in.input_image.empty()) {
             return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
         }
-
         // preprocess image
         _m_input_size_user = internal_in.input_image.size();
         auto preprocessed_image = preprocess_image(internal_in.input_image);
-
         // run session
         MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
         auto input_tensor_data = input_tensor_user.host<float>();
@@ -190,13 +187,10 @@ public:
         ::memcpy(input_tensor_data, preprocessed_image.data, input_tensor_size);
         _m_input_tensor->copyFromHostTensor(&input_tensor_user);
         _m_net->runSession(_m_session);
-
         // postprocess
         auto bboxes = postprocess();
-
         // transform internal output into external output
         out.clear();
-
         for (auto& bbox : bboxes) {
             out.push_back(dbtext_impl::transform_output<OUTPUT>(bbox));
         }
