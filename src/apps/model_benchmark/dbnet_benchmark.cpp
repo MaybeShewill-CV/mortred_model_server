@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
         input_image_path = argv[2];
         LOG(INFO) << "input test image path: " << input_image_path;
     } else {
-        input_image_path = "../demo_data/model_test_input/ocr/coco_text_test.png";
+        input_image_path = "../demo_data/model_test_input/ocr/railway_ticket.png";
         LOG(INFO) << "use default input test image path: " << input_image_path;
     }
 
@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
     LOG(INFO) << "cost time: " << cost_time << "s, fps: " << loop_times / cost_time;
 
     CvUtils::vis_text_detection(input_image, model_output);
-    std::string output_path = "../demo_data/model_test_input/ocr/coco_text_dbnet_result.png";
+    std::string output_path = "../demo_data/model_test_input/ocr/railway_ticket_result.png";
     cv::imwrite(output_path, input_image);
     LOG(INFO) << "detection result image has been written into: " << output_path;
 
