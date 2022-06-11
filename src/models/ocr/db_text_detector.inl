@@ -180,6 +180,7 @@ public:
         }
 
         // preprocess image
+        _m_input_size_user = internal_in.input_image.size();
         auto preprocessed_image = preprocess_image(internal_in.input_image);
 
         // run session
