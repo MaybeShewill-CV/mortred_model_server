@@ -60,6 +60,14 @@ struct common_out {
 };
 }
 
+// image enhancement
+namespace enhancement {
+
+struct common_out {
+    cv::Mat enhancement_result;
+};
+}
+
 }
 }
 }

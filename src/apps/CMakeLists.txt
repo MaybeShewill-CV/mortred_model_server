@@ -15,6 +15,7 @@ set(MODEL_BENCHMARK_LIST
     nanodet_benchmark
     bisenetv2_benchmark
     dbnet_benchmark
+    enlightengan_benchmark
 )
 
 foreach(src ${MODEL_BENCHMARK_LIST})
