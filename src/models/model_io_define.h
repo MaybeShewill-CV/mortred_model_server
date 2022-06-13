@@ -68,6 +68,15 @@ struct common_out {
 };
 }
 
+// image enhancement
+namespace classification {
+
+struct common_out {
+    int class_id;
+    std::vector<float> scores;
+};
+}
+
 }
 }
 }
