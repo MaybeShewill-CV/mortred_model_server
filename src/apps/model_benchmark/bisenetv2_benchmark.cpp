@@ -86,7 +86,10 @@ int main(int argc, char** argv) {
 
     cv::Mat color_seg_result;
     CvUtils::colorize_segmentation_mask(model_output[0].segmentation_result, color_seg_result, 80);
-    std::string output_path = "../demo_data/model_test_input/scene_segmentation/cityscapes_result.png";
+    std::string output_file_name = FilePathUtil::get_file_name(input_image_path);
+    output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_bisenetv2_result.png";
+    std::string output_path = FilePathUtil::concat_path(
+            "../demo_data/model_test_input/scene_segmentation", output_file_name);
     cv::imwrite(output_path, color_seg_result);
     LOG(INFO) << "segmentation result image has been written into: " << output_path;
 

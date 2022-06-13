@@ -88,7 +88,10 @@ int main(int argc, char** argv) {
     LOG(INFO) << "cost time: " << cost_time << "s, fps: " << loop_times / cost_time;
 
     CvUtils::vis_object_detection(input_image, model_output, 80);
-    std::string output_path = "../demo_data/model_test_input/object_detection/bus_nanodet_ret.jpg";
+    std::string output_file_name = FilePathUtil::get_file_name(input_image_path);
+    output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_nanodet_result.png";
+    std::string output_path = FilePathUtil::concat_path(
+            "../demo_data/model_test_input/object_detection", output_file_name);
     cv::imwrite(output_path, input_image);
     LOG(INFO) << "detection result image has been written into: " << output_path;
 

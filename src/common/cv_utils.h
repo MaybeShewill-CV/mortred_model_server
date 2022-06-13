@@ -110,7 +110,7 @@ public:
             auto bbox_color = cv::Scalar(0, 0, 255);
             auto r_polygon_color = cv::Scalar(0, 255, 0);
             // draw bounding bbox
-            cv::rectangle(input_image, bbox_roi, bbox_color, 3);
+            cv::rectangle(input_image, bbox_roi, bbox_color, 2);
             // draw polygon
             std::vector<cv::Point> polygon;
 
@@ -121,12 +121,12 @@ public:
 
             std::vector<std::vector<cv::Point> > polygons = {polygon};
             cv::polylines(
-                input_image, polygons, true, r_polygon_color, 3, cv::LINE_AA);
+                input_image, polygons, true, r_polygon_color, 2, cv::LINE_AA);
             // draw text information
             char buf[64];
             sprintf(buf, "Score:%1.2f", conf);
             cv::putText(input_image, buf, cv::Point(bbox_int.x - 5, bbox_int.y - 5),
-                        cv::FONT_ITALIC, 0.8, bbox_color, 2);
+                        cv::FONT_ITALIC, 0.5, bbox_color, 1);
         }
     }
 
