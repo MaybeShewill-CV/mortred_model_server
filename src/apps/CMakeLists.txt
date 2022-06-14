@@ -16,6 +16,7 @@ set(MODEL_BENCHMARK_LIST
     bisenetv2_benchmark
     dbnet_benchmark
     enlightengan_benchmark
+    mobilenetv2_benchmark
 )
 
 foreach(src ${MODEL_BENCHMARK_LIST})
