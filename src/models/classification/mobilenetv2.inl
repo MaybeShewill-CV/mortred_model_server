@@ -224,8 +224,6 @@ private:
     cv::Size _m_input_tensor_size = cv::Size(224, 224);
     // 模型是否成功初始化标志位
     bool _m_successfully_initialized = false;
-    // 图像均值
-    const cv::Scalar _m_mean_value = cv::Scalar(103.94f, 116.78f, 123.68f);
 
 private:
     /***
@@ -326,7 +324,7 @@ StatusCode MobileNetv2<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")
     }
 
     // 初始化input tensor size
-    _m_input_tensor_size = cv::Size(_m_input_tensor->width(), _m_input_tensor->height());
+    _m_input_tensor_size = cv::Size(224, 224);
 
     // 初始化类是否成功初始化标志位
     _m_successfully_initialized = true;
@@ -345,16 +343,16 @@ template<typename INPUT, typename OUTPUT>
 cv::Mat MobileNetv2<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& input_image) const {
     // resize input image
     cv::Mat tmp;
-
-    if (input_image.size() != _m_input_tensor_size) {
-        cv::resize(input_image, tmp, _m_input_tensor_size);
-    } else {
-        tmp = input_image;
-    }
+    cv::resize(input_image, tmp, cv::Size(256, 256));
+    auto dw = static_cast<int>(std::floor((256 - _m_input_tensor_size.width) / 2));
+    auto dh = static_cast<int>(std::floor((256 - _m_input_tensor_size.height) / 2));
+    tmp = tmp(cv::Rect(dw,dh, _m_input_tensor_size.width, _m_input_tensor_size.height));
 
     // normalize image
+    cv::cvtColor(tmp, tmp, cv::COLOR_BGR2RGB);
     tmp.convertTo(tmp, CV_32FC3);
-    cv::subtract(tmp, _m_mean_value, tmp);
+    cv::subtract(tmp, cv::Scalar(123.68f, 116.78f, 103.94f), tmp);
+    cv::divide(tmp, cv::Scalar(58.393, 57.12, 57.375), tmp);
 
     return tmp;
 }
