@@ -84,7 +84,7 @@ typename std::enable_if<std::is_same<INPUT, std::decay<base64_input>::type>::val
 transform_input(const INPUT& in) {
     internal_input result{};
     auto image_decode_string = morted::common::Base64::base64_decode(in.input_image_content);
-    std::vector <uchar> image_vec_data(image_decode_string.begin(), image_decode_string.end());
+    std::vector<uchar> image_vec_data(image_decode_string.begin(), image_decode_string.end());
 
     if (image_vec_data.empty()) {
         LOG(WARNING) << "image data empty";
@@ -153,9 +153,7 @@ public:
      * @param cfg_file_path
      * @return
      */
-    StatusCode init(const decltype(toml::parse(
-
-                                       ""))& config);
+    StatusCode init(const decltype(toml::parse(""))& config);
 
     /***
      *
@@ -385,11 +383,8 @@ MobileNetv2<INPUT, OUTPUT>::~MobileNetv2() = default;
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode MobileNetv2<INPUT, OUTPUT>::init(const decltype(toml::parse(
-
-            ""))& cfg) {
-    return _m_pimpl->
-           init(cfg);
+StatusCode MobileNetv2<INPUT, OUTPUT>::init(const decltype(toml::parse(""))& cfg) {
+    return _m_pimpl->init(cfg);
 }
 
 /***
@@ -412,7 +407,7 @@ bool MobileNetv2<INPUT, OUTPUT>::is_successfully_initialized() const {
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode MobileNetv2<INPUT, OUTPUT>::run(const INPUT& input, std::vector <OUTPUT>& output) {
+StatusCode MobileNetv2<INPUT, OUTPUT>::run(const INPUT& input, std::vector<OUTPUT>& output) {
     return _m_pimpl->run(input, output);
 }
 
