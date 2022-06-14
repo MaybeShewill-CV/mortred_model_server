@@ -23,7 +23,7 @@ namespace enhancement {
 using morted::models::enhancement::EnlightenGan;
 
 /***
- * create enlighten=gan low light image enhancement
+ * create enlighten-gan low light image enhancement
  * @tparam INPUT
  * @tparam OUTPUT
  * @param detector_name
