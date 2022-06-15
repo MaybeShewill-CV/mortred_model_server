@@ -365,7 +365,7 @@ cv::Mat AttentiveGanDerain<INPUT, OUTPUT>::Impl::postprocess() const {
     // convert tensor format
     MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
     _m_output_tensor->copyToHostTensor(&output_tensor_user);
-    auto host_data = output_tensor_user->host<float>();
+    auto host_data = output_tensor_user.host<float>();
 
     // construct result image
     cv::Mat output_feats(_m_input_size_host, CV_32FC3, host_data);
