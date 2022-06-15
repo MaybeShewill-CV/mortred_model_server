@@ -107,7 +107,7 @@ transform_input(const INPUT& in) {
 * @return
 */
 template<typename OUTPUT>
-typename std::enable_if<std::is_same<OUTPUT, std::decay<std_object_detection_output>::type>::value, common_out>::type
+typename std::enable_if<std::is_same<OUTPUT, std::decay<std_object_detection_output>::type>::value, std_object_detection_output>::type
 transform_output(const nano_impl::internal_output& internal_out) {
     std_object_detection_output result;
     for (auto& value : internal_out) {

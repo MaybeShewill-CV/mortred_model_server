@@ -106,7 +106,7 @@ transform_input(const INPUT& in) {
 * @return
 */
 template<typename OUTPUT>
-typename std::enable_if<std::is_same<OUTPUT, std::decay<std_object_detection_output>::type>::value, common_out>::type
+typename std::enable_if<std::is_same<OUTPUT, std::decay<std_object_detection_output>::type>::value, std_object_detection_output>::type
 transform_output(const yolov5_impl::internal_output& internal_out) {
     std_object_detection_output result;
     for (auto& value : internal_out) {
@@ -200,7 +200,7 @@ public:
         }
 
         // transform internal output into external output
-        yolov5_impl::transform_output<OUTPUT>(nms_result);
+        out = yolov5_impl::transform_output<OUTPUT>(nms_result);
         return StatusCode::OK;
     }
 
