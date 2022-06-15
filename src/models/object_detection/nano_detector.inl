@@ -30,7 +30,9 @@ using morted::models::io_define::common_io::base64_input;
 
 namespace object_detection {
 
-using morted::models::io_define::object_detection::common_out;
+using morted::models::io_define::object_detection::bbox;
+using morted::models::io_define::object_detection::std_object_detection_output;
+
 
 namespace nano_impl {
 
@@ -38,11 +40,7 @@ struct internal_input {
     cv::Mat input_image;
 };
 
-struct internal_output {
-    cv::Rect2f bbox;
-    float score = 0.0;
-    int32_t class_id;
-};
+using internal_output = std_object_detection_output;
 
 /***
 *
@@ -109,12 +107,12 @@ transform_input(const INPUT& in) {
 * @return
 */
 template<typename OUTPUT>
-typename std::enable_if<std::is_same<OUTPUT, std::decay<common_out>::type>::value, common_out>::type
+typename std::enable_if<std::is_same<OUTPUT, std::decay<std_object_detection_output>::type>::value, common_out>::type
 transform_output(const nano_impl::internal_output& internal_out) {
-    common_out result;
-    result.bbox = internal_out.bbox;
-    result.score = internal_out.score;
-    result.class_id = internal_out.class_id;
+    std_object_detection_output result;
+    for (auto& value : internal_out) {
+        result.push_back(value);
+    }
     return result;
 }
 
@@ -174,7 +172,7 @@ public:
     * @param out
     * @return
     */
-    StatusCode run(const INPUT& in, std::vector<OUTPUT>& out) {
+    StatusCode run(const INPUT& in, OUTPUT& out) {
         // transform external input into internal input
         auto internal_in = nano_impl::transform_input(in);
 
@@ -197,19 +195,13 @@ public:
         auto bbox_result = decode_output_tensor();
 
         // do nms
-        std::vector<nano_impl::internal_output> nms_result = CvUtils::nms_bboxes(
-                bbox_result, _m_nms_threshold);
+        nano_impl::internal_output nms_result = CvUtils::nms_bboxes(bbox_result, _m_nms_threshold);
         if (nms_result.size() > _m_keep_topk) {
             nms_result.resize(_m_keep_topk);
         }
 
         // transform internal output into external output
-        out.clear();
-
-        for (auto& bbox : nms_result) {
-            out.push_back(nano_impl::transform_output<OUTPUT>(bbox));
-        }
-
+        nano_impl::transform_input<OUTPUT>(nms_result);
         return StatusCode::OK;
     }
 
@@ -258,7 +250,7 @@ private:
      *
      * @return
      */
-    std::vector<nano_impl::internal_output> decode_output_tensor() const;
+    nano_impl::internal_output decode_output_tensor() const;
 
     /***
      *
@@ -484,13 +476,13 @@ cv::Mat NanoDetector<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& input
 * @return
 */
 template<typename INPUT, typename OUTPUT>
-std::vector<nano_impl::internal_output> NanoDetector<INPUT, OUTPUT>::Impl::decode_output_tensor() const {
+std::vector<bbox> NanoDetector<INPUT, OUTPUT>::Impl::decode_output_tensor() const {
     // convert tensor format
     MNN::Tensor tensor_preds_host(_m_output_tensor, _m_output_tensor->getDimensionType());
     _m_output_tensor->copyToHostTensor(&tensor_preds_host);
 
     // decode ouptut tensor
-    std::vector<nano_impl::internal_output> result;
+    std::vector<bbox> result;
     const int num_points = static_cast<int>(_m_center_priors.size());
     const int num_channels = _m_class_nums + (_m_reg_max + 1) * 4;
 
@@ -507,7 +499,7 @@ std::vector<nano_impl::internal_output> NanoDetector<INPUT, OUTPUT>::Impl::decod
         if (score > _m_score_threshold) {
             const float* bbox_pred = tensor_preds_host.host<float>() + idx * num_channels + _m_class_nums;
             auto obj_box_coords = refine_bbox_coords(bbox_pred, ct_x, ct_y, stride);
-            nano_impl::internal_output obj_box;
+            bbox obj_box;
             obj_box.score = score;
             obj_box.class_id = cur_label;
             obj_box.bbox = cv::Rect2f(
@@ -637,7 +629,7 @@ bool NanoDetector<INPUT, OUTPUT>::is_successfully_initialized() const {
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode NanoDetector<INPUT, OUTPUT>::run(const INPUT& input, std::vector<OUTPUT>& output) {
+StatusCode NanoDetector<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
 }
 

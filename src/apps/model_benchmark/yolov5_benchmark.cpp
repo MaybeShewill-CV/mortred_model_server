@@ -22,7 +22,7 @@ using morted::common::FilePathUtil;
 using morted::common::Timestamp;
 using morted::common::CvUtils;
 using morted::models::io_define::common_io::mat_input;
-using morted::models::io_define::object_detection::common_out;
+using morted::models::io_define::object_detection::std_object_detection_output;
 using morted::factory::object_detection::create_yolov5_detector;
 
 int main(int argc, char** argv) {
@@ -61,9 +61,9 @@ int main(int argc, char** argv) {
     struct mat_input model_input {
         input_image
     };
-    std::vector<common_out> model_output{};
+    std_object_detection_output model_output;
     // construct detector
-    auto detector = create_yolov5_detector<mat_input, common_out>("yolov5");
+    auto detector = create_yolov5_detector<mat_input, std_object_detection_output>("yolov5");
     auto cfg = toml::parse(cfg_file_path);
     detector->init(cfg);
 
