@@ -33,3 +33,7 @@
 
 # 3rd party
 ./3rd_party
+./_bin
+./_lib
+./build
+./cmake-build-debug
