@@ -175,7 +175,7 @@ class SuperPoint<INPUT, OUTPUT>::Impl {
         MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
         auto input_tensor_data = input_tensor_user.host<float>();
         auto input_tensor_size = input_tensor_user.size();
-        ::memcpy(input_tensor_data, src_input_image.data, input_tensor_size);
+        ::memcpy(input_tensor_data, preprocessed_image.data, input_tensor_size);
         _m_input_tensor->copyFromHostTensor(&input_tensor_user);
         _m_net->runSession(_m_session);
         // decode feture point locations and scores
@@ -184,7 +184,7 @@ class SuperPoint<INPUT, OUTPUT>::Impl {
         // decode feture point descriptor
         decode_fp_descriptor(internal_out);
         // transform result
-        out.clear;
+        out.clear();
         for (auto& k_pt : internal_out) {
             out.push_back(superpoint_impl::transform_output<OUTPUT>(k_pt));
         }
@@ -272,7 +272,7 @@ StatusCode SuperPoint<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))
     if (!cfg_content.contains("model_file_path")) {
         LOG(ERROR) << "Config doesn\'t have model_file_path field";
         _m_successfully_initialized = false;
-        return;
+        return StatusCode::MODEL_INIT_FAILED;
     } else {
         _m_model_file_path = cfg_content.at("model_file_path").as_string();
     }
@@ -359,7 +359,7 @@ StatusCode SuperPoint<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))
     }
 
     _m_successfully_initialized = true;
-    LOG(INFO) << "Superpoint feature extractor model: " << FileSystemProcessor::get_file_base_name(_m_model_file_path)
+    LOG(INFO) << "Superpoint feature extractor model: " << FilePathUtil::get_file_name(_m_model_file_path)
               << " initialization complete!!!";
 
     return StatusCode::OK;
@@ -408,7 +408,7 @@ void SuperPoint<INPUT, OUTPUT>::Impl::decode_fp_location_and_score(std::vector<s
         for (auto col = 0; col < dense_map_col; ++col) {
             for (auto channel = 0; channel < dense_map_channels; ++channel) {
                 auto to_index = row * dense_map_col * dense_map_channels + col * dense_map_channels + channel;
-                auto from_index = channel * dense_map_row * dense_map_col + row * dense_map_col + col
+                auto from_index = channel * dense_map_row * dense_map_col + row * dense_map_col + col;
                 semi_tdata_reshape[to_index] = host_data[from_index];
             }
         }
@@ -449,13 +449,13 @@ void SuperPoint<INPUT, OUTPUT>::Impl::decode_fp_location_and_score(std::vector<s
         }
     }
     // nms interest point
-    std::sort(key_points.begin(), key_points.end(), [](const KeyPoint& pt1, const KeyPoint& pt2) {return pt1.score >= pt2.score;});
+    std::sort(key_points.begin(), key_points.end(), [](const superpoint_impl::internal_output& pt1, const superpoint_impl::internal_output& pt2) {return pt1.score >= pt2.score;});
     auto iter = key_points.begin();
     while (iter != key_points.end()) {
         auto comp = iter + 1;
         while (comp != key_points.end()) {
-            double diff_x = iter->pos.x - comp->pos.x;
-            double diff_y = iter->pos.y - comp->pos.y;
+            double diff_x = iter->location.x - comp->location.x;
+            double diff_y = iter->location.y - comp->location.y;
             double distance = std::sqrt(std::pow(diff_x, 2) + std::pow(diff_y, 2));
 
             if (distance <= _m_nms_threshold) {
@@ -493,7 +493,7 @@ void SuperPoint<INPUT, OUTPUT>::Impl::decode_fp_descriptor(std::vector<superpoin
         for (auto col = 0; col < desc_map_col; ++col) {
             for (auto channel = 0; channel < desc_map_channels; ++channel) {
                 auto from_index = channel * desc_map_row * desc_map_col + row * desc_map_col + col;
-                auto to_index = row * desc_map_col * desc_map_channels + col * desc_map_channels + channel
+                auto to_index = row * desc_map_col * desc_map_channels + col * desc_map_channels + channel;
                 desc_tdata_reshape[to_index] = host_data[from_index];
             }
         }
