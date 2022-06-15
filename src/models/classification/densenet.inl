@@ -189,11 +189,9 @@ public:
         auto* host_data = output_tensor_user.host<float>();
         // transform output
         densenet_impl::internal_output internal_out;
-
         for (auto index = 0; index < output_tensor_user.elementSize(); ++index) {
             internal_out.scores.push_back(host_data[index]);
         }
-
         auto max_score = std::max_element(host_data, host_data + output_tensor_user.elementSize());
         auto cls_id = static_cast<int>(std::distance(host_data, max_score));
         internal_out.class_id = cls_id;
