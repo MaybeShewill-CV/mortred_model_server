@@ -1,7 +1,7 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: DenseNet.cpp
+* File: densenet.cpp
 * Date: 22-6-14
 ************************************************/
 

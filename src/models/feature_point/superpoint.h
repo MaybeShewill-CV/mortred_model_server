@@ -1,3 +1,10 @@
+/************************************************
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: superpoint.h
+* Date: 22-6-15
+************************************************/
+
 #ifndef MMAISERVER_SUPERPOINT_H
 #define MMAISERVER_SUPERPOINT_H
 

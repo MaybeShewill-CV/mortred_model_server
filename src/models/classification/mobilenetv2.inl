@@ -1,7 +1,7 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: MobileNetv2.cpp
+* File: mobilenetv2.cpp
 * Date: 22-6-13
 ************************************************/
 

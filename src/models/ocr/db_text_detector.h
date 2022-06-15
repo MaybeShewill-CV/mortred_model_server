@@ -1,7 +1,7 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: DBTextDetector.h
+* File: db_text_detector.h
 * Date: 22-6-6
 ************************************************/
 

@@ -1,7 +1,7 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: BiseNetV2.h
+* File: bisenetv2.h
 * Date: 22-6-9
 ************************************************/
 
