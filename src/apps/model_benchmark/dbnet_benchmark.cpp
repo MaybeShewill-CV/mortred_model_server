@@ -22,7 +22,7 @@ using morted::common::FilePathUtil;
 using morted::common::Timestamp;
 using morted::common::CvUtils;
 using morted::models::io_define::common_io::mat_input;
-using morted::models::io_define::ocr::common_out;
+using morted::models::io_define::ocr::std_text_regions_output;
 using morted::factory::ocr::create_dbtext_detector;
 
 int main(int argc, char** argv) {
@@ -61,9 +61,9 @@ int main(int argc, char** argv) {
     struct mat_input model_input {
             input_image
     };
-    std::vector<common_out> model_output{};
+    std_text_regions_output model_output;
     // construct detector
-    auto detector = create_dbtext_detector<mat_input, common_out>("dbnet");
+    auto detector = create_dbtext_detector<mat_input, std_text_regions_output>("dbnet");
     auto cfg = toml::parse(cfg_file_path);
     detector->init(cfg);
 

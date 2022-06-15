@@ -25,8 +25,8 @@ using morted::models::io_define::common_io::file_input;
 using morted::models::io_define::common_io::base64_input;
 
 namespace ocr {
-
-using morted::models::io_define::ocr::common_out;
+using morted::models::io_define::ocr::text_region;
+using morted::models::io_define::ocr::std_text_regions_output;
 
 namespace dbtext_impl {
 
@@ -34,11 +34,7 @@ struct internal_input {
     cv::Mat input_image;
 };
 
-struct internal_output {
-    cv::Rect2f bbox;
-    std::vector<cv::Point2f> polygon;
-    float score = 0.0;
-};
+using internal_output = std_text_regions_output;
 
 /***
  *
@@ -105,12 +101,12 @@ transform_input(const INPUT& in) {
 * @return
 */
 template<typename OUTPUT>
-typename std::enable_if<std::is_same<OUTPUT, std::decay<common_out>::type>::value, common_out>::type
+typename std::enable_if<std::is_same<OUTPUT, std::decay<std_text_regions_output>::type>::value, std_text_regions_output>::type
 transform_output(const dbtext_impl::internal_output& internal_out) {
-    common_out result;
-    result.bbox = internal_out.bbox;
-    result.polygon = internal_out.polygon;
-    result.score = internal_out.score;
+    std_text_regions_output result;
+    for (auto& value : internal_out) {
+        result.push_back(value);
+    }
     return result;
 }
 
@@ -171,7 +167,7 @@ public:
      * @param out
      * @return
      */
-    StatusCode run(const INPUT& in, std::vector<OUTPUT>& out) {
+    StatusCode run(const INPUT& in, OUTPUT& out) {
         // transform external input into internal input
         auto internal_in = dbtext_impl::transform_input(in);
         if (!internal_in.input_image.data || internal_in.input_image.empty()) {
@@ -188,13 +184,10 @@ public:
         _m_input_tensor->copyFromHostTensor(&input_tensor_user);
         _m_net->runSession(_m_session);
         // postprocess
-        auto bboxes = postprocess();
+        dbtext_impl::internal_output text_regions = postprocess();
         // transform internal output into external output
-        out.clear();
-        for (auto& bbox : bboxes) {
-            out.push_back(dbtext_impl::transform_output<OUTPUT>(bbox));
-        }
-
+        out = dbtext_impl::transform_output<OUTPUT>(text_regions);
+        
         return StatusCode::OK;
     }
 
@@ -239,7 +232,7 @@ private:
      *
      * @return
      */
-    std::vector<dbtext_impl::internal_output> postprocess() const;
+    dbtext_impl::internal_output postprocess() const;
 
     /***
      *
@@ -252,7 +245,7 @@ private:
      * @param seg_probs_mat
      * @return
      */
-    std::vector<dbtext_impl::internal_output> get_boxes_from_bitmap() const;
+    dbtext_impl::internal_output get_boxes_from_bitmap() const;
 };
 
 
@@ -446,8 +439,7 @@ void DBTextDetector<INPUT, OUTPUT>::Impl::decode_segmentation_result_mat() const
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-std::vector<dbtext_impl::internal_output>
-DBTextDetector<INPUT, OUTPUT>::Impl::postprocess() const {
+dbtext_impl::internal_output DBTextDetector<INPUT, OUTPUT>::Impl::postprocess() const {
     // decode seg prob mat
     decode_segmentation_result_mat();
     // get bboxes from bitmap
@@ -456,7 +448,7 @@ DBTextDetector<INPUT, OUTPUT>::Impl::postprocess() const {
     if (bbox_result.size() <= _m_keep_topk) {
         return bbox_result;
     } else {
-        std::vector<dbtext_impl::internal_output> keep_top_k(bbox_result.cbegin(), bbox_result.cbegin() + _m_keep_topk);
+        dbtext_impl::internal_output keep_top_k(bbox_result.cbegin(), bbox_result.cbegin() + _m_keep_topk);
         return keep_top_k;
     }
 }
@@ -468,9 +460,8 @@ DBTextDetector<INPUT, OUTPUT>::Impl::postprocess() const {
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-std::vector<dbtext_impl::internal_output>
-DBTextDetector<INPUT, OUTPUT>::Impl::get_boxes_from_bitmap() const {
-    std::vector<dbtext_impl::internal_output> result;
+dbtext_impl::internal_output DBTextDetector<INPUT, OUTPUT>::Impl::get_boxes_from_bitmap() const {
+    dbtext_impl::internal_output result;
     auto host_width = static_cast<float>(_m_input_size_host.width);
     auto host_height = static_cast<float>(_m_input_size_host.height);
     auto user_width = static_cast<float>(_m_input_size_user.width);
@@ -511,12 +502,12 @@ DBTextDetector<INPUT, OUTPUT>::Impl::get_boxes_from_bitmap() const {
         r_bounding_box.width = r_bounding_box.width * user_width / host_width;
         r_bounding_box.height = r_bounding_box.height * user_height / host_height;
 
-        dbtext_impl::internal_output bbox;
-        bbox.bbox = r_bounding_box;
-        bbox.polygon = std::vector<cv::Point2f>(r_vertices, r_vertices + 4);
-        bbox.score = score;
+        text_region region;
+        region.bbox = r_bounding_box;
+        region.polygon = std::vector<cv::Point2f>(r_vertices, r_vertices + 4);
+        region.score = score;
 
-        result.push_back(bbox);
+        result.push_back(region);
     }
 
     return result;
@@ -575,7 +566,7 @@ bool DBTextDetector<INPUT, OUTPUT>::is_successfully_initialized() const {
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode DBTextDetector<INPUT, OUTPUT>::run(const INPUT& input, std::vector<OUTPUT>& output) {
+StatusCode DBTextDetector<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
 }
 
