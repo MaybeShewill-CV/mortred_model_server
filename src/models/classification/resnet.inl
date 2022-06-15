@@ -26,7 +26,7 @@ using morted::models::io_define::common_io::base64_input;
 
 namespace classification {
 
-using morted::models::io_define::classification::common_out;
+using morted::models::io_define::classification::std_classification_output;
 
 namespace resnet_impl {
 
@@ -34,10 +34,7 @@ struct internal_input {
     cv::Mat input_image;
 };
 
-struct internal_output {
-    int class_id;
-    std::vector<float> scores;
-};
+using internal_output = std_classification_output;
 
 /***
  *
@@ -104,9 +101,9 @@ transform_input(const INPUT& in) {
 * @return
 */
 template<typename OUTPUT>
-typename std::enable_if<std::is_same<OUTPUT, std::decay<common_out>::type>::value, common_out>::type
+typename std::enable_if<std::is_same<OUTPUT, std::decay<std_classification_output>::type>::value, std_classification_output>::type
 transform_output(const resnet_impl::internal_output& internal_out) {
-    common_out result;
+    std_classification_output result;
     result.class_id = internal_out.class_id;
     result.scores = internal_out.scores;
     return result;
@@ -169,7 +166,7 @@ public:
      * @param out
      * @return
      */
-    StatusCode run(const INPUT& in, std::vector<OUTPUT>& out) {
+    StatusCode run(const INPUT& in, OUTPUT& out) {
         // transform external input into internal input
         auto internal_in = resnet_impl::transform_input(in);
 
@@ -190,19 +187,15 @@ public:
         MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
         _m_output_tensor->copyToHostTensor(&output_tensor_user);
         // transform output
-        out.clear();
+        auto* host_data = output_tensor_user.host<float>();
         resnet_impl::internal_output internal_out;
-
         for (auto index = 0; index < output_tensor_user.elementSize(); ++index) {
-            internal_out.scores.push_back(output_tensor_user.host<float>()[index]);
+            internal_out.scores.push_back(ohost_data[index]);
         }
-
-        auto max_score = std::max_element(
-                             output_tensor_user.host<float>(),
-                             output_tensor_user.host<float>() + output_tensor_user.elementSize());
-        auto cls_id = static_cast<int>(std::distance(output_tensor_user.host<float>(), max_score));
+        auto max_score = std::max_element(host_data, host_data + output_tensor_user.elementSize());
+        auto cls_id = static_cast<int>(std::distance(host_data, max_score));
         internal_out.class_id = cls_id;
-        out.push_back(resnet_impl::transform_output<OUTPUT>(internal_out));
+        out = resnet_impl::transform_output<OUTPUT>(internal_out);
 
         return StatusCode::OK;
     }
@@ -415,7 +408,7 @@ bool ResNet<INPUT, OUTPUT>::is_successfully_initialized() const {
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode ResNet<INPUT, OUTPUT>::run(const INPUT& input, std::vector<OUTPUT>& output) {
+StatusCode ResNet<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
 }
 

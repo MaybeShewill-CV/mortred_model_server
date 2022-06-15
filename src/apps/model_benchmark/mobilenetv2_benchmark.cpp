@@ -22,7 +22,7 @@ using morted::common::FilePathUtil;
 using morted::common::Timestamp;
 using morted::common::CvUtils;
 using morted::models::io_define::common_io::mat_input;
-using morted::models::io_define::classification::common_out;
+using morted::models::io_define::classification::std_classification_output;
 using morted::factory::classification::create_mobilenetv2_classifier;
 
 int main(int argc, char** argv) {
@@ -61,9 +61,9 @@ int main(int argc, char** argv) {
     struct mat_input model_input {
             input_image
     };
-    std::vector<common_out> model_output{};
+    std_classification_output model_output{};
     // construct detector
-    auto classifier = create_mobilenetv2_classifier<mat_input, common_out>("mobilenetv2");
+    auto classifier = create_mobilenetv2_classifier<mat_input, std_classification_output>("mobilenetv2");
     auto cfg = toml::parse(cfg_file_path);
     classifier->init(cfg);
 
@@ -87,10 +87,10 @@ int main(int argc, char** argv) {
     LOG(INFO) << "benchmark ends at: " << Timestamp::now().to_format_str();
     LOG(INFO) << "cost time: " << cost_time << "s, fps: " << loop_times / cost_time;
 
-    LOG(INFO) << "classify id: " << model_output[0].class_id;
-    auto max_score = std::max_element(model_output[0].scores.begin(), model_output[0].scores.end());
+    LOG(INFO) << "classify id: " << model_output.class_id;
+    auto max_score = std::max_element(model_output.scores.begin(), model_output.scores.end());
     LOG(INFO) << "max classify socre: " << *max_score;
-    LOG(INFO) << "max classify id: " << static_cast<int>(std::distance(model_output[0].scores.begin(), max_score));
+    LOG(INFO) << "max classify id: " << static_cast<int>(std::distance(model_output.scores.begin(), max_score));
 
     return 1;
 }
