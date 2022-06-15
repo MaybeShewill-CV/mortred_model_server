@@ -67,7 +67,7 @@ int main(int argc, char** argv) {
     auto cfg = toml::parse(cfg_file_path);
     extractor->init(cfg);
     if (!extractor->is_successfully_initialized()) {
-        LOG(INFO) << "attentive gan extractor init failed";
+        LOG(INFO) << "superpoint extractor init failed";
         return -1;
     }
 
@@ -75,7 +75,7 @@ int main(int argc, char** argv) {
     int loop_times = 100;
     LOG(INFO) << "input test image size: " << input_image.size();
     LOG(INFO) << "extractor run loop times: " << loop_times;
-    LOG(INFO) << "start attentive gan benchmark at: " << Timestamp::now().to_format_str();
+    LOG(INFO) << "start superpoint benchmark at: " << Timestamp::now().to_format_str();
     auto ts = Timestamp::now();
     for (int i = 0; i < loop_times; ++i) {
         extractor->run(model_input, model_output);
