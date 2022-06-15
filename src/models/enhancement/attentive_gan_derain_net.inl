@@ -26,7 +26,7 @@ using morted::models::io_define::common_io::mat_input;
 
 namespace enhancement {
 
-using morted::models::io_define::enhancement::common_out;
+using morted::models::io_define::enhancement::std_enhancement_output;
 
 namespace attentiveganderain_impl {
 
@@ -34,9 +34,7 @@ struct internal_input {
     cv::Mat input_image;
 };
 
-struct internal_output {
-    cv::Mat enhancement_result;
-};
+using internal_output = std_enhancement_output;
 
 /***
  *
@@ -100,9 +98,9 @@ typename std::enable_if<std::is_same<INPUT, std::decay<base64_input>::type>::val
  * @return
  */
 template <typename OUTPUT>
-typename std::enable_if<std::is_same<OUTPUT, std::decay<common_out>::type>::value, common_out>::type
+typename std::enable_if<std::is_same<OUTPUT, std::decay<std_enhancement_output>::type>::value, std_enhancement_output>::type
 transform_output(const attentiveganderain_impl::internal_output &internal_out) {
-    common_out result;
+    std_enhancement_output result;
     internal_out.enhancement_result.copyTo(result.enhancement_result);
     return result;
 }
@@ -160,7 +158,7 @@ template <typename INPUT, typename OUTPUT> class AttentiveGanDerain<INPUT, OUTPU
      * @param out
      * @return
      */
-    StatusCode run(const INPUT &in, std::vector<OUTPUT> &out) {
+    StatusCode run(const INPUT &in, OUTPUT &out) {
         // transform external input into internal input
         auto internal_in = attentiveganderain_impl::transform_input(in);
         if (!internal_in.input_image.data || internal_in.input_image.empty()) {
@@ -184,9 +182,7 @@ template <typename INPUT, typename OUTPUT> class AttentiveGanDerain<INPUT, OUTPU
         attentiveganderain_impl::internal_output internal_out;
         output_image.copyTo(internal_out.enhancement_result);
         // transform output
-        out.clear();
-        out.push_back(attentiveganderain_impl::transform_output<OUTPUT>(internal_out));
-
+        out = attentiveganderain_impl::transform_output<OUTPUT>(internal_out);
         return StatusCode::OK;
     }
 
@@ -444,7 +440,7 @@ template <typename INPUT, typename OUTPUT> bool AttentiveGanDerain<INPUT, OUTPUT
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode AttentiveGanDerain<INPUT, OUTPUT>::run(const INPUT &input, std::vector<OUTPUT> &output) {
+StatusCode AttentiveGanDerain<INPUT, OUTPUT>::run(const INPUT &input, OUTPUT &output) {
     return _m_pimpl->run(input, output);
 }
 

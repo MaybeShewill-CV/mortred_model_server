@@ -26,7 +26,7 @@ using morted::models::io_define::common_io::base64_input;
 
 namespace enhancement {
 
-using morted::models::io_define::enhancement::common_out;
+using morted::models::io_define::enhancement::std_enhancement_output;
 
 namespace enlightengan_impl {
 
@@ -34,9 +34,7 @@ struct internal_input {
     cv::Mat input_image;
 };
 
-struct internal_output {
-    cv::Mat enhancement_result;
-};
+using internal_output = std_enhancement_output;
 
 /***
  *
@@ -103,9 +101,9 @@ transform_input(const INPUT& in) {
 * @return
 */
 template<typename OUTPUT>
-typename std::enable_if<std::is_same<OUTPUT, std::decay<common_out>::type>::value, common_out>::type
+typename std::enable_if<std::is_same<OUTPUT, std::decay<std_enhancement_output>::type>::value, std_enhancement_output>::type
 transform_output(const enlightengan_impl::internal_output& internal_out) {
-    common_out result;
+    std_enhancement_output result;
     internal_out.enhancement_result.copyTo(result.enhancement_result);
     return result;
 }
@@ -167,7 +165,7 @@ public:
      * @param out
      * @return
      */
-    StatusCode run(const INPUT& in, std::vector<OUTPUT>& out) {
+    StatusCode run(const INPUT& in, OUTPUT& out) {
         // transform external input into internal input
         auto internal_in = enlightengan_impl::transform_input(in);
 
@@ -252,8 +250,7 @@ public:
         }
 
         // transform internal output into external output
-        out.clear();
-        out.push_back(enlightengan_impl::transform_output<OUTPUT>(internal_out));
+        out = enlightengan_impl::transform_output<OUTPUT>(internal_out);
         return StatusCode::OK;
     }
 
@@ -507,7 +504,7 @@ bool EnlightenGan<INPUT, OUTPUT>::is_successfully_initialized() const {
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode EnlightenGan<INPUT, OUTPUT>::run(const INPUT& input, std::vector<OUTPUT>& output) {
+StatusCode EnlightenGan<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
 }
 

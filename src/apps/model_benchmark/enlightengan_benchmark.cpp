@@ -22,7 +22,7 @@ using morted::common::FilePathUtil;
 using morted::common::Timestamp;
 using morted::common::CvUtils;
 using morted::models::io_define::common_io::mat_input;
-using morted::models::io_define::enhancement::common_out;
+using morted::models::io_define::enhancement::std_enhancement_output;
 using morted::factory::enhancement::create_enlightengan_enhancementor;
 
 int main(int argc, char** argv) {
@@ -61,9 +61,9 @@ int main(int argc, char** argv) {
     struct mat_input model_input {
             input_image
     };
-    std::vector<common_out> model_output{};
+    std_enhancement_output model_output;
     // construct enhancementor
-    auto enhancementor = create_enlightengan_enhancementor<mat_input, common_out>("enlightengan");
+    auto enhancementor = create_enlightengan_enhancementor<mat_input, std_enhancement_output>("enlightengan");
     auto cfg = toml::parse(cfg_file_path);
     enhancementor->init(cfg);
 
@@ -89,9 +89,8 @@ int main(int argc, char** argv) {
 
     std::string output_file_name = FilePathUtil::get_file_name(input_image_path);
     output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_enlightengan_result.png";
-    std::string output_path = FilePathUtil::concat_path(
-            "../demo_data/model_test_input/enhancement/low_light/", output_file_name);
-    cv::imwrite(output_path, model_output[0].enhancement_result);
+    std::string output_path = FilePathUtil::concat_path("../demo_data/model_test_input/enhancement/low_light/", output_file_name);
+    cv::imwrite(output_path, model_output.enhancement_result);
     LOG(INFO) << "enhancement result image has been written into: " << output_path;
 
     return 1;

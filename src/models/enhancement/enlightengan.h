@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: enlightengan.h
-* Date: 22-6-13
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: enlightengan.h
+ * Date: 22-6-13
+ ************************************************/
 
 #ifndef MM_AI_SERVER_ENLIGHTENGAN_H
 #define MM_AI_SERVER_ENLIGHTENGAN_H
@@ -12,22 +12,22 @@
 
 #include "toml/toml.hpp"
 
+#include "common/status_code.h"
 #include "models/base_model.h"
 #include "models/model_io_define.h"
-#include "common/status_code.h"
+
 
 namespace morted {
 namespace models {
 namespace enhancement {
 
-template<typename INPUT, typename OUTPUT>
+template <typename INPUT, typename OUTPUT> 
 class EnlightenGan : public morted::models::BaseAiModel<INPUT, OUTPUT> {
-public:
-
+  public:
     /***
-    * 构造函数
-    * @param config
-    */
+     * 构造函数
+     * @param config
+     */
     EnlightenGan();
 
     /***
@@ -36,24 +36,24 @@ public:
     ~EnlightenGan() override;
 
     /***
-    * 赋值构造函数
-    * @param transformer
-    */
-    EnlightenGan(const EnlightenGan& transformer) = delete;
+     * 赋值构造函数
+     * @param transformer
+     */
+    EnlightenGan(const EnlightenGan &transformer) = delete;
 
     /***
      * 复制构造函数
      * @param transformer
      * @return
      */
-    EnlightenGan& operator=(const EnlightenGan& transformer) = delete;
+    EnlightenGan &operator=(const EnlightenGan &transformer) = delete;
 
     /***
      *
      * @param toml
      * @return
      */
-    morted::common::StatusCode init(const decltype(toml::parse(""))& cfg) override;
+    morted::common::StatusCode init(const decltype(toml::parse("")) &cfg) override;
 
     /***
      *
@@ -61,8 +61,7 @@ public:
      * @param output
      * @return
      */
-    morted::common::StatusCode run(const INPUT& input, std::vector<OUTPUT>& output) override;
-
+    morted::common::StatusCode run(const INPUT &input, OUTPUT &output) override;
 
     /***
      * if db text detector successfully initialized
@@ -70,15 +69,15 @@ public:
      */
     bool is_successfully_initialized() const override;
 
-private:
+  private:
     class Impl;
     std::unique_ptr<Impl> _m_pimpl;
 };
 
-}
-}
-}
+} // namespace enhancement
+} // namespace models
+} // namespace morted
 
 #include "enlightengan.inl"
 
-#endif //MM_AI_SERVER_ENLIGHTENGAN_H
+#endif // MM_AI_SERVER_ENLIGHTENGAN_H
