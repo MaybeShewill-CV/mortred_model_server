@@ -25,7 +25,7 @@ using morted::models::io_define::common_io::file_input;
 using morted::models::io_define::common_io::base64_input;
 
 namespace scene_segmentation {
-using morted::models::io_define::scene_segmentation::common_out;
+using morted::models::io_define::scene_segmentation::std_scene_segmentation_output;
 
 namespace bisenetv2_impl {
 
@@ -33,9 +33,7 @@ struct internal_input {
     cv::Mat input_image;
 };
 
-struct internal_output {
-    cv::Mat segmentation_result;
-};
+using internal_output = std_scene_segmentation_output;
 
 /***
 *
@@ -102,9 +100,9 @@ transform_input(const INPUT& in) {
 * @return
 */
 template<typename OUTPUT>
-typename std::enable_if<std::is_same<OUTPUT, std::decay<common_out>::type>::value, common_out>::type
+typename std::enable_if<std::is_same<OUTPUT, std::decay<std_scene_segmentation_output>::type>::value, std_scene_segmentation_output>::type
 transform_output(const bisenetv2_impl::internal_output& internal_out) {
-    common_out result;
+    std_scene_segmentation_output result;
     internal_out.segmentation_result.copyTo(result.segmentation_result);
     return result;
 }
@@ -165,7 +163,7 @@ public:
      * @param out
      * @return
      */
-    StatusCode run(const INPUT& in, std::vector<OUTPUT>& out) {
+    StatusCode run(const INPUT& in, OUTPUT& out) {
         // transform external input into internal input
         auto internal_in = bisenetv2_impl::transform_input(in);
 
@@ -210,7 +208,7 @@ public:
         // transform internal output into external output
         bisenetv2_impl::internal_output internal_out;
         internal_out.segmentation_result = result_image;
-        out.push_back(bisenetv2_impl::transform_output<OUTPUT>(internal_out));
+        out = bisenetv2_impl::transform_output<OUTPUT>(internal_out);
 
         return StatusCode::OK;
     }
@@ -444,7 +442,7 @@ bool BiseNetV2<INPUT, OUTPUT>::is_successfully_initialized() const {
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode BiseNetV2<INPUT, OUTPUT>::run(const INPUT& input, std::vector<OUTPUT>& output) {
+StatusCode BiseNetV2<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
 }
 

@@ -22,7 +22,7 @@ using morted::common::FilePathUtil;
 using morted::common::Timestamp;
 using morted::common::CvUtils;
 using morted::models::io_define::common_io::mat_input;
-using morted::models::io_define::scene_segmentation::common_out;
+using morted::models::io_define::scene_segmentation::std_scene_segmentation_output;
 using morted::factory::scene_segmentation::create_bisenetv2_segmentor;
 
 int main(int argc, char** argv) {
@@ -61,9 +61,9 @@ int main(int argc, char** argv) {
     struct mat_input model_input {
             input_image
     };
-    std::vector<common_out> model_output{};
+    std_scene_segmentation_output model_output;
     // construct detector
-    auto segmentor = create_bisenetv2_segmentor<mat_input, common_out>("bisenetv2");
+    auto segmentor = create_bisenetv2_segmentor<mat_input, std_scene_segmentation_output>("bisenetv2");
     auto cfg = toml::parse(cfg_file_path);
     segmentor->init(cfg);
     if (!segmentor->is_successfully_initialized()) {
@@ -85,11 +85,10 @@ int main(int argc, char** argv) {
     LOG(INFO) << "cost time: " << cost_time << "s, fps: " << loop_times / cost_time;
 
     cv::Mat color_seg_result;
-    CvUtils::colorize_segmentation_mask(model_output[0].segmentation_result, color_seg_result, 80);
+    CvUtils::colorize_segmentation_mask(model_output.segmentation_result, color_seg_result, 80);
     std::string output_file_name = FilePathUtil::get_file_name(input_image_path);
     output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_bisenetv2_result.png";
-    std::string output_path = FilePathUtil::concat_path(
-            "../demo_data/model_test_input/scene_segmentation", output_file_name);
+    std::string output_path = FilePathUtil::concat_path("../demo_data/model_test_input/scene_segmentation", output_file_name);
     cv::imwrite(output_path, color_seg_result);
     LOG(INFO) << "segmentation result image has been written into: " << output_path;
 
