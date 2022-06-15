@@ -33,6 +33,7 @@
 
 # 3rd party
 3rd_party/
+demo_data/
 _bin/
 _lib/
 build/
