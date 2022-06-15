@@ -454,9 +454,9 @@ void SuperPoint<INPUT, OUTPUT>::Impl::decode_fp_location_and_score(std::vector<s
     while (iter != key_points.end()) {
         auto comp = iter + 1;
         while (comp != key_points.end()) {
-            double diff_x = iter->location.x - comp->location.x;
-            double diff_y = iter->location.y - comp->location.y;
-            double distance = std::sqrt(std::pow(diff_x, 2) + std::pow(diff_y, 2));
+            auto diff_x = iter->location.x - comp->location.x;
+            auto diff_y = iter->location.y - comp->location.y;
+            auto distance = std::sqrt(std::pow(diff_x, 2) + std::pow(diff_y, 2));
 
             if (distance <= _m_nms_threshold) {
                 comp = key_points.erase(comp);
