@@ -22,7 +22,7 @@ using morted::common::FilePathUtil;
 using morted::common::Timestamp;
 using morted::common::CvUtils;
 using morted::models::io_define::common_io::mat_input;
-using morted::models::io_define::feature_point::common_out;
+using morted::models::io_define::feature_point::std_feature_point_output;
 using morted::factory::feature_point::create_superpoint_extractor;
 
 int main(int argc, char** argv) {
@@ -61,9 +61,9 @@ int main(int argc, char** argv) {
     struct mat_input model_input {
             input_image
     };
-    std::vector<common_out> model_output{};
+    std_feature_point_output model_output;
     // construct extractor
-    auto extractor = create_superpoint_extractor<mat_input, common_out>("superpoint");
+    auto extractor = create_superpoint_extractor<mat_input, std_feature_point_output>("superpoint");
     auto cfg = toml::parse(cfg_file_path);
     extractor->init(cfg);
     if (!extractor->is_successfully_initialized()) {

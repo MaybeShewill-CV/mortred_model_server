@@ -60,7 +60,7 @@ class SuperPoint : public morted::models::BaseAiModel<INPUT, OUTPUT> {
      * @param output
      * @return
      */
-    morted::common::StatusCode run(const INPUT &input, std::vector<OUTPUT> &output) override;
+    morted::common::StatusCode run(const INPUT& input, OUTPUT& output) override;
 
     /***
      * if db text detector successfully initialized

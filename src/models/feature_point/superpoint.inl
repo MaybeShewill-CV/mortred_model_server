@@ -25,20 +25,15 @@ using morted::models::io_define::common_io::file_input;
 using morted::models::io_define::common_io::mat_input;
 
 namespace feature_point {
-
-using morted::models::io_define::feature_point::common_out;
+using morted::models::io_define::feature_point::fp;
+using morted::models::io_define::feature_point::std_feature_point_output;
 
 namespace superpoint_impl {
 
 struct internal_input {
     cv::Mat input_image;
 };
-
-struct internal_output {
-    cv::Point2f location;
-    std::vector<float> descriptor;
-    float score;
-};
+using internal_output = std_feature_point_output;
 
 /***
  *
@@ -102,12 +97,12 @@ typename std::enable_if<std::is_same<INPUT, std::decay<base64_input>::type>::val
  * @return
  */
 template <typename OUTPUT>
-typename std::enable_if<std::is_same<OUTPUT, std::decay<common_out>::type>::value, common_out>::type
+typename std::enable_if<std::is_same<OUTPUT, std::decay<std_feature_point_output>::type>::value, std_feature_point_output>::type
 transform_output(const superpoint_impl::internal_output &internal_out) {
-    common_out result;
-    result.location = internal_out.location;
-    result.descriptor = internal_out.descriptor;
-    result.score = internal_out.score;
+    std_feature_point_output result;
+    for (auto& value : internal_out) {
+        result.push_back(value);
+    }
     return result;
 }
 
@@ -165,7 +160,7 @@ class SuperPoint<INPUT, OUTPUT>::Impl {
      * @param out
      * @return
      */
-    StatusCode run(const INPUT &in, std::vector<OUTPUT> &out) {
+    StatusCode run(const INPUT &in, OUTPUT& out) {
         // transform external input into internal input
         auto internal_in = superpoint_impl::transform_input(in);
         if (!internal_in.input_image.data || internal_in.input_image.empty()) {
@@ -182,15 +177,12 @@ class SuperPoint<INPUT, OUTPUT>::Impl {
         _m_input_tensor->copyFromHostTensor(&input_tensor_user);
         _m_net->runSession(_m_session);
         // decode feture point locations and scores
-        std::vector<superpoint_impl::internal_output> internal_out;
+        superpoint_impl::internal_output internal_out;
         decode_fp_location_and_score(internal_out);
         // decode feture point descriptor
         decode_fp_descriptor(internal_out);
         // transform result
-        out.clear();
-        for (auto& k_pt : internal_out) {
-            out.push_back(superpoint_impl::transform_output<OUTPUT>(k_pt));
-        }
+        out = superpoint_impl::transform_output<OUTPUT>(internal_out);
 
         return StatusCode::OK;
     }
@@ -239,14 +231,14 @@ class SuperPoint<INPUT, OUTPUT>::Impl {
      * @param key_points
      * @return
      */
-    void decode_fp_location_and_score(std::vector<superpoint_impl::internal_output>& key_points) const;
+    void decode_fp_location_and_score(superpoint_impl::internal_output& key_points) const;
 
     /***
      *
      * @param key_points
      * @return
      */
-    void decode_fp_descriptor(std::vector<superpoint_impl::internal_output>& key_points) const;
+    void decode_fp_descriptor(superpoint_impl::internal_output& key_points) const;
 };
 
 /***
@@ -397,7 +389,7 @@ cv::Mat SuperPoint<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat &input_i
  * @return
  */
 template <typename INPUT, typename OUTPUT> 
-void SuperPoint<INPUT, OUTPUT>::Impl::decode_fp_location_and_score(std::vector<superpoint_impl::internal_output>& key_points) const {
+void SuperPoint<INPUT, OUTPUT>::Impl::decode_fp_location_and_score(superpoint_impl::internal_output& key_points) const {
     MNN::Tensor output_tensor_semi_user(_m_output_tensor_semi, MNN::Tensor::DimensionType::CAFFE);
     _m_output_tensor_semi->copyToHostTensor(&output_tensor_semi_user);
     auto host_data = output_tensor_semi_user.host<float>();
@@ -442,7 +434,7 @@ void SuperPoint<INPUT, OUTPUT>::Impl::decode_fp_location_and_score(std::vector<s
                     int interest_pt_y = row * _m_cell_size + row_ext_index;
                     cv::Point2f interest_pt(interest_pt_x, interest_pt_y);
                     if (score >= _m_score_threshold) {
-                        superpoint_impl::internal_output key_pt;
+                        fp key_pt;
                         key_pt.location = interest_pt;
                         key_pt.score = score;
                         key_points.push_back(key_pt);
@@ -452,7 +444,7 @@ void SuperPoint<INPUT, OUTPUT>::Impl::decode_fp_location_and_score(std::vector<s
         }
     }
     // nms interest point
-    std::sort(key_points.begin(), key_points.end(), [](const superpoint_impl::internal_output& pt1, const superpoint_impl::internal_output& pt2) {return pt1.score >= pt2.score;});
+    std::sort(key_points.begin(), key_points.end(), [](const fp& pt1, const fp& pt2) {return pt1.score >= pt2.score;});
     auto iter = key_points.begin();
     while (iter != key_points.end()) {
         auto comp = iter + 1;
@@ -483,7 +475,7 @@ void SuperPoint<INPUT, OUTPUT>::Impl::decode_fp_location_and_score(std::vector<s
  * @return
  */
 template <typename INPUT, typename OUTPUT> 
-void SuperPoint<INPUT, OUTPUT>::Impl::decode_fp_descriptor(std::vector<superpoint_impl::internal_output>& key_points) const {
+void SuperPoint<INPUT, OUTPUT>::Impl::decode_fp_descriptor(superpoint_impl::internal_output& key_points) const {
     MNN::Tensor output_tensor_desc_user(_m_output_tensor_coarse, MNN::Tensor::DimensionType::CAFFE);
     _m_output_tensor_coarse->copyToHostTensor(&output_tensor_desc_user);
     auto host_data = output_tensor_desc_user.host<float>();
@@ -596,7 +588,8 @@ template <typename INPUT, typename OUTPUT> bool SuperPoint<INPUT, OUTPUT>::is_su
  * @param output
  * @return
  */
-template <typename INPUT, typename OUTPUT> StatusCode SuperPoint<INPUT, OUTPUT>::run(const INPUT &input, std::vector<OUTPUT> &output) {
+template <typename INPUT, typename OUTPUT> 
+StatusCode SuperPoint<INPUT, OUTPUT>::run(const INPUT &input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
 }
 
