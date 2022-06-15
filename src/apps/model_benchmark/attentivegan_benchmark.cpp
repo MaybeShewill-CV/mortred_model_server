@@ -1,11 +1,11 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: enlightengan_benchmark.cpp
-* Date: 22-6-13
+* File: attentivegan_benchmark.cpp
+* Date: 22-6-15
 ************************************************/
 
-// enlightengan benckmark tool
+// attentivegan benckmark tool
 
 #include <random>
 
@@ -23,7 +23,7 @@ using morted::common::Timestamp;
 using morted::common::CvUtils;
 using morted::models::io_define::common_io::mat_input;
 using morted::models::io_define::enhancement::common_out;
-using morted::factory::enhancement::create_enlightengan_enhancementor;
+using morted::factory::enhancement::create_attentivegan_enhancementor;
 
 int main(int argc, char** argv) {
 
@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
         input_image_path = argv[2];
         LOG(INFO) << "input test image path: " << input_image_path;
     } else {
-        input_image_path = "../demo_data/model_test_input/enhancement/low_light/lol_test_1.png";
+        input_image_path = "../demo_data/model_test_input/enhancement/derain/test_1.png";
         LOG(INFO) << "use default input test image path: " << input_image_path;
     }
 
@@ -63,36 +63,34 @@ int main(int argc, char** argv) {
     };
     std::vector<common_out> model_output{};
     // construct enhancementor
-    auto enhancementor = create_enlightengan_enhancementor<mat_input, common_out>("enlightengan");
+    auto enhancementor = create_attentivegan_enhancementor<mat_input, common_out>("attentive_gan");
     auto cfg = toml::parse(cfg_file_path);
     enhancementor->init(cfg);
-
     if (!enhancementor->is_successfully_initialized()) {
-        LOG(INFO) << "enlightengan enhancementor init failed";
+        LOG(INFO) << "attentive gan enhancementor init failed";
         return -1;
     }
 
     // run benchmark
     int loop_times = 100;
     LOG(INFO) << "input test image size: " << input_image.size();
-    LOG(INFO) << "detector run loop times: " << loop_times;
-    LOG(INFO) << "start nanodet benchmark at: " << Timestamp::now().to_format_str();
+    LOG(INFO) << "enhancementor run loop times: " << loop_times;
+    LOG(INFO) << "start attentive gan benchmark at: " << Timestamp::now().to_format_str();
     auto ts = Timestamp::now();
-
     for (int i = 0; i < loop_times; ++i) {
         enhancementor->run(model_input, model_output);
     }
-
     auto cost_time = Timestamp::now() - ts;
     LOG(INFO) << "benchmark ends at: " << Timestamp::now().to_format_str();
     LOG(INFO) << "cost time: " << cost_time << "s, fps: " << loop_times / cost_time;
 
     std::string output_file_name = FilePathUtil::get_file_name(input_image_path);
-    output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_enlightengan_result.png";
-    std::string output_path = FilePathUtil::concat_path(
-            "../demo_data/model_test_input/enhancement/low_light/", output_file_name);
+    output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_attentive_gan_result.png";
+    std::string output_path = FilePathUtil::concat_path("../demo_data/model_test_input/enhancement/derain", output_file_name);
     cv::imwrite(output_path, model_output[0].enhancement_result);
     LOG(INFO) << "enhancement result image has been written into: " << output_path;
 
     return 1;
 }
+
+
