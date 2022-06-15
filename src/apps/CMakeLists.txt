@@ -19,6 +19,7 @@ set(MODEL_BENCHMARK_LIST
     resnet_benchmark
     densenet_benchmark
     attentivegan_benchmark
+    superpoint_benchmark
 )
 
 foreach(src ${MODEL_BENCHMARK_LIST})
