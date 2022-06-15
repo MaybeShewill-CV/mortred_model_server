@@ -18,6 +18,7 @@ set(MODEL_BENCHMARK_LIST
     mobilenetv2_benchmark
     resnet_benchmark
     densenet_benchmark
+    attentivegan_benchmark
 )
 
 foreach(src ${MODEL_BENCHMARK_LIST})
