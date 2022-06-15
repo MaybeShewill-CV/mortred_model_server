@@ -201,7 +201,7 @@ public:
         }
 
         // transform internal output into external output
-        nano_impl::transform_input<OUTPUT>(nms_result);
+        out = nano_impl::transform_input<OUTPUT>(nms_result);
         return StatusCode::OK;
     }
 
