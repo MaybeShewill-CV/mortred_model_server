@@ -338,7 +338,7 @@ StatusCode AttentiveGanDerain<INPUT, OUTPUT>::Impl::init(const decltype(toml::pa
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-cv::Mat AttentiveGanDerain<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& input_image) const {
+cv::Mat AttentiveGanDerain<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat &input_image) const {
     // resize image
     cv::Mat tmp;
     if (input_image.size() != _m_input_size_host) {
@@ -354,14 +354,13 @@ cv::Mat AttentiveGanDerain<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat&
 
     tmp /= 127.5;
     cv::subtract(tmp, cv::Scalar(1.0, 1.0, 1.0), tmp);
-    return tmp; 
+    return tmp;
 }
 
 /***
  * @return
  */
-template <typename INPUT, typename OUTPUT>
-cv::Mat AttentiveGanDerain<INPUT, OUTPUT>::Impl::postprocess() const {
+template <typename INPUT, typename OUTPUT> cv::Mat AttentiveGanDerain<INPUT, OUTPUT>::Impl::postprocess() const {
     // convert tensor format
     MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
     _m_output_tensor->copyToHostTensor(&output_tensor_user);
@@ -375,7 +374,7 @@ cv::Mat AttentiveGanDerain<INPUT, OUTPUT>::Impl::postprocess() const {
     auto b_min_value = *std::min_element(output_feats_split[0].begin<float>(), output_feats_split[0].end<float>());
     auto g_max_value = *std::max_element(output_feats_split[1].begin<float>(), output_feats_split[1].end<float>());
     auto g_min_value = *std::min_element(output_feats_split[1].begin<float>(), output_feats_split[1].end<float>());
-    auto r_max_value = *std::max_element(output_feats_split[2].begin<float>(), output_feats_split[2].end<float>());    
+    auto r_max_value = *std::max_element(output_feats_split[2].begin<float>(), output_feats_split[2].end<float>());
     auto r_min_value = *std::min_element(output_feats_split[2].begin<float>(), output_feats_split[2].end<float>());
     cv::Mat output_image(_m_input_size_host, CV_8UC3);
     for (auto row = 0; row < output_image.size().height; ++row) {
@@ -403,9 +402,7 @@ cv::Mat AttentiveGanDerain<INPUT, OUTPUT>::Impl::postprocess() const {
  * @tparam INPUT
  * @tparam OUTPUT
  */
-template <typename INPUT, typename OUTPUT> AttentiveGanDerain<INPUT, OUTPUT>::AttentiveGanDerain() {
-     _m_pimpl = std::make_unique<Impl>(); 
-}
+template <typename INPUT, typename OUTPUT> AttentiveGanDerain<INPUT, OUTPUT>::AttentiveGanDerain() { _m_pimpl = std::make_unique<Impl>(); }
 
 /***
  *

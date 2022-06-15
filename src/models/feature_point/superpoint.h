@@ -1,9 +1,5 @@
-//
-// Created by Administrator on 2022/6/15.
-//
-
-#ifndef MMAISERVER_ATTENTIVEGANDERAINNET_H
-#define MMAISERVER_ATTENTIVEGANDERAINNET_H
+#ifndef MMAISERVER_SUPERPOINT_H
+#define MMAISERVER_SUPERPOINT_H
 
 #include <memory>
 
@@ -13,36 +9,36 @@
 #include "models/base_model.h"
 #include "models/model_io_define.h"
 
-
 namespace morted {
 namespace models {
-namespace enhancement {
+namespace feature_point {
 
-template <typename INPUT, typename OUTPUT> class AttentiveGanDerain : public morted::models::BaseAiModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT>
+class SuperPoint : public morted::models::BaseAiModel<INPUT, OUTPUT> {
   public:
     /***
      * 构造函数
      * @param config
      */
-    AttentiveGanDerain();
+    SuperPoint();
 
     /***
      *
      */
-    ~AttentiveGanDerain() override;
+    ~SuperPoint() override;
 
     /***
      * 赋值构造函数
      * @param transformer
      */
-    AttentiveGanDerain(const AttentiveGanDerain &transformer) = delete;
+    SuperPoint(const SuperPoint &transformer) = delete;
 
     /***
      * 复制构造函数
      * @param transformer
      * @return
      */
-    AttentiveGanDerain &operator=(const AttentiveGanDerain &transformer) = delete;
+    SuperPoint &operator=(const SuperPoint &transformer) = delete;
 
     /***
      *
@@ -70,10 +66,10 @@ template <typename INPUT, typename OUTPUT> class AttentiveGanDerain : public mor
     std::unique_ptr<Impl> _m_pimpl;
 };
 
-} // namespace enhancement
+} // namespace feature_point
 } // namespace models
 } // namespace morted
 
-#include "attentive_gan_derain_net.inl"
+#include "superpoint.inl"
 
-#endif // MMAISERVER_ATTENTIVEGANDERAINNET_H
+#endif // MMAISERVER_SUPERPOINT_H

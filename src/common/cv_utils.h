@@ -135,6 +135,19 @@ public:
      * @tparam T
      * @param input_image
      * @param objs
+     */
+    template<typename T>
+    static void vis_feature_points(cv::Mat& input_image, std::vector<T>& feature_points, int radius = 4) {
+        for (const auto& key_pt : feature_points) {
+            cv::circle(input_image, key_pt.pos, static_cast<int>(radius), cv::Scalar(0, 0, 255), -1);
+        }
+    }
+
+    /***
+     *
+     * @tparam T
+     * @param input_image
+     * @param objs
      * @param cls_nums
      */
     static void colorize_segmentation_mask(const cv::Mat& input_image, cv::Mat& output_image, int cls_nums) {
