@@ -53,7 +53,7 @@ public:
      * @param output
      * @return
      */
-    virtual morted::common::StatusCode run(const INPUT& in, std::vector<OUTPUT>& out) = 0;
+    virtual morted::common::StatusCode run(const INPUT& in, OUTPUT& out) = 0;
 
     /***
      *

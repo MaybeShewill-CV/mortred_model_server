@@ -40,7 +40,7 @@ struct text_region {
     std::vector<cv::Point2f> polygon;
     float score;
 };
-using common_text_regions = std::vector<text_region>;
+using std_text_regions_output = std::vector<text_region>;
 
 struct common_out {
     cv::Rect2f bbox;
@@ -52,6 +52,13 @@ struct common_out {
 // image object detection
 namespace object_detection {
 
+struct bbox {
+    cv::Rect2f bbox;
+    float score;
+    int32_t class_id;
+};
+using std_object_detection_output = std::vector<bbox>;
+
 struct common_out {
     cv::Rect2f bbox;
     float score;
@@ -62,6 +69,11 @@ struct common_out {
 // image scene segmentation
 namespace scene_segmentation {
 
+struct seg_output {
+    cv::Mat segmentation_result;
+};
+using std_scene_segmentation_output = seg_output;
+
 struct common_out {
     cv::Mat segmentation_result;
 };
@@ -69,6 +81,11 @@ struct common_out {
 
 // image enhancement
 namespace enhancement {
+
+struct enhance_output {
+    cv::Mat enhancement_result;
+};
+using std_enhancement_output = enhance_output;
 
 struct common_out {
     cv::Mat enhancement_result;
@@ -78,6 +95,12 @@ struct common_out {
 // image enhancement
 namespace classification {
 
+struct cls_output {
+    int class_id;
+    std::vector<float> scores;
+};
+using std_classification_output = cls_output;
+
 struct common_out {
     int class_id;
     std::vector<float> scores;
@@ -86,6 +109,13 @@ struct common_out {
 
 // image feature point
 namespace feature_point {
+
+struct fp {
+    cv::Point2f location;
+    std::vector<float> descriptor;
+    float score;
+};
+using std_feature_point_output = std::vector<fp>;
 
 struct common_out {
     cv::Point2f location;
