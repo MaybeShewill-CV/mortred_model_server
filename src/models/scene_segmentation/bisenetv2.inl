@@ -151,67 +151,19 @@ public:
 
     /***
      *
+     * @param in
+     * @param out
+     * @return
+     */
+    StatusCode run(const INPUT& in, OUTPUT& out);
+
+    /***
+     *
      * @return
      */
     bool is_successfully_initialized() const {
         return _m_successfully_initialized;
     };
-
-    /***
-     *
-     * @param in
-     * @param out
-     * @return
-     */
-    StatusCode run(const INPUT& in, OUTPUT& out) {
-        // transform external input into internal input
-        auto internal_in = bisenetv2_impl::transform_input(in);
-
-        if (!internal_in.input_image.data || internal_in.input_image.empty()) {
-            return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
-        }
-
-        // preprocess image
-        cv::Mat preprocessed_image = preprocess_image(internal_in.input_image);
-        // run session
-        MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
-        auto input_tensor_data = input_tensor_user.host<float>();
-        auto input_tensor_size = input_tensor_user.size();
-        ::memcpy(input_tensor_data, preprocessed_image.data, input_tensor_size);
-        _m_input_tensor->copyFromHostTensor(&input_tensor_user);
-        _m_net->runSession(_m_session);
-        // fetch net output
-        auto* output_tensor_user = new MNN::Tensor(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
-        _m_output_tensor->copyToHostTensor(output_tensor_user);
-        auto host_data = output_tensor_user->host<float>();
-
-        int output_tensor_height = output_tensor_user->shape()[0];
-        int output_tensor_width = output_tensor_user->shape()[1];
-        const int output_tensor_channels = output_tensor_user->shape()[2];
-        cv::Mat softmax_score_mat(
-            cv::Size(output_tensor_width, output_tensor_height),
-            CV_32FC(output_tensor_channels),
-            host_data);
-        cv::Mat result_image(softmax_score_mat.size(), CV_32SC1);
-
-        for (auto row = 0; row < softmax_score_mat.rows; ++row) {
-            for (auto col = 0; col < softmax_score_mat.cols; ++col) {
-                auto* scores = softmax_score_mat.ptr<float>(row, col);
-                auto max_score_iter = std::max_element(scores, scores + output_tensor_channels);
-                int cls_id = static_cast<int>(std::distance(scores, max_score_iter));
-                result_image.at<int>(row, col) = cls_id;
-            }
-        }
-
-        cv::resize(result_image, result_image, _m_input_size_user, 0.0, 0.0, cv::INTER_NEAREST);
-
-        // transform internal output into external output
-        bisenetv2_impl::internal_output internal_out;
-        internal_out.segmentation_result = result_image;
-        out = bisenetv2_impl::transform_output<OUTPUT>(internal_out);
-
-        return StatusCode::OK;
-    }
 
 private:
     // 模型文件存储路径
@@ -388,6 +340,63 @@ cv::Mat BiseNetV2<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& input_im
     cv::divide(tmp, cv::Scalar(0.5, 0.5, 0.5), tmp);
 
     return tmp;
+}
+
+/***
+ *
+ * @param in
+ * @param out
+ * @return
+ */
+template<typename INPUT, typename OUTPUT>
+StatusCode BiseNetV2<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
+    // transform external input into internal input
+    auto internal_in = bisenetv2_impl::transform_input(in);
+
+    if (!internal_in.input_image.data || internal_in.input_image.empty()) {
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
+
+    // preprocess image
+    cv::Mat preprocessed_image = preprocess_image(internal_in.input_image);
+    // run session
+    MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
+    auto input_tensor_data = input_tensor_user.host<float>();
+    auto input_tensor_size = input_tensor_user.size();
+    ::memcpy(input_tensor_data, preprocessed_image.data, input_tensor_size);
+    _m_input_tensor->copyFromHostTensor(&input_tensor_user);
+    _m_net->runSession(_m_session);
+    // fetch net output
+    auto* output_tensor_user = new MNN::Tensor(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
+    _m_output_tensor->copyToHostTensor(output_tensor_user);
+    auto host_data = output_tensor_user->host<float>();
+
+    int output_tensor_height = output_tensor_user->shape()[0];
+    int output_tensor_width = output_tensor_user->shape()[1];
+    const int output_tensor_channels = output_tensor_user->shape()[2];
+    cv::Mat softmax_score_mat(
+        cv::Size(output_tensor_width, output_tensor_height),
+        CV_32FC(output_tensor_channels),
+        host_data);
+    cv::Mat result_image(softmax_score_mat.size(), CV_32SC1);
+
+    for (auto row = 0; row < softmax_score_mat.rows; ++row) {
+        for (auto col = 0; col < softmax_score_mat.cols; ++col) {
+            auto* scores = softmax_score_mat.ptr<float>(row, col);
+            auto max_score_iter = std::max_element(scores, scores + output_tensor_channels);
+            int cls_id = static_cast<int>(std::distance(scores, max_score_iter));
+            result_image.at<int>(row, col) = cls_id;
+        }
+    }
+
+    cv::resize(result_image, result_image, _m_input_size_user, 0.0, 0.0, cv::INTER_NEAREST);
+
+    // transform internal output into external output
+    bisenetv2_impl::internal_output internal_out;
+    internal_out.segmentation_result = result_image;
+    out = bisenetv2_impl::transform_output<OUTPUT>(internal_out);
+
+    return StatusCode::OK;
 }
 
 /************* Export Function Sets *************/

@@ -148,43 +148,19 @@ template <typename INPUT, typename OUTPUT> class AttentiveGanDerain<INPUT, OUTPU
 
     /***
      *
-     * @return
-     */
-    bool is_successfully_initialized() const { return _m_successfully_initialized; };
-
-    /***
-     *
      * @param in
      * @param out
      * @return
      */
-    StatusCode run(const INPUT &in, OUTPUT &out) {
-        // transform external input into internal input
-        auto internal_in = attentiveganderain_impl::transform_input(in);
-        if (!internal_in.input_image.data || internal_in.input_image.empty()) {
-            return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
-        }
-        // preprocess image
-        _m_input_size_user = internal_in.input_image.size();
-        auto preprocessed_image = preprocess_image(internal_in.input_image);
-        // run session
-        MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
-        auto input_tensor_data = input_tensor_user.host<float>();
-        auto input_tensor_size = input_tensor_user.size();
-        ::memcpy(input_tensor_data, preprocessed_image.data, input_tensor_size);
-        _m_input_tensor->copyFromHostTensor(&input_tensor_user);
-        _m_net->runSession(_m_session);
-        // postprocess
-        cv::Mat output_image = postprocess();
-        if (output_image.size() != _m_input_size_user) {
-            cv::resize(output_image, output_image, _m_input_size_user);
-        }
-        attentiveganderain_impl::internal_output internal_out;
-        output_image.copyTo(internal_out.enhancement_result);
-        // transform output
-        out = attentiveganderain_impl::transform_output<OUTPUT>(internal_out);
-        return StatusCode::OK;
-    }
+    StatusCode run(const INPUT &in, OUTPUT &out);
+
+    /***
+     *
+     * @return
+     */
+    bool is_successfully_initialized() const {
+        return _m_successfully_initialized; 
+    };
 
   private:
     // 模型文件存储路径
@@ -328,6 +304,41 @@ StatusCode AttentiveGanDerain<INPUT, OUTPUT>::Impl::init(const decltype(toml::pa
 
     _m_successfully_initialized = true;
     LOG(INFO) << "Attentive gan derain model: " << FilePathUtil::get_file_name(_m_model_file_path) << " initialization complete!!!";
+    return StatusCode::OK;
+}
+
+/***
+ *
+ * @param in
+ * @param out
+ * @return
+ */
+template<typename INPUT, typename OUTPUT>
+StatusCode AttentiveGanDerain<INPUT, OUTPUT>::Impl::run(const INPUT &in, OUTPUT &out) {
+    // transform external input into internal input
+    auto internal_in = attentiveganderain_impl::transform_input(in);
+    if (!internal_in.input_image.data || internal_in.input_image.empty()) {
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
+    // preprocess image
+    _m_input_size_user = internal_in.input_image.size();
+    auto preprocessed_image = preprocess_image(internal_in.input_image);
+    // run session
+    MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
+    auto input_tensor_data = input_tensor_user.host<float>();
+    auto input_tensor_size = input_tensor_user.size();
+    ::memcpy(input_tensor_data, preprocessed_image.data, input_tensor_size);
+    _m_input_tensor->copyFromHostTensor(&input_tensor_user);
+    _m_net->runSession(_m_session);
+    // postprocess
+    cv::Mat output_image = postprocess();
+    if (output_image.size() != _m_input_size_user) {
+        cv::resize(output_image, output_image, _m_input_size_user);
+    }
+    attentiveganderain_impl::internal_output internal_out;
+    output_image.copyTo(internal_out.enhancement_result);
+    // transform output
+    out = attentiveganderain_impl::transform_output<OUTPUT>(internal_out);
     return StatusCode::OK;
 }
 

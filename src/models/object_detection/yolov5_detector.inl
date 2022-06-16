@@ -157,52 +157,20 @@ public:
     StatusCode init(const decltype(toml::parse(""))& config);
 
     /***
+    *
+    * @param in
+    * @param out
+    * @return
+    */
+    StatusCode run(const INPUT& in, OUTPUT& out);
+
+    /***
      *
      * @return
      */
     bool is_successfully_initialized() const {
         return _m_successfully_initialized;
     };
-
-    /***
-    *
-    * @param in
-    * @param out
-    * @return
-    */
-    StatusCode run(const INPUT& in, OUTPUT& out) {
-        // transform external input into internal input
-        auto internal_in = yolov5_impl::transform_input(in);
-
-        if (!internal_in.input_image.data || internal_in.input_image.empty()) {
-            return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
-        }
-
-        // preprocess image
-        _m_input_size_user = internal_in.input_image.size();
-        auto preprocessed_image = preprocess_image(internal_in.input_image);
-
-        // run session
-        MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
-        auto input_tensor_data = input_tensor_user.host<float>();
-        auto input_tensor_size = input_tensor_user.size();
-        ::memcpy(input_tensor_data, preprocessed_image.data, input_tensor_size);
-        _m_input_tensor->copyFromHostTensor(&input_tensor_user);
-        _m_net->runSession(_m_session);
-
-        // decode output tensor
-        auto bbox_result = decode_output_tensor();
-
-        // do nms
-        yolov5_impl::internal_output nms_result = CvUtils::nms_bboxes(bbox_result, _m_nms_threshold);
-        if (nms_result.size() > _m_keep_topk) {
-            nms_result.resize(_m_keep_topk);
-        }
-
-        // transform internal output into external output
-        out = yolov5_impl::transform_output<OUTPUT>(nms_result);
-        return StatusCode::OK;
-    }
 
 public:
     // 模型文件存储路径
@@ -406,6 +374,47 @@ cv::Mat YoloV5Detector<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& inp
     tmp /= 255.0;
 
     return tmp;
+}
+
+/***
+*
+* @param in
+* @param out
+* @return
+*/
+template<typename INPUT, typename OUTPUT>
+StatusCode YoloV5Detector<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
+    // transform external input into internal input
+    auto internal_in = yolov5_impl::transform_input(in);
+
+    if (!internal_in.input_image.data || internal_in.input_image.empty()) {
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
+
+    // preprocess image
+    _m_input_size_user = internal_in.input_image.size();
+    auto preprocessed_image = preprocess_image(internal_in.input_image);
+
+    // run session
+    MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
+    auto input_tensor_data = input_tensor_user.host<float>();
+    auto input_tensor_size = input_tensor_user.size();
+    ::memcpy(input_tensor_data, preprocessed_image.data, input_tensor_size);
+    _m_input_tensor->copyFromHostTensor(&input_tensor_user);
+    _m_net->runSession(_m_session);
+
+    // decode output tensor
+    auto bbox_result = decode_output_tensor();
+
+    // do nms
+    yolov5_impl::internal_output nms_result = CvUtils::nms_bboxes(bbox_result, _m_nms_threshold);
+    if (nms_result.size() > _m_keep_topk) {
+        nms_result.resize(_m_keep_topk);
+    }
+
+    // transform internal output into external output
+    out = yolov5_impl::transform_output<OUTPUT>(nms_result);
+    return StatusCode::OK;
 }
 
 /***

@@ -153,106 +153,19 @@ public:
 
     /***
      *
+     * @param in
+     * @param out
+     * @return
+     */
+    StatusCode run(const INPUT& in, OUTPUT& out);
+
+    /***
+     *
      * @return
      */
     bool is_successfully_initialized() const {
         return _m_successfully_initialized;
     };
-
-    /***
-     *
-     * @param in
-     * @param out
-     * @return
-     */
-    StatusCode run(const INPUT& in, OUTPUT& out) {
-        // transform external input into internal input
-        auto internal_in = enlightengan_impl::transform_input(in);
-
-        if (!internal_in.input_image.data || internal_in.input_image.empty()) {
-            return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
-        }
-
-        // preprocess image
-        if (!internal_in.input_image.data || internal_in.input_image.empty() ||
-                internal_in.input_image.size().height < 10 || internal_in.input_image.size().width < 10) {
-            LOG(ERROR) << "invalid image data or empty image";
-            return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
-        }
-
-        if (internal_in.input_image.channels() != 3 && internal_in.input_image.channels() != 4) {
-            LOG(ERROR) << "input image should have 3 or 4 channels, but got: "
-                       << internal_in.input_image.channels() << " instead";
-            return StatusCode::MODEL_RUN_SESSION_FAILED;
-        }
-
-        if (internal_in.input_image.size() != _m_input_size_host) {
-            _m_input_size_host.height = static_cast<int>(std::ceil(internal_in.input_image.size().height / 16) * 16);
-            _m_input_size_host.width = static_cast<int>(std::ceil(internal_in.input_image.size().width / 16) * 16);
-            _m_net->resizeTensor(_m_input_tensor_src, 1, 3, _m_input_size_host.height, _m_input_size_host.width);
-            _m_net->resizeTensor(_m_input_tensor_gray, 1, 1, _m_input_size_host.height, _m_input_size_host.width);
-            _m_net->resizeSession(_m_session);
-            _m_output_tensor = _m_net->getSessionOutput(_m_session, "output");
-        }
-        cv::Mat input_src;
-        cv::Mat input_gray;
-        preprocess_image(internal_in.input_image, input_src, input_gray);
-        // run session
-        MNN::Tensor input_tensor_user_src(_m_input_tensor_src, MNN::Tensor::DimensionType::TENSORFLOW);
-        auto input_tensor_data = input_tensor_user_src.host<float>();
-        auto input_tensor_size = input_tensor_user_src.size();
-        ::memcpy(input_tensor_data, input_src.data, input_tensor_size);
-        _m_input_tensor_src->copyFromHostTensor(&input_tensor_user_src);
-
-        MNN::Tensor input_tensor_user_gray(_m_input_tensor_gray, MNN::Tensor::DimensionType::TENSORFLOW);
-        input_tensor_data = input_tensor_user_gray.host<float>();
-        input_tensor_size = input_tensor_user_gray.size();
-        ::memcpy(input_tensor_data, input_gray.data, input_tensor_size);
-        _m_input_tensor_gray->copyFromHostTensor(&input_tensor_user_gray);
-        _m_net->runSession(_m_session);
-
-        // decode output tensor
-        MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
-        _m_output_tensor->copyToHostTensor(&output_tensor_user);
-        auto host_data = output_tensor_user.host<float>();
-        auto element_size = output_tensor_user.elementSize();
-        std::vector<uchar> output_img_data;
-        output_img_data.resize(element_size);
-
-        for (int index = 0; index < element_size; ++index) {
-            auto pix_val_f = (host_data[index] + 1.0) * 255.0 / 2.0;
-            if (pix_val_f < 0.0) {
-                pix_val_f = 0.0;
-            }
-            if (pix_val_f >= 255) {
-                pix_val_f = 255.0;
-            }
-            auto pix_val = static_cast<uchar>(pix_val_f);
-            output_img_data[index] = pix_val;
-        }
-
-        enlightengan_impl::internal_output internal_out;
-        cv::Mat result_image(_m_input_size_host, CV_8UC3, output_img_data.data());
-        cv::cvtColor(result_image, internal_out.enhancement_result, cv::COLOR_RGB2BGR);
-        if (internal_out.enhancement_result.size() != internal_in.input_image.size()) {
-            cv::resize(internal_out.enhancement_result, internal_out.enhancement_result, internal_in.input_image.size());
-        }
-
-        // refine output image
-        if (internal_in.input_image.channels() == 4) {
-            std::vector<cv::Mat> input_image_split;
-            cv::split(internal_in.input_image, input_image_split);
-
-            std::vector<cv::Mat> output_image_split;
-            cv::split(internal_out.enhancement_result, output_image_split);
-            output_image_split.push_back(input_image_split[3]);
-            cv::merge(output_image_split, internal_out.enhancement_result);
-        }
-
-        // transform internal output into external output
-        out = enlightengan_impl::transform_output<OUTPUT>(internal_out);
-        return StatusCode::OK;
-    }
 
 private:
     // 模型文件存储路径
@@ -269,8 +182,6 @@ private:
     MNN::Tensor* _m_output_tensor = nullptr;
     // MNN后端使用线程数
     int _m_threads_nums = 4;
-    // 用户输入网络的图像尺寸
-    cv::Size _m_input_size_user = cv::Size();
     //　计算图定义的输入node尺寸
     cv::Size _m_input_size_host = cv::Size();
     // 是否成功初始化标志位
@@ -390,18 +301,8 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""
 
     _m_input_size_host.width = _m_input_tensor_src->width();
     _m_input_size_host.height = _m_input_tensor_src->height();
-
-    if (!cfg_content.contains("model_input_image_size")) {
-        _m_input_size_user.width = 512;
-        _m_input_size_user.height = 512;
-    } else {
-        _m_input_size_user.width = static_cast<int>(
-                                       cfg_content.at("model_input_image_size").as_array()[1].as_integer());
-        _m_input_size_user.height = static_cast<int>(
-                                        cfg_content.at("model_input_image_size").as_array()[0].as_integer());
-    }
-
     _m_successfully_initialized = true;
+    
     LOG(INFO) << "Enlighten-gan enhancement model: " << FilePathUtil::get_file_name(_m_model_file_path)
               << " initialization complete!!!";
     return StatusCode::OK;
@@ -411,9 +312,101 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""
  *
  * @tparam INPUT
  * @tparam OUTPUT
- * @param input_image
+ * @param in
+ * @param out
  * @return
  */
+template<typename INPUT, typename OUTPUT>
+StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
+    // transform external input into internal input
+    auto internal_in = enlightengan_impl::transform_input(in);
+
+    if (!internal_in.input_image.data || internal_in.input_image.empty()) {
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
+
+    // preprocess image
+    if (!internal_in.input_image.data || internal_in.input_image.empty() ||
+            internal_in.input_image.size().height < 10 || internal_in.input_image.size().width < 10) {
+        LOG(ERROR) << "invalid image data or empty image";
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
+
+    if (internal_in.input_image.channels() != 3 && internal_in.input_image.channels() != 4) {
+        LOG(ERROR) << "input image should have 3 or 4 channels, but got: "
+                    << internal_in.input_image.channels() << " instead";
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+
+    if (internal_in.input_image.size() != _m_input_size_host) {
+        _m_input_size_host.height = static_cast<int>(std::ceil(internal_in.input_image.size().height / 16) * 16);
+        _m_input_size_host.width = static_cast<int>(std::ceil(internal_in.input_image.size().width / 16) * 16);
+        _m_net->resizeTensor(_m_input_tensor_src, 1, 3, _m_input_size_host.height, _m_input_size_host.width);
+        _m_net->resizeTensor(_m_input_tensor_gray, 1, 1, _m_input_size_host.height, _m_input_size_host.width);
+        _m_net->resizeSession(_m_session);
+        _m_output_tensor = _m_net->getSessionOutput(_m_session, "output");
+    }
+    cv::Mat input_src;
+    cv::Mat input_gray;
+    preprocess_image(internal_in.input_image, input_src, input_gray);
+    // run session
+    MNN::Tensor input_tensor_user_src(_m_input_tensor_src, MNN::Tensor::DimensionType::TENSORFLOW);
+    auto input_tensor_data = input_tensor_user_src.host<float>();
+    auto input_tensor_size = input_tensor_user_src.size();
+    ::memcpy(input_tensor_data, input_src.data, input_tensor_size);
+    _m_input_tensor_src->copyFromHostTensor(&input_tensor_user_src);
+
+    MNN::Tensor input_tensor_user_gray(_m_input_tensor_gray, MNN::Tensor::DimensionType::TENSORFLOW);
+    input_tensor_data = input_tensor_user_gray.host<float>();
+    input_tensor_size = input_tensor_user_gray.size();
+    ::memcpy(input_tensor_data, input_gray.data, input_tensor_size);
+    _m_input_tensor_gray->copyFromHostTensor(&input_tensor_user_gray);
+    _m_net->runSession(_m_session);
+
+    // decode output tensor
+    MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
+    _m_output_tensor->copyToHostTensor(&output_tensor_user);
+    auto host_data = output_tensor_user.host<float>();
+    auto element_size = output_tensor_user.elementSize();
+    std::vector<uchar> output_img_data;
+    output_img_data.resize(element_size);
+
+    for (int index = 0; index < element_size; ++index) {
+        auto pix_val_f = (host_data[index] + 1.0) * 255.0 / 2.0;
+        if (pix_val_f < 0.0) {
+            pix_val_f = 0.0;
+        }
+        if (pix_val_f >= 255) {
+            pix_val_f = 255.0;
+        }
+        auto pix_val = static_cast<uchar>(pix_val_f);
+        output_img_data[index] = pix_val;
+    }
+
+    enlightengan_impl::internal_output internal_out;
+    cv::Mat result_image(_m_input_size_host, CV_8UC3, output_img_data.data());
+    cv::cvtColor(result_image, internal_out.enhancement_result, cv::COLOR_RGB2BGR);
+    if (internal_out.enhancement_result.size() != internal_in.input_image.size()) {
+        cv::resize(internal_out.enhancement_result, internal_out.enhancement_result, internal_in.input_image.size());
+    }
+
+    // refine output image
+    if (internal_in.input_image.channels() == 4) {
+        std::vector<cv::Mat> input_image_split;
+        cv::split(internal_in.input_image, input_image_split);
+
+        std::vector<cv::Mat> output_image_split;
+        cv::split(internal_out.enhancement_result, output_image_split);
+        output_image_split.push_back(input_image_split[3]);
+        cv::merge(output_image_split, internal_out.enhancement_result);
+    }
+
+    // transform internal output into external output
+    out = enlightengan_impl::transform_output<OUTPUT>(internal_out);
+    return StatusCode::OK;
+}
+
+
 /***
 *
 * @param input_image

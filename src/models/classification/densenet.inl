@@ -154,51 +154,19 @@ public:
 
     /***
      *
+     * @param in
+     * @param out
+     * @return
+     */
+    StatusCode run(const INPUT& in, OUTPUT& out);
+
+    /***
+     *
      * @return
      */
     bool is_successfully_initialized() const {
         return _m_successfully_initialized;
     };
-
-    /***
-     *
-     * @param in
-     * @param out
-     * @return
-     */
-    StatusCode run(const INPUT& in, OUTPUT& out) {
-        // transform external input into internal input
-        auto internal_in = densenet_impl::transform_input(in);
-
-        if (!internal_in.input_image.data || internal_in.input_image.empty()) {
-            return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
-        }
-
-        // preprocess image
-        auto preprocessed_image = preprocess_image(internal_in.input_image);
-        // run session
-        MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
-        auto input_tensor_data = input_tensor_user.host<float>();
-        auto input_tensor_size = input_tensor_user.size();
-        ::memcpy(input_tensor_data, preprocessed_image.data, input_tensor_size);
-        _m_input_tensor->copyFromHostTensor(&input_tensor_user);
-        _m_net->runSession(_m_session);
-        // decode output tensor
-        MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
-        _m_output_tensor->copyToHostTensor(&output_tensor_user);
-        auto* host_data = output_tensor_user.host<float>();
-        // transform output
-        densenet_impl::internal_output internal_out;
-        for (auto index = 0; index < output_tensor_user.elementSize(); ++index) {
-            internal_out.scores.push_back(host_data[index]);
-        }
-        auto max_score = std::max_element(host_data, host_data + output_tensor_user.elementSize());
-        auto cls_id = static_cast<int>(std::distance(host_data, max_score));
-        internal_out.class_id = cls_id;
-        out = densenet_impl::transform_output<OUTPUT>(internal_out);
-
-        return StatusCode::OK;
-    }
 
 private:
     std::string _m_model_file_path;
@@ -328,6 +296,49 @@ StatusCode DenseNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& 
     // 初始化类是否成功初始化标志位
     _m_successfully_initialized = true;
     LOG(INFO) << "DenseNet classification model initialization complete !!!";
+    return StatusCode::OK;
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param in
+ * @param out
+ * @return
+ */
+template<typename INPUT, typename OUTPUT>
+StatusCode DenseNet<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
+    // transform external input into internal input
+    auto internal_in = densenet_impl::transform_input(in);
+
+    if (!internal_in.input_image.data || internal_in.input_image.empty()) {
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
+
+    // preprocess image
+    auto preprocessed_image = preprocess_image(internal_in.input_image);
+    // run session
+    MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
+    auto input_tensor_data = input_tensor_user.host<float>();
+    auto input_tensor_size = input_tensor_user.size();
+    ::memcpy(input_tensor_data, preprocessed_image.data, input_tensor_size);
+    _m_input_tensor->copyFromHostTensor(&input_tensor_user);
+    _m_net->runSession(_m_session);
+    // decode output tensor
+    MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
+    _m_output_tensor->copyToHostTensor(&output_tensor_user);
+    auto* host_data = output_tensor_user.host<float>();
+    // transform output
+    densenet_impl::internal_output internal_out;
+    for (auto index = 0; index < output_tensor_user.elementSize(); ++index) {
+        internal_out.scores.push_back(host_data[index]);
+    }
+    auto max_score = std::max_element(host_data, host_data + output_tensor_user.elementSize());
+    auto cls_id = static_cast<int>(std::distance(host_data, max_score));
+    internal_out.class_id = cls_id;
+    out = densenet_impl::transform_output<OUTPUT>(internal_out);
+
     return StatusCode::OK;
 }
 
