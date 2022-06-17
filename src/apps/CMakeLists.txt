@@ -9,6 +9,7 @@ file(GLOB_RECURSE OPENCV_LIBS ${PROJECT_ROOT_DIR}/3rd_party/libs/*opencv*so)
 file(GLOB_RECURSE GLOG_LIBS ${PROJECT_ROOT_DIR}/3rd_party/libs/*glog*so)
 file(GLOB_RECURSE WORKFLOW_LIBS ${PROJECT_ROOT_DIR}/3rd_party/libs/*workflow*so)
 
+# build benchmark apps
 set(MODEL_BENCHMARK_LIST
     yolov5_benchmark
     nanodet_benchmark
@@ -24,6 +25,16 @@ set(MODEL_BENCHMARK_LIST
 
 foreach(src ${MODEL_BENCHMARK_LIST})
     add_executable(${src}.out ./model_benchmark/${src}.cpp)
+    target_link_libraries(${src}.out common models factory ${WORKFLOW_LIBS} ${GLOG_LIBS})
+endforeach()
+
+# build fast batch process app
+set(MODEL_FAST_BATCH_PROCESS_LIST
+    enlightengan_fast_batch_process
+)
+
+foreach(src ${MODEL_FAST_BATCH_PROCESS_LIST})
+    add_executable(${src}.out ./fast_batch_process/${src}.cpp)
     target_link_libraries(${src}.out common models factory ${WORKFLOW_LIBS} ${GLOG_LIBS})
 endforeach()
 
