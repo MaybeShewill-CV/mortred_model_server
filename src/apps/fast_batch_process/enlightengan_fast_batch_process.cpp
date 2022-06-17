@@ -47,26 +47,22 @@ std::vector<std::string> get_test_image_paths(const std::string &input_dir) {
     return image_paths;
 }
 
-static std::unique_ptr<EnlightenGan<mat_input, std_enhancement_output>> &get_enhancementor() {
-
-    static std::unique_ptr<EnlightenGan<mat_input, std_enhancement_output> > enhancementor_ptr = nullptr;
+static EnlightenGan<mat_input, std_enhancement_output>& get_enhancementor_instance() {
+    static EnlightenGan<mat_input, std_enhancement_output> enhancementor;
+    if (enhancementor.is_successfully_initialized()) {
+        return enhancementor;
+    }
     std::string cfg_file_path = "../weights/enhancement/low_light/config.ini";
     if (!FilePathUtil::is_file_exist(cfg_file_path)) {
         LOG(INFO) << "config file: " << cfg_file_path << " not exist";
-        return enhancementor_ptr;
+        return enhancementor;
     }
     auto cfg = toml::parse(cfg_file_path);
-    enhancementor_ptr.reset(new EnlightenGan<mat_input, std_enhancement_output>());
-    if (enhancementor_ptr->is_successfully_initialized()) {
-        return enhancementor_ptr;
-    }
-    auto status = enhancementor_ptr->init(cfg);
+    auto status = enhancementor.init(cfg);
     if (status != StatusCode::OK) {
         LOG(INFO) << "init enhancementor failed";
-        enhancementor_ptr.reset(nullptr);
-        return enhancementor_ptr;
     }
-    return enhancementor_ptr;
+    return enhancementor;
 }
 } // namespace common
 
@@ -93,14 +89,18 @@ void enhance_frame(cv::Mat &input_image, const std::string &vis_save_path, Proce
 
     mat_input model_input{input_image};
     std_enhancement_output model_output;
-    common::get_enhancementor()->run(model_input, model_output);
+    auto& enhancementor = common::get_enhancementor_instance();
+    if (!enhancementor.is_successfully_initialized()) {
+        LOG(INFO) << "enhancementor not initialized";
+        return;
+    }
+    enhancementor.run(model_input, model_output);
 
     ProcessImgRet ret;
     ret.input_image = input_image;
     ret.save_path = vis_save_path;
     model_output.enhancement_result.copyTo(ret.output_image);
-    while (!process_task_output.try_enqueue(ret)) {
-    }
+    while (!process_task_output.try_enqueue(ret)) {}
 }
 
 /***
