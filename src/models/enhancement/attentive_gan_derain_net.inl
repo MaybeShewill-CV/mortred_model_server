@@ -412,7 +412,9 @@ template <typename INPUT, typename OUTPUT> cv::Mat AttentiveGanDerain<INPUT, OUT
  * @tparam INPUT
  * @tparam OUTPUT
  */
-template <typename INPUT, typename OUTPUT> AttentiveGanDerain<INPUT, OUTPUT>::AttentiveGanDerain() { _m_pimpl = std::make_unique<Impl>(); }
+template <typename INPUT, typename OUTPUT> AttentiveGanDerain<INPUT, OUTPUT>::AttentiveGanDerain() { 
+    _m_pimpl = std::make_unique<Impl>(); 
+}
 
 /***
  *
