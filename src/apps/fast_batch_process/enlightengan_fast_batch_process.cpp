@@ -49,17 +49,18 @@ std::vector<std::string> get_test_image_paths(const std::string &input_dir) {
 
 static std::unique_ptr<EnlightenGan<mat_input, std_enhancement_output>> &get_enhancementor() {
 
-    std::unique_ptr<EnlightenGan<mat_input, std_enhancement_output>> enhancementor_ptr = nullptr;
+    std::unique_ptr<EnlightenGan<mat_input, std_enhancement_output> > enhancementor_ptr = nullptr;
     std::string cfg_file_path = "../weights/enhancement/low_light/config.ini";
     if (!FilePathUtil::is_file_exist(cfg_file_path)) {
         LOG(INFO) << "config file: " << cfg_file_path << " not exist";
         return enhancementor_ptr;
     }
     auto cfg = toml::parse(cfg_file_path);
-    enhancementor_ptr = std::make_unique<EnlightenGan<mat_input, std_enhancement_output>>(cfg);
+    enhancementor_ptr.reset(new EnlightenGan<mat_input, std_enhancement_output>());
     auto status = enhancementor_ptr->init(cfg);
     if (status != StatusCode::OK) {
         LOG(INFO) << "init enhancementor failed";
+        enhancementor_ptr.reset(nullptr);
         return enhancementor_ptr;
     }
     return enhancementor_ptr;
