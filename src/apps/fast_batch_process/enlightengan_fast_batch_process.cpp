@@ -49,7 +49,10 @@ std::vector<std::string> get_test_image_paths(const std::string &input_dir) {
 
 static std::unique_ptr<EnlightenGan<mat_input, std_enhancement_output>> &get_enhancementor() {
 
-    static std::unique_ptr<EnlightenGan<mat_input, std_enhancement_output> > enhancementor_ptr = nullptr;
+    static std::unique_ptr<EnlightenGan<mat_input, std_enhancement_output> > enhancementor_ptr;
+    if (enhancementor_ptr->is_successfully_initialized()) {
+        return enhancementor_ptr;
+    }
     std::string cfg_file_path = "../weights/enhancement/low_light/config.ini";
     if (!FilePathUtil::is_file_exist(cfg_file_path)) {
         LOG(INFO) << "config file: " << cfg_file_path << " not exist";
@@ -90,8 +93,7 @@ void enhance_frame(cv::Mat &input_image, const std::string &vis_save_path, Proce
 
     mat_input model_input{input_image};
     std_enhancement_output model_output;
-    auto &enhancementor = common::get_enhancementor();
-    enhancementor->run(model_input, model_output);
+    common::get_enhancementor()->run(model_input, model_output);
 
     ProcessImgRet ret;
     ret.input_image = input_image;
