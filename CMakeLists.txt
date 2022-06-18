@@ -27,7 +27,7 @@ set(LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_LIST_DIR}/_lib)
 # find package
 find_package(Threads REQUIRED)
 if(CMAKE_HOST_SYSTEM_NAME MATCHES "Windows")
-    set(OpenCV_DIR "E:\\opencv-4.5.0\\out\\install\\x64-Release")
+    set(OpenCV_DIR "E:\\opencv-4.5.0\\out\\build\\x64-Release")
 endif()
 find_package(OpenCV 4.5.0 REQUIRED)
 
