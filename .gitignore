@@ -38,5 +38,5 @@ _bin/
 _lib/
 build/
 cmake-build-debug/
-.vscode/settings.json
+.vscode/
 .idea/
