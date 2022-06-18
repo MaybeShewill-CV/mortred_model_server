@@ -222,7 +222,7 @@ public:
 template<typename INPUT, typename OUTPUT>
 StatusCode YoloV5Detector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& config) {
     if (!config.contains("YOLOV5")) {
-        LOG(ERROR) << "Config文件没有YoloV5相关配置, 请重新检查配置文件";
+        LOG(ERROR) << "Config file does not contain YOLOV5 section";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }

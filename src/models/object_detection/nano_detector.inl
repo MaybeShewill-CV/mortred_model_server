@@ -284,7 +284,7 @@ private:
 template<typename INPUT, typename OUTPUT>
 StatusCode NanoDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& config) {
     if (!config.contains("NanoDet")) {
-        LOG(ERROR) << "Config文件没有NanoDet相关配置, 请重新检查配置文件";
+        LOG(ERROR) << "Config file does not contain NanoDet section";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
