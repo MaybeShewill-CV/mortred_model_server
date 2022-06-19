@@ -133,7 +133,7 @@ static ResNetPtr &get_resnet_ptr(const std::string &model_name) {
     if (resnet_ptr->is_successfully_initialized()) {
         return resnet_ptr;
     }
-    std::string resnet_model_cfg_path = "../weights/classification/resnet50_config.ini";
+    std::string resnet_model_cfg_path = "../weights/classification/resnet/resnet50_config.ini";
     if (!FilePathUtil::is_file_exist(resnet_model_cfg_path)) {
         LOG(FATAL) << "resnet model config file not exist: " << resnet_model_cfg_path;
         resnet_ptr.reset(nullptr);
