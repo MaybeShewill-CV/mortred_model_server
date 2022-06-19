@@ -100,9 +100,13 @@ std::string make_response_body(const std::string &task_id, const StatusCode &sta
 
     int code = static_cast<int>(status);
     std::string msg = status == StatusCode::OK ? "success" : "fail";
-    int cls_id = model_output.class_id;
-    float scores = model_output.scores[cls_id];
-
+    int cls_id = -1;
+    int scores = -1.0;
+    if (status == StatusCode::OK) {
+        cls_id = model_output.class_id;
+        scores = model_output.scores[cls_id];
+    }
+    
     rapidjson::StringBuffer buf;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
     writer.StartObject();
