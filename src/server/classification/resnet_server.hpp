@@ -177,8 +177,13 @@ void do_classification(const ClsRequest &req, seriex_ctx *ctx) {
     // output log info
     auto task_finish_ts = Timestamp::now();
     auto task_elapse_ts = task_finish_ts - task_receive_ts;
-    LOG(INFO) << "task id: " << req.task_id << " received at: " << task_receive_ts.to_format_str()
-              << " finished at: " << task_finish_ts.to_format_str() << " elapse: " << task_elapse_ts << " s";
+    LOG(INFO) << "task id: " << req.task_id 
+              << " received at: " << task_receive_ts.to_format_str()
+              << " finished at: " << task_finish_ts.to_format_str() 
+              << " elapse: " << task_elapse_ts << " s"
+              << " received jobs: " << task_count.recieved_jobs_ato"
+              << " waiting jobs: " << task_count.waiting_jobs_ato;
+              << " finished jobs: " << task_count.finished_jobs_ato
 }
 
 void server_process(WFHttpTask *task) {
