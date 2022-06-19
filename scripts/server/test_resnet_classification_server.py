@@ -123,7 +123,8 @@ if __name__ == '__main__':
         for i in range(1000):
             test_resnet_classification_server_once()
     elif args.mode == 'locust':
-        command = 'locust -f ./server/test_resnet_classification_server.py --headless ' \
+        command = 'locust -f ./server/test_resnet_classification_server.py ' \
+                  '--host=http://localhost:8091/morted_ai_server_v1/classification/resnet --headless ' \
                   '-u {:d} -r {:d} -t {:s}'.format(args.u, args.r, args.t)
         os.system(command=command)
     else:
