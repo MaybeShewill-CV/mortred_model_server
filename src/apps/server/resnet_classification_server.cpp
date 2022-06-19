@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
     WFGlobalSettings settings = GLOBAL_SETTINGS_DEFAULT;
     settings.compute_threads = -1;
     settings.handler_threads = 50;
-    settings.endpoint_params.max_connections = 500;
+    settings.endpoint_params.max_connections = 5000;
     settings.endpoint_params.response_timeout = 30 * 1000;
     WORKFLOW_library_init(&settings);
 
