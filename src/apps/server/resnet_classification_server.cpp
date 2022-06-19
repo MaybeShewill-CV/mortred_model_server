@@ -39,7 +39,7 @@ int main(int argc, char** argv) {
     LOG(INFO) << "cfg file path: " << config_file_path;
     auto config = toml::parse(config_file_path);
     const auto& server_cfg = config.at("RESNET_CLASSIFICATION_SERVER");
-    auto port = server_cfg.at("RESNET_CLASSIFICATION_SERVER").as_integer();
+    auto port = server_cfg.at("server_port").as_integer();
 
     WFHttpServer server(morted::server::classification::server_process);
     if (server.start(port) == 0) {
