@@ -48,6 +48,8 @@ using morted::models::io_define::common_io::base64_input;
 using ResNet = morted::models::BaseAiModel<base64_input, std_classification_output>;
 using ResNetPtr = std::unique_ptr<ResNet>;
 
+static std::mutex _resnet_classifier_mutex;
+
 struct TaskCount {
     std::atomic<size_t> recieved_jobs_ato{0};
     std::atomic<size_t> finished_jobs_ato{0};
@@ -153,6 +155,7 @@ static ResNetPtr &get_resnet_ptr(const std::string &model_name) {
 }
 
 void do_classification(const ClsRequest &req, seriex_ctx *ctx) {
+    std::lock_guard<std::mutex> guard(_resnet_classifier_mutex);
     // get task receive timestamp
     auto task_receive_ts = Timestamp::now();
     // get resnet model
