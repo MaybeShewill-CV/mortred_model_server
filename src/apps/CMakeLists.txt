@@ -38,6 +38,16 @@ foreach(src ${MODEL_FAST_BATCH_PROCESS_LIST})
     target_link_libraries(${src}.out common models factory ${WORKFLOW_LIBS} ${GLOG_LIBS})
 endforeach()
 
+# build server app
+set(MODEL_SERVER_APP_LIST
+    resnet_classification_server
+)
+
+foreach(src ${MODEL_SERVER_APP_LIST})
+    add_executable(${src}.out ./server/${src}.cpp)
+    target_link_libraries(${src}.out common models factory server ${WORKFLOW_LIBS} ${GLOG_LIBS})
+endforeach()
+
 # add test tools
 add_executable(test.out ./test.cpp)
 target_link_libraries(
