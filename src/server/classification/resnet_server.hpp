@@ -101,12 +101,12 @@ std::string make_response_body(const std::string &task_id, const StatusCode &sta
     int code = static_cast<int>(status);
     std::string msg = status == StatusCode::OK ? "success" : "fail";
     int cls_id = -1;
-    int scores = -1.0;
+    float scores = -1.0;
     if (status == StatusCode::OK) {
         cls_id = model_output.class_id;
         scores = model_output.scores[cls_id];
     }
-    
+
     rapidjson::StringBuffer buf;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
     writer.StartObject();
@@ -178,7 +178,7 @@ void do_classification(const ClsRequest &req, seriex_ctx *ctx) {
     auto task_finish_ts = Timestamp::now();
     auto task_elapse_ts = task_finish_ts - task_receive_ts;
     LOG(INFO) << "task id: " << req.task_id << " received at: " << task_receive_ts.to_format_str()
-              << " finished at: " << task_finish_ts.to_format_str() << " elapse: " << task_elapse_ts << " ms";
+              << " finished at: " << task_finish_ts.to_format_str() << " elapse: " << task_elapse_ts << " s";
 }
 
 void server_process(WFHttpTask *task) {
