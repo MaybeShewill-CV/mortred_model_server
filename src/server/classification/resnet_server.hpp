@@ -152,30 +152,11 @@ static ResNetPtr &get_resnet_ptr(const std::string &model_name) {
     return resnet_ptr;
 }
 
-static std::string generate_task_id(size_t length) {
-    auto randchar = []() -> char
-    {
-        const char charset[] =
-                "0123456789"
-                "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                "abcdefghijklmnopqrstuvwxyz";
-        const size_t max_index = (sizeof(charset) - 1);
-        std::random_device rd;
-        std::mt19937 mt(rd());
-        std::uniform_int_distribution<> dist(0, INT_MAX);
-        return charset[dist(mt) % max_index];
-    };
-    std::string str(length,0);
-    std::generate_n(str.begin(), length, randchar);
-    return str;
-}
-
 void do_classification(const ClsRequest &req, seriex_ctx *ctx) {
     // get task receive timestamp
     auto task_receive_ts = Timestamp::now();
     // get resnet model
-    auto &classifier = get_resnet_ptr(generate_task_id(10));
-    LOG(INFO) << "classifier address: " << classifier.get();
+    auto &classifier = get_resnet_ptr("resnet");
     // get task count
     auto &task_count = get_task_count();
     // construct model input
