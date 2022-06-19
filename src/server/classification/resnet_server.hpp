@@ -157,6 +157,7 @@ void do_classification(const ClsRequest &req, seriex_ctx *ctx) {
     auto task_receive_ts = Timestamp::now();
     // get resnet model
     auto &classifier = get_resnet_ptr("resnet50");
+    LOG(INFO) << "classifier address: " << classifier.get();
     // get task count
     auto &task_count = get_task_count();
     // construct model input
