@@ -134,6 +134,11 @@ static ResNetPtr &get_resnet_ptr(const std::string &model_name) {
         return resnet_ptr;
     }
     std::string resnet_model_cfg_path = "../weights/classification/resnet50_config.ini";
+    if (!FilePathUtil::is_file_exit(resnet_model_cfg_path)) {
+        LOG(FATAL) << "resnet model config file not exist: " << resnet_model_cfg_path;
+        resnet_ptr.reset(nullptr);
+        return resnet_ptr;
+    }
     auto cfg = toml::parse(resnet_model_cfg_path);
     resnet_ptr->init(cfg);
     if (!resnet_ptr->is_successfully_initialized()) {

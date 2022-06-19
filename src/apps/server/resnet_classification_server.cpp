@@ -13,8 +13,6 @@
 
 #include "server/classification/resnet_server.hpp"
 
-using morted::server::classification;
-
 int main(int argc, char** argv) {
 
     if (argc != 2) {
@@ -43,7 +41,7 @@ int main(int argc, char** argv) {
     const auto& server_cfg = config.at("RESNET_CLASSIFICATION_SERVER");
     auto port = server_cfg.at("RESNET_CLASSIFICATION_SERVER").as_integer();
 
-    WFHttpServer server(classification::server_process);
+    WFHttpServer server(morted::server::classification::server_process);
     if (server.start(port) == 0) {
 		wait_group.wait();
 		server.stop();
