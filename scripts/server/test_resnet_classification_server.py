@@ -9,6 +9,7 @@
 Test ResNet classification server
 """
 import argparse
+import os
 import os.path as ops
 import requests
 import base64
@@ -77,7 +78,8 @@ class ClientBehavior(locust.TaskSet):
             image_data = f.read()
             base64_data = base64.b64encode(image_data)
 
-        url = 'http://maybeshewill-cv.natapp1.cc/morted_ai_server_v1/classification/resnet'
+        # url = 'http://maybeshewill-cv.natapp1.cc/morted_ai_server_v1/classification/resnet'
+        url = 'http://localhost:8091/morted_ai_server_v1/classification/resnet'
         task_id = src_image_path + str(time.time())
         m2 = hashlib.md5()
         m2.update(task_id.encode())
@@ -109,17 +111,20 @@ if __name__ == '__main__':
     """
     parser = argparse.ArgumentParser()
 
-    for i in range(1000):
-        test_resnet_classification_server_once()
+    # for i in range(1000):
+    #     test_resnet_classification_server_once()
 
-    # parser.add_argument('-u', type=int, default=20)
-    # parser.add_argument('-n', type=int, default=1000)
-    # parser.add_argument('-r', type=int, default=5)
-    # parser.add_argument('-t', type=str, default='5m')
-    # args = parser.parse_args()
-    #
-    # command = 'locust -f test_resnet_classification_server.py ' \
+    parser.add_argument('-u', type=int, default=20)
+    parser.add_argument('-n', type=int, default=1000)
+    parser.add_argument('-r', type=int, default=5)
+    parser.add_argument('-t', type=str, default='5m')
+    args = parser.parse_args()
+
+    # command = 'locust -f ./server/test_resnet_classification_server.py ' \
     #           '--host=http://maybeshewill-cv.natapp1.cc/morted_ai_server_v1/classification/resnet --headless ' \
     #           '-u {:d} -r {:d} -t {:s}'.format(args.u, args.r, args.t)
-    # os.system(command=command)
+    command = 'locust -f ./server/test_resnet_classification_server.py ' \
+              '--host=http://localhost:8091/morted_ai_server_v1/classification/resnet --headless ' \
+              '-u {:d} -r {:d} -t {:s}'.format(args.u, args.r, args.t)
+    os.system(command=command)
 
