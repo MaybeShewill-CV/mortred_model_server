@@ -79,8 +79,8 @@ class ClientBehavior(locust.TaskSet):
             image_data = f.read()
             base64_data = base64.b64encode(image_data)
 
-        url = 'http://maybeshewill-cv.natapp1.cc/morted_ai_server_v1/classification/resnet'
-        # url = 'http://localhost:8091/morted_ai_server_v1/classification/resnet'
+        # url = 'http://maybeshewill-cv.natapp1.cc/morted_ai_server_v1/classification/resnet'
+        url = 'http://localhost:8091/morted_ai_server_v1/classification/resnet'
         task_id = src_image_path + str(time.time())
         m2 = hashlib.md5()
         m2.update(task_id.encode())
