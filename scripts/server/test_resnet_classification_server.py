@@ -89,7 +89,8 @@ class ClientBehavior(locust.TaskSet):
             'req_id': task_id,
         }
 
-        resp = self.client.post(url, data=json.dumps(post_data))
+        # resp = self.client.post(url, data=json.dumps(post_data))
+        resp = self.client.post(url)
         if resp.status_code == 200:
             print(resp.text)
         else:
