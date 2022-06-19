@@ -112,21 +112,21 @@ if __name__ == '__main__':
     main func
     """
     parser = argparse.ArgumentParser()
-
-    for i in range(1000):
-        test_resnet_classification_server_once()
-
+    parser.add_argument('--mode', type=str, default='single', help='run mode')
     parser.add_argument('-u', type=int, default=20)
     parser.add_argument('-n', type=int, default=1000)
     parser.add_argument('-r', type=int, default=5)
     parser.add_argument('-t', type=str, default='5m')
     args = parser.parse_args()
 
-    # command = 'locust -f ./server/test_resnet_classification_server.py ' \
-    #           '--host=http://maybeshewill-cv.natapp1.cc/morted_ai_server_v1/classification/resnet --headless ' \
-    #           '-u {:d} -r {:d} -t {:s}'.format(args.u, args.r, args.t)
-    command = 'locust -f ./server/test_resnet_classification_server.py ' \
-              '--host=http://localhost:8091/morted_ai_server_v1/classification/resnet --headless ' \
-              '-u {:d} -r {:d} -t {:s}'.format(args.u, args.r, args.t)
-    # os.system(command=command)
+    if args.mode == 'single':
+        for i in range(1000):
+            test_resnet_classification_server_once()
+    elif args.mode == 'locust':
+        command = 'locust -f ./server/test_resnet_classification_server.py ' \
+                  '--host=http://localhost:8091/morted_ai_server_v1/classification/resnet --headless ' \
+                  '-u {:d} -r {:d} -t {:s}'.format(args.u, args.r, args.t)
+        os.system(command=command)
+    else:
+        raise ValueError('unknown mode')
 
