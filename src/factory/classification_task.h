@@ -50,7 +50,7 @@ static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_mobilenetv2_classifie
 template<typename INPUT, typename OUTPUT>
 static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_resnet_classifier(
     const std::string& classifier_name) {
-    REGISTER_AI_MODEL(ResNet, classifier_name, INPUT, OUTPUT)
+    static REGISTER_AI_MODEL(ResNet, classifier_name, INPUT, OUTPUT)
     return ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance().get_model(classifier_name);
 }
 
