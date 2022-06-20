@@ -11,6 +11,8 @@
 #include <atomic>
 #include <sstream>
 
+#include <glog/logging.h>
+#include <opencv2/opencv.hpp>
 #include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
@@ -19,8 +21,7 @@
 #include "workflow/HttpUtil.h"
 #include "workflow/WFTaskFactory.h"
 #include "workflow/Workflow.h"
-#include <glog/logging.h>
-#include <opencv2/opencv.hpp>
+#include "stl_container/concurrentqueue.h"
 
 #include "common/base64.h"
 #include "common/cv_utils.h"
@@ -45,8 +46,17 @@ namespace classification {
 using morted::factory::classification::create_resnet_classifier;
 using morted::models::io_define::classification::std_classification_output;
 using morted::models::io_define::common_io::base64_input;
-using ResNet = morted::models::BaseAiModel<base64_input, std_classification_output>;
-using ResNetPtr = std::unique_ptr<ResNet>;
+//using ResNet = morted::models::BaseAiModel<base64_input, std_classification_output>;
+//using ResNetPtr = std::unique_ptr<ResNet>;
+using ResNet = morted::models::classification::ResNet<base64_input, std_classification_output>;
+
+struct Worker{
+    ResNet* net = nullptr;
+    std::atomic_bool is_working{};
+    int id = -1;
+};
+using WorkerList = std::vector<Worker*>;
+using WorkerQueue = moodycamel::ConcurrentQueue<Worker**>;
 
 static std::mutex _resnet_classifier_mutex;
 
@@ -139,38 +149,44 @@ std::string make_response_body(const std::string& task_id, const StatusCode& sta
     return buf.GetString();
 }
 
-static ResNetPtr& get_resnet_ptr(const std::string& model_name) {
-    static ResNetPtr resnet_ptr = create_resnet_classifier<base64_input, std_classification_output>(model_name);
+static WorkerQueue& get_global_working_queue() {
+    static WorkerQueue working_queue(4);
+    return working_queue;
+}
 
-    if (resnet_ptr->is_successfully_initialized()) {
-        return resnet_ptr;
-    }
+static WorkerQueue& get_global_waiting_queue() {
+    static WorkerQueue waiting_queue(4);
+    return waiting_queue;
+}
 
+void init_global_waiting_queue() {
+    auto& waiting_queue = get_global_waiting_queue();
     std::string resnet_model_cfg_path = "../weights/classification/resnet/resnet50_config.ini";
-
     if (!FilePathUtil::is_file_exist(resnet_model_cfg_path)) {
         LOG(FATAL) << "resnet model config file not exist: " << resnet_model_cfg_path;
-        resnet_ptr.reset(nullptr);
-        return resnet_ptr;
+        return;
     }
-
     auto cfg = toml::parse(resnet_model_cfg_path);
-    resnet_ptr->init(cfg);
-
-    if (!resnet_ptr->is_successfully_initialized()) {
-        LOG(FATAL) << "resnet init failed";
-        resnet_ptr.reset(nullptr);
+    for (int index = 0; index < 4; ++index) {
+        auto* wk = new Worker;
+        wk->net = new ResNet;
+        wk->is_working.store(false, std::memory_order_seq_cst);
+        wk->id = index + 1;
+        if (!wk->net->is_successfully_initialized()) {
+            wk->net->init(cfg);
+        }
+        waiting_queue.enqueue(&wk);
     }
-
-    return resnet_ptr;
 }
 
 void do_classification(const ClsRequest& req, seriex_ctx* ctx) {
-    std::lock_guard<std::mutex> guard(_resnet_classifier_mutex);
+//    std::lock_guard<std::mutex> guard(_resnet_classifier_mutex);
     // get task receive timestamp
     auto task_receive_ts = Timestamp::now();
     // get resnet model
-    auto& classifier = get_resnet_ptr("resnet");
+    Worker** worker = nullptr;
+    while (get_global_waiting_queue().try_dequeue(worker)) {};
+    while (get_global_working_queue().try_enqueue(worker)) {};
     // get task count
     auto& task_count = get_task_count();
     // construct model input
@@ -178,14 +194,11 @@ void do_classification(const ClsRequest& req, seriex_ctx* ctx) {
     // do classification
     std::string response_body;
     std_classification_output model_output;
-
     if (req.is_valid) {
-        auto status = classifier->run(model_input, model_output);
-
+        auto status = (*worker)->net->run(model_input, model_output);
         if (status != StatusCode::OK) {
             DLOG(ERROR) << "classifier run failed";
         }
-
         // make response body
         response_body = make_response_body(req.task_id, status, model_output);
     } else {
@@ -206,7 +219,8 @@ void do_classification(const ClsRequest& req, seriex_ctx* ctx) {
               << " elapse: " << task_elapse_ts << " s"
               << " received jobs: " << task_count.recieved_jobs_ato
               << " waiting jobs: " << task_count.waiting_jobs_ato
-              << " finished jobs: " << task_count.finished_jobs_ato;
+              << " finished jobs: " << task_count.finished_jobs_ato
+              << " worker id: " << (*worker)->id;
 }
 
 void server_process(WFHttpTask* task) {
