@@ -202,8 +202,12 @@ void do_classification(const ClsRequest& req, seriex_ctx* ctx) {
     } else {
         response_body = make_response_body("", StatusCode::MODEL_EMPTY_INPUT_IMAGE, model_output);
     }
-    while (get_global_working_queue().try_enqueue(worker)) {};
-
+    if (worker->net != nullptr) {
+        while (get_global_working_queue().try_enqueue(worker)) {};
+    } else {
+        LOG(ERROR) << "worker->net is nullptr";
+    }
+    
     // fill response
     ctx->response->append_output_body(response_body);
     // update task count
