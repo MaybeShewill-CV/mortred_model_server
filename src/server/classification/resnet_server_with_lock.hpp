@@ -140,7 +140,7 @@ std::string make_response_body(const std::string& task_id, const StatusCode& sta
 }
 
 static ResNetPtr& get_resnet_classifier() {
-    static ResNetPtr resnet_classifier;
+    static ResNetPtr resnet_classifier = std::move(create_resnet_classifier<base64_input, std_classification_output>("resnet"));
     return resnet_classifier;
 }
 
