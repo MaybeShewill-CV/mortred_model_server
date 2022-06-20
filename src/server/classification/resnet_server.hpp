@@ -8,7 +8,6 @@
 #ifndef MM_AI_SERVER_RESNET_SERVER_H
 #define MM_AI_SERVER_RESNET_SERVER_H
 
-#include <atomic>
 #include <sstream>
 
 #include <glog/logging.h>
@@ -54,8 +53,6 @@ struct Worker{
     int id = -1;
 };
 using WorkerQueue = moodycamel::ConcurrentQueue<Worker*>;
-
-static std::mutex _resnet_classifier_mutex;
 
 struct TaskCount {
     std::atomic<size_t> recieved_jobs_ato{0};
