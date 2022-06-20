@@ -56,13 +56,13 @@ struct TaskCount {
     std::atomic<size_t> waiting_jobs_ato{0};
 };
 
-static TaskCount &get_task_count() {
+static TaskCount& get_task_count() {
     static TaskCount task_count;
     return task_count;
 }
 
 struct seriex_ctx {
-    protocol::HttpResponse *response = nullptr;
+    protocol::HttpResponse* response = nullptr;
 };
 
 struct ClsRequest {
@@ -71,10 +71,11 @@ struct ClsRequest {
     bool is_valid = true;
 };
 
-ClsRequest parse_task_request(const std::string &req_body) {
+ClsRequest parse_task_request(const std::string& req_body) {
     rapidjson::Document doc;
     doc.Parse(req_body.c_str());
     ClsRequest req{};
+
     if (doc.HasParseError() || doc.IsNull() || doc.ObjectEmpty()) {
         req.image_content = "";
         req.is_valid = false;
@@ -88,6 +89,7 @@ ClsRequest parse_task_request(const std::string &req_body) {
             req.image_content = doc["img_data"].GetString();
             req.is_valid = true;
         }
+
         if (!doc.HasMember("req_id") || !doc["req_id"].IsString()) {
             req.task_id = "";
             req.is_valid = false;
@@ -95,15 +97,18 @@ ClsRequest parse_task_request(const std::string &req_body) {
             req.task_id = doc["req_id"].GetString();
         }
     }
+
     return req;
 }
 
-std::string make_response_body(const std::string &task_id, const StatusCode &status, const std_classification_output &model_output) {
+std::string make_response_body(const std::string& task_id, const StatusCode& status,
+                               const std_classification_output& model_output) {
 
     int code = static_cast<int>(status);
     std::string msg = status == StatusCode::OK ? "success" : "fail";
     int cls_id = -1;
     float scores = -1.0;
+
     if (status == StatusCode::OK) {
         cls_id = model_output.class_id;
         scores = model_output.scores[cls_id];
@@ -134,44 +139,59 @@ std::string make_response_body(const std::string &task_id, const StatusCode &sta
     return buf.GetString();
 }
 
-static ResNetPtr &get_resnet_ptr(const std::string &model_name) {
+static ResNetPtr& get_resnet_ptr(const std::string& model_name) {
     static ResNetPtr resnet_ptr = create_resnet_classifier<base64_input, std_classification_output>(model_name);
+
     if (resnet_ptr->is_successfully_initialized()) {
         return resnet_ptr;
     }
+
     std::string resnet_model_cfg_path = "../weights/classification/resnet/resnet50_config.ini";
+
     if (!FilePathUtil::is_file_exist(resnet_model_cfg_path)) {
         LOG(FATAL) << "resnet model config file not exist: " << resnet_model_cfg_path;
         resnet_ptr.reset(nullptr);
         return resnet_ptr;
     }
+
     auto cfg = toml::parse(resnet_model_cfg_path);
     resnet_ptr->init(cfg);
+
     if (!resnet_ptr->is_successfully_initialized()) {
         LOG(FATAL) << "resnet init failed";
         resnet_ptr.reset(nullptr);
     }
+
     return resnet_ptr;
 }
 
-void do_classification(const ClsRequest &req, seriex_ctx *ctx) {
+void do_classification(const ClsRequest& req, seriex_ctx* ctx) {
     std::lock_guard<std::mutex> guard(_resnet_classifier_mutex);
     // get task receive timestamp
     auto task_receive_ts = Timestamp::now();
     // get resnet model
-    auto &classifier = get_resnet_ptr("resnet");
+    auto& classifier = get_resnet_ptr("resnet");
     // get task count
-    auto &task_count = get_task_count();
+    auto& task_count = get_task_count();
     // construct model input
     base64_input model_input{req.image_content};
     // do classification
+    std::string response_body;
     std_classification_output model_output;
-    auto status = classifier->run(model_input, model_output);
-    if (status != StatusCode::OK) {
-        LOG(ERROR) << "classifier run failed";
+
+    if (req.is_valid) {
+        auto status = classifier->run(model_input, model_output);
+
+        if (status != StatusCode::OK) {
+            DLOG(ERROR) << "classifier run failed";
+        }
+
+        // make response body
+        response_body = make_response_body(req.task_id, status, model_output);
+    } else {
+        response_body = make_response_body("", StatusCode::MODEL_EMPTY_INPUT_IMAGE, model_output);
     }
-    // make response body
-    std::string response_body = make_response_body(req.task_id, status, model_output);
+
     // fill response
     ctx->response->append_output_body(response_body);
     // update task count
@@ -180,47 +200,48 @@ void do_classification(const ClsRequest &req, seriex_ctx *ctx) {
     // output log info
     auto task_finish_ts = Timestamp::now();
     auto task_elapse_ts = task_finish_ts - task_receive_ts;
-    LOG(INFO) << "task id: " << req.task_id 
+    LOG(INFO) << "task id: " << req.task_id
               << " received at: " << task_receive_ts.to_format_str()
-              << " finished at: " << task_finish_ts.to_format_str() 
+              << " finished at: " << task_finish_ts.to_format_str()
               << " elapse: " << task_elapse_ts << " s"
               << " received jobs: " << task_count.recieved_jobs_ato
               << " waiting jobs: " << task_count.waiting_jobs_ato
               << " finished jobs: " << task_count.finished_jobs_ato;
 }
 
-void server_process(WFHttpTask *task) {
+void server_process(WFHttpTask* task) {
     // welcome message
     if (strcmp(task->get_req()->get_request_uri(), "/welcome") == 0) {
-        DLOG(INFO) << "Request-URI: " << task->get_req()->get_request_uri();
         task->get_resp()->append_output_body("<html>Welcome to Morted Resnet classification Server</html>");
         return;
     }
+
     // hello world message
     if (strcmp(task->get_req()->get_request_uri(), "/hello_world") == 0) {
-        DLOG(INFO) << "Request-URI: " << task->get_req()->get_request_uri();
         task->get_resp()->append_output_body("<html>Hello World !!!</html>");
         return;
     }
+
     // resnet classification
     if (strcmp(task->get_req()->get_request_uri(), "/morted_ai_server_v1/classification/resnet") == 0) {
-        DLOG(INFO) << "Request-URI: " << task->get_req()->get_request_uri();
         // parse request body
-        auto *req = task->get_req();
-        auto *resp = task->get_resp();
+        auto* req = task->get_req();
+        auto* resp = task->get_resp();
         auto cls_task_req = parse_task_request(protocol::HttpUtil::decode_chunked_body(req));
         // update task count
-        auto &task_count = get_task_count();
+        auto& task_count = get_task_count();
         task_count.waiting_jobs_ato++;
         task_count.recieved_jobs_ato++;
         // init series work
-        auto *series = series_of(task);
-        auto *ctx = new seriex_ctx;
+        auto* series = series_of(task);
+        auto* ctx = new seriex_ctx;
         ctx->response = resp;
         series->set_context(ctx);
-        series->set_callback([](const SeriesWork *series) { delete (seriex_ctx *)series->get_context(); });
+        series->set_callback([](const SeriesWork * series) {
+            delete (seriex_ctx*)series->get_context();
+        });
         // do classification
-        auto *cls_task = WFTaskFactory::create_go_task("resnet_cls_work", do_classification, cls_task_req, ctx);
+        auto* cls_task = WFTaskFactory::create_go_task("resnet_cls_work", do_classification, cls_task_req, ctx);
         *series << cls_task;
     }
 }

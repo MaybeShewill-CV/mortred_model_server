@@ -53,7 +53,7 @@ transform_input(const INPUT& in) {
     internal_input result{};
 
     if (!FilePathUtil::is_file_exist(in.input_image_path)) {
-        LOG(WARNING) << "input image: " << in.input_image_path << " not exist";
+        DLOG(WARNING) << "input image: " << in.input_image_path << " not exist";
         return result;
     }
 
@@ -89,7 +89,7 @@ transform_input(const INPUT& in) {
     std::vector<uchar> image_vec_data(image_decode_string.begin(), image_decode_string.end());
 
     if (image_vec_data.empty()) {
-        LOG(WARNING) << "image data empty";
+        DLOG(WARNING) << "image data empty";
         return result;
     } else {
         cv::Mat ret;

@@ -47,7 +47,7 @@ typename std::enable_if<std::is_same<INPUT, std::decay<file_input>::type>::value
     internal_input result{};
 
     if (!FilePathUtil::is_file_exist(in.input_image_path)) {
-        LOG(WARNING) << "input image: " << in.input_image_path << " not exist";
+        DLOG(WARNING) << "input image: " << in.input_image_path << " not exist";
         return result;
     }
 
@@ -81,7 +81,7 @@ typename std::enable_if<std::is_same<INPUT, std::decay<base64_input>::type>::val
     std::vector<uchar> image_vec_data(image_decode_string.begin(), image_decode_string.end());
 
     if (image_vec_data.empty()) {
-        LOG(WARNING) << "image data empty";
+        DLOG(WARNING) << "image data empty";
         return result;
     } else {
         cv::Mat ret;
