@@ -147,7 +147,7 @@ std::string make_response_body(const std::string& task_id, const StatusCode& sta
 }
 
 static WorkerQueue& get_global_working_queue() {
-    static WorkerQueue working_queue(4);
+    static WorkerQueue working_queue(1);
     return working_queue;
 }
 
@@ -159,7 +159,7 @@ void init_global_working_queue() {
         return;
     }
     auto cfg = toml::parse(resnet_model_cfg_path);
-    for (int index = 0; index < 4; ++index) {
+    for (int index = 0; index < 1; ++index) {
         auto* wk = new Worker();
         wk->net = std::make_unique<ResNet>();
         wk->id = index + 1;
@@ -212,6 +212,7 @@ void do_classification(const ClsRequest& req, seriex_ctx* ctx) {
               << " waiting jobs: " << task_count.waiting_jobs_ato
               << " finished jobs: " << task_count.finished_jobs_ato
               << " worker id: " << worker->id;
+    delete worker;
 }
 
 void server_process(WFHttpTask* task) {
