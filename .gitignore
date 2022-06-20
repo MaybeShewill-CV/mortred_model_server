@@ -40,3 +40,6 @@ build/
 cmake-build-debug/
 .vscode/
 .idea/
+
+# python cache
+*__pycache__*
