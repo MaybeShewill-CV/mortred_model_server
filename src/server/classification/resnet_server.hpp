@@ -172,6 +172,19 @@ void init_global_working_queue() {
 
 void do_classification(const ClsRequest& req, seriex_ctx* ctx) {
 //    std::lock_guard<std::mutex> guard(_resnet_classifier_mutex);
+    auto& working_queue = get_global_working_queue();
+    int index = 0;
+    while (working_queue.size_approx() != 0) {
+        auto* wk = new Worker();
+        working_queue.try_dequeue(wk);
+        if (wk->net->is_successfully_initialized()) {
+            LOG(INFO) << "worker " << wk->id << " is ready to work";
+        } else {
+            LOG(INFO) << "worker " << wk->id << " is not ready to work";
+            delete wk;
+            continue;
+        }
+    };
     // get task receive timestamp
     auto task_receive_ts = Timestamp::now();
     // get resnet model
