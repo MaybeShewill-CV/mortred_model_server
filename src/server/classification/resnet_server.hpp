@@ -147,7 +147,7 @@ std::string make_response_body(const std::string& task_id, const StatusCode& sta
 }
 
 static WorkerQueue& get_global_working_queue() {
-    static WorkerQueue working_queue(8);
+    static WorkerQueue working_queue(4);
     return working_queue;
 }
 
@@ -159,7 +159,7 @@ void init_global_working_queue() {
         return;
     }
     auto cfg = toml::parse(resnet_model_cfg_path);
-    for (int index = 0; index < 8; ++index) {
+    for (int index = 0; index < working_queue.size_approx(); ++index) {
         auto* wk = new Worker();
         wk->net = std::make_unique<ResNet>();
         wk->id = index + 1;
@@ -171,20 +171,7 @@ void init_global_working_queue() {
 }
 
 void do_classification(const ClsRequest& req, seriex_ctx* ctx) {
-//    std::lock_guard<std::mutex> guard(_resnet_classifier_mutex);
     auto& working_queue = get_global_working_queue();
-    // int index = 0;
-    // while (working_queue.size_approx() != 0) {
-    //     auto* wk = new Worker();
-    //     working_queue.try_dequeue(wk);
-    //     if (wk->net->is_successfully_initialized()) {
-    //         LOG(INFO) << "worker " << wk->id << " is ready to work";
-    //     } else {
-    //         LOG(INFO) << "worker " << wk->id << " is not ready to work";
-    //         delete wk;
-    //         continue;
-    //     }
-    // };
     // get task receive timestamp
     auto task_receive_ts = Timestamp::now();
     // get resnet model
@@ -198,28 +185,16 @@ void do_classification(const ClsRequest& req, seriex_ctx* ctx) {
     std::string response_body;
     std_classification_output model_output;
     if (req.is_valid) {
-        if (worker == nullptr) {
-            LOG(ERROR) << "worker is nullptr";
-            response_body = make_response_body(req.task_id, StatusCode::MODEL_RUN_SESSION_FAILED, model_output);
-        } else if (worker->net == nullptr) {
-            LOG(ERROR) << "worker->net is nullptr";
-            response_body = make_response_body(req.task_id, StatusCode::MODEL_RUN_SESSION_FAILED, model_output);
-        } else {
-            auto status = worker->net->run(model_input, model_output);
-            if (status != StatusCode::OK) {
-                LOG(ERROR) << "classifier run failed";
-            }
-            // make response body
-            response_body = make_response_body(req.task_id, status, model_output);
+        auto status = worker->net->run(model_input, model_output);
+        if (status != StatusCode::OK) {
+            LOG(ERROR) << "classifier run failed";
         }
+        // make response body
+        response_body = make_response_body(req.task_id, status, model_output);
     } else {
         response_body = make_response_body("", StatusCode::MODEL_EMPTY_INPUT_IMAGE, model_output);
     }
-    if (worker->net != nullptr) {
-        working_queue.enqueue(worker);
-    } else {
-        LOG(ERROR) << "worker->net is nullptr";
-    }
+    while (!working_queue.enqueue(worker)) {};
     
     // fill response
     ctx->response->append_output_body(response_body);
