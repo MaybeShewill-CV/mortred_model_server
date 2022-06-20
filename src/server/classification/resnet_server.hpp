@@ -159,7 +159,7 @@ void init_global_working_queue() {
         return;
     }
     auto cfg = toml::parse(resnet_model_cfg_path);
-    for (int index = 0; index < working_queue.size_approx(); ++index) {
+    for (int index = 0; index < 4; ++index) {
         auto* wk = new Worker();
         wk->net = std::make_unique<ResNet>();
         wk->id = index + 1;
