@@ -173,23 +173,23 @@ void init_global_working_queue() {
 void do_classification(const ClsRequest& req, seriex_ctx* ctx) {
 //    std::lock_guard<std::mutex> guard(_resnet_classifier_mutex);
     auto& working_queue = get_global_working_queue();
-    int index = 0;
-    while (working_queue.size_approx() != 0) {
-        auto* wk = new Worker();
-        working_queue.try_dequeue(wk);
-        if (wk->net->is_successfully_initialized()) {
-            LOG(INFO) << "worker " << wk->id << " is ready to work";
-        } else {
-            LOG(INFO) << "worker " << wk->id << " is not ready to work";
-            delete wk;
-            continue;
-        }
-    };
+    // int index = 0;
+    // while (working_queue.size_approx() != 0) {
+    //     auto* wk = new Worker();
+    //     working_queue.try_dequeue(wk);
+    //     if (wk->net->is_successfully_initialized()) {
+    //         LOG(INFO) << "worker " << wk->id << " is ready to work";
+    //     } else {
+    //         LOG(INFO) << "worker " << wk->id << " is not ready to work";
+    //         delete wk;
+    //         continue;
+    //     }
+    // };
     // get task receive timestamp
     auto task_receive_ts = Timestamp::now();
     // get resnet model
     auto* worker = new Worker();
-    while (get_global_working_queue().try_dequeue(worker)) {};
+    working_queue.try_dequeue(worker);
     // get task count
     auto& task_count = get_task_count();
     // construct model input
@@ -216,7 +216,7 @@ void do_classification(const ClsRequest& req, seriex_ctx* ctx) {
         response_body = make_response_body("", StatusCode::MODEL_EMPTY_INPUT_IMAGE, model_output);
     }
     if (worker->net != nullptr) {
-        while (get_global_working_queue().try_enqueue(worker)) {};
+        working_queue.enqueue(worker);
     } else {
         LOG(ERROR) << "worker->net is nullptr";
     }
