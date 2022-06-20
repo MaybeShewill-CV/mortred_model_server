@@ -174,7 +174,7 @@ void do_classification(const ClsRequest& req, seriex_ctx* ctx) {
     // get task receive timestamp
     auto task_receive_ts = Timestamp::now();
     // get resnet model
-    Worker* worker = nullptr;
+    auto* worker = new Worker();
     while (get_global_working_queue().try_dequeue(worker)) {};
     // get task count
     auto& task_count = get_task_count();
