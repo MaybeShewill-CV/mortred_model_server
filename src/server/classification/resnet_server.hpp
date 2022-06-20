@@ -45,18 +45,14 @@ using morted::common::Timestamp;
 namespace classification {
 using morted::factory::classification::create_resnet_classifier;
 using morted::models::io_define::classification::std_classification_output;
-using morted::models::io_define::common_io::base64_input;
-//using ResNet = morted::models::BaseAiModel<base64_input, std_classification_output>;
-//using ResNetPtr = std::unique_ptr<ResNet>;
-using ResNet = morted::models::classification::ResNet<base64_input, std_classification_output>;
+using morted::models::io_define::common_io::base64_input;;
+using ResNetPtr = decltype(create_resnet_classifier<base64_input, std_classification_output>(""));
 
 struct Worker{
-    ResNet* net = nullptr;
-    std::atomic_bool is_working{};
+    ResNetPtr net;
     int id = -1;
 };
-using WorkerList = std::vector<Worker*>;
-using WorkerQueue = moodycamel::ConcurrentQueue<Worker**>;
+using WorkerQueue = moodycamel::ConcurrentQueue<Worker*>;
 
 static std::mutex _resnet_classifier_mutex;
 
@@ -154,13 +150,8 @@ static WorkerQueue& get_global_working_queue() {
     return working_queue;
 }
 
-static WorkerQueue& get_global_waiting_queue() {
-    static WorkerQueue waiting_queue(4);
-    return waiting_queue;
-}
-
-void init_global_waiting_queue() {
-    auto& waiting_queue = get_global_waiting_queue();
+void init_global_working_queue() {
+    auto& waiting_queue = get_global_working_queue();
     std::string resnet_model_cfg_path = "../weights/classification/resnet/resnet50_config.ini";
     if (!FilePathUtil::is_file_exist(resnet_model_cfg_path)) {
         LOG(FATAL) << "resnet model config file not exist: " << resnet_model_cfg_path;
@@ -168,14 +159,13 @@ void init_global_waiting_queue() {
     }
     auto cfg = toml::parse(resnet_model_cfg_path);
     for (int index = 0; index < 4; ++index) {
-        auto* wk = new Worker;
-        wk->net = new ResNet;
-        wk->is_working.store(false, std::memory_order_seq_cst);
+        auto* wk = new Worker();
+        wk->net = std::move(create_resnet_classifier<base64_input, std_classification_output>("model" + std::to_string(index)));
         wk->id = index + 1;
         if (!wk->net->is_successfully_initialized()) {
             wk->net->init(cfg);
         }
-        waiting_queue.enqueue(&wk);
+        waiting_queue.enqueue(wk);
     }
 }
 
@@ -184,9 +174,8 @@ void do_classification(const ClsRequest& req, seriex_ctx* ctx) {
     // get task receive timestamp
     auto task_receive_ts = Timestamp::now();
     // get resnet model
-    Worker** worker = nullptr;
-    while (get_global_waiting_queue().try_dequeue(worker)) {};
-    while (get_global_working_queue().try_enqueue(worker)) {};
+    Worker* worker = nullptr;
+    while (get_global_working_queue().try_dequeue(worker)) {};
     // get task count
     auto& task_count = get_task_count();
     // construct model input
@@ -195,15 +184,16 @@ void do_classification(const ClsRequest& req, seriex_ctx* ctx) {
     std::string response_body;
     std_classification_output model_output;
     if (req.is_valid) {
-        auto status = (*worker)->net->run(model_input, model_output);
+        auto status = worker->net->run(model_input, model_output);
         if (status != StatusCode::OK) {
-            DLOG(ERROR) << "classifier run failed";
+            LOG(ERROR) << "classifier run failed";
         }
         // make response body
         response_body = make_response_body(req.task_id, status, model_output);
     } else {
         response_body = make_response_body("", StatusCode::MODEL_EMPTY_INPUT_IMAGE, model_output);
     }
+    while (get_global_working_queue().try_enqueue(worker)) {};
 
     // fill response
     ctx->response->append_output_body(response_body);
@@ -220,7 +210,7 @@ void do_classification(const ClsRequest& req, seriex_ctx* ctx) {
               << " received jobs: " << task_count.recieved_jobs_ato
               << " waiting jobs: " << task_count.waiting_jobs_ato
               << " finished jobs: " << task_count.finished_jobs_ato
-              << " worker id: " << (*worker)->id;
+              << " worker id: " << worker->id;
 }
 
 void server_process(WFHttpTask* task) {

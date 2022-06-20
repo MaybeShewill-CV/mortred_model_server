@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
     auto port = server_cfg.at("server_port").as_integer();
     LOG(INFO) << "serve on port: " << port;
 
-    morted::server::classification::init_global_waiting_queue();
+    morted::server::classification::init_global_working_queue();
     WFHttpServer server(morted::server::classification::server_process);
     if (server.start(port) == 0) {
 		wait_group.wait();
