@@ -41,6 +41,7 @@ endforeach()
 # build server app
 set(MODEL_SERVER_APP_LIST
     resnet_classification_server
+    resnet_classification_w_lock_server
 )
 
 foreach(src ${MODEL_SERVER_APP_LIST})
