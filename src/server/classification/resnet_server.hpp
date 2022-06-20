@@ -147,7 +147,7 @@ std::string make_response_body(const std::string& task_id, const StatusCode& sta
 }
 
 static WorkerQueue& get_global_working_queue() {
-    static WorkerQueue working_queue(24);
+    static WorkerQueue working_queue(16);
     return working_queue;
 }
 
@@ -159,7 +159,7 @@ void init_global_working_queue() {
         return;
     }
     auto cfg = toml::parse(resnet_model_cfg_path);
-    for (int index = 0; index < 24; ++index) {
+    for (int index = 0; index < 16; ++index) {
         auto* wk = new Worker();
         wk->net = std::make_unique<ResNet>();
         wk->id = index + 1;
