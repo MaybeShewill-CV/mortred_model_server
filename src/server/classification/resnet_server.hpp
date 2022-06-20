@@ -151,7 +151,7 @@ static WorkerQueue& get_global_working_queue() {
 }
 
 void init_global_working_queue() {
-    auto& waiting_queue = get_global_working_queue();
+    auto& working_queue = get_global_working_queue();
     std::string resnet_model_cfg_path = "../weights/classification/resnet/resnet50_config.ini";
     if (!FilePathUtil::is_file_exist(resnet_model_cfg_path)) {
         LOG(FATAL) << "resnet model config file not exist: " << resnet_model_cfg_path;
@@ -165,7 +165,7 @@ void init_global_working_queue() {
         if (!wk->net->is_successfully_initialized()) {
             wk->net->init(cfg);
         }
-        waiting_queue.enqueue(wk);
+        working_queue.enqueue(wk);
     }
 }
 
@@ -184,12 +184,20 @@ void do_classification(const ClsRequest& req, seriex_ctx* ctx) {
     std::string response_body;
     std_classification_output model_output;
     if (req.is_valid) {
-        auto status = worker->net->run(model_input, model_output);
-        if (status != StatusCode::OK) {
-            LOG(ERROR) << "classifier run failed";
+        if (worker == nullptr) {
+            LOG(ERROR) << "worker is nullptr";
+            response_body = make_response_body(req.task_id, StatusCode::MODEL_RUN_SESSION_FAILED, model_output);
+        } else if (worker->net == nullptr) {
+            LOG(ERROR) << "worker->net is nullptr";
+            response_body = make_response_body(req.task_id, StatusCode::MODEL_RUN_SESSION_FAILED, model_output);
+        } else {
+            auto status = worker->net->run(model_input, model_output);
+            if (status != StatusCode::OK) {
+                LOG(ERROR) << "classifier run failed";
+            }
+            // make response body
+            response_body = make_response_body(req.task_id, status, model_output);
         }
-        // make response body
-        response_body = make_response_body(req.task_id, status, model_output);
     } else {
         response_body = make_response_body("", StatusCode::MODEL_EMPTY_INPUT_IMAGE, model_output);
     }
