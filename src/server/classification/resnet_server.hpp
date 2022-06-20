@@ -212,7 +212,6 @@ void do_classification(const ClsRequest& req, seriex_ctx* ctx) {
               << " waiting jobs: " << task_count.waiting_jobs_ato
               << " finished jobs: " << task_count.finished_jobs_ato
               << " worker id: " << worker->id;
-    delete worker;
 }
 
 void server_process(WFHttpTask* task) {
