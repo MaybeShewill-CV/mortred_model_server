@@ -44,9 +44,10 @@ using morted::common::Timestamp;
 
 namespace classification {
 using morted::factory::classification::create_resnet_classifier;
+using morted::models::io_define::common_io::base64_input;
 using morted::models::io_define::classification::std_classification_output;
-using morted::models::io_define::common_io::base64_input;;
-using ResNetPtr = decltype(create_resnet_classifier<base64_input, std_classification_output>(""));
+using ResNet = morted::models::classification::ResNet<base64_input, std_classification_output>;
+using ResNetPtr = std::unique_ptr<ResNet>;
 
 struct Worker{
     ResNetPtr net;
@@ -160,7 +161,7 @@ void init_global_working_queue() {
     auto cfg = toml::parse(resnet_model_cfg_path);
     for (int index = 0; index < 4; ++index) {
         auto* wk = new Worker();
-        wk->net = std::move(create_resnet_classifier<base64_input, std_classification_output>("model" + std::to_string(index)));
+        wk->net = std::make_unique<ResNet>();
         wk->id = index + 1;
         if (!wk->net->is_successfully_initialized()) {
             wk->net->init(cfg);
