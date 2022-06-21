@@ -30,19 +30,6 @@ public:
     BaseAiServer() = default;
 
     /***
-    * 赋值构造函数
-    * @param transformer
-    */
-    BaseAiServer(const BaseAiServer& BaseAiServer) = default;
-
-    /***
-     * 复制构造函数
-     * @param transformer
-     * @return
-     */
-    BaseAiServer& operator=(const BaseAiServer& transformer) = default;
-
-    /***
      *
      * @param cfg
      * @return
