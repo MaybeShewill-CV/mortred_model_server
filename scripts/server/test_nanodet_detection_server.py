@@ -25,7 +25,7 @@ def test_nanodet_detection_server_once():
 
     :return:
     """
-    src_image_path = '../demo_data/model_test_input/object_detection/bug.jpg'
+    src_image_path = '../demo_data/model_test_input/object_detection/bus.jpg'
     assert ops.exists(src_image_path), '{:s} not exist'.format(src_image_path)
     with open(src_image_path, 'rb') as f:
         image_data = f.read()
@@ -74,7 +74,7 @@ class ClientBehavior(locust.TaskSet):
 
         :return:
         """
-        src_image_path = '../demo_data/model_test_input/object_detection/bug.jpg'
+        src_image_path = '../demo_data/model_test_input/object_detection/bus.jpg'
         with open(src_image_path, 'rb') as f:
             image_data = f.read()
             base64_data = base64.b64encode(image_data)
