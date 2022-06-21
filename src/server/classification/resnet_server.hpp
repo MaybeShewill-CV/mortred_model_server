@@ -49,13 +49,11 @@ using morted::models::io_define::classification::std_classification_output;
 using ResNet = morted::models::classification::ResNet<base64_input, std_classification_output>;
 using ResNetPtr = std::unique_ptr<ResNet>;
 
-struct Worker{
+struct Worker {
     ResNetPtr net;
     int id = -1;
 };
 using WorkerQueue = moodycamel::ConcurrentQueue<Worker*>;
-
-static std::mutex _resnet_classifier_mutex;
 
 struct TaskCount {
     std::atomic<size_t> recieved_jobs_ato{0};
@@ -176,7 +174,9 @@ void do_classification(const ClsRequest& req, seriex_ctx* ctx) {
     auto task_receive_ts = Timestamp::now();
     // get resnet model
     auto* worker = new Worker();
+    auto find_worker_start_ts = Timestamp::now();
     while(!working_queue.try_dequeue(worker)) {};
+    auto worker_found_ts = Timestamp::now() - find_worker_start_ts;
     // get task count
     auto& task_count = get_task_count();
     // construct model input
@@ -208,6 +208,7 @@ void do_classification(const ClsRequest& req, seriex_ctx* ctx) {
               << " received at: " << task_receive_ts.to_format_str()
               << " finished at: " << task_finish_ts.to_format_str()
               << " elapse: " << task_elapse_ts << " s"
+              << " find work elapse: " << worker_found_ts << " s"
               << " received jobs: " << task_count.recieved_jobs_ato
               << " waiting jobs: " << task_count.waiting_jobs_ato
               << " finished jobs: " << task_count.finished_jobs_ato
