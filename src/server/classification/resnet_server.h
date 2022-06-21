@@ -1,7 +1,7 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: resnet_server_ins.h
+* File: resnet_server.h
 * Date: 22-6-21
 ************************************************/
 
