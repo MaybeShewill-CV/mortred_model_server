@@ -70,12 +70,6 @@ public:
         return nullptr;
     }
 
-    void list_registered_models() {
-        for (auto& model : _m_model_registry) {
-            LOG(INFO) << "existed model registrar for: " << model.first << ", address: " << model.second;
-        }
-    }
-
 private:
     ModelFactory() = default;
     ~ModelFactory() = default;
@@ -97,10 +91,6 @@ public:
 
     std::unique_ptr<BASE_AI_MODEL> create_model() override {
         return std::unique_ptr<BASE_AI_MODEL>(new AI_MODEL());
-    }
-
-    static void list_all_models() {
-        ModelFactory<BASE_AI_MODEL>::get_instance().list_registered_models();
     }
 };
 
