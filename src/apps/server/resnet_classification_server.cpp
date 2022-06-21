@@ -11,7 +11,9 @@
 #include <workflow/WFHttpServer.h>
 #include <workflow/WFFacilities.h>
 
-#include "server/classification/resnet_server.hpp"
+#include "server/classification/resnet_server.h"
+
+using morted::server::classification::ResNetServer;
 
 int main(int argc, char** argv) {
 
@@ -39,11 +41,11 @@ int main(int argc, char** argv) {
     LOG(INFO) << "cfg file path: " << config_file_path;
     auto config = toml::parse(config_file_path);
     const auto& server_cfg = config.at("RESNET_CLASSIFICATION_SERVER");
-    auto port = server_cfg.at("server_port").as_integer();
+    auto port = server_cfg.at("port").as_integer();
     LOG(INFO) << "serve on port: " << port;
 
-    morted::server::classification::init_global_working_queue();
-    WFHttpServer server(morted::server::classification::server_process);
+    ResNetServer server;
+    server.init(config);
     if (server.start(port) == 0) {
 		wait_group.wait();
 		server.stop();

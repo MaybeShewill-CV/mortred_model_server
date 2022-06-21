@@ -21,6 +21,10 @@ enum StatusCode {
     MODEL_RUN_SESSION_FAILED = 2,
     MODEL_EMPTY_INPUT_IMAGE = 3,
 
+    // server status
+    SERVER_INIT_FAILED = 11,
+    SERVER_RUN_FAILED = 12,
+
     // file status
     FILE_READ_ERROR = 30,
     FILE_WRITE_ERROR = 31,
