@@ -1,11 +1,11 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: resnet_server.inl
+* File: nanodet_server.cpp
 * Date: 22-6-21
 ************************************************/
 
-#include "resnet_server.h"
+#include "nanodet_server.h"
 
 #include "glog/logging.h"
 #include "toml/toml.hpp"
@@ -26,7 +26,7 @@
 #include "common/time_stamp.h"
 #include "common/file_path_util.h"
 #include "models/model_io_define.h"
-#include "factory/classification_task.h"
+#include "factory/obj_detection_task.h"
 
 namespace morted {
 namespace server {
@@ -38,16 +38,16 @@ using morted::common::Md5;
 using morted::common::StatusCode;
 using morted::common::Timestamp;
 
-namespace classification {
+namespace object_detection {
 
-using morted::factory::classification::create_resnet_classifier;
+using morted::factory::object_detection::create_nanodet_detector;
 using morted::models::io_define::common_io::base64_input;
-using morted::models::io_define::classification::std_classification_output;
-using ResNetPtr = decltype(create_resnet_classifier<base64_input, std_classification_output>(""));
+using morted::models::io_define::object_detection::std_object_detection_output;
+using NanoDetPtr = decltype(create_nanodet_detector<base64_input, std_object_detection_output>(""));
 
 /************ Impl Declaration ************/
 
-class ResNetServer::Impl {
+class NanoDetServer::Impl {
 public:
     /***
      *
@@ -101,13 +101,13 @@ private:
     std::atomic<size_t> _m_finished_jobs{0};
     std::atomic<size_t> _m_waiting_jobs{0};
     // worker queue
-    moodycamel::ConcurrentQueue<ResNetPtr> _m_working_queue;
+    moodycamel::ConcurrentQueue<NanoDetPtr> _m_working_queue;
 private:
     struct seriex_ctx {
         protocol::HttpResponse* response = nullptr;
     };
 
-    struct cls_request {
+    struct det_request {
         std::string image_content;
         std::string task_id;
         bool is_valid = true;
@@ -119,7 +119,7 @@ private:
      * @param req_body
      * @return
      */
-    static cls_request parse_task_request(const std::string& req_body);
+    static det_request parse_task_request(const std::string& req_body);
 
     /***
      *
@@ -131,14 +131,14 @@ private:
     static std::string make_response_body(
         const std::string& task_id,
         const StatusCode& status,
-        const std_classification_output& model_output);
+        const std_object_detection_output& model_output);
 
     /***
      *
      * @param req
      * @param ctx
      */
-    void do_classification(const cls_request& req, seriex_ctx* ctx);
+    void do_detection(const det_request& req, seriex_ctx* ctx);
 };
 
 /************ Impl Implementation ************/
@@ -148,13 +148,13 @@ private:
  * @param config
  * @return
  */
-StatusCode ResNetServer::Impl::init(const decltype(toml::parse("")) &config) {
+StatusCode NanoDetServer::Impl::init(const decltype(toml::parse("")) &config) {
     // init working queue
-    auto worker_nums = static_cast<int>(config.at("RESNET_CLASSIFICATION_SERVER").at("worker_nums").as_integer());
-    auto model_cfg_path = config.at("RESNET").at("model_config_file_path").as_string();
+    auto worker_nums = static_cast<int>(config.at("NANODET_DETECTION_SERVER").at("worker_nums").as_integer());
+    auto model_cfg_path = config.at("NANODET").at("model_config_file_path").as_string();
 
     if (!FilePathUtil::is_file_exist(model_cfg_path)) {
-        LOG(FATAL) << "resnet model config file not exist: " << model_cfg_path;
+        LOG(FATAL) << "nanodet model config file not exist: " << model_cfg_path;
         _m_successfully_initialized = false;
         return StatusCode::SERVER_INIT_FAILED;
     }
@@ -162,7 +162,7 @@ StatusCode ResNetServer::Impl::init(const decltype(toml::parse("")) &config) {
     auto model_cfg = toml::parse(model_cfg_path);
 
     for (int index = 0; index < worker_nums; ++index) {
-        auto worker = create_resnet_classifier<base64_input, std_classification_output>(
+        auto worker = create_nanodet_detector<base64_input, std_object_detection_output>(
                           "worker_" + std::to_string(index + 1));
         if (!worker->is_successfully_initialized()) {
             if (worker->init(model_cfg) != StatusCode::OK) {
@@ -170,12 +170,11 @@ StatusCode ResNetServer::Impl::init(const decltype(toml::parse("")) &config) {
                 return StatusCode::SERVER_INIT_FAILED;
             }
         }
-
         _m_working_queue.enqueue(std::move(worker));
     }
 
     _m_successfully_initialized = true;
-    LOG(INFO) << "Resnet classification server init successfully";
+    LOG(INFO) << "NanoDet object detection server init successfully";
     return StatusCode::OK;
 }
 
@@ -183,10 +182,10 @@ StatusCode ResNetServer::Impl::init(const decltype(toml::parse("")) &config) {
  *
  * @param task
  */
-void ResNetServer::Impl::serve_process(WFHttpTask* task) {
+void NanoDetServer::Impl::serve_process(WFHttpTask* task) {
     // welcome message
     if (strcmp(task->get_req()->get_request_uri(), "/welcome") == 0) {
-        task->get_resp()->append_output_body("<html>Welcome to Morted Resnet classification Server</html>");
+        task->get_resp()->append_output_body("<html>Welcome to Morted NanoDet Object Detection Server</html>");
         return;
     }
 
@@ -196,12 +195,12 @@ void ResNetServer::Impl::serve_process(WFHttpTask* task) {
         return;
     }
 
-    // resnet classification
-    if (strcmp(task->get_req()->get_request_uri(), "/morted_ai_server_v1/classification/resnet") == 0) {
+    // nanodet obj detection
+    if (strcmp(task->get_req()->get_request_uri(), "/morted_ai_server_v1/obj_detection/nanodet") == 0) {
         // parse request body
         auto* req = task->get_req();
         auto* resp = task->get_resp();
-        auto cls_task_req = parse_task_request(protocol::HttpUtil::decode_chunked_body(req));
+        auto det_task_req = parse_task_request(protocol::HttpUtil::decode_chunked_body(req));
         _m_waiting_jobs++;
         _m_received_jobs++;
         // init series work
@@ -213,8 +212,8 @@ void ResNetServer::Impl::serve_process(WFHttpTask* task) {
             delete (seriex_ctx*)series->get_context();
         });
         // do classification
-        auto&& go_proc = std::bind(&ResNetServer::Impl::do_classification, this, cls_task_req, ctx);
-        auto* cls_task = WFTaskFactory::create_go_task("resnet_cls_work", go_proc, cls_task_req, ctx);
+        auto&& go_proc = std::bind(&NanoDetServer::Impl::do_detection, this, det_task_req, ctx);
+        auto* cls_task = WFTaskFactory::create_go_task("nanodet_det_work", go_proc, det_task_req, ctx);
         *series << cls_task;
     }
 }
@@ -224,10 +223,10 @@ void ResNetServer::Impl::serve_process(WFHttpTask* task) {
  * @param req_body
  * @return
  */
-ResNetServer::Impl::cls_request ResNetServer::Impl::parse_task_request(const std::string& req_body) {
+NanoDetServer::Impl::det_request NanoDetServer::Impl::parse_task_request(const std::string& req_body) {
     rapidjson::Document doc;
     doc.Parse(req_body.c_str());
-    cls_request req{};
+    det_request req{};
 
     if (doc.HasParseError() || doc.IsNull() || doc.ObjectEmpty()) {
         req.image_content = "";
@@ -261,19 +260,12 @@ ResNetServer::Impl::cls_request ResNetServer::Impl::parse_task_request(const std
  * @param model_output
  * @return
  */
-std::string ResNetServer::Impl::make_response_body(
+std::string NanoDetServer::Impl::make_response_body(
     const std::string& task_id,
     const StatusCode& status,
-    const std_classification_output& model_output) {
+    const std_object_detection_output& model_output) {
     int code = static_cast<int>(status);
     std::string msg = status == StatusCode::OK ? "success" : "fail";
-    int cls_id = -1;
-    float scores = -1.0;
-
-    if (status == StatusCode::OK) {
-        cls_id = model_output.class_id;
-        scores = model_output.scores[cls_id];
-    }
 
     rapidjson::StringBuffer buf;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
@@ -287,15 +279,7 @@ std::string ResNetServer::Impl::make_response_body(
     // write msg
     writer.Key("msg");
     writer.String(msg.c_str());
-    // write class result
-    writer.Key("data");
-    writer.StartObject();
-    writer.Key("class_id");
-    writer.Int(cls_id);
-    writer.Key("scores");
-    writer.Double(scores);
-    writer.EndObject();
-    writer.EndObject();
+    // todo implement
 
     return buf.GetString();
 }
@@ -305,11 +289,11 @@ std::string ResNetServer::Impl::make_response_body(
  * @param req
  * @param ctx
  */
-void ResNetServer::Impl::do_classification(const cls_request& req, seriex_ctx* ctx) {
+void NanoDetServer::Impl::do_detection(const det_request& req, seriex_ctx* ctx) {
     // get task receive timestamp
     auto task_receive_ts = Timestamp::now();
     // get resnet model
-    ResNetPtr worker;
+    NanoDetPtr worker;
     auto find_worker_start_ts = Timestamp::now();
 
     while (!_m_working_queue.try_dequeue(worker)) {}
@@ -322,8 +306,7 @@ void ResNetServer::Impl::do_classification(const cls_request& req, seriex_ctx* c
     // do classification
     std::string response_body;
 
-    std_classification_output model_output;
-
+    std_object_detection_output model_output;
     if (req.is_valid) {
         auto status = worker->run(model_input, model_output);
 
@@ -344,7 +327,6 @@ void ResNetServer::Impl::do_classification(const cls_request& req, seriex_ctx* c
 
     // update task count
     _m_finished_jobs++;
-
     _m_waiting_jobs--;
 
     // output log info
@@ -363,40 +345,40 @@ void ResNetServer::Impl::do_classification(const cls_request& req, seriex_ctx* c
               << " worker queue size: " << _m_working_queue.size_approx();
 }
 
-/****************** ResNetServer Implementation **************/
+/****************** NanoDetServer Implementation **************/
 
 /***
  *
  */
-ResNetServer::ResNetServer() {
+NanoDetServer::NanoDetServer() {
     _m_impl = std::make_unique<Impl>();
 }
 
 /***
  *
  */
-ResNetServer::~ResNetServer() = default;
+NanoDetServer::~NanoDetServer() = default;
 
 /***
  *
  * @param cfg
  * @return
  */
-morted::common::StatusCode ResNetServer::init(const decltype(toml::parse("")) &config) {
+morted::common::StatusCode NanoDetServer::init(const decltype(toml::parse("")) &config) {
     // init server params
-    if (!config.contains("RESNET_CLASSIFICATION_SERVER")) {
-        LOG(ERROR) << "Config file does not contain RESNET_CLASSIFICATION_SERVER section";
+    if (!config.contains("NANODET_DETECTION_SERVER")) {
+        LOG(ERROR) << "Config file does not contain NANODET_DETECTION_SERVER section";
         return StatusCode::SERVER_INIT_FAILED;
     }
 
-    toml::value cfg_content = config.at("RESNET_CLASSIFICATION_SERVER");
+    toml::value cfg_content = config.at("NANODET_DETECTION_SERVER");
     auto max_connect_nums = static_cast<int>(cfg_content.at("max_connections").as_integer());
     auto peer_resp_timeout = static_cast<int>(cfg_content.at("peer_resp_timeout").as_integer()) * 1000;
     struct WFServerParams params = HTTP_SERVER_PARAMS_DEFAULT;
     params.max_connections = max_connect_nums;
     params.peer_response_timeout = peer_resp_timeout;
     auto&& proc = std::bind(
-                      &ResNetServer::Impl::serve_process, std::cref(this->_m_impl), std::placeholders::_1);
+                      &NanoDetServer::Impl::serve_process, std::cref(this->_m_impl), std::placeholders::_1);
     _m_server = std::make_unique<WFHttpServer>(&params, proc);
 
     // init _m_impl
@@ -407,7 +389,7 @@ morted::common::StatusCode ResNetServer::init(const decltype(toml::parse("")) &c
  *
  * @param task
  */
-void ResNetServer::serve_process(WFHttpTask* task) {
+void NanoDetServer::serve_process(WFHttpTask* task) {
     return _m_impl->serve_process(task);
 }
 
@@ -415,7 +397,7 @@ void ResNetServer::serve_process(WFHttpTask* task) {
  *
  * @return
  */
-bool ResNetServer::is_successfully_initialized() const {
+bool NanoDetServer::is_successfully_initialized() const {
     return _m_impl->is_successfully_initialized();
 }
 }
