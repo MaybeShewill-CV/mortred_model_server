@@ -8,7 +8,6 @@
 #ifndef MM_AI_SERVER_RESNET_SERVER_H
 #define MM_AI_SERVER_RESNET_SERVER_H
 
-#include <atomic>
 #include <sstream>
 
 #include <glog/logging.h>
