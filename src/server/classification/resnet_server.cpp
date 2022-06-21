@@ -10,26 +10,26 @@
 
 #include "resnet_server.h"
 
-#include <glog/logging.h>
+#include "glog/logging.h"
+#include "toml/toml.hpp"
+#include "stl_container/concurrentqueue.h"
 #include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
-#include "toml/toml.hpp"
 #include "workflow/HttpMessage.h"
 #include "workflow/HttpUtil.h"
 #include "workflow/WFTaskFactory.h"
 #include "workflow/WFHttpServer.h"
 #include "workflow/Workflow.h"
-#include "stl_container/concurrentqueue.h"
 
+#include "common/md5.h"
 #include "common/base64.h"
 #include "common/cv_utils.h"
-#include "common/file_path_util.h"
-#include "common/md5.h"
 #include "common/status_code.h"
 #include "common/time_stamp.h"
-#include "factory/classification_task.h"
+#include "common/file_path_util.h"
 #include "models/model_io_define.h"
+#include "factory/classification_task.h"
 
 namespace morted {
 namespace server {
@@ -167,7 +167,6 @@ StatusCode ResNetServer::Impl::init(const decltype(toml::parse("")) &config) {
     for (int index = 0; index < worker_nums; ++index) {
         auto worker = create_resnet_classifier<base64_input, std_classification_output>(
                           "worker_" + std::to_string(index + 1));
-
         if (!worker->is_successfully_initialized()) {
             if (worker->init(model_cfg) != StatusCode::OK) {
                 _m_successfully_initialized = false;
@@ -316,7 +315,7 @@ void ResNetServer::Impl::do_classification(const cls_request& req, seriex_ctx* c
     ResNetPtr worker;
     auto find_worker_start_ts = Timestamp::now();
 
-    while (!_m_working_queue.try_dequeue(worker)) {};
+    while (!_m_working_queue.try_dequeue(worker)) {}
 
     auto worker_found_ts = Timestamp::now() - find_worker_start_ts;
 
@@ -341,7 +340,7 @@ void ResNetServer::Impl::do_classification(const cls_request& req, seriex_ctx* c
         response_body = make_response_body("", StatusCode::MODEL_EMPTY_INPUT_IMAGE, model_output);
     }
 
-    while (!_m_working_queue.enqueue(std::move(worker))) {};
+    while (!_m_working_queue.enqueue(std::move(worker))) {}
 
     // fill response
     ctx->response->append_output_body(response_body);
@@ -394,8 +393,6 @@ morted::common::StatusCode ResNetServer::init(const decltype(toml::parse("")) &c
     }
 
     toml::value cfg_content = config.at("RESNET_CLASSIFICATION_SERVER");
-    auto port = static_cast<int>(cfg_content.at("port").as_integer());
-    auto host = cfg_content.at("host").as_string();
     auto max_connect_nums = static_cast<int>(cfg_content.at("max_connections").as_integer());
     auto peer_resp_timeout = static_cast<int>(cfg_content.at("peer_resp_timeout").as_integer()) * 1000;
     struct WFServerParams params = HTTP_SERVER_PARAMS_DEFAULT;
