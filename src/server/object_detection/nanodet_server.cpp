@@ -279,7 +279,44 @@ std::string NanoDetServer::Impl::make_response_body(
     // write msg
     writer.Key("msg");
     writer.String(msg.c_str());
-    // todo implement
+    // write bbox
+    // write down data
+    writer.Key("data");
+    writer.StartArray();
+    for (auto& obj_box : model_output) {
+        int cls_id = obj_box.class_id;
+        auto score = obj_box.score;
+
+        writer.StartObject();
+        // write obj cls id
+        writer.Key("cls_id");
+        writer.String(std::to_string(cls_id).c_str());
+        // write obj score
+        writer.Key("score");
+        writer.String(std::to_string(score).c_str());
+        // write obj point coords
+        writer.Key("points");
+        writer.StartArray();
+        // left top coords
+        writer.StartArray();
+        writer.Double(obj_box.bbox.x);
+        writer.Double(obj_box.bbox.y);
+        writer.EndArray();
+        // right bottom coords
+        writer.StartArray();
+        writer.Double(obj_box.bbox.x + obj_box.bbox.width);
+        writer.Double(obj_box.bbox.y + obj_box.bbox.height);
+        writer.EndArray();
+        writer.EndArray();
+        // write extra detail infos
+        writer.Key("detail_infos");
+        writer.StartObject();
+        writer.EndObject();
+
+        writer.EndObject();
+    }
+    writer.EndArray();
+    writer.EndObject();
 
     return buf.GetString();
 }
