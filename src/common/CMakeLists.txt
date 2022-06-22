@@ -9,7 +9,6 @@ add_library(common SHARED ${COMMON_LIB_SRC})
 target_link_libraries(
     common
     Threads::Threads
-    ${BOOST_LIBS}
     ${OPENCV_LIBS}
 )
 set_target_properties(common PROPERTIES LINKER_LANGUAGE CXX)
