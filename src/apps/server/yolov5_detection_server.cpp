@@ -1,8 +1,8 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: nanodet_detection_server.cpp
-* Date: 22-6-21
+* File: yolov5_detection_server.cpp
+* Date: 22-6-22
 ************************************************/
 
 // nanodet detection server tool
@@ -11,9 +11,9 @@
 #include <workflow/WFHttpServer.h>
 #include <workflow/WFFacilities.h>
 
-#include "server/object_detection/nanodet_server.h"
+#include "server/object_detection/yolov5det_server.h"
 
-using morted::server::object_detection::NanoDetServer;
+using morted::server::object_detection::YoloV5DetServer;
 
 int main(int argc, char** argv) {
 
@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
     auto port = server_cfg.at("port").as_integer();
     LOG(INFO) << "serve on port: " << port;
 
-    NanoDetServer server;
+    YoloV5DetServer server;
     server.init(config);
     if (server.start(port) == 0) {
 		wait_group.wait();
