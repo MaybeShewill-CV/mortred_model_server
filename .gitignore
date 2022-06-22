@@ -34,6 +34,8 @@
 # 3rd party
 3rd_party/
 demo_data/
+conf/
+weights/
 _bin/
 _lib/
 build/
