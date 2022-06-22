@@ -40,7 +40,7 @@ int main(int argc, char** argv) {
     std::string config_file_path = argv[1];
     LOG(INFO) << "cfg file path: " << config_file_path;
     auto config = toml::parse(config_file_path);
-    const auto& server_cfg = config.at("NANODET_DETECTION_SERVER");
+    const auto& server_cfg = config.at("YOLOV5_DETECTION_SERVER");
     auto port = server_cfg.at("port").as_integer();
     LOG(INFO) << "serve on port: " << port;
 
