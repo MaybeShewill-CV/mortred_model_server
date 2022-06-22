@@ -8,6 +8,8 @@
 #include <iostream>
 #include <string>
 
+#include "workflow/HttpMessage.h"
+#include "workflow/HttpUtil.h"
 #include "workflow/WFFacilities.h"
 #include "workflow/WFTaskFactory.h"
 #include "workflow/WFHttpServer.h"
@@ -37,8 +39,7 @@ void do_segmentation_callback(const WFGoTask* task) {
     }
 }
 
-int main(int argc, char** argv) {
-
+void test_timedgo_task() {
     WFFacilities::WaitGroup wait_group(1);
     auto* series = Workflow::create_series_work(
                        WFTaskFactory::create_empty_task(),
@@ -54,5 +55,44 @@ int main(int argc, char** argv) {
 
     LOG(INFO) << "start whole process at: " << Timestamp::now().to_format_str();
     wait_group.wait();
+}
+
+void test_parallel_wget() {
+
+    WFFacilities::WaitGroup wait_group(1);
+
+    ParallelWork *pwork = Workflow::create_parallel_work([](const ParallelTask* task){
+        LOG(INFO) << "pwork end at: " << Timestamp::now().to_format_str();
+    });
+    SeriesWork *series;
+    WFHttpTask *new_task;
+    protocol::HttpRequest *req;
+    int i;
+
+    for (i = 1; i < 200; i++) {
+        std::string url = "http://localhost:8094/welcome";
+        new_task = WFTaskFactory::create_http_task(url, 5, 5, [](WFHttpTask *task) {
+            auto* resp = task->get_resp();});
+        req = new_task->get_req();
+        series = Workflow::create_series_work(new_task, nullptr);
+        pwork->add_series(series);
+    }
+    auto t_start = Timestamp::now();
+    Workflow::start_series_work(pwork, [&wait_group, &t_start](const SeriesWork* work) {
+        auto t_end = Timestamp::now();
+        auto diff = t_start.micro_sec_since_epoch() - t_end.micro_sec_since_epoch();
+        LOG(INFO) << "diff time: " << diff;
+        wait_group.done();});
+    wait_group.wait();
+}
+
+int main(int argc, char** argv) {
+
+    // test timed go task
+    // test_timedgo_task();
+
+    // test parallel wget
+    test_parallel_wget();
+    
     return 1;
 }
