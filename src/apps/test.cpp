@@ -57,7 +57,7 @@ void test_timedgo_task() {
     wait_group.wait();
 }
 
-void test_parallel_wget() {
+void test_parallel_wget(int parallel_count = 200) {
 
     WFFacilities::WaitGroup wait_group(1);
 
@@ -69,7 +69,7 @@ void test_parallel_wget() {
     protocol::HttpRequest *req;
     int i;
 
-    for (i = 1; i < 200; i++) {
+    for (i = 1; i < parallel_count; i++) {
         std::string url = "http://localhost:8094/welcome";
         new_task = WFTaskFactory::create_http_task(url, 5, 5, [](WFHttpTask *task) {
             auto* resp = task->get_resp();});
@@ -88,11 +88,17 @@ void test_parallel_wget() {
 
 int main(int argc, char** argv) {
 
+    WFGlobalSettings settings = GLOBAL_SETTINGS_DEFAULT;
+    settings.compute_threads = -1;
+    settings.handler_threads = 500;
+    WORKFLOW_library_init(&settings);
+
     // test timed go task
     // test_timedgo_task();
 
     // test parallel wget
-    test_parallel_wget();
+    int parallel_nums = std::stoi(argv[1]);
+    test_parallel_wget(parallel_nums);
     
     return 1;
 }
