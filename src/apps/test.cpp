@@ -7,6 +7,8 @@
 
 #include <iostream>
 #include <string>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "workflow/HttpMessage.h"
 #include "workflow/HttpUtil.h"
@@ -69,14 +71,12 @@ void test_parallel_wget(int parallel_count = 200) {
     protocol::HttpRequest *req;
     int i;
 
-    for (i = 1; i < parallel_count; i++) {
+    for (i = 0; i < parallel_count; i++) {
         std::string url = "http://localhost:8094/welcome";
         new_task = WFTaskFactory::create_http_task(url, 5, 5, [&i](WFHttpTask *task) {
             auto* resp = task->get_resp();
-            const void *body;
-            size_t body_len;
-            resp->get_parsed_body(&body, &body_len);
-            std::cout << "parallel worker: " << i << ", body content: " << body << ", len: " << body_len << std::endl;
+            std::string resp_body_str = protocol::HttpUtil::decode_chunked_body(resp);
+            LOG(INFO) << "parallel worker: " << i << ", resp: " << resp_body_str;
             });
         req = new_task->get_req();
         series = Workflow::create_series_work(new_task, nullptr);
