@@ -80,7 +80,7 @@ void test_parallel_wget(int parallel_count = 200) {
     auto t_start = Timestamp::now();
     Workflow::start_series_work(pwork, [&wait_group, &t_start](const SeriesWork* work) {
         auto t_end = Timestamp::now();
-        auto diff = t_start.micro_sec_since_epoch() - t_end.micro_sec_since_epoch();
+        auto diff = t_end.micro_sec_since_epoch() - t_start.micro_sec_since_epoch();
         LOG(INFO) << "diff time: " << diff;
         wait_group.done();});
     wait_group.wait();
