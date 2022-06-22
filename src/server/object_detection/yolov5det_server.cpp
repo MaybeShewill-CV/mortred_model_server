@@ -402,7 +402,7 @@ YoloV5DetServer::~YoloV5DetServer() = default;
  * @return
  */
 morted::common::StatusCode YoloV5DetServer::init(const decltype(toml::parse("")) &config) {
-    // init server params
+    // init server
     if (!config.contains("YOLOV5_DETECTION_SERVER")) {
         LOG(ERROR) << "Config file does not contain YOLOV5_DETECTION_SERVER section";
         return StatusCode::SERVER_INIT_FAILED;
