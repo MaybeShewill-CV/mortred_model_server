@@ -71,8 +71,13 @@ void test_parallel_wget(int parallel_count = 200) {
 
     for (i = 1; i < parallel_count; i++) {
         std::string url = "http://localhost:8094/welcome";
-        new_task = WFTaskFactory::create_http_task(url, 5, 5, [](WFHttpTask *task) {
-            auto* resp = task->get_resp();});
+        new_task = WFTaskFactory::create_http_task(url, 5, 5, [&i](WFHttpTask *task) {
+            auto* resp = task->get_resp();
+            void *body;
+            size_t body_len;
+            resp->get_parsed_body(&body, &body_len);
+            std::cout << "parallel worker: " << i << ", body content: " << body << ", len: " << body_len << std::endl;
+            });
         req = new_task->get_req();
         series = Workflow::create_series_work(new_task, nullptr);
         pwork->add_series(series);
