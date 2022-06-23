@@ -69,7 +69,7 @@ class ClientBehavior(locust.TaskSet):
         print('client stop ...')
 
     @locust.task(1)
-    def test_resnet_classification_server(self):
+    def test_yolov5_classification_server(self):
         """
 
         :return:
