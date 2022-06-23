@@ -541,6 +541,7 @@ libface_impl::internal_output LibFaceDetector<INPUT, OUTPUT>::Impl::decode_outpu
             tmp_face_box.score = raw_conf;
             tmp_face_box.landmarks = landmarks;
             tmp_face_box.bbox = cv::Rect2f(pred_bbox_x, pred_bbox_y, pred_bbox_w, pred_bbox_h);
+            tmp_face_box.class_id = 0;
             decode_result.push_back(tmp_face_box);
         }
     }
