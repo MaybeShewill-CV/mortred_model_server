@@ -42,6 +42,13 @@ struct internal_input {
 
 using internal_output = std_face_detection_output;
 
+struct FaceAnchor {
+    double cx;
+    double cy;
+    double s_kx;
+    double s_ky;
+};
+
 /***
  *
  * @tparam INPUT
@@ -200,13 +207,6 @@ class LibFaceDetector<INPUT, OUTPUT>::Impl {
     // 是否成功初始化标志位
     bool _m_successfully_initialized = false;
 
-    struct FaceAnchor {
-        double cx;
-        double cy;
-        double s_kx;
-        double s_ky;
-    };
-
   private:
     /***
      * 图像预处理, 转换图像为CV_32FC3, 通过dst = src / 127.5 - 1.0来归一化图像到[-1.0, 1.0]
@@ -218,7 +218,7 @@ class LibFaceDetector<INPUT, OUTPUT>::Impl {
      *
      * @return
      */
-    std::vector<FaceAnchor> generate_prior_anchors();
+    std::vector<libface_impl::FaceAnchor> generate_prior_anchors();
 
     /***
      *
@@ -436,8 +436,8 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::Impl::run(const INPUT &in, OUTPUT &ou
  * @param out
  * @return
  */
-template <typename INPUT, typename OUTPUT> 
-std::vector<FaceAnchor> LibFaceDetector<INPUT, OUTPUT>::Impl::generate_prior_anchors() {
+template<typename INPUT, typename OUTPUT> 
+std::vector<libface_impl::FaceAnchor> LibFaceDetector<INPUT, OUTPUT>::Impl::generate_prior_anchors() {
 
     std::vector<std::vector<double>> min_sizes = {{10., 16., 24.}, {32., 48.}, {64., 96.}, {128., 192., 256.}};
     std::vector<double> steps = {8., 16., 32., 64.};
@@ -453,7 +453,7 @@ std::vector<FaceAnchor> LibFaceDetector<INPUT, OUTPUT>::Impl::generate_prior_anc
 
     std::vector<std::vector<int>> feature_maps = {feature_map_3th, feature_map_4th, feature_map_5th, feature_map_6th};
 
-    std::vector<FaceAnchor> anchors;
+    std::vector<libface_impl::FaceAnchor> anchors;
     for (size_t k = 0; k < feature_maps.size(); ++k) {
         auto tmp_feature_map = feature_maps[k];
         auto tmp_min_sizes = min_sizes[k];
@@ -466,7 +466,7 @@ std::vector<FaceAnchor> LibFaceDetector<INPUT, OUTPUT>::Impl::generate_prior_anc
                     double cx = (j + 0.5) * steps[k] / in_w;
                     double cy = (i + 0.5) * steps[k] / in_h;
 
-                    FaceAnchor tmp_anchor{};
+                    libface_impl::FaceAnchor tmp_anchor{};
                     tmp_anchor.s_kx = s_kx;
                     tmp_anchor.s_ky = s_ky;
                     tmp_anchor.cx = cx;
