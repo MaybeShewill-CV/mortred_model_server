@@ -42,6 +42,7 @@ set(MODEL_SERVER_APP_LIST
     resnet_classification_server
     nanodet_detection_server
     yolov5_detection_server
+    mobilenetv2_classification_server
 )
 
 foreach(src ${MODEL_SERVER_APP_LIST})
