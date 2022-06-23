@@ -20,6 +20,7 @@ set(MODEL_BENCHMARK_LIST
     densenet_benchmark
     attentivegan_benchmark
     superpoint_benchmark
+    libface_benchmark
 )
 
 foreach(src ${MODEL_BENCHMARK_LIST})

@@ -13,6 +13,7 @@
 #include "models/base_model.h"
 #include "models/object_detection/nano_detector.h"
 #include "models/object_detection/yolov5_detector.h"
+#include "models/object_detection/libface_detector.h"
 
 
 namespace morted {
@@ -24,6 +25,7 @@ using morted::models::BaseAiModel;
 namespace object_detection {
 using morted::models::object_detection::NanoDetector;
 using morted::models::object_detection::YoloV5Detector;
+using morted::models::object_detection::LibFaceDetector;
 
 /***
  * create yolov5 object detection instance
@@ -48,6 +50,19 @@ static std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_yolov5_detector(const 
 template <typename INPUT, typename OUTPUT>
 static std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_nanodet_detector(const std::string &detector_name) {
     REGISTER_AI_MODEL(NanoDetector, detector_name, INPUT, OUTPUT)
+    return ModelFactory<BaseAiModel<INPUT, OUTPUT>>::get_instance().get_model(detector_name);
+}
+
+/***
+ * create libface object detection instance
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param detector_name
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+static std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_libface_detector(const std::string &detector_name) {
+    REGISTER_AI_MODEL(LibFaceDetector, detector_name, INPUT, OUTPUT)
     return ModelFactory<BaseAiModel<INPUT, OUTPUT>>::get_instance().get_model(detector_name);
 }
 
