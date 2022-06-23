@@ -322,7 +322,7 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse
     if (nullptr == _m_session) {
         LOG(ERROR) << "create libface session failed";
         _m_successfully_initialized = false;
-        return;
+        return StatusCode::MODEL_INIT_FAILED;
     }
 
     // 初始化graph input node和output node
@@ -332,12 +332,12 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse
     if (_m_input_tensor == nullptr) {
         LOG(ERROR) << "fetch libface net input node failed";
         _m_successfully_initialized = false;
-        return;
+        return StatusCode::MODEL_INIT_FAILED;
     }
     if (_m_loc_output_tensor == nullptr || _m_conf_output_tensor == nullptr) {
         LOG(ERROR) << "fetch libface net output node failed";
         _m_successfully_initialized = false;
-        return;
+        return StatusCode::MODEL_INIT_FAILED;
     }
     _m_input_size_host.width = _m_input_tensor->width();
     _m_input_size_host.height = _m_input_tensor->height();
@@ -354,6 +354,7 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse
 
     _m_successfully_initialized = true;
     LOG(INFO) << "LibFace model: " << FilePathUtil::get_file_name(_m_model_file_path) << " initialization complete!!!";
+    return StatusCode::OK;
 }
 
 /***
@@ -405,7 +406,7 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::Impl::run(const INPUT &in, OUTPUT &ou
     // decode output tensor
     auto faces_result = decode_output_tensor();
     // do nms
-    libface_impl::internal_output nms_result = CvUtils::nms(faces_result, _m_nms_threshold);
+    libface_impl::internal_output nms_result = CvUtils::nms_bboxes(faces_result, _m_nms_threshold);
     if (nms_result.size() > _m_keep_topk) {
         nms_result.resize(_m_keep_topk);
     }
@@ -502,7 +503,7 @@ libface_impl::internal_output LibFaceDetector<INPUT, OUTPUT>::Impl::decode_outpu
     auto raw_pred_bbox_nums = loc_tensor_user.shape()[1];
     auto priors = generate_prior_anchors();
 
-    std::vector<FaceBox> decode_result;
+    std::vector<face_bbox> decode_result;
 
     for (size_t batch_num = 0; batch_num < batch_nums; ++batch_num) {
         for (size_t bbox_index = 0; bbox_index < raw_pred_bbox_nums; ++bbox_index) {
@@ -537,7 +538,7 @@ libface_impl::internal_output LibFaceDetector<INPUT, OUTPUT>::Impl::decode_outpu
             }
 
             face_bbox tmp_face_box;
-            tmp_face_box.conf = raw_conf;
+            tmp_face_box.score = raw_conf;
             tmp_face_box.landmarks = landmarks;
             tmp_face_box.bbox = cv::Rect2f(pred_bbox_x, pred_bbox_y, pred_bbox_w, pred_bbox_h);
             decode_result.push_back(tmp_face_box);
