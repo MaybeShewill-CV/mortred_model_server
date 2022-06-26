@@ -1,12 +1,12 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: Yolov5DetServer.h
-* Date: 22-6-22
+* File: libface_det_server.h
+* Date: 22-6-26
 ************************************************/
 
-#ifndef MM_AI_SERVER_YOLOV5DETSERVER_H
-#define MM_AI_SERVER_YOLOV5DETSERVER_H
+#ifndef MM_AI_SERVER_LIBFACEDETSERVER_H
+#define MM_AI_SERVER_LIBFACEDETSERVER_H
 
 #include <memory>
 
@@ -15,32 +15,32 @@
 namespace morted {
 namespace server {
 namespace object_detection {
-class YoloV5DetServer : public morted::server::BaseAiServer {
+class LibfaceDetServer : public morted::server::BaseAiServer {
 public:
 
     /***
     * 构造函数
     * @param config
     */
-    YoloV5DetServer();
+    LibfaceDetServer();
 
     /***
      *
      */
-    ~YoloV5DetServer() override;
+    ~LibfaceDetServer() override;
 
     /***
     * 赋值构造函数
     * @param transformer
     */
-    YoloV5DetServer(const YoloV5DetServer& transformer) = delete;
+    LibfaceDetServer(const LibfaceDetServer& transformer) = delete;
 
     /***
      * 复制构造函数
      * @param transformer
      * @return
      */
-    YoloV5DetServer& operator=(const YoloV5DetServer& transformer) = delete;
+    LibfaceDetServer& operator=(const LibfaceDetServer& transformer) = delete;
 
     /***
      *
@@ -69,4 +69,4 @@ private:
 }
 }
 
-#endif //MM_AI_SERVER_YOLOV5DETSERVER_H
+#endif //MM_AI_SERVER_LIBFACEDETSERVER_H

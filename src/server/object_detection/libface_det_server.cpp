@@ -1,11 +1,11 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: nanodet_server.cpp
-* Date: 22-6-21
+* File: libface_det_server.cpp
+* Date: 22-6-26
 ************************************************/
 
-#include "nanodet_server.h"
+#include "libface_det_server.h"
 
 #include "glog/logging.h"
 #include "toml/toml.hpp"
@@ -40,14 +40,14 @@ using morted::common::Timestamp;
 
 namespace object_detection {
 
-using morted::factory::object_detection::create_nanodet_detector;
+using morted::factory::object_detection::create_libface_detector;
 using morted::models::io_define::common_io::base64_input;
-using morted::models::io_define::object_detection::std_object_detection_output;
-using NanoDetPtr = decltype(create_nanodet_detector<base64_input, std_object_detection_output>(""));
+using morted::models::io_define::object_detection::std_face_detection_output;
+using LibfaceDetPtr = decltype(create_libface_detector<base64_input, std_face_detection_output>(""));
 
 /************ Impl Declaration ************/
 
-class NanoDetServer::Impl {
+class LibfaceDetServer::Impl {
 public:
     /***
      *
@@ -101,7 +101,7 @@ private:
     std::atomic<size_t> _m_finished_jobs{0};
     std::atomic<size_t> _m_waiting_jobs{0};
     // worker queue
-    moodycamel::ConcurrentQueue<NanoDetPtr> _m_working_queue;
+    moodycamel::ConcurrentQueue<LibfaceDetPtr> _m_working_queue;
 private:
     struct seriex_ctx {
         protocol::HttpResponse* response = nullptr;
@@ -131,7 +131,7 @@ private:
     static std::string make_response_body(
         const std::string& task_id,
         const StatusCode& status,
-        const std_object_detection_output& model_output);
+        const std_face_detection_output& model_output);
 
     /***
      *
@@ -148,13 +148,13 @@ private:
  * @param config
  * @return
  */
-StatusCode NanoDetServer::Impl::init(const decltype(toml::parse("")) &config) {
+StatusCode LibfaceDetServer::Impl::init(const decltype(toml::parse("")) &config) {
     // init working queue
-    auto worker_nums = static_cast<int>(config.at("NANODET_DETECTION_SERVER").at("worker_nums").as_integer());
-    auto model_cfg_path = config.at("NANODET").at("model_config_file_path").as_string();
+    auto worker_nums = static_cast<int>(config.at("LIBFACE_DETECTION_SERVER").at("worker_nums").as_integer());
+    auto model_cfg_path = config.at("LIBFACE").at("model_config_file_path").as_string();
 
     if (!FilePathUtil::is_file_exist(model_cfg_path)) {
-        LOG(FATAL) << "nanodet model config file not exist: " << model_cfg_path;
+        LOG(FATAL) << "LIBFACE model config file not exist: " << model_cfg_path;
         _m_successfully_initialized = false;
         return StatusCode::SERVER_INIT_FAILED;
     }
@@ -162,7 +162,7 @@ StatusCode NanoDetServer::Impl::init(const decltype(toml::parse("")) &config) {
     auto model_cfg = toml::parse(model_cfg_path);
 
     for (int index = 0; index < worker_nums; ++index) {
-        auto worker = create_nanodet_detector<base64_input, std_object_detection_output>(
+        auto worker = create_libface_detector<base64_input, std_face_detection_output>(
                           "worker_" + std::to_string(index + 1));
         if (!worker->is_successfully_initialized()) {
             if (worker->init(model_cfg) != StatusCode::OK) {
@@ -174,7 +174,7 @@ StatusCode NanoDetServer::Impl::init(const decltype(toml::parse("")) &config) {
     }
 
     _m_successfully_initialized = true;
-    LOG(INFO) << "NanoDet object detection server init successfully";
+    LOG(INFO) << "libface object detection server init successfully";
     return StatusCode::OK;
 }
 
@@ -182,10 +182,10 @@ StatusCode NanoDetServer::Impl::init(const decltype(toml::parse("")) &config) {
  *
  * @param task
  */
-void NanoDetServer::Impl::serve_process(WFHttpTask* task) {
+void LibfaceDetServer::Impl::serve_process(WFHttpTask* task) {
     // welcome message
     if (strcmp(task->get_req()->get_request_uri(), "/welcome") == 0) {
-        task->get_resp()->append_output_body("<html>Welcome to Morted NanoDet Object Detection Server</html>");
+        task->get_resp()->append_output_body("<html>Welcome to Morted LIBFACE Object Detection Server</html>");
         return;
     }
 
@@ -196,7 +196,7 @@ void NanoDetServer::Impl::serve_process(WFHttpTask* task) {
     }
 
     // nanodet obj detection
-    if (strcmp(task->get_req()->get_request_uri(), "/morted_ai_server_v1/obj_detection/nanodet") == 0) {
+    if (strcmp(task->get_req()->get_request_uri(), "/morted_ai_server_v1/obj_detection/libface") == 0) {
         // parse request body
         auto* req = task->get_req();
         auto* resp = task->get_resp();
@@ -212,8 +212,8 @@ void NanoDetServer::Impl::serve_process(WFHttpTask* task) {
             delete (seriex_ctx*)series->get_context();
         });
         // do classification
-        auto&& go_proc = std::bind(&NanoDetServer::Impl::do_detection, this, det_task_req, ctx);
-        auto* cls_task = WFTaskFactory::create_go_task("nanodet_det_work", go_proc, det_task_req, ctx);
+        auto&& go_proc = std::bind(&LibfaceDetServer::Impl::do_detection, this, det_task_req, ctx);
+        auto* cls_task = WFTaskFactory::create_go_task("yolov6_det_work", go_proc, det_task_req, ctx);
         *series << cls_task;
     }
 }
@@ -223,7 +223,7 @@ void NanoDetServer::Impl::serve_process(WFHttpTask* task) {
  * @param req_body
  * @return
  */
-NanoDetServer::Impl::det_request NanoDetServer::Impl::parse_task_request(const std::string& req_body) {
+LibfaceDetServer::Impl::det_request LibfaceDetServer::Impl::parse_task_request(const std::string& req_body) {
     rapidjson::Document doc;
     doc.Parse(req_body.c_str());
     det_request req{};
@@ -260,10 +260,10 @@ NanoDetServer::Impl::det_request NanoDetServer::Impl::parse_task_request(const s
  * @param model_output
  * @return
  */
-std::string NanoDetServer::Impl::make_response_body(
+std::string LibfaceDetServer::Impl::make_response_body(
     const std::string& task_id,
     const StatusCode& status,
-    const std_object_detection_output& model_output) {
+    const std_face_detection_output& model_output) {
     int code = static_cast<int>(status);
     std::string msg = status == StatusCode::OK ? "success" : "fail";
 
@@ -295,7 +295,7 @@ std::string NanoDetServer::Impl::make_response_body(
         writer.Key("score");
         writer.String(std::to_string(score).c_str());
         // write obj point coords
-        writer.Key("points");
+        writer.Key("box");
         writer.StartArray();
         // left top coords
         writer.StartArray();
@@ -307,6 +307,16 @@ std::string NanoDetServer::Impl::make_response_body(
         writer.Double(obj_box.bbox.x + obj_box.bbox.width);
         writer.Double(obj_box.bbox.y + obj_box.bbox.height);
         writer.EndArray();
+        writer.EndArray();
+        // write face landmarks
+        writer.Key("landmark");
+        writer.StartArray();
+        for (const auto& pt : obj_box.landmarks) {
+            writer.StartArray();
+            writer.Double(pt.x);
+            writer.Double(pt.y);
+            writer.EndArray();
+        }
         writer.EndArray();
         // write extra detail infos
         writer.Key("detail_infos");
@@ -326,11 +336,11 @@ std::string NanoDetServer::Impl::make_response_body(
  * @param req
  * @param ctx
  */
-void NanoDetServer::Impl::do_detection(const det_request& req, seriex_ctx* ctx) {
+void LibfaceDetServer::Impl::do_detection(const det_request& req, seriex_ctx* ctx) {
     // get task receive timestamp
     auto task_receive_ts = Timestamp::now();
     // get resnet model
-    NanoDetPtr worker;
+    LibfaceDetPtr worker;
     auto find_worker_start_ts = Timestamp::now();
 
     while (!_m_working_queue.try_dequeue(worker)) {}
@@ -343,7 +353,7 @@ void NanoDetServer::Impl::do_detection(const det_request& req, seriex_ctx* ctx) 
     // do classification
     std::string response_body;
 
-    std_object_detection_output model_output;
+    std_face_detection_output model_output;
     if (req.is_valid) {
         auto status = worker->run(model_input, model_output);
 
@@ -382,40 +392,39 @@ void NanoDetServer::Impl::do_detection(const det_request& req, seriex_ctx* ctx) 
               << " worker queue size: " << _m_working_queue.size_approx();
 }
 
-/****************** NanoDetServer Implementation **************/
+/****************** LibfaceDetServer Implementation **************/
 
 /***
  *
  */
-NanoDetServer::NanoDetServer() {
+LibfaceDetServer::LibfaceDetServer() {
     _m_impl = std::make_unique<Impl>();
 }
 
 /***
  *
  */
-NanoDetServer::~NanoDetServer() = default;
+LibfaceDetServer::~LibfaceDetServer() = default;
 
 /***
  *
  * @param cfg
  * @return
  */
-morted::common::StatusCode NanoDetServer::init(const decltype(toml::parse("")) &config) {
-    // init server params
-    if (!config.contains("NANODET_DETECTION_SERVER")) {
-        LOG(ERROR) << "Config file does not contain NANODET_DETECTION_SERVER section";
+morted::common::StatusCode LibfaceDetServer::init(const decltype(toml::parse("")) &config) {
+    // init server
+    if (!config.contains("LIBFACE_DETECTION_SERVER")) {
+        LOG(ERROR) << "Config file does not contain LIBFACE_DETECTION_SERVER section";
         return StatusCode::SERVER_INIT_FAILED;
     }
 
-    toml::value cfg_content = config.at("NANODET_DETECTION_SERVER");
+    toml::value cfg_content = config.at("LIBFACE_DETECTION_SERVER");
     auto max_connect_nums = static_cast<int>(cfg_content.at("max_connections").as_integer());
     auto peer_resp_timeout = static_cast<int>(cfg_content.at("peer_resp_timeout").as_integer()) * 1000;
     struct WFServerParams params = HTTP_SERVER_PARAMS_DEFAULT;
     params.max_connections = max_connect_nums;
     params.peer_response_timeout = peer_resp_timeout;
-    auto&& proc = std::bind(
-                      &NanoDetServer::Impl::serve_process, std::cref(this->_m_impl), std::placeholders::_1);
+    auto&& proc = std::bind(&LibfaceDetServer::Impl::serve_process, std::cref(this->_m_impl), std::placeholders::_1);
     _m_server = std::make_unique<WFHttpServer>(&params, proc);
 
     // init _m_impl
@@ -426,7 +435,7 @@ morted::common::StatusCode NanoDetServer::init(const decltype(toml::parse("")) &
  *
  * @param task
  */
-void NanoDetServer::serve_process(WFHttpTask* task) {
+void LibfaceDetServer::serve_process(WFHttpTask* task) {
     return _m_impl->serve_process(task);
 }
 
@@ -434,7 +443,7 @@ void NanoDetServer::serve_process(WFHttpTask* task) {
  *
  * @return
  */
-bool NanoDetServer::is_successfully_initialized() const {
+bool LibfaceDetServer::is_successfully_initialized() const {
     return _m_impl->is_successfully_initialized();
 }
 }
