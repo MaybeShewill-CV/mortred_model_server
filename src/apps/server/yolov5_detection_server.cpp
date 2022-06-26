@@ -5,13 +5,13 @@
 * Date: 22-6-22
 ************************************************/
 
-// nanodet detection server tool
+// libface detection server tool
 
 #include <glog/logging.h>
 #include <workflow/WFHttpServer.h>
 #include <workflow/WFFacilities.h>
 
-#include "server/object_detection/yolov5det_server.h"
+#include "server/object_detection/yolov5_det_server.h"
 
 using morted::server::object_detection::YoloV5DetServer;
 

@@ -44,6 +44,7 @@ set(MODEL_SERVER_APP_LIST
     nanodet_detection_server
     yolov5_detection_server
     mobilenetv2_classification_server
+    libface_detection_server
 )
 
 foreach(src ${MODEL_SERVER_APP_LIST})

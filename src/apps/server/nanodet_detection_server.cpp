@@ -11,7 +11,7 @@
 #include <workflow/WFHttpServer.h>
 #include <workflow/WFFacilities.h>
 
-#include "server/object_detection/nanodet_server.h"
+#include "server/object_detection/nano_det_server.h"
 
 using morted::server::object_detection::NanoDetServer;
 
