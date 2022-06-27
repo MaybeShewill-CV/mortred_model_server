@@ -5,8 +5,8 @@
 * Date: 22-6-21
 ************************************************/
 
-#ifndef MM_AI_SERVER_RESNET_SERVER_H
-#define MM_AI_SERVER_RESNET_SERVER_H
+#ifndef MM_AI_SERVER_MOBILENETV2_SERVER_H
+#define MM_AI_SERVER_MOBILENETV2_SERVER_H
 
 #include <memory>
 
@@ -69,4 +69,4 @@ private:
 }
 }
 
-#endif //MM_AI_SERVER_RESNET_SERVER_H
+#endif //MM_AI_SERVER_MOBILENETV2_SERVER_H
