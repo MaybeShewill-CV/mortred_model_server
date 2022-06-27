@@ -213,7 +213,7 @@ void LibfaceDetServer::Impl::serve_process(WFHttpTask* task) {
         });
         // do classification
         auto&& go_proc = std::bind(&LibfaceDetServer::Impl::do_detection, this, det_task_req, ctx);
-        auto* cls_task = WFTaskFactory::create_go_task("yolov6_det_work", go_proc, det_task_req, ctx);
+        auto* cls_task = WFTaskFactory::create_go_task("libface_det_work", go_proc, det_task_req, ctx);
         *series << cls_task;
     }
 }

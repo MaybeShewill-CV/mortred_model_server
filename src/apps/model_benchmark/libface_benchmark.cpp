@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
         input_image_path = argv[2];
         LOG(INFO) << "input test image path: " << input_image_path;
     } else {
-        input_image_path = "../demo_data/model_test_input/object_detection/face_wo_mask.png";
+        input_image_path = "../demo_data/model_test_input/object_detection/face_wo_mask.jpg";
         LOG(INFO) << "use default input test image path: " << input_image_path;
     }
 
