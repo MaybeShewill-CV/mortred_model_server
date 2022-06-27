@@ -12,8 +12,10 @@
 #include <workflow/WFFacilities.h>
 
 #include "server/classification/mobilenetv2_server.h"
+#include "factory/classification_task.h"
 
 using morted::server::classification::MobileNetv2Server;
+using morted::factory::classification::create_mobilenetv2_cls_server;
 
 int main(int argc, char** argv) {
 
@@ -44,11 +46,11 @@ int main(int argc, char** argv) {
     auto port = server_cfg.at("port").as_integer();
     LOG(INFO) << "serve on port: " << port;
 
-    MobileNetv2Server server;
-    server.init(config);
-    if (server.start(port) == 0) {
+    auto server = create_mobilenetv2_cls_server("mobilenetv2_cls_server");
+    server->init(config);
+    if (server->start(port) == 0) {
 		wait_group.wait();
-		server.stop();
+		server->stop();
 	} else {
 		LOG(ERROR) << "Cannot start server";
 		return -1;

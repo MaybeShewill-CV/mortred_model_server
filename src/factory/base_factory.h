@@ -12,11 +12,13 @@
 #include <map>
 
 #include "models/base_model.h"
+#include "server/base_server.h"
 
 namespace morted {
 namespace factory {
 
 using morted::models::BaseAiModel;
+using morted::server::BaseAiServer;
 
 /***
  *
@@ -94,8 +96,83 @@ public:
     }
 };
 
-}
-}
+/***
+ *
+ * @tparam BASE_AI_SERVER
+ */
+template<class BASE_AI_SERVER>
+class AiServerRegistrar {
+public:
+    virtual std::unique_ptr<BASE_AI_SERVER> create_server() = 0;
 
+    AiServerRegistrar(const AiServerRegistrar& transformer) = delete;
+
+    AiServerRegistrar& operator=(const AiServerRegistrar& transformer) = delete;
+
+    AiServerRegistrar() = default;
+    virtual ~AiServerRegistrar() = default;
+};
+
+/***
+ *
+ * @tparam BASE_AI_SERVER
+ */
+template<class BASE_AI_SERVER>
+class ServerFactory {
+public:
+
+    ServerFactory(const ServerFactory& transformer) = delete;
+
+    ServerFactory& operator=(const ServerFactory& transformer) = delete;
+
+    static ServerFactory<BASE_AI_SERVER>& get_instance() {
+        static ServerFactory<BASE_AI_SERVER> instance;
+        return instance;
+    }
+
+    void register_server(AiServerRegistrar<BASE_AI_SERVER>* registrar, const std::string& name) {
+        if (_m_server_registry.find(name) == _m_server_registry.end()) {
+            _m_server_registry.insert(std::make_pair(name, registrar));
+        } else {
+            _m_server_registry[name] = registrar;
+        }
+    }
+
+    std::unique_ptr<BASE_AI_SERVER> get_server(const std::string& name) {
+        if (_m_server_registry.find(name) != _m_server_registry.end()) {
+            auto* registry = _m_server_registry[name];
+            return registry->create_server();
+        }
+
+        LOG(ERROR) << "No server named: " << name << " was found";
+        return nullptr;
+    }
+
+private:
+    ServerFactory() = default;
+    ~ServerFactory() = default;
+
+    std::map<std::string, AiServerRegistrar<BASE_AI_SERVER>* > _m_server_registry;
+};
+
+/***
+ *
+ * @tparam BASE_AI_MODEL
+ * @tparam AI_MODEL
+ */
+template <typename BASE_AI_SERVER, typename AI_SERVER>
+class ServerRegistrar : public AiServerRegistrar<BASE_AI_SERVER> {
+public:
+    explicit ServerRegistrar(const std::string& name) {
+        ServerFactory<BASE_AI_SERVER>::get_instance().register_server(this, name);
+    }
+
+    std::unique_ptr<BASE_AI_SERVER> create_server() override {
+        return std::unique_ptr<BASE_AI_SERVER>(new AI_SERVER());
+    }
+};
+
+}
+}
 
 #endif //MM_AI_SERVER_BASE_FACTORY_H

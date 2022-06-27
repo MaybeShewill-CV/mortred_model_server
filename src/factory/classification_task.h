@@ -14,17 +14,22 @@
 #include "models/classification/mobilenetv2.h"
 #include "models/classification/resnet.h"
 #include "models/classification/densenet.h"
+#include "server/classification/mobilenetv2_server.h"
 
 namespace morted {
 namespace factory {
 
 using morted::factory::ModelFactory;
+using morted::factory::ServerFactory;
 using morted::models::BaseAiModel;
+using morted::server::BaseAiServer;
 
 namespace classification {
 using morted::models::classification::MobileNetv2;
 using morted::models::classification::ResNet;
 using morted::models::classification::DenseNet;
+
+using morted::server::classification::MobileNetv2Server;
 
 /***
  * create mobilenetv2 image classification
@@ -38,6 +43,16 @@ static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_mobilenetv2_classifie
     const std::string& classifier_name) {
     REGISTER_AI_MODEL(MobileNetv2, classifier_name, INPUT, OUTPUT)
     return ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance().get_model(classifier_name);
+}
+
+/***
+ * create mobilenetv2 image classification server
+ * @param detector_name
+ * @return
+ */
+static std::unique_ptr<BaseAiServer> create_mobilenetv2_cls_server(const std::string& server_name) {
+    REGISTER_AI_SERVER(MobileNetv2Server, server_name)
+    return ServerFactory<BaseAiServer>::get_instance().get_server(server_name);
 }
 
 /***
