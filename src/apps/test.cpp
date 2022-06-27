@@ -20,10 +20,15 @@
 #include "common/base64.h"
 #include "common/status_code.h"
 #include "common/time_stamp.h"
+#include "models/model_io_define.h"
+#include "factory/classification_task.h"
 
 using morted::common::Base64;
 using morted::common::StatusCode;
 using morted::common::Timestamp;
+using morted::models::io_define::common_io::file_input;
+using morted::models::io_define::classification::std_classification_output;
+using morted::factory::classification::create_resnet_classifier;
 
 void do_segmentation() {
     LOG(INFO) << "start doing segmentation: " << Timestamp::now().to_format_str();
@@ -63,7 +68,7 @@ void test_parallel_wget(int parallel_count = 200) {
 
     WFFacilities::WaitGroup wait_group(1);
 
-    ParallelWork *pwork = Workflow::create_parallel_work([](const ParallelTask* task){
+    ParallelWork *pwork = Workflow::create_parallel_work([](const ParallelTask* task) {
         LOG(INFO) << "pwork end at: " << Timestamp::now().to_format_str();
     });
     SeriesWork *series;
@@ -77,7 +82,7 @@ void test_parallel_wget(int parallel_count = 200) {
             auto* resp = task->get_resp();
             std::string resp_body_str = protocol::HttpUtil::decode_chunked_body(resp);
             LOG(INFO) << "parallel worker: " << i << ", resp: " << resp_body_str;
-            });
+        });
         req = new_task->get_req();
         series = Workflow::create_series_work(new_task, nullptr);
         pwork->add_series(series);
@@ -87,7 +92,8 @@ void test_parallel_wget(int parallel_count = 200) {
         auto t_end = Timestamp::now();
         auto diff = t_end.micro_sec_since_epoch() - t_start.micro_sec_since_epoch();
         LOG(INFO) << "diff time: " << diff;
-        wait_group.done();});
+        wait_group.done();
+    });
     wait_group.wait();
 }
 
@@ -102,8 +108,14 @@ int main(int argc, char** argv) {
     // test_timedgo_task();
 
     // test parallel wget
-    int parallel_nums = std::stoi(argv[1]);
-    test_parallel_wget(parallel_nums);
-    
+    // int parallel_nums = std::stoi(argv[1]);
+    // test_parallel_wget(parallel_nums);
+
+    auto resnet_1 = create_resnet_classifier<file_input, std_classification_output>("resnet_1");
+    auto resnet_2 = create_resnet_classifier<file_input, std_classification_output>("resnet_1");
+
+    LOG(INFO) << "resnet_1 address: " << resnet_1.get();
+    LOG(INFO) << "resnet_2 address: " << resnet_2.get();
+
     return 1;
 }

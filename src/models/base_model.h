@@ -8,6 +8,8 @@
 #ifndef MMAISERVER_BASE_MODEL_H
 #define MMAISERVER_BASE_MODEL_H
 
+#include "toml/toml.hpp"
+
 #include "common/status_code.h"
 
 namespace morted {
