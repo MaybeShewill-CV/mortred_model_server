@@ -11,9 +11,9 @@
 #include <workflow/WFHttpServer.h>
 #include <workflow/WFFacilities.h>
 
-#include "server/classification/resnet_server.h"
+#include "factory/classification_task.h"
 
-using morted::server::classification::ResNetServer;
+using morted::factory::classification::create_resnet_cls_server;
 
 int main(int argc, char** argv) {
 
@@ -44,11 +44,11 @@ int main(int argc, char** argv) {
     auto port = server_cfg.at("port").as_integer();
     LOG(INFO) << "serve on port: " << port;
 
-    ResNetServer server;
-    server.init(config);
-    if (server.start(port) == 0) {
+    auto server = create_resnet_cls_server("resnet_cls_server");
+    server->init(config);
+    if (server->start(port) == 0) {
 		wait_group.wait();
-		server.stop();
+		server->stop();
 	} else {
 		LOG(ERROR) << "Cannot start server";
 		return -1;

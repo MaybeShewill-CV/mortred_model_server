@@ -11,10 +11,8 @@
 #include <workflow/WFHttpServer.h>
 #include <workflow/WFFacilities.h>
 
-#include "server/classification/mobilenetv2_server.h"
 #include "factory/classification_task.h"
 
-using morted::server::classification::MobileNetv2Server;
 using morted::factory::classification::create_mobilenetv2_cls_server;
 
 int main(int argc, char** argv) {
