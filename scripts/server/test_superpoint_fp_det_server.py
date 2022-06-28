@@ -20,10 +20,11 @@ import time
 import locust
 
 
-def test_superpoint_fp_det_server_once():
-    """
+def test_superpoint_fp_det_server_once(print_resp=False):
+    """_summary_
 
-    :return:
+    Args:
+        print_resp (bool, optional): _description_. Defaults to False.
     """
     src_image_path = '../demo_data/model_test_input/feature_point/test.png'
     assert ops.exists(src_image_path), '{:s} not exist'.format(src_image_path)
@@ -44,8 +45,9 @@ def test_superpoint_fp_det_server_once():
 
     try:
         resp = requests.post(url=url, data=json.dumps(post_data))
-        output = json.loads(resp.text)
-        print(output)
+        if print_resp:
+            output = json.loads(resp.text)
+            print(output)
     except Exception as e:
         print(e)
 
@@ -121,7 +123,7 @@ if __name__ == '__main__':
 
     if args.mode == 'single':
         for i in range(1000):
-            test_superpoint_fp_det_server_once()
+            test_superpoint_fp_det_server_once(print_resp=(i % 100 == 0))
     elif args.mode == 'locust':
         command = 'locust -f ./server/test_superpoint_fp_det_server.py ' \
                   '--host=http://localhost:8094/morted_ai_server_v1/feature_point/superpoint --headless ' \
