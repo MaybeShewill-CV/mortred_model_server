@@ -93,9 +93,9 @@ class ClientBehavior(locust.TaskSet):
         }
 
         resp = self.client.post(url, data=json.dumps(post_data))
-        # resp = self.client.post(url)
         if resp.status_code == 200:
-            print(resp.text)
+            output = json.loads(resp.text)
+            print('request success feature point nums: {:d}'.format(len(output['data'])))
         else:
             print('request failed')
 
