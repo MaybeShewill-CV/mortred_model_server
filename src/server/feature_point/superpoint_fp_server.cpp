@@ -284,7 +284,22 @@ std::string SuperpointFpServer::Impl::make_response_body(
     writer.Key("data");
     writer.StartArray();
     for (auto& fp : model_output) {
-        // todo fill in data field
+        // fille in fp conf score
+        writer.Key("score");
+        writer.Double(fp.score); 
+        // fill in fp localtion
+        writer.Key("location");
+        writer.StartArray();
+        writer.Double(fp.location.x);
+        writer.Double(fp.location.y);
+        writer.EndArray();
+        // fille in fp descriptor
+        writer.Key("descriptor");
+        writer.StartArray();
+        for (const auto& ft_val : fp.descriptor) {
+            writer.Double(ft_val);
+        }
+        writer.EndArray();
     }
     writer.EndArray();
     writer.EndObject();
