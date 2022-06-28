@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# @Time    : 22-6-22 上午1:12
+# @Time    : 22-6-29 上午1:12
 # @Author  : MaybeShewill-CV
 # @Site    : https://github.com/MaybeShewill-CV/MMAiServer
-# @File    : test_libface_detection_server.py
+# @File    : test_superpoint_fp_det_server.py
 # @IDE: PyCharm
 """
-Test libface detection server
+Test superpoint feature point detection server
 """
 import argparse
 import os
@@ -20,19 +20,19 @@ import time
 import locust
 
 
-def test_libface_detection_server_once():
+def test_superpoint_fp_det_server_once():
     """
 
     :return:
     """
-    src_image_path = '../demo_data/model_test_input/object_detection/face_wo_mask.jpg'
+    src_image_path = '../demo_data/model_test_input/feature_point/test.png'
     assert ops.exists(src_image_path), '{:s} not exist'.format(src_image_path)
     with open(src_image_path, 'rb') as f:
         image_data = f.read()
         base64_data = base64.b64encode(image_data)
 
     # url = 'http://maybeshewill-cv.natapp1.cc/morted_ai_server_v1/obj_detection/libface'
-    url = 'http://localhost:8094/morted_ai_server_v1/obj_detection/libface'
+    url = 'http://localhost:8094/morted_ai_server_v1/feature_point/superpoint'
     task_id = src_image_path + str(time.time())
     m2 = hashlib.md5()
     m2.update(task_id.encode())
@@ -74,13 +74,13 @@ class ClientBehavior(locust.TaskSet):
 
         :return:
         """
-        src_image_path = '../demo_data/model_test_input/object_detection/face_wo_mask.jpg'
+        src_image_path = '../demo_data/model_test_input/feature_point/test.png'
         with open(src_image_path, 'rb') as f:
             image_data = f.read()
             base64_data = base64.b64encode(image_data)
 
         # url = 'http://maybeshewill-cv.natapp1.cc/morted_ai_server_v1/obj_detection/nanodet'
-        url = 'http://localhost:8094/morted_ai_server_v1/obj_detection/libface'
+        url = 'http://localhost:8094/morted_ai_server_v1/feature_point/superpoint'
         task_id = src_image_path + str(time.time())
         m2 = hashlib.md5()
         m2.update(task_id.encode())
@@ -121,10 +121,10 @@ if __name__ == '__main__':
 
     if args.mode == 'single':
         for i in range(1000):
-            test_libface_detection_server_once()
+            test_superpoint_fp_det_server_once()
     elif args.mode == 'locust':
-        command = 'locust -f ./server/test_libface_detection_server.py ' \
-                  '--host=http://localhost:8094/morted_ai_server_v1/obj_detection/libface --headless ' \
+        command = 'locust -f ./server/test_superpoint_fp_det_server.py ' \
+                  '--host=http://localhost:8094/morted_ai_server_v1/feature_point/superpoint --headless ' \
                   '-u {:d} -r {:d} -t {:s}'.format(args.u, args.r, args.t)
         os.system(command=command)
     else:
