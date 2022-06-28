@@ -12,15 +12,19 @@
 #include "factory/register_marco.h"
 #include "models/base_model.h"
 #include "models/feature_point/superpoint.h"
+#include "server/feature_point/superpoint_fp_server.h"
 
 namespace morted {
 namespace factory {
 
 using morted::factory::ModelFactory;
 using morted::models::BaseAiModel;
+using morted::server::BaseAiServer;
 
 namespace feature_point {
 using morted::models::feature_point::SuperPoint;
+
+using morted::server::feature_point::SuperpointFpServer;
 
 /***
  * create superpoint image feature point task
@@ -33,6 +37,16 @@ template <typename INPUT, typename OUTPUT>
 static std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_superpoint_extractor(const std::string &extractor_name) {
     REGISTER_AI_MODEL(SuperPoint, extractor_name, INPUT, OUTPUT)
     return ModelFactory<BaseAiModel<INPUT, OUTPUT>>::get_instance().get_model(extractor_name);
+}
+
+/***
+ * create superpoint feature point detection server
+ * @param server_name
+ * @return
+ */
+static std::unique_ptr<BaseAiServer> create_superpoint_fp_server(const std::string& server_name) {
+    REGISTER_AI_SERVER(SuperpointFpServer, server_name)
+    return ServerFactory<BaseAiServer>::get_instance().get_server(server_name);
 }
 
 } // namespace feature_point
