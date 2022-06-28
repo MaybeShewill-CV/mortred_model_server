@@ -45,7 +45,7 @@ set(MODEL_SERVER_APP_LIST
     yolov5_detection_server
     mobilenetv2_classification_server
     libface_detection_server
-    superpoint_fp_server
+    superpoint_fp_det_server
 )
 
 foreach(src ${MODEL_SERVER_APP_LIST})

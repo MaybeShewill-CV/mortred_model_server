@@ -1,7 +1,7 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: superpoint_fp_server.cpp
+* File: superpoint_fp_det_server.cpp
 * Date: 22-6-29
 ************************************************/
 
