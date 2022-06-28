@@ -123,7 +123,7 @@ if __name__ == '__main__':
 
     if args.mode == 'single':
         for i in range(1000):
-            test_superpoint_fp_det_server_once(print_resp=(i % 100 == 0))
+            test_superpoint_fp_det_server_once(print_resp=(i % 500 == 0))
     elif args.mode == 'locust':
         command = 'locust -f ./server/test_superpoint_fp_det_server.py ' \
                   '--host=http://localhost:8094/morted_ai_server_v1/feature_point/superpoint --headless ' \
