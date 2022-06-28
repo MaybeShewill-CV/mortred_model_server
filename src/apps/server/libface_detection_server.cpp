@@ -11,9 +11,9 @@
 #include <workflow/WFHttpServer.h>
 #include <workflow/WFFacilities.h>
 
-#include "server/object_detection/libface_det_server.h"
+#include "factory/obj_detection_task.h"
 
-using morted::server::object_detection::LibfaceDetServer;
+using morted::factory::object_detection::create_libface_det_server;
 
 int main(int argc, char** argv) {
 
@@ -44,11 +44,11 @@ int main(int argc, char** argv) {
     auto port = server_cfg.at("port").as_integer();
     LOG(INFO) << "serve on port: " << port;
 
-    LibfaceDetServer server;
-    server.init(config);
-    if (server.start(port) == 0) {
+    auto server = create_libface_det_server("libface_det_server");
+    server->init(config);
+    if (server->start(port) == 0) {
 		wait_group.wait();
-		server.stop();
+		server->stop();
 	} else {
 		LOG(ERROR) << "Cannot start server";
 		return -1;

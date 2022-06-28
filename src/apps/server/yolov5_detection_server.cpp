@@ -5,15 +5,15 @@
 * Date: 22-6-22
 ************************************************/
 
-// libface detection server tool
+// yolov5 detection server tool
 
 #include <glog/logging.h>
 #include <workflow/WFHttpServer.h>
 #include <workflow/WFFacilities.h>
 
-#include "server/object_detection/yolov5_det_server.h"
+#include "factory/obj_detection_task.h"
 
-using morted::server::object_detection::YoloV5DetServer;
+using morted::factory::object_detection::create_yolov5_det_server;
 
 int main(int argc, char** argv) {
 
@@ -44,11 +44,11 @@ int main(int argc, char** argv) {
     auto port = server_cfg.at("port").as_integer();
     LOG(INFO) << "serve on port: " << port;
 
-    YoloV5DetServer server;
-    server.init(config);
-    if (server.start(port) == 0) {
+    auto server = create_yolov5_det_server("yolov5_det_server");
+    server->init(config);
+    if (server->start(port) == 0) {
 		wait_group.wait();
-		server.stop();
+		server->stop();
 	} else {
 		LOG(ERROR) << "Cannot start server";
 		return -1;

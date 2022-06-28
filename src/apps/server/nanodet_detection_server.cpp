@@ -11,9 +11,9 @@
 #include <workflow/WFHttpServer.h>
 #include <workflow/WFFacilities.h>
 
-#include "server/object_detection/nano_det_server.h"
+#include "factory/obj_detection_task.h"
 
-using morted::server::object_detection::NanoDetServer;
+using morted::factory::object_detection::create_nanodet_det_server;
 
 int main(int argc, char** argv) {
 
@@ -44,11 +44,11 @@ int main(int argc, char** argv) {
     auto port = server_cfg.at("port").as_integer();
     LOG(INFO) << "serve on port: " << port;
 
-    NanoDetServer server;
-    server.init(config);
-    if (server.start(port) == 0) {
+    auto server = create_nanodet_det_server("nanodet_det_server");
+    server->init(config);
+    if (server->start(port) == 0) {
 		wait_group.wait();
-		server.stop();
+		server->stop();
 	} else {
 		LOG(ERROR) << "Cannot start server";
 		return -1;
