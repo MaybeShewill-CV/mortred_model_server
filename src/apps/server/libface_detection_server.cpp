@@ -46,6 +46,10 @@ int main(int argc, char** argv) {
 
     auto server = create_libface_det_server("libface_det_server");
     server->init(config);
+    if (!server->is_successfully_initialized()) {
+        LOG(INFO) << "libface detection server init failed";
+        return -1;
+    }
     if (server->start(port) == 0) {
 		wait_group.wait();
 		server->stop();
