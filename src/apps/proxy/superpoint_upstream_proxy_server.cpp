@@ -122,17 +122,20 @@ int main(int argc, char *argv[]) {
     UpstreamManager::upstream_add_server("www.mortred_ai_server.com", "192.168.42.204:8094");
     UpstreamManager::upstream_add_server("www.mortred_ai_server.com", "192.168.42.212:8094");
 
-    struct WFServerParams params = HTTP_SERVER_PARAMS_DEFAULT;
-    params.request_size_limit = 24 * 1024 * 1024;
+    auto *http_task = WFTaskFactory::create_http_task("http://www.mortred_ai_server.com/welcome", 0, 0, nullptr);
+    http_task->start();
 
-    WFHttpServer server(&params, process);
-    if (server.start(port) == 0) {
-        wait_group.wait();
-        server.stop();
-    } else {
-        perror("Cannot start server");
-        exit(1);
-    }
+    // struct WFServerParams params = HTTP_SERVER_PARAMS_DEFAULT;
+    // params.request_size_limit = 24 * 1024 * 1024;
+
+    // WFHttpServer server(&params, process);
+    // if (server.start(port) == 0) {
+    //     wait_group.wait();
+    //     server.stop();
+    // } else {
+    //     perror("Cannot start server");
+    //     exit(1);
+    // }
 
     return 0;
 }
