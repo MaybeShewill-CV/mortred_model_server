@@ -16,12 +16,12 @@
 #include "models/model_io_define.h"
 #include "common/status_code.h"
 
-namespace morted {
+namespace mortred {
 namespace models {
 namespace ocr {
 
 template<typename INPUT, typename OUTPUT>
-class DBTextDetector : public morted::models::BaseAiModel<INPUT, OUTPUT> {
+class DBTextDetector : public mortred::models::BaseAiModel<INPUT, OUTPUT> {
 public:
 
     /***
@@ -53,7 +53,7 @@ public:
      * @param toml
      * @return
      */
-    morted::common::StatusCode init(const decltype(toml::parse(""))& cfg) override;
+    mortred::common::StatusCode init(const decltype(toml::parse(""))& cfg) override;
 
     /***
      *
@@ -61,7 +61,7 @@ public:
      * @param output
      * @return
      */
-    morted::common::StatusCode run(const INPUT& input, OUTPUT& output) override;
+    mortred::common::StatusCode run(const INPUT& input, OUTPUT& output) override;
 
 
     /***

@@ -14,7 +14,7 @@
 #include "common/status_code.h"
 #include "workflow/WFHttpServer.h"
 
-namespace morted {
+namespace mortred {
 namespace server {
 class BaseAiServer {
 public:
@@ -34,7 +34,7 @@ public:
      * @param cfg
      * @return
      */
-    virtual morted::common::StatusCode init(const decltype(toml::parse(""))& cfg) = 0;
+    virtual mortred::common::StatusCode init(const decltype(toml::parse(""))& cfg) = 0;
 
     /***
      *

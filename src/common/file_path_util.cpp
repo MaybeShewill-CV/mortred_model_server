@@ -12,7 +12,7 @@
 #endif
 #include <sys/stat.h>
 
-namespace morted {
+namespace mortred {
 namespace common {
     
 std::string FilePathUtil::get_file_name(const std::string& filepath) {

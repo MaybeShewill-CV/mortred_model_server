@@ -13,14 +13,14 @@
 #include "models/base_model.h"
 #include "models/scene_segmentation/bisenetv2.h"
 
-namespace morted {
+namespace mortred {
 namespace factory {
 
-using morted::factory::ModelFactory;
-using morted::models::BaseAiModel;
+using mortred::factory::ModelFactory;
+using mortred::models::BaseAiModel;
 
 namespace scene_segmentation {
-using morted::models::scene_segmentation::BiseNetV2;
+using mortred::models::scene_segmentation::BiseNetV2;
 
 /***
  * create bisenetv2 scene segmentation instance

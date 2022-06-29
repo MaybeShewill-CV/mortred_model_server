@@ -17,11 +17,11 @@
 #include "models/model_io_define.h"
 
 
-namespace morted {
+namespace mortred {
 namespace models {
 namespace enhancement {
 
-template <typename INPUT, typename OUTPUT> class AttentiveGanDerain : public morted::models::BaseAiModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class AttentiveGanDerain : public mortred::models::BaseAiModel<INPUT, OUTPUT> {
   public:
     /***
      * 构造函数
@@ -52,7 +52,7 @@ template <typename INPUT, typename OUTPUT> class AttentiveGanDerain : public mor
      * @param toml
      * @return
      */
-    morted::common::StatusCode init(const decltype(toml::parse("")) &cfg) override;
+    mortred::common::StatusCode init(const decltype(toml::parse("")) &cfg) override;
 
     /***
      *
@@ -60,7 +60,7 @@ template <typename INPUT, typename OUTPUT> class AttentiveGanDerain : public mor
      * @param output
      * @return
      */
-    morted::common::StatusCode run(const INPUT &input, OUTPUT &output) override;
+    mortred::common::StatusCode run(const INPUT &input, OUTPUT &output) override;
 
     /***
      * if db text detector successfully initialized
@@ -75,7 +75,7 @@ template <typename INPUT, typename OUTPUT> class AttentiveGanDerain : public mor
 
 } // namespace enhancement
 } // namespace models
-} // namespace morted
+} // namespace mortred
 
 #include "attentive_gan_derain_net.inl"
 

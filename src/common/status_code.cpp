@@ -7,7 +7,7 @@
 
 #include "status_code.h"
 
-namespace morted {
+namespace mortred {
 namespace common {
 
 namespace impl {

@@ -27,15 +27,15 @@
 #include "models/model_io_define.h"
 
 
-using morted::common::CvUtils;
-using morted::common::FilePathUtil;
-using morted::common::StatusCode;
-using morted::common::Timestamp;
-using morted::factory::enhancement::create_enlightengan_enhancementor;
-using morted::models::BaseAiModel;
-using morted::models::enhancement::EnlightenGan;
-using morted::models::io_define::common_io::mat_input;
-using morted::models::io_define::enhancement::std_enhancement_output;
+using mortred::common::CvUtils;
+using mortred::common::FilePathUtil;
+using mortred::common::StatusCode;
+using mortred::common::Timestamp;
+using mortred::factory::enhancement::create_enlightengan_enhancementor;
+using mortred::models::BaseAiModel;
+using mortred::models::enhancement::EnlightenGan;
+using mortred::models::io_define::common_io::mat_input;
+using mortred::models::io_define::enhancement::std_enhancement_output;
 
 #define TIME_COST(start, end) std::chrono::duration_cast<std::chrono::milliseconds>((end) - (start)).count()
 

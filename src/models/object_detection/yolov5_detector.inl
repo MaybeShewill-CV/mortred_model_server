@@ -17,21 +17,21 @@
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
 
-namespace morted {
+namespace mortred {
 namespace models {
 
-using morted::common::FilePathUtil;
-using morted::common::StatusCode;
-using morted::common::Base64;
-using morted::common::CvUtils;
-using morted::models::io_define::common_io::mat_input;
-using morted::models::io_define::common_io::file_input;
-using morted::models::io_define::common_io::base64_input;
+using mortred::common::FilePathUtil;
+using mortred::common::StatusCode;
+using mortred::common::Base64;
+using mortred::common::CvUtils;
+using mortred::models::io_define::common_io::mat_input;
+using mortred::models::io_define::common_io::file_input;
+using mortred::models::io_define::common_io::base64_input;
 
 namespace object_detection {
 
-using morted::models::io_define::object_detection::bbox;
-using morted::models::io_define::object_detection::std_object_detection_output;
+using mortred::models::io_define::object_detection::bbox;
+using mortred::models::io_define::object_detection::std_object_detection_output;
 
 namespace yolov5_impl {
 
@@ -85,7 +85,7 @@ template<typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<base64_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
     internal_input result{};
-    auto image_decode_string = morted::common::Base64::base64_decode(in.input_image_content);
+    auto image_decode_string = mortred::common::Base64::base64_decode(in.input_image_content);
     std::vector<uchar> image_vec_data(image_decode_string.begin(), image_decode_string.end());
 
     if (image_vec_data.empty()) {

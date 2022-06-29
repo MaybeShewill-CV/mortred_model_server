@@ -11,7 +11,7 @@
 
 #include "common/file_path_util.h"
 
-using morted::common::FilePathUtil;
+using mortred::common::FilePathUtil;
 
 TEST(base64_unnittest, encode) {
 

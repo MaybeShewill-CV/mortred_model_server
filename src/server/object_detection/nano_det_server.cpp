@@ -28,21 +28,21 @@
 #include "models/model_io_define.h"
 #include "factory/obj_detection_task.h"
 
-namespace morted {
+namespace mortred {
 namespace server {
 
-using morted::common::Base64;
-using morted::common::CvUtils;
-using morted::common::FilePathUtil;
-using morted::common::Md5;
-using morted::common::StatusCode;
-using morted::common::Timestamp;
+using mortred::common::Base64;
+using mortred::common::CvUtils;
+using mortred::common::FilePathUtil;
+using mortred::common::Md5;
+using mortred::common::StatusCode;
+using mortred::common::Timestamp;
 
 namespace object_detection {
 
-using morted::factory::object_detection::create_nanodet_detector;
-using morted::models::io_define::common_io::base64_input;
-using morted::models::io_define::object_detection::std_object_detection_output;
+using mortred::factory::object_detection::create_nanodet_detector;
+using mortred::models::io_define::common_io::base64_input;
+using mortred::models::io_define::object_detection::std_object_detection_output;
 using NanoDetPtr = decltype(create_nanodet_detector<base64_input, std_object_detection_output>(""));
 
 /************ Impl Declaration ************/
@@ -185,7 +185,7 @@ StatusCode NanoDetServer::Impl::init(const decltype(toml::parse("")) &config) {
 void NanoDetServer::Impl::serve_process(WFHttpTask* task) {
     // welcome message
     if (strcmp(task->get_req()->get_request_uri(), "/welcome") == 0) {
-        task->get_resp()->append_output_body("<html>Welcome to Morted NanoDet Object Detection Server</html>");
+        task->get_resp()->append_output_body("<html>Welcome to mortred NanoDet Object Detection Server</html>");
         return;
     }
 
@@ -196,7 +196,7 @@ void NanoDetServer::Impl::serve_process(WFHttpTask* task) {
     }
 
     // nanodet obj detection
-    if (strcmp(task->get_req()->get_request_uri(), "/morted_ai_server_v1/obj_detection/nanodet") == 0) {
+    if (strcmp(task->get_req()->get_request_uri(), "/mortred_ai_server_v1/obj_detection/nanodet") == 0) {
         // parse request body
         auto* req = task->get_req();
         auto* resp = task->get_resp();
@@ -401,7 +401,7 @@ NanoDetServer::~NanoDetServer() = default;
  * @param cfg
  * @return
  */
-morted::common::StatusCode NanoDetServer::init(const decltype(toml::parse("")) &config) {
+mortred::common::StatusCode NanoDetServer::init(const decltype(toml::parse("")) &config) {
     // init server params
     if (!config.contains("NANODET_DETECTION_SERVER")) {
         LOG(ERROR) << "Config file does not contain NANODET_DETECTION_SERVER section";

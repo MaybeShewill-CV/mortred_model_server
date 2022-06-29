@@ -12,7 +12,7 @@
 
 #include "common/status_code.h"
 
-namespace morted {
+namespace mortred {
 namespace models {
 
 template<typename INPUT, typename OUTPUT>
@@ -47,7 +47,7 @@ public:
      * @param cfg
      * @return
      */
-    virtual morted::common::StatusCode init(const decltype(toml::parse(""))& cfg) = 0;
+    virtual mortred::common::StatusCode init(const decltype(toml::parse(""))& cfg) = 0;
 
     /***
      *
@@ -55,7 +55,7 @@ public:
      * @param output
      * @return
      */
-    virtual morted::common::StatusCode run(const INPUT& in, OUTPUT& out) = 0;
+    virtual mortred::common::StatusCode run(const INPUT& in, OUTPUT& out) = 0;
 
     /***
      *

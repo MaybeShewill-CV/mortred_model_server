@@ -31,8 +31,8 @@ def test_libface_detection_server_once():
         image_data = f.read()
         base64_data = base64.b64encode(image_data)
 
-    # url = 'http://maybeshewill-cv.natapp1.cc/morted_ai_server_v1/obj_detection/libface'
-    url = 'http://localhost:8094/morted_ai_server_v1/obj_detection/libface'
+    # url = 'http://maybeshewill-cv.natapp1.cc/mortred_ai_server_v1/obj_detection/libface'
+    url = 'http://localhost:8094/mortred_ai_server_v1/obj_detection/libface'
     task_id = src_image_path + str(time.time())
     m2 = hashlib.md5()
     m2.update(task_id.encode())
@@ -79,8 +79,8 @@ class ClientBehavior(locust.TaskSet):
             image_data = f.read()
             base64_data = base64.b64encode(image_data)
 
-        # url = 'http://maybeshewill-cv.natapp1.cc/morted_ai_server_v1/obj_detection/nanodet'
-        url = 'http://localhost:8094/morted_ai_server_v1/obj_detection/libface'
+        # url = 'http://maybeshewill-cv.natapp1.cc/mortred_ai_server_v1/obj_detection/nanodet'
+        url = 'http://localhost:8094/mortred_ai_server_v1/obj_detection/libface'
         task_id = src_image_path + str(time.time())
         m2 = hashlib.md5()
         m2.update(task_id.encode())
@@ -124,7 +124,7 @@ if __name__ == '__main__':
             test_libface_detection_server_once()
     elif args.mode == 'locust':
         command = 'locust -f ./server/test_libface_detection_server.py ' \
-                  '--host=http://localhost:8094/morted_ai_server_v1/obj_detection/libface --headless ' \
+                  '--host=http://localhost:8094/mortred_ai_server_v1/obj_detection/libface --headless ' \
                   '-u {:d} -r {:d} -t {:s}'.format(args.u, args.r, args.t)
         os.system(command=command)
     else:

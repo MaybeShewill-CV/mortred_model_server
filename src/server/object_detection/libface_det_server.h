@@ -12,10 +12,10 @@
 
 #include "server/base_server.h"
 
-namespace morted {
+namespace mortred {
 namespace server {
 namespace object_detection {
-class LibfaceDetServer : public morted::server::BaseAiServer {
+class LibfaceDetServer : public mortred::server::BaseAiServer {
 public:
 
     /***
@@ -47,7 +47,7 @@ public:
      * @param toml
      * @return
      */
-    morted::common::StatusCode init(const decltype(toml::parse(""))& cfg) override;
+    mortred::common::StatusCode init(const decltype(toml::parse(""))& cfg) override;
 
     /***
      *

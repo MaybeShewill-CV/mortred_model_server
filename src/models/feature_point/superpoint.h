@@ -16,12 +16,12 @@
 #include "models/base_model.h"
 #include "models/model_io_define.h"
 
-namespace morted {
+namespace mortred {
 namespace models {
 namespace feature_point {
 
 template <typename INPUT, typename OUTPUT>
-class SuperPoint : public morted::models::BaseAiModel<INPUT, OUTPUT> {
+class SuperPoint : public mortred::models::BaseAiModel<INPUT, OUTPUT> {
   public:
     /***
      * 构造函数
@@ -52,7 +52,7 @@ class SuperPoint : public morted::models::BaseAiModel<INPUT, OUTPUT> {
      * @param toml
      * @return
      */
-    morted::common::StatusCode init(const decltype(toml::parse("")) &cfg) override;
+    mortred::common::StatusCode init(const decltype(toml::parse("")) &cfg) override;
 
     /***
      *
@@ -60,7 +60,7 @@ class SuperPoint : public morted::models::BaseAiModel<INPUT, OUTPUT> {
      * @param output
      * @return
      */
-    morted::common::StatusCode run(const INPUT& input, OUTPUT& output) override;
+    mortred::common::StatusCode run(const INPUT& input, OUTPUT& output) override;
 
     /***
      * if db text detector successfully initialized
@@ -75,7 +75,7 @@ class SuperPoint : public morted::models::BaseAiModel<INPUT, OUTPUT> {
 
 } // namespace feature_point
 } // namespace models
-} // namespace morted
+} // namespace mortred
 
 #include "superpoint.inl"
 

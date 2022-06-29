@@ -13,7 +13,7 @@
 
 #include "factory/obj_detection_task.h"
 
-using morted::factory::object_detection::create_libface_det_server;
+using mortred::factory::object_detection::create_libface_det_server;
 
 int main(int argc, char** argv) {
 

@@ -17,21 +17,21 @@
 #include "server/classification/mobilenetv2_server.h"
 #include "server/classification/resnet_server.h"
 
-namespace morted {
+namespace mortred {
 namespace factory {
 
-using morted::factory::ModelFactory;
-using morted::factory::ServerFactory;
-using morted::models::BaseAiModel;
-using morted::server::BaseAiServer;
+using mortred::factory::ModelFactory;
+using mortred::factory::ServerFactory;
+using mortred::models::BaseAiModel;
+using mortred::server::BaseAiServer;
 
 namespace classification {
-using morted::models::classification::MobileNetv2;
-using morted::models::classification::ResNet;
-using morted::models::classification::DenseNet;
+using mortred::models::classification::MobileNetv2;
+using mortred::models::classification::ResNet;
+using mortred::models::classification::DenseNet;
 
-using morted::server::classification::MobileNetv2Server;
-using morted::server::classification::ResNetServer;
+using mortred::server::classification::MobileNetv2Server;
+using mortred::server::classification::ResNetServer;
 
 /***
  * create mobilenetv2 image classification

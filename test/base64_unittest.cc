@@ -11,7 +11,7 @@
 
 #include "common/base64.h"
 
-using morted::common::Base64;
+using mortred::common::Base64;
 
 TEST(base64_unnittest, encode) {
     EXPECT_EQ(Base64::base64_encode("abc.txt").size(), 12);

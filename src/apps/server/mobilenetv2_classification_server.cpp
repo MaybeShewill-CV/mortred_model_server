@@ -13,7 +13,7 @@
 
 #include "factory/classification_task.h"
 
-using morted::factory::classification::create_mobilenetv2_cls_server;
+using mortred::factory::classification::create_mobilenetv2_cls_server;
 
 int main(int argc, char** argv) {
 

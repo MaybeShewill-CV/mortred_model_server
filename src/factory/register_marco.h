@@ -11,10 +11,10 @@
 #include "factory/base_factory.h"
 #include "models/model_io_define.h"
 
-using morted::models::BaseAiModel;
-using morted::server::BaseAiServer;
-using morted::factory::ModelRegistrar;
-using morted::factory::ServerRegistrar;
+using mortred::models::BaseAiModel;
+using mortred::server::BaseAiServer;
+using mortred::factory::ModelRegistrar;
+using mortred::factory::ServerRegistrar;
 
 #define REGISTER_AI_MODEL(MODEL, MODEL_NAME, INPUT, OUTPUT) \
 ModelRegistrar<BaseAiModel<INPUT, OUTPUT>, MODEL<INPUT, OUTPUT> > __model_registrar__##MODEL##_##INPUT##_##OUTPUT((MODEL_NAME));

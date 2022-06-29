@@ -18,12 +18,12 @@
 #include "models/model_io_define.h"
 #include "factory/feature_point_task.h"
 
-using morted::common::FilePathUtil;
-using morted::common::Timestamp;
-using morted::common::CvUtils;
-using morted::models::io_define::common_io::mat_input;
-using morted::models::io_define::feature_point::std_feature_point_output;
-using morted::factory::feature_point::create_superpoint_extractor;
+using mortred::common::FilePathUtil;
+using mortred::common::Timestamp;
+using mortred::common::CvUtils;
+using mortred::models::io_define::common_io::mat_input;
+using mortred::models::io_define::feature_point::std_feature_point_output;
+using mortred::factory::feature_point::create_superpoint_extractor;
 
 int main(int argc, char** argv) {
 

@@ -18,12 +18,12 @@
 #include "models/model_io_define.h"
 #include "factory/enhancement_task.h"
 
-using morted::common::FilePathUtil;
-using morted::common::Timestamp;
-using morted::common::CvUtils;
-using morted::models::io_define::common_io::mat_input;
-using morted::models::io_define::enhancement::std_enhancement_output;
-using morted::factory::enhancement::create_attentivegan_enhancementor;
+using mortred::common::FilePathUtil;
+using mortred::common::Timestamp;
+using mortred::common::CvUtils;
+using mortred::models::io_define::common_io::mat_input;
+using mortred::models::io_define::enhancement::std_enhancement_output;
+using mortred::factory::enhancement::create_attentivegan_enhancementor;
 
 int main(int argc, char** argv) {
 

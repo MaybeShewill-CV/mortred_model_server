@@ -12,7 +12,7 @@
 
 #include <opencv2/opencv.hpp>
 
-namespace morted {
+namespace mortred {
 namespace models {
 namespace io_define {
 
@@ -109,6 +109,6 @@ using std_feature_point_output = std::vector<fp>;
 
 } // namespace io_define
 } // namespace models
-} // namespace morted
+} // namespace mortred
 
 #endif // MM_AI_SERVER_MODEL_IO_DEFINE_H

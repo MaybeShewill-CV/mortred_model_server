@@ -14,11 +14,11 @@
 #include "models/base_model.h"
 #include "server/base_server.h"
 
-namespace morted {
+namespace mortred {
 namespace factory {
 
-using morted::models::BaseAiModel;
-using morted::server::BaseAiServer;
+using mortred::models::BaseAiModel;
+using mortred::server::BaseAiServer;
 
 /***
  *

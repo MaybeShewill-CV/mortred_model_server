@@ -28,21 +28,21 @@
 #include "models/model_io_define.h"
 #include "factory/obj_detection_task.h"
 
-namespace morted {
+namespace mortred {
 namespace server {
 
-using morted::common::Base64;
-using morted::common::CvUtils;
-using morted::common::FilePathUtil;
-using morted::common::Md5;
-using morted::common::StatusCode;
-using morted::common::Timestamp;
+using mortred::common::Base64;
+using mortred::common::CvUtils;
+using mortred::common::FilePathUtil;
+using mortred::common::Md5;
+using mortred::common::StatusCode;
+using mortred::common::Timestamp;
 
 namespace object_detection {
 
-using morted::factory::object_detection::create_libface_detector;
-using morted::models::io_define::common_io::base64_input;
-using morted::models::io_define::object_detection::std_face_detection_output;
+using mortred::factory::object_detection::create_libface_detector;
+using mortred::models::io_define::common_io::base64_input;
+using mortred::models::io_define::object_detection::std_face_detection_output;
 using LibfaceDetPtr = decltype(create_libface_detector<base64_input, std_face_detection_output>(""));
 
 /************ Impl Declaration ************/
@@ -185,7 +185,7 @@ StatusCode LibfaceDetServer::Impl::init(const decltype(toml::parse("")) &config)
 void LibfaceDetServer::Impl::serve_process(WFHttpTask* task) {
     // welcome message
     if (strcmp(task->get_req()->get_request_uri(), "/welcome") == 0) {
-        task->get_resp()->append_output_body("<html>Welcome to Morted LIBFACE Object Detection Server</html>");
+        task->get_resp()->append_output_body("<html>Welcome to mortred LIBFACE Object Detection Server</html>");
         return;
     }
 
@@ -196,7 +196,7 @@ void LibfaceDetServer::Impl::serve_process(WFHttpTask* task) {
     }
 
     // nanodet obj detection
-    if (strcmp(task->get_req()->get_request_uri(), "/morted_ai_server_v1/obj_detection/libface") == 0) {
+    if (strcmp(task->get_req()->get_request_uri(), "/mortred_ai_server_v1/obj_detection/libface") == 0) {
         // parse request body
         auto* req = task->get_req();
         auto* resp = task->get_resp();
@@ -411,7 +411,7 @@ LibfaceDetServer::~LibfaceDetServer() = default;
  * @param cfg
  * @return
  */
-morted::common::StatusCode LibfaceDetServer::init(const decltype(toml::parse("")) &config) {
+mortred::common::StatusCode LibfaceDetServer::init(const decltype(toml::parse("")) &config) {
     // init server
     if (!config.contains("LIBFACE_DETECTION_SERVER")) {
         LOG(ERROR) << "Config file does not contain LIBFACE_DETECTION_SERVER section";

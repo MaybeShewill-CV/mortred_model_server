@@ -15,15 +15,15 @@
 #include "models/enhancement/enlightengan.h"
 
 
-namespace morted {
+namespace mortred {
 namespace factory {
 
-using morted::factory::ModelFactory;
-using morted::models::BaseAiModel;
+using mortred::factory::ModelFactory;
+using mortred::models::BaseAiModel;
 
 namespace enhancement {
-using morted::models::enhancement::AttentiveGanDerain;
-using morted::models::enhancement::EnlightenGan;
+using mortred::models::enhancement::AttentiveGanDerain;
+using mortred::models::enhancement::EnlightenGan;
 
 /***
  * create enlighten-gan low light image enhancement
@@ -53,6 +53,6 @@ static std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_attentivegan_enhanceme
 
 } // namespace enhancement
 } // namespace factory
-} // namespace morted
+} // namespace mortred
 
 #endif // MM_AI_SERVER_ENHANCEMENT_TASK_H

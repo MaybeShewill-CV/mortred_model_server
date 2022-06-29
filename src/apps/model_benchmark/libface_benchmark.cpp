@@ -18,12 +18,12 @@
 #include "models/model_io_define.h"
 #include "factory/obj_detection_task.h"
 
-using morted::common::FilePathUtil;
-using morted::common::Timestamp;
-using morted::common::CvUtils;
-using morted::models::io_define::common_io::mat_input;
-using morted::models::io_define::object_detection::std_face_detection_output;
-using morted::factory::object_detection::create_libface_detector;
+using mortred::common::FilePathUtil;
+using mortred::common::Timestamp;
+using mortred::common::CvUtils;
+using mortred::models::io_define::common_io::mat_input;
+using mortred::models::io_define::object_detection::std_face_detection_output;
+using mortred::factory::object_detection::create_libface_detector;
 
 int main(int argc, char** argv) {
 

@@ -12,7 +12,7 @@
 #include <future>
 #include <fstream>
 
-namespace morted {
+namespace mortred {
 namespace common {
 namespace http_util {
 

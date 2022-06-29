@@ -28,21 +28,21 @@
 #include "models/model_io_define.h"
 #include "factory/classification_task.h"
 
-namespace morted {
+namespace mortred {
 namespace server {
 
-using morted::common::Base64;
-using morted::common::CvUtils;
-using morted::common::FilePathUtil;
-using morted::common::Md5;
-using morted::common::StatusCode;
-using morted::common::Timestamp;
+using mortred::common::Base64;
+using mortred::common::CvUtils;
+using mortred::common::FilePathUtil;
+using mortred::common::Md5;
+using mortred::common::StatusCode;
+using mortred::common::Timestamp;
 
 namespace classification {
 
-using morted::factory::classification::create_resnet_classifier;
-using morted::models::io_define::common_io::base64_input;
-using morted::models::io_define::classification::std_classification_output;
+using mortred::factory::classification::create_resnet_classifier;
+using mortred::models::io_define::common_io::base64_input;
+using mortred::models::io_define::classification::std_classification_output;
 using ResNetPtr = decltype(create_resnet_classifier<base64_input, std_classification_output>(""));
 
 /************ Impl Declaration ************/
@@ -186,7 +186,7 @@ StatusCode ResNetServer::Impl::init(const decltype(toml::parse("")) &config) {
 void ResNetServer::Impl::serve_process(WFHttpTask* task) {
     // welcome message
     if (strcmp(task->get_req()->get_request_uri(), "/welcome") == 0) {
-        task->get_resp()->append_output_body("<html>Welcome to Morted Resnet classification Server</html>");
+        task->get_resp()->append_output_body("<html>Welcome to mortred Resnet classification Server</html>");
         return;
     }
 
@@ -197,7 +197,7 @@ void ResNetServer::Impl::serve_process(WFHttpTask* task) {
     }
 
     // resnet classification
-    if (strcmp(task->get_req()->get_request_uri(), "/morted_ai_server_v1/classification/resnet") == 0) {
+    if (strcmp(task->get_req()->get_request_uri(), "/mortred_ai_server_v1/classification/resnet") == 0) {
         // parse request body
         auto* req = task->get_req();
         auto* resp = task->get_resp();
@@ -382,7 +382,7 @@ ResNetServer::~ResNetServer() = default;
  * @param cfg
  * @return
  */
-morted::common::StatusCode ResNetServer::init(const decltype(toml::parse("")) &config) {
+mortred::common::StatusCode ResNetServer::init(const decltype(toml::parse("")) &config) {
     // init server params
     if (!config.contains("RESNET_CLASSIFICATION_SERVER")) {
         LOG(ERROR) << "Config file does not contain RESNET_CLASSIFICATION_SERVER section";

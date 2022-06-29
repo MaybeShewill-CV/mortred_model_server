@@ -14,19 +14,19 @@
 #include "common/base64.h"
 #include "common/file_path_util.h"
 
-namespace morted {
+namespace mortred {
 namespace models {
 
-using morted::common::Base64;
-using morted::common::FilePathUtil;
-using morted::common::StatusCode;
-using morted::models::io_define::common_io::base64_input;
-using morted::models::io_define::common_io::file_input;
-using morted::models::io_define::common_io::mat_input;
+using mortred::common::Base64;
+using mortred::common::FilePathUtil;
+using mortred::common::StatusCode;
+using mortred::models::io_define::common_io::base64_input;
+using mortred::models::io_define::common_io::file_input;
+using mortred::models::io_define::common_io::mat_input;
 
 namespace feature_point {
-using morted::models::io_define::feature_point::fp;
-using morted::models::io_define::feature_point::std_feature_point_output;
+using mortred::models::io_define::feature_point::fp;
+using mortred::models::io_define::feature_point::std_feature_point_output;
 
 namespace superpoint_impl {
 
@@ -76,7 +76,7 @@ typename std::enable_if<std::is_same<INPUT, std::decay<mat_input>::type>::value,
 template <typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<base64_input>::type>::value, internal_input>::type transform_input(const INPUT &in) {
     internal_input result{};
-    auto image_decode_string = morted::common::Base64::base64_decode(in.input_image_content);
+    auto image_decode_string = mortred::common::Base64::base64_decode(in.input_image_content);
     std::vector<uchar> image_vec_data(image_decode_string.begin(), image_decode_string.end());
 
     if (image_vec_data.empty()) {
@@ -604,4 +604,4 @@ StatusCode SuperPoint<INPUT, OUTPUT>::run(const INPUT &input, OUTPUT& output) {
 
 } // namespace feature_point
 } // namespace models
-} // namespace morted
+} // namespace mortred

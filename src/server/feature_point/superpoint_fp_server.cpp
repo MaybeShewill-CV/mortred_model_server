@@ -28,21 +28,21 @@
 #include "models/model_io_define.h"
 #include "factory/feature_point_task.h"
 
-namespace morted {
+namespace mortred {
 namespace server {
 
-using morted::common::Base64;
-using morted::common::CvUtils;
-using morted::common::FilePathUtil;
-using morted::common::Md5;
-using morted::common::StatusCode;
-using morted::common::Timestamp;
+using mortred::common::Base64;
+using mortred::common::CvUtils;
+using mortred::common::FilePathUtil;
+using mortred::common::Md5;
+using mortred::common::StatusCode;
+using mortred::common::Timestamp;
 
 namespace feature_point {
 
-using morted::factory::feature_point::create_superpoint_extractor;
-using morted::models::io_define::common_io::base64_input;
-using morted::models::io_define::feature_point::std_feature_point_output;
+using mortred::factory::feature_point::create_superpoint_extractor;
+using mortred::models::io_define::common_io::base64_input;
+using mortred::models::io_define::feature_point::std_feature_point_output;
 using SuperPointPtr = decltype(create_superpoint_extractor<base64_input, std_feature_point_output>(""));
 
 /************ Impl Declaration ************/
@@ -185,7 +185,7 @@ StatusCode SuperpointFpServer::Impl::init(const decltype(toml::parse("")) &confi
 void SuperpointFpServer::Impl::serve_process(WFHttpTask* task) {
     // welcome message
     if (strcmp(task->get_req()->get_request_uri(), "/welcome") == 0) {
-        task->get_resp()->append_output_body("<html>Welcome to Morted Superpoint Feature Point Detection Server</html>");
+        task->get_resp()->append_output_body("<html>Welcome to mortred Superpoint Feature Point Detection Server</html>");
         return;
     }
 
@@ -196,7 +196,7 @@ void SuperpointFpServer::Impl::serve_process(WFHttpTask* task) {
     }
 
     // nanodet obj detection
-    if (strcmp(task->get_req()->get_request_uri(), "/morted_ai_server_v1/feature_point/superpoint") == 0) {
+    if (strcmp(task->get_req()->get_request_uri(), "/mortred_ai_server_v1/feature_point/superpoint") == 0) {
         // parse request body
         auto* req = task->get_req();
         auto* resp = task->get_resp();
@@ -346,7 +346,8 @@ void SuperpointFpServer::Impl::do_detection(const det_request& req, seriex_ctx* 
     while (!_m_working_queue.enqueue(std::move(worker))) {}
 
     // fill response
-    ctx->response->append_output_body(response_body);
+    // ctx->response->append_output_body(response_body);
+    ctx->response->append_output_body_nocopy(response_body.c_str(), response_body.size());
 
     // update task count
     _m_finished_jobs++;
@@ -387,7 +388,7 @@ SuperpointFpServer::~SuperpointFpServer() = default;
  * @param cfg
  * @return
  */
-morted::common::StatusCode SuperpointFpServer::init(const decltype(toml::parse("")) &config) {
+mortred::common::StatusCode SuperpointFpServer::init(const decltype(toml::parse("")) &config) {
     // init server
     if (!config.contains("SUPERPOINT_FP_SERVER")) {
         LOG(ERROR) << "Config file does not contain SUPERPOINT_FP_SERVER section";

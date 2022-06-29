@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-namespace morted {
+namespace mortred {
 namespace common {
 namespace http_util {
 /***

@@ -17,12 +17,12 @@
 #include "models/model_io_define.h"
 
 
-namespace morted {
+namespace mortred {
 namespace models {
 namespace enhancement {
 
 template <typename INPUT, typename OUTPUT> 
-class EnlightenGan : public morted::models::BaseAiModel<INPUT, OUTPUT> {
+class EnlightenGan : public mortred::models::BaseAiModel<INPUT, OUTPUT> {
   public:
     /***
      * 构造函数
@@ -53,7 +53,7 @@ class EnlightenGan : public morted::models::BaseAiModel<INPUT, OUTPUT> {
      * @param toml
      * @return
      */
-    morted::common::StatusCode init(const decltype(toml::parse("")) &cfg) override;
+    mortred::common::StatusCode init(const decltype(toml::parse("")) &cfg) override;
 
     /***
      *
@@ -61,7 +61,7 @@ class EnlightenGan : public morted::models::BaseAiModel<INPUT, OUTPUT> {
      * @param output
      * @return
      */
-    morted::common::StatusCode run(const INPUT &input, OUTPUT &output) override;
+    mortred::common::StatusCode run(const INPUT &input, OUTPUT &output) override;
 
     /***
      * if db text detector successfully initialized
@@ -76,7 +76,7 @@ class EnlightenGan : public morted::models::BaseAiModel<INPUT, OUTPUT> {
 
 } // namespace enhancement
 } // namespace models
-} // namespace morted
+} // namespace mortred
 
 #include "enlightengan.inl"
 

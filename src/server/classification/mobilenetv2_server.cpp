@@ -28,21 +28,21 @@
 #include "models/model_io_define.h"
 #include "factory/classification_task.h"
 
-namespace morted {
+namespace mortred {
 namespace server {
 
-using morted::common::Base64;
-using morted::common::CvUtils;
-using morted::common::FilePathUtil;
-using morted::common::Md5;
-using morted::common::StatusCode;
-using morted::common::Timestamp;
+using mortred::common::Base64;
+using mortred::common::CvUtils;
+using mortred::common::FilePathUtil;
+using mortred::common::Md5;
+using mortred::common::StatusCode;
+using mortred::common::Timestamp;
 
 namespace classification {
 
-using morted::factory::classification::create_mobilenetv2_classifier;
-using morted::models::io_define::common_io::base64_input;
-using morted::models::io_define::classification::std_classification_output;
+using mortred::factory::classification::create_mobilenetv2_classifier;
+using mortred::models::io_define::common_io::base64_input;
+using mortred::models::io_define::classification::std_classification_output;
 using MoblieNetv2NetPtr = decltype(create_mobilenetv2_classifier<base64_input, std_classification_output>(""));
 
 /************ Impl Declaration ************/
@@ -186,7 +186,7 @@ StatusCode MobileNetv2Server::Impl::init(const decltype(toml::parse("")) &config
 void MobileNetv2Server::Impl::serve_process(WFHttpTask* task) {
     // welcome message
     if (strcmp(task->get_req()->get_request_uri(), "/welcome") == 0) {
-        task->get_resp()->append_output_body("<html>Welcome to Morted Mobilenetv2 classification Server</html>");
+        task->get_resp()->append_output_body("<html>Welcome to mortred Mobilenetv2 classification Server</html>");
         return;
     }
 
@@ -197,7 +197,7 @@ void MobileNetv2Server::Impl::serve_process(WFHttpTask* task) {
     }
 
     // mobilenetv2 classification
-    if (strcmp(task->get_req()->get_request_uri(), "/morted_ai_server_v1/classification/mobilenetv2") == 0) {
+    if (strcmp(task->get_req()->get_request_uri(), "/mortred_ai_server_v1/classification/mobilenetv2") == 0) {
         // parse request body
         auto* req = task->get_req();
         auto* resp = task->get_resp();
@@ -382,7 +382,7 @@ MobileNetv2Server::~MobileNetv2Server() = default;
  * @param cfg
  * @return
  */
-morted::common::StatusCode MobileNetv2Server::init(const decltype(toml::parse("")) &config) {
+mortred::common::StatusCode MobileNetv2Server::init(const decltype(toml::parse("")) &config) {
     // init server params
     if (!config.contains("MOBILENETV2_CLASSIFICATION_SERVER")) {
         LOG(ERROR) << "Config file does not contain MOBILENETV2_CLASSIFICATION_SERVER section";

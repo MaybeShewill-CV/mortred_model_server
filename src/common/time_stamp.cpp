@@ -7,7 +7,7 @@
 
 #include "time_stamp.h"
 
-namespace morted {
+namespace mortred {
 namespace common {
 static_assert(sizeof(Timestamp) == sizeof(uint64_t), "Timestamp should be same size as uint64_t");
 
