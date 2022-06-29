@@ -118,10 +118,10 @@ int main(int argc, char *argv[]) {
 
     UpstreamManager::upstream_create_consistent_hash("mortred.ai.server", nullptr); // nullptr代表使用框架默认的一致性哈希函数
     UpstreamManager::upstream_add_server("mortred.ai.server", "172.18.19.203:8094");
-    UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.198:8094");
-    UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.199:8094");
-    UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.204:8094");
-    UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.212:8094");
+    // UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.198:8094");
+    // UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.199:8094");
+    // UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.204:8094");
+    // UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.212:8094");
 
     // auto *http_task = WFTaskFactory::create_http_task("http://mortred.ai.server/welcome", 0, 0, nullptr);
     // http_task->start();
