@@ -19,7 +19,7 @@ class MobileNetv2Server : public mortred::server::BaseAiServer {
 public:
 
     /***
-    * 构造函数
+    * 
     * @param config
     */
     MobileNetv2Server();
@@ -30,13 +30,13 @@ public:
     ~MobileNetv2Server() override;
 
     /***
-    * 赋值构造函数
+    * 
     * @param transformer
     */
     MobileNetv2Server(const MobileNetv2Server& transformer) = delete;
 
     /***
-     * 复制构造函数
+     * 
      * @param transformer
      * @return
      */
