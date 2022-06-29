@@ -45,7 +45,11 @@ int main(int argc, char** argv) {
     LOG(INFO) << "serve on port: " << port;
 
     auto server = create_libface_det_server("libface_det_server");
-    server->init(config);
+    auto status = server->init(config);
+    if (status != mortred::common::StatusCode::OK) {
+        LOG(INFO) << "libface detection server init failed";
+        return -1;
+    }
     if (!server->is_successfully_initialized()) {
         LOG(INFO) << "libface detection server init failed";
         return -1;
