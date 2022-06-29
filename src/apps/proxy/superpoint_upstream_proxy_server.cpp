@@ -98,8 +98,8 @@ void process(WFHttpTask *proxy_task) {
     req->set_request_uri(http_task->get_req()->get_request_uri());
     req->get_parsed_body(&body, &len);
     req->append_output_body_nocopy(body, len);
-    req->set_header_pair("host", "mortred.ai.server");
     *http_task->get_req() = std::move(*req);
+    req->set_request_uri("http://mortred.ai.server/welcome");
     LOG(INFO) << "http task url: " << http_task->get_req()->get_request_uri();
 
     /* also, limit the remote webserver response size. */
