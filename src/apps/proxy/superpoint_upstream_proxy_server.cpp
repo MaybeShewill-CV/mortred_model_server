@@ -124,7 +124,7 @@ int main(int argc, char *argv[]) {
     UpstreamManager::upstream_create_weighted_random("mortred.ai.server", false);
     AddressParams address_params = ADDRESS_PARAMS_DEFAULT;
     address_params.weight = 1;
-    UpstreamManager::upstream_add_server("mortred.ai.server", "172.18.19.203:8094", &address_params);
+    // UpstreamManager::upstream_add_server("mortred.ai.server", "172.18.19.203:8094", &address_params);
     UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.198:8094", &address_params);
     UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.199:8094", &address_params);
     UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.204:8094", &address_params);
