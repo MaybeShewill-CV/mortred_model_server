@@ -90,7 +90,6 @@ void process(WFHttpTask *proxy_task) {
 
     context->is_keep_alive = req->is_keep_alive();
     LOG(INFO) << "proxy task url: " << req->get_request_uri();
-    http_task->get_req()->set_header_pair("Host", "mortred.ai.server");
     http_task = WFTaskFactory::create_http_task(req->get_request_uri(), 0, 0, http_callback);
     const void *body;
     size_t len;
@@ -99,6 +98,7 @@ void process(WFHttpTask *proxy_task) {
     req->set_request_uri(http_task->get_req()->get_request_uri());
     req->get_parsed_body(&body, &len);
     req->append_output_body_nocopy(body, len);
+    req->set_header_pair("Host", "mortred.ai.server");
     *http_task->get_req() = std::move(*req);
     LOG(INFO) << "http task url: " << http_task->get_req()->get_request_uri();
 
