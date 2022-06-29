@@ -34,7 +34,7 @@ int main(int argc, char** argv) {
     settings.compute_threads = -1;
     settings.handler_threads = 50;
     settings.endpoint_params.max_connections = 500;
-    settings.endpoint_params.response_timeout = 30 * 1000;
+    settings.endpoint_params.response_timeout = 15 * 1000;
     WORKFLOW_library_init(&settings);
 
     std::string config_file_path = argv[1];
