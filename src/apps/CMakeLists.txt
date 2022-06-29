@@ -53,6 +53,16 @@ foreach(src ${MODEL_SERVER_APP_LIST})
     target_link_libraries(${src}.out common models factory server ${WORKFLOW_LIBS} ${GLOG_LIBS})
 endforeach()
 
+# build proxy server app
+set(MODEL_PROXY_SERVER_APP_LIST
+    superpoint_upstream_proxy_server
+)
+
+foreach(src ${MODEL_PROXY_SERVER_APP_LIST})
+    add_executable(${src}.out ./proxy/${src}.cpp)
+    target_link_libraries(${src}.out common models factory server ${WORKFLOW_LIBS} ${GLOG_LIBS})
+endforeach()
+
 # add test tools
 add_executable(test.out ./test.cpp)
 target_link_libraries(
