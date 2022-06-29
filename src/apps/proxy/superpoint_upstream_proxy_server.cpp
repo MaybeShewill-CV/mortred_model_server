@@ -125,6 +125,8 @@ int main(int argc, char *argv[]) {
     auto *http_task = WFTaskFactory::create_http_task("http://www.mortred_ai_server.com/welcome", 0, 0, nullptr);
     http_task->start();
 
+    wait_group.wait();
+
     // struct WFServerParams params = HTTP_SERVER_PARAMS_DEFAULT;
     // params.request_size_limit = 24 * 1024 * 1024;
 
