@@ -121,7 +121,7 @@ int main(int argc, char *argv[]) {
     WFFacilities::WaitGroup wait_group(1);
     port = atoi(argv[1]);
 
-    UpstreamManager::upstream_create_weighted_random("mortred.ai.server", false);
+    UpstreamManager::upstream_create_consistent_hash("mortred.ai.server", nullptr);
     AddressParams address_params = ADDRESS_PARAMS_DEFAULT;
     address_params.weight = 1;
     // UpstreamManager::upstream_add_server("mortred.ai.server", "172.18.19.203:8094", &address_params);
