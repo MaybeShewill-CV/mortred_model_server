@@ -90,8 +90,8 @@ void process(WFHttpTask *proxy_task) {
 
     context->is_keep_alive = req->is_keep_alive();
     LOG(INFO) << "proxy task url: " << req->get_request_uri();
-    //http_task = WFTaskFactory::create_http_task(req->get_request_uri(), 0, 0, http_callback);
-    http_task = WFTaskFactory::create_http_task("http://mortred.ai.server/welcome", 0, 0, http_callback);
+    http_task->get_req()->set_header_pair("Host", "mortred.ai.server");
+    http_task = WFTaskFactory::create_http_task(req->get_request_uri(), 0, 0, http_callback);
     const void *body;
     size_t len;
 
@@ -99,7 +99,6 @@ void process(WFHttpTask *proxy_task) {
     req->set_request_uri(http_task->get_req()->get_request_uri());
     req->get_parsed_body(&body, &len);
     req->append_output_body_nocopy(body, len);
-    req->set_request_uri("http://localhost:8094/welcome");
     *http_task->get_req() = std::move(*req);
     LOG(INFO) << "http task url: " << http_task->get_req()->get_request_uri();
 
@@ -124,12 +123,14 @@ int main(int argc, char *argv[]) {
     params.request_size_limit = 24 * 1024 * 1024;
     WFHttpServer server(&params, process);
 
-    UpstreamManager::upstream_create_consistent_hash("mortred.ai.server", nullptr); // nullptr代表使用框架默认的一致性哈希函数
-    UpstreamManager::upstream_add_server("mortred.ai.server", "172.18.19.203:8094");
-    // UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.198:8094");
-    // UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.199:8094");
-    // UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.204:8094");
-    // UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.212:8094");
+    UpstreamManager::upstream_create_weighted_random("mortred.ai.server", false);
+    AddressParams address_params = ADDRESS_PARAMS_DEFAULT;
+    address_params.weight = 1;
+    UpstreamManager::upstream_add_server("mortred.ai.server", "172.18.19.203:8094", &address_params);
+    UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.198:8094", &address_params);
+    UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.199:8094", &address_params);
+    UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.204:8094", &address_params);
+    UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.212:8094", &address_params);
 
     if (server.start(port) == 0) {
         wait_group.wait();
