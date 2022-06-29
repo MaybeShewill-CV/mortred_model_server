@@ -117,6 +117,7 @@ int main(int argc, char *argv[]) {
     port = atoi(argv[1]);
 
     UpstreamManager::upstream_create_consistent_hash("mortred.ai.server", nullptr); // nullptr代表使用框架默认的一致性哈希函数
+    UpstreamManager::upstream_add_server("mortred.ai.server", "172.18.19.203:8094");
     UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.198:8094");
     UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.199:8094");
     UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.204:8094");
