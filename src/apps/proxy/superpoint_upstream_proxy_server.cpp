@@ -77,16 +77,6 @@ void http_callback(WFHttpTask *task) {
 }
 
 void process(WFHttpTask *proxy_task) {
-
-    UpstreamManager::upstream_create_weighted_random("mortred.ai.server", false);
-    AddressParams address_params = ADDRESS_PARAMS_DEFAULT;
-    address_params.weight = 1;
-    UpstreamManager::upstream_add_server("mortred.ai.server", "172.18.19.203:8094", &address_params);
-    UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.198:8094", &address_params);
-    UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.199:8094", &address_params);
-    UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.204:8094", &address_params);
-    UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.212:8094", &address_params);
-
     auto *req = proxy_task->get_req();
     SeriesWork *series = series_of(proxy_task);
     WFHttpTask *http_task; /* for requesting remote webserver. */
@@ -99,8 +89,10 @@ void process(WFHttpTask *proxy_task) {
     series->set_callback([](const SeriesWork *series) { delete (tutorial_series_context *)series->get_context(); });
 
     context->is_keep_alive = req->is_keep_alive();
-    LOG(INFO) << "proxy task url: " << req->get_request_uri();
-    http_task = WFTaskFactory::create_http_task(req->get_request_uri(), 0, 0, http_callback);
+    char proxy_url[128];
+    sprintf(proxy_url, "http://mortred.ai.server%s", req->get_request_uri());
+    LOG(INFO) << "proxy task url: " << proxy_url;
+    http_task = WFTaskFactory::create_http_task(proxy_url, 0, 0, http_callback);
     const void *body;
     size_t len;
 
@@ -128,6 +120,15 @@ int main(int argc, char *argv[]) {
 
     WFFacilities::WaitGroup wait_group(1);
     port = atoi(argv[1]);
+
+    UpstreamManager::upstream_create_weighted_random("mortred.ai.server", false);
+    AddressParams address_params = ADDRESS_PARAMS_DEFAULT;
+    address_params.weight = 1;
+    UpstreamManager::upstream_add_server("mortred.ai.server", "172.18.19.203:8094", &address_params);
+    UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.198:8094", &address_params);
+    UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.199:8094", &address_params);
+    UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.204:8094", &address_params);
+    UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.212:8094", &address_params);
 
     struct WFServerParams params = HTTP_SERVER_PARAMS_DEFAULT;
     params.request_size_limit = 24 * 1024 * 1024;
