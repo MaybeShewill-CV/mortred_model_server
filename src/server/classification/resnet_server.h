@@ -10,7 +10,7 @@
 
 #include <memory>
 
-#include "server/base_server.h"
+#include "server/abstract_server.h"
 
 namespace mortred {
 namespace server {
