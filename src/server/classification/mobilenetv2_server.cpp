@@ -9,12 +9,8 @@
 
 #include "glog/logging.h"
 #include "toml/toml.hpp"
-#include "stl_container/concurrentqueue.h"
-#include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
-#include "workflow/HttpMessage.h"
-#include "workflow/HttpUtil.h"
 #include "workflow/WFTaskFactory.h"
 #include "workflow/WFHttpServer.h"
 #include "workflow/Workflow.h"
@@ -26,6 +22,7 @@
 #include "common/time_stamp.h"
 #include "common/file_path_util.h"
 #include "models/model_io_define.h"
+#include "server/base_server_impl.h"
 #include "factory/classification_task.h"
 
 namespace mortred {
@@ -37,6 +34,7 @@ using mortred::common::FilePathUtil;
 using mortred::common::Md5;
 using mortred::common::StatusCode;
 using mortred::common::Timestamp;
+using mortred::server::BaseAiServerImpl;
 
 namespace classification {
 
@@ -47,80 +45,16 @@ using MoblieNetv2NetPtr = decltype(create_mobilenetv2_classifier<base64_input, s
 
 /************ Impl Declaration ************/
 
-class MobileNetv2Server::Impl {
+class MobileNetv2Server::Impl : public BaseAiServerImpl<MoblieNetv2NetPtr, std_classification_output> {
 public:
-    /***
-     *
-     */
-    Impl() = default;
-
-    /***
-     *
-     */
-    ~Impl() = default;
-
-    /***
-    *
-    * @param transformer
-    */
-    Impl(const Impl& transformer) = delete;
-
-    /***
-     *
-     * @param transformer
-     * @return
-     */
-    Impl& operator=(const Impl& transformer) = delete;
-
     /***
     *
     * @param cfg_file_path
     * @return
     */
-    StatusCode init(const decltype(toml::parse(""))& config);
+    StatusCode init(const decltype(toml::parse(""))& config) override;
 
-    /***
-     *
-     * @param task
-     */
-    void serve_process(WFHttpTask* task);
-
-    /***
-     *
-     * @return
-     */
-    bool is_successfully_initialized() const {
-        return _m_successfully_initialized;
-    };
-
-private:
-    // init flag
-    bool _m_successfully_initialized = false;
-    // task count
-    std::atomic<size_t> _m_received_jobs{0};
-    std::atomic<size_t> _m_finished_jobs{0};
-    std::atomic<size_t> _m_waiting_jobs{0};
-    // worker queue
-    moodycamel::ConcurrentQueue<MoblieNetv2NetPtr> _m_working_queue;
-private:
-    struct seriex_ctx {
-        protocol::HttpResponse* response = nullptr;
-    };
-
-    struct cls_request {
-        std::string image_content;
-        std::string task_id;
-        bool is_valid = true;
-    };
-
-private:
-    /***
-     *
-     * @param req_body
-     * @return
-     */
-    static cls_request parse_task_request(const std::string& req_body);
-
+protected:
     /***
      *
      * @param task_id
@@ -128,17 +62,10 @@ private:
      * @param model_output
      * @return
      */
-    static std::string make_response_body(
+    std::string make_response_body(
         const std::string& task_id,
         const StatusCode& status,
-        const std_classification_output& model_output);
-
-    /***
-     *
-     * @param req
-     * @param ctx
-     */
-    void do_classification(const cls_request& req, seriex_ctx* ctx);
+        const std_classification_output& model_output) override;
 };
 
 /************ Impl Implementation ************/
@@ -164,6 +91,7 @@ StatusCode MobileNetv2Server::Impl::init(const decltype(toml::parse("")) &config
     for (int index = 0; index < worker_nums; ++index) {
         auto worker = create_mobilenetv2_classifier<base64_input, std_classification_output>(
                           "worker_" + std::to_string(index + 1));
+
         if (!worker->is_successfully_initialized()) {
             if (worker->init(model_cfg) != StatusCode::OK) {
                 _m_successfully_initialized = false;
@@ -174,84 +102,33 @@ StatusCode MobileNetv2Server::Impl::init(const decltype(toml::parse("")) &config
         _m_working_queue.enqueue(std::move(worker));
     }
 
+    // init worker run timeout
+    if (!config.at("MOBILENETV2_CLASSIFICATION_SERVER").contains("model_run_timeout")) {
+        _m_model_run_timeout = 500; // ms
+    } else {
+        _m_model_run_timeout = static_cast<int>(
+                                   config.at("MOBILENETV2_CLASSIFICATION_SERVER").at("model_run_timeout").as_integer());
+    }
+
+    // init server uri
+    if (!config.at("MOBILENETV2_CLASSIFICATION_SERVER").contains("server_url")) {
+        LOG(ERROR) << "missing server uri field";
+        _m_successfully_initialized = false;
+        return StatusCode::SERVER_INIT_FAILED;
+    } else {
+        _m_server_uri = config.at("MOBILENETV2_CLASSIFICATION_SERVER").at("server_url").as_string();
+    }
+
+    // init server params
+    toml::value cfg_content = config.at("MOBILENETV2_CLASSIFICATION_SERVER");
+    max_connection_nums = static_cast<int>(cfg_content.at("max_connections").as_integer());
+    peer_resp_timeout = static_cast<int>(cfg_content.at("peer_resp_timeout").as_integer()) * 1000;
+    compute_threads = static_cast<int>(cfg_content.at("compute_threads").as_integer());
+    handler_threads = static_cast<int>(cfg_content.at("handler_threads").as_integer());
+
     _m_successfully_initialized = true;
     LOG(INFO) << "Mobilenetv2 classification server init successfully";
     return StatusCode::OK;
-}
-
-/***
- *
- * @param task
- */
-void MobileNetv2Server::Impl::serve_process(WFHttpTask* task) {
-    // welcome message
-    if (strcmp(task->get_req()->get_request_uri(), "/welcome") == 0) {
-        task->get_resp()->append_output_body("<html>Welcome to mortred Mobilenetv2 classification Server</html>");
-        return;
-    }
-
-    // hello world message
-    if (strcmp(task->get_req()->get_request_uri(), "/hello_world") == 0) {
-        task->get_resp()->append_output_body("<html>Hello World !!!</html>");
-        return;
-    }
-
-    // mobilenetv2 classification
-    if (strcmp(task->get_req()->get_request_uri(), "/mortred_ai_server_v1/classification/mobilenetv2") == 0) {
-        // parse request body
-        auto* req = task->get_req();
-        auto* resp = task->get_resp();
-        auto cls_task_req = parse_task_request(protocol::HttpUtil::decode_chunked_body(req));
-        _m_waiting_jobs++;
-        _m_received_jobs++;
-        // init series work
-        auto* series = series_of(task);
-        auto* ctx = new seriex_ctx;
-        ctx->response = resp;
-        series->set_context(ctx);
-        series->set_callback([](const SeriesWork * series) {
-            delete (seriex_ctx*)series->get_context();
-        });
-        // do classification
-        auto&& go_proc = std::bind(&MobileNetv2Server::Impl::do_classification, this, cls_task_req, ctx);
-        auto* cls_task = WFTaskFactory::create_go_task("mobilenetv2_cls_work", go_proc, cls_task_req, ctx);
-        *series << cls_task;
-    }
-}
-
-/***
- *
- * @param req_body
- * @return
- */
-MobileNetv2Server::Impl::cls_request MobileNetv2Server::Impl::parse_task_request(const std::string& req_body) {
-    rapidjson::Document doc;
-    doc.Parse(req_body.c_str());
-    cls_request req{};
-
-    if (doc.HasParseError() || doc.IsNull() || doc.ObjectEmpty()) {
-        req.image_content = "";
-        req.is_valid = false;
-    } else {
-        CHECK_EQ(doc.IsObject(), true);
-
-        if (!doc.HasMember("img_data") || !doc["img_data"].IsString()) {
-            req.image_content = "";
-            req.is_valid = false;
-        } else {
-            req.image_content = doc["img_data"].GetString();
-            req.is_valid = true;
-        }
-
-        if (!doc.HasMember("req_id") || !doc["req_id"].IsString()) {
-            req.task_id = "";
-            req.is_valid = false;
-        } else {
-            req.task_id = doc["req_id"].GetString();
-        }
-    }
-
-    return req;
 }
 
 /***
@@ -266,7 +143,7 @@ std::string MobileNetv2Server::Impl::make_response_body(
     const StatusCode& status,
     const std_classification_output& model_output) {
     int code = static_cast<int>(status);
-    std::string msg = status == StatusCode::OK ? "success" : "fail";
+    std::string msg = status == StatusCode::OK ? "success" : mortred::common::error_code_to_str(code);
     int cls_id = -1;
     float scores = -1.0;
 
@@ -300,69 +177,6 @@ std::string MobileNetv2Server::Impl::make_response_body(
     return buf.GetString();
 }
 
-/***
- *
- * @param req
- * @param ctx
- */
-void MobileNetv2Server::Impl::do_classification(const cls_request& req, seriex_ctx* ctx) {
-    // get task receive timestamp
-    auto task_receive_ts = Timestamp::now();
-    // get mobilenetv2 model
-    MoblieNetv2NetPtr worker;
-    auto find_worker_start_ts = Timestamp::now();
-
-    while (!_m_working_queue.try_dequeue(worker)) {}
-
-    auto worker_found_ts = Timestamp::now() - find_worker_start_ts;
-
-    // construct model input
-    base64_input model_input{req.image_content};
-
-    // do classification
-    std::string response_body;
-
-    std_classification_output model_output;
-
-    if (req.is_valid) {
-        auto status = worker->run(model_input, model_output);
-
-        if (status != StatusCode::OK) {
-            LOG(ERROR) << "classifier run failed";
-        }
-
-        // make response body
-        response_body = make_response_body(req.task_id, status, model_output);
-    } else {
-        response_body = make_response_body("", StatusCode::MODEL_EMPTY_INPUT_IMAGE, model_output);
-    }
-
-    while (!_m_working_queue.enqueue(std::move(worker))) {}
-
-    // fill response
-    ctx->response->append_output_body(response_body);
-
-    // update task count
-    _m_finished_jobs++;
-
-    _m_waiting_jobs--;
-
-    // output log info
-    auto task_finish_ts = Timestamp::now();
-
-    auto task_elapse_ts = task_finish_ts - task_receive_ts;
-
-    LOG(INFO) << "task id: " << req.task_id
-              << " received at: " << task_receive_ts.to_format_str()
-              << " finished at: " << task_finish_ts.to_format_str()
-              << " elapse: " << task_elapse_ts << " s"
-              << " find work elapse: " << worker_found_ts << " s"
-              << " received jobs: " << _m_received_jobs
-              << " waiting jobs: " << _m_waiting_jobs
-              << " finished jobs: " << _m_finished_jobs
-              << " worker queue size: " << _m_working_queue.size_approx();
-}
-
 /****************** MobileNetv2Server Implementation **************/
 
 /***
@@ -383,23 +197,26 @@ MobileNetv2Server::~MobileNetv2Server() = default;
  * @return
  */
 mortred::common::StatusCode MobileNetv2Server::init(const decltype(toml::parse("")) &config) {
-    // init server params
-    if (!config.contains("MOBILENETV2_CLASSIFICATION_SERVER")) {
-        LOG(ERROR) << "Config file does not contain MOBILENETV2_CLASSIFICATION_SERVER section";
-        return StatusCode::SERVER_INIT_FAILED;
+    // init impl
+    auto status = _m_impl->init(config);
+    if (status != StatusCode::OK) {
+        LOG(INFO) << "init mobilenetv2 classification server failed";
+        return status;
     }
 
-    toml::value cfg_content = config.at("MOBILENETV2_CLASSIFICATION_SERVER");
-    auto max_connect_nums = static_cast<int>(cfg_content.at("max_connections").as_integer());
-    auto peer_resp_timeout = static_cast<int>(cfg_content.at("peer_resp_timeout").as_integer()) * 1000;
-    struct WFServerParams params = HTTP_SERVER_PARAMS_DEFAULT;
-    params.max_connections = max_connect_nums;
-    params.peer_response_timeout = peer_resp_timeout;
-    auto&& proc = std::bind(&MobileNetv2Server::Impl::serve_process, std::cref(this->_m_impl), std::placeholders::_1);
-    _m_server = std::make_unique<WFHttpServer>(&params, proc);
+    // init server
+    WFGlobalSettings settings = GLOBAL_SETTINGS_DEFAULT;
+    settings.compute_threads = _m_impl->compute_threads;
+    settings.handler_threads = _m_impl->handler_threads;
+    settings.endpoint_params.max_connections = _m_impl->max_connection_nums;
+    settings.endpoint_params.response_timeout = _m_impl->peer_resp_timeout;
+    WORKFLOW_library_init(&settings);
 
-    // init _m_impl
-    return _m_impl->init(config);
+    auto&& proc = std::bind(
+                      &MobileNetv2Server::Impl::serve_process, std::cref(this->_m_impl), std::placeholders::_1);
+    _m_server = std::make_unique<WFHttpServer>(proc);
+
+    return StatusCode::OK;
 }
 
 /***

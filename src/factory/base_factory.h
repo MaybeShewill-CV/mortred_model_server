@@ -12,7 +12,7 @@
 #include <map>
 
 #include "models/base_model.h"
-#include "server/base_server.h"
+#include "server/abstract_server.h"
 
 namespace mortred {
 namespace factory {

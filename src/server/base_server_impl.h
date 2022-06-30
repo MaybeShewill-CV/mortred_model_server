@@ -222,14 +222,17 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         auto* ctx = new seriex_ctx;
         ctx->response = resp;
         series->set_context(ctx);
+//        series->set_callback([](const SeriesWork * series) {
+//            delete (seriex_ctx*)series->get_context();
+//        });
         // do classification
         auto&& go_proc = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work, this, cls_task_req, ctx);
-        auto* cls_task = WFTaskFactory::create_timedgo_task(
+        auto* serve_task = WFTaskFactory::create_timedgo_task(
                 0, _m_model_run_timeout * 1e6, _m_server_uri,
                 go_proc, cls_task_req, ctx);
-        auto&& go_proc_cb = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb, this, cls_task);
-        cls_task->set_callback(go_proc_cb);
-        *series << cls_task;
+        auto&& go_proc_cb = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb, this, serve_task);
+        serve_task->set_callback(go_proc_cb);
+        *series << serve_task;
     }
 }
 
@@ -248,6 +251,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
 
     // get task receive timestamp
     ctx->task_id = req.task_id;
+    ctx->is_task_req_valid = req.is_valid;
     auto task_receive_ts = Timestamp::now();
     ctx->task_received_ts = task_receive_ts.to_format_str();
 
@@ -264,7 +268,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
 
     // do classification
     StatusCode status;
-
     if (req.is_valid) {
         status = worker->run(model_input, ctx->model_output);
 
@@ -274,8 +277,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     } else {
         status = StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
-
-    ctx->is_task_req_valid = req.is_valid;
     ctx->model_run_status = status;
 
     // restore worker queue
@@ -311,7 +312,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
 
     std::string task_id = ctx->is_task_req_valid ? ctx->task_id : "";
     std::string response_body = make_response_body(task_id, status, ctx->model_output);
-    ctx->response->append_output_body_nocopy(response_body.c_str(), response_body.size());
+    ctx->response->append_output_body(response_body);
 
     // update task count
     _m_finished_jobs++;
@@ -327,8 +328,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
               << " waiting jobs: " << _m_waiting_jobs
               << " finished jobs: " << _m_finished_jobs
               << " worker queue size: " << _m_working_queue.size_approx();
-
-    delete (seriex_ctx*)series_of(task)->get_context();
 }
 }
 }

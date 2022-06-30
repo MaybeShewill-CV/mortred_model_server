@@ -5,10 +5,9 @@
 * Date: 22-6-19
 ************************************************/
 
-// resnet classification server tool
+// mobilenetv2 classification server tool
 
 #include <glog/logging.h>
-#include <workflow/WFHttpServer.h>
 #include <workflow/WFFacilities.h>
 
 #include "factory/classification_task.h"
@@ -17,25 +16,19 @@ using mortred::factory::classification::create_mobilenetv2_cls_server;
 
 int main(int argc, char** argv) {
 
-    if (argc != 2) {
-        LOG(INFO) << "usage:";
-        LOG(INFO) << "exe cfg_path";
-        return -1;
-    }
-
     google::InitGoogleLogging(argv[0]);
     google::InstallFailureSignalHandler();
     google::SetStderrLogging(google::GLOG_INFO);
     FLAGS_alsologtostderr = true;
     FLAGS_colorlogtostderr = true;
 
-    static WFFacilities::WaitGroup wait_group(1);
-    WFGlobalSettings settings = GLOBAL_SETTINGS_DEFAULT;
-    settings.compute_threads = -1;
-    settings.handler_threads = 50;
-    settings.endpoint_params.max_connections = 500;
-    settings.endpoint_params.response_timeout = 30 * 1000;
-    WORKFLOW_library_init(&settings);
+    if (argc != 2) {
+        LOG(INFO) << "usage:";
+        LOG(INFO) << "exe cfg_path";
+        return -1;
+    }
+
+    WFFacilities::WaitGroup wait_group(1);
 
     std::string config_file_path = argv[1];
     LOG(INFO) << "cfg file path: " << config_file_path;
