@@ -13,7 +13,7 @@
 #include <sstream>
 #include <iomanip>
 
-namespace mortred {
+namespace jinq {
 namespace common {
 class Timestamp {
 public:

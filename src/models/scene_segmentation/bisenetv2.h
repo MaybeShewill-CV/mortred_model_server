@@ -16,12 +16,12 @@
 #include "models/model_io_define.h"
 #include "common/status_code.h"
 
-namespace mortred {
+namespace jinq {
 namespace models {
 namespace scene_segmentation {
 
 template<typename INPUT, typename OUTPUT>
-class BiseNetV2 : public mortred::models::BaseAiModel<INPUT, OUTPUT> {
+class BiseNetV2 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
 public:
 
     /***
@@ -53,7 +53,7 @@ public:
      * @param toml
      * @return
      */
-    mortred::common::StatusCode init(const decltype(toml::parse(""))& cfg) override;
+    jinq::common::StatusCode init(const decltype(toml::parse(""))& cfg) override;
 
     /***
      *
@@ -61,7 +61,7 @@ public:
      * @param output
      * @return
      */
-    mortred::common::StatusCode run(const INPUT& input, OUTPUT& output) override;
+    jinq::common::StatusCode run(const INPUT& input, OUTPUT& output) override;
 
 
     /***

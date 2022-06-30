@@ -13,14 +13,14 @@
 #include "models/base_model.h"
 #include "models/ocr/db_text_detector.h"
 
-namespace mortred {
+namespace jinq {
 namespace factory {
 
-using mortred::factory::ModelFactory;
-using mortred::models::BaseAiModel;
+using jinq::factory::ModelFactory;
+using jinq::models::BaseAiModel;
 
 namespace ocr {
-using mortred::models::ocr::DBTextDetector;
+using jinq::models::ocr::DBTextDetector;
 
 /***
  * create db text detector instance

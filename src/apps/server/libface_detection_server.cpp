@@ -13,7 +13,7 @@
 
 #include "factory/obj_detection_task.h"
 
-using mortred::factory::object_detection::create_libface_det_server;
+using jinq::factory::object_detection::create_libface_det_server;
 
 int main(int argc, char** argv) {
 
@@ -40,7 +40,7 @@ int main(int argc, char** argv) {
 
     auto server = create_libface_det_server("libface_det_server");
     auto status = server->init(config);
-    if (status != mortred::common::StatusCode::OK) {
+    if (status != jinq::common::StatusCode::OK) {
         LOG(INFO) << "libface detection server init failed";
         return -1;
     }

@@ -18,12 +18,12 @@
 #include "models/model_io_define.h"
 #include "factory/ocr_task.h"
 
-using mortred::common::FilePathUtil;
-using mortred::common::Timestamp;
-using mortred::common::CvUtils;
-using mortred::models::io_define::common_io::mat_input;
-using mortred::models::io_define::ocr::std_text_regions_output;
-using mortred::factory::ocr::create_dbtext_detector;
+using jinq::common::FilePathUtil;
+using jinq::common::Timestamp;
+using jinq::common::CvUtils;
+using jinq::models::io_define::common_io::mat_input;
+using jinq::models::io_define::ocr::std_text_regions_output;
+using jinq::factory::ocr::create_dbtext_detector;
 
 int main(int argc, char** argv) {
 

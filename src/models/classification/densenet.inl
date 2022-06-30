@@ -14,19 +14,19 @@
 #include "common/file_path_util.h"
 #include "common/base64.h"
 
-namespace mortred {
+namespace jinq {
 namespace models {
 
-using mortred::common::FilePathUtil;
-using mortred::common::StatusCode;
-using mortred::common::Base64;
-using mortred::models::io_define::common_io::mat_input;
-using mortred::models::io_define::common_io::file_input;
-using mortred::models::io_define::common_io::base64_input;
+using jinq::common::FilePathUtil;
+using jinq::common::StatusCode;
+using jinq::common::Base64;
+using jinq::models::io_define::common_io::mat_input;
+using jinq::models::io_define::common_io::file_input;
+using jinq::models::io_define::common_io::base64_input;
 
 namespace classification {
 
-using mortred::models::io_define::classification::std_classification_output;
+using jinq::models::io_define::classification::std_classification_output;
 
 namespace densenet_impl {
 
@@ -80,7 +80,7 @@ template<typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<base64_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
     internal_input result{};
-    auto image_decode_string = mortred::common::Base64::base64_decode(in.input_image_content);
+    auto image_decode_string = jinq::common::Base64::base64_decode(in.input_image_content);
     std::vector<uchar> image_vec_data(image_decode_string.begin(), image_decode_string.end());
 
     if (image_vec_data.empty()) {

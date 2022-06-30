@@ -9,7 +9,7 @@
 
 #include <memory.h>
 
-namespace mortred {
+namespace jinq {
 namespace common {
 /* Define the static member of MD5. */
 const byte Md5::PADDING[64] = { 0x80 };

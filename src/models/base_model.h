@@ -12,7 +12,7 @@
 
 #include "common/status_code.h"
 
-namespace mortred {
+namespace jinq {
 namespace models {
 
 template<typename INPUT, typename OUTPUT>
@@ -47,7 +47,7 @@ public:
      * @param cfg
      * @return
      */
-    virtual mortred::common::StatusCode init(const decltype(toml::parse(""))& cfg) = 0;
+    virtual jinq::common::StatusCode init(const decltype(toml::parse(""))& cfg) = 0;
 
     /***
      *
@@ -55,7 +55,7 @@ public:
      * @param output
      * @return
      */
-    virtual mortred::common::StatusCode run(const INPUT& in, OUTPUT& out) = 0;
+    virtual jinq::common::StatusCode run(const INPUT& in, OUTPUT& out) = 0;
 
     /***
      *

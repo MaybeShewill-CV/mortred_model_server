@@ -15,15 +15,15 @@
 #include "models/enhancement/enlightengan.h"
 
 
-namespace mortred {
+namespace jinq {
 namespace factory {
 
-using mortred::factory::ModelFactory;
-using mortred::models::BaseAiModel;
+using jinq::factory::ModelFactory;
+using jinq::models::BaseAiModel;
 
 namespace enhancement {
-using mortred::models::enhancement::AttentiveGanDerain;
-using mortred::models::enhancement::EnlightenGan;
+using jinq::models::enhancement::AttentiveGanDerain;
+using jinq::models::enhancement::EnlightenGan;
 
 /***
  * create enlighten-gan low light image enhancement
@@ -53,6 +53,6 @@ static std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_attentivegan_enhanceme
 
 } // namespace enhancement
 } // namespace factory
-} // namespace mortred
+} // namespace jinq
 
 #endif // MM_AI_SERVER_ENHANCEMENT_TASK_H

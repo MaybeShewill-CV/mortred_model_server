@@ -10,7 +10,7 @@
 
 #include <string>
 
-namespace mortred {
+namespace jinq {
 namespace common {
 class Base64 {
 public:

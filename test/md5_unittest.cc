@@ -11,7 +11,7 @@
 
 #include "common/md5.h"
 
-using mortred::common::Md5;
+using jinq::common::Md5;
 
 TEST(md5_unnittest, to_str) {
     std::string test_str_sampe1 = "test";

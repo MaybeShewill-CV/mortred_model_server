@@ -18,21 +18,21 @@
 #include "server/object_detection/yolov5_det_server.h"
 #include "server/object_detection/libface_det_server.h"
 
-namespace mortred {
+namespace jinq {
 namespace factory {
 
-using mortred::factory::ModelFactory;
-using mortred::models::BaseAiModel;
-using mortred::server::BaseAiServer;
+using jinq::factory::ModelFactory;
+using jinq::models::BaseAiModel;
+using jinq::server::BaseAiServer;
 
 namespace object_detection {
-using mortred::models::object_detection::NanoDetector;
-using mortred::models::object_detection::YoloV5Detector;
-using mortred::models::object_detection::LibFaceDetector;
+using jinq::models::object_detection::NanoDetector;
+using jinq::models::object_detection::YoloV5Detector;
+using jinq::models::object_detection::LibFaceDetector;
 
-using mortred::server::object_detection::NanoDetServer;
-using mortred::server::object_detection::YoloV5DetServer;
-using mortred::server::object_detection::LibfaceDetServer;
+using jinq::server::object_detection::NanoDetServer;
+using jinq::server::object_detection::YoloV5DetServer;
+using jinq::server::object_detection::LibfaceDetServer;
 
 /***
  * create yolov5 object detection instance
@@ -105,6 +105,6 @@ static std::unique_ptr<BaseAiServer> create_libface_det_server(const std::string
 
 } // namespace object_detection
 } // namespace factory
-} // namespace mortred
+} // namespace jinq
 
 #endif // MM_AI_SERVER_OBJ_DETECTION_TASK_H

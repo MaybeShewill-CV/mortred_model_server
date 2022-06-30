@@ -13,7 +13,7 @@
 
 #include <opencv2/opencv.hpp>
 
-namespace mortred {
+namespace jinq {
 namespace common {
 class CvUtils {
 public:

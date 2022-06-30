@@ -14,17 +14,17 @@
 #include "models/feature_point/superpoint.h"
 #include "server/feature_point/superpoint_fp_server.h"
 
-namespace mortred {
+namespace jinq {
 namespace factory {
 
-using mortred::factory::ModelFactory;
-using mortred::models::BaseAiModel;
-using mortred::server::BaseAiServer;
+using jinq::factory::ModelFactory;
+using jinq::models::BaseAiModel;
+using jinq::server::BaseAiServer;
 
 namespace feature_point {
-using mortred::models::feature_point::SuperPoint;
+using jinq::models::feature_point::SuperPoint;
 
-using mortred::server::feature_point::SuperpointFpServer;
+using jinq::server::feature_point::SuperpointFpServer;
 
 /***
  * create superpoint image feature point task
@@ -51,6 +51,6 @@ static std::unique_ptr<BaseAiServer> create_superpoint_fp_server(const std::stri
 
 } // namespace feature_point
 } // namespace factory
-} // namespace mortred
+} // namespace jinq
 
 #endif // MM_AI_SERVER_FEATURE_POINT_TASK_H

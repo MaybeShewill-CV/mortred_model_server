@@ -21,18 +21,18 @@
 #include "server/base_server_impl.h"
 #include "factory/classification_task.h"
 
-namespace mortred {
+namespace jinq {
 namespace server {
 
-using mortred::common::FilePathUtil;
-using mortred::common::StatusCode;
-using mortred::server::BaseAiServerImpl;
+using jinq::common::FilePathUtil;
+using jinq::common::StatusCode;
+using jinq::server::BaseAiServerImpl;
 
 namespace classification {
 
-using mortred::factory::classification::create_densenet_classifier;
-using mortred::models::io_define::common_io::base64_input;
-using mortred::models::io_define::classification::std_classification_output;
+using jinq::factory::classification::create_densenet_classifier;
+using jinq::models::io_define::common_io::base64_input;
+using jinq::models::io_define::classification::std_classification_output;
 using DenseNetPtr = decltype(create_densenet_classifier<base64_input, std_classification_output>(""));
 
 /************ Impl Declaration ************/
@@ -133,7 +133,7 @@ std::string DenseNetServer::Impl::make_response_body(
     const StatusCode& status,
     const std_classification_output& model_output) {
     int code = static_cast<int>(status);
-    std::string msg = status == StatusCode::OK ? "success" : mortred::common::error_code_to_str(code);
+    std::string msg = status == StatusCode::OK ? "success" : jinq::common::error_code_to_str(code);
     int cls_id = -1;
     float scores = -1.0;
 
@@ -184,7 +184,7 @@ DenseNetServer::~DenseNetServer() = default;
  * @param cfg
  * @return
  */
-mortred::common::StatusCode DenseNetServer::init(const decltype(toml::parse("")) &config) {
+jinq::common::StatusCode DenseNetServer::init(const decltype(toml::parse("")) &config) {
     // init impl
     auto status = _m_impl->init(config);
     if (status != StatusCode::OK) {

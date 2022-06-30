@@ -18,22 +18,22 @@
 #include "server/classification/resnet_server.h"
 #include "server/classification/densenet_server.h"
 
-namespace mortred {
+namespace jinq {
 namespace factory {
 
-using mortred::factory::ModelFactory;
-using mortred::factory::ServerFactory;
-using mortred::models::BaseAiModel;
-using mortred::server::BaseAiServer;
+using jinq::factory::ModelFactory;
+using jinq::factory::ServerFactory;
+using jinq::models::BaseAiModel;
+using jinq::server::BaseAiServer;
 
 namespace classification {
-using mortred::models::classification::MobileNetv2;
-using mortred::models::classification::ResNet;
-using mortred::models::classification::DenseNet;
+using jinq::models::classification::MobileNetv2;
+using jinq::models::classification::ResNet;
+using jinq::models::classification::DenseNet;
 
-using mortred::server::classification::MobileNetv2Server;
-using mortred::server::classification::ResNetServer;
-using mortred::server::classification::DenseNetServer;
+using jinq::server::classification::MobileNetv2Server;
+using jinq::server::classification::ResNetServer;
+using jinq::server::classification::DenseNetServer;
 
 /***
  * create mobilenetv2 image classification

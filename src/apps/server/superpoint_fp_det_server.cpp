@@ -13,7 +13,7 @@
 
 #include "factory/feature_point_task.h"
 
-using mortred::factory::feature_point::create_superpoint_fp_server;
+using jinq::factory::feature_point::create_superpoint_fp_server;
 
 int main(int argc, char** argv) {
 

@@ -23,12 +23,12 @@
 #include "models/model_io_define.h"
 #include "factory/classification_task.h"
 
-using mortred::common::Base64;
-using mortred::common::StatusCode;
-using mortred::common::Timestamp;
-using mortred::models::io_define::common_io::file_input;
-using mortred::models::io_define::classification::std_classification_output;
-using mortred::factory::classification::create_resnet_classifier;
+using jinq::common::Base64;
+using jinq::common::StatusCode;
+using jinq::common::Timestamp;
+using jinq::models::io_define::common_io::file_input;
+using jinq::models::io_define::classification::std_classification_output;
+using jinq::factory::classification::create_resnet_classifier;
 
 void do_segmentation() {
     LOG(INFO) << "start doing segmentation: " << Timestamp::now().to_format_str();

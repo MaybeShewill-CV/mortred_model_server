@@ -18,12 +18,12 @@
 #include "models/model_io_define.h"
 #include "factory/classification_task.h"
 
-using mortred::common::FilePathUtil;
-using mortred::common::Timestamp;
-using mortred::common::CvUtils;
-using mortred::models::io_define::common_io::mat_input;
-using mortred::models::io_define::classification::std_classification_output;
-using mortred::factory::classification::create_mobilenetv2_classifier;
+using jinq::common::FilePathUtil;
+using jinq::common::Timestamp;
+using jinq::common::CvUtils;
+using jinq::models::io_define::common_io::mat_input;
+using jinq::models::io_define::classification::std_classification_output;
+using jinq::factory::classification::create_mobilenetv2_classifier;
 
 int main(int argc, char** argv) {
 

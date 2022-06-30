@@ -90,7 +90,7 @@ void process(WFHttpTask *proxy_task) {
 
     context->is_keep_alive = req->is_keep_alive();
     char proxy_url[128];
-    sprintf(proxy_url, "http://mortred.ai.server%s", req->get_request_uri());
+    sprintf(proxy_url, "http://jinq.ai.server%s", req->get_request_uri());
     LOG(INFO) << "proxy task url: " << proxy_url;
     http_task = WFTaskFactory::create_http_task(proxy_url, 0, 0, http_callback);
     const void *body;
@@ -100,7 +100,7 @@ void process(WFHttpTask *proxy_task) {
     req->set_request_uri(http_task->get_req()->get_request_uri());
     req->get_parsed_body(&body, &len);
     req->append_output_body_nocopy(body, len);
-    // req->set_header_pair("Host", "mortred.ai.server");
+    // req->set_header_pair("Host", "jinq.ai.server");
     *http_task->get_req() = std::move(*req);
     LOG(INFO) << "http task url: " << http_task->get_req()->get_request_uri();
 
@@ -121,14 +121,14 @@ int main(int argc, char *argv[]) {
     WFFacilities::WaitGroup wait_group(1);
     port = atoi(argv[1]);
 
-    UpstreamManager::upstream_create_consistent_hash("mortred.ai.server", nullptr);
+    UpstreamManager::upstream_create_consistent_hash("jinq.ai.server", nullptr);
     AddressParams address_params = ADDRESS_PARAMS_DEFAULT;
     address_params.weight = 1;
-    // UpstreamManager::upstream_add_server("mortred.ai.server", "172.18.19.203:8094", &address_params);
-    UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.198:8094", &address_params);
-    UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.199:8094", &address_params);
-    UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.204:8094", &address_params);
-    UpstreamManager::upstream_add_server("mortred.ai.server", "192.168.42.212:8094", &address_params);
+    // UpstreamManager::upstream_add_server("jinq.ai.server", "172.18.19.203:8094", &address_params);
+    UpstreamManager::upstream_add_server("jinq.ai.server", "192.168.42.198:8094", &address_params);
+    UpstreamManager::upstream_add_server("jinq.ai.server", "192.168.42.199:8094", &address_params);
+    UpstreamManager::upstream_add_server("jinq.ai.server", "192.168.42.204:8094", &address_params);
+    UpstreamManager::upstream_add_server("jinq.ai.server", "192.168.42.212:8094", &address_params);
 
     struct WFServerParams params = HTTP_SERVER_PARAMS_DEFAULT;
     params.request_size_limit = 24 * 1024 * 1024;

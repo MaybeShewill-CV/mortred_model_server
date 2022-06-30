@@ -16,12 +16,12 @@
 #include "models/model_io_define.h"
 #include "common/status_code.h"
 
-namespace mortred {
+namespace jinq {
 namespace models {
 namespace object_detection {
 
 template<typename INPUT, typename OUTPUT>
-class NanoDetector : public mortred::models::BaseAiModel<INPUT, OUTPUT> {
+class NanoDetector : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
     typedef struct CenterPrior_ {
         int x;
         int y;
@@ -59,7 +59,7 @@ public:
      * @param toml
      * @return
      */
-    mortred::common::StatusCode init(const decltype(toml::parse(""))& cfg) override;
+    jinq::common::StatusCode init(const decltype(toml::parse(""))& cfg) override;
 
     /***
      *
@@ -67,7 +67,7 @@ public:
      * @param output
      * @return
      */
-    mortred::common::StatusCode run(const INPUT& input, OUTPUT& output) override;
+    jinq::common::StatusCode run(const INPUT& input, OUTPUT& output) override;
 
 
     /***

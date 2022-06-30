@@ -16,12 +16,12 @@
 #include "models/base_model.h"
 #include "models/model_io_define.h"
 
-namespace mortred {
+namespace jinq {
 namespace models {
 namespace feature_point {
 
 template <typename INPUT, typename OUTPUT>
-class SuperPoint : public mortred::models::BaseAiModel<INPUT, OUTPUT> {
+class SuperPoint : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
   public:
     /***
      * 构造函数
@@ -52,7 +52,7 @@ class SuperPoint : public mortred::models::BaseAiModel<INPUT, OUTPUT> {
      * @param toml
      * @return
      */
-    mortred::common::StatusCode init(const decltype(toml::parse("")) &cfg) override;
+    jinq::common::StatusCode init(const decltype(toml::parse("")) &cfg) override;
 
     /***
      *
@@ -60,7 +60,7 @@ class SuperPoint : public mortred::models::BaseAiModel<INPUT, OUTPUT> {
      * @param output
      * @return
      */
-    mortred::common::StatusCode run(const INPUT& input, OUTPUT& output) override;
+    jinq::common::StatusCode run(const INPUT& input, OUTPUT& output) override;
 
     /***
      * if db text detector successfully initialized
@@ -75,7 +75,7 @@ class SuperPoint : public mortred::models::BaseAiModel<INPUT, OUTPUT> {
 
 } // namespace feature_point
 } // namespace models
-} // namespace mortred
+} // namespace jinq
 
 #include "superpoint.inl"
 

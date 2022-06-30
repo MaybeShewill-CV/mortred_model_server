@@ -11,7 +11,7 @@
 #include <string>
 #include <map>
 
-namespace mortred {
+namespace jinq {
 namespace common {
 enum StatusCode {
     OK = 0,

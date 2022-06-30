@@ -18,21 +18,21 @@
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
 
-namespace mortred {
+namespace jinq {
 namespace models {
 
-using mortred::common::Base64;
-using mortred::common::CvUtils;
-using mortred::common::FilePathUtil;
-using mortred::common::StatusCode;
-using mortred::models::io_define::common_io::base64_input;
-using mortred::models::io_define::common_io::file_input;
-using mortred::models::io_define::common_io::mat_input;
+using jinq::common::Base64;
+using jinq::common::CvUtils;
+using jinq::common::FilePathUtil;
+using jinq::common::StatusCode;
+using jinq::models::io_define::common_io::base64_input;
+using jinq::models::io_define::common_io::file_input;
+using jinq::models::io_define::common_io::mat_input;
 
 namespace object_detection {
 
-using mortred::models::io_define::object_detection::face_bbox;
-using mortred::models::io_define::object_detection::std_face_detection_output;
+using jinq::models::io_define::object_detection::face_bbox;
+using jinq::models::io_define::object_detection::std_face_detection_output;
 
 namespace libface_impl {
 
@@ -93,7 +93,7 @@ template <typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<base64_input>::type>::value, internal_input>::type 
 transform_input(const INPUT &in) {
     internal_input result{};
-    auto image_decode_string = mortred::common::Base64::base64_decode(in.input_image_content);
+    auto image_decode_string = jinq::common::Base64::base64_decode(in.input_image_content);
     std::vector<uchar> image_vec_data(image_decode_string.begin(), image_decode_string.end());
 
     if (image_vec_data.empty()) {
@@ -606,4 +606,4 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::run(const INPUT &input, OUTPUT &outpu
 
 } // namespace object_detection
 } // namespace models
-} // namespace mortred
+} // namespace jinq

@@ -7,7 +7,7 @@
 
 #include "status_code.h"
 
-namespace mortred {
+namespace jinq {
 namespace common {
 
 namespace impl {

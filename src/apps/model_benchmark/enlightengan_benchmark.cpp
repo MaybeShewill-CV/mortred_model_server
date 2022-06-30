@@ -18,12 +18,12 @@
 #include "models/model_io_define.h"
 #include "factory/enhancement_task.h"
 
-using mortred::common::FilePathUtil;
-using mortred::common::Timestamp;
-using mortred::common::CvUtils;
-using mortred::models::io_define::common_io::mat_input;
-using mortred::models::io_define::enhancement::std_enhancement_output;
-using mortred::factory::enhancement::create_enlightengan_enhancementor;
+using jinq::common::FilePathUtil;
+using jinq::common::Timestamp;
+using jinq::common::CvUtils;
+using jinq::models::io_define::common_io::mat_input;
+using jinq::models::io_define::enhancement::std_enhancement_output;
+using jinq::factory::enhancement::create_enlightengan_enhancementor;
 
 int main(int argc, char** argv) {
 

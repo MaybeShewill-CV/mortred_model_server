@@ -18,12 +18,12 @@
 #include "models/model_io_define.h"
 #include "factory/scene_segmentation_task.h"
 
-using mortred::common::FilePathUtil;
-using mortred::common::Timestamp;
-using mortred::common::CvUtils;
-using mortred::models::io_define::common_io::mat_input;
-using mortred::models::io_define::scene_segmentation::std_scene_segmentation_output;
-using mortred::factory::scene_segmentation::create_bisenetv2_segmentor;
+using jinq::common::FilePathUtil;
+using jinq::common::Timestamp;
+using jinq::common::CvUtils;
+using jinq::models::io_define::common_io::mat_input;
+using jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
+using jinq::factory::scene_segmentation::create_bisenetv2_segmentor;
 
 int main(int argc, char** argv) {
 

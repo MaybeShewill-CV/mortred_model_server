@@ -16,12 +16,12 @@
 #include "models/base_model.h"
 #include "models/model_io_define.h"
 
-namespace mortred {
+namespace jinq {
 namespace models {
 namespace object_detection {
 
 template <typename INPUT, typename OUTPUT> 
-class LibFaceDetector : public mortred::models::BaseAiModel<INPUT, OUTPUT> {
+class LibFaceDetector : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
   public:
     /***
      * 构造函数
@@ -52,7 +52,7 @@ class LibFaceDetector : public mortred::models::BaseAiModel<INPUT, OUTPUT> {
      * @param toml
      * @return
      */
-    mortred::common::StatusCode init(const decltype(toml::parse("")) &cfg) override;
+    jinq::common::StatusCode init(const decltype(toml::parse("")) &cfg) override;
 
     /***
      *
@@ -60,7 +60,7 @@ class LibFaceDetector : public mortred::models::BaseAiModel<INPUT, OUTPUT> {
      * @param output
      * @return
      */
-    mortred::common::StatusCode run(const INPUT &input, OUTPUT &output) override;
+    jinq::common::StatusCode run(const INPUT &input, OUTPUT &output) override;
 
     /***
      * if db text detector successfully initialized
@@ -74,7 +74,7 @@ class LibFaceDetector : public mortred::models::BaseAiModel<INPUT, OUTPUT> {
 };
 } // namespace object_detection
 } // namespace models
-} // namespace mortred
+} // namespace jinq
 
 #include "libface_detector.inl"
 

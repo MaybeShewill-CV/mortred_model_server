@@ -28,14 +28,14 @@
 #include "common/file_path_util.h"
 #include "models/model_io_define.h"
 
-namespace mortred {
+namespace jinq {
 namespace server {
-using mortred::common::Base64;
-using mortred::common::CvUtils;
-using mortred::common::FilePathUtil;
-using mortred::common::Md5;
-using mortred::common::StatusCode;
-using mortred::common::Timestamp;
+using jinq::common::Base64;
+using jinq::common::CvUtils;
+using jinq::common::FilePathUtil;
+using jinq::common::Md5;
+using jinq::common::StatusCode;
+using jinq::common::Timestamp;
 
 template<typename WORKER, typename MODEL_OUTPUT>
 class BaseAiServerImpl {
@@ -199,7 +199,7 @@ template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
     // welcome message
     if (strcmp(task->get_req()->get_request_uri(), "/welcome") == 0) {
-        task->get_resp()->append_output_body("<html>Welcome to mortred ai server</html>");
+        task->get_resp()->append_output_body("<html>Welcome to jinq ai server</html>");
         return;
     }
 

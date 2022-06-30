@@ -21,18 +21,18 @@
 #include "server/base_server_impl.h"
 #include "factory/obj_detection_task.h"
 
-namespace mortred {
+namespace jinq {
 namespace server {
 
-using mortred::common::FilePathUtil;
-using mortred::common::StatusCode;
-using mortred::server::BaseAiServerImpl;
+using jinq::common::FilePathUtil;
+using jinq::common::StatusCode;
+using jinq::server::BaseAiServerImpl;
 
 namespace object_detection {
 
-using mortred::factory::object_detection::create_yolov5_detector;
-using mortred::models::io_define::common_io::base64_input;
-using mortred::models::io_define::object_detection::std_object_detection_output;
+using jinq::factory::object_detection::create_yolov5_detector;
+using jinq::models::io_define::common_io::base64_input;
+using jinq::models::io_define::object_detection::std_object_detection_output;
 using Yolov5DetPtr = decltype(create_yolov5_detector<base64_input, std_object_detection_output>(""));
 
 class YoloV5DetServer::Impl : public BaseAiServerImpl<Yolov5DetPtr, std_object_detection_output> {
@@ -130,7 +130,7 @@ std::string YoloV5DetServer::Impl::make_response_body(
     const StatusCode& status,
     const std_object_detection_output& model_output) {
     int code = static_cast<int>(status);
-    std::string msg = status == StatusCode::OK ? "success" : mortred::common::error_code_to_str(code);
+    std::string msg = status == StatusCode::OK ? "success" : jinq::common::error_code_to_str(code);
 
     rapidjson::StringBuffer buf;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
@@ -205,7 +205,7 @@ YoloV5DetServer::~YoloV5DetServer() = default;
  * @param cfg
  * @return
  */
-mortred::common::StatusCode YoloV5DetServer::init(const decltype(toml::parse("")) &config) {
+jinq::common::StatusCode YoloV5DetServer::init(const decltype(toml::parse("")) &config) {
     // init impl
     auto status = _m_impl->init(config);
 

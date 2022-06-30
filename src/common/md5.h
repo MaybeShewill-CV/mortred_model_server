@@ -79,7 +79,7 @@ typedef unsigned char byte;
 /* Define of byte. */
 typedef unsigned int bit32;
 
-namespace mortred {
+namespace jinq {
 namespace common {
 class Md5 {
 public:

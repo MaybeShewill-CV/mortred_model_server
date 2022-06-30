@@ -13,7 +13,7 @@
 
 #include "factory/classification_task.h"
 
-using mortred::factory::classification::create_resnet_cls_server;
+using jinq::factory::classification::create_resnet_cls_server;
 
 int main(int argc, char** argv) {
 

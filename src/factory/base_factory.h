@@ -14,11 +14,11 @@
 #include "models/base_model.h"
 #include "server/abstract_server.h"
 
-namespace mortred {
+namespace jinq {
 namespace factory {
 
-using mortred::models::BaseAiModel;
-using mortred::server::BaseAiServer;
+using jinq::models::BaseAiModel;
+using jinq::server::BaseAiServer;
 
 /***
  *

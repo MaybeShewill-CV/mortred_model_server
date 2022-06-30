@@ -18,12 +18,12 @@
 #include "models/model_io_define.h"
 #include "factory/obj_detection_task.h"
 
-using mortred::common::FilePathUtil;
-using mortred::common::Timestamp;
-using mortred::common::CvUtils;
-using mortred::models::io_define::common_io::mat_input;
-using mortred::models::io_define::object_detection::std_object_detection_output;
-using mortred::factory::object_detection::create_nanodet_detector;
+using jinq::common::FilePathUtil;
+using jinq::common::Timestamp;
+using jinq::common::CvUtils;
+using jinq::models::io_define::common_io::mat_input;
+using jinq::models::io_define::object_detection::std_object_detection_output;
+using jinq::factory::object_detection::create_nanodet_detector;
 
 int main(int argc, char** argv) {
 

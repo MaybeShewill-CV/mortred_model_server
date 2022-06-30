@@ -21,18 +21,18 @@
 #include "server/base_server_impl.h"
 #include "factory/feature_point_task.h"
 
-namespace mortred {
+namespace jinq {
 namespace server {
 
-using mortred::common::FilePathUtil;
-using mortred::common::StatusCode;
-using mortred::server::BaseAiServerImpl;
+using jinq::common::FilePathUtil;
+using jinq::common::StatusCode;
+using jinq::server::BaseAiServerImpl;
 
 namespace feature_point {
 
-using mortred::factory::feature_point::create_superpoint_extractor;
-using mortred::models::io_define::common_io::base64_input;
-using mortred::models::io_define::feature_point::std_feature_point_output;
+using jinq::factory::feature_point::create_superpoint_extractor;
+using jinq::models::io_define::common_io::base64_input;
+using jinq::models::io_define::feature_point::std_feature_point_output;
 using SuperPointPtr = decltype(create_superpoint_extractor<base64_input, std_feature_point_output>(""));
 
 /************ Impl Declaration ************/
@@ -135,7 +135,7 @@ std::string SuperpointFpServer::Impl::make_response_body(
     const StatusCode& status,
     const std_feature_point_output& model_output) {
     int code = static_cast<int>(status);
-    std::string msg = status == StatusCode::OK ? "success" : mortred::common::error_code_to_str(code);
+    std::string msg = status == StatusCode::OK ? "success" : jinq::common::error_code_to_str(code);
 
     rapidjson::StringBuffer buf;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
@@ -198,7 +198,7 @@ SuperpointFpServer::~SuperpointFpServer() = default;
  * @param cfg
  * @return
  */
-mortred::common::StatusCode SuperpointFpServer::init(const decltype(toml::parse("")) &config) {
+jinq::common::StatusCode SuperpointFpServer::init(const decltype(toml::parse("")) &config) {
     // init impl
     auto status = _m_impl->init(config);
 

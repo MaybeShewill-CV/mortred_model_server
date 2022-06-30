@@ -12,10 +12,10 @@
 
 #include "server/abstract_server.h"
 
-namespace mortred {
+namespace jinq {
 namespace server {
 namespace classification {
-class ResNetServer : public mortred::server::BaseAiServer {
+class ResNetServer : public jinq::server::BaseAiServer {
 public:
 
     /***
@@ -47,7 +47,7 @@ public:
      * @param toml
      * @return
      */
-    mortred::common::StatusCode init(const decltype(toml::parse(""))& cfg) override;
+    jinq::common::StatusCode init(const decltype(toml::parse(""))& cfg) override;
 
     /***
      *

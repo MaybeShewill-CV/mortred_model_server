@@ -7,7 +7,7 @@
 
 #include "base64.h"
 
-namespace mortred {
+namespace jinq {
 namespace common {
 
 const std::string& get_base64_chars() {
