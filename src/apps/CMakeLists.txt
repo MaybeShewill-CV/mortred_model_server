@@ -46,6 +46,7 @@ set(MODEL_SERVER_APP_LIST
     mobilenetv2_classification_server
     libface_detection_server
     superpoint_fp_det_server
+    densenet_classification_server
 )
 
 foreach(src ${MODEL_SERVER_APP_LIST})
