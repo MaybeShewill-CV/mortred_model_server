@@ -15,11 +15,7 @@
 #include "workflow/WFHttpServer.h"
 #include "workflow/Workflow.h"
 
-#include "common/md5.h"
-#include "common/base64.h"
-#include "common/cv_utils.h"
 #include "common/status_code.h"
-#include "common/time_stamp.h"
 #include "common/file_path_util.h"
 #include "models/model_io_define.h"
 #include "server/base_server_impl.h"
@@ -28,12 +24,8 @@
 namespace mortred {
 namespace server {
 
-using mortred::common::Base64;
-using mortred::common::CvUtils;
 using mortred::common::FilePathUtil;
-using mortred::common::Md5;
 using mortred::common::StatusCode;
-using mortred::common::Timestamp;
 using mortred::server::BaseAiServerImpl;
 
 namespace classification {
@@ -77,8 +69,10 @@ protected:
  */
 StatusCode MobileNetv2Server::Impl::init(const decltype(toml::parse("")) &config) {
     // init working queue
-    auto worker_nums = static_cast<int>(config.at("MOBILENETV2_CLASSIFICATION_SERVER").at("worker_nums").as_integer());
-    auto model_cfg_path = config.at("MOBILENETV2").at("model_config_file_path").as_string();
+    auto server_section = config.at("MOBILENETV2_CLASSIFICATION_SERVER");
+    auto worker_nums = static_cast<int>(server_section.at("worker_nums").as_integer());
+    auto model_section = config.at("MOBILENETV2");
+    auto model_cfg_path = model_section.at("model_config_file_path").as_string();
 
     if (!FilePathUtil::is_file_exist(model_cfg_path)) {
         LOG(FATAL) << "mobilenetv2 model config file not exist: " << model_cfg_path;
@@ -87,44 +81,39 @@ StatusCode MobileNetv2Server::Impl::init(const decltype(toml::parse("")) &config
     }
 
     auto model_cfg = toml::parse(model_cfg_path);
-
     for (int index = 0; index < worker_nums; ++index) {
         auto worker = create_mobilenetv2_classifier<base64_input, std_classification_output>(
                           "worker_" + std::to_string(index + 1));
-
         if (!worker->is_successfully_initialized()) {
             if (worker->init(model_cfg) != StatusCode::OK) {
                 _m_successfully_initialized = false;
                 return StatusCode::SERVER_INIT_FAILED;
             }
         }
-
         _m_working_queue.enqueue(std::move(worker));
     }
 
     // init worker run timeout
-    if (!config.at("MOBILENETV2_CLASSIFICATION_SERVER").contains("model_run_timeout")) {
+    if (!server_section.contains("model_run_timeout")) {
         _m_model_run_timeout = 500; // ms
     } else {
-        _m_model_run_timeout = static_cast<int>(
-                                   config.at("MOBILENETV2_CLASSIFICATION_SERVER").at("model_run_timeout").as_integer());
+        _m_model_run_timeout = static_cast<int>(server_section.at("model_run_timeout").as_integer());
     }
 
     // init server uri
-    if (!config.at("MOBILENETV2_CLASSIFICATION_SERVER").contains("server_url")) {
+    if (!server_section.contains("server_url")) {
         LOG(ERROR) << "missing server uri field";
         _m_successfully_initialized = false;
         return StatusCode::SERVER_INIT_FAILED;
     } else {
-        _m_server_uri = config.at("MOBILENETV2_CLASSIFICATION_SERVER").at("server_url").as_string();
+        _m_server_uri = server_section.at("server_url").as_string();
     }
 
     // init server params
-    toml::value cfg_content = config.at("MOBILENETV2_CLASSIFICATION_SERVER");
-    max_connection_nums = static_cast<int>(cfg_content.at("max_connections").as_integer());
-    peer_resp_timeout = static_cast<int>(cfg_content.at("peer_resp_timeout").as_integer()) * 1000;
-    compute_threads = static_cast<int>(cfg_content.at("compute_threads").as_integer());
-    handler_threads = static_cast<int>(cfg_content.at("handler_threads").as_integer());
+    max_connection_nums = static_cast<int>(server_section.at("max_connections").as_integer());
+    peer_resp_timeout = static_cast<int>(server_section.at("peer_resp_timeout").as_integer()) * 1000;
+    compute_threads = static_cast<int>(server_section.at("compute_threads").as_integer());
+    handler_threads = static_cast<int>(server_section.at("handler_threads").as_integer());
 
     _m_successfully_initialized = true;
     LOG(INFO) << "Mobilenetv2 classification server init successfully";
