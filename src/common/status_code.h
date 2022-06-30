@@ -20,6 +20,7 @@ enum StatusCode {
     MODEL_INIT_FAILED = 1,
     MODEL_RUN_SESSION_FAILED = 2,
     MODEL_EMPTY_INPUT_IMAGE = 3,
+    MODEL_RUN_TIMEOUT = 4,
 
     // server status
     SERVER_INIT_FAILED = 11,

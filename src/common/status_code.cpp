@@ -11,17 +11,31 @@ namespace mortred {
 namespace common {
 
 namespace impl {
-std::map<int, std::string> _m_error_code_table = {
-    { StatusCode::OK, "OK" },
-    { StatusCode::MODEL_INIT_FAILED, "Model init failed" },
-    { StatusCode::COMPRESS_ERROR, "Compress Not Support" },
-    { StatusCode::UNCOMPRESS_ERROR, "Uncompress Error" },
-    { StatusCode::FILE_READ_ERROR, "File Read Error" },
-    { StatusCode::FILE_WRITE_ERROR, "File Write Error" },
-    { StatusCode::FILE_NOT_EXIST_ERROR, "File Not Exist Error" },
-    { StatusCode::JSON_DECODE_ERROR, "Decode Json Error" },
-    { StatusCode::JSON_ENCODE_ERROR, "Encode Json Error" },
-};
+
+std::map<int, std::string>& get_error_code_table() {
+    static std::map<int, std::string> m_error_code_table = {
+        { StatusCode::OK, "OK" },
+
+        { StatusCode::MODEL_INIT_FAILED, "model init failed" },
+        { StatusCode::MODEL_RUN_TIMEOUT, "model run timeout" },
+        { StatusCode::MODEL_EMPTY_INPUT_IMAGE, "model input empty" },
+        { StatusCode::MODEL_RUN_SESSION_FAILED, "model run session failed" },
+
+        { StatusCode::SERVER_INIT_FAILED, "server init failed" },
+        { StatusCode::SERVER_RUN_FAILED, "server run failed" },
+
+        { StatusCode::COMPRESS_ERROR, "compress not support" },
+        { StatusCode::UNCOMPRESS_ERROR, "uncompress error" },
+
+        { StatusCode::FILE_READ_ERROR, "file read error" },
+        { StatusCode::FILE_WRITE_ERROR, "file write error" },
+        { StatusCode::FILE_NOT_EXIST_ERROR, "file not exist error" },
+
+        { StatusCode::JSON_DECODE_ERROR, "decode json error" },
+        { StatusCode::JSON_ENCODE_ERROR, "encode sson error" },
+    };
+    return m_error_code_table;
+}
 }
 
 /***
@@ -30,8 +44,9 @@ std::map<int, std::string> _m_error_code_table = {
  * @return
  */
 std::string error_code_to_str(int error_code) {
-    auto it = impl::_m_error_code_table.find(error_code);
-    if(it == impl::_m_error_code_table.end()) {
+    auto it = impl::get_error_code_table().find(error_code);
+
+    if (it == impl::get_error_code_table().end()) {
         return "Unknown";
     } else {
         return it->second;
