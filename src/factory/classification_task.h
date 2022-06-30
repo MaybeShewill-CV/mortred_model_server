@@ -16,6 +16,7 @@
 #include "models/classification/densenet.h"
 #include "server/classification/mobilenetv2_server.h"
 #include "server/classification/resnet_server.h"
+#include "server/classification/densenet_server.h"
 
 namespace mortred {
 namespace factory {
@@ -32,6 +33,7 @@ using mortred::models::classification::DenseNet;
 
 using mortred::server::classification::MobileNetv2Server;
 using mortred::server::classification::ResNetServer;
+using mortred::server::classification::DenseNetServer;
 
 /***
  * create mobilenetv2 image classification
@@ -93,6 +95,16 @@ static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_densenet_classifier(
     const std::string& classifier_name) {
     REGISTER_AI_MODEL(DenseNet, classifier_name, INPUT, OUTPUT)
     return ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance().get_model(classifier_name);
+}
+
+/***
+ * create densenet image classification server
+ * @param detector_name
+ * @return
+ */
+static std::unique_ptr<BaseAiServer> create_densenet_cls_server(const std::string& server_name) {
+    REGISTER_AI_SERVER(DenseNetServer, server_name)
+    return ServerFactory<BaseAiServer>::get_instance().get_server(server_name);
 }
 
 }

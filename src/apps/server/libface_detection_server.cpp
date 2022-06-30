@@ -30,12 +30,6 @@ int main(int argc, char** argv) {
     }
 
     static WFFacilities::WaitGroup wait_group(1);
-    WFGlobalSettings settings = GLOBAL_SETTINGS_DEFAULT;
-    settings.compute_threads = -1;
-    settings.handler_threads = 50;
-    settings.endpoint_params.max_connections = 500;
-    settings.endpoint_params.response_timeout = 30 * 1000;
-    WORKFLOW_library_init(&settings);
 
     std::string config_file_path = argv[1];
     LOG(INFO) << "cfg file path: " << config_file_path;
@@ -47,10 +41,6 @@ int main(int argc, char** argv) {
     auto server = create_libface_det_server("libface_det_server");
     auto status = server->init(config);
     if (status != mortred::common::StatusCode::OK) {
-        LOG(INFO) << "libface detection server init failed";
-        return -1;
-    }
-    if (!server->is_successfully_initialized()) {
         LOG(INFO) << "libface detection server init failed";
         return -1;
     }

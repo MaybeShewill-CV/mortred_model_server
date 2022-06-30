@@ -1,21 +1,22 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: superpoint_fp_det_server.cpp
-* Date: 22-6-29
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: densenet_classification_server.cpp
+ * Date: 22-7-1
+ ************************************************/
 
-// superpoint feature point detection server tool
+// densenet classification server tool
 
 #include <glog/logging.h>
-#include <workflow/WFHttpServer.h>
 #include <workflow/WFFacilities.h>
+#include <workflow/WFHttpServer.h>
 
-#include "factory/feature_point_task.h"
 
-using mortred::factory::feature_point::create_superpoint_fp_server;
+#include "factory/classification_task.h"
 
-int main(int argc, char** argv) {
+using mortred::factory::classification::create_densenet_cls_server;
+
+int main(int argc, char **argv) {
 
     google::InitGoogleLogging(argv[0]);
     google::InstallFailureSignalHandler();
@@ -29,24 +30,24 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    WFFacilities::WaitGroup wait_group(1);
+    static WFFacilities::WaitGroup wait_group(1);
 
     std::string config_file_path = argv[1];
     LOG(INFO) << "cfg file path: " << config_file_path;
     auto config = toml::parse(config_file_path);
-    const auto& server_cfg = config.at("SUPERPOINT_FP_SERVER");
+    const auto &server_cfg = config.at("DENSENET_CLASSIFICATION_SERVER");
     auto port = server_cfg.at("port").as_integer();
     LOG(INFO) << "serve on port: " << port;
 
-    auto server = create_superpoint_fp_server("superpoint_fp_server");
+    auto server = create_densenet_cls_server("densenet_cls_server");
     server->init(config);
     if (server->start(port) == 0) {
-		wait_group.wait();
-		server->stop();
-	} else {
-		LOG(ERROR) << "Cannot start server";
-		return -1;
-	}
+        wait_group.wait();
+        server->stop();
+    } else {
+        LOG(ERROR) << "Cannot start server";
+        return -1;
+    }
 
     return 0;
 }
