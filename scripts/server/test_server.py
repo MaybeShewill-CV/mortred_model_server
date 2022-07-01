@@ -129,6 +129,10 @@ def main_process():
             r=r,
             t=t
         )
+        content = open('./server/locust_performance.py', 'r').readlines()
+        content[17] = 'URL = \'\'\n'
+        content[18] = 'SRC_IMAGE_PATH = \'\'\n'
+        open('./server/locust_performance.py', 'w').writelines(content)
     
     print('Complete test')
     return
