@@ -77,11 +77,11 @@ def locust_test_mode(url, src_image_path, u, r, t):
         r (_type_): _description_
         t (_type_): _description_
     """
-    content = open('locust_performance.py', 'r').readlines()
+    content = open('./server/locust_performance.py', 'r').readlines()
     content[17] = 'URL = \'{:s}\''.format(url)
     content[18] = 'SRC_IMAGE_PATH = \'{:s}\''.format(src_image_path)
-    open('locust_performance.py', 'w').writelines(content)
-    
+    open('./server/locust_performance.py', 'w').writelines(content)
+
     command = 'locust -f ./server/locust_performance.py --host={:s} --headless -u {:d} -r {:d} -t {:s}'.format(url, u, r, t)
     os.system(command=command)
 
