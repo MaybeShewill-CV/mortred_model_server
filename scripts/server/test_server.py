@@ -11,6 +11,7 @@ test server
 import argparse
 import os
 import os.path as ops
+from re import U
 import requests
 import base64
 import json
@@ -72,14 +73,17 @@ class ClientBehavior(locust.TaskSet):
         """
         simulate client
         """
+        url = URL
+        src_image_path = SRC_IMAGE_PATH
+
         def on_start(self):
             """
 
             :return:
             """
             print('client start ...')
-            self.url = URL
-            self.src_image_path = SRC_IMAGE_PATH
+            # self.url = URL
+            # self.src_image_path = SRC_IMAGE_PATH
             # print('url: {:s}'.format(self.url))
             # print('src_image_path: {:s}'.format(self.src_image_path))
 
@@ -180,7 +184,8 @@ def main_process():
         print('Start test server for model: {:s}, mode {:s}'.format(model_name, test_mode))
         URL = url
         SRC_IMAGE_PATH = source_image_path
-        ClientBehavior.on_start()
+        ClientBehavior.src_image_path = SRC_IMAGE_PATH
+        ClientBehavior.url = URL
         locust_test_mode(
             url=url,
             src_image_path=source_image_path,
