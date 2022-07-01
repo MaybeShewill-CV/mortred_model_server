@@ -149,7 +149,7 @@ def main_process():
         print('Supported servers are listed: ')
         print(CFG_MAP.keys())
         return
-    test_mode = args.test_mode
+    test_mode = args.mode
     if test_mode not in ['single', 'locust']:
         print('Only support \'single\' and \'locust\' mode')
         return
