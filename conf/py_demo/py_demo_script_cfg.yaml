@@ -1,0 +1,66 @@
+RESNET:
+    MODEL_NAME: 'resnet' # model name
+    MODE: 'single'
+    URL: 'http://localhost:8091/mortred_ai_server_v1/classification/resnet' # service url
+    SOURCE_IMAGE_PATH: '../demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG'  # source image path
+    SINGLE:
+        LOOP_TIMES: 1000
+    LOCUST:
+        U: 20
+        R: 10
+        T: '10m'
+MOBILENETV2:
+    MODEL_NAME: 'mobilenetv2' # model name
+    MODE: 'single'
+    URL: 'http://localhost:8091/mortred_ai_server_v1/classification/mobilenetv2' # service url
+    SOURCE_IMAGE_PATH: '../demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG'  # source image path
+    SINGLE:
+        LOOP_TIMES: 1000
+    LOCUST:
+        U: 20
+        R: 10
+        T: '10m'
+NANODET:
+    MODEL_NAME: 'nanodet' # model name
+    MODE: 'single'
+    URL: 'http://localhost:8091/mortred_ai_server_v1/obj_detection/nanodet' # service url
+    SOURCE_IMAGE_PATH: '../demo_data/model_test_input/object_detection/bus.jpg'  # source image path
+    SINGLE:
+        LOOP_TIMES: 1000
+    LOCUST:
+        U: 20
+        R: 10
+        T: '10m'
+YOLOV5:
+    MODEL_NAME: 'yolov5' # model name
+    MODE: 'single'
+    URL: 'http://localhost:8091/mortred_ai_server_v1/obj_detection/yolov5' # service url
+    SOURCE_IMAGE_PATH: '../demo_data/model_test_input/object_detection/bus.jpg'  # source image path
+    SINGLE:
+        LOOP_TIMES: 1000
+    LOCUST:
+        U: 20
+        R: 10
+        T: '10m'
+LIBFACE:
+    MODEL_NAME: 'libface' # model name
+    MODE: 'single'
+    URL: 'http://localhost:8091/mortred_ai_server_v1/obj_detection/libface' # service url
+    SOURCE_IMAGE_PATH: '../demo_data/model_test_input/object_detection/face_wo_mask.jpg'  # source image path
+    SINGLE:
+        LOOP_TIMES: 1000
+    LOCUST:
+        U: 20
+        R: 10
+        T: '10m'
+SUPERPOINT:
+    MODEL_NAME: 'superpoint' # model name
+    MODE: 'single'
+    URL: 'http://localhost:8091/mortred_ai_server_v1/feature_point/superpoint' # service url
+    SOURCE_IMAGE_PATH: '../demo_data/model_test_input/feature_point/test.png'  # source image path
+    SINGLE:
+        LOOP_TIMES: 1000
+    LOCUST:
+        U: 20
+        R: 10
+        T: '10m'
