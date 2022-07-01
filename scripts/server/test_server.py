@@ -78,8 +78,8 @@ class ClientBehavior(locust.TaskSet):
             :return:
             """
             print('client start ...')
-            # self.url = 'http://localhost:8091/mortred_ai_server_v1/classification/mobilenetv2'
-            # self.src_image_path = '../demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG'
+            self.url = 'http://localhost:8091/mortred_ai_server_v1/classification/mobilenetv2'
+            self.src_image_path = '../demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG'
             # print('url: {:s}'.format(self.url))
             # print('src_image_path: {:s}'.format(self.src_image_path))
 
@@ -96,11 +96,11 @@ class ClientBehavior(locust.TaskSet):
 
             :return:
             """
-            with open('../demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG', 'rb') as f:
+            with open(self.src_image_path, 'rb') as f:
                 image_data = f.read()
                 base64_data = base64.b64encode(image_data)
 
-            task_id = '../demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG' + str(time.time())
+            task_id = self.src_image_path + str(time.time())
             m2 = hashlib.md5()
             m2.update(task_id.encode())
             task_id = m2.hexdigest()
@@ -109,7 +109,7 @@ class ClientBehavior(locust.TaskSet):
                 'req_id': task_id,
             }
 
-            resp = self.client.post('http://localhost:8091/mortred_ai_server_v1/classification/mobilenetv2', data=json.dumps(post_data))
+            resp = self.client.post(self.url, data=json.dumps(post_data))
             if resp.status_code == 200:
                 print('request success')
             else:
