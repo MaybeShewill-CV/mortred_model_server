@@ -226,6 +226,11 @@ py_demo_cfg = Config(config_path='../conf/py_demo/py_demo_script_cfg.yaml')
 
 cfg_map = {
     'resnet': py_demo_cfg.RESNET,
+    'mobilenetv2': py_demo_cfg.MOBILENETV2,
+    'nanodet': py_demo_cfg.NANODET,
+    'yolov5': py_demo_cfg.YOLOV5,
+    'libface': py_demo_cfg.LIBFACE,
+    'superpoint': py_demo_cfg.SUPERPOINT,
 }
 
 
