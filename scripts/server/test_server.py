@@ -170,7 +170,7 @@ def main_process():
         u = cfg.LOCUST.U
         r = cfg.LOCUST.R
         t = cfg.LOCUST.T
-        print('Start test server for model: {:s}, mode {:s}'.format(model_name, mode))
+        print('Start test server for model: {:s}, mode {:s}'.format(model_name, test_mode))
         locust_test_mode(
             url=url,
             src_image_path=source_image_path,
