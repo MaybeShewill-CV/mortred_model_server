@@ -116,6 +116,11 @@ class ClientBehavior(locust.TaskSet):
             :return:
             """
             print('client start ...')
+            self.url = URL
+            self.src_image_path = SRC_IMAGE_PATH
+            print('url: {:s}'.format(self.url))
+            print('src_image_path: {:s}'.format(self.src_image_path))
+            raise ValueError()
 
         def on_stop(self):
             """
