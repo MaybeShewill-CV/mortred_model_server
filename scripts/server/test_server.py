@@ -23,8 +23,6 @@ import locust
 from config_utils import parse_config_utils
 
 CFG_MAP = parse_config_utils.cfg_map
-URL = ''
-SRC_IMAGE_PATH = ''
 
 
 def init_args():
@@ -69,66 +67,6 @@ def single_test_mode(url, src_image_path, loop_times):
     return
 
 
-class ClientBehavior(locust.TaskSet):
-        """
-        simulate client
-        """
-        url = URL
-        src_image_path = SRC_IMAGE_PATH
-
-        def on_start(self):
-            """
-
-            :return:
-            """
-            print('client start ...')
-            # self.url = URL
-            # self.src_image_path = SRC_IMAGE_PATH
-            # print('url: {:s}'.format(self.url))
-            # print('src_image_path: {:s}'.format(self.src_image_path))
-
-        def on_stop(self):
-            """
-
-            :return:
-            """
-            print('client stop ...')
-
-        @locust.task(1)
-        def test_server(self):
-            """
-
-            :return:
-            """
-            with open(self.src_image_path, 'rb') as f:
-                image_data = f.read()
-                base64_data = base64.b64encode(image_data)
-
-            task_id = self.src_image_path + str(time.time())
-            m2 = hashlib.md5()
-            m2.update(task_id.encode())
-            task_id = m2.hexdigest()
-            post_data = {
-                'img_data': base64_data.decode(),
-                'req_id': task_id,
-            }
-
-            resp = self.client.post(self.url, data=json.dumps(post_data))
-            if resp.status_code == 200:
-                print('request success')
-            else:
-                print('request failed')
-
-
-class WebBehavior(locust.HttpUser):
-    """
-    simulate server
-    """
-    tasks = [ClientBehavior]
-    min_wait = 10
-    max_wait = 40
-
-
 def locust_test_mode(url, src_image_path, u, r, t):
     """_summary_
 
@@ -139,10 +77,10 @@ def locust_test_mode(url, src_image_path, u, r, t):
         r (_type_): _description_
         t (_type_): _description_
     """
-    URL = url
-    SRC_IMAGE_PATH = src_image_path
-
-    command = 'locust -f ./server/test_server.py --host={:s} --headless -u {:d} -r {:d} -t {:s}'.format(url, u, r, t)
+    import locust_performance
+    locust_performance.URL = url
+    locust_performance.SRC_IMAGE_PATH = src_image_path
+    command = 'locust -f ./server/locust_performance.py --host={:s} --headless -u {:d} -r {:d} -t {:s}'.format(url, u, r, t)
     os.system(command=command)
 
     return
@@ -182,10 +120,6 @@ def main_process():
         r = cfg.LOCUST.R
         t = cfg.LOCUST.T
         print('Start test server for model: {:s}, mode {:s}'.format(model_name, test_mode))
-        URL = url
-        SRC_IMAGE_PATH = source_image_path
-        ClientBehavior.src_image_path = SRC_IMAGE_PATH
-        ClientBehavior.url = URL
         locust_test_mode(
             url=url,
             src_image_path=source_image_path,
