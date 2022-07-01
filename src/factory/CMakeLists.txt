@@ -10,5 +10,7 @@ add_library(factory SHARED ${FACTORY_LIB_SRC})
 target_link_libraries(
     factory
     common
+    models
+    server
 )
 set_target_properties(factory PROPERTIES LINKER_LANGUAGE CXX)
