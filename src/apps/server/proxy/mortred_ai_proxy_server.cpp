@@ -1,11 +1,11 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: superpoint_upstream_proxy_server.cpp
- * Date: 22-6-29
+ * File: mortred_ai_proxy_server.cpp
+ * Date: 22-7-1
  ************************************************/
 
-// superpoint feature point detection server tool
+// mortred ai proxy server tool
 
 #include "glog/logging.h"
 #include "workflow/HttpMessage.h"
@@ -124,11 +124,11 @@ int main(int argc, char *argv[]) {
     UpstreamManager::upstream_create_consistent_hash("jinq.ai.server", nullptr);
     AddressParams address_params = ADDRESS_PARAMS_DEFAULT;
     address_params.weight = 1;
-    // UpstreamManager::upstream_add_server("jinq.ai.server", "172.18.19.203:8094", &address_params);
-    UpstreamManager::upstream_add_server("jinq.ai.server", "192.168.42.198:8094", &address_params);
-    UpstreamManager::upstream_add_server("jinq.ai.server", "192.168.42.199:8094", &address_params);
-    UpstreamManager::upstream_add_server("jinq.ai.server", "192.168.42.204:8094", &address_params);
+    address_params.server_type = 0;
     UpstreamManager::upstream_add_server("jinq.ai.server", "192.168.42.212:8094", &address_params);
+    address_params.weight = 1;
+    address_params.server_type = 1;
+    UpstreamManager::upstream_add_server("jinq.ai.server", "192.168.42.204:8094", &address_params);
 
     struct WFServerParams params = HTTP_SERVER_PARAMS_DEFAULT;
     params.request_size_limit = 24 * 1024 * 1024;
