@@ -22,8 +22,8 @@ import locust
 from config_utils import parse_config_utils
 
 CFG_MAP = parse_config_utils.cfg_map
-URL = 'http://localhost:8091/mortred_ai_server_v1/classification/mobilenetv2'
-SRC_IMAGE_PATH = '../demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG'
+URL = ''
+SRC_IMAGE_PATH = ''
 
 
 def init_args():
@@ -78,8 +78,8 @@ class ClientBehavior(locust.TaskSet):
             :return:
             """
             print('client start ...')
-            self.url = 'http://localhost:8091/mortred_ai_server_v1/classification/mobilenetv2'
-            self.src_image_path = '../demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG'
+            self.url = URL
+            self.src_image_path = SRC_IMAGE_PATH
             # print('url: {:s}'.format(self.url))
             # print('src_image_path: {:s}'.format(self.src_image_path))
 
