@@ -72,43 +72,6 @@ class ClientBehavior(locust.TaskSet):
         """
         simulate client
         """
-        def __init__(self):
-            super().__init__(locust.TaskSet)
-            self.url = ''
-            self.src_image_path
-
-        @property
-        def url(self):
-            """
-            url
-            """
-            return self.url
-
-        @url.setter
-        def url(self, value):
-            """_summary_
-
-            Args:
-                value (_type_): _description_
-            """
-            self.url = value
-
-        @property
-        def src_image_path(self):
-            """
-            url
-            """
-            return self.src_image_path
-
-        @src_image_path.setter
-        def src_image_path(self, value):
-            """_summary_
-
-            Args:
-                value (_type_): _description_
-            """
-            self.src_image_path = value
-
         def on_start(self):
             """
 
@@ -133,11 +96,11 @@ class ClientBehavior(locust.TaskSet):
 
             :return:
             """
-            with open(SRC_IMAGE_PATH, 'rb') as f:
+            with open('../demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG', 'rb') as f:
                 image_data = f.read()
                 base64_data = base64.b64encode(image_data)
 
-            task_id = SRC_IMAGE_PATH + str(time.time())
+            task_id = '../demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG' + str(time.time())
             m2 = hashlib.md5()
             m2.update(task_id.encode())
             task_id = m2.hexdigest()
@@ -146,7 +109,7 @@ class ClientBehavior(locust.TaskSet):
                 'req_id': task_id,
             }
 
-            resp = self.client.post(URL, data=json.dumps(post_data))
+            resp = self.client.post('http://localhost:8091/mortred_ai_server_v1/classification/mobilenetv2', data=json.dumps(post_data))
             if resp.status_code == 200:
                 print('request success')
             else:
