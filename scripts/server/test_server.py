@@ -24,7 +24,8 @@ import locust
 from config_utils import parse_config_utils
 
 CFG_MAP = parse_config_utils.cfg_map
-
+URL = ''
+SRC_IMAGE_PATH = ''
 
 def init_args():
     """
@@ -129,11 +130,11 @@ class ClientBehavior(locust.TaskSet):
 
             :return:
             """
-            with open(self.src_image_path, 'rb') as f:
+            with open(SRC_IMAGE_PATH, 'rb') as f:
                 image_data = f.read()
                 base64_data = base64.b64encode(image_data)
 
-            task_id = self.src_image_path + str(time.time())
+            task_id = SRC_IMAGE_PATH + str(time.time())
             m2 = hashlib.md5()
             m2.update(task_id.encode())
             task_id = m2.hexdigest()
@@ -142,7 +143,7 @@ class ClientBehavior(locust.TaskSet):
                 'req_id': task_id,
             }
 
-            resp = self.client.post(self.url, data=json.dumps(post_data))
+            resp = self.client.post(URL, data=json.dumps(post_data))
             if resp.status_code == 200:
                 print('request success')
             else:
@@ -168,9 +169,9 @@ def locust_test_mode(url, src_image_path, u, r, t):
         r (_type_): _description_
         t (_type_): _description_
     """
-    ClientBehavior.url = url
-    ClientBehavior.src_image_path = src_image_path
-    
+    URL = url
+    SRC_IMAGE_PATH = src_image_path
+
     command = 'locust -f ./server/test_server.py --host={:s} --headless -u {:d} -r {:d} -t {:s}'.format(url, u, r, t)
     os.system(command=command)
 
