@@ -68,21 +68,47 @@ def single_test_mode(url, src_image_path, loop_times):
     return
 
 
-def locust_test_mode(url, src_image_path, u, r, t):
-    """_summary_
-
-    Args:
-        url (_type_): _description_
-        src_image_path (_type_): _description_
-        u (_type_): _description_
-        r (_type_): _description_
-        t (_type_): _description_
-    """
-
-    class _ClientBehavior(locust.TaskSet):
+class ClientBehavior(locust.TaskSet):
         """
         simulate client
         """
+        def __init__(self):
+            super().__init__(locust.TaskSet)
+            self.url = ''
+            self.src_image_path
+
+        @property
+        def url(self):
+            """
+            url
+            """
+            return self.url
+
+        @url.setter
+        def url(self, value):
+            """_summary_
+
+            Args:
+                value (_type_): _description_
+            """
+            self.url = value
+
+        @property
+        def src_image_path(self):
+            """
+            url
+            """
+            return self.src_image_path
+
+        @src_image_path.setter
+        def src_image_path(self, value):
+            """_summary_
+
+            Args:
+                value (_type_): _description_
+            """
+            self.src_image_path = value
+
         def on_start(self):
             """
 
@@ -103,11 +129,11 @@ def locust_test_mode(url, src_image_path, u, r, t):
 
             :return:
             """
-            with open(src_image_path, 'rb') as f:
+            with open(self.src_image_path, 'rb') as f:
                 image_data = f.read()
                 base64_data = base64.b64encode(image_data)
 
-            task_id = src_image_path + str(time.time())
+            task_id = self.src_image_path + str(time.time())
             m2 = hashlib.md5()
             m2.update(task_id.encode())
             task_id = m2.hexdigest()
@@ -116,21 +142,35 @@ def locust_test_mode(url, src_image_path, u, r, t):
                 'req_id': task_id,
             }
 
-            resp = self.client.post(url, data=json.dumps(post_data))
+            resp = self.client.post(self.url, data=json.dumps(post_data))
             if resp.status_code == 200:
                 print('request success')
             else:
                 print('request failed')
 
 
-    class _WebBehavior(locust.HttpUser):
-        """
-        simulate server
-        """
-        tasks = [_ClientBehavior]
-        min_wait = 10
-        max_wait = 40
+class WebBehavior(locust.HttpUser):
+    """
+    simulate server
+    """
+    tasks = [ClientBehavior]
+    min_wait = 10
+    max_wait = 40
 
+
+def locust_test_mode(url, src_image_path, u, r, t):
+    """_summary_
+
+    Args:
+        url (_type_): _description_
+        src_image_path (_type_): _description_
+        u (_type_): _description_
+        r (_type_): _description_
+        t (_type_): _description_
+    """
+    ClientBehavior.url = url
+    ClientBehavior.src_image_path = src_image_path
+    
     command = 'locust -f ./server/test_server.py --host={:s} --headless -u {:d} -r {:d} -t {:s}'.format(url, u, r, t)
     os.system(command=command)
 
