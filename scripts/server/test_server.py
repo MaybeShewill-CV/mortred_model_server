@@ -9,10 +9,8 @@
 test server
 """
 import argparse
-from ast import main
 import os
 import os.path as ops
-from statistics import mode
 import requests
 import base64
 import json
