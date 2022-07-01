@@ -160,7 +160,7 @@ def main_process():
     source_image_path = cfg.SOURCE_IMAGE_PATH
     if test_mode == 'single':
         loop_times = cfg.SINGLE.LOOP_TIMES
-        print('Start test server for model: {:s}, mode {:s}'.format(model_name, mode))
+        print('Start test server for model: {:s}, mode {:s}'.format(model_name, test_mode))
         single_test_mode(
             url=url,
             src_image_path=source_image_path,
