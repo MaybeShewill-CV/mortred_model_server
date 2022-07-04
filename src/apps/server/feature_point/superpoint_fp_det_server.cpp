@@ -8,7 +8,6 @@
 // superpoint feature point detection server tool
 
 #include <glog/logging.h>
-#include <workflow/WFHttpServer.h>
 #include <workflow/WFFacilities.h>
 
 #include "factory/feature_point_task.h"

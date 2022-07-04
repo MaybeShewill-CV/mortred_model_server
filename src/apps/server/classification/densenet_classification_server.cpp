@@ -9,8 +9,6 @@
 
 #include <glog/logging.h>
 #include <workflow/WFFacilities.h>
-#include <workflow/WFHttpServer.h>
-
 
 #include "factory/classification_task.h"
 

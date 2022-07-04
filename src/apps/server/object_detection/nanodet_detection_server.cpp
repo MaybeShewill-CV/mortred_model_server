@@ -8,7 +8,6 @@
 // nanodet detection server tool
 
 #include <glog/logging.h>
-#include <workflow/WFHttpServer.h>
 #include <workflow/WFFacilities.h>
 
 #include "factory/obj_detection_task.h"

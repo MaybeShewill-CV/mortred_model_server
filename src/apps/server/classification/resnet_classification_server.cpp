@@ -8,7 +8,6 @@
 // resnet classification server tool
 
 #include <glog/logging.h>
-#include <workflow/WFHttpServer.h>
 #include <workflow/WFFacilities.h>
 
 #include "factory/classification_task.h"
