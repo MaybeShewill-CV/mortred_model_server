@@ -1,11 +1,11 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: attentive_gan_derain_server.cpp
+* File: enlighten_gan_server.cpp
 * Date: 22-7-04
 ************************************************/
 
-#include "attentive_gan_derain_server.h"
+#include "enlighten_gan_server.h"
 
 #include "glog/logging.h"
 #include "toml/toml.hpp"
@@ -32,14 +32,14 @@ using jinq::server::BaseAiServerImpl;
 
 namespace enhancement {
 
-using jinq::factory::enhancement::create_attentivegan_enhancementor;
+using jinq::factory::enhancement::create_enlightengan_enhancementor;
 using jinq::models::io_define::common_io::base64_input;
 using jinq::models::io_define::enhancement::std_enhancement_output;
-using AttentiveGanPtr = decltype(create_attentivegan_enhancementor<base64_input, std_enhancement_output>(""));
+using EnlightenGanPtr = decltype(create_enlightengan_enhancementor<base64_input, std_enhancement_output>(""));
 
 /************ Impl Declaration ************/
 
-class AttentiveGanDerainServer::Impl : public BaseAiServerImpl<AttentiveGanPtr, std_enhancement_output> {
+class EnlightenGanServer::Impl : public BaseAiServerImpl<EnlightenGanPtr, std_enhancement_output> {
 public:
     /***
     *
@@ -69,14 +69,14 @@ protected:
  * @param config
  * @return
  */
-StatusCode AttentiveGanDerainServer::Impl::init(const decltype(toml::parse("")) &config) {
+StatusCode EnlightenGanServer::Impl::init(const decltype(toml::parse("")) &config) {
     // init working queue
-    auto server_section = config.at("ATTENTIVE_GAN_DERAIN_SERVER");
+    auto server_section = config.at("ENLIGHTEN_GAN_SERVER");
     auto worker_nums = static_cast<int>(server_section.at("worker_nums").as_integer());
-    auto model_cfg_path = config.at("ATTENTIVE_GAN_DERAIN").at("model_config_file_path").as_string();
+    auto model_cfg_path = config.at("ENLIGHTEN_GAN").at("model_config_file_path").as_string();
 
     if (!FilePathUtil::is_file_exist(model_cfg_path)) {
-        LOG(FATAL) << "attentive gan model config file not exist: " << model_cfg_path;
+        LOG(FATAL) << "enlighten gan model config file not exist: " << model_cfg_path;
         _m_successfully_initialized = false;
         return StatusCode::SERVER_INIT_FAILED;
     }
@@ -84,8 +84,8 @@ StatusCode AttentiveGanDerainServer::Impl::init(const decltype(toml::parse("")) 
     auto model_cfg = toml::parse(model_cfg_path);
 
     for (int index = 0; index < worker_nums; ++index) {
-        auto worker = create_attentivegan_enhancementor<base64_input, std_enhancement_output>(
-                "worker_" + std::to_string(index + 1));
+        auto worker = create_enlightengan_enhancementor<base64_input, std_enhancement_output>(
+                          "worker_" + std::to_string(index + 1));
 
         if (!worker->is_successfully_initialized()) {
             if (worker->init(model_cfg) != StatusCode::OK) {
@@ -120,7 +120,7 @@ StatusCode AttentiveGanDerainServer::Impl::init(const decltype(toml::parse("")) 
     handler_threads = static_cast<int>(server_section.at("handler_threads").as_integer());
 
     _m_successfully_initialized = true;
-    LOG(INFO) << "attentive gan derain server init successfully";
+    LOG(INFO) << "enlighten gan server init successfully";
     return StatusCode::OK;
 }
 
@@ -131,7 +131,7 @@ StatusCode AttentiveGanDerainServer::Impl::init(const decltype(toml::parse("")) 
  * @param model_output
  * @return
  */
-std::string AttentiveGanDerainServer::Impl::make_response_body(
+std::string EnlightenGanServer::Impl::make_response_body(
     const std::string& task_id,
     const StatusCode& status,
     const std_enhancement_output& model_output) {
@@ -167,26 +167,26 @@ std::string AttentiveGanDerainServer::Impl::make_response_body(
 /***
  *
  */
-AttentiveGanDerainServer::AttentiveGanDerainServer() {
+EnlightenGanServer::EnlightenGanServer() {
     _m_impl = std::make_unique<Impl>();
 }
 
 /***
  *
  */
-AttentiveGanDerainServer::~AttentiveGanDerainServer() = default;
+EnlightenGanServer::~EnlightenGanServer() = default;
 
 /***
  *
  * @param cfg
  * @return
  */
-jinq::common::StatusCode AttentiveGanDerainServer::init(const decltype(toml::parse("")) &config) {
+jinq::common::StatusCode EnlightenGanServer::init(const decltype(toml::parse("")) &config) {
     // init impl
     auto status = _m_impl->init(config);
 
     if (status != StatusCode::OK) {
-        LOG(INFO) << "init attentive gan derain server failed";
+        LOG(INFO) << "init enlighten gan derain server failed";
         return status;
     }
 
@@ -199,8 +199,8 @@ jinq::common::StatusCode AttentiveGanDerainServer::init(const decltype(toml::par
     WORKFLOW_library_init(&settings);
 
     auto&& proc = std::bind(
-            &AttentiveGanDerainServer::Impl::serve_process, std::cref(this->_m_impl), std::placeholders::_1);
-    _m_server = std::make_unique<WFHttpServer>( proc);
+                      &EnlightenGanServer::Impl::serve_process, std::cref(this->_m_impl), std::placeholders::_1);
+    _m_server = std::make_unique<WFHttpServer>(proc);
 
     return StatusCode::OK;
 }
@@ -209,7 +209,7 @@ jinq::common::StatusCode AttentiveGanDerainServer::init(const decltype(toml::par
  *
  * @param task
  */
-void AttentiveGanDerainServer::serve_process(WFHttpTask* task) {
+void EnlightenGanServer::serve_process(WFHttpTask* task) {
     return _m_impl->serve_process(task);
 }
 
@@ -217,7 +217,7 @@ void AttentiveGanDerainServer::serve_process(WFHttpTask* task) {
  *
  * @return
  */
-bool AttentiveGanDerainServer::is_successfully_initialized() const {
+bool EnlightenGanServer::is_successfully_initialized() const {
     return _m_impl->is_successfully_initialized();
 }
 }

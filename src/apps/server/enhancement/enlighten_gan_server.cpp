@@ -5,14 +5,14 @@
 * Date: 22-7-04
 ************************************************/
 
-// attentive gan derain server tool
+// enlighten gan derain server tool
 
 #include <glog/logging.h>
 #include <workflow/WFFacilities.h>
 
 #include "factory/enhancement_task.h"
 
-using jinq::factory::enhancement::create_attentivegan_derain_server;
+using jinq::factory::enhancement::create_enlightengan_server;
 
 int main(int argc, char** argv) {
 
@@ -33,11 +33,11 @@ int main(int argc, char** argv) {
     std::string config_file_path = argv[1];
     LOG(INFO) << "cfg file path: " << config_file_path;
     auto config = toml::parse(config_file_path);
-    const auto& server_cfg = config.at("ATTENTIVE_GAN_DERAIN_SERVER");
+    const auto& server_cfg = config.at("ENLIGHTEN_GAN_SERVER");
     auto port = server_cfg.at("port").as_integer();
     LOG(INFO) << "serve on port: " << port;
 
-    auto server = create_attentivegan_derain_server("attentive_gan_derain_server");
+    auto server = create_enlightengan_server("enlighten_gan_server");
     server->init(config);
     if (server->start(port) == 0) {
 		wait_group.wait();

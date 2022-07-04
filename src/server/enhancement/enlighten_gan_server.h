@@ -1,12 +1,12 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: attentive_gan_derain_server.h
+* File: enlighten_gan_server.h
 * Date: 22-7-04
 ************************************************/
 
-#ifndef MM_AI_SERVER_ATTENTIVEGANDERRAINSERVER_H
-#define MM_AI_SERVER_ATTENTIVEGANDERRAINSERVER_H
+#ifndef MM_AI_SERVER_ENLIGHTENGANSERVER_H
+#define MM_AI_SERVER_ENLIGHTENGANSERVER_H
 
 #include <memory>
 
@@ -15,32 +15,32 @@
 namespace jinq {
 namespace server {
 namespace enhancement {
-class AttentiveGanDerainServer : public jinq::server::BaseAiServer {
+class EnlightenGanServer : public jinq::server::BaseAiServer {
 public:
 
     /***
     * 构造函数
     * @param config
     */
-    AttentiveGanDerainServer();
+    EnlightenGanServer();
 
     /***
      *
      */
-    ~AttentiveGanDerainServer() override;
+    ~EnlightenGanServer() override;
 
     /***
     * 赋值构造函数
     * @param transformer
     */
-    AttentiveGanDerainServer(const AttentiveGanDerainServer& transformer) = delete;
+    EnlightenGanServer(const EnlightenGanServer& transformer) = delete;
 
     /***
      * 复制构造函数
      * @param transformer
      * @return
      */
-    AttentiveGanDerainServer& operator=(const AttentiveGanDerainServer& transformer) = delete;
+    EnlightenGanServer& operator=(const EnlightenGanServer& transformer) = delete;
 
     /***
      *
@@ -69,4 +69,4 @@ private:
 }
 }
 
-#endif //MM_AI_SERVER_ATTENTIVEGANDERRAINSERVER_H
+#endif //MM_AI_SERVER_ENLIGHTENGANSERVER_H
