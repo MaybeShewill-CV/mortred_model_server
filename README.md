@@ -11,3 +11,7 @@ The three major components are illustrated on the architecture picture bellow.
 A quick overview and examples for both serving and model benchmarking are provided below. Detailed documentation and examples will be provided in the docs folder.
 
 You're welcomed to ask questions and help me to make it better!
+
+# Reference
+* https://github.com/sogou/workflow
+* https://github.com/alibaba/MNN
