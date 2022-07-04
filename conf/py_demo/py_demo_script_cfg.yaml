@@ -64,3 +64,47 @@ SUPERPOINT:
         U: 20
         R: 10
         T: '10m'
+ATTENTIVE_GAN:
+    MODEL_NAME: 'attentive_gan' # model name
+    MODE: 'single'
+    URL: 'http://localhost:8091/mortred_ai_server_v1/enhancement/attentive_gan_derain' # service url
+    SOURCE_IMAGE_PATH: '../demo_data/model_test_input/enhancement/derain/test_1.png'  # source image path
+    SINGLE:
+        LOOP_TIMES: 1000
+    LOCUST:
+        U: 20
+        R: 10
+        T: '10m'
+ENLIGHTEN_GAN:
+    MODEL_NAME: 'enlighten_gan' # model name
+    MODE: 'single'
+    URL: 'http://localhost:8091/mortred_ai_server_v1/enhancement/enlighten_gan' # service url
+    SOURCE_IMAGE_PATH: '../demo_data/model_test_input/enhancement/low_light/lol_test_1.png'  # source image path
+    SINGLE:
+        LOOP_TIMES: 1000
+    LOCUST:
+        U: 20
+        R: 10
+        T: '10m'
+BISENETV2:
+    MODEL_NAME: 'bisenetv2' # model name
+    MODE: 'single'
+    URL: 'http://localhost:8091/mortred_ai_server_v1/scene_segmentation/bisenetv2' # service url
+    SOURCE_IMAGE_PATH: '../demo_data/model_test_input/scene_segmentation/cityscapes_test.png'  # source image path
+    SINGLE:
+        LOOP_TIMES: 1000
+    LOCUST:
+        U: 20
+        R: 10
+        T: '10m'
+DBTEXT:
+    MODEL_NAME: 'dbtext' # model name
+    MODE: 'single'
+    URL: 'http://localhost:8091/mortred_ai_server_v1/ocr/dbtext' # service url
+    SOURCE_IMAGE_PATH: '../demo_data/model_test_input/ocr/railway_ticket.png'  # source image path
+    SINGLE:
+        LOOP_TIMES: 1000
+    LOCUST:
+        U: 20
+        R: 10
+        T: '10m'

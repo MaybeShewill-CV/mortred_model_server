@@ -40,9 +40,12 @@ endforeach()
 # build server app
 set(MODEL_SERVER_APP_LIST
     classification
+    enhancement
     feature_point
     object_detection
+    ocr
     proxy
+    scene_segmentation
 )
 
 foreach(dir_name ${MODEL_SERVER_APP_LIST})
