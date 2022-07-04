@@ -202,15 +202,13 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         task->get_resp()->append_output_body("<html>Welcome to jinq ai server</html>");
         return;
     }
-
     // hello world message
-    if (strcmp(task->get_req()->get_request_uri(), "/hello_world") == 0) {
+    else if (strcmp(task->get_req()->get_request_uri(), "/hello_world") == 0) {
         task->get_resp()->append_output_body("<html>Hello World !!!</html>");
         return;
     }
-
     // model service
-    if (strcmp(task->get_req()->get_request_uri(), _m_server_uri.c_str()) == 0) {
+    else if (strcmp(task->get_req()->get_request_uri(), _m_server_uri.c_str()) == 0) {
         // parse request body
         auto* req = task->get_req();
         auto* resp = task->get_resp();
@@ -233,6 +231,10 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         auto&& go_proc_cb = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb, this, serve_task);
         serve_task->set_callback(go_proc_cb);
         *series << serve_task;
+    }
+    // not found valid url
+    else {
+        task->get_resp()->append_output_body("<html>404 Not Found</html>");
     }
 }
 
