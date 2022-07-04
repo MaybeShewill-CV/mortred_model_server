@@ -154,10 +154,14 @@ std::string AttentiveGanDerainServer::Impl::make_response_body(
     writer.Key("data");
     writer.StartObject();
     writer.Key("enhance_result");
-    std::vector<uchar> imencode_buffer;
-    cv::imencode(".jpg", model_output.enhancement_result, imencode_buffer);
-    auto output_image_data = Base64::base64_encode(imencode_buffer.data(), imencode_buffer.size());
-    writer.String(output_image_data.c_str());
+    if (model_output.enhancement_result.empty()) {
+        writer.String("");
+    } else {
+        std::vector<uchar> imencode_buffer;
+        cv::imencode(".jpg", model_output.enhancement_result, imencode_buffer);
+        auto output_image_data = Base64::base64_encode(imencode_buffer.data(), imencode_buffer.size());
+        writer.String(output_image_data.c_str());
+    }
     writer.EndObject();
     writer.EndObject();
 
