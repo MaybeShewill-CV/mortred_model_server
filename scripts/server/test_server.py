@@ -61,7 +61,7 @@ def single_test_mode(url, src_image_path, loop_times):
     for i in range(loop_times):
         try:
             resp = requests.post(url=url, data=json.dumps(post_data))
-            print(resp.text)
+            print(resp.text[:200])
         except Exception as e:
             print(e)
     return

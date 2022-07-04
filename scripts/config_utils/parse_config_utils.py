@@ -231,6 +231,10 @@ cfg_map = {
     'yolov5': py_demo_cfg.YOLOV5,
     'libface': py_demo_cfg.LIBFACE,
     'superpoint': py_demo_cfg.SUPERPOINT,
+    'attentive_gan': py_demo_cfg.ATTENTIVE_GAN,
+    'enlighten_gan': py_demo_cfg.ENLIGHTEN_GAN,
+    'bisenetv2': py_demo_cfg.BISENETV2,
+    'dbtext': py_demo_cfg.DBTEXT,
 }
 
 
