@@ -4,8 +4,8 @@ Morted AI Model Server is a flexible and easy to use tool for serving deep learn
 
 The three major components are illustrated on the architecture picture bellow.
 
-<p align="center">
-  <img src='./resources/images/simple_architecture.png' alt='simple_architecture' height="450px" width="550px">
+<p align="left">
+  <img src='./resources/images/simple_architecture.png' alt='simple_architecture' height="500px" width="600px">
 </p>
 
 A quick overview and examples for both serving and model benchmarking are provided below. Detailed documentation and examples will be provided in the docs folder.
@@ -21,11 +21,16 @@ You're welcomed to ask questions and help me to make it better!
 
 ## Quick Start
 
-Before proceeding further with this document, make sure you have the following prerequisites.
-1.Make sure you have CUDA&GPU&Driver rightly installed. You may refer to [this](https://developer.nvidia.com/cuda-toolkit) to install them.
-2.Make sure you have MNN installed. For install instruction you may find some help [here](https://www.yuque.com/mnn/en/build_linux). MNN-2.0.0's cuda backend was not supported for now. You'd better use MNN-1.2.0 release version to have both cpu and cuda computation backend. The bugs in MNN-2.0.0 remained here will be fixed as soon as possible.
+Before proceeding further with this document, make sure you have the following prerequisites
+
+1.Make sure you have CUDA&GPU&Driver rightly installed. You may refer to [this](https://developer.nvidia.com/cuda-toolkit) to install them
+
+2.Make sure you have MNN installed. For install instruction you may find some help [here](https://www.yuque.com/mnn/en/build_linux). MNN-2.0.0's cuda backend was not supported for now. You'd better use MNN-1.2.0 release version to have both cpu and cuda computation backend. The bugs in MNN-2.0.0 remained here will be fixed as soon as possible
+
 3.Make sure you have WORKFLOW installed. For install instruction you may find some help [here](https://github.com/sogou/workflow)
+
 4.Make sure you have OPENCV installed. For install instruction you may find some help [here](https://docs.opencv.org/4.x/d7/d9f/tutorial_linux_install.html)
+
 5.Make sure your GCC tookit support cpp-11
 
 After all prerequisites are settled down you may start to build the mortred ai server frame work.
