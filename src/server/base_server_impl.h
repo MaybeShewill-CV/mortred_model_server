@@ -231,10 +231,12 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         auto&& go_proc_cb = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb, this, serve_task);
         serve_task->set_callback(go_proc_cb);
         *series << serve_task;
+        return;
     }
     // not found valid url
     else {
         task->get_resp()->append_output_body("<html>404 Not Found</html>");
+        return;
     }
 }
 
