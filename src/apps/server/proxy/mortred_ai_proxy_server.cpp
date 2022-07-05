@@ -91,7 +91,6 @@ void process(WFHttpTask *proxy_task) {
     context->is_keep_alive = req->is_keep_alive();
     char proxy_url[128];
     sprintf(proxy_url, "http://mortred.ai.server%s", req->get_request_uri());
-    LOG(INFO) << "proxy task url: " << proxy_url;
     http_task = WFTaskFactory::create_http_task(proxy_url, 0, 0, http_callback);
     const void *body;
     size_t len;
@@ -101,7 +100,6 @@ void process(WFHttpTask *proxy_task) {
     req->get_parsed_body(&body, &len);
     req->append_output_body_nocopy(body, len);
     *http_task->get_req() = std::move(*req);
-    LOG(INFO) << "http task url: " << http_task->get_req()->get_request_uri();
 
     /* also, limit the remote webserver response size. */
     http_task->get_resp()->set_size_limit(200 * 1024 * 1024);
