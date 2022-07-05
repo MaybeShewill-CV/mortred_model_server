@@ -220,10 +220,10 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         auto* ctx = new seriex_ctx;
         ctx->response = resp;
         series->set_context(ctx);
-//        series->set_callback([](const SeriesWork * series) {
-//            delete (seriex_ctx*)series->get_context();
-//        });
-        // do classification
+        // series->set_callback([](const SeriesWork * series) {
+            // delete (seriex_ctx*)series->get_context();
+        // });
+        // do model work
         auto&& go_proc = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work, this, cls_task_req, ctx);
         auto* serve_task = WFTaskFactory::create_timedgo_task(
                 0, _m_model_run_timeout * 1e6, _m_server_uri,
