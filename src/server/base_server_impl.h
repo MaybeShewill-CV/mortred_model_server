@@ -113,6 +113,7 @@ protected:
         std::string task_received_ts;
         std::string task_finished_ts;
         bool is_task_req_valid = false;
+        bool is_go_proc_finished = false;
         double worker_run_time_consuming = 0; // ms
         double find_worker_time_consuming = 0; // ms
         MODEL_OUTPUT model_output;
@@ -220,9 +221,11 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         auto* ctx = new seriex_ctx;
         ctx->response = resp;
         series->set_context(ctx);
-        // series->set_callback([](const SeriesWork * series) {
-            // delete (seriex_ctx*)series->get_context();
-        // });
+        series->set_callback([](const SeriesWork * series) {
+            auto* ctx = (seriex_ctx*)series->get_context();
+            while (!ctx->is_go_proc_finished) {ctx = (seriex_ctx*)series->get_context();}
+            delete (seriex_ctx*)series->get_context();
+        });
         // do model work
         auto&& go_proc = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work, this, cls_task_req, ctx);
         auto* serve_task = WFTaskFactory::create_timedgo_task(
@@ -290,6 +293,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     auto task_finish_ts = Timestamp::now();
     ctx->task_finished_ts = task_finish_ts.to_format_str();
     ctx->worker_run_time_consuming = (task_finish_ts - task_receive_ts) * 1000;
+    ctx->is_go_proc_finished = true;
 }
 
 /***
