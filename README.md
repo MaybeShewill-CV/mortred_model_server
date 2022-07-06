@@ -1,4 +1,4 @@
-# Mortred AI Model Web Server
+<div align="center"><font size='8' color='green'><img align="center" width = "50" height = "50" src="./resources/images/icon.png">Mortred AI Model Web Server</div></font></img>  
 
 Morted AI Model Server is a flexible and easy to use tool for serving deep learning models. Models trained by `tensorflow/pytorch` will be deployed via [MNN](https://github.com/alibaba/MNN) toolkit and served as a web server through [workflow](https://github.com/sogou/workflow) framework finally.
 
@@ -85,6 +85,34 @@ You should see the mobilenetv2 model benchmark profile as follows:
 <p align="left">
   <img src='./resources/images/mobilenetv2_demo_benchmark.png' alt='mobilenetv2_demo_benchmark'>
 </p>
+
+## Benchmark
+
+The benchmark test environment is as follows：
+
+**OS:** Ubuntu 18.04.5 LTS / 5.4.0-53-generic
+
+**MEMORY:** 32G DIMM DDR4 Synchronous 2666 MHz
+
+**CPU:** Intel(R) Core(TM) i5-10400 CPU @ 2.90GHz
+
+**GCC:** gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0
+
+**GPU:** GeForce RTX 3080
+
+**CUDA:** CUDA Version: 11.1
+
+**GPU Driver:** Driver Version: 455.23.04
+
+### Model Inference Benchmark
+
+All models loop several times to avoid the influence of gpu's warmup and only model's inference time has been counted.
+
+`Benchmark Code Snappit`
+![benchmakr_code_snappit](./resources/images/benchmark_code_snappit.png)
+
+* [Details Of Model's Benchmark](./docs/)
+
 
 ## Reference
 
