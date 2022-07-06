@@ -42,7 +42,7 @@ public:
     * @param cfg_file_path
     * @return
     */
-    StatusCode init(const decltype(toml::parse(""))& config);
+    StatusCode init(const decltype(toml::parse(""))& config) override;
 
 protected:
     /***
@@ -208,7 +208,6 @@ YoloV5DetServer::~YoloV5DetServer() = default;
 jinq::common::StatusCode YoloV5DetServer::init(const decltype(toml::parse("")) &config) {
     // init impl
     auto status = _m_impl->init(config);
-
     if (status != StatusCode::OK) {
         LOG(INFO) << "init yolov5 detection server failed";
         return status;
@@ -226,8 +225,7 @@ jinq::common::StatusCode YoloV5DetServer::init(const decltype(toml::parse("")) &
             &YoloV5DetServer::Impl::serve_process, std::cref(this->_m_impl), std::placeholders::_1);
     _m_server = std::make_unique<WFHttpServer>(proc);
 
-    // init _m_impl
-    return _m_impl->init(config);
+    return StatusCode::OK;
 }
 
 /***
