@@ -221,12 +221,12 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         auto* ctx = new seriex_ctx;
         ctx->response = resp;
         series->set_context(ctx);
-        series->set_callback([](const SeriesWork * series) {
-            auto* ctx = (seriex_ctx*)series->get_context();
-            while (!ctx->is_go_proc_finished) {ctx = (seriex_ctx*)series->get_context();}
-            delete (seriex_ctx*)series->get_context();
-        });
         // do model work
+        auto* counter = WFTaskFactory::create_counter_task("release_ctx", 1, [](const WFCounterTask* task){
+            delete (seriex_ctx*)series_of(task)->get_context();
+            // LOG(INFO) << "release series context resource";
+        });
+        counter->start();
         auto&& go_proc = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work, this, cls_task_req, ctx);
         auto* serve_task = WFTaskFactory::create_timedgo_task(
                 0, _m_model_run_timeout * 1e6, _m_server_uri,
@@ -294,6 +294,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     ctx->task_finished_ts = task_finish_ts.to_format_str();
     ctx->worker_run_time_consuming = (task_finish_ts - task_receive_ts) * 1000;
     ctx->is_go_proc_finished = true;
+    WFTaskFactory::count_by_name("release_ctx");
 }
 
 /***
