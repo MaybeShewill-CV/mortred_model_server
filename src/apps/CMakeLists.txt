@@ -28,14 +28,14 @@ foreach(dir_name ${MODEL_BENCHMARK_LIST})
 endforeach()
 
 # build fast batch process app
-set(MODEL_FAST_BATCH_PROCESS_LIST
-    enlightengan_fast_batch_process
-)
+# set(MODEL_FAST_BATCH_PROCESS_LIST
+#     enlightengan_fast_batch_process
+# )
 
-foreach(src ${MODEL_FAST_BATCH_PROCESS_LIST})
-    add_executable(${src}.out ./fast_batch_process/${src}.cpp)
-    target_link_libraries(${src}.out common models factory ${WORKFLOW_LIBS} ${GLOG_LIBS})
-endforeach()
+# foreach(src ${MODEL_FAST_BATCH_PROCESS_LIST})
+#     add_executable(${src}.out ./fast_batch_process/${src}.cpp)
+#     target_link_libraries(${src}.out common models factory ${WORKFLOW_LIBS} ${GLOG_LIBS})
+# endforeach()
 
 # build server app
 set(MODEL_SERVER_APP_LIST
