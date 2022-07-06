@@ -2,14 +2,14 @@
   <img src='./resources/images/icon.png' alt='icon.png' height="200px" width="200px">
 </p>
 
-<div align="center"><font size='8' color='green'>Mortred AI Model Web Server</div></font>  
+<div align="center"><font size='8' color='green'>Mortred AI Model Web Server</font></div>  
 
 Morted AI Model Server is a flexible and easy to use tool for serving deep learning models. Models trained by `tensorflow/pytorch` will be deployed via [MNN](https://github.com/alibaba/MNN) toolkit and served as a web server through [workflow](https://github.com/sogou/workflow) framework finally.
 
 The three major components are illustrated on the architecture picture bellow.
 
-<p align="left">
-  <img src='./resources/images/simple_architecture.png' alt='simple_architecture' height="500px" width="600px">
+<p align="center">
+  <img src='./resources/images/simple_architecture.png' alt='simple_architecture' height="400px" width="500px">
 </p>
 
 A quick overview and examples for both serving and model benchmarking are provided below. Detailed documentation and examples will be provided in the docs folder.
