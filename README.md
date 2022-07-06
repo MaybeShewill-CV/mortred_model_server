@@ -1,6 +1,6 @@
-<p align="center">
-  <img src='./resources/images/icon.png' alt='icon.png' height="200px" width="200px">
-</p>
+<h1 align="center">
+  <img src="./resources/images/icon.png" alt='icon.png' height="200px" width="200px"/>
+</h1>
 
 # Mortred AI Model Web Server
 
@@ -70,7 +70,7 @@ make -j10
 
 **Step 3:** Download Pre-Built Models
 
-Download pre-built image models via [BaiduNetDisk here](https://pan.baidu.com/s/1sLLSE1CWksKNxmRIGaQn_A) and extract code is `86sd`. Create a directory named `weights` in $PROJECT_ROOT_DIR and unzip the downloaded models in it. The weights directory  structure should looks like
+Download pre-built image models via [BaiduNetDisk here](https://pan.baidu.com/s/1yneu-7X5IMIuv31Gn5ZIzg) and extract code is `1y98`. Create a directory named `weights` in $PROJECT_ROOT_DIR and unzip the downloaded models in it. The weights directory  structure should looks like
 
 <p align="left">
   <img src='./resources/images/weights_folder_structure.png' alt='weights_folder_architecture'>
@@ -117,10 +117,14 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 `Benchmark Code Snappit`
 ![benchmakr_code_snappit](./resources/images/benchmark_code_snappit.png)
 
-* [Details Of Model's Benchmark](./docs/)
+* [Details Of Model's Benchmark](./docs/model_inference_benchmark.md)
 
+## TODO
+
+* [ ] Add more model into model zoo
 
 ## Reference
 
 * <https://github.com/sogou/workflow>
 * <https://github.com/alibaba/MNN>
+* <https://github.com/wfrest/wfrest/blob/main/src/base/Timestamp.cc>

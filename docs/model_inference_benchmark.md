@@ -24,7 +24,6 @@ The benchmark test environment is as follows：
 | ResNet-50   | 224x224 | 3.35ms | 298.8 | cuda |
 | Densenet-121| 224x224 | 5.30ms | 188.8 | cuda |
 
-
 ## Image Object Detection
 
 | Model Name | Input Image Size  | Inference Time (ms) | Fps | Backend |
@@ -35,3 +34,31 @@ The benchmark test environment is as follows：
 | YOLOV5-S   | 640x640 | 20.24ms | 49.4 | cuda |
 | YOLOV5-N   | 640x640 | 18.34ms | 54.5 | cuda |
 | nanodet_plus_m_1x5 | 416x416 | 5.44ms | 183.7 | cuda |
+
+## Image Scene Segmentation
+
+| Model Name | Input Image Size  | Inference Time (ms) | Fps | Backend |
+|------------|-------------------|----------------|-----|----|
+| BiseNetV2  | 512x1024 | 41.84ms | 23.9 | cuda |
+
+## Image Enhancement
+
+| Model Name | Input Image Size  | Inference Time (ms) | Fps | Backend |
+|------------|-------------------|----------------|-----|----|
+| Attentive-Gan  | 240x320 | 497.51ms | 2.01 | cuda |
+| Enlighten-Gan  | 256x256 | 28.986ms | 34.5 | cuda |
+
+## Image Feature Point
+
+| Model Name | Input Image Size  | Inference Time (ms) | Fps | Backend |
+|------------|-------------------|----------------|-----|----|
+| Superpoint-N | 120x160 | 1.19ms | 835.2 | cuda |
+| Superpoint-S | 240x320 | 3.49ms | 286.8 | cuda |
+| Superpoint-M | 480x640 | 15.3ms | 65.36 | cuda |
+| Superpoint-L | 960x1280| 51.8ms | 19.31 | cuda |
+
+## Image OCR
+
+| Model Name | Input Image Size  | Inference Time (ms) | Fps | Backend |
+|------------|-------------------|----------------|-----|----|
+| DBNet | 544x960 | 39.12ms | 25.56 | cuda |
