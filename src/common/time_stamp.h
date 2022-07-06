@@ -1,6 +1,6 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
+* Copyright All Rights Reserved.
+* Author: Chanchann
 * File: time_stamp.h
 * Date: 22-6-5
 ************************************************/
