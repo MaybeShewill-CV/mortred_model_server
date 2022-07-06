@@ -4,7 +4,9 @@
 
 # Mortred AI Model Web Server
 
-Morted AI Model Server is a flexible and easy to use tool for serving deep learning models. Models trained by `tensorflow/pytorch` will be deployed via [MNN](https://github.com/alibaba/MNN) toolkit and served as a web server through [workflow](https://github.com/sogou/workflow) framework finally.
+Morted AI Model Server is a toy platform for serving deep learning models. The platform's goal is to make the most usage of your cpu and gpu resources. Models trained by `tensorflow/pytorch` will be deployed via [MNN](https://github.com/alibaba/MNN) toolkit and served as a web server through [workflow](https://github.com/sogou/workflow) framework finally.
+
+Due to the lack of author's c++ skill you're welcomed to help improve the project
 
 The three major components are illustrated on the architecture picture bellow.
 
