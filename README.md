@@ -6,7 +6,7 @@
 
 Morted AI Model Server is a toy platform for serving deep learning models. The platform's goal is to make the most usage of your cpu and gpu resources. Models trained by `tensorflow/pytorch` will be deployed via [MNN](https://github.com/alibaba/MNN) toolkit and served as a web server through [workflow](https://github.com/sogou/workflow) framework finally.
 
-Due to the lack of author's c++ skill you're welcomed to help improve the project
+Do not hesitate to let me know if you find some bug cause I'm a c-with-struct noob :upside_down_face:
 
 The three major components are illustrated on the architecture picture bellow.
 
@@ -41,7 +41,7 @@ Before proceeding further with this document, make sure you have the following p
 
 After all prerequisites are settled down you may start to build the mortred ai server frame work.
 
-### Setup
+### Setup :fire::fire::fire:
 
 **Step 1:** Prepare 3rd-party Libraries
 
@@ -60,7 +60,7 @@ cp -r $WORKFLOW_ROOT_DIR/_include/workflow ./3rd_party/include
 cp -r $WORKFLOW_ROOT_DIR/_lib/libworkflow.so* ./3rd_party/libs
 ```
 
-**Step 2:** Build Mortred AI Server
+**Step 2:** Build Mortred AI Server :coffee::coffee::coffee:
 
 ```bash
 mkdir build && cd build
@@ -68,7 +68,7 @@ cmake ..
 make -j10
 ```
 
-**Step 3:** Download Pre-Built Models
+**Step 3:** Download Pre-Built Models :tea::tea::tea:
 
 Download pre-built image models via [BaiduNetDisk here](https://pan.baidu.com/s/1yneu-7X5IMIuv31Gn5ZIzg) and extract code is `1y98`. Create a directory named `weights` in $PROJECT_ROOT_DIR and unzip the downloaded models in it. The weights directory  structure should looks like
 
@@ -117,7 +117,7 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 `Benchmark Code Snappit`
 ![benchmakr_code_snappit](./resources/images/benchmark_code_snappit.png)
 
-* [Details Of Model's Benchmark](./docs/model_inference_benchmark.md)
+* [Details Of Model Inference Benchmark](./docs/model_inference_benchmark.md)
 
 ## TODO
 
