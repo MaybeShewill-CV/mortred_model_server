@@ -113,7 +113,7 @@ python server/test_server.py --server mobilenetv2 --mode single
 The client will repeatly post [demo images](./demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG) 1000 times. You will get classification result from response like
 ![mobilenetv2_demo_client_result](./resources/images/demo_mobilenetv2_client.png)
 
-For more server demo you may find them in [Torturials](#toturials)
+For more server demo you may find them in [Torturials](#toturials) :point_down::point_down::point_down:
 
 # `Benchmark`
 
@@ -153,8 +153,8 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 
 # `How To`
 
-* [How To Add New AI Model](./docs/how_to_add_new_model.md)
-* [How To Add New Model Server](./docs/how_to_add_new_server.md)
+* [How To Add Your Own Model](./docs/how_to_add_new_model.md) :fire::fire:
+* [How To Serve Your Own Model](./docs/how_to_add_new_server.md) :fire::fire:
 
 # `Web Server Configuration`
 
