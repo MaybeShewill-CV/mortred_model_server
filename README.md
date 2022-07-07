@@ -46,7 +46,7 @@ After all prerequisites are settled down you may start to build the mortred ai s
 
 **Step 1:** Prepare 3rd-party Libraries
 
-For MNN headers and libs
+Copy MNN headers and libs
 
 ```bash
 cp -r $MNN_ROOT_DIR/include/MNN ./3rd_party/include
@@ -54,7 +54,7 @@ cp $MNN_ROOT_DIR/build/libMNN.so ./3rd_party/libs
 cp $MNN_ROOT_DIR/build/source/backend/cuda/libMNN_Cuda_Main.so ./3rd_party/libs
 ```
 
-For workflow headers and libs
+Copy workflow headers and libs
 
 ```bash
 cp -r $WORKFLOW_ROOT_DIR/_include/workflow ./3rd_party/include
@@ -71,7 +71,7 @@ make -j10
 
 **Step 3:** Download Pre-Built Models :tea::tea::tea:
 
-Download pre-built image models via [BaiduNetDisk here](https://pan.baidu.com/s/1yneu-7X5IMIuv31Gn5ZIzg) and extract code is `1y98`. Create a directory named `weights` in $PROJECT_ROOT_DIR and unzip the downloaded models in it. The weights directory  structure should looks like
+Download pre-built image models via [BaiduNetDisk](https://pan.baidu.com/s/1yneu-7X5IMIuv31Gn5ZIzg) and extract code is `1y98`. Create a directory named `weights` in $PROJECT_ROOT_DIR and unzip the downloaded models in it. The weights directory  structure should looks like
 
 <p align="left">
   <img src='./resources/images/weights_folder_structure.png' alt='weights_folder_architecture'>
@@ -113,7 +113,7 @@ python server/test_server.py --server mobilenetv2 --mode single
 The client will repeatly post [demo images](./demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG) 1000 times. You will get classification result from response like
 ![mobilenetv2_demo_client_result](./resources/images/demo_mobilenetv2_client.png)
 
-For more server demo you may find them in
+For more server demo you may find them in [Torturials](#toturials)
 
 # `Benchmark`
 
@@ -145,11 +145,11 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 
 # `Toturials`
 
-* [Classification Model Server Toturials](./docs/toturials_of_classification_model_server.md)
-* [Segmentation Model Server Toturials](./docs/toturials_of_segmentation_model_server.md)
-* [Object Detection Model Server Toturials](./docs/toturials_of_object_detection_model_server.md)
-* [Enhancement Model Server Toturials](./docs/toturials_of_enhancement_model_server.md)
-* [Feature Point Model Server Toturials](./docs/toturials_of_feature_point_model_server.md)
+* [Image Classification Model Server Toturials](./docs/toturials_of_classification_model_server.md)
+* [Image Segmentation Model Server Toturials](./docs/toturials_of_segmentation_model_server.md)
+* [Image Object Detection Model Server Toturials](./docs/toturials_of_object_detection_model_server.md)
+* [Image Enhancement Model Server Toturials](./docs/toturials_of_enhancement_model_server.md)
+* [Image Feature Point Model Server Toturials](./docs/toturials_of_feature_point_model_server.md)
 
 # `How To`
 
@@ -161,11 +161,11 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 * [Description About Model Server](./docs/about_model_server_configuration.md)
 * [Description About Proxy Server](./docs/about_proxy_server_configuration.md)
 
-## TODO
+# `TODO`
 
 * [ ] Add more model into model zoo
 
-## Reference
+# `Reference`
 
 * <https://github.com/sogou/workflow>
 * <https://github.com/alibaba/MNN>
