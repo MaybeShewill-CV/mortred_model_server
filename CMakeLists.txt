@@ -23,6 +23,9 @@ message(STATUS "\tBuild Path: ${CMAKE_CURRENT_BINARY_DIR}")
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_ROOT_DIR}/_bin)
 set(LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_LIST_DIR}/_lib)
+file(GLOB MNN_LIBS ${PROJECT_ROOT_DIR}/3rd_party/libs/*MNN*so*)
+file(GLOB_RECURSE WORKFLOW_LIBS ${PROJECT_ROOT_DIR}/3rd_party/libs/*workflow*so)
+file(GLOB_RECURSE GLOG_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*glog*so)
 
 # find package
 find_package(Threads REQUIRED)
@@ -30,6 +33,10 @@ if(CMAKE_HOST_SYSTEM_NAME MATCHES "Windows")
     set(OpenCV_DIR "E:\\opencv-4.5.0\\out\\build\\x64-Release")
 endif()
 find_package(OpenCV 4.5.0 REQUIRED)
+find_package(glog REQUIRED)
+
+include_directories(${GLOG_INCLUDE_DIR})
+include_directories(${OpenCV_INCLUDE_DIRS})
 
 # add subdirectory
 add_subdirectory(src/common)

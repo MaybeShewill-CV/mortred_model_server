@@ -5,9 +5,6 @@ include_directories(
     ${PROJECT_ROOT_DIR}/src
 )
 
-file(GLOB_RECURSE GLOG_LIBS ${PROJECT_ROOT_DIR}/3rd_party/libs/*glog*so)
-file(GLOB_RECURSE WORKFLOW_LIBS ${PROJECT_ROOT_DIR}/3rd_party/libs/*workflow*so)
-
 # build benchmark apps
 set(MODEL_BENCHMARK_LIST
     classification
@@ -23,7 +20,7 @@ foreach(dir_name ${MODEL_BENCHMARK_LIST})
     foreach(src ${src_list})
         string(REGEX REPLACE ".+/(.+)\\..*" "\\1" file_name ${src})
         add_executable(${file_name}.out ${src})
-        target_link_libraries(${file_name}.out common models factory ${WORKFLOW_LIBS} ${GLOG_LIBS})
+        target_link_libraries(${file_name}.out common models factory ${WORKFLOW_LIBS} ${GLOG_LIBRARIES})
     endforeach()
 endforeach()
 
@@ -53,7 +50,7 @@ foreach(dir_name ${MODEL_SERVER_APP_LIST})
     foreach(src ${src_list})
         string(REGEX REPLACE ".+/(.+)\\..*" "\\1" file_name ${src})
         add_executable(${file_name}.out ${src})
-        target_link_libraries(${file_name}.out common models factory ${WORKFLOW_LIBS} ${GLOG_LIBS})
+        target_link_libraries(${file_name}.out common models factory ${WORKFLOW_LIBS} ${GLOG_LIBRARIES})
     endforeach()
 endforeach()
 
@@ -65,5 +62,5 @@ target_link_libraries(
     models
     factory
     ${WORKFLOW_LIBS}
-    ${GLOG_LIBS}
+    ${GLOG_LIBRARIES}
 )
