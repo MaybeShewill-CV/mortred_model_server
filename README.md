@@ -2,8 +2,7 @@
   <img src="./resources/images/icon.png" alt='icon.png' height="180px" width="180px"/>
 </h1>
 
-# Mortred AI Model Web Server
-
+![matrix_icon](./resources/images/matrix_icon_raw.gif)
 Morted AI Model Server is a toy platform for serving deep learning models. The platform's goal is to make the most usage of your cpu and gpu resources. Models trained by `tensorflow/pytorch` will be deployed via [MNN](https://github.com/alibaba/MNN) toolkit and served as a web server through [workflow](https://github.com/sogou/workflow) framework finally.
 
 Do not hesitate to let me know if you find some bug cause I'm a c-with-struct noob :upside_down_face:
@@ -20,11 +19,16 @@ You're welcomed to ask questions and help me to make it better!
 
 # `Contents of this document`
 
-* [Quick Start](#quick-start)
-* [Benchmark](#benchmark)
-* [Toturials](#toturials)
-* [How To](#how-to)
-* [Web Server Configuration](#web-server-configuration)
+- [`Contents of this document`](#contents-of-this-document)
+- [`Quick Start`](#quick-start)
+    - [Setup :fire::fire::fire:](#setup-firefirefire)
+- [`Benchmark`](#benchmark)
+    - [Model Inference Benchmark](#model-inference-benchmark)
+- [`Toturials`](#toturials)
+- [`How To`](#how-to)
+- [`Web Server Configuration`](#web-server-configuration)
+- [`TODO`](#todo)
+- [`Reference`](#reference)
 
 # `Quick Start`
 
