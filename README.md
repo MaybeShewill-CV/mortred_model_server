@@ -19,16 +19,11 @@ You're welcomed to ask questions and help me to make it better!
 
 # `Contents of this document`
 
-- [`Contents of this document`](#contents-of-this-document)
-- [`Quick Start`](#quick-start)
-    - [Setup :fire::fire::fire:](#setup-firefirefire)
-- [`Benchmark`](#benchmark)
-    - [Model Inference Benchmark](#model-inference-benchmark)
-- [`Toturials`](#toturials)
-- [`How To`](#how-to)
-- [`Web Server Configuration`](#web-server-configuration)
-- [`TODO`](#todo)
-- [`Reference`](#reference)
+* [Quick Start](#quick-start)
+* [Benchmark](#benchmark)
+* [Toturials](#toturials)
+* [How To](#how-to)
+* [Web Server Configuration](#web-server-configuration)
 
 # `Quick Start`
 
