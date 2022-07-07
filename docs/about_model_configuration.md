@@ -1,8 +1,8 @@
-# About Model Configuration
+<b><font color='black' size='8' face='Helvetica'> About Model Configuration </font></b>
 
 All model's configurations are stored in $PROJECT_ROOT_DIR/conf/model folder.
 
-## Common Configuration
+<b><font color='GrayB' size='6' face='Helvetica'> Common Configuration </font></b>
 
 Use mobilenetv2's model configuration for example
 ![common_model_config](../resources/images/common_model_config_example.png)
@@ -13,9 +13,12 @@ Use mobilenetv2's model configuration for example
 
 **compute_backend:** compute backend only "cpu" and "cuda" was supported for now
 
-## Special Model Configuration
+<b><font color='GrayB' size='6' face='Helvetica'> Special Model Configuration </font></b>
 
-### For Image Objection Model Configuration
+<b><font color='GrayZ' size='5' face='Helvetica'> ----- Image Objection Model Configuration </font></b>
+
+Use yolov5's model configuration for example
+![yolov5_model_config](../resources/images/yolov5_model_cfg_example.png)
 
 **model_score_threshold:** obj-bbox's score threshold only keep objs with score higher than this
 
@@ -25,8 +28,10 @@ Use mobilenetv2's model configuration for example
 
 **model_class_nums:** total number of categories the model can recognize
 
+<b><font color='GrayZ' size='5' face='Helvetica'> ----- SuperPoint Model Configuration </font></b>
 
-### SuperPoint Model Configuration
+Superpoint's model configuration for example
+![superpoint_model_config](../resources/images/superpoint_model_cfg_example.png)
 
 **model_nms_threshold:** only one feature point can be kept in radius of this threshold
 

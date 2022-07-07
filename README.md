@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="./resources/images/icon.png" alt='icon.png' height="200px" width="200px"/>
+  <img src="./resources/images/icon.png" alt='icon.png' height="180px" width="180px"/>
 </h1>
 
 # Mortred AI Model Web Server
@@ -18,14 +18,15 @@ A quick overview and examples for both serving and model benchmarking are provid
 
 You're welcomed to ask questions and help me to make it better!
 
-## Contents of this document
+# `Contents of this document`
 
 * [Quick Start](#quick-start)
 * [Benchmark](#benchmark)
+* [Toturials](#toturials)
 * [How To](#how-to)
 * [Web Server Configuration](#web-server-configuration)
 
-## Quick Start
+# `Quick Start`
 
 Before proceeding further with this document, make sure you have the following prerequisites
 
@@ -76,13 +77,13 @@ Download pre-built image models via [BaiduNetDisk here](https://pan.baidu.com/s/
   <img src='./resources/images/weights_folder_structure.png' alt='weights_folder_architecture'>
 </p>
 
-**Step 4:** Test Demo App
+**Step 4:** Test MobileNetv2 Benchmark Tool
 
 The benchmark and server apps will be built in \$PROJECT_ROOT_DIR/_bin and libs will be built in \$PROJECT_ROOT_DIR/_lib.
 Benchmark the mobilenetv2 classification model
 
 ```bash
-cd $PROJECT_ROOT_DIR/bin
+cd $PROJECT_ROOT_DIR/_bin
 ./mobilenetv2_benchmark.out ../conf/model/classification/mobilenetv2/mobilenetv2_config.ini
 ```
 
@@ -92,7 +93,29 @@ You should see the mobilenetv2 model benchmark profile as follows:
   <img src='./resources/images/mobilenetv2_demo_benchmark.png' alt='mobilenetv2_demo_benchmark'>
 </p>
 
-## Benchmark
+**Step 5:** Run MobileNetV2 Server Locally
+
+The detailed description about web server configuration will be found at [Web Server Configuration](#web-server-configuration). Now start serving the model
+
+```bash
+cd $PROJECT_ROOT_DIR/_bin
+./mobilenetv2_classification_server.out ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.ini
+```
+
+Model service will be start at `http://localhost:8091` with 4 instance worker waiting to serve. A demo python client was supplied here to test the service simply do
+
+```bash
+cd $PROJECT_ROOT_DIR/scripts
+export PYTHONPATH=$PWD:$PYTHONPATH
+python server/test_server.py --server mobilenetv2 --mode single
+```
+
+The client will repeatly post [demo images](./demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG) 1000 times. You will get classification result from response like
+![mobilenetv2_demo_client_result](./resources/images/demo_mobilenetv2_client.png)
+
+For more server demo you may find them in
+
+# `Benchmark`
 
 The benchmark test environment is as follows：
 
@@ -119,6 +142,24 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 
 * [Details Of Model Inference Benchmark](./docs/model_inference_benchmark.md)
 * [About Model Configuration](./docs/about_model_configuration.md)
+
+# `Toturials`
+
+* [Classification Model Server Toturials](./docs/toturials_of_classification_model_server.md)
+* [Segmentation Model Server Toturials](./docs/toturials_of_segmentation_model_server.md)
+* [Object Detection Model Server Toturials](./docs/toturials_of_object_detection_model_server.md)
+* [Enhancement Model Server Toturials](./docs/toturials_of_enhancement_model_server.md)
+* [Feature Point Model Server Toturials](./docs/toturials_of_feature_point_model_server.md)
+
+# `How To`
+
+* [How To Add New AI Model](./docs/how_to_add_new_model.md)
+* [How To Add New Model Server](./docs/how_to_add_new_server.md)
+
+# `Web Server Configuration`
+
+* [Description About Model Server](./docs/about_model_server_configuration.md)
+* [Description About Proxy Server](./docs/about_proxy_server_configuration.md)
 
 ## TODO
 
