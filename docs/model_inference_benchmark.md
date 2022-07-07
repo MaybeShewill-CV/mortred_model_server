@@ -39,7 +39,7 @@ The benchmark test environment is as follows：
 
 | Model Name | Input Image Size  | Inference Time (ms) | Fps | Backend |
 |------------|-------------------|----------------|-----|----|
-| BiseNetV2  | 512x1024 | 41.84ms | 23.9 | cuda |
+| BiseNetV2  | 512x1024 | 16.20ms | 61.7 | cuda |
 
 ## Image Enhancement
 
