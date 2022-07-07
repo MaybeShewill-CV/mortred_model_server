@@ -11,6 +11,7 @@
 #include "glog/logging.h"
 #include "MNN/Interpreter.hpp"
 
+#include "common/time_stamp.h"
 #include "common/file_path_util.h"
 #include "common/base64.h"
 
@@ -23,6 +24,7 @@ using jinq::common::Base64;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::common_io::file_input;
 using jinq::models::io_define::common_io::base64_input;
+using jinq::common::Timestamp;
 
 namespace scene_segmentation {
 using jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
@@ -367,28 +369,10 @@ StatusCode BiseNetV2<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     _m_input_tensor->copyFromHostTensor(&input_tensor_user);
     _m_net->runSession(_m_session);
     // fetch net output
-    auto* output_tensor_user = new MNN::Tensor(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
-    _m_output_tensor->copyToHostTensor(output_tensor_user);
-    auto host_data = output_tensor_user->host<float>();
-
-    int output_tensor_height = output_tensor_user->shape()[0];
-    int output_tensor_width = output_tensor_user->shape()[1];
-    const int output_tensor_channels = output_tensor_user->shape()[2];
-    cv::Mat softmax_score_mat(
-        cv::Size(output_tensor_width, output_tensor_height),
-        CV_32FC(output_tensor_channels),
-        host_data);
-    cv::Mat result_image(softmax_score_mat.size(), CV_32SC1);
-
-    for (auto row = 0; row < softmax_score_mat.rows; ++row) {
-        for (auto col = 0; col < softmax_score_mat.cols; ++col) {
-            auto* scores = softmax_score_mat.ptr<float>(row, col);
-            auto max_score_iter = std::max_element(scores, scores + output_tensor_channels);
-            int cls_id = static_cast<int>(std::distance(scores, max_score_iter));
-            result_image.at<int>(row, col) = cls_id;
-        }
-    }
-
+    MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
+    _m_output_tensor->copyToHostTensor(&output_tensor_user);
+    auto host_data = output_tensor_user.host<int>();
+    cv::Mat result_image(_m_input_size_host, CV_32SC1, host_data);
     cv::resize(result_image, result_image, _m_input_size_user, 0.0, 0.0, cv::INTER_NEAREST);
 
     // transform internal output into external output
