@@ -118,6 +118,7 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 ![benchmakr_code_snappit](./resources/images/benchmark_code_snappit.png)
 
 * [Details Of Model Inference Benchmark](./docs/model_inference_benchmark.md)
+* [About Model Configuration](./docs/about_model_configuration.md)
 
 ## TODO
 
