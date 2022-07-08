@@ -45,8 +45,8 @@ The benchmark test environment is as follows：
 
 | Model Name | Input Image Size  | Inference Time (ms) | Fps | Backend |
 |------------|-------------------|----------------|-----|----|
-| Attentive-Gan  | 240x320 | 497.51ms | 2.01 | cuda |
-| Enlighten-Gan  | 256x256 | 28.986ms | 34.5 | cuda |
+| Attentive-Gan  | 240x320 | 497.51ms | 2.013 | cuda |
+| Enlighten-Gan  | 256x256 | 6.43ms   | 155.6 | cuda |
 
 ## Image Feature Point
 
