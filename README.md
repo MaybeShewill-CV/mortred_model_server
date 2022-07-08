@@ -2,10 +2,10 @@
   <img src="./resources/images/icon.png" alt='icon.png' height="180px" width="180px"/>
 </h1>
 
-![icon](./resources/images/iconv7.png)
+![icon](./resources/images/iconv4.png)
 Morted AI Model Server is a toy platform for serving deep learning models. The platform's goal is to make the most usage of your cpu and gpu resources. Models trained by `tensorflow/pytorch` will be deployed via [MNN](https://github.com/alibaba/MNN) toolkit and served as a web server through [workflow](https://github.com/sogou/workflow) framework finally.
 
-Do not hesitate to let me know if you find some bug cause I'm a c-with-struct noob :upside_down_face:
+Do not hesitate to let me know if you find bugs here cause I'm a c-with-struct noob :upside_down_face:
 
 The three major components are illustrated on the architecture picture bellow.
 
@@ -29,15 +29,15 @@ You're welcomed to ask questions and help me to make it better!
 
 Before proceeding further with this document, make sure you have the following prerequisites
 
-**1.** Make sure you have CUDA&GPU&Driver rightly installed. You may refer to [this](https://developer.nvidia.com/cuda-toolkit) to install them
+**1.** Make sure you have **CUDA&GPU&Driver** rightly installed. You may refer to [this](https://developer.nvidia.com/cuda-toolkit) to install them
 
-**2.** Make sure you have MNN installed. For install instruction you may find some help [here](https://www.yuque.com/mnn/en/build_linux). MNN-2.0.0's cuda backend was not supported for now. You'd better use MNN-1.2.0 release version to have both cpu and cuda computation backend. The bugs in MNN-2.0.0 remained here will be fixed as soon as possible
+**2.** Make sure you have **MNN** installed. For install instruction you may find some help [here](https://www.yuque.com/mnn/en/build_linux). MNN-2.0.0's cuda backend was not supported for now. You'd better use MNN-1.2.0 release version to have both cpu and cuda computation backend. The bugs in MNN-2.0.0 remained here will be fixed as soon as possible
 
-**3.** Make sure you have WORKFLOW installed. For install instruction you may find some help [here](https://github.com/sogou/workflow)
+**3.** Make sure you have **WORKFLOW** installed. For install instruction you may find some help [here](https://github.com/sogou/workflow)
 
-**4.** Make sure you have OPENCV installed. For install instruction you may find some help [here](https://docs.opencv.org/4.x/d7/d9f/tutorial_linux_install.html)
+**4.** Make sure you have **OPENCV** installed. For install instruction you may find some help [here](https://docs.opencv.org/4.x/d7/d9f/tutorial_linux_install.html)
 
-**5.** Make sure your GCC tookit support cpp-11
+**5.** Make sure your **GCC** tookit support cpp-11
 
 After all prerequisites are settled down you may start to build the mortred ai server frame work.
 
@@ -101,7 +101,7 @@ cd $PROJECT_ROOT_DIR/_bin
 ./mobilenetv2_classification_server.out ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.ini
 ```
 
-Model service will be start at `http://localhost:8091` with 4 instance worker waiting to serve. A demo python client was supplied here to test the service simply do
+Model service will be start at `http://localhost:8091` with 4 workers waiting to serve. A demo python client was supplied to test the service
 
 ```bash
 cd $PROJECT_ROOT_DIR/scripts

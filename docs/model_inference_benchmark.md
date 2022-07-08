@@ -1,4 +1,4 @@
-# Model Inference Benchmark
+<b><font color='black' size='8' face='Helvetica'> Model Inference Benchmark </font></b>
 
 The benchmark test environment is as follows：
 
@@ -16,7 +16,7 @@ The benchmark test environment is as follows：
 
 **GPU Driver:** Driver Version: 455.23.04
 
-## Image Classification
+<b><font color='GrayB' size='6' face='Helvetica'> Image Classification </font></b>
 
 | Model Name | Input Image Size | Inference Time (ms) | Fps | Backend |
 |------------|------------------|----------------|-----|----|
@@ -24,7 +24,7 @@ The benchmark test environment is as follows：
 | ResNet-50   | 224x224 | 3.35ms | 298.8 | cuda |
 | Densenet-121| 224x224 | 5.30ms | 188.8 | cuda |
 
-## Image Object Detection
+<b><font color='GrayB' size='6' face='Helvetica'> Image Object Detection </font></b>
 
 | Model Name | Input Image Size  | Inference Time (ms) | Fps | Backend |
 |------------|-------------------|----------------|-----|----|
@@ -35,20 +35,20 @@ The benchmark test environment is as follows：
 | YOLOV5-N   | 640x640 | 18.34ms | 54.5 | cuda |
 | nanodet_plus_m_1x5 | 416x416 | 5.44ms | 183.7 | cuda |
 
-## Image Scene Segmentation
+<b><font color='GrayB' size='6' face='Helvetica'> Image Scene Segmentation </font></b>
 
 | Model Name | Input Image Size  | Inference Time (ms) | Fps | Backend |
 |------------|-------------------|----------------|-----|----|
 | BiseNetV2  | 512x1024 | 16.20ms | 61.7 | cuda |
 
-## Image Enhancement
+<b><font color='GrayB' size='6' face='Helvetica'> Image Enhancement </font></b>
 
 | Model Name | Input Image Size  | Inference Time (ms) | Fps | Backend |
 |------------|-------------------|----------------|-----|----|
 | Attentive-Gan  | 240x320 | 497.51ms | 2.013 | cuda |
 | Enlighten-Gan  | 256x256 | 6.43ms   | 155.6 | cuda |
 
-## Image Feature Point
+<b><font color='GrayB' size='6' face='Helvetica'> Image Feature Point </font></b>
 
 | Model Name | Input Image Size  | Inference Time (ms) | Fps | Backend |
 |------------|-------------------|----------------|-----|----|
@@ -57,7 +57,7 @@ The benchmark test environment is as follows：
 | Superpoint-M | 480x640 | 15.3ms | 65.36 | cuda |
 | Superpoint-L | 960x1280| 51.8ms | 19.31 | cuda |
 
-## Image OCR
+<b><font color='GrayB' size='6' face='Helvetica'> Image OCR </font></b>
 
 | Model Name | Input Image Size  | Inference Time (ms) | Fps | Backend |
 |------------|-------------------|----------------|-----|----|

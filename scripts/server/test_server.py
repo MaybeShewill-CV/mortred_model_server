@@ -11,7 +11,6 @@ test server
 import argparse
 import os
 import os.path as ops
-from re import U
 import requests
 import base64
 import json
