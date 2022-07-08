@@ -113,6 +113,7 @@ protected:
         std::string task_received_ts;
         std::string task_finished_ts;
         bool is_task_req_valid = false;
+        bool is_go_cb_finished = false;
         double worker_run_time_consuming = 0; // ms
         double find_worker_time_consuming = 0; // ms
         MODEL_OUTPUT model_output;
@@ -219,22 +220,26 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         auto* series = series_of(task);
         auto* ctx = new seriex_ctx;
         ctx->response = resp;
-        series->set_context(ctx);
+        // series->set_context(ctx);
         // do model work
         auto&& go_proc = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work, this, cls_task_req, ctx);
         WFGoTask* serve_task = nullptr;
         if (_m_model_run_timeout <= 0) {
             serve_task = WFTaskFactory::create_go_task(_m_server_uri, go_proc, cls_task_req, ctx);
+            serve_task->user_data = ctx;
         } else {
             serve_task = WFTaskFactory::create_timedgo_task(
                 0, _m_model_run_timeout * 1e6, _m_server_uri, go_proc, cls_task_req, ctx);
+            serve_task->user_data = ctx;
         }
         auto&& go_proc_cb = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb, this, serve_task);
         serve_task->set_callback(go_proc_cb);
         *series << serve_task;
-        auto* counter = WFTaskFactory::create_counter_task("release_ctx", 1, [&](const WFCounterTask* task){
-            delete (seriex_ctx*)series_of(task)->get_context();
+        WFCounterTask* counter = WFTaskFactory::create_counter_task("release_ctx", 1, [&](const WFCounterTask* task){
+            while (!((seriex_ctx*)task->user_data)->is_go_cb_finished) {}
+            delete (seriex_ctx*)task->user_data;
         });
+        counter->user_data = ctx;
         *series << counter;
         return;
     }
@@ -308,7 +313,8 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
     auto state = task->get_state();
-    auto* ctx = (seriex_ctx*)series_of(task)->get_context();
+    // auto* ctx = (seriex_ctx*)series_of(task)->get_context();
+    auto* ctx = (seriex_ctx*)task->user_data;
 
     // fill response
     StatusCode status;
@@ -338,6 +344,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
               << " waiting jobs: " << _m_waiting_jobs
               << " finished jobs: " << _m_finished_jobs
               << " worker queue size: " << _m_working_queue.size_approx();
+    ctx->is_go_cb_finished = true;
 }
 }
 }
