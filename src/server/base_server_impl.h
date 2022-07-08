@@ -113,7 +113,6 @@ protected:
         std::string task_received_ts;
         std::string task_finished_ts;
         bool is_task_req_valid = false;
-        bool is_go_proc_finished = false;
         double worker_run_time_consuming = 0; // ms
         double find_worker_time_consuming = 0; // ms
         MODEL_OUTPUT model_output;
@@ -222,10 +221,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         ctx->response = resp;
         series->set_context(ctx);
         // do model work
-        auto* counter = WFTaskFactory::create_counter_task("release_ctx", 1, [](const WFCounterTask* task){
-            delete (seriex_ctx*)series_of(task)->get_context();
-        });
-        counter->start();
         auto&& go_proc = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work, this, cls_task_req, ctx);
         WFGoTask* serve_task = nullptr;
         if (_m_model_run_timeout <= 0) {
@@ -237,6 +232,10 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         auto&& go_proc_cb = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb, this, serve_task);
         serve_task->set_callback(go_proc_cb);
         *series << serve_task;
+        auto* counter = WFTaskFactory::create_counter_task("release_ctx", 1, [&](const WFCounterTask* task){
+            delete (seriex_ctx*)series_of(task)->get_context();
+        });
+        *series << counter;
         return;
     }
     // not found valid url
@@ -296,7 +295,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     auto task_finish_ts = Timestamp::now();
     ctx->task_finished_ts = task_finish_ts.to_format_str();
     ctx->worker_run_time_consuming = (task_finish_ts - task_receive_ts) * 1000;
-    ctx->is_go_proc_finished = true;
     WFTaskFactory::count_by_name("release_ctx");
 }
 
