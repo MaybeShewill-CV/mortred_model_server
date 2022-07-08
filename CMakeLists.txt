@@ -32,7 +32,7 @@ find_package(Threads REQUIRED)
 if(CMAKE_HOST_SYSTEM_NAME MATCHES "Windows")
     set(OpenCV_DIR "E:\\opencv-4.5.0\\out\\build\\x64-Release")
 endif()
-find_package(OpenCV 4.5.0 REQUIRED)
+find_package(OpenCV REQUIRED)
 find_package(glog REQUIRED)
 
 include_directories(${GLOG_INCLUDE_DIR})
