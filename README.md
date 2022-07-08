@@ -2,7 +2,7 @@
   <img src="./resources/images/icon.png" alt='icon.png' height="180px" width="180px"/>
 </h1>
 
-![icon](./resources/images/iconv8_transparrent.png)
+![icon](./resources/images/iconv7.png)
 Morted AI Model Server is a toy platform for serving deep learning models. The platform's goal is to make the most usage of your cpu and gpu resources. Models trained by `tensorflow/pytorch` will be deployed via [MNN](https://github.com/alibaba/MNN) toolkit and served as a web server through [workflow](https://github.com/sogou/workflow) framework finally.
 
 Do not hesitate to let me know if you find some bug cause I'm a c-with-struct noob :upside_down_face:
@@ -109,8 +109,10 @@ export PYTHONPATH=$PWD:$PYTHONPATH
 python server/test_server.py --server mobilenetv2 --mode single
 ```
 
-The client will repeatly post [demo images](./demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG) 1000 times. You will get classification result from response like
-![mobilenetv2_demo_client_result](./resources/images/demo_mobilenetv2_client.png)
+The client will repeatly post [demo images](./demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG) 1000 times. Server output should be like
+![mobilenetv2_server_exam_output](./resources/images/exam_server_output.png)
+Client output should be like
+![mobilenetv2_client_exam_output](./resources/images/exam_client_output.png)
 
 For more server demo you may find them in [Torturials](#toturials) :point_down::point_down::point_down:
 
