@@ -235,8 +235,8 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         auto&& go_proc_cb = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb, this, serve_task);
         serve_task->set_callback(go_proc_cb);
         *series << serve_task;
-        WFCounterTask* counter = WFTaskFactory::create_counter_task("release_ctx", 1, [&](const WFCounterTask* task){
-            while (!((seriex_ctx*)task->user_data)->is_go_cb_finished) {}
+        WFCounterTask* counter = WFTaskFactory::create_counter_task("release_ctx", 2, [&](const WFCounterTask* task){
+            // while (!((seriex_ctx*)task->user_data)->is_go_cb_finished) {}
             delete (seriex_ctx*)task->user_data;
         });
         counter->user_data = ctx;
@@ -313,7 +313,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
     auto state = task->get_state();
-    // auto* ctx = (seriex_ctx*)series_of(task)->get_context();
     auto* ctx = (seriex_ctx*)task->user_data;
 
     // fill response
@@ -344,7 +343,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
               << " waiting jobs: " << _m_waiting_jobs
               << " finished jobs: " << _m_finished_jobs
               << " worker queue size: " << _m_working_queue.size_approx();
-    ctx->is_go_cb_finished = true;
+    WFTaskFactory::count_by_name("release_ctx");
 }
 }
 }
