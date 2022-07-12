@@ -167,11 +167,9 @@ std::string SuperpointFpServer::Impl::make_response_body(
         // fille in fp descriptor
         writer.Key("descriptor");
         writer.StartArray();
-
-        for (const auto& ft_val : fp.descriptor) {
-            writer.Double(ft_val);
-        }
-
+        // for (const auto& ft_val : fp.descriptor) {
+        //     writer.Double(ft_val);
+        // }
         writer.EndArray();
     }
 
