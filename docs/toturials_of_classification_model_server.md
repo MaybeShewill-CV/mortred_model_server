@@ -93,5 +93,5 @@ Now enlarge the worker nums from 4 to 12 and let's see what happens.
 You may find almost no timed out task and worker queue size remains at least one worker. Gpu utilization also rise a lot. The test result shows avg resp time reduced to 35ms minimu resp time remains around 13ms and the rps reaches 546 req/s which is almost the same speed as model's inference benchmark result. :fire::fire::fire:
 ![losust_test_result_2](../resources/images/locust_test_result_2.png)
 
-But do expect to enlarge more workers to unlimitedly promote the server's performance. It may benefit nothing when you enlarge worker to 24. Rps remains the same.
+But do not expect to enlarge more workers to unlimitedly promote the server's performance. It may benefit nothing when you enlarge worker to 24. Rps remains the same.
 ![losust_test_result_3](../resources/images/locust_test_result_3.png)
