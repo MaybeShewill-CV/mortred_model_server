@@ -30,7 +30,7 @@ python server/test_server.py --server attentive_gan --mode single
 
 ## Unique Tips For Enhancement Model Python Client
 
-Most of the enhancement's model output is a image corresponding to the origin image. The enhancement server's response is a json obj 
+Most of the enhancement's model output is a image corresponding to the origin image. The enhancement server's response is a json obj
 
 ```python
 resp = {
@@ -42,6 +42,7 @@ resp = {
     }
 }
 ```
+
 `enhance_result` contains the model's output encoded with base64. If you want to save the model's output info local file you may do
 
 ```python
@@ -55,7 +56,7 @@ with open(src_image_path, 'rb') as f:
     }
     resp = requests.post(url=url, data=json.dumps(post_data))
     output = json.loads(resp.text)['data']['enhance_result']
-    out_f = open('result.png', 'wb')
+    out_f = open('result.jpg', 'wb')
     out_f.write(base64.b64decode(output))
     out_f.close()
 ```

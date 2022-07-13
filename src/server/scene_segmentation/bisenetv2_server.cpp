@@ -153,7 +153,7 @@ std::string BiseNetV2Server::Impl::make_response_body(
     // write output
     writer.Key("data");
     writer.StartObject();
-    writer.Key("enhance_result");
+    writer.Key("segment_result");
     if (model_output.segmentation_result.empty()) {
         writer.String("");
     } else {
