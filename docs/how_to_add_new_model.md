@@ -1,6 +1,6 @@
 # How To Add New Model
 
-Here is brief instruction about how to add a new model in this frame work. All models are inherited from [jinq::models::BaseAiModel<INPUT, OUTPUT>](../src/models/base_model.h). `INPUT` and `OUTPUT` was defined by users which helps a lot when users have different type of input data. The process of running the model is mainly divided into three steps. Firstly transform the user defined input data into model's internal input data type which usually is a OpenCV mat. Secondly do model inference. Finally transform model's internal output data type into user defined output data type. I will show you a example to help you add a new densenet image classification model.
+Here is brief instruction about how to add a new model in this frame work. All models are inherited from [jinq::models::BaseAiModel<INPUT, OUTPUT>](../src/models/base_model.h). `INPUT` and `OUTPUT` was defined by users which helps a lot when users have different type of input data. The process of running the model is mainly divided into three steps. Firstly transform the user defined input data into model's internal input data type which usually is a OpenCV mat. Secondly do model inference. Finally transform model's internal output data type into user defined output data type. I will show you an example to help you add a new densenet image classification model.
 
 ## Step 1: Define Your Own Input Data Type :cowboy_hat_face:
 
@@ -203,3 +203,10 @@ If nothing wrong happened :smile: you should get a similar benchmark result like
 ![densenet_bench_mark](../resources/images/densenet_model_benchmark_result.png)
 
 Good Luck !!! :trophy::trophy::trophy:
+
+## Reference
+
+Complete implementation code can be found
+
+* [DenseNet Model Implement](../src/models/classification/densenet.inl)
+* [DenseNet Model BenchMark App](../src/apps/model_benchmark/classification/densenet_benchmark.cpp)
