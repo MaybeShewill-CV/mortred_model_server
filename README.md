@@ -1,9 +1,18 @@
-<h1 align="center">
-  <img src="./resources/images/icon.png" alt='icon.png' height="180px" width="180px"/>
-</h1>
+<div id="top" align="center">
 
-![icon](./resources/images/iconv4.png)
-Morted AI Model Server is a toy platform for serving deep learning models. The platform's goal is to make the most usage of your cpu and gpu resources. Models trained by `tensorflow/pytorch` will be deployed via [MNN](https://github.com/alibaba/MNN) toolkit and served as a web server through [workflow](https://github.com/sogou/workflow) framework finally.
+  <h1 align="center">
+    <img src="./resources/images/icon.png" alt='icon.png' height="180px" width="180px"/>
+  </h1>
+
+  ![icon](./resources/images/iconv4.png)
+
+   Mortred-AI-Web-Server: A Noob Web Server for AI Models
+
+   | [English](README.md) | [中文](README-zh-Hans.md) |
+
+</div>
+
+Morted AI Model Server is a toy web server for deep learning models. Server tries its best to make the most usage of your cpu and gpu resources. All dl models are trained by `tensorflow/pytorch` and deployed via [MNN](https://github.com/alibaba/MNN) toolkit and supply web service through [workflow](https://github.com/sogou/workflow) framework finally.
 
 Do not hesitate to let me know if you find bugs here cause I'm a c-with-struct noob :upside_down_face:
 
