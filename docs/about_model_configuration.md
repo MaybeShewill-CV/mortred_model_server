@@ -38,4 +38,3 @@ Superpoint's model configuration for example
 **max_track_length:** only track images which are closer than this distance
 
 **nn_dis_thresh:** thoses points whose feature distances are smaller than this will be regarded as the same point
-
