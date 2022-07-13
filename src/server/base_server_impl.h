@@ -232,7 +232,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         auto&& go_proc_cb = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb, this, serve_task);
         serve_task->set_callback(go_proc_cb);
         *series << serve_task;
-        WFCounterTask* counter = WFTaskFactory::create_counter_task("release_ctx", 2, [](const WFCounterTask* task){
+        WFCounterTask* counter = WFTaskFactory::create_counter_task("release_ctx", 1, [](const WFCounterTask* task){
             delete (seriex_ctx*)series_of(task)->get_context();
         });
         *series << counter;
@@ -295,7 +295,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     auto task_finish_ts = Timestamp::now();
     ctx->task_finished_ts = task_finish_ts.to_format_str();
     ctx->worker_run_time_consuming = (task_finish_ts - task_receive_ts) * 1000;
-    WFTaskFactory::count_by_name("release_ctx");
+    // WFTaskFactory::count_by_name("release_ctx");
 }
 
 /***
