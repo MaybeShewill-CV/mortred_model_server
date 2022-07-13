@@ -25,7 +25,6 @@ Use mobilenetv2's model server configuration for example
 
 **model_config_file_path:** model's configuration file path. For detailed description of it you may refer to [about_model_configuration](../docs/about_model_configuration.md)
 
-
 <b><font color='GrayB' size='6' face='Helvetica'> Other Web Service Configuration </font></b>
 
 For other web service configuration you may find help at [workflow_docs_about_global_configuration](https://github.com/sogou/workflow/blob/f7979e46f3b1f9c0052adb9e2ffa959730dcda6e/docs/en/about-config.md)
