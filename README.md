@@ -164,7 +164,7 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 # `How To`
 
 * [How To Add New Model](./docs/how_to_add_new_model.md) :fire::fire:
-* [How To ADD New Server](./docs/how_to_add_new_server.md) :fire::fire:
+* [How To Add New Server](./docs/how_to_add_new_server.md) :fire::fire:
 
 # `Web Server Configuration`
 
