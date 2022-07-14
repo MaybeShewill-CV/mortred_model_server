@@ -308,13 +308,6 @@ StatusCode SuperPoint<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))
 
     _m_input_size_host.width = _m_input_tensor->width();
     _m_input_size_host.height = _m_input_tensor->height();
-    if (!cfg_content.contains("model_input_image_size")) {
-        _m_input_size_user.width = 320;
-        _m_input_size_user.height = 240;
-    } else {
-        _m_input_size_user.width = static_cast<int>(cfg_content.at("model_input_image_size").as_array()[1].as_integer());
-        _m_input_size_user.height = static_cast<int>(cfg_content.at("model_input_image_size").as_array()[0].as_integer());
-    }
 
     if (!cfg_content.contains("model_score_threshold")) {
         _m_score_threshold = 0.4;
@@ -348,9 +341,11 @@ StatusCode SuperPoint<INPUT, OUTPUT>::Impl::run(const INPUT &in, OUTPUT& out) {
     if (!internal_in.input_image.data || internal_in.input_image.empty()) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
+
     // preprocess image
     _m_input_size_user = internal_in.input_image.size();
     cv::Mat preprocessed_image = preprocess_image(internal_in.input_image);
+
     // run session
     MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
     auto input_tensor_data = input_tensor_user.host<float>();
@@ -358,11 +353,22 @@ StatusCode SuperPoint<INPUT, OUTPUT>::Impl::run(const INPUT &in, OUTPUT& out) {
     ::memcpy(input_tensor_data, preprocessed_image.data, input_tensor_size);
     _m_input_tensor->copyFromHostTensor(&input_tensor_user);
     _m_net->runSession(_m_session);
+
     // decode feture point locations and scores
     superpoint_impl::internal_output internal_out;
     decode_fp_location_and_score(internal_out);
+
     // decode feture point descriptor
     decode_fp_descriptor(internal_out);
+
+    // rescale feature point locations
+    float h_scale = static_cast<float>(_m_input_size_user.height) / _m_input_size_host.height;
+    float w_scale = static_cast<float>(_m_input_size_user.width) / _m_input_size_host.width;
+    for (auto& pt : internal_out) {
+        pt.location.x *= w_scale;
+        pt.location.y *= h_scale;
+    }
+
     // transform result
     out = superpoint_impl::transform_output<OUTPUT>(internal_out);
 
@@ -471,13 +477,6 @@ void SuperPoint<INPUT, OUTPUT>::Impl::decode_fp_location_and_score(superpoint_im
         }
         iter++;
     }
-    // rescale key point coords
-    double h_scale = static_cast<float>(_m_input_size_user.height) / _m_input_size_host.height;
-    double w_scale = static_cast<float>(_m_input_size_user.width) / _m_input_size_host.width;
-    for (auto& pt : key_points) {
-        pt.location.x *= w_scale;
-        pt.location.y *= h_scale;
-    }
 }
 
 /***
@@ -503,6 +502,7 @@ void SuperPoint<INPUT, OUTPUT>::Impl::decode_fp_descriptor(superpoint_impl::inte
         }
     }
     cv::Mat desc(desc_map_row, desc_map_col, CV_32FC(desc_map_channels), desc_tdata_reshape.data());
+
     // grid sample descriptor
     for (auto& key_pt : key_points) {
         float x = static_cast<float>(key_pt.location.x) / static_cast<float>(_m_cell_size);
@@ -545,7 +545,6 @@ void SuperPoint<INPUT, OUTPUT>::Impl::decode_fp_descriptor(superpoint_impl::inte
         for (auto& v : sample_descriptor) {
             v /= vec_norm;
         }
-
         key_pt.descriptor = sample_descriptor;
     }
 }
