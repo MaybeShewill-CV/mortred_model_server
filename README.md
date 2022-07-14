@@ -179,4 +179,6 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 
 * <https://github.com/sogou/workflow>
 * <https://github.com/alibaba/MNN>
+* <https://github.com/Tencent/rapidjson>
+* <https://github.com/ToruNiina/toml11>
 * <https://github.com/wfrest/wfrest/blob/main/src/base/Timestamp.cc>
