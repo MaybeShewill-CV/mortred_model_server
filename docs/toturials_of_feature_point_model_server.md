@@ -62,7 +62,7 @@ resp = {
 ![superpoint_server_input](../resources/images/superpoint_server_input.png)
 
 `Server's Output Image With Different Model`
-<center>**************** 120x160_model **************** 240x320_model ******************************** 480x640_model ******************************** 960x1280_model ****************</center>
+<center>************** 120x160_model **************** 240x320_model *********************** 480x640_model ******************************** 960x1280_model ****************</center>
 
 ![superpoint_server_output](../resources/images/superpoint_server_output.png)
 
