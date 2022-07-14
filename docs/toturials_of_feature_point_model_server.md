@@ -59,6 +59,7 @@ resp = {
 [superpoint](https://arxiv.org/abs/1712.07629) model was designed for detect and describe feature point on images. You may refer to repo [https://github.com/magicleap/SuperPointPretrainedNetwork](https://github.com/magicleap/SuperPointPretrainedNetwork) for details about training details.
 
 `Server's Input Image`
+
 ![superpoint_server_input](../resources/images/superpoint_server_input.png)
 
 `Server's Output Image With Different Model`
