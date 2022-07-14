@@ -65,7 +65,7 @@ with open(src_image_path, 'rb') as f:
 
 ### AttentiveGan Derain Model
 
-[attentive_gan_derain](https://arxiv.org/abs/1711.10098) model was designed for derain task. You may refer to repo https://github.com/MaybeShewill-CV/attentive-gan-derainnet for details about training details.
+[attentive_gan_derain](https://arxiv.org/abs/1711.10098) model was designed for derain task. You may refer to repo [https://github.com/MaybeShewill-CV/attentive-gan-derainnet](https://github.com/MaybeShewill-CV/attentive-gan-derainnet) for details about training details.
 
 `Server's Input Image`
 ![attentive_server_input](../resources/images/attentive_gan_server_input.png)
@@ -75,7 +75,7 @@ with open(src_image_path, 'rb') as f:
 
 ### EnlightenGan Model
 
-[enlighten_gan_derain](https://arxiv.org/abs/1906.06972) model was designed for low light image enhancement task. You may refer to repo https://github.com/VITA-Group/EnlightenGAN for details about training details.
+[enlighten_gan_derain](https://arxiv.org/abs/1906.06972) model was designed for low light image enhancement task. You may refer to repo [https://github.com/VITA-Group/EnlightenGAN](https://github.com/VITA-Group/EnlightenGAN) for details about training details.
 
 `Server's Input Image`
 ![enlighten_server_input](../resources/images/enlighten_gan_server_input.png)
