@@ -30,7 +30,7 @@ You're welcomed to ask questions and help me to make it better!
 
 * [Quick Start](#quick-start)
 * [Benchmark](#benchmark)
-* [Toturials](#toturials)
+* [Tutorials](#tutorials)
 * [How To](#how-to)
 * [Web Server Configuration](#web-server-configuration)
 
@@ -123,7 +123,7 @@ The client will repeatly post [demo images](./demo_data/model_test_input/classif
 Client output should be like
 ![mobilenetv2_client_exam_output](./resources/images/exam_client_output.png)
 
-For more server demo you may find them in [Torturials](#toturials) :point_down::point_down::point_down:
+For more server demo you may find them in [Torturials](#tutorials) :point_down::point_down::point_down:
 
 # `Benchmark`
 
@@ -153,13 +153,13 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 * [Details Of Model Inference Benchmark](./docs/model_inference_benchmark.md)
 * [About Model Configuration](./docs/about_model_configuration.md)
 
-# `Toturials`
+# `Tutorials`
 
-* [Image Classification Model Server Toturials](./docs/toturials_of_classification_model_server.md)
-* [Image Segmentation Model Server Toturials](./docs/toturials_of_segmentation_model_server.md)
-* [Image Object Detection Model Server Toturials](./docs/toturials_of_object_detection_model_server.md)
-* [Image Enhancement Model Server Toturials](./docs/toturials_of_enhancement_model_server.md)
-* [Image Feature Point Model Server Toturials](./docs/toturials_of_feature_point_model_server.md)
+* [Image Classification Model Server Tutorials](./docs/tutorials_of_classification_model_server.md)
+* [Image Segmentation Model Server Tutorials](./docs/tutorials_of_segmentation_model_server.md)
+* [Image Object Detection Model Server Tutorials](./docs/tutorials_of_object_detection_model_server.md)
+* [Image Enhancement Model Server Tutorials](./docs/tutorials_of_enhancement_model_server.md)
+* [Image Feature Point Model Server Tutorials](./docs/tutorials_of_feature_point_model_server.md)
 
 # `How To`
 

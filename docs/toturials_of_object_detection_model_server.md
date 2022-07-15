@@ -1,4 +1,4 @@
-# Toturials Of Object Detection Model Server
+# Tutorials Of Object Detection Model Server
 
 ## Start A Object Detection Server
 

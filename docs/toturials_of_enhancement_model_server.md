@@ -1,4 +1,4 @@
-# Toturials Of Enhancement Model Server
+# Tutorials Of Enhancement Model Server
 
 ## Start A Enhancement Server
 

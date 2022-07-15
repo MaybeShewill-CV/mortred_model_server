@@ -1,4 +1,4 @@
-# Toturials Of Feature Point Model Server
+# Tutorials Of Feature Point Model Server
 
 ## Start A Feature Point Server
 

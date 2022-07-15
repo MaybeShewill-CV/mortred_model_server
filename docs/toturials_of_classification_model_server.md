@@ -1,4 +1,4 @@
-# Toturials Of Classification Model Server
+# Tutorials Of Classification Model Server
 
 ## Start A Classification Server
 

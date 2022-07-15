@@ -1,4 +1,4 @@
-# Toturials Of Scene Segmentation Model Server
+# Tutorials Of Scene Segmentation Model Server
 
 ## Start A Scene Segmentation Server
 
