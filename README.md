@@ -177,7 +177,7 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 
 # `Repo-Status`
 
-![Repobeats analytics image](https://repobeats.axiom.co/api/embed/ffa5169a3a4002d4f573b12be173c9382d14b78a.svg "Repobeats analytics image")
+![repo-status](https://repobeats.axiom.co/api/embed/b8c3f964c5afc4776f62a12bcd1e76c57ac554ca.svg "Repobeats analytics image")
 
 # `Reference`
 
