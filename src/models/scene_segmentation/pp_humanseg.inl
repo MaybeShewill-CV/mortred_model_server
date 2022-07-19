@@ -272,8 +272,8 @@ StatusCode PPHumanSeg<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    _m_input_tensor = _m_net->getSessionInput(_m_session, "img");
-    _m_output_tensor = _m_net->getSessionOutput(_m_session, "tmp_75");
+    _m_input_tensor = _m_net->getSessionInput(_m_session, "x");
+    _m_output_tensor = _m_net->getSessionOutput(_m_session, "softmax_0.tmp_0");
 
     if (_m_input_tensor == nullptr) {
         LOG(ERROR) << "Fetch PPHumanSeg Input Node failed";
