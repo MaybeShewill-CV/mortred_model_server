@@ -114,7 +114,7 @@ transform_output(const ppmat_impl::internal_output& internal_out) {
 /***************** Impl Function Sets ******************/
 
 template<typename INPUT, typename OUTPUT>
-class ModNetMatting<INPUT, OUTPUT>::Impl {
+class PPMatting<INPUT, OUTPUT>::Impl {
 public:
     /***
      *
@@ -200,7 +200,7 @@ private:
 * @return
 */
 template<typename INPUT, typename OUTPUT>
-StatusCode ModNetMatting<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& config) {
+StatusCode PPMatting<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& config) {
     if (!config.contains("PP_MATTING")) {
         LOG(ERROR) << "Config file missing PP_MATTING section, please check";
         _m_successfully_initialized = false;
@@ -304,7 +304,7 @@ StatusCode ModNetMatting<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("
 * @return
 */
 template<typename INPUT, typename OUTPUT>
-cv::Mat ModNetMatting<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& input_image) const {
+cv::Mat PPMatting<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& input_image) const {
     cv::Mat tmp;
     // swap channles
     cv::cvtColor(input_image, tmp, cv::COLOR_BGR2RGB);
@@ -334,7 +334,7 @@ cv::Mat ModNetMatting<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& inpu
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode ModNetMatting<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
+StatusCode PPMatting<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     // transform external input into internal input
     auto internal_in = ppmat_impl::transform_input(in);
 
@@ -377,7 +377,7 @@ StatusCode ModNetMatting<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out)
  * @tparam OUTPUT
  */
 template<typename INPUT, typename OUTPUT>
-ModNetMatting<INPUT, OUTPUT>::ModNetMatting() {
+PPMatting<INPUT, OUTPUT>::PPMatting() {
     _m_pimpl = std::make_unique<Impl>();
 }
 
@@ -387,7 +387,7 @@ ModNetMatting<INPUT, OUTPUT>::ModNetMatting() {
  * @tparam OUTPUT
  */
 template<typename INPUT, typename OUTPUT>
-ModNetMatting<INPUT, OUTPUT>::~ModNetMatting() = default;
+PPMatting<INPUT, OUTPUT>::~PPMatting() = default;
 
 /***
  *
@@ -397,7 +397,7 @@ ModNetMatting<INPUT, OUTPUT>::~ModNetMatting() = default;
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode ModNetMatting<INPUT, OUTPUT>::init(const decltype(toml::parse(""))& cfg) {
+StatusCode PPMatting<INPUT, OUTPUT>::init(const decltype(toml::parse(""))& cfg) {
     return _m_pimpl->init(cfg);
 }
 
@@ -408,7 +408,7 @@ StatusCode ModNetMatting<INPUT, OUTPUT>::init(const decltype(toml::parse(""))& c
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-bool ModNetMatting<INPUT, OUTPUT>::is_successfully_initialized() const {
+bool PPMatting<INPUT, OUTPUT>::is_successfully_initialized() const {
     return _m_pimpl->is_successfully_initialized();
 }
 
@@ -421,7 +421,7 @@ bool ModNetMatting<INPUT, OUTPUT>::is_successfully_initialized() const {
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode ModNetMatting<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
+StatusCode PPMatting<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
 }
 
