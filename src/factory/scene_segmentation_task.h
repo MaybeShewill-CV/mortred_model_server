@@ -12,6 +12,7 @@
 #include "factory/register_marco.h"
 #include "models/base_model.h"
 #include "models/scene_segmentation/bisenetv2.h"
+#include "models/scene_segmentation/modnet_matting.h"
 #include "server/scene_segmentation//bisenetv2_server.h"
 
 namespace jinq {
@@ -23,6 +24,7 @@ using jinq::server::BaseAiServer;
 
 namespace scene_segmentation {
 using jinq::models::scene_segmentation::BiseNetV2;
+using jinq::models::scene_segmentation::ModNetMatting;
 
 using jinq::server::scene_segmentation::BiseNetV2Server;
 
@@ -36,6 +38,19 @@ using jinq::server::scene_segmentation::BiseNetV2Server;
 template<typename INPUT, typename OUTPUT>
 static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_bisenetv2_segmentor(const std::string& segmentor_name) {
     REGISTER_AI_MODEL(BiseNetV2, segmentor_name, INPUT, OUTPUT)
+    return ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance().get_model(segmentor_name);
+}
+
+/***
+ * create modnet human matting instance
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param detector_name
+ * @return
+ */
+template<typename INPUT, typename OUTPUT>
+static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_modnet_segmentor(const std::string& segmentor_name) {
+    REGISTER_AI_MODEL(ModNetMatting, segmentor_name, INPUT, OUTPUT)
     return ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance().get_model(segmentor_name);
 }
 
