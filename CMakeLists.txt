@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(mm_ai_server)
+project(mortred_model_server)
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99")
@@ -16,7 +16,7 @@ ELSE()
 ENDIF(CMAKE_BUILD_TYPE MATCHES Debug)
 
 message(STATUS ">>>>>>>>>>>>>")
-message(STATUS "MM AI Server INFO:")
+message(STATUS "Mortred Model Server INFO:")
 message(STATUS "\tSystem: ${CMAKE_SYSTEM_NAME}")
 message(STATUS "\tProcessor: ${CMAKE_SYSTEM_PROCESSOR}")
 message(STATUS "\tBuild Path: ${CMAKE_CURRENT_BINARY_DIR}")
