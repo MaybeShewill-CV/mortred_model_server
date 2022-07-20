@@ -356,10 +356,17 @@ StatusCode PPHumanSeg<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
     _m_output_tensor->copyToHostTensor(&output_tensor_user);
     auto host_data = output_tensor_user.host<float>();
-    cv::Mat result_image(_m_input_size_host, CV_32FC1, host_data);
-    result_image *= 255.0;
-    result_image.convertTo(result_image, CV_32SC1);
-    cv::resize(result_image, result_image, _m_input_size_user, 0.0, 0.0, cv::INTER_NEAREST);
+    cv::Mat logits(_m_input_size_host, CV_32FC2, host_data);
+    cv::resize(logits, logits, _m_input_size_user, 0.0, 0.0, cv::INTER_LINEAR);
+    cv::Mat result_image(_m_input_size_user, CV_8UC1, cv::Scalar(0));
+    for (auto row = 0; row < logits.rows; ++row) {
+        for (auto col = 0; col < logits.cols; ++col) {
+            auto logit_val = logits.at<cv::Vec2f>(row, col);
+            if (logit_val[0] < logit_val[1]) {
+                result_image.at<uchar>(row, col) = 255;
+            }
+        }
+    }
 
     // transform internal output into external output
     pphumanseg_impl::internal_output internal_out;
