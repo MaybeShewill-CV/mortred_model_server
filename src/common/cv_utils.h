@@ -176,6 +176,30 @@ public:
     }
 
     /***
+     *
+     * @param input_image
+     * @param output_image
+     * @param cls_nums
+     */
+    static void add_segmentation_mask(
+            const cv::Mat& input_image, const cv::Mat& segment_mask,
+            cv::Mat& output_image, int cls_nums) {
+        // prepare color map
+        auto color_map = generate_color_map(cls_nums);
+        if (output_image.empty()) {
+            output_image.create(input_image.size(), CV_8UC3);
+        }
+        assert(input_image.size() == output_image.size());
+
+        // make colorized segmentation mask
+        cv::Mat colorized_mask;
+        colorize_segmentation_mask(segment_mask, colorized_mask, cls_nums);
+
+        // make add image
+        cv::addWeighted(input_image, 0.6, colorized_mask, 0.4, 0.0, output_image);
+    }
+
+    /***
     *
     * @param box1
     * @param box2
