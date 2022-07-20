@@ -357,9 +357,9 @@ StatusCode ModNetMatting<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out)
     _m_output_tensor->copyToHostTensor(&output_tensor_user);
     auto host_data = output_tensor_user.host<float>();
     cv::Mat result_image(_m_input_size_host, CV_32FC1, host_data);
+    cv::resize(result_image, result_image, _m_input_size_user, 0.0, 0.0, cv::INTER_LINEAR);
     result_image *= 255.0;
-    result_image.convertTo(result_image, CV_32SC1);
-    cv::resize(result_image, result_image, _m_input_size_user, 0.0, 0.0, cv::INTER_NEAREST);
+    result_image.convertTo(result_image, CV_8UC1);
 
     // transform internal output into external output
     modnet_impl::internal_output internal_out;
