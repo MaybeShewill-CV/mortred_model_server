@@ -273,7 +273,8 @@ StatusCode PPMatting<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))&
     }
 
     _m_input_tensor = _m_net->getSessionInput(_m_session, "img");
-    _m_output_tensor = _m_net->getSessionOutput(_m_session, "tmp_75");
+    auto output_all = _m_net->getSessionOutputAll(_m_session);
+    _m_output_tensor = output_all.begin()->second;
 
     if (_m_input_tensor == nullptr) {
         LOG(ERROR) << "Fetch PPMatting Input Node failed";
@@ -357,9 +358,9 @@ StatusCode PPMatting<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     _m_output_tensor->copyToHostTensor(&output_tensor_user);
     auto host_data = output_tensor_user.host<float>();
     cv::Mat result_image(_m_input_size_host, CV_32FC1, host_data);
+    cv::resize(result_image, result_image, _m_input_size_user, 0.0, 0.0, cv::INTER_NEAREST);
     result_image *= 255.0;
     result_image.convertTo(result_image, CV_32SC1);
-    cv::resize(result_image, result_image, _m_input_size_user, 0.0, 0.0, cv::INTER_NEAREST);
 
     // transform internal output into external output
     ppmat_impl::internal_output internal_out;
