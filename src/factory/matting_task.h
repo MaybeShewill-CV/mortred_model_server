@@ -13,6 +13,7 @@
 #include "models/base_model.h"
 #include "models/matting/modnet_matting.h"
 #include "models/matting/pp_matting.h"
+#include "server/matting/pp_matting_server.h"
 
 namespace jinq {
 namespace factory {
@@ -24,6 +25,8 @@ using jinq::server::BaseAiServer;
 namespace matting {
 using jinq::models::matting::ModNetMatting;
 using jinq::models::matting::PPMatting;
+
+using jinq::server::matting::PPMattingServer;
 
 /***
  * create modnet human matting instance
@@ -49,6 +52,16 @@ template<typename INPUT, typename OUTPUT>
 static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_ppmatting_segmentor(const std::string& segmentor_name) {
     REGISTER_AI_MODEL(PPMatting, segmentor_name, INPUT, OUTPUT)
     return ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance().get_model(segmentor_name);
+}
+
+/***
+ * create pp matting server
+ * @param detector_name
+ * @return
+ */
+static std::unique_ptr<BaseAiServer> create_pp_matting_server(const std::string& server_name) {
+    REGISTER_AI_SERVER(PPMattingServer, server_name)
+    return ServerFactory<BaseAiServer>::get_instance().get_server(server_name);
 }
 
 }

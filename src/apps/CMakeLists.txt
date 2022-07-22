@@ -44,6 +44,7 @@ set(MODEL_SERVER_APP_LIST
     ocr
     proxy
     scene_segmentation
+    matting
 )
 
 foreach(dir_name ${MODEL_SERVER_APP_LIST})
