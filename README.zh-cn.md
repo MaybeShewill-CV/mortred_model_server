@@ -14,7 +14,7 @@
 
 这是一个易于使用的面向DL模型的Web服务器，致力于充分发挥单机的cpu和gpu性能。整个服务器的架构大致可以分成三层，最底层的DL模型开发依赖于 `tensorflow/pytorch` 框架，中间的DL模型推理引擎主要依赖 [MNN](https://github.com/alibaba/MNN) 它具有高性能、易于适配多种计算后端的优势，上层的DL模型网络服务依赖高性能C++服务器引擎 [workflow](https://github.com/sogou/workflow) 来完成.
 
-欢迎你反馈任何你发现的bug，鉴于本人还是一个c with struct 弱鸡 :upside_down_face:
+欢迎你反馈任何你发现的bug，本人还是一个c with struct 弱鸡 :upside_down_face:
 
 整个项目的简要架构图如下
 
