@@ -4,7 +4,7 @@
     <img src="./resources/images/icon.png" alt='icon.png' height="180px" width="180px"/>
   </h1>
 
-  ![icon](./resources/images/iconv4.png)
+  ![icon](./resources/images/iconv1.gif)
 
    Mortred-AI-Web-Server: A Noob Web Server for AI Models
 
