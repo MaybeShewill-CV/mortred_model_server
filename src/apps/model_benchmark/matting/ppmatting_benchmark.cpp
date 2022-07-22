@@ -1,27 +1,27 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: modnet_benchmark.cpp
+* File: ppmatting_benchmark.cpp
 * Date: 22-7-19
 ************************************************/
 
-// modnet matting benckmark tool
+// pphuman matting benckmark tool
 
 #include <glog/logging.h>
-#include <toml/toml.hpp>
+#include "toml/toml.hpp"
 
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
 #include "common/time_stamp.h"
 #include "models/model_io_define.h"
-#include "factory/scene_segmentation_task.h"
+#include "factory/matting_task.h"
 
 using jinq::common::FilePathUtil;
 using jinq::common::Timestamp;
 using jinq::common::CvUtils;
 using jinq::models::io_define::common_io::mat_input;
-using jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
-using jinq::factory::scene_segmentation::create_modnet_segmentor;
+using jinq::models::io_define::matting::std_matting_output;
+using jinq::factory::matting::create_ppmatting_segmentor;
 
 int main(int argc, char** argv) {
 
@@ -59,13 +59,13 @@ int main(int argc, char** argv) {
     struct mat_input model_input {
             input_image
     };
-    std_scene_segmentation_output model_output;
+    std_matting_output model_output;
     // construct detector
-    auto segmentor = create_modnet_segmentor<mat_input, std_scene_segmentation_output>("modnet");
+    auto segmentor = create_ppmatting_segmentor<mat_input, std_matting_output>("pphuman");
     auto cfg = toml::parse(cfg_file_path);
     segmentor->init(cfg);
     if (!segmentor->is_successfully_initialized()) {
-        LOG(INFO) << "modnet segmentor init failed";
+        LOG(INFO) << "ppmatting segmentor init failed";
         return -1;
     }
 
@@ -73,7 +73,7 @@ int main(int argc, char** argv) {
     int loop_times = 100;
     LOG(INFO) << "input test image size: " << input_image.size();
     LOG(INFO) << "segmentor run loop times: " << loop_times;
-    LOG(INFO) << "start modnet benchmark at: " << Timestamp::now().to_format_str();
+    LOG(INFO) << "start ppmatting benchmark at: " << Timestamp::now().to_format_str();
     auto ts = Timestamp::now();
     for (int i = 0; i < loop_times; ++i) {
         segmentor->run(model_input, model_output);
@@ -83,9 +83,9 @@ int main(int argc, char** argv) {
     LOG(INFO) << "cost time: " << cost_time << "s, fps: " << loop_times / cost_time;
 
     std::string output_file_name = FilePathUtil::get_file_name(input_image_path);
-    output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_modnet_result.png";
+    output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_ppmatting_result.png";
     std::string output_path = FilePathUtil::concat_path("../demo_data/model_test_input/scene_segmentation", output_file_name);
-    cv::imwrite(output_path, model_output.segmentation_result);
+    cv::imwrite(output_path, model_output.matting_result);
     LOG(INFO) << "segmentation result image has been written into: " << output_path;
 
     return 1;

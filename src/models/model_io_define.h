@@ -74,6 +74,16 @@ using std_scene_segmentation_output = seg_output;
 
 } // namespace scene_segmentation
 
+// image scene segmentation
+namespace matting {
+
+struct matting_output {
+    cv::Mat matting_result;
+};
+using std_matting_output = matting_output;
+
+} // namespace scene_segmentation
+
 // image enhancement
 namespace enhancement {
 

@@ -18,7 +18,7 @@
 
 namespace jinq {
 namespace models {
-namespace scene_segmentation {
+namespace matting {
 
 template<typename INPUT, typename OUTPUT>
 class ModNetMatting : public jinq::models::BaseAiModel<INPUT, OUTPUT> {

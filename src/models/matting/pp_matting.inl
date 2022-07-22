@@ -26,8 +26,8 @@ using jinq::models::io_define::common_io::file_input;
 using jinq::models::io_define::common_io::base64_input;
 using jinq::common::Timestamp;
 
-namespace scene_segmentation {
-using jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
+namespace matting {
+using jinq::models::io_define::matting::std_matting_output;
 
 namespace ppmat_impl {
 
@@ -35,7 +35,7 @@ struct internal_input {
     cv::Mat input_image;
 };
 
-using internal_output = std_scene_segmentation_output;
+using internal_output = std_matting_output;
 
 /***
 *
@@ -102,10 +102,10 @@ transform_input(const INPUT& in) {
 * @return
 */
 template<typename OUTPUT>
-typename std::enable_if<std::is_same<OUTPUT, std::decay<std_scene_segmentation_output>::type>::value, std_scene_segmentation_output>::type
+typename std::enable_if<std::is_same<OUTPUT, std::decay<std_matting_output>::type>::value, std_matting_output>::type
 transform_output(const ppmat_impl::internal_output& internal_out) {
-    std_scene_segmentation_output result;
-    internal_out.segmentation_result.copyTo(result.segmentation_result);
+    std_matting_output result;
+    internal_out.matting_result.copyTo(result.matting_result);
     return result;
 }
 
@@ -364,7 +364,7 @@ StatusCode PPMatting<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
 
     // transform internal output into external output
     ppmat_impl::internal_output internal_out;
-    internal_out.segmentation_result = result_image;
+    internal_out.matting_result = result_image;
     out = ppmat_impl::transform_output<OUTPUT>(internal_out);
 
     return StatusCode::OK;
