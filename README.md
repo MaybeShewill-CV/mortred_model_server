@@ -8,7 +8,7 @@
 
    Mortred-AI-Web-Server: 一个面向DL模型的Web服务器
 
-   | [English](README.md) | [中文](README-zh-Hans.md) |
+   | [English](README.en-us.md) | [中文](README.md) |
 
 </div>
 
