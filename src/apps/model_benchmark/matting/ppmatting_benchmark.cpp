@@ -45,7 +45,7 @@ int main(int argc, char** argv) {
         input_image_path = argv[2];
         LOG(INFO) << "input test image path: " << input_image_path;
     } else {
-        input_image_path = "../demo_data/model_test_input/scene_segmentation/matting_test.jpg";
+        input_image_path = "../demo_data/model_test_input/matting/matting_test.jpg";
         LOG(INFO) << "use default input test image path: " << input_image_path;
     }
 
@@ -84,7 +84,7 @@ int main(int argc, char** argv) {
 
     std::string output_file_name = FilePathUtil::get_file_name(input_image_path);
     output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_ppmatting_result.png";
-    std::string output_path = FilePathUtil::concat_path("../demo_data/model_test_input/scene_segmentation", output_file_name);
+    std::string output_path = FilePathUtil::concat_path("../demo_data/model_test_input/matting", output_file_name);
     cv::imwrite(output_path, model_output.matting_result);
     LOG(INFO) << "segmentation result image has been written into: " << output_path;
 

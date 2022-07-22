@@ -13,6 +13,7 @@ set(MODEL_BENCHMARK_LIST
     object_detection
     ocr
     segmentation
+    matting
 )
 
 foreach(dir_name ${MODEL_BENCHMARK_LIST})
