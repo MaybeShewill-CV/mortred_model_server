@@ -70,7 +70,7 @@ int main(int argc, char** argv) {
     }
 
     // run benchmark
-    int loop_times = 100;
+    int loop_times = 500;
     LOG(INFO) << "input test image size: " << input_image.size();
     LOG(INFO) << "segmentor run loop times: " << loop_times;
     LOG(INFO) << "start pphuman benchmark at: " << Timestamp::now().to_format_str();

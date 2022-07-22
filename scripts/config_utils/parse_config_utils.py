@@ -235,6 +235,9 @@ cfg_map = {
     'enlighten_gan': py_demo_cfg.ENLIGHTEN_GAN,
     'bisenetv2': py_demo_cfg.BISENETV2,
     'dbtext': py_demo_cfg.DBTEXT,
+    'modnet': py_demo_cfg.MODNET,
+    'ppmatting': py_demo_cfg.PPMATTING,
+    'pphuman_seg': py_demo_cfg.PPHUMAN_SEG,
 }
 
 

@@ -108,3 +108,36 @@ DBTEXT:
         U: 20
         R: 10
         T: '10m'
+MODNET:
+    MODEL_NAME: 'modnet' # model name
+    MODE: 'single'
+    URL: 'http://localhost:8091/mortred_ai_server_v1/matting/modnet' # service url
+    SOURCE_IMAGE_PATH: '../demo_data/model_test_input/matting/matting_test.jpg'  # source image path
+    SINGLE:
+        LOOP_TIMES: 1000
+    LOCUST:
+        U: 20
+        R: 10
+        T: '10m'
+PPMATTING:
+    MODEL_NAME: 'ppmatting' # model name
+    MODE: 'single'
+    URL: 'http://localhost:8091/mortred_ai_server_v1/matting/pp_matting' # service url
+    SOURCE_IMAGE_PATH: '../demo_data/model_test_input/matting/matting_test.jpg'  # source image path
+    SINGLE:
+        LOOP_TIMES: 1000
+    LOCUST:
+        U: 20
+        R: 10
+        T: '10m'
+PPHUMAN_SEG:
+    MODEL_NAME: 'pphuman_seg' # model name
+    MODE: 'single'
+    URL: 'http://localhost:8091/mortred_ai_server_v1/scene_segmentation/pphuman_seg' # service url
+    SOURCE_IMAGE_PATH: '../demo_data/model_test_input/scene_segmentation/human_image.jpg'  # source image path
+    SINGLE:
+        LOOP_TIMES: 1000
+    LOCUST:
+        U: 20
+        R: 10
+        T: '10m'
