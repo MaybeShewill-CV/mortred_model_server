@@ -166,7 +166,7 @@ python server/test_server.py --server mobilenetv2 --mode single
 
 # `文档教程`
 
-* [如何快速添加新的DL模型](./docs/how_to_add_new_model.md) :fire::fire:
+* [如何快速添加新的DL模型](./docs/how_to_add_new_model.zh-cn.md) :fire::fire:
 * [如何快速添加新的DL服务](./docs/how_to_add_new_server.md) :fire::fire:
 
 # `网络服务器配置说明`

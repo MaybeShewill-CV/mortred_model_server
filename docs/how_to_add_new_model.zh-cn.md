@@ -54,22 +54,22 @@ namespace object_detection {
 
 通常情况下模型的默认输入都是一个OpenCV格式的Mat对象，这个可以在代码 [densenet.inl#L33-L35](../src/models/classification/densenet.inl) 查看到. 用户需要自己实现转换方法来实现用户自定义输入到模型默认输入的转换
 
-For example if you defined a base64 encoded image as your input data type. Then you're supposed implement the transform funciton at [densenet.inl#L73-L94](../src/models/classification/densenet.inl)
-![base64_transform_code](../resources/images/eg_transform_base64_to_mat.png)
 
 例如你使用base64编码的图像作为模型输入，那么你需要实现类似 [densenet.inl#L73-L94](../src/models/classification/densenet.inl) 的转换函数来实现用户输入到模型默认输入的转换
 ![base64_transform_code](../resources/images/eg_transform_base64_to_mat.png)
 
-## Step 4: Implement The Transform Function from User Defined Output to Model's Internal Output :pig_nose:
+## Step 4: 实现模型默认输出到用户自定义输出的转换 :pig_nose:
 
-If you use the default output type then your transform function equals a simple assignment funciton like [densenet.inl#L96-L110](../src/models/classification/densenet.inl)
+如果你使用的是默认的输出格式那么你的转换函数会退化为一个简单的赋值函数 [densenet.inl#L96-L110](../src/models/classification/densenet.inl)
 ![output_transform_code](../resources/images/eg_transform_output.png)
 
-Of course you may define your own customized output data format.
+当然你可以自定义输出格式。
 
-## Step 5: Implement The `init` Interface Function :mouse:
+## Step 5: 实现 `init` 接口函数 :mouse:
 
 Usually model's init function is used to setup model's interpreter, session, tensor resource and determinate the computing backend. You may checkout [densenet.inl#L199-L343](../src/models/classification/densenet.inl) for details. Init funciton's structure is
+
+通常模型的 `init` 接口使用来初始化模型的解释器、tensor资源、选择计算后端等. 你可以通过查看 [densenet.inl#L199-L343](../src/models/classification/densenet.inl) 来获取更细节的信息. 主要的代码结构如下
 
 ```cpp
 /***
@@ -85,9 +85,11 @@ StatusCode DenseNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& 
 }
 ```
 
-## Step 6: Implement The `run` Interface Function :elephant:
+## Step 6: 实现 `run` 接口函数 :elephant:
 
 This interface function is responsible for the main model inference process. Three major modules of this process are first transfor input second run model's session finally transfor output. The main code for densenet model is
+
+这个接口函数负责所有模型的inference过程. 三个主要的过程如上所述依次是：1.转换用户自定义输入 2.模型前向传播 3.转换用户自定义模型输出。`densenet` 模型的 `run` 函数接口实现如下：
 
 ```cpp
 /***
@@ -133,9 +135,9 @@ StatusCode DenseNet<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
 }
 ```
 
-## Step 7: Add New Model Into Task Factory :factory:
+## Step 7: 工厂类中加入模型创建接口函数 :factory:
 
-Task factory is used to create model object. Details about this can be found [classification_task.inl#L86-L98](../src/factory/classification_task.h)
+任务工厂是用来创建模型和服务器对象的. 你可以查看 [classification_task.inl#L86-L98](../src/factory/classification_task.h) 获取细节信息。
 
 ```cpp
 /***
@@ -153,9 +155,9 @@ static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_densenet_classifier(
 }
 ```
 
-## Step 8: Make A Benchmark App For New Model :airplane:
+## Step 8: 写一个Benchmark工具 :airplane:
 
-You have already add a new ai model till this step. Now let's make a benchmark app to verify your new model. Comple code can be found [densenet_benchmark.cpp](../src/apps/model_benchmark/classification/densenet_benchmark.cpp)
+到第七步为止你已经在框架中新增了一个 `densenet` 图像分类模型. 那么现在可以做一个简单的基准测试工具来验证一下上面的工作. 完整的代码可以在 [densenet_benchmark.cpp](../src/apps/model_benchmark/classification/densenet_benchmark.cpp) 中看到
 
 ```cpp
 int main(int argc, char** argv) {
@@ -202,16 +204,16 @@ int main(int argc, char** argv) {
 }
 ```
 
-If nothing wrong happened :smile: you should get a similar benchmark result like
+如无错误 :smile: 你应该可以得到一个如下所示的结果
 
-`densenet benchmark result`
+`densenet benchmark 结果`
 ![densenet_bench_mark](../resources/images/densenet_model_benchmark_result.png)
 
-Good Luck !!! :trophy::trophy::trophy:
+祝你好运 !!! :trophy::trophy::trophy:
 
-## Reference
+## 参考
 
-Complete implementation code can be found
+完整的 `densenet` 模型代码和基准测试工具代码可查看
 
 * [DenseNet Model Implement](../src/models/classification/densenet.inl)
 * [DenseNet Model BenchMark App](../src/apps/model_benchmark/classification/densenet_benchmark.cpp)
