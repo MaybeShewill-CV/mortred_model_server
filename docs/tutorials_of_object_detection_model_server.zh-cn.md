@@ -79,6 +79,7 @@ resp = {
 Yolov5 :rocket: 是一个 **niubi** 的目标检测模型。
 
 `客户端输入图像`
+
 ![yolov5_server_input](../resources/images/yolov5_server_input.jpg)
 
 `服务器输出图像`
@@ -92,7 +93,9 @@ Yolov5 :rocket: 是一个 **niubi** 的目标检测模型。
 Libface 是由 [ShiqiYu](https://github.com/ShiqiYu) 老师出品的杰出人脸检测模型. 你可以参考 [https://github.com/ShiqiYu/libfacedetection](https://github.com/ShiqiYu/libfacedetection) 来获取模型细节。
 
 `客户端输入图像`
+
 ![libface_server_input](../resources/images/libface_server_input.jpg)
 
 `服务端输出图像`
+
 ![libface_server_output](../resources/images/libface_server_output.png)
