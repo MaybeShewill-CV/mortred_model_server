@@ -8,7 +8,7 @@
 
    Mortred-AI-Web-Server: A Noob Web Server for AI Models
 
-   | [English](README.md) | [中文](README.zh-cn.md) |
+   | [English](README.en-us.md) | [中文](README.md) |
 
 </div>
 
