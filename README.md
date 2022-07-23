@@ -153,16 +153,16 @@ python server/test_server.py --server mobilenetv2 --mode single
 `Benchmark 代码段`
 ![benchmakr_code_snappit](./resources/images/benchmark_code_snappit.png)
 
-* [Model_Zoo 所有模型的详细基准测试结果](./docs/model_inference_benchmark.md)
-* [关于模型推理的配置文件说明](./docs/about_model_configuration.md)
+* [Model_Zoo 所有模型的详细基准测试结果](./docs/model_inference_benchmark.zh-cn.md)
+* [关于模型推理的配置文件说明](./docs/about_model_configuration.zh-cn.md)
 
 # `模型说明`
 
-* [图像分类服务部署说明与示例](./docs/tutorials_of_classification_model_server.md)
-* [图像分割服务部署说明与示例](./docs/tutorials_of_segmentation_model_server.md)
-* [图像目标检测服务部署说明与示例](./docs/tutorials_of_object_detection_model_server.md)
-* [图像增强服务部署说明与示例](./docs/tutorials_of_enhancement_model_server.md)
-* [图像特征点检测服务部署说明与示例](./docs/tutorials_of_feature_point_model_server.md)
+* [图像分类服务部署说明与示例](./docs/tutorials_of_classification_model_server.zh-cn.md)
+* [图像分割服务部署说明与示例](./docs/tutorials_of_segmentation_model_server.zh-cn.md)
+* [图像目标检测服务部署说明与示例](./docs/tutorials_of_object_detection_model_server.zh-cn.md)
+* [图像增强服务部署说明与示例](./docs/tutorials_of_enhancement_model_server.zh-cn.md)
+* [图像特征点检测服务部署说明与示例](./docs/tutorials_of_feature_point_model_server.zh-cn.md)
 
 # `文档教程`
 
