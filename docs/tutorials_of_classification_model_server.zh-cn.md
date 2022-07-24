@@ -26,7 +26,7 @@ cd $PROJECT_ROOT/_bin
 `python客户端代码片段`
 ![sample_mobilenetv2_cls_client](../resources/images/mobilenetv2_sample_client.png)
 
-服务的url地址可以在服务启动之前在配置文件中进行配置修改。你可以在 [模型服务器配置说明文档](../docs/about_model_server_configuration.md) 中找到详细说明。
+服务的url地址可以在服务启动之前在配置文件中进行配置修改。你可以在 [模型服务器配置说明文档](../docs/about_model_server_configuration.zh-cn.md) 中找到详细说明。
 
 调用python客户端的方式如下
 

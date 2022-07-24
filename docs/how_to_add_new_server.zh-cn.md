@@ -1,12 +1,12 @@
-# How To Add New Server
+# 如何增加新的DL模型服务
 
-Here is brief instruction about how to add a new server in this frame work. All model server are inherited from [jinq::server::BaseAiServer](../src/server/abstract_server.h) which determin the server's interface function. You're supposed to pay more attention to [jinq::server::BaseAiServerImpl<WORKER, MODEL_OUTPUT>](../src/server/base_server_impl.h). It's the actual implemention of the base server and all specific servers are inherited from this implementation. `WORKER` is the model in this framework for example the new densenet image classification model in [how_to_add_new_model.md](../docs/how_to_add_new_model.md). `MODEL_OUTPUT` is model's output defined by users. The input of the model uses base64 encoded images uniformly considring convenience and efficiency. Server's main process consist three major module first parse client's request data and fetch base64 encoded input image second send that image into worker queue waiting to run inference finally make response and reply to the client. I will show you an example to help you add a new densenet image classification server in the next sections.
+下面是一个简要教程教大家如何快速新增一个DL模型服务. 所有的模型服务类都继承自 [jinq::server::BaseAiServer](../src/server/abstract_server.h) 接口类。除去接口用户更应该关心的是这个实现类 [jinq::server::BaseAiServerImpl<WORKER, MODEL_OUTPUT>](../src/server/base_server_impl.h)，它负责了整个服务类的功能实现. `WORKER` 指代的是该框架内的DL模型，例如在文档 [how_to_add_new_model.md](../docs/how_to_add_new_model.md) 中新增的 `DenseNet` 图像分类模型. `MODEL_OUTPUT` 是指代用户自定义的模型输出. 出于效率和便捷性考虑，DL模型输入统一使用 `base64` 编码的图像。服务的主要处理过程可以抽象为三步，首先解析客户端发送的请求并获取其中的base64编码图像内容，其次将任务丢入 `worker_queue` 中等待模型计算处理，最后获取模型输出并将其填入response返回给客户端。接下来将通过一个例子讲述如何将之前新增的 `densenet` 分类模型包装成为服务
 
-## Step 1: Define Your Own Output Data Type :monkey_face:
+## Step 1: 定义模型的输出数据格式 :monkey_face:
 
-This step is the same as adding a new model. Default model's output data type for different kind of vision tasks can be found in [model_io_define.h](../src/models/model_io_define.h). Those structs which are named after std** represent the default model output. 
+This step is the same as adding a new model. Default model's output data type for different kind of vision tasks can be found in [model_io_define.h](../src/models/model_io_define.h). Those structs which are named after std** represent the default model output.
 
-For example the default model output for classification task is
+这一步和新增DL模型中的步骤是完全相同的. 例如默认的分类模型输出为
 
 ```cpp
 namespace classification {
@@ -18,11 +18,11 @@ namespace classification {
 } 
 ```
 
-class_id equals max score's idx in scores.
+class_id 等于scores序列中最大值的索引号.
 
-## Step 2: Inherit Your New Model Server
+## Step 2: 继承一个新的Server类
 
-The new model server inherit from [jinq::server::BaseAiServer](../src/server/abstract_server.h) and is only response for interface. The class private member `_m_impl` is responsible for actual implementation. Detailed code can be found [densenet_server.h](../src/server/classification/densenet_server.h). Main structure is
+新的Server类继承自 [jinq::server::BaseAiServer](../src/server/abstract_server.h) 并且仅仅用来定义统一接口。该类的private成员 `_m_impl` 用来负责具体的服务实现. 代码细节可参考 [densenet_server.h](../src/server/classification/densenet_server.h). 主要的结构如下
 
 ```cpp
 namespace jinq {
@@ -53,7 +53,7 @@ private:
 }
 ```
 
-Private class member `_m_impl` inherit from [BaseAiServerImpl<WORKER, MODEL_OUTPUT>](../src/server/base_server_impl.h). Here `WORKER` represent the densenet model which can be create by factory function and `MODEL_OUTPUT` use the default classification model's output so `DenseNetServer::Impl` can be constructed like
+私有成员 `_m_impl` 继承自 [BaseAiServerImpl<WORKER, MODEL_OUTPUT>](../src/server/base_server_impl.h)。`WORKER` 模板参数代表着任务工厂所能创建的DL模型，`MODEL_OUTPUT` 代表用户自定义的模型输出。整体 `DenseNetServer::Impl` 实现主体结构如下
 
 ```cpp
 using jinq::models::io_define::classification::std_classification_output;
@@ -63,11 +63,11 @@ using DenseNetPtr = decltype(create_densenet_classifier<base64_input, std_classi
 class DenseNetServer::Impl : public BaseAiServerImpl<DenseNetPtr, std_classification_output>
 ```
 
-Detailed code can be found [densenet_server.cpp#L40-L61](../src/server/classification/densenet_server.cpp)
+代码细节可参考 [densenet_server.cpp#L40-L61](../src/server/classification/densenet_server.cpp)
 
-## Step 3: Implement SubClass Specific Interface
+## Step 3: 实现子类的接口函数
 
-Each server impl subclass should implement two specific interface
+每个Server实现子类都需要实现这两个特殊的接口函数。
 
 ```cpp
 /***
@@ -87,13 +87,13 @@ StatusCode init(const decltype(toml::parse(""))& config) override;
 std::string make_response_body(const std::string& task_id, const StatusCode& status, const std_classification_output& model_output) override;
 ```
 
-`init` interface is used to initialize model server due to each server's specific configuration. You may checkout [about_model_server_configuration.md](../docs/about_model_server_configuration.md) for server's configuration details.
+`init` 负责根据每个Server不同的配置参数来初始化Server. 关于Server参数配置可以查看文档 [about_model_server_configuration.md](../docs/about_model_server_configuration.zh-cn.md)。
 
-`make_response_body` is used to transfor model's output into response content. User must implement the interface function consdering each server may have special response format.
+`make_response_body` 接口负责将模型的输出转换成服务端的response信息返回给客户端。
 
-## Step 4: Implment SubClass Server Interface Function （optional）
+## Step 4: 实现子类的 `serve_process` 接口函数 （可选）
 
-That interface can be directly inherit from base class's implementation. Major module of server process is first `parse client request` second run model session which is packaged into a `WFGoTask` finally make response and reply to client which is implemented in `WFGoTask_CallBack Function`. Main server's code structure is
+该函数主要负责服务端的serve逻辑，如果没有特殊需求一般可以直接继承自基类. 该函数的主要过程分为三步，首选通过 `parse client request` 来获取客户端发送的图像数据，其次是调用模型inference过程，在这里该计算任务被包装成一个 `WFGoTask`，最后在 `WFGoTask_CallBack Function` 计算任务的回调函数中将模型的输出转换成服务端的response信息返回给客户端。主要的代码结构如下
 
 ```cpp
 /***
@@ -169,11 +169,11 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
 }
 ```
 
-You'd better use the base class's implementation if you're a beginner otherwise you can implement your own serve logic if you've got some specific needs.
+如果是新手的话推荐直接继承基类的实现过程，如果你有特殊的需求那么可以自行修改实现过程。
 
-## Step 5: Add New Server Into Task Factory :factory:
+## Step 5: 任务工厂中增加创建接口 :factory:
 
-Task factory is used to create model object. Details about this can be found [classification_task.inl#L100-L108](../src/factory/classification_task.h)
+在任务工厂中创建相应的接口函数，细节实现可以参考 [classification_task.inl#L100-L108](../src/factory/classification_task.h)
 
 ```cpp
 /***
@@ -187,9 +187,9 @@ static std::unique_ptr<BaseAiServer> create_densenet_cls_server(const std::strin
 }
 ```
 
-## Step 6: Make A New Server App :airplane:
+## Step 6: 创建一个新的图像分类服务app :airplane:
 
-You have already add a new ai model server till this step. Now let's make a server app to verify. Comple code can be found [densenet_classification_server.cpp](../src/apps/server/classification/densenet_classification_server.cpp)
+至此为止你已经成功添加了一个全新的图像分类服务。现在就来创建一个分类服务app来测试下效果吧. 完整的代码可参考 [densenet_classification_server.cpp](../src/apps/server/classification/densenet_classification_server.cpp)
 
 ```cpp
 int main(int argc, char** argv) {
@@ -217,13 +217,13 @@ int main(int argc, char** argv) {
 }
 ```
 
-If nothing wrong happened :smile: you should get a similar server described in [toturials_of_classification_model_server](../docs/toturials_of_classification_model_server.md)
+不出意外 :smile: 你就可以得到一个和文档 [toturials_of_classification_model_server](../docs/toturials_of_classification_model_server.md) 中描述相同的高性能图像分类服务器了。
 
-Good Luck !!! :trophy::trophy::trophy:
+祝你好运 !!! :trophy::trophy::trophy:
 
-## Reference
+## 参考
 
-Complete implementation code can be found
+完整代码如下
 
 * [Base Server Impl Implement](../src/server/base_server_impl.h)
 * [DenseNet Server Implement](../src/server/classification/densenet_server.cpp)
