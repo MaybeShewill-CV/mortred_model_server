@@ -22,8 +22,6 @@
   <img src='./resources/images/simple_architecture.png' alt='simple_architecture' height="400px" width="500px">
 </p>
 
-下面是文档概要，能帮助你快速安装、编译测试demo等。
-
 欢迎你提出改进意见或者pr来帮助我把它建设的更好 :smile::fire:
 
 # `文档目录`
@@ -166,8 +164,8 @@ python server/test_server.py --server mobilenetv2 --mode single
 
 # `文档教程`
 
-* [如何快速添加新的DL模型](./docs/how_to_add_new_model.zh-cn.md) :fire::fire:
-* [如何快速添加新的DL服务](./docs/how_to_add_new_server.zh-cn.md) :fire::fire:
+* [快速添加新的DL模型](./docs/how_to_add_new_model.zh-cn.md) :fire::fire:
+* [快速添加新的DL服务](./docs/how_to_add_new_server.zh-cn.md) :fire::fire:
 
 # `网络服务器配置说明`
 
@@ -177,6 +175,7 @@ python server/test_server.py --server mobilenetv2 --mode single
 # `TODO`
 
 * [ ] 增加更多的DL模型
+* [ ] 创建docker环境
 
 # `开发状态`
 
