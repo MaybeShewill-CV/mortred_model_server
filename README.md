@@ -31,6 +31,7 @@
 * [模型说明](#模型说明)
 * [文档教程](#文档教程)
 * [网络服务器配置说明](#网络服务器配置说明)
+* [Model_Zoo](#model_zoo)
 
 # `快速开始`
 
@@ -171,6 +172,78 @@ python server/test_server.py --server mobilenetv2 --mode single
 
 * [模型网络服务器配置说明](./docs/about_model_server_configuration.zh-cn.md)
 * [代理服务器配置说明](./docs/about_proxy_server_configuration.zh-cn.md)
+
+# `Model Zoo`
+
+<table>
+  <tbody>
+    <tr>
+      <td>
+        <b>模型</b>
+      </td>
+      <td>
+        <b>BenchMark</b>
+      </td>
+    </tr>
+    <tr>
+      <td width="300">
+        <ul>
+        <details><summary><b>图像分类</b></summary>
+          <ul>
+            <li>ResNet </li>
+            <li>MobileNetv2 </li>
+            <li>DenseNet </li>
+          </ul>
+        </details>
+        <details><summary><b>图像增强</b></summary>
+          <ul>
+            <details><summary><b>低光照补偿</b></summary>
+                <ul>
+                    <li>EnlightGan</li>
+                </ul>
+            </details>
+            <details><summary><b>图像去雨滴</b></summary>
+                <ul>
+                    <li>AttentiveGan</li>
+                </ul>
+            </details>
+          <ul>
+        </details>
+        <details><summary><b>图像特征点检测</b></summary>
+          <ul>
+              <li>SuperPoint</li>
+          </ul>
+        </details>
+        <details><summary><b>图像Matting</b></summary>
+          <ul>
+            <li>paddleseg-modnet</li>
+            <li>paddleseg-ppmatting</li>
+          </ul>
+        </details>
+        <details><summary><b>图像目标检测</b></summary>
+          <ul>
+            <li>yolov5</li>
+            <li>yolov7</li>
+            <li>nanodet</li>
+            <li>libface</li>
+          </ul>
+        </details>
+        <details><summary><b>图像OCR</b></summary>
+          <ul>
+            <li>DbNet</li>
+          </ul>
+        </details>
+        <details><summary><b>图像分割</b></summary>
+          <ul>
+            <li>bisenetv2</li>
+            <li>pp-humanseg</li>
+          </ul>
+        </details>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
 
 # `TODO`
 
