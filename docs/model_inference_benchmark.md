@@ -62,3 +62,7 @@ The benchmark test environment is as follows：
 | Model Name | Input Image Size  | Inference Time (ms) | Fps | Backend |
 |------------|-------------------|----------------|-----|----|
 | DBNet | 544x960 | 39.12ms | 25.56 | cuda |
+
+<b><font color='GrayB' size='6' face='Helvetica'> Reference </font></b>
+
+* <https://github.com/PaddlePaddle/PaddleSeg>
