@@ -264,7 +264,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     auto task_receive_ts = Timestamp::now();
     ctx->task_received_ts = task_receive_ts.to_format_str();
 
-    // get mobilenetv2 model
+    // get model worker
     WORKER worker;
     auto find_worker_start_ts = Timestamp::now();
 
@@ -275,7 +275,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     // construct model input
     models::io_define::common_io::base64_input model_input{req.image_content};
 
-    // do classification
+    // do model inference
     StatusCode status;
     if (req.is_valid) {
         status = worker->run(model_input, ctx->model_output);
