@@ -26,6 +26,7 @@ set(LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_LIST_DIR}/_lib)
 file(GLOB MNN_LIBS ${PROJECT_ROOT_DIR}/3rd_party/libs/*MNN*so*)
 file(GLOB_RECURSE WORKFLOW_LIBS ${PROJECT_ROOT_DIR}/3rd_party/libs/*workflow*so)
 file(GLOB_RECURSE GLOG_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*glog*so)
+file(GLOB_RECURSE BASE64_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*base64*so)
 
 # find package
 find_package(Threads REQUIRED)

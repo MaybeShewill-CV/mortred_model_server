@@ -12,6 +12,7 @@
 #include <random>
 
 #include <opencv2/opencv.hpp>
+#include "base64/libbase64.h"
 
 namespace jinq {
 namespace common {
@@ -275,6 +276,46 @@ public:
         return result;
     }
 
+    /***
+     *
+     * @param input
+     * @return
+     */
+    static cv::Mat decode_base64_str_into_cvmat_fast(const std::string& input) {
+        char out[input.size() * 2];
+        size_t out_len = 0;
+        base64_decode(input.c_str(), input.size(), out, &out_len, 0);
+        std::vector<uchar> image_vec_data(out, out + out_len);
+        cv::Mat ret;
+        cv::imdecode(image_vec_data, cv::IMREAD_UNCHANGED).copyTo(ret);
+
+        return ret;
+    }
+
+    /***
+     *
+     * @param input
+     * @return
+     */
+    static std::string encode_cvmat_into_base64_str(const cv::Mat& input) {
+        if (!input.data || input.empty()) {
+            return "";
+        }
+        std::vector<uchar> imencode_buffer;
+        cv::imencode(".jpg", input, imencode_buffer);
+
+        char in[imencode_buffer.size() + 1];
+        in[imencode_buffer.size()] = '\0';
+        for (int idx = 0; idx < imencode_buffer.size(); ++idx) {
+            in[idx] = static_cast<char>(imencode_buffer[idx]);
+        }
+
+        char out[imencode_buffer.size() * 2];
+        size_t out_len = 0;
+        base64_encode(in,imencode_buffer.size(), out, &out_len, 0);
+
+        return out;
+    }
 };
 }
 }
