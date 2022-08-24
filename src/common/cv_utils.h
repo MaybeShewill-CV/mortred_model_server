@@ -183,13 +183,15 @@ public:
      * @param cls_nums
      */
     static void add_segmentation_mask(
-            const cv::Mat& input_image, const cv::Mat& segment_mask,
-            cv::Mat& output_image, int cls_nums) {
+        const cv::Mat& input_image, const cv::Mat& segment_mask,
+        cv::Mat& output_image, int cls_nums) {
         // prepare color map
         auto color_map = generate_color_map(cls_nums);
+
         if (output_image.empty()) {
             output_image.create(input_image.size(), CV_8UC3);
         }
+
         assert(input_image.size() == output_image.size());
 
         // make colorized segmentation mask
@@ -281,7 +283,7 @@ public:
      * @param input
      * @return
      */
-    static cv::Mat decode_base64_str_into_cvmat_fast(const std::string& input) {
+    static cv::Mat decode_base64_str_into_cvmat(const std::string& input) {
         char out[input.size() * 2];
         size_t out_len = 0;
         base64_decode(input.c_str(), input.size(), out, &out_len, 0);
@@ -301,18 +303,20 @@ public:
         if (!input.data || input.empty()) {
             return "";
         }
+
         std::vector<uchar> imencode_buffer;
         cv::imencode(".jpg", input, imencode_buffer);
 
         char in[imencode_buffer.size() + 1];
         in[imencode_buffer.size()] = '\0';
+
         for (int idx = 0; idx < imencode_buffer.size(); ++idx) {
             in[idx] = static_cast<char>(imencode_buffer[idx]);
         }
 
         char out[imencode_buffer.size() * 2];
         size_t out_len = 0;
-        base64_encode(in,imencode_buffer.size(), out, &out_len, 0);
+        base64_encode(in, imencode_buffer.size(), out, &out_len, 0);
 
         return out;
     }

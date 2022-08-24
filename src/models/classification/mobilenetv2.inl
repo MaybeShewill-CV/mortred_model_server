@@ -13,10 +13,12 @@
 
 #include "common/file_path_util.h"
 #include "common/base64.h"
+#include "common/cv_utils.h"
 
 namespace jinq {
 namespace models {
 
+using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 using jinq::common::Base64;
@@ -80,15 +82,13 @@ template<typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<base64_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
     internal_input result{};
-    auto image_decode_string = jinq::common::Base64::base64_decode(in.input_image_content);
-    std::vector<uchar> image_vec_data(image_decode_string.begin(), image_decode_string.end());
+    auto image = CvUtils::decode_base64_str_into_cvmat(in.input_image_content);
 
-    if (image_vec_data.empty()) {
+    if (!image.data || image.empty()) {
         DLOG(WARNING) << "image data empty";
         return result;
     } else {
-        cv::Mat ret;
-        cv::imdecode(image_vec_data, cv::IMREAD_UNCHANGED).copyTo(result.input_image);
+        image.copyTo(result.input_image);
         return result;
     }
 }
@@ -208,6 +208,7 @@ StatusCode MobileNetv2<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
+
     toml::value cfg_content = config.at("MOBILENETV2");
 
     // init Interpreter
@@ -258,6 +259,7 @@ StatusCode MobileNetv2<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")
             mnn_config.type = MNN_FORWARD_CPU;
         }
     }
+
     mnn_config.numThread = _m_threads_nums;
     MNN::BackendConfig backend_config;
     backend_config.precision = MNN::BackendConfig::Precision_High;
@@ -265,6 +267,7 @@ StatusCode MobileNetv2<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")
     mnn_config.backendConfig = &backend_config;
 
     _m_session = _m_net->createSession(mnn_config);
+
     if (_m_session == nullptr) {
         LOG(ERROR) << "Create Session failed, model file path: " << _m_model_file_path;
         _m_successfully_initialized = false;
@@ -274,11 +277,13 @@ StatusCode MobileNetv2<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")
     // 创建Tensor
     _m_input_tensor = _m_net->getSessionInput(_m_session, "input_tensor");
     _m_output_tensor = _m_net->getSessionOutput(_m_session, "output_tensor");
+
     if (_m_input_tensor == nullptr) {
         LOG(ERROR) << "Fetch mobilenetv2 classification model input node failed";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
+
     if (_m_output_tensor == nullptr) {
         LOG(ERROR) << "Fetch mobilenetv2 classification model output node failed";
         _m_successfully_initialized = false;
@@ -306,6 +311,7 @@ template<typename INPUT, typename OUTPUT>
 StatusCode MobileNetv2<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     // transform external input into internal input
     auto internal_in = mobilenetv2_impl::transform_input(in);
+
     if (!internal_in.input_image.data || internal_in.input_image.empty()) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
@@ -325,9 +331,11 @@ StatusCode MobileNetv2<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     auto* host_data = output_tensor_user.host<float>();
     // transform output
     mobilenetv2_impl::internal_output internal_out;
+
     for (auto index = 0; index < output_tensor_user.elementSize(); ++index) {
         internal_out.scores.push_back(host_data[index]);
     }
+
     auto max_score = std::max_element(host_data, host_data + output_tensor_user.elementSize());
     auto cls_id = static_cast<int>(std::distance(host_data, max_score));
     internal_out.class_id = cls_id;
@@ -350,7 +358,7 @@ cv::Mat MobileNetv2<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& input_
     cv::resize(input_image, tmp, cv::Size(256, 256));
     auto dw = static_cast<int>(std::floor((256 - _m_input_tensor_size.width) / 2));
     auto dh = static_cast<int>(std::floor((256 - _m_input_tensor_size.height) / 2));
-    tmp = tmp(cv::Rect(dw,dh, _m_input_tensor_size.width, _m_input_tensor_size.height));
+    tmp = tmp(cv::Rect(dw, dh, _m_input_tensor_size.width, _m_input_tensor_size.height));
 
     // normalize image
     cv::cvtColor(tmp, tmp, cv::COLOR_BGR2RGB);

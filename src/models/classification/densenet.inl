@@ -11,12 +11,14 @@
 #include "glog/logging.h"
 #include "MNN/Interpreter.hpp"
 
-#include "common/file_path_util.h"
 #include "common/base64.h"
+#include "common/cv_utils.h"
+#include "common/file_path_util.h"
 
 namespace jinq {
 namespace models {
 
+using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 using jinq::common::Base64;
@@ -80,15 +82,13 @@ template<typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<base64_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
     internal_input result{};
-    auto image_decode_string = jinq::common::Base64::base64_decode(in.input_image_content);
-    std::vector<uchar> image_vec_data(image_decode_string.begin(), image_decode_string.end());
+    auto image = CvUtils::decode_base64_str_into_cvmat(in.input_image_content);
 
-    if (image_vec_data.empty()) {
+    if (!image.data || image.empty()) {
         DLOG(WARNING) << "image data empty";
         return result;
     } else {
-        cv::Mat ret;
-        cv::imdecode(image_vec_data, cv::IMREAD_UNCHANGED).copyTo(result.input_image);
+        image.copyTo(result.input_image);
         return result;
     }
 }
@@ -331,9 +331,11 @@ StatusCode DenseNet<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     auto* host_data = output_tensor_user.host<float>();
     // transform output
     densenet_impl::internal_output internal_out;
+
     for (auto index = 0; index < output_tensor_user.elementSize(); ++index) {
         internal_out.scores.push_back(host_data[index]);
     }
+
     auto max_score = std::max_element(host_data, host_data + output_tensor_user.elementSize());
     auto cls_id = static_cast<int>(std::distance(host_data, max_score));
     internal_out.class_id = cls_id;
@@ -356,7 +358,7 @@ cv::Mat DenseNet<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& input_ima
     cv::resize(input_image, tmp, cv::Size(256, 256));
     auto dw = static_cast<int>(std::floor((256 - _m_input_tensor_size.width) / 2));
     auto dh = static_cast<int>(std::floor((256 - _m_input_tensor_size.height) / 2));
-    tmp = tmp(cv::Rect(dw,dh, _m_input_tensor_size.width, _m_input_tensor_size.height));
+    tmp = tmp(cv::Rect(dw, dh, _m_input_tensor_size.width, _m_input_tensor_size.height));
 
     // normalize image
     cv::cvtColor(tmp, tmp, cv::COLOR_BGR2RGB);
