@@ -10,5 +10,6 @@ target_link_libraries(
     common
     Threads::Threads
     ${OPENCV_LIBS}
+    ${BASE64_LIBRARIES}
 )
 set_target_properties(common PROPERTIES LINKER_LANGUAGE CXX)
