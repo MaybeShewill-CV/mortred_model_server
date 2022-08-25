@@ -11,12 +11,14 @@
 #include "glog/logging.h"
 #include <opencv2/opencv.hpp>
 
+#include "common/cv_utils.h"
 #include "common/base64.h"
 #include "common/file_path_util.h"
 
 namespace jinq {
 namespace models {
 
+using jinq::common::CvUtils;
 using jinq::common::Base64;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
@@ -77,15 +79,13 @@ typename std::enable_if<std::is_same<INPUT, std::decay<mat_input>::type>::value,
 template <typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<base64_input>::type>::value, internal_input>::type transform_input(const INPUT &in) {
     internal_input result{};
-    auto image_decode_string = jinq::common::Base64::base64_decode(in.input_image_content);
-    std::vector<uchar> image_vec_data(image_decode_string.begin(), image_decode_string.end());
+    auto image = CvUtils::decode_base64_str_into_cvmat(in.input_image_content);
 
-    if (image_vec_data.empty()) {
+    if (!image.data || image.empty()) {
         DLOG(WARNING) << "image data empty";
         return result;
     } else {
-        cv::Mat ret;
-        cv::imdecode(image_vec_data, cv::IMREAD_UNCHANGED).copyTo(result.input_image);
+        image.copyTo(result.input_image);
         return result;
     }
 }
