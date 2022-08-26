@@ -383,6 +383,7 @@ StatusCode PPHumanSeg<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
             }
         }
     }
+    cv::imwrite("tmp.png", result_image * 255);
 
     // transform internal output into external output
     pphumanseg_impl::internal_output internal_out;
