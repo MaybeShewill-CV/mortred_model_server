@@ -326,22 +326,10 @@ public:
      * @param input
      * @return
      */
-    static cv::Mat convert_to_chw_mat(const cv::Mat& input) {
-        // only support 3 channel image
-        cv::Mat result;
-        if (input.type() == CV_8UC3 || input.type() == CV_8UC1) {
-            std::vector<uchar> data(input.channels() * input.rows * input.cols);
-            for(int y = 0; y < input.rows; ++y) {
-                for(int x = 0; x < input.cols; ++x) {
-                    for(int c = 0; c < input.channels(); ++c) {
-                        data[c * (input.rows * input.cols) + y * input.cols + x] =
-                                input.at<cv::Vec3b>(y, x)[c];
-                    }
-                }
-            }
-            result = cv::Mat(input.size(), input.type(), data.data());
-        } else if (input.type() == CV_32FC3 || input.type() == CV_32FC1) {
-            std::vector<float> data(input.channels() * input.rows * input.cols);
+    static std::vector<float> convert_to_chw_vec(const cv::Mat& input) {
+        std::vector<float> data;
+        if (input.type() == CV_32FC3 || input.type() == CV_32FC1) {
+            data.resize(input.channels() * input.rows * input.cols);
             for(int y = 0; y < input.rows; ++y) {
                 for(int x = 0; x < input.cols; ++x) {
                     for(int c = 0; c < input.channels(); ++c) {
@@ -350,13 +338,11 @@ public:
                     }
                 }
             }
-            result = cv::Mat(input.size(), input.type(), data.data());
+            return data;
         } else {
-            LOG(ERROR) << "not support for opencv mat type of: " << input.type();
-            result = input;
+            LOG(ERROR) << "Only support 32fc1 and 32fc3. Not support for opencv mat type of: " << input.type();
+            return data;
         }
-
-        return result;
     }
 
     /***
@@ -374,26 +360,6 @@ public:
             for (int j = 0; j < w; ++j) {
                 for (int k = 0; k < c; ++k) {
                     result[i * (w * c) + j * c + k] = input[k * (h * w) + i * w + j];
-                }
-            }
-        }
-
-        return result;
-    }
-
-    /***
-     *
-     * @param input
-     * @return
-     */
-    static cv::Mat convert_to_hwc_mat(const std::vector<uchar>& input, int c, int h, int w) {
-        // only support 3 channel image
-        assert(input.size() == h * w * c);
-        cv::Mat result(cv::Size(w, h), CV_8UC3);
-        for (int i = 0; i < h; ++i) {
-            for (int j = 0; j < w; ++j) {
-                for (int k = 0; k < c; ++k) {
-                    result.at<cv::Vec3b>(i, j)[k] = input[k * (h * w) + i * w + j];
                 }
             }
         }
