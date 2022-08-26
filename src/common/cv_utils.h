@@ -328,7 +328,7 @@ public:
      */
     static std::vector<float> convert_to_chw_vec(const cv::Mat& input) {
         std::vector<float> data;
-        if (input.type() == CV_32FC3 || input.type() == CV_32FC1) {
+        if (input.type() == CV_32FC3) {
             data.resize(input.channels() * input.rows * input.cols);
             for(int y = 0; y < input.rows; ++y) {
                 for(int x = 0; x < input.cols; ++x) {
@@ -340,7 +340,7 @@ public:
             }
             return data;
         } else {
-            LOG(ERROR) << "Only support 32fc1 and 32fc3. Not support for opencv mat type of: " << input.type();
+            LOG(ERROR) << "Only support 32fc3. Not support for opencv mat type of: " << input.type();
             return data;
         }
     }
@@ -356,10 +356,10 @@ public:
         assert(input.size() == h * w * c);
         std::vector<T> result;
         result.resize(input.size());
-        for (int i = 0; i < h; ++i) {
-            for (int j = 0; j < w; ++j) {
-                for (int k = 0; k < c; ++k) {
-                    result[i * (w * c) + j * c + k] = input[k * (h * w) + i * w + j];
+        for (int row = 0; row < h; ++row) {
+            for (int col = 0; col < w; ++col) {
+                for (int channel = 0; channel < c; ++channel) {
+                    result[row * (w * c) + col * c + channel] = input[channel * (h * w) + row * w + col];
                 }
             }
         }
