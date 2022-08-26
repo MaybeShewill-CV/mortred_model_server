@@ -11,6 +11,7 @@
 #include "glog/logging.h"
 #include "MNN/Interpreter.hpp"
 
+#include "common/cv_utils.h"
 #include "common/time_stamp.h"
 #include "common/file_path_util.h"
 #include "common/base64.h"
@@ -18,6 +19,7 @@
 namespace jinq {
 namespace models {
 
+using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 using jinq::common::Base64;
@@ -203,7 +205,7 @@ private:
 template<typename INPUT, typename OUTPUT>
 StatusCode BiseNetV2<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& config) {
     if (!config.contains("BISENETV2")) {
-        LOG(ERROR) << "Config文件没有BISENETV2相关配置, 请重新检查配置文件";
+        LOG(ERROR) << "Config missing BISENETV2 section please check config file";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
