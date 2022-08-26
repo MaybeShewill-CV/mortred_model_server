@@ -326,7 +326,7 @@ StatusCode MobileNetv2<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     _m_input_tensor->copyFromHostTensor(&input_tensor_user);
     _m_net->runSession(_m_session);
     // decode output tensor
-    MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
+    MNN::Tensor output_tensor_user(_m_output_tensor, _m_output_tensor->getDimensionType());
     _m_output_tensor->copyToHostTensor(&output_tensor_user);
     auto* host_data = output_tensor_user.host<float>();
     // transform output
