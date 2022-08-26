@@ -361,7 +361,16 @@ StatusCode PPHumanSeg<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::CAFFE);
     _m_output_tensor->copyToHostTensor(&output_tensor_user);
     auto host_data = output_tensor_user.host<float>();
-    cv::Mat logits(_m_input_size_host, CV_32FC2, host_data);
+    float hwc_host_data[output_tensor_user.elementSize()];
+    for (auto row = 0; row < _m_input_size_host.height; ++row) {
+        for (auto col = 0; col < _m_input_size_host.width; ++col) {
+            for (auto channel = 0; channel < 2; ++channel) {
+                hwc_host_data[row * _m_input_size_host.width * 2 + col * 2 + channel] = host_data[
+                    channel * _m_input_size_host.height * _m_input_size_host.width + row * _m_input_size_host.width, col];
+            }
+        }
+    }
+    cv::Mat logits(_m_input_size_host, CV_32FC2, hwc_host_data);
     cv::resize(logits, logits, _m_input_size_user, 0.0, 0.0, cv::INTER_LINEAR);
     cv::Mat result_image(_m_input_size_user, CV_32SC1, cv::Scalar(0));
     for (auto row = 0; row < logits.rows; ++row) {
