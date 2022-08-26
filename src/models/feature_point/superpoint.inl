@@ -347,14 +347,12 @@ StatusCode SuperPoint<INPUT, OUTPUT>::Impl::run(const INPUT &in, OUTPUT& out) {
     // preprocess image
     _m_input_size_user = internal_in.input_image.size();
     cv::Mat preprocessed_image = preprocess_image(internal_in.input_image);
-    LOG(INFO) << preprocessed_image.channels();
-    auto pre_chw_image_data = CvUtils::convert_to_chw_vec(preprocessed_image);
 
     // run session
     MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::CAFFE);
     auto input_tensor_data = input_tensor_user.host<float>();
     auto input_tensor_size = input_tensor_user.size();
-    ::memcpy(input_tensor_data, pre_chw_image_data.data(), input_tensor_size);
+    ::memcpy(input_tensor_data, preprocessed_image.data, input_tensor_size);
     _m_input_tensor->copyFromHostTensor(&input_tensor_user);
     _m_net->runSession(_m_session);
 
