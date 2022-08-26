@@ -377,7 +377,7 @@ StatusCode PPHumanSeg<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     auto tmp_host_data = tmp_tensor.host<float>();
 
     for (int i = 0; i < output_tensor_user.elementSize(); ++i) {
-        if (std::abs(tmp_host_data[i] - hwc_host_data[i]) < 0.000000001) {
+        if (std::abs(tmp_host_data[i] - hwc_host_data[i]) > 0.000000001) {
             LOG(INFO) << "origin: " << tmp_host_data[i];
             LOG(INFO) << "converted: " << hwc_host_data[i];
         }
