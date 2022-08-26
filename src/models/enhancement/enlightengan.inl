@@ -390,19 +390,7 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) 
             }
         }
     }
-
-    // for (int index = 0; index < element_size; ++index) {
-    //     auto pix_val_f = (host_data[index] + 1.0) * 255.0 / 2.0;
-    //     if (pix_val_f < 0.0) {
-    //         pix_val_f = 0.0;
-    //     }
-    //     if (pix_val_f >= 255) {
-    //         pix_val_f = 255.0;
-    //     }
-    //     auto pix_val = static_cast<uchar>(pix_val_f);
-    //     output_img_data[index] = pix_val;
-    // }
-
+    
     enlightengan_impl::internal_output internal_out;
     cv::Mat result_image(_m_input_size_host, CV_8UC3, output_img_data.data());
     cv::cvtColor(result_image, internal_out.enhancement_result, cv::COLOR_RGB2BGR);
