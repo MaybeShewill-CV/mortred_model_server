@@ -378,7 +378,7 @@ StatusCode PPHumanSeg<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     }
     LOG(INFO) << hwc_host_data[384];
 
-    cv::Mat logits(_m_input_size_host, CV_32FC2, host_data);
+    cv::Mat logits(_m_input_size_host, CV_32FC2, hwc_host_data);
     cv::resize(logits, logits, _m_input_size_user, 0.0, 0.0, cv::INTER_LINEAR);
     cv::Mat result_image(_m_input_size_user, CV_32SC1, cv::Scalar(0));
     for (auto row = 0; row < logits.rows; ++row) {
