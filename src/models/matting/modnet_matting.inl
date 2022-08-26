@@ -358,7 +358,7 @@ StatusCode ModNetMatting<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out)
     _m_net->runSession(_m_session);
 
     // fetch net output
-    MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
+    MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::CAFFE);
     _m_output_tensor->copyToHostTensor(&output_tensor_user);
     auto host_data = output_tensor_user.host<float>();
     cv::Mat result_image(_m_input_size_host, CV_32FC1, host_data);
