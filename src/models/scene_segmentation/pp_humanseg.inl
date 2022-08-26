@@ -361,12 +361,12 @@ StatusCode PPHumanSeg<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
     _m_output_tensor->copyToHostTensor(&output_tensor_user);
     auto host_data = output_tensor_user.host<float>();
-    LOG(INFO) << host_data[100];
+    LOG(INFO) << host_data[384];
 
     MNN::Tensor tmp_tensor(_m_output_tensor, MNN::Tensor::DimensionType::CAFFE);
     _m_output_tensor->copyToHostTensor(&tmp_tensor);
     auto tmp_host_data = tmp_tensor.host<float>();
-    LOG(INFO) << tmp_host_data[100];
+    LOG(INFO) << tmp_host_data[384];
     float hwc_host_data[output_tensor_user.elementSize()];
     for (auto row = 0; row < _m_input_size_host.height; ++row) {
         for (auto col = 0; col < _m_input_size_host.width; ++col) {
@@ -376,7 +376,7 @@ StatusCode PPHumanSeg<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
             }
         }
     }
-    LOG(INFO) << hwc_host_data[100];
+    LOG(INFO) << hwc_host_data[384];
 
     cv::Mat logits(_m_input_size_host, CV_32FC2, host_data);
     cv::resize(logits, logits, _m_input_size_user, 0.0, 0.0, cv::INTER_LINEAR);
