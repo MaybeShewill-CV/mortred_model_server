@@ -12,11 +12,13 @@
 #include <opencv2/opencv.hpp>
 
 #include "common/base64.h"
+#include "common/cv_utils.h"
 #include "common/file_path_util.h"
 
 namespace jinq {
 namespace models {
 
+using jinq::common::CvUtils;
 using jinq::common::Base64;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
@@ -224,7 +226,7 @@ class SuperPoint<INPUT, OUTPUT>::Impl {
 template <typename INPUT, typename OUTPUT> 
 StatusCode SuperPoint<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")) &config) {
     if (!config.contains("SUPERPOINT")) {
-        LOG(ERROR) << "Config文件没有SUPERPOINT相关配置, 请重新检查配置文件";
+        LOG(ERROR) << "Config file missing SUPERPOINT section please check config file";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
@@ -345,12 +347,14 @@ StatusCode SuperPoint<INPUT, OUTPUT>::Impl::run(const INPUT &in, OUTPUT& out) {
     // preprocess image
     _m_input_size_user = internal_in.input_image.size();
     cv::Mat preprocessed_image = preprocess_image(internal_in.input_image);
+    LOG(INFO) << preprocessed_image.channels();
+    auto pre_chw_image_data = CvUtils::convert_to_chw_vec(preprocessed_image);
 
     // run session
-    MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
+    MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::CAFFE);
     auto input_tensor_data = input_tensor_user.host<float>();
     auto input_tensor_size = input_tensor_user.size();
-    ::memcpy(input_tensor_data, preprocessed_image.data, input_tensor_size);
+    ::memcpy(input_tensor_data, pre_chw_image_data.data(), input_tensor_size);
     _m_input_tensor->copyFromHostTensor(&input_tensor_user);
     _m_net->runSession(_m_session);
 
@@ -393,8 +397,8 @@ cv::Mat SuperPoint<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat &input_i
     cv::cvtColor(tmp, tmp, cv::COLOR_BGR2GRAY);
 
     // normalize
-    if (tmp.type() != CV_32FC3) {
-        tmp.convertTo(tmp, CV_32FC3);
+    if (tmp.type() != CV_32FC1) {
+        tmp.convertTo(tmp, CV_32FC1);
     }
     tmp /= 255.0;
     return tmp;
@@ -447,7 +451,7 @@ void SuperPoint<INPUT, OUTPUT>::Impl::decode_fp_location_and_score(superpoint_im
                     float score = dense_softmax.at<cv::Vec<float, dense_map_channels - 1> >(row, col)[score_idx];
                     int interest_pt_x = col * _m_cell_size + col_ext_index;
                     int interest_pt_y = row * _m_cell_size + row_ext_index;
-                    cv::Point2f interest_pt(interest_pt_x, interest_pt_y);
+                    cv::Point2f interest_pt(static_cast<float>(interest_pt_x), static_cast<float>(interest_pt_y));
                     if (score >= _m_score_threshold) {
                         fp key_pt;
                         key_pt.location = interest_pt;
