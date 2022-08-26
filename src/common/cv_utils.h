@@ -328,9 +328,8 @@ public:
      */
     static cv::Mat convert_to_chw_mat(const cv::Mat& input) {
         // only support 3 channel image
-        assert(input.channels() == 3);
         cv::Mat result;
-        if (input.type() == CV_8UC3) {
+        if (input.type() == CV_8UC3 || input.type() == CV_8UC1) {
             std::vector<uchar> data(input.channels() * input.rows * input.cols);
             for(int y = 0; y < input.rows; ++y) {
                 for(int x = 0; x < input.cols; ++x) {
@@ -341,7 +340,7 @@ public:
                 }
             }
             result = cv::Mat(input.size(), input.type(), data.data());
-        } else if (input.type() == CV_32FC3) {
+        } else if (input.type() == CV_32FC3 || input.type() == CV_32FC1) {
             std::vector<float> data(input.channels() * input.rows * input.cols);
             for(int y = 0; y < input.rows; ++y) {
                 for(int x = 0; x < input.cols; ++x) {
@@ -355,6 +354,48 @@ public:
         } else {
             LOG(ERROR) << "not support for opencv mat type of: " << input.type();
             result = input;
+        }
+
+        return result;
+    }
+
+    /***
+     *
+     * @param input
+     * @return
+     */
+    template<class T>
+    static std::vector<T> convert_to_hwc_vec(const std::vector<T>& input, int c, int h, int w) {
+        // only support 3 channel image
+        assert(input.size() == h * w * c);
+        std::vector<T> result;
+        result.resize(input.size());
+        for (int i = 0; i < h; ++i) {
+            for (int j = 0; j < w; ++j) {
+                for (int k = 0; k < c; ++k) {
+                    result[i * (w * c) + j * c + k] = input[k * (h * w) + i * w + j];
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /***
+     *
+     * @param input
+     * @return
+     */
+    static cv::Mat convert_to_hwc_mat(const std::vector<uchar>& input, int c, int h, int w) {
+        // only support 3 channel image
+        assert(input.size() == h * w * c);
+        cv::Mat result(cv::Size(w, h), CV_8UC3);
+        for (int i = 0; i < h; ++i) {
+            for (int j = 0; j < w; ++j) {
+                for (int k = 0; k < c; ++k) {
+                    result.at<cv::Vec3b>(i, j)[k] = input[k * (h * w) + i * w + j];
+                }
+            }
         }
 
         return result;

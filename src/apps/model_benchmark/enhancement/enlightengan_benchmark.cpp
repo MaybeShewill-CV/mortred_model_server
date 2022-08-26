@@ -76,7 +76,7 @@ int main(int argc, char** argv) {
     int loop_times = 100;
     LOG(INFO) << "input test image size: " << input_image.size();
     LOG(INFO) << "detector run loop times: " << loop_times;
-    LOG(INFO) << "start nanodet benchmark at: " << Timestamp::now().to_format_str();
+    LOG(INFO) << "start enlightengan benchmark at: " << Timestamp::now().to_format_str();
     auto ts = Timestamp::now();
 
     for (int i = 0; i < loop_times; ++i) {

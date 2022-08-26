@@ -372,7 +372,7 @@ cv::Mat AttentiveGanDerain<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat 
  */
 template <typename INPUT, typename OUTPUT> cv::Mat AttentiveGanDerain<INPUT, OUTPUT>::Impl::postprocess() const {
     // convert tensor format
-    MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
+    MNN::Tensor output_tensor_user(_m_output_tensor, _m_output_tensor->getDimensionType());
     _m_output_tensor->copyToHostTensor(&output_tensor_user);
     auto host_data = output_tensor_user.host<float>();
 
@@ -393,9 +393,9 @@ template <typename INPUT, typename OUTPUT> cv::Mat AttentiveGanDerain<INPUT, OUT
             float g_feats_val = output_feats.at<cv::Vec3f>(row, col)[1];
             float r_feats_val = output_feats.at<cv::Vec3f>(row, col)[2];
 
-            float b_scale_val = (b_feats_val - b_min_value) * 255.0 / (b_max_value - b_min_value);
-            float g_scale_val = (g_feats_val - g_min_value) * 255.0 / (g_max_value - g_min_value);
-            float r_scale_val = (r_feats_val - r_min_value) * 255.0 / (r_max_value - r_min_value);
+            auto b_scale_val = static_cast<float>((b_feats_val - b_min_value) * 255.0 / (b_max_value - b_min_value));
+            auto g_scale_val = static_cast<float>((g_feats_val - g_min_value) * 255.0 / (g_max_value - g_min_value));
+            auto r_scale_val = static_cast<float>((r_feats_val - r_min_value) * 255.0 / (r_max_value - r_min_value));
 
             output_image.at<cv::Vec3b>(row, col)[0] = static_cast<uint8_t>(b_scale_val);
             output_image.at<cv::Vec3b>(row, col)[1] = static_cast<uint8_t>(g_scale_val);
