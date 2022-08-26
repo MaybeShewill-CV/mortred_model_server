@@ -205,7 +205,7 @@ private:
 template<typename INPUT, typename OUTPUT>
 StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& config) {
     if (!config.contains("ENLIGHTENGAN")) {
-        LOG(ERROR) << "Config文件没有ENLIGHTENGAN相关配置, 请重新检查配置文件";
+        LOG(ERROR) << "Config file missing ENLIGHTENGAN section please check";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
@@ -350,7 +350,6 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) 
     cv::Mat input_gray;
     preprocess_image(internal_in.input_image, input_src, input_gray);
     auto input_src_chw_data = CvUtils::convert_to_chw_vec(input_src);
-    auto input_gray_chw_data = CvUtils::convert_to_chw_vec(input_gray);
 
     // run session
     MNN::Tensor input_tensor_user_src(_m_input_tensor_src, MNN::Tensor::DimensionType::CAFFE);
@@ -362,38 +361,50 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) 
     MNN::Tensor input_tensor_user_gray(_m_input_tensor_gray, MNN::Tensor::DimensionType::CAFFE);
     input_tensor_data = input_tensor_user_gray.host<float>();
     input_tensor_size = input_tensor_user_gray.size();
-    ::memcpy(input_tensor_data, input_gray_chw_data.data(), input_tensor_size);
+    ::memcpy(input_tensor_data, input_gray.data, input_tensor_size);
     _m_input_tensor_gray->copyFromHostTensor(&input_tensor_user_gray);
     _m_net->runSession(_m_session);
 
     // decode output tensor
-    MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
-//    MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::CAFFE);
+    MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::CAFFE);
     _m_output_tensor->copyToHostTensor(&output_tensor_user);
     auto host_data = output_tensor_user.host<float>();
     auto element_size = output_tensor_user.elementSize();
     std::vector<uchar> output_img_data;
     output_img_data.resize(element_size);
 
-    for (int index = 0; index < element_size; ++index) {
-        auto pix_val_f = (host_data[index] + 1.0) * 255.0 / 2.0;
-        if (pix_val_f < 0.0) {
-            pix_val_f = 0.0;
+    for (auto row = 0; row < _m_input_size_host.height; ++row) {
+        for (auto col = 0; col < _m_input_size_host.width; ++col) {
+            for (auto c = 0; c < 3; ++c) {
+                auto hwc_idx = row * _m_input_size_host.width * 3 + col * 3 + c;
+                auto chw_idx = c * _m_input_size_host.height * _m_input_size_host.width + row * _m_input_size_host.width + col;
+                auto pix_val_f = (host_data[chw_idx] + 1.0) * 255.0 / 2.0;
+                if (pix_val_f < 0.0) {
+                    pix_val_f = 0.0;
+                }
+                if (pix_val_f >= 255) {
+                    pix_val_f = 255.0;
+                }
+                auto pix_val = static_cast<uchar>(pix_val_f);
+                output_img_data[hwc_idx] = pix_val;
+            }
         }
-        if (pix_val_f >= 255) {
-            pix_val_f = 255.0;
-        }
-        auto pix_val = static_cast<uchar>(pix_val_f);
-        output_img_data[index] = pix_val;
     }
-//    output_img_data = CvUtils::convert_to_hwc_vec<uchar>(
-//            output_img_data, 3, _m_input_size_host.height, _m_input_size_host.width);
+
+    // for (int index = 0; index < element_size; ++index) {
+    //     auto pix_val_f = (host_data[index] + 1.0) * 255.0 / 2.0;
+    //     if (pix_val_f < 0.0) {
+    //         pix_val_f = 0.0;
+    //     }
+    //     if (pix_val_f >= 255) {
+    //         pix_val_f = 255.0;
+    //     }
+    //     auto pix_val = static_cast<uchar>(pix_val_f);
+    //     output_img_data[index] = pix_val;
+    // }
 
     enlightengan_impl::internal_output internal_out;
     cv::Mat result_image(_m_input_size_host, CV_8UC3, output_img_data.data());
-//    cv::Mat result_image = CvUtils::convert_to_hwc_mat(
-//            output_img_data, 3, _m_input_size_host.height, _m_input_size_host.width);
-
     cv::cvtColor(result_image, internal_out.enhancement_result, cv::COLOR_RGB2BGR);
     if (internal_out.enhancement_result.size() != internal_in.input_image.size()) {
         cv::resize(internal_out.enhancement_result, internal_out.enhancement_result, internal_in.input_image.size());
