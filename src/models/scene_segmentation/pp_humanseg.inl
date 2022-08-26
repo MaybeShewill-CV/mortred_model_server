@@ -367,7 +367,7 @@ StatusCode PPHumanSeg<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
         for (auto col = 0; col < _m_input_size_host.width; ++col) {
             for (auto channel = 0; channel < 2; ++channel) {
                 hwc_host_data[row * _m_input_size_host.width * 2 + col * 2 + channel] = host_data[
-                    channel * _m_input_size_host.height * _m_input_size_host.width + row * _m_input_size_host.width, col];
+                    channel * _m_input_size_host.height * _m_input_size_host.width + row * _m_input_size_host.width + col];
             }
         }
     }
