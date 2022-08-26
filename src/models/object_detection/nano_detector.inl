@@ -458,8 +458,10 @@ StatusCode NanoDetector<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) 
     // preprocess
     _m_input_size_user = internal_in.input_image.size();
     cv::Mat input_image_copy = preprocess_image(internal_in.input_image);
+    input_image_copy = CvUtils::convert_to_chw_mat(input_image_copy);
+
     // run session
-    MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
+    MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::CAFFE);
     auto input_tensor_data = input_tensor_user.host<float>();
     auto input_tensor_size = input_tensor_user.size();
     ::memcpy(input_tensor_data, input_image_copy.data, input_tensor_size);
