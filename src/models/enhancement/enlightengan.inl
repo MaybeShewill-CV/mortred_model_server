@@ -349,22 +349,26 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) 
     cv::Mat input_src;
     cv::Mat input_gray;
     preprocess_image(internal_in.input_image, input_src, input_gray);
+    auto input_src_chw_data = CvUtils::convert_to_chw_vec(input_src);
+    auto input_gray_chw_data = CvUtils::convert_to_chw_vec(input_gray);
+
     // run session
-    MNN::Tensor input_tensor_user_src(_m_input_tensor_src, MNN::Tensor::DimensionType::TENSORFLOW);
+    MNN::Tensor input_tensor_user_src(_m_input_tensor_src, MNN::Tensor::DimensionType::CAFFE);
     auto input_tensor_data = input_tensor_user_src.host<float>();
     auto input_tensor_size = input_tensor_user_src.size();
-    ::memcpy(input_tensor_data, input_src.data, input_tensor_size);
+    ::memcpy(input_tensor_data, input_src_chw_data.data(), input_tensor_size);
     _m_input_tensor_src->copyFromHostTensor(&input_tensor_user_src);
 
-    MNN::Tensor input_tensor_user_gray(_m_input_tensor_gray, MNN::Tensor::DimensionType::TENSORFLOW);
+    MNN::Tensor input_tensor_user_gray(_m_input_tensor_gray, MNN::Tensor::DimensionType::CAFFE);
     input_tensor_data = input_tensor_user_gray.host<float>();
     input_tensor_size = input_tensor_user_gray.size();
-    ::memcpy(input_tensor_data, input_gray.data, input_tensor_size);
+    ::memcpy(input_tensor_data, input_gray_chw_data.data(), input_tensor_size);
     _m_input_tensor_gray->copyFromHostTensor(&input_tensor_user_gray);
     _m_net->runSession(_m_session);
 
     // decode output tensor
     MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
+//    MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::CAFFE);
     _m_output_tensor->copyToHostTensor(&output_tensor_user);
     auto host_data = output_tensor_user.host<float>();
     auto element_size = output_tensor_user.elementSize();
@@ -382,9 +386,14 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) 
         auto pix_val = static_cast<uchar>(pix_val_f);
         output_img_data[index] = pix_val;
     }
+//    output_img_data = CvUtils::convert_to_hwc_vec<uchar>(
+//            output_img_data, 3, _m_input_size_host.height, _m_input_size_host.width);
 
     enlightengan_impl::internal_output internal_out;
     cv::Mat result_image(_m_input_size_host, CV_8UC3, output_img_data.data());
+//    cv::Mat result_image = CvUtils::convert_to_hwc_mat(
+//            output_img_data, 3, _m_input_size_host.height, _m_input_size_host.width);
+
     cv::cvtColor(result_image, internal_out.enhancement_result, cv::COLOR_RGB2BGR);
     if (internal_out.enhancement_result.size() != internal_in.input_image.size()) {
         cv::resize(internal_out.enhancement_result, internal_out.enhancement_result, internal_in.input_image.size());
