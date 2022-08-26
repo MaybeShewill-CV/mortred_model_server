@@ -372,6 +372,17 @@ StatusCode PPHumanSeg<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
         }
     }
 
+    MNN::Tensor tmp_tensor(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
+    _m_output_tensor->copyToHostTensor(&tmp_tensor);
+    auto tmp_host_data = tmp_tensor.host<float>();
+
+    for (int i = 0; i < output_tensor_user.elementSize(); ++i) {
+        if (std::abs(tmp_host_data[i] - hwc_host_data[i]) < 0.000000001) {
+            LOG(INFO) << "origin: " << tmp_host_data[i];
+            LOG(INFO) << "converted: " << hwc_host_data[i];
+        }
+    }
+
     cv::Mat logits(_m_input_size_host, CV_32FC2, hwc_host_data.data());
     cv::resize(logits, logits, _m_input_size_user, 0.0, 0.0, cv::INTER_LINEAR);
     cv::Mat result_image(_m_input_size_user, CV_32SC1, cv::Scalar(0));
@@ -383,7 +394,6 @@ StatusCode PPHumanSeg<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
             }
         }
     }
-    cv::imwrite("tmp.png", result_image * 255);
 
     // transform internal output into external output
     pphumanseg_impl::internal_output internal_out;
