@@ -361,8 +361,7 @@ StatusCode PPHumanSeg<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::CAFFE);
     _m_output_tensor->copyToHostTensor(&output_tensor_user);
     auto host_data = output_tensor_user.host<float>();
-    std::vector<float> hwc_host_data;
-    hwc_host_data.resize(output_tensor_user.elementSize());
+    float hwc_host_data[output_tensor_user.elementSize()];
     for (auto row = 0; row < _m_input_size_host.height; ++row) {
         for (auto col = 0; col < _m_input_size_host.width; ++col) {
             for (auto channel = 0; channel < 2; ++channel) {
@@ -371,19 +370,7 @@ StatusCode PPHumanSeg<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
             }
         }
     }
-
-    MNN::Tensor tmp_tensor(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
-    _m_output_tensor->copyToHostTensor(&tmp_tensor);
-    auto tmp_host_data = tmp_tensor.host<float>();
-
-    for (int i = 0; i < output_tensor_user.elementSize(); ++i) {
-        if (std::abs(tmp_host_data[i] - hwc_host_data[i]) > 0.000000001) {
-            LOG(INFO) << "origin: " << tmp_host_data[i];
-            LOG(INFO) << "converted: " << hwc_host_data[i];
-        }
-    }
-
-    cv::Mat logits(_m_input_size_host, CV_32FC2, hwc_host_data.data());
+    cv::Mat logits(_m_input_size_host, CV_32FC2, hwc_host_data);
     cv::resize(logits, logits, _m_input_size_user, 0.0, 0.0, cv::INTER_LINEAR);
     cv::Mat result_image(_m_input_size_user, CV_32SC1, cv::Scalar(0));
     for (auto row = 0; row < logits.rows; ++row) {
