@@ -394,9 +394,10 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out
     // preprocess image
     _m_input_size_user = internal_in.input_image.size();
     auto preprocessed_image = preprocess_image(internal_in.input_image);
+    preprocessed_image = CvUtils::convert_to_chw_mat(preprocessed_image);
 
     // run session
-    MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
+    MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::CAFFE);
     auto input_tensor_data = input_tensor_user.host<float>();
     auto input_tensor_size = input_tensor_user.size();
     ::memcpy(input_tensor_data, preprocessed_image.data, input_tensor_size);
@@ -425,7 +426,7 @@ template<typename INPUT, typename OUTPUT>
 yolov7_impl::internal_output YoloV7Detector<INPUT, OUTPUT>::Impl::decode_output_tensor() const {
 
     // convert tensor format
-    MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
+    MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::CAFFE);
     _m_output_tensor->copyToHostTensor(&output_tensor_user);
 
     // fetch tensor data
@@ -445,7 +446,7 @@ yolov7_impl::internal_output YoloV7Detector<INPUT, OUTPUT>::Impl::decode_output_
 
     for (auto index = 0; index < raw_pred_bbox_nums; ++index) {
         for (auto idx = 0; idx < _m_class_nums + 5; idx++) {
-            raw_output[index][idx] = output_tensordata[index + raw_pred_bbox_nums * idx];
+            raw_output[index][idx] = output_tensordata[index * (_m_class_nums + 5) + idx];
         }
     }
 
