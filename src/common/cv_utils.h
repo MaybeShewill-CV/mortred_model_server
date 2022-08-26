@@ -320,6 +320,45 @@ public:
 
         return out;
     }
+
+    /***
+     *
+     * @param input
+     * @return
+     */
+    static cv::Mat convert_to_chw_mat(const cv::Mat& input) {
+        // only support 3 channel image
+        assert(input.channels() == 3);
+        cv::Mat result;
+        if (input.type() == CV_8UC3) {
+            std::vector<uchar> data(input.channels() * input.rows * input.cols);
+            for(int y = 0; y < input.rows; ++y) {
+                for(int x = 0; x < input.cols; ++x) {
+                    for(int c = 0; c < input.channels(); ++c) {
+                        data[c * (input.rows * input.cols) + y * input.cols + x] =
+                                input.at<cv::Vec3b>(y, x)[c];
+                    }
+                }
+            }
+            result = cv::Mat(input.size(), input.type(), data.data());
+        } else if (input.type() == CV_32FC3) {
+            std::vector<float> data(input.channels() * input.rows * input.cols);
+            for(int y = 0; y < input.rows; ++y) {
+                for(int x = 0; x < input.cols; ++x) {
+                    for(int c = 0; c < input.channels(); ++c) {
+                        data[c * (input.rows * input.cols) + y * input.cols + x] =
+                                input.at<cv::Vec3f>(y, x)[c];
+                    }
+                }
+            }
+            result = cv::Mat(input.size(), input.type(), data.data());
+        } else {
+            LOG(ERROR) << "not support for opencv mat type of: " << input.type();
+            result = input;
+        }
+
+        return result;
+    }
 };
 }
 }
