@@ -241,7 +241,7 @@ StatusCode MobileNetv2<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")
         _m_threads_nums = static_cast<int>(cfg_content.at("model_threads_num").as_integer());
     }
 
-    // 根据Interpreter创建Session
+    // init session
     MNN::ScheduleConfig mnn_config;
 
     if (!cfg_content.contains("compute_backend")) {
@@ -274,7 +274,7 @@ StatusCode MobileNetv2<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    // 创建Tensor
+    // init input/output tensor
     _m_input_tensor = _m_net->getSessionInput(_m_session, "input_tensor");
     _m_output_tensor = _m_net->getSessionOutput(_m_session, "output_tensor");
 
@@ -289,11 +289,8 @@ StatusCode MobileNetv2<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
-
-    // 初始化input tensor size
     _m_input_tensor_size = cv::Size(224, 224);
 
-    // 初始化类是否成功初始化标志位
     _m_successfully_initialized = true;
     LOG(INFO) << "MobileNetv2 classification model initialization complete !!!";
     return StatusCode::OK;
@@ -318,6 +315,7 @@ StatusCode MobileNetv2<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
 
     // preprocess image
     auto preprocessed_image = preprocess_image(internal_in.input_image);
+
     // run session
     MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
     auto input_tensor_data = input_tensor_user.host<float>();
@@ -325,10 +323,12 @@ StatusCode MobileNetv2<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     ::memcpy(input_tensor_data, preprocessed_image.data, input_tensor_size);
     _m_input_tensor->copyFromHostTensor(&input_tensor_user);
     _m_net->runSession(_m_session);
+
     // decode output tensor
     MNN::Tensor output_tensor_user(_m_output_tensor, _m_output_tensor->getDimensionType());
     _m_output_tensor->copyToHostTensor(&output_tensor_user);
     auto* host_data = output_tensor_user.host<float>();
+    
     // transform output
     mobilenetv2_impl::internal_output internal_out;
 

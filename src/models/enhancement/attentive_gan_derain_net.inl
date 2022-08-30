@@ -205,7 +205,7 @@ template <typename INPUT, typename OUTPUT> class AttentiveGanDerain<INPUT, OUTPU
 template <typename INPUT, typename OUTPUT>
 StatusCode AttentiveGanDerain<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")) &config) {
     if (!config.contains("ATTENTIVEGANDERAIN")) {
-        LOG(ERROR) << "Config文件没有ATTENTIVEGANDERAIN相关配置, 请重新检查配置文件";
+        LOG(ERROR) << "Config missing ATTENTIVEGANDERAIN section please check config file";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
