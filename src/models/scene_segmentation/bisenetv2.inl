@@ -212,7 +212,7 @@ StatusCode BiseNetV2<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))&
 
     toml::value cfg_content = config.at("BISENETV2");
 
-    // 初始化线程模型计算使用的线程数
+    // init model threads nums
     if (!cfg_content.contains("model_threads_num")) {
         LOG(WARNING) << "Config file doesn\'t contain model_threads_num field, using default 4";
         _m_threads_nums = 4;
@@ -220,7 +220,7 @@ StatusCode BiseNetV2<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))&
         _m_threads_nums = cfg_content.at("model_threads_num").as_integer();
     }
 
-    // 初始化MNN Interpreter
+    // init interpreter
     if (!cfg_content.contains("model_file_path")) {
         LOG(ERROR) << "Config file doesn\'t contain model_file_path field, please check again";
         _m_successfully_initialized = false;
@@ -243,7 +243,7 @@ StatusCode BiseNetV2<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))&
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    // 初始化MNN Session
+    // init session
     MNN::ScheduleConfig mnn_config;
 
     if (!cfg_content.contains("compute_backend")) {
@@ -278,7 +278,7 @@ StatusCode BiseNetV2<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))&
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    // 初始化graph input node和output node
+    // init input_tensor/output_tensor
     _m_input_tensor = _m_net->getSessionInput(_m_session, "input_tensor");
     _m_output_tensor = _m_net->getSessionOutput(_m_session, "final_output");
 
@@ -297,7 +297,6 @@ StatusCode BiseNetV2<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))&
     _m_input_size_host.width = _m_input_tensor->width();
     _m_input_size_host.height = _m_input_tensor->height();
 
-    // 初始化用户输入的图像归一化尺寸
     if (!cfg_content.contains("model_input_image_size")) {
         LOG(WARNING) << "Config doesn\'t contain model_input_image_size filed, using default value [1024, 512]";
         _m_input_size_user.width = 1024;
