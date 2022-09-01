@@ -241,7 +241,7 @@ StatusCode DenseNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& 
         _m_threads_nums = static_cast<int>(cfg_content.at("model_threads_num").as_integer());
     }
 
-    // 根据Interpreter创建Session
+    // init session
     MNN::ScheduleConfig mnn_config;
 
     if (!cfg_content.contains("compute_backend")) {
@@ -274,7 +274,7 @@ StatusCode DenseNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& 
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    // 创建Tensor
+    // init input/output tensor
     _m_input_tensor = _m_net->getSessionInput(_m_session, "input_tensor");
     _m_output_tensor = _m_net->getSessionOutput(_m_session, "output_tensor");
 
@@ -289,11 +289,8 @@ StatusCode DenseNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& 
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
-
-    // 初始化input tensor size
     _m_input_tensor_size = cv::Size(224, 224);
 
-    // 初始化类是否成功初始化标志位
     _m_successfully_initialized = true;
     LOG(INFO) << "DenseNet classification model initialization complete !!!";
     return StatusCode::OK;
