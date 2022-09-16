@@ -45,14 +45,3 @@ foreach(dir_name ${MODEL_SERVER_APP_LIST})
         target_link_libraries(${file_name}.out common models factory ${WORKFLOW_LIBS} ${GLOG_LIBRARIES})
     endforeach()
 endforeach()
-
-# add test tools
-add_executable(test.out ./test.cpp)
-target_link_libraries(
-    test.out
-    common
-    models
-    factory
-    ${WORKFLOW_LIBS}
-    ${GLOG_LIBRARIES}
-)
