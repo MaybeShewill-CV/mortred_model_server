@@ -24,19 +24,19 @@ public:
     virtual ~BaseAiModel() = default;
 
     /***
-     * 构造函数
+     * 
      * @param config
      */
     BaseAiModel() = default;
 
     /***
-    * 赋值构造函数
+    * 
     * @param transformer
     */
     BaseAiModel(const BaseAiModel& BaseAiModel) = default;
 
     /***
-     * 复制构造函数
+     * 
      * @param transformer
      * @return
      */
