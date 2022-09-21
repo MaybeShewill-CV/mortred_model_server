@@ -25,7 +25,7 @@ class DBTextDetector : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
 public:
 
     /***
-    * 构造函数
+    * constructor
     * @param config
     */
     DBTextDetector();
@@ -36,13 +36,13 @@ public:
     ~DBTextDetector() override;
 
     /***
-    * 赋值构造函数
+    * constructor
     * @param transformer
     */
     DBTextDetector(const DBTextDetector& transformer) = delete;
 
     /***
-     * 复制构造函数
+     * constructor
      * @param transformer
      * @return
      */
