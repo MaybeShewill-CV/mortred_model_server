@@ -252,7 +252,7 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(
         _m_threads_nums = static_cast<int>(cfg_content.at("model_threads_num").as_integer());
     }
 
-    // init Interpreter
+    // init interpreter
     if (!cfg_content.contains("model_file_path")) {
         LOG(ERROR) << "Config doesn\'t have model_file_path field";
         _m_successfully_initialized = false;
@@ -275,7 +275,7 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    // init Session
+    // init session
     MNN::ScheduleConfig mnn_config;
 
     if (!cfg_content.contains("compute_backend")) {
