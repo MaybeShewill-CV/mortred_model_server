@@ -25,8 +25,7 @@ class YoloV7Detector : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
 public:
 
     /***
-    * 构造函数
-    * @param config
+    * constructor
     */
     YoloV7Detector();
 
@@ -36,13 +35,13 @@ public:
     ~YoloV7Detector() override;
 
     /***
-    * 赋值构造函数
+    * constructor
     * @param transformer
     */
     YoloV7Detector(const YoloV7Detector& transformer) = delete;
 
     /***
-     * 复制构造函数
+     * constructor
      * @param transformer
      * @return
      */
