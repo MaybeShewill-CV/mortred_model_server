@@ -10,9 +10,9 @@
 
 #include <toml/toml.hpp>
 #include <workflow/WFTask.h>
+#include <workflow/WFHttpServer.h>
 
 #include "common/status_code.h"
-#include "workflow/WFHttpServer.h"
 
 namespace jinq {
 namespace server {
