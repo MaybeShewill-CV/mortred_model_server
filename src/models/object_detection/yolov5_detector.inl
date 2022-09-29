@@ -173,7 +173,7 @@ public:
     };
 
 public:
-    // 模型文件存储路径
+    // model file path
     std::string _m_model_file_path;
     // MNN Interpreter
     std::unique_ptr<MNN::Interpreter> _m_net = nullptr;
@@ -183,27 +183,27 @@ public:
     MNN::Tensor* _m_input_tensor = nullptr;
     // MNN Loc Output tensor node
     MNN::Tensor* _m_output_tensor = nullptr;
-    // MNN后端使用线程数
+    // MNN thread nums
     int _m_threads_nums = 4;
-    // 得分阈值
+    // score thresh
     double _m_score_threshold = 0.4;
-    // nms阈值
+    // nms thresh
     double _m_nms_threshold = 0.35;
-    // top_k keep阈值
+    // top_k keep thresh
     long _m_keep_topk = 250;
-    // 模型类别数量
+    // class nums
     int _m_class_nums = 80;
-    // 用户输入网络的图像尺寸
+    // input image size
     cv::Size _m_input_size_user = cv::Size();
-    //　计算图定义的输入node尺寸
+    //　input node size
     cv::Size _m_input_size_host = cv::Size();
-    // 是否成功初始化标志位
+    // init flag
     bool _m_successfully_initialized = false;
 
 public:
     /***
-     * 图像预处理, 转换图像为CV_32FC3, 通过dst = src / 127.5 - 1.0来归一化图像到[-1.0, 1.0]
-     * @param input_image : 输入图像
+     * preprocess
+     * @param input_image : input image
      */
     cv::Mat preprocess_image(const cv::Mat& input_image) const;
 
