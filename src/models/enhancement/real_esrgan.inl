@@ -1,11 +1,11 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: enlightengan.inl
-* Date: 22-6-13
+* File: RealEsrGan.cpp
+* Date: 22-9-29
 ************************************************/
 
-#include "enlightengan.h"
+#include "real_esrgan.h"
 
 #include <opencv2/opencv.hpp>
 #include "glog/logging.h"
@@ -30,7 +30,7 @@ namespace enhancement {
 
 using jinq::models::io_define::enhancement::std_enhancement_output;
 
-namespace enlightengan_impl {
+namespace real_esrgan_impl {
 
 struct internal_input {
     cv::Mat input_image;
@@ -102,7 +102,7 @@ transform_input(const INPUT& in) {
 */
 template<typename OUTPUT>
 typename std::enable_if<std::is_same<OUTPUT, std::decay<std_enhancement_output>::type>::value, std_enhancement_output>::type
-transform_output(const enlightengan_impl::internal_output& internal_out) {
+transform_output(const real_esrgan_impl::internal_output& internal_out) {
     std_enhancement_output result;
     internal_out.enhancement_result.copyTo(result.enhancement_result);
     return result;
@@ -114,7 +114,7 @@ transform_output(const enlightengan_impl::internal_output& internal_out) {
 /***************** Impl Function Sets ******************/
 
 template<typename INPUT, typename OUTPUT>
-class EnlightenGan<INPUT, OUTPUT>::Impl {
+class RealEsrGan<INPUT, OUTPUT>::Impl {
 public:
     /***
      *
@@ -175,9 +175,7 @@ private:
     // MNN Session
     MNN::Session* _m_session = nullptr;
     // MNN Input tensor node
-    MNN::Tensor* _m_input_tensor_src = nullptr;
-    // MNN Input tensor node
-    MNN::Tensor* _m_input_tensor_gray = nullptr;
+    MNN::Tensor* _m_input_tensor = nullptr;
     // MNN Loc Output tensor node
     MNN::Tensor* _m_output_tensor = nullptr;
     // MNN后端使用线程数
@@ -193,7 +191,7 @@ private:
     * @param input_image
     * @return
     */
-    void preprocess_image(const cv::Mat& input_image, cv::Mat& output_src, cv::Mat& output_gray) const;
+    static cv::Mat preprocess_image(const cv::Mat& input_image);
 };
 
 
@@ -203,14 +201,14 @@ private:
 * @return
 */
 template<typename INPUT, typename OUTPUT>
-StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& config) {
-    if (!config.contains("ENLIGHTENGAN")) {
-        LOG(ERROR) << "Config file missing ENLIGHTENGAN section please check";
+StatusCode RealEsrGan<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& config) {
+    if (!config.contains("RealEsrGan")) {
+        LOG(ERROR) << "Config file missing RealEsrGan section please check";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    toml::value cfg_content = config.at("ENLIGHTENGAN");
+    toml::value cfg_content = config.at("RealEsrGan");
 
     // init threads
     if (!cfg_content.contains("model_threads_num")) {
@@ -230,7 +228,7 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""
     }
 
     if (!FilePathUtil::is_file_exist(_m_model_file_path)) {
-        LOG(ERROR) << "Enlightengan model file: " << _m_model_file_path << " not exist";
+        LOG(ERROR) << "RealEsrGan model file: " << _m_model_file_path << " not exist";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
@@ -239,7 +237,7 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""
                  MNN::Interpreter::createFromFile(_m_model_file_path.c_str()));
 
     if (nullptr == _m_net) {
-        LOG(ERROR) << "Create enlighten-gan enhancement model interpreter failed";
+        LOG(ERROR) << "Create real-esrgan enhancement model interpreter failed";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
@@ -272,38 +270,31 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""
     _m_session = _m_net->createSession(mnn_config);
 
     if (nullptr == _m_session) {
-        LOG(ERROR) << "Create enlighten-gan enhancement model session failed";
+        LOG(ERROR) << "Create real-esrgan enhancement model session failed";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    _m_input_tensor_src = _m_net->getSessionInput(_m_session, "input_src");
-    _m_input_tensor_gray = _m_net->getSessionInput(_m_session, "input_gray");
+    _m_input_tensor = _m_net->getSessionInput(_m_session, "input");
     _m_output_tensor = _m_net->getSessionOutput(_m_session, "output");
 
-    if (_m_input_tensor_src == nullptr) {
-        LOG(ERROR) << "Fetch enlighten-gan enhancement model input src node failed";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    if (_m_input_tensor_gray == nullptr) {
-        LOG(ERROR) << "Fetch enlighten-gan enhancement model input gray node failed";
+    if (_m_input_tensor == nullptr) {
+        LOG(ERROR) << "Fetch real-esrgan enhancement model input src node failed";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
 
     if (_m_output_tensor == nullptr) {
-        LOG(ERROR) << "Fetch enlighten-gan enhancement model output node failed";
+        LOG(ERROR) << "Fetch real-esrgan enhancement model output node failed";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    _m_input_size_host.width = _m_input_tensor_src->width();
-    _m_input_size_host.height = _m_input_tensor_src->height();
+    _m_input_size_host.width = _m_input_tensor->width();
+    _m_input_size_host.height = _m_input_tensor->height();
     _m_successfully_initialized = true;
-    
-    LOG(INFO) << "Enlighten-gan enhancement model: " << FilePathUtil::get_file_name(_m_model_file_path)
+
+    LOG(INFO) << "Real-esrgan enhancement model: " << FilePathUtil::get_file_name(_m_model_file_path)
               << " initialization complete!!!";
     return StatusCode::OK;
 }
@@ -317,9 +308,9 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
+StatusCode RealEsrGan<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     // transform external input into internal input
-    auto internal_in = enlightengan_impl::transform_input(in);
+    auto internal_in = real_esrgan_impl::transform_input(in);
 
     if (!internal_in.input_image.data || internal_in.input_image.empty()) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
@@ -334,83 +325,59 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) 
 
     if (internal_in.input_image.channels() != 3 && internal_in.input_image.channels() != 4) {
         LOG(ERROR) << "input image should have 3 or 4 channels, but got: "
-                    << internal_in.input_image.channels() << " instead";
+                   << internal_in.input_image.channels() << " instead";
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
 
     if (internal_in.input_image.size() != _m_input_size_host) {
-        _m_input_size_host.height = static_cast<int>(std::ceil(internal_in.input_image.size().height / 16) * 16);
-        _m_input_size_host.width = static_cast<int>(std::ceil(internal_in.input_image.size().width / 16) * 16);
-        _m_net->resizeTensor(_m_input_tensor_src, 1, 3, _m_input_size_host.height, _m_input_size_host.width);
-        _m_net->resizeTensor(_m_input_tensor_gray, 1, 1, _m_input_size_host.height, _m_input_size_host.width);
+        _m_net->resizeTensor(_m_input_tensor, 1, 3, internal_in.input_image.size().height,
+                             internal_in.input_image.size().width);
         _m_net->resizeSession(_m_session);
         _m_output_tensor = _m_net->getSessionOutput(_m_session, "output");
     }
-    cv::Mat input_src;
-    cv::Mat input_gray;
-    preprocess_image(internal_in.input_image, input_src, input_gray);
-    auto input_src_chw_data = CvUtils::convert_to_chw_vec(input_src);
+
+    cv::Mat input_src = preprocess_image(internal_in.input_image);
 
     // run session
-    MNN::Tensor input_tensor_user_src(_m_input_tensor_src, MNN::Tensor::DimensionType::CAFFE);
+    MNN::Tensor input_tensor_user_src(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
     auto input_tensor_data = input_tensor_user_src.host<float>();
     auto input_tensor_size = input_tensor_user_src.size();
-    ::memcpy(input_tensor_data, input_src_chw_data.data(), input_tensor_size);
-    _m_input_tensor_src->copyFromHostTensor(&input_tensor_user_src);
-
-    MNN::Tensor input_tensor_user_gray(_m_input_tensor_gray, MNN::Tensor::DimensionType::CAFFE);
-    input_tensor_data = input_tensor_user_gray.host<float>();
-    input_tensor_size = input_tensor_user_gray.size();
-    ::memcpy(input_tensor_data, input_gray.data, input_tensor_size);
-    _m_input_tensor_gray->copyFromHostTensor(&input_tensor_user_gray);
+    ::memcpy(input_tensor_data, input_src.data, input_tensor_size);
+    _m_input_tensor->copyFromHostTensor(&input_tensor_user_src);
     _m_net->runSession(_m_session);
 
     // decode output tensor
-    MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::CAFFE);
+    real_esrgan_impl::internal_output internal_out;
+    MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
     _m_output_tensor->copyToHostTensor(&output_tensor_user);
     auto host_data = output_tensor_user.host<float>();
     auto element_size = output_tensor_user.elementSize();
+
     std::vector<uchar> output_img_data;
     output_img_data.resize(element_size);
 
-    for (auto row = 0; row < _m_input_size_host.height; ++row) {
-        for (auto col = 0; col < _m_input_size_host.width; ++col) {
-            for (auto c = 0; c < 3; ++c) {
-                auto hwc_idx = row * _m_input_size_host.width * 3 + col * 3 + c;
-                auto chw_idx = c * _m_input_size_host.height * _m_input_size_host.width + row * _m_input_size_host.width + col;
-                auto pix_val_f = (host_data[chw_idx] + 1.0) * 255.0 / 2.0;
-                if (pix_val_f < 0.0) {
-                    pix_val_f = 0.0;
-                }
-                if (pix_val_f >= 255) {
-                    pix_val_f = 255.0;
-                }
-                auto pix_val = static_cast<uchar>(pix_val_f);
-                output_img_data[hwc_idx] = pix_val;
-            }
+    for (auto index = 0; index < element_size; ++index) {
+        auto pix_val_f = host_data[index] * 255.0;
+
+        if (pix_val_f < 0.0) {
+            pix_val_f = 0.0;
         }
+
+        if (pix_val_f >= 255) {
+            pix_val_f = 255.0;
+        }
+
+        auto pix_val = static_cast<uchar>(pix_val_f);
+        output_img_data[index] = pix_val;
     }
-    
-    enlightengan_impl::internal_output internal_out;
-    cv::Mat result_image(_m_input_size_host, CV_8UC3, output_img_data.data());
+
+    auto output_w = output_tensor_user.width();
+    auto output_h = output_tensor_user.height();
+    cv::Mat result_image(cv::Size(output_w, output_h), CV_8UC3, output_img_data.data());
     cv::cvtColor(result_image, internal_out.enhancement_result, cv::COLOR_RGB2BGR);
-    if (internal_out.enhancement_result.size() != internal_in.input_image.size()) {
-        cv::resize(internal_out.enhancement_result, internal_out.enhancement_result, internal_in.input_image.size());
-    }
-
-    // refine output image
-    if (internal_in.input_image.channels() == 4) {
-        std::vector<cv::Mat> input_image_split;
-        cv::split(internal_in.input_image, input_image_split);
-
-        std::vector<cv::Mat> output_image_split;
-        cv::split(internal_out.enhancement_result, output_image_split);
-        output_image_split.push_back(input_image_split[3]);
-        cv::merge(output_image_split, internal_out.enhancement_result);
-    }
 
     // transform internal output into external output
-    out = enlightengan_impl::transform_output<OUTPUT>(internal_out);
+    out = real_esrgan_impl::transform_output<OUTPUT>(internal_out);
     return StatusCode::OK;
 }
 
@@ -422,12 +389,10 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) 
 * @param output_gray
 */
 template<typename INPUT, typename OUTPUT>
-void EnlightenGan<INPUT, OUTPUT>::Impl::preprocess_image(
-    const cv::Mat& input_image, cv::Mat& output_src,
-    cv::Mat& output_gray) const {
+cv::Mat RealEsrGan<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& input_image) {
+    cv::Mat output_src;
     input_image.copyTo(output_src);
 
-    // resize image
     if (output_src.channels() == 4) {
         cv::cvtColor(output_src, output_src, cv::COLOR_BGRA2RGB);
     } else {
@@ -440,13 +405,8 @@ void EnlightenGan<INPUT, OUTPUT>::Impl::preprocess_image(
     }
 
     output_src /= 255.0;
-    cv::subtract(output_src, cv::Scalar(0.5, 0.5, 0.5), output_src);
-    cv::divide(output_src, cv::Scalar(0.5, 0.5, 0.5), output_src);
 
-    // make gray output
-    std::vector<cv::Mat> src_split;
-    cv::split(output_src, src_split);
-    output_gray = 1.0 - (0.299 * (src_split[0] + 1.0) + 0.587 * (src_split[1] + 1.0) + 0.114 * (src_split[2] + 1.0)) * 0.5;
+    return output_src;
 }
 
 /************* Export Function Sets *************/
@@ -457,7 +417,7 @@ void EnlightenGan<INPUT, OUTPUT>::Impl::preprocess_image(
  * @tparam OUTPUT
  */
 template<typename INPUT, typename OUTPUT>
-EnlightenGan<INPUT, OUTPUT>::EnlightenGan() {
+RealEsrGan<INPUT, OUTPUT>::RealEsrGan() {
     _m_pimpl = std::make_unique<Impl>();
 }
 
@@ -467,7 +427,7 @@ EnlightenGan<INPUT, OUTPUT>::EnlightenGan() {
  * @tparam OUTPUT
  */
 template<typename INPUT, typename OUTPUT>
-EnlightenGan<INPUT, OUTPUT>::~EnlightenGan() = default;
+RealEsrGan<INPUT, OUTPUT>::~RealEsrGan() = default;
 
 /***
  *
@@ -477,7 +437,7 @@ EnlightenGan<INPUT, OUTPUT>::~EnlightenGan() = default;
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode EnlightenGan<INPUT, OUTPUT>::init(const decltype(toml::parse(""))& cfg) {
+StatusCode RealEsrGan<INPUT, OUTPUT>::init(const decltype(toml::parse(""))& cfg) {
     return _m_pimpl->init(cfg);
 }
 
@@ -488,7 +448,7 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::init(const decltype(toml::parse(""))& cf
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-bool EnlightenGan<INPUT, OUTPUT>::is_successfully_initialized() const {
+bool RealEsrGan<INPUT, OUTPUT>::is_successfully_initialized() const {
     return _m_pimpl->is_successfully_initialized();
 }
 
@@ -501,7 +461,7 @@ bool EnlightenGan<INPUT, OUTPUT>::is_successfully_initialized() const {
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode EnlightenGan<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
+StatusCode RealEsrGan<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
 }
 
