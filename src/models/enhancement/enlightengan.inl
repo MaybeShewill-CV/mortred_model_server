@@ -168,7 +168,7 @@ public:
     };
 
 private:
-    // 模型文件存储路径
+    // model weights file path
     std::string _m_model_file_path;
     // MNN Interpreter
     std::unique_ptr<MNN::Interpreter> _m_net = nullptr;
@@ -180,11 +180,11 @@ private:
     MNN::Tensor* _m_input_tensor_gray = nullptr;
     // MNN Loc Output tensor node
     MNN::Tensor* _m_output_tensor = nullptr;
-    // MNN后端使用线程数
+    // mnn thread nums
     int _m_threads_nums = 4;
-    //　计算图定义的输入node尺寸
+    // input node size
     cv::Size _m_input_size_host = cv::Size();
-    // 是否成功初始化标志位
+    // init flag
     bool _m_successfully_initialized = false;
 
 private:
@@ -220,7 +220,7 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""
         _m_threads_nums = static_cast<int>(cfg_content.at("model_threads_num").as_integer());
     }
 
-    // init Interpreter
+    // init interpreter
     if (!cfg_content.contains("model_file_path")) {
         LOG(ERROR) << "Config doesn\'t have model_file_path field";
         _m_successfully_initialized = false;
@@ -244,7 +244,7 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    // init Session
+    // init session
     MNN::ScheduleConfig mnn_config;
 
     if (!cfg_content.contains("compute_backend")) {
