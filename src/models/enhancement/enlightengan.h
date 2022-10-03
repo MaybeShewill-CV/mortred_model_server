@@ -25,7 +25,7 @@ template <typename INPUT, typename OUTPUT>
 class EnlightenGan : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
   public:
     /***
-     * 构造函数
+     * construct function
      * @param config
      */
     EnlightenGan();
@@ -36,13 +36,13 @@ class EnlightenGan : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
     ~EnlightenGan() override;
 
     /***
-     * 赋值构造函数
+     * construct function
      * @param transformer
      */
     EnlightenGan(const EnlightenGan &transformer) = delete;
 
     /***
-     * 复制构造函数
+     * construct function
      * @param transformer
      * @return
      */
@@ -64,7 +64,7 @@ class EnlightenGan : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
     jinq::common::StatusCode run(const INPUT &input, OUTPUT &output) override;
 
     /***
-     * if db text detector successfully initialized
+     * if model successfully initialized
      * @return
      */
     bool is_successfully_initialized() const override;
