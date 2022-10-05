@@ -24,7 +24,7 @@ namespace enhancement {
 template <typename INPUT, typename OUTPUT> class AttentiveGanDerain : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
   public:
     /***
-     * 构造函数
+     * construct function
      * @param config
      */
     AttentiveGanDerain();
@@ -35,13 +35,13 @@ template <typename INPUT, typename OUTPUT> class AttentiveGanDerain : public jin
     ~AttentiveGanDerain() override;
 
     /***
-     * 赋值构造函数
+     * construct function
      * @param transformer
      */
     AttentiveGanDerain(const AttentiveGanDerain &transformer) = delete;
 
     /***
-     * 复制构造函数
+     * construct function
      * @param transformer
      * @return
      */
@@ -63,7 +63,7 @@ template <typename INPUT, typename OUTPUT> class AttentiveGanDerain : public jin
     jinq::common::StatusCode run(const INPUT &input, OUTPUT &output) override;
 
     /***
-     * if db text detector successfully initialized
+     * if model successfully initialized
      * @return
      */
     bool is_successfully_initialized() const override;
