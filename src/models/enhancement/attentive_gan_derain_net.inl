@@ -163,23 +163,23 @@ template <typename INPUT, typename OUTPUT> class AttentiveGanDerain<INPUT, OUTPU
     };
 
   private:
-    // 模型文件存储路径
+    // model file path
     std::string _m_model_file_path;
-    // MNN Interpreter
+    // mnn interpreter
     std::unique_ptr<MNN::Interpreter> _m_net = nullptr;
-    // MNN Session
+    // mnn session
     MNN::Session *_m_session = nullptr;
-    // MNN Input tensor node
+    // mnn input tensor node
     MNN::Tensor *_m_input_tensor = nullptr;
-    // MNN Loc Output tensor node
+    // mnn output tensor node
     MNN::Tensor *_m_output_tensor = nullptr;
-    // MNN后端使用线程数
+    // mnn threads nums
     int _m_threads_nums = 4;
-    // 用户输入网络的图像尺寸
+    // input image size
     cv::Size _m_input_size_user = cv::Size();
-    //　计算图定义的输入node尺寸
+    // input node size
     cv::Size _m_input_size_host = cv::Size();
-    // 是否成功初始化标志位
+    // init flag
     bool _m_successfully_initialized = false;
 
   private:
@@ -220,7 +220,7 @@ StatusCode AttentiveGanDerain<INPUT, OUTPUT>::Impl::init(const decltype(toml::pa
         _m_threads_nums = static_cast<int>(cfg_content.at("model_threads_num").as_integer());
     }
 
-    // init Interpreter
+    // init interpreter
     if (!cfg_content.contains("model_file_path")) {
         LOG(ERROR) << "Config doesn\'t have model_file_path field";
         _m_successfully_initialized = false;
@@ -243,7 +243,7 @@ StatusCode AttentiveGanDerain<INPUT, OUTPUT>::Impl::init(const decltype(toml::pa
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    // init Session
+    // init session
     MNN::ScheduleConfig mnn_config;
 
     if (!cfg_content.contains("compute_backend")) {
