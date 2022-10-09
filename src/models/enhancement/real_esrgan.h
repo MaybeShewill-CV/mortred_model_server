@@ -25,7 +25,7 @@ template <typename INPUT, typename OUTPUT>
 class RealEsrGan : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
 public:
     /***
-     * 构造函数
+     * construct function
      * @param config
      */
     RealEsrGan();
@@ -36,13 +36,13 @@ public:
     ~RealEsrGan() override;
 
     /***
-     * 赋值构造函数
+     * construct function
      * @param transformer
      */
     RealEsrGan(const RealEsrGan& transformer) = delete;
 
     /***
-     * 复制构造函数
+     * construct function
      * @param transformer
      * @return
      */
@@ -64,7 +64,7 @@ public:
     jinq::common::StatusCode run(const INPUT& input, OUTPUT& output) override;
 
     /***
-     * if db text detector successfully initialized
+     * model init flag
      * @return
      */
     bool is_successfully_initialized() const override;
