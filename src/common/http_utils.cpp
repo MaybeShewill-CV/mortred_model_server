@@ -118,7 +118,6 @@ void MultipartParser::get_file_name_type(
     } else {
         content_type = "application/octet-stream";
     }
-    return;
 }
 
 }
