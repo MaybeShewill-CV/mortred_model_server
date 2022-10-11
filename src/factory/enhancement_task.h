@@ -13,6 +13,7 @@
 #include "models/base_model.h"
 #include "models/enhancement/attentive_gan_derain_net.h"
 #include "models/enhancement/enlightengan.h"
+#include "models/enhancement/real_esrgan.h"
 #include "server/enhancement/attentive_gan_derain_server.h"
 #include "server/enhancement/enlighten_gan_server.h"
 
@@ -26,6 +27,7 @@ using jinq::server::BaseAiServer;
 namespace enhancement {
 using jinq::models::enhancement::AttentiveGanDerain;
 using jinq::models::enhancement::EnlightenGan;
+using jinq::models::enhancement::RealEsrGan;
 
 using jinq::server::enhancement::AttentiveGanDerainServer;
 using jinq::server::enhancement::EnlightenGanServer;
@@ -76,6 +78,20 @@ const std::string& enhancementor_name) {
 static std::unique_ptr<BaseAiServer> create_attentivegan_derain_server(const std::string& server_name) {
     REGISTER_AI_SERVER(AttentiveGanDerainServer, server_name)
     return ServerFactory<BaseAiServer>::get_instance().get_server(server_name);
+}
+
+/***
+ * create real esrgan image upsampler
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param detector_name
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+static std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_realesrgan_enhancementor(
+        const std::string& enhancementor_name) {
+    REGISTER_AI_MODEL(RealEsrGan, enhancementor_name, INPUT, OUTPUT)
+    return ModelFactory<BaseAiModel<INPUT, OUTPUT>>::get_instance().get_model(enhancementor_name);
 }
 
 } // namespace enhancement
