@@ -202,13 +202,13 @@ private:
 */
 template<typename INPUT, typename OUTPUT>
 StatusCode RealEsrGan<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& config) {
-    if (!config.contains("RealEsrGan")) {
-        LOG(ERROR) << "Config file missing RealEsrGan section please check";
+    if (!config.contains("REALESRGAN")) {
+        LOG(ERROR) << "Config file missing REALESRGAN section please check";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    toml::value cfg_content = config.at("RealEsrGan");
+    toml::value cfg_content = config.at("REALESRGAN");
 
     // init threads
     if (!cfg_content.contains("model_threads_num")) {
@@ -228,7 +228,7 @@ StatusCode RealEsrGan<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))
     }
 
     if (!FilePathUtil::is_file_exist(_m_model_file_path)) {
-        LOG(ERROR) << "RealEsrGan model file: " << _m_model_file_path << " not exist";
+        LOG(ERROR) << "real-esrgan model file: " << _m_model_file_path << " not exist";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
