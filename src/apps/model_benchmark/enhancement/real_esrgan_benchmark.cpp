@@ -7,8 +7,8 @@
 
 // real-esrgan benckmark tool
 
-#include <glog/logging.h>
-#include <toml/toml.hpp>
+#include "glog/logging.h"
+#include "toml/toml.hpp"
 
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
@@ -16,9 +16,9 @@
 #include "models/model_io_define.h"
 #include "factory/enhancement_task.h"
 
-using jinq::common::FilePathUtil;
-using jinq::common::Timestamp;
 using jinq::common::CvUtils;
+using jinq::common::Timestamp;
+using jinq::common::FilePathUtil;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::enhancement::std_enhancement_output;
 using jinq::factory::enhancement::create_realesrgan_enhancementor;
