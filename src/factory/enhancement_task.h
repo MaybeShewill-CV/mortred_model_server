@@ -16,6 +16,7 @@
 #include "models/enhancement/real_esrgan.h"
 #include "server/enhancement/attentive_gan_derain_server.h"
 #include "server/enhancement/enlighten_gan_server.h"
+#include "server/enhancement/real_esr_gan_server.h"
 
 namespace jinq {
 namespace factory {
@@ -31,6 +32,7 @@ using jinq::models::enhancement::RealEsrGan;
 
 using jinq::server::enhancement::AttentiveGanDerainServer;
 using jinq::server::enhancement::EnlightenGanServer;
+using jinq::server::enhancement::RealEsrGanServer;
 
 /***
  * create enlighten-gan low light image enhancement
@@ -92,6 +94,16 @@ static std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_realesrgan_enhancement
         const std::string& enhancementor_name) {
     REGISTER_AI_MODEL(RealEsrGan, enhancementor_name, INPUT, OUTPUT)
     return ModelFactory<BaseAiModel<INPUT, OUTPUT>>::get_instance().get_model(enhancementor_name);
+}
+
+/***
+ * create real esr-gan upsample server
+ * @param detector_name
+ * @return
+ */
+static std::unique_ptr<BaseAiServer> create_realesrgan_server(const std::string& server_name) {
+    REGISTER_AI_SERVER(RealEsrGanServer, server_name)
+    return ServerFactory<BaseAiServer>::get_instance().get_server(server_name);
 }
 
 } // namespace enhancement
