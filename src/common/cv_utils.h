@@ -18,9 +18,30 @@ namespace jinq {
 namespace common {
 class CvUtils {
 public:
+    /***
+     * constructor
+     * @return
+     */
     CvUtils() = delete;
+
+    /***
+     * deconstructor
+     * @return
+     */
     ~CvUtils() = delete;
+
+    /***
+     * constructor
+     * @param transformer
+     * @return
+     */
     CvUtils(const CvUtils& transformer) = delete;
+
+    /***
+     * constructor
+     * @param transformer
+     * @return
+     */
     CvUtils& operator=(const CvUtils& transformer) = delete;
 
     /***
