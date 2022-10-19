@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
     cv::imwrite(output_path, model_output.enhancement_result);
     LOG(INFO) << "enhancement result image has been written into: " << output_path;
 
-    return 1;
+    return 0;
 }
 
 
