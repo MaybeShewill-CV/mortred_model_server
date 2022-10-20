@@ -92,5 +92,5 @@ int main(int argc, char** argv) {
     LOG(INFO) << "max classify socre: " << *max_score;
     LOG(INFO) << "max classify id: " << static_cast<int>(std::distance(model_output.scores.begin(), max_score));
 
-    return 1;
+    return 0;
 }
