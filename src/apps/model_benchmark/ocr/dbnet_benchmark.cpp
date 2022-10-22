@@ -7,8 +7,6 @@
 
 // dbnet benckmark tool
 
-#include <random>
-
 #include <glog/logging.h>
 #include <toml/toml.hpp>
 
@@ -94,5 +92,5 @@ int main(int argc, char** argv) {
     cv::imwrite(output_path, input_image);
     LOG(INFO) << "detection result image has been written into: " << output_path;
 
-    return 1;
+    return 0;
 }

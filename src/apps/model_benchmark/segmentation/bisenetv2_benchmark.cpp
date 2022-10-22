@@ -7,8 +7,6 @@
 
 // bisenetv2 benckmark tool
 
-#include <random>
-
 #include <glog/logging.h>
 #include <toml/toml.hpp>
 
@@ -92,7 +90,7 @@ int main(int argc, char** argv) {
     cv::imwrite(output_path, color_seg_result);
     LOG(INFO) << "segmentation result image has been written into: " << output_path;
 
-    return 1;
+    return 0;
 }
 
 
