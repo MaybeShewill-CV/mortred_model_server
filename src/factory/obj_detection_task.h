@@ -18,6 +18,7 @@
 #include "server/object_detection/nano_det_server.h"
 #include "server/object_detection/yolov5_det_server.h"
 #include "server/object_detection/libface_det_server.h"
+#include "server/object_detection/yolov7_det_server.h"
 
 namespace jinq {
 namespace factory {
@@ -35,6 +36,7 @@ using jinq::models::object_detection::YoloV7Detector;
 using jinq::server::object_detection::NanoDetServer;
 using jinq::server::object_detection::YoloV5DetServer;
 using jinq::server::object_detection::LibfaceDetServer;
+using jinq::server::object_detection::YoloV7DetServer;
 
 /***
  * create yolov5 object detection instance
@@ -116,6 +118,16 @@ template <typename INPUT, typename OUTPUT>
 static std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_yolov7_detector(const std::string& detector_name) {
     REGISTER_AI_MODEL(YoloV7Detector, detector_name, INPUT, OUTPUT)
     return ModelFactory<BaseAiModel<INPUT, OUTPUT>>::get_instance().get_model(detector_name);
+}
+
+/***
+ * create yolov7 object detection server
+ * @param detector_name
+ * @return
+ */
+static std::unique_ptr<BaseAiServer> create_yolov7_det_server(const std::string& server_name) {
+    REGISTER_AI_SERVER(YoloV7DetServer, server_name)
+    return ServerFactory<BaseAiServer>::get_instance().get_server(server_name);
 }
 
 } // namespace object_detection
