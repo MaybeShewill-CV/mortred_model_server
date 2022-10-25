@@ -18,7 +18,7 @@ const std::string& get_base64_chars() {
     return base64_chars;
 }
 
-static inline bool is_base64(unsigned char c) {
+static bool is_base64(unsigned char c) {
     return (isalnum(c) || (c == '+') || (c == '/'));
 }
 
