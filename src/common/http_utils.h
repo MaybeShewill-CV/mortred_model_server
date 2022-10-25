@@ -14,9 +14,6 @@
 namespace jinq {
 namespace common {
 namespace http_util {
-/***
- * multipart parser class
- */
 class MultipartParser {
 public:
     /***
