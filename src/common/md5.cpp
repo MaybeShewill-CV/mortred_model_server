@@ -22,7 +22,6 @@ const char Md5::HEX_NUMBERS[16] = {
 
 /**
 * @Construct a MD5 object with a string.
-*
 * @param {message} the message will be transformed.
 *
 */
