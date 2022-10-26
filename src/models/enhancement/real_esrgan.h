@@ -16,7 +16,6 @@
 #include "models/base_model.h"
 #include "models/model_io_define.h"
 
-
 namespace jinq {
 namespace models {
 namespace enhancement {
