@@ -15,7 +15,7 @@ namespace common {
 class Base64 {
 public:
     /***
-     *
+     * constructor
      */
     Base64() = delete;
 
@@ -25,13 +25,13 @@ public:
     ~Base64() = default;
 
     /***
-     * 赋值构造函数
+     * constructor
      * @param transformer
      */
     Base64(const Base64 &transformer) = delete;
 
     /***
-     * 复制构造函数
+     * constructor
      * @param transformer
      * @return
      */
