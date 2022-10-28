@@ -104,7 +104,7 @@ void MultipartParser::get_file_name_type(
 
     size_t last_spliter = file_path.find_last_of("/\\");
     filename = file_path.substr(last_spliter + 1);
-    size_t dot_pos = filename.find_last_of(".");
+    size_t dot_pos = filename.find_last_of('.');
     if (dot_pos == std::string::npos) {
         content_type = "application/octet-stream";
         return;

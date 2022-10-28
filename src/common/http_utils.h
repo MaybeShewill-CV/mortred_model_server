@@ -62,7 +62,7 @@ public:
     const std::string& gen_body_content();
 
 private:
-    void get_file_name_type(const std::string &file_path, std::string& filename, std::string& content_type);
+    static void get_file_name_type(const std::string &file_path, std::string& filename, std::string& content_type);
 
 private:
     std::string _m_boundary;

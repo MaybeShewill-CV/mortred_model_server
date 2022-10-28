@@ -125,8 +125,8 @@ public:
             auto bbox_float = obj.bbox;
             auto conf = obj.score;
             auto bbox_int = cv::Rect(
-                                static_cast<int>(bbox_float.x), static_cast<int>(bbox_float.y),
-                                static_cast<int>(bbox_float.width), static_cast<int>(bbox_float.height));
+                    static_cast<int>(bbox_float.x), static_cast<int>(bbox_float.y),
+                    static_cast<int>(bbox_float.width), static_cast<int>(bbox_float.height));
             auto bbox_roi = bbox_int & image_roi;
 
             auto bbox_color = cv::Scalar(0, 0, 255);
@@ -349,16 +349,19 @@ public:
      */
     static std::vector<float> convert_to_chw_vec(const cv::Mat& input) {
         std::vector<float> data;
+
         if (input.type() == CV_32FC3) {
             data.resize(input.channels() * input.rows * input.cols);
-            for(int y = 0; y < input.rows; ++y) {
-                for(int x = 0; x < input.cols; ++x) {
-                    for(int c = 0; c < input.channels(); ++c) {
+
+            for (int y = 0; y < input.rows; ++y) {
+                for (int x = 0; x < input.cols; ++x) {
+                    for (int c = 0; c < input.channels(); ++c) {
                         data[c * (input.rows * input.cols) + y * input.cols + x] =
-                                input.at<cv::Vec3f>(y, x)[c];
+                            input.at<cv::Vec3f>(y, x)[c];
                     }
                 }
             }
+
             return data;
         } else {
             LOG(ERROR) << "Only support 32fc3. Not support for opencv mat type of: " << input.type();
@@ -377,6 +380,7 @@ public:
         assert(input.size() == h * w * c);
         std::vector<T> result;
         result.resize(input.size());
+
         for (int row = 0; row < h; ++row) {
             for (int col = 0; col < w; ++col) {
                 for (int channel = 0; channel < c; ++channel) {
