@@ -9,7 +9,6 @@
 #define MMAISERVER_STATUSCODE_H
 
 #include <string>
-#include <map>
 
 namespace jinq {
 namespace common {

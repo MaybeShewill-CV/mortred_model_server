@@ -7,6 +7,8 @@
 
 #include "status_code.h"
 
+#include <map>
+
 namespace jinq {
 namespace common {
 
