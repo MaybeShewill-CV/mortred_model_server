@@ -24,7 +24,7 @@ template <typename INPUT, typename OUTPUT>
 class LibFaceDetector : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
   public:
     /***
-     * 构造函数
+     * constructor
      * @param config
      */
     LibFaceDetector();
@@ -35,13 +35,13 @@ class LibFaceDetector : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
     ~LibFaceDetector() override;
 
     /***
-     * 赋值构造函数
+     * constructor
      * @param transformer
      */
     LibFaceDetector(const LibFaceDetector &transformer) = delete;
 
     /***
-     * 复制构造函数
+     * constructor
      * @param transformer
      * @return
      */
