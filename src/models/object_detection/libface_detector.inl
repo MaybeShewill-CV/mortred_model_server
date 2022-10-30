@@ -180,7 +180,7 @@ class LibFaceDetector<INPUT, OUTPUT>::Impl {
     bool is_successfully_initialized() const { return _m_successfully_initialized; };
 
   private:
-    // 模型文件存储路径
+    // model file path
     std::string _m_model_file_path;
     // MNN Interpreter
     std::unique_ptr<MNN::Interpreter> _m_net = nullptr;
@@ -192,25 +192,25 @@ class LibFaceDetector<INPUT, OUTPUT>::Impl {
     MNN::Tensor *_m_loc_output_tensor = nullptr;
     // MNN conf Output tensor node
     MNN::Tensor *_m_conf_output_tensor = nullptr;
-    // MNN后端使用线程数
+    // MNN threads
     uint _m_threads_nums = 4;
-    // 得分阈值
+    // score thresh
     double _m_score_threshold = 0.6;
-    // nms阈值
+    // nms thresh
     double _m_nms_threshold = 0.3;
-    // top_k keep阈值
+    // top_k keep
     size_t _m_keep_topk = 250;
-    // 用户输入网络的图像尺寸
+    // input image size
     cv::Size _m_input_size_user = cv::Size();
-    //　计算图定义的输入node尺寸
+    //　input node size
     cv::Size _m_input_size_host = cv::Size();
-    // 是否成功初始化标志位
+    // init flag
     bool _m_successfully_initialized = false;
 
   private:
     /***
-     * 图像预处理, 转换图像为CV_32FC3, 通过dst = src / 127.5 - 1.0来归一化图像到[-1.0, 1.0]
-     * @param input_image : 输入图像
+     * preprocess
+     * @param input_image
      */
     cv::Mat preprocess_image(const cv::Mat &input_image) const;
 
@@ -242,7 +242,7 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse
 
     toml::value cfg_content = config.at("LIBFACE");
 
-    // 初始化线程模型计算使用的线程数
+    // init mnn threads
     if (!cfg_content.contains("model_threads_num")) {
         LOG(WARNING) << "Config missing model_threads_num field, use default 4";
         _m_threads_nums = 4;
@@ -250,7 +250,7 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse
         _m_threads_nums = cfg_content["model_threads_num"].as_integer();
     }
 
-    // 初始化得分阈值
+    // init score thresh
     if (!cfg_content.contains("model_score_threshold")) {
         LOG(WARNING) << "Config missing model_score_threshold field, use default 0.5";
         _m_score_threshold = 0.5;
@@ -259,7 +259,7 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse
     }
     _m_score_threshold = std::max(_m_score_threshold, 0.5);
 
-    // nms阈值
+    // nms thresh
     if (!cfg_content.contains("model_nms_threshold")) {
         LOG(WARNING) << "Config missing model_nms_threshold field, use default 0.3";
         _m_nms_threshold = 0.3;
@@ -267,7 +267,7 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse
         _m_nms_threshold = cfg_content["model_nms_threshold"].as_floating();
     }
 
-    // top k阈值
+    // top k
     if (!cfg_content.contains("model_keep_top_k")) {
         LOG(WARNING) << "Config missing model_keep_top_k field, use default 250";
         _m_keep_topk = 250;
@@ -275,7 +275,7 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse
         _m_keep_topk = cfg_content["model_keep_top_k"].as_integer();
     }
 
-    // 初始化MNN Interpreter
+    // init mnn interpreter
     if (!cfg_content.contains("model_file_path")) {
         LOG(ERROR) << "Config missing model_file_path field";
         _m_successfully_initialized = false;
@@ -295,7 +295,7 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    // 初始化MNN Session
+    // init mnn session
     MNN::ScheduleConfig mnn_config;
     if (!cfg_content.contains("compute_backend")) {
         LOG(WARNING) << "Config missing compute_backend field, use default cpu";
@@ -325,7 +325,7 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    // 初始化graph input node和output node
+    // init graph input node and output node
     _m_input_tensor = _m_net->getSessionInput(_m_session, "input");
     _m_loc_output_tensor = _m_net->getSessionOutput(_m_session, "loc");
     _m_conf_output_tensor = _m_net->getSessionOutput(_m_session, "conf");
@@ -342,7 +342,7 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse
     _m_input_size_host.width = _m_input_tensor->width();
     _m_input_size_host.height = _m_input_tensor->height();
 
-    // 初始化用户输入的图像归一化尺寸
+    // init input image size
     if (!cfg_content.contains("model_input_image_size")) {
         LOG(WARNING) << "Config missing model_input_image_size field, use default [320, 240]";
         _m_input_size_user.width = 320;
