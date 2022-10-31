@@ -25,7 +25,7 @@ class PPMatting : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
 public:
 
     /***
-    * 构造函数
+    * constructor
     * @param config
     */
     PPMatting();
@@ -36,13 +36,13 @@ public:
     ~PPMatting() override;
 
     /***
-    * 赋值构造函数
+    * constructor
     * @param transformer
     */
     PPMatting(const PPMatting& transformer) = delete;
 
     /***
-     * 复制构造函数
+     * constructor
      * @param transformer
      * @return
      */
@@ -65,7 +65,7 @@ public:
 
 
     /***
-     * if db text detector successfully initialized
+     * if model successfully initialized
      * @return
      */
     bool is_successfully_initialized() const override;
