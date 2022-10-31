@@ -183,15 +183,15 @@ private:
     uint _m_threads_nums = 4;
     // input tensor size
     cv::Size _m_input_size_user = cv::Size();
-    //
+    // input node size
     cv::Size _m_input_size_host = cv::Size();
-    // flag
+    // init flag
     bool _m_successfully_initialized = false;
 
 private:
     /***
      *
-     * @param input_image : 输入图像
+     * @param input_image :
      */
     cv::Mat preprocess_image(const cv::Mat& input_image) const;
 };
