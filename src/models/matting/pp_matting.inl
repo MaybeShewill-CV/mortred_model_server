@@ -181,17 +181,19 @@ private:
     MNN::Tensor* _m_output_tensor = nullptr;
     // MNN backend thread nums
     uint _m_threads_nums = 4;
-    // input tensor size
+    // input image size
     cv::Size _m_input_size_user = cv::Size();
-    //
+    // input node size
     cv::Size _m_input_size_host = cv::Size();
     // flag
     bool _m_successfully_initialized = false;
 
 private:
+
     /***
      *
-     * @param input_image :
+     * @param input_image
+     * @return
      */
     cv::Mat preprocess_image(const cv::Mat& input_image) const;
 };
