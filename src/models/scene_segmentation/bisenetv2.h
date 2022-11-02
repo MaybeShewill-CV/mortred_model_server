@@ -25,7 +25,7 @@ class BiseNetV2 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
 public:
 
     /***
-    * 构造函数
+    * constructor
     * @param config
     */
     BiseNetV2();
@@ -36,13 +36,13 @@ public:
     ~BiseNetV2() override;
 
     /***
-    * 赋值构造函数
+    * constructor
     * @param transformer
     */
     BiseNetV2(const BiseNetV2& transformer) = delete;
 
     /***
-     * 复制构造函数
+     * constructor
      * @param transformer
      * @return
      */
@@ -65,7 +65,7 @@ public:
 
 
     /***
-     * if db text detector successfully initialized
+     * if model successfully initialized
      * @return
      */
     bool is_successfully_initialized() const override;
