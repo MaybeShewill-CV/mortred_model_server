@@ -191,7 +191,7 @@ private:
 private:
     /***
      *
-     * @param input_image : 输入图像
+     * @param input_image :
      */
     cv::Mat preprocess_image(const cv::Mat& input_image) const;
 };
