@@ -19,7 +19,7 @@ class PPHumanSegServer : public jinq::server::BaseAiServer {
 public:
 
     /***
-    * 构造函数
+    * constructor
     * @param config
     */
     PPHumanSegServer();
@@ -30,13 +30,13 @@ public:
     ~PPHumanSegServer() override;
 
     /***
-    * 赋值构造函数
+    * constructor
     * @param transformer
     */
     PPHumanSegServer(const PPHumanSegServer& transformer) = delete;
 
     /***
-     * 复制构造函数
+     * constructor
      * @param transformer
      * @return
      */
