@@ -120,7 +120,7 @@ StatusCode BiseNetV2Server::Impl::init(const decltype(toml::parse("")) &config) 
     handler_threads = static_cast<int>(server_section.at("handler_threads").as_integer());
 
     _m_successfully_initialized = true;
-    LOG(INFO) << "bisenetv2 gan server init successfully";
+    LOG(INFO) << "bisenetv2 segmentation server init successfully";
     return StatusCode::OK;
 }
 

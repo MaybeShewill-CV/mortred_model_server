@@ -19,7 +19,7 @@ class BiseNetV2Server : public jinq::server::BaseAiServer {
 public:
 
     /***
-    * 构造函数
+    * constructor
     * @param config
     */
     BiseNetV2Server();
@@ -30,13 +30,13 @@ public:
     ~BiseNetV2Server() override;
 
     /***
-    * 赋值构造函数
+    * constructor
     * @param transformer
     */
     BiseNetV2Server(const BiseNetV2Server& transformer) = delete;
 
     /***
-     * 复制构造函数
+     * constructor
      * @param transformer
      * @return
      */
