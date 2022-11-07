@@ -19,7 +19,7 @@ class DenseNetServer : public jinq::server::BaseAiServer {
 public:
 
     /***
-    * 构造函数
+    * constructor
     * @param config
     */
     DenseNetServer();
@@ -30,13 +30,13 @@ public:
     ~DenseNetServer() override;
 
     /***
-    * 赋值构造函数
+    * constructor
     * @param transformer
     */
     DenseNetServer(const DenseNetServer& transformer) = delete;
 
     /***
-     * 复制构造函数
+     * constructor
      * @param transformer
      * @return
      */
