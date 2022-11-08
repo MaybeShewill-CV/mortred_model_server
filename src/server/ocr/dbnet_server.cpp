@@ -233,7 +233,7 @@ jinq::common::StatusCode DBNetServer::init(const decltype(toml::parse("")) &conf
     WORKFLOW_library_init(&settings);
 
     auto&& proc = std::bind(
-                      &DBNetServer::Impl::serve_process, std::cref(this->_m_impl), std::placeholders::_1);
+        &DBNetServer::Impl::serve_process, std::cref(this->_m_impl), std::placeholders::_1);
     _m_server = std::make_unique<WFHttpServer>(proc);
 
     return StatusCode::OK;
