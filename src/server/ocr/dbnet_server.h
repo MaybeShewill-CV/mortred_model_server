@@ -19,7 +19,7 @@ class DBNetServer : public jinq::server::BaseAiServer {
 public:
 
     /***
-    * 构造函数
+    * constructor
     * @param config
     */
     DBNetServer();
@@ -30,13 +30,13 @@ public:
     ~DBNetServer() override;
 
     /***
-    * 赋值构造函数
+    * constructor
     * @param transformer
     */
     DBNetServer(const DBNetServer& transformer) = delete;
 
     /***
-     * 复制构造函数
+     * constructor
      * @param transformer
      * @return
      */
