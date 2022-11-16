@@ -19,7 +19,7 @@ class LibfaceDetServer : public jinq::server::BaseAiServer {
 public:
 
     /***
-    * 构造函数
+    * constructor
     * @param config
     */
     LibfaceDetServer();
@@ -30,13 +30,13 @@ public:
     ~LibfaceDetServer() override;
 
     /***
-    * 赋值构造函数
+    * constructor
     * @param transformer
     */
     LibfaceDetServer(const LibfaceDetServer& transformer) = delete;
 
     /***
-     * 复制构造函数
+     * constructor
      * @param transformer
      * @return
      */
