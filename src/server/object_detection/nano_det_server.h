@@ -1,7 +1,7 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: nanodet_server.h
+* File: nano_det_server.h
 * Date: 22-6-22
 ************************************************/
 
@@ -19,7 +19,7 @@ class NanoDetServer : public jinq::server::BaseAiServer {
 public:
 
     /***
-    * 构造函数
+    * constructor
     * @param config
     */
     NanoDetServer();
@@ -30,13 +30,13 @@ public:
     ~NanoDetServer() override;
 
     /***
-    * 赋值构造函数
+    * constructor
     * @param transformer
     */
     NanoDetServer(const NanoDetServer& transformer) = delete;
 
     /***
-     * 复制构造函数
+     * constructor
      * @param transformer
      * @return
      */
