@@ -1,7 +1,7 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: nanodet_server.cpp
+* File: nano_det_server.cpp
 * Date: 22-6-21
 ************************************************/
 
