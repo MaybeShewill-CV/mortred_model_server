@@ -19,7 +19,7 @@ class ModNetServer : public jinq::server::BaseAiServer {
 public:
 
     /***
-    * 构造函数
+    * constructor
     * @param config
     */
     ModNetServer();
@@ -30,13 +30,13 @@ public:
     ~ModNetServer() override;
 
     /***
-    * 赋值构造函数
+    * constructor
     * @param transformer
     */
     ModNetServer(const ModNetServer& transformer) = delete;
 
     /***
-     * 复制构造函数
+     * constructor
      * @param transformer
      * @return
      */
