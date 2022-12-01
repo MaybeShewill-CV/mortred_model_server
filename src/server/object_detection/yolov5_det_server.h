@@ -19,7 +19,7 @@ class YoloV5DetServer : public jinq::server::BaseAiServer {
 public:
 
     /***
-    * 构造函数
+    * constructor
     * @param config
     */
     YoloV5DetServer();
@@ -30,13 +30,13 @@ public:
     ~YoloV5DetServer() override;
 
     /***
-    * 赋值构造函数
+    * constructor
     * @param transformer
     */
     YoloV5DetServer(const YoloV5DetServer& transformer) = delete;
 
     /***
-     * 复制构造函数
+     * constructor
      * @param transformer
      * @return
      */
