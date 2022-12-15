@@ -19,7 +19,7 @@ class ResNetServer : public jinq::server::BaseAiServer {
 public:
 
     /***
-    * 构造函数
+    * constructor
     * @param config
     */
     ResNetServer();
@@ -30,13 +30,13 @@ public:
     ~ResNetServer() override;
 
     /***
-    * 赋值构造函数
+    * constructor
     * @param transformer
     */
     ResNetServer(const ResNetServer& transformer) = delete;
 
     /***
-     * 复制构造函数
+     * constructor
      * @param transformer
      * @return
      */
