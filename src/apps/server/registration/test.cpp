@@ -16,7 +16,7 @@ int main(int argc, char** argv) {
 
     for (auto& row : res) {
         for (auto& col : row) {
-            LOG(INFO) << "key: " << col.first << ", value: " << col.second;
+            LOG(INFO) << "key: " << col.first << ", value: " << std::get<std::string>(col.second);
         }
     }
 
