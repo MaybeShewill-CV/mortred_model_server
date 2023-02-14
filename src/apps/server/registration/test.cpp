@@ -17,8 +17,10 @@ int main(int argc, char** argv) {
     LOG(INFO) << "select info length: " << res.size();
 
     for (auto& row : res) {
-        LOG(INFO) << "key: " << row.begin()->first << ", value: " << std::get<int>(row.begin()->second);
-        LOG(INFO) << "key: " << row.end()->first << ", value: " << std::get<std::string>(row.end()->second);
+        auto iter = row.begin();
+        LOG(INFO) << "key: " << iter->first << ", value: " << std::get<int>(iter->second);
+        iter++;
+        LOG(INFO) << "key: " << iter->first << ", value: " << std::get<std::string>(iter->second);
     }
 
     return 0;
