@@ -12,7 +12,7 @@ int main(int argc, char** argv) {
 
     MySqlHelper helper;
     std::map<std::string, std::string> conds;
-    auto res = helper.select("", "", conds);
+    auto res = helper.select("", {"", ""}, conds);
 
     for (auto& row : res) {
         for (auto& col : row) {
