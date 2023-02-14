@@ -1,4 +1,5 @@
 #include <string>
+#include <map>
 
 #include "glog/logging.h"
 
@@ -10,7 +11,8 @@ using jinq::registration::mysql::MySqlHelper;
 int main(int argc, char** argv) {
 
     MySqlHelper helper;
-    auto res = helper.select("", "", "");
+    std::map<std::string, std::string> conds;
+    auto res = helper.select("", "", conds);
 
     for (auto& row : res) {
         for (auto& col : row) {
