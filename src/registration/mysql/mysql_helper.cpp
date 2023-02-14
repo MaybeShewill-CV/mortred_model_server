@@ -164,6 +164,7 @@ void select_callback(WFMySQLTask* task) {
                 }
 
                 fprintf(stderr, "-------- ROW END --------\n");
+                query_result->push_back(row_data);
             }
 
             fprintf(stderr, "-------- RESULT SET END --------\n");
