@@ -80,8 +80,8 @@ void select_callback(WFMySQLTask* task) {
                     fprintf(stderr, "[%s][%s]", fields[i]->get_name().c_str(),
                             datatype2str(arr[i].get_data_type()));
                     // fetch column data field name
-                    ColumnKeyType data_field = fields[i]->get_name();
-                    ColumnValueType data_value;
+                    ColumnKey data_field = fields[i]->get_name();
+                    ColumnValue data_value;
 
                     if (arr[i].is_string()) {
                         std::string res = arr[i].as_string();
