@@ -22,6 +22,9 @@ namespace mysql {
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 using jinq::registration::mysql::MySqlDBConfig;
+using jinq::registration::mysql::ColumnValueType;
+using jinq::registration::mysql::ColumnKeyType;
+using jinq::registration::mysql::RowData;
 using jinq::registration::mysql::QueryResult;
 
 namespace internal_impl {
@@ -36,9 +39,6 @@ void select_callback(WFMySQLTask* task) {
     std::vector<protocol::MySQLCell> arr;
 
     if (task->get_state() != WFT_STATE_SUCCESS) {
-        fprintf(stderr, "error msg: %s\n",
-                WFGlobal::get_error_string(task->get_state(),
-                                           task->get_error()));
         char log_str[256];
         sprintf(log_str, "error msg: %s\n",
                 WFGlobal::get_error_string(task->get_state(),
@@ -69,16 +69,25 @@ void select_callback(WFMySQLTask* task) {
             }
 
             fprintf(stderr, "------- COLUMNS END ------\n");
-
+            
+            // fetch every row data
             while (cursor.fetch_row(arr)) {
                 fprintf(stderr, "---------- ROW ----------\n");
+
+                RowData row_data;
 
                 for (size_t i = 0; i < arr.size(); i++) {
                     fprintf(stderr, "[%s][%s]", fields[i]->get_name().c_str(),
                             datatype2str(arr[i].get_data_type()));
+                    // fetch column data field name
+                    ColumnKeyType data_field = fields[i]->get_name();
+                    ColumnValueType data_value;
 
                     if (arr[i].is_string()) {
                         std::string res = arr[i].as_string();
+                        data_value = res;
+                        // row_data.insert(std::make_pair(data_field, data_value));
+                        row_data.insert(std::make_pair(data_field, res));
 
                         if (res.length() == 0) {
                             fprintf(stderr, "[\"\"]\n");
@@ -87,6 +96,12 @@ void select_callback(WFMySQLTask* task) {
                         }
                     } else if (arr[i].is_int()) {
                         fprintf(stderr, "[%d]\n", arr[i].as_int());
+
+                        int res = arr[i].as_int();
+                        data_value = res;
+                        // row_data.insert(std::make_pair(data_field, data_value));
+                        row_data.insert(std::make_pair(data_field, res));
+
                     } else if (arr[i].is_ulonglong()) {
                         fprintf(stderr, "[%llu]\n", arr[i].as_ulonglong());
                     } else if (arr[i].is_float()) {
@@ -154,23 +169,7 @@ void select_callback(WFMySQLTask* task) {
             fprintf(stderr, "-------- RESULT SET END --------\n");
         } while (cursor.next_result_set());
 
-    } else if (resp->get_packet_type() == MYSQL_PACKET_OK) {
-        fprintf(stderr, "OK. %llu ", task->get_resp()->get_affected_rows());
-
-        if (task->get_resp()->get_affected_rows() == 1) {
-            fprintf(stderr, "row ");
-        } else {
-            fprintf(stderr, "rows ");
-        }
-
-        fprintf(stderr, "affected. %d warnings. insert_id=%llu. %s\n",
-                task->get_resp()->get_warnings(),
-                task->get_resp()->get_last_insert_id(),
-                task->get_resp()->get_info().c_str());
     } else if (resp->get_packet_type() == MYSQL_PACKET_ERROR) {
-        fprintf(stderr, "ERROR. error_code=%d %s\n",
-                task->get_resp()->get_error_code(),
-                task->get_resp()->get_error_msg().c_str());
         char log_str[256];
         sprintf(log_str, "ERROR. error_code=%d %s\n",
                 task->get_resp()->get_error_code(),
@@ -178,12 +177,10 @@ void select_callback(WFMySQLTask* task) {
         LOG(ERROR) << log_str;
         LOG(ERROR) << task->get_req()->get_query();
     } else if (resp->get_packet_type() == MYSQL_PACKET_EOF) {
-        fprintf(stderr, "EOF packet without any ResultSets\n");
         char log_str[256];
         sprintf(log_str, "EOF packet without any ResultSets\n");
         LOG(ERROR) << log_str;
     } else {
-        fprintf(stderr, "Abnormal packet_type=%d\n", resp->get_packet_type());
         char log_str[256];
         sprintf(log_str, "Abnormal packet_type=%d\n", resp->get_packet_type());
         LOG(ERROR) << log_str;
@@ -278,9 +275,30 @@ QueryResult MySqlHelper::Impl::select(
     const std::vector<std::string> &columns,
     const std::map<std::string, std::string> &conditions) {
 
-    WFFacilities::WaitGroup wg(1);
+    QueryResult result;
 
+    char mysql_url_chars[128];
+    sprintf(mysql_url_chars, "mysql://%s:%s@%s",
+            "root", "327205", "localhost/mortred_ai_server");
+    std::string mysql_url = std::string(mysql_url_chars);
+    std::string sql_query = "SELECT * FROM mmai_projects";
 
+    auto* task = WFTaskFactory::create_mysql_task(mysql_url, 5, internal_impl::select_callback);
+    task->get_req()->set_query(query);
+    task->user_data = &result;
+
+    WFFacilities::WaitGroup wait_group(1);
+	SeriesWork *series = Workflow::create_series_work(task,
+		[&wait_group](const SeriesWork *series) {
+			wait_group.done();
+		});
+
+	series->set_context(&url);
+	series->start();
+
+	wait_group.wait();
+
+    return result;
 }
 
 

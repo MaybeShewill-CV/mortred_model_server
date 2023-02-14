@@ -17,9 +17,9 @@ namespace jinq {
 namespace registration {
 namespace mysql {
 
-using ColumnValueType = std::variant<std::string, int, uint, float, double, bool>;
-using ColumnKeyType = std::string;
-using RowData = std::map<ColumnKeyType, ColumnValueType>;
+using ColumnValue = std::variant<std::string, int, uint, float, double, bool>;
+using ColumnKey = std::string;
+using RowData = std::map<ColumnKey, ColumnValue>;
 using QueryResult = std::vector<RowData>;
 
 }
