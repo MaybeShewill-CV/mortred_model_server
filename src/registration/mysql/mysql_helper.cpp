@@ -86,8 +86,7 @@ void select_callback(WFMySQLTask* task) {
                     if (arr[i].is_string()) {
                         std::string res = arr[i].as_string();
                         data_value = res;
-                        // row_data.insert(std::make_pair(data_field, data_value));
-                        row_data.insert(std::make_pair(data_field, res));
+                        row_data.insert(std::make_pair(data_field, data_value));
 
                         if (res.length() == 0) {
                             fprintf(stderr, "[\"\"]\n");
@@ -99,8 +98,7 @@ void select_callback(WFMySQLTask* task) {
 
                         int res = arr[i].as_int();
                         data_value = res;
-                        // row_data.insert(std::make_pair(data_field, data_value));
-                        row_data.insert(std::make_pair(data_field, res));
+                        row_data.insert(std::make_pair(data_field, data_value));
 
                     } else if (arr[i].is_ulonglong()) {
                         fprintf(stderr, "[%llu]\n", arr[i].as_ulonglong());
