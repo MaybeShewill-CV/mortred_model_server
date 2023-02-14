@@ -72,7 +72,7 @@ class MySqlHelper {
 
   private:
     class Impl;
-    std::unique_ptr<Impl> _m_pimpl;
+    std::shared_ptr<Impl> _m_pimpl;
 };
 }
 

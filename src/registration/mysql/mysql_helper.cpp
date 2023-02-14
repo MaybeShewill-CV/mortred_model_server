@@ -308,7 +308,7 @@ QueryResult MySqlHelper::Impl::select(
  *
  */
 MySqlHelper::MySqlHelper() {
-    _m_pimpl = std::make_unique<Impl>();
+    _m_pimpl = std::make_shared<Impl>();
 }
 
 /***
