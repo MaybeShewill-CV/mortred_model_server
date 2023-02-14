@@ -22,8 +22,8 @@ namespace mysql {
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 using jinq::registration::mysql::MySqlDBConfig;
-using jinq::registration::mysql::ColumnValueType;
-using jinq::registration::mysql::ColumnKeyType;
+using jinq::registration::mysql::ColumnValue;
+using jinq::registration::mysql::ColumnKey;
 using jinq::registration::mysql::RowData;
 using jinq::registration::mysql::QueryResult;
 
