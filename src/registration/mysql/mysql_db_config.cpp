@@ -208,7 +208,7 @@ StatusCode MySqlDBConfig::Impl::init(const std::string &cfg_file_path) {
  *
  */
 MySqlDBConfig::MySqlDBConfig() {
-    _m_pimpl = std::make_unique<Impl>();
+    _m_pimpl = std::make_shared<Impl>();
 }
 
 /***

@@ -2,9 +2,9 @@ cmake_minimum_required(VERSION 3.15)
 
 project(mortred_model_server)
 set(CMAKE_C_STANDARD 99)
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99")
-set(CMAKE_CXX_FLAGS "-std=c++14")
+set(CMAKE_CXX_FLAGS "-std=c++17")
 set(PROJECT_ROOT_DIR ${CMAKE_CURRENT_LIST_DIR})
 
 # target options

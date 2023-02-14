@@ -33,6 +33,7 @@
 
 # 3rd party
 3rd_party/
+3rd_party/libs/*
 demo_data/
 conf/
 weights/

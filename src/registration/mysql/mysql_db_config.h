@@ -33,14 +33,14 @@ class MySqlDBConfig {
      * constructor
      * @param transformer
      */
-    MySqlDBConfig(const MySqlDBConfig &transformer) = delete;
+    MySqlDBConfig(const MySqlDBConfig &transformer) = default;
 
     /***
      * constructor
      * @param transformer
      * @return
      */
-    MySqlDBConfig &operator=(const MySqlDBConfig &transformer) = delete;
+    MySqlDBConfig &operator=(const MySqlDBConfig &transformer) = default;
 
     /***
      *
@@ -101,7 +101,7 @@ class MySqlDBConfig {
 
   private:
     class Impl;
-    std::unique_ptr<Impl> _m_pimpl;
+    std::shared_ptr<Impl> _m_pimpl;
 };
 }
 }
