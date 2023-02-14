@@ -44,6 +44,7 @@ add_subdirectory(src/common)
 add_subdirectory(src/models)
 add_subdirectory(src/factory)
 add_subdirectory(src/server)
+add_subdirectory(src/registration)
 add_subdirectory(src/apps)
 
 # add unittest

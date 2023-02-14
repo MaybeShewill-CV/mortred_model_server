@@ -14,6 +14,7 @@ namespace jinq {
 namespace common {
 enum StatusCode {
     OK = 0,
+    OJBK = OK,
 
     // model status
     MODEL_INIT_FAILED = 1,
@@ -37,6 +38,9 @@ enum StatusCode {
     // json
     JSON_DECODE_ERROR = 50,
     JSON_ENCODE_ERROR = 51,
+
+    // mysql status
+    MYSQL_INIT_DB_CONFIG_ERROR = 60,
 };
 
 /***
