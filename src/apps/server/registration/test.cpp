@@ -17,9 +17,8 @@ int main(int argc, char** argv) {
     LOG(INFO) << "select info length: " << res.size();
 
     for (auto& row : res) {
-        for (auto& col : row) {
-            LOG(INFO) << "key: " << col.first << ", value: " << std::get<std::string>(col.second);
-        }
+        LOG(INFO) << "key: " << row[0].first << ", value: " << std::get<std::int>(row[0].second);
+        LOG(INFO) << "key: " << row[1].first << ", value: " << std::get<std::string>(row[1].second);
     }
 
     return 0;
