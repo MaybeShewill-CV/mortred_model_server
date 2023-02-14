@@ -284,7 +284,7 @@ QueryResult MySqlHelper::Impl::select(
     std::string sql_query = "SELECT * FROM mmai_projects";
 
     auto* task = WFTaskFactory::create_mysql_task(mysql_url, 5, internal_impl::select_callback);
-    task->get_req()->set_query(query);
+    task->get_req()->set_query(sql_query);
     task->user_data = &result;
 
     WFFacilities::WaitGroup wait_group(1);
@@ -293,7 +293,7 @@ QueryResult MySqlHelper::Impl::select(
 			wait_group.done();
 		});
 
-	series->set_context(&url);
+	series->set_context(&mysql_url);
 	series->start();
 
 	wait_group.wait();
