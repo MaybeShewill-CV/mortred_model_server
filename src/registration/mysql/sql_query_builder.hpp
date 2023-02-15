@@ -23,7 +23,7 @@ public:
     /***
      *
     */
-    virtual ~SqlBuilder() = 0;
+    virtual ~SqlBuilder() = default;
 
     /***
      *
