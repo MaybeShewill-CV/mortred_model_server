@@ -296,7 +296,13 @@ QueryResult MySqlHelper::Impl::select(
     for (auto& iter : conditions) {
         cond_ss << " " << iter.first << iter.second;
     }
-    std::string sql_query = fmt::format("SELECT {0} FROM {1} WHERE{2}", col_ss.str(), table, cond_ss.str());
+    std::string sql_query;
+    if (conditions.empty()) {
+        sql_query = fmt::format("SELECT {0} FROM {1};", col_ss.str(), table);
+    } else {
+        sql_query = fmt::format("SELECT {0} FROM {1} WHERE{2};", col_ss.str(), table, cond_ss.str());
+    }
+    LOG(INFO) << "query: " << sql_query;
 
     auto* task = WFTaskFactory::create_mysql_task(mysql_url, 5, internal_impl::select_callback);
     task->get_req()->set_query(sql_query);
