@@ -99,6 +99,9 @@ public:
  */
 class SelectBuilder : public SqlBuilder {
 public:
+
+    ~SelectBuilder() override = default;
+
     /***
      *
      * @param columns
@@ -206,6 +209,9 @@ private:
  */
 class InsertBuilder : public SqlBuilder {
   public:
+
+    ~InsertBuilder() override = default;
+
     /***
      * 
      * @param table 
@@ -274,6 +280,9 @@ class InsertBuilder : public SqlBuilder {
  */
 class UpdateBuilder : public SqlBuilder {
   public:
+
+    ~UpdateBuilder() override = default;
+
     /***
      *
      * @param table
@@ -327,6 +336,9 @@ class UpdateBuilder : public SqlBuilder {
 
 class DeleteBuilder : public SqlBuilder {
   public:
+
+    ~DeleteBuilder() override = default;
+
     SqlBuilder& remove(const std::string& table, const std::string& condition) override {
         _m_query = "DELETE FROM " + table;
         if (!condition.empty()) {
