@@ -12,6 +12,7 @@
 #include "workflow/WFTaskFactory.h"
 #include "workflow/MySQLResult.h"
 #include "workflow/Workflow.h"
+#include "fmt/core.h"
 
 #include "common/file_path_util.h"
 
@@ -273,29 +274,42 @@ QueryResult MySqlHelper::Impl::select(
     const std::string &table,
     const std::vector<std::string> &columns,
     const std::map<std::string, std::string> &conditions) {
-
     QueryResult result;
 
+    // prepare mysql url
     char mysql_url_chars[128];
-    sprintf(mysql_url_chars, "mysql://%s:%s@%s",
-            "root", "327205", "localhost/mortred_ai_server");
+    sprintf(mysql_url_chars, "mysql://%s:%s@%s/%s",
+            _m_db_cfg.get_user_name().c_str(), _m_db_cfg.get_user_pw().c_str(),
+            _m_db_cfg.get_host().c_str(), _m_db_cfg.get_db_name().c_str());
     std::string mysql_url = std::string(mysql_url_chars);
-    std::string sql_query = "SELECT * FROM mmai_projects";
+
+    // construct sql query
+    std::stringstream col_ss;
+    for (auto index = 0; index < columns.size(); ++index) {
+        if (index == columns.size() - 1) {
+            col_ss << columns[index];
+        } else {
+            col_ss << columns[index] << ", ";
+        }
+    }
+    std::stringstream cond_ss;
+    for (auto& iter : conditions) {
+        cond_ss << " " << iter.first << iter.second;
+    }
+    std::string sql_query = fmt::format("SELECT {0} FROM {1} WHERE{2}", col_ss.str(), table, cond_ss.str());
 
     auto* task = WFTaskFactory::create_mysql_task(mysql_url, 5, internal_impl::select_callback);
     task->get_req()->set_query(sql_query);
     task->user_data = &result;
 
     WFFacilities::WaitGroup wait_group(1);
-	SeriesWork *series = Workflow::create_series_work(task,
-		[&wait_group](const SeriesWork *series) {
-			wait_group.done();
-		});
-
-	series->set_context(&mysql_url);
-	series->start();
-
-	wait_group.wait();
+    SeriesWork *series = Workflow::create_series_work(task,
+            [&wait_group](const SeriesWork *series) {
+                    wait_group.done();
+            });
+    series->set_context(&mysql_url);
+    series->start();
+    wait_group.wait();
 
     return result;
 }
@@ -307,8 +321,13 @@ QueryResult MySqlHelper::Impl::select(
  *
  */
 MySqlHelper::MySqlHelper() {
-    _m_pimpl = std::make_shared<Impl>();
+    _m_pimpl = std::make_unique<Impl>();
 }
+
+/***
+ *
+ */
+MySqlHelper::~MySqlHelper() = default;
 
 /***
  *

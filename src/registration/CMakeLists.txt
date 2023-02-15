@@ -11,5 +11,6 @@ target_link_libraries(
     registration
     common
     ${GLOG_LIBRARIES}
+    ${FMT_LIBRARIES}
 )
 set_target_properties(registration PROPERTIES LINKER_LANGUAGE CXX)

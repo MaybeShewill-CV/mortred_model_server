@@ -30,7 +30,7 @@ class MySqlHelper {
     /***
      *
      */
-    ~MySqlHelper() = default;
+    ~MySqlHelper();
     
     /***
      * constructor
@@ -72,7 +72,7 @@ class MySqlHelper {
 
   private:
     class Impl;
-    std::shared_ptr<Impl> _m_pimpl;
+    std::unique_ptr<Impl> _m_pimpl;
 };
 }
 

@@ -27,6 +27,7 @@ file(GLOB MNN_LIBS ${PROJECT_ROOT_DIR}/3rd_party/libs/*MNN*so*)
 file(GLOB_RECURSE WORKFLOW_LIBS ${PROJECT_ROOT_DIR}/3rd_party/libs/*workflow*so)
 file(GLOB_RECURSE GLOG_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*glog*so)
 file(GLOB_RECURSE BASE64_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*base64*so)
+file(GLOB_RECURSE FMT_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*fmt*a)
 
 # find package
 find_package(Threads REQUIRED)
