@@ -20,31 +20,35 @@ class SqlQueryBuilder {
     /***
      * constructor
      */
-    SqlQueryBuilder();
+    SqlQueryBuilder() = default;
     
     /***
      *
      */
-    ~SqlQueryBuilder();
+    ~SqlQueryBuilder() = default;
     
     /***
      * constructor
      * @param transformer
      */
-    SqlQueryBuilder(const SqlQueryBuilder &transformer) = delete;
+    SqlQueryBuilder(const SqlQueryBuilder &transformer) = default;
     
     /***
      * constructor
      * @param transformer
      * @return
      */
-    SqlQueryBuilder &operator=(const SqlQueryBuilder &transformer) = delete;
+    SqlQueryBuilder &operator=(const SqlQueryBuilder &transformer) = default;
 
-
+    /***
+     *
+     * @param columns
+     * @return
+     */
+    SqlQueryBuilder& select(const std::string& columns);
 
   private:
-    class Impl;
-    std::unique_ptr<Impl> _m_pimpl;
+    std::string _m_query;
 };
 
 }

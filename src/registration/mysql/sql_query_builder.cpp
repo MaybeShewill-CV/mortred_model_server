@@ -6,3 +6,23 @@
  ************************************************/
 
 #include "sql_query_builder.h"
+
+#include <unordered_map>
+
+namespace jinq {
+namespace registration {
+namespace mysql {
+
+/***
+ *
+ * @param columns
+ * @return
+ */
+SqlQueryBuilder &SqlQueryBuilder::select(const std::string &columns) {
+    _m_query = "SELECT " + columns;
+    return *this;
+}
+
+}
+}
+}
