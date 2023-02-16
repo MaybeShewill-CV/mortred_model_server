@@ -150,7 +150,7 @@ void select_callback(WFMySQLTask* task) {
         writer.Key("db");
         writer.String(db_name.c_str());
         writer.Key("table");
-        writer.String(db_name.c_str());
+        writer.String(table_name.c_str());
         writer.Key("fields_names");
         auto f_names = fmt::to_string(fmt::join(field_names, ", "));
         writer.String(f_names.c_str());
