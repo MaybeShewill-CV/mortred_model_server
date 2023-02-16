@@ -12,10 +12,12 @@ using jinq::registration::mysql::MySqlHelper;
 int main(int argc, char** argv) {
 
     MySqlDBConfig db_cfg;
-    db_cfg.set_db_name("mortred_ai_serer");
-    db_cfg.set_host("localhost");
-    db_cfg.set_user_name("root");
-    db_cfg.set_user_pw("327205");
+    std::string cfg_file_path = "../conf/server/registration_center/registration_config.ini";
+    db_cfg.init(cfg_file_path);
+//    db_cfg.set_db_name("mortred_ai_serer");
+//    db_cfg.set_host("localhost");
+//    db_cfg.set_user_name("root");
+//    db_cfg.set_user_pw("327205");
 
     MySqlHelper helper;
     helper.init(db_cfg);
