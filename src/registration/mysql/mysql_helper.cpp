@@ -64,6 +64,7 @@ void select_callback(WFMySQLTask* task) {
         writer.Key("data");
         writer.StartObject();
         writer.EndObject();
+        writer.EndObject();
         *query_str = buf.GetString();
         return;
     }
