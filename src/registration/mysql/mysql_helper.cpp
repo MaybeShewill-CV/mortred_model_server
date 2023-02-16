@@ -55,16 +55,12 @@ void select_callback(WFMySQLTask* task) {
     std::vector<std::vector<std::string> > multiple_rows;
 
     if (task->get_state() != WFT_STATE_SUCCESS) {
-        char log_str[256];
-        sprintf(log_str, "error msg: %s\n",
-                WFGlobal::get_error_string(task->get_state(),
-                                           task->get_error()));
-        LOG(ERROR) << log_str;
-
+        std::string log_str = fmt::format(
+            "error msg: {}", WFGlobal::get_error_string(task->get_state(), task->get_error()));
         writer.Key("status");
         writer.Int(task->get_state());
         writer.Key("msg");
-        writer.String(log_str);
+        writer.String(log_str.c_str());
         writer.Key("data");
         writer.StartObject();
         writer.EndObject();
@@ -73,154 +69,70 @@ void select_callback(WFMySQLTask* task) {
     }
 
     if (cursor.get_cursor_status() == MYSQL_STATUS_GET_RESULT) {
-//        fprintf(stderr, "cursor_status=%d field_count=%u rows_count=%u\n",
-//                cursor.get_cursor_status(), cursor.get_field_count(), cursor.get_rows_count());
-
         do {
-//            fprintf(stderr, "-------- RESULT SET --------\n");
-            //nocopy api
             fields = cursor.fetch_fields();
             for (int i = 0; i < cursor.get_field_count(); i++) {
                 if (i == 0) {
                     db_name = fields[i]->get_db();
                     table_name = fields[i]->get_table();
-//                    fprintf(stderr, "db=%s table=%s\n",
-//                            fields[i]->get_db().c_str(), fields[i]->get_table().c_str());
-//                    fprintf(stderr, "-------- COLUMNS --------\n");
                 }
-
-//                fprintf(stderr, "name[%s] type[%s]\n",
-//                        fields[i]->get_name().c_str(),
-//                        datatype2str(fields[i]->get_data_type()));
                 field_names.push_back(fields[i]->get_name());
                 field_types.emplace_back(datatype2str(fields[i]->get_data_type()));
             }
-
-//            fprintf(stderr, "------- COLUMNS END ------\n");
-            
             // fetch every row data
             while (cursor.fetch_row(arr)) {
-//                fprintf(stderr, "---------- ROW ----------\n");
                 std::vector<std::string> single_row;
-                for (size_t i = 0; i < arr.size(); i++) {
-//                    fprintf(stderr, "[%s][%s]", fields[i]->get_name().c_str(),
-//                            datatype2str(arr[i].get_data_type()));
-
-                    if (arr[i].is_string()) {
-                        std::string res = arr[i].as_string();
+                for (auto& each_arr : arr) {
+                    if (each_arr.is_string()) {
+                        std::string res = each_arr.as_string();
                         single_row.push_back(res);
-
-//                        if (res.length() == 0) {
-//                            fprintf(stderr, "[\"\"]\n");
-//                        } else {
-//                            fprintf(stderr, "[%s]\n", res.c_str());
-//                        }
-                    } else if (arr[i].is_int()) {
-//                        fprintf(stderr, "[%d]\n", arr[i].as_int());
-                        int res = arr[i].as_int();
+                    } else if (each_arr.is_int()) {
+                        int res = each_arr.as_int();
                         single_row.push_back(std::to_string(res));
-                    } else if (arr[i].is_ulonglong()) {
-//                        fprintf(stderr, "[%llu]\n", arr[i].as_ulonglong());
-                        auto res = arr[i].as_ulonglong();
+                    } else if (each_arr.is_ulonglong()) {
+                        auto res = each_arr.as_ulonglong();
                         single_row.push_back(std::to_string(res));
-                    } else if (arr[i].is_float()) {
-//                        const void* ptr = nullptr;
-//                        size_t len = 0;
-//                        int data_type = 0;
-//                        arr[i].get_cell_nocopy(&ptr, &len, &data_type);
-//                        size_t pos = 0;
-//
-//                        for (pos = 0; pos < len; pos++) {
-//                            if (*((const char*) ptr + pos) == '.') {
-//                                break;
-//                            }
-//                        }
-//
-//                        if (pos != len) {
-//                            pos = len - pos - 1;
-//                        } else {
-//                            pos = 0;
-//                        }
-//                        fprintf(stderr, "[%.*f]\n", (int) pos, arr[i].as_float());
-
-                        auto res = arr[i].as_float();
+                    } else if (each_arr.is_float()) {
+                        auto res = each_arr.as_float();
                         single_row.push_back(std::to_string(res));
-                    } else if (arr[i].is_double()) {
-//                        const void* ptr = nullptr;
-//                        size_t len = 0;
-//                        int data_type = 0;
-//                        arr[i].get_cell_nocopy(&ptr, &len, &data_type);
-//                        size_t pos = 0;
-//
-//                        for (pos = 0; pos < len; pos++) {
-//                            if (*((const char*) ptr + pos) == '.') {
-//                                break;
-//                            }
-//                        }
-//
-//                        if (pos != len) {
-//                            pos = len - pos - 1;
-//                        } else {
-//                            pos = 0;
-//                        }
-//
-//                        fprintf(stderr, "[%.*lf]\n", (int) pos, arr[i].as_double());
-
-                        auto res = arr[i].as_double();
+                    } else if (each_arr.is_double()) {
+                        auto res = each_arr.as_double();
                         single_row.push_back(std::to_string(res));
-                    } else if (arr[i].is_date()) {
-//                        fprintf(stderr, "[%s]\n", arr[i].as_string().c_str());
-                        auto res = arr[i].as_date();
+                    } else if (each_arr.is_date()) {
+                        auto res = each_arr.as_date();
                         single_row.push_back(res);
-                    } else if (arr[i].is_time()) {
-//                        fprintf(stderr, "[%s]\n", arr[i].as_string().c_str());
-                        auto res = arr[i].as_time();
+                    } else if (each_arr.is_time()) {
+                        auto res = each_arr.as_time();
                         single_row.push_back(res);
-                    } else if (arr[i].is_datetime()) {
-//                        fprintf(stderr, "[%s]\n", arr[i].as_string().c_str());
-                        auto res = arr[i].as_datetime();
+                    } else if (each_arr.is_datetime()) {
+                        auto res = each_arr.as_datetime();
                         single_row.push_back(res);
-                    } else if (arr[i].is_null()) {
-//                        fprintf(stderr, "[NULL]\n");
+                    } else if (each_arr.is_null()) {
                         single_row.emplace_back("");
                     } else {
-                        std::string res = arr[i].as_binary_string();
-
-//                        if (res.length() == 0) {
-//                            fprintf(stderr, "[\"\"]\n");
-//                        } else {
-//                            fprintf(stderr, "[%s]\n", res.c_str());
-//                        }
+                        std::string res = each_arr.as_binary_string();
                         single_row.push_back(res);
                     }
                 }
-
-//                fprintf(stderr, "-------- ROW END --------\n");
                 multiple_rows.push_back(single_row);
             }
-
-//            fprintf(stderr, "-------- RESULT SET END --------\n");
         } while (cursor.next_result_set());
         status = 0;
         msg = "ok";
     } else if (resp->get_packet_type() == MYSQL_PACKET_ERROR) {
-        char log_str[256];
-        sprintf(log_str, "ERROR. error_code=%d %s\n",
-                task->get_resp()->get_error_code(),
-                task->get_resp()->get_error_msg().c_str());
+        std::string log_str = fmt::format(
+            "ERROR, error_code={} {}", task->get_resp()->get_error_code(), task->get_resp()->get_error_msg());
         LOG(ERROR) << log_str;
         LOG(ERROR) << task->get_req()->get_query();
         status = -1;
         msg = log_str;
     } else if (resp->get_packet_type() == MYSQL_PACKET_EOF) {
-        char log_str[256];
-        sprintf(log_str, "EOF packet without any ResultSets\n");
+        std::string log_str = "EOF packet without any ResultSets";
         LOG(ERROR) << log_str;
         status = -1;
         msg = log_str;
     } else {
-        char log_str[256];
-        sprintf(log_str, "Abnormal packet_type=%d\n", resp->get_packet_type());
+        std::string log_str = fmt::format("Abnormal packet_type={}", resp->get_packet_type());
         LOG(ERROR) << log_str;
         status = -1;
         msg = log_str;
@@ -248,13 +160,22 @@ void select_callback(WFMySQLTask* task) {
         writer.Key("select_objs");
         writer.StartArray();
         for (auto& single_row : multiple_rows) {
-            auto row_str = fmt::to_string(fmt::join(single_row, ", "));
-            writer.String(row_str.c_str());
+            writer.StartObject();
+            for (auto idx = 0; idx < single_row.size(); ++idx) {
+                writer.Key(field_names[idx].c_str());
+                writer.StartObject();
+                writer.Key("type");
+                writer.String(field_types[idx].c_str());
+                writer.Key("value");
+                writer.String(single_row[idx].c_str());
+                writer.EndObject();
+            }
+            writer.EndObject();
         }
         writer.EndArray();
         writer.EndObject();
     }
-
+    writer.EndObject();
     *query_str = buf.GetString();
 }
 
