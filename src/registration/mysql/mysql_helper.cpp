@@ -274,6 +274,7 @@ std::string MySqlHelper::Impl::select(
             _m_db_cfg.get_user_name().c_str(), _m_db_cfg.get_user_pw().c_str(),
             _m_db_cfg.get_host().c_str(), _m_db_cfg.get_db_name().c_str());
     std::string mysql_url = std::string(mysql_url_chars);
+    LOG(INFO) << mysql_url;
 
     // construct sql query
     std::stringstream col_ss;
