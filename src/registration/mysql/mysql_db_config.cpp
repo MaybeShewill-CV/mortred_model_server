@@ -340,7 +340,7 @@ void MySqlDBConfig::set_user_name(const std::string &u_name) {
  * @param u_name
  */
 void MySqlDBConfig::set_user_pw(const std::string &u_pw) {
-    return _m_pimpl->set_user_name(u_pw);
+    return _m_pimpl->set_user_pw(u_pw);
 }
 
 /***
