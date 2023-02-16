@@ -20,15 +20,7 @@ int main(int argc, char** argv) {
     std::map<std::string, std::string> conds;
     auto res = helper.select("mmai_projects", {"id", "name"}, conds);
 
-    LOG(INFO) << "select info length: " << res.size();
-
-    for (auto& row : res) {
-        auto iter = row.begin();
-        LOG(INFO) << "key: " << iter->first << ", value: " << std::get<int>(iter->second);
-        iter++;
-        LOG(INFO) << "key: " << iter->first << ", value: " << std::get<std::string>(iter->second);
-    }
-
+    LOG(INFO) << "select result: " << res;
     return 0;
 
 }

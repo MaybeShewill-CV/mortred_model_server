@@ -98,8 +98,11 @@ public:
  * select query sql builder
  */
 class SelectBuilder : public SqlBuilder {
+    using KV_Values = std::unordered_map<std::string, std::string>;
 public:
-
+    /***
+     *
+     */
     ~SelectBuilder() override = default;
 
     /***
@@ -166,39 +169,9 @@ public:
     }
 
   private:
-    /***
-     *
-     * @param table
-     * @param values
-     * @return
-     */
-    SqlBuilder& insert(const std::string& table, const std::unordered_map<std::string, std::string>& values) override {
-        return *this;
-    };
-
-    /***
-     *
-     * @param table
-     * @param values
-     * @param condition
-     * @return
-     */
-    SqlBuilder& update(
-        const std::string& table,
-        const std::unordered_map<std::string, std::string>& values,
-        const std::string& condition) override {
-        return *this;
-    };
-
-    /***
-     *
-     * @param table
-     * @param condition
-     * @return
-     */
-    SqlBuilder& remove(const std::string& table, const std::string& condition) override {
-        return *this;
-    }
+    SqlBuilder& insert(const std::string& table, const KV_Values& values) override { return *this; };
+    SqlBuilder& update(const std::string& table, const KV_Values& values, const std::string& condition) override { return *this; };
+    SqlBuilder& remove(const std::string& table, const std::string& condition) override { return *this; }
 
 private:
     std::string _m_query;
@@ -208,8 +181,11 @@ private:
  * insert query sql builder
  */
 class InsertBuilder : public SqlBuilder {
+    using KV_Values = std::unordered_map<std::string, std::string>;
   public:
-
+    /***
+     *
+     */
     ~InsertBuilder() override = default;
 
     /***
@@ -218,7 +194,7 @@ class InsertBuilder : public SqlBuilder {
      * @param values 
      * @return 
      */
-    SqlBuilder& insert(const std::string& table, const std::unordered_map<std::string, std::string>& values) override {
+    SqlBuilder& insert(const std::string& table, const KV_Values& values) override {
         std::string columns;
         std::string vals;
         for (const auto& [key, value] : values) {
@@ -243,33 +219,13 @@ class InsertBuilder : public SqlBuilder {
     }
     
   private:
-    SqlBuilder& select(const std::string& columns) override {
-        return *this;
-    }
-
-    SqlBuilder& from(const std::string& table) override {
-        return *this;
-    }
-
-    SqlBuilder& where(const std::string& condition) override {
-        return *this;
-    }
-
-    SqlBuilder& order_by(const std::string& column, bool ascending) override {
-        return *this;
-    }
-
-    SqlBuilder& join(const std::string& table, const std::string& condition) override {
-        return *this;
-    }
-
-    SqlBuilder& update(const std::string& table, const std::unordered_map<std::string, std::string>& values, const std::string& condition) override {
-        return *this;
-    }
-
-    SqlBuilder& remove(const std::string& table, const std::string& condition) override {
-        return *this;
-    }
+    SqlBuilder& select(const std::string& columns) override { return *this; }
+    SqlBuilder& from(const std::string& table) override { return *this; }
+    SqlBuilder& where(const std::string& condition) override { return *this; }
+    SqlBuilder& order_by(const std::string& column, bool ascending) override { return *this; }
+    SqlBuilder& join(const std::string& table, const std::string& condition) override { return *this; }
+    SqlBuilder& update(const std::string& table, const KV_Values& values, const std::string& condition) override { return *this; }
+    SqlBuilder& remove(const std::string& table, const std::string& condition) override { return *this; }
 
   private:
     std::string _m_query;
@@ -279,8 +235,11 @@ class InsertBuilder : public SqlBuilder {
  * update query sql builder
  */
 class UpdateBuilder : public SqlBuilder {
+    using KV_Values = std::unordered_map<std::string, std::string>;
   public:
-
+    /***
+     *
+     */
     ~UpdateBuilder() override = default;
 
     /***
@@ -290,10 +249,7 @@ class UpdateBuilder : public SqlBuilder {
      * @param condition
      * @return
      */
-    SqlBuilder& update(
-        const std::string& table,
-        const std::unordered_map<std::string, std::string>& values,
-        const std::string& condition) override {
+    SqlBuilder& update(const std::string& table, const KV_Values& values, const std::string& condition) override {
         std::stringstream query;
         query << "UPDATE " << table << " SET ";
         bool first = true;
@@ -328,17 +284,27 @@ class UpdateBuilder : public SqlBuilder {
     SqlBuilder& where(const std::string& condition) override { return *this; }
     SqlBuilder& order_by(const std::string& column, bool ascending) override { return *this; }
     SqlBuilder& join(const std::string& table, const std::string& condition) override { return *this; }
-    SqlBuilder& insert(const std::string& table, const std::unordered_map<std::string, std::string>& values) override { return *this; }
+    SqlBuilder& insert(const std::string& table, const KV_Values& values) override { return *this; }
     SqlBuilder& remove(const std::string& table, const std::string& condition) override { return *this; }
 
+  private:
     std::string _m_query;
 };
 
 class DeleteBuilder : public SqlBuilder {
+    using KV_Values = std::unordered_map<std::string, std::string>;
   public:
-
+    /***
+     *
+     */
     ~DeleteBuilder() override = default;
 
+    /***
+     *
+     * @param table
+     * @param condition
+     * @return
+     */
     SqlBuilder& remove(const std::string& table, const std::string& condition) override {
         _m_query = "DELETE FROM " + table;
         if (!condition.empty()) {
@@ -347,6 +313,10 @@ class DeleteBuilder : public SqlBuilder {
         return *this;
     }
 
+    /**
+     *
+     * @return
+     */
     std::string get_query() override {
         if (!_m_query.empty() && _m_query.back() != ';') {
             _m_query += ";";
@@ -360,12 +330,10 @@ class DeleteBuilder : public SqlBuilder {
     SqlBuilder& where(const std::string& condition) override { return *this; }
     SqlBuilder& order_by(const std::string& column, bool ascending) override { return *this; }
     SqlBuilder& join(const std::string& table, const std::string& condition) override { return *this; }
-    SqlBuilder& insert(const std::string& table, const std::unordered_map<std::string, std::string>& values) override { return *this; }
-    SqlBuilder& update(
-        const std::string& table,
-        const std::unordered_map<std::string, std::string>& values,
-        const std::string& condition) override { return *this; }
+    SqlBuilder& insert(const std::string& table, const KV_Values& values) override { return *this; }
+    SqlBuilder& update(const std::string& table, const KV_Values& values, const std::string& condition) override { return *this; }
 
+  private:
     std::string _m_query;
 };
 

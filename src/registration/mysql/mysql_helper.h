@@ -26,6 +26,12 @@ class MySqlHelper {
      * constructor
      */
     MySqlHelper();
+
+    /***
+     *
+     * @param cfg
+     */
+    explicit MySqlHelper(const jinq::registration::mysql::MySqlDBConfig& cfg);
     
     /***
      *
@@ -65,7 +71,7 @@ class MySqlHelper {
      * @param conditions
      * @return
      */
-    jinq::registration::mysql::QueryResult select(
+    std::string select(
         const std::string& table,
         const std::vector<std::string>& columns,
         const std::map<std::string, std::string>& conditions);

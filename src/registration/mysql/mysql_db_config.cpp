@@ -116,6 +116,48 @@ class MySqlDBConfig::Impl {
         return _m_db_name;
     }
 
+    /***
+     *
+     */
+    void set_user_name(const std::string& u_name) {
+        _m_user_name = u_name;
+    }
+
+    /***
+     *
+     */
+    void set_user_pw(const std::string& u_pw) {
+        _m_pw = u_pw;
+    }
+
+    /***
+     *
+     */
+    void set_host(const std::string& host) {
+        _m_host = host;
+    }
+
+    /***
+     *
+     */
+    void set_port(int port) {
+        _m_port = port;
+    }
+
+    /***
+     *
+     */
+    void set_uri(const std::string& uri) {
+        _m_uri = uri;
+    }
+
+    /***
+     *
+     */
+    void set_db_name(const std::string& db_name) {
+        _m_db_name = db_name;
+    }
+
   private:
     // user name
     std::string _m_user_name;
@@ -283,6 +325,54 @@ int MySqlDBConfig::get_port() const {
  */
 std::string MySqlDBConfig::get_db_name() const {
     return _m_pimpl->get_db_name();
+}
+
+/***
+ *
+ * @param u_name
+ */
+void MySqlDBConfig::set_user_name(const std::string &u_name) {
+    return _m_pimpl->set_user_name(u_name);
+}
+
+/***
+ *
+ * @param u_name
+ */
+void MySqlDBConfig::set_user_pw(const std::string &u_pw) {
+    return _m_pimpl->set_user_name(u_pw);
+}
+
+/***
+ *
+ * @param db_name
+ */
+void MySqlDBConfig::set_db_name(const std::string &db_name) {
+    return _m_pimpl->set_db_name(db_name);
+}
+
+/***
+ *
+ * @param host
+ */
+void MySqlDBConfig::set_host(const std::string &host) {
+    return _m_pimpl->set_host(host);
+}
+
+/***
+ *
+ * @param port
+ */
+void MySqlDBConfig::set_port(int port) {
+   return _m_pimpl->set_port(port);
+}
+
+/***
+ *
+ * @param uri
+ */
+void MySqlDBConfig::set_uri(const std::string &uri) {
+   return _m_pimpl->set_uri(uri);
 }
 
 }

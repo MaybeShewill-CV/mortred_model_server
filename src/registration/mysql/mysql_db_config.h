@@ -95,6 +95,36 @@ class MySqlDBConfig {
 
     /***
      *
+     */
+    void set_user_name(const std::string& u_name);
+
+    /***
+     *
+     */
+    void set_user_pw(const std::string& u_pw);
+
+    /***
+     *
+     */
+    void set_host(const std::string& host);
+
+    /***
+     *
+     */
+    void set_port(int port);
+
+    /***
+     *
+     */
+    void set_uri(const std::string& uri);
+
+    /***
+     *
+     */
+    void set_db_name(const std::string& db_name);
+
+    /***
+     *
      * @return
      */
     bool is_successfully_initialized() const;
