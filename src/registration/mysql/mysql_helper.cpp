@@ -49,7 +49,7 @@ void select_callback(WFMySQLTask* task) {
     rapidjson::StringBuffer buf;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
     writer.StartObject();
-    int status = 0;
+    int status;
     std::string msg;
     std::string db_name;
     std::string table_name;
@@ -273,11 +273,8 @@ StatusCode MySqlHelper::Impl::init(const MySqlDBConfig& db_cfg) {
  */
 StatusCode MySqlHelper::Impl::select(const std::string &query, std::string &query_result) {
     // prepare mysql url
-    char mysql_url_chars[128];
-    sprintf(mysql_url_chars, "mysql://%s:%s@%s/%s",
-            _m_db_cfg.get_user_name().c_str(), _m_db_cfg.get_user_pw().c_str(),
-            _m_db_cfg.get_host().c_str(), _m_db_cfg.get_db_name().c_str());
-    std::string mysql_url = std::string(mysql_url_chars);
+    std::string mysql_url = fmt::format(
+        "mysql://{}:{}@{}/{}", _m_db_cfg.get_user_name(), _m_db_cfg.get_user_pw(), _m_db_cfg.get_host(), _m_db_cfg.get_db_name());
 
     auto* task = WFTaskFactory::create_mysql_task(mysql_url, 5, internal_impl::select_callback);
     task->get_req()->set_query(query);
