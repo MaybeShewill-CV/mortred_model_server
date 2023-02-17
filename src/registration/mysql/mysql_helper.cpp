@@ -297,6 +297,7 @@ StatusCode MySqlHelper::Impl::select(const std::string &query, std::string &quer
     series->start();
     wait_group.wait();
 
+    query_result = q_status.query_result;
     return q_status.query_status;
 }
 
