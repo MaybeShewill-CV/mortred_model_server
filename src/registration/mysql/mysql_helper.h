@@ -66,15 +66,10 @@ class MySqlHelper {
 
     /***
      *
-     * @param table
-     * @param columns
-     * @param conditions
+     * @param query
      * @return
      */
-    std::string select(
-        const std::string& table,
-        const std::vector<std::string>& columns,
-        const std::map<std::string, std::string>& conditions);
+    jinq::common::StatusCode select(const std::string& query, std::string& query_result);
 
   private:
     class Impl;

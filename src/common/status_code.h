@@ -41,6 +41,10 @@ enum StatusCode {
 
     // mysql status
     MYSQL_INIT_DB_CONFIG_ERROR = 60,
+    MYSQL_SELECT_FAILED = 61,
+    MYSQL_INSERT_FAILED = 62,
+    MYSQL_UPDATE_FAILED = 63,
+    MYSQL_DELETE_FAILED = 64,
 };
 
 /***

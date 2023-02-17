@@ -35,8 +35,11 @@ namespace internal_impl {
 
 void select_callback(WFMySQLTask* task) {
 
-    auto* query_str = (std::string*)task->user_data;
-    QueryResult query_result;
+    struct query_status {
+        std::string query_result;
+        StatusCode query_status;
+    };
+    auto* q_status = (query_status*)task->user_data;
 
     protocol::MySQLResponse* resp = task->get_resp();
     protocol::MySQLResultCursor cursor(resp);
@@ -65,7 +68,8 @@ void select_callback(WFMySQLTask* task) {
         writer.StartObject();
         writer.EndObject();
         writer.EndObject();
-        *query_str = buf.GetString();
+        q_status->query_result = buf.GetString();
+        q_status->query_status = StatusCode::MYSQL_SELECT_FAILED;
         return;
     }
 
@@ -177,7 +181,12 @@ void select_callback(WFMySQLTask* task) {
         writer.EndObject();
     }
     writer.EndObject();
-    *query_str = buf.GetString();
+    q_status->query_result = buf.GetString();
+    if (status != 0) {
+        q_status->query_status = StatusCode::MYSQL_SELECT_FAILED;
+    } else {
+        q_status->query_status = StatusCode::OK;
+    }
 }
 
 }
@@ -218,15 +227,10 @@ class MySqlHelper::Impl {
 
     /***
      *
-     * @param table
-     * @param columns
-     * @param conditions
+     * @param query
      * @return
      */
-    std::string select(
-        const std::string& table,
-        const std::vector<std::string>& columns,
-        const std::map<std::string, std::string>& conditions);
+    StatusCode select(const std::string& query, std::string& query_result);
 
     /***
      *
@@ -251,6 +255,11 @@ class MySqlHelper::Impl {
 StatusCode MySqlHelper::Impl::init(const MySqlDBConfig& db_cfg) {
     // copy db cfg
     _m_db_cfg = db_cfg;
+    // check if db config is complete
+    if (_m_db_cfg.get_user_name().empty()) {
+        _m_successfully_initialized = false;
+        return StatusCode::MYSQL_INIT_DB_CONFIG_ERROR;
+    }
 
     _m_successfully_initialized = true;
     return StatusCode::OJBK;
@@ -258,60 +267,37 @@ StatusCode MySqlHelper::Impl::init(const MySqlDBConfig& db_cfg) {
 
 /***
  *
- * @param table
- * @param columns
- * @param conditions
+ * @param query
+ * @param query_result
  * @return
  */
-std::string MySqlHelper::Impl::select(
-    const std::string &table,
-    const std::vector<std::string> &columns,
-    const std::map<std::string, std::string> &conditions) {
-
+StatusCode MySqlHelper::Impl::select(const std::string &query, std::string &query_result) {
     // prepare mysql url
     char mysql_url_chars[128];
     sprintf(mysql_url_chars, "mysql://%s:%s@%s/%s",
             _m_db_cfg.get_user_name().c_str(), _m_db_cfg.get_user_pw().c_str(),
             _m_db_cfg.get_host().c_str(), _m_db_cfg.get_db_name().c_str());
     std::string mysql_url = std::string(mysql_url_chars);
-    LOG(INFO) << mysql_url;
-
-    // construct sql query
-    std::stringstream col_ss;
-    for (auto index = 0; index < columns.size(); ++index) {
-        if (index == columns.size() - 1) {
-            col_ss << columns[index];
-        } else {
-            col_ss << columns[index] << ", ";
-        }
-    }
-    std::stringstream cond_ss;
-    for (auto& iter : conditions) {
-        cond_ss << " " << iter.first << iter.second;
-    }
-    std::string sql_query;
-    if (conditions.empty()) {
-        sql_query = fmt::format("SELECT {0} FROM {1};", col_ss.str(), table);
-    } else {
-        sql_query = fmt::format("SELECT {0} FROM {1} WHERE{2};", col_ss.str(), table, cond_ss.str());
-    }
-    LOG(INFO) << "query: " << sql_query;
 
     auto* task = WFTaskFactory::create_mysql_task(mysql_url, 5, internal_impl::select_callback);
-    task->get_req()->set_query(sql_query);
-    std::string result;
-    task->user_data = &result;
+    task->get_req()->set_query(query);
+    struct query_status {
+        std::string query_result;
+        StatusCode query_status = StatusCode::OK;
+    } q_status;
+    task->user_data = &q_status;
 
     WFFacilities::WaitGroup wait_group(1);
-    SeriesWork *series = Workflow::create_series_work(task,
-            [&wait_group](const SeriesWork *series) {
-                    wait_group.done();
-            });
+    SeriesWork *series = Workflow::create_series_work(
+        task,
+        [&wait_group](const SeriesWork *series) {
+            wait_group.done();
+        });
     series->set_context(&mysql_url);
     series->start();
     wait_group.wait();
 
-    return result;
+    return q_status.query_status;
 }
 
 
@@ -354,11 +340,8 @@ StatusCode MySqlHelper::init(const jinq::registration::mysql::MySqlDBConfig &db_
  * @param conditions
  * @return
  */
-std::string MySqlHelper::select(
-    const std::string &table,
-    const std::vector<std::string> &columns,
-    const std::map<std::string, std::string> &conditions) {
-    return _m_pimpl->select(table, columns, conditions);
+StatusCode MySqlHelper::select(const std::string &query, std::string &query_result) {
+    return _m_pimpl->select(query, query_result);
 }
 
 /***

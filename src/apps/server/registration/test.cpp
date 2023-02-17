@@ -5,9 +5,11 @@
 
 #include "common/status_code.h"
 #include "registration/mysql/mysql_helper.h"
+#include "registration/mysql/sql_query_builder.hpp"
 
 using jinq::registration::mysql::MySqlDBConfig;
 using jinq::registration::mysql::MySqlHelper;
+using jinq::registration::mysql::SelectBuilder;
 
 int main(int argc, char** argv) {
 
@@ -21,10 +23,13 @@ int main(int argc, char** argv) {
 
     MySqlHelper helper;
     helper.init(db_cfg);
-    std::map<std::string, std::string> conds;
-    auto res = helper.select("mmai_service_instances", {"ip_address", "service_id"}, conds);
+    std::string query_result;
+    SelectBuilder builder;
+    auto sql_query = builder.select("*").from("mmai_projects").get_query();
+    auto res = helper.select(sql_query, query_result);
 
-    LOG(INFO) << "select result: " << res;
+    LOG(INFO) << "select status: " << res;
+    LOG(INFO) << "select result: " << query_result;
     return 0;
 
 }
