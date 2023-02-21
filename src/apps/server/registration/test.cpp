@@ -43,6 +43,7 @@ int main(int argc, char** argv) {
     LOG(INFO) << "select status: " << select_res;
     LOG(INFO) << "select result: " << query_result;
 
-    return 0;
+    LOG(INFO) << __FUNCTION__ ;
 
+    return 0;
 }
