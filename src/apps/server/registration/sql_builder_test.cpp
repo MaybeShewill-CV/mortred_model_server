@@ -9,9 +9,10 @@
 
 #include "glog/logging.h"
 
+#include "registration/mysql/mysql_data_type.h"
 #include "registration/mysql/sql_query_builder.hpp"
 
-
+using jinq::registration::mysql::KVData;
 using jinq::registration::mysql::SelectBuilder;
 using jinq::registration::mysql::InsertBuilder;
 using jinq::registration::mysql::UpdateBuilder;
@@ -29,21 +30,21 @@ int main(int argc, char** argv) {
 
     // test insert query builder
     InsertBuilder insert_query_builder;
-    std::unordered_map<std::string, std::string> values = {{"name", "John"}, {"age", "20"}};
+    KVData values = {{"name", std::string("John")}, {"age", 21}};
     std::string insert_query = insert_query_builder.insert("user", values).get_query();
     LOG(INFO) << "insert query: " << insert_query;
 
     // test update query builder
     UpdateBuilder update_query_builder;
-    std::unordered_map<std::string, std::string> update_values = {{"name", "Mike"}, {"age", "21"}};
+    KVData update_values = {{"name", std::string("Mike")}, {"age", "21"}};
     std::string conditions = "name = 'John'";
-    std::string update_query = update_query_builder.update("user", update_values, conditions).get_query();
+    std::string update_query = update_query_builder.update("user", update_values).where(conditions).get_query();
     LOG(INFO) << "update query: " << update_query;
 
     // test delete query builder
     DeleteBuilder delete_query_builder;
     conditions = "name = 'Mike'";
-    std::string delete_query = delete_query_builder.remove("user", conditions).get_query();
+    std::string delete_query = delete_query_builder.remove("user").where(conditions).get_query();
     LOG(INFO) << "delete query: " << delete_query << std::endl;
 
 }

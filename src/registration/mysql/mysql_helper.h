@@ -71,6 +71,13 @@ class MySqlHelper {
      */
     jinq::common::StatusCode select(const std::string& query, std::string& query_result);
 
+    /***
+     *
+     * @param query
+     * @return
+     */
+    jinq::common::StatusCode insert(const std::string& query);
+
   private:
     class Impl;
     std::unique_ptr<Impl> _m_pimpl;

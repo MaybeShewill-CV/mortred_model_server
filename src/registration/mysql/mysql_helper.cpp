@@ -28,7 +28,6 @@ using jinq::common::StatusCode;
 using jinq::registration::mysql::MySqlDBConfig;
 using jinq::registration::mysql::ColumnValue;
 using jinq::registration::mysql::ColumnKey;
-using jinq::registration::mysql::RowData;
 using jinq::registration::mysql::QueryResult;
 
 namespace internal_impl {
@@ -189,6 +188,34 @@ void select_callback(WFMySQLTask* task) {
     }
 }
 
+void insert_callback(WFMySQLTask* task) {
+
+    auto* q_status = (StatusCode*)task->user_data;
+
+    protocol::MySQLResponse* resp = task->get_resp();
+    protocol::MySQLResultCursor cursor(resp);
+
+    if (task->get_state() != WFT_STATE_SUCCESS) {
+        std::string log_str = fmt::format(
+            "error msg: {}", WFGlobal::get_error_string(task->get_state(), task->get_error()));
+        *q_status = StatusCode::MYSQL_INSERT_FAILED;
+        return;
+    }
+
+    if (resp->get_error_code() != 0) {
+        std::string log_str = fmt::format(
+            "ERROR, error_code={} {}", resp->get_error_code(), resp->get_error_msg());
+        LOG(ERROR) << log_str;
+        *q_status = StatusCode::MYSQL_INSERT_FAILED;
+    } else if (resp->get_packet_type() != MYSQL_PACKET_OK) {
+        std::string log_str = fmt::format("Abnormal packet_type={}", resp->get_packet_type());
+        LOG(ERROR) << log_str;
+        *q_status = StatusCode::MYSQL_INSERT_FAILED;
+    } else {
+        *q_status = StatusCode::OJBK;
+    }
+}
+
 }
 
 /***************** Impl Function Sets ******************/
@@ -231,6 +258,13 @@ class MySqlHelper::Impl {
      * @return
      */
     StatusCode select(const std::string& query, std::string& query_result);
+
+    /***
+     *
+     * @param query
+     * @return
+     */
+    StatusCode insert(const std::string& query);
 
     /***
      *
@@ -298,6 +332,35 @@ StatusCode MySqlHelper::Impl::select(const std::string &query, std::string &quer
     return q_status.query_status;
 }
 
+/***
+ *
+ * @param query
+ * @param query_result
+ * @return
+ */
+StatusCode MySqlHelper::Impl::insert(const std::string &query) {
+    // prepare mysql url
+    std::string mysql_url = fmt::format(
+        "mysql://{}:{}@{}/{}", _m_db_cfg.get_user_name(), _m_db_cfg.get_user_pw(), _m_db_cfg.get_host(), _m_db_cfg.get_db_name());
+
+    auto* task = WFTaskFactory::create_mysql_task(mysql_url, 5, internal_impl::insert_callback);
+    task->get_req()->set_query(query);
+    StatusCode query_status;
+    task->user_data = &query_status;
+
+    WFFacilities::WaitGroup wait_group(1);
+    SeriesWork *series = Workflow::create_series_work(
+        task,
+        [&wait_group](const SeriesWork *series) {
+            wait_group.done();
+        });
+    series->set_context(&mysql_url);
+    series->start();
+    wait_group.wait();
+
+    return query_status;
+}
+
 
 /************* Export Function Sets *************/
 
@@ -340,6 +403,15 @@ StatusCode MySqlHelper::init(const jinq::registration::mysql::MySqlDBConfig &db_
  */
 StatusCode MySqlHelper::select(const std::string &query, std::string &query_result) {
     return _m_pimpl->select(query, query_result);
+}
+
+/***
+ *
+ * @param query
+ * @return
+ */
+StatusCode MySqlHelper::insert(const std::string &query) {
+    return _m_pimpl->insert(query);
 }
 
 /***
