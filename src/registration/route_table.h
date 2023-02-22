@@ -122,7 +122,7 @@ class RouteTable {
      * @param service_names
      * @return
      */
-    jinq::common::StatusCode get_all_service_names_of_project(const std::string& project_name, std::vector<std::string>& service_names);
+    jinq::common::StatusCode list_all_service_names_of_project(const std::string& project_name, std::vector<std::string>& service_names);
 
     /***
      *
@@ -132,7 +132,7 @@ class RouteTable {
      * @param uri_names
      * @return
      */
-    jinq::common::StatusCode get_all_uri_names_of_service(
+    jinq::common::StatusCode list_all_uri_names_of_service(
         const std::string& project_name, const std::string& service_name,
         const std::string& version, std::vector<std::string>& uri_names);
 

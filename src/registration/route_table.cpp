@@ -107,7 +107,7 @@ jinq::common::StatusCode RouteTable::get_handler(
  * @param uri_names
  * @return
  */
-jinq::common::StatusCode RouteTable::get_all_uri_names_of_service(
+jinq::common::StatusCode RouteTable::list_all_uri_names_of_service(
     const std::string &proj_name,
     const std::string &service_name,
     const std::string &version,
@@ -142,7 +142,7 @@ jinq::common::StatusCode RouteTable::get_all_uri_names_of_service(
  * @param service_names
  * @return
  */
-jinq::common::StatusCode RouteTable::get_all_service_names_of_project(
+jinq::common::StatusCode RouteTable::list_all_service_names_of_project(
     const std::string &proj_name,
     std::vector<std::string> &service_names) {
 
