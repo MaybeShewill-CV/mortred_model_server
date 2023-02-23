@@ -10,7 +10,10 @@
 
 #include <memory>
 
+#include "workflow/WFHttpServer.h"
+
 #include "common/status_code.h"
+#include "registration/mysql/mysql_db_config.h"
 
 namespace jinq {
 namespace registration {
@@ -31,14 +34,14 @@ class RegistrationHelper {
      * constructor
      * @param transformer
      */
-    RegistrationHelper(const RegistrationHelper &transformer) = default;
+    RegistrationHelper(const RegistrationHelper &transformer) = delete;
 
     /***
      * constructor
      * @param transformer
      * @return
      */
-    RegistrationHelper &operator=(const RegistrationHelper &transformer) = default;
+    RegistrationHelper &operator=(const RegistrationHelper &transformer) = delete;
 
     /***
      *
@@ -54,8 +57,8 @@ class RegistrationHelper {
     bool is_successfully_initialized() const;
     
   private:
-    class Impl;
-    std::shared_ptr<Impl> _m_pimpl;
+    std::unique_ptr<WFHttpServer> _m_server;
+    std::unique_ptr<jinq::registration::mysql::MySqlDBConfig> _m_mysql_db_cfg;
 };
 
 }
