@@ -1,0 +1,54 @@
+FORMAT: 1A
+
+# Mortred Model Server [/mmai_server]
+
+Root
+
+## Registration [/mmai_server/registration]
+
+Registration project's api
+
+### Projects [/mmai_server/registration/projects]
+
+Api relative to registration's project data table
+
+#### v1 [/mmai_server/registration/projects/v1]
+
+V1 version
+
+##### list [/mmai_server/registration/projects/v1/list]
+
+###### list all projects information [GET]
+
++ Response 200 (application/json)
+
+        {
+            "status": 0,
+            "msg": "success",
+            "data": [
+                        "project_a",
+                        "project_b"
+                    ]
+        }
+
+##### add [/mmai_server/registration/projects/v1/add]
+
+###### add a new project [POST]
+
++ Request (application/json)
+
+        {
+            "project_name": "test_project",
+            "creator_name": "test_user",
+            "remark": "",
+        }
+
++ Response 200 (application/json)
+
+        {
+            "status": 0,
+            "msg": "success",
+            "data": "project_id"
+        }
+
+
