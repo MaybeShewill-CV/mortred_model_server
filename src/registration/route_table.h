@@ -13,6 +13,8 @@
 #include <functional>
 #include <unordered_map>
 
+#include "workflow/HttpMessage.h"
+
 #include "common/status_code.h"
 
 namespace jinq {
@@ -21,7 +23,7 @@ namespace registration {
 template<class T>
 class BaseNode {
   public:
-    bool contain_node(const std::string& node_name) {
+    bool contain_node(const std::string& node_name) const {
         return node_map.find(node_name) != node_map.end();
     }
 
@@ -36,7 +38,7 @@ class BaseNode {
 class UriHandlerNode {
   public:
     std::string uri;
-    std::function<void()> handler;
+    std::function<void(const protocol::HttpRequest*, protocol::HttpResponse*)> handler;
 };
 
 // Define the VersionNode class
@@ -65,19 +67,6 @@ class RootNode : public BaseNode<ProjectNode>{
 class RouteTable {
   public:
     /***
-     *
-     */
-    RouteTable() {
-        _m_root = std::make_unique<RootNode>();
-        _m_root->root_name = "mortred_model_server";
-    };
-
-    /***
-     *
-     */
-    ~RouteTable() = default;
-    
-    /***
      * constructor
      * @param transformer
      */
@@ -92,6 +81,15 @@ class RouteTable {
 
     /***
      *
+     * @return
+     */
+    static RouteTable& get_instance() {
+        static RouteTable table;
+        return table;
+    }
+
+    /***
+     *
      * @param proj_name
      * @param service_name
      * @param version
@@ -102,7 +100,17 @@ class RouteTable {
     jinq::common::StatusCode add_handler(
         const std::string& proj_name, const std::string& service_name,
         const std::string& version, const std::string& service_uri,
-        const std::function<void()>& handler);
+        const std::function<void(const protocol::HttpRequest*, protocol::HttpResponse*)>& handler);
+
+    /***
+     *
+     * @param uri
+     * @param handler
+     * @return
+     */
+    jinq::common::StatusCode add_handler(
+        const std::string& uri,
+        const std::function<void(const protocol::HttpRequest*, protocol::HttpResponse*)>& handler);
 
     /***
      *
@@ -112,32 +120,36 @@ class RouteTable {
      * @param service_uri
      * @return
      */
-    jinq::common::StatusCode get_handler(const std::string& proj_name, const std::string& service_name,
-                                         const std::string& version, const std::string& service_uri,
-                                         std::function<void()>& handler) const;
+    jinq::common::StatusCode get_handler(
+        const std::string& proj_name, const std::string& service_name,
+        const std::string& version, const std::string& service_uri,
+        std::function<void(const protocol::HttpRequest*, protocol::HttpResponse*)>& handler) const;
 
     /***
      *
-     * @param project_name
-     * @param service_names
-     * @return
-     */
-    jinq::common::StatusCode list_all_service_names_of_project(const std::string& project_name, std::vector<std::string>& service_names);
-
-    /***
-     *
-     * @param project_name
+     * @param proj_name
      * @param service_name
      * @param version
-     * @param uri_names
+     * @param service_uri
      * @return
      */
-    jinq::common::StatusCode list_all_uri_names_of_service(
-        const std::string& project_name, const std::string& service_name,
-        const std::string& version, std::vector<std::string>& uri_names);
+    jinq::common::StatusCode get_handler(
+        const std::string& uri,
+        std::function<void(const protocol::HttpRequest*, protocol::HttpResponse*)>& handler) const;
 
   private:
-    std::unique_ptr<RootNode> _m_root;
+    RootNode _m_root;
+
+  private:
+    /***
+     *
+     */
+    RouteTable() = default;
+
+    /***
+     *
+     */
+    ~RouteTable() = default;
 };
 
 }
