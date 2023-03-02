@@ -54,9 +54,12 @@ class RegistrationHelper {
      *
      * @return
      */
-    bool is_successfully_initialized() const;
+    inline bool is_successfully_initialized() const {
+        return _m_successfully_init;
+    }
     
   private:
+    bool _m_successfully_init;
     std::unique_ptr<WFHttpServer> _m_server;
     std::unique_ptr<jinq::registration::mysql::MySqlDBConfig> _m_mysql_db_cfg;
 };
