@@ -26,6 +26,8 @@ A quick overview and examples for both serving and model benchmarking are provid
 
 You're welcomed to ask questions and help me to make it better!
 
+All models and detectors can be downloaded from my [Hugging Face Page](https://huggingface.co/MaybeShewill-CV/mortred_model_server).
+
 # `Contents of this document`
 
 * [Quick Start](#quick-start)

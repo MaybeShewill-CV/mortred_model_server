@@ -16,6 +16,8 @@
 
 欢迎你反馈任何你发现的bug，本人还是一个c with struct 弱鸡 :upside_down_face:
 
+模型文件可以访问我的 [Hugging Face Page](https://huggingface.co/MaybeShewill-CV/mortred_model_server)
+
 整个项目的简要架构图如下
 
 <p align="center">
