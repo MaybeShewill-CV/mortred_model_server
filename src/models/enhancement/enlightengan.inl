@@ -443,6 +443,9 @@ void EnlightenGan<INPUT, OUTPUT>::Impl::preprocess_image(
     } else {
         cv::cvtColor(output_src, output_src, cv::COLOR_BGR2RGB);
     }
+    if (input_image.size() != _m_input_size_host) {
+        cv::resize(input_image, output_src, _m_input_size_host);
+    }
 
     // normalize
     if (output_src.type() != CV_32FC3) {
