@@ -262,8 +262,18 @@ StatusCode PPHumanSeg<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))
     mnn_config.numThread = _m_threads_nums;
 
     MNN::BackendConfig backend_config;
-    backend_config.precision = MNN::BackendConfig::Precision_High;
-    backend_config.power = MNN::BackendConfig::Power_High;
+    if (!cfg_content.contains("backend_precision_mode")) {
+        LOG(WARNING) << "Config doesn\'t have backend_precision_mode field default Precision_Normal";
+        backend_config.precision = MNN::BackendConfig::Precision_Normal;
+    } else {
+        backend_config.precision = static_cast<MNN::BackendConfig::PrecisionMode>(cfg_content.at("backend_precision_mode").as_integer());
+    }
+    if (!cfg_content.contains("backend_power_mode")) {
+        LOG(WARNING) << "Config doesn\'t have backend_power_mode field default Power_Normal";
+        backend_config.power = MNN::BackendConfig::Power_Normal;
+    } else {
+        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(cfg_content.at("backend_power_mode").as_integer());
+    }
     mnn_config.backendConfig = &backend_config;
 
     _m_session = _m_net->createSession(mnn_config);

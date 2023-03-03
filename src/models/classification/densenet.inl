@@ -243,7 +243,6 @@ StatusCode DenseNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& 
 
     // init session
     MNN::ScheduleConfig mnn_config;
-
     if (!cfg_content.contains("compute_backend")) {
         LOG(WARNING) << "Config doesn\'t have compute_backend field default cpu";
         mnn_config.type = MNN_FORWARD_CPU;
@@ -259,15 +258,23 @@ StatusCode DenseNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& 
             mnn_config.type = MNN_FORWARD_CPU;
         }
     }
-
     mnn_config.numThread = _m_threads_nums;
     MNN::BackendConfig backend_config;
-    backend_config.precision = MNN::BackendConfig::Precision_High;
-    backend_config.power = MNN::BackendConfig::Power_High;
+    if (!cfg_content.contains("backend_precision_mode")) {
+        LOG(WARNING) << "Config doesn\'t have backend_precision_mode field default Precision_Normal";
+        backend_config.precision = MNN::BackendConfig::Precision_Normal;
+    } else {
+        backend_config.precision = static_cast<MNN::BackendConfig::PrecisionMode>(cfg_content.at("backend_precision_mode").as_integer());
+    }
+    if (!cfg_content.contains("backend_power_mode")) {
+        LOG(WARNING) << "Config doesn\'t have backend_power_mode field default Power_Normal";
+        backend_config.power = MNN::BackendConfig::Power_Normal;
+    } else {
+        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(cfg_content.at("backend_power_mode").as_integer());
+    }
     mnn_config.backendConfig = &backend_config;
 
     _m_session = _m_net->createSession(mnn_config);
-
     if (_m_session == nullptr) {
         LOG(ERROR) << "Create Session failed, model file path: " << _m_model_file_path;
         _m_successfully_initialized = false;
