@@ -1,18 +1,18 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: yolov5_detection_server.cpp
-* Date: 22-6-22
+* File: yolov6_detection_server.cpp
+* Date: 23-3-3
 ************************************************/
 
-// yolov5 detection server tool
+// yolov6 detection server tool
 
 #include <glog/logging.h>
 #include <workflow/WFFacilities.h>
 
 #include "factory/obj_detection_task.h"
 
-using jinq::factory::object_detection::create_yolov5_det_server;
+using jinq::factory::object_detection::create_yolov6_det_server;
 
 int main(int argc, char** argv) {
 
@@ -33,18 +33,18 @@ int main(int argc, char** argv) {
     std::string config_file_path = argv[1];
     LOG(INFO) << "cfg file path: " << config_file_path;
     auto config = toml::parse(config_file_path);
-    const auto& server_cfg = config.at("YOLOV5_DETECTION_SERVER");
+    const auto& server_cfg = config.at("YOLOV6_DETECTION_SERVER");
     auto port = server_cfg.at("port").as_integer();
     LOG(INFO) << "serve on port: " << port;
 
-    auto server = create_yolov5_det_server("yolov5_det_server");
+    auto server = create_yolov6_det_server("yolov6_det_server");
     server->init(config);
     if (server->start(port) == 0) {
-		wait_group.wait();
-		server->stop();
+        wait_group.wait();
+        server->stop();
     } else {
-            LOG(ERROR) << "Cannot start server";
-            return -1;
+        LOG(ERROR) << "Cannot start server";
+        return -1;
     }
 
     return 0;
