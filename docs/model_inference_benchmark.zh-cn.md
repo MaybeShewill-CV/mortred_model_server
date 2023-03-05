@@ -20,19 +20,19 @@
 
 | Model Name   | Input Image Size | Inference Time (ms) | Fps   | Backend |
 |--------------|------------------|---------------------|-------|---------|
-| MobilenetV2  | 224x224          | 1.16ms              | 864.5 | cuda    |
+| MobilenetV2  | 224x224          | 1.03ms              | 969.7 | cuda    |
 | ResNet-50    | 224x224          | 3.35ms              | 298.8 | cuda    |
-| Densenet-121 | 224x224          | 4.14ms              | 241.4 | cuda    |
+| Densenet-121 | 224x224          | 3.67ms              | 272.8 | cuda    |
 
 <b><font color='GrayB' size='6' face='Helvetica'> 图像目标检测 </font></b>
 
 | Model Name         | Input Image Size | Inference Time (ms) | Fps   | Backend |
 |--------------------|------------------|---------------------|-------|---------|
-| YOLOV5-X           | 640x640          | 29.50ms             | 33.9  | cuda    |
-| YOLOV5-L           | 640x640          | 22.22ms             | 45.0  | cuda    |
-| YOLOV5-M           | 640x640          | 18.05ms             | 55.4  | cuda    |
-| YOLOV5-S           | 640x640          | 15.13ms             | 66.1  | cuda    |
-| YOLOV5-N           | 640x640          | 13.70ms             | 73.0  | cuda    |
+| YOLOV5-X           | 640x640          | 25.06ms             | 39.9  | cuda    |
+| YOLOV5-L           | 640x640          | 19.92ms             | 50.2  | cuda    |
+| YOLOV5-M           | 640x640          | 16.61ms             | 60.2  | cuda    |
+| YOLOV5-S           | 640x640          | 14.47ms             | 69.1  | cuda    |
+| YOLOV5-N           | 640x640          | 13.21ms             | 75.7  | cuda    |
 | nanodet_plus_m_1x5 | 416x416          | 5.34ms              | 187.3 | cuda    |
 
 <b><font color='GrayB' size='6' face='Helvetica'> 图像分割 </font></b>
@@ -45,24 +45,23 @@
 
 | Model Name    | Input Image Size | Inference Time (ms) | Fps   | Backend |
 |---------------|------------------|---------------------|-------|---------|
-| Attentive-Gan | 240x320          | 497.51ms            | 2.013 | cuda    |
+| Attentive-Gan | 240x320          | 453.72ms            | 2.204 | cuda    |
 | Enlighten-Gan | 256x256          | 6.81ms              | 146.8 | cuda    |
 
 <b><font color='GrayB' size='6' face='Helvetica'> 图像特征点检测 </font></b>
 
-| Model Name   | Input Image Size | Inference Time (ms) | Fps   | Backend |
-|--------------|------------------|---------------------|-------|---------|
-| Superpoint-N | 120x160          | 1.06ms              | 941.5 | cuda    |
-| Superpoint-S | 240x320          | 3.21ms              | 311.5 | cuda    |
-| Superpoint-M | 480x640          | 15.1ms              | 66.36 | cuda    |
-| Superpoint-L | 960x1280         | 71.4ms              | 14.01 | cuda    |
+| Model Name   | Input Image Size | Inference Time (ms) |  Fps   | Backend |
+|--------------|------------------|---------------------|--------|---------|
+| Superpoint-N | 120x160          | 0.94ms              | 1064.9 |  cuda   |
+| Superpoint-S | 240x320          | 3.05ms              | 328.1  |  cuda   |
+| Superpoint-M | 480x640          | 14.3ms              | 70.07  |  cuda   |
+| Superpoint-L | 960x1280         | 66.6ms              | 15.01  |  cuda   |
 
 <b><font color='GrayB' size='6' face='Helvetica'> 图像文本检测 </font></b>
 
 | Model Name | Input Image Size | Inference Time (ms) | Fps   | Backend |
 |------------|------------------|---------------------|-------|---------|
-| DBNet      | 544x960          | 14.99ms             | 66.71 | cuda    |
-
+| DBNet      | 655x445          | 12.02ms             | 83.21 | cuda    |
 
 <b><font color='GrayB' size='6' face='Helvetica'> Reference </font></b>
 
