@@ -25,7 +25,7 @@ class YoloV6Detector : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
 public:
 
     /***
-    * 构造函数
+    * constructor
     * @param config
     */
     YoloV6Detector();
@@ -36,13 +36,13 @@ public:
     ~YoloV6Detector() override;
 
     /***
-    * 赋值构造函数
+    * constructor
     * @param transformer
     */
     YoloV6Detector(const YoloV6Detector& transformer) = delete;
 
     /***
-     * 复制构造函数
+     * constructor
      * @param transformer
      * @return
      */
@@ -65,7 +65,7 @@ public:
 
 
     /***
-     * if db text detector successfully initialized
+     * if yolov6 detector successfully initialized
      * @return
      */
     bool is_successfully_initialized() const override;
