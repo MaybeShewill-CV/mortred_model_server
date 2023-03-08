@@ -64,7 +64,7 @@ public:
 
 
     /***
-     * if db text detector successfully initialized
+     * if yolov7 detector successfully initialized
      * @return
      */
     bool is_successfully_initialized() const override;
