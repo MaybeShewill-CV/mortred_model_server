@@ -1,7 +1,7 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: yolov5_detector.inl
+* File: yolov7_detector.inl
 * Date: 22-7-14
 ************************************************/
 
@@ -221,13 +221,13 @@ public:
 */
 template<typename INPUT, typename OUTPUT>
 StatusCode YoloV7Detector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& config) {
-    if (!config.contains("YOLOV5")) {
-        LOG(ERROR) << "Config file does not contain YOLOV5 section";
+    if (!config.contains("YOLOV7")) {
+        LOG(ERROR) << "Config file does not contain YOLOV7 section";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    toml::value cfg_content = config.at("YOLOV5");
+    toml::value cfg_content = config.at("YOLOV7");
 
     // init threads
     if (!cfg_content.contains("model_threads_num")) {
@@ -247,7 +247,7 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(
     }
 
     if (!FilePathUtil::is_file_exist(_m_model_file_path)) {
-        LOG(ERROR) << "YoloV5 Detection model file: " << _m_model_file_path << " not exist";
+        LOG(ERROR) << "YOLOV7 Detection model file: " << _m_model_file_path << " not exist";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
@@ -256,7 +256,7 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(
                  MNN::Interpreter::createFromFile(_m_model_file_path.c_str()));
 
     if (nullptr == _m_net) {
-        LOG(ERROR) << "Create yolov5 detection model interpreter failed";
+        LOG(ERROR) << "Create yolov7 detection model interpreter failed";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
@@ -308,13 +308,13 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(
     _m_output_tensor = _m_net->getSessionOutput(_m_session, "output");
 
     if (_m_input_tensor == nullptr) {
-        LOG(ERROR) << "Fetch yolov5 detection model input node failed";
+        LOG(ERROR) << "Fetch yolov7 detection model input node failed";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
 
     if (_m_output_tensor == nullptr) {
-        LOG(ERROR) << "Fetch yolov5 detection model output node failed";
+        LOG(ERROR) << "Fetch yolov7 detection model output node failed";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
