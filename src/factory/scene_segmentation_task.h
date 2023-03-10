@@ -14,6 +14,7 @@
 // model header
 #include "models/scene_segmentation/bisenetv2.h"
 #include "models/scene_segmentation/pp_humanseg.h"
+#include "models/scene_segmentation/msocrnet.h"
 // server header
 #include "server/scene_segmentation/bisenetv2_server.h"
 #include "server/scene_segmentation/pphuman_seg_server.h"
@@ -28,6 +29,7 @@ using jinq::server::BaseAiServer;
 namespace scene_segmentation {
 using jinq::models::scene_segmentation::BiseNetV2;
 using jinq::models::scene_segmentation::PPHumanSeg;
+using jinq::models::scene_segmentation::MsOcrNet;
 
 using jinq::server::scene_segmentation::BiseNetV2Server;
 using jinq::server::scene_segmentation::PPHumanSegServer;
@@ -55,6 +57,19 @@ static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_bisenetv2_segmentor(c
 template<typename INPUT, typename OUTPUT>
 static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_pphuman_segmentor(const std::string& segmentor_name) {
     REGISTER_AI_MODEL(PPHumanSeg, segmentor_name, INPUT, OUTPUT)
+    return ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance().get_model(segmentor_name);
+}
+
+/***
+ * create msocrnet scene segmentation instance
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param detector_name
+ * @return
+ */
+template<typename INPUT, typename OUTPUT>
+static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_msocrnet_segmentor(const std::string& segmentor_name) {
+    REGISTER_AI_MODEL(MsOcrNet, segmentor_name, INPUT, OUTPUT)
     return ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance().get_model(segmentor_name);
 }
 
