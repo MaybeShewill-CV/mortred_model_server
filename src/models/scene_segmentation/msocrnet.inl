@@ -307,10 +307,13 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& 
     _m_input_size_host.width = _m_input_tensor->width();
     _m_input_size_host.height = _m_input_tensor->height();
 
+    _m_input_tensor->print();
+    _m_output_tensor->print();
+
     if (!cfg_content.contains("model_input_image_size")) {
         LOG(WARNING) << "Config doesn\'t contain model_input_image_size filed, using default value [1024, 512]";
-        _m_input_size_user.width = 1024;
-        _m_input_size_user.height = 512;
+        _m_input_size_user.width = 2048;
+        _m_input_size_user.height = 1024;
     } else {
         _m_input_size_user.width = static_cast<int>(
             cfg_content.at("model_input_image_size").as_array()[1].as_integer());
