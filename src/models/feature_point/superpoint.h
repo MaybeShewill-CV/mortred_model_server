@@ -24,7 +24,7 @@ template <typename INPUT, typename OUTPUT>
 class SuperPoint : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
   public:
     /***
-     * 构造函数
+     * constructor
      * @param config
      */
     SuperPoint();
@@ -35,13 +35,13 @@ class SuperPoint : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
     ~SuperPoint() override;
 
     /***
-     * 赋值构造函数
+     * constructor
      * @param transformer
      */
     SuperPoint(const SuperPoint &transformer) = delete;
 
     /***
-     * 复制构造函数
+     * constructor
      * @param transformer
      * @return
      */
@@ -63,7 +63,7 @@ class SuperPoint : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
     jinq::common::StatusCode run(const INPUT& input, OUTPUT& output) override;
 
     /***
-     * if db text detector successfully initialized
+     * if superpoint detector successfully initialized
      * @return
      */
     bool is_successfully_initialized() const override;
