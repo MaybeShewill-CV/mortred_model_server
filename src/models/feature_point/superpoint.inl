@@ -165,7 +165,7 @@ class SuperPoint<INPUT, OUTPUT>::Impl {
     bool is_successfully_initialized() const { return _m_successfully_initialized; };
 
   private:
-    // 模型文件存储路径
+    // model file path
     std::string _m_model_file_path;
     // MNN Interpreter
     std::unique_ptr<MNN::Interpreter> _m_net = nullptr;
@@ -177,22 +177,22 @@ class SuperPoint<INPUT, OUTPUT>::Impl {
     MNN::Tensor *_m_output_tensor_semi = nullptr;
     // MNN Output tensor node coarse
     MNN::Tensor *_m_output_tensor_coarse = nullptr;
-    // MNN后端使用线程数
+    // MNN Threads Nums
     int _m_threads_nums = 4;
-    // 得分阈值
+    // Score thresh
     double _m_score_threshold = 0.015;
-    // nms阈值
+    // nms thresh
     double _m_nms_threshold = 4.0;
     // cell size
     int _m_cell_size = 8;
 
-    // 用户输入网络的图像尺寸
+    // user input size
     cv::Size _m_input_size_user = cv::Size();
-    //　计算图定义的输入node尺寸
+    // input node size
     cv::Size _m_input_size_host = cv::Size();
     // init color map
     std::map<int, cv::Scalar> _m_color_map;
-    // 是否成功初始化标志位
+    // flag
     bool _m_successfully_initialized = false;
 
   private:
