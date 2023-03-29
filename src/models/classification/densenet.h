@@ -25,7 +25,7 @@ class DenseNet : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
 public:
 
     /***
-    * 构造函数
+    * constructor
     * @param config
     */
     DenseNet();
@@ -36,13 +36,13 @@ public:
     ~DenseNet() override;
 
     /***
-    * 赋值构造函数
+    * constructor
     * @param transformer
     */
     DenseNet(const DenseNet& transformer) = delete;
 
     /***
-     * 复制构造函数
+     * constructor
      * @param transformer
      * @return
      */
@@ -65,7 +65,7 @@ public:
 
 
     /***
-     * if db text detector successfully initialized
+     * if classifier successfully initialized
      * @return
      */
     bool is_successfully_initialized() const override;
