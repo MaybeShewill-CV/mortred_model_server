@@ -25,7 +25,7 @@ class MobileNetv2 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
 public:
 
     /***
-    * 构造函数
+    * constructor
     * @param config
     */
     MobileNetv2();
@@ -36,13 +36,13 @@ public:
     ~MobileNetv2() override;
 
     /***
-    * 赋值构造函数
+    * constructor
     * @param transformer
     */
     MobileNetv2(const MobileNetv2& transformer) = delete;
 
     /***
-     * 复制构造函数
+     * constructor
      * @param transformer
      * @return
      */
@@ -65,7 +65,7 @@ public:
 
 
     /***
-     * if db text detector successfully initialized
+     * if mobilenetv2 model successfully initialized
      * @return
      */
     bool is_successfully_initialized() const override;
