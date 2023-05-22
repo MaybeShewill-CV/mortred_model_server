@@ -17,6 +17,7 @@ namespace impl {
 std::map<int, std::string>& get_error_code_table() {
     static std::map<int, std::string> m_error_code_table = {
         { StatusCode::OK, "OK" },
+        { StatusCode::OJBK, "OK" },
 
         { StatusCode::MODEL_INIT_FAILED, "model init failed" },
         { StatusCode::MODEL_RUN_TIMEOUT, "model run timeout" },
