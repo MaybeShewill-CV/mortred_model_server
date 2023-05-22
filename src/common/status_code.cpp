@@ -26,15 +26,22 @@ std::map<int, std::string>& get_error_code_table() {
         { StatusCode::SERVER_INIT_FAILED, "server init failed" },
         { StatusCode::SERVER_RUN_FAILED, "server run failed" },
 
-        { StatusCode::COMPRESS_ERROR, "compress not support" },
-        { StatusCode::UNCOMPRESS_ERROR, "uncompress error" },
-
         { StatusCode::FILE_READ_ERROR, "file read error" },
         { StatusCode::FILE_WRITE_ERROR, "file write error" },
         { StatusCode::FILE_NOT_EXIST_ERROR, "file not exist error" },
 
+        { StatusCode::COMPRESS_ERROR, "compress not support" },
+        { StatusCode::UNCOMPRESS_ERROR, "uncompress error" },
+
         { StatusCode::JSON_DECODE_ERROR, "decode json error" },
         { StatusCode::JSON_ENCODE_ERROR, "encode sson error" },
+
+        { StatusCode::MYSQL_INIT_DB_CONFIG_ERROR, "init mysql connection failed"},
+        { StatusCode::MYSQL_SELECT_FAILED, "exec select sql failed"},
+        { StatusCode::MYSQL_INSERT_FAILED, "exec insert sql failed"},
+        { StatusCode::MYSQL_UPDATE_FAILED, "exec update sql failed"},
+        { StatusCode::MYSQL_DELETE_FAILED, "exec delete sql failed"},
+
     };
     return m_error_code_table;
 }
