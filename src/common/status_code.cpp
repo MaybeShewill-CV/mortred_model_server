@@ -43,6 +43,8 @@ std::map<int, std::string>& get_error_code_table() {
         { StatusCode::MYSQL_UPDATE_FAILED, "exec update sql failed"},
         { StatusCode::MYSQL_DELETE_FAILED, "exec delete sql failed"},
 
+        { StatusCode::ROUTER_ADD_HANDLER_FAILED, "add handler to router table faile"},
+
     };
     return m_error_code_table;
 }
