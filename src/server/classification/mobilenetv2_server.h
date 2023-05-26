@@ -19,44 +19,44 @@ class MobileNetv2Server : public jinq::server::BaseAiServer {
 public:
 
     /***
-    * 
+    * constructor
     * @param config
     */
     MobileNetv2Server();
 
     /***
-     *
+     * constructor
      */
     ~MobileNetv2Server() override;
 
     /***
-    * 
+    * constructor
     * @param transformer
     */
     MobileNetv2Server(const MobileNetv2Server& transformer) = delete;
 
     /***
-     * 
+     * constructor
      * @param transformer
      * @return
      */
     MobileNetv2Server& operator=(const MobileNetv2Server& transformer) = delete;
 
     /***
-     *
+     * 
      * @param toml
      * @return
      */
     jinq::common::StatusCode init(const decltype(toml::parse(""))& cfg) override;
 
     /***
-     *
+     * 
      * @param task
      */
     void serve_process(WFHttpTask* task) override;
 
     /***
-     *
+     * init flag
      * @return
      */
     bool is_successfully_initialized() const override;

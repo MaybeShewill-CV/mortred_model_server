@@ -181,6 +181,14 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 
 ![repo-status](https://repobeats.axiom.co/api/embed/b8c3f964c5afc4776f62a12bcd1e76c57ac554ca.svg "Repobeats analytics image")
 
+# `Star History`
+
+[![Star History Chart](https://api.star-history.com/svg?repos=MaybeShewill-CV/mortred_model_server&type=Date)](https://star-history.com/#MaybeShewill-CV/mortred_model_server&Date)
+
+## Visitor Count
+
+![Visitor Count](https://profile-counter.glitch.me/15725187_mortred_model_server/count.svg)
+
 # `Acknowledgement`
 
 mortred_model_server refers to the following projects:
