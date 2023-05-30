@@ -80,6 +80,12 @@ private:
     uint8_t _m_encoder_device_id = 0;
     uint8_t _m_decoder_device_id = 0;
 
+    // model input/output names
+    std::vector<std::string> _m_encoder_input_names;
+    std::vector<std::string> _m_encoder_output_names;
+    std::vector<std::string> _m_decoder_input_names;
+    std::vector<std::string> _m_decoder_output_names;
+
     // model session options
     Ort::SessionOptions _m_encoder_sess_options;
     Ort::SessionOptions _m_decoder_sess_options;
@@ -94,6 +100,21 @@ private:
 
     // init flag
     bool _m_successfully_init_model = false;
+
+  private:
+    /***
+     *
+     * @param input_image
+     * @return
+     */
+    cv::Mat preprocess_image(const cv::Mat& input_image);
+
+    /****
+     *
+     * @param input_image
+     * @return
+     */
+    StatusCode encode_image_embeddings(const cv::Mat& input_image);
 };
 
 /************ Impl Implementation ************/
@@ -131,14 +152,28 @@ jinq::common::StatusCode SamSegmentor::Impl::init(const decltype(toml::parse("")
                           env, _m_encoder_model_path.c_str(), _m_encoder_sess_options);
     if (_m_encoder_sess->GetInputCount() != 1 || _m_encoder_sess->GetOutputCount() != 1) {
         std::string err_msg = fmt::format(
-                                  "invalid input/output count, input count should be 1 rather than {}, output count should be 1 rather than {}",
-                                  _m_encoder_sess->GetInputCount(), _m_encoder_sess->GetOutputCount());
+            "invalid input/output count, input count should be 1 rather than {}, output count should be 1 rather than {}",
+            _m_encoder_sess->GetInputCount(), _m_encoder_sess->GetOutputCount());
         LOG(ERROR) << err_msg;
         _m_successfully_init_model = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
+    _m_encoder_input_names = {"input_image"};
+    _m_encoder_output_names = {"image_embeddings"};
     _m_encoder_input_shape = _m_encoder_sess->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
     _m_encoder_output_shape = _m_encoder_sess->GetOutputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
+    std::string tmp_info = fmt::format(
+        "encoder input shape: [{}, {}, {}, {}]",
+        _m_encoder_input_shape[0], _m_encoder_input_shape[1], _m_encoder_input_shape[2], _m_encoder_input_shape[3]);
+    LOG(INFO) << tmp_info;
+    tmp_info = fmt::format(
+        "encoder output shape: [{}, {}, {}, {}]",
+        _m_encoder_output_shape[0], _m_encoder_output_shape[1], _m_encoder_output_shape[2], _m_encoder_output_shape[3]);
+    LOG(INFO) << tmp_info;
+    if (_m_encoder_input_shape.size() != 4 || _m_encoder_output_shape.size() != 4) {
+        LOG(ERROR) << "invalid encoder input/output node shape";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
     use_gpu = false;
     LOG(INFO) << "... successfully load sam encoder model";
 
@@ -165,6 +200,9 @@ jinq::common::StatusCode SamSegmentor::Impl::init(const decltype(toml::parse("")
     }
     _m_decoder_sess = std::make_unique<Ort::Session>(
                           env, _m_decoder_model_path.c_str(), _m_decoder_sess_options);
+    _m_decoder_input_names = {
+        "image_embeddings", "point_coords", "point_labels", "mask_input", "has_mask_input", "orig_im_size"};
+    _m_decoder_output_names = {"masks", "iou_predictions", "low_res_masks"};
     LOG(INFO) << "... successfully load sam decoder model";
 
     _m_successfully_init_model = true;
@@ -188,11 +226,82 @@ jinq::common::StatusCode SamSegmentor::Impl::predict(
     const std::vector<int>& point_labels,
     cv::Mat& predicted_mask) {
 
+    encode_image_embeddings(input_image);
+
     if (_m_encoder_sess->GetInputCount() == 1) {
         return StatusCode::OJBK;
     } else {
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
+}
+
+/***
+ *
+ * @param input_image
+ * @return
+ */
+cv::Mat SamSegmentor::Impl::preprocess_image(const cv::Mat &input_image) {
+
+    auto input_node_h = static_cast<int>(_m_encoder_input_shape[2]);
+    auto input_node_w = static_cast<int>(_m_encoder_input_shape[3]);
+
+    cv::Mat result;
+    cv::cvtColor(input_image, result, cv::COLOR_BGR2RGB);
+    cv::resize(input_image, result,cv::Size(input_node_w, input_node_h));
+    result.convertTo(result, CV_32FC3);
+
+    cv::subtract(result, cv::Scalar(123.675, 116.28, 103.53), result);
+    cv::divide(result, cv::Scalar(58.395, 57.12, 57.375), result);
+
+    return result;
+}
+
+/***
+ *
+ * @param input_image
+ * @return
+ */
+StatusCode SamSegmentor::Impl::encode_image_embeddings(const cv::Mat &input_image) {
+    // preprocess image
+    auto preprocessed_image = preprocess_image(input_image);
+    auto input_tensor_values = CvUtils::convert_to_chw_vec(preprocessed_image);
+
+    // run encoder
+    auto memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+    auto input_tensor_size = _m_encoder_input_shape[0] * _m_encoder_input_shape[1] * _m_encoder_input_shape[2] * _m_encoder_input_shape[3];
+    auto input_tensor = Ort::Value::CreateTensor<float>(
+        memory_info, input_tensor_values.data(), input_tensor_size,
+        _m_encoder_input_shape.data(), 4);
+    assert(input_tensor.IsTensor());
+//    LOG(INFO) << "construct input tensor complete";
+
+//    auto output_tensors = _m_encoder_sess->Run(
+//        Ort::RunOptions{nullptr},
+//        reinterpret_cast<const char *const *>(_m_encoder_input_names.data()),
+//        &input_tensor, 1,
+//        reinterpret_cast<const char *const *>(_m_encoder_output_names.data()), 1);
+    auto output_tensor_values = std::vector<float>(
+        _m_encoder_output_shape[0] * _m_encoder_output_shape[1] * _m_encoder_output_shape[2] * _m_encoder_output_shape[3]);
+    auto output_tensor = Ort::Value::CreateTensor<float>(
+        memory_info, output_tensor_values.data(), output_tensor_values.size(),
+        _m_encoder_output_shape.data(), _m_encoder_output_shape.size());
+    Ort::RunOptions run_options;
+    LOG(INFO) << "run session successfully";
+    const char *tmp_input_names[1]{"input_image"};
+    const char *tmp_output_names[1]{"image_embeddings"};
+    _m_encoder_sess->Run(
+        run_options,
+        tmp_input_names,
+        &input_tensor, 1,
+        tmp_output_names,
+        &output_tensor, 1);
+
+    for (auto& val : output_tensor_values) {
+        LOG(INFO) << val;
+    }
+    LOG(INFO) << "run session successfully";
+
+    return StatusCode::OJBK;
 }
 
 /***
