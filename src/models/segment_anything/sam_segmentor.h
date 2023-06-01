@@ -68,6 +68,14 @@ class SamSegmentor {
         const std::vector<int>& point_labels,
         cv::Mat& predicted_mask);
 
+    /***
+     *
+     * @param input_image
+     * @param image_embeddings
+     * @return
+     */
+    jinq::common::StatusCode get_embedding(const cv::Mat& input_image, std::vector<float>& image_embeddings);
+
 
     /***
      * if db text detector successfully initialized
