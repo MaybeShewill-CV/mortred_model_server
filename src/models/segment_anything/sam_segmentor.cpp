@@ -176,7 +176,8 @@ jinq::common::StatusCode SamSegmentor::Impl::init(const decltype(toml::parse("")
     }
     _m_encoder_thread_nums = sam_encoder_cfg["model_threads_num"].as_integer();
     _m_encoder_sess_options.SetIntraOpNumThreads(_m_encoder_thread_nums);
-    _m_encoder_sess_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+    _m_encoder_sess_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+    _m_encoder_sess_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
     if (use_gpu) {
         OrtCUDAProviderOptions cuda_options;
         cuda_options.device_id = _m_encoder_device_id;
@@ -218,7 +219,8 @@ jinq::common::StatusCode SamSegmentor::Impl::init(const decltype(toml::parse("")
     }
     _m_decoder_thread_nums = sam_decoder_cfg["model_threads_num"].as_integer();
     _m_decoder_sess_options.SetIntraOpNumThreads(_m_decoder_thread_nums);
-    _m_decoder_sess_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+    _m_decoder_sess_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+    _m_decoder_sess_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
     if (use_gpu) {
         OrtCUDAProviderOptions cuda_options;
         cuda_options.device_id = _m_decoder_device_id;
