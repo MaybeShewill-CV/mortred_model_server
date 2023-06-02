@@ -96,7 +96,7 @@ private:
 
     // model envs
     Ort::Env _m_env;
-    Ort::MemoryInfo _m_memo_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+    Ort::MemoryInfo _m_memo_info = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
 
     // model session options
     Ort::SessionOptions _m_encoder_sess_options;
@@ -177,7 +177,7 @@ jinq::common::StatusCode SamSegmentor::Impl::init(const decltype(toml::parse("")
     _m_encoder_thread_nums = sam_encoder_cfg["model_threads_num"].as_integer();
     _m_encoder_sess_options.SetIntraOpNumThreads(_m_encoder_thread_nums);
     _m_encoder_sess_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
-    _m_encoder_sess_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+//    _m_encoder_sess_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
     if (use_gpu) {
         OrtCUDAProviderOptions cuda_options;
         cuda_options.device_id = _m_encoder_device_id;
@@ -220,7 +220,7 @@ jinq::common::StatusCode SamSegmentor::Impl::init(const decltype(toml::parse("")
     _m_decoder_thread_nums = sam_decoder_cfg["model_threads_num"].as_integer();
     _m_decoder_sess_options.SetIntraOpNumThreads(_m_decoder_thread_nums);
     _m_decoder_sess_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
-    _m_decoder_sess_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+//    _m_decoder_sess_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
     if (use_gpu) {
         OrtCUDAProviderOptions cuda_options;
         cuda_options.device_id = _m_decoder_device_id;
@@ -236,6 +236,16 @@ jinq::common::StatusCode SamSegmentor::Impl::init(const decltype(toml::parse("")
         auto shape = _m_decoder_sess->GetInputTypeInfo(idx).GetTensorTypeAndShapeInfo().GetShape();
         auto t_type = _m_decoder_sess->GetInputTypeInfo(idx).GetTensorTypeAndShapeInfo().GetElementType();
         auto tmp_info = fmt::format("decoder input name: {}, data type: {}, shape: ", _m_decoder_input_names[idx], t_type);
+        for (auto& s : shape) {
+            tmp_info += std::to_string(s) + " ";
+        }
+        LOG(INFO) << tmp_info;
+    }
+
+    for (int idx = 0; idx < _m_decoder_output_names.size(); ++idx) {
+        auto shape = _m_decoder_sess->GetOutputTypeInfo(idx).GetTensorTypeAndShapeInfo().GetShape();
+        auto t_type = _m_decoder_sess->GetOutputTypeInfo(idx).GetTensorTypeAndShapeInfo().GetElementType();
+        auto tmp_info = fmt::format("decoder output name: {}, data type: {}, shape: ", _m_decoder_output_names[idx], t_type);
         for (auto& s : shape) {
             tmp_info += std::to_string(s) + " ";
         }
@@ -272,11 +282,19 @@ jinq::common::StatusCode SamSegmentor::Impl::predict(
         LOG(INFO) << "encoding image embeddings failed, status code: " << status;
         return status;
     }
+    LOG(INFO) << image_embeddings.GetTensorMutableData<float>()[0] << " "
+              << image_embeddings.GetTensorMutableData<float>()[1] << " "
+              << image_embeddings.GetTensorMutableData<float>()[2] << " "
+              << image_embeddings.GetTensorMutableData<float>()[3] << " ";
     LOG(INFO) << "embedding finished";
 
     // decoder masks
     std::vector<cv::Mat> masks;
     status = get_masks(image_embeddings, bboxes, points, point_labels, masks);
+    if (status != StatusCode::OJBK) {
+        LOG(INFO) << "decode sam-masks failed, status code: " << status;
+        return status;
+    }
     LOG(INFO) << "decode finished";
 
     cv::imwrite("fuck.png", masks[0]);
@@ -389,6 +407,57 @@ StatusCode SamSegmentor::Impl::get_masks(
     const std::vector<cv::Point> &points,
     const std::vector<int> &point_labels,
     std::vector<cv::Mat> &out_masks) {
+    // init decoder input tensor
+    std::vector<Ort::Value> decoder_input_tensor;
+
+    // init embeddings
+    decoder_input_tensor.push_back(std::move(image_embeddings));
+
+    // init points tensor and label tensor
+    std::vector<float> total_points;
+    std::vector<float> total_labels;
+    //    for (auto& pt : points) {
+    //        auto x = static_cast<float>(pt.x);
+    //        auto y = static_cast<float>(pt.y);
+    //        total_points.push_back({x, y});
+    //        total_labels.push_back(1.0);
+    //    }
+    //    for (auto& rect : bboxes) {
+    //        // top left point
+    //        auto tl_pt = rect.tl();
+    //        auto tl_x = static_cast<float>(tl_pt.x);
+    //        auto tl_y = static_cast<float>(tl_pt.y);
+    //        total_points.push_back({tl_x, tl_y});
+    //        total_labels.push_back(2.0);
+    //        // bottom right point
+    //        auto br_x = static_cast<float>(tl_x + static_cast<float>(rect.width));
+    //        auto br_y = static_cast<float>(tl_y + static_cast<float>(rect.height));
+    //        total_points.push_back({br_x, br_y});
+    //        total_labels.push_back(3.0);
+    //    }
+    total_points.push_back(100.0);
+    total_points.push_back(100.0);
+    total_labels.push_back(1.0);
+
+    std::vector<int64_t> point_tensor_shape({1, static_cast<int64_t>(total_points.size() / 2), 2});
+    auto point_tensor = Ort::Value::CreateTensor<float>(
+        _m_memo_info, total_points.data(),
+        total_points.size(), point_tensor_shape.data(), point_tensor_shape.size());
+    if (!point_tensor.IsTensor() || !point_tensor.HasValue()) {
+        LOG(ERROR) << "create point tensor for decoder failed";
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+    decoder_input_tensor.push_back(std::move(point_tensor));
+
+    std::vector<int64_t> point_labels_tensor_shape({1, static_cast<int64_t>(total_labels.size())});
+    auto point_label_tensor = Ort::Value::CreateTensor<float>(
+        _m_memo_info, total_labels.data(),
+        total_labels.size(), point_labels_tensor_shape.data(),point_labels_tensor_shape.size());
+    if (!point_label_tensor.IsTensor() || !point_label_tensor.HasValue()) {
+        LOG(ERROR) << "create point labels tensor for decoder failed";
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+    decoder_input_tensor.push_back(std::move(point_label_tensor));
 
     // init mask input tensor
     std::vector<float> mask_tensor_values(1 * 1 * 256 * 256, 0.0);
@@ -396,6 +465,11 @@ StatusCode SamSegmentor::Impl::get_masks(
     auto mask_tensor = Ort::Value::CreateTensor<float>(
         _m_memo_info, mask_tensor_values.data(),
         mask_tensor_values.size(), mask_tensor_shape.data(),mask_tensor_shape.size());
+    if (!mask_tensor.IsTensor() || !mask_tensor.HasValue()) {
+        LOG(ERROR) << "create mask tensor for decoder failed";
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+    decoder_input_tensor.push_back(std::move(mask_tensor));
 
     // init has mask input tensor
     std::vector<float> has_mask_tensor_values(1, 0.0);
@@ -403,73 +477,50 @@ StatusCode SamSegmentor::Impl::get_masks(
     auto has_mask_tensor = Ort::Value::CreateTensor<float>(
         _m_memo_info, has_mask_tensor_values.data(),
         has_mask_tensor_values.size(), has_mask_tensor_shape.data(),has_mask_tensor_shape.size());
+    if (!has_mask_tensor.IsTensor() || !has_mask_tensor.HasValue()) {
+        LOG(ERROR) << "create has mask tensor for decoder failed";
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+    decoder_input_tensor.push_back(std::move(has_mask_tensor));
 
     // init ori image size input tensor
     std::vector<float> ori_image_size_tensor_values = {
         static_cast<float>(_m_ori_image_size.width), static_cast<float>(_m_ori_image_size.height)};
     std::vector<int64_t> ori_image_size_tensor_shape({2});
-    auto ori_image_size_tensor = Ort::Value::CreateTensor<float>(
+    auto ori_img_size_tensor = Ort::Value::CreateTensor<float>(
         _m_memo_info, ori_image_size_tensor_values.data(),
-        ori_image_size_tensor_values.size(), ori_image_size_tensor_shape.data(),ori_image_size_tensor_shape.size());
-
-    // init points tensor and label tensor
-    std::vector<std::vector<float> > total_points;
-    std::vector<float> total_labels;
-    for (auto& pt : points) {
-        auto x = static_cast<float>(pt.x);
-        auto y = static_cast<float>(pt.y);
-        total_points.push_back({x, y});
-        total_labels.push_back(1.0);
+        ori_image_size_tensor_values.size(), ori_image_size_tensor_shape.data(),
+        ori_image_size_tensor_shape.size());
+    if (!ori_img_size_tensor.IsTensor() || !ori_img_size_tensor.HasValue()) {
+        LOG(ERROR) << "create ori image size tensor for decoder failed";
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
-    for (auto& rect : bboxes) {
-        // top left point
-        auto tl_pt = rect.tl();
-        auto tl_x = static_cast<float>(tl_pt.x);
-        auto tl_y = static_cast<float>(tl_pt.y);
-        total_points.push_back({tl_x, tl_y});
-        total_labels.push_back(2.0);
-        // bottom right point
-        auto br_x = static_cast<float>(tl_x + static_cast<float>(rect.width));
-        auto br_y = static_cast<float>(tl_y + static_cast<float>(rect.height));
-        total_points.push_back({br_x, br_y});
-        total_labels.push_back(3.0);
-    }
-    total_points.push_back({0.0, 0.0});
-    total_labels.push_back(-1.0);
-
-    std::vector<int64_t> point_labels_tensor_shape({1, static_cast<int64_t>(total_labels.size())});
-    auto point_labels_tensor = Ort::Value::CreateTensor<float>(
-        _m_memo_info, total_labels.data(),
-        total_labels.size(), point_labels_tensor_shape.data(),point_labels_tensor_shape.size());
-
-    std::vector<int64_t> point_tensor_shape({1, static_cast<int64_t>(total_points.size()), 2});
-    auto point_tensor = Ort::Value::CreateTensor<float>(
-        _m_memo_info, (float*)total_points.data(),
-        total_points.size() * 2, point_tensor_shape.data(), point_tensor_shape.size());
-
-    std::vector<Ort::Value> decoder_input_tensor;
-    decoder_input_tensor.push_back(std::move(image_embeddings));
-    decoder_input_tensor.push_back(std::move(point_tensor));
-    decoder_input_tensor.push_back(std::move(point_labels_tensor));
-    decoder_input_tensor.push_back(std::move(mask_tensor));
-    decoder_input_tensor.push_back(std::move(has_mask_tensor));
-    decoder_input_tensor.push_back(std::move(ori_image_size_tensor));
+    decoder_input_tensor.push_back(std::move(ori_img_size_tensor));
 
     // run decoder
     auto output_tensors = _m_decoder_sess->Run(
         Ort::RunOptions{nullptr}, _m_decoder_input_names.data(), decoder_input_tensor.data(),
         decoder_input_tensor.size(), _m_decoder_output_names.data(), _m_decoder_output_names.size());
-
-    for (auto& out_tensor : output_tensors) {
-        auto mask_values = out_tensor.GetTensorMutableData<float>();
-        cv::Mat mask_image(1024, 1024, CV_8UC1);
-        for (int i = 0; i < mask_image.rows; i++) {
-            for (int j = 0; j < mask_image.cols; j++) {
-                mask_image.at<uchar>(i, j) = mask_values[i * mask_image.cols + j] > 0 ? 255 : 0;
-            }
-        }
-        out_masks.push_back(mask_image);
+    auto mask_shape = output_tensors[0].GetTensorTypeAndShapeInfo().GetShape();
+    for (auto& s : mask_shape) {
+        LOG(INFO) << s;
     }
+
+    auto masks_preds_value = output_tensors[0].GetTensorMutableData<float>();
+    auto masks_preds_iou_value = output_tensors[1].GetTensorMutableData<float>();
+    for (int idx = 0; idx < 1; ++idx) {
+        LOG(INFO) << "preds iou: " << masks_preds_iou_value[idx];
+    }
+    LOG(INFO) << fmt::format(
+        "mask value: {} {} {} {}", masks_preds_value[0], masks_preds_value[1], masks_preds_value[2], masks_preds_value[3]);
+
+    cv::Mat mask(cv::Size(1024, 1024), CV_8UC1);
+    for (int row = 0; row < mask.rows; ++row) {
+        for (int col = 0; col < mask.cols; ++col) {
+            mask.at<uchar>(row, col) = masks_preds_value[row * mask.cols + col] > 0 ? 255 : 0;
+        }
+    }
+    out_masks.push_back(mask);
 
     return StatusCode::OJBK;
 }
