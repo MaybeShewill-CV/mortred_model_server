@@ -416,28 +416,31 @@ StatusCode SamSegmentor::Impl::get_masks(
     // init points tensor and label tensor
     std::vector<float> total_points;
     std::vector<float> total_labels;
-    //    for (auto& pt : points) {
-    //        auto x = static_cast<float>(pt.x);
-    //        auto y = static_cast<float>(pt.y);
-    //        total_points.push_back({x, y});
-    //        total_labels.push_back(1.0);
-    //    }
-    //    for (auto& rect : bboxes) {
-    //        // top left point
-    //        auto tl_pt = rect.tl();
-    //        auto tl_x = static_cast<float>(tl_pt.x);
-    //        auto tl_y = static_cast<float>(tl_pt.y);
-    //        total_points.push_back({tl_x, tl_y});
-    //        total_labels.push_back(2.0);
-    //        // bottom right point
-    //        auto br_x = static_cast<float>(tl_x + static_cast<float>(rect.width));
-    //        auto br_y = static_cast<float>(tl_y + static_cast<float>(rect.height));
-    //        total_points.push_back({br_x, br_y});
-    //        total_labels.push_back(3.0);
-    //    }
-    total_points.push_back(100.0);
-    total_points.push_back(100.0);
-    total_labels.push_back(1.0);
+    for (auto& pt : points) {
+        auto x = static_cast<float>(pt.x);
+        auto y = static_cast<float>(pt.y);
+        total_points.push_back(x);
+        total_points.push_back(y);
+        total_labels.push_back(1.0);
+    }
+    for (auto& rect : bboxes) {
+        // top left point
+        auto tl_pt = rect.tl();
+        auto tl_x = static_cast<float>(tl_pt.x);
+        auto tl_y = static_cast<float>(tl_pt.y);
+        total_points.push_back(tl_x);
+        total_points.push_back(tl_y);
+        total_labels.push_back(2.0);
+        // bottom right point
+        auto br_x = static_cast<float>(tl_x + static_cast<float>(rect.width));
+        auto br_y = static_cast<float>(tl_y + static_cast<float>(rect.height));
+        total_points.push_back(br_x);
+        total_points.push_back(br_y);
+        total_labels.push_back(3.0);
+    }
+    total_points.push_back(0.0);
+    total_points.push_back(0.0);
+    total_labels.push_back(-1.0);
 
     std::vector<int64_t> point_tensor_shape({1, static_cast<int64_t>(total_points.size() / 2), 2});
     auto point_tensor = Ort::Value::CreateTensor<float>(
