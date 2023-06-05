@@ -233,7 +233,7 @@ public:
         // prepare color map
         auto color_map = generate_color_map(static_cast<int>(masks.size()) + 1);
         output_image = input_image.clone();
-        cv::Mat color_mask(output_image.size(), CV_8UC3);
+        cv::Mat color_mask = cv::Mat::zeros(output_image.size(), CV_8UC3);
 
         // colorize color map
         for (int idx = 0; idx < masks.size(); ++idx) {
@@ -255,7 +255,6 @@ public:
             cv::Mat tmp_color_mask;
             cv::merge(mask_merge, tmp_color_mask);
             color_mask += tmp_color_mask;
-            cv::imwrite("color.png", color_mask);
         }
 
         cv::addWeighted(output_image, 0.6, color_mask, 0.4, 0.0, output_image);
