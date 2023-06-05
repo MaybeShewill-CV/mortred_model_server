@@ -224,6 +224,44 @@ public:
     }
 
     /***
+     *
+     * @param input_image
+     * @param masks
+     * @param output_image
+     */
+    static void visualize_sam_output_masks(const cv::Mat& input_image, const std::vector<cv::Mat>& masks, cv::Mat& output_image) {
+        // prepare color map
+        auto color_map = generate_color_map(static_cast<int>(masks.size()) + 1);
+        output_image = input_image.clone();
+        cv::Mat color_mask(output_image.size(), CV_8UC3);
+
+        // colorize color map
+        for (int idx = 0; idx < masks.size(); ++idx) {
+            auto color = color_map[idx];
+
+            auto mask_b = masks[idx].clone();
+            auto mask_g = masks[idx].clone();
+            auto mask_r = masks[idx].clone();
+
+            mask_b /= 255;
+            mask_g /= 255;
+            mask_r /= 255;
+
+            mask_b *= color[0];
+            mask_g *= color[1];
+            mask_r *= color[2];
+
+            std::vector<cv::Mat> mask_merge = {mask_b, mask_g, mask_r};
+            cv::Mat tmp_color_mask;
+            cv::merge(mask_merge, tmp_color_mask);
+            color_mask += tmp_color_mask;
+            cv::imwrite("color.png", color_mask);
+        }
+
+        cv::addWeighted(output_image, 0.6, color_mask, 0.4, 0.0, output_image);
+    }
+
+    /***
     *
     * @param box1
     * @param box2
