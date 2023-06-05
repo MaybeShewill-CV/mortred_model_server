@@ -13,6 +13,7 @@
 
 #include "common/file_path_util.h"
 #include "common/cv_utils.h"
+#include "common/time_stamp.h"
 
 namespace jinq {
 namespace models {
@@ -20,6 +21,7 @@ namespace models {
 using jinq::common::CvUtils;
 using jinq::common::StatusCode;
 using jinq::common::FilePathUtil;
+using jinq::common::Timestamp;
 
 namespace segment_anything {
 
@@ -51,9 +53,7 @@ public:
     jinq::common::StatusCode predict(
         const cv::Mat& input_image,
         const std::vector<cv::Rect>& bboxes,
-        const std::vector<cv::Point>& points,
-        const std::vector<int>& point_labels,
-        cv::Mat& predicted_mask);
+        std::vector<cv::Mat>& predicted_masks);
 
     /***
      *
@@ -126,11 +126,18 @@ private:
 
     /***
      *
+     * @param bboxes
+     * @return
+     */
+    std::vector<cv::Rect2f> transform_bboxes(const std::vector<cv::Rect>& bboxes);
+
+    /***
+     *
      * @param input_image
      * @param image_embeddings
      * @return
      */
-    StatusCode encode_image_embeddings(const cv::Mat& input_image, Ort::Value& image_embeddings);
+    StatusCode encode_image_embeddings(const cv::Mat& input_image, std::vector<float>& image_embeddings);
 
     /***
      *
@@ -142,11 +149,22 @@ private:
      * @return
      */
      StatusCode get_masks(
-        Ort::Value& image_embeddings,
-        const std::vector<cv::Rect>& bboxes,
-        const std::vector<cv::Point>& points,
-        const std::vector<int>& point_labels,
+        const std::vector<float>& image_embeddings,
+        const std::vector<cv::Rect2f>& bboxes,
         std::vector<cv::Mat>& out_masks);
+
+     /***
+      *
+      * @param decoder_inputs
+      * @param bbox
+      * @param points
+      * @param out_mask
+      * @return
+      */
+     StatusCode get_mask(
+         const std::vector<float>& image_embeddings,
+         const cv::Rect2f& bbox,
+         cv::Mat& out_mask);
 };
 
 /************ Impl Implementation ************/
@@ -177,7 +195,7 @@ jinq::common::StatusCode SamSegmentor::Impl::init(const decltype(toml::parse("")
     _m_encoder_thread_nums = sam_encoder_cfg["model_threads_num"].as_integer();
     _m_encoder_sess_options.SetIntraOpNumThreads(_m_encoder_thread_nums);
     _m_encoder_sess_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
-//    _m_encoder_sess_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+    _m_encoder_sess_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
     if (use_gpu) {
         OrtCUDAProviderOptions cuda_options;
         cuda_options.device_id = _m_encoder_device_id;
@@ -220,7 +238,7 @@ jinq::common::StatusCode SamSegmentor::Impl::init(const decltype(toml::parse("")
     _m_decoder_thread_nums = sam_decoder_cfg["model_threads_num"].as_integer();
     _m_decoder_sess_options.SetIntraOpNumThreads(_m_decoder_thread_nums);
     _m_decoder_sess_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
-//    _m_decoder_sess_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+    _m_decoder_sess_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
     if (use_gpu) {
         OrtCUDAProviderOptions cuda_options;
         cuda_options.device_id = _m_decoder_device_id;
@@ -231,26 +249,6 @@ jinq::common::StatusCode SamSegmentor::Impl::init(const decltype(toml::parse("")
     _m_decoder_input_names = {
         "image_embeddings", "point_coords", "point_labels", "mask_input", "has_mask_input", "orig_im_size"};
     _m_decoder_output_names = {"masks", "iou_predictions", "low_res_masks"};
-
-    for (int idx = 0; idx < _m_decoder_input_names.size(); ++idx) {
-        auto shape = _m_decoder_sess->GetInputTypeInfo(idx).GetTensorTypeAndShapeInfo().GetShape();
-        auto t_type = _m_decoder_sess->GetInputTypeInfo(idx).GetTensorTypeAndShapeInfo().GetElementType();
-        auto tmp_info = fmt::format("decoder input name: {}, data type: {}, shape: ", _m_decoder_input_names[idx], t_type);
-        for (auto& s : shape) {
-            tmp_info += std::to_string(s) + " ";
-        }
-        LOG(INFO) << tmp_info;
-    }
-
-    for (int idx = 0; idx < _m_decoder_output_names.size(); ++idx) {
-        auto shape = _m_decoder_sess->GetOutputTypeInfo(idx).GetTensorTypeAndShapeInfo().GetShape();
-        auto t_type = _m_decoder_sess->GetOutputTypeInfo(idx).GetTensorTypeAndShapeInfo().GetElementType();
-        auto tmp_info = fmt::format("decoder output name: {}, data type: {}, shape: ", _m_decoder_output_names[idx], t_type);
-        for (auto& s : shape) {
-            tmp_info += std::to_string(s) + " ";
-        }
-        LOG(INFO) << tmp_info;
-    }
 
     _m_successfully_init_model = true;
     LOG(INFO) << "Successfully load sam model";
@@ -269,41 +267,39 @@ jinq::common::StatusCode SamSegmentor::Impl::init(const decltype(toml::parse("")
 jinq::common::StatusCode SamSegmentor::Impl::predict(
     const cv::Mat& input_image,
     const std::vector<cv::Rect>& bboxes,
-    const std::vector<cv::Point>& points,
-    const std::vector<int>& point_labels,
-    cv::Mat& predicted_mask) {
+    std::vector<cv::Mat>& predicted_masks) {
     // fetch origin image size
     _m_ori_image_size = input_image.size();
 
+    if (bboxes.empty()) {
+        LOG(INFO) << "input bboxes empty";
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+
     // encode image embeddings
-    Ort::Value image_embeddings(nullptr);
+    auto t_start = Timestamp::now();
+    std::vector<float> image_embeddings;
     auto status= encode_image_embeddings(input_image, image_embeddings);
     if (status != StatusCode::OJBK) {
         LOG(INFO) << "encoding image embeddings failed, status code: " << status;
         return status;
     }
-    LOG(INFO) << image_embeddings.GetTensorMutableData<float>()[0] << " "
-              << image_embeddings.GetTensorMutableData<float>()[1] << " "
-              << image_embeddings.GetTensorMutableData<float>()[2] << " "
-              << image_embeddings.GetTensorMutableData<float>()[3] << " ";
-    LOG(INFO) << "embedding finished";
+    auto t_cost = Timestamp::now() - t_start;
+    LOG(INFO) << "embedding finished cost time: " << t_cost;
+
+    // transform bboxes
+    std::vector<cv::Rect2f> transformed_bboxes = transform_bboxes(bboxes);
 
     // decoder masks
-    std::vector<cv::Mat> masks;
-    status = get_masks(image_embeddings, bboxes, points, point_labels, masks);
+    t_start = Timestamp::now();
+    status = get_masks(image_embeddings, transformed_bboxes, predicted_masks);
     if (status != StatusCode::OJBK) {
         LOG(INFO) << "decode sam-masks failed, status code: " << status;
         return status;
     }
-    LOG(INFO) << "decode finished";
-
-    cv::imwrite("fuck.png", masks[0]);
-
-    if (_m_encoder_sess->GetInputCount() == 1) {
-        return StatusCode::OJBK;
-    } else {
-        return StatusCode::MODEL_RUN_SESSION_FAILED;
-    }
+    t_cost = Timestamp::now() - t_start;
+    LOG(INFO) << "decode finished cost time: " << t_cost;
+    return StatusCode::OJBK;
 }
 
 /***
@@ -315,22 +311,7 @@ jinq::common::StatusCode SamSegmentor::Impl::predict(
 jinq::common::StatusCode SamSegmentor::Impl::get_embedding(
     const cv::Mat &input_image,
     std::vector<float> &image_embeddings) {
-    // encode images
-    Ort::Value img_embeds(nullptr);
-    auto status= encode_image_embeddings(input_image, img_embeds);
-    if (status != StatusCode::OJBK) {
-        return status;
-    }
-
-    // fetch embedding
-    auto embeds_size = std::accumulate(std::begin(_m_encoder_output_shape), std::end(_m_encoder_output_shape), 1, std::multiplies<int64_t>());
-    image_embeddings.resize(embeds_size);
-    auto img_embeds_val = img_embeds.GetTensorMutableData<float>();
-    for (auto idx = 0; idx < embeds_size; ++idx) {
-        image_embeddings[idx] = img_embeds_val[idx];
-    }
-    return StatusCode::OJBK;
-
+    return encode_image_embeddings(input_image, image_embeddings);
 }
 
 /***
@@ -342,16 +323,53 @@ cv::Mat SamSegmentor::Impl::preprocess_image(const cv::Mat &input_image) {
 
     auto input_node_h = static_cast<int>(_m_encoder_input_shape[2]);
     auto input_node_w = static_cast<int>(_m_encoder_input_shape[3]);
+    auto ori_img_width = static_cast<float>(input_image.size().width);
+    auto ori_img_height = static_cast<float>(input_image.size().height);
+    auto long_side = std::max(input_image.size().height, input_image.size().width);
+    float scale = static_cast<float>(input_node_h) / static_cast<float>(long_side);
+    cv::Size target_size = cv::Size(
+        static_cast<int>(scale * ori_img_width), static_cast<int>(scale * ori_img_height));
 
     cv::Mat result;
     cv::cvtColor(input_image, result, cv::COLOR_BGR2RGB);
-    cv::resize(input_image, result,cv::Size(input_node_w, input_node_h));
+    cv::resize(input_image, result,target_size);
     result.convertTo(result, CV_32FC3);
 
     cv::subtract(result, cv::Scalar(123.675, 116.28, 103.53), result);
     cv::divide(result, cv::Scalar(58.395, 57.12, 57.375), result);
 
+    // pad image
+    auto pad_h = input_node_h - target_size.height;
+    auto pad_w = input_node_w - target_size.width;
+    cv::copyMakeBorder(result, result, 0, pad_h, 0, pad_w, cv::BORDER_CONSTANT, 0.0);
+
     return result;
+}
+
+/***
+ *
+ * @param bboxes
+ * @return
+ */
+std::vector<cv::Rect2f> SamSegmentor::Impl::transform_bboxes(const std::vector<cv::Rect> &bboxes) {
+    auto ori_img_h = static_cast<float>(_m_ori_image_size.height);
+    auto ori_img_w = static_cast<float>(_m_ori_image_size.width);
+    auto long_side = std::max(ori_img_h, ori_img_w);
+    auto input_tensor_h = static_cast<float>(_m_encoder_input_shape[2]);
+    auto input_tensor_w = static_cast<float>(_m_encoder_input_shape[3]);
+    float scale = input_tensor_h / long_side;
+
+    std::vector<cv::Rect2f> transformed_bboxes;
+    for (auto& box : bboxes) {
+        cv::Rect2f new_box = box;
+        new_box.x *= scale;
+        new_box.y *= scale;
+        new_box.width *= scale;
+        new_box.height *= scale;
+        transformed_bboxes.push_back(new_box);
+    }
+
+    return transformed_bboxes;
 }
 
 /***
@@ -360,7 +378,7 @@ cv::Mat SamSegmentor::Impl::preprocess_image(const cv::Mat &input_image) {
  * @param image_embeddings
  * @return
  */
-StatusCode SamSegmentor::Impl::encode_image_embeddings(const cv::Mat &input_image, Ort::Value& image_embeddings) {
+StatusCode SamSegmentor::Impl::encode_image_embeddings(const cv::Mat &input_image, std::vector<float>& image_embeddings) {
     // preprocess image
     auto preprocessed_image = preprocess_image(input_image);
     auto input_tensor_values = CvUtils::convert_to_chw_vec(preprocessed_image);
@@ -387,7 +405,13 @@ StatusCode SamSegmentor::Impl::encode_image_embeddings(const cv::Mat &input_imag
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
 
-    image_embeddings = std::move(output_tensors.front());
+    auto embeds_size = std::accumulate(
+        std::begin(_m_encoder_output_shape), std::end(_m_encoder_output_shape), 1, std::multiplies());
+    image_embeddings.resize(embeds_size);
+    auto img_embeds_val = output_tensors[0].GetTensorMutableData<float>();
+    for (auto idx = 0; idx < embeds_size; ++idx) {
+        image_embeddings[idx] = img_embeds_val[idx];
+    }
 
     return StatusCode::OJBK;
 }
@@ -402,42 +426,59 @@ StatusCode SamSegmentor::Impl::encode_image_embeddings(const cv::Mat &input_imag
  * @return
  */
 StatusCode SamSegmentor::Impl::get_masks(
-    Ort::Value &image_embeddings,
-    const std::vector<cv::Rect> &bboxes,
-    const std::vector<cv::Point> &points,
-    const std::vector<int> &point_labels,
+    const std::vector<float> &image_embeddings,
+    const std::vector<cv::Rect2f> &bboxes,
     std::vector<cv::Mat> &out_masks) {
-    // init decoder input tensor
+
+    for (auto& bbox : bboxes) {
+        cv::Mat out_mask;
+        auto status_code= get_mask(image_embeddings, bbox, out_mask);
+        if (status_code != StatusCode::OJBK) {
+            return status_code;
+        }
+        out_masks.push_back(out_mask);
+    }
+
+    return StatusCode::OJBK;
+}
+
+/***
+ *
+ * @param decoder_inputs
+ * @param bbox
+ * @param points
+ * @param out_mask
+ * @return
+ */
+StatusCode SamSegmentor::Impl::get_mask(
+    const std::vector<float>& image_embeddings,
+    const cv::Rect2f &bbox,
+    cv::Mat &out_mask) {
+    // init decoder inputs
     std::vector<Ort::Value> decoder_input_tensor;
 
-    // init embeddings
-    decoder_input_tensor.push_back(std::move(image_embeddings));
+    // init image embedding tensors
+    auto embedding_tensor = Ort::Value::CreateTensor<float>(
+        _m_memo_info, (float*)image_embeddings.data(), image_embeddings.size(),
+        _m_encoder_output_shape.data(), _m_encoder_output_shape.size());
+    decoder_input_tensor.push_back(std::move(embedding_tensor));
 
     // init points tensor and label tensor
     std::vector<float> total_points;
     std::vector<float> total_labels;
-    for (auto& pt : points) {
-        auto x = static_cast<float>(pt.x);
-        auto y = static_cast<float>(pt.y);
-        total_points.push_back(x);
-        total_points.push_back(y);
-        total_labels.push_back(1.0);
-    }
-    for (auto& rect : bboxes) {
-        // top left point
-        auto tl_pt = rect.tl();
-        auto tl_x = static_cast<float>(tl_pt.x);
-        auto tl_y = static_cast<float>(tl_pt.y);
-        total_points.push_back(tl_x);
-        total_points.push_back(tl_y);
-        total_labels.push_back(2.0);
-        // bottom right point
-        auto br_x = static_cast<float>(tl_x + static_cast<float>(rect.width));
-        auto br_y = static_cast<float>(tl_y + static_cast<float>(rect.height));
-        total_points.push_back(br_x);
-        total_points.push_back(br_y);
-        total_labels.push_back(3.0);
-    }
+    // top left point
+    auto tl_pt = bbox.tl();
+    auto tl_x = tl_pt.x;
+    auto tl_y = tl_pt.y;
+    total_points.push_back(tl_x);
+    total_points.push_back(tl_y);
+    total_labels.push_back(2.0);
+    // bottom right point
+    auto br_x = tl_x + bbox.width;
+    auto br_y = tl_y + bbox.height;
+    total_points.push_back(br_x);
+    total_points.push_back(br_y);
+    total_labels.push_back(3.0);
     total_points.push_back(0.0);
     total_points.push_back(0.0);
     total_labels.push_back(-1.0);
@@ -504,26 +545,21 @@ StatusCode SamSegmentor::Impl::get_masks(
     auto output_tensors = _m_decoder_sess->Run(
         Ort::RunOptions{nullptr}, _m_decoder_input_names.data(), decoder_input_tensor.data(),
         decoder_input_tensor.size(), _m_decoder_output_names.data(), _m_decoder_output_names.size());
-    auto mask_shape = output_tensors[0].GetTensorTypeAndShapeInfo().GetShape();
-    for (auto& s : mask_shape) {
-        LOG(INFO) << s;
-    }
-
     auto masks_preds_value = output_tensors[0].GetTensorMutableData<float>();
-    auto masks_preds_iou_value = output_tensors[1].GetTensorMutableData<float>();
-    for (int idx = 0; idx < 1; ++idx) {
-        LOG(INFO) << "preds iou: " << masks_preds_iou_value[idx];
-    }
-    LOG(INFO) << fmt::format(
-        "mask value: {} {} {} {}", masks_preds_value[0], masks_preds_value[1], masks_preds_value[2], masks_preds_value[3]);
 
-    cv::Mat mask(cv::Size(1024, 1024), CV_8UC1);
+    auto output_mask_shape = output_tensors[0].GetTensorTypeAndShapeInfo().GetShape();
+    int output_mask_h = static_cast<int>(output_mask_shape[2]);
+    int output_mask_w = static_cast<int>(output_mask_shape[3]);
+    cv::Mat mask(cv::Size(output_mask_w, output_mask_h), CV_8UC1);
     for (int row = 0; row < mask.rows; ++row) {
         for (int col = 0; col < mask.cols; ++col) {
             mask.at<uchar>(row, col) = masks_preds_value[row * mask.cols + col] > 0 ? 255 : 0;
         }
     }
-    out_masks.push_back(mask);
+    if (cv::Size(output_mask_w, output_mask_h) != _m_ori_image_size) {
+        cv::resize(mask, mask, _m_ori_image_size, 0.0, 0.0, cv::INTER_NEAREST);
+    }
+    mask.copyTo(out_mask);
 
     return StatusCode::OJBK;
 }
@@ -561,10 +597,8 @@ jinq::common::StatusCode SamSegmentor::init(const decltype(toml::parse("")) &cfg
 jinq::common::StatusCode SamSegmentor::predict(
     const cv::Mat& input_image,
     const std::vector<cv::Rect>& bboxes,
-    const std::vector<cv::Point>& points,
-    const std::vector<int>& point_labels,
-    cv::Mat& predicted_mask) {
-    return _m_pimpl->predict(input_image, bboxes, points, point_labels, predicted_mask);
+    std::vector<cv::Mat>& predicted_masks) {
+    return _m_pimpl->predict(input_image, bboxes, predicted_masks);
 }
 
 /***

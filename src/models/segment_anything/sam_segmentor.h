@@ -64,9 +64,7 @@ class SamSegmentor {
     jinq::common::StatusCode predict(
         const cv::Mat& input_image,
         const std::vector<cv::Rect>& bboxes,
-        const std::vector<cv::Point>& points,
-        const std::vector<int>& point_labels,
-        cv::Mat& predicted_mask);
+        std::vector<cv::Mat>& predicted_masks);
 
     /***
      *
