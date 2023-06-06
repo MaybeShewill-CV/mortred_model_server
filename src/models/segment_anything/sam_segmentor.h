@@ -89,6 +89,4 @@ class SamSegmentor {
 }
 }
 
-
-
 #endif // MORTRED_MODEL_SERVER_SAMSEGMENTOR_H
