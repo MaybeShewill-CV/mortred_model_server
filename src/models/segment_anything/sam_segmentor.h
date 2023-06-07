@@ -25,7 +25,7 @@ namespace segment_anything {
 class SamSegmentor {
   public:
     /***
-    * 构造函数
+    * constructor
     * @param config
      */
     SamSegmentor();
@@ -36,13 +36,13 @@ class SamSegmentor {
     ~SamSegmentor();
 
     /***
-    * 赋值构造函数
+    * constructor
     * @param transformer
      */
     SamSegmentor(const SamSegmentor& transformer) = delete;
 
     /***
-     * 复制构造函数
+     * constructor
      * @param transformer
      * @return
      */
@@ -76,7 +76,7 @@ class SamSegmentor {
 
 
     /***
-     * if db text detector successfully initialized
+     * if model successfully initialized
      * @return
      */
     bool is_successfully_initialized() const;

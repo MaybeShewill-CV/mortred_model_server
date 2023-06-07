@@ -7,6 +7,8 @@
 
 #include "sam_vit_encoder.h"
 
+#include <chrono>
+
 #include "glog/logging.h"
 #include "MNN/Interpreter.hpp"
 
@@ -49,7 +51,15 @@ class SamVitEncoder::Impl {
      * @param image_embeddings
      * @return
      */
-    jinq::common::StatusCode get_embedding(const cv::Mat& input_image, std::vector<float>& image_embeddings);
+    jinq::common::StatusCode encode(const cv::Mat& input_image, std::vector<float>& image_embeddings);
+
+    /***
+     *
+     * @return
+     */
+    std::vector<int> get_encoder_input_shape() const {
+        return _m_input_shape;
+    }
 
     /***
      * if model successfully initialized
@@ -151,12 +161,16 @@ jinq::common::StatusCode SamVitEncoder::Impl::init(const decltype(toml::parse(""
  * @param image_embeddings
  * @return
  */
-jinq::common::StatusCode SamVitEncoder::Impl::get_embedding(
+jinq::common::StatusCode SamVitEncoder::Impl::encode(
     const cv::Mat &input_image,
     std::vector<float> &image_embeddings) {
     // preprocess image
     auto preprocessed_image = preprocess_image(input_image);
     auto input_tensor_values = CvUtils::convert_to_chw_vec(preprocessed_image);
+    if (input_tensor_values.empty()) {
+        LOG(ERROR) << "empty input data for sam vit encoder";
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
 
     // run encoder
     auto input_tensor_user = MNN::Tensor(_m_input_tensor, MNN::Tensor::DimensionType::CAFFE);
@@ -166,13 +180,6 @@ jinq::common::StatusCode SamVitEncoder::Impl::get_embedding(
     _m_input_tensor->copyFromHostTensor(&input_tensor_user);
 
     _m_net->runSession(_m_session);
-
-//    for (;;) {
-//        auto t_start = Timestamp::now();
-//        _m_net->runSession(_m_session);
-//        auto t_cost = Timestamp::now() - t_start;
-//        LOG(INFO) << "encoder run session cost time: " << t_cost;
-//    }
 
     MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::CAFFE);
     _m_output_tensor->copyToHostTensor(&output_tensor_user);
@@ -247,8 +254,16 @@ jinq::common::StatusCode SamVitEncoder::init(const decltype(toml::parse("")) &cf
  * @param image_embeddings
  * @return
  */
-jinq::common::StatusCode SamVitEncoder::get_embedding(const cv::Mat &input_image, std::vector<float> &image_embeddings) {
-    return _m_pimpl->get_embedding(input_image, image_embeddings);
+jinq::common::StatusCode SamVitEncoder::encode(const cv::Mat &input_image, std::vector<float> &image_embeddings) {
+    return _m_pimpl->encode(input_image, image_embeddings);
+}
+
+/***
+ *
+ * @return
+ */
+std::vector<int> SamVitEncoder::get_encoder_input_shape() const {
+   return _m_pimpl->get_encoder_input_shape();
 }
 
 /***

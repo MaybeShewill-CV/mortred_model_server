@@ -1,12 +1,12 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: SamVitEncoder.h
+ * File: SamDecoder.h
  * Date: 23-6-7
  ************************************************/
 
-#ifndef MORTRED_MODEL_SERVER_SAMVITENCODER_H
-#define MORTRED_MODEL_SERVER_SAMVITENCODER_H
+#ifndef MORTRED_MODEL_SERVER_SAMDECODER_H
+#define MORTRED_MODEL_SERVER_SAMDECODER_H
 
 #include <vector>
 
@@ -22,31 +22,31 @@ namespace segment_anything {
 /***
  *
  */
-class SamVitEncoder {
+class SamDecoder {
   public:
     /***
     * constructor
     * @param config
      */
-    SamVitEncoder();
+    SamDecoder();
 
     /***
      *
      */
-    ~SamVitEncoder();
+    ~SamDecoder();
 
     /***
     * constructor
     * @param transformer
      */
-    SamVitEncoder(const SamVitEncoder& transformer) = delete;
+    SamDecoder(const SamDecoder& transformer) = delete;
 
     /***
      * constructor
      * @param transformer
      * @return
      */
-    SamVitEncoder& operator=(const SamVitEncoder& transformer) = delete;
+    SamDecoder& operator=(const SamDecoder& transformer) = delete;
 
     /***
      *
@@ -57,17 +57,22 @@ class SamVitEncoder {
 
     /***
      *
-     * @param input_image
-     * @param image_embeddings
-     * @return
+     * @param ori_img_size
      */
-    jinq::common::StatusCode encode(const cv::Mat& input_image, std::vector<float>& image_embeddings);
+    void set_ori_image_size(const cv::Size& ori_img_size);
 
     /***
      *
+     * @param image_embeddings
+     * @param bboxes
+     * @param predicted_masks
      * @return
      */
-    std::vector<int> get_encoder_input_shape() const;
+    jinq::common::StatusCode decode(
+        const std::vector<float>& image_embeddings,
+        const std::vector<cv::Rect2f>& bboxes,
+        std::vector<cv::Mat>& predicted_masks);
+
 
     /***
      * if model successfully initialized
@@ -83,4 +88,4 @@ class SamVitEncoder {
 }
 }
 
-#endif // MORTRED_MODEL_SERVER_SAMVITENCODER_H
+#endif // MORTRED_MODEL_SERVER_SAMDECODER_H
