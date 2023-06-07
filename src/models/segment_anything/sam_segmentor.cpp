@@ -179,7 +179,7 @@ jinq::common::StatusCode SamSegmentor::Impl::predict(
 jinq::common::StatusCode SamSegmentor::Impl::get_embedding(
     const cv::Mat &input_image,
     std::vector<float> &image_embeddings) {
-
+    return _m_sam_encoder->encode(input_image, image_embeddings);
 }
 
 /***
