@@ -13,6 +13,7 @@
 
 #include <opencv2/opencv.hpp>
 #include "base64/libbase64.h"
+#include "glog/logging.h"
 
 namespace jinq {
 namespace common {
