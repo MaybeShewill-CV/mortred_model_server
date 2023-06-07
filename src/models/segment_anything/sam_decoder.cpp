@@ -195,7 +195,7 @@ jinq::common::StatusCode SamDecoder::Impl::decode(
         predicted_masks.push_back(out_mask);
     }
     auto t_cost = Timestamp::now() - t_start;
-    LOG(INFO) << "decode finished cost time: " << t_cost;
+//    LOG(INFO) << "decode finished cost time: " << t_cost;
 
     return StatusCode::OJBK;
 }
