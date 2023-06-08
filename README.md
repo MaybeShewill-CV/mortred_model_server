@@ -42,7 +42,7 @@ Before proceeding further with this document, make sure you have the following p
 
 **1.** Make sure you have **CUDA&GPU&Driver** rightly installed. You may refer to [this](https://developer.nvidia.com/cuda-toolkit) to install them
 
-**2.** Make sure you have **MNN** installed. For install instruction you may find some help [here](https://www.yuque.com/mnn/en/build_linux). MNN-2.0.0's cuda backend was not supported for now. You'd better use MNN-1.2.0 release version to have both cpu and cuda computation backend. The bugs in MNN-2.0.0 remained here will be fixed as soon as possible
+**2.** Make sure you have **MNN** installed. For install instruction you may find some help [here](https://www.yuque.com/mnn/en/build_linux). MNN-2.3.0 release version was recommended.
 
 **3.** Make sure you have **WORKFLOW** installed. For install instruction you may find some help [here](https://github.com/sogou/workflow)
 

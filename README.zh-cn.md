@@ -41,7 +41,7 @@
 
 **1.** 确保 **CUDA&GPU&Driver** 正确安装，否则只能使用cpu做服务器的计算后端，一些复杂模型cpu计算耗时非常久，不推荐使用cpu作为计算后端. 你可以参考 [nvidia文档](https://developer.nvidia.com/cuda-toolkit) 来正确安装。
 
-**2.** 确保 **MNN** 已正常安装. 同样可以参考他们的 [官方安装文档](https://www.yuque.com/mnn/en/build_linux). 值得一提的是 `MNN-2.0.0` 的 `cuda` 计算后端目前暂时不可用，推荐在本项目中使用 `MNN-1.2.0`
+**2.** 确保 **MNN** 已正常安装. 同样可以参考他们的 [官方安装文档](https://www.yuque.com/mnn/en/build_linux). 推荐在本项目中使用 `MNN-2.3.0`
 
 **3.** 确保 **WORKFLOW** 正确安装. 可以参考 [官方安装文档](https://github.com/sogou/workflow)
 
