@@ -109,13 +109,6 @@ class SamDecoder::Impl {
 
   private:
     /***
-     *
-     * @param bboxes
-     * @return
-     */
-    std::vector<cv::Rect2f> transform_bboxes(const std::vector<cv::Rect>& bboxes);
-
-    /***
       *
       * @param decoder_inputs
       * @param bbox
@@ -288,7 +281,7 @@ StatusCode SamDecoder::Impl::get_mask(
 
     // init ori image size input tensor
     std::vector<float> ori_image_size_tensor_values = {
-        static_cast<float>(_m_ori_image_size.width), static_cast<float>(_m_ori_image_size.height)};
+        static_cast<float>(_m_ori_image_size.height), static_cast<float>(_m_ori_image_size.width)};
     std::vector<int64_t> ori_image_size_tensor_shape({2});
     auto ori_img_size_tensor = Ort::Value::CreateTensor<float>(
         _m_memo_info, ori_image_size_tensor_values.data(),
