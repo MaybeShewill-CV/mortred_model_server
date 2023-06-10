@@ -170,7 +170,7 @@ class MsOcrNet<INPUT, OUTPUT>::Impl {
     };
 
   private:
-    // 模型文件存储路径
+    // model file path
     std::string _m_model_file_path;
     // MNN Interpreter
     std::unique_ptr<MNN::Interpreter> _m_net = nullptr;
@@ -178,21 +178,21 @@ class MsOcrNet<INPUT, OUTPUT>::Impl {
     MNN::Session* _m_session = nullptr;
     // MNN Input tensor node
     MNN::Tensor* _m_input_tensor = nullptr;
-    // MNN Loc Output tensor node
+    // MNN Output tensor node
     MNN::Tensor* _m_output_tensor = nullptr;
-    // MNN后端使用线程数
+    // MNN threads nums
     uint _m_threads_nums = 4;
-    // 用户输入网络的图像尺寸
+    // user input size
     cv::Size _m_input_size_user = cv::Size();
-    //　计算图定义的输入node尺寸
+    //　input node size
     cv::Size _m_input_size_host = cv::Size();
-    // 是否成功初始化标志位
+    // flag
     bool _m_successfully_initialized = false;
 
   private:
     /***
-     * 图像预处理, 转换图像为CV_32FC3, 通过dst = src / 127.5 - 1.0来归一化图像到[-1.0, 1.0]
-     * @param input_image : 输入图像
+     * preprocess image
+     * @param input_image : input image
      */
     cv::Mat preprocess_image(const cv::Mat& input_image) const;
 };
