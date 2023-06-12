@@ -151,6 +151,10 @@ public:
         /** Determine the Execution's forward type is determine by user or auto determine */
         Session_Backend_Fix = 8, // Use the backend user set, when not support use default backend
         Session_Backend_Auto = 9, // Auto Determine the Op type by MNN
+
+        /** Determine static memory whether recyle in resizeSession or just cache the memory */
+        Session_Memory_Collect = 10, // Recycle static memory when session resize in case memory explosion 
+        Session_Memory_Cache = 11, // Cache the static memory for next forward usage
     };
     /**
      * @brief The API shoud be called before create session.
@@ -177,14 +181,16 @@ public:
      * @brief The API shoud be called after last resize session.
      * If resize session generate new cache info, try to rewrite cache file.
      * If resize session do not generate any new cache info, just do nothing.
-     * @param session    giveb session
-     * @param flag   Protected param, not used now
+     * @param session    given session
+     * @param flag   Protected param, not used now 
      */
     ErrorCode updateCacheFile(Session *session, int flag = 0);
 
     enum HintMode {
         // Max Op number for async tuning
         MAX_TUNING_NUMBER = 0,
+        // Strictly check model file or not, default 1. if set 0, will not check model file valid/invalid
+        STRICT_CHECK_MODEL = 1,
     };
     /**
      * @brief The API shoud be called before create session.

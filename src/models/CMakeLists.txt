@@ -13,5 +13,7 @@ target_link_libraries(
     ${MNN_LIBS}
     ${OpenCV_LIBS}
     ${GLOG_LIBRARIES}
+    ${ONNXRUNTIME_LIBRARIES}
+    ${FMT_LIBRARIES}
 )
 set_target_properties(models PROPERTIES LINKER_LANGUAGE CXX)
