@@ -50,6 +50,8 @@ Before proceeding further with this document, make sure you have the following p
 
 **5.** Make sure your **GCC** tookit support cpp-11
 
+**6.** Segment-Anything needs **ONNXRUNTIME** library. You may refer to [this](https://onnxruntime.ai/) to install onnxruntime>=1.14.1
+
 After all prerequisites are settled down you may start to build the mortred ai server frame work.
 
 ### Setup :fire::fire::fire:
@@ -64,11 +66,18 @@ cp $MNN_ROOT_DIR/build/libMNN.so ./3rd_party/libs
 cp $MNN_ROOT_DIR/build/source/backend/cuda/libMNN_Cuda_Main.so ./3rd_party/libs
 ```
 
-Copy workflow headers and libs
+Copy WORKFLOW headers and libs
 
 ```bash
 cp -r $WORKFLOW_ROOT_DIR/_include/workflow ./3rd_party/include
 cp -r $WORKFLOW_ROOT_DIR/_lib/libworkflow.so* ./3rd_party/libs
+```
+
+Copy ONNXRUNTIME headers and libs
+
+```bash
+cp -r $ONNXRUNTIME_ROOT_DIR/include/* ./3rd_party/include/onnxruntime
+cp -r $ONNXRUNTIME_ROOT_DIR/_lib/libonnxruntime*.so* ./3rd_party/libs
 ```
 
 **Step 2:** Build Mortred AI Server :coffee::coffee::coffee:

@@ -49,6 +49,8 @@
 
 **5.** 确保你的开发环境中的 **GCC** 编译工具链支持 `CPP11`
 
+**6.** Segment-Anything 目前需要使用到 **ONNXRUNTIME** 库. 可以参考 [官方安装文档](https://onnxruntime.ai/) 安装onnxruntime>=1.14.1
+
 准备工作都完成之后可以愉快的安装本项目了 :tea:
 
 ### 编译安装 :fire::fire::fire:
@@ -64,11 +66,18 @@ cp $MNN_ROOT_DIR/build/libMNN.so ./3rd_party/libs
 cp $MNN_ROOT_DIR/build/source/backend/cuda/libMNN_Cuda_Main.so ./3rd_party/libs
 ```
 
-同样的方式拷贝workflow的头文件和库文件, `WORKFLOW_ROOT_DIR` 代表 `workflow` 项目在你机器的根目录
+同样的方式拷贝`WORKFLOW`的头文件和库文件, `WORKFLOW_ROOT_DIR` 代表 `WORKFLOW` 项目在你机器的根目录
 
 ```bash
 cp -r $WORKFLOW_ROOT_DIR/_include/workflow ./3rd_party/include
 cp -r $WORKFLOW_ROOT_DIR/_lib/libworkflow.so* ./3rd_party/libs
+```
+
+同样的方式拷贝`ONNXRUNTIME`的头文件和库文件, `ONNXRUNTIME_ROOT_DIR` 代表 `ONNXRUNTIME` 项目在你机器的根目录
+
+```bash
+cp -r $ONNXRUNTIME_ROOT_DIR/include/* ./3rd_party/include/onnxruntime
+cp -r $ONNXRUNTIME_ROOT_DIR/_lib/libonnxruntime*.so* ./3rd_party/libs
 ```
 
 **Step 2:** 开始编译本项目 :coffee::coffee::coffee:
