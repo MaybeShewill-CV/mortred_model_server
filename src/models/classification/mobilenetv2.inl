@@ -170,27 +170,27 @@ public:
 
 private:
     std::string _m_model_file_path;
-    // MNN Net即模型数据持有者
+    // MNN Net
     std::unique_ptr <MNN::Interpreter> _m_net = nullptr;
-    // MNN session即模型输入数据持有者
+    // MNN Session
     MNN::Session* _m_session = nullptr;
-    // MNN session配置
+    // MNN Session Config
     MNN::ScheduleConfig _m_session_config;
-    // MNN 输入tensor
+    // MNN Input Tensor
     MNN::Tensor* _m_input_tensor = nullptr;
-    // MNN score输出tensor
+    // MNN Output Tensor
     MNN::Tensor* _m_output_tensor = nullptr;
-    // MNN后端使用线程数
+    // MNN Backend Threads Nums
     int _m_threads_nums = 4;
-    // MNN 模型输入tensor大小
+    // MNN Input Tensor Size
     cv::Size _m_input_tensor_size = cv::Size(224, 224);
-    // 模型是否成功初始化标志位
+    // flag
     bool _m_successfully_initialized = false;
 
 private:
     /***
-     * 图像预处理, 转换图像为CV_32FC3, 通过dst = src / 127.5 - 1.0来归一化图像到[-1.0, 1.0]
-     * @param input_image : 输入图像
+     * preprocess
+     * @param input_image : input image
      */
     cv::Mat preprocess_image(const cv::Mat& input_image) const;
 };
