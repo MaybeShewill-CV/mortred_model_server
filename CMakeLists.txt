@@ -28,12 +28,10 @@ file(GLOB_RECURSE WORKFLOW_LIBS ${PROJECT_ROOT_DIR}/3rd_party/libs/*workflow*so)
 file(GLOB_RECURSE GLOG_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*glog*so)
 file(GLOB_RECURSE BASE64_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*base64*so)
 file(GLOB_RECURSE FMT_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*fmt*so)
+file(GLOB_RECURSE ONNXRUNTIME_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*onnxruntime*so)
 
 # find package
 find_package(Threads REQUIRED)
-if(CMAKE_HOST_SYSTEM_NAME MATCHES "Windows")
-    set(OpenCV_DIR "E:\\opencv-4.5.0\\out\\build\\x64-Release")
-endif()
 find_package(OpenCV REQUIRED)
 find_package(glog REQUIRED)
 
@@ -45,7 +43,6 @@ add_subdirectory(src/common)
 add_subdirectory(src/models)
 add_subdirectory(src/factory)
 add_subdirectory(src/server)
-add_subdirectory(src/registration)
 add_subdirectory(src/apps)
 
 # add unittest

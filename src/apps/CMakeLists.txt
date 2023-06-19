@@ -14,6 +14,7 @@ set(MODEL_BENCHMARK_LIST
     ocr
     segmentation
     matting
+    sam
 )
 
 foreach(dir_name ${MODEL_BENCHMARK_LIST})
@@ -35,7 +36,6 @@ set(MODEL_SERVER_APP_LIST
     proxy
     scene_segmentation
     matting
-    registration
 )
 
 foreach(dir_name ${MODEL_SERVER_APP_LIST})
@@ -43,6 +43,6 @@ foreach(dir_name ${MODEL_SERVER_APP_LIST})
     foreach(src ${src_list})
         string(REGEX REPLACE ".+/(.+)\\..*" "\\1" file_name ${src})
         add_executable(${file_name}.out ${src})
-        target_link_libraries(${file_name}.out common models factory registration ${WORKFLOW_LIBS} ${GLOG_LIBRARIES})
+        target_link_libraries(${file_name}.out common models factory ${WORKFLOW_LIBS} ${GLOG_LIBRARIES})
     endforeach()
 endforeach()
