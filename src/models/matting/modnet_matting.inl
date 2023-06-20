@@ -170,6 +170,7 @@ public:
     };
 
 private:
+    // MNN Model File
     std::string _m_model_file_path;
     // MNN Interpreter
     std::unique_ptr<MNN::Interpreter> _m_net = nullptr;
