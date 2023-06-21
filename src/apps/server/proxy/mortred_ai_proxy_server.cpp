@@ -8,8 +8,6 @@
 // mortred ai proxy server tool
 
 #include "glog/logging.h"
-#include "workflow/HttpMessage.h"
-#include "workflow/HttpUtil.h"
 #include "workflow/UpstreamManager.h"
 #include "workflow/WFFacilities.h"
 #include "workflow/WFHttpServer.h"
@@ -18,13 +16,13 @@
 
 struct tutorial_series_context {
     std::string url;
-    WFHttpTask *proxy_task;
-    bool is_keep_alive;
+    WFHttpTask *proxy_task = nullptr;
+    bool is_keep_alive = true;
 };
 
 void reply_callback(WFHttpTask *proxy_task) {
     SeriesWork *series = series_of(proxy_task);
-    tutorial_series_context *context = (tutorial_series_context *)series->get_context();
+    auto *context = (tutorial_series_context *)series->get_context();
     auto *proxy_resp = proxy_task->get_resp();
     size_t size = proxy_resp->get_output_body_size();
 
@@ -40,7 +38,7 @@ void http_callback(WFHttpTask *task) {
     int error = task->get_error();
     auto *resp = task->get_resp();
     SeriesWork *series = series_of(task);
-    tutorial_series_context *context = (tutorial_series_context *)series->get_context();
+    auto *context = (tutorial_series_context *)series->get_context();
     auto *proxy_resp = context->proxy_task->get_resp();
 
     if (state == WFT_STATE_SUCCESS) {
@@ -81,7 +79,7 @@ void process(WFHttpTask *proxy_task) {
     SeriesWork *series = series_of(proxy_task);
     WFHttpTask *http_task; /* for requesting remote webserver. */
 
-    tutorial_series_context *context = new tutorial_series_context;
+    auto *context = new tutorial_series_context;
     context->url = req->get_request_uri();
     context->proxy_task = proxy_task;
 
