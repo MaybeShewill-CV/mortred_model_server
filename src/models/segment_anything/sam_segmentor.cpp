@@ -8,7 +8,6 @@
 #include "sam_segmentor.h"
 
 #include "glog/logging.h"
-#include "fmt/format.h"
 
 #include "common/file_path_util.h"
 #include "common/cv_utils.h"
