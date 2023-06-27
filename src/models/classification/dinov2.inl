@@ -361,7 +361,7 @@ cv::Mat Dinov2<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& input_image
     cv::Mat result;
     input_image.convertTo(result, CV_32FC3);
 
-    cv::divide(result, cv::Scalar(255.0, 255.0, 255.0), result);
+    cv::divide(result, 255.0, result);
     cv::subtract(result, cv::Scalar(0.5, 0.5, 0.5), result);
     cv::divide(result, cv::Scalar(0.5, 0.5, 0.5), result);
 
