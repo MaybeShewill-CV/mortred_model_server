@@ -155,7 +155,7 @@ jinq::common::StatusCode OpenAiClipVitEncoder::Impl::init(const decltype(toml::p
 
     _m_input_shape = _m_input_tensor->shape();
     _m_output_shape = _m_output_tensor->shape();
-    if (_m_input_shape.size() != 4 || _m_output_shape.size() != 4) {
+    if (_m_input_shape.size() != 4 || _m_output_shape.size() != 2) {
         LOG(ERROR) << "invalid encoder input/output node shape";
         return StatusCode::MODEL_INIT_FAILED;
     }
@@ -214,25 +214,15 @@ cv::Mat OpenAiClipVitEncoder::Impl::preprocess_image(const cv::Mat &input_image)
 
     auto input_node_h = static_cast<int>(_m_input_shape[2]);
     auto input_node_w = static_cast<int>(_m_input_shape[3]);
-    auto ori_img_width = static_cast<float>(input_image.size().width);
-    auto ori_img_height = static_cast<float>(input_image.size().height);
-    auto long_side = std::max(input_image.size().height, input_image.size().width);
-    float scale = static_cast<float>(input_node_h) / static_cast<float>(long_side);
-    cv::Size target_size = cv::Size(
-        static_cast<int>(scale * ori_img_width), static_cast<int>(scale * ori_img_height));
 
     cv::Mat result;
     cv::cvtColor(input_image, result, cv::COLOR_BGR2RGB);
-    cv::resize(input_image, result,target_size);
+    cv::resize(result, result,cv::Size(input_node_w, input_node_h));
     result.convertTo(result, CV_32FC3);
 
-    cv::subtract(result, cv::Scalar(123.675, 116.28, 103.53), result);
-    cv::divide(result, cv::Scalar(58.395, 57.12, 57.375), result);
-
-    // pad image
-    auto pad_h = input_node_h - target_size.height;
-    auto pad_w = input_node_w - target_size.width;
-    cv::copyMakeBorder(result, result, 0, pad_h, 0, pad_w, cv::BORDER_CONSTANT, 0.0);
+    cv::divide(result, 255.0, result);
+    cv::subtract(result, cv::Scalar(0.48145466, 0.4578275, 0.40821073), result);
+    cv::divide(result, cv::Scalar(0.26862954, 0.26130258, 0.27577711), result);
 
     return result;
 }

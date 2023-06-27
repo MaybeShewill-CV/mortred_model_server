@@ -213,7 +213,7 @@ cv::Mat SamVitEncoder::Impl::preprocess_image(const cv::Mat &input_image) {
 
     cv::Mat result;
     cv::cvtColor(input_image, result, cv::COLOR_BGR2RGB);
-    cv::resize(input_image, result,target_size);
+    cv::resize(result, result,target_size);
     result.convertTo(result, CV_32FC3);
 
     cv::subtract(result, cv::Scalar(123.675, 116.28, 103.53), result);
