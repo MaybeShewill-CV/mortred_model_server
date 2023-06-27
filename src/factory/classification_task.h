@@ -14,6 +14,7 @@
 #include "models/classification/mobilenetv2.h"
 #include "models/classification/resnet.h"
 #include "models/classification/densenet.h"
+#include "models/classification/dinov2.h"
 #include "server/classification/mobilenetv2_server.h"
 #include "server/classification/resnet_server.h"
 #include "server/classification/densenet_server.h"
@@ -30,6 +31,7 @@ namespace classification {
 using jinq::models::classification::MobileNetv2;
 using jinq::models::classification::ResNet;
 using jinq::models::classification::DenseNet;
+using jinq::models::classification::Dinov2;
 
 using jinq::server::classification::MobileNetv2Server;
 using jinq::server::classification::ResNetServer;
@@ -105,6 +107,20 @@ static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_densenet_classifier(
 static std::unique_ptr<BaseAiServer> create_densenet_cls_server(const std::string& server_name) {
     REGISTER_AI_SERVER(DenseNetServer, server_name)
     return ServerFactory<BaseAiServer>::get_instance().get_server(server_name);
+}
+
+/***
+ * create dinov2 image classification
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param detector_name
+ * @return
+ */
+template<typename INPUT, typename OUTPUT>
+static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_dinov2_classifier(
+    const std::string& classifier_name) {
+    REGISTER_AI_MODEL(Dinov2, classifier_name, INPUT, OUTPUT)
+    return ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance().get_model(classifier_name);
 }
 
 }

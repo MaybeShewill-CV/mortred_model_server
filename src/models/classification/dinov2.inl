@@ -296,8 +296,8 @@ StatusCode Dinov2<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& co
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    _m_input_tensor_size.width = static_cast<int>(cfg_content.at("model_input_image_size").as_array()[0].as_integer());
-    _m_input_tensor_size.height = static_cast<int>(cfg_content.at("model_input_image_size").as_array()[1].as_integer());
+    _m_input_tensor_size.height = _m_input_tensor->shape()[2];
+    _m_input_tensor_size.width = _m_input_tensor->shape()[3];
 
     _m_successfully_initialized = true;
     LOG(INFO) << "Dinov2 classification model initialization complete !!!";
@@ -316,31 +316,32 @@ template<typename INPUT, typename OUTPUT>
 StatusCode Dinov2<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     // transform external input into internal input
     auto internal_in = dinov2_impl::transform_input(in);
-
     if (!internal_in.input_image.data || internal_in.input_image.empty()) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
 
     // preprocess image
     auto preprocessed_image = preprocess_image(internal_in.input_image);
+    auto input_chw_image_data = CvUtils::convert_to_chw_vec(preprocessed_image);
+
     // run session
     MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::CAFFE);
     auto input_tensor_data = input_tensor_user.host<float>();
     auto input_tensor_size = input_tensor_user.size();
-    ::memcpy(input_tensor_data, preprocessed_image.data, input_tensor_size);
+    ::memcpy(input_tensor_data, input_chw_image_data.data(), input_tensor_size);
     _m_input_tensor->copyFromHostTensor(&input_tensor_user);
     _m_net->runSession(_m_session);
+
     // decode output tensor
     MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::CAFFE);
     _m_output_tensor->copyToHostTensor(&output_tensor_user);
     auto* host_data = output_tensor_user.host<float>();
+
     // transform output
     dinov2_impl::internal_output internal_out;
-
     for (auto index = 0; index < output_tensor_user.elementSize(); ++index) {
         internal_out.scores.push_back(host_data[index]);
     }
-
     auto max_score = std::max_element(host_data, host_data + output_tensor_user.elementSize());
     auto cls_id = static_cast<int>(std::distance(host_data, max_score));
     internal_out.class_id = cls_id;
@@ -359,13 +360,13 @@ StatusCode Dinov2<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
 template<typename INPUT, typename OUTPUT>
 cv::Mat Dinov2<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& input_image) const {
     cv::Mat result;
-    input_image.convertTo(result, CV_32FC3);
+    cv::cvtColor(input_image, result, cv::COLOR_BGR2RGB);
+    cv::resize(result, result, _m_input_tensor_size);
+    result.convertTo(result, CV_32FC3);
 
     cv::divide(result, 255.0, result);
-    cv::subtract(result, cv::Scalar(0.5, 0.5, 0.5), result);
-    cv::divide(result, cv::Scalar(0.5, 0.5, 0.5), result);
-
-    cv::resize(result, result, _m_input_tensor_size);
+    cv::subtract(result, cv::Scalar(0.48145466, 0.4578275, 0.40821073), result);
+    cv::divide(result, cv::Scalar(0.26862954, 0.26130258, 0.27577711), result);
 
     return result;
 }
