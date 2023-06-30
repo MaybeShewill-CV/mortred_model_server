@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
             },
             masks);
         auto t_end = std::chrono::system_clock::now();
-        auto t_cost = std::chrono::duration_cast<std::chrono::seconds>(t_end - t_start).count();
+        auto t_cost = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
         LOG(INFO) << "... infer: " << i << ", cost time: " << t_cost;
     }
 

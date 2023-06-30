@@ -348,10 +348,12 @@ void FastSamSegmentor::Impl::postprocess() {
     auto c = _m_output_1_shape[1];
     auto mh = _m_output_1_shape[2];
     auto mw = _m_output_1_shape[3];
+
     auto output_tensor_1_host = MNN::Tensor(_m_output_tensor_1, _m_output_tensor_1->getDimensionType());
     _m_output_tensor_1->copyToHostTensor(&output_tensor_1_host);
     auto* output_tensor_1_data = output_tensor_1_host.host<float>();
     std::vector<float> output_tensor_1_data_vec(output_tensor_1_data, output_tensor_1_data + output_tensor_1_host.elementSize());
+
     auto mask_proto_hwc = CvUtils::convert_to_hwc_vec(output_tensor_1_data_vec, 1, c, mh * mw);
     cv::Mat mask_proto(cv::Size(mh * mw, c), CV_32FC1, mask_proto_hwc.data());
 
