@@ -222,11 +222,39 @@ jinq::common::StatusCode FastSamSegmentor::Impl::predict(
     // preprocess image
     auto preprocessed_image = preprocess_image(input_image);
     auto input_image_nchw_data = CvUtils::convert_to_chw_vec(preprocessed_image);
+    LOG(INFO) << input_image_nchw_data[0] << " "
+              << input_image_nchw_data[1] << " "
+              << input_image_nchw_data[2] << " "
+              << input_image_nchw_data[3] << " "
+              << input_image_nchw_data[4];
+    LOG(INFO) << input_image_nchw_data.size();
 
     // run session
     auto input_tensor_host = MNN::Tensor(_m_input_tensor, MNN::Tensor::DimensionType::CAFFE);
-    ::memcpy(input_tensor_host.host<float>(), input_image_nchw_data.data(), input_tensor_host.elementSize());
+    ::memcpy(input_tensor_host.host<float>(), input_image_nchw_data.data(), input_tensor_host.size());
+    _m_input_tensor->copyFromHostTensor(&input_tensor_host);
+
     _m_net->runSession(_m_session);
+
+//    auto output_tensor_0_host = MNN::Tensor(_m_output_tensor_0, _m_output_tensor_0->getDimensionType());
+//    _m_output_tensor_0->copyToHostTensor(&output_tensor_0_host);
+//    auto* output_tensor_0_data = output_tensor_0_host.host<float>();
+//
+//    LOG(INFO) << output_tensor_0_data[0] << " "
+//              << output_tensor_0_data[1] << " "
+//              << output_tensor_0_data[2] << " "
+//              << output_tensor_0_data[3] << " "
+//              << output_tensor_0_data[4];
+//
+//    auto output_tensor_1_host = MNN::Tensor(_m_output_tensor_1, _m_output_tensor_0->getDimensionType());
+//    _m_output_tensor_1->copyToHostTensor(&output_tensor_1_host);
+//    auto* output_tensor_1_data = output_tensor_1_host.host<float>();
+//
+//    LOG(INFO) << output_tensor_1_data[0] << " "
+//              << output_tensor_1_data[1] << " "
+//              << output_tensor_1_data[2] << " "
+//              << output_tensor_1_data[3] << " "
+//              << output_tensor_1_data[4];
 
     // post process decode mask
     postprocess();
@@ -253,11 +281,12 @@ std::vector<cv::Rect2f> FastSamSegmentor::Impl::transform_bboxes(const std::vect
  */
 cv::Mat FastSamSegmentor::Impl::preprocess_image(const cv::Mat &input_image) {
     cv::Mat result;
-    cv::cvtColor(input_image, result, cv::COLOR_BGR2RGB);
+
+    cv::resize(input_image, result, cv::Size(640, 640));
+
+    cv::cvtColor(result, result, cv::COLOR_BGR2RGB);
 
     result.convertTo(result, CV_32FC3);
-
-    cv::resize(result, result, cv::Size(640, 640));
 
     cv::divide(result, 255.0, result);
 
@@ -266,46 +295,126 @@ cv::Mat FastSamSegmentor::Impl::preprocess_image(const cv::Mat &input_image) {
 
 void FastSamSegmentor::Impl::postprocess() {
 
-    auto batch_size = 1;
-    auto nc = 1;
-    auto nm = 32;
-
-    std::vector<std::vector<float> > threshed_preds;
-    LOG(INFO) << _m_output_0_shape.size();
-    LOG(INFO) << _m_output_0_shape[0] << " "
-              << _m_output_0_shape[1] << " "
-              << _m_output_0_shape[2];
-
     auto output_tensor_0_host = MNN::Tensor(_m_output_tensor_0, _m_output_tensor_0->getDimensionType());
     _m_output_tensor_0->copyToHostTensor(&output_tensor_0_host);
-    LOG(INFO) << output_tensor_0_host.shape().size();
-    LOG(INFO) << output_tensor_0_host.shape()[0] << " "
-              << output_tensor_0_host.shape()[1] << " "
-              << output_tensor_0_host.shape()[2];
     auto* output_tensor_0_data = output_tensor_0_host.host<float>();
-    LOG(INFO) << output_tensor_0_data[0] << " "
-              << output_tensor_0_data[1] << " "
-              << output_tensor_0_data[2] << " "
-              << output_tensor_0_data[3] << " "
-              << output_tensor_0_data[4];
 
-    for (auto bboxes_nums = 0; bboxes_nums < _m_output_0_shape[2]; ++bboxes_nums) {
-        std::vector<float> bbox_info;
-        bbox_info.resize(_m_output_0_shape[1]);
-        for (auto idx = 0; idx < _m_output_0_shape[1]; ++idx) {
-            auto info_idx = idx * _m_output_0_shape[1] + bboxes_nums;
-            auto info_value = output_tensor_0_data[info_idx];
-            bbox_info[idx] = info_value;
+    auto bbox_info_len = _m_output_0_shape[1];
+    auto bbox_nums = _m_output_0_shape[2];
+
+    struct bbox_ {
+        cv::Rect2f bbox;
+        float score = 0.0;
+        std::vector<float> masks;
+        int class_id = 0;
+    };
+
+    std::vector<std::vector<float> > total_preds;
+    total_preds.resize(bbox_nums);
+    for (auto& bbox : total_preds) {
+        bbox.resize(bbox_info_len);
+    }
+
+    for (auto idx_0 = 0; idx_0 < bbox_info_len; ++idx_0) {
+        for (auto idx_1 = 0; idx_1 < bbox_nums; ++idx_1) {
+            auto data_idx = idx_0 * bbox_nums + idx_1;
+            total_preds[idx_1][idx_0] = output_tensor_0_data[data_idx];
         }
-        if (bbox_info[4] <= 0.9) {
-//            LOG(INFO) << bbox_info[4];
-            continue ;
-        } else {
-//            LOG(INFO) << bbox_info[3];
-            threshed_preds.push_back(bbox_info);
+    }
+    LOG(INFO) << total_preds.size();
+
+    std::vector<bbox_> threshed_preds;
+    for (auto& bbox : total_preds) {
+        auto conf = bbox[4];
+        if (conf > 0.25) {
+            bbox_ b;
+            b.score = bbox[4];
+            b.masks = {bbox.begin() + 5, bbox.end()};
+            auto cx = bbox[0];
+            auto cy = bbox[1];
+            auto width = bbox[2];
+            auto height = bbox[3];
+            auto x = cx - width / 2.0f;
+            auto y = cy - height / 2.0f;
+            b.bbox = cv::Rect2f(x, y, width, height);
+            threshed_preds.push_back(b);
         }
     }
     LOG(INFO) << threshed_preds.size();
+
+    auto nms_result = CvUtils::nms_bboxes(threshed_preds, 0.7);
+    LOG(INFO) << nms_result.size();
+
+    auto c = _m_output_1_shape[1];
+    auto mh = _m_output_1_shape[2];
+    auto mw = _m_output_1_shape[3];
+    auto output_tensor_1_host = MNN::Tensor(_m_output_tensor_1, _m_output_tensor_1->getDimensionType());
+    _m_output_tensor_1->copyToHostTensor(&output_tensor_1_host);
+    auto* output_tensor_1_data = output_tensor_1_host.host<float>();
+    std::vector<float> output_tensor_1_data_vec(output_tensor_1_data, output_tensor_1_data + output_tensor_1_host.elementSize());
+    auto mask_proto_hwc = CvUtils::convert_to_hwc_vec(output_tensor_1_data_vec, 1, c, mh * mw);
+    cv::Mat mask_proto(cv::Size(mh * mw, c), CV_32FC1, mask_proto_hwc.data());
+
+    std::vector<cv::Mat> preds_masks;
+    for (auto& bbox : nms_result) {
+        cv::Mat mask_in(cv::Size(c, 1), CV_32FC1, bbox.masks.data());
+        cv::Mat mask_output = mask_in * mask_proto;
+        mask_output = mask_output.reshape(1, {mw, mh});
+        cv::Mat tmp_exp(mask_output.size(), CV_32FC1);
+        cv::exp(-mask_output, tmp_exp);
+        cv::Mat sigmoid_output(mask_output.size(), CV_32FC1);
+        sigmoid_output = 1.0f / (1.0f + tmp_exp);
+
+        for (auto row = 0; row < sigmoid_output.rows; ++row) {
+            for (auto col = 0; col < sigmoid_output.cols; ++col) {
+                if (row > bbox.bbox.y * 0.25 && row < (bbox.bbox.y + bbox.bbox.height) * 0.25 &&
+                    col > bbox.bbox.x * 0.25 && col < (bbox.bbox.x + bbox.bbox.width) * 0.25) {
+                    continue;
+                } else {
+                    sigmoid_output.at<float>(row, col) = 0.0;
+                }
+            }
+        }
+        cv::resize(
+            sigmoid_output, sigmoid_output, cv::Size(640, 640),
+            0.0, 0.0, cv::INTER_LINEAR);
+
+        cv::Mat mask(sigmoid_output.size(), CV_8UC1);
+        for (auto row = 0; row < sigmoid_output.rows; ++row) {
+            for (auto col = 0; col < sigmoid_output.cols; ++col) {
+                if (sigmoid_output.at<float>(row, col) >= 0.5) {
+                    mask.at<uchar>(row, col) = 255;
+                }
+            }
+        }
+        preds_masks.push_back(mask);
+    }
+
+    auto comp_area = [](const cv::Mat& a, const cv::Mat& b) -> bool {
+        auto a_count = cv::countNonZero(a);
+        auto b_count = cv::countNonZero(b);
+
+        return a_count >= b_count;
+    };
+    std::sort(preds_masks.begin(), preds_masks.end(), comp_area);
+
+    auto color_pool = CvUtils::generate_color_map(static_cast<int>(nms_result.size()));
+    cv::Mat color_mask(cv::Size(640, 640), CV_8UC3);
+    for (auto idx = 0; idx < preds_masks.size(); ++idx) {
+        auto color = color_pool[idx];
+        auto mask = preds_masks[idx];
+        for (auto row = 0; row < mask.rows; ++row) {
+            for (auto col = 0; col < mask.cols; ++col) {
+                if (mask.at<uchar>(row, col) == 255) {
+                    color_mask.at<cv::Vec3b>(row, col)[0] = static_cast<uchar>(color[0]);
+                    color_mask.at<cv::Vec3b>(row, col)[1] = static_cast<uchar>(color[1]);
+                    color_mask.at<cv::Vec3b>(row, col)[2] = static_cast<uchar>(color[2]);
+                }
+            }
+        }
+    }
+
+    cv::imwrite("fuck_mask.png", color_mask);
 }
 
 /***
