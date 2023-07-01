@@ -328,6 +328,10 @@ StatusCode FastSamSegmentor::Impl::decode_masks(std::vector<cv::Mat>& preds_mask
     auto output_tensor_0_host = MNN::Tensor(_m_output_tensor_0, _m_output_tensor_0->getDimensionType());
     _m_output_tensor_0->copyToHostTensor(&output_tensor_0_host);
     auto* output_tensor_0_data = output_tensor_0_host.host<float>();
+    if (output_tensor_0_data == nullptr) {
+        LOG(ERROR) << "fetch output tensor 0 inference result failed, output tensor 0's data is nullptr";
+        return StatusCode::MODEL_RUN_SESSION_FAILED; 
+    }
     LOG(INFO) << "output tensor 0 data: ";
     LOG(INFO) << " ---- "
               << output_tensor_0_data[0] << " "
@@ -380,6 +384,10 @@ StatusCode FastSamSegmentor::Impl::decode_masks(std::vector<cv::Mat>& preds_mask
     auto output_tensor_1_host = MNN::Tensor(_m_output_tensor_1, _m_output_tensor_1->getDimensionType());
     _m_output_tensor_1->copyToHostTensor(&output_tensor_1_host);
     auto* output_tensor_1_data = output_tensor_1_host.host<float>();
+    if (output_tensor_1_data == nullptr) {
+        LOG(ERROR) << "fetch output tensor 1 inference result failed, output tensor 1's data is nullptr";
+        return StatusCode::MODEL_RUN_SESSION_FAILED; 
+    }
     LOG(INFO) << "output tensor 1 data: ";
     LOG(INFO) << " ---- "
               << output_tensor_1_data[0] << " "
@@ -465,9 +473,11 @@ StatusCode FastSamSegmentor::Impl::decode_masks(std::vector<cv::Mat>& preds_mask
             }
         }
     }
-    // color_mask.copyTo(merged_mask);
+    color_mask.copyTo(merged_mask);
 
     cv::imwrite("fuck_mask.png", color_mask);
+
+    return StatusCode::OJBK;
 }
 
 /***
