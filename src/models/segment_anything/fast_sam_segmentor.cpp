@@ -440,6 +440,10 @@ StatusCode FastSamSegmentor::Impl::decode_masks(std::vector<cv::Mat>& preds_mask
 
     // merge total predicted masks via area order
     auto comp_area = [] (const cv::Mat& a, const cv::Mat& b) -> bool {
+
+        assert(a.channels() == 1);
+        assert(b.channels() == 1);
+
         auto a_area = cv::countNonZero(a);
         auto b_area = cv::countNonZero(b);
         
