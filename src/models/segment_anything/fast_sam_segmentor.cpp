@@ -24,21 +24,6 @@ using jinq::common::Timestamp;
 
 namespace segment_anything {
 
-bool compare_area(cv::Mat& a, cv::Mat& b) {
-    if (!a.data || a.empty()) {
-        return false;
-    }
-
-    if (!b.data || b.empty()) {
-        return true;
-    }
-
-    auto a_count = cv::countNonZero(a);
-    auto b_count = cv::countNonZero(b);
-
-    return a_count >= b_count;
-}
-
 class FastSamSegmentor::Impl {
   public:
     /***
@@ -99,13 +84,27 @@ class FastSamSegmentor::Impl {
     MNN::Tensor* _m_output_tensor_0 = nullptr;
     MNN::Tensor* _m_output_tensor_1 = nullptr;
 
-    // model input/output shape info
-    std::vector<int> _m_input_shape;
+    // model output shape info
     std::vector<int> _m_output_0_shape;
     std::vector<int> _m_output_1_shape;
 
+    // input image size
+    cv::Size _m_input_image_size;
+    // input tensor size
+    cv::Size _m_input_tensor_size;
+    // preds mask shape
+    cv::Size _m_preds_mask_size;
+
     // init flag
     bool _m_successfully_init_model = false;
+
+    // internal bbox
+    struct _m_preds_bbox {
+        cv::Rect2f bbox;
+        float score = 0.0;
+        std::vector<float> masks;
+        int class_id = 0;
+    };
 
   private:
     /***
@@ -120,12 +119,12 @@ class FastSamSegmentor::Impl {
      * @param input_image
      * @return
      */
-    static cv::Mat preprocess_image(const cv::Mat& input_image);
+    cv::Mat preprocess_image(const cv::Mat& input_image);
 
     /***
      *
      */
-    void postprocess();
+    StatusCode decode_masks(std::vector<cv::Mat>& preds_masks, cv::Mat& merged_mask);
 };
 
 /************ Impl Implementation ************/
@@ -199,20 +198,44 @@ jinq::common::StatusCode FastSamSegmentor::Impl::init(const decltype(toml::parse
         return StatusCode::MODEL_INIT_FAILED;
     }
 
+    // fetch input tensor
     _m_input_name = "images";
-    _m_output_0_name = "output0";
-    _m_output_1_name = "output1";
-
     _m_input_tensor = _m_net->getSessionInput(_m_session, _m_input_name.c_str());
-    _m_output_tensor_0 = _m_net->getSessionOutput(_m_session, _m_output_0_name.c_str());
-    _m_output_tensor_1 = _m_net->getSessionOutput(_m_session, _m_output_1_name.c_str());
+    if (_m_input_tensor == nullptr) {
+        LOG(INFO) << "fetch input node \'images\' failed";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    if (_m_input_tensor->shape().size() != 4) {
+        LOG(INFO) << "Invalid input tensor shape. Input tensor should be with [n, c, h, w] four dims but " << _m_input_tensor->shape().size() << " dims instead";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    _m_input_tensor_size = cv::Size(_m_input_tensor->shape()[3], _m_input_tensor->shape()[2]);
 
-    _m_input_shape = _m_input_tensor->shape();
+    // fetch output tensor 0
+    _m_output_0_name = "output0";
+    _m_output_tensor_0 = _m_net->getSessionOutput(_m_session, _m_output_0_name.c_str());
+    if (_m_output_tensor_0 == nullptr) {
+        LOG(INFO) << "fetch output node \'output0\' failed";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
     _m_output_0_shape = _m_output_tensor_0->shape();
+
+    // fetch output tensor 1
+    _m_output_1_name = "output1";    
+    _m_output_tensor_1 = _m_net->getSessionOutput(_m_session, _m_output_1_name.c_str());
+    if (_m_output_tensor_1 == nullptr) {
+        LOG(INFO) << "fetch output node \'output1\' failed";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    if (_m_output_tensor_1->shape().size() != 4) {
+        LOG(INFO) << "Invalid output tensor 1 shape. Output tensor 1 should be with [n, c, h, w] four dims but " << _m_output_tensor_1->shape().size() << " dims instead";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
     _m_output_1_shape = _m_output_tensor_1->shape();
+    _m_preds_mask_size = cv::Size(_m_output_1_shape[3], _m_output_1_shape[2]);
 
     _m_successfully_init_model = true;
-    LOG(INFO) << "Successfully load sam vit encoder";
+    LOG(INFO) << "Successfully load fastsam model";
     return StatusCode::OJBK;
 }
 
@@ -235,6 +258,7 @@ jinq::common::StatusCode FastSamSegmentor::Impl::predict(
     }
 
     // preprocess image
+    _m_input_image_size = input_image.size();
     auto preprocessed_image = preprocess_image(input_image);
     auto input_image_nchw_data = CvUtils::convert_to_chw_vec(preprocessed_image);
     LOG(INFO) << "input image nchw data: ";
@@ -253,8 +277,12 @@ jinq::common::StatusCode FastSamSegmentor::Impl::predict(
     _m_net->runSession(_m_session);
 
     // post process decode mask
-    postprocess();
-
+    cv::Mat merged_mask;
+    auto status = decode_masks(predicted_masks, merged_mask);
+    if (status != StatusCode::OK) {
+        LOG(ERROR) << "decode masks failed, status code: " << status;
+        return status;
+    }
 
     return StatusCode::OK;
 }
@@ -278,7 +306,7 @@ std::vector<cv::Rect2f> FastSamSegmentor::Impl::transform_bboxes(const std::vect
 cv::Mat FastSamSegmentor::Impl::preprocess_image(const cv::Mat &input_image) {
     cv::Mat result;
 
-    cv::resize(input_image, result, cv::Size(640, 640));
+    cv::resize(input_image, result, _m_input_tensor_size);
 
     cv::cvtColor(result, result, cv::COLOR_BGR2RGB);
 
@@ -289,8 +317,14 @@ cv::Mat FastSamSegmentor::Impl::preprocess_image(const cv::Mat &input_image) {
     return result;
 }
 
-void FastSamSegmentor::Impl::postprocess() {
-
+/***
+ *
+ * @param preds_masks
+ * @param merged_mask
+ * @return
+ */
+StatusCode FastSamSegmentor::Impl::decode_masks(std::vector<cv::Mat>& preds_masks, cv::Mat& merged_mask) {
+    // decode output preds info
     auto output_tensor_0_host = MNN::Tensor(_m_output_tensor_0, _m_output_tensor_0->getDimensionType());
     _m_output_tensor_0->copyToHostTensor(&output_tensor_0_host);
     auto* output_tensor_0_data = output_tensor_0_host.host<float>();
@@ -304,20 +338,11 @@ void FastSamSegmentor::Impl::postprocess() {
 
     auto bbox_info_len = _m_output_0_shape[1];
     auto bbox_nums = _m_output_0_shape[2];
-
-    struct bbox_ {
-        cv::Rect2f bbox;
-        float score = 0.0;
-        std::vector<float> masks;
-        int class_id = 0;
-    };
-
     std::vector<std::vector<float> > total_preds;
     total_preds.resize(bbox_nums);
     for (auto& bbox : total_preds) {
         bbox.resize(bbox_info_len);
     }
-
     for (auto idx_0 = 0; idx_0 < bbox_info_len; ++idx_0) {
         for (auto idx_1 = 0; idx_1 < bbox_nums; ++idx_1) {
             auto data_idx = idx_0 * bbox_nums + idx_1;
@@ -326,11 +351,11 @@ void FastSamSegmentor::Impl::postprocess() {
     }
     LOG(INFO) << "total preds bboxes: " << total_preds.size();
 
-    std::vector<bbox_> threshed_preds;
+    std::vector<_m_preds_bbox> threshed_preds;
     for (auto& bbox : total_preds) {
         auto conf = bbox[4];
         if (conf > 0.25) {
-            bbox_ b;
+            _m_preds_bbox b;
             b.score = bbox[4];
             b.masks = {bbox.begin() + 5, bbox.end()};
             auto cx = bbox[0];
@@ -346,11 +371,11 @@ void FastSamSegmentor::Impl::postprocess() {
     LOG(INFO) << "remain bbox after conf thresh: " << threshed_preds.size();
 
     auto nms_result = CvUtils::nms_bboxes(threshed_preds, 0.7);
-    LOG(INFO) << "remain bbox after conf thresh: " << nms_result.size();
+    LOG(INFO) << "remain bbox after nms thresh: " << nms_result.size();
 
     auto c = _m_output_1_shape[1];
-    auto mh = _m_output_1_shape[2];
-    auto mw = _m_output_1_shape[3];
+    auto mh = _m_preds_mask_size.height;
+    auto mw = _m_preds_mask_size.width;
 
     auto output_tensor_1_host = MNN::Tensor(_m_output_tensor_1, _m_output_tensor_1->getDimensionType());
     _m_output_tensor_1->copyToHostTensor(&output_tensor_1_host);
@@ -363,16 +388,19 @@ void FastSamSegmentor::Impl::postprocess() {
               << output_tensor_1_data[3] << " "
               << output_tensor_1_data[4];
     std::vector<float> output_tensor_1_data_vec(output_tensor_1_data, output_tensor_1_data + output_tensor_1_host.elementSize());
-    LOG(INFO) << "output tensor 1 vec size: " << output_tensor_1_data_vec.size();
+    DLOG(INFO) << "output tensor 1 vec size: " << output_tensor_1_data_vec.size();
 
     auto mask_proto_hwc = CvUtils::convert_to_hwc_vec(output_tensor_1_data_vec, 1, c, mh * mw);
-    LOG(INFO) << "converted mask proto hwc vector size: " << mask_proto_hwc.size();
+    DLOG(INFO) << "converted mask proto hwc vector size: " << mask_proto_hwc.size();
 
     cv::Mat mask_proto(cv::Size(mh * mw, c), CV_32FC1, mask_proto_hwc.data());
-    LOG(INFO) << "mask proto constructed complete, size: " << mask_proto.size();
+    DLOG(INFO) << "mask proto constructed complete, size: " << mask_proto.size();
 
+    float downscale_h = static_cast<float>(mh) / static_cast<float>(_m_input_image_size.height);
+    float downscale_w = static_cast<float>(mw) / static_cast<float>(_m_input_image_size.width);
     std::vector<cv::Mat> preds_masks;
     for (auto& bbox : nms_result) {
+        // decode mask
         cv::Mat mask_in(cv::Size(c, 1), CV_32FC1, bbox.masks.data());
         cv::Mat mask_output = mask_in * mask_proto;
         mask_output = mask_output.reshape(1, {mw, mh});
@@ -381,10 +409,16 @@ void FastSamSegmentor::Impl::postprocess() {
         cv::Mat sigmoid_output(mask_output.size(), CV_32FC1);
         sigmoid_output = 1.0f / (1.0f + tmp_exp);
 
+        // crop mask
         for (auto row = 0; row < sigmoid_output.rows; ++row) {
             for (auto col = 0; col < sigmoid_output.cols; ++col) {
-                if (row > bbox.bbox.y * 0.25 && row < (bbox.bbox.y + bbox.bbox.height) * 0.25 &&
-                    col > bbox.bbox.x * 0.25 && col < (bbox.bbox.x + bbox.bbox.width) * 0.25) {
+                // downscale preds bounding box
+                auto scaled_bbox_tlx = bbox.bbox.x * downscale_w;
+                auto scaled_bbox_tly = bbox.bbox.y * downscale_h;
+                auto scaled_bbox_rbx = scaled_bbox_tlx + bbox.bbox.width * downscale_w;
+                auto scaled_bbox_rby = scaled_bbox_tly + bbox.bbox.height * downscale_h;
+                // crop mask via bounding box
+                if (row > scaled_bbox_tly && row < scaled_bbox_rby && col > scaled_bbox_tlx && col < scaled_bbox_rbx) {
                     continue;
                 } else {
                     sigmoid_output.at<float>(row, col) = 0.0f;
@@ -392,9 +426,9 @@ void FastSamSegmentor::Impl::postprocess() {
             }
         }
 
-        cv::resize(sigmoid_output, sigmoid_output, cv::Size(640, 640), 0.0, 0.0, cv::INTER_LINEAR);
-
-        cv::Mat mask = cv::Mat::zeros(sigmoid_output.size(), CV_8U);
+        // thresh mask
+        cv::resize(sigmoid_output, sigmoid_output, _m_input_image_size, 0.0, 0.0, cv::INTER_LINEAR);
+        cv::Mat mask = cv::Mat::zeros(sigmoid_output.size(), CV_8UC1);
         for (auto row = 0; row < sigmoid_output.rows; ++row) {
             for (auto col = 0; col < sigmoid_output.cols; ++col) {
                 if (sigmoid_output.at<float>(row, col) >= 0.5) {
@@ -402,49 +436,20 @@ void FastSamSegmentor::Impl::postprocess() {
                 }
             }
         }
-
         preds_masks.push_back(mask);
     }
 
-    // auto comp = [](const cv::Mat& a, const cv::Mat& b) -> bool {
-    //     // auto a_count = cv::countNonZero(a);
-    //     // auto b_count = cv::countNonZero(b);
-    //     // return a_count >= b_count;
-
-    //     if (!a.data || a.empty()) {
-    //         return false;
-    //     }
-    //     if (!b.data || b.empty()) {
-    //         return true;
-    //     }
-
-    //     int a_count = 0;
-    //     for (auto row = 0; row < a.rows; ++ row) {
-    //         for (auto col = 0; col < a.cols; ++col) {
-    //             auto value = a.at<uchar>(row, col);
-    //             if (value == 255) {
-    //                 a_count += 1;
-    //             }
-    //         }
-    //     }
-
-    //     int b_count = 0;
-    //     for (auto row = 0; row < b.rows; ++ row) {
-    //         for (auto col = 0; col < b.cols; ++col) {
-    //             auto value = b.at<uchar>(row, col);
-    //             if (value == 255) {
-    //                 b_count += 1;
-    //             }
-    //         }
-    //     }
-
-    //     return a_count >= b_count;
-    // };
-
-    std::sort(preds_masks.begin(), preds_masks.end(), segment_anything::compare_area);
+    // merge total predicted masks via area order
+    auto comp_area = [] (const cv::Mat& a, const cv::Mat& b) -> bool {
+        auto a_area = cv::countNonZero(a);
+        auto b_area = cv::countNonZero(b);
+        
+        return a_area >= b_area;
+    };
+    std::sort(preds_masks.begin(), preds_masks.end(), comp_area);
 
     auto color_pool = CvUtils::generate_color_map(static_cast<int>(nms_result.size()));
-    cv::Mat color_mask(cv::Size(640, 640), CV_8UC3);
+    cv::Mat color_mask(_m_input_image_size, CV_8UC3);
     for (auto idx = 0; idx < preds_masks.size(); ++idx) {
         auto color = color_pool[idx];
         auto mask = preds_masks[idx];
@@ -458,6 +463,7 @@ void FastSamSegmentor::Impl::postprocess() {
             }
         }
     }
+    color_mask.copyTo(merged_mask);
 
     cv::imwrite("fuck_mask.png", color_mask);
 }
