@@ -362,28 +362,28 @@ void FastSamSegmentor::Impl::postprocess() {
         cv::Mat sigmoid_output(mask_output.size(), CV_32FC1);
         sigmoid_output = 1.0f / (1.0f + tmp_exp);
 
-        for (auto row = 0; row < sigmoid_output.rows; ++row) {
-            for (auto col = 0; col < sigmoid_output.cols; ++col) {
-                if (row > bbox.bbox.y * 0.25 && row < (bbox.bbox.y + bbox.bbox.height) * 0.25 &&
-                    col > bbox.bbox.x * 0.25 && col < (bbox.bbox.x + bbox.bbox.width) * 0.25) {
-                    continue;
-                } else {
-                    sigmoid_output.at<float>(row, col) = 0.0;
-                }
-            }
-        }
-        cv::resize(
-            sigmoid_output, sigmoid_output, cv::Size(640, 640),
-            0.0, 0.0, cv::INTER_LINEAR);
-
+        cv::resize(sigmoid_output, sigmoid_output, cv::Size(640, 640), 0.0, 0.0, cv::INTER_LINEAR);
         cv::Mat mask(sigmoid_output.size(), CV_8UC1);
         for (auto row = 0; row < sigmoid_output.rows; ++row) {
             for (auto col = 0; col < sigmoid_output.cols; ++col) {
-                if (sigmoid_output.at<float>(row, col) >= 0.5) {
+                auto sigmod_value = sigmoid_output.at<float>(row, col);
+                if (row > bbox.bbox.y && row < (bbox.bbox.y + bbox.bbox.height) &&
+                    col > bbox.bbox.x && col < (bbox.bbox.x + bbox.bbox.width) && sigmod_value >= 0.5) {
                     mask.at<uchar>(row, col) = 255;
+                } else {
+                    continue;
                 }
             }
         }
+
+        // cv::Mat mask(sigmoid_output.size(), CV_8UC1);
+        // for (auto row = 0; row < sigmoid_output.rows; ++row) {
+        //     for (auto col = 0; col < sigmoid_output.cols; ++col) {
+        //         if (sigmoid_output.at<float>(row, col) >= 0.5) {
+        //             mask.at<uchar>(row, col) = 255;
+        //         }
+        //     }
+        // }
         preds_masks.push_back(mask);
     }
 
