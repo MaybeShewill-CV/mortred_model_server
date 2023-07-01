@@ -462,7 +462,6 @@ StatusCode FastSamSegmentor::Impl::decode_masks(std::vector<cv::Mat>& preds_mask
     for (auto idx = 0; idx < preds_masks.size(); ++idx) {
         auto color = color_pool[idx];
         auto mask = preds_masks[idx];
-        LOG(INFO) << mask.size();
         for (auto row = 0; row < mask.rows; ++row) {
             for (auto col = 0; col < mask.cols; ++col) {
                 if (mask.at<uchar>(row, col) == 255) {
