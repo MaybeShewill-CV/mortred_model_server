@@ -398,7 +398,6 @@ StatusCode FastSamSegmentor::Impl::decode_masks(std::vector<cv::Mat>& preds_mask
 
     float downscale_h = static_cast<float>(mh) / static_cast<float>(_m_input_image_size.height);
     float downscale_w = static_cast<float>(mw) / static_cast<float>(_m_input_image_size.width);
-    std::vector<cv::Mat> preds_masks;
     for (auto& bbox : nms_result) {
         // decode mask
         cv::Mat mask_in(cv::Size(c, 1), CV_32FC1, bbox.masks.data());
