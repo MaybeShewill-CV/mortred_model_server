@@ -222,12 +222,13 @@ jinq::common::StatusCode FastSamSegmentor::Impl::predict(
     // preprocess image
     auto preprocessed_image = preprocess_image(input_image);
     auto input_image_nchw_data = CvUtils::convert_to_chw_vec(preprocessed_image);
-    LOG(INFO) << input_image_nchw_data[0] << " "
+    LOG(INFO) << "input image nchw data: ";
+    LOG(INFO) << " ---- "
+              << input_image_nchw_data[0] << " "
               << input_image_nchw_data[1] << " "
               << input_image_nchw_data[2] << " "
               << input_image_nchw_data[3] << " "
               << input_image_nchw_data[4];
-    LOG(INFO) << input_image_nchw_data.size();
 
     // run session
     auto input_tensor_host = MNN::Tensor(_m_input_tensor, MNN::Tensor::DimensionType::CAFFE);
@@ -235,26 +236,6 @@ jinq::common::StatusCode FastSamSegmentor::Impl::predict(
     _m_input_tensor->copyFromHostTensor(&input_tensor_host);
 
     _m_net->runSession(_m_session);
-
-//    auto output_tensor_0_host = MNN::Tensor(_m_output_tensor_0, _m_output_tensor_0->getDimensionType());
-//    _m_output_tensor_0->copyToHostTensor(&output_tensor_0_host);
-//    auto* output_tensor_0_data = output_tensor_0_host.host<float>();
-//
-//    LOG(INFO) << output_tensor_0_data[0] << " "
-//              << output_tensor_0_data[1] << " "
-//              << output_tensor_0_data[2] << " "
-//              << output_tensor_0_data[3] << " "
-//              << output_tensor_0_data[4];
-//
-//    auto output_tensor_1_host = MNN::Tensor(_m_output_tensor_1, _m_output_tensor_0->getDimensionType());
-//    _m_output_tensor_1->copyToHostTensor(&output_tensor_1_host);
-//    auto* output_tensor_1_data = output_tensor_1_host.host<float>();
-//
-//    LOG(INFO) << output_tensor_1_data[0] << " "
-//              << output_tensor_1_data[1] << " "
-//              << output_tensor_1_data[2] << " "
-//              << output_tensor_1_data[3] << " "
-//              << output_tensor_1_data[4];
 
     // post process decode mask
     postprocess();
@@ -298,6 +279,13 @@ void FastSamSegmentor::Impl::postprocess() {
     auto output_tensor_0_host = MNN::Tensor(_m_output_tensor_0, _m_output_tensor_0->getDimensionType());
     _m_output_tensor_0->copyToHostTensor(&output_tensor_0_host);
     auto* output_tensor_0_data = output_tensor_0_host.host<float>();
+    LOG(INFO) << "output tensor 0 data: ";
+    LOG(INFO) << " ---- "
+              << output_tensor_0_data[0] << " "
+              << output_tensor_0_data[1] << " "
+              << output_tensor_0_data[2] << " "
+              << output_tensor_0_data[3] << " "
+              << output_tensor_0_data[4];
 
     auto bbox_info_len = _m_output_0_shape[1];
     auto bbox_nums = _m_output_0_shape[2];
@@ -321,7 +309,7 @@ void FastSamSegmentor::Impl::postprocess() {
             total_preds[idx_1][idx_0] = output_tensor_0_data[data_idx];
         }
     }
-    LOG(INFO) << total_preds.size();
+    LOG(INFO) << "total preds bboxes: " << total_preds.size();
 
     std::vector<bbox_> threshed_preds;
     for (auto& bbox : total_preds) {
@@ -340,10 +328,10 @@ void FastSamSegmentor::Impl::postprocess() {
             threshed_preds.push_back(b);
         }
     }
-    LOG(INFO) << threshed_preds.size();
+    LOG(INFO) << "remain bbox after conf thresh: " << threshed_preds.size();
 
     auto nms_result = CvUtils::nms_bboxes(threshed_preds, 0.7);
-    LOG(INFO) << nms_result.size();
+    LOG(INFO) << "remain bbox after conf thresh: " << nms_result.size();
 
     auto c = _m_output_1_shape[1];
     auto mh = _m_output_1_shape[2];
@@ -352,6 +340,13 @@ void FastSamSegmentor::Impl::postprocess() {
     auto output_tensor_1_host = MNN::Tensor(_m_output_tensor_1, _m_output_tensor_1->getDimensionType());
     _m_output_tensor_1->copyToHostTensor(&output_tensor_1_host);
     auto* output_tensor_1_data = output_tensor_1_host.host<float>();
+    LOG(INFO) << "output tensor 1 data: ";
+    LOG(INFO) << " ---- "
+              << output_tensor_1_data[0] << " "
+              << output_tensor_1_data[1] << " "
+              << output_tensor_1_data[2] << " "
+              << output_tensor_1_data[3] << " "
+              << output_tensor_1_data[4];
     std::vector<float> output_tensor_1_data_vec(output_tensor_1_data, output_tensor_1_data + output_tensor_1_host.elementSize());
 
     auto mask_proto_hwc = CvUtils::convert_to_hwc_vec(output_tensor_1_data_vec, 1, c, mh * mw);
