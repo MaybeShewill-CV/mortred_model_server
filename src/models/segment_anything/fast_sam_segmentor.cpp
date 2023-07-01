@@ -348,9 +348,13 @@ void FastSamSegmentor::Impl::postprocess() {
               << output_tensor_1_data[3] << " "
               << output_tensor_1_data[4];
     std::vector<float> output_tensor_1_data_vec(output_tensor_1_data, output_tensor_1_data + output_tensor_1_host.elementSize());
+    LOG(INFO) << "output tensor 1 vec size: " << output_tensor_1_data_vec.size();
 
     auto mask_proto_hwc = CvUtils::convert_to_hwc_vec(output_tensor_1_data_vec, 1, c, mh * mw);
+    LOG(INFO) << "converted mask proto hwc vector size: " << mask_proto_hwc.size();
+
     cv::Mat mask_proto(cv::Size(mh * mw, c), CV_32FC1, mask_proto_hwc.data());
+    LOG(INFO) << "mask proto constructed complete, size: " << mask_proto.size();
 
     std::vector<cv::Mat> preds_masks;
     for (auto& bbox : nms_result) {

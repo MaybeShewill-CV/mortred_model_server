@@ -20,6 +20,8 @@ using jinq::common::CvUtils;
 using jinq::models::segment_anything::FastSamSegmentor;
 
 int main(int argc, char** argv) {
+    google::InstallFailureSignalHandler();
+
     // test
     std::string config_file_path = argv[1];
 
