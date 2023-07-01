@@ -396,6 +396,13 @@ void FastSamSegmentor::Impl::postprocess() {
         // auto b_count = cv::countNonZero(b);
         // return a_count >= b_count;
 
+        if (a.empty()) {
+            return false;
+        }
+        if (b.empty()) {
+            return true;
+        }
+
         int a_count = 0;
         for (auto row = 0; row < a.rows; ++ row) {
             for (auto col = 0; col < a.cols; ++col) {
