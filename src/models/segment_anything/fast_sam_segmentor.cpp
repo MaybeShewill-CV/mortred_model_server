@@ -390,14 +390,12 @@ void FastSamSegmentor::Impl::postprocess() {
 
         preds_masks.push_back(mask);
     }
-
-    auto comp_area = [](const cv::Mat& a, const cv::Mat& b) -> bool {
+    std::sort(preds_masks.begin(), preds_masks.end(), [](const cv::Mat& a, const cv::Mat& b) {
         auto a_count = cv::countNonZero(a);
         auto b_count = cv::countNonZero(b);
 
         return a_count >= b_count;
-    };
-    std::sort(preds_masks.begin(), preds_masks.end(), comp_area);
+    });
 
     auto color_pool = CvUtils::generate_color_map(static_cast<int>(nms_result.size()));
     cv::Mat color_mask(cv::Size(640, 640), CV_8UC3);
