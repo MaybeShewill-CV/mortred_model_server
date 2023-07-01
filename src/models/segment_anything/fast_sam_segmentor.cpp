@@ -379,7 +379,7 @@ void FastSamSegmentor::Impl::postprocess() {
 
         cv::resize(sigmoid_output, sigmoid_output, cv::Size(640, 640), 0.0, 0.0, cv::INTER_LINEAR);
 
-        cv::Mat mask(sigmoid_output.size(), CV_8UC1);
+        cv::Mat mask = cv::Mat::zeros(sigmoid_output.size(), CV_8U);
         for (auto row = 0; row < sigmoid_output.rows; ++row) {
             for (auto col = 0; col < sigmoid_output.cols; ++col) {
                 if (sigmoid_output.at<float>(row, col) >= 0.5) {
