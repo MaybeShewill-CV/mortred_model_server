@@ -465,7 +465,7 @@ StatusCode FastSamSegmentor::Impl::decode_masks(std::vector<cv::Mat>& preds_mask
             }
         }
     }
-    color_mask.copyTo(merged_mask);
+    // color_mask.copyTo(merged_mask);
 
     cv::imwrite("fuck_mask.png", color_mask);
 }
