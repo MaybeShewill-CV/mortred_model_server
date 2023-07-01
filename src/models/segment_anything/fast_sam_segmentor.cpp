@@ -398,6 +398,7 @@ StatusCode FastSamSegmentor::Impl::decode_masks(std::vector<cv::Mat>& preds_mask
 
     float downscale_h = static_cast<float>(mh) / static_cast<float>(_m_input_image_size.height);
     float downscale_w = static_cast<float>(mw) / static_cast<float>(_m_input_image_size.width);
+    preds_masks.clear();
     for (auto& bbox : nms_result) {
         // decode mask
         cv::Mat mask_in(cv::Size(c, 1), CV_32FC1, bbox.masks.data());
@@ -435,14 +436,12 @@ StatusCode FastSamSegmentor::Impl::decode_masks(std::vector<cv::Mat>& preds_mask
                 }
             }
         }
+        LOG(INFO) << mask.channels();
         preds_masks.push_back(mask);
     }
 
-    // merge total predicted masks via area order
+    // merge total predicted masks according to mask area order
     auto comp_area = [] (const cv::Mat& a, const cv::Mat& b) -> bool {
-
-        assert(a.channels() == 1);
-        assert(b.channels() == 1);
 
         auto a_area = cv::countNonZero(a);
         auto b_area = cv::countNonZero(b);
