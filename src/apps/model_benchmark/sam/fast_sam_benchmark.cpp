@@ -33,6 +33,9 @@ int main(int argc, char** argv) {
     }
 
     std::string input_image_path = "../demo_data/model_test_input/sam/truck_resize.jpg";
+    if (argc >= 3) {
+        input_image_path = argv[2];    
+    }
     cv::Mat input_image = cv::imread(input_image_path, cv::IMREAD_UNCHANGED);
 
     std::vector<cv::Mat> masks;
