@@ -24,7 +24,7 @@ using jinq::common::Timestamp;
 
 namespace segment_anything {
 
-bool compare_area(const cv::Mat& a, const cv::Mat& b) {
+bool compare_area(cv::Mat& a, cv::Mat& b) {
     if (!a.data || a.empty()) {
         return false;
     }
