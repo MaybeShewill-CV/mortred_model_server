@@ -24,6 +24,21 @@ using jinq::common::Timestamp;
 
 namespace segment_anything {
 
+bool compare_area(const cv::Mat& a, const cv::Mat& b) {
+    if (!a.data || a.empty()) {
+        return false;
+    }
+
+    if (!b.data || b.empty()) {
+        return true;
+    }
+
+    auto a_count = cv::countNonZero(a);
+    auto b_count = cv::countNonZero(b);
+
+    return a_count >= b_count;
+}
+
 class FastSamSegmentor::Impl {
   public:
     /***
@@ -391,42 +406,42 @@ void FastSamSegmentor::Impl::postprocess() {
         preds_masks.push_back(mask);
     }
 
-    auto comp = [](const cv::Mat& a, const cv::Mat& b) -> bool {
-        // auto a_count = cv::countNonZero(a);
-        // auto b_count = cv::countNonZero(b);
-        // return a_count >= b_count;
+    // auto comp = [](const cv::Mat& a, const cv::Mat& b) -> bool {
+    //     // auto a_count = cv::countNonZero(a);
+    //     // auto b_count = cv::countNonZero(b);
+    //     // return a_count >= b_count;
 
-        if (!a.data || a.empty()) {
-            return false;
-        }
-        if (!b.data || b.empty()) {
-            return true;
-        }
+    //     if (!a.data || a.empty()) {
+    //         return false;
+    //     }
+    //     if (!b.data || b.empty()) {
+    //         return true;
+    //     }
 
-        int a_count = 0;
-        for (auto row = 0; row < a.rows; ++ row) {
-            for (auto col = 0; col < a.cols; ++col) {
-                auto value = a.at<uchar>(row, col);
-                if (value == 255) {
-                    a_count += 1;
-                }
-            }
-        }
+    //     int a_count = 0;
+    //     for (auto row = 0; row < a.rows; ++ row) {
+    //         for (auto col = 0; col < a.cols; ++col) {
+    //             auto value = a.at<uchar>(row, col);
+    //             if (value == 255) {
+    //                 a_count += 1;
+    //             }
+    //         }
+    //     }
 
-        int b_count = 0;
-        for (auto row = 0; row < b.rows; ++ row) {
-            for (auto col = 0; col < b.cols; ++col) {
-                auto value = b.at<uchar>(row, col);
-                if (value == 255) {
-                    b_count += 1;
-                }
-            }
-        }
+    //     int b_count = 0;
+    //     for (auto row = 0; row < b.rows; ++ row) {
+    //         for (auto col = 0; col < b.cols; ++col) {
+    //             auto value = b.at<uchar>(row, col);
+    //             if (value == 255) {
+    //                 b_count += 1;
+    //             }
+    //         }
+    //     }
 
-        return a_count >= b_count;
-    };
+    //     return a_count >= b_count;
+    // };
 
-    std::sort(preds_masks.begin(), preds_masks.end(), comp);
+    std::sort(preds_masks.begin(), preds_masks.end(), segment_anything::compare_area);
 
     auto color_pool = CvUtils::generate_color_map(static_cast<int>(nms_result.size()));
     cv::Mat color_mask(cv::Size(640, 640), CV_8UC3);
