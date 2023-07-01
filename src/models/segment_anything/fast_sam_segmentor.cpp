@@ -448,7 +448,7 @@ StatusCode FastSamSegmentor::Impl::decode_masks(std::vector<cv::Mat>& preds_mask
         
         return a_area >= b_area;
     };
-    std::sort(preds_masks.begin(), preds_masks.end(), comp_area);
+    // std::sort(preds_masks.begin(), preds_masks.end(), comp_area);
 
     auto color_pool = CvUtils::generate_color_map(static_cast<int>(nms_result.size()));
     cv::Mat color_mask(_m_input_image_size, CV_8UC3);
