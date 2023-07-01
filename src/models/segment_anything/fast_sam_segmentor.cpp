@@ -404,8 +404,8 @@ StatusCode FastSamSegmentor::Impl::decode_masks(std::vector<cv::Mat>& preds_mask
     cv::Mat mask_proto(cv::Size(mh * mw, c), CV_32FC1, mask_proto_hwc.data());
     DLOG(INFO) << "mask proto constructed complete, size: " << mask_proto.size();
 
-    float downscale_h = static_cast<float>(mh) / static_cast<float>(_m_input_image_size.height);
-    float downscale_w = static_cast<float>(mw) / static_cast<float>(_m_input_image_size.width);
+    float downscale_h = static_cast<float>(mh) / static_cast<float>(_m_input_tensor_size.height);
+    float downscale_w = static_cast<float>(mw) / static_cast<float>(_m_input_tensor_size.width);
     preds_masks.clear();
     for (auto& bbox : nms_result) {
         // decode mask
