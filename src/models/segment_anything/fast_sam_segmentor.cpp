@@ -444,7 +444,7 @@ StatusCode FastSamSegmentor::Impl::decode_masks(std::vector<cv::Mat>& preds_mask
                 }
             }
         }
-        preds_masks.push_back(mask);
+        preds_masks.push_back(mask);/*  */
     }
 
     // merge total predicted masks according to mask area order
@@ -455,7 +455,7 @@ StatusCode FastSamSegmentor::Impl::decode_masks(std::vector<cv::Mat>& preds_mask
         
         return a_area >= b_area;
     };
-    // std::sort(preds_masks.begin(), preds_masks.end(), comp_area);
+    std::sort(preds_masks.begin(), preds_masks.end(), comp_area);
 
     auto color_pool = CvUtils::generate_color_map(static_cast<int>(preds_masks.size()));
     cv::Mat color_mask(_m_input_image_size, CV_8UC3);
