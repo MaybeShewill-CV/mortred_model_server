@@ -200,6 +200,31 @@ public:
 
     /***
      *
+     * @param everything_mask
+     * @param color_mask
+     */
+    static void colorize_sam_everything_mask(const cv::Mat& everything_mask, cv::Mat& color_mask) {
+        double max_value;
+        cv::minMaxIdx(everything_mask, nullptr, &max_value, nullptr, nullptr);
+        auto obj_counts = static_cast<int>(max_value);
+        auto color_pool = generate_color_map(obj_counts);
+
+        color_mask = cv::Mat::zeros(everything_mask.size(), CV_8UC3);
+        for (auto row = 0; row < everything_mask.rows; ++row) {
+            auto row_data = everything_mask.ptr<int32_t>(row);
+            auto color_row_data = color_mask.ptr<cv::Vec3b>(row);
+            for (auto col = 0; col < everything_mask.cols; ++col) {
+                auto obj_id = row_data[col];
+                auto color = color_pool[obj_id];
+                color_row_data[col][0] = static_cast<uchar>(color[0]);
+                color_row_data[col][1] = static_cast<uchar>(color[1]);
+                color_row_data[col][2] = static_cast<uchar>(color[2]);
+            }
+        }
+    }
+
+    /***
+     *
      * @param input_image
      * @param output_image
      * @param cls_nums
@@ -318,10 +343,11 @@ public:
                 auto last_elem = --std::end(tmp_bboxes);
                 const auto& rect1 = last_elem->bbox;
 
+                T last_elem_bak = *last_elem;
                 tmp_bboxes.erase(last_elem);
 
                 for (auto pos = std::begin(tmp_bboxes); pos != std::end(tmp_bboxes);) {
-                    auto overlap = calc_iou(*last_elem, *pos);
+                    auto overlap = calc_iou(last_elem_bak, *pos);
 
                     if (overlap > nms_threshold) {
                         pos = tmp_bboxes.erase(pos);
@@ -330,7 +356,7 @@ public:
                     }
                 }
 
-                result.push_back(*last_elem);
+                result.push_back(last_elem_bak);
             }
         }
 
