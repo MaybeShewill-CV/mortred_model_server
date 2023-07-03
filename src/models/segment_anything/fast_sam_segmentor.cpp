@@ -1,7 +1,7 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: FastFastSamSegmentor.cpp
+ * File: fast_sam_segmentor.cpp
  * Date: 23-6-29
  ************************************************/
 
@@ -110,17 +110,17 @@ class FastSamSegmentor::Impl {
   private:
     /***
      *
-     * @param bboxes
-     * @return
-     */
-    std::vector<cv::Rect2f> transform_bboxes(const std::vector<cv::Rect>& bboxes, int target_size=1024) const;
-
-    /***
-     *
      * @param input_image
      * @return
      */
-    cv::Mat preprocess_image(const cv::Mat& input_image);
+    cv::Mat preprocess_image(const cv::Mat& input_image) const;
+
+    /***
+     *
+     * @param mask
+     * @return
+     */
+    cv::Mat upscale_mask_image(const cv::Mat& mask);
 
     /***
      *
@@ -260,13 +260,6 @@ jinq::common::StatusCode FastSamSegmentor::Impl::everything(const cv::Mat& input
     _m_input_image_size = input_image.size();
     auto preprocessed_image = preprocess_image(input_image);
     auto input_image_nchw_data = CvUtils::convert_to_chw_vec(preprocessed_image);
-    DLOG(INFO) << "input image nchw data: ";
-    DLOG(INFO) << " ---- "
-               << input_image_nchw_data[0] << " "
-               << input_image_nchw_data[1] << " "
-               << input_image_nchw_data[2] << " "
-               << input_image_nchw_data[3] << " "
-               << input_image_nchw_data[4];
 
     // run session
     auto input_tensor_host = MNN::Tensor(_m_input_tensor, MNN::Tensor::DimensionType::CAFFE);
@@ -306,32 +299,58 @@ jinq::common::StatusCode FastSamSegmentor::Impl::everything(const cv::Mat& input
 
 /***
  *
- * @param bboxes
- * @param target_size
+ * @param input_image
  * @return
  */
-std::vector<cv::Rect2f> FastSamSegmentor::Impl::transform_bboxes(const std::vector<cv::Rect> &bboxes, int target_size) const {
-    std::vector<cv::Rect2f> transformed_bboxes;
-    return transformed_bboxes;
+cv::Mat FastSamSegmentor::Impl::preprocess_image(const cv::Mat &input_image) const {
+
+    auto input_node_h = _m_input_tensor_size.height;
+    auto input_node_w = _m_input_tensor_size.width;
+    auto ori_img_width = static_cast<float>(_m_input_image_size.width);
+    auto ori_img_height = static_cast<float>(_m_input_image_size.height);
+    auto long_side = std::max(_m_input_image_size.width, _m_input_image_size.height);
+    float scale = static_cast<float>(input_node_h) / static_cast<float>(long_side);
+    cv::Size target_size = cv::Size(
+        static_cast<int>(scale * ori_img_width), static_cast<int>(scale * ori_img_height));
+
+    cv::Mat result;
+    cv::cvtColor(input_image, result, cv::COLOR_BGR2RGB);
+    cv::resize(result, result,target_size);
+    result.convertTo(result, CV_32FC3);
+    cv::divide(result, 255.0, result);
+
+    // pad image
+    auto pad_h = input_node_h - target_size.height;
+    auto pad_w = input_node_w - target_size.width;
+    cv::copyMakeBorder(result, result, 0, pad_h, 0, pad_w, cv::BORDER_CONSTANT, 0.0);
+
+    return result;
 }
 
 /***
  *
- * @param input_image
+ * @param mask
  * @return
  */
-cv::Mat FastSamSegmentor::Impl::preprocess_image(const cv::Mat &input_image) {
-    cv::Mat result;
+cv::Mat FastSamSegmentor::Impl::upscale_mask_image(const cv::Mat &mask) {
+    auto input_node_h = _m_preds_mask_size.height;
+    auto input_node_w = _m_preds_mask_size.width;
+    auto ori_img_width = static_cast<float>(_m_input_image_size.width);
+    auto ori_img_height = static_cast<float>(_m_input_image_size.height);
+    auto long_side = std::max(_m_input_image_size.width, _m_input_image_size.height);
+    float scale = static_cast<float>(input_node_h) / static_cast<float>(long_side);
+    cv::Size target_size = cv::Size(
+        static_cast<int>(scale * ori_img_width), static_cast<int>(scale * ori_img_height));
+    auto pad_h = input_node_h - target_size.height;
+    auto pad_w = input_node_w - target_size.width;
 
-    cv::resize(input_image, result, _m_input_tensor_size);
+    cv::Mat result_mask;
+    cv::Rect src_mask_roi = cv::Rect(0, 0, mask.cols - pad_w, mask.rows - pad_h) &
+                            cv::Rect(0, 0, mask.cols, mask.rows);
+    mask(src_mask_roi).copyTo(result_mask);
 
-    cv::cvtColor(result, result, cv::COLOR_BGR2RGB);
-
-    result.convertTo(result, CV_32FC3);
-
-    cv::divide(result, 255.0, result);
-
-    return result;
+    cv::resize(result_mask, result_mask, _m_input_image_size, 0.0, 0.0, cv::INTER_LINEAR);
+    return result_mask;
 }
 
 /***
@@ -349,13 +368,6 @@ StatusCode FastSamSegmentor::Impl::decode_all_masks(std::vector<cv::Mat>& preds_
         LOG(ERROR) << "fetch output tensor 0 inference result failed, output tensor 0's data is nullptr";
         return StatusCode::MODEL_RUN_SESSION_FAILED; 
     }
-    DLOG(INFO) << "output tensor 0 data: ";
-    DLOG(INFO) << " ---- "
-               << output_tensor_0_data[0] << " "
-               << output_tensor_0_data[1] << " "
-               << output_tensor_0_data[2] << " "
-               << output_tensor_0_data[3] << " "
-               << output_tensor_0_data[4];
 
     auto bbox_info_len = _m_output_0_shape[1];
     auto bbox_nums = _m_output_0_shape[2];
@@ -370,7 +382,6 @@ StatusCode FastSamSegmentor::Impl::decode_all_masks(std::vector<cv::Mat>& preds_
             total_preds[idx_1][idx_0] = output_tensor_0_data[data_idx];
         }
     }
-    DLOG(INFO) << "total preds bboxes: " << total_preds.size();
 
     std::vector<_m_preds_bbox> threshed_preds;
     for (auto& bbox : total_preds) {
@@ -395,11 +406,8 @@ StatusCode FastSamSegmentor::Impl::decode_all_masks(std::vector<cv::Mat>& preds_
             threshed_preds.push_back(b);
         }
     }
-    DLOG(INFO) << "remain bbox after conf thresh: " << threshed_preds.size();
 
     auto nms_result = CvUtils::nms_bboxes(threshed_preds, _m_iou_thresh);
-    DLOG(INFO) << "remain bbox after nms thresh: " << nms_result.size();
-
     auto c = _m_output_1_shape[1];
     auto mh = _m_preds_mask_size.height;
     auto mw = _m_preds_mask_size.width;
@@ -411,13 +419,6 @@ StatusCode FastSamSegmentor::Impl::decode_all_masks(std::vector<cv::Mat>& preds_
         LOG(ERROR) << "fetch output tensor 1 inference result failed, output tensor 1's data is nullptr";
         return StatusCode::MODEL_RUN_SESSION_FAILED; 
     }
-    DLOG(INFO) << "output tensor 1 data: ";
-    DLOG(INFO) << " ---- "
-              << output_tensor_1_data[0] << " "
-              << output_tensor_1_data[1] << " "
-              << output_tensor_1_data[2] << " "
-              << output_tensor_1_data[3] << " "
-              << output_tensor_1_data[4];
     std::vector<float> output_tensor_1_data_vec(output_tensor_1_data, output_tensor_1_data + output_tensor_1_host.elementSize());
     auto mask_proto_hwc = CvUtils::convert_to_hwc_vec(output_tensor_1_data_vec, 1, c, mh * mw);
     cv::Mat mask_proto(cv::Size(mh * mw, c), CV_32FC1, mask_proto_hwc.data());
@@ -452,11 +453,12 @@ StatusCode FastSamSegmentor::Impl::decode_all_masks(std::vector<cv::Mat>& preds_
         }
 
         // thresh mask
-        cv::resize(sigmoid_output, sigmoid_output, _m_input_image_size, 0.0, 0.0, cv::INTER_LINEAR);
-        cv::Mat mask = cv::Mat::zeros(sigmoid_output.size(), CV_8UC1);
-        for (auto row = 0; row < sigmoid_output.rows; ++row) {
-            for (auto col = 0; col < sigmoid_output.cols; ++col) {
-                if (sigmoid_output.at<float>(row, col) >= 0.5) {
+
+        auto upscaled_sigmoid_output = upscale_mask_image(sigmoid_output);
+        cv::Mat mask = cv::Mat::zeros(upscaled_sigmoid_output.size(), CV_8UC1);
+        for (auto row = 0; row < upscaled_sigmoid_output.rows; ++row) {
+            for (auto col = 0; col < upscaled_sigmoid_output.cols; ++col) {
+                if (upscaled_sigmoid_output.at<float>(row, col) >= 0.5) {
                     mask.at<uchar>(row, col) = 255;
                 }
             }

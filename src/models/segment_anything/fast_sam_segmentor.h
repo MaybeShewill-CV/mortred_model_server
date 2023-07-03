@@ -1,7 +1,7 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: FastFastSamSegmentor.h
+ * File: fast_sam_segmentor.h
  * Date: 23-6-29
  ************************************************/
 
