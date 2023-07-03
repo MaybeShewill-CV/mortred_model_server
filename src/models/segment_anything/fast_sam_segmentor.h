@@ -58,14 +58,11 @@ class FastSamSegmentor {
 
     /***
      *
-     * @param input
-     * @param output
+     * @param input_image
+     * @param everything_mask
      * @return
      */
-    jinq::common::StatusCode predict(
-        const cv::Mat& input_image,
-        const std::vector<cv::Rect>& bboxes,
-        std::vector<cv::Mat>& predicted_masks);
+    jinq::common::StatusCode everything(const cv::Mat& input_image, cv::Mat& everything_mask);
 
     /***
      * if model successfully initialized

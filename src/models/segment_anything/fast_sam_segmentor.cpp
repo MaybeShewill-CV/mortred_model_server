@@ -24,6 +24,13 @@ using jinq::common::Timestamp;
 
 namespace segment_anything {
 
+struct _m_preds_bbox {
+    cv::Rect2f bbox;
+    float score = 0.0;
+    std::vector<float> masks;
+    int class_id = 0;
+};
+
 class FastSamSegmentor::Impl {
   public:
     /***
@@ -45,14 +52,11 @@ class FastSamSegmentor::Impl {
 
     /***
      *
-     * @param input
-     * @param output
+     * @param input_image
+     * @param everything_mask
      * @return
      */
-    jinq::common::StatusCode predict(
-        const cv::Mat& input_image,
-        const std::vector<cv::Rect>& bboxes,
-        std::vector<cv::Mat>& predicted_masks);
+    jinq::common::StatusCode everything(const cv::Mat& input_image, cv::Mat& everything_mask);
 
     /***
      * if model successfully initialized
@@ -95,16 +99,13 @@ class FastSamSegmentor::Impl {
     // preds mask shape
     cv::Size _m_preds_mask_size;
 
+    // conf threshold
+    double _m_conf_thresh = 0.25;
+    // nms iou threshold
+    double _m_iou_thresh = 0.9;
+
     // init flag
     bool _m_successfully_init_model = false;
-
-    // internal bbox
-    struct _m_preds_bbox {
-        cv::Rect2f bbox;
-        float score = 0.0;
-        std::vector<float> masks;
-        int class_id = 0;
-    };
 
   private:
     /***
@@ -124,7 +125,7 @@ class FastSamSegmentor::Impl {
     /***
      *
      */
-    StatusCode decode_masks(std::vector<cv::Mat>& preds_masks, cv::Mat& merged_mask);
+    StatusCode decode_all_masks(std::vector<cv::Mat>& preds_masks);
 };
 
 /************ Impl Implementation ************/
@@ -234,6 +235,10 @@ jinq::common::StatusCode FastSamSegmentor::Impl::init(const decltype(toml::parse
     _m_output_1_shape = _m_output_tensor_1->shape();
     _m_preds_mask_size = cv::Size(_m_output_1_shape[3], _m_output_1_shape[2]);
 
+    // init conf thresh and iou thresh
+    _m_conf_thresh = cfg_content.at("conf_thresh").as_floating();
+    _m_iou_thresh = cfg_content.at("iou_thresh").as_floating();
+
     _m_successfully_init_model = true;
     LOG(INFO) << "Successfully load fastsam model";
     return StatusCode::OJBK;
@@ -242,16 +247,10 @@ jinq::common::StatusCode FastSamSegmentor::Impl::init(const decltype(toml::parse
 /***
  *
  * @param input_image
- * @param bboxes
- * @param points
- * @param point_labels
- * @param predicted_mask
+ * @param everything_mask
  * @return
  */
-jinq::common::StatusCode FastSamSegmentor::Impl::predict(
-    const cv::Mat& input_image,
-    const std::vector<cv::Rect>& bboxes,
-    std::vector<cv::Mat>& predicted_masks) {
+jinq::common::StatusCode FastSamSegmentor::Impl::everything(const cv::Mat& input_image, cv::Mat& everything_mask) {
     // check input image
     if (!input_image.data || input_image.empty()) {
         return StatusCode::MODEL_RUN_SESSION_FAILED;
@@ -261,13 +260,13 @@ jinq::common::StatusCode FastSamSegmentor::Impl::predict(
     _m_input_image_size = input_image.size();
     auto preprocessed_image = preprocess_image(input_image);
     auto input_image_nchw_data = CvUtils::convert_to_chw_vec(preprocessed_image);
-    LOG(INFO) << "input image nchw data: ";
-    LOG(INFO) << " ---- "
-              << input_image_nchw_data[0] << " "
-              << input_image_nchw_data[1] << " "
-              << input_image_nchw_data[2] << " "
-              << input_image_nchw_data[3] << " "
-              << input_image_nchw_data[4];
+    DLOG(INFO) << "input image nchw data: ";
+    DLOG(INFO) << " ---- "
+               << input_image_nchw_data[0] << " "
+               << input_image_nchw_data[1] << " "
+               << input_image_nchw_data[2] << " "
+               << input_image_nchw_data[3] << " "
+               << input_image_nchw_data[4];
 
     // run session
     auto input_tensor_host = MNN::Tensor(_m_input_tensor, MNN::Tensor::DimensionType::CAFFE);
@@ -276,12 +275,30 @@ jinq::common::StatusCode FastSamSegmentor::Impl::predict(
 
     _m_net->runSession(_m_session);
 
-    // post process decode mask
-    cv::Mat merged_mask;
-    auto status = decode_masks(predicted_masks, merged_mask);
+    // decode all mask
+    std::vector<cv::Mat> predicted_all_masks;
+    auto status = decode_all_masks(predicted_all_masks);
     if (status != StatusCode::OK) {
-        LOG(ERROR) << "decode masks failed, status code: " << status;
+        LOG(ERROR) << "decode all masks failed, status code: " << status;
         return status;
+    }
+    if (predicted_all_masks.empty()) {
+        LOG(WARNING) << "predicted mask counts: 0";
+        return StatusCode::OK;
+    }
+
+    // reorder mask by area and generate everything mask
+    auto comp_area = [](const cv::Mat& a, const cv::Mat& b) -> bool {
+        auto a_area = cv::countNonZero(a);
+        auto b_area = cv::countNonZero(b);
+        return a_area >= b_area;
+    };
+    std::sort(predicted_all_masks.begin(), predicted_all_masks.end(), comp_area);
+    everything_mask = cv::Mat::zeros(_m_input_image_size, CV_32SC1);
+    for (auto idx = 0; idx < predicted_all_masks.size(); ++idx) {
+        auto obj_id = idx + 1;
+        auto mask = predicted_all_masks[idx];
+        everything_mask.setTo(obj_id, mask);
     }
 
     return StatusCode::OK;
@@ -323,7 +340,7 @@ cv::Mat FastSamSegmentor::Impl::preprocess_image(const cv::Mat &input_image) {
  * @param merged_mask
  * @return
  */
-StatusCode FastSamSegmentor::Impl::decode_masks(std::vector<cv::Mat>& preds_masks, cv::Mat& merged_mask) {
+StatusCode FastSamSegmentor::Impl::decode_all_masks(std::vector<cv::Mat>& preds_masks) {
     // decode output preds info
     auto output_tensor_0_host = MNN::Tensor(_m_output_tensor_0, _m_output_tensor_0->getDimensionType());
     _m_output_tensor_0->copyToHostTensor(&output_tensor_0_host);
@@ -332,13 +349,13 @@ StatusCode FastSamSegmentor::Impl::decode_masks(std::vector<cv::Mat>& preds_mask
         LOG(ERROR) << "fetch output tensor 0 inference result failed, output tensor 0's data is nullptr";
         return StatusCode::MODEL_RUN_SESSION_FAILED; 
     }
-    LOG(INFO) << "output tensor 0 data: ";
-    LOG(INFO) << " ---- "
-              << output_tensor_0_data[0] << " "
-              << output_tensor_0_data[1] << " "
-              << output_tensor_0_data[2] << " "
-              << output_tensor_0_data[3] << " "
-              << output_tensor_0_data[4];
+    DLOG(INFO) << "output tensor 0 data: ";
+    DLOG(INFO) << " ---- "
+               << output_tensor_0_data[0] << " "
+               << output_tensor_0_data[1] << " "
+               << output_tensor_0_data[2] << " "
+               << output_tensor_0_data[3] << " "
+               << output_tensor_0_data[4];
 
     auto bbox_info_len = _m_output_0_shape[1];
     auto bbox_nums = _m_output_0_shape[2];
@@ -353,12 +370,12 @@ StatusCode FastSamSegmentor::Impl::decode_masks(std::vector<cv::Mat>& preds_mask
             total_preds[idx_1][idx_0] = output_tensor_0_data[data_idx];
         }
     }
-    LOG(INFO) << "total preds bboxes: " << total_preds.size();
+    DLOG(INFO) << "total preds bboxes: " << total_preds.size();
 
     std::vector<_m_preds_bbox> threshed_preds;
     for (auto& bbox : total_preds) {
         auto conf = bbox[4];
-        if (conf > 0.25) {
+        if (conf > _m_conf_thresh) {
             _m_preds_bbox b;
             b.score = bbox[4];
             b.masks = {bbox.begin() + 5, bbox.end()};
@@ -367,15 +384,21 @@ StatusCode FastSamSegmentor::Impl::decode_masks(std::vector<cv::Mat>& preds_mask
             auto width = bbox[2];
             auto height = bbox[3];
             auto x = cx - width / 2.0f;
+            if (x < 0.0) {
+                x = 0.0f;
+            }
             auto y = cy - height / 2.0f;
+            if (y < 0.0) {
+                y = 0.0f;
+            }
             b.bbox = cv::Rect2f(x, y, width, height);
             threshed_preds.push_back(b);
         }
     }
-    LOG(INFO) << "remain bbox after conf thresh: " << threshed_preds.size();
+    DLOG(INFO) << "remain bbox after conf thresh: " << threshed_preds.size();
 
-    auto nms_result = CvUtils::nms_bboxes(threshed_preds, 0.7);
-    LOG(INFO) << "remain bbox after nms thresh: " << nms_result.size();
+    auto nms_result = CvUtils::nms_bboxes(threshed_preds, _m_iou_thresh);
+    DLOG(INFO) << "remain bbox after nms thresh: " << nms_result.size();
 
     auto c = _m_output_1_shape[1];
     auto mh = _m_preds_mask_size.height;
@@ -388,25 +411,19 @@ StatusCode FastSamSegmentor::Impl::decode_masks(std::vector<cv::Mat>& preds_mask
         LOG(ERROR) << "fetch output tensor 1 inference result failed, output tensor 1's data is nullptr";
         return StatusCode::MODEL_RUN_SESSION_FAILED; 
     }
-    LOG(INFO) << "output tensor 1 data: ";
-    LOG(INFO) << " ---- "
+    DLOG(INFO) << "output tensor 1 data: ";
+    DLOG(INFO) << " ---- "
               << output_tensor_1_data[0] << " "
               << output_tensor_1_data[1] << " "
               << output_tensor_1_data[2] << " "
               << output_tensor_1_data[3] << " "
               << output_tensor_1_data[4];
     std::vector<float> output_tensor_1_data_vec(output_tensor_1_data, output_tensor_1_data + output_tensor_1_host.elementSize());
-    DLOG(INFO) << "output tensor 1 vec size: " << output_tensor_1_data_vec.size();
-
     auto mask_proto_hwc = CvUtils::convert_to_hwc_vec(output_tensor_1_data_vec, 1, c, mh * mw);
-    DLOG(INFO) << "converted mask proto hwc vector size: " << mask_proto_hwc.size();
-
     cv::Mat mask_proto(cv::Size(mh * mw, c), CV_32FC1, mask_proto_hwc.data());
-    DLOG(INFO) << "mask proto constructed complete, size: " << mask_proto.size();
 
     float downscale_h = static_cast<float>(mh) / static_cast<float>(_m_input_tensor_size.height);
     float downscale_w = static_cast<float>(mw) / static_cast<float>(_m_input_tensor_size.width);
-    preds_masks.clear();
     for (auto& bbox : nms_result) {
         // decode mask
         cv::Mat mask_in(cv::Size(c, 1), CV_32FC1, bbox.masks.data());
@@ -414,17 +431,17 @@ StatusCode FastSamSegmentor::Impl::decode_masks(std::vector<cv::Mat>& preds_mask
         mask_output = mask_output.reshape(1, {mw, mh});
         cv::Mat tmp_exp(mask_output.size(), CV_32FC1);
         cv::exp(-mask_output, tmp_exp);
-        cv::Mat sigmoid_output(mask_output.size(), CV_32FC1);
+        cv::Mat sigmoid_output = cv::Mat::zeros(mask_output.size(), CV_32FC1);
         sigmoid_output = 1.0f / (1.0f + tmp_exp);
 
         // crop mask
         for (auto row = 0; row < sigmoid_output.rows; ++row) {
             for (auto col = 0; col < sigmoid_output.cols; ++col) {
                 // downscale preds bounding box
-                auto scaled_bbox_tlx = bbox.bbox.x * downscale_w;
-                auto scaled_bbox_tly = bbox.bbox.y * downscale_h;
-                auto scaled_bbox_rbx = scaled_bbox_tlx + bbox.bbox.width * downscale_w;
-                auto scaled_bbox_rby = scaled_bbox_tly + bbox.bbox.height * downscale_h;
+                auto scaled_bbox_tlx = static_cast<int>(bbox.bbox.x * downscale_w);
+                auto scaled_bbox_tly = static_cast<int>(bbox.bbox.y * downscale_h);
+                auto scaled_bbox_rbx = scaled_bbox_tlx + static_cast<int>(bbox.bbox.width * downscale_w);
+                auto scaled_bbox_rby = scaled_bbox_tly + static_cast<int>(bbox.bbox.height * downscale_h);
                 // crop mask via bounding box
                 if (row > scaled_bbox_tly && row < scaled_bbox_rby && col > scaled_bbox_tlx && col < scaled_bbox_rbx) {
                     continue;
@@ -436,7 +453,7 @@ StatusCode FastSamSegmentor::Impl::decode_masks(std::vector<cv::Mat>& preds_mask
 
         // thresh mask
         cv::resize(sigmoid_output, sigmoid_output, _m_input_image_size, 0.0, 0.0, cv::INTER_LINEAR);
-        cv::Mat mask = cv::Mat::zeros(sigmoid_output.size(), CV_8U);
+        cv::Mat mask = cv::Mat::zeros(sigmoid_output.size(), CV_8UC1);
         for (auto row = 0; row < sigmoid_output.rows; ++row) {
             for (auto col = 0; col < sigmoid_output.cols; ++col) {
                 if (sigmoid_output.at<float>(row, col) >= 0.5) {
@@ -444,37 +461,8 @@ StatusCode FastSamSegmentor::Impl::decode_masks(std::vector<cv::Mat>& preds_mask
                 }
             }
         }
-        preds_masks.push_back(mask);/*  */
+        preds_masks.push_back(mask);
     }
-
-    // merge total predicted masks according to mask area order
-    auto comp_area = [] (const cv::Mat& a, const cv::Mat& b) -> bool {
-
-        auto a_area = cv::countNonZero(a);
-        auto b_area = cv::countNonZero(b);
-        
-        return a_area >= b_area;
-    };
-    std::sort(preds_masks.begin(), preds_masks.end(), comp_area);
-
-    auto color_pool = CvUtils::generate_color_map(static_cast<int>(preds_masks.size()));
-    cv::Mat color_mask(_m_input_image_size, CV_8UC3);
-    for (auto idx = 0; idx < preds_masks.size(); ++idx) {
-        auto color = color_pool[idx];
-        auto mask = preds_masks[idx];
-        for (auto row = 0; row < mask.rows; ++row) {
-            for (auto col = 0; col < mask.cols; ++col) {
-                if (mask.at<uchar>(row, col) == 255) {
-                    color_mask.at<cv::Vec3b>(row, col)[0] = static_cast<uchar>(color[0]);
-                    color_mask.at<cv::Vec3b>(row, col)[1] = static_cast<uchar>(color[1]);
-                    color_mask.at<cv::Vec3b>(row, col)[2] = static_cast<uchar>(color[2]);
-                }
-            }
-        }
-    }
-    color_mask.copyTo(merged_mask);
-
-    cv::imwrite("fuck_mask.png", color_mask);
 
     return StatusCode::OJBK;
 }
@@ -503,17 +491,11 @@ jinq::common::StatusCode FastSamSegmentor::init(const decltype(toml::parse("")) 
 /***
  *
  * @param input_image
- * @param bboxes
- * @param points
- * @param point_labels
- * @param predicted_mask
+ * @param everything_mask
  * @return
  */
-jinq::common::StatusCode FastSamSegmentor::predict(
-    const cv::Mat& input_image,
-    const std::vector<cv::Rect>& bboxes,
-    std::vector<cv::Mat>& predicted_masks) {
-    return _m_pimpl->predict(input_image, bboxes, predicted_masks);
+jinq::common::StatusCode FastSamSegmentor::everything(const cv::Mat &input_image, cv::Mat &everything_mask) {
+    return _m_pimpl->everything(input_image, everything_mask);
 }
 
 /***
