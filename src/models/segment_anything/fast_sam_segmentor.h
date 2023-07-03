@@ -5,8 +5,8 @@
  * Date: 23-6-29
  ************************************************/
 
-#ifndef MORTRED_MODEL_SERVER_FASTFastSamSegmentor_H
-#define MORTRED_MODEL_SERVER_FASTFastSamSegmentor_H
+#ifndef MORTRED_MODEL_SERVER_FASTSAMSEGMENTOR_H
+#define MORTRED_MODEL_SERVER_FASTSAMSEGMENTOR_H
 
 #include <memory>
 #include <vector>
@@ -78,4 +78,4 @@ class FastSamSegmentor {
 }
 }
 
-#endif // MORTRED_MODEL_SERVER_FASTFastSamSegmentor_H
+#endif // MORTRED_MODEL_SERVER_FASTSAMSEGMENTOR_H
