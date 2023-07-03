@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
 
     LOG(INFO) << "Start benchmarking sam predict interface ...";
     cv::Mat everything_mask;
-    for (auto i = 0; i < 1; ++i) {
+    for (auto i = 0; i < 10; ++i) {
         auto t_start = std::chrono::system_clock::now();
         fast_sam_model.everything(input_image, everything_mask);
         auto t_end = std::chrono::system_clock::now();
