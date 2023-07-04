@@ -31,7 +31,10 @@ int main(int argc, char** argv) {
 
     // test
     std::string config_file_path = argv[1];
-
+    if (!FilePathUtil::is_file_exist(config_file_path)) {
+        LOG(ERROR) << "config file path: " << config_file_path << " not exists";
+        return -1;
+    }
     FastSamSegmentor fast_sam_model;
     auto cfg = toml::parse(config_file_path);
     fast_sam_model.init(cfg);
