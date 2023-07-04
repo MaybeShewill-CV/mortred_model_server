@@ -24,6 +24,11 @@ using jinq::models::segment_anything::FastSamSegmentor;
 int main(int argc, char** argv) {
     google::InstallFailureSignalHandler();
 
+    if (argc < 2) {
+        LOG(INFO) << "usage exe config_file";
+        return -1;
+    }
+
     // test
     std::string config_file_path = argv[1];
 
@@ -31,10 +36,10 @@ int main(int argc, char** argv) {
     auto cfg = toml::parse(config_file_path);
     fast_sam_model.init(cfg);
     if (!fast_sam_model.is_successfully_initialized()) {
-        LOG(ERROR) << "init sam failed";
+        LOG(ERROR) << "init fast-sam failed";
     }
 
-    std::string input_image_path = "../demo_data/model_test_input/sam/truck_resize.jpg";
+    std::string input_image_path = "../demo_data/model_test_input/sam/truck.jpg";
     if (argc >= 3) {
         input_image_path = argv[2];    
     }
