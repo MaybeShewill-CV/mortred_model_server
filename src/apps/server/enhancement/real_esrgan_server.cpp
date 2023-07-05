@@ -40,12 +40,12 @@ int main(int argc, char** argv) {
     auto server = create_realesrgan_server("real_esrgan_server");
     server->init(config);
     if (server->start(port) == 0) {
-		wait_group.wait();
-		server->stop();
-	} else {
-		LOG(ERROR) << "Cannot start server";
-		return -1;
-	}
+        wait_group.wait();
+        server->stop();
+    } else {
+        LOG(ERROR) << "Cannot start server";
+        return -1;
+    }
 
     return 0;
 }
