@@ -113,7 +113,7 @@ class OpenAiClipVitEncoder::Impl {
  * @return
  */
 jinq::common::StatusCode OpenAiClipVitEncoder::Impl::init(const decltype(toml::parse("")) &cfg) {
-    // init sam encoder configs
+    // init vit encoder configs
     auto cfg_content = cfg.at("OPENAI_CLIP_VIT_ENCODER");
     _m_model_path = cfg_content["model_file_path"].as_string();
     if (!FilePathUtil::is_file_exist(_m_model_path)) {
@@ -121,6 +121,8 @@ jinq::common::StatusCode OpenAiClipVitEncoder::Impl::init(const decltype(toml::p
         _m_successfully_init_model = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
+
+    // init session
     _m_net = std::unique_ptr<MNN::Interpreter>(MNN::Interpreter::createFromFile(_m_model_path.c_str()));
     _m_thread_nums = cfg_content["model_threads_num"].as_integer();
     _m_model_device = cfg_content["compute_backend"].as_string();
@@ -147,14 +149,25 @@ jinq::common::StatusCode OpenAiClipVitEncoder::Impl::init(const decltype(toml::p
     
     _m_session = _m_net->createSession(mnn_config);
 
+    // fetch input/output tensors
     _m_input_name = "pixel_values";
-    _m_output_name = "output";
-
     _m_input_tensor = _m_net->getSessionInput(_m_session, _m_input_name.c_str());
-    _m_output_tensor = _m_net->getSessionOutput(_m_session, _m_output_name.c_str());
-
+    if (_m_input_tensor == nullptr) {
+        LOG(ERROR) << "fetch input pixel_values tensor failed";
+        _m_successfully_init_model = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
     _m_input_shape = _m_input_tensor->shape();
+
+    _m_output_name = "output";
+    _m_output_tensor = _m_net->getSessionOutput(_m_session, _m_output_name.c_str());
+    if (_m_output_tensor == nullptr) {
+        LOG(ERROR) << "fetch input output tensor failed";
+        _m_successfully_init_model = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
     _m_output_shape = _m_output_tensor->shape();
+
     if (_m_input_shape.size() != 4 || _m_output_shape.size() != 2) {
         LOG(ERROR) << "invalid encoder input/output node shape";
         return StatusCode::MODEL_INIT_FAILED;

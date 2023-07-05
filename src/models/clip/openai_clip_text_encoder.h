@@ -1,7 +1,7 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: OpenAiClipTextEncoder.h
+ * File: openai_clip_text_encoder.h
  * Date: 23-6-26
  ************************************************/
 
@@ -58,11 +58,11 @@ class OpenAiClipTextEncoder {
 
     /***
      *
-     * @param input_image
+     * @param input_text
      * @param text_embeddings
      * @return
      */
-    jinq::common::StatusCode encode(const cv::Mat& input_image, std::vector<float>& text_embeddings);
+    jinq::common::StatusCode encode(const std::string& input_text, std::vector<float>& text_embeddings);
 
     /***
      *
