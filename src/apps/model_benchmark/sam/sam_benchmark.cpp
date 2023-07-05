@@ -82,5 +82,5 @@ int main(int argc, char** argv) {
     cv::Mat color_output;
     CvUtils::visualize_sam_output_masks(input_image, masks, color_output);
     cv::imwrite(output_path, color_output);
-    LOG(INFO) << "sam everything result image has been written into: " << output_path;
+    LOG(INFO) << "sam prediction result image has been written into: " << output_path;
 }
