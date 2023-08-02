@@ -31,7 +31,7 @@ class NanoDetector : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
 public:
 
     /***
-    * 构造函数
+    * constructor
     * @param config
     */
     NanoDetector();
@@ -42,13 +42,13 @@ public:
     ~NanoDetector() override;
 
     /***
-    * 赋值构造函数
+    * constructor
     * @param transformer
     */
     NanoDetector(const NanoDetector& transformer) = delete;
 
     /***
-     * 复制构造函数
+     * constructor
      * @param transformer
      * @return
      */
@@ -71,7 +71,7 @@ public:
 
 
     /***
-     * if db text detector successfully initialized
+     * if nano detector successfully initialized
      * @return
      */
     bool is_successfully_initialized() const override;
