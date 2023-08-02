@@ -7,10 +7,10 @@
 
 #include "clip_tokenizer.h"
 
-#include <chrono>
-#include <unordered_map>
+#include <iostream>
 #include <regex>
 #include <fstream>
+#include <unordered_map>
 
 #include "glog/logging.h"
 
@@ -102,23 +102,16 @@ StatusCode ClipTokenizer::Impl::init(const decltype(toml::parse("")) &cfg) {
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    auto fin = std::ifstream(vocab_file_path, std::ios::binary);
+    auto fin = std::ifstream(vocab_file_path, std::ios::in);
 
     std::string word;
-    std::vector<char> buf(128);
-
-    for (int i = 0; i < _m_vocab_counts; i++) {
-        uint32_t len;
-        fin.read((char *)&len, sizeof(len));
-
-        buf.resize(len);
-        fin.read((char *)buf.data(), len);
-        word.assign(buf.data(), len);
-
+    int i = 0;
+    while (std::getline(fin, word)) {
         _m_token_to_id[word] = i;
         _m_id_to_token[i] = word;
+        i++;
     }
-    
+
     _m_successfully_init_model = true;
     LOG(INFO) << "Successfully clip tokenizer";
     return StatusCode::OJBK;
@@ -130,50 +123,39 @@ StatusCode ClipTokenizer::Impl::init(const decltype(toml::parse("")) &cfg) {
  * @param token
  * @return
  */
-StatusCode ClipTokenizer::Impl::tokenize(
-    const std::string& input_text,
-    std::vector<int32_t> &tokens) {
-
+StatusCode ClipTokenizer::Impl::tokenize(const std::string& input_text, std::vector<int32_t> &tokens) {
     std::vector<std::string> words;
-
     // first split the text into words
-    {
-        std::string str = input_text;
-        std::string pat = R"('s|'t|'re|'ve|'m|'ll|'d| ?[[:alpha:]]+| ?[[:digit:]]+| ?[^\s[:alpha:][:digit:]]+|\s+(?!\S)|\s+)";
+    std::string str = input_text;
+    std::string pat = R"('s|'t|'re|'ve|'m|'ll|'d| ?[[:alpha:]]+| ?[[:digit:]]+| ?[^\s[:alpha:][:digit:]]+|\s+(?!\S)|\s+)";
 
-        // Generate the subpattern from the special_tokens vector if it's not empty
-        if (!_m_special_tokens.empty()) {
-            std::string special_tokens_subpattern;
-            for (const auto &token : _m_special_tokens) {
-                if (!special_tokens_subpattern.empty()) {
-                    special_tokens_subpattern += "|";
-                }
-                special_tokens_subpattern += token;
+    // generate the subpattern from the special_tokens vector if it's not empty
+    if (!_m_special_tokens.empty()) {
+        std::string special_tokens_subpattern;
+        for (const auto &token : _m_special_tokens) {
+            if (!special_tokens_subpattern.empty()) {
+                special_tokens_subpattern += "|";
             }
-
-            // Modify the regex pattern with the generated special tokens subpattern
-            pat = special_tokens_subpattern + "|" + pat;
+            special_tokens_subpattern += token;
         }
 
-        std::regex re(pat);
-        std::smatch m;
-
-        while (std::regex_search(str, m, re))
-        {
-            for (auto x : m)
-            {
-                words.push_back(x);
-            }
-            str = m.suffix();
-        }
+        // Modify the regex pattern with the generated special tokens subpattern
+        pat = special_tokens_subpattern + "|" + pat;
     }
 
-    tokens.push_back(49406); // startoftext
+    std::regex re(pat);
+    std::smatch m;
+    while (std::regex_search(str, m, re)) {
+        for (auto x : m) {
+            words.push_back(x);
+        }
+        str = m.suffix();
+    }
 
+    tokens.push_back(49406); // start of text
     for (const auto &word : words) {
-        // feel lucky? let's try if it's a full word
-        std::string full_word = "";
-        if (word.starts_with(" ")) {
+        std::string full_word;
+        if (word.rfind(" ", 0) == 0) {
             full_word += word.substr(1);
         } else {
             full_word += word;
@@ -185,23 +167,23 @@ StatusCode ClipTokenizer::Impl::tokenize(
             continue;
         }
 
-        for (int i = 0; i < word.size();) {
-            for (int j = word.size() - 1; j >= i; j--) {
+        for (size_t i = 0; i < word.size();) {
+            for (size_t j = word.size() - 1; j >= i; j--) {
                 auto cand = word.substr(i, j - i + 1);
                 auto it = _m_token_to_id.find(cand);
                 if (it != _m_token_to_id.end()) { // word.substr(i, j-i+1) in vocab
                     tokens.push_back(it->second);
                     i = j + 1;
                     break;
-                } else if (j == i) { // word.substr(i, 1) has no matching
-                    fprintf(stderr, "%s: unknown token '%s'\n", __func__, word.substr(i, 1).data());
+                } else if (j == i) {
+                    LOG(ERROR) << "unknown token: " << word.substr(i, 1).data();
                     i++;
+                    return StatusCode::TOKENIZE_UNKNOWN_TOKEN;
                 }
             }
         }
     }
-
-    tokens.push_back(49407); // endoftext
+    tokens.push_back(49407); // end of text
 
     return StatusCode::OJBK;
 }
@@ -211,6 +193,10 @@ std::string ClipTokenizer::Impl::convert_to_utf8(const std::wstring &input) {
 }
 
 std::wstring ClipTokenizer::Impl::convert_to_wstring(const std::string &input) {
+
+}
+
+void ClipTokenizer::Impl::add_special_token(const std::string &token) {
 
 }
 

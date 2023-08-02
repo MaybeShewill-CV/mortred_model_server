@@ -52,6 +52,9 @@ enum StatusCode {
     ROUTER_GET_PROJECT_NAMES_FAILED = 72,
     ROUTER_GET_SERVICE_NAMES_FAILED = 73,
     ROUTER_GET_URI_NAMES_FAILED = 74,
+
+    // tokenization failed
+    TOKENIZE_UNKNOWN_TOKEN = 80,
 };
 
 /***

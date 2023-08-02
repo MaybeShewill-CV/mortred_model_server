@@ -183,7 +183,6 @@ StatusCode OpenAiClipTextEncoder::Impl::encode(
     const std::string& input_text,
     std::vector<float> &text_embeddings) {
 
-
     return StatusCode::OJBK;
 }
 

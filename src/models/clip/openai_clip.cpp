@@ -49,11 +49,11 @@ class OpenAiClip::Impl {
 
     /***
      *
-     * @param input_image
-     * @param image_embeddings
+     * @param input_text
+     * @param textual_embeddings
      * @return
      */
-    jinq::common::StatusCode get_textual_embedding(const cv::Mat& input_image, std::vector<float>& textual_embeddings);
+    jinq::common::StatusCode get_textual_embedding(const std::string& input_text, std::vector<float>& textual_embeddings);
 
     /***
      *
@@ -125,8 +125,8 @@ jinq::common::StatusCode OpenAiClip::Impl::init(const decltype(toml::parse("")) 
  * @param textual_embeddings
  * @return
  */
-StatusCode OpenAiClip::Impl::get_textual_embedding(const cv::Mat &input_image, std::vector<float> &textual_embeddings) {
-    return _m_textual_encoder->encode(input_image, textual_embeddings);
+StatusCode OpenAiClip::Impl::get_textual_embedding(const std::string& input_text, std::vector<float> &textual_embeddings) {
+    return _m_textual_encoder->encode(input_text, textual_embeddings);
 }
 
 /***
@@ -167,8 +167,8 @@ jinq::common::StatusCode OpenAiClip::init(const decltype(toml::parse("")) &cfg) 
  * @param text_embeddings
  * @return
  */
-StatusCode OpenAiClip::get_textual_embedding(const cv::Mat &input_image, std::vector<float> &text_embeddings) {
-    return _m_pimpl->get_textual_embedding(input_image, text_embeddings);
+StatusCode OpenAiClip::get_textual_embedding(const std::string &input_text, std::vector<float> &text_embeddings) {
+    return _m_pimpl->get_textual_embedding(input_text, text_embeddings);
 }
 
 /***

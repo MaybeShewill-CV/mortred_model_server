@@ -58,11 +58,11 @@ class OpenAiClip {
 
     /***
      *
-     * @param input_image
+     * @param input_text
      * @param text_embeddings
      * @return
      */
-    jinq::common::StatusCode get_textual_embedding(const cv::Mat& input_image, std::vector<float>& text_embeddings);
+    jinq::common::StatusCode get_textual_embedding(const std::string& input_text, std::vector<float>& text_embeddings);
 
     /***
      *
