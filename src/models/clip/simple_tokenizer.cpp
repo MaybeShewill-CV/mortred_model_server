@@ -5,11 +5,12 @@
  * Date: 23-7-6
  ************************************************/
 
-#include "clip_tokenizer.h"
+#include "simple_tokenizer.h"
 
 #include <iostream>
 #include <regex>
 #include <fstream>
+#include <codecvt>
 #include <unordered_map>
 
 #include "glog/logging.h"
@@ -29,7 +30,7 @@ namespace clip {
 using id = int32_t;
 using token = std::string;
 
-class ClipTokenizer::Impl {
+class SimpleTokenizer::Impl {
   public:
     /***
      *
@@ -68,8 +69,6 @@ class ClipTokenizer::Impl {
     // model file path
     std::string _m_model_path;
 
-    int _m_vocab_counts = 49408;
-
     std::unordered_map<token, id> _m_token_to_id;
     std::unordered_map<id, token> _m_id_to_token;
     std::vector<std::string> _m_special_tokens;
@@ -77,11 +76,9 @@ class ClipTokenizer::Impl {
     // init flag
     bool _m_successfully_init_model = false;
 
-    std::string convert_to_utf8(const std::wstring &input);
+    static std::string convert_to_utf8(const std::wstring &input);
 
-    std::wstring convert_to_wstring(const std::string &input);
-
-    void add_special_token(const std::string &token);
+    static std::wstring convert_to_wstring(const std::string &input);
 };
 
 /************ Impl Implementation ************/
@@ -91,7 +88,7 @@ class ClipTokenizer::Impl {
  * @param cfg
  * @return
  */
-StatusCode ClipTokenizer::Impl::init(const decltype(toml::parse("")) &cfg) {
+StatusCode SimpleTokenizer::Impl::init(const decltype(toml::parse("")) &cfg) {
 
     auto token_cfg = cfg.at("TOKENIZER");
 
@@ -123,7 +120,7 @@ StatusCode ClipTokenizer::Impl::init(const decltype(toml::parse("")) &cfg) {
  * @param token
  * @return
  */
-StatusCode ClipTokenizer::Impl::tokenize(const std::string& input_text, std::vector<int32_t> &tokens) {
+StatusCode SimpleTokenizer::Impl::tokenize(const std::string& input_text, std::vector<int32_t> &tokens) {
     std::vector<std::string> words;
     // first split the text into words
     std::string str = input_text;
@@ -188,36 +185,46 @@ StatusCode ClipTokenizer::Impl::tokenize(const std::string& input_text, std::vec
     return StatusCode::OJBK;
 }
 
-std::string ClipTokenizer::Impl::convert_to_utf8(const std::wstring &input) {
-
+/***
+ *
+ * @param input
+ * @return
+ */
+std::string SimpleTokenizer::Impl::convert_to_utf8(const std::wstring &input) {
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    std::string result = converter.to_bytes(input);
+    return result;
 }
 
-std::wstring ClipTokenizer::Impl::convert_to_wstring(const std::string &input) {
-
-}
-
-void ClipTokenizer::Impl::add_special_token(const std::string &token) {
-
+/***
+ *
+ * @param input
+ * @return
+ */
+std::wstring SimpleTokenizer::Impl::convert_to_wstring(const std::string &input) {
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    std::wstring result = converter.from_bytes(input);
+    return result;
 }
 
 /***
  *
  */
-ClipTokenizer::ClipTokenizer() {
+SimpleTokenizer::SimpleTokenizer() {
     _m_pimpl = std::make_unique<Impl>();
 }
 
 /***
  *
  */
-ClipTokenizer::~ClipTokenizer() = default;
+SimpleTokenizer::~SimpleTokenizer() = default;
 
 /***
  *
  * @param cfg
  * @return
  */
-StatusCode ClipTokenizer::init(const decltype(toml::parse("")) &cfg) {
+StatusCode SimpleTokenizer::init(const decltype(toml::parse("")) &cfg) {
     return _m_pimpl->init(cfg);
 }
 
@@ -227,7 +234,7 @@ StatusCode ClipTokenizer::init(const decltype(toml::parse("")) &cfg) {
  * @param token
  * @return
  */
-StatusCode ClipTokenizer::tokenize(const std::string& input_text, std::vector<int> &token) {
+StatusCode SimpleTokenizer::tokenize(const std::string& input_text, std::vector<int> &token) {
     return _m_pimpl->tokenize(input_text, token);
 }
 
@@ -235,7 +242,7 @@ StatusCode ClipTokenizer::tokenize(const std::string& input_text, std::vector<in
  *
  * @return
  */
-bool ClipTokenizer::is_successfully_initialized() const {
+bool SimpleTokenizer::is_successfully_initialized() const {
     return _m_pimpl->is_successfully_initialized();
 }
 

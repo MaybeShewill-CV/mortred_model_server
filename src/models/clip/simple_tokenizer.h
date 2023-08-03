@@ -5,8 +5,8 @@
  * Date: 23-7-6
  ************************************************/
 
-#ifndef MORTRED_MODEL_SERVER_CLIP_TOKENIZER_H
-#define MORTRED_MODEL_SERVER_CLIP_TOKENIZER_H
+#ifndef MORTRED_MODEL_SERVER_SIMPLE_TOKENIZER_H
+#define MORTRED_MODEL_SERVER_SIMPLE_TOKENIZER_H
 
 #include <memory>
 #include <vector>
@@ -22,31 +22,31 @@ namespace clip {
 /***
  *
  */
-class ClipTokenizer {
+class SimpleTokenizer {
   public:
     /***
     * constructor
     * @param config
      */
-    ClipTokenizer();
+    SimpleTokenizer();
 
     /***
      *
      */
-    ~ClipTokenizer();
+    ~SimpleTokenizer();
 
     /***
     * constructor
     * @param transformer
      */
-    ClipTokenizer(const ClipTokenizer& transformer) = delete;
+    SimpleTokenizer(const SimpleTokenizer& transformer) = delete;
 
     /***
      * constructor
      * @param transformer
      * @return
      */
-    ClipTokenizer& operator=(const ClipTokenizer& transformer) = delete;
+    SimpleTokenizer& operator=(const SimpleTokenizer& transformer) = delete;
 
     /***
      *
@@ -77,4 +77,4 @@ class ClipTokenizer {
 }
 }
 
-#endif // MORTRED_MODEL_SERVER_CLIP_TOKENIZER_H
+#endif // MORTRED_MODEL_SERVER_SIMPLE_TOKENIZER_H
