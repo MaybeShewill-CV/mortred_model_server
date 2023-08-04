@@ -374,7 +374,7 @@ public:
         base64_decode(input.c_str(), input.size(), out, &out_len, 0);
         std::vector<uchar> image_vec_data(out, out + out_len);
         cv::Mat ret;
-        cv::imdecode(image_vec_data, cv::IMREAD_UNCHANGED).copyTo(ret);
+        cv::imdecode(image_vec_data, cv::IMREAD_COLOR).copyTo(ret);
 
         return ret;
     }
@@ -413,19 +413,16 @@ public:
      */
     static std::vector<float> convert_to_chw_vec(const cv::Mat& input) {
         std::vector<float> data;
-
         if (input.type() == CV_32FC3) {
             data.resize(input.channels() * input.rows * input.cols);
-
             for (int y = 0; y < input.rows; ++y) {
+                auto raw_data = input.ptr<cv::Vec3f>(y);
                 for (int x = 0; x < input.cols; ++x) {
                     for (int c = 0; c < input.channels(); ++c) {
-                        data[c * (input.rows * input.cols) + y * input.cols + x] =
-                            input.at<cv::Vec3f>(y, x)[c];
+                        data[c * (input.rows * input.cols) + y * input.cols + x] = raw_data[x][c];
                     }
                 }
             }
-
             return data;
         } else {
             LOG(ERROR) << "Only support 32fc3. Not support for opencv mat type of: " << input.type();

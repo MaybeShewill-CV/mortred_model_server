@@ -15,6 +15,7 @@ set(MODEL_BENCHMARK_LIST
     segmentation
     matting
     sam
+    clip
 )
 
 foreach(dir_name ${MODEL_BENCHMARK_LIST})

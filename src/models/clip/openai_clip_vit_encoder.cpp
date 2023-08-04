@@ -150,7 +150,7 @@ jinq::common::StatusCode OpenAiClipVitEncoder::Impl::init(const decltype(toml::p
     _m_session = _m_net->createSession(mnn_config);
 
     // fetch input/output tensors
-    _m_input_name = "pixel_values";
+    _m_input_name = "input";
     _m_input_tensor = _m_net->getSessionInput(_m_session, _m_input_name.c_str());
     if (_m_input_tensor == nullptr) {
         LOG(ERROR) << "fetch input pixel_values tensor failed";

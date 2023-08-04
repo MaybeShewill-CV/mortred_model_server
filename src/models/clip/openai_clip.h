@@ -72,6 +72,26 @@ class OpenAiClip {
      */
     jinq::common::StatusCode get_visual_embedding(const cv::Mat& input_image, std::vector<float>& image_embeddings);
 
+    /***
+     *
+     * @param input_texts
+     * @param input_image
+     * @param simi_scores
+     * @return
+     */
+    jinq::common::StatusCode texts2img(
+        const std::vector<std::string>& input_texts, const cv::Mat& input_image, std::vector<float>& simi_scores);
+
+    /***
+     *
+     * @param input_texts
+     * @param input_image
+     * @param simi_scores
+     * @return
+     */
+    jinq::common::StatusCode imgs2text(
+        const std::vector<cv::Mat>& input_images, const std::string& input_text, std::vector<float>& simi_scores);
+
 
     /***
      * if model successfully initialized

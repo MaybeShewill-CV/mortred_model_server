@@ -7,6 +7,8 @@
 
 #include "openai_clip.h"
 
+#include <cmath>
+
 #include "glog/logging.h"
 
 #include "common/file_path_util.h"
@@ -45,7 +47,7 @@ class OpenAiClip::Impl {
      * @param cfg
      * @return
      */
-    jinq::common::StatusCode init(const decltype(toml::parse(""))& cfg);
+    StatusCode init(const decltype(toml::parse(""))& cfg);
 
     /***
      *
@@ -53,7 +55,7 @@ class OpenAiClip::Impl {
      * @param textual_embeddings
      * @return
      */
-    jinq::common::StatusCode get_textual_embedding(const std::string& input_text, std::vector<float>& textual_embeddings);
+    StatusCode get_textual_embedding(const std::string& input_text, std::vector<float>& textual_embeddings);
 
     /***
      *
@@ -61,7 +63,27 @@ class OpenAiClip::Impl {
      * @param image_embeddings
      * @return
      */
-    jinq::common::StatusCode get_visual_embedding(const cv::Mat& input_image, std::vector<float>& image_embeddings);
+    StatusCode get_visual_embedding(const cv::Mat& input_image, std::vector<float>& image_embeddings);
+
+    /***
+     *
+     * @param input_texts
+     * @param input_image
+     * @param simi_scores
+     * @return
+     */
+    StatusCode texts2img(
+        const std::vector<std::string>& input_texts, const cv::Mat& input_image, std::vector<float>& simi_scores);
+
+    /***
+     *
+     * @param input_images
+     * @param input_text
+     * @param simi_scores
+     * @return
+     */
+    StatusCode imgs2text(
+        const std::vector<cv::Mat>& input_images, const std::string& input_text, std::vector<float>& simi_scores);
 
     /***
      * if model successfully initialized
@@ -75,9 +97,6 @@ class OpenAiClip::Impl {
     // model
     std::unique_ptr<OpenAiClipVitEncoder> _m_visual_encoder;
     std::unique_ptr<OpenAiClipTextEncoder> _m_textual_encoder;
-
-    // origin image size
-    cv::Size _m_ori_image_size;
 
     // sam vit input image size
     cv::Size _m_vit_encoder_input_size;
@@ -93,7 +112,7 @@ class OpenAiClip::Impl {
  * @param cfg
  * @return
  */
-jinq::common::StatusCode OpenAiClip::Impl::init(const decltype(toml::parse("")) &cfg) {
+StatusCode OpenAiClip::Impl::init(const decltype(toml::parse("")) &cfg) {
     // init sam encoder
     _m_visual_encoder = std::make_unique<OpenAiClipVitEncoder>();
     _m_visual_encoder->init(cfg);
@@ -139,6 +158,122 @@ StatusCode OpenAiClip::Impl::get_visual_embedding(const cv::Mat &input_image, st
     return _m_visual_encoder->encode(input_image, image_embeddings);
 }
 
+/***
+ *
+ * @param input_texts
+ * @param input_image
+ * @param simi_scores
+ * @return
+ */
+StatusCode OpenAiClip::Impl::texts2img(
+    const std::vector<std::string> &input_texts, const cv::Mat &input_image, std::vector<float> &simi_scores) {
+    // get visual features
+    std::vector<float> vis_feats;
+    auto status = get_visual_embedding(input_image, vis_feats);
+    if (status != StatusCode::OJBK) {
+        LOG(ERROR) << "get visual features failed, status: " << status;
+        return status;
+    }
+    auto vis_feats_norm = std::inner_product(vis_feats.begin(), vis_feats.end(), vis_feats.begin(), 0.0f);
+    vis_feats_norm = std::sqrt(vis_feats_norm);
+    for (auto& val : vis_feats) {
+        val /= vis_feats_norm;
+    }
+
+    // get text features
+    std::vector<std::vector<float> > texts_feats;
+    for (auto& text : input_texts) {
+        std::vector<float> text_feats;
+        status = get_textual_embedding(text, text_feats);
+        if (status != StatusCode::OK) {
+            LOG(ERROR) << "get textual features failed, status: " << status;
+            return status;
+        } else {
+            auto text_feats_norm = std::inner_product(
+                text_feats.begin(), text_feats.end(), text_feats.begin(), 0.0f);
+            text_feats_norm = std::sqrt(text_feats_norm);
+            for (auto& val : text_feats) {
+                val /= text_feats_norm;
+            }
+            texts_feats.push_back(text_feats);
+        }
+    }
+
+    // calculate simi scores
+    std::vector<float> simi_values;
+    for (auto& text_feats : texts_feats) {
+        auto inner_product = std::inner_product(vis_feats.begin(), vis_feats.end(), text_feats.begin(), 0.0f);
+        auto simi_value = std::exp(100.0f * inner_product);
+        simi_values.push_back(simi_value);
+    }
+    auto sum_values = std::accumulate(simi_values.begin(), simi_values.end(), 0.0f, std::plus{});
+    simi_scores.resize(0);
+    for (auto val : simi_values) {
+        auto score = val / sum_values;
+        simi_scores.push_back(score);
+    }
+
+    return StatusCode::OK;
+}
+
+/***
+ *
+ * @param input_images
+ * @param input_text
+ * @param simi_scores
+ * @return
+ */
+StatusCode OpenAiClip::Impl::imgs2text(
+    const std::vector<cv::Mat> &input_images, const std::string &input_text, std::vector<float> &simi_scores) {
+    // get textual features
+    std::vector<float> text_feats;
+    auto status = get_textual_embedding(input_text, text_feats);
+    if (status != StatusCode::OJBK) {
+        LOG(ERROR) << "get textual features failed, status: " << status;
+        return status;
+    }
+    auto text_feats_norm = std::inner_product(text_feats.begin(), text_feats.end(), text_feats.begin(), 0.0f);
+    text_feats_norm = std::sqrt(text_feats_norm);
+    for (auto& val : text_feats) {
+        val /= text_feats_norm;
+    }
+
+    // get visual features
+    std::vector<std::vector<float> > visuals_feats;
+    for (auto& image : input_images) {
+        std::vector<float> vis_feats;
+        status = get_visual_embedding(image, vis_feats);
+        if (status != StatusCode::OK) {
+            LOG(ERROR) << "get visual features failed, status: " << status;
+            return status;
+        } else {
+            auto vis_feats_norm = std::inner_product(
+                vis_feats.begin(), vis_feats.end(), vis_feats.begin(), 0.0f);
+            vis_feats_norm = std::sqrt(vis_feats_norm);
+            for (auto& val : vis_feats) {
+                val /= vis_feats_norm;
+            }
+            visuals_feats.push_back(vis_feats);
+        }
+    }
+
+    // calculate simi scores
+    std::vector<float> simi_values;
+    for (auto& vis_feats : visuals_feats) {
+        auto inner_product = std::inner_product(text_feats.begin(), text_feats.end(), vis_feats.begin(), 0.0f);
+        auto simi_value = std::exp(100.0f * inner_product);
+        simi_values.push_back(simi_value);
+    }
+    auto sum_values = std::accumulate(simi_values.begin(), simi_values.end(), 0.0f, std::plus{});
+    simi_scores.resize(0);
+    for (auto val : simi_values) {
+        auto score = val / sum_values;
+        simi_scores.push_back(score);
+    }
+
+    return StatusCode::OK;
+}
+
 
 /***
  *
@@ -157,7 +292,7 @@ OpenAiClip::~OpenAiClip() = default;
  * @param cfg
  * @return
  */
-jinq::common::StatusCode OpenAiClip::init(const decltype(toml::parse("")) &cfg) {
+StatusCode OpenAiClip::init(const decltype(toml::parse("")) &cfg) {
     return _m_pimpl->init(cfg);
 }
 
@@ -179,6 +314,30 @@ StatusCode OpenAiClip::get_textual_embedding(const std::string &input_text, std:
  */
 StatusCode OpenAiClip::get_visual_embedding(const cv::Mat &input_image, std::vector<float> &image_embeddings) {
     return _m_pimpl->get_visual_embedding(input_image, image_embeddings);
+}
+
+/***
+ *
+ * @param input_texts
+ * @param input_image
+ * @param simi_scores
+ * @return
+ */
+StatusCode OpenAiClip::texts2img(
+    const std::vector<std::string> &input_texts, const cv::Mat &input_image, std::vector<float> &simi_scores) {
+   return _m_pimpl->texts2img(input_texts, input_image, simi_scores);
+}
+
+/***
+ *
+ * @param input_images
+ * @param input_text
+ * @param simi_scores
+ * @return
+ */
+StatusCode OpenAiClip::imgs2text(
+    const std::vector<cv::Mat> &input_images, const std::string &input_text, std::vector<float> &simi_scores) {
+   return _m_pimpl->imgs2text(input_images, input_text, simi_scores);
 }
 
 /***
