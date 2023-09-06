@@ -293,7 +293,7 @@ StatusCode SamVitEncoder::Impl::init_mnn_model(const decltype(toml::parse("")) &
  */
 StatusCode SamVitEncoder::Impl::init_onnx_model(const decltype(toml::parse("")) &cfg) {
     // ort env and memo info
-    _m_env = {ORT_LOGGING_LEVEL_WARNING, ""};
+    _m_env = {ORT_LOGGING_LEVEL_ERROR, ""};
 
     // init sam encoder configs
     auto sam_encoder_cfg = cfg.at("SAM_VIT_ENCODER");
@@ -317,6 +317,9 @@ StatusCode SamVitEncoder::Impl::init_onnx_model(const decltype(toml::parse("")) 
         cuda_options.device_id = _m_device_id;
         _m_onnx_sess_options.AppendExecutionProvider_CUDA(cuda_options);
     }
+
+    _m_input_name = "input_image";
+    _m_output_name = "image_embeddings";
 
     _m_onnx_sess = std::make_unique<Ort::Session>(_m_env, _m_model_path.c_str(), _m_onnx_sess_options);
     auto input_shape = _m_onnx_sess->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
@@ -386,9 +389,13 @@ StatusCode SamVitEncoder::Impl::onnx_encode(const cv::Mat &input_image, std::vec
         LOG(ERROR) << "empty input data for sam vit encoder";
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
+    std::vector<int64 > input_shape;
+    for (auto& v : _m_input_shape) {
+        input_shape.push_back(static_cast<long>(v));
+    }
     auto input_image_tensor = Ort::Value::CreateTensor<float>(
         _m_memo_info, (float*)input_tensor_values.data(), input_tensor_values.size(),
-        reinterpret_cast<const int64_t *>(_m_input_shape.data()), _m_input_shape.size());
+        input_shape.data(), input_shape.size());
     encoder_input_tensor.push_back(std::move(input_image_tensor));
 
     // run session
@@ -398,6 +405,7 @@ StatusCode SamVitEncoder::Impl::onnx_encode(const cv::Mat &input_image, std::vec
         Ort::RunOptions{nullptr}, input_names.data(), encoder_input_tensor.data(),
         encoder_input_tensor.size(), output_names.data(), output_names.size());
     auto output_preds_value = output_tensors[0].GetTensorMutableData<float>();
+    auto output_mask_shape = output_tensors[0].GetTensorTypeAndShapeInfo().GetShape();
 
     // copy image embeddings
     auto embeds_size = std::accumulate(
