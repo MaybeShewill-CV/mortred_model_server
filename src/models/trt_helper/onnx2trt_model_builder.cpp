@@ -145,7 +145,8 @@ StatusCode Onnx2TrtModelBuilder::Impl::build_engine(
 
     // set config
     std::unique_ptr<nvinfer1::IBuilderConfig> config(builder->createBuilderConfig());
-    config->setMaxWorkspaceSize(1 << 20);
+    size_t workspace = 1 << 30;
+    config->setMemoryPoolLimit(nvinfer1::MemoryPoolType::kWORKSPACE, workspace * 6);
     if (precision == TRT_PRECISION_MODE::TRT_PRECISION_FP32) {
         // skip
     } else if (precision == TRT_PRECISION_MODE::TRT_PRECISION_FP16) {
