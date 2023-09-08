@@ -47,3 +47,17 @@ foreach(dir_name ${MODEL_SERVER_APP_LIST})
         target_link_libraries(${file_name}.out common models factory ${WORKFLOW_LIBS} ${GLOG_LIBRARIES})
     endforeach()
 endforeach()
+
+# build model tools app
+set(MODEL_TOOLS_APP_LIST
+    trt_converter
+)
+
+foreach(dir_name ${MODEL_TOOLS_APP_LIST})
+    file(GLOB_RECURSE src_list ./model_tools/${dir_name}/*.cpp)
+    foreach(src ${src_list})
+        string(REGEX REPLACE ".+/(.+)\\..*" "\\1" file_name ${src})
+        add_executable(${file_name}.out ${src})
+        target_link_libraries(${file_name}.out common models ${GLOG_LIBRARIES})
+    endforeach()
+endforeach()
