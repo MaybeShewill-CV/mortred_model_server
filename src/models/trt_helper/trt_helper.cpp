@@ -16,7 +16,6 @@
 
 namespace jinq {
 namespace models {
-namespace privacy_detection {
 namespace trt_helper {
 
 using jinq::common::StatusCode;
@@ -52,14 +51,23 @@ bool TrtHelper::setup_engine_binding(
     const int& index, EngineBinding& binding) {
 
     binding.set_index(index);
-    const char* name = engine->getBindingName(index);
+//    const char* name = engine->getBindingName(index);
+    const char* name = engine->getIOTensorName(index);
     if (name == nullptr) {
         return false;
     }
     binding.set_name(std::string(name));
-    binding.set_dims(engine->getBindingDimensions(index));
+//    binding.set_dims(engine->getBindingDimensions(index));
+    binding.set_dims(engine->getTensorShape(name));
     binding.set_volume(dims_volume(binding.dims()));
-    binding.set_is_input(engine->bindingIsInput(index));
+//    binding.set_is_input(engine->bindingIsInput(index));
+    auto tensor_io_mode = engine->getTensorIOMode(name);
+    if (tensor_io_mode == nvinfer1::TensorIOMode::kINPUT) {
+        binding.set_is_input(true);
+    } else {
+        binding.set_is_input(false);
+    }
+
     return true;
 }
 
@@ -79,9 +87,17 @@ bool TrtHelper::setup_engine_binding(
     if (binding.index() == -1) {
         return false;
     }
-    binding.set_dims(engine->getBindingDimensions(binding.index()));
+//    binding.set_dims(engine->getBindingDimensions(binding.index()));
+    binding.set_dims(engine->getTensorShape(name.c_str()));
     binding.set_volume(dims_volume(binding.dims()));
-    binding.set_is_input(engine->bindingIsInput(binding.index()));
+//    binding.set_is_input(engine->bindingIsInput(binding.index()));
+    auto tensor_io_mode = engine->getTensorIOMode(name.c_str());
+    if (tensor_io_mode == nvinfer1::TensorIOMode::kINPUT) {
+        binding.set_is_input(true);
+    } else {
+        binding.set_is_input(false);
+    }
+
     return true;
 }
 
@@ -92,9 +108,12 @@ bool TrtHelper::setup_engine_binding(
  * @return
  */
 StatusCode TrtHelper::setup_device_memory(std::unique_ptr<nvinfer1::ICudaEngine>& engine, DeviceMemory& output) {
-    auto nb_bindings = engine->getNbBindings();
+//    auto nb_bindings = engine->getNbBindings();
+    auto nb_bindings = engine->getNbIOTensors();
     for (int i = 0; i < nb_bindings; ++i) {
-        auto dims = engine->getBindingDimensions(i);
+//        auto dims = engine->getBindingDimensions(i);
+        auto tensorname = engine->getIOTensorName(i);
+        auto dims = engine->getTensorShape(tensorname);
         auto volume = dims_volume(dims);
         void* cuda_memo = nullptr;
         auto r = cudaMalloc(&cuda_memo, volume * sizeof(float));
@@ -107,7 +126,6 @@ StatusCode TrtHelper::setup_device_memory(std::unique_ptr<nvinfer1::ICudaEngine>
     return StatusCode::OK;
 }
 
-}
 }
 }
 }

@@ -20,7 +20,6 @@
 
 namespace jinq {
 namespace models {
-namespace privacy_detection {
 namespace trt_helper {
 
 class EngineBinding {
@@ -343,7 +342,6 @@ class TrtHelper {
         }
     }
 };
-}
 }
 }
 }
