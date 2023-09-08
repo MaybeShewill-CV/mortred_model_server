@@ -15,5 +15,8 @@ target_link_libraries(
     ${GLOG_LIBRARIES}
     ${ONNXRUNTIME_LIBRARIES}
     ${FMT_LIBRARIES}
+    ${NVINFER_LIBRARIES}
+    ${TRT_ONNXPARSER_LIBRARIES}
+    ${CUDA_LIBRARIES}
 )
 set_target_properties(models PROPERTIES LINKER_LANGUAGE CXX)

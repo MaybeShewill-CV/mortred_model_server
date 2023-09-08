@@ -4,7 +4,7 @@ project(mortred_model_server)
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99")
-set(CMAKE_CXX_FLAGS "-std=c++17")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wno-deprecated-declarations")
 set(PROJECT_ROOT_DIR ${CMAKE_CURRENT_LIST_DIR})
 
 # target options
@@ -29,14 +29,18 @@ file(GLOB_RECURSE GLOG_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*glog*so)
 file(GLOB_RECURSE BASE64_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*base64*so)
 file(GLOB_RECURSE FMT_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*fmt*so)
 file(GLOB_RECURSE ONNXRUNTIME_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*onnxruntime*so)
+file(GLOB_RECURSE NVINFER_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*nvinfer*.so*)
+file(GLOB_RECURSE TRT_ONNXPARSER_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*nvonnxparser*.so*)
 
 # find package
 find_package(Threads REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(glog REQUIRED)
+find_package(CUDA REQUIRED)
 
 include_directories(${GLOG_INCLUDE_DIR})
 include_directories(${OpenCV_INCLUDE_DIRS})
+include_directories(${CUDA_INCLUDE_DIRS})
 
 # add subdirectory
 add_subdirectory(src/common)
