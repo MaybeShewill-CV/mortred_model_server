@@ -11,7 +11,6 @@
 
 #include <opencv2/opencv.hpp>
 #include "glog/logging.h"
-#include "MNN/Interpreter.hpp"
 #include "TensorRT-8.6.1.6/NvInferRuntime.h"
 
 #include "common/base64.h"
@@ -82,6 +81,18 @@ class SamVitTrtEncoder::Impl {
      * @return
      */
     StatusCode encode(const cv::Mat& input_image, std::vector<float>& image_embeddings);
+
+    /***
+     *
+     * @return
+     */
+    std::vector<int> get_encoder_input_shape() const {
+        std::vector<int> result;
+        for (auto idx = 0; idx < _m_input_binding.dims().nbDims; idx++) {
+            result.push_back(_m_input_binding.dims().d[idx]);
+        }
+        return result;
+    }
 
     /***
      *
@@ -424,6 +435,14 @@ bool SamVitTrtEncoder::is_successfully_initialized() const {
  */
 StatusCode SamVitTrtEncoder::encode(const cv::Mat &input_image, std::vector<float> &image_embeddings){
     return _m_pimpl->encode(input_image, image_embeddings);
+}
+
+/***
+ *
+ * @return
+ */
+std::vector<int> SamVitTrtEncoder::get_encoder_input_shape() const {
+    return _m_pimpl->get_encoder_input_shape();
 }
 
 }

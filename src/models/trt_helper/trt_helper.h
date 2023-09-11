@@ -321,6 +321,18 @@ class TrtHelper {
 
     /***
      *
+     * @param engine
+     * @param context
+     * @param output
+     * @return
+     */
+    static common::StatusCode setup_device_memory(
+        std::unique_ptr<nvinfer1::ICudaEngine>& engine,
+        std::unique_ptr<nvinfer1::IExecutionContext>& context,
+        DeviceMemory& output);
+
+    /***
+     *
      * @return
      */
     static bool opencv_has_cuda() {

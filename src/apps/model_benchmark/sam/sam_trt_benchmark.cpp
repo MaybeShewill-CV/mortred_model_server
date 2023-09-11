@@ -16,10 +16,12 @@
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
 #include "models/segment_anything/sam_vit_trt_encoder.h"
+#include "models/segment_anything/sam_trt_decoder.h"
 
 using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;
 using jinq::models::segment_anything::SamVitTrtEncoder;
+using jinq::models::segment_anything::SamTrtDecoder;
 
 int main(int argc, char** argv) {
     google::InstallFailureSignalHandler();
@@ -40,6 +42,13 @@ int main(int argc, char** argv) {
     sam_vit_trt_encoder.init(cfg);
     if (!sam_vit_trt_encoder.is_successfully_initialized()) {
         LOG(ERROR) << "init sam trt encoder failed";
+        return -1;
+    }
+
+    SamTrtDecoder sam_vit_trt_decoder;
+    sam_vit_trt_decoder.init(cfg);
+    if (!sam_vit_trt_decoder.is_successfully_initialized()) {
+        LOG(ERROR) << "init sam trt decoder failed";
         return -1;
     }
 
