@@ -87,6 +87,19 @@ class SamTrtSegmentor {
      */
     jinq::common::StatusCode get_embedding(const cv::Mat& input_image, std::vector<float>& image_embeddings);
 
+    /**
+     *
+     * @param image_embeddings
+     * @param input_image_size
+     * @param prompt_points
+     * @param predicted_masks
+     * @return
+     */
+    jinq::common::StatusCode decode_masks(
+        const std::vector<float>& image_embeddings,
+        const cv::Size& input_image_size,
+        const std::vector<std::vector<cv::Point2f> >& prompt_points,
+        std::vector<cv::Mat> &predicted_masks);
 
     /***
      * if model successfully initialized

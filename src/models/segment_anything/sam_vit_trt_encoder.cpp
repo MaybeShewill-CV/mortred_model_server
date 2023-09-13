@@ -349,8 +349,20 @@ cv::Mat SamVitTrtEncoder::Impl::preprocess_image(const cv::Mat& input_image) con
 StatusCode SamVitTrtEncoder::Impl::encode(const cv::Mat &input_image, std::vector<float> &image_embeddings){
     // preprocess input data
     _m_input_size_user = input_image.size();
+
+    auto t_start = std::chrono::high_resolution_clock::now();
     auto preprocessed_image = preprocess_image(input_image);
+    auto t_end = std::chrono::high_resolution_clock::now();
+    auto t_cost = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
+    LOG(INFO) << "      ---- embedding preprocess cost time: " << t_cost << " ms";
+
+    t_start = std::chrono::high_resolution_clock::now();
     auto input_chw_data = CvUtils::convert_to_chw_vec(preprocessed_image);
+    t_end = std::chrono::high_resolution_clock::now();
+    t_cost = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
+    LOG(INFO) << "      ---- embedding convert to chw cost time: " << t_cost << " ms";
+
+    t_start = std::chrono::high_resolution_clock::now();
     auto* cuda_mem_input = (float*)_m_device_memory.at(_m_input_binding.index());
     int32_t input_mem_size = static_cast<int32_t >(preprocessed_image.channels() * preprocessed_image.size().area() * sizeof(float));
     auto cuda_status = cudaMemcpyAsync(
@@ -359,8 +371,12 @@ StatusCode SamVitTrtEncoder::Impl::encode(const cv::Mat &input_image, std::vecto
         LOG(ERROR) << "copy input image memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
+    t_end = std::chrono::high_resolution_clock::now();
+    t_cost = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
+    LOG(INFO) << "      ---- embedding memcpy mat data to gpu cost time: " << t_cost << " ms";
 
     // do inference
+    t_start = std::chrono::high_resolution_clock::now();
     _m_trt_execution_context->setTensorAddress("images", cuda_mem_input);
     _m_trt_execution_context->setTensorAddress("image_embeddings", _m_device_memory.at(_m_output_binding.index()));
     if (!_m_trt_execution_context->enqueueV3(_m_cuda_stream)) {
@@ -377,6 +393,9 @@ StatusCode SamVitTrtEncoder::Impl::encode(const cv::Mat &input_image, std::vecto
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
     cudaStreamSynchronize(_m_cuda_stream);
+    t_end = std::chrono::high_resolution_clock::now();
+    t_cost = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
+    LOG(INFO) << "      ---- embedding inference cost time: " << t_cost << " ms";
 
     // fetch image embeddings
     image_embeddings.resize(0);

@@ -79,6 +79,20 @@ class SamTrtSegmentor::Impl {
     StatusCode get_embedding(const cv::Mat& input_image, std::vector<float>& image_embeddings);
 
     /***
+     *
+     * @param image_embeddings
+     * @param input_image_size
+     * @param prompt_points
+     * @param predicted_masks
+     * @return
+     */
+    StatusCode decode_masks(
+        const std::vector<float>& image_embeddings,
+        const cv::Size& input_image_size,
+        const std::vector<std::vector<cv::Point2f> >& prompt_points,
+        std::vector<cv::Mat> &predicted_masks);
+
+    /***
      * if model successfully initialized
      * @return
      */
@@ -251,6 +265,23 @@ StatusCode SamTrtSegmentor::Impl::get_embedding(
 
 /***
  *
+ * @param image_embeddings
+ * @param input_image_size
+ * @param prompt_points
+ * @param predicted_masks
+ * @return
+ */
+StatusCode SamTrtSegmentor::Impl::decode_masks(
+    const std::vector<float> &image_embeddings,
+    const cv::Size& input_image_size,
+    const std::vector<std::vector<cv::Point2f>> &prompt_points,
+    std::vector<cv::Mat> &predicted_masks) {
+    _m_sam_decoder->set_ori_image_size(input_image_size);
+   return _m_sam_decoder->decode(image_embeddings, prompt_points, predicted_masks);
+}
+
+/***
+ *
  * @param ori_point
  * @param target_size
  * @return
@@ -326,6 +357,22 @@ StatusCode SamTrtSegmentor::predict(
  */
 StatusCode SamTrtSegmentor::get_embedding(const cv::Mat &input_image, std::vector<float> &image_embeddings) {
     return _m_pimpl->get_embedding(input_image, image_embeddings);
+}
+
+/***
+ *
+ * @param image_embeddings
+ * @param input_image_size
+ * @param prompt_points
+ * @param predicted_masks
+ * @return
+ */
+StatusCode SamTrtSegmentor::decode_masks(
+    const std::vector<float> &image_embeddings,
+    const cv::Size& input_image_size,
+    const std::vector<std::vector<cv::Point2f>> &prompt_points,
+    std::vector<cv::Mat> &predicted_masks) {
+    return _m_pimpl->decode_masks(image_embeddings, input_image_size, prompt_points, predicted_masks);
 }
 
 /***

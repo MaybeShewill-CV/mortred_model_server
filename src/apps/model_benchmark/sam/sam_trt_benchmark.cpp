@@ -69,24 +69,29 @@ int main(int argc, char** argv) {
         LOG(INFO) << " .... iter: " << idx + 1 << " encoding cost time: " << t_cost << " ms";
     }
 
-    LOG(INFO) << "Start benchmarking sam predict interface ...";
-    sam_trt_segmentor.predict(
-        input_image,
-        {
-            cv::Rect(483, 683, 158, 132),
-            cv::Rect(220, 327, 430, 122),
-            cv::Rect(77, 78, 58, 176),
-            cv::Rect(972, 464, 111, 52)
-        },
-        masks);
-
-    std::vector<std::vector<cv::Point2f> > input_points = {
-        {cv::Point2f(483, 683), },
-        {cv::Point2f(220, 327), },
-        {cv::Point2f(77, 78), },
-        {cv::Point2f(972, 464), }
+    LOG(INFO) << "Start benchmarking prompt mask decoder interface ...";
+    std::vector<std::vector<cv::Point2f> > prompt_points = {
+        {cv::Point2f(562, 749), },
     };
-    sam_trt_segmentor.predict(input_image, input_points, masks);
+    for (auto idx = 0; idx < 10; ++idx) {
+        auto t_start = std::chrono::system_clock::now();
+        sam_trt_segmentor.decode_masks(img_embeds, input_image.size(), prompt_points, masks);
+        auto t_end = std::chrono::system_clock::now();
+        auto t_cost = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
+        LOG(INFO) << " .... iter: " << idx + 1 << " decode mask cost time: " << t_cost << " ms";
+    }
+
+    LOG(INFO) << "Start benchmarking sam predict interface ...";
+//    sam_trt_segmentor.predict(
+//        input_image,
+//        {
+//            cv::Rect(483, 683, 158, 132),
+//            cv::Rect(220, 327, 430, 122),
+//            cv::Rect(77, 78, 58, 176),
+//            cv::Rect(972, 464, 111, 52)
+//        },
+//        masks);
+    sam_trt_segmentor.predict(input_image, prompt_points, masks);
 
     std::string output_file_name = FilePathUtil::get_file_name(input_image_path);
     output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_sam_trt_output.png";

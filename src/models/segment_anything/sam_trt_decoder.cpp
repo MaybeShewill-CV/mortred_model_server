@@ -544,6 +544,7 @@ StatusCode SamTrtDecoder::Impl::get_mask(
     const std::vector<cv::Point2f> &point_coords,
     const std::vector<float> &point_labels,
     cv::Mat &out_mask) {
+    auto t_start = std::chrono::high_resolution_clock::now();
     // init point coords and point labels cuda memo
     std::vector<float> total_points;
     for (auto& pt : point_coords) {
@@ -598,17 +599,21 @@ StatusCode SamTrtDecoder::Impl::get_mask(
         LOG(ERROR) << "copy input image memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
+    auto t_end = std::chrono::high_resolution_clock::now();
+    auto t_cost = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
+    LOG(INFO) << "      ---- mask decode memcpy cpu to gpu cost time: " << t_cost << " ms";
 
     // do inference
-    _m_trt_execution_context->setTensorAddress(
+    t_start = std::chrono::high_resolution_clock::now();
+    _m_trt_execution_context->setInputTensorAddress(
         "image_embeddings", _m_device_memory.at(_m_image_embedding_binding.index()));
-    _m_trt_execution_context->setTensorAddress(
+    _m_trt_execution_context->setInputTensorAddress(
         "point_coords", _m_device_memory.at(_m_point_coords_binding.index()));
-    _m_trt_execution_context->setTensorAddress(
+    _m_trt_execution_context->setInputTensorAddress(
         "point_labels", _m_device_memory.at(_m_point_labels_binding.index()));
-    _m_trt_execution_context->setTensorAddress(
+    _m_trt_execution_context->setInputTensorAddress(
         "mask_input", _m_device_memory.at(_m_mask_input_binding.index()));
-    _m_trt_execution_context->setTensorAddress(
+    _m_trt_execution_context->setInputTensorAddress(
         "has_mask_input", _m_device_memory.at(_m_has_mask_input_binding.index()));
     _m_trt_execution_context->setTensorAddress(
         "low_res_masks", _m_device_memory.at(_m_low_res_masks_output_binding.index()));
@@ -642,11 +647,18 @@ StatusCode SamTrtDecoder::Impl::get_mask(
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
     cudaStreamSynchronize(_m_cuda_stream);
+    t_end = std::chrono::high_resolution_clock::now();
+    t_cost = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
+    LOG(INFO) << "      ---- mask decode inference cost time: " << t_cost << " ms";
 
     // parse output mask
+    t_start = std::chrono::high_resolution_clock::now();
     int best_mask_idx = static_cast<int>(
         std::distance(iou_preds_data.begin(), std::max_element(iou_preds_data.begin(), iou_preds_data.end())));
     decode_output_mask(low_res_mask_data, best_mask_idx, out_mask);
+    t_end = std::chrono::high_resolution_clock::now();
+    t_cost = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
+    LOG(INFO) << "      ---- mask decode output mask cost time: " << t_cost << " ms";
 
     return StatusCode::OJBK;
 }
