@@ -379,6 +379,7 @@ StatusCode SamVitTrtEncoder::Impl::encode(const cv::Mat &input_image, std::vecto
     cudaStreamSynchronize(_m_cuda_stream);
 
     // fetch image embeddings
+    image_embeddings.resize(0);
     for (auto& val : _m_output_host_memory) {
         image_embeddings.push_back(val);
     }

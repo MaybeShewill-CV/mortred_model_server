@@ -1,13 +1,14 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: sam_trt_decoder.h
- * Date: 23-9-8
+ * File: sam_trt_segmentor.h
+ * Date: 23-9-12
  ************************************************/
 
-#ifndef MORTRED_MODEL_SERVER_SAM_TRT_DECODER_H
-#define MORTRED_MODEL_SERVER_SAM_TRT_DECODER_H
+#ifndef MORTRED_MODEL_SERVER_SAM_TRT_SEGMENTOR_H
+#define MORTRED_MODEL_SERVER_SAM_TRT_SEGMENTOR_H
 
+#include <memory>
 #include <vector>
 
 #include <opencv2/opencv.hpp>
@@ -20,33 +21,33 @@ namespace models {
 namespace segment_anything {
 
 /***
- *
+ * 
  */
-class SamTrtDecoder {
+class SamTrtSegmentor {
   public:
     /***
     * constructor
     * @param config
      */
-    SamTrtDecoder();
-
+    SamTrtSegmentor();
+    
     /***
      *
      */
-    ~SamTrtDecoder();
+    ~SamTrtSegmentor();
 
     /***
     * constructor
     * @param transformer
      */
-    SamTrtDecoder(const SamTrtDecoder& transformer) = delete;
+    SamTrtSegmentor(const SamTrtSegmentor& transformer) = delete;
 
     /***
      * constructor
      * @param transformer
      * @return
      */
-    SamTrtDecoder& operator=(const SamTrtDecoder& transformer) = delete;
+    SamTrtSegmentor& operator=(const SamTrtSegmentor& transformer) = delete;
 
     /***
      *
@@ -57,39 +58,34 @@ class SamTrtDecoder {
 
     /***
      *
-     * @param ori_img_size
-     */
-    void set_ori_image_size(const cv::Size& ori_img_size);
-
-    /***
-     *
-     * @param ori_img_size
-     */
-    void set_encoder_input_size(const cv::Size& input_node_size);
-
-    /***
-     *
-     * @param image_embeddings
-     * @param bboxes
-     * @param predicted_masks
+     * @param input
+     * @param output
      * @return
      */
-    jinq::common::StatusCode decode(
-        const std::vector<float>& image_embeddings,
-        const std::vector<cv::Rect2f>& bboxes,
+    jinq::common::StatusCode predict(
+        const cv::Mat& input_image,
+        const std::vector<cv::Rect>& bboxes,
         std::vector<cv::Mat>& predicted_masks);
 
     /***
      *
-     * @param image_embeddings
-     * @param bboxes
+     * @param input_image
+     * @param points
      * @param predicted_masks
      * @return
      */
-    jinq::common::StatusCode decode(
-        const std::vector<float>& image_embeddings,
+    jinq::common::StatusCode predict(
+        const cv::Mat& input_image,
         const std::vector<std::vector<cv::Point2f> >& points,
         std::vector<cv::Mat>& predicted_masks);
+
+    /***
+     *
+     * @param input_image
+     * @param image_embeddings
+     * @return
+     */
+    jinq::common::StatusCode get_embedding(const cv::Mat& input_image, std::vector<float>& image_embeddings);
 
 
     /***
@@ -106,4 +102,4 @@ class SamTrtDecoder {
 }
 }
 
-#endif // MORTRED_MODEL_SERVER_SAM_TRT_DECODER_H
+#endif // MORTRED_MODEL_SERVER_SAM_TRT_SEGMENTOR_H

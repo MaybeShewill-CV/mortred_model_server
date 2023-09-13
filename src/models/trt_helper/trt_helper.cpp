@@ -108,7 +108,7 @@ StatusCode TrtHelper::setup_device_memory(std::unique_ptr<nvinfer1::ICudaEngine>
         auto tensorname = engine->getIOTensorName(i);
         auto dims = engine->getTensorShape(tensorname);
         auto volume = dims_volume(dims);
-        LOG(INFO) << "tensor: " << tensorname <<  ", volume: " << volume << ", dims: " << dims_to_string(dims);
+        DLOG(INFO) << "tensor: " << tensorname <<  ", volume: " << volume << ", dims: " << dims_to_string(dims);
         void* cuda_memo = nullptr;
         auto r = cudaMalloc(&cuda_memo, volume * sizeof(float));
         if (r != 0 || cuda_memo == nullptr) {
@@ -136,7 +136,7 @@ StatusCode TrtHelper::setup_device_memory(
         auto tensorname = engine->getIOTensorName(i);
         auto dims = context->getTensorShape(tensorname);
         auto volume = dims_volume(dims);
-        LOG(INFO) << "tensor: " << tensorname <<  ", volume: " << volume << ", dims: " << dims_to_string(dims);
+        DLOG(INFO) << "tensor: " << tensorname <<  ", volume: " << volume << ", dims: " << dims_to_string(dims);
         void* cuda_memo = nullptr;
         auto r = cudaMalloc(&cuda_memo, volume * sizeof(float));
         if (r != 0 || cuda_memo == nullptr) {
