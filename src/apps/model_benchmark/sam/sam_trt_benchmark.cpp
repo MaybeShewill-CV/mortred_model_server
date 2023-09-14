@@ -71,7 +71,10 @@ int main(int argc, char** argv) {
 
     LOG(INFO) << "Start benchmarking prompt mask decoder interface ...";
     std::vector<std::vector<cv::Point2f> > prompt_points = {
-        {cv::Point2f(562, 749), },
+//        {cv::Point2f(562, 749), },
+        {cv::Point2f(435, 388), },
+//        {cv::Point2f(105, 166), },
+//        {cv::Point2f(1028, 490), }
     };
     for (auto idx = 0; idx < 10; ++idx) {
         auto t_start = std::chrono::system_clock::now();
