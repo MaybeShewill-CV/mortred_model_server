@@ -601,7 +601,7 @@ StatusCode SamTrtDecoder::Impl::get_mask(
     }
     auto t_end = std::chrono::high_resolution_clock::now();
     auto t_cost = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
-    LOG(INFO) << "      ---- mask decode memcpy cpu to gpu cost time: " << t_cost << " ms";
+    DLOG(INFO) << "      ---- mask decode memcpy cpu to gpu cost time: " << t_cost << " ms";
 
     // do inference
     t_start = std::chrono::high_resolution_clock::now();
@@ -649,7 +649,7 @@ StatusCode SamTrtDecoder::Impl::get_mask(
     cudaStreamSynchronize(_m_cuda_stream);
     t_end = std::chrono::high_resolution_clock::now();
     t_cost = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
-    LOG(INFO) << "      ---- mask decode inference cost time: " << t_cost << " ms";
+    DLOG(INFO) << "      ---- mask decode inference cost time: " << t_cost << " ms";
 
     // parse output mask
     t_start = std::chrono::high_resolution_clock::now();
@@ -658,7 +658,7 @@ StatusCode SamTrtDecoder::Impl::get_mask(
     decode_output_mask(low_res_mask_data, best_mask_idx, out_mask);
     t_end = std::chrono::high_resolution_clock::now();
     t_cost = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
-    LOG(INFO) << "      ---- mask decode output mask cost time: " << t_cost << " ms";
+    DLOG(INFO) << "      ---- mask decode output mask cost time: " << t_cost << " ms";
 
     return StatusCode::OJBK;
 }

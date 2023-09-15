@@ -16,14 +16,10 @@
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
 #include "models/segment_anything/sam_trt_segmentor.h"
-//#include "models/segment_anything/sam_vit_trt_encoder.h"
-//#include "models/segment_anything/sam_trt_decoder.h"
 
 using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;
 using jinq::models::segment_anything::SamTrtSegmentor;
-//using jinq::models::segment_anything::SamVitTrtEncoder;
-//using jinq::models::segment_anything::SamTrtDecoder;
 
 int main(int argc, char** argv) {
     google::InstallFailureSignalHandler();
@@ -70,11 +66,12 @@ int main(int argc, char** argv) {
     }
 
     LOG(INFO) << "Start benchmarking prompt mask decoder interface ...";
+    float scale = 1024.f / static_cast<float>(input_image.cols);
     std::vector<std::vector<cv::Point2f> > prompt_points = {
-//        {cv::Point2f(562, 749), },
-        {cv::Point2f(435, 388), },
-//        {cv::Point2f(105, 166), },
-//        {cv::Point2f(1028, 490), }
+        {cv::Point2f(562 * scale, 749 * scale), },
+        {cv::Point2f(435 * scale, 388 * scale), },
+        {cv::Point2f(105 * scale, 166 * scale), },
+        {cv::Point2f(1028 * scale, 490 * scale), }
     };
     for (auto idx = 0; idx < 10; ++idx) {
         auto t_start = std::chrono::system_clock::now();
@@ -85,15 +82,15 @@ int main(int argc, char** argv) {
     }
 
     LOG(INFO) << "Start benchmarking sam predict interface ...";
-//    sam_trt_segmentor.predict(
-//        input_image,
-//        {
-//            cv::Rect(483, 683, 158, 132),
-//            cv::Rect(220, 327, 430, 122),
-//            cv::Rect(77, 78, 58, 176),
-//            cv::Rect(972, 464, 111, 52)
-//        },
-//        masks);
+    sam_trt_segmentor.predict(
+        input_image,
+        {
+            cv::Rect(483, 683, 158, 132),
+            cv::Rect(220, 327, 430, 122),
+            cv::Rect(77, 78, 58, 176),
+            cv::Rect(972, 464, 111, 52)
+        },
+        masks);
     sam_trt_segmentor.predict(input_image, prompt_points, masks);
 
     std::string output_file_name = FilePathUtil::get_file_name(input_image_path);

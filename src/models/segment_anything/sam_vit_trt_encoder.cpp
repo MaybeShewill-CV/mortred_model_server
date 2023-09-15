@@ -354,13 +354,13 @@ StatusCode SamVitTrtEncoder::Impl::encode(const cv::Mat &input_image, std::vecto
     auto preprocessed_image = preprocess_image(input_image);
     auto t_end = std::chrono::high_resolution_clock::now();
     auto t_cost = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
-    LOG(INFO) << "      ---- embedding preprocess cost time: " << t_cost << " ms";
+    DLOG(INFO) << "      ---- embedding preprocess cost time: " << t_cost << " ms";
 
     t_start = std::chrono::high_resolution_clock::now();
     auto input_chw_data = CvUtils::convert_to_chw_vec(preprocessed_image);
     t_end = std::chrono::high_resolution_clock::now();
     t_cost = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
-    LOG(INFO) << "      ---- embedding convert to chw cost time: " << t_cost << " ms";
+    DLOG(INFO) << "      ---- embedding convert to chw cost time: " << t_cost << " ms";
 
     t_start = std::chrono::high_resolution_clock::now();
     auto* cuda_mem_input = (float*)_m_device_memory.at(_m_input_binding.index());
@@ -373,7 +373,7 @@ StatusCode SamVitTrtEncoder::Impl::encode(const cv::Mat &input_image, std::vecto
     }
     t_end = std::chrono::high_resolution_clock::now();
     t_cost = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
-    LOG(INFO) << "      ---- embedding memcpy mat data to gpu cost time: " << t_cost << " ms";
+    DLOG(INFO) << "      ---- embedding memcpy mat data to gpu cost time: " << t_cost << " ms";
 
     // do inference
     t_start = std::chrono::high_resolution_clock::now();
@@ -395,7 +395,7 @@ StatusCode SamVitTrtEncoder::Impl::encode(const cv::Mat &input_image, std::vecto
     cudaStreamSynchronize(_m_cuda_stream);
     t_end = std::chrono::high_resolution_clock::now();
     t_cost = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
-    LOG(INFO) << "      ---- embedding inference cost time: " << t_cost << " ms";
+    DLOG(INFO) << "      ---- embedding inference cost time: " << t_cost << " ms";
 
     // fetch image embeddings
     image_embeddings.resize(0);
