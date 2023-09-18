@@ -18,5 +18,6 @@ target_link_libraries(
     ${NVINFER_LIBRARIES}
     ${TRT_ONNXPARSER_LIBRARIES}
     ${CUDA_LIBRARIES}
+    ${WORKFLOW_LIBS}
 )
 set_target_properties(models PROPERTIES LINKER_LANGUAGE CXX)

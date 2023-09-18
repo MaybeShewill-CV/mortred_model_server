@@ -82,6 +82,18 @@ class SamTrtSegmentor {
     /***
      *
      * @param input_image
+     * @param points
+     * @param predicted_masks
+     * @return
+     */
+    jinq::common::StatusCode parallel_predict(
+        const cv::Mat& input_image,
+        const std::vector<std::vector<cv::Point2f> >& points,
+        std::vector<cv::Mat>& predicted_masks);
+
+    /***
+     *
+     * @param input_image
      * @param image_embeddings
      * @return
      */
