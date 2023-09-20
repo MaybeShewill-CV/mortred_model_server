@@ -5,8 +5,8 @@
  * Date: 23-9-20
  ************************************************/
 
-#ifndef MORTRED_MODEL_SERVER_SAM_TRT_EVERYTHING_DECODER_H
-#define MORTRED_MODEL_SERVER_SAM_TRT_EVERYTHING_DECODER_H
+#ifndef MORTRED_MODEL_SERVER_SAM_TRT_AMG_DECODER_H
+#define MORTRED_MODEL_SERVER_SAM_TRT_AMG_DECODER_H
 
 #include <vector>
 
@@ -22,31 +22,31 @@ namespace segment_anything {
 /***
  *
  */
-class SamTrtEverythingDecoder {
+class SamTrtAmgDecoder {
   public:
     /***
     * constructor
     * @param config
      */
-    SamTrtEverythingDecoder();
+    SamTrtAmgDecoder();
 
     /***
      *
      */
-    ~SamTrtEverythingDecoder();
+    ~SamTrtAmgDecoder();
 
     /***
     * constructor
     * @param transformer
      */
-    SamTrtEverythingDecoder(const SamTrtEverythingDecoder& transformer) = delete;
+    SamTrtAmgDecoder(const SamTrtAmgDecoder& transformer) = delete;
 
     /***
      * constructor
      * @param transformer
      * @return
      */
-    SamTrtEverythingDecoder& operator=(const SamTrtEverythingDecoder& transformer) = delete;
+    SamTrtAmgDecoder& operator=(const SamTrtAmgDecoder& transformer) = delete;
 
     /***
      *
@@ -93,4 +93,4 @@ class SamTrtEverythingDecoder {
 }
 }
 
-#endif // MORTRED_MODEL_SERVER_SAM_TRT_EVERYTHING_DECODER_H
+#endif // MORTRED_MODEL_SERVER_SAM_TRT_AMG_DECODER_H
