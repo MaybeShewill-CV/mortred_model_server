@@ -172,6 +172,11 @@ class DeviceMemory {
     /***
      *
      */
+    DeviceMemory(const DeviceMemory&) = default;
+
+    /***
+     *
+     */
     ~DeviceMemory() noexcept {
         for (auto& ptr : _m_memory) {
             auto cuda_status = cudaFree(ptr);
@@ -183,8 +188,6 @@ class DeviceMemory {
         DLOG(INFO) << "~destruct device memory";
     };
 
-  private:
-    DeviceMemory(const DeviceMemory&) = default;
   public:
 
     void swap(DeviceMemory& other) {
