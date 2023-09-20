@@ -29,6 +29,17 @@ int main(int argc, char** argv) {
         return -1;
     }
 
+    // read input image
+    std::string input_image_path = "../demo_data/model_test_input/sam/truck.jpg";
+    if (argc >= 3) {
+        input_image_path = argv[2];
+    }
+    if (!FilePathUtil::is_file_exist(input_image_path)) {
+        LOG(ERROR) << "input image file path: " << input_image_path << " not exists";
+        return -1;
+    }
+    cv::Mat input_image = cv::imread(input_image_path, cv::IMREAD_UNCHANGED);
+
     // test
     std::string config_file_path = argv[1];
     if (!FilePathUtil::is_file_exist(config_file_path)) {
@@ -43,19 +54,8 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    std::string input_image_path = "../demo_data/model_test_input/sam/truck.jpg";
-    if (argc >= 3) {
-        input_image_path = argv[2];
-    }
-    if (!FilePathUtil::is_file_exist(input_image_path)) {
-        LOG(ERROR) << "input image file path: " << input_image_path << " not exists";
-        return -1;
-    }
-    cv::Mat input_image = cv::imread(input_image_path, cv::IMREAD_UNCHANGED);
-
     std::vector<cv::Mat> masks;
     std::vector<float> img_embeds;
-
     LOG(INFO) << "Start benchmarking vit encoder interface ...";
     for (auto idx = 0; idx < 10; ++idx) {
         auto t_start = std::chrono::high_resolution_clock ::now();
@@ -74,9 +74,9 @@ int main(int argc, char** argv) {
         {cv::Point2f(1028 * scale, 490 * scale), },
     };
     for (auto idx = 0; idx < 100; ++idx) {
-        auto t_start = std::chrono::system_clock::now();
+        auto t_start = std::chrono::high_resolution_clock::now();
         sam_trt_segmentor.decode_masks(img_embeds, input_image.size(), prompt_points, masks);
-        auto t_end = std::chrono::system_clock::now();
+        auto t_end = std::chrono::high_resolution_clock::now();
         auto t_cost = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
         LOG(INFO) << " .... iter: " << idx + 1 << " decode mask cost time: " << t_cost << " ms";
     }
