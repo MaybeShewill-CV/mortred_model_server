@@ -5,7 +5,7 @@
  * Date: 23-9-20
  ************************************************/
 
-#include "sam_trt_everything_decoder.h"
+#include "sam_trt_amg_decoder.h"
 
 #include "glog/logging.h"
 #include "stl_container/concurrentqueue.h"
@@ -31,7 +31,7 @@ using trt_helper::DeviceMemory;
 using trt_helper::TrtHelper;
 using trt_helper::TrtLogger;
 
-class SamTrtDecoder::Impl {
+class SamTrtEverythingDecoder::Impl {
   public:
     /***
      *
@@ -53,35 +53,11 @@ class SamTrtDecoder::Impl {
     /***
      *
      * @param image_embeddings
-     * @param bboxes
-     * @param predicted_masks
-     * @return
-     */
-    StatusCode decode(
-        const std::vector<float>& image_embeddings,
-        const std::vector<cv::Rect2f>& bboxes,
-        std::vector<cv::Mat>& predicted_masks);
-
-    /***
-     *
-     * @param image_embeddings
      * @param points
      * @param predicted_masks
      * @return
      */
     StatusCode decode(
-        const std::vector<float>& image_embeddings,
-        const std::vector<std::vector<cv::Point2f> >& points,
-        std::vector<cv::Mat>& predicted_masks);
-
-    /***
-     *
-     * @param image_embeddings
-     * @param points
-     * @param predicted_masks
-     * @return
-     */
-    StatusCode parallel_decode(
         const std::vector<float>& image_embeddings,
         const std::vector<std::vector<cv::Point2f> >& points,
         std::vector<cv::Mat>& predicted_masks);
@@ -121,33 +97,9 @@ class SamTrtDecoder::Impl {
     // tensorrt engine
     std::unique_ptr<nvinfer1::IRuntime> _m_trt_runtime;
     std::unique_ptr<nvinfer1::ICudaEngine> _m_trt_engine;
-    std::unique_ptr<nvinfer1::IExecutionContext> _m_trt_execution_context;
     std::unique_ptr<TrtLogger> _m_trt_logger;
 
-    // input/output tensor binding
-    EngineBinding _m_image_embedding_binding;
-    EngineBinding _m_point_coords_binding;
-    EngineBinding _m_point_labels_binding;
-    EngineBinding _m_mask_input_binding;
-    EngineBinding _m_has_mask_input_binding;
-    EngineBinding _m_low_res_masks_output_binding;
-    EngineBinding _m_iou_predictions_output_binding;
-
-    // trt device memory
-    DeviceMemory _m_device_memory;
-    cudaStream_t _m_cuda_stream = nullptr;
-    int32_t _m_max_decoder_point_counts = 128;
-
-    // origin image size
-    cv::Size _m_ori_image_size;
-    // vit encoder input node size
-    cv::Size _m_encoder_input_size = cv::Size(1024, 1024);
-
-    // init flag
-    bool _m_successfully_initialized = false;
-
-  private:
-    // sam decoder trt input
+    // decoder thread executor
     struct SamDecodeInput {
         // bindings
         EngineBinding image_embedding_binding;
@@ -168,6 +120,18 @@ class SamTrtDecoder::Impl {
     moodycamel::ConcurrentQueue<ThreadExecutor> _m_decoder_queue;
     // worker queue size
     int _m_decoder_queue_size = 4;
+    // parallel decode context
+    struct parallel_decode_seriex_ctx {
+        std::vector<cv::Mat> decoded_masks;
+    };
+
+    // origin image size
+    cv::Size _m_ori_image_size;
+    // vit encoder input node size
+    cv::Size _m_encoder_input_size = cv::Size(1024, 1024);
+
+    // init flag
+    bool _m_successfully_initialized = false;
 
   private:
     /***
@@ -209,6 +173,12 @@ class SamTrtDecoder::Impl {
      * @return
      */
     StatusCode init_thread_executor(ThreadExecutor& executor);
+
+    /***
+     *
+     * @param ctx
+     */
+    void thread_decode_mask_proc(parallel_decode_seriex_ctx* ctx);
 };
 
 /************ Impl Implementation ************/
@@ -218,7 +188,7 @@ class SamTrtDecoder::Impl {
  * @param cfg
  * @return
  */
-StatusCode SamTrtDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
+StatusCode SamTrtEverythingDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
     // init sam vit trt config section
     if (!cfg.contains("SAM_VIT_TRT_DECODER")) {
         LOG(ERROR) << "Config file does not contain SAM_VIT_TRT_DECODER section";
@@ -265,203 +235,6 @@ StatusCode SamTrtDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    // init trt execution context
-    _m_trt_execution_context = std::unique_ptr<nvinfer1::IExecutionContext>(_m_trt_engine->createExecutionContext());
-    if (_m_trt_execution_context == nullptr) {
-        LOG(ERROR) << "create trt engine failed";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // bind image embedding tensor
-    std::string input_node_name = "image_embeddings";
-    auto successfully_bind = TrtHelper::setup_engine_binding(_m_trt_engine, input_node_name, _m_image_embedding_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind input tensor image_embeddings failed";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (_m_image_embedding_binding.dims().nbDims != 4) {
-        std::string input_shape_str = TrtHelper::dims_to_string(_m_image_embedding_binding.dims());
-        LOG(ERROR) << "wrong input tensor shape: " << input_shape_str << " expected: [N, C, H, W]";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (_m_image_embedding_binding.is_dynamic()) {
-        LOG(ERROR) << "trt not support dynamic input tensors";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // bind point coords tensor
-    input_node_name = "point_coords";
-    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_engine, input_node_name, _m_point_coords_binding);
-    nvinfer1::Dims3 point_coords_dims(1, _m_max_decoder_point_counts, 2);
-    _m_point_coords_binding.set_dims(point_coords_dims);
-    _m_trt_execution_context->setInputShape(input_node_name.c_str(), point_coords_dims);
-    //    auto max_dims = _m_trt_engine->getProfileShape(input_node_name.c_str(), 0, nvinfer1::OptProfileSelector::kMAX);
-    //    LOG(INFO) << TrtHelper::dims_to_string(max_dims);
-    //    auto min_dims = _m_trt_engine->getProfileShape(input_node_name.c_str(), 0, nvinfer1::OptProfileSelector::kMIN);
-    //    LOG(INFO) << TrtHelper::dims_to_string(min_dims);
-    //    auto opt_dims = _m_trt_engine->getProfileShape(input_node_name.c_str(), 0, nvinfer1::OptProfileSelector::kOPT);
-    //    LOG(INFO) << TrtHelper::dims_to_string(opt_dims);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind input tensor point_coords failed";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (_m_point_coords_binding.dims().nbDims != 3) {
-        auto input_shape_str = TrtHelper::dims_to_string(_m_point_coords_binding.dims());
-        LOG(ERROR) << "wrong input tensor shape: " << input_shape_str << " expected: [B, N, 2]";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (_m_point_coords_binding.is_dynamic()) {
-        LOG(ERROR) << "trt not support dynamic input tensors";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // bind point labels tensor
-    input_node_name = "point_labels";
-    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_engine, input_node_name, _m_point_labels_binding);
-    nvinfer1::Dims2 point_labels_dims(1, _m_max_decoder_point_counts);
-    _m_point_labels_binding.set_dims(point_labels_dims);
-    _m_trt_execution_context->setInputShape(input_node_name.c_str(), point_labels_dims);
-    //    max_dims = _m_trt_engine->getProfileShape(input_node_name.c_str(), 0, nvinfer1::OptProfileSelector::kMAX);
-    //    LOG(INFO) << TrtHelper::dims_to_string(max_dims);
-    //    min_dims = _m_trt_engine->getProfileShape(input_node_name.c_str(), 0, nvinfer1::OptProfileSelector::kMIN);
-    //    LOG(INFO) << TrtHelper::dims_to_string(min_dims);
-    //    opt_dims = _m_trt_engine->getProfileShape(input_node_name.c_str(), 0, nvinfer1::OptProfileSelector::kOPT);
-    //    LOG(INFO) << TrtHelper::dims_to_string(opt_dims);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind input tensor point_labels failed";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (_m_point_labels_binding.dims().nbDims != 2) {
-        std::string input_shape_str;
-        for (auto idx = 0; idx < _m_point_labels_binding.dims().nbDims; ++idx) {
-            input_shape_str += std::to_string(_m_point_labels_binding.dims().d[idx]) + ",";
-        }
-        LOG(ERROR) << "wrong input tensor shape: " << input_shape_str << " expected: [B, N]";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (_m_point_labels_binding.is_dynamic()) {
-        LOG(ERROR) << "trt not support dynamic input tensors";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // bind mask input tensor
-    input_node_name = "mask_input";
-    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_engine, input_node_name, _m_mask_input_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind input tensor mask_input failed";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (_m_mask_input_binding.dims().nbDims != 4) {
-        std::string input_shape_str;
-        for (auto idx = 0; idx < _m_mask_input_binding.dims().nbDims; ++idx) {
-            input_shape_str += std::to_string(_m_mask_input_binding.dims().d[idx]) + ",";
-        }
-        LOG(ERROR) << "wrong input tensor shape: " << input_shape_str << " expected: [B, N, H, W]";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (_m_mask_input_binding.is_dynamic()) {
-        LOG(ERROR) << "trt not support dynamic input tensors";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // bind has mask input tensor
-    input_node_name = "has_mask_input";
-    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_engine, input_node_name, _m_has_mask_input_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind input tensor mask_input failed";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (_m_has_mask_input_binding.dims().nbDims != 1) {
-        std::string input_shape_str;
-        for (auto idx = 0; idx < _m_has_mask_input_binding.dims().nbDims; ++idx) {
-            input_shape_str += std::to_string(_m_has_mask_input_binding.dims().d[idx]) + ",";
-        }
-        LOG(ERROR) << "wrong input tensor shape: " << input_shape_str << " expected: [N,]";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (_m_has_mask_input_binding.is_dynamic()) {
-        LOG(ERROR) << "trt not support dynamic input tensors";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // bind low res masks output tensor
-    std::string output_node_name = "low_res_masks";
-    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_engine, output_node_name, _m_low_res_masks_output_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind output tensor failed";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (_m_low_res_masks_output_binding.dims().nbDims != 4) {
-        std::string output_shape_str;
-        for (auto idx = 0; idx < _m_low_res_masks_output_binding.dims().nbDims; ++idx) {
-            output_shape_str += std::to_string(_m_low_res_masks_output_binding.dims().d[idx]) + ",";
-        }
-        LOG(ERROR) << "wrong output tensor shape: " << output_shape_str << " expected: [N, C, H, W]";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (_m_low_res_masks_output_binding.is_dynamic()) {
-        LOG(ERROR) << "trt not support dynamic output tensors";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // bind iou predictions output tensor
-    output_node_name = "iou_predictions";
-    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_engine, output_node_name, _m_iou_predictions_output_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind output tensor failed";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (_m_iou_predictions_output_binding.dims().nbDims != 2) {
-        std::string output_shape_str;
-        for (auto idx = 0; idx < _m_iou_predictions_output_binding.dims().nbDims; ++idx) {
-            output_shape_str += std::to_string(_m_iou_predictions_output_binding.dims().d[idx]) + ",";
-        }
-        LOG(ERROR) << "wrong output tensor shape: " << output_shape_str << " expected: [N, C]";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (_m_iou_predictions_output_binding.is_dynamic()) {
-        LOG(ERROR) << "trt not support dynamic output tensors";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // setup device memory
-    auto set_device_memo_status = TrtHelper::setup_device_memory(
-        _m_trt_engine, _m_trt_execution_context, _m_device_memory);
-    if (set_device_memo_status != StatusCode::OK) {
-        LOG(ERROR) << "setup device memory for model failed, status code: " << set_device_memo_status;
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // init cuda stream
-    if (cudaStreamCreate(&_m_cuda_stream) != cudaSuccess) {
-        LOG(ERROR) << "ERROR: cuda stream creation failed.";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
     // init mask decoder executor queue
     _m_decoder_queue_size = static_cast<int>(cfg_content.at("worker_queue_size").as_integer());
     for (auto idx = 0; idx < _m_decoder_queue_size; ++idx) {
@@ -491,51 +264,7 @@ StatusCode SamTrtDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
  * @param predicted_masks
  * @return
  */
-StatusCode SamTrtDecoder::Impl::decode(
-    const std::vector<float>& image_embeddings,
-    const std::vector<cv::Rect2f>& bboxes,
-    std::vector<cv::Mat>& predicted_masks) {
-    // init image embedding cuda memo copy
-    auto input_mem_size = static_cast<int32_t>(image_embeddings.size() * sizeof(float));
-    auto cuda_status = cudaMemcpyAsync(
-        _m_device_memory.at(_m_image_embedding_binding.index()), image_embeddings.data(), input_mem_size,
-        cudaMemcpyHostToDevice, _m_cuda_stream);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "copy input image memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
-        return StatusCode::MODEL_RUN_SESSION_FAILED;
-    }
-    // decode masks
-    for (auto& bbox : bboxes) {
-        std::vector<cv::Point2f> point_coords;
-        std::vector<float> point_labels;
-        // top left point
-        point_coords.push_back(bbox.tl());
-        point_labels.push_back(2.0);
-        // bottom right point
-        point_coords.push_back(bbox.br());
-        point_labels.push_back(3.0);
-        point_coords.emplace_back(0.0f, 0.0f);
-        point_labels.push_back(-1.0);
-
-        cv::Mat out_mask;
-        auto status = get_mask(point_coords, point_labels, out_mask);
-        if (status != StatusCode::OK) {
-            LOG(ERROR) << "decode mask from image failed, status code: " << status;
-            return status;
-        }
-        predicted_masks.push_back(out_mask);
-    }
-    return StatusCode::OJBK;
-}
-
-/***
- *
- * @param image_embeddings
- * @param bboxes
- * @param predicted_masks
- * @return
- */
-StatusCode SamTrtDecoder::Impl::decode(
+StatusCode SamTrtEverythingDecoder::Impl::decode(
     const std::vector<float> &image_embeddings,
     const std::vector<std::vector<cv::Point2f> > &points,
     std::vector<cv::Mat> &predicted_masks) {
@@ -565,26 +294,11 @@ StatusCode SamTrtDecoder::Impl::decode(
 
 /***
  *
- * @param image_embeddings
- * @param points
- * @param predicted_masks
- * @return
- */
-StatusCode SamTrtDecoder::Impl::parallel_decode(
-    const std::vector<float> &image_embeddings,
-    const std::vector<std::vector<cv::Point2f>> &points,
-    std::vector<cv::Mat> &predicted_masks) {
-    // todo(luoyao@baidu.com) implement
-    return StatusCode::OK;
-}
-
-/***
- *
  * @param input_file_path
  * @param file_content
  * @return
  */
-bool SamTrtDecoder::Impl::read_model_file(const std::string &input_file_path, std::vector<unsigned char> &file_content) {
+bool SamTrtEverythingDecoder::Impl::read_model_file(const std::string &input_file_path, std::vector<unsigned char> &file_content) {
     // read file
     std::ifstream file(input_file_path, std::ios::binary);
     if (!file.is_open() || file.eof() || file.fail() || file.bad()) {
@@ -611,7 +325,7 @@ bool SamTrtDecoder::Impl::read_model_file(const std::string &input_file_path, st
  * @param out_mask
  * @return
  */
-StatusCode SamTrtDecoder::Impl::get_mask(
+StatusCode SamTrtEverythingDecoder::Impl::get_mask(
     const std::vector<cv::Point2f> &point_coords,
     const std::vector<float> &point_labels,
     cv::Mat &out_mask) {
@@ -742,7 +456,7 @@ StatusCode SamTrtDecoder::Impl::get_mask(
  * @param encoder_input_size
  * @return
  */
-void SamTrtDecoder::Impl::decode_output_mask(
+void SamTrtEverythingDecoder::Impl::decode_output_mask(
     const std::vector<float> &low_res_mask_value, const int mask_idx, cv::Mat &out_mask) {
     // select best low res mask
     cv::Mat mask(cv::Size(256, 256), CV_32FC1);
@@ -784,7 +498,7 @@ void SamTrtDecoder::Impl::decode_output_mask(
  * @param executor
  * @return
  */
-StatusCode SamTrtDecoder::Impl::init_thread_executor(ThreadExecutor& executor) {
+StatusCode SamTrtEverythingDecoder::Impl::init_thread_executor(ThreadExecutor& executor) {
     auto& context = executor.first;
     auto& decoder_input = executor.second;
 
@@ -814,9 +528,6 @@ StatusCode SamTrtDecoder::Impl::init_thread_executor(ThreadExecutor& executor) {
     input_node_name = "point_coords";
     auto& point_coords_binding = decoder_input.point_coords_binding;
     successfully_bind = TrtHelper::setup_engine_binding(_m_trt_engine, input_node_name, point_coords_binding);
-    nvinfer1::Dims3 point_coords_dims(1, _m_max_decoder_point_counts, 2);
-    point_coords_binding.set_dims(point_coords_dims);
-    context->setInputShape(input_node_name.c_str(), point_coords_dims);
     if (!successfully_bind) {
         LOG(ERROR) << "bind input tensor point_coords failed";
         return StatusCode::MODEL_INIT_FAILED;
@@ -835,9 +546,6 @@ StatusCode SamTrtDecoder::Impl::init_thread_executor(ThreadExecutor& executor) {
     input_node_name = "point_labels";
     auto& point_labels_binding = decoder_input.point_labels_binding;
     successfully_bind = TrtHelper::setup_engine_binding(_m_trt_engine, input_node_name, point_labels_binding);
-    nvinfer1::Dims2 point_labels_dims(1, _m_max_decoder_point_counts);
-    point_labels_binding.set_dims(point_labels_dims);
-    context->setInputShape(input_node_name.c_str(), point_labels_dims);
     if (!successfully_bind) {
         LOG(ERROR) << "bind input tensor point_labels failed";
         return StatusCode::MODEL_INIT_FAILED;
@@ -879,7 +587,7 @@ StatusCode SamTrtDecoder::Impl::init_thread_executor(ThreadExecutor& executor) {
         return StatusCode::MODEL_INIT_FAILED;
     }
     if (has_mask_input_binding.dims().nbDims != 1) {
-        std::string input_shape_str = TrtHelper::dims_to_string(has_mask_input_binding.dims());;
+        std::string input_shape_str = TrtHelper::dims_to_string(has_mask_input_binding.dims());
         LOG(ERROR) << "wrong input tensor shape: " << input_shape_str << " expected: [N,]";
         return StatusCode::MODEL_INIT_FAILED;
     }
@@ -947,36 +655,22 @@ StatusCode SamTrtDecoder::Impl::init_thread_executor(ThreadExecutor& executor) {
 /***
  *
  */
-SamTrtDecoder::SamTrtDecoder() {
+SamTrtEverythingDecoder::SamTrtEverythingDecoder() {
     _m_pimpl = std::make_unique<Impl>();
 }
 
 /***
  *
  */
-SamTrtDecoder::~SamTrtDecoder() = default;
+SamTrtEverythingDecoder::~SamTrtEverythingDecoder() = default;
 
 /***
  *
  * @param cfg
  * @return
  */
-StatusCode SamTrtDecoder::init(const decltype(toml::parse("")) &cfg) {
+StatusCode SamTrtEverythingDecoder::init(const decltype(toml::parse("")) &cfg) {
     return _m_pimpl->init(cfg);
-}
-
-/***
- *
- * @param image_embeddings
- * @param bboxes
- * @param predicted_masks
- * @return
- */
-StatusCode SamTrtDecoder::decode(
-    const std::vector<float>& image_embeddings,
-    const std::vector<cv::Rect2f>& bboxes,
-    std::vector<cv::Mat>& predicted_masks) {
-    return _m_pimpl->decode(image_embeddings, bboxes, predicted_masks);
 }
 
 /***
@@ -986,7 +680,7 @@ StatusCode SamTrtDecoder::decode(
  * @param predicted_masks
  * @return
  */
-StatusCode SamTrtDecoder::decode(
+StatusCode SamTrtEverythingDecoder::decode(
     const std::vector<float> &image_embeddings,
     const std::vector<std::vector<cv::Point2f> > &points,
     std::vector<cv::Mat> &predicted_masks) {
@@ -995,23 +689,9 @@ StatusCode SamTrtDecoder::decode(
 
 /***
  *
- * @param image_embeddings
- * @param points
- * @param predicted_masks
- * @return
- */
-StatusCode SamTrtDecoder::parallel_decode(
-    const std::vector<float> &image_embeddings,
-    const std::vector<std::vector<cv::Point2f>> &points,
-    std::vector<cv::Mat> &predicted_masks) {
-    return _m_pimpl->parallel_decode(image_embeddings, points, predicted_masks);
-}
-
-/***
- *
  * @param ori_img_size
  */
-void SamTrtDecoder::set_ori_image_size(const cv::Size &ori_img_size) {
+void SamTrtEverythingDecoder::set_ori_image_size(const cv::Size &ori_img_size) {
     return _m_pimpl->set_ori_image_size(ori_img_size);
 }
 
@@ -1019,7 +699,7 @@ void SamTrtDecoder::set_ori_image_size(const cv::Size &ori_img_size) {
  *
  * @param ori_img_size
  */
-void SamTrtDecoder::set_encoder_input_size(const cv::Size &input_node_size){
+void SamTrtEverythingDecoder::set_encoder_input_size(const cv::Size &input_node_size){
     return _m_pimpl->set_encoder_input_size(input_node_size);
 }
 
@@ -1027,7 +707,7 @@ void SamTrtDecoder::set_encoder_input_size(const cv::Size &input_node_size){
  *
  * @return
  */
-bool SamTrtDecoder::is_successfully_initialized() const {
+bool SamTrtEverythingDecoder::is_successfully_initialized() const {
     return _m_pimpl->is_successfully_initialized();
 }
 
