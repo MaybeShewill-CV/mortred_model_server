@@ -12,7 +12,6 @@
 #include "glog/logging.h"
 #include "toml/toml.hpp"
 #include "opencv2/opencv.hpp"
-#include "workflow/WFHttpServer.h"
 
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
@@ -73,92 +72,22 @@ int main(int argc, char** argv) {
         {cv::Point2f(435 * scale, 388 * scale), },
         {cv::Point2f(105 * scale, 166 * scale), },
         {cv::Point2f(1028 * scale, 490 * scale), },
-        {cv::Point2f(562 * scale, 749 * scale), },
-        {cv::Point2f(435 * scale, 388 * scale), },
-        {cv::Point2f(105 * scale, 166 * scale), },
-        {cv::Point2f(1028 * scale, 490 * scale), },
-        {cv::Point2f(562 * scale, 749 * scale), },
-        {cv::Point2f(435 * scale, 388 * scale), },
-        {cv::Point2f(105 * scale, 166 * scale), },
-        {cv::Point2f(1028 * scale, 490 * scale), },
-        {cv::Point2f(562 * scale, 749 * scale), },
-        {cv::Point2f(435 * scale, 388 * scale), },
-        {cv::Point2f(105 * scale, 166 * scale), },
-        {cv::Point2f(1028 * scale, 490 * scale), },
-        {cv::Point2f(562 * scale, 749 * scale), },
-        {cv::Point2f(435 * scale, 388 * scale), },
-        {cv::Point2f(105 * scale, 166 * scale), },
-        {cv::Point2f(1028 * scale, 490 * scale), },
-//        {cv::Point2f(562 * scale, 749 * scale), },
-//        {cv::Point2f(435 * scale, 388 * scale), },
-//        {cv::Point2f(105 * scale, 166 * scale), },
-//        {cv::Point2f(1028 * scale, 490 * scale), },
-//        {cv::Point2f(562 * scale, 749 * scale), },
-//        {cv::Point2f(435 * scale, 388 * scale), },
-//        {cv::Point2f(105 * scale, 166 * scale), },
-//        {cv::Point2f(1028 * scale, 490 * scale), },
-//        {cv::Point2f(562 * scale, 749 * scale), },
-//        {cv::Point2f(435 * scale, 388 * scale), },
-//        {cv::Point2f(105 * scale, 166 * scale), },
-//        {cv::Point2f(1028 * scale, 490 * scale), },
-//        {cv::Point2f(562 * scale, 749 * scale), },
-//        {cv::Point2f(435 * scale, 388 * scale), },
-//        {cv::Point2f(105 * scale, 166 * scale), },
-//        {cv::Point2f(1028 * scale, 490 * scale), },
-//        {cv::Point2f(562 * scale, 749 * scale), },
-//        {cv::Point2f(435 * scale, 388 * scale), },
-//        {cv::Point2f(105 * scale, 166 * scale), },
-//        {cv::Point2f(1028 * scale, 490 * scale), },
-//        {cv::Point2f(562 * scale, 749 * scale), },
-//        {cv::Point2f(435 * scale, 388 * scale), },
-//        {cv::Point2f(105 * scale, 166 * scale), },
-//        {cv::Point2f(1028 * scale, 490 * scale), },
-//        {cv::Point2f(562 * scale, 749 * scale), },
-//        {cv::Point2f(435 * scale, 388 * scale), },
-//        {cv::Point2f(105 * scale, 166 * scale), },
-//        {cv::Point2f(1028 * scale, 490 * scale), },
-//        {cv::Point2f(562 * scale, 749 * scale), },
-//        {cv::Point2f(435 * scale, 388 * scale), },
-//        {cv::Point2f(105 * scale, 166 * scale), },
-//        {cv::Point2f(1028 * scale, 490 * scale), },
-//        {cv::Point2f(562 * scale, 749 * scale), },
-//        {cv::Point2f(435 * scale, 388 * scale), },
-//        {cv::Point2f(105 * scale, 166 * scale), },
-//        {cv::Point2f(1028 * scale, 490 * scale), },
-//        {cv::Point2f(562 * scale, 749 * scale), },
-//        {cv::Point2f(435 * scale, 388 * scale), },
-//        {cv::Point2f(105 * scale, 166 * scale), },
-//        {cv::Point2f(1028 * scale, 490 * scale), },
-//        {cv::Point2f(562 * scale, 749 * scale), },
-//        {cv::Point2f(435 * scale, 388 * scale), },
-//        {cv::Point2f(105 * scale, 166 * scale), },
-//        {cv::Point2f(1028 * scale, 490 * scale), },
-//        {cv::Point2f(562 * scale, 749 * scale), },
-//        {cv::Point2f(435 * scale, 388 * scale), },
-//        {cv::Point2f(105 * scale, 166 * scale), },
-//        {cv::Point2f(1028 * scale, 490 * scale), },
-//        {cv::Point2f(562 * scale, 749 * scale), },
-//        {cv::Point2f(435 * scale, 388 * scale), },
-//        {cv::Point2f(105 * scale, 166 * scale), },
-//        {cv::Point2f(1028 * scale, 490 * scale), },
-//        {cv::Point2f(562 * scale, 749 * scale), },
-//        {cv::Point2f(435 * scale, 388 * scale), },
-//        {cv::Point2f(105 * scale, 166 * scale), },
-//        {cv::Point2f(1028 * scale, 490 * scale), },
-//        {cv::Point2f(562 * scale, 749 * scale), },
-//        {cv::Point2f(435 * scale, 388 * scale), },
-//        {cv::Point2f(105 * scale, 166 * scale), },
-//        {cv::Point2f(1028 * scale, 490 * scale), },
     };
-//    for (auto idx = 0; idx < 100; ++idx) {
-//        auto t_start = std::chrono::system_clock::now();
-//        sam_trt_segmentor.decode_masks(img_embeds, input_image.size(), prompt_points, masks);
-//        auto t_end = std::chrono::system_clock::now();
-//        auto t_cost = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
-//        LOG(INFO) << " .... iter: " << idx + 1 << " decode mask cost time: " << t_cost << " ms";
-//    }
+    for (auto idx = 0; idx < 100; ++idx) {
+        auto t_start = std::chrono::system_clock::now();
+        sam_trt_segmentor.decode_masks(img_embeds, input_image.size(), prompt_points, masks);
+        auto t_end = std::chrono::system_clock::now();
+        auto t_cost = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
+        LOG(INFO) << " .... iter: " << idx + 1 << " decode mask cost time: " << t_cost << " ms";
+    }
 
     LOG(INFO) << "Start benchmarking sam predict interface ...";
+    for (auto& pts : prompt_points) {
+        for (auto& pt : pts) {
+            pt.x /= scale;
+            pt.y /= scale;
+        }
+    }
     for (auto idx = 0; idx < 20; ++idx) {
         masks.clear();
         auto t_start = std::chrono::high_resolution_clock::now();
@@ -172,21 +101,6 @@ int main(int argc, char** argv) {
     std::string output_path = FilePathUtil::concat_path(
         "../demo_data/model_test_input/sam", output_file_name);
     cv::Mat color_output;
-    CvUtils::visualize_sam_output_masks(input_image, masks, color_output);
-    cv::imwrite(output_path, color_output);
-
-    for (auto idx = 0; idx < 20; ++idx) {
-        masks.clear();
-        auto t_start = std::chrono::high_resolution_clock::now();
-        sam_trt_segmentor.parallel_predict(input_image, prompt_points, masks);
-        auto t_end = std::chrono::high_resolution_clock::now();
-        auto t_cost = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
-        LOG(INFO) << " .... iter: " << idx + 1 << " parallel predict mask cost time: " << t_cost << " ms";
-    }
-    output_file_name = FilePathUtil::get_file_name(input_image_path);
-    output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_sam_trt_parallel_output.png";
-    output_path = FilePathUtil::concat_path(
-        "../demo_data/model_test_input/sam", output_file_name);
     CvUtils::visualize_sam_output_masks(input_image, masks, color_output);
     cv::imwrite(output_path, color_output);
 
