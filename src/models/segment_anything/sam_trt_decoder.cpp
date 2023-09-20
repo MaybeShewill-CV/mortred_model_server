@@ -47,7 +47,7 @@ class SamTrtDecoder::Impl {
      * @param cfg
      * @return
      */
-    jinq::common::StatusCode init(const decltype(toml::parse(""))& cfg);
+    StatusCode init(const decltype(toml::parse(""))& cfg);
 
     /***
      *
@@ -56,7 +56,7 @@ class SamTrtDecoder::Impl {
      * @param predicted_masks
      * @return
      */
-    jinq::common::StatusCode decode(
+    StatusCode decode(
         const std::vector<float>& image_embeddings,
         const std::vector<cv::Rect2f>& bboxes,
         std::vector<cv::Mat>& predicted_masks);
@@ -68,7 +68,7 @@ class SamTrtDecoder::Impl {
      * @param predicted_masks
      * @return
      */
-    jinq::common::StatusCode decode(
+    StatusCode decode(
         const std::vector<float>& image_embeddings,
         const std::vector<std::vector<cv::Point2f> >& points,
         std::vector<cv::Mat>& predicted_masks);
@@ -123,7 +123,7 @@ class SamTrtDecoder::Impl {
     // trt device memory
     DeviceMemory _m_device_memory;
     cudaStream_t _m_cuda_stream = nullptr;
-    int32_t _m_max_decoder_point_counts = 16;
+    int32_t _m_max_decoder_point_counts = 128;
 
     // origin image size
     cv::Size _m_ori_image_size;
@@ -175,7 +175,7 @@ class SamTrtDecoder::Impl {
  * @param cfg
  * @return
  */
-jinq::common::StatusCode SamTrtDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
+StatusCode SamTrtDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
     // init sam vit trt config section
     if (!cfg.contains("SAM_VIT_TRT_DECODER")) {
         LOG(ERROR) << "Config file does not contain SAM_VIT_TRT_DECODER section";
@@ -239,10 +239,7 @@ jinq::common::StatusCode SamTrtDecoder::Impl::init(const decltype(toml::parse(""
         return StatusCode::MODEL_INIT_FAILED;
     }
     if (_m_image_embedding_binding.dims().nbDims != 4) {
-        std::string input_shape_str;
-        for (auto idx = 0; idx < _m_image_embedding_binding.dims().nbDims; ++idx) {
-            input_shape_str += std::to_string(_m_image_embedding_binding.dims().d[idx]) + ",";
-        }
+        std::string input_shape_str = TrtHelper::dims_to_string(_m_image_embedding_binding.dims());
         LOG(ERROR) << "wrong input tensor shape: " << input_shape_str << " expected: [N, C, H, W]";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
@@ -288,22 +285,13 @@ jinq::common::StatusCode SamTrtDecoder::Impl::init(const decltype(toml::parse(""
     nvinfer1::Dims2 point_labels_dims(1, _m_max_decoder_point_counts);
     _m_point_labels_binding.set_dims(point_labels_dims);
     _m_trt_execution_context->setInputShape(input_node_name.c_str(), point_labels_dims);
-//    max_dims = _m_trt_engine->getProfileShape(input_node_name.c_str(), 0, nvinfer1::OptProfileSelector::kMAX);
-//    LOG(INFO) << TrtHelper::dims_to_string(max_dims);
-//    min_dims = _m_trt_engine->getProfileShape(input_node_name.c_str(), 0, nvinfer1::OptProfileSelector::kMIN);
-//    LOG(INFO) << TrtHelper::dims_to_string(min_dims);
-//    opt_dims = _m_trt_engine->getProfileShape(input_node_name.c_str(), 0, nvinfer1::OptProfileSelector::kOPT);
-//    LOG(INFO) << TrtHelper::dims_to_string(opt_dims);
     if (!successfully_bind) {
         LOG(ERROR) << "bind input tensor point_labels failed";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
     if (_m_point_labels_binding.dims().nbDims != 2) {
-        std::string input_shape_str;
-        for (auto idx = 0; idx < _m_point_labels_binding.dims().nbDims; ++idx) {
-            input_shape_str += std::to_string(_m_point_labels_binding.dims().d[idx]) + ",";
-        }
+        auto input_shape_str = TrtHelper::dims_to_string(_m_point_labels_binding.dims());
         LOG(ERROR) << "wrong input tensor shape: " << input_shape_str << " expected: [B, N]";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
@@ -323,10 +311,7 @@ jinq::common::StatusCode SamTrtDecoder::Impl::init(const decltype(toml::parse(""
         return StatusCode::MODEL_INIT_FAILED;
     }
     if (_m_mask_input_binding.dims().nbDims != 4) {
-        std::string input_shape_str;
-        for (auto idx = 0; idx < _m_mask_input_binding.dims().nbDims; ++idx) {
-            input_shape_str += std::to_string(_m_mask_input_binding.dims().d[idx]) + ",";
-        }
+        auto input_shape_str = TrtHelper::dims_to_string(_m_mask_input_binding.dims());
         LOG(ERROR) << "wrong input tensor shape: " << input_shape_str << " expected: [B, N, H, W]";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
@@ -346,10 +331,7 @@ jinq::common::StatusCode SamTrtDecoder::Impl::init(const decltype(toml::parse(""
         return StatusCode::MODEL_INIT_FAILED;
     }
     if (_m_has_mask_input_binding.dims().nbDims != 1) {
-        std::string input_shape_str;
-        for (auto idx = 0; idx < _m_has_mask_input_binding.dims().nbDims; ++idx) {
-            input_shape_str += std::to_string(_m_has_mask_input_binding.dims().d[idx]) + ",";
-        }
+        auto input_shape_str = TrtHelper::dims_to_string(_m_has_mask_input_binding.dims());
         LOG(ERROR) << "wrong input tensor shape: " << input_shape_str << " expected: [N,]";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
@@ -369,10 +351,7 @@ jinq::common::StatusCode SamTrtDecoder::Impl::init(const decltype(toml::parse(""
         return StatusCode::MODEL_INIT_FAILED;
     }
     if (_m_low_res_masks_output_binding.dims().nbDims != 4) {
-        std::string output_shape_str;
-        for (auto idx = 0; idx < _m_low_res_masks_output_binding.dims().nbDims; ++idx) {
-            output_shape_str += std::to_string(_m_low_res_masks_output_binding.dims().d[idx]) + ",";
-        }
+        auto output_shape_str = TrtHelper::dims_to_string(_m_low_res_masks_output_binding.dims());
         LOG(ERROR) << "wrong output tensor shape: " << output_shape_str << " expected: [N, C, H, W]";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
@@ -392,10 +371,7 @@ jinq::common::StatusCode SamTrtDecoder::Impl::init(const decltype(toml::parse(""
         return StatusCode::MODEL_INIT_FAILED;
     }
     if (_m_iou_predictions_output_binding.dims().nbDims != 2) {
-        std::string output_shape_str;
-        for (auto idx = 0; idx < _m_iou_predictions_output_binding.dims().nbDims; ++idx) {
-            output_shape_str += std::to_string(_m_iou_predictions_output_binding.dims().d[idx]) + ",";
-        }
+        auto output_shape_str = TrtHelper::dims_to_string(_m_iou_predictions_output_binding.dims());
         LOG(ERROR) << "wrong output tensor shape: " << output_shape_str << " expected: [N, C]";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
@@ -417,7 +393,7 @@ jinq::common::StatusCode SamTrtDecoder::Impl::init(const decltype(toml::parse(""
 
     // init cuda stream
     if (cudaStreamCreate(&_m_cuda_stream) != cudaSuccess) {
-        LOG(ERROR) << "ERROR: cuda stream creation failed." << std::endl;
+        LOG(ERROR) << "ERROR: cuda stream creation failed.";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
@@ -725,7 +701,7 @@ SamTrtDecoder::~SamTrtDecoder() = default;
  * @param cfg
  * @return
  */
-jinq::common::StatusCode SamTrtDecoder::init(const decltype(toml::parse("")) &cfg) {
+StatusCode SamTrtDecoder::init(const decltype(toml::parse("")) &cfg) {
     return _m_pimpl->init(cfg);
 }
 
@@ -736,7 +712,7 @@ jinq::common::StatusCode SamTrtDecoder::init(const decltype(toml::parse("")) &cf
  * @param predicted_masks
  * @return
  */
-jinq::common::StatusCode SamTrtDecoder::decode(
+StatusCode SamTrtDecoder::decode(
     const std::vector<float>& image_embeddings,
     const std::vector<cv::Rect2f>& bboxes,
     std::vector<cv::Mat>& predicted_masks) {
@@ -750,7 +726,7 @@ jinq::common::StatusCode SamTrtDecoder::decode(
  * @param predicted_masks
  * @return
  */
-jinq::common::StatusCode SamTrtDecoder::decode(
+StatusCode SamTrtDecoder::decode(
     const std::vector<float> &image_embeddings,
     const std::vector<std::vector<cv::Point2f> > &points,
     std::vector<cv::Mat> &predicted_masks) {

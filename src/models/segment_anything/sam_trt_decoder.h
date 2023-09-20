@@ -91,7 +91,6 @@ class SamTrtDecoder {
         const std::vector<std::vector<cv::Point2f> >& points,
         std::vector<cv::Mat>& predicted_masks);
 
-
     /***
      * if model successfully initialized
      * @return
