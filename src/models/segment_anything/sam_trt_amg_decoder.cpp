@@ -118,6 +118,9 @@ class SamTrtAmgDecoder::Impl {
     };
     // thread executor
     struct ThreadExecutor {
+//        std::unique_ptr<nvinfer1::IRuntime> trt_runtime;
+//        std::unique_ptr<nvinfer1::ICudaEngine> trt_engine;
+//        std::unique_ptr<TrtLogger> trt_logger;
         std::unique_ptr<nvinfer1::IExecutionContext> context;
         std::unique_ptr<SamDecodeInput> input;
     };
@@ -129,8 +132,15 @@ class SamTrtAmgDecoder::Impl {
     int _m_compute_thread_nums = 1;
     // parallel decode context
     struct thread_decode_seriex_ctx {
+        // output params
         cv::Mat decoded_masks;
         StatusCode model_run_status = StatusCode::OK;
+        // time consuming measurement
+        long dequeue_thread_executor_time_consuming = 0;
+        long gpu_memo_cpy_time_consuming = 0;
+        long model_inference_consuming = 0;
+        long decode_mask_time_consuming = 0;
+        long enqueue_thread_executor_time_consuming = 0;
     };
 
     // origin image size
@@ -239,11 +249,24 @@ StatusCode SamTrtAmgDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
     // init mask decoder executor queue
     _m_decoder_queue_size = static_cast<int>(cfg_content.at("worker_queue_size").as_integer());
     for (auto idx = 0; idx < _m_decoder_queue_size; ++idx) {
+        // init trt logger and runtime
+//        auto trt_logger = std::make_unique<TrtLogger>();
+//        auto trt_runtime = std::unique_ptr<nvinfer1::IRuntime>(nvinfer1::createInferRuntime(*trt_logger));
+        // init trt engine
+//        auto trt_engine = std::unique_ptr<nvinfer1::ICudaEngine>(
+//            trt_runtime->deserializeCudaEngine(model_file_content.data(), model_content_length));
+        // init trt context
         auto context = std::unique_ptr<nvinfer1::IExecutionContext>(_m_trt_engine->createExecutionContext());
+        // init decoder input
         auto decoder_input = std::make_unique<SamDecodeInput>();
+
         ThreadExecutor executor;
+//        executor.trt_logger = std::move(trt_logger);
+//        executor.trt_runtime = std::move(trt_runtime);
+//        executor.trt_engine = std::move(trt_engine);
         executor.context = std::move(context);
         executor.input = std::move(decoder_input);
+
         auto init_status = init_thread_executor(executor);
         if (init_status != StatusCode::OK) {
             LOG(ERROR) << "init thread mask decode executor failed, status code: " << init_status;
@@ -287,6 +310,12 @@ StatusCode SamTrtAmgDecoder::Impl::decode(
             } else {
                 predicted_masks.push_back(series_ctx->decoded_masks);
             }
+            LOG(INFO) << "      -- series: " << idx << " decode time profile";
+            LOG(INFO) << "      -- dequeue thread executor cost time: " << series_ctx->dequeue_thread_executor_time_consuming << " ms";
+            LOG(INFO) << "      -- copy inputs to gpu memory cost time: " << series_ctx->gpu_memo_cpy_time_consuming << " ms";
+            LOG(INFO) << "      -- decoding model inference cost time: " << series_ctx->model_inference_consuming << " ms";
+            LOG(INFO) << "      -- decode output mask cost time: " << series_ctx->decode_mask_time_consuming << " ms";
+            LOG(INFO) << "      -- enqueue thread executor cost time: " << series_ctx->enqueue_thread_executor_time_consuming << " ms";
             delete series_ctx;
         }
         wait_group.done();
@@ -386,6 +415,7 @@ void SamTrtAmgDecoder::Impl::decode_output_mask(
  * @return
  */
 StatusCode SamTrtAmgDecoder::Impl::init_thread_executor(ThreadExecutor& executor) {
+//    auto& engine = executor.trt_engine;
     auto& context = executor.context;
     auto& decoder_input = executor.input;
 
@@ -548,10 +578,15 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
     const cv::Point2f &point,
     thread_decode_seriex_ctx *ctx) {
     // get decoder
+    auto t_start = std::chrono::high_resolution_clock::now();
     ThreadExecutor decode_executor;
     while (!_m_decoder_queue.try_dequeue(decode_executor)) {}
     auto& context = decode_executor.context;
     auto& decoder_input = decode_executor.input;
+    auto t_end = std::chrono::high_resolution_clock::now();
+    auto t_cost = std::chrono::duration_cast<std::chrono::milliseconds >(t_end - t_start).count();
+    ctx->dequeue_thread_executor_time_consuming = t_cost;
+    DLOG(INFO) << "      -- get decoding executor cost time: " << t_cost << " ms";
 
     // prepare input bindings
     auto& image_embedding_binding = decoder_input->image_embedding_binding;
@@ -566,10 +601,14 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
     auto& cuda_stream = decoder_input->cuda_stream;
 
     // init image embedding cuda memo copy
+    t_start = std::chrono::high_resolution_clock::now();
     auto input_mem_size = static_cast<int32_t>(image_embeddings.size() * sizeof(float));
     auto cuda_status = cudaMemcpyAsync(
         device_memory.at(image_embedding_binding.index()), image_embeddings.data(), input_mem_size,
         cudaMemcpyHostToDevice, cuda_stream);
+//    auto cuda_status = cudaMemcpy(
+//        device_memory.at(image_embedding_binding.index()), image_embeddings.data(), input_mem_size,
+//        cudaMemcpyHostToDevice);
     if (cuda_status != cudaSuccess) {
         LOG(ERROR) << "copy image embedding memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
         ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;
@@ -587,6 +626,9 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
     cuda_status = cudaMemcpyAsync(
         device_memory.at(point_coords_binding.index()), total_points.data(), input_mem_size,
         cudaMemcpyHostToDevice, cuda_stream);
+//    cuda_status = cudaMemcpy(
+//        device_memory.at(point_coords_binding.index()), total_points.data(), input_mem_size,
+//        cudaMemcpyHostToDevice);
     if (cuda_status != cudaSuccess) {
         LOG(ERROR) << "copy point coords memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
         ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;
@@ -596,6 +638,9 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
     cuda_status = cudaMemcpyAsync(
         device_memory.at(point_labels_binding.index()), total_labels.data(), input_mem_size,
         cudaMemcpyHostToDevice, cuda_stream);
+//    cuda_status = cudaMemcpy(
+//        device_memory.at(point_labels_binding.index()), total_labels.data(), input_mem_size,
+//        cudaMemcpyHostToDevice);
     if (cuda_status != cudaSuccess) {
         LOG(ERROR) << "copy point labels memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
         ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;
@@ -608,6 +653,9 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
     cuda_status = cudaMemcpyAsync(
         device_memory.at(mask_input_binding.index()), mask_tensor_values.data(), input_mem_size,
         cudaMemcpyHostToDevice, cuda_stream);
+//    cuda_status = cudaMemcpy(
+//        device_memory.at(mask_input_binding.index()), mask_tensor_values.data(), input_mem_size,
+//        cudaMemcpyHostToDevice);
     if (cuda_status != cudaSuccess) {
         LOG(ERROR) << "copy mask tensor memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
         ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;
@@ -620,13 +668,22 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
     cuda_status = cudaMemcpyAsync(
         device_memory.at(has_mask_input_binding.index()), has_mask_tensor_values.data(), input_mem_size,
         cudaMemcpyHostToDevice, cuda_stream);
+//    cuda_status = cudaMemcpy(
+//        device_memory.at(has_mask_input_binding.index()), has_mask_tensor_values.data(), input_mem_size,
+//        cudaMemcpyHostToDevice);
     if (cuda_status != cudaSuccess) {
         LOG(ERROR) << "copy has mask tensor value to gpu failed, error str: " << cudaGetErrorString(cuda_status);
         ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;
         return;
     }
+    cudaStreamSynchronize(cuda_stream);
+    t_end = std::chrono::high_resolution_clock::now();
+    t_cost = std::chrono::duration_cast<std::chrono::milliseconds >(t_end - t_start).count();
+    ctx->gpu_memo_cpy_time_consuming = t_cost;
+    DLOG(INFO) << "      -- copy inputs to gpu memory cost time: " << t_cost << " ms";
 
     // do inference
+    t_start = std::chrono::high_resolution_clock::now();
     context->setInputTensorAddress("image_embeddings", device_memory.at(image_embedding_binding.index()));
     context->setInputTensorAddress("point_coords", device_memory.at(point_coords_binding.index()));
     context->setInputTensorAddress("point_labels", device_memory.at(point_labels_binding.index()));
@@ -639,12 +696,20 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
         ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;
         return;
     }
+//    if (!context->executeV2(device_memory.begin())) {
+//        LOG(ERROR) << "excute input data for inference failed";
+//        ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;
+//        return;
+//    }
 
     std::vector<float> low_res_mask_data;
     low_res_mask_data.resize(low_res_masks_output_binding.volume());
     cuda_status = cudaMemcpyAsync(
         low_res_mask_data.data(),device_memory.at(low_res_masks_output_binding.index()),
         low_res_masks_output_binding.volume() * sizeof(float),cudaMemcpyDeviceToHost, cuda_stream);
+//    cuda_status = cudaMemcpy(
+//        low_res_mask_data.data(),device_memory.at(low_res_masks_output_binding.index()),
+//        low_res_masks_output_binding.volume() * sizeof(float),cudaMemcpyDeviceToHost);
     if (cuda_status != cudaSuccess) {
         LOG(ERROR) << "async copy output tensor back from device memory to host memory failed, error str: "
                    << cudaGetErrorString(cuda_status);
@@ -656,6 +721,9 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
     cuda_status = cudaMemcpyAsync(
         iou_preds_data.data(), device_memory.at(iou_predictions_output_binding.index()),
         iou_predictions_output_binding.volume() * sizeof(float), cudaMemcpyDeviceToHost, cuda_stream);
+//    cuda_status = cudaMemcpy(
+//        iou_preds_data.data(), device_memory.at(iou_predictions_output_binding.index()),
+//        iou_predictions_output_binding.volume() * sizeof(float), cudaMemcpyDeviceToHost);
     if (cuda_status != cudaSuccess) {
         LOG(ERROR) << "async copy output tensor back from device memory to host memory failed, error str: "
                    << cudaGetErrorString(cuda_status);
@@ -663,14 +731,27 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
         return;
     }
     cudaStreamSynchronize(cuda_stream);
+    t_end = std::chrono::high_resolution_clock::now();
+    t_cost = std::chrono::duration_cast<std::chrono::milliseconds >(t_end - t_start).count();
+    ctx->model_inference_consuming = t_cost;
+    DLOG(INFO) << "      -- enqueueV3 execution cost time: " << t_cost << " ms";
 
     // parse output mask
+    t_start = std::chrono::high_resolution_clock::now();
     int best_mask_idx = static_cast<int>(
         std::distance(iou_preds_data.begin(), std::max_element(iou_preds_data.begin(), iou_preds_data.end())));
     decode_output_mask(low_res_mask_data, best_mask_idx, ctx->decoded_masks);
+    t_end = std::chrono::high_resolution_clock::now();
+    t_cost = std::chrono::duration_cast<std::chrono::milliseconds >(t_end - t_start).count();
+    ctx->decode_mask_time_consuming = t_cost;
+    DLOG(INFO) << "      -- decode mask cost time: " << t_cost << " ms";
 
     // restore worker queue
-    while (!_m_decoder_queue.enqueue(std::move(decode_executor))) {}
+    t_start = std::chrono::high_resolution_clock::now();
+    _m_decoder_queue.enqueue(std::move(decode_executor));
+    t_end = std::chrono::high_resolution_clock::now();
+    t_cost = std::chrono::duration_cast<std::chrono::milliseconds >(t_end - t_start).count();
+    ctx->enqueue_thread_executor_time_consuming = t_cost;
 }
 
 /***
