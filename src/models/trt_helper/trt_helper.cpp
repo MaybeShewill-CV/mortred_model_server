@@ -139,6 +139,8 @@ StatusCode TrtHelper::setup_device_memory(
         DLOG(INFO) << "tensor: " << tensorname <<  ", volume: " << volume << ", dims: " << dims_to_string(dims);
         void* cuda_memo = nullptr;
         auto r = cudaMalloc(&cuda_memo, volume * sizeof(float));
+//        auto r = cudaMallocHost(&cuda_memo, volume * sizeof(float));
+//        auto r = cudaHostAlloc(&cuda_memo, volume * sizeof(float), cudaHostAllocMapped);
         if (r != 0 || cuda_memo == nullptr) {
             LOG(ERROR) << "Setup device memory failed error str: " << cudaGetErrorString(r);
             return StatusCode::TRT_ALLOC_MEMO_FAILED;
