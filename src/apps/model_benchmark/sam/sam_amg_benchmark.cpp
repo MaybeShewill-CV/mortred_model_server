@@ -70,25 +70,12 @@ int main(int argc, char** argv) {
 
     std::vector<cv::Mat> masks;
     std::vector<float> img_embeds;
+    float scale = 1024.f / static_cast<float>(input_image.cols);
+    std::vector<std::vector<cv::Point2f> > prompt_points(12, {{cv::Point2f(562 * scale, 749 * scale),},});
 
     sam_vit_encoder.encode(input_image, img_embeds);
 
     LOG(INFO) << "Start benchmarking prompt mask decoder interface ...";
-    float scale = 1024.f / static_cast<float>(input_image.cols);
-    std::vector<std::vector<cv::Point2f> > prompt_points = {
-        {cv::Point2f(562 * scale, 749 * scale), },
-        {cv::Point2f(435 * scale, 388 * scale), },
-        {cv::Point2f(105 * scale, 166 * scale), },
-        {cv::Point2f(1028 * scale, 490 * scale), },
-        {cv::Point2f(562 * scale, 749 * scale), },
-        {cv::Point2f(435 * scale, 388 * scale), },
-        {cv::Point2f(105 * scale, 166 * scale), },
-        {cv::Point2f(1028 * scale, 490 * scale), },
-        {cv::Point2f(562 * scale, 749 * scale), },
-        {cv::Point2f(435 * scale, 388 * scale), },
-        {cv::Point2f(105 * scale, 166 * scale), },
-        {cv::Point2f(1028 * scale, 490 * scale), },
-    };
     for (auto idx = 0; idx < 100; ++idx) {
         auto t_start = std::chrono::high_resolution_clock::now();
         sam_trt_decoder.decode(img_embeds, prompt_points, masks);
