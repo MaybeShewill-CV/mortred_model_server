@@ -313,7 +313,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
     // fill response
     StatusCode status;
 
-    if (state == WFT_STATE_ABORTED) {
+    if (state != WFT_STATE_SUCCESS) {
         LOG(ERROR) << "task: " << ctx->task_id << " model run timeout";
         status = StatusCode::MODEL_RUN_TIMEOUT;
     } else {
