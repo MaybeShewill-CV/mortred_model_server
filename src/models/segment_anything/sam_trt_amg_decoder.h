@@ -67,17 +67,32 @@ class SamTrtAmgDecoder {
      */
     void set_encoder_input_size(const cv::Size& input_node_size);
 
+    struct AmgMaskOutput {
+        std::vector<cv::Mat> segmentations;
+        std::vector<int32_t> areas;
+        std::vector<cv::Rect> bboxes;
+        std::vector<float> preds_ious;
+        std::vector<float> preds_stability_scores;
+        std::vector<cv::Point2f> point_coords;
+    };
+
     /***
      *
      * @param image_embeddings
-     * @param bboxes
-     * @param predicted_masks
+     * @param output_mask
+     * @param points_per_side
+     * @param pred_iou_thresh
+     * @param stability_score_thresh
+     * @param stability_score_offset
+     * @param box_nms_thresh
+     * @param min_mask_region_area
      * @return
      */
-    jinq::common::StatusCode decode(
+    jinq::common::StatusCode decode_everything(
         const std::vector<float>& image_embeddings,
-        const std::vector<std::vector<cv::Point2f> >& points,
-        std::vector<cv::Mat>& predicted_masks);
+        AmgMaskOutput& output, int points_per_side = 32, float pred_iou_thresh = 0.88,
+        float stability_score_thresh = 0.95, float stability_score_offset = 1.0f,
+        float box_nms_thresh = 0.7, int min_mask_region_area = 0);
 
     /***
      * if model successfully initialized

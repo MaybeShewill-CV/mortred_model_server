@@ -55,14 +55,20 @@ class SamTrtAmgDecoder::Impl {
     /***
      *
      * @param image_embeddings
-     * @param points
-     * @param predicted_masks
+     * @param amg_output
+     * @param points_per_side
+     * @param pred_iou_thresh
+     * @param stability_score_thresh
+     * @param stability_score_offset
+     * @param box_nms_thresh
+     * @param min_mask_region_area
      * @return
      */
-    StatusCode decode(
-        const std::vector<float>& image_embeddings,
-        const std::vector<std::vector<cv::Point2f> >& points,
-        std::vector<cv::Mat>& predicted_masks);
+    StatusCode decode_everything(
+        const std::vector<float> &image_embeddings,
+        AmgMaskOutput& amg_output, int points_per_side = 32, float pred_iou_thresh = 0.88,
+        float stability_score_thresh = 0.95, float stability_score_offset = 1.0f,
+        float box_nms_thresh = 0.7, int min_mask_region_area = 0);
 
     /***
      *
@@ -135,6 +141,9 @@ class SamTrtAmgDecoder::Impl {
         // output params
         cv::Mat decoded_masks;
         StatusCode model_run_status = StatusCode::OK;
+        float pred_iou = 0.0f;
+        float stability_score = 0.0f;
+        cv::Point2f point_coord;
         // time consuming measurement
         long dequeue_thread_executor_time_consuming = 0;
         long gpu_memo_cpy_time_consuming = 0;
@@ -159,6 +168,24 @@ class SamTrtAmgDecoder::Impl {
      * @return
      */
     static bool read_model_file(const std::string& input_file_path, std::vector<unsigned char>& file_content);
+
+    /***
+     *
+     * @param image_embeddings
+     * @param points
+     * @param predicted_masks
+     * @param predicted_iou
+     * @param stability_scores
+     * @param point_coords
+     * @return
+     */
+    StatusCode decode(
+        const std::vector<float>& image_embeddings,
+        const std::vector<std::vector<cv::Point2f> >& points,
+        std::vector<cv::Mat>& predicted_masks,
+        std::vector<float>& predicted_iou,
+        std::vector<float>& stability_scores,
+        std::vector<cv::Point2f>& point_coords);
 
     /***
      *
@@ -190,6 +217,41 @@ class SamTrtAmgDecoder::Impl {
         const std::vector<float>& image_embeddings,
         const cv::Point2f& point,
         thread_decode_seriex_ctx* ctx);
+
+    /***
+     *
+     * @param input_image_size
+     * @param n_points_per_side
+     * @return
+     */
+    static std::vector<std::vector<cv::Point2f> > generate_prompt_points(const cv::Size& input_image_size, int n_points_per_side);
+
+    /***
+     *
+     * @param mask
+     * @param mask_threshold
+     * @param threshold_offset
+     * @return
+     */
+    static float calculate_stability_score(const cv::Mat& mask);
+
+    /***
+     *
+     * @param pred_masks
+     * @param pred_ious
+     * @param pred_stability_scores
+     * @param point_coords
+     * @param pred_iou_thresh
+     * @param stability_score_thresh
+     * @param box_nms_thresh
+     * @param min_mask_region_area
+     * @param amg_output
+     */
+    static void filter_output_masks(
+        const std::vector<cv::Mat>& pred_masks, const std::vector<float>& pred_ious, const std::vector<float>& pred_stability_scores,
+        const std::vector<cv::Point2f>& point_coords, float pred_iou_thresh,
+        float stability_score_thresh, float box_nms_thresh, int min_mask_region_area,
+        AmgMaskOutput& amg_output);
 };
 
 /************ Impl Implementation ************/
@@ -249,21 +311,12 @@ StatusCode SamTrtAmgDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
     // init mask decoder executor queue
     _m_decoder_queue_size = static_cast<int>(cfg_content.at("worker_queue_size").as_integer());
     for (auto idx = 0; idx < _m_decoder_queue_size; ++idx) {
-        // init trt logger and runtime
-//        auto trt_logger = std::make_unique<TrtLogger>();
-//        auto trt_runtime = std::unique_ptr<nvinfer1::IRuntime>(nvinfer1::createInferRuntime(*trt_logger));
-        // init trt engine
-//        auto trt_engine = std::unique_ptr<nvinfer1::ICudaEngine>(
-//            trt_runtime->deserializeCudaEngine(model_file_content.data(), model_content_length));
         // init trt context
         auto context = std::unique_ptr<nvinfer1::IExecutionContext>(_m_trt_engine->createExecutionContext());
         // init decoder input
         auto decoder_input = std::make_unique<SamDecodeInput>();
 
         ThreadExecutor executor;
-//        executor.trt_logger = std::move(trt_logger);
-//        executor.trt_runtime = std::move(trt_runtime);
-//        executor.trt_engine = std::move(trt_engine);
         executor.context = std::move(context);
         executor.input = std::move(decoder_input);
 
@@ -291,50 +344,39 @@ StatusCode SamTrtAmgDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
 /***
  *
  * @param image_embeddings
- * @param bboxes
- * @param predicted_masks
+ * @param amg_output
+ * @param points_per_side
+ * @param pred_iou_thresh
+ * @param stability_score_thresh
+ * @param stability_score_offset
+ * @param box_nms_thresh
+ * @param min_mask_region_area
  * @return
  */
-StatusCode SamTrtAmgDecoder::Impl::decode(
-    const std::vector<float> &image_embeddings,
-    const std::vector<std::vector<cv::Point2f> > &points,
-    std::vector<cv::Mat> &predicted_masks) {
-    WFFacilities::WaitGroup wait_group(1);
-    StatusCode status = StatusCode::OK;
-    // create workflow parallel series
-    auto* p_series = Workflow::create_parallel_work([&](const ParallelWork* pwork) -> void {
-        for (auto idx = 0; idx < pwork->size(); ++idx) {
-            auto* series_ctx = (thread_decode_seriex_ctx*)pwork->series_at(idx)->get_context();
-            if (series_ctx->model_run_status != StatusCode::OK) {
-                status = series_ctx->model_run_status;
-            } else {
-                predicted_masks.push_back(series_ctx->decoded_masks);
-            }
-            LOG(INFO) << "      -- series: " << idx << " decode time profile";
-            LOG(INFO) << "      -- dequeue thread executor cost time: " << series_ctx->dequeue_thread_executor_time_consuming << " ms";
-            LOG(INFO) << "      -- copy inputs to gpu memory cost time: " << series_ctx->gpu_memo_cpy_time_consuming << " ms";
-            LOG(INFO) << "      -- decoding model inference cost time: " << series_ctx->model_inference_consuming << " ms";
-            LOG(INFO) << "      -- decode output mask cost time: " << series_ctx->decode_mask_time_consuming << " ms";
-            LOG(INFO) << "      -- enqueue thread executor cost time: " << series_ctx->enqueue_thread_executor_time_consuming << " ms";
-            delete series_ctx;
-        }
-        wait_group.done();
-//        LOG(INFO) << "parallel decode mask complete";
-    });
+StatusCode SamTrtAmgDecoder::Impl::decode_everything(
+    const std::vector<float>& image_embeddings,
+    AmgMaskOutput& amg_output, const int points_per_side, const float pred_iou_thresh,
+    const float stability_score_thresh, const float stability_score_offset,
+    const float box_nms_thresh, const int min_mask_region_area) {
+    // generate decoding prompt points
+    auto prompt_pts = generate_prompt_points(_m_ori_image_size, points_per_side);
 
-    // add multiple decode task into parallel series
-    for (auto& pts : points) {
-        auto* ctx = new thread_decode_seriex_ctx;
-        auto&& decode_proc = std::bind(
-            &SamTrtAmgDecoder::Impl::thread_decode_mask_proc, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
-        auto* decode_task = WFTaskFactory::create_go_task(
-            "parallel_decode_mask", decode_proc, image_embeddings, pts[0], ctx);
-        auto* series = Workflow::create_series_work(decode_task, nullptr);
-        series->set_context(ctx);
-        p_series->add_series(series);
+    // decode masks
+    std::vector<cv::Mat> pred_masks;
+    std::vector<float> pred_ious;
+    std::vector<float> pred_stability_scores;
+    std::vector<cv::Point2f> point_coords;
+    auto status = decode(image_embeddings, prompt_pts, pred_masks, pred_ious, pred_stability_scores, point_coords);
+    if (status != StatusCode::OK) {
+        LOG(INFO) << "decode mask from prompt points failed, status code: " << status;
+        return status;
     }
-    p_series->start();
-    wait_group.wait();
+
+    // filter output masks
+    filter_output_masks(
+        pred_masks, pred_ious, pred_stability_scores, point_coords, pred_iou_thresh,
+        stability_score_thresh, box_nms_thresh, min_mask_region_area,
+        amg_output);
 
     return status;
 }
@@ -362,6 +404,66 @@ bool SamTrtAmgDecoder::Impl::read_model_file(const std::string &input_file_path,
     file.read(reinterpret_cast<std::ifstream::char_type*>(&file_content.front()), file_size);
     file.close();
     return true;
+}
+
+/***
+ *
+ * @param image_embeddings
+ * @param points
+ * @param predicted_masks
+ * @param predicted_iou
+ * @param point_coords
+ * @return
+ */
+StatusCode SamTrtAmgDecoder::Impl::decode(
+    const std::vector<float> &image_embeddings,
+    const std::vector<std::vector<cv::Point2f> > &points,
+    std::vector<cv::Mat> &predicted_masks,
+    std::vector<float>& predicted_iou,
+    std::vector<float>& stability_scores,
+    std::vector<cv::Point2f>& point_coords) {
+
+    WFFacilities::WaitGroup wait_group(1);
+    StatusCode status = StatusCode::OK;
+    // create workflow parallel series
+    auto* p_series = Workflow::create_parallel_work([&](const ParallelWork* pwork) -> void {
+        for (auto idx = 0; idx < pwork->size(); ++idx) {
+            auto* series_ctx = (thread_decode_seriex_ctx*)pwork->series_at(idx)->get_context();
+            if (series_ctx->model_run_status != StatusCode::OK) {
+                status = series_ctx->model_run_status;
+            } else {
+                predicted_masks.push_back(series_ctx->decoded_masks);
+                predicted_iou.push_back(series_ctx->pred_iou);
+                stability_scores.push_back(series_ctx->stability_score);
+                point_coords.push_back(series_ctx->point_coord);
+            }
+//            LOG(INFO) << "      -- series: " << idx << " decode time profile";
+//            LOG(INFO) << "      -- dequeue thread executor cost time: " << series_ctx->dequeue_thread_executor_time_consuming << " ms";
+//            LOG(INFO) << "      -- copy inputs to gpu memory cost time: " << series_ctx->gpu_memo_cpy_time_consuming << " ms";
+//            LOG(INFO) << "      -- decoding model inference cost time: " << series_ctx->model_inference_consuming << " ms";
+//            LOG(INFO) << "      -- decode output mask cost time: " << series_ctx->decode_mask_time_consuming << " ms";
+//            LOG(INFO) << "      -- enqueue thread executor cost time: " << series_ctx->enqueue_thread_executor_time_consuming << " ms";
+            delete series_ctx;
+        }
+        wait_group.done();
+    });
+
+    // add multiple decode task into parallel series
+    for (auto& pts : points) {
+        auto* ctx = new thread_decode_seriex_ctx;
+        auto&& decode_proc = [this](auto && PH1, auto && PH2, auto && PH3) {
+            thread_decode_mask_proc(std::forward<decltype(PH1)>(PH1),
+                                    std::forward<decltype(PH2)>(PH2),std::forward<decltype(PH3)>(PH3)); };
+        auto* decode_task = WFTaskFactory::create_go_task(
+            "parallel_decode_mask", decode_proc, image_embeddings, pts[0], ctx);
+        auto* series = Workflow::create_series_work(decode_task, nullptr);
+        series->set_context(ctx);
+        p_series->add_series(series);
+    }
+    p_series->start();
+    wait_group.wait();
+
+    return status;
 }
 
 /***
@@ -406,7 +508,8 @@ void SamTrtAmgDecoder::Impl::decode_output_mask(
             row_data[col] = mask_data[col] > 0.0 ? 255 : 0;
         }
     }
-    o_mask.copyTo(out_mask);
+//    o_mask.copyTo(out_mask);
+    mask.copyTo(out_mask);
 }
 
 /***
@@ -606,9 +709,6 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
     auto cuda_status = cudaMemcpyAsync(
         device_memory.at(image_embedding_binding.index()), image_embeddings.data(), input_mem_size,
         cudaMemcpyHostToDevice, cuda_stream);
-//    auto cuda_status = cudaMemcpy(
-//        device_memory.at(image_embedding_binding.index()), image_embeddings.data(), input_mem_size,
-//        cudaMemcpyHostToDevice);
     if (cuda_status != cudaSuccess) {
         LOG(ERROR) << "copy image embedding memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
         ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;
@@ -626,9 +726,6 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
     cuda_status = cudaMemcpyAsync(
         device_memory.at(point_coords_binding.index()), total_points.data(), input_mem_size,
         cudaMemcpyHostToDevice, cuda_stream);
-//    cuda_status = cudaMemcpy(
-//        device_memory.at(point_coords_binding.index()), total_points.data(), input_mem_size,
-//        cudaMemcpyHostToDevice);
     if (cuda_status != cudaSuccess) {
         LOG(ERROR) << "copy point coords memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
         ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;
@@ -638,9 +735,6 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
     cuda_status = cudaMemcpyAsync(
         device_memory.at(point_labels_binding.index()), total_labels.data(), input_mem_size,
         cudaMemcpyHostToDevice, cuda_stream);
-//    cuda_status = cudaMemcpy(
-//        device_memory.at(point_labels_binding.index()), total_labels.data(), input_mem_size,
-//        cudaMemcpyHostToDevice);
     if (cuda_status != cudaSuccess) {
         LOG(ERROR) << "copy point labels memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
         ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;
@@ -653,9 +747,6 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
     cuda_status = cudaMemcpyAsync(
         device_memory.at(mask_input_binding.index()), mask_tensor_values.data(), input_mem_size,
         cudaMemcpyHostToDevice, cuda_stream);
-//    cuda_status = cudaMemcpy(
-//        device_memory.at(mask_input_binding.index()), mask_tensor_values.data(), input_mem_size,
-//        cudaMemcpyHostToDevice);
     if (cuda_status != cudaSuccess) {
         LOG(ERROR) << "copy mask tensor memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
         ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;
@@ -668,9 +759,6 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
     cuda_status = cudaMemcpyAsync(
         device_memory.at(has_mask_input_binding.index()), has_mask_tensor_values.data(), input_mem_size,
         cudaMemcpyHostToDevice, cuda_stream);
-//    cuda_status = cudaMemcpy(
-//        device_memory.at(has_mask_input_binding.index()), has_mask_tensor_values.data(), input_mem_size,
-//        cudaMemcpyHostToDevice);
     if (cuda_status != cudaSuccess) {
         LOG(ERROR) << "copy has mask tensor value to gpu failed, error str: " << cudaGetErrorString(cuda_status);
         ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;
@@ -696,20 +784,12 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
         ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;
         return;
     }
-//    if (!context->executeV2(device_memory.begin())) {
-//        LOG(ERROR) << "excute input data for inference failed";
-//        ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;
-//        return;
-//    }
 
     std::vector<float> low_res_mask_data;
     low_res_mask_data.resize(low_res_masks_output_binding.volume());
     cuda_status = cudaMemcpyAsync(
         low_res_mask_data.data(),device_memory.at(low_res_masks_output_binding.index()),
         low_res_masks_output_binding.volume() * sizeof(float),cudaMemcpyDeviceToHost, cuda_stream);
-//    cuda_status = cudaMemcpy(
-//        low_res_mask_data.data(),device_memory.at(low_res_masks_output_binding.index()),
-//        low_res_masks_output_binding.volume() * sizeof(float),cudaMemcpyDeviceToHost);
     if (cuda_status != cudaSuccess) {
         LOG(ERROR) << "async copy output tensor back from device memory to host memory failed, error str: "
                    << cudaGetErrorString(cuda_status);
@@ -721,9 +801,6 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
     cuda_status = cudaMemcpyAsync(
         iou_preds_data.data(), device_memory.at(iou_predictions_output_binding.index()),
         iou_predictions_output_binding.volume() * sizeof(float), cudaMemcpyDeviceToHost, cuda_stream);
-//    cuda_status = cudaMemcpy(
-//        iou_preds_data.data(), device_memory.at(iou_predictions_output_binding.index()),
-//        iou_predictions_output_binding.volume() * sizeof(float), cudaMemcpyDeviceToHost);
     if (cuda_status != cudaSuccess) {
         LOG(ERROR) << "async copy output tensor back from device memory to host memory failed, error str: "
                    << cudaGetErrorString(cuda_status);
@@ -741,6 +818,8 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
     int best_mask_idx = static_cast<int>(
         std::distance(iou_preds_data.begin(), std::max_element(iou_preds_data.begin(), iou_preds_data.end())));
     decode_output_mask(low_res_mask_data, best_mask_idx, ctx->decoded_masks);
+    ctx->pred_iou = iou_preds_data[best_mask_idx];
+    ctx->stability_score = calculate_stability_score(ctx->decoded_masks);
     t_end = std::chrono::high_resolution_clock::now();
     t_cost = std::chrono::duration_cast<std::chrono::milliseconds >(t_end - t_start).count();
     ctx->decode_mask_time_consuming = t_cost;
@@ -752,6 +831,266 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
     t_end = std::chrono::high_resolution_clock::now();
     t_cost = std::chrono::duration_cast<std::chrono::milliseconds >(t_end - t_start).count();
     ctx->enqueue_thread_executor_time_consuming = t_cost;
+}
+
+/***
+ *
+ * @param input_image_size
+ * @param n_points_per_side
+ * @return
+ */
+std::vector<std::vector<cv::Point2f> > SamTrtAmgDecoder::Impl::generate_prompt_points(
+    const cv::Size &input_image_size, int n_points_per_side) {
+    std::vector<std::vector<cv::Point2f> > prompt_points;
+//    float offset = 1.0f / (2.0f * static_cast<float>(n_points_per_side));
+    auto w_step = static_cast<float>(input_image_size.width) / static_cast<float>(n_points_per_side);
+    auto h_step = static_cast<float>(input_image_size.height) / static_cast<float>(n_points_per_side);
+    for (auto start_y = h_step / 2.0f; start_y < static_cast<float>(input_image_size.height);) {
+        for (auto start_x = w_step / 2.0f; start_x < static_cast<float>(input_image_size.width);) {
+            prompt_points.push_back({cv::Point2f(start_x, start_y)});
+            start_x += w_step;
+        }
+        start_y += h_step;
+    }
+    return prompt_points;
+}
+
+/***
+ *
+ * @param mask
+ * @param mask_threshold
+ * @param threshold_offset
+ * @return
+ */
+float SamTrtAmgDecoder::Impl::calculate_stability_score(const cv::Mat &mask) {
+    float intersections = 0.0f;
+    float unions = 0.0f;
+    for (auto row = 0; row < mask.rows; ++row) {
+        auto row_data = mask.ptr<float>(row);
+        for (auto col = 0; col < mask.cols; ++col) {
+            auto value = row_data[col];
+            if (value > 0.0 + 1.0f) {
+                intersections += 1.0f;
+            }
+            if (value > 0.0 - 1.0f) {
+                unions += 1.0f;
+            }
+        }
+    }
+    return intersections / unions;
+}
+
+/***
+ *
+ * @param pred_masks
+ * @param pred_ious
+ * @param pred_stability_scores
+ * @param point_coords
+ * @param pred_iou_thresh
+ * @param stability_score_thresh
+ * @param stability_score_offset
+ * @param box_nms_thresh
+ * @param min_mask_region_area
+ * @param amg_output
+ */
+void SamTrtAmgDecoder::Impl::filter_output_masks(
+    const std::vector<cv::Mat> &pred_masks, const std::vector<float> &pred_ious, const std::vector<float> &pred_stability_scores,
+    const std::vector<cv::Point2f> &point_coords, const float pred_iou_thresh, const float stability_score_thresh,
+    const float box_nms_thresh, const int min_mask_region_area,
+    AmgMaskOutput &amg_output) {
+
+    std::vector<cv::Mat> iou_threshed_masks;
+    std::vector<float> iou_threshed_ious;
+    std::vector<float> iou_threshed_stability_scores;
+    std::vector<cv::Point2f> iou_threshed_point_coords;
+    for (auto idx = 0; idx < pred_ious.size(); ++idx) {
+        if (pred_ious[idx] >= pred_iou_thresh) {
+            iou_threshed_masks.push_back(pred_masks[idx]);
+            iou_threshed_ious.push_back(pred_ious[idx]);
+            iou_threshed_stability_scores.push_back(pred_stability_scores[idx]);
+            iou_threshed_point_coords.push_back(point_coords[idx]);
+        }
+    }
+
+    // filter by stability score
+    std::vector<cv::Mat> stability_threshed_masks;
+    std::vector<float> stability_threshed_ious;
+    std::vector<float> stability_scores;
+    std::vector<cv::Point2f> stability_threshed_point_coords;
+    for (auto idx = 0; idx < iou_threshed_stability_scores.size(); ++idx) {
+        auto stability_score = iou_threshed_stability_scores[idx];
+        if (stability_score >= stability_score_thresh) {
+            stability_threshed_masks.push_back(iou_threshed_masks[idx]);
+            stability_threshed_ious.push_back(iou_threshed_ious[idx]);
+            stability_scores.push_back(stability_score);
+            stability_threshed_point_coords.push_back(iou_threshed_point_coords[idx]);
+        }
+    }
+    iou_threshed_masks.clear();
+    iou_threshed_masks.shrink_to_fit();
+    iou_threshed_ious.clear();
+    iou_threshed_ious.shrink_to_fit();
+    iou_threshed_stability_scores.clear();
+    iou_threshed_stability_scores.shrink_to_fit();
+    iou_threshed_point_coords.clear();
+    iou_threshed_point_coords.shrink_to_fit();
+
+    // threshold masks generate mask bboxes
+    std::vector<cv::Rect> mask_bboxes;
+    std::vector<int32_t> mask_areas;
+    for (auto &mask : stability_threshed_masks) {
+        int32_t tl_x = INT32_MAX;
+        int32_t tl_y = INT32_MAX;
+        int32_t rb_x = INT32_MIN;
+        int32_t rb_y = INT32_MIN;
+        int32_t mask_area = 0;
+        for (int row = 0; row < mask.rows; ++row) {
+            auto mask_data = mask.ptr<float>(row);
+            for (int col = 0; col < mask.cols; ++col) {
+                mask_data[col] = mask_data[col] > 0.0 ? 255.0 : 0.0;
+                if (mask_data[col] == 255.0f) {
+                    mask_area += 1;
+                    if (row < tl_y) {
+                        tl_y = row;
+                    }
+                    if (col < tl_x) {
+                        tl_x = col;
+                    }
+                    if (row > rb_y) {
+                        rb_y = row;
+                    }
+                    if (col > rb_x) {
+                        rb_x = col;
+                    }
+                }
+            }
+        }
+        mask_areas.push_back(mask_area);
+        //        cv::Mat tmp_mask;
+        //        mask.convertTo(tmp_mask, CV_8UC1);
+        //        std::vector<std::vector<cv::Point>> contours;
+        //        cv::findContours(tmp_mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+        //        double max_area = 0;
+        //        int max_cnt_idx = -1;
+        //        for (auto idx = 0; idx < contours.size(); ++idx) {
+        //            double area = cv::contourArea(contours[idx]);
+        //            if (area > max_area) {
+        //                max_area = area;
+        //                max_cnt_idx = idx;
+        //            }
+        //        }
+        //        auto mask_bbox = cv::minAreaRect(contours[max_cnt_idx]).boundingRect();
+        //        mask_bboxes.push_back(mask_bbox);
+        //        LOG(INFO) << mask_bbox;
+        //        LOG(INFO) << tl_x << ", " << tl_y << ", " << rb_x << ", " << rb_y;
+        if (tl_x < rb_x && tl_y < rb_y) {
+            auto mask_bbox = cv::Rect(tl_x, tl_y, rb_x - tl_x, rb_y - tl_y);
+            mask_bboxes.push_back(mask_bbox);
+        } else {
+            mask_bboxes.emplace_back(0, 0, 0, 0);
+        }
+    }
+
+    // nms mask bboxes
+    std::vector<int> nms_keep_indices;
+    cv::dnn::NMSBoxes(mask_bboxes, stability_threshed_ious, 0.0, box_nms_thresh, nms_keep_indices);
+    std::vector<cv::Mat> nms_threshed_masks;
+    std::vector<float> nms_threshed_ious;
+    std::vector<cv::Rect> nms_threshed_mask_bboxes;
+    std::vector<int32_t> nms_threshed_mask_areas;
+    std::vector<float> nms_threshed_stability_scores;
+    std::vector<cv::Point2f> nms_threshed_point_coords;
+    for (auto &idx : nms_keep_indices) {
+        nms_threshed_masks.push_back(stability_threshed_masks[idx]);
+        nms_threshed_ious.push_back(stability_threshed_ious[idx]);
+        nms_threshed_mask_bboxes.push_back(mask_bboxes[idx]);
+        nms_threshed_mask_areas.push_back(mask_areas[idx]);
+        nms_threshed_stability_scores.push_back(stability_scores[idx]);
+        nms_threshed_point_coords.push_back(stability_threshed_point_coords[idx]);
+    }
+    mask_bboxes.clear();
+    mask_bboxes.shrink_to_fit();
+    mask_areas.clear();
+    mask_areas.shrink_to_fit();
+    stability_threshed_masks.clear();
+    stability_threshed_masks.shrink_to_fit();
+    stability_threshed_ious.clear();
+    stability_threshed_ious.shrink_to_fit();
+    stability_scores.clear();
+    stability_scores.shrink_to_fit();
+    stability_threshed_point_coords.clear();
+    stability_threshed_point_coords.shrink_to_fit();
+
+    // filter small region mask
+    std::vector<cv::Mat> region_threshed_masks;
+    std::vector<float> region_threshed_ious;
+    std::vector<cv::Rect> region_threshed_mask_bboxes;
+    std::vector<int32_t> region_threshed_mask_areas;
+    std::vector<float> region_threshed_stability_scores;
+    std::vector<cv::Point2f> region_threshed_point_coords;
+    if (min_mask_region_area > 0) {
+        for (auto idx = 0; idx < nms_threshed_masks.size(); ++idx) {
+            cv::Mat labels;
+            cv::Mat stats;
+            cv::Mat centroids;
+            auto mask = nms_threshed_masks[idx];
+            auto components_count = cv::connectedComponentsWithStats(mask, labels, stats, centroids, 8);
+            for (auto i = 1; i < components_count; ++i) {
+                int area = stats.at<int>(i, cv::CC_STAT_AREA);
+                if (area < min_mask_region_area) {
+                    cv::Mat component_mask = (labels == i);
+                    mask.setTo(0, component_mask);
+                }
+            }
+            components_count = cv::connectedComponentsWithStats(mask, labels, stats, centroids, 8);
+            if (components_count > 0) {
+                region_threshed_masks.push_back(mask);
+                region_threshed_ious.push_back(nms_threshed_ious[idx]);
+                region_threshed_mask_bboxes.push_back(nms_threshed_mask_bboxes[idx]);
+                region_threshed_mask_areas.push_back(nms_threshed_mask_areas[idx]);
+                region_threshed_stability_scores.push_back(nms_threshed_stability_scores[idx]);
+                region_threshed_point_coords.push_back(nms_threshed_point_coords[idx]);
+            }
+        }
+    } else {
+        region_threshed_masks = nms_threshed_masks;
+        region_threshed_ious = nms_threshed_ious;
+        region_threshed_mask_bboxes = nms_threshed_mask_bboxes;
+        region_threshed_mask_areas = nms_threshed_mask_areas;
+        region_threshed_stability_scores = nms_threshed_stability_scores;
+        region_threshed_point_coords = nms_threshed_point_coords;
+    }
+
+    // sort filter result according to mask area
+    std::vector<size_t> sort_index(region_threshed_mask_areas.size());
+    for (size_t i = 0; i < region_threshed_mask_areas.size(); ++i) {
+        sort_index[i] = i;
+    }
+    std::sort(sort_index.begin(), sort_index.end(), [&region_threshed_mask_areas](int i, int j) {
+        return region_threshed_mask_areas[i] > region_threshed_mask_areas[j];});
+
+    std::vector<cv::Mat> sorted_masks(sort_index.size());
+    std::vector<float> sorted_ious(sort_index.size());
+    std::vector<cv::Rect> sorted_mask_bboxes(sort_index.size());
+    std::vector<int32_t> sorted_mask_areas(sort_index.size());
+    std::vector<float> sorted_stability_scores(sort_index.size());
+    std::vector<cv::Point2f> sorted_point_coords(sort_index.size());
+
+    for (size_t i = 0; i < sort_index.size(); ++i) {
+        sorted_masks[i] = region_threshed_masks[sort_index[i]];
+        sorted_ious[i] = region_threshed_ious[sort_index[i]];
+        sorted_mask_bboxes[i] = region_threshed_mask_bboxes[sort_index[i]];
+        sorted_mask_areas[i] = region_threshed_mask_areas[sort_index[i]];
+        sorted_stability_scores[i] = region_threshed_stability_scores[sort_index[i]];
+        sorted_point_coords[i] = region_threshed_point_coords[sort_index[i]];
+    }
+
+    amg_output.segmentations = sorted_masks;
+    amg_output.bboxes = sorted_mask_bboxes;
+    amg_output.preds_ious = sorted_ious;
+    amg_output.areas = sorted_mask_areas;
+    amg_output.preds_stability_scores = sorted_stability_scores;
+    amg_output.point_coords = sorted_point_coords;
 }
 
 /***
@@ -778,15 +1117,22 @@ StatusCode SamTrtAmgDecoder::init(const decltype(toml::parse("")) &cfg) {
 /***
  *
  * @param image_embeddings
- * @param points
- * @param predicted_masks
+ * @param amg_output
+ * @param points_per_side
+ * @param pred_iou_thresh
+ * @param stability_score_thresh
+ * @param stability_score_offset
+ * @param box_nms_thresh
+ * @param min_mask_region_area
  * @return
  */
-StatusCode SamTrtAmgDecoder::decode(
+StatusCode SamTrtAmgDecoder::decode_everything(
     const std::vector<float> &image_embeddings,
-    const std::vector<std::vector<cv::Point2f> > &points,
-    std::vector<cv::Mat> &predicted_masks) {
-    return _m_pimpl->decode(image_embeddings, points, predicted_masks);
+    AmgMaskOutput& amg_output, const int points_per_side, const float pred_iou_thresh, const float stability_score_thresh,
+    const float stability_score_offset, const float box_nms_thresh, const int min_mask_region_area) {
+    return _m_pimpl->decode_everything(
+        image_embeddings, amg_output, points_per_side, pred_iou_thresh, stability_score_thresh,
+        stability_score_offset, box_nms_thresh, min_mask_region_area);
 }
 
 /***
