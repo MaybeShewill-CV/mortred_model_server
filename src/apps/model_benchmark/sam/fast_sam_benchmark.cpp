@@ -15,7 +15,7 @@
 
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
-#include "models/segment_anything/fast_sam_segmentor.h"
+#include "models/segment_anything/fast_sam/fast_sam_segmentor.h"
 
 using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;

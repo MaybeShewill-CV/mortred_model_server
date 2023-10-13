@@ -15,11 +15,11 @@
 
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
-#include "models/segment_anything/sam_segmentor.h"
+#include "models/segment_anything/sam_prediction/sam_predictor.h"
 
 using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;
-using jinq::models::segment_anything::SamSegmentor;
+using jinq::models::segment_anything::SamPredictor;
 
 int main(int argc, char** argv) {
     google::InstallFailureSignalHandler();
@@ -35,7 +35,7 @@ int main(int argc, char** argv) {
         LOG(ERROR) << "config file path: " << config_file_path << " not exists";
         return -1;
     }
-    SamSegmentor sam_model;
+    SamPredictor sam_model;
     auto cfg = toml::parse(config_file_path);
     sam_model.init(cfg);
     if (!sam_model.is_successfully_initialized()) {
@@ -72,6 +72,14 @@ int main(int argc, char** argv) {
             cv::Rect(220, 327, 430, 122),
             cv::Rect(77, 78, 58, 176),
             cv::Rect(972, 464, 111, 52)
+        },
+        masks);
+    sam_model.predict(
+        input_image,
+        {
+            {cv::Point2f(1524, 675)},
+            {cv::Point2f(1094, 381)},
+            {cv::Point2f(183, 587)},
         },
         masks);
 

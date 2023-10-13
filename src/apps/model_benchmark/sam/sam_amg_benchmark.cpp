@@ -4,7 +4,7 @@
  * File: sam_amg_benchmark.cpp
  * Date: 23-9-20
  ************************************************/
-// test sam amg trt model
+// test sam amg model
 
 #include <string>
 #include <chrono>
@@ -15,13 +15,12 @@
 
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
-#include "models/segment_anything/sam_vit_trt_encoder.h"
-#include "models/segment_anything/sam_trt_amg_decoder.h"
+#include "models/segment_anything/sam_automask_generator/sam_automask_generator.h"
 
 using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;
-using jinq::models::segment_anything::SamTrtAmgDecoder;
-using jinq::models::segment_anything::SamVitTrtEncoder;
+using jinq::models::segment_anything::SamAutoMaskGenerator;
+using jinq::models::segment_anything::AmgMaskOutput;
 
 int main(int argc, char** argv) {
     google::InstallFailureSignalHandler();
@@ -49,33 +48,20 @@ int main(int argc, char** argv) {
         return -1;
     }
     auto cfg = toml::parse(config_file_path);
-    SamTrtAmgDecoder sam_trt_amg_decoder;
-    sam_trt_amg_decoder.init(cfg);
-    if (!sam_trt_amg_decoder.is_successfully_initialized()) {
-        LOG(ERROR) << "init sam trt amg decoder failed";
+    SamAutoMaskGenerator sam_amg;
+    sam_amg.init(cfg);
+    if (!sam_amg.is_successfully_initialized()) {
+        LOG(ERROR) << "init sam auto mask generator model failed";
         return -1;
     }
-    sam_trt_amg_decoder.set_encoder_input_size(cv::Size(1024, 1024));
-    sam_trt_amg_decoder.set_ori_image_size(input_image.size());
 
-    SamVitTrtEncoder sam_vit_encoder;
-    sam_vit_encoder.init(cfg);
-    if (!sam_vit_encoder.is_successfully_initialized()) {
-        LOG(ERROR) << "init sam vit encoder failed";
-        return -1;
-    }
-    //
-    std::vector<float> img_embeds;
-    sam_vit_encoder.encode(input_image, img_embeds);
-
-    cv::Mat ouptut_mask;
-    SamTrtAmgDecoder::AmgMaskOutput amg_output;
+    AmgMaskOutput amg_output;
     for (auto idx = 0; idx < 10; ++idx) {
         auto t_start = std::chrono::high_resolution_clock::now();
-        sam_trt_amg_decoder.decode_everything(img_embeds, amg_output, 32);
+        sam_amg.generate(input_image, amg_output);
         auto t_end = std::chrono::high_resolution_clock::now();
         auto t_cost = std::chrono::duration_cast<std::chrono::milliseconds >(t_end - t_start).count();
-        LOG(INFO) << " .... iter: " << idx + 1 << ", amg everything decode cost time: " << t_cost << " ms";
+        LOG(INFO) << " .... iter: " << idx + 1 << ", amg generate mask cost time: " << t_cost << " ms";
     }
 
     auto seg_mask_counts = static_cast<int>(amg_output.segmentations.size());
@@ -100,11 +86,11 @@ int main(int argc, char** argv) {
     }
 
     std::string output_file_name = FilePathUtil::get_file_name(input_image_path);
-    output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_sam_trt_amg_output.png";
+    output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_sam_amg_output.png";
     std::string output_path = FilePathUtil::concat_path(
         "../demo_data/model_test_input/sam", output_file_name);
     cv::Mat output_mask;
     cv::addWeighted(input_image, 0.6, color_mask, 0.4, 0.0, output_mask);
     cv::imwrite(output_path, output_mask);
-    LOG(INFO) << "sam trt amg prediction result image has been written into: " << output_path;
+    LOG(INFO) << "sam amg prediction result image has been written into: " << output_path;
 }
