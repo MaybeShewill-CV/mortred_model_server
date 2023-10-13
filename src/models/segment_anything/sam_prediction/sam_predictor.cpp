@@ -1,18 +1,18 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: SamSegmentor.cpp
+ * File: SamPredictor.cpp
  * Date: 23-5-26
  ************************************************/
 
-#include "sam_segmentor.h"
+#include "sam_predictor.h"
 
 #include "glog/logging.h"
 
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
 #include "common/time_stamp.h"
-#include "models/segment_anything/sam_automask_generator/sam_prompt_decoder.h"
+#include "sam_prompt_decoder.h"
 #include "sam_vit_encoder.h"
 
 namespace jinq {
@@ -28,7 +28,7 @@ namespace segment_anything {
 using jinq::models::segment_anything::SamVitEncoder;
 using jinq::models::segment_anything::SamPromptDecoder;
 
-class SamSegmentor::Impl {
+class SamPredictor::Impl {
 public:
     /***
      *
@@ -125,7 +125,7 @@ private:
  * @param cfg
  * @return
  */
-StatusCode SamSegmentor::Impl::init(const decltype(toml::parse("")) &cfg) {
+StatusCode SamPredictor::Impl::init(const decltype(toml::parse("")) &cfg) {
     // init sam encoder
     _m_sam_encoder = std::make_unique<SamVitEncoder>();
     _m_sam_encoder->init(cfg);
@@ -161,7 +161,7 @@ StatusCode SamSegmentor::Impl::init(const decltype(toml::parse("")) &cfg) {
  * @param predicted_mask
  * @return
  */
-StatusCode SamSegmentor::Impl::predict(
+StatusCode SamPredictor::Impl::predict(
     const cv::Mat& input_image,
     const std::vector<cv::Rect>& bboxes,
     std::vector<cv::Mat>& predicted_masks) {
@@ -198,7 +198,7 @@ StatusCode SamSegmentor::Impl::predict(
  * @param predicted_masks
  * @return
  */
-StatusCode SamSegmentor::Impl::predict(
+StatusCode SamPredictor::Impl::predict(
     const cv::Mat &input_image,
     const std::vector<std::vector<cv::Point2f>> &prompt_points,
     std::vector<cv::Mat> &predicted_masks) {
@@ -234,7 +234,7 @@ StatusCode SamSegmentor::Impl::predict(
  * @param image_embeddings
  * @return
  */
-StatusCode SamSegmentor::Impl::get_embedding(
+StatusCode SamPredictor::Impl::get_embedding(
     const cv::Mat &input_image,
     std::vector<float> &image_embeddings) {
     return _m_sam_encoder->encode(input_image, image_embeddings);
@@ -246,7 +246,7 @@ StatusCode SamSegmentor::Impl::get_embedding(
  * @param target_size
  * @return
  */
-std::vector<cv::Rect2f> SamSegmentor::Impl::transform_bboxes(const std::vector<cv::Rect> &bboxes, int target_size) const {
+std::vector<cv::Rect2f> SamPredictor::Impl::transform_bboxes(const std::vector<cv::Rect> &bboxes, int target_size) const {
     auto ori_img_h = static_cast<float>(_m_ori_image_size.height);
     auto ori_img_w = static_cast<float>(_m_ori_image_size.width);
     auto long_side = std::max(ori_img_h, ori_img_w);
@@ -272,7 +272,7 @@ std::vector<cv::Rect2f> SamSegmentor::Impl::transform_bboxes(const std::vector<c
  * @param target_size
  * @return
  */
-std::vector<std::vector<cv::Point2f>> SamSegmentor::Impl::transform_points(
+std::vector<std::vector<cv::Point2f>> SamPredictor::Impl::transform_points(
     const std::vector<std::vector<cv::Point2f>> &points, int target_size) const {
     auto ori_img_h = static_cast<float>(_m_ori_image_size.height);
     auto ori_img_w = static_cast<float>(_m_ori_image_size.width);
@@ -297,21 +297,21 @@ std::vector<std::vector<cv::Point2f>> SamSegmentor::Impl::transform_points(
 /***
  *
  */
-SamSegmentor::SamSegmentor() {
+SamPredictor::SamPredictor() {
     _m_pimpl = std::make_unique<Impl>();
 }
 
 /***
  *
  */
-SamSegmentor::~SamSegmentor() = default;
+SamPredictor::~SamPredictor() = default;
 
 /***
  *
  * @param cfg
  * @return
  */
-StatusCode SamSegmentor::init(const decltype(toml::parse("")) &cfg) {
+StatusCode SamPredictor::init(const decltype(toml::parse("")) &cfg) {
     return _m_pimpl->init(cfg);
 }
 
@@ -324,7 +324,7 @@ StatusCode SamSegmentor::init(const decltype(toml::parse("")) &cfg) {
  * @param predicted_mask
  * @return
  */
-StatusCode SamSegmentor::predict(
+StatusCode SamPredictor::predict(
     const cv::Mat& input_image,
     const std::vector<cv::Rect>& bboxes,
     std::vector<cv::Mat>& predicted_masks) {
@@ -338,7 +338,7 @@ StatusCode SamSegmentor::predict(
  * @param predicted_masks
  * @return
  */
-StatusCode SamSegmentor::predict(
+StatusCode SamPredictor::predict(
     const cv::Mat &input_image,
     const std::vector<std::vector<cv::Point2f>> &prompt_points,
     std::vector<cv::Mat> &predicted_masks) {
@@ -351,7 +351,7 @@ StatusCode SamSegmentor::predict(
  * @param image_embeddings
  * @return
  */
-StatusCode SamSegmentor::get_embedding(const cv::Mat &input_image, std::vector<float> &image_embeddings) {
+StatusCode SamPredictor::get_embedding(const cv::Mat &input_image, std::vector<float> &image_embeddings) {
    return _m_pimpl->get_embedding(input_image, image_embeddings);
 }
 
@@ -359,7 +359,7 @@ StatusCode SamSegmentor::get_embedding(const cv::Mat &input_image, std::vector<f
  *
  * @return
  */
-bool SamSegmentor::is_successfully_initialized() const {
+bool SamPredictor::is_successfully_initialized() const {
     return _m_pimpl->is_successfully_initialized();
 }
 

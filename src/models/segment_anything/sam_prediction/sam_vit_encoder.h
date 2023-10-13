@@ -5,8 +5,8 @@
  * Date: 23-6-7
  ************************************************/
 
-#ifndef MORTRED_MODEL_SERVER_SAMVITENCODER_H
-#define MORTRED_MODEL_SERVER_SAMVITENCODER_H
+#ifndef MORTRED_MODEL_SERVER_SAM_VIT_ENCODER_H
+#define MORTRED_MODEL_SERVER_SAM_VIT_ENCODER_H
 
 #include <vector>
 
@@ -83,4 +83,4 @@ class SamVitEncoder {
 }
 }
 
-#endif // MORTRED_MODEL_SERVER_SAMVITENCODER_H
+#endif // MORTRED_MODEL_SERVER_SAM_VIT_ENCODER_H

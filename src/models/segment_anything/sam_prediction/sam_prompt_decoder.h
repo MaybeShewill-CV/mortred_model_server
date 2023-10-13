@@ -5,8 +5,8 @@
  * Date: 23-6-7
  ************************************************/
 
-#ifndef MORTRED_MODEL_SERVER_SamPromptDecoder_H
-#define MORTRED_MODEL_SERVER_SamPromptDecoder_H
+#ifndef MORTRED_MODEL_SERVER_SAM_PROMPT_DECODER_H
+#define MORTRED_MODEL_SERVER_SAM_PROMPT_DECODER_H
 
 #include <vector>
 
@@ -106,4 +106,4 @@ class SamPromptDecoder {
 }
 }
 
-#endif // MORTRED_MODEL_SERVER_SamPromptDecoder_H
+#endif // MORTRED_MODEL_SERVER_SAM_PROMPT_DECODER_H

@@ -58,7 +58,7 @@ class SamVitEncoder::Impl {
      * @param cfg
      * @return
      */
-    jinq::common::StatusCode init(const decltype(toml::parse(""))& cfg);
+    StatusCode init(const decltype(toml::parse(""))& cfg);
 
     /***
      *
@@ -66,7 +66,7 @@ class SamVitEncoder::Impl {
      * @param image_embeddings
      * @return
      */
-    jinq::common::StatusCode encode(const cv::Mat& input_image, std::vector<float>& image_embeddings);
+    StatusCode encode(const cv::Mat& input_image, std::vector<float>& image_embeddings);
 
     /***
      *
@@ -238,7 +238,7 @@ class SamVitEncoder::Impl {
  * @param cfg
  * @return
  */
-jinq::common::StatusCode SamVitEncoder::Impl::init(const decltype(toml::parse("")) &cfg) {
+StatusCode SamVitEncoder::Impl::init(const decltype(toml::parse("")) &cfg) {
     // choose backend type
     auto backend_dict = cfg.at("BACKEND_DICT");
     auto backend_name = cfg.at("SAM_ENCODER").at("backend_type").as_string();
@@ -281,7 +281,7 @@ jinq::common::StatusCode SamVitEncoder::Impl::init(const decltype(toml::parse(""
  * @param image_embeddings
  * @return
  */
-jinq::common::StatusCode SamVitEncoder::Impl::encode(
+StatusCode SamVitEncoder::Impl::encode(
     const cv::Mat &input_image,
     std::vector<float> &image_embeddings) {
     StatusCode infer_status;
@@ -677,7 +677,7 @@ SamVitEncoder::~SamVitEncoder() = default;
  * @param cfg
  * @return
  */
-jinq::common::StatusCode SamVitEncoder::init(const decltype(toml::parse("")) &cfg) {
+StatusCode SamVitEncoder::init(const decltype(toml::parse("")) &cfg) {
     return _m_pimpl->init(cfg);
 }
 
@@ -687,7 +687,7 @@ jinq::common::StatusCode SamVitEncoder::init(const decltype(toml::parse("")) &cf
  * @param image_embeddings
  * @return
  */
-jinq::common::StatusCode SamVitEncoder::encode(const cv::Mat &input_image, std::vector<float> &image_embeddings) {
+StatusCode SamVitEncoder::encode(const cv::Mat &input_image, std::vector<float> &image_embeddings) {
     return _m_pimpl->encode(input_image, image_embeddings);
 }
 

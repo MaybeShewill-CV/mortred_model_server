@@ -1,12 +1,12 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: SamSegmentor.h
+ * File: SamPredictor.h
  * Date: 23-5-26
  ************************************************/
 
-#ifndef MORTRED_MODEL_SERVER_SAMSEGMENTOR_H
-#define MORTRED_MODEL_SERVER_SAMSEGMENTOR_H
+#ifndef MORTRED_MODEL_SERVER_SAM_PREDICTOR_H
+#define MORTRED_MODEL_SERVER_SAM_PREDICTOR_H
 
 #include <memory>
 #include <vector>
@@ -23,31 +23,31 @@ namespace segment_anything {
 /***
  * 
  */
-class SamSegmentor {
+class SamPredictor {
   public:
     /***
     * constructor
     * @param config
      */
-    SamSegmentor();
+    SamPredictor();
     
     /***
      *
      */
-    ~SamSegmentor();
+    ~SamPredictor();
 
     /***
     * constructor
     * @param transformer
      */
-    SamSegmentor(const SamSegmentor& transformer) = delete;
+    SamPredictor(const SamPredictor& transformer) = delete;
 
     /***
      * constructor
      * @param transformer
      * @return
      */
-    SamSegmentor& operator=(const SamSegmentor& transformer) = delete;
+    SamPredictor& operator=(const SamPredictor& transformer) = delete;
 
     /***
      *
@@ -103,4 +103,4 @@ class SamSegmentor {
 }
 }
 
-#endif // MORTRED_MODEL_SERVER_SAMSEGMENTOR_H
+#endif // MORTRED_MODEL_SERVER_SAM_PREDICTOR_H
