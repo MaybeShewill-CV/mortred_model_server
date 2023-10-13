@@ -33,7 +33,7 @@ using trt_helper::DeviceMemory;
 using trt_helper::TrtHelper;
 using trt_helper::TrtLogger;
 
-class SamTrtAmgDecoder::Impl {
+class SamAmgDecoder::Impl {
   public:
     /***
      *
@@ -59,7 +59,6 @@ class SamTrtAmgDecoder::Impl {
      * @param points_per_side
      * @param pred_iou_thresh
      * @param stability_score_thresh
-     * @param stability_score_offset
      * @param box_nms_thresh
      * @param min_mask_region_area
      * @return
@@ -67,8 +66,7 @@ class SamTrtAmgDecoder::Impl {
     StatusCode decode_everything(
         const std::vector<float> &image_embeddings,
         AmgMaskOutput& amg_output, int points_per_side = 32, float pred_iou_thresh = 0.88,
-        float stability_score_thresh = 0.95, float stability_score_offset = 1.0f,
-        float box_nms_thresh = 0.7, int min_mask_region_area = 0);
+        float stability_score_thresh = 0.95, float box_nms_thresh = 0.7, int min_mask_region_area = 0);
 
     /***
      *
@@ -124,9 +122,6 @@ class SamTrtAmgDecoder::Impl {
     };
     // thread executor
     struct ThreadExecutor {
-//        std::unique_ptr<nvinfer1::IRuntime> trt_runtime;
-//        std::unique_ptr<nvinfer1::ICudaEngine> trt_engine;
-//        std::unique_ptr<TrtLogger> trt_logger;
         std::unique_ptr<nvinfer1::IExecutionContext> context;
         std::unique_ptr<SamDecodeInput> input;
     };
@@ -261,20 +256,20 @@ class SamTrtAmgDecoder::Impl {
  * @param cfg
  * @return
  */
-StatusCode SamTrtAmgDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
+StatusCode SamAmgDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
     // init sam vit trt config section
-    if (!cfg.contains("SAM_VIT_TRT_AMG_DECODER")) {
-        LOG(ERROR) << "Config file does not contain SAM_VIT_TRT_AMG_DECODER section";
+    if (!cfg.contains("SAM_AMG_DECODER")) {
+        LOG(ERROR) << "Config file does not contain SAM_AMG_DECODER section";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    toml::value cfg_content = cfg.at("SAM_VIT_TRT_AMG_DECODER");
+    toml::value cfg_content = cfg.at("SAM_AMG_DECODER");
 
     // init trt runtime
     _m_trt_logger = std::make_unique<TrtLogger>();
     auto* trt_runtime = nvinfer1::createInferRuntime(*_m_trt_logger);
     if(trt_runtime == nullptr) {
-        LOG(ERROR) << "Init TensorRT runtime failed";
+        LOG(ERROR) << "init tensorrt runtime failed";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
@@ -289,7 +284,7 @@ StatusCode SamTrtAmgDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
         _m_model_file_path = cfg_content.at("model_file_path").as_string();
     }
     if (!FilePathUtil::is_file_exist(_m_model_file_path)) {
-        LOG(ERROR) << "Sam trt segmentation model file: " << _m_model_file_path << " not exist";
+        LOG(ERROR) << "sam amg decoder model file: " << _m_model_file_path << " not exist";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
@@ -319,7 +314,6 @@ StatusCode SamTrtAmgDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
         ThreadExecutor executor;
         executor.context = std::move(context);
         executor.input = std::move(decoder_input);
-
         auto init_status = init_thread_executor(executor);
         if (init_status != StatusCode::OK) {
             LOG(ERROR) << "init thread mask decode executor failed, status code: " << init_status;
@@ -336,8 +330,8 @@ StatusCode SamTrtAmgDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
     WORKFLOW_library_init(&settings);
 
     _m_successfully_initialized = true;
-    LOG(INFO) << "Sam trt amg decoder model: " << FilePathUtil::get_file_name(_m_model_file_path)
-              << " initialization complete!!!";
+    LOG(INFO) << "Successfully load sam amg decoder from: " << FilePathUtil::get_file_name(_m_model_file_path);
+
     return StatusCode::OK;
 }
 
@@ -353,11 +347,10 @@ StatusCode SamTrtAmgDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
  * @param min_mask_region_area
  * @return
  */
-StatusCode SamTrtAmgDecoder::Impl::decode_everything(
+StatusCode SamAmgDecoder::Impl::decode_everything(
     const std::vector<float>& image_embeddings,
     AmgMaskOutput& amg_output, const int points_per_side, const float pred_iou_thresh,
-    const float stability_score_thresh, const float stability_score_offset,
-    const float box_nms_thresh, const int min_mask_region_area) {
+    const float stability_score_thresh, const float box_nms_thresh, const int min_mask_region_area) {
     // generate decoding prompt points
     auto prompt_pts = generate_prompt_points(_m_ori_image_size, points_per_side);
 
@@ -366,17 +359,16 @@ StatusCode SamTrtAmgDecoder::Impl::decode_everything(
     std::vector<float> pred_ious;
     std::vector<float> pred_stability_scores;
     std::vector<cv::Point2f> point_coords;
-    auto status = decode(image_embeddings, prompt_pts, pred_masks, pred_ious, pred_stability_scores, point_coords);
+    auto status = decode(
+        image_embeddings, prompt_pts, pred_masks, pred_ious, pred_stability_scores, point_coords);
     if (status != StatusCode::OK) {
         LOG(INFO) << "decode mask from prompt points failed, status code: " << status;
         return status;
     }
 
     // filter output masks
-    filter_output_masks(
-        pred_masks, pred_ious, pred_stability_scores, point_coords, pred_iou_thresh,
-        stability_score_thresh, box_nms_thresh, min_mask_region_area,
-        amg_output);
+    filter_output_masks(pred_masks, pred_ious, pred_stability_scores, point_coords, pred_iou_thresh,
+                        stability_score_thresh, box_nms_thresh, min_mask_region_area,amg_output);
 
     return status;
 }
@@ -387,7 +379,7 @@ StatusCode SamTrtAmgDecoder::Impl::decode_everything(
  * @param file_content
  * @return
  */
-bool SamTrtAmgDecoder::Impl::read_model_file(const std::string &input_file_path, std::vector<unsigned char> &file_content) {
+bool SamAmgDecoder::Impl::read_model_file(const std::string &input_file_path, std::vector<unsigned char> &file_content) {
     // read file
     std::ifstream file(input_file_path, std::ios::binary);
     if (!file.is_open() || file.eof() || file.fail() || file.bad()) {
@@ -415,7 +407,7 @@ bool SamTrtAmgDecoder::Impl::read_model_file(const std::string &input_file_path,
  * @param point_coords
  * @return
  */
-StatusCode SamTrtAmgDecoder::Impl::decode(
+StatusCode SamAmgDecoder::Impl::decode(
     const std::vector<float> &image_embeddings,
     const std::vector<std::vector<cv::Point2f> > &points,
     std::vector<cv::Mat> &predicted_masks,
@@ -474,7 +466,7 @@ StatusCode SamTrtAmgDecoder::Impl::decode(
  * @param encoder_input_size
  * @return
  */
-void SamTrtAmgDecoder::Impl::decode_output_mask(
+void SamAmgDecoder::Impl::decode_output_mask(
     const std::vector<float> &low_res_mask_value, const int mask_idx, cv::Mat &out_mask) {
     // select best low res mask
     cv::Mat mask(cv::Size(256, 256), CV_32FC1);
@@ -499,16 +491,7 @@ void SamTrtAmgDecoder::Impl::decode_output_mask(
     mask = mask(cropped_roi);
     // resize mask into ori image size
     cv::resize(mask, mask, _m_ori_image_size);
-    // fill in mask value
-    cv::Mat o_mask(_m_ori_image_size, CV_8UC1);
-    for (int row = 0; row < mask.rows; ++row) {
-        auto row_data = o_mask.ptr(row);
-        auto mask_data = mask.ptr<float>(row);
-        for (int col = 0; col < mask.cols; ++col) {
-            row_data[col] = mask_data[col] > 0.0 ? 255 : 0;
-        }
-    }
-//    o_mask.copyTo(out_mask);
+    
     mask.copyTo(out_mask);
 }
 
@@ -517,7 +500,7 @@ void SamTrtAmgDecoder::Impl::decode_output_mask(
  * @param executor
  * @return
  */
-StatusCode SamTrtAmgDecoder::Impl::init_thread_executor(ThreadExecutor& executor) {
+StatusCode SamAmgDecoder::Impl::init_thread_executor(ThreadExecutor& executor) {
 //    auto& engine = executor.trt_engine;
     auto& context = executor.context;
     auto& decoder_input = executor.input;
@@ -676,7 +659,7 @@ StatusCode SamTrtAmgDecoder::Impl::init_thread_executor(ThreadExecutor& executor
  * @param point
  * @param ctx
  */
-void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
+void SamAmgDecoder::Impl::thread_decode_mask_proc(
     const std::vector<float> &image_embeddings,
     const cv::Point2f &point,
     thread_decode_seriex_ctx *ctx) {
@@ -689,7 +672,6 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
     auto t_end = std::chrono::high_resolution_clock::now();
     auto t_cost = std::chrono::duration_cast<std::chrono::milliseconds >(t_end - t_start).count();
     ctx->dequeue_thread_executor_time_consuming = t_cost;
-    DLOG(INFO) << "      -- get decoding executor cost time: " << t_cost << " ms";
 
     // prepare input bindings
     auto& image_embedding_binding = decoder_input->image_embedding_binding;
@@ -768,7 +750,6 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
     t_end = std::chrono::high_resolution_clock::now();
     t_cost = std::chrono::duration_cast<std::chrono::milliseconds >(t_end - t_start).count();
     ctx->gpu_memo_cpy_time_consuming = t_cost;
-    DLOG(INFO) << "      -- copy inputs to gpu memory cost time: " << t_cost << " ms";
 
     // do inference
     t_start = std::chrono::high_resolution_clock::now();
@@ -811,7 +792,6 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
     t_end = std::chrono::high_resolution_clock::now();
     t_cost = std::chrono::duration_cast<std::chrono::milliseconds >(t_end - t_start).count();
     ctx->model_inference_consuming = t_cost;
-    DLOG(INFO) << "      -- enqueueV3 execution cost time: " << t_cost << " ms";
 
     // parse output mask
     t_start = std::chrono::high_resolution_clock::now();
@@ -823,7 +803,6 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
     t_end = std::chrono::high_resolution_clock::now();
     t_cost = std::chrono::duration_cast<std::chrono::milliseconds >(t_end - t_start).count();
     ctx->decode_mask_time_consuming = t_cost;
-    DLOG(INFO) << "      -- decode mask cost time: " << t_cost << " ms";
 
     // restore worker queue
     t_start = std::chrono::high_resolution_clock::now();
@@ -839,10 +818,9 @@ void SamTrtAmgDecoder::Impl::thread_decode_mask_proc(
  * @param n_points_per_side
  * @return
  */
-std::vector<std::vector<cv::Point2f> > SamTrtAmgDecoder::Impl::generate_prompt_points(
+std::vector<std::vector<cv::Point2f> > SamAmgDecoder::Impl::generate_prompt_points(
     const cv::Size &input_image_size, int n_points_per_side) {
     std::vector<std::vector<cv::Point2f> > prompt_points;
-//    float offset = 1.0f / (2.0f * static_cast<float>(n_points_per_side));
     auto w_step = static_cast<float>(input_image_size.width) / static_cast<float>(n_points_per_side);
     auto h_step = static_cast<float>(input_image_size.height) / static_cast<float>(n_points_per_side);
     for (auto start_y = h_step / 2.0f; start_y < static_cast<float>(input_image_size.height);) {
@@ -862,7 +840,7 @@ std::vector<std::vector<cv::Point2f> > SamTrtAmgDecoder::Impl::generate_prompt_p
  * @param threshold_offset
  * @return
  */
-float SamTrtAmgDecoder::Impl::calculate_stability_score(const cv::Mat &mask) {
+float SamAmgDecoder::Impl::calculate_stability_score(const cv::Mat &mask) {
     float intersections = 0.0f;
     float unions = 0.0f;
     for (auto row = 0; row < mask.rows; ++row) {
@@ -893,7 +871,7 @@ float SamTrtAmgDecoder::Impl::calculate_stability_score(const cv::Mat &mask) {
  * @param min_mask_region_area
  * @param amg_output
  */
-void SamTrtAmgDecoder::Impl::filter_output_masks(
+void SamAmgDecoder::Impl::filter_output_masks(
     const std::vector<cv::Mat> &pred_masks, const std::vector<float> &pred_ious, const std::vector<float> &pred_stability_scores,
     const std::vector<cv::Point2f> &point_coords, const float pred_iou_thresh, const float stability_score_thresh,
     const float box_nms_thresh, const int min_mask_region_area,
@@ -966,23 +944,6 @@ void SamTrtAmgDecoder::Impl::filter_output_masks(
             }
         }
         mask_areas.push_back(mask_area);
-        //        cv::Mat tmp_mask;
-        //        mask.convertTo(tmp_mask, CV_8UC1);
-        //        std::vector<std::vector<cv::Point>> contours;
-        //        cv::findContours(tmp_mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-        //        double max_area = 0;
-        //        int max_cnt_idx = -1;
-        //        for (auto idx = 0; idx < contours.size(); ++idx) {
-        //            double area = cv::contourArea(contours[idx]);
-        //            if (area > max_area) {
-        //                max_area = area;
-        //                max_cnt_idx = idx;
-        //            }
-        //        }
-        //        auto mask_bbox = cv::minAreaRect(contours[max_cnt_idx]).boundingRect();
-        //        mask_bboxes.push_back(mask_bbox);
-        //        LOG(INFO) << mask_bbox;
-        //        LOG(INFO) << tl_x << ", " << tl_y << ", " << rb_x << ", " << rb_y;
         if (tl_x < rb_x && tl_y < rb_y) {
             auto mask_bbox = cv::Rect(tl_x, tl_y, rb_x - tl_x, rb_y - tl_y);
             mask_bboxes.push_back(mask_bbox);
@@ -1096,21 +1057,21 @@ void SamTrtAmgDecoder::Impl::filter_output_masks(
 /***
  *
  */
-SamTrtAmgDecoder::SamTrtAmgDecoder() {
+SamAmgDecoder::SamAmgDecoder() {
     _m_pimpl = std::make_unique<Impl>();
 }
 
 /***
  *
  */
-SamTrtAmgDecoder::~SamTrtAmgDecoder() = default;
+SamAmgDecoder::~SamAmgDecoder() = default;
 
 /***
  *
  * @param cfg
  * @return
  */
-StatusCode SamTrtAmgDecoder::init(const decltype(toml::parse("")) &cfg) {
+StatusCode SamAmgDecoder::init(const decltype(toml::parse("")) &cfg) {
     return _m_pimpl->init(cfg);
 }
 
@@ -1126,20 +1087,20 @@ StatusCode SamTrtAmgDecoder::init(const decltype(toml::parse("")) &cfg) {
  * @param min_mask_region_area
  * @return
  */
-StatusCode SamTrtAmgDecoder::decode_everything(
+StatusCode SamAmgDecoder::decode_everything(
     const std::vector<float> &image_embeddings,
     AmgMaskOutput& amg_output, const int points_per_side, const float pred_iou_thresh, const float stability_score_thresh,
-    const float stability_score_offset, const float box_nms_thresh, const int min_mask_region_area) {
+    const float box_nms_thresh, const int min_mask_region_area) {
     return _m_pimpl->decode_everything(
         image_embeddings, amg_output, points_per_side, pred_iou_thresh, stability_score_thresh,
-        stability_score_offset, box_nms_thresh, min_mask_region_area);
+        box_nms_thresh, min_mask_region_area);
 }
 
 /***
  *
  * @param ori_img_size
  */
-void SamTrtAmgDecoder::set_ori_image_size(const cv::Size &ori_img_size) {
+void SamAmgDecoder::set_ori_image_size(const cv::Size &ori_img_size) {
     return _m_pimpl->set_ori_image_size(ori_img_size);
 }
 
@@ -1147,7 +1108,7 @@ void SamTrtAmgDecoder::set_ori_image_size(const cv::Size &ori_img_size) {
  *
  * @param ori_img_size
  */
-void SamTrtAmgDecoder::set_encoder_input_size(const cv::Size &input_node_size){
+void SamAmgDecoder::set_encoder_input_size(const cv::Size &input_node_size){
     return _m_pimpl->set_encoder_input_size(input_node_size);
 }
 
@@ -1155,7 +1116,7 @@ void SamTrtAmgDecoder::set_encoder_input_size(const cv::Size &input_node_size){
  *
  * @return
  */
-bool SamTrtAmgDecoder::is_successfully_initialized() const {
+bool SamAmgDecoder::is_successfully_initialized() const {
     return _m_pimpl->is_successfully_initialized();
 }
 

@@ -14,6 +14,7 @@
 #include "toml/toml.hpp"
 
 #include "common/status_code.h"
+#include "sam_automask_generator.h"
 
 namespace jinq {
 namespace models {
@@ -22,31 +23,31 @@ namespace segment_anything {
 /***
  *
  */
-class SamTrtAmgDecoder {
+class SamAmgDecoder {
   public:
     /***
     * constructor
     * @param config
      */
-    SamTrtAmgDecoder();
+    SamAmgDecoder();
 
     /***
      *
      */
-    ~SamTrtAmgDecoder();
+    ~SamAmgDecoder();
 
     /***
     * constructor
     * @param transformer
      */
-    SamTrtAmgDecoder(const SamTrtAmgDecoder& transformer) = delete;
+    SamAmgDecoder(const SamAmgDecoder& transformer) = delete;
 
     /***
      * constructor
      * @param transformer
      * @return
      */
-    SamTrtAmgDecoder& operator=(const SamTrtAmgDecoder& transformer) = delete;
+    SamAmgDecoder& operator=(const SamAmgDecoder& transformer) = delete;
 
     /***
      *
@@ -67,15 +68,6 @@ class SamTrtAmgDecoder {
      */
     void set_encoder_input_size(const cv::Size& input_node_size);
 
-    struct AmgMaskOutput {
-        std::vector<cv::Mat> segmentations;
-        std::vector<int32_t> areas;
-        std::vector<cv::Rect> bboxes;
-        std::vector<float> preds_ious;
-        std::vector<float> preds_stability_scores;
-        std::vector<cv::Point2f> point_coords;
-    };
-
     /***
      *
      * @param image_embeddings
@@ -91,8 +83,7 @@ class SamTrtAmgDecoder {
     jinq::common::StatusCode decode_everything(
         const std::vector<float>& image_embeddings,
         AmgMaskOutput& output, int points_per_side = 32, float pred_iou_thresh = 0.88,
-        float stability_score_thresh = 0.95, float stability_score_offset = 1.0f,
-        float box_nms_thresh = 0.7, int min_mask_region_area = 0);
+        float stability_score_thresh = 0.95, float box_nms_thresh = 0.7, int min_mask_region_area = 0);
 
     /***
      * if model successfully initialized
