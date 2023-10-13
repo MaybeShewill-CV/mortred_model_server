@@ -5,8 +5,8 @@
  * Date: 23-9-20
  ************************************************/
 
-#ifndef MORTRED_MODEL_SERVER_SAM_TRT_AMG_DECODER_H
-#define MORTRED_MODEL_SERVER_SAM_TRT_AMG_DECODER_H
+#ifndef MORTRED_MODEL_SERVER_SAM_AMG_DECODER_H
+#define MORTRED_MODEL_SERVER_SAM_AMG_DECODER_H
 
 #include <vector>
 
@@ -108,4 +108,4 @@ class SamTrtAmgDecoder {
 }
 }
 
-#endif // MORTRED_MODEL_SERVER_SAM_TRT_AMG_DECODER_H
+#endif // MORTRED_MODEL_SERVER_SAM_AMG_DECODER_H

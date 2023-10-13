@@ -5,7 +5,7 @@
  * Date: 23-9-20
  ************************************************/
 
-#include "sam_trt_amg_decoder.h"
+#include "sam_amg_decoder.h"
 
 #include "glog/logging.h"
 #include "stl_container/concurrentqueue.h"

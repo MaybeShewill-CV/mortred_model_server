@@ -1,12 +1,12 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: SamDecoder.h
+ * File: SamPromptDecoder.h
  * Date: 23-6-7
  ************************************************/
 
-#ifndef MORTRED_MODEL_SERVER_SAMDECODER_H
-#define MORTRED_MODEL_SERVER_SAMDECODER_H
+#ifndef MORTRED_MODEL_SERVER_SamPromptDecoder_H
+#define MORTRED_MODEL_SERVER_SamPromptDecoder_H
 
 #include <vector>
 
@@ -22,31 +22,31 @@ namespace segment_anything {
 /***
  *
  */
-class SamDecoder {
+class SamPromptDecoder {
   public:
     /***
     * constructor
     * @param config
      */
-    SamDecoder();
+    SamPromptDecoder();
 
     /***
      *
      */
-    ~SamDecoder();
+    ~SamPromptDecoder();
 
     /***
     * constructor
     * @param transformer
      */
-    SamDecoder(const SamDecoder& transformer) = delete;
+    SamPromptDecoder(const SamPromptDecoder& transformer) = delete;
 
     /***
      * constructor
      * @param transformer
      * @return
      */
-    SamDecoder& operator=(const SamDecoder& transformer) = delete;
+    SamPromptDecoder& operator=(const SamPromptDecoder& transformer) = delete;
 
     /***
      *
@@ -63,6 +63,12 @@ class SamDecoder {
 
     /***
      *
+     * @param ori_img_size
+     */
+    void set_encoder_input_size(const cv::Size& input_node_size);
+
+    /***
+     *
      * @param image_embeddings
      * @param bboxes
      * @param predicted_masks
@@ -71,6 +77,18 @@ class SamDecoder {
     jinq::common::StatusCode decode(
         const std::vector<float>& image_embeddings,
         const std::vector<cv::Rect2f>& bboxes,
+        std::vector<cv::Mat>& predicted_masks);
+
+    /***
+     *
+     * @param image_embeddings
+     * @param bboxes
+     * @param predicted_masks
+     * @return
+     */
+    jinq::common::StatusCode decode(
+        const std::vector<float>& image_embeddings,
+        const std::vector<std::vector<cv::Point2f> >& points,
         std::vector<cv::Mat>& predicted_masks);
 
 
@@ -88,4 +106,4 @@ class SamDecoder {
 }
 }
 
-#endif // MORTRED_MODEL_SERVER_SAMDECODER_H
+#endif // MORTRED_MODEL_SERVER_SamPromptDecoder_H
