@@ -1,18 +1,18 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: libface_detection_server.cpp
-* Date: 22-6-26
+* File: centerface_detection_server.cpp
+* Date: 23-10-18
 ************************************************/
 
-// libface detection server tool
+// center face detection server tool
 
 #include <glog/logging.h>
 #include <workflow/WFFacilities.h>
 
 #include "factory/obj_detection_task.h"
 
-using jinq::factory::object_detection::create_libface_det_server;
+using jinq::factory::object_detection::create_centerface_det_server;
 
 int main(int argc, char** argv) {
 
@@ -33,23 +33,23 @@ int main(int argc, char** argv) {
     std::string config_file_path = argv[1];
     LOG(INFO) << "cfg file path: " << config_file_path;
     auto config = toml::parse(config_file_path);
-    const auto& server_cfg = config.at("LIBFACE_DETECTION_SERVER");
+    const auto& server_cfg = config.at("CENTER_FACE_DETECTION_SERVER");
     auto port = server_cfg.at("port").as_integer();
     LOG(INFO) << "serve on port: " << port;
 
-    auto server = create_libface_det_server("libface_det_server");
+    auto server = create_centerface_det_server("centerface_det_server");
     auto status = server->init(config);
     if (status != jinq::common::StatusCode::OK) {
-        LOG(INFO) << "libface detection server init failed";
+        LOG(INFO) << "center face detection server init failed";
         return -1;
     }
     if (server->start(port) == 0) {
-		wait_group.wait();
-		server->stop();
-	} else {
-		LOG(ERROR) << "Cannot start server";
-		return -1;
-	}
+        wait_group.wait();
+        server->stop();
+    } else {
+        LOG(ERROR) << "Cannot start server";
+        return -1;
+    }
 
     return 0;
 }

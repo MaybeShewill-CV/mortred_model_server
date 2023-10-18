@@ -1,11 +1,11 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: libface_benchmark.cpp
-* Date: 22-6-24
+* File: centerface_benchmark.cpp
+* Date: 23-10-18
 ************************************************/
 
-// libface benckmark tool
+// center face benckmark tool
 
 #include <glog/logging.h>
 #include <toml/toml.hpp>
@@ -21,7 +21,7 @@ using jinq::common::Timestamp;
 using jinq::common::CvUtils;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::object_detection::std_face_detection_output;
-using jinq::factory::object_detection::create_libface_detector;
+using jinq::factory::object_detection::create_centerface_detector;
 
 int main(int argc, char** argv) {
 
@@ -61,12 +61,11 @@ int main(int argc, char** argv) {
     };
     std_face_detection_output model_output;
     // construct detector
-    auto detector = create_libface_detector<mat_input, std_face_detection_output>("libface");
+    auto detector = create_centerface_detector<mat_input, std_face_detection_output>("center_face");
     auto cfg = toml::parse(cfg_file_path);
     detector->init(cfg);
-
     if (!detector->is_successfully_initialized()) {
-        LOG(INFO) << "libface detector init failed";
+        LOG(INFO) << "center face detector init failed";
         return -1;
     }
 
@@ -74,7 +73,7 @@ int main(int argc, char** argv) {
     int loop_times = 100;
     LOG(INFO) << "input test image size: " << input_image.size();
     LOG(INFO) << "detector run loop times: " << loop_times;
-    LOG(INFO) << "start libface benchmark at: " << Timestamp::now().to_format_str();
+    LOG(INFO) << "start center face benchmark at: " << Timestamp::now().to_format_str();
     auto ts = Timestamp::now();
 
     for (int i = 0; i < loop_times; ++i) {
@@ -87,7 +86,7 @@ int main(int argc, char** argv) {
 
     CvUtils::vis_object_detection(input_image, model_output, 80);
     std::string output_file_name = FilePathUtil::get_file_name(input_image_path);
-    output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_libface_result.png";
+    output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_center_face_result.png";
     std::string output_path = FilePathUtil::concat_path(
             "../demo_data/model_test_input/object_detection", output_file_name);
     cv::imwrite(output_path, input_image);

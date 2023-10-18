@@ -358,8 +358,8 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse
         _m_input_size_user.width = 320;
         _m_input_size_user.height = 240;
     } else {
-        _m_input_size_user.width = cfg_content["model_input_image_size"].as_array()[0].as_integer();
-        _m_input_size_user.height = cfg_content["model_input_image_size"].as_array()[1].as_integer();
+        _m_input_size_user.width = static_cast<int>(cfg_content["model_input_image_size"].as_array()[0].as_integer());
+        _m_input_size_user.height = static_cast<int>(cfg_content["model_input_image_size"].as_array()[1].as_integer());
     }
 
     _m_successfully_initialized = true;
@@ -424,8 +424,8 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::Impl::run(const INPUT &in, OUTPUT &ou
     }
 
     // refine bbox coords
-    auto width_scale = _m_input_size_user.width / static_cast<double>(_m_input_size_host.width);
-    auto height_scale = _m_input_size_user.height / static_cast<double>(_m_input_size_host.height);
+    auto width_scale = _m_input_size_user.width / static_cast<float>(_m_input_size_host.width);
+    auto height_scale = _m_input_size_user.height / static_cast<float>(_m_input_size_host.height);
     for (auto &face_box : nms_result) {
         face_box.bbox.x *= width_scale;
         face_box.bbox.y *= height_scale;
@@ -475,8 +475,8 @@ std::vector<libface_impl::FaceAnchor> LibFaceDetector<INPUT, OUTPUT>::Impl::gene
                     double s_kx = min_size / in_w;
                     double s_ky = min_size / in_h;
 
-                    double cx = (j + 0.5) * steps[k] / in_w;
-                    double cy = (i + 0.5) * steps[k] / in_h;
+                    double cx = (static_cast<double>(j) + 0.5) * steps[k] / in_w;
+                    double cy = (static_cast<double>(i) + 0.5) * steps[k] / in_h;
 
                     libface_impl::FaceAnchor tmp_anchor{};
                     tmp_anchor.s_kx = s_kx;
