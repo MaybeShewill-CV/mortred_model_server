@@ -47,9 +47,9 @@
 
 **4.** 确保 **OPENCV** 正确安装. 可以参考 [官方安装文档](https://docs.opencv.org/4.x/d7/d9f/tutorial_linux_install.html)
 
-**5.** 确保你的开发环境中的 **GCC** 编译工具链支持 `CPP11`
+**5.** 确保你的开发环境中的 **GCC** 编译工具链支持 `CPP17`
 
-**6.** Segment-Anything 目前需要使用到 **ONNXRUNTIME** 库. 可以参考 [官方安装文档](https://onnxruntime.ai/) 安装onnxruntime>=1.14.1
+**6.** Segment-Anything 目前需要使用到 **ONNXRUNTIME** 和 **TensorRT** 库. 可以参考 [官方安装文档](https://onnxruntime.ai/) 安装onnxruntime>=1.14.1, [官方安装文档](https://developer.nvidia.com/tensorrt) 安装TensorRT-8.6.1.6
 
 准备工作都完成之后可以愉快的安装本项目了 :tea:
 
@@ -78,6 +78,16 @@ cp -r $WORKFLOW_ROOT_DIR/_lib/libworkflow.so* ./3rd_party/libs
 ```bash
 cp -r $ONNXRUNTIME_ROOT_DIR/include/* ./3rd_party/include/onnxruntime
 cp -r $ONNXRUNTIME_ROOT_DIR/_lib/libonnxruntime*.so* ./3rd_party/libs
+```
+
+同样的方式拷贝`TensorRT`的头文件和库文件, `TENSORRT_ROOT_DIR` 代表 `TensorRT` 项目在你机器的根目录
+
+```bash
+cp -r $TENSORRT_ROOT_DIR/include/* ./3rd_party/include/TensorRT-8.6.1.6
+cp -r $TENSORRT_ROOT_DIR/_lib/libnvinfer.so* ./3rd_party/libs
+cp -r $TENSORRT_ROOT_DIR/_lib/libnvinfer_builder_resource.so.8.6.1 ./3rd_party/libs
+cp -r $TENSORRT_ROOT_DIR/_lib/libnvinfer_plugin.so* ./3rd_party/libs
+cp -r $TENSORRT_ROOT_DIR/_lib/libnvonnxparser.so* ./3rd_party/libs
 ```
 
 **Step 2:** 开始编译本项目 :coffee::coffee::coffee:
