@@ -50,7 +50,7 @@ Before proceeding further with this document, make sure you have the following p
 
 **5.** Make sure your **GCC** tookit support cpp-17
 
-**6.** Segment-Anything needs **ONNXRUNTIME** and **TENSOR-RT**library. You may refer to [this](https://onnxruntime.ai/) to install onnxruntime>=1.14.1 and [this](https://developer.nvidia.com/tensorrt) to install TensorRT-8.6.1.6
+**6.** Segment-Anything needs **ONNXRUNTIME** and **TENSOR-RT** library. You may refer to [this](https://onnxruntime.ai/) to install onnxruntime>=1.14.1 and [this](https://developer.nvidia.com/tensorrt) to install TensorRT-8.6.1.6
 
 After all prerequisites are settled down you may start to build the mortred ai server frame work.
 
