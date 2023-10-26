@@ -48,9 +48,9 @@ Before proceeding further with this document, make sure you have the following p
 
 **4.** Make sure you have **OPENCV** installed. For install instruction you may find some help [here](https://docs.opencv.org/4.x/d7/d9f/tutorial_linux_install.html)
 
-**5.** Make sure your **GCC** tookit support cpp-11
+**5.** Make sure your **GCC** tookit support cpp-17
 
-**6.** Segment-Anything needs **ONNXRUNTIME** library. You may refer to [this](https://onnxruntime.ai/) to install onnxruntime>=1.14.1
+**6.** Segment-Anything needs **ONNXRUNTIME** and **TENSOR-RT**library. You may refer to [this](https://onnxruntime.ai/) to install onnxruntime>=1.14.1 and [this](https://developer.nvidia.com/tensorrt) to install TensorRT-8.6.1.6
 
 After all prerequisites are settled down you may start to build the mortred ai server frame work.
 
@@ -78,6 +78,16 @@ Copy ONNXRUNTIME headers and libs
 ```bash
 cp -r $ONNXRUNTIME_ROOT_DIR/include/* ./3rd_party/include/onnxruntime
 cp -r $ONNXRUNTIME_ROOT_DIR/_lib/libonnxruntime*.so* ./3rd_party/libs
+```
+
+Copy TensorRT headers and libs
+
+```bash
+cp -r $TENSORRT_ROOT_DIR/include/* ./3rd_party/include/TensorRT-8.6.1.6
+cp -r $TENSORRT_ROOT_DIR/_lib/libnvinfer.so* ./3rd_party/libs
+cp -r $TENSORRT_ROOT_DIR/_lib/libnvinfer_builder_resource.so.8.6.1 ./3rd_party/libs
+cp -r $TENSORRT_ROOT_DIR/_lib/libnvinfer_plugin.so* ./3rd_party/libs
+cp -r $TENSORRT_ROOT_DIR/_lib/libnvonnxparser.so* ./3rd_party/libs
 ```
 
 **Step 2:** Build Mortred AI Server :coffee::coffee::coffee:
