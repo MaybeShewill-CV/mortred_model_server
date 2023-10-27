@@ -117,6 +117,16 @@ using std_feature_point_output = std::vector<fp>;
 
 } // namespace feature_point
 
+// mono depth estimation
+namespace mono_depth_estimation {
+
+struct mde_output {
+    cv::Mat depth_map;
+};
+using std_mde_output = mde_output;
+
+} // namespace mono_depth_estimation
+
 } // namespace io_define
 } // namespace models
 } // namespace jinq

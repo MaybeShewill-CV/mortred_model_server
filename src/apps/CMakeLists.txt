@@ -16,6 +16,7 @@ set(MODEL_BENCHMARK_LIST
     matting
     sam
     clip
+    mono_depth_estimation
 )
 
 foreach(dir_name ${MODEL_BENCHMARK_LIST})
