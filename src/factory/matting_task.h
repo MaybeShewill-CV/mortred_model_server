@@ -5,8 +5,8 @@
 * Date: 22-7-22
 ************************************************/
 
-#ifndef MM_AI_SERVER_SCENE_SEGMENTATION_H
-#define MM_AI_SERVER_SCENE_SEGMENTATION_H
+#ifndef MM_AI_SERVER_MATTING_TASK_H
+#define MM_AI_SERVER_MATTING_TASK_H
 
 #include "factory/base_factory.h"
 #include "factory/register_marco.h"
@@ -80,4 +80,4 @@ static std::unique_ptr<BaseAiServer> create_modnet_server(const std::string& ser
 }
 }
 
-#endif //MM_AI_SERVER_SCENE_SEGMENTATION_H
+#endif //MM_AI_SERVER_MATTING_TASK_H

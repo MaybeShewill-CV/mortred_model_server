@@ -5,8 +5,8 @@
 * Date: 22-6-9
 ************************************************/
 
-#ifndef MM_AI_SERVER_SCENE_SEGMENTATION_H
-#define MM_AI_SERVER_SCENE_SEGMENTATION_H
+#ifndef MM_AI_SERVER_SCENE_SEGMENTATION_TASK_H
+#define MM_AI_SERVER_SCENE_SEGMENTATION_TASK_H
 
 #include "factory/base_factory.h"
 #include "factory/register_marco.h"
@@ -97,4 +97,4 @@ static std::unique_ptr<BaseAiServer> create_pphuman_seg_server(const std::string
 }
 }
 
-#endif //MM_AI_SERVER_SCENE_SEGMENTATION_H
+#endif //MM_AI_SERVER_SCENE_SEGMENTATION_TASK_H
