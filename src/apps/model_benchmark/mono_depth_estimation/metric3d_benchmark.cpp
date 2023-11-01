@@ -24,7 +24,6 @@ using jinq::models::io_define::mono_depth_estimation::std_mde_output;
 using jinq::factory::mono_depth_estimation::create_metric3d_estimator;
 
 int main(int argc, char** argv) {
-
     if (argc != 2 && argc != 3) {
         LOG(ERROR) << "wrong usage";
         LOG(INFO) << "exe config_file_path [test_image_path]";
@@ -67,10 +66,10 @@ int main(int argc, char** argv) {
     }
 
     // run benchmark
-    int loop_times = 1;
+    int loop_times = 10;
     LOG(INFO) << "input test image size: " << input_image.size();
     LOG(INFO) << "estimator run loop times: " << loop_times;
-    LOG(INFO) << "start center face benchmark at: " << Timestamp::now().to_format_str();
+    LOG(INFO) << "start metric3d benchmark at: " << Timestamp::now().to_format_str();
     auto ts = Timestamp::now();
     for (int i = 0; i < loop_times; ++i) {
         estimator->run(model_input, model_output);
@@ -78,6 +77,16 @@ int main(int argc, char** argv) {
     auto cost_time = Timestamp::now() - ts;
     LOG(INFO) << "benchmark ends at: " << Timestamp::now().to_format_str();
     LOG(INFO) << "cost time: " << cost_time << "s, fps: " << loop_times / cost_time;
+
+    // save colorized depth map
+    cv::Mat colorized_depth_map;
+    CvUtils::colorize_depth_map(model_output.depth_map, colorized_depth_map);
+    std::string output_file_name = FilePathUtil::get_file_name(input_image_path);
+    output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_metric3d_depth_result.png";
+    std::string output_path = FilePathUtil::concat_path(
+        "../demo_data/model_test_input/mono_depth_estimation", output_file_name);
+    cv::imwrite(output_path, colorized_depth_map);
+    LOG(INFO) << "prediction result image has been written into: " << output_path;
 
     return 0;
 }

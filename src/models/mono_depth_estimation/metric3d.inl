@@ -133,12 +133,6 @@ public:
      *
      */
     ~Impl() {
-        if (_m_backend_type == MNN) {
-            if (_m_mnn_params.net != nullptr && _m_mnn_params.session != nullptr) {
-                _m_mnn_params.net->releaseModel();
-                _m_mnn_params.net->releaseSession(_m_mnn_params.session);
-            }
-        }
         if (_m_backend_type == TRT) {
             auto status = cudaStreamDestroy(_m_trt_params.cuda_stream);
             if (status != cudaSuccess) {
@@ -187,7 +181,7 @@ public:
 private:
     struct MNNParams {
         std::string model_file_path;
-        std::unique_ptr<MNN::Interpreter> net = nullptr;
+        MNN::Interpreter* net = nullptr;
         MNN::Session* session = nullptr;
         MNN::Tensor* input_tensor = nullptr;
         MNN::Tensor* confidence_output_tensor = nullptr;
@@ -484,8 +478,7 @@ StatusCode Metric3D<INPUT, OUTPUT>::Impl::init_mnn(const toml::value& config) {
         LOG(ERROR) << "metric3d model file: " << _m_mnn_params.model_file_path << " not exist";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    _m_mnn_params.net = std::unique_ptr<MNN::Interpreter>(MNN::Interpreter::createFromFile(
-                            _m_mnn_params.model_file_path.c_str()));
+    _m_mnn_params.net = MNN::Interpreter::createFromFile(_m_mnn_params.model_file_path.c_str());
     if (nullptr == _m_mnn_params.net) {
         LOG(ERROR) << "Create metric3d model interpreter failed";
         return StatusCode::MODEL_INIT_FAILED;
@@ -534,11 +527,11 @@ StatusCode Metric3D<INPUT, OUTPUT>::Impl::init_mnn(const toml::value& config) {
     _m_mnn_params.input_tensor = _m_mnn_params.net->getSessionInput(_m_mnn_params.session, "input_image");
     _m_mnn_params.confidence_output_tensor = _m_mnn_params.net->getSessionOutput(_m_mnn_params.session, "confidence");
     _m_mnn_params.preds_depth_output_tensor = _m_mnn_params.net->getSessionOutput(_m_mnn_params.session, "prediction");
-    if (_m_mnn_params.input_tensor == nullptr) {
+    if (nullptr == _m_mnn_params.input_tensor) {
         LOG(ERROR) << "fetch metric3d model input node failed";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    if (_m_mnn_params.confidence_output_tensor == nullptr || _m_mnn_params.preds_depth_output_tensor == nullptr) {
+    if (nullptr == _m_mnn_params.confidence_output_tensor || nullptr == _m_mnn_params.preds_depth_output_tensor) {
         LOG(ERROR) << "fetch metric3d model output node failed";
         return StatusCode::MODEL_INIT_FAILED;
     }
@@ -578,8 +571,6 @@ StatusCode Metric3D<INPUT, OUTPUT>::Impl::mnn_run(const INPUT& in, OUTPUT& out) 
     auto& net = _m_mnn_params.net;
     auto& session = _m_mnn_params.session;
     auto& input_tensor = _m_mnn_params.input_tensor;
-    LOG(INFO) << "input tensor size: ";
-    input_tensor->printShape();
 
     // preprocess
     _m_input_size_user = internal_in.input_image.size();
@@ -827,7 +818,7 @@ StatusCode Metric3D<INPUT, OUTPUT>::Impl::trt_run(const INPUT& in, OUTPUT& out) 
     _m_trt_params.execution_context->setTensorAddress(
         "prediction", _m_trt_params.device_memory.at(_m_trt_params.output_depth_binding.index()));
     if (!_m_trt_params.execution_context->enqueueV3(_m_trt_params.cuda_stream)) {
-        LOG(ERROR) << "excute input data for inference failed";
+        LOG(ERROR) << "execute input data for inference failed";
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
 
