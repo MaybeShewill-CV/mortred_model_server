@@ -287,6 +287,24 @@ public:
     }
 
     /***
+     *
+     * @param depth_map
+     * @param color_mask
+     */
+    static void colorize_depth_map(const cv::Mat& depth_map, cv::Mat& color_mask) {
+        // convert depth map
+        double max_depth = 0.0;
+        cv::Mat normed_depth_map;
+        cv::minMaxLoc(depth_map, nullptr, &max_depth);
+        cv::divide(depth_map, max_depth, normed_depth_map);
+        normed_depth_map *= 255.0f;
+        normed_depth_map.convertTo(normed_depth_map, CV_8UC1);
+
+        // apply color map
+        cv::applyColorMap(normed_depth_map, color_mask, cv::ColormapTypes::COLORMAP_JET);
+    }
+
+    /***
     *
     * @param box1
     * @param box2
