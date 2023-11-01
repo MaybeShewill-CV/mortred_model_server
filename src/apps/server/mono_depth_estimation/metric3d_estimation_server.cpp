@@ -1,18 +1,18 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: centerface_detection_server.cpp
-* Date: 23-10-18
+* File: metric3d_estimation_server.cpp
+* Date: 23-11-01
 ************************************************/
 
-// center face detection server tool
+// metric3d estimation server tool
 
 #include <glog/logging.h>
 #include <workflow/WFFacilities.h>
 
-#include "factory/obj_detection_task.h"
+#include "factory/mono_depth_estimate_task.h"
 
-using jinq::factory::object_detection::create_centerface_det_server;
+using jinq::factory::mono_depth_estimation::create_metric3d_estimation_server;
 
 int main(int argc, char** argv) {
 
@@ -33,14 +33,14 @@ int main(int argc, char** argv) {
     std::string config_file_path = argv[1];
     LOG(INFO) << "cfg file path: " << config_file_path;
     auto config = toml::parse(config_file_path);
-    const auto& server_cfg = config.at("CENTER_FACE_DETECTION_SERVER");
+    const auto& server_cfg = config.at("METRIC3D_ESTIMATION_SERVER");
     auto port = server_cfg.at("port").as_integer();
     LOG(INFO) << "serve on port: " << port;
 
-    auto server = create_centerface_det_server("centerface_det_server");
+    auto server = create_metric3d_estimation_server("metric3d_estimate_server");
     auto status = server->init(config);
     if (status != jinq::common::StatusCode::OK) {
-        LOG(INFO) << "center face detection server init failed";
+        LOG(INFO) << "metric3d estimate server init failed";
         return -1;
     }
     if (server->start(port) == 0) {

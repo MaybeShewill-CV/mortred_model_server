@@ -38,6 +38,7 @@ set(MODEL_SERVER_APP_LIST
     proxy
     scene_segmentation
     matting
+    mono_depth_estimation
 )
 
 foreach(dir_name ${MODEL_SERVER_APP_LIST})
