@@ -238,6 +238,7 @@ cfg_map = {
     'modnet': py_demo_cfg.MODNET,
     'ppmatting': py_demo_cfg.PPMATTING,
     'pphuman_seg': py_demo_cfg.PPHUMAN_SEG,
+    'metric3d': py_demo_cfg.METRIC3D,
 }
 
 

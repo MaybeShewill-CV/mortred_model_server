@@ -141,3 +141,14 @@ PPHUMAN_SEG:
         U: 20
         R: 10
         T: '10m'
+METRIC3D:
+    MODEL_NAME: 'metric3d' # model name
+    MODE: 'single'
+    URL: 'http://localhost:8091/mortred_ai_server_v1/mono_depth_estimation/metric3d' # service url
+    SOURCE_IMAGE_PATH: '../demo_data/model_test_input/mono_depth_estimation/0000000005.png'  # source image path
+    SINGLE:
+        LOOP_TIMES: 10
+    LOCUST:
+        U: 20
+        R: 10
+        T: '10m'
