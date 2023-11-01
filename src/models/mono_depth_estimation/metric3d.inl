@@ -133,10 +133,16 @@ public:
      *
      */
     ~Impl() {
+        if (_m_backend_type == MNN) {
+            if (nullptr != _m_mnn_params.net && nullptr != _m_mnn_params.session) {
+                _m_mnn_params.net->releaseModel();
+                _m_mnn_params.net->releaseSession(_m_mnn_params.session);
+            }
+        }
         if (_m_backend_type == TRT) {
             auto status = cudaStreamDestroy(_m_trt_params.cuda_stream);
             if (status != cudaSuccess) {
-                LOG(ERROR) << "Failed to free metric3d trt object. Destruct cuda stream "
+                LOG(ERROR) << "failed to free metric3d trt object. destruct cuda stream "
                               "failed code str: " << cudaGetErrorString(status);
             }
         }
