@@ -193,10 +193,10 @@ private:
         // model file path
         std::string model_file_path;
         // trt context
-        std::unique_ptr<nvinfer1::IExecutionContext> execution_context;
+        TrtLogger logger;
         std::unique_ptr<nvinfer1::IRuntime> runtime;
         std::unique_ptr<nvinfer1::ICudaEngine> engine;
-        std::unique_ptr<TrtLogger> logger;
+        std::unique_ptr<nvinfer1::IExecutionContext> execution_context;
         // trt bindings
         EngineBinding input_image_binding;
         EngineBinding output_depth_binding;
@@ -657,9 +657,9 @@ metric3d_impl::internal_output Metric3D<INPUT, OUTPUT>::Impl::mnn_decode_output(
 template <typename INPUT, typename OUTPUT>
 StatusCode Metric3D<INPUT, OUTPUT>::Impl::init_trt(const toml::value& cfg) {
     // init trt runtime
-    _m_trt_params.logger = std::make_unique<TrtLogger>();
-    auto* trt_runtime = nvinfer1::createInferRuntime(*_m_trt_params.logger);
-    if(trt_runtime == nullptr) {
+    _m_trt_params.logger = TrtLogger();
+    auto* trt_runtime = nvinfer1::createInferRuntime(_m_trt_params.logger);
+    if(nullptr == trt_runtime) {
         LOG(ERROR) << "init tensorrt runtime failed";
         return StatusCode::MODEL_INIT_FAILED;
     }
@@ -684,14 +684,14 @@ StatusCode Metric3D<INPUT, OUTPUT>::Impl::init_trt(const toml::value& cfg) {
     auto model_content_length = sizeof(model_file_content[0]) * model_file_content.size();
     _m_trt_params.engine = std::unique_ptr<nvinfer1::ICudaEngine>(
         _m_trt_params.runtime->deserializeCudaEngine(model_file_content.data(), model_content_length));
-    if (_m_trt_params.engine == nullptr) {
+    if (nullptr == _m_trt_params.engine) {
         LOG(ERROR) << "deserialize trt engine failed";
         return StatusCode::MODEL_INIT_FAILED;
     }
 
     // init trt execution context
     _m_trt_params.execution_context = std::unique_ptr<nvinfer1::IExecutionContext>(_m_trt_params.engine->createExecutionContext());
-    if (_m_trt_params.execution_context == nullptr) {
+    if (nullptr == _m_trt_params.execution_context) {
         LOG(ERROR) << "create trt engine failed";
         return StatusCode::MODEL_INIT_FAILED;
     }
