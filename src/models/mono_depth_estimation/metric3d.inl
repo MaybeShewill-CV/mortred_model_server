@@ -647,9 +647,14 @@ metric3d_impl::internal_output Metric3D<INPUT, OUTPUT>::Impl::mnn_decode_output(
     auto label_scale_factor = calculate_label_scale_factor();
     cv::divide(depth_map, label_scale_factor, depth_map);
 
+    // colorize depth map
+    cv::Mat colorized_depth_map;
+    CvUtils::colorize_depth_map(depth_map, colorized_depth_map);
+
     // copy result
     std_mde_output out;
     depth_map.copyTo(out.depth_map);
+    colorized_depth_map.copyTo(out.colorized_depth_map);
     return out;
 }
 
@@ -896,9 +901,14 @@ metric3d_impl::internal_output Metric3D<INPUT, OUTPUT>::Impl::trt_decode_output(
     auto label_scale_factor = calculate_label_scale_factor();
     cv::divide(depth_map, label_scale_factor, depth_map);
 
+    // colorize depth map
+    cv::Mat colorized_depth_map;
+    CvUtils::colorize_depth_map(depth_map, colorized_depth_map);
+
     // copy result
     std_mde_output out;
     depth_map.copyTo(out.depth_map);
+    colorized_depth_map.copyTo(out.colorized_depth_map);
     return out;
 }
 

@@ -122,6 +122,7 @@ namespace mono_depth_estimation {
 
 struct mde_output {
     cv::Mat depth_map;
+    cv::Mat colorized_depth_map;
 };
 using std_mde_output = mde_output;
 
