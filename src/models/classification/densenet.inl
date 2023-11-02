@@ -170,26 +170,26 @@ public:
 
 private:
     std::string _m_model_file_path;
-    // MNN Net即模型数据持有者
-    std::unique_ptr <MNN::Interpreter> _m_net = nullptr;
-    // MNN session即模型输入数据持有者
+    // mnn interpreter
+    MNN::Interpreter* _m_net = nullptr;
+    // mnn session
     MNN::Session* _m_session = nullptr;
-    // MNN session配置
+    // session config
     MNN::ScheduleConfig _m_session_config;
-    // MNN 输入tensor
+    // mnn input tensor
     MNN::Tensor* _m_input_tensor = nullptr;
-    // MNN score输出tensor
+    // mnn output tensor
     MNN::Tensor* _m_output_tensor = nullptr;
-    // MNN后端使用线程数
+    // thread nums
     int _m_threads_nums = 4;
-    // MNN 模型输入tensor大小
+    // input node size
     cv::Size _m_input_tensor_size = cv::Size(224, 224);
-    // 模型是否成功初始化标志位
+    // flag
     bool _m_successfully_initialized = false;
 
 private:
     /***
-     * 图像预处理, 转换图像为CV_32FC3, 通过dst = src / 127.5 - 1.0来归一化图像到[-1.0, 1.0]
+     * image preprocess func
      * @param input_image : 输入图像
      */
     cv::Mat preprocess_image(const cv::Mat& input_image) const;
@@ -226,8 +226,7 @@ StatusCode DenseNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& 
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    _m_net = std::unique_ptr<MNN::Interpreter>(MNN::Interpreter::createFromFile(_m_model_file_path.c_str()));
-
+    _m_net = MNN::Interpreter::createFromFile(_m_model_file_path.c_str());
     if (_m_net == nullptr) {
         LOG(ERROR) << "Create Interpreter failed, model file path: " << _m_model_file_path;
         _m_successfully_initialized = false;
