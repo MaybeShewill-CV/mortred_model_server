@@ -150,19 +150,19 @@ For more server demo you may find them in [Torturials](#tutorials) :point_down::
 
 The benchmark test environment is as follows：
 
-**OS:** Ubuntu 18.04.5 LTS / 5.4.0-53-generic
+**OS:** Ubuntu 20.04.5 LTS / 5.15.0-87-generic
 
 **MEMORY:** 32G DIMM DDR4 Synchronous 2666 MHz
 
 **CPU:** Intel(R) Core(TM) i5-10400 CPU @ 2.90GHz
 
-**GCC:** gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0
+**GCC:** gcc (Ubuntu 9.4.0-1ubuntu1~20.04.2) 9.4.0
 
 **GPU:** GeForce RTX 3080
 
-**CUDA:** CUDA Version: 11.1
+**CUDA:** CUDA Version: 11.5
 
-**GPU Driver:** Driver Version: 455.23.04
+**GPU Driver:** Driver Version: 495.29.05
 
 ### Model Inference Benchmark
 
