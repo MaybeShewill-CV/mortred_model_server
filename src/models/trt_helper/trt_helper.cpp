@@ -39,6 +39,7 @@ void EngineBinding::swap(EngineBinding& other) {
 }
 
 /******* Trt Helper Func Implementation *****/
+
 /***
  *
  * @param engine
@@ -47,12 +48,16 @@ void EngineBinding::swap(EngineBinding& other) {
  * @return
  */
 bool TrtHelper::setup_engine_binding(
-    const std::unique_ptr<nvinfer1::ICudaEngine>& engine,
+    const nvinfer1::ICudaEngine* engine,
     const int& index, EngineBinding& binding) {
+    if (nullptr == engine) {
+        LOG(ERROR) << "cuda engine pointer is null";
+        return false;
+    }
 
     binding.set_index(index);
     const char* name = engine->getIOTensorName(index);
-    if (name == nullptr) {
+    if (nullptr == name) {
         return false;
     }
     binding.set_name(std::string(name));
@@ -76,8 +81,12 @@ bool TrtHelper::setup_engine_binding(
  * @return
  */
 bool TrtHelper::setup_engine_binding(
-    const std::unique_ptr<nvinfer1::ICudaEngine>& engine,
+    const nvinfer1::ICudaEngine* engine,
     const std::string& name, EngineBinding& binding) {
+    if (nullptr == engine) {
+        LOG(ERROR) << "cuda engine pointer is null";
+        return false;
+    }
 
     binding.set_name(name);
     binding.set_index(engine->getBindingIndex(name.c_str()));
@@ -99,48 +108,26 @@ bool TrtHelper::setup_engine_binding(
 /***
  *
  * @param engine
- * @param output
- * @return
- */
-StatusCode TrtHelper::setup_device_memory(std::unique_ptr<nvinfer1::ICudaEngine>& engine, DeviceMemory& output) {
-    auto nb_bindings = engine->getNbIOTensors();
-    for (int i = 0; i < nb_bindings; ++i) {
-        auto tensorname = engine->getIOTensorName(i);
-        auto dims = engine->getTensorShape(tensorname);
-        auto volume = dims_volume(dims);
-        DLOG(INFO) << "tensor: " << tensorname <<  ", volume: " << volume << ", dims: " << dims_to_string(dims);
-        void* cuda_memo = nullptr;
-        auto r = cudaMalloc(&cuda_memo, volume * sizeof(float));
-        if (r != 0 || cuda_memo == nullptr) {
-            LOG(ERROR) << "Setup device memory failed error str: " << cudaGetErrorString(r);
-            return StatusCode::TRT_ALLOC_MEMO_FAILED;
-        }
-        output.push_back(cuda_memo);
-    }
-    return StatusCode::OK;
-}
-
-/***
- *
- * @param engine
  * @param context
  * @param output
  * @return
  */
 StatusCode TrtHelper::setup_device_memory(
-    std::unique_ptr<nvinfer1::ICudaEngine> &engine,
-    std::unique_ptr<nvinfer1::IExecutionContext> &context,
+    const nvinfer1::ICudaEngine* engine,
+    const nvinfer1::IExecutionContext* context,
     DeviceMemory &output) {
+    if (nullptr == engine || nullptr == context) {
+        LOG(ERROR) << "cuda engine pointer or context pointer is null";
+        return StatusCode::TRT_ALLOC_MEMO_FAILED;
+    }
+
     auto nb_bindings = engine->getNbIOTensors();
     for (int i = 0; i < nb_bindings; ++i) {
         auto tensorname = engine->getIOTensorName(i);
         auto dims = context->getTensorShape(tensorname);
         auto volume = dims_volume(dims);
-        DLOG(INFO) << "tensor: " << tensorname <<  ", volume: " << volume << ", dims: " << dims_to_string(dims);
         void* cuda_memo = nullptr;
         auto r = cudaMalloc(&cuda_memo, volume * sizeof(float));
-//        auto r = cudaMallocHost(&cuda_memo, volume * sizeof(float));
-//        auto r = cudaHostAlloc(&cuda_memo, volume * sizeof(float), cudaHostAllocMapped);
         if (r != 0 || cuda_memo == nullptr) {
             LOG(ERROR) << "Setup device memory failed error str: " << cudaGetErrorString(r);
             return StatusCode::TRT_ALLOC_MEMO_FAILED;

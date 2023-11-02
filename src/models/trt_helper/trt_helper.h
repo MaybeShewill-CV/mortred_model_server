@@ -233,10 +233,21 @@ class DeviceMemory {
 
 class TrtLogger : public nvinfer1::ILogger {
   public:
+    /***
+     *
+     */
     TrtLogger() = default;
 
+    /***
+     *
+     */
     ~TrtLogger() override = default;
 
+    /***
+     *
+     * @param severity
+     * @param msg
+     */
     void log(nvinfer1::ILogger::Severity severity, const char* msg) noexcept override {
         if (severity == nvinfer1::ILogger::Severity::kINFO) {
             DLOG(INFO) << msg;
@@ -256,11 +267,34 @@ class TrtLogger : public nvinfer1::ILogger {
 
 class TrtHelper {
   public:
+    /***
+     *
+     */
     TrtHelper() = delete;
+
+    /***
+     *
+     */
     ~TrtHelper() = delete;
+
+    /***
+     *
+     * @param transformer
+     */
     TrtHelper(const TrtHelper& transformer) = delete;
+
+    /***
+     *
+     * @param transformer
+     * @return
+     */
     TrtHelper& operator=(const TrtHelper& transformer) = delete;
 
+    /***
+     *
+     * @param dims
+     * @return
+     */
     static std::string dims_to_string(const nvinfer1::Dims& dims) {
         std::string out = "(";
         for (int32_t i = 0; i < dims.nbDims; ++i) {
@@ -298,7 +332,7 @@ class TrtHelper {
     * @return
      */
     static bool setup_engine_binding(
-        const std::unique_ptr<nvinfer1::ICudaEngine>& engine,
+        const nvinfer1::ICudaEngine* engine,
         const std::string& name, EngineBinding& binding);
 
     /***
@@ -309,18 +343,8 @@ class TrtHelper {
      * @return
      */
     static bool setup_engine_binding(
-        const std::unique_ptr<nvinfer1::ICudaEngine>& engine,
+        const nvinfer1::ICudaEngine* engine,
         const int& index, EngineBinding& binding);
-
-    /***
-     *
-     * @param engine
-     * @param output
-     * @return
-     */
-    static common::StatusCode setup_device_memory(
-        std::unique_ptr<nvinfer1::ICudaEngine>& engine,
-        DeviceMemory& output);
 
     /***
      *
@@ -330,8 +354,8 @@ class TrtHelper {
      * @return
      */
     static common::StatusCode setup_device_memory(
-        std::unique_ptr<nvinfer1::ICudaEngine>& engine,
-        std::unique_ptr<nvinfer1::IExecutionContext>& context,
+        const nvinfer1::ICudaEngine* engine,
+        const nvinfer1::IExecutionContext* context,
         DeviceMemory& output);
 
     /***
@@ -347,7 +371,7 @@ class TrtHelper {
      *
      * @param engine
      */
-    static void print_bindings(const std::unique_ptr<nvinfer1::ICudaEngine>& engine) {
+    static void print_bindings(const nvinfer1::ICudaEngine* engine) {
         const int32_t n_bindings = engine->getNbBindings();
         for(int i = 0; i < n_bindings; ++i) {
             EngineBinding binding;
