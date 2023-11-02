@@ -171,7 +171,7 @@ public:
 private:
     std::string _m_model_file_path;
     // MNN Net
-    std::unique_ptr <MNN::Interpreter> _m_net = nullptr;
+    MNN::Interpreter* _m_net = nullptr;
     // MNN session
     MNN::Session* _m_session = nullptr;
     // MNN session
@@ -226,8 +226,7 @@ StatusCode ResNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& co
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    _m_net = std::unique_ptr<MNN::Interpreter>(MNN::Interpreter::createFromFile(_m_model_file_path.c_str()));
-
+    _m_net = MNN::Interpreter::createFromFile(_m_model_file_path.c_str());
     if (_m_net == nullptr) {
         LOG(ERROR) << "Create Interpreter failed, model file path: " << _m_model_file_path;
         _m_successfully_initialized = false;
