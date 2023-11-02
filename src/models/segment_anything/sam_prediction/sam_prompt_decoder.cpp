@@ -129,10 +129,10 @@ class SamPromptDecoder::Impl {
     std::vector<int> _m_encoder_input_shape;
 
     // tensorrt engine
-    std::unique_ptr<nvinfer1::IRuntime> _m_trt_runtime;
-    std::unique_ptr<nvinfer1::ICudaEngine> _m_trt_engine;
-    std::unique_ptr<nvinfer1::IExecutionContext> _m_trt_execution_context;
-    std::unique_ptr<TrtLogger> _m_trt_logger;
+    TrtLogger _m_trt_logger;
+    nvinfer1::IRuntime* _m_trt_runtime = nullptr;
+    nvinfer1::ICudaEngine* _m_trt_engine = nullptr;
+    nvinfer1::IExecutionContext* _m_trt_execution_context = nullptr;
 
     // input/output tensor binding
     EngineBinding _m_image_embedding_binding;
@@ -420,13 +420,12 @@ StatusCode SamPromptDecoder::Impl::init_onnx_model(const toml::value &cfg) {
  */
 StatusCode SamPromptDecoder::Impl::init_trt_model(const toml::value &cfg) {
     // init trt runtime
-    _m_trt_logger = std::make_unique<TrtLogger>();
-    auto* trt_runtime = nvinfer1::createInferRuntime(*_m_trt_logger);
-    if(trt_runtime == nullptr) {
+    _m_trt_logger = TrtLogger();
+    _m_trt_runtime = nvinfer1::createInferRuntime(_m_trt_logger);
+    if(nullptr == _m_trt_runtime) {
         LOG(ERROR) << "Init TensorRT runtime failed";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    _m_trt_runtime = std::unique_ptr<nvinfer1::IRuntime>(trt_runtime);
 
     // init trt engine
     if (!cfg.contains("model_file_path")) {
@@ -445,15 +444,14 @@ StatusCode SamPromptDecoder::Impl::init_trt_model(const toml::value &cfg) {
         return StatusCode::MODEL_INIT_FAILED;
     }
     auto model_content_length = sizeof(model_file_content[0]) * model_file_content.size();
-    _m_trt_engine = std::unique_ptr<nvinfer1::ICudaEngine>(
-        _m_trt_runtime->deserializeCudaEngine(model_file_content.data(), model_content_length));
+    _m_trt_engine = _m_trt_runtime->deserializeCudaEngine(model_file_content.data(), model_content_length);
     if (_m_trt_engine == nullptr) {
         LOG(ERROR) << "deserialize trt engine failed";
         return StatusCode::MODEL_INIT_FAILED;
     }
 
     // init trt execution context
-    _m_trt_execution_context = std::unique_ptr<nvinfer1::IExecutionContext>(_m_trt_engine->createExecutionContext());
+    _m_trt_execution_context = _m_trt_engine->createExecutionContext();
     if (_m_trt_execution_context == nullptr) {
         LOG(ERROR) << "create trt engine failed";
         return StatusCode::MODEL_INIT_FAILED;

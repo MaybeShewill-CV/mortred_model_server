@@ -82,7 +82,7 @@ class FastSamSegmentor::Impl {
     std::string _m_output_1_name;
 
     // model session
-    std::unique_ptr<MNN::Interpreter> _m_net;
+    MNN::Interpreter* _m_net = nullptr;
     MNN::Session* _m_session = nullptr;
     MNN::Tensor* _m_input_tensor = nullptr;
     MNN::Tensor* _m_output_tensor_0 = nullptr;
@@ -145,7 +145,7 @@ jinq::common::StatusCode FastSamSegmentor::Impl::init(const decltype(toml::parse
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    _m_net = std::unique_ptr<MNN::Interpreter>(MNN::Interpreter::createFromFile(_m_model_path.c_str()));
+    _m_net = MNN::Interpreter::createFromFile(_m_model_path.c_str());
     if (_m_net == nullptr) {
         LOG(ERROR) << "Create Interpreter failed, model file path: " << _m_model_path;
         _m_successfully_init_model = false;

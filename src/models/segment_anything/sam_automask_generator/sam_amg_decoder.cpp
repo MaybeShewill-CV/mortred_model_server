@@ -101,9 +101,9 @@ class SamAmgDecoder::Impl {
     std::vector<const char*> _m_output_names;
 
     // tensorrt engine
-    std::unique_ptr<nvinfer1::IRuntime> _m_trt_runtime;
-    std::unique_ptr<nvinfer1::ICudaEngine> _m_trt_engine;
-    std::unique_ptr<TrtLogger> _m_trt_logger;
+    TrtLogger _m_trt_logger;
+    nvinfer1::IRuntime* _m_trt_runtime = nullptr;
+    nvinfer1::ICudaEngine* _m_trt_engine = nullptr;
 
     // decoder thread executor
     struct SamDecodeInput {
@@ -122,8 +122,8 @@ class SamAmgDecoder::Impl {
     };
     // thread executor
     struct ThreadExecutor {
-        std::unique_ptr<nvinfer1::IExecutionContext> context;
-        std::unique_ptr<SamDecodeInput> input;
+        nvinfer1::IExecutionContext* context;
+        SamDecodeInput* input;
     };
     // worker queue
     moodycamel::ConcurrentQueue<ThreadExecutor> _m_decoder_queue;
@@ -266,14 +266,13 @@ StatusCode SamAmgDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
     toml::value cfg_content = cfg.at("SAM_AMG_DECODER");
 
     // init trt runtime
-    _m_trt_logger = std::make_unique<TrtLogger>();
-    auto* trt_runtime = nvinfer1::createInferRuntime(*_m_trt_logger);
-    if(trt_runtime == nullptr) {
+    _m_trt_logger = TrtLogger();
+    _m_trt_runtime = nvinfer1::createInferRuntime(_m_trt_logger);
+    if(nullptr == _m_trt_runtime) {
         LOG(ERROR) << "init tensorrt runtime failed";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    _m_trt_runtime = std::unique_ptr<nvinfer1::IRuntime>(trt_runtime);
 
     // init trt engine
     if (!cfg_content.contains("model_file_path")) {
@@ -295,9 +294,8 @@ StatusCode SamAmgDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
         return StatusCode::MODEL_INIT_FAILED;
     }
     auto model_content_length = sizeof(model_file_content[0]) * model_file_content.size();
-    _m_trt_engine = std::unique_ptr<nvinfer1::ICudaEngine>(
-        _m_trt_runtime->deserializeCudaEngine(model_file_content.data(), model_content_length));
-    if (_m_trt_engine == nullptr) {
+    _m_trt_engine = _m_trt_runtime->deserializeCudaEngine(model_file_content.data(), model_content_length);
+    if (nullptr == _m_trt_engine) {
         LOG(ERROR) << "deserialize trt engine failed";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
@@ -306,21 +304,16 @@ StatusCode SamAmgDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
     // init mask decoder executor queue
     _m_decoder_queue_size = static_cast<int>(cfg_content.at("worker_queue_size").as_integer());
     for (auto idx = 0; idx < _m_decoder_queue_size; ++idx) {
-        // init trt context
-        auto context = std::unique_ptr<nvinfer1::IExecutionContext>(_m_trt_engine->createExecutionContext());
-        // init decoder input
-        auto decoder_input = std::make_unique<SamDecodeInput>();
-
-        ThreadExecutor executor;
-        executor.context = std::move(context);
-        executor.input = std::move(decoder_input);
+        ThreadExecutor executor{};
+        executor.context = _m_trt_engine->createExecutionContext();
+        executor.input = new SamDecodeInput;
         auto init_status = init_thread_executor(executor);
         if (init_status != StatusCode::OK) {
             LOG(ERROR) << "init thread mask decode executor failed, status code: " << init_status;
             _m_successfully_initialized = false;
             return StatusCode::MODEL_INIT_FAILED;
         }
-        _m_decoder_queue.enqueue(std::move(executor));
+        _m_decoder_queue.enqueue(executor);
     }
 
     // init compute thread pool
@@ -502,8 +495,8 @@ void SamAmgDecoder::Impl::decode_output_mask(
  */
 StatusCode SamAmgDecoder::Impl::init_thread_executor(ThreadExecutor& executor) {
 //    auto& engine = executor.trt_engine;
-    auto& context = executor.context;
-    auto& decoder_input = executor.input;
+    auto context = executor.context;
+    auto decoder_input = executor.input;
 
     // bind image embedding tensor
     auto& image_embedding_binding = decoder_input->image_embedding_binding;
@@ -665,10 +658,10 @@ void SamAmgDecoder::Impl::thread_decode_mask_proc(
     thread_decode_seriex_ctx *ctx) {
     // get decoder
     auto t_start = std::chrono::high_resolution_clock::now();
-    ThreadExecutor decode_executor;
+    ThreadExecutor decode_executor{};
     while (!_m_decoder_queue.try_dequeue(decode_executor)) {}
-    auto& context = decode_executor.context;
-    auto& decoder_input = decode_executor.input;
+    auto context = decode_executor.context;
+    auto decoder_input = decode_executor.input;
     auto t_end = std::chrono::high_resolution_clock::now();
     auto t_cost = std::chrono::duration_cast<std::chrono::milliseconds >(t_end - t_start).count();
     ctx->dequeue_thread_executor_time_consuming = t_cost;
@@ -806,7 +799,7 @@ void SamAmgDecoder::Impl::thread_decode_mask_proc(
 
     // restore worker queue
     t_start = std::chrono::high_resolution_clock::now();
-    _m_decoder_queue.enqueue(std::move(decode_executor));
+    _m_decoder_queue.enqueue(decode_executor);
     t_end = std::chrono::high_resolution_clock::now();
     t_cost = std::chrono::duration_cast<std::chrono::milliseconds >(t_end - t_start).count();
     ctx->enqueue_thread_executor_time_consuming = t_cost;

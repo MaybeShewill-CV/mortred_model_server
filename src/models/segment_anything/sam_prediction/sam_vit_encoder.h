@@ -1,7 +1,7 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: SamVitEncoder.h
+ * File: sam_vit_encoder.h
  * Date: 23-6-7
  ************************************************/
 
