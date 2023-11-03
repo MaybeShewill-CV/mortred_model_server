@@ -41,7 +41,7 @@
 
 **1.** 确保 **CUDA&GPU&Driver** 正确安装，否则只能使用cpu做服务器的计算后端，一些复杂模型cpu计算耗时非常久，不推荐使用cpu作为计算后端. 你可以参考 [nvidia文档](https://developer.nvidia.com/cuda-toolkit) 来正确安装。
 
-**2.** 确保 **MNN** 已正常安装. 同样可以参考他们的 [官方安装文档](https://www.yuque.com/mnn/en/build_linux). 推荐在本项目中使用 `MNN-2.3.0`
+**2.** 确保 **MNN** 已正常安装. 同样可以参考他们的 [官方安装文档](https://www.yuque.com/mnn/en/build_linux). 推荐在本项目中使用 `MNN-2.7.0`
 
 **3.** 确保 **WORKFLOW** 正确安装. 可以参考 [官方安装文档](https://github.com/sogou/workflow)
 
@@ -49,7 +49,7 @@
 
 **5.** 确保你的开发环境中的 **GCC** 编译工具链支持 `CPP17`
 
-**6.** Segment-Anything 目前需要使用到 **ONNXRUNTIME** 和 **TensorRT** 库. 可以参考 [官方安装文档](https://onnxruntime.ai/) 安装onnxruntime>=1.14.1, [官方安装文档](https://developer.nvidia.com/tensorrt) 安装TensorRT-8.6.1.6
+**6.** Segment-Anything 目前需要使用到 **ONNXRUNTIME** 和 **TensorRT** 库. 可以参考 [官方安装文档](https://onnxruntime.ai/) 安装onnxruntime>=1.16.0, [官方安装文档](https://developer.nvidia.com/tensorrt) 安装TensorRT-8.6.1.6
 
 准备工作都完成之后可以愉快的安装本项目了 :tea:
 
