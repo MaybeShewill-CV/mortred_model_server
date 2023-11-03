@@ -171,7 +171,7 @@ private:
     // model weights file path
     std::string _m_model_file_path;
     // MNN Interpreter
-    std::unique_ptr<MNN::Interpreter> _m_net = nullptr;
+    MNN::Interpreter* _m_net = nullptr;
     // MNN Session
     MNN::Session* _m_session = nullptr;
     // MNN Input tensor node
@@ -235,9 +235,7 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    _m_net = std::unique_ptr<MNN::Interpreter>(
-                 MNN::Interpreter::createFromFile(_m_model_file_path.c_str()));
-
+    _m_net = MNN::Interpreter::createFromFile(_m_model_file_path.c_str());
     if (nullptr == _m_net) {
         LOG(ERROR) << "Create enlighten-gan enhancement model interpreter failed";
         _m_successfully_initialized = false;
@@ -246,7 +244,6 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""
 
     // init session
     MNN::ScheduleConfig mnn_config;
-
     if (!cfg_content.contains("compute_backend")) {
         LOG(WARNING) << "Config doesn\'t have compute_backend field default cpu";
         mnn_config.type = MNN_FORWARD_CPU;

@@ -178,7 +178,7 @@ private:
     // 模型文件存储路径
     std::string _m_model_file_path;
     // MNN Interpreter
-    std::unique_ptr<MNN::Interpreter> _m_net = nullptr;
+    MNN::Interpreter* _m_net = nullptr;
     // MNN Session
     MNN::Session* _m_session = nullptr;
     // MNN Input tensor node
@@ -314,9 +314,7 @@ StatusCode NanoDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
 
-    _m_net = std::unique_ptr<MNN::Interpreter>(
-                 MNN::Interpreter::createFromFile(_m_model_file_path.c_str()));
-
+    _m_net = MNN::Interpreter::createFromFile(_m_model_file_path.c_str());
     if (nullptr == _m_net) {
         LOG(ERROR) << "Create NanoDet detection model interpreter failed";
         _m_successfully_initialized = false;
@@ -325,7 +323,6 @@ StatusCode NanoDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""
 
     // init Session
     MNN::ScheduleConfig mnn_config;
-
     if (!cfg_content.contains("compute_backend")) {
         LOG(WARNING) << "Config doesn\'t have compute_backend field default cpu";
         mnn_config.type = MNN_FORWARD_CPU;

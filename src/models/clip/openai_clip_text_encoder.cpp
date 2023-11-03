@@ -85,12 +85,12 @@ class OpenAiClipTextEncoder::Impl {
     std::string _m_output_name;
 
     // tokenizer
-    std::unique_ptr<SimpleTokenizer> _m_tokenizer;
+    SimpleTokenizer _m_tokenizer;
     int _m_context_length = 77;
     bool _m_truncate_token = true;
 
     // model session
-    std::unique_ptr<MNN::Interpreter> _m_net;
+    MNN::Interpreter* _m_net = nullptr;
     MNN::Session* _m_session = nullptr;
     MNN::Tensor* _m_input_tensor = nullptr;
     MNN::Tensor* _m_output_tensor = nullptr;
@@ -130,7 +130,7 @@ StatusCode OpenAiClipTextEncoder::Impl::init(const decltype(toml::parse("")) &cf
     }
 
     // init session
-    _m_net = std::unique_ptr<MNN::Interpreter>(MNN::Interpreter::createFromFile(_m_model_path.c_str()));
+    _m_net = MNN::Interpreter::createFromFile(_m_model_path.c_str());
     _m_thread_nums = cfg_content["model_threads_num"].as_integer();
     _m_model_device = cfg_content["compute_backend"].as_string();
     MNN::ScheduleConfig mnn_config;
@@ -176,9 +176,8 @@ StatusCode OpenAiClipTextEncoder::Impl::init(const decltype(toml::parse("")) &cf
     }
 
     // init tokenizer
-    _m_tokenizer = std::make_unique<SimpleTokenizer>();
-    auto status = _m_tokenizer->init(cfg);
-    if (!_m_tokenizer->is_successfully_initialized()) {
+    auto status = _m_tokenizer.init(cfg);
+    if (!_m_tokenizer.is_successfully_initialized()) {
         LOG(ERROR) << "init simple tokenizer failed, status code: " << status;
         _m_successfully_init_model = false;
         return StatusCode::MODEL_INIT_FAILED;
@@ -241,7 +240,7 @@ StatusCode OpenAiClipTextEncoder::Impl::encode(
 void OpenAiClipTextEncoder::Impl::tokenize(
     const std::string &input_text, std::vector<int32_t> &token_ids, std::vector<int32_t> &attn_mask) {
     std::vector<int32_t> text_tokens;
-    _m_tokenizer->tokenize(input_text, text_tokens);
+    _m_tokenizer.tokenize(input_text, text_tokens);
 
     token_ids.resize(_m_context_length);
     attn_mask.resize(_m_context_length);

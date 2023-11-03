@@ -48,7 +48,7 @@ class FastSamSegmentor::Impl {
      * @param cfg
      * @return
      */
-    jinq::common::StatusCode init(const decltype(toml::parse(""))& cfg);
+    StatusCode init(const decltype(toml::parse(""))& cfg);
 
     /***
      *
@@ -56,7 +56,7 @@ class FastSamSegmentor::Impl {
      * @param everything_mask
      * @return
      */
-    jinq::common::StatusCode everything(const cv::Mat& input_image, cv::Mat& everything_mask);
+    StatusCode everything(const cv::Mat& input_image, cv::Mat& everything_mask);
 
     /***
      * if model successfully initialized
@@ -135,7 +135,7 @@ class FastSamSegmentor::Impl {
  * @param cfg
  * @return
  */
-jinq::common::StatusCode FastSamSegmentor::Impl::init(const decltype(toml::parse("")) &cfg) {
+StatusCode FastSamSegmentor::Impl::init(const decltype(toml::parse("")) &cfg) {
     // init sam encoder configs
     auto cfg_content = cfg.at("FAST_SAM");
     _m_model_path = cfg_content["model_file_path"].as_string();
@@ -250,7 +250,7 @@ jinq::common::StatusCode FastSamSegmentor::Impl::init(const decltype(toml::parse
  * @param everything_mask
  * @return
  */
-jinq::common::StatusCode FastSamSegmentor::Impl::everything(const cv::Mat& input_image, cv::Mat& everything_mask) {
+StatusCode FastSamSegmentor::Impl::everything(const cv::Mat& input_image, cv::Mat& everything_mask) {
     // check input image
     if (!input_image.data || input_image.empty()) {
         return StatusCode::MODEL_RUN_SESSION_FAILED;
@@ -487,7 +487,7 @@ FastSamSegmentor::~FastSamSegmentor() = default;
  * @param cfg
  * @return
  */
-jinq::common::StatusCode FastSamSegmentor::init(const decltype(toml::parse("")) &cfg) {
+StatusCode FastSamSegmentor::init(const decltype(toml::parse("")) &cfg) {
     return _m_pimpl->init(cfg);
 }
 
@@ -497,7 +497,7 @@ jinq::common::StatusCode FastSamSegmentor::init(const decltype(toml::parse("")) 
  * @param everything_mask
  * @return
  */
-jinq::common::StatusCode FastSamSegmentor::everything(const cv::Mat &input_image, cv::Mat &everything_mask) {
+StatusCode FastSamSegmentor::everything(const cv::Mat &input_image, cv::Mat &everything_mask) {
     return _m_pimpl->everything(input_image, everything_mask);
 }
 

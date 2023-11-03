@@ -166,7 +166,7 @@ template <typename INPUT, typename OUTPUT> class AttentiveGanDerain<INPUT, OUTPU
     // model file path
     std::string _m_model_file_path;
     // mnn interpreter
-    std::unique_ptr<MNN::Interpreter> _m_net = nullptr;
+    MNN::Interpreter* _m_net = nullptr;
     // mnn session
     MNN::Session *_m_session = nullptr;
     // mnn input tensor node
@@ -235,8 +235,7 @@ StatusCode AttentiveGanDerain<INPUT, OUTPUT>::Impl::init(const decltype(toml::pa
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    _m_net = std::unique_ptr<MNN::Interpreter>(MNN::Interpreter::createFromFile(_m_model_file_path.c_str()));
-
+    _m_net = MNN::Interpreter::createFromFile(_m_model_file_path.c_str());
     if (nullptr == _m_net) {
         LOG(ERROR) << "Create attentive gan derain model interpreter failed";
         _m_successfully_initialized = false;

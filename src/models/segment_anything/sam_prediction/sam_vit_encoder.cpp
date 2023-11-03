@@ -51,6 +51,12 @@ class SamVitEncoder::Impl {
                               "failed code str: " << cudaGetErrorString(status);
             }
         }
+        if (_m_backend_type == ONNX) {
+            if (nullptr != _m_onnx_sess) {
+                delete _m_onnx_sess;
+                _m_onnx_sess = nullptr;
+            }
+        }
     }
 
     /***
@@ -99,7 +105,7 @@ class SamVitEncoder::Impl {
     std::string _m_output_name;
 
     // mnn model session
-    std::unique_ptr<MNN::Interpreter> _m_net;
+    MNN::Interpreter* _m_net = nullptr;
     MNN::Session* _m_session = nullptr;
     MNN::Tensor* _m_input_tensor = nullptr;
     MNN::Tensor* _m_output_tensor = nullptr;
@@ -113,7 +119,7 @@ class SamVitEncoder::Impl {
     Ort::SessionOptions _m_onnx_sess_options;
 
     // onnx model session
-    std::unique_ptr<Ort::Session> _m_onnx_sess;
+    Ort::Session* _m_onnx_sess = nullptr;
 
     // model input/output shape info
     std::vector<int> _m_input_shape;
@@ -339,7 +345,7 @@ StatusCode SamVitEncoder::Impl::init_mnn_model(const toml::value& cfg) {
         LOG(ERROR) << "sam encoder model file path: " << _m_model_path << " not exists";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    _m_net = std::unique_ptr<MNN::Interpreter>(MNN::Interpreter::createFromFile(_m_model_path.c_str()));
+    _m_net = MNN::Interpreter::createFromFile(_m_model_path.c_str());
     _m_thread_nums = cfg.at("model_threads_num").as_integer();
     _m_model_device = cfg.at("compute_backend").as_string();
     MNN::ScheduleConfig mnn_config;
@@ -406,8 +412,7 @@ StatusCode SamVitEncoder::Impl::init_onnx_model(const toml::value& cfg) {
 
     _m_input_name = "input_image";
     _m_output_name = "image_embeddings";
-
-    _m_onnx_sess = std::make_unique<Ort::Session>(_m_env, _m_model_path.c_str(), _m_onnx_sess_options);
+    _m_onnx_sess = new Ort::Session(_m_env, _m_model_path.c_str(), _m_onnx_sess_options);
     auto input_shape = _m_onnx_sess->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
     for (auto& v : input_shape) {
         _m_input_shape.push_back(static_cast<int>(v));

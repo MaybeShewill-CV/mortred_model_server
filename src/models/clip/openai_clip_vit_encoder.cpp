@@ -84,7 +84,7 @@ class OpenAiClipVitEncoder::Impl {
     std::string _m_output_name;
 
     // model session
-    std::unique_ptr<MNN::Interpreter> _m_net;
+    MNN::Interpreter* _m_net;
     MNN::Session* _m_session = nullptr;
     MNN::Tensor* _m_input_tensor = nullptr;
     MNN::Tensor* _m_output_tensor = nullptr;
@@ -123,7 +123,7 @@ jinq::common::StatusCode OpenAiClipVitEncoder::Impl::init(const decltype(toml::p
     }
 
     // init session
-    _m_net = std::unique_ptr<MNN::Interpreter>(MNN::Interpreter::createFromFile(_m_model_path.c_str()));
+    _m_net = MNN::Interpreter::createFromFile(_m_model_path.c_str());
     _m_thread_nums = cfg_content["model_threads_num"].as_integer();
     _m_model_device = cfg_content["compute_backend"].as_string();
     MNN::ScheduleConfig mnn_config;
