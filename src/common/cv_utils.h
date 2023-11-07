@@ -305,6 +305,33 @@ public:
     }
 
     /***
+     *
+     * @tparam T
+     * @param input_image0
+     * @param input_image1
+     * @param match_result
+     * @param out_image
+     */
+    template <class T>
+    static void visualize_fp_match_result(
+        const cv::Mat& input_image0, const cv::Mat& input_image1, const std::vector<T>& match_result, cv::Mat& out_image) {
+        std::vector<cv::KeyPoint> kpts0;
+        std::vector<cv::KeyPoint> kpts1;
+        std::vector<cv::DMatch> matches;
+
+        for (auto idx = 0; idx < match_result.size(); ++idx) {
+            cv::KeyPoint kpt0(match_result[idx].m_fp.first.location, 0.0);
+            cv::KeyPoint kpt1(match_result[idx].m_fp.second.location, 0.0);
+            cv::DMatch dmatch(idx, idx, 0.0);
+            kpts0.push_back(kpt0);
+            kpts1.push_back(kpt1);
+            matches.push_back(dmatch);
+        }
+
+        cv::drawMatches(input_image0, kpts0, input_image1, kpts1, matches, out_image);
+    }
+
+    /***
     *
     * @param box1
     * @param box2
