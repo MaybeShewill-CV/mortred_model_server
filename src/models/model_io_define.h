@@ -30,6 +30,12 @@ struct file_input {
 struct base64_input {
     std::string input_image_content;
 };
+
+struct pair_mat_input {
+    cv::Mat src_input_image;
+    cv::Mat dst_input_image;
+};
+
 } // namespace common_io
 
 // image ocr
@@ -114,6 +120,12 @@ struct fp {
     float score;
 };
 using std_feature_point_output = std::vector<fp>;
+
+struct matched_fp {
+    std::pair<fp, fp> m_fp;
+    float match_score;
+};
+using std_feature_point_match_output = std::vector<matched_fp>;
 
 } // namespace feature_point
 
