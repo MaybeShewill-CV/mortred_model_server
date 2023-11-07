@@ -85,9 +85,7 @@ class LightGlue<INPUT, OUTPUT>::Impl {
     /***
      *
      */
-    ~Impl() {
-        // todo implement deconstruct function
-    }
+    ~Impl() = default;
 
     /***
      *
@@ -268,8 +266,8 @@ cv::Mat LightGlue<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat &input_im
     // long side resize
     auto long_side = std::max(input_image.size().width, input_image.size().height);
     auto resize_scale = _m_long_side_len / static_cast<float>(long_side);
-    auto resize_h = static_cast<int>(input_image.size().height * resize_scale);
-    auto resize_w = static_cast<int>(input_image.size().width * resize_scale);
+    auto resize_h = static_cast<int>(static_cast<float>(input_image.size().height) * resize_scale);
+    auto resize_w = static_cast<int>(static_cast<float>(input_image.size().width) * resize_scale);
     cv::Mat tmp;
     cv::resize(input_image, tmp, cv::Size(resize_w, resize_h), 0.0, 0.0, cv::INTER_AREA);
 
@@ -346,10 +344,10 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_onnx(const toml::value& config) 
     }
 
     // init match threshold
-    _m_match_thresh = config.at("match_thresh").as_floating();
+    _m_match_thresh = static_cast<float>(config.at("match_thresh").as_floating());
 
     // init long side length
-    _m_long_side_len = config.at("long_side_length").as_floating();
+    _m_long_side_len = static_cast<float>(config.at("long_side_length").as_floating());
 
     return StatusCode::OK;
 }
@@ -536,7 +534,7 @@ std_feature_point_match_output LightGlue<INPUT, OUTPUT>::Impl::onnx_decode_outpu
  * @tparam INPUT
  * @tparam OUTPUT
  */
-template <typename INPUT, typename OUTPUT> LightGlue<INPUT, OUTPUT>::LightGlue() { 
+template <typename INPUT, typename OUTPUT> LightGlue<INPUT, OUTPUT>::LightGlue() {
     _m_pimpl = std::make_unique<Impl>(); 
 }
 
