@@ -7,13 +7,17 @@
 
 #include "lightglue.h"
 
+#include <unordered_map>
+
 #include "glog/logging.h"
 #include <opencv2/opencv.hpp>
 #include "onnxruntime/onnxruntime_cxx_api.h"
+#include "TensorRT-8.6.1.6/NvInferRuntime.h"
 
 #include "common/base64.h"
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
+#include "models/trt_helper/trt_helper.h"
 
 namespace jinq {
 namespace models {
@@ -30,6 +34,11 @@ namespace feature_point {
 using jinq::models::io_define::feature_point::fp;
 using jinq::models::io_define::feature_point::matched_fp;
 using jinq::models::io_define::feature_point::std_feature_point_match_output;
+
+using trt_helper::EngineBinding;
+using trt_helper::DeviceMemory;
+using trt_helper::TrtHelper;
+using trt_helper::TrtLogger;
 
 namespace lightglue_impl {
 
@@ -69,6 +78,60 @@ transform_output(const lightglue_impl::internal_output &internal_out) {
     }
     return result;
 }
+
+/***
+ * specified memo allocator for match result output tensor
+ */
+class MatchResultOutputAllocator : public nvinfer1::IOutputAllocator {
+  public:
+    /***
+     *
+     * @param tensorName
+     * @param currentMemory
+     * @param size
+     * @param alignment
+     * @return
+     */
+    void* reallocateOutput(char const* tensorName, void* currentMemory, uint64_t size, uint64_t alignment) noexcept override {
+        LOG(INFO) << "reallocate cuda memo for dynamically shaped tensor: " << tensorName;
+        // reallocate cuda memo
+        if (size > output_size) {
+            cudaFree(output_ptr);
+            output_ptr = nullptr;
+            output_size = 0;
+            if (cudaMalloc(&output_ptr, size) == cudaSuccess) {
+                LOG(INFO) << "successfully allocate cuda memo for: " << tensorName << ", size: " << size;
+                output_size = size;
+            }
+        }
+        return output_ptr;
+    }
+
+    /***
+     *
+     * @param tensorName
+     * @param dims
+     */
+    void notifyShape(char const* tensorName, nvinfer1::Dims const& dims) noexcept override {
+        output_dims = dims;
+    }
+
+    // Saved dimensions of the output tensor
+    nvinfer1::Dims output_dims{};
+
+    // nullptr if memory could not be allocated
+    void* output_ptr{nullptr};
+
+    // Size of allocation pointed to by output
+    uint64_t output_size{0};
+
+    /***
+     *
+     */
+    ~MatchResultOutputAllocator() override {
+        cudaFree(output_ptr);
+    }
+};
 
 } // namespace lightglue_impl
 
@@ -146,6 +209,34 @@ private:
         std::vector<float> scales = {1.0f , 1.0f};
     };
 
+    struct TRTParams {
+        std::string model_file_path;
+        // trt env params
+        TrtLogger logger;
+        nvinfer1::IRuntime* runtime = nullptr;
+        nvinfer1::ICudaEngine* engine = nullptr;
+        nvinfer1::IExecutionContext* execution_context = nullptr;
+        lightglue_impl::MatchResultOutputAllocator* match_output_allocator = nullptr;
+        // trt bindings
+        EngineBinding src_input_image_binding;
+        EngineBinding dst_input_image_binding;
+        EngineBinding out_kpts0_binding;
+        EngineBinding out_kpts1_binding;
+        EngineBinding out_matches_binding;
+        EngineBinding out_match_scores_binding;
+        // trt memory
+        std::unordered_map<std::string, void*> device_memory;
+        std::unordered_map<std::string, lightglue_impl::MatchResultOutputAllocator*> allocator_map;
+        cudaStream_t cuda_stream = nullptr;
+        // host memory
+        std::vector<int64_t> out_kpts0_host;
+        std::vector<int64_t> out_kpts1_host;
+        std::vector<int64_t > out_matches_host;
+        std::vector<float> out_match_scores_host;
+        // max match points
+        int max_matched_points = 2048;
+    };
+
     enum BackendType {
         ONNX = 0,
         TRT = 1,
@@ -157,6 +248,9 @@ private:
 
     // onnx net params
     ONNXParams _m_onnx_params;
+
+    // trt net params
+    TRTParams _m_trt_params;
 
     // user input size
     cv::Size _m_src_input_size_user = cv::Size();
@@ -196,6 +290,27 @@ private:
      * @return
      */
     lightglue_impl::internal_output onnx_decode_output();
+
+    /***
+     *
+     * @param config
+     * @return
+     */
+    StatusCode init_trt(const toml::value& config);
+
+    /***
+     *
+     * @param in
+     * @param out
+     * @return
+     */
+    StatusCode trt_run(const INPUT& in, OUTPUT& out);
+
+    /***
+     *
+     * @return
+     */
+    StatusCode setup_device_memory();
 };
 
 /***
@@ -223,8 +338,7 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")) 
     if (_m_backend_type == ONNX) {
         init_status = init_onnx(lightglue_cfg);
     } else {
-        // todo(luoyao@baidu.com) init trt func
-        // init_status = init_trt(lightglue_cfg);
+         init_status = init_trt(lightglue_cfg);
     }
 
     if (init_status == StatusCode::OK) {
@@ -250,8 +364,7 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::run(const INPUT &in, OUTPUT& out) {
     if (_m_backend_type == ONNX) {
         infer_status = onnx_run(in, out);
     } else {
-        // todo(luoyao@baidu.com) implement trt run func
-        // infer_status = trt_run(in, out);
+        infer_status = trt_run(in, out);
     }
     return infer_status;
 }
@@ -525,6 +638,270 @@ std_feature_point_match_output LightGlue<INPUT, OUTPUT>::Impl::onnx_decode_outpu
     }
 
     return matched_fpts;
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param config
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_trt(const toml::value &config) {
+    // init trt runtime
+    _m_trt_params.logger = TrtLogger();
+    _m_trt_params.runtime = nvinfer1::createInferRuntime(_m_trt_params.logger);
+    if(nullptr == _m_trt_params.runtime) {
+        LOG(ERROR) << "init tensorrt runtime failed";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    // init trt engine
+    if (!config.contains("model_file_path")) {
+        LOG(ERROR) << "config doesn\'t have model_file_path field";
+        return StatusCode::MODEL_INIT_FAILED;
+    } else {
+        _m_trt_params.model_file_path = config.at("model_file_path").as_string();
+    }
+    if (!FilePathUtil::is_file_exist(_m_trt_params.model_file_path)) {
+        LOG(ERROR) << "superpoint lightglue fp match model file: " << _m_trt_params.model_file_path << " not exist";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    std::ifstream fgie(_m_trt_params.model_file_path, std::ios_base::in | std::ios_base::binary);
+    if (!fgie) {
+        LOG(ERROR) << "read model file: " << _m_trt_params.model_file_path << " failed";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    std::stringstream buffer;
+    buffer << fgie.rdbuf();
+    std::string stream_model(buffer.str());
+    _m_trt_params.engine = _m_trt_params.runtime->deserializeCudaEngine(stream_model.data(), stream_model.size());
+    if (nullptr == _m_trt_params.engine) {
+        LOG(ERROR) << "deserialize trt engine failed";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    // init trt execution context
+    _m_trt_params.execution_context = _m_trt_params.engine->createExecutionContext();
+    if (nullptr == _m_trt_params.execution_context) {
+        LOG(ERROR) << "create trt engine failed";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    // bind input image tensors
+    std::string input_node_name = "image0";
+    auto successfully_bind = TrtHelper::setup_engine_binding(_m_trt_params.engine, input_node_name, _m_trt_params.src_input_image_binding);
+    if (!successfully_bind) {
+        LOG(ERROR) << "bind input tensor failed";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    input_node_name = "image1";
+    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_params.engine, input_node_name, _m_trt_params.dst_input_image_binding);
+    if (!successfully_bind) {
+        LOG(ERROR) << "bind input tensor failed";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    // bind output tensor
+    std::string output_node_name = "kpts0";
+    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_params.engine, output_node_name, _m_trt_params.out_kpts0_binding);
+    if (!successfully_bind) {
+        LOG(ERROR) << "bind output tensor failed";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    output_node_name = "kpts1";
+    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_params.engine, output_node_name, _m_trt_params.out_kpts1_binding);
+    if (!successfully_bind) {
+        LOG(ERROR) << "bind output tensor failed";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    output_node_name = "matches0";
+    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_params.engine, output_node_name, _m_trt_params.out_matches_binding);
+    if (!successfully_bind) {
+        LOG(ERROR) << "bind output tensor failed";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    output_node_name = "mscores0";
+    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_params.engine, output_node_name, _m_trt_params.out_match_scores_binding);
+    if (!successfully_bind) {
+        LOG(ERROR) << "bind output tensor failed";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    // set specified allocator for dynamically shaped output
+    _m_trt_params.match_output_allocator = new lightglue_impl::MatchResultOutputAllocator;
+    _m_trt_params.execution_context->setOutputAllocator("matches0", _m_trt_params.match_output_allocator);
+    _m_trt_params.execution_context->setOutputAllocator("mscores0", _m_trt_params.match_output_allocator);
+
+    // init cuda stream
+    if (cudaStreamCreate(&_m_trt_params.cuda_stream) != cudaSuccess) {
+        LOG(ERROR) << "ERROR: cuda stream creation failed.";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    return StatusCode::OK;
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param in
+ * @param out
+ * @return
+ */
+template<typename INPUT, typename OUTPUT>
+StatusCode LightGlue<INPUT, OUTPUT>::Impl::trt_run(const INPUT &in, OUTPUT &out) {
+    // init sess
+    auto& context = _m_trt_params.execution_context;
+    auto& device_memory = _m_trt_params.device_memory;
+    auto& src_input_binding = _m_trt_params.src_input_image_binding;
+    auto& dst_input_binding = _m_trt_params.dst_input_image_binding;
+    auto cuda_stream = _m_trt_params.cuda_stream;
+
+    // transform external input into internal input
+    auto internal_in = lightglue_impl::transform_input(in);
+    if (!internal_in.src_input_image.data || internal_in.src_input_image.empty() ||
+        !internal_in.dst_input_image.data || internal_in.dst_input_image.empty()) {
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
+
+    // preprocess image
+    _m_src_input_size_user = internal_in.src_input_image.size();
+    cv::Mat src_preprocessed_image = preprocess_image(internal_in.src_input_image);
+    auto src_input_chw_data = CvUtils::convert_to_chw_vec(src_preprocessed_image);
+    _m_dst_input_size_user = internal_in.dst_input_image.size();
+    cv::Mat dst_preprocessed_image = preprocess_image(internal_in.dst_input_image);
+    auto dst_input_chw_data = CvUtils::convert_to_chw_vec(dst_preprocessed_image);
+
+    // setup trt bindings
+    nvinfer1::Dims4 src_input_shape(1, 1, _m_src_input_size_user.height, _m_src_input_size_user.width);
+    src_input_binding.set_dims(src_input_shape);
+    context->setInputShape("image0", src_input_shape);
+    nvinfer1::Dims4 dst_input_shape(1, 1, _m_dst_input_size_user.height, _m_dst_input_size_user.width);
+    dst_input_binding.set_dims(dst_input_shape);
+    context->setInputShape("image1", dst_input_shape);
+
+    // allocate device memory
+    auto status = setup_device_memory();
+    if (status != StatusCode::OK) {
+        LOG(ERROR) << "setup cuda memory for inference failed status code: " << status;
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+
+    // copy input image memo
+    auto* cuda_mem_input = (float*)device_memory["image0"];
+    auto input_mem_size = static_cast<int32_t >(src_input_chw_data.size() * sizeof(float));
+    auto cuda_status = cudaMemcpyAsync(
+        cuda_mem_input, (float*)src_input_chw_data.data(), input_mem_size, cudaMemcpyHostToDevice, cuda_stream);
+    if (cuda_status != cudaSuccess) {
+        LOG(ERROR) << "copy input image memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+    cuda_mem_input = (float*)device_memory["image1"];
+    input_mem_size = static_cast<int32_t >(dst_input_chw_data.size() * sizeof(float));
+    cuda_status = cudaMemcpyAsync(
+        cuda_mem_input, (float*)dst_input_chw_data.data(), input_mem_size, cudaMemcpyHostToDevice, cuda_stream);
+    if (cuda_status != cudaSuccess) {
+        LOG(ERROR) << "copy input image memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+
+    // do inference
+    std::vector<const char*> tensor_names = {"image0", "image1", "kpts0", "kpts1", "matches0", "mscores0"};
+    for (auto& tensor_name : tensor_names) {
+        if (!context->setTensorAddress(tensor_name, device_memory[tensor_name])) {
+            LOG(ERROR) << "set addr for tensor: " << tensor_name << "failed";
+        }
+    }
+    if (!context->enqueueV3(cuda_stream)) {
+        LOG(ERROR) << "excute input data for inference failed";
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+    cudaStreamSynchronize(cuda_stream);
+
+    // transform internal output
+    // todo fix tensorrt engine convention problem
+    lightglue_impl::internal_output internal_out;
+    out = lightglue_impl::transform_output<OUTPUT>(internal_out);
+
+    return StatusCode::MODEL_RUN_SESSION_FAILED;
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @return
+ */
+template<typename INPUT, typename OUTPUT>
+StatusCode LightGlue<INPUT, OUTPUT>::Impl::setup_device_memory() {
+    // init global params
+    auto& context = _m_trt_params.execution_context;
+    auto& device_memory = _m_trt_params.device_memory;
+    auto& allocator_map = _m_trt_params.allocator_map;
+    auto& engine = _m_trt_params.engine;
+
+    // clear device memory
+//    for (auto& node_memo : device_memory) {
+//        auto& node_ptr = node_memo.second;
+//        if (nullptr != node_ptr) {
+//            cudaFree(node_ptr);
+//            node_ptr = nullptr;
+//        }
+//    }
+
+    // init input node memory
+    for (auto& node_name : {"image0", "image1"}) {
+        auto shape = context->getTensorShape(node_name);
+        LOG(INFO) << "node: " << node_name << ", shape: " << TrtHelper::dims_to_string(shape);
+        LOG(INFO) << "node: " << node_name << ", tensor location: " << static_cast<int>(engine->getTensorLocation(node_name));
+        auto volume = TrtHelper::dims_volume(shape);
+        void* cuda_memo = nullptr;
+        auto r = cudaMalloc(&cuda_memo, volume * sizeof(float));
+        if (r != 0 || cuda_memo == nullptr) {
+            LOG(ERROR) << "Setup device memory failed error str: " << cudaGetErrorString(r);
+            return StatusCode::TRT_ALLOC_MEMO_FAILED;
+        }
+        device_memory.insert(std::make_pair(node_name, cuda_memo));
+    }
+
+    // init output node memory
+    std::vector<std::string> output_names = {"kpts0", "kpts1", "matches0", "mscores0"};
+    for (auto& node_name : output_names) {
+        auto dims = context->getTensorShape(node_name.c_str());
+        LOG(INFO) << "node: " << node_name << ", shape: " << TrtHelper::dims_to_string(dims);
+        LOG(INFO) << "node: " << node_name << ", tensor location: " << static_cast<int>(engine->getTensorLocation(node_name.c_str()));
+        bool has_dynamic_shape = false;
+        for (auto& dim : dims.d) {
+            if (dim == -1) {
+                has_dynamic_shape = true;
+            }
+        }
+        if (has_dynamic_shape) {
+            LOG(INFO) << "set specific allocator";
+            auto* allocator = new lightglue_impl::MatchResultOutputAllocator;
+            context->setOutputAllocator(node_name.c_str(), allocator);
+            allocator_map.emplace(node_name, allocator);
+            void* cuda_memo;
+            device_memory.insert(std::make_pair(node_name, cuda_memo));
+        } else {
+            auto volume = TrtHelper::dims_volume(dims);
+            void* cuda_memo = nullptr;
+            auto r = cudaMalloc(&cuda_memo, volume * sizeof(int64_t ));
+            if (r != 0 || cuda_memo == nullptr) {
+                LOG(ERROR) << "Setup device memory failed error str: " << cudaGetErrorString(r);
+                return StatusCode::TRT_ALLOC_MEMO_FAILED;
+            }
+            device_memory.insert(std::make_pair(node_name, cuda_memo));
+        }
+    }
+    return StatusCode::OJBK;
 }
 
 /************* Export Function Sets *************/
