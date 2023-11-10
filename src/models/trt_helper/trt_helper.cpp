@@ -121,20 +121,34 @@ StatusCode TrtHelper::setup_device_memory(
         return StatusCode::TRT_ALLOC_MEMO_FAILED;
     }
 
+    StatusCode status = StatusCode::OJBK;
     auto nb_bindings = engine->getNbIOTensors();
     for (int i = 0; i < nb_bindings; ++i) {
         auto tensorname = engine->getIOTensorName(i);
         auto dims = context->getTensorShape(tensorname);
-        auto volume = dims_volume(dims);
-        void* cuda_memo = nullptr;
-        auto r = cudaMalloc(&cuda_memo, volume * sizeof(float));
-        if (r != 0 || cuda_memo == nullptr) {
-            LOG(ERROR) << "Setup device memory failed error str: " << cudaGetErrorString(r);
-            return StatusCode::TRT_ALLOC_MEMO_FAILED;
+        bool has_dynamic_shape = false;
+        for (auto& dim : dims.d) {
+            if (dim == -1) {
+                has_dynamic_shape = true;
+            }
         }
-        output.push_back(cuda_memo);
+        if (has_dynamic_shape) {
+            LOG(WARNING) << "try to allocate cuda memo for dynamic shape tensor with dims: " << dims_to_string(dims);
+            LOG(WARNING) << "not support to allocate cuda memo for dynamic tensor statically, use nullptr instead";
+            output.push_back(nullptr);
+            status = StatusCode::TRT_ALLOC_DYNAMIC_SHAPE_MEMO;
+        } else {
+            auto volume = dims_volume(dims);
+            void* cuda_memo = nullptr;
+            auto r = cudaMalloc(&cuda_memo, volume * sizeof(float));
+            if (r != 0 || cuda_memo == nullptr) {
+                LOG(ERROR) << "Setup device memory failed error str: " << cudaGetErrorString(r);
+                return StatusCode::TRT_ALLOC_MEMO_FAILED;
+            }
+            output.push_back(cuda_memo);
+        }
     }
-    return StatusCode::OK;
+    return status;
 }
 
 }
