@@ -469,6 +469,17 @@ public:
                 }
             }
             return data;
+        } else if (input.type() == CV_32FC1) {
+            data.resize(input.channels() * input.rows * input.cols);
+            for (int y = 0; y < input.rows; ++y) {
+                auto raw_data = input.ptr<float>(y);
+                for (int x = 0; x < input.cols; ++x) {
+                    for (int c = 0; c < input.channels(); ++c) {
+                        data[c * (input.rows * input.cols) + y * input.cols + x] = raw_data[x];
+                    }
+                }
+            }
+            return data;
         } else {
             LOG(ERROR) << "Only support 32fc3. Not support for opencv mat type of: " << input.type();
             return data;
