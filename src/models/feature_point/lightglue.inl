@@ -848,13 +848,13 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::setup_device_memory() {
     auto& engine = _m_trt_params.engine;
 
     // clear device memory
-//    for (auto& node_memo : device_memory) {
-//        auto& node_ptr = node_memo.second;
-//        if (nullptr != node_ptr) {
-//            cudaFree(node_ptr);
-//            node_ptr = nullptr;
-//        }
-//    }
+    for (auto& node_memo : device_memory) {
+        auto& node_ptr = node_memo.second;
+        if (nullptr != node_ptr) {
+            cudaFree(node_ptr);
+            node_ptr = nullptr;
+        }
+    }
 
     // init input node memory
     for (auto& node_name : {"image0", "image1"}) {
