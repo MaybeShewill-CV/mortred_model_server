@@ -811,7 +811,7 @@ StatusCode Metric3D<INPUT, OUTPUT>::Impl::trt_run(const INPUT& in, OUTPUT& out) 
     auto input_chw_data = CvUtils::convert_to_chw_vec(preprocessed_image);
 
     // copy input data from host to device
-    auto* cuda_mem_input = (float*)_m_trt_params.device_memory.at(_m_trt_params.input_image_binding.index());
+    auto* cuda_mem_input = _m_trt_params.device_memory.at(_m_trt_params.input_image_binding.index());
     auto input_mem_size = static_cast<int32_t >(preprocessed_image.channels() * preprocessed_image.size().area() * sizeof(float));
     auto cuda_status = cudaMemcpyAsync(
         cuda_mem_input, (float*)input_chw_data.data(), input_mem_size, cudaMemcpyHostToDevice, _m_trt_params.cuda_stream);
@@ -821,7 +821,8 @@ StatusCode Metric3D<INPUT, OUTPUT>::Impl::trt_run(const INPUT& in, OUTPUT& out) 
     }
 
     // do inference
-    _m_trt_params.execution_context->setTensorAddress("input_image", cuda_mem_input);
+    _m_trt_params.execution_context->setTensorAddress(
+        "input_image", _m_trt_params.device_memory.at(_m_trt_params.input_image_binding.index()));
     _m_trt_params.execution_context->setTensorAddress(
         "confidence", _m_trt_params.device_memory.at(_m_trt_params.output_confidence_binding.index()));
     _m_trt_params.execution_context->setTensorAddress(
