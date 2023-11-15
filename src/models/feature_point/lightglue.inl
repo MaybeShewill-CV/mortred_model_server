@@ -82,7 +82,7 @@ transform_output(const lightglue_impl::internal_output &internal_out) {
 /***
  * specified memo allocator for match result output tensor
  */
-class MatchResultOutputAllocator : public nvinfer1::IOutputAllocator {
+class LightGlueOutputAllocator : public nvinfer1::IOutputAllocator {
   public:
     /***
      *
@@ -93,14 +93,14 @@ class MatchResultOutputAllocator : public nvinfer1::IOutputAllocator {
      * @return
      */
     void* reallocateOutput(char const* tensorName, void* currentMemory, uint64_t size, uint64_t alignment) noexcept override {
-        LOG(INFO) << "reallocate cuda memo for dynamically shaped tensor: " << tensorName;
+        DLOG(INFO) << "reallocate cuda memo for dynamically shaped tensor: " << tensorName;
         // reallocate cuda memo
         if (size > output_size) {
             cudaFree(output_ptr);
             output_ptr = nullptr;
             output_size = 0;
             if (cudaMalloc(&output_ptr, size) == cudaSuccess) {
-                LOG(INFO) << "successfully allocate cuda memo for: " << tensorName << ", size: " << size;
+                DLOG(INFO) << "successfully allocate cuda memo for: " << tensorName << ", size: " << size;
                 output_size = size;
             }
         }
@@ -128,7 +128,7 @@ class MatchResultOutputAllocator : public nvinfer1::IOutputAllocator {
     /***
      *
      */
-    ~MatchResultOutputAllocator() override {
+    ~LightGlueOutputAllocator() override {
         cudaFree(output_ptr);
     }
 };
@@ -209,32 +209,47 @@ private:
         std::vector<float> scales = {1.0f , 1.0f};
     };
 
-    struct TRTParams {
+    struct SuperPointTRTExtractor {
         std::string model_file_path;
         // trt env params
         TrtLogger logger;
         nvinfer1::IRuntime* runtime = nullptr;
         nvinfer1::ICudaEngine* engine = nullptr;
-        nvinfer1::IExecutionContext* execution_context = nullptr;
-        lightglue_impl::MatchResultOutputAllocator* match_output_allocator = nullptr;
+        nvinfer1::IExecutionContext* context = nullptr;
         // trt bindings
-        EngineBinding src_input_image_binding;
-        EngineBinding dst_input_image_binding;
-        EngineBinding out_kpts0_binding;
-        EngineBinding out_kpts1_binding;
-        EngineBinding out_matches_binding;
-        EngineBinding out_match_scores_binding;
+        EngineBinding input_image_binding;
+        EngineBinding out_kpts_binding;
+        EngineBinding out_scores_binding;
+        EngineBinding out_descriptors_binding;
         // trt memory
-        std::unordered_map<std::string, void*> device_memory;
-        std::unordered_map<std::string, lightglue_impl::MatchResultOutputAllocator*> allocator_map;
+        std::unordered_map<std::string, lightglue_impl::LightGlueOutputAllocator*> allocators;
         cudaStream_t cuda_stream = nullptr;
-        // host memory
-        std::vector<int64_t> out_kpts0_host;
-        std::vector<int64_t> out_kpts1_host;
-        std::vector<int64_t > out_matches_host;
-        std::vector<float> out_match_scores_host;
-        // max match points
-        int max_matched_points = 2048;
+        // score thresh
+        float score_thresh = 0.0f;
+    };
+
+    struct LightGlueTRTMatcher {
+        std::string model_file_path;
+        // trt env params
+        TrtLogger logger;
+        nvinfer1::IRuntime* runtime = nullptr;
+        nvinfer1::ICudaEngine* engine = nullptr;
+        nvinfer1::IExecutionContext* context = nullptr;
+        // trt bindings
+        EngineBinding input_kpts0_binding;
+        EngineBinding input_kpts1_binding;
+        EngineBinding input_desc0_binding;
+        EngineBinding input_desc1_binding;
+        EngineBinding out_matches_binding;
+        EngineBinding out_mscores_binding;
+        // trt memory
+        std::unordered_map<std::string, lightglue_impl::LightGlueOutputAllocator*> allocators;
+        cudaStream_t cuda_stream = nullptr;
+    };
+
+    struct TRTParams {
+        SuperPointTRTExtractor* extractor = nullptr;
+        LightGlueTRTMatcher* matcher = nullptr;
     };
 
     enum BackendType {
@@ -308,9 +323,59 @@ private:
 
     /***
      *
+     * @param config
      * @return
      */
-    StatusCode setup_device_memory();
+    StatusCode init_extractor(const toml::value& config);
+
+    /***
+     *
+     * @param config
+     * @return
+     */
+    StatusCode init_matcher(const toml::value& config);
+
+    /***
+     *
+     * @return
+     */
+    StatusCode setup_extractor_device_memory_allocators();
+
+    /***
+     *
+     * @return
+     */
+    StatusCode setup_matcher_device_memory_allocators();
+
+    /***
+     *
+     * @param input_image
+     * @param feature_locations
+     * @param feature_scores
+     * @param feature_descriptors
+     * @return
+     */
+    StatusCode trt_extract_feature_points(
+        const cv::Mat& input_image,
+        std::vector<int32_t>& feature_locations,
+        std::vector<float>& feature_scores,
+        std::vector<float>& feature_descriptors);
+
+    /***
+     *
+     * @param input_kpts0
+     * @param input_desc0
+     * @param input_kpts1
+     * @param input_desc1
+     * @param match_result
+     * @return
+     */
+    StatusCode trt_match_feature_points(
+        const std::vector<int32_t>& input_kpts0,
+        const std::vector<float>& input_desc0,
+        const std::vector<int32_t>& input_kpts1,
+        const std::vector<float>& input_desc1,
+        lightglue_impl::internal_output& match_result);
 };
 
 /***
@@ -332,7 +397,6 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")) 
     } else {
         lightglue_cfg = config.at("LIGHTGLUE_TRT");
     }
-    auto model_file_name = FilePathUtil::get_file_name(lightglue_cfg.at("model_file_path").as_string());
 
     StatusCode init_status;
     if (_m_backend_type == ONNX) {
@@ -343,10 +407,10 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")) 
 
     if (init_status == StatusCode::OK) {
         _m_successfully_initialized = true;
-        LOG(INFO) << "Successfully load lightglue model from: " << model_file_name;
+        LOG(INFO) << "Successfully load lightglue model";
     } else {
         _m_successfully_initialized = false;
-        LOG(INFO) << "Failed load lightglue model from: " << model_file_name;
+        LOG(INFO) << "Failed load lightglue model";
     }
 
     return init_status;
@@ -457,10 +521,12 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_onnx(const toml::value& config) 
     }
 
     // init match threshold
-    _m_match_thresh = static_cast<float>(config.at("match_thresh").as_floating());
+    _m_match_thresh = static_cast<float>(config.at("match_score_thresh").as_floating());
 
     // init long side length
     _m_long_side_len = static_cast<float>(config.at("long_side_length").as_floating());
+
+    LOG(INFO) << "successfully load lightglue e2e model from: " << _m_onnx_params.model_file_path;
 
     return StatusCode::OK;
 }
@@ -649,98 +715,17 @@ std_feature_point_match_output LightGlue<INPUT, OUTPUT>::Impl::onnx_decode_outpu
  */
 template <typename INPUT, typename OUTPUT>
 StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_trt(const toml::value &config) {
-    // init trt runtime
-    _m_trt_params.logger = TrtLogger();
-    _m_trt_params.runtime = nvinfer1::createInferRuntime(_m_trt_params.logger);
-    if(nullptr == _m_trt_params.runtime) {
-        LOG(ERROR) << "init tensorrt runtime failed";
+    // init superpoint extractor
+    auto status = init_extractor(config);
+    if (status != StatusCode::OK) {
+        LOG(ERROR) << "init trt extractor failed status code: " << status;
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    // init trt engine
-    if (!config.contains("model_file_path")) {
-        LOG(ERROR) << "config doesn\'t have model_file_path field";
-        return StatusCode::MODEL_INIT_FAILED;
-    } else {
-        _m_trt_params.model_file_path = config.at("model_file_path").as_string();
-    }
-    if (!FilePathUtil::is_file_exist(_m_trt_params.model_file_path)) {
-        LOG(ERROR) << "superpoint lightglue fp match model file: " << _m_trt_params.model_file_path << " not exist";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    std::ifstream fgie(_m_trt_params.model_file_path, std::ios_base::in | std::ios_base::binary);
-    if (!fgie) {
-        LOG(ERROR) << "read model file: " << _m_trt_params.model_file_path << " failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    std::stringstream buffer;
-    buffer << fgie.rdbuf();
-    std::string stream_model(buffer.str());
-    _m_trt_params.engine = _m_trt_params.runtime->deserializeCudaEngine(stream_model.data(), stream_model.size());
-    if (nullptr == _m_trt_params.engine) {
-        LOG(ERROR) << "deserialize trt engine failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // init trt execution context
-    _m_trt_params.execution_context = _m_trt_params.engine->createExecutionContext();
-    if (nullptr == _m_trt_params.execution_context) {
-        LOG(ERROR) << "create trt engine failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // bind input image tensors
-    std::string input_node_name = "image0";
-    auto successfully_bind = TrtHelper::setup_engine_binding(_m_trt_params.engine, input_node_name, _m_trt_params.src_input_image_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind input tensor failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    input_node_name = "image1";
-    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_params.engine, input_node_name, _m_trt_params.dst_input_image_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind input tensor failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // bind output tensor
-    std::string output_node_name = "kpts0";
-    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_params.engine, output_node_name, _m_trt_params.out_kpts0_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind output tensor failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    output_node_name = "kpts1";
-    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_params.engine, output_node_name, _m_trt_params.out_kpts1_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind output tensor failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    output_node_name = "matches0";
-    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_params.engine, output_node_name, _m_trt_params.out_matches_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind output tensor failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    output_node_name = "mscores0";
-    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_params.engine, output_node_name, _m_trt_params.out_match_scores_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind output tensor failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // set specified allocator for dynamically shaped output
-    _m_trt_params.match_output_allocator = new lightglue_impl::MatchResultOutputAllocator;
-    _m_trt_params.execution_context->setOutputAllocator("matches0", _m_trt_params.match_output_allocator);
-    _m_trt_params.execution_context->setOutputAllocator("mscores0", _m_trt_params.match_output_allocator);
-
-    // init cuda stream
-    if (cudaStreamCreate(&_m_trt_params.cuda_stream) != cudaSuccess) {
-        LOG(ERROR) << "ERROR: cuda stream creation failed.";
+    // init lightglue matcher
+    status = init_matcher(config);
+    if (status != StatusCode::OK) {
+        LOG(ERROR) << "init trt matcher failed status code: " << status;
         return StatusCode::MODEL_INIT_FAILED;
     }
 
@@ -757,13 +742,6 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_trt(const toml::value &config) {
  */
 template<typename INPUT, typename OUTPUT>
 StatusCode LightGlue<INPUT, OUTPUT>::Impl::trt_run(const INPUT &in, OUTPUT &out) {
-    // init sess
-    auto& context = _m_trt_params.execution_context;
-    auto& device_memory = _m_trt_params.device_memory;
-    auto& src_input_binding = _m_trt_params.src_input_image_binding;
-    auto& dst_input_binding = _m_trt_params.dst_input_image_binding;
-    auto cuda_stream = _m_trt_params.cuda_stream;
-
     // transform external input into internal input
     auto internal_in = lightglue_impl::transform_input(in);
     if (!internal_in.src_input_image.data || internal_in.src_input_image.empty() ||
@@ -774,63 +752,273 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::trt_run(const INPUT &in, OUTPUT &out)
     // preprocess image
     _m_src_input_size_user = internal_in.src_input_image.size();
     cv::Mat src_preprocessed_image = preprocess_image(internal_in.src_input_image);
-    auto src_input_chw_data = CvUtils::convert_to_chw_vec(src_preprocessed_image);
     _m_dst_input_size_user = internal_in.dst_input_image.size();
     cv::Mat dst_preprocessed_image = preprocess_image(internal_in.dst_input_image);
-    auto dst_input_chw_data = CvUtils::convert_to_chw_vec(dst_preprocessed_image);
 
-    // setup trt bindings
-    nvinfer1::Dims4 src_input_shape(1, 1, _m_src_input_size_user.height, _m_src_input_size_user.width);
-    src_input_binding.set_dims(src_input_shape);
-    context->setInputShape("image0", src_input_shape);
-    nvinfer1::Dims4 dst_input_shape(1, 1, _m_dst_input_size_user.height, _m_dst_input_size_user.width);
-    dst_input_binding.set_dims(dst_input_shape);
-    context->setInputShape("image1", dst_input_shape);
-
-    // allocate device memory
-    auto status = setup_device_memory();
+    // extract feature points from src/dst input image
+    std::vector<int32_t> kpts0;
+    std::vector<float> kpts0_scores;
+    std::vector<float> kpts0_descriptors;
+    auto status = trt_extract_feature_points(src_preprocessed_image, kpts0, kpts0_scores, kpts0_descriptors);
     if (status != StatusCode::OK) {
-        LOG(ERROR) << "setup cuda memory for inference failed status code: " << status;
+        LOG(ERROR) << "extractor feature points for src input image failed, status code: " << status;
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+    std::vector<int32_t> kpts1;
+    std::vector<float> kpts1_scores;
+    std::vector<float> kpts1_descriptors;
+    status = trt_extract_feature_points(dst_preprocessed_image, kpts1, kpts1_scores, kpts1_descriptors);
+    if (status != StatusCode::OK) {
+        LOG(ERROR) << "extractor feature points for dst input image failed, status code: " << status;
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
 
-    // copy input image memo
-    auto* cuda_mem_input = (float*)device_memory["image0"];
-    auto input_mem_size = static_cast<int32_t >(src_input_chw_data.size() * sizeof(float));
-    auto cuda_status = cudaMemcpyAsync(
-        cuda_mem_input, (float*)src_input_chw_data.data(), input_mem_size, cudaMemcpyHostToDevice, cuda_stream);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "copy input image memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
-        return StatusCode::MODEL_RUN_SESSION_FAILED;
-    }
-    cuda_mem_input = (float*)device_memory["image1"];
-    input_mem_size = static_cast<int32_t >(dst_input_chw_data.size() * sizeof(float));
-    cuda_status = cudaMemcpyAsync(
-        cuda_mem_input, (float*)dst_input_chw_data.data(), input_mem_size, cudaMemcpyHostToDevice, cuda_stream);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "copy input image memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
+    // match feature points
+    lightglue_impl::internal_output match_out;
+    status = trt_match_feature_points(
+        kpts0, kpts0_descriptors, kpts1, kpts1_descriptors, match_out);
+    if (status != StatusCode::OK) {
+        LOG(ERROR) << "match feature points failed, status code: " << status;
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
 
-    // do inference
-    std::vector<const char*> tensor_names = {"image0", "image1", "kpts0", "kpts1", "matches0", "mscores0"};
-    for (auto& tensor_name : tensor_names) {
-        if (!context->setTensorAddress(tensor_name, device_memory[tensor_name])) {
-            LOG(ERROR) << "set addr for tensor: " << tensor_name << "failed";
-        }
+    // rescale feature points
+    auto kpts0_w_scale = static_cast<float>(_m_src_input_size_user.width) / static_cast<float>(src_preprocessed_image.cols);
+    auto kpts0_h_scale = static_cast<float>(_m_src_input_size_user.height) / static_cast<float>(src_preprocessed_image.rows);
+    auto kpts1_w_scale = static_cast<float>(_m_dst_input_size_user.width) / static_cast<float>(dst_preprocessed_image.cols);
+    auto kpts1_h_scale = static_cast<float>(_m_dst_input_size_user.height) / static_cast<float>(dst_preprocessed_image.rows);
+    for (auto& matched_fp : match_out) {
+        auto& kpt_0 = matched_fp.m_fp.first.location;
+        kpt_0.x = (kpt_0.x + 0.5f) * kpts0_w_scale - 0.5f;
+        kpt_0.y = (kpt_0.y + 0.5f) * kpts0_h_scale - 0.5f;
+        auto& kpt_1 = matched_fp.m_fp.second.location;
+        kpt_1.x = (kpt_1.x + 0.5f) * kpts1_w_scale - 0.5f;
+        kpt_1.y = (kpt_1.y + 0.5f) * kpts1_h_scale - 0.5f;
     }
-    if (!context->enqueueV3(cuda_stream)) {
-        LOG(ERROR) << "excute input data for inference failed";
-        return StatusCode::MODEL_RUN_SESSION_FAILED;
-    }
-    cudaStreamSynchronize(cuda_stream);
 
     // transform internal output
-    // todo fix tensorrt engine convention problem
-    lightglue_impl::internal_output internal_out;
-    out = lightglue_impl::transform_output<OUTPUT>(internal_out);
+    out = lightglue_impl::transform_output<OUTPUT>(match_out);
 
-    return StatusCode::MODEL_RUN_SESSION_FAILED;
+    return StatusCode::OK;
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param config
+ * @return
+ */
+template<typename INPUT, typename OUTPUT>
+StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_extractor(const toml::value &config) {
+    // init trt runtime
+    _m_trt_params.extractor = new SuperPointTRTExtractor;
+    _m_trt_params.extractor->logger = TrtLogger();
+    _m_trt_params.extractor->runtime = nvinfer1::createInferRuntime(_m_trt_params.extractor->logger);
+    if(nullptr == _m_trt_params.extractor->runtime) {
+        LOG(ERROR) << "init tensorrt runtime failed";
+        delete _m_trt_params.extractor;
+        _m_trt_params.extractor = nullptr;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    // init trt engine
+    if (!config.contains("extractor_model_file_path")) {
+        LOG(ERROR) << "config doesn\'t have model_file_path field";
+        delete _m_trt_params.extractor;
+        _m_trt_params.extractor = nullptr;
+        return StatusCode::MODEL_INIT_FAILED;
+    } else {
+        _m_trt_params.extractor->model_file_path = config.at("extractor_model_file_path").as_string();
+    }
+    if (!FilePathUtil::is_file_exist(_m_trt_params.extractor->model_file_path)) {
+        LOG(ERROR) << "superpoint fp extraction model file: " << _m_trt_params.extractor->model_file_path << " not exist";
+        delete _m_trt_params.extractor;
+        _m_trt_params.extractor = nullptr;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    std::ifstream fgie(_m_trt_params.extractor->model_file_path, std::ios_base::in | std::ios_base::binary);
+    if (!fgie) {
+        LOG(ERROR) << "read model file: " << _m_trt_params.extractor->model_file_path << " failed";
+        delete _m_trt_params.extractor;
+        _m_trt_params.extractor = nullptr;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    std::stringstream buffer;
+    buffer << fgie.rdbuf();
+    std::string stream_model(buffer.str());
+    _m_trt_params.extractor->engine = _m_trt_params.extractor->runtime->deserializeCudaEngine(stream_model.data(), stream_model.size());
+    if (nullptr == _m_trt_params.extractor->engine) {
+        LOG(ERROR) << "deserialize trt engine failed";
+        delete _m_trt_params.extractor;
+        _m_trt_params.extractor = nullptr;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    // init trt execution context
+    _m_trt_params.extractor->context = _m_trt_params.extractor->engine->createExecutionContext();
+    if (nullptr == _m_trt_params.extractor->context) {
+        LOG(ERROR) << "create trt execution context failed";
+        delete _m_trt_params.extractor;
+        _m_trt_params.extractor = nullptr;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    // bind input image tensors
+    TrtHelper::setup_engine_binding(_m_trt_params.extractor->engine, "image", _m_trt_params.extractor->input_image_binding);
+    // bind output tensor
+    TrtHelper::setup_engine_binding(_m_trt_params.extractor->engine, "keypoints", _m_trt_params.extractor->out_kpts_binding);
+    TrtHelper::setup_engine_binding(_m_trt_params.extractor->engine, "scores", _m_trt_params.extractor->out_scores_binding);
+    TrtHelper::setup_engine_binding(_m_trt_params.extractor->engine, "descriptors", _m_trt_params.extractor->out_descriptors_binding);
+
+    // init cuda stream
+    if (cudaStreamCreate(&_m_trt_params.extractor->cuda_stream) != cudaSuccess) {
+        LOG(ERROR) << "ERROR: create cuda stream failed";
+        delete _m_trt_params.extractor;
+        _m_trt_params.extractor = nullptr;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    // set output memo allocators for dynamic output tensor
+    auto status = setup_extractor_device_memory_allocators();
+    if (status != StatusCode::OK) {
+        LOG(ERROR) << "setup specific allocators for dynamic output tensor failed, status code: " << status;
+        delete _m_trt_params.extractor;
+        _m_trt_params.extractor = nullptr;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    // set feature point score threshold
+    _m_trt_params.extractor->score_thresh = static_cast<float>(config.at("extract_score_thresh").as_floating());
+
+    LOG(INFO) << "successfully load trt extractor model from: " << _m_trt_params.extractor->model_file_path;
+    return StatusCode::OK;
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param config
+ * @return
+ */
+template<typename INPUT, typename OUTPUT>
+StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_matcher(const toml::value &config) {
+    // init trt runtime
+    _m_trt_params.matcher = new LightGlueTRTMatcher;
+    _m_trt_params.matcher->logger = TrtLogger();
+    _m_trt_params.matcher->runtime = nvinfer1::createInferRuntime(_m_trt_params.matcher->logger);
+    if(nullptr == _m_trt_params.matcher->runtime) {
+        LOG(ERROR) << "init tensorrt runtime failed";
+        delete _m_trt_params.matcher;
+        _m_trt_params.matcher = nullptr;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    // init trt engine
+    if (!config.contains("matcher_model_file_path")) {
+        LOG(ERROR) << "config doesn\'t have matcher_model_file_path field";
+        delete _m_trt_params.matcher;
+        _m_trt_params.matcher = nullptr;
+        return StatusCode::MODEL_INIT_FAILED;
+    } else {
+        _m_trt_params.matcher->model_file_path = config.at("matcher_model_file_path").as_string();
+    }
+    if (!FilePathUtil::is_file_exist(_m_trt_params.matcher->model_file_path)) {
+        LOG(ERROR) << "lightglue fp matcher model file: " << _m_trt_params.matcher->model_file_path << " not exist";
+        delete _m_trt_params.matcher;
+        _m_trt_params.matcher = nullptr;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    std::ifstream fgie(_m_trt_params.matcher->model_file_path, std::ios_base::in | std::ios_base::binary);
+    if (!fgie) {
+        LOG(ERROR) << "read model file: " << _m_trt_params.matcher->model_file_path << " failed";
+        delete _m_trt_params.matcher;
+        _m_trt_params.matcher = nullptr;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    std::stringstream buffer;
+    buffer << fgie.rdbuf();
+    std::string stream_model(buffer.str());
+    _m_trt_params.matcher->engine = _m_trt_params.matcher->runtime->deserializeCudaEngine(stream_model.data(), stream_model.size());
+    if (nullptr == _m_trt_params.matcher->engine) {
+        LOG(ERROR) << "deserialize trt engine failed";
+        delete _m_trt_params.matcher;
+        _m_trt_params.matcher = nullptr;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    // init trt execution context
+    _m_trt_params.matcher->context = _m_trt_params.matcher->engine->createExecutionContext();
+    if (nullptr == _m_trt_params.matcher->context) {
+        LOG(ERROR) << "create trt execution context failed";
+        delete _m_trt_params.matcher;
+        _m_trt_params.matcher = nullptr;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    // bind input image tensors
+    TrtHelper::setup_engine_binding(_m_trt_params.matcher->engine, "kpts0", _m_trt_params.matcher->input_kpts0_binding);
+    TrtHelper::setup_engine_binding(_m_trt_params.matcher->engine, "kpts1", _m_trt_params.matcher->input_kpts1_binding);
+    TrtHelper::setup_engine_binding(_m_trt_params.matcher->engine, "desc0", _m_trt_params.matcher->input_desc0_binding);
+    TrtHelper::setup_engine_binding(_m_trt_params.matcher->engine, "desc1", _m_trt_params.matcher->input_desc1_binding);
+    // bind output tensor
+    TrtHelper::setup_engine_binding(_m_trt_params.matcher->engine, "matches0", _m_trt_params.matcher->out_matches_binding);
+    TrtHelper::setup_engine_binding(_m_trt_params.matcher->engine, "mscores0", _m_trt_params.matcher->out_mscores_binding);
+
+    // init cuda stream
+    if (cudaStreamCreate(&_m_trt_params.matcher->cuda_stream) != cudaSuccess) {
+        LOG(ERROR) << "ERROR: create cuda stream failed";
+        delete _m_trt_params.matcher;
+        _m_trt_params.matcher = nullptr;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    // set output memo allocators for dynamic output tensor
+    auto status = setup_matcher_device_memory_allocators();
+    if (status != StatusCode::OK) {
+        LOG(ERROR) << "setup specific allocators for dynamic output tensor failed, status code: " << status;
+        delete _m_trt_params.matcher;
+        _m_trt_params.matcher = nullptr;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    // init match threshold
+    _m_match_thresh = static_cast<float>(config.at("match_score_thresh").as_floating());
+
+    // init long side length
+    _m_long_side_len = static_cast<float>(config.at("long_side_length").as_floating());
+
+    LOG(INFO) << "successfully load trt matcher model from: " << _m_trt_params.matcher->model_file_path;
+    return StatusCode::OK;
+}
+
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @return
+ */
+template<typename INPUT, typename OUTPUT>
+StatusCode LightGlue<INPUT, OUTPUT>::Impl::setup_extractor_device_memory_allocators() {
+    // init global params
+    auto* context = _m_trt_params.extractor->context;
+    auto& memo_allocator = _m_trt_params.extractor->allocators;
+
+    // init allocators for output node
+    std::vector<std::string> output_names = {"keypoints", "scores", "descriptors"};
+    for (auto& node_name : output_names) {
+        auto dims = context->getTensorShape(node_name.c_str());
+        bool has_dynamic_shape = std::any_of(dims.d, dims.d + dims.nbDims, [](int32_t dim) { return dim == -1; });
+        if (has_dynamic_shape) {
+            auto* allocator = new lightglue_impl::LightGlueOutputAllocator;
+            context->setOutputAllocator(node_name.c_str(), allocator);
+            memo_allocator.insert(std::make_pair(node_name, allocator));
+            context->setTensorAddress(node_name.c_str(), nullptr);
+        }
+    }
+    return StatusCode::OJBK;
 }
 
 /***
@@ -840,68 +1028,288 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::trt_run(const INPUT &in, OUTPUT &out)
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode LightGlue<INPUT, OUTPUT>::Impl::setup_device_memory() {
+StatusCode LightGlue<INPUT, OUTPUT>::Impl::setup_matcher_device_memory_allocators() {
     // init global params
-    auto& context = _m_trt_params.execution_context;
-    auto& device_memory = _m_trt_params.device_memory;
-    auto& allocator_map = _m_trt_params.allocator_map;
-    auto& engine = _m_trt_params.engine;
+    auto* context = _m_trt_params.matcher->context;
+    auto& memo_allocator = _m_trt_params.matcher->allocators;
 
-    // clear device memory
-    for (auto& node_memo : device_memory) {
-        auto& node_ptr = node_memo.second;
-        if (nullptr != node_ptr) {
-            cudaFree(node_ptr);
-            node_ptr = nullptr;
-        }
-    }
-
-    // init input node memory
-    for (auto& node_name : {"image0", "image1"}) {
-        auto shape = context->getTensorShape(node_name);
-        LOG(INFO) << "node: " << node_name << ", shape: " << TrtHelper::dims_to_string(shape);
-        LOG(INFO) << "node: " << node_name << ", tensor location: " << static_cast<int>(engine->getTensorLocation(node_name));
-        auto volume = TrtHelper::dims_volume(shape);
-        void* cuda_memo = nullptr;
-        auto r = cudaMalloc(&cuda_memo, volume * sizeof(float));
-        if (r != 0 || cuda_memo == nullptr) {
-            LOG(ERROR) << "Setup device memory failed error str: " << cudaGetErrorString(r);
-            return StatusCode::TRT_ALLOC_MEMO_FAILED;
-        }
-        device_memory.insert(std::make_pair(node_name, cuda_memo));
-    }
-
-    // init output node memory
-    std::vector<std::string> output_names = {"kpts0", "kpts1", "matches0", "mscores0"};
+    // init allocators for output node
+    std::vector<std::string> output_names = {"matches0", "mscores0"};
     for (auto& node_name : output_names) {
         auto dims = context->getTensorShape(node_name.c_str());
-        LOG(INFO) << "node: " << node_name << ", shape: " << TrtHelper::dims_to_string(dims);
-        LOG(INFO) << "node: " << node_name << ", tensor location: " << static_cast<int>(engine->getTensorLocation(node_name.c_str()));
-        bool has_dynamic_shape = false;
-        for (auto& dim : dims.d) {
-            if (dim == -1) {
-                has_dynamic_shape = true;
-            }
-        }
+        bool has_dynamic_shape = std::any_of(dims.d, dims.d + dims.nbDims, [](int32_t dim) { return dim == -1; });
         if (has_dynamic_shape) {
-            LOG(INFO) << "set specific allocator";
-            auto* allocator = new lightglue_impl::MatchResultOutputAllocator;
+            auto* allocator = new lightglue_impl::LightGlueOutputAllocator;
             context->setOutputAllocator(node_name.c_str(), allocator);
-            allocator_map.emplace(node_name, allocator);
-            void* cuda_memo;
-            device_memory.insert(std::make_pair(node_name, cuda_memo));
-        } else {
-            auto volume = TrtHelper::dims_volume(dims);
-            void* cuda_memo = nullptr;
-            auto r = cudaMalloc(&cuda_memo, volume * sizeof(int64_t ));
-            if (r != 0 || cuda_memo == nullptr) {
-                LOG(ERROR) << "Setup device memory failed error str: " << cudaGetErrorString(r);
-                return StatusCode::TRT_ALLOC_MEMO_FAILED;
-            }
-            device_memory.insert(std::make_pair(node_name, cuda_memo));
+            memo_allocator.insert(std::make_pair(node_name, allocator));
+            context->setTensorAddress(node_name.c_str(), nullptr);
         }
     }
     return StatusCode::OJBK;
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param input_image
+ * @param feature_locations
+ * @param feature_scores
+ * @param feature_descriptors
+ * @return
+ */
+template<typename INPUT, typename OUTPUT>
+StatusCode LightGlue<INPUT, OUTPUT>::Impl::trt_extract_feature_points(
+    const cv::Mat &input_image,
+    std::vector<int32_t> &feature_locations,
+    std::vector<float> &feature_scores,
+    std::vector<float> &feature_descriptors) {
+    // init sess
+    auto* context = _m_trt_params.extractor->context;
+    auto* cuda_stream = _m_trt_params.extractor->cuda_stream;
+    auto& memo_allocators = _m_trt_params.extractor->allocators;
+    auto& input_image_binding = _m_trt_params.extractor->input_image_binding;
+
+    // setup input image
+    auto input_chw_data = CvUtils::convert_to_chw_vec(input_image);
+    nvinfer1::Dims4 input_shape(1, 1, input_image.rows, input_image.cols);
+    input_image_binding.set_dims(input_shape);
+    context->setInputShape("image", input_shape);
+
+    // copy input image memo
+    void* cuda_mem_input;
+    auto input_mem_size = static_cast<int32_t >(input_chw_data.size() * sizeof(float));
+    auto cuda_status = cudaMalloc(&cuda_mem_input, input_mem_size);
+    if (cuda_status != cudaSuccess) {
+        LOG(ERROR) << "malloc cuda memo for input image failed, error str: " << cudaGetErrorString(cuda_status);
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+    cuda_status = cudaMemcpyAsync(
+        cuda_mem_input, (float*)input_chw_data.data(), input_mem_size, cudaMemcpyHostToDevice, cuda_stream);
+    if (cuda_status != cudaSuccess) {
+        LOG(ERROR) << "copy input image memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+
+    // do inference
+    context->setInputTensorAddress("image", cuda_mem_input);
+    if (!context->enqueueV3(cuda_stream)) {
+        LOG(ERROR) << "execute input data for inference failed";
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+
+    // copy result
+    std::vector<int32_t > fp_locations;
+    auto kpts_dims = TrtHelper::dims_volume(context->getTensorShape("keypoints"));
+    fp_locations.resize(kpts_dims);
+    cudaMemcpyAsync(
+        fp_locations.data(), memo_allocators["keypoints"]->output_ptr,
+        kpts_dims * sizeof(int32_t), cudaMemcpyDeviceToHost, cuda_stream);
+
+    std::vector<float> fp_scores;
+    auto scores_dims = TrtHelper::dims_volume(context->getTensorShape("scores"));
+    fp_scores.resize(scores_dims);
+    cudaMemcpyAsync(
+        fp_scores.data(), memo_allocators["scores"]->output_ptr,
+        scores_dims * sizeof(float), cudaMemcpyDeviceToHost, cuda_stream);
+
+    std::vector<float> fp_descs;
+    auto descriptors_dims = TrtHelper::dims_volume(context->getTensorShape("descriptors"));
+    fp_descs.resize(descriptors_dims);
+    cudaMemcpyAsync(
+        fp_descs.data(), memo_allocators["descriptors"]->output_ptr,
+        descriptors_dims * sizeof(float), cudaMemcpyDeviceToHost, cuda_stream);
+
+    cudaStreamSynchronize(cuda_stream);
+    cudaFree(cuda_mem_input);
+    cuda_mem_input = nullptr;
+
+    // thresh feature points
+    assert(fp_scores.size() * 2 == fp_locations.size());
+    assert(fp_scores.size() * 256 == fp_descs.size());
+    for (auto idx = 0; idx < fp_scores.size(); ++idx) {
+        auto fp_score = fp_scores[idx];
+        if (fp_score < _m_trt_params.extractor->score_thresh) {
+            continue;
+        } else {
+            feature_scores.push_back(fp_score);
+            for (auto i = 0; i < 2; ++i) {
+                feature_locations.push_back(fp_locations[idx * 2 + i]);
+            }
+            for (auto i = 0; i < 256; ++i) {
+                feature_descriptors.push_back(fp_descs[idx * 256 + i]);
+            }
+        }
+    }
+
+    return StatusCode::OK;
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param input_kpts0
+ * @param input_desc0
+ * @param input_kpts1
+ * @param input_desc1
+ * @param match_result
+ * @return
+ */
+template<typename INPUT, typename OUTPUT>
+StatusCode LightGlue<INPUT, OUTPUT>::Impl::trt_match_feature_points(
+    const std::vector<int32_t> &input_kpts0,
+    const std::vector<float> &input_desc0,
+    const std::vector<int32_t> &input_kpts1,
+    const std::vector<float> &input_desc1,
+    lightglue_impl::internal_output &match_result) {
+    // init sess
+    auto* context = _m_trt_params.matcher->context;
+    auto* cuda_stream = _m_trt_params.matcher->cuda_stream;
+    auto& memo_allocators = _m_trt_params.matcher->allocators;
+    auto& input_kpts0_binding = _m_trt_params.matcher->input_kpts0_binding;
+    auto& input_kpts1_binding = _m_trt_params.matcher->input_kpts1_binding;
+    auto& input_desc0_binding = _m_trt_params.matcher->input_desc0_binding;
+    auto& input_desc1_binding = _m_trt_params.matcher->input_desc1_binding;
+
+    // setup input image
+    auto kpts0_dims = nvinfer1::Dims3(1, static_cast<int32_t >(input_kpts0.size() / 2), 2);
+    input_kpts0_binding.set_dims(kpts0_dims);
+    context->setInputShape("kpts0", kpts0_dims);
+    auto kpts1_dims = nvinfer1::Dims3(1, static_cast<int32_t >(input_kpts1.size() / 2), 2);
+    input_kpts1_binding.set_dims(kpts1_dims);
+    context->setInputShape("kpts1", kpts1_dims);
+    auto desc0_dims = nvinfer1::Dims3(1, static_cast<int32_t >(input_desc0.size() / 256), 256);
+    input_desc0_binding.set_dims(desc0_dims);
+    context->setInputShape("desc0", desc0_dims);
+    auto desc1_dims = nvinfer1::Dims3(1, static_cast<int32_t >(input_desc1.size() / 256), 256);
+    input_desc1_binding.set_dims(desc1_dims);
+    context->setInputShape("desc1", desc1_dims);
+
+    // copy input data from host to device
+    void* input_kpts0_cuda = nullptr;
+    auto allocate_memo_size = static_cast<int32_t >(input_kpts0.size() * sizeof(int32_t));
+    auto cuda_status = cudaMalloc(&input_kpts0_cuda, allocate_memo_size);
+    if (cuda_status != cudaSuccess) {
+        LOG(ERROR) << "malloc cuda memo for input kpts0 failed, error str: " << cudaGetErrorString(cuda_status);
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+    cuda_status = cudaMemcpyAsync(
+        input_kpts0_cuda, input_kpts0.data(), allocate_memo_size, cudaMemcpyHostToDevice, cuda_stream);
+    if (cuda_status != cudaSuccess) {
+        LOG(ERROR) << "copy input kpts0 memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+
+    void* input_kpts1_cuda = nullptr;
+    allocate_memo_size = static_cast<int32_t >(input_kpts1.size() * sizeof(int32_t));
+    cuda_status = cudaMalloc(&input_kpts1_cuda, allocate_memo_size);
+    if (cuda_status != cudaSuccess) {
+        LOG(ERROR) << "malloc cuda memo for input kpts1 failed, error str: " << cudaGetErrorString(cuda_status);
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+    cuda_status = cudaMemcpyAsync(
+        input_kpts1_cuda, input_kpts1.data(), allocate_memo_size, cudaMemcpyHostToDevice, cuda_stream);
+    if (cuda_status != cudaSuccess) {
+        LOG(ERROR) << "copy input kpts1 memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+
+    void* input_desc0_cuda = nullptr;
+    allocate_memo_size = static_cast<int32_t >(input_desc0.size() * sizeof(float));
+    cuda_status = cudaMalloc(&input_desc0_cuda, allocate_memo_size);
+    if (cuda_status != cudaSuccess) {
+        LOG(ERROR) << "malloc cuda memo for input desc0 failed, error str: " << cudaGetErrorString(cuda_status);
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+    cuda_status = cudaMemcpyAsync(
+        input_desc0_cuda, input_desc0.data(), allocate_memo_size, cudaMemcpyHostToDevice, cuda_stream);
+    if (cuda_status != cudaSuccess) {
+        LOG(ERROR) << "copy input desc0 memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+
+    void* input_desc1_cuda = nullptr;
+    allocate_memo_size = static_cast<int32_t >(input_desc1.size() * sizeof(float));
+    cuda_status = cudaMalloc(&input_desc1_cuda, allocate_memo_size);
+    if (cuda_status != cudaSuccess) {
+        LOG(ERROR) << "malloc cuda memo for input desc1 failed, error str: " << cudaGetErrorString(cuda_status);
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+    cuda_status = cudaMemcpyAsync(
+        input_desc1_cuda, input_desc1.data(), allocate_memo_size, cudaMemcpyHostToDevice, cuda_stream);
+    if (cuda_status != cudaSuccess) {
+        LOG(ERROR) << "copy input desc1 memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+
+    // do inference
+    context->setInputTensorAddress("kpts0", input_kpts0_cuda);
+    context->setInputTensorAddress("kpts1", input_kpts1_cuda);
+    context->setInputTensorAddress("desc0", input_desc0_cuda);
+    context->setInputTensorAddress("desc1", input_desc1_cuda);
+    if (!context->enqueueV3(cuda_stream)) {
+        LOG(ERROR) << "execute input data for inference failed";
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+
+    // copy result
+    std::vector<int32_t > out_matches;
+    auto out_matches_dims = TrtHelper::dims_volume(context->getTensorShape("matches0"));
+    out_matches.resize(out_matches_dims);
+    cudaMemcpyAsync(
+        out_matches.data(), memo_allocators["matches0"]->output_ptr,
+        out_matches_dims * sizeof(int32_t), cudaMemcpyDeviceToHost, cuda_stream);
+
+    std::vector<float> out_mscores;
+    auto out_mscores_dims = TrtHelper::dims_volume(context->getTensorShape("mscores0"));
+    out_mscores.resize(out_mscores_dims);
+    cudaMemcpyAsync(
+        out_mscores.data(), memo_allocators["mscores0"]->output_ptr,
+        out_mscores_dims * sizeof(float), cudaMemcpyDeviceToHost, cuda_stream);
+
+    cudaStreamSynchronize(cuda_stream);
+    cudaFree(input_kpts0_cuda);
+    input_kpts0_cuda = nullptr;
+    cudaFree(input_kpts1_cuda);
+    input_kpts1_cuda = nullptr;
+    cudaFree(input_desc0_cuda);
+    input_desc0_cuda = nullptr;
+    cudaFree(input_desc1_cuda);
+    input_desc1_cuda = nullptr;
+
+    // copy internal output
+    std::vector<cv::Point2f> kpts0;
+    for (auto idx = 0; idx < input_kpts0.size(); idx += 2) {
+        auto fpt = cv::Point2f(static_cast<float>(input_kpts0[idx]), static_cast<float>(input_kpts0[idx + 1]));
+        kpts0.push_back(fpt);
+    }
+    std::vector<cv::Point2f> kpts1;
+    for (auto idx = 0; idx < input_kpts1.size(); idx += 2) {
+        auto fpt = cv::Point2f(static_cast<float>(input_kpts1[idx]), static_cast<float>(input_kpts1[idx + 1]));
+        kpts1.push_back(fpt);
+    }
+
+    assert(out_mscores.size() * 2 == out_matches.size());
+    for (auto idx = 0; idx < out_mscores.size(); ++idx) {
+        auto match_score = out_mscores[idx];
+        if (match_score < _m_match_thresh) {
+            continue;
+        }
+        auto kpt0_idx = out_matches[idx * 2];
+        auto kpt1_idx = out_matches[idx * 2 + 1];
+        if (kpt0_idx < 0 || kpt0_idx >= kpts0.size() || kpt1_idx < 0 || kpt1_idx >= kpts1.size()) {
+            continue;
+        }
+        auto kpt0 = kpts0[kpt0_idx];
+        auto kpt1 = kpts1[kpt1_idx];
+        fp f_kpt0 {kpt0, {}, 0.0};
+        fp f_kpt1 {kpt1, {}, 0.0};
+        matched_fp m_fp = {std::make_pair(f_kpt0, f_kpt1), match_score};
+        match_result.push_back(m_fp);
+    }
+
+    return StatusCode::OK;
 }
 
 /************* Export Function Sets *************/
