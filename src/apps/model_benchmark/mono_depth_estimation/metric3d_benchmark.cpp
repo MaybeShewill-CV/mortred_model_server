@@ -79,17 +79,28 @@ int main(int argc, char** argv) {
     LOG(INFO) << "cost time: " << cost_time << "s, fps: " << loop_times / cost_time;
 
     // save colorized depth map
-    cv::Mat colorized_depth_map;
-    CvUtils::colorize_depth_map(model_output.depth_map, colorized_depth_map);
     std::string output_file_name = FilePathUtil::get_file_name(input_image_path);
-    output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_metric3d_depth_result.png";
-    std::string output_path = FilePathUtil::concat_path(
-        "../demo_data/model_test_input/mono_depth_estimation", output_file_name);
-    cv::imwrite(output_path, colorized_depth_map);
-    LOG(INFO) << "prediction result image has been written into: " << output_path;
+    output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_metric3d_colorized_depth_result.png";
+    std::string output_path = FilePathUtil::concat_path("../demo_data/model_test_input/mono_depth_estimation", output_file_name);
+    cv::imwrite(output_path, model_output.colorized_depth_map);
+    LOG(INFO) << "prediction colorized depth image has been written into: " << output_path;
+
+    // save depth map and confidence map
+    output_file_name = FilePathUtil::get_file_name(input_image_path);
+    output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_metric3d_depth_result.yaml";
+    output_path = FilePathUtil::concat_path("../demo_data/model_test_input/mono_depth_estimation", output_file_name);
+    cv::FileStorage out_depth_map;
+    out_depth_map.open(output_path, cv::FileStorage::WRITE);
+    out_depth_map.write("depth_map", model_output.depth_map);
+    LOG(INFO) << "prediction depth map has been written into: " << output_path;
+
+    output_file_name = FilePathUtil::get_file_name(input_image_path);
+    output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_metric3d_conf_result.yaml";
+    output_path = FilePathUtil::concat_path("../demo_data/model_test_input/mono_depth_estimation", output_file_name);
+    cv::FileStorage out_conf_map;
+    out_conf_map.open(output_path, cv::FileStorage::WRITE);
+    out_conf_map.write("conf_map", model_output.confidence_map);
+    LOG(INFO) << "prediction confidence map has been written into: " << output_path;
 
     return 0;
 }
-
-
-

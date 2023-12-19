@@ -133,6 +133,7 @@ using std_feature_point_match_output = std::vector<matched_fp>;
 namespace mono_depth_estimation {
 
 struct mde_output {
+    cv::Mat confidence_map;
     cv::Mat depth_map;
     cv::Mat colorized_depth_map;
 };

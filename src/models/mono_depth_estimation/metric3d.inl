@@ -113,7 +113,9 @@ template <typename OUTPUT>
 typename std::enable_if<std::is_same<OUTPUT, std::decay<std_mde_output>::type>::value, std_mde_output>::type
 transform_output(const metric3d_impl::internal_output& internal_out) {
     std_mde_output result;
+    internal_out.confidence_map.copyTo(result.confidence_map);
     internal_out.depth_map.copyTo(result.depth_map);
+    internal_out.colorized_depth_map.copyTo(result.colorized_depth_map);
     return result;
 }
 
@@ -653,6 +655,7 @@ metric3d_impl::internal_output Metric3D<INPUT, OUTPUT>::Impl::mnn_decode_output(
 
     // copy result
     std_mde_output out;
+    confidence_map.copyTo(out.confidence_map);
     depth_map.copyTo(out.depth_map);
     colorized_depth_map.copyTo(out.colorized_depth_map);
     return out;
@@ -906,6 +909,7 @@ metric3d_impl::internal_output Metric3D<INPUT, OUTPUT>::Impl::trt_decode_output(
 
     // copy result
     std_mde_output out;
+    confidence_map.copyTo(out.confidence_map);
     depth_map.copyTo(out.depth_map);
     colorized_depth_map.copyTo(out.colorized_depth_map);
     return out;
