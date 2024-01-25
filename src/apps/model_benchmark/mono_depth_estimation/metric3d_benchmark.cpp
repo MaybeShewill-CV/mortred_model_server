@@ -5,7 +5,7 @@
 * Date: 23-10-27
 ************************************************/
 
-// metric3d benckmark tool
+// metric3d benchmark tool
 
 #include <glog/logging.h>
 #include <toml/toml.hpp>
