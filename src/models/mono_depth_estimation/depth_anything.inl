@@ -295,7 +295,8 @@ template <typename INPUT, typename OUTPUT>
 StatusCode DepthAnything<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     StatusCode infer_status;
     if (_m_backend_type == MNN) {
-        infer_status = mnn_run(in, out);
+        // todo implement mnn inference
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
     } else {
         infer_status = trt_run(in, out);
     }
@@ -330,7 +331,7 @@ cv::Mat DepthAnything<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& inpu
     out.convertTo(out, CV_32FC3);
 
     // normalize image data
-    cv::divide(255.0, out, out);
+    cv::divide(out, 255, out);
     cv::subtract(out, cv::Scalar(0.406f, 0.456f, 0.485f), out);
     cv::divide(out, cv::Scalar(0.225f, 0.224f, 0.229f), out);
 
@@ -381,7 +382,7 @@ StatusCode DepthAnything<INPUT, OUTPUT>::Impl::init_trt(const toml::value& cfg) 
 
     // init trt execution context
     _m_trt_params.context = _m_trt_params.engine->createExecutionContext();
-    if (nullptr == _m_trt_params.execution_context) {
+    if (nullptr == _m_trt_params.context) {
         LOG(ERROR) << "create trt engine failed";
         return StatusCode::MODEL_INIT_FAILED;
     }
@@ -514,7 +515,7 @@ StatusCode DepthAnything<INPUT, OUTPUT>::Impl::trt_run(const INPUT& in, OUTPUT& 
 
     // d2h data transfer
     cuda_status = cudaMemcpyAsync(
-        output_host, output_device, output_binding.volume() * sizeof(int32_t), cudaMemcpyDeviceToHost, cuda_stream);
+        output_host, output_device, output_binding.volume() * sizeof(float), cudaMemcpyDeviceToHost, cuda_stream);
     if (cuda_status != cudaSuccess) {
         LOG(ERROR) << "async copy output tensor back from device memory to host memory failed, error str: "
                    << cudaGetErrorString(cuda_status);
