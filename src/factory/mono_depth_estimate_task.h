@@ -12,6 +12,7 @@
 #include "factory/register_marco.h"
 #include "models/base_model.h"
 #include "models/mono_depth_estimation/metric3d.h"
+#include "models/mono_depth_estimation/depth_anything.h"
 #include "server/mono_depth_estimation/metric3d_server.h"
 
 namespace jinq {
@@ -23,6 +24,7 @@ using jinq::server::BaseAiServer;
 
 namespace mono_depth_estimation {
 using jinq::models::mono_depth_estimation::Metric3D;
+using jinq::models::mono_depth_estimation::DepthAnything;
 
 using jinq::server::mono_depth_estimation::Metric3DServer;
 
@@ -36,6 +38,19 @@ using jinq::server::mono_depth_estimation::Metric3DServer;
 template <typename INPUT, typename OUTPUT>
 static std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_metric3d_estimator(const std::string& estimator_name) {
     REGISTER_AI_MODEL(Metric3D, estimator_name, INPUT, OUTPUT)
+    return ModelFactory<BaseAiModel<INPUT, OUTPUT>>::get_instance().get_model(estimator_name);
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param estimator_name
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+static std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_depth_anything_estimator(const std::string& estimator_name) {
+    REGISTER_AI_MODEL(DepthAnything, estimator_name, INPUT, OUTPUT)
     return ModelFactory<BaseAiModel<INPUT, OUTPUT>>::get_instance().get_model(estimator_name);
 }
 
