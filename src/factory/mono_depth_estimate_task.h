@@ -14,6 +14,7 @@
 #include "models/mono_depth_estimation/metric3d.h"
 #include "models/mono_depth_estimation/depth_anything.h"
 #include "server/mono_depth_estimation/metric3d_server.h"
+#include "server/mono_depth_estimation/depth_anything_server.h"
 
 namespace jinq {
 namespace factory {
@@ -27,6 +28,7 @@ using jinq::models::mono_depth_estimation::Metric3D;
 using jinq::models::mono_depth_estimation::DepthAnything;
 
 using jinq::server::mono_depth_estimation::Metric3DServer;
+using jinq::server::mono_depth_estimation::DepthAnythingServer;
 
 /***
  *
@@ -61,6 +63,16 @@ static std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_depth_anything_estimat
  */
 static std::unique_ptr<BaseAiServer> create_metric3d_estimation_server(const std::string& server_name) {
     REGISTER_AI_SERVER(Metric3DServer, server_name)
+    return ServerFactory<BaseAiServer>::get_instance().get_server(server_name);
+}
+
+/***
+ * create depth anything depth estimation server
+ * @param detector_name
+ * @return
+ */
+static std::unique_ptr<BaseAiServer> create_depth_anything_estimation_server(const std::string& server_name) {
+    REGISTER_AI_SERVER(DepthAnythingServer, server_name)
     return ServerFactory<BaseAiServer>::get_instance().get_server(server_name);
 }
 
