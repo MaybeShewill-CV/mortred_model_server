@@ -41,10 +41,7 @@ using trt_helper::TrtLogger;
 
 namespace hrnet_impl {
 
-struct internal_input {
-    cv::Mat input_image;
-};
-
+using internal_input = mat_input;
 using internal_output = std_scene_segmentation_output;
 
 /***
@@ -76,9 +73,7 @@ transform_input(const INPUT& in) {
 template<typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<mat_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
-    internal_input result{};
-    result.input_image = in.input_image;
-    return result;
+    return in;
 }
 
 /***
@@ -114,9 +109,7 @@ transform_input(const INPUT& in) {
 template<typename OUTPUT>
 typename std::enable_if<std::is_same<OUTPUT, std::decay<std_scene_segmentation_output>::type>::value, std_scene_segmentation_output>::type
 transform_output(const hrnet_impl::internal_output& internal_out) {
-    std_scene_segmentation_output result;
-    internal_out.segmentation_result.copyTo(result.segmentation_result);
-    return result;
+    return internal_out;
 }
 
 }
@@ -214,14 +207,14 @@ class HRNetSegmentation<INPUT, OUTPUT>::Impl {
         nvinfer1::IRuntime* runtime = nullptr;
         nvinfer1::ICudaEngine* engine = nullptr;
         nvinfer1::IExecutionContext* context = nullptr;
+        cudaStream_t cuda_stream = nullptr;
         // trt bindings
         EngineBinding input_image_binding;
         EngineBinding out_segment_binding;
         // trt memory
-        DeviceMemory device_memory;
-        cudaStream_t cuda_stream = nullptr;
-        // trt out segmentation host
-        std::vector<float> out_segment_host;
+        void* input_device = nullptr;
+        void* output_device = nullptr;
+        int32_t* output_host = nullptr;
     };
 
     struct MNNParams {
@@ -481,11 +474,27 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::init_trt(const toml::value &c
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    // setup device memory
-    auto set_device_memo_status = TrtHelper::setup_device_memory(
-        _m_trt_params.engine, _m_trt_params.context, _m_trt_params.device_memory);
-    if (set_device_memo_status != StatusCode::OK) {
-        LOG(ERROR) << "setup device memory for model failed, status code: " << set_device_memo_status;
+    // setup input host/device memory
+    auto memo_size = _m_trt_params.input_image_binding.volume() * sizeof(float);
+    auto cuda_status = cudaMalloc(&_m_trt_params.input_device, memo_size);
+    if (cuda_status != cudaSuccess) {
+        LOG(ERROR) << "allocate device memory for input image failed, err str: " << cudaGetErrorString(cuda_status);
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    // setup output host/device memory
+    memo_size = _m_trt_params.out_segment_binding.volume() * sizeof(int32_t );
+    cuda_status = cudaMallocHost(reinterpret_cast<void**>(&_m_trt_params.output_host), memo_size);
+    if (cuda_status != cudaSuccess) {
+        LOG(ERROR) << "allocate host memory for output node failed, err str: " << cudaGetErrorString(cuda_status);
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    cuda_status = cudaMalloc(&_m_trt_params.output_device, memo_size);
+    if (cuda_status != cudaSuccess) {
+        LOG(ERROR) << "allocate device memory for output node failed, err str: " << cudaGetErrorString(cuda_status);
+        _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
 
@@ -494,9 +503,6 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::init_trt(const toml::value &c
         LOG(ERROR) << "ERROR: cuda stream creation failed." << std::endl;
         return StatusCode::MODEL_INIT_FAILED;
     }
-
-    // allocate output host tensor memo
-    _m_trt_params.out_segment_host.resize(_m_trt_params.out_segment_binding.volume());
 
     return StatusCode::OK;
 }
@@ -515,9 +521,10 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::trt_run(const INPUT &in, OUTP
     auto* context = _m_trt_params.context;
     auto& input_image_binding = _m_trt_params.input_image_binding;
     auto& out_segment_binding = _m_trt_params.out_segment_binding;
-    auto& device_memory = _m_trt_params.device_memory;
-    auto& out_seg_host = _m_trt_params.out_segment_host;
-    auto* cuda_stream = _m_trt_params.cuda_stream;
+    auto& cuda_stream = _m_trt_params.cuda_stream;
+    auto& input_device = _m_trt_params.input_device;
+    auto& output_device = _m_trt_params.output_device;
+    auto& output_host = _m_trt_params.output_host;
 
     // transform external input into internal input
     auto internal_in = hrnet_impl::transform_input(in);
@@ -526,23 +533,23 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::trt_run(const INPUT &in, OUTP
     }
 
     // preprocess input data
-    _m_input_size_user = internal_in.input_image.size();
-    auto preprocessed_image = preprocess_image(internal_in.input_image);
+    auto& input_image = internal_in.input_image;
+    _m_input_size_user = input_image.size();
+    auto preprocessed_image = preprocess_image(input_image);
     auto input_chw_data = CvUtils::convert_to_chw_vec(preprocessed_image);
 
-    // copy input data from host to device
-    auto* cuda_mem_input = device_memory.at(input_image_binding.index());
-    auto input_mem_size = static_cast<int32_t >(preprocessed_image.channels() * preprocessed_image.size().area() * sizeof(float));
+    // h2d data transfer
+    auto input_mem_size = input_image_binding.volume() * sizeof(float);
     auto cuda_status = cudaMemcpyAsync(
-        cuda_mem_input, (float*)input_chw_data.data(), input_mem_size, cudaMemcpyHostToDevice, cuda_stream);
+        input_device, (float*)input_chw_data.data(), input_mem_size, cudaMemcpyHostToDevice, cuda_stream);
     if (cuda_status != cudaSuccess) {
         LOG(ERROR) << "copy input image memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
 
     // do inference
-    context->setInputTensorAddress("x", device_memory.at(input_image_binding.index()));
-    context->setTensorAddress("argmax_0.tmp_0", device_memory.at(out_segment_binding.index()));
+    context->setInputTensorAddress("x", input_device);
+    context->setTensorAddress("argmax_0.tmp_0", output_device);
     if (!context->enqueueV3(cuda_stream)) {
         LOG(ERROR) << "execute input data for inference failed";
         return StatusCode::MODEL_RUN_SESSION_FAILED;
@@ -550,7 +557,7 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::trt_run(const INPUT &in, OUTP
 
     // async copy inference result back to host
     cuda_status = cudaMemcpyAsync(
-        out_seg_host.data(),device_memory.at(out_segment_binding.index()),out_segment_binding.volume() * sizeof(float),
+        output_host, output_device, out_segment_binding.volume() * sizeof(int32_t ),
         cudaMemcpyDeviceToHost, cuda_stream);
     if (cuda_status != cudaSuccess) {
         LOG(ERROR) << "async copy output tensor back from device memory to host memory failed, error str: "
@@ -560,7 +567,7 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::trt_run(const INPUT &in, OUTP
     cudaStreamSynchronize(cuda_stream);
 
     // transform internal output into external output
-    cv::Mat result_image(_m_input_size_host, CV_32FC1, out_seg_host.data());
+    cv::Mat result_image(_m_input_size_host, CV_32S, output_host);
     cv::resize(result_image, result_image, _m_input_size_user, 0.0, 0.0, cv::INTER_NEAREST);
     hrnet_impl::internal_output internal_out;
     internal_out.segmentation_result = result_image;
@@ -691,7 +698,7 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::onnx_run(const INPUT &in, OUT
     }
 
     // transform output
-    cv::Mat result_image(_m_input_size_host, CV_32FC1, output_segment_value.data());
+    cv::Mat result_image(_m_input_size_host, CV_32F, output_segment_value.data());
     cv::resize(result_image, result_image, _m_input_size_user, 0.0, 0.0, cv::INTER_NEAREST);
     hrnet_impl::internal_output internal_out;
     internal_out.segmentation_result = result_image;
