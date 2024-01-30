@@ -73,7 +73,7 @@ StatusCode HRNetServer::Impl::init(const decltype(toml::parse("")) &config) {
     // init working queue
     auto server_section = config.at("HRNET_SERVER");
     auto worker_nums = static_cast<int>(server_section.at("worker_nums").as_integer());
-    auto model_cfg_path = config.at("HRNET_SERVER").at("model_config_file_path").as_string();
+    auto model_cfg_path = config.at("HRNET").at("model_config_file_path").as_string();
 
     if (!FilePathUtil::is_file_exist(model_cfg_path)) {
         LOG(FATAL) << "hrnet model config file not exist: " << model_cfg_path;
