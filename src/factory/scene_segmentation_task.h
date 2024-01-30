@@ -19,6 +19,7 @@
 // server header
 #include "server/scene_segmentation/bisenetv2_server.h"
 #include "server/scene_segmentation/pphuman_seg_server.h"
+#include "server/scene_segmentation/hrnet_server.h"
 
 namespace jinq {
 namespace factory {
@@ -35,6 +36,7 @@ using jinq::models::scene_segmentation::HRNetSegmentation;
 
 using jinq::server::scene_segmentation::BiseNetV2Server;
 using jinq::server::scene_segmentation::PPHumanSegServer;
+using jinq::server::scene_segmentation::HRNetServer;
 
 /***
  * create bisenetv2 scene segmentation instance
@@ -105,6 +107,16 @@ static std::unique_ptr<BaseAiServer> create_bisenetv2_server(const std::string& 
  */
 static std::unique_ptr<BaseAiServer> create_pphuman_seg_server(const std::string& server_name) {
     REGISTER_AI_SERVER(PPHumanSegServer, server_name)
+    return ServerFactory<BaseAiServer>::get_instance().get_server(server_name);
+}
+
+/***
+ * create hrnet scene segmentation server
+ * @param detector_name
+ * @return
+ */
+static std::unique_ptr<BaseAiServer> create_hrnet_server(const std::string& server_name) {
+    REGISTER_AI_SERVER(HRNetServer, server_name)
     return ServerFactory<BaseAiServer>::get_instance().get_server(server_name);
 }
 
