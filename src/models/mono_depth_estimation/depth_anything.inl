@@ -129,11 +129,8 @@ class DepthAnything<INPUT, OUTPUT>::Impl {
             // todo implement MNN infer
         }
         if (_m_backend_type == TRT) {
-            auto status = cudaStreamDestroy(_m_trt_params.cuda_stream);
-            if (status != cudaSuccess) {
-                LOG(ERROR) << "failed to free DepthAnything trt object. destruct cuda stream "
-                              "failed code str: " << cudaGetErrorString(status);
-            }
+            cudaFreeHost(_m_trt_params.output_host);
+            cudaStreamDestroy(_m_trt_params.cuda_stream);
         }
     }
 

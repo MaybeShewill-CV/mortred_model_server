@@ -129,11 +129,8 @@ class HRNetSegmentation<INPUT, OUTPUT>::Impl {
      */
     ~Impl() {
         if (_m_backend_type == TRT) {
-            auto status = cudaStreamDestroy(_m_trt_params.cuda_stream);
-            if (status != cudaSuccess) {
-                LOG(ERROR) << "failed to free hrnet segmentation trt object. destruct cuda stream "
-                              "failed code str: " << cudaGetErrorString(status);
-            }
+            cudaFreeHost(_m_trt_params.output_host);
+            cudaStreamDestroy(_m_trt_params.cuda_stream);
         } else if (_m_backend_type == ONNX) {
 
         } else {
