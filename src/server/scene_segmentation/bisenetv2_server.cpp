@@ -18,7 +18,7 @@
 #include "common/base64.h"
 #include "common/status_code.h"
 #include "common/file_path_util.h"
-#include "common/cv_utils"
+#include "common/cv_utils.h"
 #include "models/model_io_define.h"
 #include "server/base_server_impl.h"
 #include "factory/scene_segmentation_task.h"
