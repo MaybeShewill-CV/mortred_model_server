@@ -18,6 +18,7 @@
 #include "common/base64.h"
 #include "common/status_code.h"
 #include "common/file_path_util.h"
+#include "common/cv_utils"
 #include "models/model_io_define.h"
 #include "server/base_server_impl.h"
 #include "factory/scene_segmentation_task.h"
@@ -28,6 +29,7 @@ namespace server {
 using jinq::common::Base64;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
+using jinq::common::CvUtils;
 using jinq::server::BaseAiServerImpl;
 
 namespace scene_segmentation {
@@ -157,8 +159,10 @@ std::string PPHumanSegServer::Impl::make_response_body(
     if (model_output.segmentation_result.empty()) {
         writer.String("");
     } else {
+        cv::Mat color_mask;
+        CvUtils::colorize_segmentation_mask(model_output.segmentation_result, color_mask, 80);
         std::vector<uchar> imencode_buffer;
-        cv::imencode(".png", model_output.segmentation_result, imencode_buffer);
+        cv::imencode(".png", color_mask, imencode_buffer);
         auto output_image_data = Base64::base64_encode(imencode_buffer.data(), imencode_buffer.size());
         writer.String(output_image_data.c_str());
     }
