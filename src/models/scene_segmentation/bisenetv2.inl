@@ -86,7 +86,7 @@ transform_input(const INPUT& in) {
         return result;
     } else {
         cv::Mat ret;
-        cv::imdecode(image_vec_data, cv::IMREAD_UNCHANGED).copyTo(result.input_image);
+        result.input_image = cv::imdecode(image_vec_data, cv::IMREAD_UNCHANGED);
         return result;
     }
 }
