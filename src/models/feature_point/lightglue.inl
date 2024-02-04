@@ -42,10 +42,7 @@ using trt_helper::TrtLogger;
 
 namespace lightglue_impl {
 
-struct internal_input {
-    cv::Mat src_input_image;
-    cv::Mat dst_input_image;
-};
+using internal_input = pair_mat_input;
 using internal_output = std_feature_point_match_output;
 
 /***
@@ -56,10 +53,7 @@ using internal_output = std_feature_point_match_output;
  */
 template <typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<pair_mat_input>::type>::value, internal_input>::type transform_input(const INPUT &in) {
-    internal_input result{};
-    result.src_input_image = in.src_input_image;
-    result.dst_input_image = in.dst_input_image;
-    return result;
+    return in;
 }
 
 /***
@@ -72,11 +66,7 @@ typename std::enable_if<std::is_same<INPUT, std::decay<pair_mat_input>::type>::v
 template <typename OUTPUT>
 typename std::enable_if<std::is_same<OUTPUT, std::decay<std_feature_point_match_output>::type>::value, std_feature_point_match_output>::type
 transform_output(const lightglue_impl::internal_output &internal_out) {
-    std_feature_point_match_output result;
-    for (auto& value : internal_out) {
-        result.push_back(value);
-    }
-    return result;
+    return internal_out;
 }
 
 /***
