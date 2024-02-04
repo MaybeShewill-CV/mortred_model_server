@@ -40,10 +40,7 @@ using jinq::models::io_define::mono_depth_estimation::std_mde_output;
 
 namespace metric3d_impl {
 
-struct internal_input {
-    cv::Mat input_image;
-};
-
+using internal_input = mat_input;
 using internal_output = std_mde_output;
 
 /***
@@ -60,7 +57,6 @@ transform_input(const INPUT& in) {
         LOG(WARNING) << "input image: " << in.input_image_path << " not exist";
         return result;
     }
-
     result.input_image = cv::imread(in.input_image_path, cv::IMREAD_UNCHANGED);
     return result;
 }
@@ -74,9 +70,7 @@ transform_input(const INPUT& in) {
 template <typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<mat_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
-    internal_input result{};
-    result.input_image = in.input_image;
-    return result;
+    return in;
 }
 
 /***
@@ -91,13 +85,12 @@ transform_input(const INPUT& in) {
     internal_input result{};
     auto image_decode_string = jinq::common::Base64::base64_decode(in.input_image_content);
     std::vector<uchar> image_vec_data(image_decode_string.begin(), image_decode_string.end());
-
     if (image_vec_data.empty()) {
         LOG(WARNING) << "image data empty";
         return result;
     } else {
         cv::Mat ret;
-        cv::imdecode(image_vec_data, cv::IMREAD_UNCHANGED).copyTo(result.input_image);
+        result.input_image = cv::imdecode(image_vec_data, cv::IMREAD_UNCHANGED);
         return result;
     }
 }
@@ -112,11 +105,7 @@ transform_input(const INPUT& in) {
 template <typename OUTPUT>
 typename std::enable_if<std::is_same<OUTPUT, std::decay<std_mde_output>::type>::value, std_mde_output>::type
 transform_output(const metric3d_impl::internal_output& internal_out) {
-    std_mde_output result;
-    internal_out.confidence_map.copyTo(result.confidence_map);
-    internal_out.depth_map.copyTo(result.depth_map);
-    internal_out.colorized_depth_map.copyTo(result.colorized_depth_map);
-    return result;
+    return internal_out;
 }
 
 } // namespace metric3d_impl
@@ -205,16 +194,17 @@ private:
         nvinfer1::IRuntime* runtime = nullptr;
         nvinfer1::ICudaEngine* engine = nullptr;
         nvinfer1::IExecutionContext* execution_context = nullptr;
+        cudaStream_t cuda_stream = nullptr;
         // trt bindings
         EngineBinding input_image_binding;
         EngineBinding output_depth_binding;
         EngineBinding output_confidence_binding;
         // trt memory
-        DeviceMemory device_memory;
-        cudaStream_t cuda_stream = nullptr;
-        // host memory
-        std::vector<float> output_depth_host;
-        std::vector<float> output_confidence_host;
+        void* input_image_device = nullptr;
+        void* output_depth_device = nullptr;
+        void* output_confidence_device = nullptr;
+        float* output_depth_host = nullptr;
+        float* output_confidence_host = nullptr;
     };
 
     enum BackendType {
@@ -760,11 +750,40 @@ StatusCode Metric3D<INPUT, OUTPUT>::Impl::init_trt(const toml::value& cfg) {
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    // setup device memory
-    auto set_device_memo_status = TrtHelper::setup_device_memory(
-        _m_trt_params.engine, _m_trt_params.execution_context, _m_trt_params.device_memory);
-    if (set_device_memo_status != StatusCode::OK) {
-        LOG(ERROR) << "setup device memory for model failed, status code: " << set_device_memo_status;
+    // setup input host/device memory
+    auto memo_size = _m_trt_params.input_image_binding.volume() * sizeof(float);
+    auto cuda_status = cudaMalloc(&_m_trt_params.input_image_device, memo_size);
+    if (cuda_status != cudaSuccess) {
+        LOG(ERROR) << "allocate device memory for input image failed, err str: " << cudaGetErrorString(cuda_status);
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    // setup output host/device memory
+    memo_size = _m_trt_params.output_depth_binding.volume() * sizeof(float);
+    cuda_status = cudaMallocHost(reinterpret_cast<void**>(&_m_trt_params.output_depth_host), memo_size);
+    if (cuda_status != cudaSuccess) {
+        LOG(ERROR) << "allocate host memory for output node failed, err str: " << cudaGetErrorString(cuda_status);
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    cuda_status = cudaMalloc(&_m_trt_params.output_depth_device, memo_size);
+    if (cuda_status != cudaSuccess) {
+        LOG(ERROR) << "allocate device memory for output node failed, err str: " << cudaGetErrorString(cuda_status);
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    memo_size = _m_trt_params.output_confidence_binding.volume() * sizeof(float);
+    cuda_status = cudaMallocHost(reinterpret_cast<void**>(&_m_trt_params.output_confidence_host), memo_size);
+    if (cuda_status != cudaSuccess) {
+        LOG(ERROR) << "allocate host memory for output node failed, err str: " << cudaGetErrorString(cuda_status);
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    cuda_status = cudaMalloc(&_m_trt_params.output_confidence_device, memo_size);
+    if (cuda_status != cudaSuccess) {
+        LOG(ERROR) << "allocate device memory for output node failed, err str: " << cudaGetErrorString(cuda_status);
+        _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
 
@@ -773,10 +792,6 @@ StatusCode Metric3D<INPUT, OUTPUT>::Impl::init_trt(const toml::value& cfg) {
         LOG(ERROR) << "ERROR: cuda stream creation failed." << std::endl;
         return StatusCode::MODEL_INIT_FAILED;
     }
-
-    // allocate output host tensor memo
-    _m_trt_params.output_depth_host.resize(_m_trt_params.output_depth_binding.volume());
-    _m_trt_params.output_confidence_host.resize(_m_trt_params.output_confidence_binding.volume());
 
     // init intrinsic and canonical size
     _m_focal_length = static_cast<float>(cfg.at("focal_length").as_floating());
@@ -802,6 +817,18 @@ StatusCode Metric3D<INPUT, OUTPUT>::Impl::init_trt(const toml::value& cfg) {
  */
 template <typename INPUT, typename OUTPUT>
 StatusCode Metric3D<INPUT, OUTPUT>::Impl::trt_run(const INPUT& in, OUTPUT& out) {
+    // init sess
+    auto& context = _m_trt_params.execution_context;
+    auto& input_binding = _m_trt_params.input_image_binding;
+    auto& out_depth_binding = _m_trt_params.output_depth_binding;
+    auto& out_confidence_binding = _m_trt_params.output_confidence_binding;
+    auto& input_device = _m_trt_params.input_image_device;
+    auto& out_depth_device = _m_trt_params.output_depth_device;
+    auto& out_depth_host = _m_trt_params.output_depth_host;
+    auto& out_confidence_device = _m_trt_params.output_confidence_device;
+    auto& out_confidence_host = _m_trt_params.output_confidence_host;
+    auto& cuda_stream = _m_trt_params.cuda_stream;
+
     // transform external input into internal input
     auto internal_in = metric3d_impl::transform_input(in);
     if (!internal_in.input_image.data || internal_in.input_image.empty()) {
@@ -809,52 +836,44 @@ StatusCode Metric3D<INPUT, OUTPUT>::Impl::trt_run(const INPUT& in, OUTPUT& out) 
     }
 
     // preprocess input data
-    _m_input_size_user = internal_in.input_image.size();
-    auto preprocessed_image = preprocess_image(internal_in.input_image);
+    auto& input_image = internal_in.input_image;
+    _m_input_size_user = input_image.size();
+    auto preprocessed_image = preprocess_image(input_image);
     auto input_chw_data = CvUtils::convert_to_chw_vec(preprocessed_image);
 
     // copy input data from host to device
-    auto* cuda_mem_input = _m_trt_params.device_memory.at(_m_trt_params.input_image_binding.index());
-    auto input_mem_size = static_cast<int32_t >(preprocessed_image.channels() * preprocessed_image.size().area() * sizeof(float));
-    auto cuda_status = cudaMemcpyAsync(
-        cuda_mem_input, (float*)input_chw_data.data(), input_mem_size, cudaMemcpyHostToDevice, _m_trt_params.cuda_stream);
+    auto input_mem_size = input_binding.volume() * sizeof(float);
+    auto cuda_status = cudaMemcpyAsync(input_device, input_chw_data.data(), input_mem_size, cudaMemcpyHostToDevice, cuda_stream);
     if (cuda_status != cudaSuccess) {
         LOG(ERROR) << "copy input image memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
 
     // do inference
-    _m_trt_params.execution_context->setTensorAddress(
-        "input_image", _m_trt_params.device_memory.at(_m_trt_params.input_image_binding.index()));
-    _m_trt_params.execution_context->setTensorAddress(
-        "confidence", _m_trt_params.device_memory.at(_m_trt_params.output_confidence_binding.index()));
-    _m_trt_params.execution_context->setTensorAddress(
-        "prediction", _m_trt_params.device_memory.at(_m_trt_params.output_depth_binding.index()));
-    if (!_m_trt_params.execution_context->enqueueV3(_m_trt_params.cuda_stream)) {
+    context->setTensorAddress("input_image", input_device);
+    context->setTensorAddress("confidence", out_confidence_device);
+    context->setTensorAddress("prediction", out_depth_device);
+    if (!context->enqueueV3(cuda_stream)) {
         LOG(ERROR) << "execute input data for inference failed";
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
 
     // async copy inference result back to host
-    cuda_status = cudaMemcpyAsync(_m_trt_params.output_confidence_host.data(),
-                                  _m_trt_params.device_memory.at(_m_trt_params.output_confidence_binding.index()),
-                                  (int)(_m_trt_params.output_confidence_binding.volume() * sizeof(float)),
-                                  cudaMemcpyDeviceToHost, _m_trt_params.cuda_stream);
+    cuda_status = cudaMemcpyAsync(
+        out_confidence_host, out_confidence_device, out_confidence_binding.volume() * sizeof(float), cudaMemcpyDeviceToHost, cuda_stream);
     if (cuda_status != cudaSuccess) {
         LOG(ERROR) << "async copy output tensor back from device memory to host memory failed, error str: "
                    << cudaGetErrorString(cuda_status);
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
-    cuda_status = cudaMemcpyAsync(_m_trt_params.output_depth_host.data(),
-                                  _m_trt_params.device_memory.at(_m_trt_params.output_depth_binding.index()),
-                                  (int)(_m_trt_params.output_depth_binding.volume() * sizeof(float)),
-                                  cudaMemcpyDeviceToHost, _m_trt_params.cuda_stream);
+    cuda_status = cudaMemcpyAsync(
+        out_depth_host, out_depth_device, out_depth_binding.volume() * sizeof(float), cudaMemcpyDeviceToHost, cuda_stream);
     if (cuda_status != cudaSuccess) {
         LOG(ERROR) << "async copy output tensor back from device memory to host memory failed, error str: "
                    << cudaGetErrorString(cuda_status);
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
-    cudaStreamSynchronize(_m_trt_params.cuda_stream);
+    cudaStreamSynchronize(cuda_stream);
 
     // decode output
     auto depth_out = trt_decode_output();
