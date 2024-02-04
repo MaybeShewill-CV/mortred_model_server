@@ -30,7 +30,6 @@ using jinq::models::io_define::common_io::base64_input;
 using jinq::models::io_define::common_io::file_input;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::trt_helper::EngineBinding;
-using jinq::models::trt_helper::DeviceMemory;
 using jinq::models::trt_helper::TrtHelper;
 using jinq::models::trt_helper::TrtLogger;
 
