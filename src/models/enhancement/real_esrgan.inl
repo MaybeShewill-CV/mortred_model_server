@@ -32,10 +32,7 @@ using jinq::models::io_define::enhancement::std_enhancement_output;
 
 namespace real_esrgan_impl {
 
-struct internal_input {
-    cv::Mat input_image;
-};
-
+using internal_input = mat_input;
 using internal_output = std_enhancement_output;
 
 /***
@@ -48,12 +45,10 @@ template<typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<file_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
     internal_input result{};
-
     if (!FilePathUtil::is_file_exist(in.input_image_path)) {
         DLOG(WARNING) << "input image: " << in.input_image_path << " not exist";
         return result;
     }
-
     result.input_image = cv::imread(in.input_image_path, cv::IMREAD_UNCHANGED);
     return result;
 }
@@ -67,9 +62,7 @@ transform_input(const INPUT& in) {
 template<typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<mat_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
-    internal_input result{};
-    result.input_image = in.input_image;
-    return result;
+    return in;
 }
 
 /***
@@ -83,12 +76,11 @@ typename std::enable_if<std::is_same<INPUT, std::decay<base64_input>::type>::val
 transform_input(const INPUT& in) {
     internal_input result{};
     auto image = CvUtils::decode_base64_str_into_cvmat(in.input_image_content);
-
     if (!image.data || image.empty()) {
         DLOG(WARNING) << "image data empty";
         return result;
     } else {
-        image.copyTo(result.input_image);
+        result.input_image = image;
         return result;
     }
 }
@@ -103,9 +95,7 @@ transform_input(const INPUT& in) {
 template<typename OUTPUT>
 typename std::enable_if<std::is_same<OUTPUT, std::decay<std_enhancement_output>::type>::value, std_enhancement_output>::type
 transform_output(const real_esrgan_impl::internal_output& internal_out) {
-    std_enhancement_output result;
-    internal_out.enhancement_result.copyTo(result.enhancement_result);
-    return result;
+    return internal_out;
 }
 
 
