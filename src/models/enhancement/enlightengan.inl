@@ -98,7 +98,6 @@ transform_output(const enlightengan_impl::internal_output& internal_out) {
     return internal_out;
 }
 
-
 }
 
 /***************** Impl Function Sets ******************/
