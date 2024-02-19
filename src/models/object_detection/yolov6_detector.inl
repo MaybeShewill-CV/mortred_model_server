@@ -35,10 +35,7 @@ using jinq::models::io_define::object_detection::std_object_detection_output;
 
 namespace yolov6_impl {
 
-struct internal_input {
-    cv::Mat input_image;
-};
-
+using internal_input = mat_input;
 using internal_output = std_object_detection_output;
 
 /***
@@ -51,12 +48,10 @@ template<typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<file_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
     internal_input result{};
-
     if (!FilePathUtil::is_file_exist(in.input_image_path)) {
         DLOG(WARNING) << "input image: " << in.input_image_path << " not exist";
         return result;
     }
-
     result.input_image = cv::imread(in.input_image_path, cv::IMREAD_UNCHANGED);
     return result;
 }
@@ -70,9 +65,7 @@ transform_input(const INPUT& in) {
 template<typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<mat_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
-    internal_input result{};
-    result.input_image = in.input_image;
-    return result;
+    return in;
 }
 
 /***
@@ -93,7 +86,7 @@ transform_input(const INPUT& in) {
         return result;
     } else {
         cv::Mat ret;
-        cv::imdecode(image_vec_data, cv::IMREAD_UNCHANGED).copyTo(result.input_image);
+        result.input_image = cv::imdecode(image_vec_data, cv::IMREAD_UNCHANGED);
         return result;
     }
 }
@@ -108,11 +101,7 @@ transform_input(const INPUT& in) {
 template<typename OUTPUT>
 typename std::enable_if<std::is_same<OUTPUT, std::decay<std_object_detection_output>::type>::value, std_object_detection_output>::type
 transform_output(const yolov6_impl::internal_output& internal_out) {
-    std_object_detection_output result;
-    for (auto& value : internal_out) {
-        result.push_back(value);
-    }
-    return result;
+    return internal_out;
 }
 }
 
