@@ -101,11 +101,7 @@ transform_input(const INPUT& in) {
 template<typename OUTPUT>
 typename std::enable_if<std::is_same<OUTPUT, std::decay<std_object_detection_output>::type>::value, std_object_detection_output>::type
 transform_output(const yolov7_impl::internal_output& internal_out) {
-    std_object_detection_output result;
-    for (auto& value : internal_out) {
-        result.push_back(value);
-    }
-    return result;
+    return internal_out;
 }
 }
 
