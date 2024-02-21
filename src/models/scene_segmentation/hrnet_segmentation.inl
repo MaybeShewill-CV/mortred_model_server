@@ -54,12 +54,10 @@ template<typename INPUT>
 typename std::enable_if<std::is_same<INPUT, std::decay<file_input>::type>::value, internal_input>::type
 transform_input(const INPUT& in) {
     internal_input result{};
-
     if (!FilePathUtil::is_file_exist(in.input_image_path)) {
         DLOG(WARNING) << "input image: " << in.input_image_path << " not exist";
         return result;
     }
-
     result.input_image = cv::imread(in.input_image_path, cv::IMREAD_UNCHANGED);
     return result;
 }
