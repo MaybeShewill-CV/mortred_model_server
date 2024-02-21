@@ -159,6 +159,15 @@ std::string BiseNetV2Server::Impl::make_response_body(
     if (model_output.segmentation_result.empty()) {
         writer.String("");
     } else {
+        std::vector<uchar> imencode_buffer;
+        cv::imencode(".png", model_output.segmentation_result, imencode_buffer);
+        auto output_image_data = Base64::base64_encode(imencode_buffer.data(), imencode_buffer.size());
+        writer.String(output_image_data.c_str());
+    }
+    writer.Key("colorized_seg_mask");
+    if (model_output.segmentation_result.empty()) {
+        writer.String("");
+    } else {
         cv::Mat color_mask;
         CvUtils::colorize_segmentation_mask(model_output.segmentation_result, color_mask, 80);
         std::vector<uchar> imencode_buffer;
