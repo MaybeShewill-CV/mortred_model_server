@@ -75,6 +75,7 @@ namespace scene_segmentation {
 
 struct seg_output {
     cv::Mat segmentation_result;
+    cv::Mat colorized_seg_mask;
 };
 using std_scene_segmentation_output = seg_output;
 
