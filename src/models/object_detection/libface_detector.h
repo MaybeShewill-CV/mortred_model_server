@@ -5,8 +5,8 @@
  * Date: 22-6-10
  ************************************************/
 
-#ifndef MMAISERVER_LIBFACEDETECTOR_H
-#define MMAISERVER_LIBFACEDETECTOR_H
+#ifndef MORTRED_MODEL_SERVER_LIBFACE_DETECTOR_H
+#define MORTRED_MODEL_SERVER_LIBFACE_DETECTOR_H
 
 #include <memory>
 
@@ -78,4 +78,4 @@ class LibFaceDetector : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
 
 #include "libface_detector.inl"
 
-#endif // MMAISERVER_LIBFACEDETECTOR_H
+#endif // MORTRED_MODEL_SERVER_LIBFACE_DETECTOR_H

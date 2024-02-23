@@ -5,8 +5,8 @@
 * Date: 22-6-10
 ************************************************/
 
-#ifndef MMAISERVER_NANODETECTOR_H
-#define MMAISERVER_NANODETECTOR_H
+#ifndef MORTRED_MODEL_SERVER_NANO_DETECTOR_H
+#define MORTRED_MODEL_SERVER_NANO_DETECTOR_H
 
 #include <memory>
 
@@ -86,4 +86,4 @@ private:
 
 #include "nano_detector.inl"
 
-#endif //MMAISERVER_NANODETECTOR_H
+#endif //MORTRED_MODEL_SERVER_NANO_DETECTOR_H

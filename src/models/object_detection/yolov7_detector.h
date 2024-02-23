@@ -5,8 +5,8 @@
 * Date: 22-7-17
 ************************************************/
 
-#ifndef MM_AI_SERVER_YOLOV7DETECTOR_H
-#define MM_AI_SERVER_YOLOV7DETECTOR_H
+#ifndef MORTRED_MODEL_SERVER_YOLOV7_DETECTOR_H
+#define MORTRED_MODEL_SERVER_YOLOV7_DETECTOR_H
 
 #include <memory>
 
@@ -79,4 +79,4 @@ private:
 
 #include "yolov7_detector.inl"
 
-#endif //MM_AI_SERVER_YOLOV7DETECTOR_H
+#endif //MORTRED_MODEL_SERVER_YOLOV7_DETECTOR_H
