@@ -5,8 +5,8 @@
 * Date: 22-6-6
 ************************************************/
 
-#ifndef MMAISERVER_DBTextDetector_H
-#define MMAISERVER_DBTextDetector_H
+#ifndef MORTRED_MODEL_SERVER_DB_TEXT_DETECTOR_H
+#define MORTRED_MODEL_SERVER_DB_TEXT_DETECTOR_H
 
 #include <memory>
 
@@ -81,4 +81,4 @@ private:
 
 #include "db_text_detector.inl"
 
-#endif //MMAISERVER_DBTextDetector_H
+#endif //MORTRED_MODEL_SERVER_DB_TEXT_DETECTOR_H
