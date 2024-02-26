@@ -5,8 +5,8 @@
 * Date: 22-6-5
 ************************************************/
 
-#ifndef MMAISERVER_TIMESTAMP_H
-#define MMAISERVER_TIMESTAMP_H
+#ifndef MORTRED_MODEL_SERVER_TIMESTAMP_H
+#define MORTRED_MODEL_SERVER_TIMESTAMP_H
 
 #include <chrono>
 #include <string>
@@ -214,4 +214,4 @@ inline double operator-(const Timestamp& high, const Timestamp& low) {
 }
 }
 
-#endif //MMAISERVER_TIMESTAMP_H
+#endif //MORTRED_MODEL_SERVER_TIMESTAMP_H

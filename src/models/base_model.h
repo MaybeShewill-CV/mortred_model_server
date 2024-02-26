@@ -5,8 +5,8 @@
 * Date: 22-6-2
 ************************************************/
 
-#ifndef MMAISERVER_BASE_MODEL_H
-#define MMAISERVER_BASE_MODEL_H
+#ifndef MORTRED_MODEL_SERVER_BASE_MODEL_H
+#define MORTRED_MODEL_SERVER_BASE_MODEL_H
 
 #include "toml/toml.hpp"
 
@@ -67,4 +67,4 @@ public:
 }
 
 
-#endif //MMAISERVER_BASE_MODEL_H
+#endif //MORTRED_MODEL_SERVER_BASE_MODEL_H

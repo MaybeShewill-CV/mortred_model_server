@@ -5,8 +5,8 @@
 * Date: 22-6-14
 ************************************************/
 
-#ifndef MMAISERVER_ATTENTIVEGANDERAINNET_H
-#define MMAISERVER_ATTENTIVEGANDERAINNET_H
+#ifndef MORTRED_MODEL_SERVER_ATTENTIVE_GAN_DERAIN_NET_H
+#define MORTRED_MODEL_SERVER_ATTENTIVE_GAN_DERAIN_NET_H
 
 #include <memory>
 
@@ -78,4 +78,4 @@ template <typename INPUT, typename OUTPUT> class AttentiveGanDerain : public jin
 
 #include "attentive_gan_derain_net.inl"
 
-#endif // MMAISERVER_ATTENTIVEGANDERAINNET_H
+#endif // MORTRED_MODEL_SERVER_ATTENTIVE_GAN_DERAIN_NET_H

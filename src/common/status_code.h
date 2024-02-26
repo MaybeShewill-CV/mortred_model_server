@@ -5,8 +5,8 @@
 * Date: 22-6-2
 ************************************************/
 
-#ifndef MMAISERVER_STATUSCODE_H
-#define MMAISERVER_STATUSCODE_H
+#ifndef MORTRED_MODEL_SERVER_STATUSCODE_H
+#define MORTRED_MODEL_SERVER_STATUSCODE_H
 
 #include <string>
 
@@ -73,4 +73,4 @@ std::string error_code_to_str(int error_code);
 }
 }
 
-#endif //MMAISERVER_STATUSCODE_H
+#endif //MORTRED_MODEL_SERVER_STATUSCODE_H

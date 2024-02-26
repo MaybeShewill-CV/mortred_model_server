@@ -5,8 +5,8 @@
 * Date: 22-6-4
 ************************************************/
 
-#ifndef MMAISERVER_HTTP_UTILS_H
-#define MMAISERVER_HTTP_UTILS_H
+#ifndef MORTRED_MODEL_SERVER_HTTP_UTILS_H
+#define MORTRED_MODEL_SERVER_HTTP_UTILS_H
 
 #include <string>
 #include <vector>
@@ -75,4 +75,4 @@ private:
 }
 }
 
-#endif //MMAISERVER_HTTP_UTILS_H
+#endif //MORTRED_MODEL_SERVER_HTTP_UTILS_H

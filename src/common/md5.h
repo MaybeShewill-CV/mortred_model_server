@@ -5,8 +5,8 @@
 * Date: 22-6-2
 ************************************************/
 
-#ifndef MMAISERVER_MD5_H
-#define MMAISERVER_MD5_H
+#ifndef MORTRED_MODEL_SERVER_MD5_H
+#define MORTRED_MODEL_SERVER_MD5_H
 
 #define s11 7
 #define s12 12
@@ -131,4 +131,4 @@ private:
 }
 }
 
-#endif //MMAISERVER_MD5_H
+#endif //MORTRED_MODEL_SERVER_MD5_H

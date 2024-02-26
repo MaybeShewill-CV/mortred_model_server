@@ -5,8 +5,8 @@
 * Date: 22-6-15
 ************************************************/
 
-#ifndef MMAISERVER_SUPERPOINT_H
-#define MMAISERVER_SUPERPOINT_H
+#ifndef MORTRED_MODEL_SERVER_SUPERPOINT_H
+#define MORTRED_MODEL_SERVER_SUPERPOINT_H
 
 #include <memory>
 
@@ -79,4 +79,4 @@ class SuperPoint : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
 
 #include "superpoint.inl"
 
-#endif // MMAISERVER_SUPERPOINT_H
+#endif // MORTRED_MODEL_SERVER_SUPERPOINT_H
