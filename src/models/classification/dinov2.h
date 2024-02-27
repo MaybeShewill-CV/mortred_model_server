@@ -1,7 +1,7 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: Dinov2.h
+ * File: dinov2.h
  * Date: 23-6-12
  ************************************************/
 
