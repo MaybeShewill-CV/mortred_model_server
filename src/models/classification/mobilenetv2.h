@@ -5,8 +5,8 @@
 * Date: 22-6-13
 ************************************************/
 
-#ifndef MM_AI_SERVER_MOBILENETV2_H
-#define MM_AI_SERVER_MOBILENETV2_H
+#ifndef MORTRED_MODEL_SERVER_MOBILENETV2_H
+#define MORTRED_MODEL_SERVER_MOBILENETV2_H
 
 #include <memory>
 
@@ -81,4 +81,4 @@ private:
 
 #include "mobilenetv2.inl"
 
-#endif //MM_AI_SERVER_MOBILENETV2_H
+#endif //MORTRED_MODEL_SERVER_MOBILENETV2_H

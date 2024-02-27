@@ -5,8 +5,8 @@
 * Date: 22-6-14
 ************************************************/
 
-#ifndef MM_AI_SERVER_RESNET_H
-#define MM_AI_SERVER_RESNET_H
+#ifndef MORTRED_MODEL_SERVER_RESNET_H
+#define MORTRED_MODEL_SERVER_RESNET_H
 
 
 #include <memory>
@@ -82,4 +82,4 @@ private:
 
 #include "resnet.inl"
 
-#endif //MM_AI_SERVER_RESNET_H
+#endif //MORTRED_MODEL_SERVER_RESNET_H

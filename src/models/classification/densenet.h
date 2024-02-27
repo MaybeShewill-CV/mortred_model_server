@@ -5,8 +5,8 @@
 * Date: 22-6-14
 ************************************************/
 
-#ifndef MM_AI_SERVER_DENSENET_H
-#define MM_AI_SERVER_DENSENET_H
+#ifndef MORTRED_MODEL_SERVER_DENSENET_H
+#define MORTRED_MODEL_SERVER_DENSENET_H
 
 #include <memory>
 
@@ -81,4 +81,4 @@ private:
 
 #include "densenet.inl"
 
-#endif //MM_AI_SERVER_DENSENET_H
+#endif //MORTRED_MODEL_SERVER_DENSENET_H
