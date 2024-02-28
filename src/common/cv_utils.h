@@ -5,8 +5,8 @@
 * Date: 22-6-10
 ************************************************/
 
-#ifndef MM_AI_SERVER_CV_UTILS_H
-#define MM_AI_SERVER_CV_UTILS_H
+#ifndef MORTRED_MODEL_SERVER_CV_UTILS_H
+#define MORTRED_MODEL_SERVER_CV_UTILS_H
 
 #include <map>
 #include <random>
@@ -512,4 +512,4 @@ public:
 }
 }
 
-#endif //MM_AI_SERVER_CV_UTILS_H
+#endif //MORTRED_MODEL_SERVER_CV_UTILS_H

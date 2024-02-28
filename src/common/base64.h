@@ -5,8 +5,8 @@
 * Date: 22-6-2
 ************************************************/
 
-#ifndef MM_AI_SERVER_BASE64_H
-#define MM_AI_SERVER_BASE64_H
+#ifndef MORTRED_MODEL_SERVER_BASE64_H
+#define MORTRED_MODEL_SERVER_BASE64_H
 
 #include <string>
 
@@ -61,4 +61,4 @@ public:
 }
 }
 
-#endif //MM_AI_SERVER_BASE64_H
+#endif //MORTRED_MODEL_SERVER_BASE64_H

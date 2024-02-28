@@ -5,8 +5,8 @@
 * Date: 22-6-6
 ************************************************/
 
-#ifndef MM_AI_SERVER_FILEPATHUTIL_H
-#define MM_AI_SERVER_FILEPATHUTIL_H
+#ifndef MORTRED_MODEL_SERVER_FILE_PATH_UTIL_H
+#define MORTRED_MODEL_SERVER_FILE_PATH_UTIL_H
 
 #include <string>
 
@@ -53,4 +53,4 @@ public:
 }
 }
 
-#endif //MM_AI_SERVER_FILEPATHUTIL_H
+#endif //MORTRED_MODEL_SERVER_FILE_PATH_UTIL_H
