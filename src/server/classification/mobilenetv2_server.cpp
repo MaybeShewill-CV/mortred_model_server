@@ -114,6 +114,7 @@ StatusCode MobileNetv2Server::Impl::init(const decltype(toml::parse("")) &config
     peer_resp_timeout = static_cast<int>(server_section.at("peer_resp_timeout").as_integer()) * 1000;
     compute_threads = static_cast<int>(server_section.at("compute_threads").as_integer());
     handler_threads = static_cast<int>(server_section.at("handler_threads").as_integer());
+    request_size_limit = static_cast<size_t>(server_section.at("request_size_limit").as_integer());
 
     _m_successfully_initialized = true;
     LOG(INFO) << "Mobilenetv2 classification server init successfully";
@@ -197,13 +198,15 @@ jinq::common::StatusCode MobileNetv2Server::init(const decltype(toml::parse(""))
     WFGlobalSettings settings = GLOBAL_SETTINGS_DEFAULT;
     settings.compute_threads = _m_impl->compute_threads;
     settings.handler_threads = _m_impl->handler_threads;
-    settings.endpoint_params.max_connections = _m_impl->max_connection_nums;
-    settings.endpoint_params.response_timeout = _m_impl->peer_resp_timeout;
     WORKFLOW_library_init(&settings);
 
-    auto&& proc = std::bind(
-                      &MobileNetv2Server::Impl::serve_process, std::cref(this->_m_impl), std::placeholders::_1);
-    _m_server = std::make_unique<WFHttpServer>(proc);
+    WFServerParams server_params = SERVER_PARAMS_DEFAULT;
+    server_params.max_connections = _m_impl->max_connection_nums;
+    server_params.request_size_limit = _m_impl->request_size_limit;
+    server_params.peer_response_timeout = _m_impl->peer_resp_timeout;
+
+    auto&& proc = std::bind(&MobileNetv2Server::Impl::serve_process, std::cref(this->_m_impl), std::placeholders::_1);
+    _m_server = std::make_unique<WFHttpServer>(&server_params, proc);
 
     return StatusCode::OK;
 }
