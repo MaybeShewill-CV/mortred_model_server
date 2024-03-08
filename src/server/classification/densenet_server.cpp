@@ -201,10 +201,10 @@ jinq::common::StatusCode DenseNetServer::init(const decltype(toml::parse("")) &c
 
     WFServerParams server_params = SERVER_PARAMS_DEFAULT;
     server_params.max_connections = _m_impl->max_connection_nums;
-    server_params.request_size_limit = _m_impl->request_size_limit;
     server_params.peer_response_timeout = _m_impl->peer_resp_timeout;
+    server_params.request_size_limit = _m_impl->request_size_limit * 1024 * 1024;
 
-    auto&& proc = std::bind(&DenseNetServer::Impl::serve_process, std::cref(this->_m_impl), std::placeholders::_1);
+    auto proc = [&](auto arg) { return this->_m_impl->serve_process(arg); };
     _m_server = std::make_unique<WFHttpServer>(&server_params, proc);
 
     return StatusCode::OK;
