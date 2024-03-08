@@ -90,6 +90,7 @@ public:
     int peer_resp_timeout = 15 * 1000;
     int compute_threads = -1;
     int handler_threads = 50;
+    size_t request_size_limit = -1;
 
 protected:
     // init flag
