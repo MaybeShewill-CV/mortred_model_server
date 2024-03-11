@@ -206,7 +206,7 @@ jinq::common::StatusCode ResNetServer::init(const decltype(toml::parse("")) &con
     server_params.peer_response_timeout = _m_impl->peer_resp_timeout;
     server_params.request_size_limit = _m_impl->request_size_limit * 1024 * 1024;
 
-    auto proc = [&](auto arg) { return this->_m_impl->serve_process(arg); };
+    auto&& proc = [&](auto arg) { return this->_m_impl->serve_process(arg); };
     _m_server = std::make_unique<WFHttpServer>(&server_params, proc);
 
     return StatusCode::OK;
