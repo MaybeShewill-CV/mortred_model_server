@@ -16,6 +16,7 @@
 #include "models/object_detection/yolov5_detector.h"
 #include "models/object_detection/yolov6_detector.h"
 #include "models/object_detection/yolov7_detector.h"
+#include "models/object_detection/yolov8_detector.h"
 #include "models/object_detection/centerface_detector.h"
 #include "server/object_detection/libface_det_server.h"
 #include "server/object_detection/nano_det_server.h"
@@ -37,6 +38,7 @@ using jinq::models::object_detection::NanoDetector;
 using jinq::models::object_detection::YoloV5Detector;
 using jinq::models::object_detection::YoloV6Detector;
 using jinq::models::object_detection::YoloV7Detector;
+using jinq::models::object_detection::YoloV8Detector;
 using jinq::models::object_detection::CenterFaceDetector;
 
 using jinq::server::object_detection::LibfaceDetServer;
@@ -159,6 +161,19 @@ static std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_yolov7_detector(const 
 static std::unique_ptr<BaseAiServer> create_yolov7_det_server(const std::string& server_name) {
     REGISTER_AI_SERVER(YoloV7DetServer, server_name)
     return ServerFactory<BaseAiServer>::get_instance().get_server(server_name);
+}
+
+/***
+ * create yolov8 object detection instance
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param detector_name
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+static std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_yolov8_detector(const std::string& detector_name) {
+    REGISTER_AI_MODEL(YoloV8Detector, detector_name, INPUT, OUTPUT)
+    return ModelFactory<BaseAiModel<INPUT, OUTPUT>>::get_instance().get_model(detector_name);
 }
 
 /***
