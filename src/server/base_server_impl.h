@@ -258,20 +258,17 @@ template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     const BaseAiServerImpl::cls_request& req,
     BaseAiServerImpl::seriex_ctx* ctx) {
+    // get model worker
+    WORKER worker;
+    auto find_worker_start_ts = Timestamp::now();
+    while (!_m_working_queue.try_dequeue(worker)) {}
+    ctx->find_worker_time_consuming = (Timestamp::now() - find_worker_start_ts) * 1000;
 
     // get task receive timestamp
     ctx->task_id = req.task_id;
     ctx->is_task_req_valid = req.is_valid;
     auto task_receive_ts = Timestamp::now();
     ctx->task_received_ts = task_receive_ts.to_format_str();
-
-    // get model worker
-    WORKER worker;
-    auto find_worker_start_ts = Timestamp::now();
-
-    while (!_m_working_queue.try_dequeue(worker)) {}
-
-    ctx->find_worker_time_consuming = (Timestamp::now() - find_worker_start_ts) * 1000;
 
     // construct model input
     models::io_define::common_io::base64_input model_input{req.image_content};
@@ -280,7 +277,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     StatusCode status;
     if (req.is_valid) {
         status = worker->run(model_input, ctx->model_output);
-
         if (status != StatusCode::OK) {
             LOG(ERROR) << "worker run failed";
         }
