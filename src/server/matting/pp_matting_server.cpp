@@ -118,6 +118,7 @@ StatusCode PPMattingServer::Impl::init(const decltype(toml::parse("")) &config) 
     peer_resp_timeout = static_cast<int>(server_section.at("peer_resp_timeout").as_integer()) * 1000;
     compute_threads = static_cast<int>(server_section.at("compute_threads").as_integer());
     handler_threads = static_cast<int>(server_section.at("handler_threads").as_integer());
+    request_size_limit = static_cast<size_t>(server_section.at("request_size_limit").as_integer());
 
     _m_successfully_initialized = true;
     LOG(INFO) << "pp matting server init successfully";
@@ -199,12 +200,14 @@ jinq::common::StatusCode PPMattingServer::init(const decltype(toml::parse("")) &
     WFGlobalSettings settings = GLOBAL_SETTINGS_DEFAULT;
     settings.compute_threads = _m_impl->compute_threads;
     settings.handler_threads = _m_impl->handler_threads;
-    settings.endpoint_params.max_connections = _m_impl->max_connection_nums;
-    settings.endpoint_params.response_timeout = _m_impl->peer_resp_timeout;
     WORKFLOW_library_init(&settings);
 
-    auto&& proc = std::bind(
-                      &PPMattingServer::Impl::serve_process, std::cref(this->_m_impl), std::placeholders::_1);
+    WFServerParams server_params = SERVER_PARAMS_DEFAULT;
+    server_params.max_connections = _m_impl->max_connection_nums;
+    server_params.peer_response_timeout = _m_impl->peer_resp_timeout;
+    server_params.request_size_limit = _m_impl->request_size_limit * 1024 * 1024;
+
+    auto&& proc = [&](auto arg) { return this->_m_impl->serve_process(arg); };
     _m_server = std::make_unique<WFHttpServer>(proc);
 
     return StatusCode::OK;
