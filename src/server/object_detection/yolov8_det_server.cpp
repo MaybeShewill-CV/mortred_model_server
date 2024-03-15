@@ -13,7 +13,6 @@
 #include "rapidjson/writer.h"
 #include "workflow/WFTaskFactory.h"
 #include "workflow/WFHttpServer.h"
-#include "workflow/Workflow.h"
 
 #include "common/status_code.h"
 #include "common/file_path_util.h"
