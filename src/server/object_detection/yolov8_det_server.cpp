@@ -208,7 +208,6 @@ YoloV8DetServer::~YoloV8DetServer() = default;
 jinq::common::StatusCode YoloV8DetServer::init(const decltype(toml::parse("")) &config) {
     // init impl
     auto status = _m_impl->init(config);
-
     if (status != StatusCode::OK) {
         LOG(INFO) << "init yolov8 detection server failed";
         return status;

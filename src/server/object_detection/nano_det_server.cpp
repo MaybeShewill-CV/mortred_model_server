@@ -225,7 +225,7 @@ jinq::common::StatusCode NanoDetServer::init(const decltype(toml::parse("")) &co
     server_params.request_size_limit = _m_impl->request_size_limit * 1024 * 1024;
 
     auto&& proc = [&](auto arg) { return this->_m_impl->serve_process(arg); };
-    _m_server = std::make_unique<WFHttpServer>(proc);
+    _m_server = std::make_unique<WFHttpServer>(&server_params, proc);
 
     return StatusCode::OK;
 }
