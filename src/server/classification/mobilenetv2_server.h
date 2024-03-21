@@ -5,8 +5,8 @@
 * Date: 22-6-21
 ************************************************/
 
-#ifndef MM_AI_SERVER_MOBILENETV2_SERVER_H
-#define MM_AI_SERVER_MOBILENETV2_SERVER_H
+#ifndef MORTRED_MODEL_SERVER_MOBILENETV2_SERVER_H
+#define MORTRED_MODEL_SERVER_MOBILENETV2_SERVER_H
 
 #include <memory>
 
@@ -69,4 +69,4 @@ private:
 }
 }
 
-#endif //MM_AI_SERVER_MOBILENETV2_SERVER_H
+#endif //MORTRED_MODEL_SERVER_MOBILENETV2_SERVER_H

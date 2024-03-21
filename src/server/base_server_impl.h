@@ -5,8 +5,8 @@
 * Date: 22-6-30
 ************************************************/
 
-#ifndef MM_AI_SERVER_BASE_SERVER_IMPL_H
-#define MM_AI_SERVER_BASE_SERVER_IMPL_H
+#ifndef MORTRED_MODEL_SERVER_BASE_SERVER_IMPL_H
+#define MORTRED_MODEL_SERVER_BASE_SERVER_IMPL_H
 
 #include "glog/logging.h"
 #include "toml/toml.hpp"
@@ -341,4 +341,4 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
 }
 
 
-#endif //MM_AI_SERVER_BASE_SERVER_IMPL_H
+#endif //MORTRED_MODEL_SERVER_BASE_SERVER_IMPL_H

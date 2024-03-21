@@ -5,8 +5,8 @@
 * Date: 22-6-21
 ************************************************/
 
-#ifndef MM_AI_SERVER_BASESERVER_H
-#define MM_AI_SERVER_BASESERVER_H
+#ifndef MORTRED_MODEL_SERVER_BASESERVER_H
+#define MORTRED_MODEL_SERVER_BASESERVER_H
 
 #include <toml/toml.hpp>
 #include <workflow/WFTask.h>
@@ -96,4 +96,4 @@ protected:
 }
 }
 
-#endif //MM_AI_SERVER_BASESERVER_H
+#endif //MORTRED_MODEL_SERVER_BASESERVER_H
