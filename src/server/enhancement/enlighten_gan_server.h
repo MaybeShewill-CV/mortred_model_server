@@ -5,8 +5,8 @@
 * Date: 22-7-04
 ************************************************/
 
-#ifndef MM_AI_SERVER_ENLIGHTENGANSERVER_H
-#define MM_AI_SERVER_ENLIGHTENGANSERVER_H
+#ifndef MORTRED_MODEL_SERVER_ENLIGHTEN_GAN_SERVER_H
+#define MORTRED_MODEL_SERVER_ENLIGHTEN_GAN_SERVER_H
 
 #include <memory>
 
@@ -69,4 +69,4 @@ private:
 }
 }
 
-#endif //MM_AI_SERVER_ENLIGHTENGANSERVER_H
+#endif //MORTRED_MODEL_SERVER_ENLIGHTEN_GAN_SERVER_H
