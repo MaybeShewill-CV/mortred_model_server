@@ -5,8 +5,8 @@
 * Date: 22-6-9
 ************************************************/
 
-#ifndef MM_AI_SERVER_SCENE_SEGMENTATION_TASK_H
-#define MM_AI_SERVER_SCENE_SEGMENTATION_TASK_H
+#ifndef MORTRED_MODEL_SERVER_SCENE_SEGMENTATION_TASK_H
+#define MORTRED_MODEL_SERVER_SCENE_SEGMENTATION_TASK_H
 
 #include "factory/base_factory.h"
 #include "factory/register_marco.h"
@@ -124,4 +124,4 @@ static std::unique_ptr<BaseAiServer> create_hrnet_server(const std::string& serv
 }
 }
 
-#endif //MM_AI_SERVER_SCENE_SEGMENTATION_TASK_H
+#endif //MORTRED_MODEL_SERVER_SCENE_SEGMENTATION_TASK_H

@@ -5,8 +5,8 @@
 * Date: 22-6-14
 ************************************************/
 
-#ifndef MM_AI_SERVER_CLASSIFICATION_TASK_H
-#define MM_AI_SERVER_CLASSIFICATION_TASK_H
+#ifndef MORTRED_MODEL_SERVER_CLASSIFICATION_TASK_H
+#define MORTRED_MODEL_SERVER_CLASSIFICATION_TASK_H
 
 #include "factory/base_factory.h"
 #include "factory/register_marco.h"
@@ -127,4 +127,4 @@ static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_dinov2_classifier(
 }
 }
 
-#endif //MM_AI_SERVER_CLASSIFICATION_TASK_H
+#endif //MORTRED_MODEL_SERVER_CLASSIFICATION_TASK_H

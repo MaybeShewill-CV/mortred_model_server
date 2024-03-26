@@ -5,8 +5,8 @@
  * Date: 22-6-13
  ************************************************/
 
-#ifndef MM_AI_SERVER_ENHANCEMENT_TASK_H
-#define MM_AI_SERVER_ENHANCEMENT_TASK_H
+#ifndef MORTRED_MODEL_SERVER_ENHANCEMENT_TASK_H
+#define MORTRED_MODEL_SERVER_ENHANCEMENT_TASK_H
 
 #include "factory/base_factory.h"
 #include "factory/register_marco.h"
@@ -110,4 +110,4 @@ static std::unique_ptr<BaseAiServer> create_realesrgan_server(const std::string&
 } // namespace factory
 } // namespace jinq
 
-#endif // MM_AI_SERVER_ENHANCEMENT_TASK_H
+#endif // MORTRED_MODEL_SERVER_ENHANCEMENT_TASK_H

@@ -5,8 +5,8 @@
 * Date: 22-6-7
 ************************************************/
 
-#ifndef MM_AI_SERVER_BASE_FACTORY_H
-#define MM_AI_SERVER_BASE_FACTORY_H
+#ifndef MORTRED_MODEL_SERVER_BASE_FACTORY_H
+#define MORTRED_MODEL_SERVER_BASE_FACTORY_H
 
 #include <memory>
 #include <map>
@@ -297,4 +297,4 @@ public:
 }
 }
 
-#endif //MM_AI_SERVER_BASE_FACTORY_H
+#endif //MORTRED_MODEL_SERVER_BASE_FACTORY_H

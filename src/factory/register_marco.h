@@ -5,8 +5,8 @@
 * Date: 22-6-8
 ************************************************/
 
-#ifndef MM_AI_SERVER_REGISTER_MARCO_H
-#define MM_AI_SERVER_REGISTER_MARCO_H
+#ifndef MORTRED_MODEL_SERVER_REGISTER_MARCO_H
+#define MORTRED_MODEL_SERVER_REGISTER_MARCO_H
 
 #include "factory/base_factory.h"
 #include "models/model_io_define.h"
@@ -27,4 +27,4 @@ ServerRegistrar<BaseAiServer, SERVER> __server_registrar__##SERVER((SERVER_NAME)
 #define REGISTER_ROUTER_URL(URI, FUNC) \
 RouteTable::get_instance().add_handler(#URI, #FUNC)
 
-#endif //MM_AI_SERVER_REGISTER_MARCO_H
+#endif //MORTRED_MODEL_SERVER_REGISTER_MARCO_H
