@@ -205,8 +205,6 @@ class DepthAnything<INPUT, OUTPUT>::Impl {
     cv::Size _m_input_size_user = cv::Size();
     //　input node size
     cv::Size _m_input_size_host = cv::Size();
-    // focal length
-    float _m_focal_length = 0.0f;
     // intrinsic params
     std::vector<float> _m_intrinsic_params = {0.0, 0.0, 0.0, 0.0};
 
@@ -451,7 +449,6 @@ StatusCode DepthAnything<INPUT, OUTPUT>::Impl::init_trt(const toml::value& cfg) 
     }
 
     // init intrinsic and canonical size
-    _m_focal_length = static_cast<float>(cfg.at("focal_length").as_floating());
     _m_intrinsic_params = {
         static_cast<float>(cfg.at("intrinsic").as_array()[0].as_floating()),
         static_cast<float>(cfg.at("intrinsic").as_array()[1].as_floating()),
