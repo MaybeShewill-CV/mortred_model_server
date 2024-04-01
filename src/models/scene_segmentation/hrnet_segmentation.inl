@@ -513,7 +513,7 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::init_trt(const toml::value &c
 template<typename INPUT, typename OUTPUT>
 StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::trt_run(const INPUT &in, OUTPUT &out) {
     // init sess
-    auto* context = _m_trt_params.context;
+    auto& context = _m_trt_params.context;
     auto& input_image_binding = _m_trt_params.input_image_binding;
     auto& out_segment_binding = _m_trt_params.out_segment_binding;
     auto& cuda_stream = _m_trt_params.cuda_stream;

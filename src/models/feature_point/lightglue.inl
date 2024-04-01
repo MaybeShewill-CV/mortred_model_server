@@ -993,7 +993,7 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_matcher(const toml::value &confi
 template<typename INPUT, typename OUTPUT>
 StatusCode LightGlue<INPUT, OUTPUT>::Impl::setup_extractor_device_memory_allocators() {
     // init global params
-    auto* context = _m_trt_params.extractor->context;
+    auto& context = _m_trt_params.extractor->context;
     auto& memo_allocator = _m_trt_params.extractor->allocators;
 
     // init allocators for output node
@@ -1020,7 +1020,7 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::setup_extractor_device_memory_allocat
 template<typename INPUT, typename OUTPUT>
 StatusCode LightGlue<INPUT, OUTPUT>::Impl::setup_matcher_device_memory_allocators() {
     // init global params
-    auto* context = _m_trt_params.matcher->context;
+    auto& context = _m_trt_params.matcher->context;
     auto& memo_allocator = _m_trt_params.matcher->allocators;
 
     // init allocators for output node
@@ -1055,7 +1055,7 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::trt_extract_feature_points(
     std::vector<float> &feature_scores,
     std::vector<float> &feature_descriptors) {
     // init sess
-    auto* context = _m_trt_params.extractor->context;
+    auto& context = _m_trt_params.extractor->context;
     auto* cuda_stream = _m_trt_params.extractor->cuda_stream;
     auto& memo_allocators = _m_trt_params.extractor->allocators;
     auto& input_image_binding = _m_trt_params.extractor->input_image_binding;
@@ -1154,8 +1154,8 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::trt_match_feature_points(
     const std::vector<float> &input_desc1,
     lightglue_impl::internal_output &match_result) {
     // init sess
-    auto* context = _m_trt_params.matcher->context;
-    auto* cuda_stream = _m_trt_params.matcher->cuda_stream;
+    auto& context = _m_trt_params.matcher->context;
+    auto& cuda_stream = _m_trt_params.matcher->cuda_stream;
     auto& memo_allocators = _m_trt_params.matcher->allocators;
     auto& input_kpts0_binding = _m_trt_params.matcher->input_kpts0_binding;
     auto& input_kpts1_binding = _m_trt_params.matcher->input_kpts1_binding;
