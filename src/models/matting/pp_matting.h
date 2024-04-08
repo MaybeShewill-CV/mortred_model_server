@@ -5,8 +5,8 @@
 * Date: 22-7-19
 ************************************************/
 
-#ifndef MM_AI_SERVER_PP_MATTING_H
-#define MM_AI_SERVER_PP_MATTING_H
+#ifndef MORTRED_MODEL_SERVER_PP_MATTING_H
+#define MORTRED_MODEL_SERVER_PP_MATTING_H
 
 #include <memory>
 
@@ -80,4 +80,4 @@ private:
 
 #include "pp_matting.inl"
 
-#endif //MM_AI_SERVER_PP_MATTING_H
+#endif //MORTRED_MODEL_SERVER_PP_MATTING_H
