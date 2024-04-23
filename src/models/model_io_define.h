@@ -142,6 +142,22 @@ using std_mde_output = mde_output;
 
 } // namespace mono_depth_estimation
 
+// diffusion
+namespace diffusion {
+
+struct ddpm_unet_input {
+    cv::Mat xt;
+    int64_t timestep;
+};
+
+struct ddpm_unet_output {
+    cv::Mat predict_noise;
+};
+using std_ddpm_unet_input = ddpm_unet_input;
+using std_ddpm_unet_output = ddpm_unet_output;
+
+}
+
 } // namespace io_define
 } // namespace models
 } // namespace jinq
