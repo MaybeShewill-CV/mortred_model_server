@@ -7,11 +7,11 @@
 
 // ddpm-unet benckmark tool
 
+#include <random>
+
 #include <glog/logging.h>
 #include <toml/toml.hpp>
 
-#include "common/cv_utils.h"
-#include "common/file_path_util.h"
 #include "common/time_stamp.h"
 #include "models/model_io_define.h"
 #include "models/diffussion/ddpm_unet.h"
@@ -40,14 +40,23 @@ int main(int argc, char** argv) {
     auto cfg = toml::parse(cfg_file_path);
 
     // construct model input
-    cv::Mat input_image(cv::Size(128, 128), CV_32FC3);
-    cv::randn(input_image, 0.0, 1.0);
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    float mean = 0.0; // 均值
+    float stddev = 1.0; // 标准差
+
+    // 创建正态分布对象
+    std::normal_distribution<float> distribution(mean, stddev);
+    std::vector<float> xt(128 * 128 * 3);
+    for (auto& val : xt) {
+        val = distribution(gen);
+    }
     std_ddpm_unet_input model_input;
-    model_input.xt = input_image;
+    model_input.xt = xt;
     model_input.timestep = 1000;
     std_ddpm_unet_output model_output;
 
-    // construct enhancementor
+    // construct ddpm unet
     auto unet = std::make_unique<DDPMUNet<std_ddpm_unet_input, std_ddpm_unet_output > >();
     unet->init(cfg);
     if (!unet->is_successfully_initialized()) {
@@ -57,7 +66,6 @@ int main(int argc, char** argv) {
 
     // run benchmark
     int loop_times = 100;
-    LOG(INFO) << "input test image size: " << input_image.size();
     LOG(INFO) << "ddpm unet run loop times: " << loop_times;
     LOG(INFO) << "start ddpm unet benchmark at: " << Timestamp::now().to_format_str();
     auto ts = Timestamp::now();
@@ -68,7 +76,6 @@ int main(int argc, char** argv) {
     LOG(INFO) << "benchmark ends at: " << Timestamp::now().to_format_str();
     LOG(INFO) << "cost time: " << cost_time << "s, fps: " << loop_times / cost_time;
     LOG(INFO) << model_output.predict_noise.size();
-    LOG(INFO) << model_output.predict_noise.channels();
 
     return 0;
 }

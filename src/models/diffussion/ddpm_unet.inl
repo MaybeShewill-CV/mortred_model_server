@@ -160,10 +160,9 @@ class DDPMUNet<INPUT, OUTPUT>::Impl {
     // trt net params
     TRTParams _m_trt_params;
 
-    // input image size
-    cv::Size _m_input_size_user = cv::Size();
     //　input node size
-    cv::Size _m_input_size_host = cv::Size();
+    cv::Size _m_input_size = cv::Size();
+    int _m_input_channels = 0;
 
     // init flag
     bool _m_successfully_initialized = false;
@@ -318,8 +317,9 @@ StatusCode DDPMUNet<INPUT, OUTPUT>::Impl::init_trt(const toml::value& cfg) {
         LOG(ERROR) << "not support dynamic input tensors";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    _m_input_size_host.height = _m_trt_params.input_xt_binding.dims().d[2];
-    _m_input_size_host.width = _m_trt_params.input_xt_binding.dims().d[3];
+    _m_input_channels = _m_trt_params.input_xt_binding.dims().d[1];
+    _m_input_size.height = _m_trt_params.input_xt_binding.dims().d[2];
+    _m_input_size.width = _m_trt_params.input_xt_binding.dims().d[3];
 
     input_node_name = "t";
     successfully_bind = TrtHelper::setup_engine_binding(_m_trt_params.engine, input_node_name, _m_trt_params.input_t_binding);
@@ -408,13 +408,12 @@ StatusCode DDPMUNet<INPUT, OUTPUT>::Impl::trt_run(const INPUT& in, OUTPUT& out) 
 
     // preprocess input data
     auto& xt = in.xt;
-    _m_input_size_user = xt.size();
     auto& timestep = in.timestep;
 
     // h2d data transfer
     auto input_mem_size = input_xt_binding.volume() * sizeof(float);
     auto cuda_status = cudaMemcpyAsync(
-        input_xt_device, (float*)xt.data, input_mem_size, cudaMemcpyHostToDevice, cuda_stream);
+        input_xt_device, (float*)xt.data(), input_mem_size, cudaMemcpyHostToDevice, cuda_stream);
     if (cuda_status != cudaSuccess) {
         LOG(ERROR) << "copy input image memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
         return StatusCode::MODEL_RUN_SESSION_FAILED;
@@ -463,9 +462,12 @@ StatusCode DDPMUNet<INPUT, OUTPUT>::Impl::trt_run(const INPUT& in, OUTPUT& out) 
 template <typename INPUT, typename OUTPUT>
 ddpm_unet_impl::internal_output DDPMUNet<INPUT, OUTPUT>::Impl::trt_decode_output() {
     // fetch origin predict noise
-    cv::Mat predict_noise(_m_input_size_host, CV_32FC3, _m_trt_params.output_host);
+    auto elem_counts = _m_input_size.area() * _m_input_channels;
     std_ddpm_unet_output out;
-    out.predict_noise = predict_noise;
+    out.predict_noise.resize(elem_counts);
+    for (auto idx = 0; idx < elem_counts; ++idx) {
+        out.predict_noise[idx] = _m_trt_params.output_host[idx];
+    }
     return out;
 }
 

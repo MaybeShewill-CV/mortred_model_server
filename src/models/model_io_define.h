@@ -146,15 +146,25 @@ using std_mde_output = mde_output;
 namespace diffusion {
 
 struct ddpm_unet_input {
-    cv::Mat xt;
+    std::vector<float> xt;
     int64_t timestep;
 };
 
 struct ddpm_unet_output {
-    cv::Mat predict_noise;
+    std::vector<float> predict_noise;
 };
 using std_ddpm_unet_input = ddpm_unet_input;
 using std_ddpm_unet_output = ddpm_unet_output;
+
+struct ddpm_sample_input {
+    cv::Size sample_size;
+    int64_t timestep;
+};
+struct ddpm_sample_output {
+    cv::Mat out_image;
+};
+using std_ddpm_input = ddpm_unet_input;
+using std_ddpm_output = ddpm_unet_output;
 
 }
 
