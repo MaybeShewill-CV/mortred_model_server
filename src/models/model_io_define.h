@@ -159,12 +159,14 @@ using std_ddpm_unet_output = ddpm_unet_output;
 struct ddpm_sample_input {
     cv::Size sample_size;
     int64_t timestep;
+    int channels = 3;
+    bool save_all_mid_results = true;
 };
 struct ddpm_sample_output {
-    cv::Mat out_image;
+    std::vector<cv::Mat> out_images;
 };
-using std_ddpm_input = ddpm_unet_input;
-using std_ddpm_output = ddpm_unet_output;
+using std_ddpm_input = ddpm_sample_input;
+using std_ddpm_output = ddpm_sample_output;
 
 }
 
