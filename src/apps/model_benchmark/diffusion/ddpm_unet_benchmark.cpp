@@ -42,10 +42,8 @@ int main(int argc, char** argv) {
     // construct model input
     std::random_device rd;
     std::mt19937 gen(rd());
-    float mean = 0.0; // 均值
-    float stddev = 1.0; // 标准差
-
-    // 创建正态分布对象
+    float mean = 0.0;
+    float stddev = 1.0;
     std::normal_distribution<float> distribution(mean, stddev);
     std::vector<float> xt(128 * 128 * 3);
     for (auto& val : xt) {
@@ -75,7 +73,6 @@ int main(int argc, char** argv) {
     auto cost_time = Timestamp::now() - ts;
     LOG(INFO) << "benchmark ends at: " << Timestamp::now().to_format_str();
     LOG(INFO) << "cost time: " << cost_time << "s, fps: " << loop_times / cost_time;
-    LOG(INFO) << model_output.predict_noise.size();
 
     return 0;
 }
