@@ -318,7 +318,7 @@ StatusCode DDPMSampler<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")
     // precompute beta and alpha_cumprod
     if (_m_beta_schedule == beta_schedule_type::linear) {
         _m_betas = linear_beta_schedule(_m_timesteps, _m_beta_start, _m_beta_end);
-    } else if (_m_beta_schedule == beta_schedule_type::cos) {
+    } else if (_m_beta_schedule == beta_schedule_type::cosine) {
         _m_betas = cos_beta_schedule(_m_timesteps, 0.008);
     } else if (_m_beta_schedule == beta_schedule_type::sigmoid) {
         _m_betas = sigmoid_beta_schedule(_m_timesteps);
