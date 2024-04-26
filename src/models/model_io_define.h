@@ -161,6 +161,7 @@ struct ddpm_sample_input {
     int64_t timestep;
     int channels = 3;
     bool save_all_mid_results = true;
+    bool use_fixed_noise_for_psample = false;
 };
 struct ddpm_sample_output {
     std::vector<cv::Mat> out_images;
