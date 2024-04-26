@@ -11,6 +11,7 @@
 
 #include <opencv2/opencv.hpp>
 #include "glog/logging.h"
+#include "onnxruntime/onnxruntime_cxx_api.h"
 #include "TensorRT-8.6.1.6/NvInferRuntime.h"
 #include "TensorRT-8.6.1.6/NvInferPlugin.h"
 
@@ -82,9 +83,8 @@ class DDPMUNet<INPUT, OUTPUT>::Impl {
      *
      */
     ~Impl() {
-        if (_m_backend_type == MNN) {
-            // todo implement MNN infer
-        }
+        if (_m_backend_type == ONNX) {}
+
         if (_m_backend_type == TRT) {
             cudaFreeHost(_m_trt_params.output_host);
             cudaStreamDestroy(_m_trt_params.cuda_stream);
@@ -148,9 +148,26 @@ class DDPMUNet<INPUT, OUTPUT>::Impl {
         float* output_host = nullptr;
     };
 
+    struct ONNXParams {
+        std::string model_file_path;
+        // ort env params
+        int thread_nums = 1;
+        std::string device = "cuda";
+        int device_id = 0;
+        Ort::Env env;
+        Ort::SessionOptions session_options;
+        Ort::Session* session = nullptr;
+        Ort::AllocatorWithDefaultOptions allocator;
+        // input/output node info
+        std::vector<const char*> input_node_names;
+        std::vector<std::vector<int64_t>> input_node_shapes;
+        std::vector<const char*> output_node_names;
+        std::vector<std::vector<int64_t>> output_node_shapes;
+    };
+
     enum BackendType {
         TRT = 0,
-        MNN = 1,
+        ONNX = 1,
     };
 
   private:
@@ -159,6 +176,9 @@ class DDPMUNet<INPUT, OUTPUT>::Impl {
 
     // trt net params
     TRTParams _m_trt_params;
+
+    // onnx net params
+    ONNXParams _m_onnx_params;
 
     //　input node size
     cv::Size _m_input_size = cv::Size();
@@ -188,6 +208,21 @@ class DDPMUNet<INPUT, OUTPUT>::Impl {
      * @return
      */
     ddpm_unet_impl::internal_output trt_decode_output();
+
+    /***
+     *
+     * @param config
+     * @return
+     */
+    StatusCode init_onnx(const toml::value& cfg);
+
+    /***
+     *
+     * @param in
+     * @param out
+     * @return
+     */
+    StatusCode onnx_run(const INPUT& in, OUTPUT& out);
 };
 
 /***
@@ -204,19 +239,24 @@ StatusCode DDPMUNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")) &
 
     // init ddpm-unet configs
     toml::value model_cfg;
-    if (_m_backend_type == MNN) {
-        model_cfg = config.at("DDPM_UNET_MNN");
-    } else {
+    if (_m_backend_type == TRT) {
         model_cfg = config.at("DDPM_UNET_TRT");
+    } else if (_m_backend_type == ONNX) {
+        model_cfg = config.at("DDPM_UNET_ONNX");
+    } else {
+        LOG(ERROR) << "not supported backend type: " << _m_backend_type;
+        return StatusCode::MODEL_INIT_FAILED;
     }
     auto model_file_name = FilePathUtil::get_file_name(model_cfg.at("model_file_path").as_string());
 
     StatusCode init_status;
-    if (_m_backend_type == MNN) {
-        // todo implement mnn inference
-        return StatusCode::MODEL_INIT_FAILED;
-    } else {
+    if (_m_backend_type == TRT) {
         init_status = init_trt(model_cfg);
+    } else if (_m_backend_type == ONNX){
+        init_status = init_onnx(model_cfg);
+    } else {
+        LOG(ERROR) << "not supported backend type: " << _m_backend_type;
+        return StatusCode::MODEL_INIT_FAILED;
     }
 
     if (init_status == StatusCode::OK) {
@@ -239,11 +279,13 @@ StatusCode DDPMUNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")) &
 template <typename INPUT, typename OUTPUT>
 StatusCode DDPMUNet<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     StatusCode infer_status;
-    if (_m_backend_type == MNN) {
-        // todo implement mnn inference
-        return StatusCode::MODEL_RUN_SESSION_FAILED;
-    } else {
+    if (_m_backend_type == TRT) {
         infer_status = trt_run(in, out);
+    } else if (_m_backend_type == ONNX) {
+        infer_status = onnx_run(in, out);
+    } else {
+        LOG(ERROR) << "not supported backend type: " << _m_backend_type;
+        infer_status = StatusCode::MODEL_RUN_SESSION_FAILED;
     }
     return infer_status;
 }
@@ -469,6 +511,130 @@ ddpm_unet_impl::internal_output DDPMUNet<INPUT, OUTPUT>::Impl::trt_decode_output
         out.predict_noise[idx] = _m_trt_params.output_host[idx];
     }
     return out;
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param cfg
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+StatusCode DDPMUNet<INPUT, OUTPUT>::Impl::init_onnx(const toml::value &cfg) {
+    // ort env and memo info
+    _m_onnx_params.env = Ort::Env(ORT_LOGGING_LEVEL_ERROR, "");
+
+    // init session
+    _m_onnx_params.model_file_path = cfg.at("model_file_path").as_string();
+    if (!FilePathUtil::is_file_exist(_m_onnx_params.model_file_path)) {
+        LOG(ERROR) << "ddpm denoise model file path: " << _m_onnx_params.model_file_path << " not exists";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    bool use_gpu = false;
+    _m_onnx_params.device = cfg.at("compute_backend").as_string();
+    if (std::strcmp(_m_onnx_params.device.c_str(), "cuda") == 0) {
+        use_gpu = true;
+        _m_onnx_params.device_id = static_cast<int>(cfg.at("gpu_device_id").as_integer());
+    }
+    _m_onnx_params.thread_nums = cfg.at("model_threads_num").as_integer();
+    _m_onnx_params.session_options = Ort::SessionOptions();
+    _m_onnx_params.session_options.SetIntraOpNumThreads(_m_onnx_params.thread_nums);
+    _m_onnx_params.session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+    _m_onnx_params.session_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+    if (use_gpu) {
+        OrtCUDAProviderOptions cuda_options;
+        cuda_options.device_id = _m_onnx_params.device_id;
+        cuda_options.cudnn_conv_algo_search = OrtCudnnConvAlgoSearchDefault;
+        cuda_options.gpu_mem_limit = 0;
+        cuda_options.arena_extend_strategy = 1;
+        cuda_options.do_copy_in_default_stream = 1;
+        cuda_options.has_user_compute_stream = 0;
+        cuda_options.default_memory_arena_cfg = nullptr;
+        _m_onnx_params.session_options.AppendExecutionProvider_CUDA(cuda_options);
+        _m_onnx_params.session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+    }
+    _m_onnx_params.session = new Ort::Session(_m_onnx_params.env, _m_onnx_params.model_file_path.c_str(), _m_onnx_params.session_options);
+
+    // init input/output nodes info
+    auto input_nodes_counts = _m_onnx_params.session->GetInputCount();
+    for (size_t i = 0 ; i < input_nodes_counts ; i++) {
+        auto input_node_name = strdup(_m_onnx_params.session->GetInputNameAllocated(i, _m_onnx_params.allocator).get());
+        auto input_node_shape = _m_onnx_params.session->GetInputTypeInfo(i).GetTensorTypeAndShapeInfo().GetShape();
+        _m_onnx_params.input_node_names.push_back(std::move(input_node_name));
+        _m_onnx_params.input_node_shapes.push_back(input_node_shape);
+        if (std::strcmp(input_node_name, "xt") == 0) {
+            _m_input_channels = input_node_shape[1];
+            _m_input_size.height = input_node_shape[2];
+            _m_input_size.width = input_node_shape[3];
+        }
+    }
+
+    auto output_nodes_counts = _m_onnx_params.session->GetOutputCount();
+    for (size_t i = 0 ; i < output_nodes_counts ; i++) {
+        auto output_node_name = strdup(_m_onnx_params.session->GetOutputNameAllocated(i, _m_onnx_params.allocator).get());
+        auto output_node_shape = _m_onnx_params.session->GetOutputTypeInfo(i).GetTensorTypeAndShapeInfo().GetShape();
+        _m_onnx_params.output_node_names.push_back(std::move(output_node_name));
+        _m_onnx_params.output_node_shapes.push_back(output_node_shape);
+    }
+
+    return StatusCode::OK;
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param in
+ * @param out
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+StatusCode DDPMUNet<INPUT, OUTPUT>::Impl::onnx_run(const INPUT &in, OUTPUT &out) {
+    // init sess
+    auto& sess = _m_onnx_params.session;
+    auto& input_node_shapes = _m_onnx_params.input_node_shapes;
+    auto& input_node_names = _m_onnx_params.input_node_names;
+    auto& output_node_shapes = _m_onnx_params.output_node_shapes;
+    auto& output_node_names = _m_onnx_params.output_node_names;
+
+    // preprocess input data
+    auto& xt = in.xt;
+    auto& timestep = in.timestep;
+
+    // prepare input tensors
+    auto memory_info = Ort::MemoryInfo::CreateCpu(
+        OrtAllocatorType::OrtDeviceAllocator, OrtMemType::OrtMemTypeDefault);
+    auto input_xt_tensor = Ort::Value::CreateTensor<float>(
+        memory_info, (float*)xt.data(), xt.size(), input_node_shapes[0].data(), input_node_shapes[0].size());
+    std::vector<int64_t> t_vec = {timestep};
+    auto input_t_tensor = Ort::Value::CreateTensor<int64_t >(
+        memory_info, (int64_t *)t_vec.data(), t_vec.size(), input_node_shapes[1].data(), input_node_shapes[1].size());
+    std::vector<Ort::Value> input_tensors;
+    input_tensors.push_back(std::move(input_xt_tensor));
+    input_tensors.push_back(std::move(input_t_tensor));
+
+    // run session
+    auto output_tensors = sess->Run(
+        Ort::RunOptions{nullptr}, input_node_names.data(), input_tensors.data(), input_tensors.size(),
+        output_node_names.data() , output_node_names.size());
+
+    // copy output tensor values
+    ddpm_unet_impl::internal_output internal_out;
+    auto& out_predict_tensor = output_tensors[0];
+    int out_predict_tensor_size = 1;
+    for (auto &val : out_predict_tensor.GetTensorTypeAndShapeInfo().GetShape()) {
+        out_predict_tensor_size *= val;
+    }
+    internal_out.predict_noise.resize(out_predict_tensor_size);
+    for (auto idx = 0; idx < out_predict_tensor_size; ++idx) {
+        internal_out.predict_noise[idx] = out_predict_tensor.template GetTensorMutableData<float>()[idx];
+    }
+
+    // transform output
+    out = ddpm_unet_impl::transform_output<OUTPUT>(internal_out);
+
+    return StatusCode::OK;
 }
 
 /************* Export Function Sets *************/

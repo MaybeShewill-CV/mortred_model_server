@@ -14,8 +14,6 @@
 #include <opencv2/opencv.hpp>
 #include "glog/logging.h"
 #include "indicators/indicators.hpp"
-#include "TensorRT-8.6.1.6/NvInferPlugin.h"
-#include "TensorRT-8.6.1.6/NvInferRuntime.h"
 
 #include "common/base64.h"
 #include "common/cv_utils.h"
@@ -94,7 +92,7 @@ std::vector<double> linspace(const double start, const double end, const int num
      * @param vec_size
      * @return
  */
-std::vector<float> generate_random_norm_vector(int64_t vec_size, float mean=0.0, float stddev=1.0) {
+std::vector<float> generate_random_norm_vector(const size_t vec_size, float mean=0.0, float stddev=1.0) {
     std::random_device rd;
     std::default_random_engine gen(rd());
     std::normal_distribution<float> distribution(mean, stddev);
@@ -175,6 +173,7 @@ class DDPMSampler<INPUT, OUTPUT>::Impl {
     double _m_beta_start = 0.0;
     double _m_beta_end = 0.0;
     std::unique_ptr<indicators::BlockProgressBar> _m_p_sample_bar;
+    std::vector<float> _m_fixed_noise_for_psample;
 
     // denoise schedule
     std::unique_ptr<DenoiseModelPtr> _m_denoise_net;
@@ -285,9 +284,10 @@ class DDPMSampler<INPUT, OUTPUT>::Impl {
      * @param xt
      * @param t
      * @param is_last_step
+     * @param use_fixed_noise
      * @return
      */
-    std::vector<float> p_sample_once(const std::vector<float>& xt, int64_t t, bool is_last_step=false);
+    std::vector<float> p_sample_once(const std::vector<float>& xt, int64_t t, bool is_last_step=false, bool use_fixed_noise=false);
 
     /***
      *
@@ -295,10 +295,12 @@ class DDPMSampler<INPUT, OUTPUT>::Impl {
      * @param timesteps
      * @param channels
      * @param save_all_mid_results
+     * @param use_fixed_noise
      * @return
      */
     std::vector<std::vector<float> > p_sample(
-        const cv::Size& size, int64_t timesteps, int channels=3, bool save_all_mid_results=false);
+        const cv::Size& size, int64_t timesteps, int channels=3,
+        bool save_all_mid_results=false, bool use_fixed_noise=false);
 };
 
 /***
@@ -371,16 +373,18 @@ StatusCode DDPMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     auto sample_timestep = transformed_input.timestep;
     auto sample_channels = transformed_input.channels;
     auto save_all_mid_results = transformed_input.save_all_mid_results;
+    auto use_fixed_noise_for_psample = transformed_input.use_fixed_noise_for_psample;
 
     // p-sample loop
-    auto mid_sample_results = p_sample(sample_size, sample_timestep, sample_channels, save_all_mid_results);
+    auto mid_sample_results = p_sample(sample_size, sample_timestep, sample_channels, save_all_mid_results, use_fixed_noise_for_psample);
 
     // transform sampled results into cv::Mat
     ddpm_sampler_impl::internal_output internal_out;
     StatusCode sample_status = StatusCode::OK;
     for (auto& img_data : mid_sample_results) {
         // rescale image data to [0, 255]
-        std::transform(img_data.begin(), img_data.end(), img_data.begin(), [](float x) { return (x + 1.0f) * 0.5f * 255.0f; });
+        std::transform(img_data.begin(), img_data.end(), img_data.begin(), [](float x) { return (x + 1.0f) * 0.5f * 255.0f + 0.5; });
+        std::transform(img_data.begin(), img_data.end(), img_data.begin(), [](float x) { return std::clamp(x, 0.0f, 255.0f); });
         auto hwc_data = CvUtils::convert_to_hwc_vec<float>(img_data, sample_channels, sample_size.height, sample_size.width);
         cv::Mat mid_image;
         if (sample_channels == 1) {
@@ -435,10 +439,12 @@ std::vector<float> DDPMSampler<INPUT, OUTPUT>::Impl::compute_predict_mean(
  * @param xt
  * @param t
  * @param is_last_step
+ * @param use_fixed_noise
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-std::vector<float> DDPMSampler<INPUT, OUTPUT>::Impl::p_sample_once(const std::vector<float>& xt, int64_t t, bool is_last_step) {
+std::vector<float> DDPMSampler<INPUT, OUTPUT>::Impl::p_sample_once(
+    const std::vector<float>& xt, int64_t t, bool is_last_step, bool use_fixed_noise) {
     // compute predict noise
     std_ddpm_unet_input denoise_in;
     denoise_in.xt = xt;
@@ -458,8 +464,6 @@ std::vector<float> DDPMSampler<INPUT, OUTPUT>::Impl::p_sample_once(const std::ve
         std::transform(predict_mean.begin(), predict_mean.end(), predict_mean.begin(), [](float x) { return std::clamp(x, -1.0f, 1.0f); });
         return predict_mean;
     } else {
-        // generate random noise
-        std::vector<float> noise = ddpm_sampler_impl::generate_random_norm_vector(static_cast<int64_t >(predict_mean.size()));
         // compute posterior_variance
         auto beta_t = _m_betas[t];
         auto alpha_t_cumprod = _m_alpha_cumprod[t];
@@ -469,9 +473,16 @@ std::vector<float> DDPMSampler<INPUT, OUTPUT>::Impl::p_sample_once(const std::ve
         }
         auto posterior_variance = beta_t * (1.0 - alpha_t_cumprod_pre) / (1.0 - alpha_t_cumprod);
         // compute sample result
-        std::vector<float> result(noise.size());
+        std::vector<float> result(xt.size());
         auto scale = std::sqrt(posterior_variance);
-        std::transform(noise.begin(), noise.end(), result.begin(), [scale](double x) { return x * scale; });
+        if (use_fixed_noise) {
+            std::transform(_m_fixed_noise_for_psample.begin(), _m_fixed_noise_for_psample.end(), result.begin(),
+                           [scale](double x) { return x * scale; });
+        } else {
+            // generate random noise
+            std::vector<float> noise = ddpm_sampler_impl::generate_random_norm_vector(predict_mean.size());
+            std::transform(noise.begin(), noise.end(), result.begin(), [scale](double x) { return x * scale; });
+        }
         std::transform(predict_mean.begin(), predict_mean.end(), result.begin(), result.begin(), std::plus<>());
         return result;
     }
@@ -485,14 +496,18 @@ std::vector<float> DDPMSampler<INPUT, OUTPUT>::Impl::p_sample_once(const std::ve
  * @param timesteps
  * @param channels
  * @param save_all_mid_results
+ * @param use_fixed_noise_for_psample
  * @return
  */
 template <typename INPUT, typename OUTPUT>
 std::vector<std::vector<float> > DDPMSampler<INPUT, OUTPUT>::Impl::p_sample(
-    const cv::Size &size, int64_t timesteps, int channels, bool save_all_mid_results) {
+    const cv::Size &size, int64_t timesteps, int channels, bool save_all_mid_results, bool use_fixed_noise_for_psample) {
     // construct xt random noise
     std::vector<float> xt = ddpm_sampler_impl::generate_random_norm_vector(size.area() * channels);
     std::vector<std::vector<float> > mid_sample_results;
+    if (use_fixed_noise_for_psample) {
+        _m_fixed_noise_for_psample = ddpm_sampler_impl::generate_random_norm_vector(xt.size());
+    }
 
     // loop sample
     std::vector<double> steps = ddpm_sampler_impl::linspace(0.0, static_cast<double>(timesteps) - 1.0, static_cast<int>(timesteps));
@@ -500,7 +515,7 @@ std::vector<std::vector<float> > DDPMSampler<INPUT, OUTPUT>::Impl::p_sample(
     for (auto idx = 0; idx < steps.size(); ++idx) {
         auto t_step = static_cast<int64_t >(steps[idx]);
         bool is_last = t_step == 0;
-        xt = p_sample_once(xt, t_step, is_last);
+        xt = p_sample_once(xt, t_step, is_last, use_fixed_noise_for_psample);
         if (save_all_mid_results) {
             mid_sample_results.push_back(xt);
         } else {
