@@ -347,6 +347,7 @@ StatusCode DDPMSampler<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")
     _m_p_sample_bar->set_option(indicators::option::FontStyles{std::vector<indicators::FontStyle>{indicators::FontStyle::bold}});
     _m_p_sample_bar->set_option(indicators::option::ShowElapsedTime{true});
     _m_p_sample_bar->set_option(indicators::option::ShowPercentage{true});
+    _m_p_sample_bar->set_option(indicators::option::ShowRemainingTime(true));
 
     if (init_status == StatusCode::OK) {
         _m_successfully_initialized = true;

@@ -10,7 +10,8 @@
 #include <random>
 
 #include <glog/logging.h>
-#include <toml/toml.hpp>
+#include "toml/toml.hpp"
+#include "indicators/indicators.hpp"
 
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
@@ -33,16 +34,15 @@ int main(int argc, char** argv) {
         return -1;
     }
 
+    // prepare input params
     std::string cfg_file_path = argv[1];
     LOG(INFO) << "config file path: " << cfg_file_path;
-
     if (!FilePathUtil::is_file_exist(cfg_file_path)) {
         LOG(INFO) << "config file: " << cfg_file_path << " not exist";
         return -1;
     }
 
     std::string input_image_path;
-
     if (argc == 3) {
         input_image_path = argv[2];
         LOG(INFO) << "input test image path: " << input_image_path;
@@ -50,23 +50,32 @@ int main(int argc, char** argv) {
         input_image_path = "../demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG";
         LOG(INFO) << "use default input test image path: " << input_image_path;
     }
-
     if (!FilePathUtil::is_file_exist(input_image_path)) {
         LOG(INFO) << "test input image file: " << input_image_path << " not exist";
         return -1;
     }
 
+    // init progress bar
+    auto progress_bar = std::make_unique<indicators::BlockProgressBar>();
+    progress_bar->set_option(indicators::option::BarWidth{80});
+    progress_bar->set_option(indicators::option::Start{"["});
+    progress_bar->set_option(indicators::option::End{"]"});
+    progress_bar->set_option(indicators::option::ForegroundColor{indicators::Color::white});
+    progress_bar->set_option(indicators::option::FontStyles{std::vector<indicators::FontStyle>{indicators::FontStyle::bold}});
+    progress_bar->set_option(indicators::option::ShowElapsedTime{true});
+    progress_bar->set_option(indicators::option::ShowPercentage{true});
+    progress_bar->set_option(indicators::option::ShowRemainingTime(true));
+
     // construct model input
     cv::Mat input_image = cv::imread(input_image_path, cv::IMREAD_COLOR);
     struct mat_input model_input {
-            input_image
+        input_image
     };
     std_classification_output model_output{};
     // construct detector
     auto classifier = create_densenet_classifier<mat_input, std_classification_output>("densenet");
     auto cfg = toml::parse(cfg_file_path);
     classifier->init(cfg);
-
     if (!classifier->is_successfully_initialized()) {
         LOG(INFO) << "densenet classifier init failed";
         return -1;
@@ -78,10 +87,11 @@ int main(int argc, char** argv) {
     LOG(INFO) << "classifier run loop times: " << loop_times;
     LOG(INFO) << "start densenet benchmark at: " << Timestamp::now().to_format_str();
     auto ts = Timestamp::now();
-
     for (int i = 0; i < loop_times; ++i) {
         classifier->run(model_input, model_output);
+        progress_bar->set_progress((static_cast<float>(i) / static_cast<float>(loop_times)) * 100.0f);
     }
+    progress_bar->mark_as_completed();
 
     auto cost_time = Timestamp::now() - ts;
     LOG(INFO) << "benchmark ends at: " << Timestamp::now().to_format_str();
