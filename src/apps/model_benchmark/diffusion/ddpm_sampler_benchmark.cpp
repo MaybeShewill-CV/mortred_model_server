@@ -25,9 +25,9 @@ using jinq::models::diffusion::DDPMSampler;
 
 int main(int argc, char** argv) {
 
-    if (argc != 2 && argc != 3 && argc != 4) {
+    if (argc != 2 && argc != 3 && argc != 4 && argc != 5) {
         LOG(ERROR) << "wrong usage";
-        LOG(INFO) << "exe config_file_path [save_dir] [save_all_mid_results(default: true)]";
+        LOG(INFO) << "exe config_file_path [save_dir] [save_all_mid_results(default: true)] [use_fixed_noise(default: false)]";
         return -1;
     }
 
@@ -45,9 +45,14 @@ int main(int argc, char** argv) {
         save_dir = argv[2];
     }
 
-    bool save_all_mid_results = true;
-    if (argc == 4) {
+    bool save_all_mid_results = false;
+    if (argc >= 4) {
         save_all_mid_results = std::stoi(argv[3]) == 1;
+    }
+
+    bool use_fixed_noise = false;
+    if (argc >= 5) {
+        use_fixed_noise = std::stoi(argv[4]) == 1;
     }
 
     // construct model input
@@ -56,6 +61,7 @@ int main(int argc, char** argv) {
     model_input.timestep = 1000;
     model_input.channels = 3;
     model_input.save_all_mid_results = save_all_mid_results;
+    model_input.use_fixed_noise_for_psample = use_fixed_noise;
     std_ddpm_output model_output;
 
     // construct ddpm unet
