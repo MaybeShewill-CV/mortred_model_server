@@ -364,6 +364,7 @@ StatusCode DDIMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     auto sample_steps = transformed_input.sample_steps;
     auto save_all_mid_results = transformed_input.save_all_mid_results;
     auto xt_data = transformed_input.xt_data;
+    auto eta = transformed_input.eta;
 
     // p-sample loop
     std::vector<float> xt;
@@ -372,7 +373,7 @@ StatusCode DDIMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     } else {
         xt = std::vector<float>(xt_data, xt_data + sample_size.area() * sample_channels);
     }
-    auto mid_sample_results = p_sample(xt, total_steps, sample_steps, save_all_mid_results);
+    auto mid_sample_results = p_sample(xt, total_steps, sample_steps, eta, save_all_mid_results);
 
     // transform sampled results into cv::Mat
     ddim_sampler_impl::internal_output internal_out;

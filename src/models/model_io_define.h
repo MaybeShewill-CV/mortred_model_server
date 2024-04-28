@@ -176,6 +176,7 @@ struct ddim_sample_input {
     int channels = 3;
     bool save_all_mid_results = true;
     float* xt_data = nullptr;
+    float eta = 1.0f;
 };
 struct ddim_sample_output {
     std::vector<cv::Mat> sampled_images;

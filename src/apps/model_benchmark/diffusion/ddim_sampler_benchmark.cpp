@@ -45,7 +45,7 @@ int main(int argc, char** argv) {
         save_dir = argv[2];
     }
 
-    int sample_steps = 25;
+    int sample_steps = 10;
     if (argc >= 4) {
         sample_steps = std::stoi(argv[3]);
     }
@@ -63,6 +63,7 @@ int main(int argc, char** argv) {
     model_input.sample_steps = sample_steps;
     model_input.channels = 3;
     model_input.save_all_mid_results = save_all_mid_results;
+    model_input.eta = 1.0f;
 
     // construct ddpm unet
     auto sampler = std::make_unique<DDIMSampler<std_ddim_input, std_ddim_output > >();
