@@ -158,7 +158,7 @@ using std_ddpm_unet_output = ddpm_unet_output;
 
 struct ddpm_sample_input {
     cv::Size sample_size;
-    int64_t timestep;
+    int timestep;
     int channels = 3;
     bool save_all_mid_results = true;
     bool use_fixed_noise_for_psample = false;
@@ -168,6 +168,21 @@ struct ddpm_sample_output {
 };
 using std_ddpm_input = ddpm_sample_input;
 using std_ddpm_output = ddpm_sample_output;
+
+struct ddim_sample_input {
+    cv::Size sample_size;
+    int total_steps;
+    int sample_steps;
+    int channels = 3;
+    bool save_all_mid_results = true;
+    float* xt_data = nullptr;
+};
+struct ddim_sample_output {
+    std::vector<cv::Mat> sampled_images;
+    std::vector<cv::Mat> predicted_x0;
+};
+using std_ddim_input = ddim_sample_input;
+using std_ddim_output = ddim_sample_output;
 
 }
 
