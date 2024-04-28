@@ -5,8 +5,8 @@
  * Date: 24-4-23
  ************************************************/
 
-#ifndef MORTRED_MODEL_SERVER_DDPMSAMPLER_H
-#define MORTRED_MODEL_SERVER_DDPMSAMPLER_H
+#ifndef MORTRED_MODEL_SERVER_DDPM_SAMPLER_H
+#define MORTRED_MODEL_SERVER_DDPM_SAMPLER_H
 
 #include <memory>
 
@@ -78,4 +78,4 @@ class DDPMSampler : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
 
 #include "ddpm_sampler.inl"
 
-#endif // MORTRED_MODEL_SERVER_DDPMSAMPLER_H
+#endif // MORTRED_MODEL_SERVER_DDPM_SAMPLER_H
