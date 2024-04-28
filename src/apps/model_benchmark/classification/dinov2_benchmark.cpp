@@ -76,7 +76,7 @@ int main(int argc, char** argv) {
     auto cfg = toml::parse(cfg_file_path);
     classifier->init(cfg);
     if (!classifier->is_successfully_initialized()) {
-        LOG(INFO) << "mobilenetv2 classifier init failed";
+        LOG(INFO) << "dinov2 feature extractor init failed";
         return -1;
     }
 
@@ -84,11 +84,11 @@ int main(int argc, char** argv) {
     int loop_times = 100;
     LOG(INFO) << "input test image size: " << input_image.size();
     LOG(INFO) << "classifier run loop times: " << loop_times;
-    LOG(INFO) << "start mobilenetv2 benchmark at: " << Timestamp::now().to_format_str();
+    LOG(INFO) << "start dinov2 benchmark at: " << Timestamp::now().to_format_str();
     auto ts = Timestamp::now();
     for (int i = 0; i < loop_times; ++i) {
         classifier->run(model_input, model_output);
-        progress_bar->set_progress((static_cast<float>(i) / static_cast<float>(loop_times)) * 100.0f);
+        progress_bar->set_progress((static_cast<float>(i + 1) / static_cast<float>(loop_times)) * 100.0f);
     }
     progress_bar->mark_as_completed();
 

@@ -89,7 +89,7 @@ int main(int argc, char** argv) {
     auto ts = Timestamp::now();
     for (int i = 0; i < loop_times; ++i) {
         classifier->run(model_input, model_output);
-        progress_bar->set_progress((static_cast<float>(i) / static_cast<float>(loop_times)) * 100.0f);
+        progress_bar->set_progress((static_cast<float>(i + 1) / static_cast<float>(loop_times)) * 100.0f);
     }
     progress_bar->mark_as_completed();
 
