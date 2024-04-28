@@ -87,16 +87,14 @@ int main(int argc, char** argv) {
 
     // save sampled images
     if (save_all_mid_results) {
-        for (auto idx = 0; idx < model_input.sample_steps; ++idx) {
-            auto image = model_output.sampled_images[idx];
-            std::string save_name = "sample-step-" + std::to_string(model_input.sample_steps - 1 - idx) + ".png";
-            std::string save_path = FilePathUtil::concat_path(save_dir, save_name);
-            cv::imwrite(save_path, image);
-            image = model_output.predicted_x0[idx];
-            save_name = "predict_x0-step-" + std::to_string(model_input.sample_steps - 1 - idx) + ".png";
-            save_path = FilePathUtil::concat_path(save_dir, save_name);
-            cv::imwrite(save_path, image);
-        }
+        auto stacked_sampled_image = CvUtils::stack_multiple_ddpm_images(model_output.sampled_images);
+        auto stacked_predict_x0_image = CvUtils::stack_multiple_ddpm_images(model_output.predicted_x0);
+        std::string save_name = "stacked_sampled_image.png";
+        std::string save_path = FilePathUtil::concat_path(save_dir, save_name);
+        cv::imwrite(save_path, stacked_sampled_image);
+        save_name = "stacked_predict_x0_image.png";
+        save_path = FilePathUtil::concat_path(save_dir, save_name);
+        cv::imwrite(save_path, stacked_predict_x0_image);
     } else {
         auto image = model_output.sampled_images[0];
         std::string save_name = "sample-step-0.png";

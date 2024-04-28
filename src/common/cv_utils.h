@@ -497,6 +497,46 @@ public:
 
         return result;
     }
+
+    /***
+     *
+     * @param multi_images
+     * @param gap
+     * @param images_per_row
+     * @return
+     */
+    static cv::Mat stack_multiple_ddpm_images(const std::vector<cv::Mat>& multi_images, const int gap=2, const int images_per_row=8) {
+        if (multi_images.empty()) {
+            LOG(ERROR) << "input image vector is empty";
+            return cv::Mat();
+        }
+
+        int h_spacing = gap;
+        int v_spacing = gap;
+
+        int image_width = multi_images[0].cols;
+        int image_height = multi_images[0].rows;
+
+        int total_rows = std::ceil(static_cast<float>(multi_images.size()) / images_per_row); // 计算总行数
+        int total_cols = std::min(static_cast<int>(multi_images.size()), images_per_row); // 每行的列数
+
+        int big_image_width = total_cols * image_width + (total_cols - 1) * h_spacing;
+        int big_image_height = total_rows * image_height + (total_rows - 1) * v_spacing;
+
+        cv::Mat big_image = cv::Mat::zeros(big_image_height, big_image_width, multi_images[0].type());
+
+        for (size_t i = 0; i < multi_images.size(); ++i) {
+            int row = i / images_per_row;
+            int col = i % images_per_row;
+
+            int x = col * (image_width + h_spacing);
+            int y = row * (image_height + v_spacing);
+
+            multi_images[i].copyTo(big_image(cv::Rect(x, y, image_width, image_height)));
+        }
+
+        return big_image;
+    }
 };
 }
 }
