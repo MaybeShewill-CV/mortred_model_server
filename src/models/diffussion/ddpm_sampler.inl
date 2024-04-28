@@ -524,7 +524,7 @@ std::vector<std::vector<float> > DDPMSampler<INPUT, OUTPUT>::Impl::p_sample(
                 mid_sample_results.push_back(xt);
             }
         }
-        _m_p_sample_bar->set_progress((static_cast<float>(idx) / static_cast<float>(steps.size())) * 100.0f);
+        _m_p_sample_bar->set_progress((static_cast<float>(idx + 1) / static_cast<float>(steps.size())) * 100.0f);
     }
     _m_p_sample_bar->mark_as_completed();
 
