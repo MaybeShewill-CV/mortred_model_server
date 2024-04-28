@@ -5,7 +5,7 @@
  * Date: 24-4-24
  ************************************************/
 
-// ddpm-sampler benckmark tool
+// ddpm-sampler benchmark tool
 
 #include <random>
 
