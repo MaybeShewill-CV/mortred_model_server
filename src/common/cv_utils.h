@@ -12,8 +12,9 @@
 #include <random>
 
 #include <opencv2/opencv.hpp>
-#include "base64/libbase64.h"
 #include "glog/logging.h"
+
+#include "common/base64.h"
 
 namespace jinq {
 namespace common {
@@ -414,13 +415,13 @@ public:
      * @return
      */
     static cv::Mat decode_base64_str_into_cvmat(const std::string& input) {
-        char out[input.size() * 2];
-        size_t out_len = 0;
-        base64_decode(input.c_str(), input.size(), out, &out_len, 0);
-        std::vector<uchar> image_vec_data(out, out + out_len);
         cv::Mat ret;
+        if (input.size() < 10) {
+            return ret;
+        }
+        auto image_decode_string = jinq::common::Base64::base64_decode(input);
+        std::vector<uchar> image_vec_data(image_decode_string.begin(), image_decode_string.end());
         cv::imdecode(image_vec_data, cv::IMREAD_COLOR).copyTo(ret);
-
         return ret;
     }
 
@@ -433,22 +434,10 @@ public:
         if (!input.data || input.empty()) {
             return "";
         }
-
         std::vector<uchar> imencode_buffer;
         cv::imencode(".jpg", input, imencode_buffer);
-
-        char in[imencode_buffer.size() + 1];
-        in[imencode_buffer.size()] = '\0';
-
-        for (int idx = 0; idx < imencode_buffer.size(); ++idx) {
-            in[idx] = static_cast<char>(imencode_buffer[idx]);
-        }
-
-        char out[imencode_buffer.size() * 2];
-        size_t out_len = 0;
-        base64_encode(in, imencode_buffer.size(), out, &out_len, 0);
-
-        return out;
+        std::string output_image_data = jinq::common::Base64::base64_encode(imencode_buffer.data(), imencode_buffer.size());
+        return output_image_data;
     }
 
     /***
