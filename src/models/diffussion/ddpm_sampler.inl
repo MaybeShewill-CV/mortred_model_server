@@ -299,7 +299,7 @@ class DDPMSampler<INPUT, OUTPUT>::Impl {
      * @return
      */
     std::vector<std::vector<float> > p_sample(
-        const cv::Size& size, int64_t timesteps, int channels=3,
+        const cv::Size& size, int timesteps, int channels=3,
         bool save_all_mid_results=false, bool use_fixed_noise=false);
 };
 
@@ -502,7 +502,7 @@ std::vector<float> DDPMSampler<INPUT, OUTPUT>::Impl::p_sample_once(
  */
 template <typename INPUT, typename OUTPUT>
 std::vector<std::vector<float> > DDPMSampler<INPUT, OUTPUT>::Impl::p_sample(
-    const cv::Size &size, int64_t timesteps, int channels, bool save_all_mid_results, bool use_fixed_noise_for_psample) {
+    const cv::Size &size, int timesteps, int channels, bool save_all_mid_results, bool use_fixed_noise_for_psample) {
     // construct xt random noise
     std::vector<float> xt = ddpm_sampler_impl::generate_random_norm_vector(size.area() * channels);
     std::vector<std::vector<float> > mid_sample_results;
