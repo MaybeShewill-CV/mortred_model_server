@@ -65,20 +65,20 @@ int main(int argc, char** argv) {
     std_ddpm_output model_output;
 
     // construct ddpm unet
-    auto unet = std::make_unique<DDPMSampler<std_ddpm_input, std_ddpm_output > >();
-    unet->init(cfg);
-    if (!unet->is_successfully_initialized()) {
+    auto sampler = std::make_unique<DDPMSampler<std_ddpm_input, std_ddpm_output > >();
+    sampler->init(cfg);
+    if (!sampler->is_successfully_initialized()) {
         LOG(INFO) << "ddpm sampler model init failed";
         return -1;
     }
 
     // run benchmark
     int loop_times = 1;
-    LOG(INFO) << "ddpm unet run loop times: " << loop_times;
+    LOG(INFO) << "ddpm sampler run loop times: " << loop_times;
     LOG(INFO) << "start ddpm sampler benchmark at: " << Timestamp::now().to_format_str();
     auto ts = Timestamp::now();
     for (int i = 0; i < loop_times; ++i) {
-        unet->run(model_input, model_output);
+        sampler->run(model_input, model_output);
     }
     auto cost_time = Timestamp::now() - ts;
     LOG(INFO) << "benchmark ends at: " << Timestamp::now().to_format_str();
