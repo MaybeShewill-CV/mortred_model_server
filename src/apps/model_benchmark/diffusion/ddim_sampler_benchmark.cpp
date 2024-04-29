@@ -27,7 +27,8 @@ int main(int argc, char** argv) {
 
     if (argc != 2 && argc != 3 && argc != 4 && argc != 5) {
         LOG(ERROR) << "wrong usage";
-        LOG(INFO) << "exe config_file_path [save_dir] [sample_steps] [save_all_mid_results(default: true)]";
+        LOG(INFO) << "exe config_file_path [sample_size(default: 128)] [sample_steps(default: 10)] "
+                     "[save_all_mid_results(default: true)]";
         return -1;
     }
 
@@ -40,9 +41,9 @@ int main(int argc, char** argv) {
     }
     auto cfg = toml::parse(cfg_file_path);
 
-    std::string save_dir = "../demo_data/model_test_input/diffusion/ddim";
-    if (argc == 3) {
-        save_dir = argv[2];
+    int sample_size = 128;
+    if (argc >= 3) {
+        sample_size = std::stoi(argv[2]);
     }
 
     int sample_steps = 10;
@@ -50,7 +51,7 @@ int main(int argc, char** argv) {
         sample_steps = std::stoi(argv[3]);
     }
 
-    bool save_all_mid_results = false;
+    bool save_all_mid_results = true;
     if (argc >= 5) {
         save_all_mid_results = std::stoi(argv[4]) == 1;
     }
@@ -58,7 +59,7 @@ int main(int argc, char** argv) {
     // construct model input
     std_ddim_output model_output;
     std_ddim_input model_input;
-    model_input.sample_size = cv::Size(128, 128);
+    model_input.sample_size = cv::Size(sample_size, sample_size);
     model_input.total_steps = 1000;
     model_input.sample_steps = sample_steps;
     model_input.channels = 3;
@@ -86,6 +87,7 @@ int main(int argc, char** argv) {
     LOG(INFO) << "cost time: " << cost_time << "s, fps: " << loop_times / cost_time;
 
     // save sampled images
+    std::string save_dir = "../demo_data/model_test_input/diffusion/ddim";
     if (save_all_mid_results) {
         auto stacked_sampled_image = CvUtils::stack_multiple_ddpm_images(model_output.sampled_images);
         auto stacked_predict_x0_image = CvUtils::stack_multiple_ddpm_images(model_output.predicted_x0);
