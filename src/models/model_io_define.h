@@ -149,12 +149,22 @@ struct ddpm_unet_input {
     std::vector<float> xt;
     int64_t timestep;
 };
-
 struct ddpm_unet_output {
     std::vector<float> predict_noise;
 };
 using std_ddpm_unet_input = ddpm_unet_input;
 using std_ddpm_unet_output = ddpm_unet_output;
+
+struct cls_cond_ddpm_unet_input {
+    std::vector<float> xt;
+    int64_t timestep;
+    int cls_id = 0;
+};
+struct cls_cond_ddpm_unet_output {
+    std::vector<float> predict_noise;
+};
+using std_cls_cond_ddpm_unet_input = cls_cond_ddpm_unet_input;
+using std_cls_cond_ddpm_unet_output = cls_cond_ddpm_unet_output;
 
 struct ddpm_sample_input {
     cv::Size sample_size;
@@ -184,6 +194,23 @@ struct ddim_sample_output {
 };
 using std_ddim_input = ddim_sample_input;
 using std_ddim_output = ddim_sample_output;
+
+struct cls_cond_ddim_sample_input {
+    cv::Size sample_size;
+    int total_steps;
+    int sample_steps;
+    int cls_id= 0;
+    int channels = 3;
+    bool save_all_mid_results = true;
+    float* xt_data = nullptr;
+    float eta = 1.0f;
+};
+struct cls_cond_ddim_sample_output {
+    std::vector<cv::Mat> sampled_images;
+    std::vector<cv::Mat> predicted_x0;
+};
+using std_cls_cond_ddim_input = cls_cond_ddim_sample_input;
+using std_cls_cond_ddim_output = cls_cond_ddim_sample_output;
 
 }
 
