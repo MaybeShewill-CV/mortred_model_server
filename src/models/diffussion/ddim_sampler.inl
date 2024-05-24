@@ -284,11 +284,9 @@ class DDIMSampler<INPUT, OUTPUT>::Impl {
      * @param xt
      * @param t
      * @param t_next
-     * @param is_last_step
      * @return
      */
-    std::tuple<std::vector<float>, std::vector<float> > p_sample_once(
-        std::vector<float>& xt, int t, int t_next, float eta=0.0f, bool is_last_step=false);
+    std::tuple<std::vector<float>, std::vector<float> > p_sample_once(std::vector<float>& xt, int t, int t_next, float eta=0.0f);
 };
 
 /***
@@ -365,6 +363,7 @@ StatusCode DDIMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     auto save_all_mid_results = transformed_input.save_all_mid_results;
     auto xt_data = transformed_input.xt_data;
     auto eta = transformed_input.eta;
+    auto save_raw_output = transformed_input.save_raw_output;
 
     // p-sample loop
     std::vector<float> xt;
@@ -381,10 +380,17 @@ StatusCode DDIMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     for (auto& img_tuple : mid_sample_results) {
         auto predict_x0 = std::get<0>(img_tuple);
         auto predict_xt = std::get<1>(img_tuple);
+        if (save_raw_output) {
+            internal_out.raw_predicted_x0.push_back(predict_x0);
+            internal_out.raw_sampled_images.push_back(predict_xt);
+        }
         // rescale image data to [0, 255]
         for (auto idx = 0; idx < predict_x0.size(); ++idx) {
+            predict_x0[idx] = std::clamp(predict_x0[idx], -1.0f, 1.0f);
             predict_x0[idx] = (predict_x0[idx] + 1.0f) * 0.5f * 255.0f + 0.5f;
             predict_x0[idx] = std::clamp(predict_x0[idx], 0.0f, 255.0f);
+
+            predict_xt[idx] = std::clamp(predict_xt[idx], -1.0f, 1.0f);
             predict_xt[idx] = (predict_xt[idx] + 1.0f) * 0.5f * 255.0f + 0.5f;
             predict_xt[idx] = std::clamp(predict_xt[idx], 0.0f, 255.0f);
         }
@@ -444,7 +450,7 @@ std::vector<std::tuple<std::vector<float>, std::vector<float> > > DDIMSampler<IN
         auto t = steps[idx];
         bool is_last = t == 0;
         auto t_next = is_last ? t : steps[idx + 1];
-        auto sample_result = p_sample_once(xt, t, t_next, eta, is_last);
+        auto sample_result = p_sample_once(xt, t, t_next, eta);
         xt = std::get<1>(sample_result);
         if (save_all_mid_results) {
             mid_sample_results.push_back(sample_result);
@@ -467,12 +473,11 @@ std::vector<std::tuple<std::vector<float>, std::vector<float> > > DDIMSampler<IN
  * @param xt
  * @param t
  * @param t_next
- * @param is_last_step
  * @return
  */
 template <typename INPUT, typename OUTPUT>
 std::tuple<std::vector<float>, std::vector<float> > DDIMSampler<INPUT, OUTPUT>::Impl::p_sample_once(
-    std::vector<float>& xt, int t, int t_next, float eta, bool is_last_step) {
+    std::vector<float>& xt, int t, int t_next, float eta) {
     // compute predict noise
     std_ddpm_unet_input denoise_in;
     denoise_in.xt = xt;
@@ -525,10 +530,6 @@ std::tuple<std::vector<float>, std::vector<float> > DDIMSampler<INPUT, OUTPUT>::
         auto direct_to_xt_v = direction_to_xt[idx];
         auto random_noise_v = random_noise[idx];
         xt_next[idx] = x0_t_v + direct_to_xt_v + random_noise_v;
-        if (is_last_step) {
-            // clip data to [-1, 1] if last step
-            xt_next[idx] = std::clamp(xt_next[idx], -1.0f, 1.0f);
-        }
     }
 
     return std::make_tuple(x0_t, xt_next);

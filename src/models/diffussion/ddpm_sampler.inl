@@ -375,6 +375,7 @@ StatusCode DDPMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     auto sample_channels = transformed_input.channels;
     auto save_all_mid_results = transformed_input.save_all_mid_results;
     auto use_fixed_noise_for_psample = transformed_input.use_fixed_noise_for_psample;
+    auto save_raw_output = transformed_input.save_raw_output;
 
     // p-sample loop
     auto mid_sample_results = p_sample(sample_size, sample_timestep, sample_channels, save_all_mid_results, use_fixed_noise_for_psample);
@@ -383,7 +384,11 @@ StatusCode DDPMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     ddpm_sampler_impl::internal_output internal_out;
     StatusCode sample_status = StatusCode::OK;
     for (auto& img_data : mid_sample_results) {
+        if (save_raw_output) {
+            internal_out.out_raw_predictions.push_back(img_data);
+        }
         // rescale image data to [0, 255]
+        std::transform(img_data.begin(), img_data.end(), img_data.begin(), [](float x) { return std::clamp(x, -1.0f, 1.0f); });
         std::transform(img_data.begin(), img_data.end(), img_data.begin(), [](float x) { return (x + 1.0f) * 0.5f * 255.0f + 0.5; });
         std::transform(img_data.begin(), img_data.end(), img_data.begin(), [](float x) { return std::clamp(x, 0.0f, 255.0f); });
         auto hwc_data = CvUtils::convert_to_hwc_vec<float>(img_data, sample_channels, sample_size.height, sample_size.width);
@@ -461,8 +466,6 @@ std::vector<float> DDPMSampler<INPUT, OUTPUT>::Impl::p_sample_once(
     std::vector<float> predict_mean = compute_predict_mean(xt, denoise_out.predict_noise, t);
     // compute sample result
     if (is_last_step) {
-        // clamp result into [-1.0, 1.0]
-        std::transform(predict_mean.begin(), predict_mean.end(), predict_mean.begin(), [](float x) { return std::clamp(x, -1.0f, 1.0f); });
         return predict_mean;
     } else {
         // compute posterior_variance
