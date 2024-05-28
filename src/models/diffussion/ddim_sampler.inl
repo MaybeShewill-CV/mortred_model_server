@@ -401,6 +401,8 @@ StatusCode DDIMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
             mid_image = cv::Mat(sample_size, CV_32FC1, hwc_data.data());
         } else if (sample_channels == 3) {
             mid_image = cv::Mat(sample_size, CV_32FC3, hwc_data.data());
+        } else if (sample_channels == 4) {
+            mid_image = cv::Mat(sample_size, CV_32FC4, hwc_data.data());
         } else {
             LOG(ERROR) << "not support image channels: " << sample_channels;
             continue;
@@ -414,6 +416,8 @@ StatusCode DDIMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
             mid_image = cv::Mat(sample_size, CV_32FC1, hwc_data.data());
         } else if (sample_channels == 3) {
             mid_image = cv::Mat(sample_size, CV_32FC3, hwc_data.data());
+        } else if (sample_channels == 4) {
+            mid_image = cv::Mat(sample_size, CV_32FC4, hwc_data.data());
         } else {
             LOG(ERROR) << "not support image channels: " << sample_channels;
             continue;
