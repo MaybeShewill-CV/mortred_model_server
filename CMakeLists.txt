@@ -36,10 +36,12 @@ find_package(Threads REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(glog REQUIRED)
 find_package(CUDA REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 include_directories(${GLOG_INCLUDE_DIR})
 include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${CUDA_INCLUDE_DIRS})
+include_directories(${EIGEN3_INCLUDE_DIR})
 
 # add subdirectory
 add_subdirectory(src/common)

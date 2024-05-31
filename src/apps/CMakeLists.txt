@@ -18,6 +18,7 @@ set(MODEL_BENCHMARK_LIST
     clip
     mono_depth_estimation
     diffusion
+    mot
 )
 
 foreach(dir_name ${MODEL_BENCHMARK_LIST})
