@@ -101,7 +101,7 @@ using std_enhancement_output = enhance_output;
 
 } // namespace enhancement
 
-// image enhancement
+// image classification
 namespace classification {
 
 struct cls_output {
