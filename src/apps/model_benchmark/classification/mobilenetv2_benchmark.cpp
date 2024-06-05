@@ -7,8 +7,6 @@
 
 // mobilenetv2 benckmark tool
 
-#include <random>
-
 #include <glog/logging.h>
 #include <toml/toml.hpp>
 
