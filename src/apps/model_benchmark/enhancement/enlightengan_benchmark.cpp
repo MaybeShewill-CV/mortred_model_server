@@ -7,8 +7,6 @@
 
 // enlightengan benckmark tool
 
-#include <random>
-
 #include <glog/logging.h>
 #include <toml/toml.hpp>
 
@@ -35,14 +33,12 @@ int main(int argc, char** argv) {
 
     std::string cfg_file_path = argv[1];
     LOG(INFO) << "config file path: " << cfg_file_path;
-
     if (!FilePathUtil::is_file_exist(cfg_file_path)) {
         LOG(INFO) << "config file: " << cfg_file_path << " not exist";
         return -1;
     }
 
     std::string input_image_path;
-
     if (argc == 3) {
         input_image_path = argv[2];
         LOG(INFO) << "input test image path: " << input_image_path;
@@ -50,7 +46,6 @@ int main(int argc, char** argv) {
         input_image_path = "../demo_data/model_test_input/enhancement/low_light/lol_test_1.png";
         LOG(INFO) << "use default input test image path: " << input_image_path;
     }
-
     if (!FilePathUtil::is_file_exist(input_image_path)) {
         LOG(INFO) << "test input image file: " << input_image_path << " not exist";
         return -1;
@@ -66,7 +61,6 @@ int main(int argc, char** argv) {
     auto enhancementor = create_enlightengan_enhancementor<mat_input, std_enhancement_output>("enlightengan");
     auto cfg = toml::parse(cfg_file_path);
     enhancementor->init(cfg);
-
     if (!enhancementor->is_successfully_initialized()) {
         LOG(INFO) << "enlightengan enhancementor init failed";
         return -1;
@@ -78,11 +72,9 @@ int main(int argc, char** argv) {
     LOG(INFO) << "detector run loop times: " << loop_times;
     LOG(INFO) << "start enlightengan benchmark at: " << Timestamp::now().to_format_str();
     auto ts = Timestamp::now();
-
     for (int i = 0; i < loop_times; ++i) {
         enhancementor->run(model_input, model_output);
     }
-
     auto cost_time = Timestamp::now() - ts;
     LOG(INFO) << "benchmark ends at: " << Timestamp::now().to_format_str();
     LOG(INFO) << "cost time: " << cost_time << "s, fps: " << loop_times / cost_time;
