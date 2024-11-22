@@ -55,6 +55,7 @@ enum StatusCode {
 
     // tokenization failed
     TOKENIZE_UNKNOWN_TOKEN = 80,
+    TOKENIZE_FAILED = 81,
 
     // trt error
     TRT_CUDA_ERROR = 90,
