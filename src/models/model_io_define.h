@@ -247,6 +247,18 @@ using std_ldm_output = ldm_sample_output;
 
 }
 
+// llm
+namespace llm {
+
+namespace text {
+
+using token_id = int32_t;
+using tokens = std::vector<int32_t >;
+
+}
+
+}
+
 } // namespace io_define
 } // namespace models
 } // namespace jinq
