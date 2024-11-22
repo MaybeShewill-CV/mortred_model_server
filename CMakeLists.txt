@@ -8,7 +8,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wno-deprecated-declarations"
 set(PROJECT_ROOT_DIR ${CMAKE_CURRENT_LIST_DIR})
 
 # target options
-set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_BUILD_TYPE Debug)
 IF(CMAKE_BUILD_TYPE MATCHES Debug)
     message("Build type debug")
 ELSE()
@@ -30,6 +30,8 @@ file(GLOB_RECURSE FMT_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*fmt*so)
 file(GLOB_RECURSE ONNXRUNTIME_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*onnxruntime*so)
 file(GLOB_RECURSE NVINFER_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*nvinfer*.so*)
 file(GLOB_RECURSE TRT_ONNXPARSER_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*nvonnxparser*.so*)
+file(GLOB_RECURSE LLAMA_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*llama*.so*)
+file(GLOB_RECURSE GGML_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*ggml*.so*)
 
 # find package
 find_package(Threads REQUIRED)

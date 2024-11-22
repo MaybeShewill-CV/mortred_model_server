@@ -19,6 +19,7 @@ set(MODEL_BENCHMARK_LIST
     mono_depth_estimation
     diffusion
     mot
+    llm
 )
 
 foreach(dir_name ${MODEL_BENCHMARK_LIST})
