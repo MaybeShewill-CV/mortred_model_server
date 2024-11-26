@@ -43,11 +43,11 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    std::string input = "<user>\n"
-                        "Can you recommend some beginner-friendly programming languages for someone new to coding?\n"
-                        "</user>";
+    std::string input = "\n<|start_header_id|>system<|end_header_id|>\n\nYou are a helpful assistant<|eot_id|>\n<|start_header_id|>user<|end_header_id|>\n\nHello<|eot_id|>\n<|start_header_id|>assistant<|end_header_id|>\n\nHi there<|eot_id|>\n<|start_header_id|>user<|end_header_id|>\n\nWho are you<|eot_id|>\n<|start_header_id|>assistant<|end_header_id|>\n\nI am an assistant<|eot_id|>\n<|start_header_id|>user<|end_header_id|>\n\nWho creates you?<|eot_id|>\n<|start_header_id|>assistant<|end_header_id|>\n\n";
+    LOG(INFO) << "input prompt text: " << input;
     std::string out;
     model.run(input, out);
+    LOG(INFO) << "generated output: " << out;
 
     return 0;
 }

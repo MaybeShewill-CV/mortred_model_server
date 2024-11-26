@@ -157,9 +157,10 @@ private:
     /***
      *
      * @param prompt_tokens
+     * @param generate_out
      * @return
      */
-    StatusCode llama_generate(std::vector<llama_token>& prompt_tokens);
+    StatusCode llama_generate(std::vector<llama_token>& prompt_tokens, std::string& generate_out);
 };
 
 /***
@@ -248,9 +249,16 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     // tokenize input prompt
     std::vector<llama_token> prompt_tokens;
     auto status = tokenize_prompt(prompt, prompt_tokens);
+    if (status != StatusCode::OK) {
+        return status;
+    }
 
     // run llama3 generate
-    status = llama_generate(prompt_tokens);
+    std::string generate_out;
+    status = llama_generate(prompt_tokens, generate_out);
+
+    // transform output
+    out = llama_impl::transform_output<OUTPUT>(generate_out);
 
     return status;
 }
@@ -294,8 +302,7 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::tokenize_prompt(const std::string &promp
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode Llama3<INPUT, OUTPUT>::Impl::llama_generate(std::vector<llama_token> &prompt_tokens) {
-    std::string response;
+StatusCode Llama3<INPUT, OUTPUT>::Impl::llama_generate(std::vector<llama_token> &prompt_tokens, std::string& generate_out) {
     // prepare a batch for the prompt
     llama_batch batch = llama_batch_get_one(prompt_tokens.data(), static_cast<int32_t>(prompt_tokens.size()));
     llama_token new_token_id;
@@ -304,9 +311,8 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::llama_generate(std::vector<llama_token> 
         int n_ctx = llama_n_ctx(_m_ctx);
         int n_ctx_used = llama_get_kv_cache_used_cells(_m_ctx);
         if (n_ctx_used + batch.n_tokens > n_ctx) {
-            printf("\033[0m\n");
-            fprintf(stderr, "context size exceeded\n");
-            exit(0);
+            LOG(ERROR) << "context size exceeded";
+            return StatusCode::MODEL_RUN_SESSION_FAILED;
         }
 
         if (llama_decode(_m_ctx, batch)) {
@@ -330,14 +336,13 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::llama_generate(std::vector<llama_token> 
             return StatusCode::MODEL_RUN_SESSION_FAILED;
         }
         std::string piece(buf, n);
-        printf("%s", piece.c_str());
-        fflush(stdout);
-        response += piece;
+//        printf("%s", piece.c_str());
+//        fflush(stdout);
+        generate_out += piece;
 
         // prepare the next batch with the sampled token
         batch = llama_batch_get_one(&new_token_id, 1);
     }
-    LOG(INFO) << "generate: " << response;
 
     return StatusCode::OK;
 }
