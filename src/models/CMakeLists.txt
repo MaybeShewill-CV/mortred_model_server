@@ -20,6 +20,6 @@ target_link_libraries(
     ${CUDA_LIBRARIES}
     ${WORKFLOW_LIBS}
     ${LLAMA_LIBRARIES}
-#    ${GGML_LIBRARIES}
+    ${GGML_LIBRARIES}
 )
 set_target_properties(models PROPERTIES LINKER_LANGUAGE CXX)
