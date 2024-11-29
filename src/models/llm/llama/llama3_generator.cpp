@@ -130,7 +130,7 @@ StatusCode Llama3Generator::Impl::text_completion(const std::string &prompt, std
  * @param generate_output
  * @return
  */
-StatusCode Llama3Generator::Impl::chat_completion(models::llm::chat_template::Dialog &dialog, std::string &generate_output) {
+StatusCode Llama3Generator::Impl::chat_completion(Dialog &dialog, std::string &generate_output) {
     // template format dialog
     std::string fmt_prompt;
     auto status = _m_chat_template.apply_chat_template(dialog, fmt_prompt);
@@ -143,10 +143,10 @@ StatusCode Llama3Generator::Impl::chat_completion(models::llm::chat_template::Di
     status = _m_model.run(fmt_prompt, generate_output);
 
     // log dialog messages
-    for (auto& msg : dialog) {
-        LOG(INFO) << fmt::format("{}: {}", msg.role, msg.content);
+    for (auto& msg : dialog.messages) {
+        DLOG(INFO) << fmt::format("{}: {}", msg.role, msg.content);
     }
-    LOG(INFO) << fmt::format("assistant: {}", generate_output);
+    DLOG(INFO) << fmt::format("assistant: {}", generate_output);
 
     return status;
 }
