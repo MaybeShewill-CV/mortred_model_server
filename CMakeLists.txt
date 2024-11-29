@@ -8,7 +8,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wno-deprecated-declarations"
 set(PROJECT_ROOT_DIR ${CMAKE_CURRENT_LIST_DIR})
 
 # target options
-set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_BUILD_TYPE Release)
 IF(CMAKE_BUILD_TYPE MATCHES Debug)
     message("Build type debug")
 ELSE()
