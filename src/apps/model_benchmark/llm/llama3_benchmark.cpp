@@ -43,7 +43,8 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    Dialog dialog = {
+    Dialog dialog;
+    dialog.messages = {
         {"system", "You're a smart AI assistant from Mortred Company"},
         {"user", "Who are you?"},
         {"assistant", "I am a ai assistant"},

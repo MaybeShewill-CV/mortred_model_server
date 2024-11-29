@@ -42,6 +42,7 @@ set(MODEL_SERVER_APP_LIST
     scene_segmentation
     matting
     mono_depth_estimation
+    llm
 )
 
 foreach(dir_name ${MODEL_SERVER_APP_LIST})
