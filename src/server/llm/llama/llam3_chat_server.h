@@ -15,7 +15,7 @@
 namespace jinq {
 namespace server {
 namespace llm {
-namespace llama3 {
+namespace llama {
 
 class Llama3ChatServer : public jinq::server::BaseAiServer {
   public:
