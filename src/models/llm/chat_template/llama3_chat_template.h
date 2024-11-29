@@ -49,7 +49,7 @@ class Llama3ChatTemplate : public BaseChatTemplate {
      * @param output
      * @return
      */
-    jinq::common::StatusCode apply_chat_template(const std::vector<ChatMessage>& messages, std::string& out_fmt_str) override;
+    jinq::common::StatusCode apply_chat_template(const models::llm::chat_template::Dialog& dialog, std::string& out_fmt_str) override;
 
   private:
     class Impl;

@@ -26,33 +26,68 @@ struct ChatMessage {
     ChatMessage(std::string r, std::string c) : role(std::move(r)), content(std::move(c)) {}
 };
 
-using Dialog = std::vector<ChatMessage>;
+class Dialog {
+  public:
+    Dialog() = default;
+
+    ~Dialog() = default;
+
+    Dialog(const Dialog &transformer) = default;
+
+    Dialog& operator=(const Dialog &transformer) = default;
+
+    Dialog operator+(const Dialog& other) {
+        Dialog tmp(*this);
+        std::copy(other.messages.begin(), other.messages.end(), std::back_inserter(tmp.messages));
+        return tmp;
+    }
+
+    Dialog& operator+=(const Dialog& other) {
+        std::copy(other.messages.begin(), other.messages.end(), std::back_inserter(messages));
+        return *this;
+    }
+
+    inline void push_back(const ChatMessage& msg) {
+        messages.push_back(msg);
+    }
+
+    inline void clean_cache() {
+        messages.clear();
+    }
+
+    bool empty() const {
+        return messages.empty();
+    };
+
+  public:
+    std::vector<ChatMessage> messages;
+};
 
 class BaseChatTemplate {
-  public:
+public:
     /***
     *
      */
     virtual ~BaseChatTemplate() = default;
 
     /***
-     * 
+     *
      * @param config
      */
     BaseChatTemplate() = default;
 
     /***
-    * 
+    *
     * @param transformer
      */
-    BaseChatTemplate(const BaseChatTemplate &BaseChatTemplate) = default;
+    BaseChatTemplate(const BaseChatTemplate& BaseChatTemplate) = default;
 
     /***
-     * 
+     *
      * @param transformer
      * @return
      */
-    BaseChatTemplate &operator=(const BaseChatTemplate &transformer) = default;
+    BaseChatTemplate& operator=(const BaseChatTemplate& transformer) = default;
 
     /***
      *
@@ -60,7 +95,7 @@ class BaseChatTemplate {
      * @param output
      * @return
      */
-    virtual jinq::common::StatusCode apply_chat_template(const std::vector<ChatMessage>& messages, std::string& out_fmt_str) = 0;
+    virtual jinq::common::StatusCode apply_chat_template(const Dialog& messages, std::string& out_fmt_str) = 0;
 };
 }
 }

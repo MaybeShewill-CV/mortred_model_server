@@ -44,11 +44,11 @@ class Llama3ChatTemplate::Impl {
 
     /***
      *
-     * @param in
-     * @param out
+     * @param dialog
+     * @param out_fmt_str
      * @return
      */
-    StatusCode apply_chat_template(const std::vector<ChatMessage>& messages, std::string& out_fmt_str);
+    StatusCode apply_chat_template(const Dialog& dialog, std::string& out_fmt_str);
 
   private:
     std::string _m_header_fmt = "<|start_header_id|>{}<|end_header_id|>\n\n";
@@ -62,12 +62,12 @@ class Llama3ChatTemplate::Impl {
  * @param out_fmt_str
  * @return
  */
-StatusCode Llama3ChatTemplate::Impl::apply_chat_template(const std::vector<ChatMessage> &messages, std::string &out_fmt_str) {
-    if (messages.empty()) {
+StatusCode Llama3ChatTemplate::Impl::apply_chat_template(const Dialog& dialog, std::string &out_fmt_str) {
+    if (dialog.empty()) {
         return StatusCode::TOKENIZE_FAILED;
     }
     std::string fmt_dialog;
-    for (auto& message : messages) {
+    for (auto& message : dialog.messages) {
         fmt_dialog += fmt::format(_m_message_fmt, message.role, message.content);
     }
     fmt_dialog += fmt::format(_m_header_fmt, "assistant");
@@ -96,8 +96,8 @@ Llama3ChatTemplate::~Llama3ChatTemplate() = default;
  * @param out_fmt_str
  * @return
  */
-StatusCode Llama3ChatTemplate::apply_chat_template(const std::vector<ChatMessage> &messages, std::string &out_fmt_str) {
-    return _m_pimpl->apply_chat_template(messages, out_fmt_str);
+StatusCode Llama3ChatTemplate::apply_chat_template(const Dialog& dialog, std::string &out_fmt_str) {
+    return _m_pimpl->apply_chat_template(dialog, out_fmt_str);
 }
 
 }
