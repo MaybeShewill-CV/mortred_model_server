@@ -11,6 +11,7 @@
 #include <memory>
 
 #include "toml/toml.hpp"
+#include "llama_cpp/llama.h"
 
 #include "models/base_model.h"
 #include "models/model_io_define.h"
@@ -62,6 +63,14 @@ class Llama3 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
      * @return
      */
     jinq::common::StatusCode run(const INPUT &input, OUTPUT &output) override;
+
+    /***
+     *
+     * @param prompt
+     * @param prompt_tokens
+     * @return
+     */
+    jinq::common::StatusCode tokenize_prompt(const std::string &prompt, std::vector<llama_token> &prompt_tokens);
 
     /***
      * if model successfully initialized

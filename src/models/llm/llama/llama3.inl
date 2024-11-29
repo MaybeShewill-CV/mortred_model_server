@@ -51,7 +51,8 @@ typename std::enable_if<std::is_same<INPUT, char*>::value, internal_input>::type
 * @return
  */
 template <typename INPUT>
-typename std::enable_if<std::is_same<INPUT, std::string>::value, internal_input>::type transform_input(const INPUT& in) {
+typename std::enable_if<std::is_same<INPUT, std::string>::value, internal_input>::type transform_input(
+    const INPUT& in) {
     return in;
 }
 
@@ -119,6 +120,14 @@ public:
 
     /***
      *
+     * @param prompt
+     * @param prompt_tokens
+     * @return
+     */
+    StatusCode tokenize_prompt(const std::string& prompt, std::vector<llama_token>& prompt_tokens);
+
+    /***
+     *
      * @return
      */
     bool is_successfully_initialized() const {
@@ -145,15 +154,7 @@ private:
     // init flag
     bool _m_successfully_initialized = false;
 
-  private:
-    /***
-     *
-     * @param prompt
-     * @param prompt_tokens
-     * @return
-     */
-    StatusCode tokenize_prompt(const std::string& prompt, std::vector<llama_token>& prompt_tokens);
-
+private:
     /***
      *
      * @param prompt_tokens
@@ -243,24 +244,38 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")) &co
  */
 template <typename INPUT, typename OUTPUT>
 StatusCode Llama3<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
-    // transform input
-    llama_impl::internal_input prompt = llama_impl::transform_input(in);
+    if constexpr(std::is_same<INPUT, std::string>::value) {
+        // transform input
+        llama_impl::internal_input prompt = llama_impl::transform_input(in);
 
-    // tokenize input prompt
-    std::vector<llama_token> prompt_tokens;
-    auto status = tokenize_prompt(prompt, prompt_tokens);
-    if (status != StatusCode::OK) {
+        // tokenize input prompt
+        std::vector<llama_token> prompt_tokens;
+        auto status = tokenize_prompt(prompt, prompt_tokens);
+        if (status != StatusCode::OK) {
+            return status;
+        }
+
+        // run llama3 generate
+        std::string generate_out;
+        status = llama_generate(prompt_tokens, generate_out);
+
+        // transform output
+        out = llama_impl::transform_output<OUTPUT>(generate_out);
+
         return status;
+    } else if constexpr(std::is_same<INPUT, std::vector<llama_token>&>::value) {
+        // run llama3 generate
+        std::string generate_out;
+        auto status = llama_generate(in, generate_out);
+
+        // transform output
+        out = llama_impl::transform_output<OUTPUT>(generate_out);
+
+        return status;
+    } else {
+        LOG(ERROR) << "wrong input data type";
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
-
-    // run llama3 generate
-    std::string generate_out;
-    status = llama_generate(prompt_tokens, generate_out);
-
-    // transform output
-    out = llama_impl::transform_output<OUTPUT>(generate_out);
-
-    return status;
 }
 
 /***
@@ -272,13 +287,15 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode Llama3<INPUT, OUTPUT>::Impl::tokenize_prompt(const std::string &prompt, std::vector<llama_token> &prompt_tokens) {
+StatusCode Llama3<INPUT, OUTPUT>::Impl::tokenize_prompt(const std::string& prompt,
+        std::vector<llama_token>& prompt_tokens) {
     if (prompt.empty()) {
         LOG(WARNING) << "input prompt is empty";
         return StatusCode::TOKENIZE_FAILED;
     }
 
-    auto n_prompt_tokens = llama_tokenize(_m_model, prompt.c_str(), static_cast<int32_t>(prompt.size()), nullptr, 0, true, true);
+    auto n_prompt_tokens = llama_tokenize(_m_model, prompt.c_str(), static_cast<int32_t>(prompt.size()), nullptr, 0, true,
+                                          true);
     n_prompt_tokens *= -1;
     prompt_tokens.resize(n_prompt_tokens);
     auto prompt_size = static_cast<int32_t >(prompt.size());
@@ -302,7 +319,8 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::tokenize_prompt(const std::string &promp
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode Llama3<INPUT, OUTPUT>::Impl::llama_generate(std::vector<llama_token> &prompt_tokens, std::string& generate_out) {
+StatusCode Llama3<INPUT, OUTPUT>::Impl::llama_generate(std::vector<llama_token>& prompt_tokens,
+        std::string& generate_out) {
     // prepare a batch for the prompt
     llama_batch batch = llama_batch_get_one(prompt_tokens.data(), static_cast<int32_t>(prompt_tokens.size()));
     llama_token new_token_id;
@@ -336,8 +354,8 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::llama_generate(std::vector<llama_token> 
             return StatusCode::MODEL_RUN_SESSION_FAILED;
         }
         std::string piece(buf, n);
-//        printf("%s", piece.c_str());
-//        fflush(stdout);
+        //        printf("%s", piece.c_str());
+        //        fflush(stdout);
         generate_out += piece;
 
         // prepare the next batch with the sampled token
@@ -401,6 +419,19 @@ bool Llama3<INPUT, OUTPUT>::is_successfully_initialized() const {
 template <typename INPUT, typename OUTPUT>
 StatusCode Llama3<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param input
+ * @param output
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+StatusCode Llama3<INPUT, OUTPUT>::tokenize_prompt(const std::string& prompt, std::vector<llama_token>& prompt_tokens) {
+    return _m_pimpl->tokenize_prompt(prompt, prompt_tokens);
 }
 
 }
