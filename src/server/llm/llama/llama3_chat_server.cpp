@@ -331,7 +331,7 @@ void Llama3ChatServer::Impl::complete_chat(seriex_ctx* ctx) {
     Dialog dialog = task.current_dialog;
 
     // generate response
-    auto status = _m_generator.chat_completion(task.current_dialog, ctx->gen_out, true);
+    auto status = _m_generator.chat_completion(task.current_dialog, ctx->gen_out);
     if (status != StatusCode::OK) {
         auto err_msg = fmt::format("complete chat failed, status: {}", std::to_string(status));
         ctx->err_msg = err_msg;
