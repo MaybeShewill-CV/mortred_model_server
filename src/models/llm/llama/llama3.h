@@ -22,6 +22,11 @@ namespace models {
 namespace llm {
 namespace llama {
 
+struct ModelStatus {
+    uint32_t n_ctx_size;
+    int32_t kv_cache_cell_nums;
+};
+
 template <typename INPUT, typename OUTPUT> 
 class Llama3 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
   public:
@@ -71,6 +76,12 @@ class Llama3 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
      * @return
      */
     jinq::common::StatusCode tokenize_prompt(const std::string &prompt, std::vector<llama_token> &prompt_tokens);
+
+    /***
+     *
+     * @return
+     */
+    ModelStatus get_model_stat() const;
 
     /***
      * if model successfully initialized
