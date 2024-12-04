@@ -11,7 +11,7 @@
 #include "factory/base_factory.h"
 #include "factory/register_marco.h"
 #include "models/base_model.h"
-#include "server/llm/llama/llam3_chat_server.h"
+#include "server/llm/llama/llama3_chat_server.h"
 
 namespace jinq {
 namespace factory {

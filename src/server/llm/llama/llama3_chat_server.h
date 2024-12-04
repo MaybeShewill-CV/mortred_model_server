@@ -5,8 +5,8 @@
  * Date: 24-11-29
  ************************************************/
 
-#ifndef MORTRED_MODEL_SERVER_LLAM3_CHAT_SERVER_H
-#define MORTRED_MODEL_SERVER_LLAM3_CHAT_SERVER_H
+#ifndef MORTRED_MODEL_SERVER_LLAMA3_CHAT_SERVER_H
+#define MORTRED_MODEL_SERVER_LLAMA3_CHAT_SERVER_H
 
 #include <memory>
 
@@ -72,4 +72,4 @@ class Llama3ChatServer : public jinq::server::BaseAiServer {
 }
 }
 
-#endif // MORTRED_MODEL_SERVER_LLAM3_CHAT_SERVER_H
+#endif // MORTRED_MODEL_SERVER_LLAMA3_CHAT_SERVER_H
