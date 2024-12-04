@@ -83,6 +83,13 @@ class Llama3Generator::Impl {
 
     /***
      *
+     */
+    void clear_kv_cache_cell() {
+        return _m_model.clear_kv_cache_cell();
+    }
+
+    /***
+     *
      * @return
      */
     bool is_successfully_initialized() const {
@@ -225,6 +232,13 @@ StatusCode Llama3Generator::text_completion(const std::string &prompt, std::stri
  */
 StatusCode Llama3Generator::chat_completion(models::llm::chat_template::Dialog &dialog, std::string &generate_output) {
     return _m_pimpl->chat_completion(dialog, generate_output);
+}
+
+/***
+ *
+ */
+void Llama3Generator::clear_kv_cache_cell() {
+    return _m_pimpl->clear_kv_cache_cell();
 }
 
 }

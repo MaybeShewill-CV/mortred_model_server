@@ -84,6 +84,11 @@ class Llama3 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
     ModelStatus get_model_stat() const;
 
     /***
+     *
+     */
+    void clear_kv_cache_cell() const;
+
+    /***
      * if model successfully initialized
      * @return
      */

@@ -133,6 +133,11 @@ public:
 
     /***
      *
+     */
+    void clear_kv_cache_cell() const;
+
+    /***
+     *
      * @return
      */
     bool is_successfully_initialized() const {
@@ -332,21 +337,29 @@ ModelStatus Llama3<INPUT, OUTPUT>::Impl::get_model_stat() const {
  *
  * @tparam INPUT
  * @tparam OUTPUT
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+void Llama3<INPUT, OUTPUT>::Impl::clear_kv_cache_cell() const {
+    llama_kv_cache_clear(_m_ctx);
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
  * @param prompt_tokens
  * @return
  */
 template <typename INPUT, typename OUTPUT>
 StatusCode Llama3<INPUT, OUTPUT>::Impl::llama_generate(std::vector<llama_token>& prompt_tokens, std::string& generate_out) {
     // prepare a batch for the prompt
-    LOG(INFO) << "prompt token size: " << prompt_tokens.size();
     llama_batch batch = llama_batch_get_one(prompt_tokens.data(), static_cast<int32_t>(prompt_tokens.size()));
     llama_token new_token_id;
     while (true) {
         // check if we have enough space in the context to evaluate this batch
         int n_ctx = llama_n_ctx(_m_ctx);
         int n_ctx_used = llama_get_kv_cache_used_cells(_m_ctx);
-        LOG(INFO) << "context size: " << n_ctx;
-        LOG(INFO) << "kv cache size: " << n_ctx_used;
         if (n_ctx_used + batch.n_tokens > n_ctx) {
             LOG(ERROR) << "context size exceeded";
             return StatusCode::MODEL_RUN_SESSION_FAILED;
@@ -377,8 +390,6 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::llama_generate(std::vector<llama_token>&
             return StatusCode::MODEL_RUN_SESSION_FAILED;
         }
         std::string piece(buf, n);
-//        printf("%s", piece.c_str());
-//        fflush(stdout);
         generate_out += piece;
 
         // prepare the next batch with the sampled token
@@ -466,6 +477,16 @@ StatusCode Llama3<INPUT, OUTPUT>::tokenize_prompt(const std::string& prompt, std
 template <typename INPUT, typename OUTPUT>
 ModelStatus Llama3<INPUT, OUTPUT>::get_model_stat() const {
     return _m_pimpl->get_model_stat();
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ */
+template <typename INPUT, typename OUTPUT>
+void Llama3<INPUT, OUTPUT>::clear_kv_cache_cell() const {
+    return _m_pimpl->clear_kv_cache_cell();
 }
 
 }

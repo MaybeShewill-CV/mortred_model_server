@@ -73,6 +73,11 @@ class Llama3Generator : public BaseLlmGenerator {
     jinq::common::StatusCode chat_completion(models::llm::chat_template::Dialog& dialog, OUT std::string& generate_output) override;
 
     /***
+     *
+     */
+    void clear_kv_cache_cell();
+
+    /***
      * if model successfully initialized
      * @return
      */

@@ -48,10 +48,26 @@ int main(int argc, char** argv) {
         {"system", "You're a smart AI assistant from Mortred Company"},
         {"user", "Who are you?"},
         {"assistant", "I am a ai assistant"},
-        {"user", "Where are you from?"},
+        {"user", "Who is your favorite singer?"},
     };
     std::string gen_out;
+    generator.chat_completion(dialog, gen_out);
+    dialog.messages.emplace_back("assistant", gen_out);
+    LOG(INFO) << "assistant: " << gen_out;
+
+    Dialog new_dialog;
+    new_dialog.messages.emplace_back("user", "answer last question again");
+    generator.chat_completion(new_dialog, gen_out);
+    dialog.messages.emplace_back("assistant", gen_out);
+    LOG(INFO) << "assistant: " << gen_out;
+
+    generator.clear_kv_cache_cell();
+    generator.chat_completion(new_dialog, gen_out);
+    LOG(INFO) << "assistant: " << gen_out;
+
+    generator.clear_kv_cache_cell();
     auto status = generator.chat_completion(dialog, gen_out);
+    LOG(INFO) << "assistant: " << gen_out;
 
     return status;
 }
