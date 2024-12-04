@@ -67,6 +67,7 @@ class Llama3Generator : public BaseLlmGenerator {
      *
      * @param dialog
      * @param generate_output
+     * @param truncate
      * @return
      */
     jinq::common::StatusCode chat_completion(models::llm::chat_template::Dialog& dialog, OUT std::string& generate_output) override;

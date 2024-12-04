@@ -76,6 +76,7 @@ class Llama3Generator::Impl {
      *
      * @param dialog
      * @param generate_output
+     * @param truncate
      * @return
      */
     StatusCode chat_completion(models::llm::chat_template::Dialog& dialog, OUT std::string& generate_output);
@@ -142,6 +143,7 @@ StatusCode Llama3Generator::Impl::text_completion(const std::string &prompt, std
  *
  * @param dialog
  * @param generate_output
+ * @param truncate
  * @return
  */
 StatusCode Llama3Generator::Impl::chat_completion(Dialog &dialog, std::string &generate_output) {
@@ -165,10 +167,10 @@ StatusCode Llama3Generator::Impl::chat_completion(Dialog &dialog, std::string &g
     status = _m_model.run(prompt_tokens, generate_output);
 
     // log dialog messages
-    for (auto& msg : dialog.messages) {
-        DLOG(INFO) << fmt::format("{}: {}", msg.role, msg.content);
-    }
-    DLOG(INFO) << fmt::format("assistant: {}", generate_output);
+//    for (auto& msg : dialog.messages) {
+//        DLOG(INFO) << fmt::format("{}: {}", msg.role, msg.content);
+//    }
+//    DLOG(INFO) << fmt::format("assistant: {}", generate_output);
 
     return status;
 }
@@ -218,6 +220,7 @@ StatusCode Llama3Generator::text_completion(const std::string &prompt, std::stri
  *
  * @param dialog
  * @param generate_output
+ * @param truncate
  * @return
  */
 StatusCode Llama3Generator::chat_completion(models::llm::chat_template::Dialog &dialog, std::string &generate_output) {
