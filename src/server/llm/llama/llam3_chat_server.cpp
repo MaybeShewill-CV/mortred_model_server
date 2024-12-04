@@ -328,17 +328,10 @@ StatusCode Llama3ChatServer::Impl::parse_request(const protocol::HttpRequest* re
 void Llama3ChatServer::Impl::complete_chat(seriex_ctx* ctx) {
     // fill-in hole dialog
     auto task = ctx->d_task;
-    Dialog dialog;
-    if (_m_user_history_dialogs.find(task.uuid) != _m_user_history_dialogs.end()) {
-        auto cached_dialog = _m_user_history_dialogs[task.uuid];
-        auto cur_dialog = task.current_dialog;
-        dialog = cached_dialog + cur_dialog;
-    } else {
-        dialog = task.current_dialog;
-    }
+    Dialog dialog = task.current_dialog;
 
     // generate response
-    auto status = _m_generator.chat_completion(dialog, ctx->gen_out);
+    auto status = _m_generator.chat_completion(task.current_dialog, ctx->gen_out, true);
     if (status != StatusCode::OK) {
         auto err_msg = fmt::format("complete chat failed, status: {}", std::to_string(status));
         ctx->err_msg = err_msg;
