@@ -171,7 +171,14 @@ private:
      */
     void complete_chat_cb(const WFGoTask* task);
 
-
+    /***
+     *
+     * @param ctx
+     * @param dropped_token_ratio
+     * @param max_summary_token_ratio
+     * @return
+     */
+    StatusCode regenerate_with_cache_dialogs(seriex_ctx* ctx, float dropped_token_ratio=0.5, float max_summary_token_ratio=0.1);
 };
 
 /************ Impl Implementation ************/
@@ -326,27 +333,50 @@ StatusCode Llama3ChatServer::Impl::parse_request(const protocol::HttpRequest* re
  * @param ctx
  */
 void Llama3ChatServer::Impl::complete_chat(seriex_ctx* ctx) {
-    // fill-in hole dialog
+    // fetch current dialog
     auto task = ctx->d_task;
     Dialog dialog = task.current_dialog;
 
     // generate response
     auto status = _m_generator.chat_completion(task.current_dialog, ctx->gen_out);
-    if (status != StatusCode::OK) {
-        auto err_msg = fmt::format("complete chat failed, status: {}", std::to_string(status));
-        ctx->err_msg = err_msg;
-        ctx->err_state = status;
-        LOG(ERROR) << (err_msg);
-        return;
-    }
 
     // cache history dialog
     ChatMessage msg = {"assistant", ctx->gen_out};
     dialog.push_back(msg);
     if (_m_user_history_dialogs.find(task.uuid) != _m_user_history_dialogs.end()) {
-        _m_user_history_dialogs[task.uuid] = dialog;
+        _m_user_history_dialogs[task.uuid] += dialog;
     } else {
         _m_user_history_dialogs.insert(std::make_pair(task.uuid, dialog));
+    }
+
+    // check if context exceeded occurred
+    if (status == StatusCode::LLM_CONTEXT_SIZE_EXCEEDED) {
+        int try_times = 5;
+        float base_token_drop_ration = 0.75f;
+        float base_summary_token_ratio = 0.1f;
+        float scale_ratio = 1.4f;
+        while (try_times--) {
+            status = regenerate_with_cache_dialogs(ctx, base_token_drop_ration, base_summary_token_ratio);
+            if (status == StatusCode::LLM_CONTEXT_SIZE_EXCEEDED) {
+                LOG(WARNING) << "context still exceeded during regeneration process, try another time with more token dropped";
+                base_token_drop_ration *= scale_ratio;
+                base_summary_token_ratio /= scale_ratio;
+                continue;
+            } else {
+                break;
+            }
+        }
+    }
+
+    // fill in ctx messages
+    if (status == StatusCode::OK) {
+        return;
+    } else {
+        auto err_msg = fmt::format("complete chat failed, status: {}", std::to_string(status));
+        ctx->err_msg = err_msg;
+        ctx->err_state = status;
+        LOG(ERROR) << (err_msg);
+        return;
     }
 }
 
@@ -388,6 +418,86 @@ void Llama3ChatServer::Impl::complete_chat_cb(const WFGoTask* task) {
     // update task count
     _m_finished_jobs++;
     _m_waiting_jobs--;
+}
+
+/***
+ *
+ * @param ctx
+ * @param dropped_token_ratio
+ * @param max_summary_token_ratio
+ * @return
+ */
+StatusCode Llama3ChatServer::Impl::regenerate_with_cache_dialogs(
+    seriex_ctx *ctx, float dropped_token_ratio, float max_summary_token_ratio) {
+    auto task = ctx->d_task;
+    // prepare summary dialog
+    Dialog summary_dialogs;
+    auto history_dialogs = _m_user_history_dialogs[task.uuid];
+    auto history_dialog_tokens = _m_generator.count_dialog_token_nums(history_dialogs);
+    auto drop_threshold = static_cast<int32_t >(dropped_token_ratio * static_cast<float>(history_dialog_tokens));
+    int32_t dropped_token_nums = 0;
+    int msg_idx =0;
+    for (; msg_idx < history_dialogs.messages.size(); ++msg_idx) {
+        auto role = history_dialogs.messages[msg_idx].role;
+        auto content = history_dialogs.messages[msg_idx].content;
+        Dialog tmp_dia(role, content);
+        dropped_token_nums += _m_generator.count_dialog_token_nums(tmp_dia);
+        summary_dialogs += tmp_dia;
+        if (dropped_token_nums >= drop_threshold) {
+            msg_idx++;
+            break;
+        }
+    }
+    auto summary_token_nums = static_cast<int32_t >(static_cast<float>(dropped_token_nums) * max_summary_token_ratio);
+    summary_token_nums = summary_token_nums > 0 ? summary_token_nums : 1;
+    summary_dialogs.messages.emplace_back("system", "You are an assistant skilled at generating summaries.");
+    summary_dialogs.messages.emplace_back(
+        "user",
+        fmt::format("Please summarize the multi-turn conversation above in content not exceeding {} tokens.", summary_token_nums)
+    );
+
+    // check summary dialog token nums
+    auto summary_tokens = _m_generator.count_dialog_token_nums(summary_dialogs);
+    auto n_ctx = _m_generator.get_model_stat().n_ctx_size;
+    while (summary_tokens > 0.75 * n_ctx) {
+        summary_dialogs.messages.erase(summary_dialogs.messages.begin());
+        summary_tokens = _m_generator.count_dialog_token_nums(summary_dialogs);
+    }
+    LOG(INFO) << "n_tokens: " << summary_tokens << " used before summary";
+
+    // generate summary msg
+    _m_generator.clear_kv_cache_cell();
+    std::string summary_msg;
+    auto status = _m_generator.chat_completion(summary_dialogs, summary_msg);
+    if (status != StatusCode::OK) {
+        return status;
+    }
+    LOG(INFO) << "summary msg: " << summary_msg;
+
+    // renew history dialogs
+    Dialog updated_dialog(
+        "system",
+        fmt::format("You are a smart ai assistant from Mortred Company.Here is the summary of our previous {} rounds of "
+                    "conversation. Summary content is {}.Please continue assisting the customer based on it.",
+                    summary_dialogs.messages.size(), summary_msg)
+    );
+    LOG(INFO) << "n_tokens: " << _m_generator.count_dialog_token_nums(updated_dialog) << " used after summary";
+    for (auto i = msg_idx; i < history_dialogs.messages.size(); ++i) {
+        updated_dialog.messages.push_back(history_dialogs.messages[i]);
+    }
+    _m_user_history_dialogs[task.uuid].clean_cache();
+    _m_user_history_dialogs[task.uuid] = updated_dialog;
+
+    // regenerate response content
+    _m_generator.clear_kv_cache_cell();
+    Dialog cur_dialog = updated_dialog + task.current_dialog;
+    status = _m_generator.chat_completion(cur_dialog, ctx->gen_out);
+
+    // cache dialog
+    _m_user_history_dialogs[task.uuid] += task.current_dialog;
+    _m_user_history_dialogs[task.uuid] += Dialog("assistant", ctx->gen_out);
+
+    return status;
 }
 
 /************* Export Function Sets *************/

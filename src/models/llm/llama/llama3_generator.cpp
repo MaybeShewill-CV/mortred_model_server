@@ -92,6 +92,21 @@ class Llama3Generator::Impl {
      *
      * @return
      */
+    ModelStatus get_model_stat() {
+        return _m_model.get_model_stat();
+    }
+
+    /***
+     *
+     * @param dialog
+     * @return
+     */
+    int32_t count_dialog_token_nums(const Dialog& dialog);
+
+    /***
+     *
+     * @return
+     */
     bool is_successfully_initialized() const {
         return _m_successfully_initialized;
     };
@@ -182,6 +197,24 @@ StatusCode Llama3Generator::Impl::chat_completion(Dialog &dialog, std::string &g
     return status;
 }
 
+/***
+ *
+ * @param dialog
+ * @return
+ */
+int32_t Llama3Generator::Impl::count_dialog_token_nums(const Dialog &dialog) {
+    if (dialog.empty()) {
+        return 0;
+    }
+    std::string fmt_prompt;
+    auto status = _m_chat_template.apply_chat_template(dialog, fmt_prompt);
+    if (status != StatusCode::OK) {
+        LOG(ERROR) << "apply chat template for dialog failed, status code: " << status;
+        return -1;
+    }
+    return _m_model.count_prompt_token_nums(fmt_prompt);
+}
+
 /************* Export Function Sets *************/
 
 /***
@@ -239,6 +272,22 @@ StatusCode Llama3Generator::chat_completion(models::llm::chat_template::Dialog &
  */
 void Llama3Generator::clear_kv_cache_cell() {
     return _m_pimpl->clear_kv_cache_cell();
+}
+
+/***
+ *
+ * @return
+ */
+ModelStatus Llama3Generator::get_model_stat() const {
+    return _m_pimpl->get_model_stat();
+}
+
+/***
+ *
+ * @return
+ */
+int32_t Llama3Generator::count_dialog_token_nums(const Dialog &dialog) const {
+    return _m_pimpl->count_dialog_token_nums(dialog);
 }
 
 }

@@ -12,10 +12,11 @@
 
 #include "toml/toml.hpp"
 
+#include "common/status_code.h"
 #include "models/base_model.h"
 #include "models/model_io_define.h"
 #include "models/llm/base_generator.h"
-#include "common/status_code.h"
+#include "models/llm/llama/llama3.h"
 
 namespace jinq {
 namespace models {
@@ -76,6 +77,19 @@ class Llama3Generator : public BaseLlmGenerator {
      *
      */
     void clear_kv_cache_cell();
+
+    /***
+     *
+     * @return
+     */
+    llm::llama::ModelStatus get_model_stat() const;
+
+    /***
+     *
+     * @param dialog
+     * @return
+     */
+    int32_t count_dialog_token_nums(const models::llm::chat_template::Dialog& dialog) const;
 
     /***
      * if model successfully initialized
