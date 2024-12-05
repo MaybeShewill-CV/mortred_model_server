@@ -437,9 +437,9 @@ StatusCode Llama3ChatServer::Impl::regenerate_with_cache_dialogs(
     auto drop_threshold = static_cast<int32_t >(dropped_token_ratio * static_cast<float>(history_dialog_tokens));
     int32_t dropped_token_nums = 0;
     int msg_idx =0;
-    for (; msg_idx < history_dialogs.messages.size(); ++msg_idx) {
-        auto role = history_dialogs.messages[msg_idx].role;
-        auto content = history_dialogs.messages[msg_idx].content;
+    for (; msg_idx < history_dialogs.size(); ++msg_idx) {
+        auto role = history_dialogs[msg_idx].role;
+        auto content = history_dialogs[msg_idx].content;
         Dialog tmp_dia(role, content);
         dropped_token_nums += _m_generator.count_dialog_token_nums(tmp_dia);
         summary_dialogs += tmp_dia;
@@ -450,10 +450,10 @@ StatusCode Llama3ChatServer::Impl::regenerate_with_cache_dialogs(
     }
     auto summary_token_nums = static_cast<int32_t >(static_cast<float>(dropped_token_nums) * max_summary_token_ratio);
     summary_token_nums = summary_token_nums > 0 ? summary_token_nums : 1;
-    summary_dialogs.messages.emplace_back("system", "You are an assistant skilled at generating summaries.");
-    summary_dialogs.messages.emplace_back(
-        "user",
-        fmt::format("Please summarize the multi-turn conversation above in content not exceeding {} tokens.", summary_token_nums)
+    summary_dialogs.push_back({"system", "You are an assistant skilled at generating summaries."});
+    summary_dialogs.push_back(
+        {"user", fmt::format("Please summarize the multi-turn conversation above "
+                             "in content not exceeding {} tokens.", summary_token_nums)}
     );
 
     // check summary dialog token nums
@@ -479,11 +479,11 @@ StatusCode Llama3ChatServer::Impl::regenerate_with_cache_dialogs(
         "system",
         fmt::format("You are a smart ai assistant from Mortred Company.Here is the summary of our previous {} rounds of "
                     "conversation. Summary content is {}.Please continue assisting the customer based on it.",
-                    summary_dialogs.messages.size(), summary_msg)
+                    summary_dialogs.size(), summary_msg)
     );
     LOG(INFO) << "n_tokens: " << _m_generator.count_dialog_token_nums(updated_dialog) << " used after summary";
-    for (auto i = msg_idx; i < history_dialogs.messages.size(); ++i) {
-        updated_dialog.messages.push_back(history_dialogs.messages[i]);
+    for (auto i = msg_idx; i < history_dialogs.size(); ++i) {
+        updated_dialog.push_back(history_dialogs[i]);
     }
     _m_user_history_dialogs[task.uuid].clean_cache();
     _m_user_history_dialogs[task.uuid] = updated_dialog;

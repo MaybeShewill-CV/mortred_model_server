@@ -55,6 +55,10 @@ class Dialog {
         return *this;
     }
 
+    inline ChatMessage& operator[](size_t index) {
+        return messages[index];
+    }
+
     inline void push_back(const ChatMessage& msg) {
         messages.push_back(msg);
     }
@@ -66,6 +70,10 @@ class Dialog {
     bool empty() const {
         return messages.empty();
     };
+
+    inline size_t size() const {
+        return messages.size();
+    }
 
   public:
     std::vector<ChatMessage> messages;
