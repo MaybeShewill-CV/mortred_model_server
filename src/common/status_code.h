@@ -62,6 +62,9 @@ enum StatusCode {
     TRT_ALLOC_MEMO_FAILED = 91,
     TRT_CONVERT_ONNX_MODEL_FAILED = 92,
     TRT_ALLOC_DYNAMIC_SHAPE_MEMO = 93,
+
+    // llm relative status
+    LLM_CONTEXT_SIZE_EXCEEDED = 100,
 };
 
 /***
