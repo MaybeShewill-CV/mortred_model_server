@@ -244,6 +244,13 @@ void Llama3ChatServer::Impl::serve_process(WFHttpTask* task) {
         task->get_resp()->append_output_body("<html>Hello World !!!</html>");
         return;
     }
+    // check model stat
+    else if (strcmp(task->get_req()->get_request_uri(), "/check_model_stat") == 0) {
+        auto model_stat = _m_generator.get_model_stat();
+        task->get_resp()->append_output_body(fmt::format(
+            "<html>n_ctx: {}\n kv cache used: {}</html>", model_stat.n_ctx_size, model_stat.kv_cache_cell_nums));
+        return;
+    }
     // model service
     else if (strcmp(task->get_req()->get_request_uri(), _m_server_uri.c_str()) == 0) {
         // parse request body
