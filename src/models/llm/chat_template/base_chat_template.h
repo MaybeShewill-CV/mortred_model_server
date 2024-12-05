@@ -36,6 +36,14 @@ class Dialog {
 
     Dialog& operator=(const Dialog &transformer) = default;
 
+    explicit Dialog (const ChatMessage &msg) {
+        messages.push_back(msg);
+    }
+
+    Dialog (const std::string& role, const std::string& content) {
+        messages.emplace_back(role, content);
+    }
+
     Dialog operator+(const Dialog& other) {
         Dialog tmp(*this);
         std::copy(other.messages.begin(), other.messages.end(), std::back_inserter(tmp.messages));
