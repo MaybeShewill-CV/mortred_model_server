@@ -89,6 +89,13 @@ class Llama3 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
     void clear_kv_cache_cell() const;
 
     /***
+     *
+     * @param prompt
+     * @return
+     */
+    int32_t count_prompt_token_nums(const std::string& prompt) const;
+
+    /***
      * if model successfully initialized
      * @return
      */
@@ -98,6 +105,7 @@ class Llama3 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
     class Impl;
     std::unique_ptr<Impl> _m_pimpl;
 };
+
 }
 }
 }

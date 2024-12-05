@@ -136,6 +136,8 @@ public:
      */
     void clear_kv_cache_cell() const;
 
+    int32_t count_prompt_token_nums(const std::string& prompt) const;
+
     /***
      *
      * @return
@@ -348,6 +350,22 @@ void Llama3<INPUT, OUTPUT>::Impl::clear_kv_cache_cell() const {
  *
  * @tparam INPUT
  * @tparam OUTPUT
+ * @param prompt
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+int32_t Llama3<INPUT, OUTPUT>::Impl::count_prompt_token_nums(const std::string &prompt) const {
+   if (prompt.empty()) {
+       return 0;
+   }
+   auto n_prompt_tokens = llama_tokenize(_m_model, prompt.c_str(), static_cast<int32_t>(prompt.size()), nullptr, 0, true, true);
+   return -n_prompt_tokens;
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
  * @param prompt_tokens
  * @return
  */
@@ -362,7 +380,7 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::llama_generate(std::vector<llama_token>&
         int n_ctx_used = llama_get_kv_cache_used_cells(_m_ctx);
         if (n_ctx_used + batch.n_tokens > n_ctx) {
             LOG(ERROR) << "context size exceeded";
-            return StatusCode::MODEL_RUN_SESSION_FAILED;
+            return StatusCode::LLM_CONTEXT_SIZE_EXCEEDED;
         }
 
         auto status = llama_decode(_m_ctx, batch);
@@ -487,6 +505,18 @@ ModelStatus Llama3<INPUT, OUTPUT>::get_model_stat() const {
 template <typename INPUT, typename OUTPUT>
 void Llama3<INPUT, OUTPUT>::clear_kv_cache_cell() const {
     return _m_pimpl->clear_kv_cache_cell();
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param prompt
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+int32_t Llama3<INPUT, OUTPUT>::count_prompt_token_nums(const std::string &prompt) const {
+    return _m_pimpl->count_prompt_token_nums(prompt);
 }
 
 }
