@@ -251,6 +251,14 @@ void Llama3ChatServer::Impl::serve_process(WFHttpTask* task) {
             "<html>n_ctx: {}\n kv cache used: {}</html>", model_stat.n_ctx_size, model_stat.kv_cache_cell_nums));
         return;
     }
+    // clear kv cache
+    else if (strcmp(task->get_req()->get_request_uri(), "/clear_kv_cache") == 0) {
+        _m_generator.clear_kv_cache_cell();
+        auto model_stat = _m_generator.get_model_stat();
+        task->get_resp()->append_output_body(fmt::format(
+            "<html>kv cache cleared.\n n_ctx: {}\n kv cache used: {}</html>", model_stat.n_ctx_size, model_stat.kv_cache_cell_nums));
+        return;
+    }
     // model service
     else if (strcmp(task->get_req()->get_request_uri(), _m_server_uri.c_str()) == 0) {
         // parse request body
