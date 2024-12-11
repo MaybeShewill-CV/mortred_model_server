@@ -32,6 +32,7 @@ file(GLOB_RECURSE NVINFER_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*nvinfer*
 file(GLOB_RECURSE TRT_ONNXPARSER_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*nvonnxparser*.so*)
 file(GLOB_RECURSE LLAMA_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*llama*.so*)
 file(GLOB_RECURSE GGML_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*ggml*.so*)
+file(GLOB_RECURSE FAISS_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*faiss*.so*)
 
 # find package
 find_package(Threads REQUIRED)
