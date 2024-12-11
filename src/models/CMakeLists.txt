@@ -21,5 +21,6 @@ target_link_libraries(
     ${WORKFLOW_LIBS}
     ${LLAMA_LIBRARIES}
     ${GGML_LIBRARIES}
+    ${FAISS_LIBRARIES}
 )
 set_target_properties(models PROPERTIES LINKER_LANGUAGE CXX)

@@ -56,6 +56,7 @@ enum StatusCode {
     // tokenization failed
     TOKENIZE_UNKNOWN_TOKEN = 80,
     TOKENIZE_FAILED = 81,
+    ENCODE_TOKEN_FAILED = 82,
 
     // trt error
     TRT_CUDA_ERROR = 90,
@@ -65,6 +66,10 @@ enum StatusCode {
 
     // llm relative status
     LLM_CONTEXT_SIZE_EXCEEDED = 100,
+
+    // RAG relative status
+    RAG_PARSE_WIKI_STR_FAILED = 120,
+    RAG_BUILD_CORPUS_INDEX_FAILED = 121,
 };
 
 /***

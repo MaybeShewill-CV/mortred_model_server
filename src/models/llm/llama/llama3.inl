@@ -8,6 +8,7 @@
 #include "llama3.h"
 
 #include "glog/logging.h"
+#include "fmt/format.h"
 #include "llama_cpp/llama.h"
 
 #include "common/cv_utils.h"
@@ -127,6 +128,20 @@ public:
 
     /***
      *
+     * @param prompt
+     * @param out_embeddings
+     * @param pool_type
+     * @param truncated
+     * @param max_seq_len
+     * @param do_norm
+     * @return
+     */
+    StatusCode embed_prompt(
+        const std::string& prompt, std::vector<std::vector<float> >& out_embeddings, const std::string& pool_type = "mean",
+        bool truncated=true, int32_t max_seq_len=512, bool do_norm=true);
+
+    /***
+     *
      * @return
      */
     ModelStatus get_model_stat() const;
@@ -136,6 +151,11 @@ public:
      */
     void clear_kv_cache_cell() const;
 
+    /***
+     *
+     * @param prompt
+     * @return
+     */
     int32_t count_prompt_token_nums(const std::string& prompt) const;
 
     /***
@@ -325,6 +345,106 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::tokenize_prompt(const std::string& promp
  *
  * @tparam INPUT
  * @tparam OUTPUT
+ * @param prompt
+ * @param out_embeddings
+ * @param pool_type
+ * @param truncated
+ * @param max_seq_len
+ * @param do_norm
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+StatusCode Llama3<INPUT, OUTPUT>::Impl::embed_prompt(
+    const std::string& prompt, std::vector<std::vector<float> >& out_embeddings, const std::string& pool_type,
+    bool truncated, int32_t max_seq_len, bool do_norm) {
+    // check prompt validation
+    if (prompt.empty()) {
+        LOG(ERROR) << "empty prompt";
+        return StatusCode::TOKENIZE_FAILED;
+    }
+
+    // tokenize prompt
+    std::vector<llama_token> prompt_tokens;
+    auto status = tokenize_prompt(prompt, prompt_tokens);
+    if (status != StatusCode::OK) {
+        LOG(ERROR) << "tokenize prompt failed";
+        return StatusCode::TOKENIZE_FAILED;
+    }
+    if (truncated && prompt_tokens.size() > max_seq_len) {
+        prompt_tokens.resize(max_seq_len);
+    }
+
+    // fill-in batch data
+    auto batch = llama_batch_init(static_cast<int32_t >(prompt_tokens.size()), 0, 1);
+    for (int32_t i = 0; i < prompt_tokens.size(); i++) {
+        batch.token[batch.n_tokens] = prompt_tokens[i];
+        batch.pos[batch.n_tokens] = i;
+        batch.n_seq_id[batch.n_tokens] = 1;
+        for (size_t j = 0; j < 1; ++j) {
+            batch.seq_id[batch.n_tokens][j] = 0;
+        }
+        batch.logits[batch.n_tokens] = true;
+        batch.n_tokens++;
+    }
+
+    // embed tokens
+    auto embed_dims = llama_n_embd(_m_model);
+    llama_kv_cache_clear(_m_ctx);
+    llama_set_embeddings(_m_ctx, true);
+    llama_decode(_m_ctx, batch);
+    out_embeddings.resize(batch.n_tokens, std::vector<float>(embed_dims, 0.0));
+    for (int i = 0; i < batch.n_tokens; i++) {
+        if (!batch.logits[i]) {
+            continue;
+        }
+        const float * embd = llama_get_embeddings_ith(_m_ctx, i);
+        for (auto j = 0; j < llama_n_embd(_m_model); ++j) {
+            out_embeddings[i][j] = embd[j];
+        }
+    }
+    llama_set_embeddings(_m_ctx, false);
+
+    // check if need pool embeddings
+    std::string trans_pool_type;
+    std::transform(pool_type.begin(), pool_type.end(), trans_pool_type.begin(), [](unsigned char c) { return std::tolower(c);});
+    if (trans_pool_type == "mean") {
+        std::vector<float> pooled_embeds(embed_dims, 0.0f);
+        auto rows = out_embeddings.size();
+        auto cols = out_embeddings[0].size();
+        for (auto col = 0; col < cols; ++col) {
+            float sum = 0.0f;
+            for (auto row = 0; row < rows; ++row) {
+                sum += out_embeddings[row][col];
+            }
+            sum /= static_cast<float>(rows);
+            pooled_embeds[col] = sum;
+        }
+        out_embeddings.clear();
+        out_embeddings.push_back(pooled_embeds);
+    }
+
+    // norm embeddings
+    if (do_norm) {
+        for (auto& emb_vec : out_embeddings) {
+            auto sum = 0.0f;
+            for (auto& val : emb_vec) {
+                sum += static_cast<float>(std::pow(val, 2));
+            }
+            sum = sum > 0 ? std::sqrt(sum) : 0.0f;
+            float norm = 1.0f / sum;
+            for (auto& val : emb_vec) {
+                val *= norm;
+            }
+        }
+    }
+
+    return StatusCode::OK;
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
  * @return
  */
 template <typename INPUT, typename OUTPUT>
@@ -332,6 +452,7 @@ ModelStatus Llama3<INPUT, OUTPUT>::Impl::get_model_stat() const {
     ModelStatus stat{};
     stat.n_ctx_size = llama_n_ctx(_m_ctx);
     stat.kv_cache_cell_nums = llama_get_kv_cache_used_cells(_m_ctx);
+    stat.embed_dims = llama_n_embd(_m_model);
     return stat;
 }
 
@@ -435,7 +556,7 @@ Llama3<INPUT, OUTPUT>::Llama3() {
  * @tparam OUTPUT
  */
 template <typename INPUT, typename OUTPUT>
-Llama3<INPUT, OUTPUT>::~Llama3() = default;
+Llama3<INPUT, OUTPUT>::~Llama3() {};
 
 /***
  *
@@ -484,6 +605,25 @@ StatusCode Llama3<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
 template <typename INPUT, typename OUTPUT>
 StatusCode Llama3<INPUT, OUTPUT>::tokenize_prompt(const std::string& prompt, std::vector<llama_token>& prompt_tokens) {
     return _m_pimpl->tokenize_prompt(prompt, prompt_tokens);
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param prompt
+ * @param out_embeddings
+ * @param pool_type
+ * @param truncated
+ * @param max_seq_len
+ * @param do_norm
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+StatusCode Llama3<INPUT, OUTPUT>::embed_prompt(
+    const std::string& prompt, std::vector<std::vector<float> >& out_embeddings,
+    const std::string& pool_type, bool truncated, int32_t max_seq_len, bool do_norm) {
+    return _m_pimpl->embed_prompt(prompt, out_embeddings, pool_type, truncated, max_seq_len, do_norm);
 }
 
 /***

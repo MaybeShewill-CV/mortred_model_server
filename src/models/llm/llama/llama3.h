@@ -25,6 +25,7 @@ namespace llama {
 struct ModelStatus {
     uint32_t n_ctx_size;
     int32_t kv_cache_cell_nums;
+    int32_t embed_dims;
 };
 
 template <typename INPUT, typename OUTPUT> 
@@ -76,6 +77,20 @@ class Llama3 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
      * @return
      */
     jinq::common::StatusCode tokenize_prompt(const std::string &prompt, std::vector<llama_token> &prompt_tokens);
+
+    /***
+     *
+     * @param prompt
+     * @param out_embeddings
+     * @param pool_type
+     * @param truncated
+     * @param max_seq_len
+     * @param do_norm
+     * @return
+     */
+    jinq::common::StatusCode embed_prompt(
+        const std::string& prompt, std::vector<std::vector<float> >& out_embeddings, const std::string& pool_type = "mean",
+        bool truncated=true, int32_t max_seq_len=512, bool do_norm=true);
 
     /***
      *
