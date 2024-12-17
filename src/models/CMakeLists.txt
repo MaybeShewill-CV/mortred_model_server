@@ -12,7 +12,7 @@ target_link_libraries(
     common
     ${MNN_LIBS}
     ${OpenCV_LIBS}
-    ${GLOG_LIBRARIES}
+    glog::glog
     ${ONNXRUNTIME_LIBRARIES}
     ${FMT_LIBRARIES}
     ${NVINFER_LIBRARIES}

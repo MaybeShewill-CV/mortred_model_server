@@ -12,6 +12,6 @@ target_link_libraries(
     common
     models
     ${WORKFLOW_LIBS}
-    ${GLOG_LIBRARIES}
+    glog::glog
 )
 set_target_properties(server PROPERTIES LINKER_LANGUAGE CXX)
