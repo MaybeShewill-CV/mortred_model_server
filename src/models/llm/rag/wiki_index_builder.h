@@ -1,16 +1,17 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: WikiPreprocessor.h
+ * File: wiki_index_builder.h
  * Date: 24-12-9
  ************************************************/
 
-#ifndef MORTRED_MODEL_SERVER_WIKI_PREPROCESSOR_H
-#define MORTRED_MODEL_SERVER_WIKI_PREPROCESSOR_H
+#ifndef MORTRED_MODEL_SERVER_WIKI_INDEX_BUILDER_H
+#define MORTRED_MODEL_SERVER_WIKI_INDEX_BUILDER_H
 
 #include <memory>
 
 #include "toml/toml.hpp"
+#include "faiss/IndexFlat.h"
 
 #include "common/status_code.h"
 
@@ -18,31 +19,32 @@ namespace jinq {
 namespace models {
 namespace llm {
 namespace rag {
-class WikiPreprocessor {
+
+class WikiIndexBuilder {
   public:
     /***
     * constructor
     * @param config
      */
-    WikiPreprocessor();
+    WikiIndexBuilder();
     
     /***
      *
      */
-    ~WikiPreprocessor();
+    ~WikiIndexBuilder();
     
     /***
     * constructor
     * @param transformer
      */
-    WikiPreprocessor(const WikiPreprocessor &transformer) = delete;
+    WikiIndexBuilder(const WikiIndexBuilder &transformer) = delete;
 
     /***
      * constructor
      * @param transformer
      * @return
      */
-    WikiPreprocessor &operator=(const WikiPreprocessor &transformer) = delete;
+    WikiIndexBuilder &operator=(const WikiIndexBuilder &transformer) = delete;
 
     /***
      *
@@ -60,20 +62,37 @@ class WikiPreprocessor {
     /***
      *
      * @param source_wiki_corpus_dir
-     * @param out_save_path
-     * @param chunk_word_size
+     * @param out_index_dir
      * @return
      */
-    jinq::common::StatusCode chunk_wiki_corpus(
-        const std::string& source_wiki_corpus_dir, const std::string& out_save_path, int chunk_word_size = 100);
+    jinq::common::StatusCode build_index(const std::string& source_wiki_corpus_dir, const std::string& out_index_dir);
 
     /***
      *
-     * @param segmented_corpus_path
-     * @param out_index_path
+     * @param index_f_path
+     * @param index
      * @return
      */
-    jinq::common::StatusCode build_chunk_index(const std::string& segmented_corpus_path, const std::string& out_index_path);
+    jinq::common::StatusCode load_index(const std::string& index_f_path);
+
+    /***
+     *
+     * @param corpus_segment_path
+     * @param segments
+     * @return
+     */
+    jinq::common::StatusCode load_corpus_segment(const std::string& corpus_segment_path);
+
+    /***
+     *
+     * @param input_prompt
+     * @param referenced_corpus
+     * @param top_k
+     * @param aapply_chat_template
+     * @return
+     */
+    jinq::common::StatusCode search(
+        const std::string& input_prompt, std::string& referenced_corpus, int top_k=1, bool apply_chat_template=true);
 
   private:
     class Impl;
@@ -85,4 +104,4 @@ class WikiPreprocessor {
 }
 }
 
-#endif // MORTRED_MODEL_SERVER_WIKI_PREPROCESSOR_H
+#endif // MORTRED_MODEL_SERVER_WIKI_INDEX_BUILDER_H
