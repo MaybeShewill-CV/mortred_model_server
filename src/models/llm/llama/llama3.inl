@@ -406,6 +406,7 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::embed_prompt(
 
     // check if need pool embeddings
     std::string trans_pool_type;
+    trans_pool_type.resize(pool_type.size());
     std::transform(pool_type.begin(), pool_type.end(), trans_pool_type.begin(), [](unsigned char c) { return std::tolower(c);});
     if (trans_pool_type == "mean") {
         std::vector<float> pooled_embeds(embed_dims, 0.0f);
@@ -556,7 +557,7 @@ Llama3<INPUT, OUTPUT>::Llama3() {
  * @tparam OUTPUT
  */
 template <typename INPUT, typename OUTPUT>
-Llama3<INPUT, OUTPUT>::~Llama3() {};
+Llama3<INPUT, OUTPUT>::~Llama3() = default;
 
 /***
  *
