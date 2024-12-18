@@ -229,39 +229,45 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")) &co
     auto main_gpu_device_id = static_cast<int32_t >(model_cfg.at("main_gpu_device").as_integer());
     _m_model_params.n_gpu_layers = n_gpu_layers;
     _m_model_params.main_gpu = main_gpu_device_id;
+    _m_model_params.vocab_only = false;
+    if (model_cfg.contains("vocab_only")) {
+        _m_model_params.vocab_only = model_cfg.at("vocab_only").as_boolean();
+    }
     _m_model = llama_load_model_from_file(_m_model_file_path.c_str(), _m_model_params);
     if (_m_model == nullptr) {
         LOG(ERROR) << "load llama3 model from: " << _m_model_file_path << " failed";
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    // init sampler
-    _m_sampler = llama_sampler_chain_init(_m_sampler_params);
-    if (_m_sampler == nullptr) {
-        LOG(ERROR) << "failed to create the llama sampler";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    auto temp = static_cast<float>(model_cfg.at("sampler_temp").as_floating());
-    auto init_min_p = 0.05f;
-    auto min_keep = 1;
-    llama_sampler_chain_add(_m_sampler, llama_sampler_init_min_p(init_min_p, min_keep));
-    llama_sampler_chain_add(_m_sampler, llama_sampler_init_temp(temp));
-    llama_sampler_chain_add(_m_sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
+    if (!_m_model_params.vocab_only) {
+        // init sampler
+        _m_sampler = llama_sampler_chain_init(_m_sampler_params);
+        if (_m_sampler == nullptr) {
+            LOG(ERROR) << "failed to create the llama sampler";
+            return StatusCode::MODEL_INIT_FAILED;
+        }
+        auto temp = static_cast<float>(model_cfg.at("sampler_temp").as_floating());
+        auto init_min_p = 0.05f;
+        auto min_keep = 1;
+        llama_sampler_chain_add(_m_sampler, llama_sampler_init_min_p(init_min_p, min_keep));
+        llama_sampler_chain_add(_m_sampler, llama_sampler_init_temp(temp));
+        llama_sampler_chain_add(_m_sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
 
-    // init ctx params
-    if (!config.contains("CONTEXT")) {
-        LOG(ERROR) << "Config file does not contain CONTEXT section";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    toml::value ctx_cfg = config.at("CONTEXT");
-    auto ctx_size = static_cast<int32_t >(ctx_cfg.at("context_size").as_integer());
-    _m_ctx_params.n_ctx = ctx_size;
-    _m_ctx_params.n_batch = ctx_size;
-    _m_ctx = llama_new_context_with_model(_m_model, _m_ctx_params);
-    if (_m_ctx == nullptr) {
-        LOG(ERROR) << "failed to create the llama_context";
-        return StatusCode::MODEL_INIT_FAILED;
+        // init ctx params
+        if (!config.contains("CONTEXT")) {
+            LOG(ERROR) << "Config file does not contain CONTEXT section";
+            _m_successfully_initialized = false;
+            return StatusCode::MODEL_INIT_FAILED;
+        }
+        toml::value ctx_cfg = config.at("CONTEXT");
+        auto ctx_size = static_cast<int32_t >(ctx_cfg.at("context_size").as_integer());
+        _m_ctx_params.n_ctx = ctx_size;
+        _m_ctx_params.n_batch = ctx_size;
+        _m_ctx = llama_new_context_with_model(_m_model, _m_ctx_params);
+        if (_m_ctx == nullptr) {
+            LOG(ERROR) << "failed to create the llama_context";
+            return StatusCode::MODEL_INIT_FAILED;
+        }
     }
 
     _m_successfully_initialized = true;
@@ -331,7 +337,10 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::tokenize_prompt(const std::string& promp
     auto prompt_size = static_cast<int32_t >(prompt.size());
     auto token_data = prompt_tokens.data();
     auto token_size = static_cast<int32_t>(prompt_tokens.size());
-    auto add_special = llama_get_kv_cache_used_cells(_m_ctx) == 0;
+    bool add_special = true;
+    if (nullptr != _m_ctx) {
+        add_special = llama_get_kv_cache_used_cells(_m_ctx) == 0;
+    }
     auto token_nums = llama_tokenize(_m_model, prompt.c_str(), prompt_size, token_data, token_size, add_special, true);
     if (token_nums < 0) {
         LOG(ERROR) << "failed to tokenize the prompt: " << prompt;

@@ -111,8 +111,9 @@ class JinaEmbeddingsV3<INPUT, OUTPUT>::Impl {
         if (_m_backend_type == TRT) {
             LOG(ERROR) << "trt backend has not been implemented";
         } else {
-            _m_onnx_params.session->release();
-            return;
+            if (nullptr != _m_onnx_params.session) {
+                _m_onnx_params.session->release();
+            }
         }
     }
 
