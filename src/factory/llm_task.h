@@ -11,6 +11,7 @@
 #include "factory/base_factory.h"
 #include "factory/register_marco.h"
 #include "models/base_model.h"
+#include "models/llm/embedding/jina_embeddings_v3.h"
 #include "server/llm/llama/llama3_chat_server.h"
 
 namespace jinq {
@@ -36,6 +37,26 @@ static std::unique_ptr<BaseAiServer> create_llama3_chat_server(const std::string
 }
 
 }
+
+namespace embedding {
+
+using jinq::models::llm::embedding::JinaEmbeddingsV3;
+
+/***
+ * create jina embedding v3 instance
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param detector_name
+ * @return
+ */
+template<typename INPUT, typename OUTPUT>
+static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_jina_embedding_v3(const std::string& model_name) {
+    REGISTER_AI_MODEL(JinaEmbeddingsV3, model_name, INPUT, OUTPUT)
+    return ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance().get_model(model_name);
+}
+
+}
+
 }
 }
 }
