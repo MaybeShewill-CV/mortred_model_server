@@ -257,6 +257,27 @@ using tokens = std::vector<int32_t >;
 
 }
 
+namespace embedding {
+
+enum pool_type {
+    EMBEDDING_MEAN_POOLING = 1,
+    EMBEDDING_NONE_POOLING = 2,
+};
+
+struct embedding_input {
+    std::string text;
+    pool_type pooling_type = EMBEDDING_MEAN_POOLING;
+};
+struct embedding_output {
+    std::vector<int32_t > token_ids;
+    std::vector<std::vector<float> > token_embeds;
+};
+
+using std_embedding_input = embedding_input;
+using std_embedding_output = embedding_output;
+
+}
+
 }
 
 } // namespace io_define
