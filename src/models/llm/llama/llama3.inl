@@ -1,3 +1,5 @@
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "Simplify"
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
@@ -122,9 +124,10 @@ public:
      *
      * @param prompt
      * @param prompt_tokens
+     * @param add_special
      * @return
      */
-    StatusCode tokenize_prompt(const std::string& prompt, std::vector<llama_token>& prompt_tokens);
+    StatusCode tokenize(const std::string& prompt, std::vector<llama_token>& prompt_tokens, bool add_special = true);
 
     /***
      *
@@ -136,7 +139,7 @@ public:
      * @param do_norm
      * @return
      */
-    StatusCode embed_prompt(
+    StatusCode get_embedding(
         const std::string& prompt, std::vector<std::vector<float> >& out_embeddings, const std::string& pool_type = "mean",
         bool truncated=true, int32_t max_seq_len=512, bool do_norm=true);
 
@@ -288,7 +291,11 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
 
         // tokenize input prompt
         std::vector<llama_token> prompt_tokens;
-        auto status = tokenize_prompt(prompt, prompt_tokens);
+        bool add_special = true;
+        if (nullptr != _m_ctx) {
+            add_special = llama_get_kv_cache_used_cells(_m_ctx) == 0;
+        }
+        auto status = tokenize(prompt, prompt_tokens, add_special);
         if (status != StatusCode::OK) {
             return status;
         }
@@ -322,29 +329,43 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
  * @tparam OUTPUT
  * @param prompt
  * @param prompt_tokens
+ * @param add_special
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode Llama3<INPUT, OUTPUT>::Impl::tokenize_prompt(const std::string& prompt, std::vector<llama_token>& prompt_tokens) {
+StatusCode Llama3<INPUT, OUTPUT>::Impl::tokenize(
+    const std::string& prompt, std::vector<llama_token>& prompt_tokens, bool add_special) {
+    // check prompt empty
     if (prompt.empty()) {
         LOG(WARNING) << "input prompt is empty";
         return StatusCode::TOKENIZE_FAILED;
     }
 
-    auto n_prompt_tokens = llama_tokenize(_m_model, prompt.c_str(), static_cast<int32_t>(prompt.size()), nullptr, 0, true, true);
-    n_prompt_tokens *= -1;
-    prompt_tokens.resize(n_prompt_tokens);
+    const bool model_wants_add_bos = llama_add_bos_token(_m_model);
+    const bool add_bos = model_wants_add_bos && add_special;
+    const bool parse_special = true;
+
+    // resize tokens counts to upper size
+    int n_tokens = prompt.length() + 2 * add_bos;
+    prompt_tokens.resize(n_tokens);
     auto prompt_size = static_cast<int32_t >(prompt.size());
     auto token_data = prompt_tokens.data();
     auto token_size = static_cast<int32_t>(prompt_tokens.size());
-    bool add_special = true;
-    if (nullptr != _m_ctx) {
-        add_special = llama_get_kv_cache_used_cells(_m_ctx) == 0;
-    }
-    auto token_nums = llama_tokenize(_m_model, prompt.c_str(), prompt_size, token_data, token_size, add_special, true);
-    if (token_nums < 0) {
-        LOG(ERROR) << "failed to tokenize the prompt: " << prompt;
-        return StatusCode::TOKENIZE_FAILED;
+    auto tokens_counts = llama_tokenize(_m_model, prompt.c_str(), prompt_size, token_data, token_size, add_bos, parse_special);
+    if (tokens_counts < 0) {
+        prompt_tokens.resize(-tokens_counts);
+        token_data = prompt_tokens.data();
+        token_size = static_cast<int32_t>(prompt_tokens.size());
+        int check = llama_tokenize(_m_model, prompt.c_str(), prompt_size, token_data, token_size, add_bos, parse_special);
+        assert(check == -tokens_counts);
+    } else if (tokens_counts > n_tokens) {
+        prompt_tokens.resize(tokens_counts);
+        token_data = prompt_tokens.data();
+        token_size = static_cast<int32_t>(prompt_tokens.size());
+        int check = llama_tokenize(_m_model, prompt.c_str(), prompt_size, token_data, token_size, add_bos, parse_special);
+        assert(check == tokens_counts);
+    } else {
+        prompt_tokens.resize(tokens_counts);
     }
 
     return StatusCode::OK;
@@ -363,7 +384,7 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::tokenize_prompt(const std::string& promp
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode Llama3<INPUT, OUTPUT>::Impl::embed_prompt(
+StatusCode Llama3<INPUT, OUTPUT>::Impl::get_embedding(
     const std::string& prompt, std::vector<std::vector<float> >& out_embeddings, const std::string& pool_type,
     bool truncated, int32_t max_seq_len, bool do_norm) {
     // check prompt validation
@@ -374,7 +395,7 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::embed_prompt(
 
     // tokenize prompt
     std::vector<llama_token> prompt_tokens;
-    auto status = tokenize_prompt(prompt, prompt_tokens);
+    auto status = tokenize(prompt, prompt_tokens);
     if (status != StatusCode::OK) {
         LOG(ERROR) << "tokenize prompt failed";
         return StatusCode::TOKENIZE_FAILED;
@@ -608,13 +629,14 @@ StatusCode Llama3<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
  *
  * @tparam INPUT
  * @tparam OUTPUT
- * @param input
- * @param output
+ * @param prompt
+ * @param prompt_tokens
+ * @param add_special
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode Llama3<INPUT, OUTPUT>::tokenize_prompt(const std::string& prompt, std::vector<llama_token>& prompt_tokens) {
-    return _m_pimpl->tokenize_prompt(prompt, prompt_tokens);
+StatusCode Llama3<INPUT, OUTPUT>::tokenize(const std::string& prompt, std::vector<llama_token>& prompt_tokens, bool add_special) {
+    return _m_pimpl->tokenize(prompt, prompt_tokens, add_special);
 }
 
 /***
@@ -630,10 +652,10 @@ StatusCode Llama3<INPUT, OUTPUT>::tokenize_prompt(const std::string& prompt, std
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode Llama3<INPUT, OUTPUT>::embed_prompt(
+StatusCode Llama3<INPUT, OUTPUT>::get_embedding(
     const std::string& prompt, std::vector<std::vector<float> >& out_embeddings,
     const std::string& pool_type, bool truncated, int32_t max_seq_len, bool do_norm) {
-    return _m_pimpl->embed_prompt(prompt, out_embeddings, pool_type, truncated, max_seq_len, do_norm);
+    return _m_pimpl->get_embedding(prompt, out_embeddings, pool_type, truncated, max_seq_len, do_norm);
 }
 
 /***
@@ -673,3 +695,4 @@ int32_t Llama3<INPUT, OUTPUT>::count_prompt_token_nums(const std::string &prompt
 }
 }
 }
+#pragma clang diagnostic pop

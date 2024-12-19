@@ -531,7 +531,7 @@ StatusCode WikiIndexBuilder::Impl::search(
 
     // encode input prompt
     std::vector<std::vector<float> > input_prompt_feats;
-    auto status = _m_encoders[0]->embed_prompt(input_prompt, input_prompt_feats, "mean", true, _m_token_max_len, true);
+    auto status = _m_encoders[0]->get_embedding(input_prompt, input_prompt_feats, "mean", true, _m_token_max_len, true);
     if (status != StatusCode::OK) {
         LOG(ERROR) << fmt::format("encode input prompt failed status code: {}", status);
         return StatusCode::RAG_SEARCH_SEGMENT_CORPUS_FAILED;
@@ -910,7 +910,7 @@ StatusCode WikiIndexBuilder::Impl::embed_segments(int worker_id, series_ctx *ctx
         auto& text = segment.text;
         auto fmt_input = fmt::format("passage: {}", text);
         std::vector<std::vector<float> > embs;
-        auto status = model->embed_prompt(fmt_input, embs, "mean", true, ctx->token_max_len, true);
+        auto status = model->get_embedding(fmt_input, embs, "mean", true, ctx->token_max_len, true);
         if (status != StatusCode::OK) {
             LOG(WARNING) << fmt::format("embed prompt failed status: {}", status);
             std::vector<float> feature(embed_dims, 0.0f);

@@ -74,9 +74,10 @@ class Llama3 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
      *
      * @param prompt
      * @param prompt_tokens
+     * @param add_special
      * @return
      */
-    jinq::common::StatusCode tokenize_prompt(const std::string &prompt, std::vector<llama_token> &prompt_tokens);
+    jinq::common::StatusCode tokenize(const std::string &prompt, std::vector<llama_token> &prompt_tokens, bool add_special = true);
 
     /***
      *
@@ -88,7 +89,7 @@ class Llama3 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
      * @param do_norm
      * @return
      */
-    jinq::common::StatusCode embed_prompt(
+    jinq::common::StatusCode get_embedding(
         const std::string& prompt, std::vector<std::vector<float> >& out_embeddings, const std::string& pool_type = "mean",
         bool truncated=true, int32_t max_seq_len=512, bool do_norm=true);
 

@@ -145,7 +145,7 @@ StatusCode Llama3Generator::Impl::init(const decltype(toml::parse("")) &config) 
 StatusCode Llama3Generator::Impl::text_completion(const std::string &prompt, std::string &generate_output) {
     // tokenize prompts
     std::vector<llama_token> prompt_tokens;
-    auto status = _m_model.tokenize_prompt(prompt, prompt_tokens);
+    auto status = _m_model.tokenize(prompt, prompt_tokens);
     if (status != StatusCode::OK) {
         LOG(ERROR) << "tokenize dialog failed, status code: " << status;
         return status;
@@ -179,7 +179,7 @@ StatusCode Llama3Generator::Impl::chat_completion(Dialog &dialog, std::string &g
 
     // tokenize prompts
     std::vector<llama_token> prompt_tokens;
-    status = _m_model.tokenize_prompt(fmt_prompt, prompt_tokens);
+    status = _m_model.tokenize(fmt_prompt, prompt_tokens);
     if (status != StatusCode::OK) {
         LOG(ERROR) << "tokenize dialog failed, status code: " << status;
         return status;

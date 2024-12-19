@@ -56,10 +56,9 @@ int main(int argc, char** argv) {
     LOG(INFO) << fmt::format("tokenizer run loop times: {}", loop_times);
     LOG(INFO) << "start tokenizer benchmark at: " << Timestamp::now().to_format_str();
     std::vector<int32_t > tokens;
-//    tokens.resize(3);
     auto ts = Timestamp::now();
     for (int i = 0; i < loop_times; ++i) {
-        model.tokenize_prompt(text, tokens);
+        model.tokenize(text, tokens);
     }
     auto cost_time = Timestamp::now() - ts;
     LOG(INFO) << "benchmark ends at: " << Timestamp::now().to_format_str();

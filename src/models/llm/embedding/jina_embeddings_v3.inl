@@ -377,7 +377,7 @@ StatusCode JinaEmbeddingsV3<INPUT, OUTPUT>::Impl::onnx_run(const INPUT &in, OUTP
     auto pooling_type = input.pooling_type;
 
     // tokenize text
-    auto status = _m_tokenizer->tokenize_prompt(input_text, embed_out.token_ids);
+    auto status = _m_tokenizer->tokenize(input_text, embed_out.token_ids);
     if (status != StatusCode::OK) {
         LOG(ERROR) << fmt::format("tokenizing input text: {} failed, status code: {}", input_text, status);
         return StatusCode::MODEL_RUN_SESSION_FAILED;
