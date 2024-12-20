@@ -107,10 +107,10 @@ public:
 
     /***
      *
-     * @param cfg_file_path
+     * @param config
      * @return
      */
-    StatusCode init(const decltype(toml::parse("")) &config);
+    StatusCode init(const toml::value& config);
 
     /***
      *
@@ -145,6 +145,31 @@ public:
 
     /***
      *
+     * @param prompt
+     * @param generate_output
+     * @return
+     */
+    StatusCode text_completion(const std::string& prompt, std::string& generate_output);
+
+    /***
+     *
+     * @param dialog
+     * @param generate_output
+     * @return
+     */
+    StatusCode chat_completion(Dialog& dialog, std::string& generate_output);
+
+    /***
+     *
+     * @param dialog
+     * @param add_ass
+     * @param out_formatted_str
+     * @return
+     */
+    StatusCode apply_chat_template(const Dialog& dialog, bool add_ass, std::string& out_formatted_str);
+
+    /***
+     *
      * @return
      */
     ModelStatus get_model_stat() const;
@@ -153,13 +178,6 @@ public:
      *
      */
     void clear_kv_cache_cell() const;
-
-    /***
-     *
-     * @param prompt
-     * @return
-     */
-    int32_t count_prompt_token_nums(const std::string& prompt) const;
 
     /***
      *
@@ -205,7 +223,7 @@ private:
 * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode Llama3<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")) &config) {
+StatusCode Llama3<INPUT, OUTPUT>::Impl::init(const toml::value& config) {
     if (!config.contains("LLAMA3")) {
         LOG(ERROR) << "Config file does not contain LLAMA3 section";
         _m_successfully_initialized = false;
@@ -263,7 +281,10 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")) &co
             return StatusCode::MODEL_INIT_FAILED;
         }
         toml::value ctx_cfg = config.at("CONTEXT");
-        auto ctx_size = static_cast<int32_t >(ctx_cfg.at("context_size").as_integer());
+        auto ctx_size = llama_n_ctx_train(_m_model);
+        if (ctx_cfg.contains("context_size")) {
+            ctx_size = static_cast<int32_t >(ctx_cfg.at("context_size").as_integer());
+        }
         _m_ctx_params.n_ctx = ctx_size;
         _m_ctx_params.n_batch = ctx_size;
         _m_ctx = llama_new_context_with_model(_m_model, _m_ctx_params);
@@ -337,7 +358,7 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::tokenize(
     const std::string& prompt, std::vector<llama_token>& prompt_tokens, bool add_special) {
     // check prompt empty
     if (prompt.empty()) {
-        LOG(WARNING) << "input prompt is empty";
+        LOG(ERROR) << "input prompt is empty";
         return StatusCode::TOKENIZE_FAILED;
     }
 
@@ -357,13 +378,21 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::tokenize(
         token_data = prompt_tokens.data();
         token_size = static_cast<int32_t>(prompt_tokens.size());
         int check = llama_tokenize(_m_model, prompt.c_str(), prompt_size, token_data, token_size, add_bos, parse_special);
-        assert(check == -tokens_counts);
+        if (check != -tokens_counts) {
+            LOG(ERROR) << fmt::format("token counts shifted after resize token container capacity, token counts: {} before resizing, "
+                          "counts: {} after resizing", -tokens_counts, check);
+            return StatusCode::TOKENIZE_FAILED;
+        }
     } else if (tokens_counts > n_tokens) {
         prompt_tokens.resize(tokens_counts);
         token_data = prompt_tokens.data();
         token_size = static_cast<int32_t>(prompt_tokens.size());
         int check = llama_tokenize(_m_model, prompt.c_str(), prompt_size, token_data, token_size, add_bos, parse_special);
-        assert(check == tokens_counts);
+        if (check != tokens_counts) {
+            LOG(ERROR) << fmt::format("token counts shifted after resize token container capacity, token counts: {} before resizing, "
+                                      "counts: {} after resizing", tokens_counts, check);
+            return StatusCode::TOKENIZE_FAILED;
+        }
     } else {
         prompt_tokens.resize(tokens_counts);
     }
@@ -476,6 +505,103 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::get_embedding(
  *
  * @tparam INPUT
  * @tparam OUTPUT
+ * @param prompt
+ * @param generate_output
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+StatusCode Llama3<INPUT, OUTPUT>::Impl::text_completion(const std::string &prompt, std::string &generate_output) {
+    return run(prompt, generate_output);
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param dialog
+ * @param generate_output
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+StatusCode Llama3<INPUT, OUTPUT>::Impl::chat_completion(Dialog &dialog, std::string &generate_output) {
+    // template format dialog
+    std::string fmt_prompt;
+    auto status = apply_chat_template(dialog, false, fmt_prompt);
+    if (status != StatusCode::OK) {
+        LOG(ERROR) << "apply chat template for dialog failed, status code: " << status;
+        return status;
+    }
+
+    // tokenize prompts
+    std::vector<llama_token> prompt_tokens;
+    status = tokenize(fmt_prompt, prompt_tokens);
+    if (status != StatusCode::OK) {
+        LOG(ERROR) << "tokenize dialog failed, status code: " << status;
+        return status;
+    }
+
+    // chat completion
+    status = run(prompt_tokens, generate_output);
+
+    return status;
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param dialog
+ * @param add_ass
+ * @param out_formatted_str
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+StatusCode Llama3<INPUT, OUTPUT>::Impl::apply_chat_template(const Dialog &dialog, bool add_ass, std::string &out_formatted_str) {
+    // allocate string buffer
+    int32_t alloc_size = 0;
+    bool fallback = false; // indicate if we must fallback to default chatml
+    std::vector<llama_chat_message> chat;
+    for (auto& msg : dialog.messages) {
+        alloc_size += static_cast<int>(static_cast<double>((std::strlen(msg.role) + std::strlen(msg.content))) * 1.25);
+    }
+    std::vector<char> buf(alloc_size);
+
+    // run the first time to get the total output length
+    int32_t res = llama_chat_apply_template(
+        _m_model, nullptr, dialog.messages.data(), dialog.size(), add_ass, buf.data(), alloc_size);
+
+    // error: chat template is not supported
+    if (res < 0) {
+        LOG(WARNING) << "failed to apply model's default chat template. Will try again with chatml template";
+        res = llama_chat_apply_template(nullptr, "chatml", chat.data(), chat.size(), add_ass, buf.data(), alloc_size);
+        fallback = true;
+        if (res < 0) {
+            LOG(ERROR) << "failed to apply default chatml template";
+            return StatusCode::LLM_APPLY_CHAT_TEMPLATE_FAILED;
+        }
+    }
+
+    // if it turns out that our buffer is too small, we resize it
+    if (res > buf.size()) {
+        buf.resize(res);
+        res = llama_chat_apply_template(
+            fallback ? nullptr : _m_model,
+            fallback ? "chatml" : nullptr,
+            chat.data(), chat.size(), add_ass, buf.data(), alloc_size);
+    }
+    if (res < 0) {
+        LOG(ERROR) << "failed to apply default chatml template";
+        return StatusCode::LLM_APPLY_CHAT_TEMPLATE_FAILED;
+    }
+    out_formatted_str = std::string(buf.data(), res);
+
+    return StatusCode::OK;
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
  * @return
  */
 template <typename INPUT, typename OUTPUT>
@@ -496,22 +622,6 @@ ModelStatus Llama3<INPUT, OUTPUT>::Impl::get_model_stat() const {
 template <typename INPUT, typename OUTPUT>
 void Llama3<INPUT, OUTPUT>::Impl::clear_kv_cache_cell() const {
     llama_kv_cache_clear(_m_ctx);
-}
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param prompt
- * @return
- */
-template <typename INPUT, typename OUTPUT>
-int32_t Llama3<INPUT, OUTPUT>::Impl::count_prompt_token_nums(const std::string &prompt) const {
-   if (prompt.empty()) {
-       return 0;
-   }
-   auto n_prompt_tokens = llama_tokenize(_m_model, prompt.c_str(), static_cast<int32_t>(prompt.size()), nullptr, 0, true, true);
-   return -n_prompt_tokens;
 }
 
 /***
@@ -597,7 +707,7 @@ Llama3<INPUT, OUTPUT>::~Llama3() = default;
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode Llama3<INPUT, OUTPUT>::init(const decltype(toml::parse("")) &cfg) {
+StatusCode Llama3<INPUT, OUTPUT>::init(const toml::value& cfg) {
     return _m_pimpl->init(cfg);
 }
 
@@ -662,6 +772,46 @@ StatusCode Llama3<INPUT, OUTPUT>::get_embedding(
  *
  * @tparam INPUT
  * @tparam OUTPUT
+ * @param prompt
+ * @param generate_output
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+StatusCode Llama3<INPUT, OUTPUT>::text_completion(const std::string &prompt, std::string &generate_output) {
+    return _m_pimpl->text_completion(prompt, generate_output);
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param dialog
+ * @param generate_output
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+StatusCode Llama3<INPUT, OUTPUT>::chat_completion(Dialog &dialog, std::string &generate_output) {
+    return _m_pimpl->chat_completion(dialog, generate_output);
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param dialog
+ * @param add_ass
+ * @param out_formatted_str
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+StatusCode Llama3<INPUT, OUTPUT>::apply_chat_template(const Dialog &dialog, bool add_ass, std::string &out_formatted_str) {
+   return  _m_pimpl->apply_chat_template(dialog, add_ass, out_formatted_str);
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
  * @return
  */
 template <typename INPUT, typename OUTPUT>
@@ -677,18 +827,6 @@ ModelStatus Llama3<INPUT, OUTPUT>::get_model_stat() const {
 template <typename INPUT, typename OUTPUT>
 void Llama3<INPUT, OUTPUT>::clear_kv_cache_cell() const {
     return _m_pimpl->clear_kv_cache_cell();
-}
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param prompt
- * @return
- */
-template <typename INPUT, typename OUTPUT>
-int32_t Llama3<INPUT, OUTPUT>::count_prompt_token_nums(const std::string &prompt) const {
-    return _m_pimpl->count_prompt_token_nums(prompt);
 }
 
 }

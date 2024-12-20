@@ -13,20 +13,16 @@
 #include "toml/toml.hpp"
 #include "llama_cpp/llama.h"
 
+#include "common/status_code.h"
 #include "models/base_model.h"
 #include "models/model_io_define.h"
-#include "common/status_code.h"
+#include "models/llm/llm_datatype.hpp"
 
 namespace jinq {
 namespace models {
 namespace llm {
-namespace llama {
 
-struct ModelStatus {
-    uint32_t n_ctx_size;
-    int32_t kv_cache_cell_nums;
-    int32_t embed_dims;
-};
+namespace llama {
 
 template <typename INPUT, typename OUTPUT> 
 class Llama3 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
@@ -60,7 +56,7 @@ class Llama3 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
      * @param toml
      * @return
      */
-    jinq::common::StatusCode init(const decltype(toml::parse("")) &cfg) override;
+    jinq::common::StatusCode init(const toml::value& cfg) override;
 
     /***
      *
@@ -95,6 +91,32 @@ class Llama3 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
 
     /***
      *
+     * @param input
+     * @param output
+     * @return
+     */
+    jinq::common::StatusCode text_completion(const std::string& prompt, std::string& generate_output);
+
+    /***
+     *
+     * @param dialog
+     * @param generate_output
+     * @param truncate
+     * @return
+     */
+    jinq::common::StatusCode chat_completion(Dialog& dialog, std::string& generate_output);
+
+    /***
+     *
+     * @param dialog
+     * @param add_ass
+     * @param out_formatted_str
+     * @return
+     */
+    jinq::common::StatusCode apply_chat_template(const Dialog& dialog, bool add_ass, std::string& out_formatted_str);
+
+    /***
+     *
      * @return
      */
     ModelStatus get_model_stat() const;
@@ -103,13 +125,6 @@ class Llama3 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
      *
      */
     void clear_kv_cache_cell() const;
-
-    /***
-     *
-     * @param prompt
-     * @return
-     */
-    int32_t count_prompt_token_nums(const std::string& prompt) const;
 
     /***
      * if model successfully initialized
