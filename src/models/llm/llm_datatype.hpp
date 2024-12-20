@@ -9,15 +9,18 @@
 #define MORTRED_MODEL_SERVER_COMMON_DATATYPE_H
 
 #include <string>
+#include <vector>
+
+#include "llama_cpp/llama.h"
 
 namespace jinq {
 namespace models {
 namespace llm {
 
-struct ChatMessage {
-    std::string role;
-    std::string content;
-    ChatMessage(std::string r, std::string c) : role(std::move(r)), content(std::move(c)) {}
+struct ModelStatus {
+    uint32_t n_ctx_size;
+    int32_t kv_cache_cell_nums;
+    int32_t embed_dims;
 };
 
 class Dialog {
@@ -43,13 +46,21 @@ class Dialog {
      * @param transformer
      * @return
      */
-    Dialog& operator=(const Dialog &transformer) = default;
+    Dialog &operator=(const Dialog &transformer) = default;
 
     /***
      *
      * @param msg
      */
-    explicit Dialog (const ChatMessage &msg) {
+    explicit Dialog(const llama_chat_message &msg) { messages.push_back(msg); }
+
+    /***
+     *
+     * @param role
+     * @param content
+     */
+    Dialog(const std::string &role, const std::string &content) {
+        llama_chat_message msg = {role.c_str(), content.c_str()};
         messages.push_back(msg);
     }
 
@@ -58,8 +69,9 @@ class Dialog {
      * @param role
      * @param content
      */
-    Dialog (const std::string& role, const std::string& content) {
-        messages.emplace_back(role, content);
+    Dialog(const char* role, const char* content) {
+        llama_chat_message msg = {role, content};
+        messages.push_back(msg);
     }
 
     /***
@@ -67,7 +79,7 @@ class Dialog {
      * @param other
      * @return
      */
-    Dialog operator+(const Dialog& other) {
+    Dialog operator+(const Dialog &other) {
         Dialog tmp(*this);
         std::copy(other.messages.begin(), other.messages.end(), std::back_inserter(tmp.messages));
         return tmp;
@@ -78,40 +90,47 @@ class Dialog {
      * @param other
      * @return
      */
-    Dialog& operator+=(const Dialog& other) {
+    Dialog &operator+=(const Dialog &other) {
         std::copy(other.messages.begin(), other.messages.end(), std::back_inserter(messages));
         return *this;
     }
 
-    inline ChatMessage& operator[](size_t index) {
-        return messages[index];
-    }
+    /***
+     *
+     * @param index
+     * @return
+     */
+    inline llama_chat_message &operator[](size_t index) { return messages[index]; }
 
-    inline void push_back(const ChatMessage& msg) {
-        messages.push_back(msg);
-    }
+    /***
+     *
+     * @param msg
+     */
+    inline void push_back(const llama_chat_message &msg) { messages.push_back(msg); }
 
-    inline void clean_cache() {
-        messages.clear();
-    }
+    /***
+     *
+     */
+    inline void clean_cache() { messages.clear(); }
 
-    bool empty() const {
-        return messages.empty();
-    };
+    /***
+     *
+     * @return
+     */
+    bool empty() const { return messages.empty(); };
 
-    inline size_t size() const {
-        return messages.size();
-    }
+    /***
+     *
+     * @return
+     */
+    inline size_t size() const { return messages.size(); }
 
   public:
-    std::vector<ChatMessage> messages;
+    std::vector<llama_chat_message> messages;
 };
 
-struct ModelStatus {
-    uint32_t n_ctx_size;
-    int32_t kv_cache_cell_nums;
-    int32_t embed_dims;
-};
-
+}
+}
+}
 
 #endif // MORTRED_MODEL_SERVER_COMMON_DATATYPE_H
