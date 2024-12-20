@@ -66,6 +66,7 @@ enum StatusCode {
 
     // llm relative status
     LLM_CONTEXT_SIZE_EXCEEDED = 100,
+    LLM_APPLY_CHAT_TEMPLATE_FAILED = 101,
 
     // RAG relative status
     RAG_PARSE_WIKI_STR_FAILED = 120,
