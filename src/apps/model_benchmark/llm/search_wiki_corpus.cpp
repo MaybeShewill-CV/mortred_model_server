@@ -23,13 +23,13 @@ using jinq::models::llm::rag::WikiIndexBuilder;
 int main(int argc, char** argv) {
     if (argc != 6) {
         LOG(ERROR) << "wrong usage";
-        LOG(INFO) << "exe config_file_path index_path corpus_path query top_k";
+        LOG(INFO) << "exe config_file_path index_dir corpus_dir query top_k";
         return -1;
     }
 
     std::string cfg_path = argv[1];
-    std::string index_path = argv[2];
-    std::string corpus_path = argv[3];
+    std::string index_dir = argv[2];
+    std::string corpus_dir = argv[3];
     std::string query = argv[4];
     int top_k = std::stoi(argv[5]);
 
@@ -43,27 +43,27 @@ int main(int argc, char** argv) {
     }
 
     // load corpus and index
-    auto status = searcher.load_index(index_path);
+    auto status = searcher.load_index(index_dir);
     if (status != StatusCode::OJBK) {
-        LOG(ERROR) << fmt::format("load index file: {} failed", index_path);
+        LOG(ERROR) << fmt::format("load index file: {} failed", index_dir);
         return -1;
     }
-    status = searcher.load_corpus_segment(corpus_path);
+    status = searcher.load_corpus_segment(corpus_dir);
     if (status != StatusCode::OJBK) {
-        LOG(ERROR) << fmt::format("load segment corpus file: {} failed", corpus_path);
+        LOG(ERROR) << fmt::format("load segment corpus file: {} failed", corpus_dir);
         return -1;
     }
 
     // search top k corpus
-    std::string reference_corpus;
-    status = searcher.search(query, reference_corpus, top_k, true);
+    std::string out_referenced_corpus;
+    status = searcher.search(query, out_referenced_corpus, top_k, true);
     if (status != StatusCode::OJBK) {
         LOG(ERROR) << fmt::format("search reference corpus failed status: {}", status);
         return -1;
     }
     LOG(INFO) << "successfully searched following reference corpus: ";
     LOG(INFO) << "---------------";
-    LOG(INFO) << reference_corpus;
+    LOG(INFO) << out_referenced_corpus;
 
     return 1;
 }

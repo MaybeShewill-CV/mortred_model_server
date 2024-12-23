@@ -12,12 +12,12 @@
 
 #include "common/file_path_util.h"
 #include "common/time_stamp.h"
-#include "models/llm/llama/llama3_generator.h"
+#include "models/llm/llm_datatype.hpp"
+#include "models/llm/llama/llama3.h"
 
 using jinq::common::FilePathUtil;
-using jinq::models::llm::chat_template::Dialog;
-using jinq::models::llm::chat_template::ChatMessage;
-using jinq::models::llm::llama::Llama3Generator;
+using jinq::models::llm::Dialog;
+using jinq::models::llm::llama::Llama3;
 
 int main(int argc, char** argv) {
 
@@ -35,7 +35,7 @@ int main(int argc, char** argv) {
     }
 
     // construct llama3 model
-    Llama3Generator generator;
+    Llama3<std::vector<llama_token>, std::string> generator;
     auto cfg = toml::parse(cfg_file_path);
     generator.init(cfg);
     if (!generator.is_successfully_initialized()) {
@@ -52,13 +52,13 @@ int main(int argc, char** argv) {
     };
     std::string gen_out;
     generator.chat_completion(dialog, gen_out);
-    dialog.messages.emplace_back("assistant", gen_out);
+    dialog.messages.push_back({"assistant", gen_out.c_str()});
     LOG(INFO) << "assistant: " << gen_out;
 
     Dialog new_dialog;
-    new_dialog.messages.emplace_back("user", "answer last question again");
+    new_dialog.messages.push_back({"user", "answer last question again"});
     generator.chat_completion(new_dialog, gen_out);
-    dialog.messages.emplace_back("assistant", gen_out);
+    dialog.messages.push_back({"assistant", gen_out.c_str()});
     LOG(INFO) << "assistant: " << gen_out;
 
     generator.clear_kv_cache_cell();
@@ -67,6 +67,10 @@ int main(int argc, char** argv) {
 
     generator.clear_kv_cache_cell();
     auto status = generator.chat_completion(dialog, gen_out);
+    LOG(INFO) << "assistant: " << gen_out;
+
+    std::string out;
+    generator.text_completion("hello! how are ", out);
     LOG(INFO) << "assistant: " << gen_out;
 
     return status;
