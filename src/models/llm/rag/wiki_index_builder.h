@@ -69,30 +69,29 @@ class WikiIndexBuilder {
 
     /***
      *
-     * @param index_f_path
+     * @param index_file_dir
      * @param index
      * @return
      */
-    jinq::common::StatusCode load_index(const std::string& index_f_path);
+    jinq::common::StatusCode load_index(const std::string& index_file_dir);
 
     /***
      *
-     * @param corpus_segment_path
-     * @param segments
+     * @param corpus_segment_dir
      * @return
      */
-    jinq::common::StatusCode load_corpus_segment(const std::string& corpus_segment_path);
+    jinq::common::StatusCode load_corpus_segment(const std::string& corpus_segment_dir);
 
     /***
      *
      * @param input_prompt
-     * @param referenced_corpus
+     * @param out_referenced_corpus
      * @param top_k
      * @param aapply_chat_template
      * @return
      */
     jinq::common::StatusCode search(
-        const std::string& input_prompt, std::string& referenced_corpus, int top_k=1, bool apply_chat_template=true);
+        const std::string& input_prompt, std::string& out_referenced_corpus, int top_k=1, bool apply_chat_template=true);
 
   private:
     class Impl;
