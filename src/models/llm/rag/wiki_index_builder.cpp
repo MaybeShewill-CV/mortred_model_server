@@ -479,27 +479,26 @@ StatusCode WikiIndexBuilder::Impl::load_index(const std::string &index_file_dir)
     });
 
     // load and merge index file
-    std::vector<float> merged_vectors;
-    int vec_dims = 0;
+    if (_m_index != nullptr) {
+        _m_index.reset(nullptr);
+    }
     for (auto& f_path : index_file_paths) {
         auto* index = dynamic_cast<faiss::IndexFlatL2*>(faiss::read_index(f_path.c_str(), 0));
         if (index == nullptr) {
             LOG(ERROR) << fmt::format("read index file failed: {}", f_path);
             return StatusCode::RAG_LOAD_INDEX_FAILED;
         }
-        const float* raw_data = index->get_xb();
-        vec_dims = index->d;
-        for (size_t i = 0; i < index->ntotal * index->d; ++i) {
-            merged_vectors.push_back(raw_data[i]);
+        LOG(INFO) << "index d: " << index->d;
+        LOG(INFO) << "index ntotal: " << index->ntotal;
+        if (nullptr == _m_index) {
+            _m_index = std::make_unique<faiss::IndexFlatL2>(index->d);
         }
-    }
+        LOG(INFO) << "_m_index d: " << _m_index->d;
+        LOG(INFO) << "_m_index ntotal: " << _m_index->ntotal;
+        _m_index->add(index->ntotal, index->get_xb());
 
-    if (_m_index != nullptr) {
-        _m_index.reset();
+        delete index;
     }
-    _m_index = std::make_unique<faiss::IndexFlatL2>(vec_dims);
-    auto merged_index_ntotal = static_cast<long>(merged_vectors.size() / vec_dims);
-    _m_index->add(merged_index_ntotal, merged_vectors.data());
 
     return StatusCode::OK;
 }

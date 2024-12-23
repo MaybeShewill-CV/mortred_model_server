@@ -37,7 +37,7 @@ using jinq::common::FilePathUtil;
 namespace llm {
 
 using models::llm::Dialog;
-using LLMPtr = models::llm::llama::Llama3<std::vector<llama_token>, std::string>;
+using LLMPtr = models::llm::llama::Llama3<std::vector<llama_token>&, std::string>;
 
 namespace llama {
 
@@ -206,6 +206,7 @@ StatusCode Llama3ChatServer::Impl::init(const decltype(toml::parse("")) &config)
     auto status = _m_generator->init(model_cfg);
     if (status != StatusCode::OK) {
         LOG(ERROR) << fmt::format("init llama3 model failed, status code: {}", std::to_string(status));
+        _m_successfully_initialized = false;
         return StatusCode::SERVER_INIT_FAILED;
     }
 
