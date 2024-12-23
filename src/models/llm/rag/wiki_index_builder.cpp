@@ -24,7 +24,9 @@
 
 #include "common/time_stamp.h"
 #include "common/file_path_util.h"
+#include "models/model_io_define.h"
 #include "models/llm/llama/llama3.h"
+#include "models/llm/embedding/jina_embeddings_v3.h"
 
 namespace jinq {
 namespace models {
@@ -34,6 +36,8 @@ using jinq::common::Timestamp;
 using jinq::common::StatusCode;
 using jinq::common::FilePathUtil;
 using Llama3Ptr = jinq::models::llm::llama::Llama3<std::string, std::string>;
+using jinq::models::io_define::llm::embedding::std_embedding_output;
+using JinaEmdV3Ptr = jinq::models::llm::embedding::JinaEmbeddingsV3<std::string, std_embedding_output>;
 
 namespace rag {
 
@@ -153,16 +157,30 @@ class WikiIndexBuilder::Impl {
     };
 
   private:
+    enum embedding_model_type {
+        LLAMA3_EMBEDDING = 0,
+        JINA_EMBEDDING_V3 = 1,
+    };
+
+    std::unordered_map<std::string, embedding_model_type> _m_embedding_model_map = {
+        {"llama3", LLAMA3_EMBEDDING},
+        {"jina_embedding_v3", JINA_EMBEDDING_V3},
+    };
+
     // init flag
     bool _m_successfully_initialized = true;
     // llama3 model
-    std::vector<std::unique_ptr<Llama3Ptr> > _m_encoders;
+    std::vector<std::unique_ptr<Llama3Ptr> > _m_llama3_encoders;
+    // jina embedding v3 model
+    std::vector<std::unique_ptr<JinaEmdV3Ptr > > _m_jina_encoders;
     // corpus chunk word size
     int32_t _m_chunk_word_size = 100;
     // tokenize max seq length
     int32_t _m_token_max_len = 512;
     // workers
     int _m_segment_workers = 4;
+    // embedding model type
+    embedding_model_type _m_embedding_type = JINA_EMBEDDING_V3;
 
     // index engine
     std::unique_ptr<faiss::IndexFlatL2> _m_index;
@@ -185,6 +203,7 @@ class WikiIndexBuilder::Impl {
         int32_t chunk_word_size = 100;
         int segment_workers = 1;
         int encode_workers = 1;
+        embedding_model_type embedding_type = JINA_EMBEDDING_V3;
         std::vector<std::vector<std::string> > split_wiki_corpus_paths;
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string> > > split_wiki_title_texts;
         // output setting
@@ -279,23 +298,62 @@ class WikiIndexBuilder::Impl {
 StatusCode WikiIndexBuilder::Impl::init(const decltype(toml::parse("")) &cfg) {
     auto wiki_cfg = cfg.at("WIKI_PREPROCESS");
 
-    // init llama3 model
-    auto encode_worker_nums = wiki_cfg["encode_worker_nums"].as_integer();
-    for (auto i = 0; i < encode_worker_nums; ++i) {
-        auto model = std::make_unique<Llama3Ptr>();
-        model->init(cfg);
-        if (!model->is_successfully_initialized()) {
-            LOG(ERROR) << "init llama3 model failed";
-            _m_successfully_initialized = false;
-            return StatusCode::RAG_BUILD_CORPUS_INDEX_FAILED;
-        }
-        _m_encoders.push_back(std::move(model));
-    }
-
     // init preprocess params
     _m_chunk_word_size = static_cast<int32_t >(wiki_cfg["chunk_word_size"].as_integer());
     _m_token_max_len = static_cast<int32_t >(wiki_cfg["tokenize_max_seq_len"].as_integer());
     _m_segment_workers = static_cast<int >(wiki_cfg["segment_worker_nums"].as_integer());
+    std::string embedding_model_name = wiki_cfg["embedding_model"].as_string();
+    if (_m_embedding_model_map.find(embedding_model_name) == _m_embedding_model_map.end()) {
+        LOG(ERROR) << fmt::format("unsupported embedding model: {}", embedding_model_name);
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    _m_embedding_type = _m_embedding_model_map[embedding_model_name];
+
+    // init embedding models
+    if (_m_embedding_type == embedding_model_type::LLAMA3_EMBEDDING) {
+        auto embed_cfg = cfg.at("LLAMA3_EMBEDDING");
+        auto encode_worker_nums = embed_cfg["encode_worker_nums"].as_integer();
+        std::string model_cfg_path = embed_cfg["embedding_cfg_path"].as_string();
+        if (!FilePathUtil::is_file_exist(model_cfg_path)) {
+            LOG(ERROR) << fmt::format("embedding model cfg file: {} not exist", model_cfg_path);
+            return StatusCode::MODEL_INIT_FAILED;
+        }
+        auto model_cfg = toml::parse(model_cfg_path);
+        for (auto i = 0; i < encode_worker_nums; ++i) {
+            auto model = std::make_unique<Llama3Ptr>();
+            model->init(model_cfg);
+            if (!model->is_successfully_initialized()) {
+                LOG(ERROR) << "init llama3 model failed";
+                _m_successfully_initialized = false;
+                return StatusCode::RAG_BUILD_CORPUS_INDEX_FAILED;
+            }
+            _m_llama3_encoders.push_back(std::move(model));
+        }
+    } else if (_m_embedding_type == embedding_model_type::JINA_EMBEDDING_V3) {
+        auto embed_cfg = cfg.at("JINA_EMBEDDING_V3");
+        auto encode_worker_nums = embed_cfg["encode_worker_nums"].as_integer();
+        std::string model_cfg_path = embed_cfg["embedding_cfg_path"].as_string();
+        if (!FilePathUtil::is_file_exist(model_cfg_path)) {
+            LOG(ERROR) << fmt::format("embedding model cfg file: {} not exist", model_cfg_path);
+            return StatusCode::MODEL_INIT_FAILED;
+        }
+        auto model_cfg = toml::parse(model_cfg_path);
+        for (auto i = 0; i < encode_worker_nums; ++i) {
+            auto model = std::make_unique<JinaEmdV3Ptr>();
+            model->init(model_cfg);
+            if (!model->is_successfully_initialized()) {
+                LOG(ERROR) << "init jina embedding v3 model failed";
+                _m_successfully_initialized = false;
+                return StatusCode::RAG_BUILD_CORPUS_INDEX_FAILED;
+            }
+            _m_jina_encoders.push_back(std::move(model));
+        }
+    } else {
+        LOG(ERROR) << fmt::format("unsupported embedding model: {}", embedding_model_name);
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
 
     _m_successfully_initialized = true;
     return StatusCode::OK;
@@ -314,7 +372,12 @@ StatusCode WikiIndexBuilder::Impl::build_index(const std::string &source_wiki_co
     auto* ctx = new series_ctx;
     ctx->chunk_word_size = _m_chunk_word_size;
     ctx->segment_workers = _m_segment_workers;
-    ctx->encode_workers = static_cast<int>(_m_encoders.size());
+    ctx->embedding_type = _m_embedding_type;
+    if (_m_embedding_type == embedding_model_type::LLAMA3_EMBEDDING) {
+        ctx->encode_workers = static_cast<int>(_m_llama3_encoders.size());
+    } else if (_m_embedding_type == embedding_model_type::JINA_EMBEDDING_V3) {
+        ctx->encode_workers = static_cast<int>(_m_jina_encoders.size());
+    }
     ctx->token_max_len = _m_token_max_len;
     ctx->output_dir = out_index_dir;
     ctx->wiki_segments.resize(ctx->segment_workers, std::vector<wiki_corpus_segment>());
@@ -479,26 +542,26 @@ StatusCode WikiIndexBuilder::Impl::load_index(const std::string &index_file_dir)
     });
 
     // load and merge index file
+    LOG(INFO) << "start loading index file ...";
+    LOG(INFO) << fmt::format("total split index file count: {}", index_file_paths.size());
     if (_m_index != nullptr) {
         _m_index.reset(nullptr);
     }
-    for (auto& f_path : index_file_paths) {
+    for (auto i = 0; i < index_file_paths.size(); ++i) {
+        auto f_path = index_file_paths[i];
         auto* index = dynamic_cast<faiss::IndexFlatL2*>(faiss::read_index(f_path.c_str(), 0));
         if (index == nullptr) {
             LOG(ERROR) << fmt::format("read index file failed: {}", f_path);
             return StatusCode::RAG_LOAD_INDEX_FAILED;
         }
-        LOG(INFO) << "index d: " << index->d;
-        LOG(INFO) << "index ntotal: " << index->ntotal;
         if (nullptr == _m_index) {
             _m_index = std::make_unique<faiss::IndexFlatL2>(index->d);
         }
-        LOG(INFO) << "_m_index d: " << _m_index->d;
-        LOG(INFO) << "_m_index ntotal: " << _m_index->ntotal;
         _m_index->add(index->ntotal, index->get_xb());
-
         delete index;
+        std::cout << "\rloading index file: [" << i + 1 << " / " << index_file_paths.size() << "]" << std::flush;
     }
+    std::cout << std::endl;
 
     return StatusCode::OK;
 }
@@ -528,7 +591,8 @@ StatusCode WikiIndexBuilder::Impl::load_corpus_segment(const std::string &corpus
         return std::stoi(prefix_id_a) < std::stoi(prefix_id_b);
     });
 
-    for (auto& corpus_segment_path : corpus_file_paths) {
+    for (auto i = 0; i < corpus_file_paths.size(); ++i) {
+        auto corpus_segment_path = corpus_file_paths[i];
         std::ifstream f_in(corpus_segment_path, std::ios::in);
         if (!f_in.is_open() || f_in.bad()) {
             LOG(ERROR) << fmt::format("read segment corpus file: {} failed", corpus_segment_path);
@@ -545,7 +609,9 @@ StatusCode WikiIndexBuilder::Impl::load_corpus_segment(const std::string &corpus
             segment.text = doc["text"].GetString();
             _m_segment_wiki_corpus.push_back(segment);
         }
+        std::cout << "\rloading segmented corpus file: [" << i + 1 << " / " << corpus_file_paths.size() << "]" << std::flush;
     }
+    std::cout << std::endl;
 
     return StatusCode::OK;
 }
@@ -571,18 +637,30 @@ StatusCode WikiIndexBuilder::Impl::search(
     }
 
     // encode input prompt
-    std::vector<std::vector<float> > input_prompt_feats;
-    auto status = _m_encoders[0]->get_embedding(input_prompt, input_prompt_feats, "mean", true, _m_token_max_len, true);
-    if (status != StatusCode::OK) {
-        LOG(ERROR) << fmt::format("encode input prompt failed status code: {}", status);
-        return StatusCode::RAG_SEARCH_SEGMENT_CORPUS_FAILED;
+    std::vector<float> prompt_feat_embedding;
+    if (_m_embedding_type == embedding_model_type::LLAMA3_EMBEDDING) {
+        std::vector<std::vector<float> > input_prompt_feats;
+        auto status = _m_llama3_encoders[0]->get_embedding(input_prompt, input_prompt_feats, "mean", true, _m_token_max_len, true);
+        if (status != StatusCode::OK) {
+            LOG(ERROR) << fmt::format("encode input prompt failed status code: {}", status);
+            return StatusCode::RAG_SEARCH_SEGMENT_CORPUS_FAILED;
+        }
+        prompt_feat_embedding = input_prompt_feats[0];
+    } else if (_m_embedding_type == embedding_model_type::JINA_EMBEDDING_V3) {
+        std_embedding_output embed_out;
+        auto status = _m_jina_encoders[0]->run(input_prompt, embed_out);
+        if (status != StatusCode::OK) {
+            LOG(ERROR) << fmt::format("encode input prompt failed status code: {}", status);
+            return StatusCode::RAG_SEARCH_SEGMENT_CORPUS_FAILED;
+        }
+        prompt_feat_embedding = embed_out.token_embeds[0];
     }
 
     // search topk corpus;
     int query_nums = 1;
     std::vector<long> ids(top_k * query_nums);
     std::vector<float> dis(top_k * query_nums);
-    _m_index->search(query_nums, input_prompt_feats[0].data(), top_k, dis.data(), ids.data());
+    _m_index->search(query_nums, prompt_feat_embedding.data(), top_k, dis.data(), ids.data());
 
     // apply template to corpus
     if (apply_chat_template) {
@@ -742,7 +820,6 @@ bool WikiIndexBuilder::Impl::preprocess_wiki_corpus(wiki_corpus_segment &segment
 StatusCode WikiIndexBuilder::Impl::parse_wiki_corpus(int worker_id, series_ctx *ctx) {
     // parse all wiki segments
     auto& corpus_paths = ctx->split_wiki_corpus_paths[worker_id];
-//    LOG(INFO) << fmt::format("worker {} start parsing source wiki corpus ...", worker_id);
     std::unordered_map<std::string, std::string> corpus;
     for (auto& f_path : corpus_paths) {
         std::ifstream f_in(f_path, std::ios::in);
@@ -939,35 +1016,66 @@ StatusCode WikiIndexBuilder::Impl::embed_segments(int worker_id, series_ctx *ctx
         LOG(ERROR) << ctx->err_msg;
         return ctx->err_code;
     }
-//    LOG(INFO) << fmt::format("worker {} start embedding segment corpus total counts: {}", worker_id, corpus.size());
 
     // embedding segments and write index
-    auto& model = _m_encoders[worker_id];
-    auto model_stat = model->get_model_stat();
-    auto embed_dims = model_stat.embed_dims;
-    ctx->wiki_segment_features[worker_id].resize(corpus.size());
-    for (auto idx = 0; idx < corpus.size(); ++idx) {
-        auto& segment = corpus[idx];
-        auto& text = segment.text;
-        auto fmt_input = fmt::format("passage: {}", text);
-        std::vector<std::vector<float> > embs;
-        auto status = model->get_embedding(fmt_input, embs, "mean", true, ctx->token_max_len, true);
-        if (status != StatusCode::OK) {
-            LOG(WARNING) << fmt::format("embed prompt failed status: {}", status);
-            std::vector<float> feature(embed_dims, 0.0f);
-            ctx->wiki_segment_features[worker_id][idx] = feature;
-        } else {
-            auto feature = embs[0];
-            ctx->wiki_segment_features[worker_id][idx] = feature;
+    if (ctx->embedding_type == embedding_model_type::LLAMA3_EMBEDDING) {
+        auto& model = _m_llama3_encoders[worker_id];
+        auto model_stat = model->get_model_stat();
+        auto embed_dims = model_stat.embed_dims;
+        ctx->wiki_segment_features[worker_id].resize(corpus.size());
+        for (auto idx = 0; idx < corpus.size(); ++idx) {
+            auto& segment = corpus[idx];
+            auto& text = segment.text;
+            auto fmt_input = fmt::format("passage: {}", text);
+            std::vector<std::vector<float> > embs;
+            auto status = model->get_embedding(fmt_input, embs, "mean", true, ctx->token_max_len, true);
+            if (status != StatusCode::OK) {
+                LOG(WARNING) << fmt::format("embed prompt failed status: {}", status);
+                std::vector<float> feature(embed_dims, 0.0f);
+                ctx->wiki_segment_features[worker_id][idx] = feature;
+            } else {
+                auto feature = embs[0];
+                ctx->wiki_segment_features[worker_id][idx] = feature;
+            }
+            _m_count_of_embeddings_has_been_extracted++;
+            auto info = fmt::format("extract embeddings of segmented texts: [{} / {}] ...",
+                                    _m_count_of_embeddings_has_been_extracted, _m_count_of_segmented_texts);
+            std::cout << "\r" << info << std::flush;
         }
-        _m_count_of_embeddings_has_been_extracted++;
-        auto info = fmt::format("extract embeddings of segmented texts: [{} / {}] ...",
-                                _m_count_of_embeddings_has_been_extracted, _m_count_of_segmented_texts);
-        std::cout << "\r" << info << std::flush;
+        corpus.clear();
+        std::vector<wiki_corpus_segment>().swap(corpus);
+    } else if (ctx->embedding_type == embedding_model_type::JINA_EMBEDDING_V3) {
+        auto& model = _m_jina_encoders[worker_id];
+        auto model_stat = model->get_model_stat();
+        auto embed_dims = model_stat.embed_dims;
+        ctx->wiki_segment_features[worker_id].resize(corpus.size());
+        for (auto idx = 0; idx < corpus.size(); ++idx) {
+            auto& segment = corpus[idx];
+            auto& text = segment.text;
+            auto fmt_input = fmt::format("passage: {}", text);
+            std_embedding_output emb_out;
+            auto status = model->run(fmt_input, emb_out);
+            if (status != StatusCode::OK) {
+                LOG(WARNING) << fmt::format("embed prompt failed status: {}", status);
+                std::vector<float> feature(embed_dims, 0.0f);
+                ctx->wiki_segment_features[worker_id][idx] = feature;
+            } else {
+                auto feature = emb_out.token_embeds[0];
+                ctx->wiki_segment_features[worker_id][idx] = feature;
+            }
+            _m_count_of_embeddings_has_been_extracted++;
+            auto info = fmt::format("extract embeddings of segmented texts: [{} / {}] ...",
+                                    _m_count_of_embeddings_has_been_extracted, _m_count_of_segmented_texts);
+            std::cout << "\r" << info << std::flush;
+        }
+        corpus.clear();
+        std::vector<wiki_corpus_segment>().swap(corpus);
+    } else {
+        ctx->err_msg = fmt::format("unsupported embedding model type: {}", ctx->embedding_type);
+        ctx->err_code = StatusCode::RAG_BUILD_CORPUS_INDEX_FAILED;
+        LOG(ERROR) << ctx->err_msg;
+        return ctx->err_code;
     }
-    corpus.clear();
-    std::vector<wiki_corpus_segment>().swap(corpus);
-//    LOG(INFO) << fmt::format("worker {} extract embedding of wiki corpus complete", worker_id);
 
     return StatusCode::OK;
 }
@@ -983,12 +1091,25 @@ StatusCode WikiIndexBuilder::Impl::write_index_file(series_ctx *ctx) {
         total_features_count += feats.size();
     }
     if (total_features_count == 0) {
-        LOG(ERROR) << "empty segment corpus embedding features";
-        return StatusCode::RAG_BUILD_CORPUS_INDEX_FAILED;
+        ctx->err_msg = "empty segment corpus embedding features";
+        ctx->err_code = StatusCode::RAG_BUILD_CORPUS_INDEX_FAILED;
+        LOG(ERROR) << ctx->err_msg;
+        return ctx->err_code;
     }
 
-    auto model_stat = _m_encoders[0]->get_model_stat();
-    auto emb_dims = model_stat.embed_dims;
+    auto emb_dims = 0;
+    if (ctx->embedding_type == embedding_model_type::LLAMA3_EMBEDDING) {
+        auto model_stat = _m_llama3_encoders[0]->get_model_stat();
+        emb_dims = model_stat.embed_dims;
+    } else if (ctx->embedding_type == embedding_model_type::JINA_EMBEDDING_V3) {
+        auto model_stat = _m_jina_encoders[0]->get_model_stat();
+        emb_dims = model_stat.embed_dims;
+    } else {
+        ctx->err_msg = fmt::format("unsupported embedding model type: {}", ctx->embedding_type);
+        ctx->err_code = StatusCode::RAG_BUILD_CORPUS_INDEX_FAILED;
+        LOG(ERROR) << ctx->err_msg;
+        return ctx->err_code;
+    }
     LOG(INFO) << "start writing index file ...";
     LOG(INFO) << fmt::format("total segment corpus feature counts: {}", total_features_count);
     LOG(INFO) << fmt::format("feature dims: {}", emb_dims);
