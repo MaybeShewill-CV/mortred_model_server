@@ -119,7 +119,7 @@ class Llama3 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
      *
      * @return
      */
-    ModelStatus get_model_stat() const;
+    jinq::models::llm::ModelStatus get_model_stat() const;
 
     /***
      *
