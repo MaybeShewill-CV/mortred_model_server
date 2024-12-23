@@ -12,9 +12,10 @@
 
 #include "toml/toml.hpp"
 
+#include "common/status_code.h"
 #include "models/base_model.h"
 #include "models/model_io_define.h"
-#include "common/status_code.h"
+#include "models/llm/llm_datatype.hpp"
 
 namespace jinq {
 namespace models {
@@ -62,6 +63,12 @@ class JinaEmbeddingsV3 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
      * @return
      */
     jinq::common::StatusCode run(const INPUT &input, OUTPUT &output) override;
+
+    /***
+     *
+     * @return
+     */
+    jinq::models::llm::ModelStatus get_model_stat() const;
 
     /***
      * if model successfully initialized

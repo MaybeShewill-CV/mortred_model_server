@@ -149,6 +149,20 @@ class JinaEmbeddingsV3<INPUT, OUTPUT>::Impl {
      *
      * @return
      */
+    ModelStatus get_model_stat() const {
+        ModelStatus status{};
+        if (_m_backend_type == ONNX) {
+            status.embed_dims = _m_onnx_params.embedding_dims;
+        } else {
+            LOG(ERROR) << fmt::format("unsupported backend: {}", _m_backend_type);
+        }
+        return status;
+    };
+
+    /***
+     *
+     * @return
+     */
     bool is_successfully_initialized() const {
         return _m_successfully_initialized;
     };
@@ -515,6 +529,11 @@ bool JinaEmbeddingsV3<INPUT, OUTPUT>::is_successfully_initialized() const {
 template <typename INPUT, typename OUTPUT>
 StatusCode JinaEmbeddingsV3<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
+}
+
+template <typename INPUT, typename OUTPUT>
+ModelStatus JinaEmbeddingsV3<INPUT, OUTPUT>::get_model_stat() const {
+    return _m_pimpl->get_model_stat();
 }
 
 }
