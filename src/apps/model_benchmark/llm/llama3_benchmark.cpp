@@ -35,7 +35,7 @@ int main(int argc, char** argv) {
     }
 
     // construct llama3 model
-    Llama3<std::vector<llama_token>, std::string> generator;
+    Llama3<std::vector<llama_token>&, std::string> generator;
     auto cfg = toml::parse(cfg_file_path);
     generator.init(cfg);
     if (!generator.is_successfully_initialized()) {

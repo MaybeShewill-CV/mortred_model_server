@@ -84,6 +84,7 @@ void request_chat_task_cb(WFGoTask* task) {
     if (!ctx->uuid.empty()) {
         req->add_header_pair("Cookie", ctx->uuid);
     }
+    req->add_header_pair("Connection", "Keep-Alive");
     series_of(task)->push_back(http_task);
 }
 
