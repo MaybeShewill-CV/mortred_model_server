@@ -199,6 +199,8 @@ class JinaEmbeddingsV3<INPUT, OUTPUT>::Impl {
     ONNXParams _m_onnx_params;
     // tokenizer
     std::unique_ptr<TokenizerPtr> _m_tokenizer;
+    // max token size
+    int _m_max_token_length = 8192;
     // init flag
     bool _m_successfully_initialized = false;
 
@@ -395,6 +397,11 @@ StatusCode JinaEmbeddingsV3<INPUT, OUTPUT>::Impl::onnx_run(const INPUT &in, OUTP
     if (status != StatusCode::OK) {
         LOG(ERROR) << fmt::format("tokenizing input text: {} failed, status code: {}", input_text, status);
         return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+    if (embed_out.token_ids.size() > _m_max_token_length) {
+        LOG(WARNING) << fmt::format("input token size: {}, greater than max token size: {}, resize to size: {}",
+                                    embed_out.token_ids.size(), _m_max_token_length, _m_max_token_length);
+        embed_out.token_ids.resize(_m_max_token_length);
     }
     std::vector<int64_t > input_tokens_64;
     for (auto& id : embed_out.token_ids) {
