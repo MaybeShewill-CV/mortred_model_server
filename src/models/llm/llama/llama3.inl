@@ -240,7 +240,7 @@ private:
      * @param grammar_first
      * @return
      */
-    StatusCode llama_sample(int idx, llama_token& out_sampled_token, bool grammar_first=false);
+    bool llama_sample(int idx, llama_token& out_sampled_token, bool grammar_first=false);
 };
 
 /***
@@ -791,7 +791,8 @@ template <typename INPUT, typename OUTPUT>
 StatusCode Llama3<INPUT, OUTPUT>::Impl::llama_generate(std::vector<llama_token>& prompt_tokens, std::string& generate_out) {
     // prepare a batch for the prompt
     llama_batch batch = llama_batch_get_one(prompt_tokens.data(), static_cast<int32_t>(prompt_tokens.size()));
-    llama_token new_token_id;
+    llama_token new_token_id = -1;
+    StatusCode status = StatusCode::OK;
     while (true) {
         // check if we have enough space in the context to evaluate this batch
         int n_ctx = llama_n_ctx(_m_ctx);
@@ -802,21 +803,24 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::llama_generate(std::vector<llama_token>&
         }
 
         // run decoder model
-        auto status = llama_decode(_m_ctx, batch);
-        if (status == 1) {
+        int successfully_decode = llama_decode(_m_ctx, batch);
+        if (successfully_decode == 1) {
             LOG(WARNING) << "llama generate failed. could not find a KV slot for the batch "
                           "(try reducing the size of the batch or increase the context)";
-        } else if (status < 0) {
-            LOG(ERROR) << "llama decode failed code: " << status;
-            return StatusCode::MODEL_RUN_SESSION_FAILED;
+        } else if (successfully_decode < 0) {
+            LOG(ERROR) << "llama decode failed code: " << successfully_decode;
+            status = StatusCode::MODEL_RUN_SESSION_FAILED;
+            break;
         }
 
         // sample from model output logits
-        StatusCode sample_status = llama_sample(-1, new_token_id, false);
-        if (sample_status != StatusCode::OK) {
-            LOG(ERROR) << "llama sample failed";
-            return StatusCode::MODEL_RUN_SESSION_FAILED;
-        }
+        llama_sample(-1, new_token_id, false);
+//        bool successfully_sampled = llama_sample(-1, new_token_id, false);
+//        if (!successfully_sampled) {
+//            LOG(ERROR) << "llama sample failed";
+//            status = StatusCode::MODEL_RUN_SESSION_FAILED;
+//            break;
+//        }
         if (llama_token_is_eog(_m_model, new_token_id)) {
             break;
         }
@@ -844,7 +848,7 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::llama_generate(std::vector<llama_token>&
         batch = llama_batch_get_one(&new_token_id, 1);
     }
 
-    return StatusCode::OK;
+    return status;
 }
 
 /***
@@ -857,7 +861,7 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::llama_generate(std::vector<llama_token>&
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode Llama3<INPUT, OUTPUT>::Impl::llama_sample(int idx, llama_token &out_sampled_token, bool grammar_first) {
+bool Llama3<INPUT, OUTPUT>::Impl::llama_sample(int idx, llama_token &out_sampled_token, bool grammar_first) {
     // get logits
     std::vector<llama_token_data> cur;
     llama_token_data_array cur_p;
@@ -876,12 +880,12 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::llama_sample(int idx, llama_token &out_s
     llama_sampler_apply(_m_smpl_chain, &cur_p);
     if (cur_p.selected == -1) {
         LOG(ERROR) << "no selected token during sampling - check your sampling configuration";
-        return StatusCode::MODEL_RUN_SESSION_FAILED;
+        return false;
     }
     const llama_token id = cur_p.data[cur_p.selected].id;
     if (grammar_first && _m_smpl_grmr != nullptr) {
         out_sampled_token = id;
-        return StatusCode::OK;
+        return true;
     }
 
     // check if sampled token fits the grammar
@@ -891,7 +895,7 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::llama_sample(int idx, llama_token &out_s
     bool is_valid = single_token_data_array.data[0].logit != -INFINITY;
     if (is_valid) {
         out_sampled_token = id;
-        return StatusCode::OK;
+        return true;
     }
 
     // resampling:
@@ -907,7 +911,7 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::llama_sample(int idx, llama_token &out_s
     llama_sampler_apply(_m_smpl_chain, &cur_p);
     if (cur_p.selected == -1) {
         LOG(ERROR) << "no selected token during sampling - check your sampling configuration";
-        return StatusCode::MODEL_RUN_SESSION_FAILED;
+        return false;
     }
     out_sampled_token = cur_p.data[cur_p.selected].id;
 
@@ -915,7 +919,7 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::llama_sample(int idx, llama_token &out_s
     llama_sampler_accept(_m_smpl_grmr, out_sampled_token);
     llama_sampler_accept(_m_smpl_chain, out_sampled_token);
 
-    return StatusCode::OK;
+    return true;
 }
 
 /************* Export Function Sets *************/
