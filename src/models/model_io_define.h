@@ -278,6 +278,18 @@ using std_embedding_output = embedding_output;
 
 }
 
+namespace vlm {
+
+struct vlm_input {
+    std::string image_path;
+    std::string text;
+};
+
+using std_vlm_input = vlm_input;
+using std_vlm_output = std::string;
+
+}
+
 }
 
 } // namespace io_define

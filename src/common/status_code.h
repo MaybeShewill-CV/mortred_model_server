@@ -74,6 +74,9 @@ enum StatusCode {
     RAG_LOAD_INDEX_FAILED = 122,
     RAG_LOAD_SEGMENT_CORPUS_FAILED = 123,
     RAG_SEARCH_SEGMENT_CORPUS_FAILED = 124,
+
+    // VLM relative status
+    VLM_QWEN_ENCODE_IMAGE_FAILED = 140,
 };
 
 /***
