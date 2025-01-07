@@ -67,66 +67,6 @@ class Qwen2VL : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
     jinq::common::StatusCode run(const INPUT &input, OUTPUT &output) override;
 
     /***
-     *
-     * @param prompt
-     * @param prompt_tokens
-     * @param add_special
-     * @return
-     */
-    jinq::common::StatusCode tokenize(const std::string &prompt, std::vector<llama_token> &prompt_tokens, bool add_special = true);
-
-    /***
-     *
-     * @param prompt
-     * @param out_embeddings
-     * @param pool_type
-     * @param truncated
-     * @param max_seq_len
-     * @param do_norm
-     * @return
-     */
-    jinq::common::StatusCode get_embedding(
-        const std::string& prompt, std::vector<std::vector<float> >& out_embeddings, const std::string& pool_type = "mean",
-        bool truncated=true, int32_t max_seq_len=512, bool do_norm=true);
-
-    /***
-     *
-     * @param input
-     * @param output
-     * @return
-     */
-    jinq::common::StatusCode text_completion(const std::string& prompt, std::string& generate_output);
-
-    /***
-     *
-     * @param dialog
-     * @param generate_output
-     * @param truncate
-     * @return
-     */
-    jinq::common::StatusCode chat_completion(Dialog& dialog, std::string& generate_output);
-
-    /***
-     *
-     * @param dialog
-     * @param add_ass
-     * @param out_formatted_str
-     * @return
-     */
-    jinq::common::StatusCode apply_chat_template(const Dialog& dialog, bool add_ass, std::string& out_formatted_str);
-
-    /***
-     *
-     * @return
-     */
-    jinq::models::llm::ModelStatus get_model_stat() const;
-
-    /***
-     *
-     */
-    void clear_kv_cache_cell() const;
-
-    /***
      * if model successfully initialized
      * @return
      */
