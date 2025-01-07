@@ -76,5 +76,18 @@ int main(int argc, char** argv) {
         LOG(INFO) << fmt::format("---- {}", output);
     }
 
+    input.image_path = "";
+    input.text = "describe the image in details";
+    status = generator.run(input, output);
+    if (status != StatusCode::OK) {
+        LOG(ERROR) << "generator run session failed";
+        return status;
+    } else {
+        LOG(INFO) << "user input: ";
+        LOG(INFO) << fmt::format("---- {}", text_prompt);
+        LOG(INFO) << "assistant response: ";
+        LOG(INFO) << fmt::format("---- {}", output);
+    }
+
     return status;
 }
