@@ -67,6 +67,8 @@ enum StatusCode {
     // llm relative status
     LLM_CONTEXT_SIZE_EXCEEDED = 100,
     LLM_APPLY_CHAT_TEMPLATE_FAILED = 101,
+    LLM_LLAMA_DECODE_FAILED = 102,
+    LLM_LLAMA_SAMPLE_NEW_TOKEN_FAILED = 103,
 
     // RAG relative status
     RAG_PARSE_WIKI_STR_FAILED = 120,
@@ -77,6 +79,7 @@ enum StatusCode {
 
     // VLM relative status
     VLM_QWEN_ENCODE_IMAGE_FAILED = 140,
+    VLM_QWEN_DECODE_IMAGE_EMBEDDING_FAILED = 141,
 };
 
 /***
