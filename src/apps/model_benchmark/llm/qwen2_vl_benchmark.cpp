@@ -53,8 +53,6 @@ int main(int argc, char** argv) {
         LOG(INFO) << "empty text prompt";
         return -1;
     }
-    LOG(INFO) << "user input: ";
-    LOG(INFO) << fmt::format("---- {}", text_prompt);
 
     // construct qwen2-vl model
     Qwen2VL<std_vlm_input, std_vlm_output> generator;
@@ -72,6 +70,8 @@ int main(int argc, char** argv) {
         LOG(ERROR) << "generator run session failed";
         return status;
     } else {
+        LOG(INFO) << "user input: ";
+        LOG(INFO) << fmt::format("---- {}", text_prompt);
         LOG(INFO) << "assistant response: ";
         LOG(INFO) << fmt::format("---- {}", output);
     }
