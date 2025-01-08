@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    std_vlm_input input{image_path, text_prompt};
+    std_vlm_input input{"", text_prompt};
     std_vlm_output output;
     auto status = generator.run(input, output);
     if (status != StatusCode::OK) {
@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
         return status;
     } else {
         LOG(INFO) << "user input: ";
-        LOG(INFO) << fmt::format("---- {}", text_prompt);
+        LOG(INFO) << fmt::format("---- {}", input.text);
         LOG(INFO) << "assistant response: ";
         LOG(INFO) << fmt::format("---- {}", output);
     }
@@ -84,7 +84,7 @@ int main(int argc, char** argv) {
         return status;
     } else {
         LOG(INFO) << "user input: ";
-        LOG(INFO) << fmt::format("---- {}", text_prompt);
+        LOG(INFO) << fmt::format("---- {}", input.text);
         LOG(INFO) << "assistant response: ";
         LOG(INFO) << fmt::format("---- {}", output);
     }
