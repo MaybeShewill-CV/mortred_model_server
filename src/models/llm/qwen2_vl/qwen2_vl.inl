@@ -11,6 +11,7 @@
 #include "fmt/format.h"
 #include "llama_cpp/llama.h"
 
+#include "common/base64.h"
 #include "common/cv_utils.h"
 #include "common/time_stamp.h"
 #include "common/file_path_util.h"
@@ -21,18 +22,22 @@ namespace jinq {
 namespace models {
 namespace llm {
 
+using jinq::common::Base64;
 using jinq::common::CvUtils;
 using jinq::common::Timestamp;
 using jinq::common::StatusCode;
 using jinq::common::FilePathUtil;
-using jinq::models::io_define::llm::vlm::std_vlm_input;
+using jinq::models::io_define::llm::vlm::mat_input;
+using jinq::models::io_define::llm::vlm::file_input;
+using jinq::models::io_define::llm::vlm::bytes_input;
+using jinq::models::io_define::llm::vlm::base64_input;
 using jinq::models::io_define::llm::vlm::std_vlm_output;
 
 namespace qwen2_vl {
 
 namespace qwen2_vl_impl {
 
-using internal_input = std_vlm_input;
+using internal_input = bytes_input;
 using internal_output = std_vlm_output;
 
 /***
@@ -42,8 +47,103 @@ using internal_output = std_vlm_output;
 * @return
  */
 template <typename INPUT>
-typename std::enable_if<std::is_same<INPUT, std_vlm_input>::value, internal_input>::type transform_input(const INPUT& in) {
+typename std::enable_if<std::is_same<INPUT, mat_input>::value, internal_input>::type transform_input(const INPUT& in) {
+    internal_input result;
+    const cv::Mat& image = in.image;
+    if (image.empty() || !image.data) {
+        LOG(INFO) << "invalid opencv mat data or empty opencv mat";
+        return result;
+    }
+
+    std::vector<unsigned char> buffer;
+    cv::imencode(".jpg", image, buffer);
+    result.image_bytes = new unsigned char[buffer.size()];
+    std::memcpy(result.image_bytes, buffer.data(), buffer.size());
+
+    result.bytes_length = buffer.size();
+    result.text = in.text;
+
+    return result;
+}
+
+/***
+*
+* @tparam INPUT
+* @param in
+* @return
+ */
+template <typename INPUT>
+typename std::enable_if<std::is_same<INPUT, file_input>::value, internal_input>::type transform_input(const INPUT& in) {
+    internal_input result;
+    auto image_path = in.image_path;
+    if (!image_path.empty() && !FilePathUtil::is_file_exist(image_path)) {
+        LOG(ERROR) << fmt::format("image file: {} not exist", image_path);
+        return result;
+    }
+    if (image_path.empty()) {
+        DLOG(WARNING) << fmt::format("empty image file path");
+        return result;
+    }
+
+    std::ifstream file(image_path, std::ios::binary | std::ios::ate);
+    if (!file.is_open()) {
+        LOG(ERROR) << fmt::format("Failed to open file: {}", image_path);
+        return result;
+    }
+
+    std::streamsize file_size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    result.image_bytes = new unsigned char[file_size];
+    if (!file.read(reinterpret_cast<char*>(result.image_bytes), file_size)) {
+        LOG(ERROR) << fmt::format("Failed to read file: {}", image_path);
+        delete[] result.image_bytes;
+        result.image_bytes = nullptr;
+        return result;
+    }
+
+    result.bytes_length = static_cast<size_t>(file_size);
+    result.text = in.text;
+
+    file.close();
+    return result;
+}
+
+/***
+*
+* @tparam INPUT
+* @param in
+* @return
+ */
+template <typename INPUT>
+typename std::enable_if<std::is_same<INPUT, bytes_input>::value, internal_input>::type transform_input(const INPUT& in) {
     return in;
+}
+
+/***
+*
+* @tparam INPUT
+* @param in
+* @return
+ */
+template <typename INPUT>
+typename std::enable_if<std::is_same<INPUT, base64_input>::value, internal_input>::type transform_input(const INPUT& in) {
+    internal_input result;
+    std::string& img_b64_str = in.b64_image;
+    if (img_b64_str.empty()) {
+        LOG(ERROR) << "empty base64 image data";
+        return result;
+    }
+
+    auto image_str = Base64::base64_decode(img_b64_str);
+    std::vector<unsigned char> buffer(image_str.begin(), image_str.end());
+    result.image_bytes = new unsigned char[buffer.size()];
+    std::memcpy(result.image_bytes, buffer.data(), buffer.size());
+
+    result.bytes_length = buffer.size();
+    result.text = in.text;
+
+    return result;
 }
 
 /***
@@ -155,11 +255,12 @@ class Qwen2VL<INPUT, OUTPUT>::Impl {
 
     /***
      *
-     * @param input_image_path
+     * @param input_image_bytes
+     * @param bytes_length
      * @param out_img_embeds
      * @return
      */
-    StatusCode encode_image(const std::string& input_image_path, std::vector<float>& out_img_embeds);
+    StatusCode encode_image(const unsigned char* input_image_bytes, int bytes_length, std::vector<float>& out_img_embeds);
 
     /***
      *
@@ -362,8 +463,8 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     auto internal_in = qwen2_vl_impl::transform_input(in);
     // encode input image
     std::vector<float> image_embds;
-    if (!internal_in.image_path.empty()) {
-        auto status = encode_image(internal_in.image_path, image_embds);
+    if (nullptr != internal_in.image_bytes) {
+        auto status = encode_image(internal_in.image_bytes, internal_in.bytes_length, image_embds);
         if (status != StatusCode::OK) {
             LOG(ERROR) << fmt::format("encode input image failed");
             return status;
@@ -545,16 +646,18 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init_sampler() {
  *
  * @tparam INPUT
  * @tparam OUTPUT
- * @param input_image_path
+ * @param input_image_bytes
+ * @param bytes_length
  * @param out_img_embeds
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::encode_image(const std::string &input_image_path, std::vector<float> &out_img_embeds) {
+StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::encode_image(
+    const unsigned char* input_image_bytes, int bytes_length, std::vector<float> &out_img_embeds) {
     // load input image
     auto* image_u8 = clip_image_u8_init();
-    if (!clip_image_load_from_file(input_image_path.c_str(), image_u8)) {
-        LOG(ERROR) << fmt::format("load image from: {} failed", input_image_path);
+    if (!clip_image_load_from_bytes(input_image_bytes, bytes_length, image_u8)) {
+        LOG(ERROR) << fmt::format("load image from bytes failed");
         return StatusCode::VLM_QWEN_ENCODE_IMAGE_FAILED;
     }
     LOG(INFO) << fmt::format("input image size: [width / height] --> [{} / {}]", image_u8->nx, image_u8->ny);

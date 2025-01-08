@@ -8,6 +8,7 @@
 
 #include <glog/logging.h>
 #include "toml/toml.hpp"
+#include <opencv2/opencv.hpp>
 
 #include "common/status_code.h"
 #include "common/time_stamp.h"
@@ -17,7 +18,8 @@
 
 using jinq::common::StatusCode;
 using jinq::common::FilePathUtil;
-using jinq::models::io_define::llm::vlm::std_vlm_input;
+using jinq::models::io_define::llm::vlm::file_input;
+using jinq::models::io_define::llm::vlm::mat_input;
 using jinq::models::io_define::llm::vlm::std_vlm_output;
 using jinq::models::llm::qwen2_vl::Qwen2VL;
 
@@ -55,7 +57,7 @@ int main(int argc, char** argv) {
     }
 
     // construct qwen2-vl model
-    Qwen2VL<std_vlm_input, std_vlm_output> generator;
+    Qwen2VL<mat_input, std_vlm_output> generator;
     auto cfg = toml::parse(cfg_file_path);
     generator.init(cfg);
     if (!generator.is_successfully_initialized()) {
@@ -63,7 +65,8 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    std_vlm_input input{"", text_prompt};
+    cv::Mat image = cv::imread(image_path, cv::IMREAD_COLOR);
+    mat_input input{image, text_prompt};
     std_vlm_output output;
     auto status = generator.run(input, output);
     if (status != StatusCode::OK) {
@@ -76,8 +79,7 @@ int main(int argc, char** argv) {
         LOG(INFO) << fmt::format("---- {}", output);
     }
 
-    input.image_path = "";
-    input.text = "describe the image in details";
+    input.text = "what's the title in the top-left corner of the image";
     status = generator.run(input, output);
     if (status != StatusCode::OK) {
         LOG(ERROR) << "generator run session failed";

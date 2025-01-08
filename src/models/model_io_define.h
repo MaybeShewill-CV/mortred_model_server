@@ -280,12 +280,28 @@ using std_embedding_output = embedding_output;
 
 namespace vlm {
 
-struct vlm_input {
+struct file_input {
     std::string image_path;
     std::string text;
 };
 
-using std_vlm_input = vlm_input;
+struct mat_input {
+    cv::Mat image;
+    std::string text;
+};
+
+struct base64_input {
+    std::string b64_image;
+    std::string text;
+};
+
+struct bytes_input {
+    unsigned char* image_bytes = nullptr;
+    size_t bytes_length = 0;
+    std::string text;
+};
+
+using std_vlm_input = file_input;
 using std_vlm_output = std::string;
 
 }
