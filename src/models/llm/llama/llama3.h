@@ -127,6 +127,12 @@ class Llama3 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
     void clear_kv_cache_cell() const;
 
     /***
+     *
+     * @return
+     */
+    llama_perf_context_data get_context_perf() const;
+
+    /***
      * if model successfully initialized
      * @return
      */

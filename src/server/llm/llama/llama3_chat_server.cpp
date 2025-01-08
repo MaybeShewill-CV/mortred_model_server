@@ -262,6 +262,24 @@ void Llama3ChatServer::Impl::serve_process(WFHttpTask* task) {
             "<html>kv cache cleared.\n n_ctx: {}\n kv cache used: {}</html>", model_stat.n_ctx_size, model_stat.kv_cache_cell_nums));
         return;
     }
+    // clear kv cache
+    else if (strcmp(task->get_req()->get_request_uri(), "/get_context_perf") == 0) {
+        auto data = _m_generator->get_context_perf();
+        const double t_end_ms = 1e-3 * static_cast<double>(ggml_time_us());
+        auto perf_str = fmt::format(
+            "load time = {} ms\n"
+            "prompt eval time = {} ms / %5d tokens ({} ms per token, {} tokens per second)\n"
+            "eval time = {} ms / {} runs   ({} ms per token, {} tokens per second)\n"
+            "total time = {} ms / {} tokens\n",
+            data.t_load_ms,
+            data.t_p_eval_ms, data.n_p_eval, data.t_p_eval_ms / data.n_p_eval, 1e3 / data.t_p_eval_ms * data.n_p_eval,
+            data.t_eval_ms, data.n_eval, data.t_eval_ms / data.n_eval, 1e3 / data.t_eval_ms * data.n_eval,
+            (t_end_ms - data.t_start_ms), (data.n_p_eval + data.n_eval)
+            );
+        task->get_resp()->append_output_body(fmt::format(
+            "<html>context perf data: {}</html>", perf_str));
+        return;
+    }
     // model service
     else if (strcmp(task->get_req()->get_request_uri(), _m_server_uri.c_str()) == 0) {
         // parse request body

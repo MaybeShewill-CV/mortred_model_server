@@ -193,6 +193,14 @@ public:
      *
      * @return
      */
+    llama_perf_context_data get_context_perf() const {
+       return llama_perf_context(_m_ctx);
+    }
+
+    /***
+     *
+     * @return
+     */
     bool is_successfully_initialized() const {
         return _m_successfully_initialized;
     };
@@ -1070,6 +1078,17 @@ ModelStatus Llama3<INPUT, OUTPUT>::get_model_stat() const {
 template <typename INPUT, typename OUTPUT>
 void Llama3<INPUT, OUTPUT>::clear_kv_cache_cell() const {
     return _m_pimpl->clear_kv_cache_cell();
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+llama_perf_context_data Llama3<INPUT, OUTPUT>::get_context_perf() const {
+    return _m_pimpl->get_context_perf();
 }
 
 }
