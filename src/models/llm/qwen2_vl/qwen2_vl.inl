@@ -7,9 +7,15 @@
 
 #include "qwen2_vl.h"
 
+#include <regex>
+
 #include "glog/logging.h"
 #include "fmt/format.h"
 #include "llama_cpp/llama.h"
+#include "rapidjson/document.h"
+#include "workflow/WFFacilities.h"
+#include "workflow/WFTaskFactory.h"
+#include "workflow/HttpUtil.h"
 
 #include "common/base64.h"
 #include "common/cv_utils.h"
@@ -81,7 +87,6 @@ typename std::enable_if<std::is_same<INPUT, file_input>::value, internal_input>:
         return result;
     }
     if (image_path.empty()) {
-        DLOG(WARNING) << fmt::format("empty image file path");
         return result;
     }
 
@@ -116,7 +121,8 @@ typename std::enable_if<std::is_same<INPUT, file_input>::value, internal_input>:
 * @return
  */
 template <typename INPUT>
-typename std::enable_if<std::is_same<INPUT, bytes_input>::value, internal_input>::type transform_input(const INPUT& in) {
+typename std::enable_if<std::is_same<INPUT, bytes_input>::value, internal_input>::type transform_input(
+    const INPUT& in) {
     return in;
 }
 
@@ -127,7 +133,8 @@ typename std::enable_if<std::is_same<INPUT, bytes_input>::value, internal_input>
 * @return
  */
 template <typename INPUT>
-typename std::enable_if<std::is_same<INPUT, base64_input>::value, internal_input>::type transform_input(const INPUT& in) {
+typename std::enable_if<std::is_same<INPUT, base64_input>::value, internal_input>::type transform_input(
+    const INPUT& in) {
     internal_input result;
     std::string& img_b64_str = in.b64_image;
     if (img_b64_str.empty()) {
@@ -165,7 +172,7 @@ transform_output(const qwen2_vl_impl::internal_output& internal_out) {
 
 template <typename INPUT, typename OUTPUT>
 class Qwen2VL<INPUT, OUTPUT>::Impl {
-  public:
+public:
     /***
      *
      */
@@ -224,13 +231,41 @@ class Qwen2VL<INPUT, OUTPUT>::Impl {
 
     /***
      *
+     * @param dialog
+     * @param generate_output
+     * @param truncate
+     * @return
+     */
+    StatusCode chat_completion(Dialog& dialog, std::string& generate_output);
+
+    /***
+     *
+     * @return
+     */
+    ModelStatus get_model_stat() const;
+
+    /***
+     *
+     */
+    void clear_kv_cache_cell() const;
+
+    /***
+     *
+     * @return
+     */
+    llama_perf_context_data get_context_perf() const {
+        return llama_perf_context(_m_llm_ctx);
+    }
+
+    /***
+     *
      * @return
      */
     bool is_successfully_initialized() const {
         return _m_successfully_initialized;
     };
 
-  private:
+private:
     // vision tower params
     clip_ctx* _m_clip_ctx = nullptr;
 
@@ -246,7 +281,7 @@ class Qwen2VL<INPUT, OUTPUT>::Impl {
     // init flag
     bool _m_successfully_initialized = false;
 
-  private:
+private:
     /***
      *
      * @param need_grama
@@ -270,7 +305,8 @@ class Qwen2VL<INPUT, OUTPUT>::Impl {
      * @param out_tokens
      * @return
      */
-    StatusCode common_tokenize(const std::string & text, bool add_special, bool parse_special, std::vector<int32_t>& out_tokens);
+    StatusCode common_tokenize(const std::string& text, bool add_special, bool parse_special,
+                               std::vector<int32_t>& out_tokens);
 
     /***
      *
@@ -278,7 +314,7 @@ class Qwen2VL<INPUT, OUTPUT>::Impl {
      * @param special
      * @return
      */
-    std::string common_token_to_piece(const llama_token& token, bool special=true);
+    std::string common_token_to_piece(const llama_token& token, bool special = true);
 
     /***
      *
@@ -322,7 +358,7 @@ class Qwen2VL<INPUT, OUTPUT>::Impl {
      * @param grammar_first
      * @return
      */
-    bool llama_sample(int idx, llama_token& out_sampled_token, bool grammar_first=false);
+    bool llama_sample(int idx, llama_token& out_sampled_token, bool grammar_first = false);
 
     /***
      *
@@ -332,6 +368,14 @@ class Qwen2VL<INPUT, OUTPUT>::Impl {
      * @return
      */
     StatusCode autoregressive_generate(int* n_past, int* st_pos_id, std::string& out_piece);
+
+    /***
+     *
+     * @param image_url
+     * @param bytes_data
+     * @return
+     */
+    StatusCode parse_image_url_data(const std::string& image_url, bytes_input& bytes_data);
 };
 
 /***
@@ -414,8 +458,10 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init(const toml::value& config) {
     if (ctx_cfg.contains("context_size")) {
         ctx_size = static_cast<int32_t >(ctx_cfg.at("context_size").as_integer());
     }
-    _m_llm_ctx_params.n_ctx = ctx_size <= llama_n_ctx_train(_m_llm_model) ? ctx_size : llama_n_ctx_train(_m_llm_model); // context size
-    _m_llm_ctx_params.n_batch = _m_llm_ctx_params.n_ctx / 4; // logical batch size for prompt processing (must be >=32 to use BLAS)
+    _m_llm_ctx_params.n_ctx = ctx_size <= llama_n_ctx_train(_m_llm_model) ? ctx_size : llama_n_ctx_train(
+                                  _m_llm_model); // context size
+    _m_llm_ctx_params.n_batch = _m_llm_ctx_params.n_ctx /
+                                4; // logical batch size for prompt processing (must be >=32 to use BLAS)
     _m_llm_ctx_params.n_ubatch = 512; // physical batch size for prompt processing (must be >=32 to use BLAS)
     _m_llm_ctx_params.logits_all = false; // return logits for all tokens in the batch
     _m_llm_ctx_params.embeddings = false;  // get only sentence embedding
@@ -443,7 +489,7 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init(const toml::value& config) {
 
     std::string result = "logits ";
     for (int i = 0; i < llama_sampler_chain_n(_m_smpl_chain); i++) {
-        const auto * smpl = llama_sampler_chain_get(_m_smpl_chain, i);
+        const auto* smpl = llama_sampler_chain_get(_m_smpl_chain, i);
         result += std::string("-> ") + llama_sampler_name(smpl) + " ";
     }
     LOG(INFO) << result;
@@ -475,21 +521,41 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     auto image_size = clip_get_load_image_size(_m_clip_ctx);
 
     // prepare prompt
-    auto& prompt = internal_in.text;
+    std::string& prompt = internal_in.text;
     std::string system_prompt;
     std::string user_prompt;
-    size_t image_pos = prompt.find("<|vision_start|>");
 
-    if (image_pos != std::string::npos) {
-        // new templating mode: Provide the full prompt including system message and use <image> as a placeholder for the image
-        system_prompt = prompt.substr(0, image_pos);
-        user_prompt = prompt.substr(image_pos + std::string("<|vision_pad|>").length());
-        LOG(INFO) << fmt::format("system_prompt: {}", system_prompt);
-        LOG(INFO) << fmt::format("user_prompt: {}", user_prompt);
+    std::string start_tag = "<|im_start|>";
+    std::string end_tag = "<|im_end|>";
+    if (prompt.find(start_tag) != std::string::npos) {
+        size_t start = prompt.find(start_tag);
+        size_t end = prompt.find(end_tag);
+        while (start <= end) {
+            if (start != std::string::npos && end != std::string::npos && end > start) {
+                size_t contentStart = start + start_tag.length();
+                std::string extracted = prompt.substr(contentStart, end - contentStart);
+                if (extracted.find("system") == 0) {
+                    system_prompt = extracted;
+                }
+                if (extracted.find("user") == 0) {
+                    user_prompt = extracted;
+                }
+            }
+            if (end + end_tag.length() > prompt.length()) {
+                break;
+            }
+            std::string left_str = prompt.substr(end + end_tag.length());
+            start = left_str.find(start_tag);
+            start += (end + end_tag.length());
+            end = left_str.find(end_tag);
+            end += (end + end_tag.length());
+        }
+        system_prompt = fmt::format("{}{}{}\n", start_tag, system_prompt, end_tag);
+        user_prompt = fmt::format("{}{}{}\n<|im_start|>assistant\n", start_tag, user_prompt, end_tag);
     } else {
-        // llava-1.5 native mode
-        system_prompt = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n<|vision_start|>";
-        user_prompt = "<|vision_end|>" + prompt + "<|im_end|>\n<|im_start|>assistant\n";
+        system_prompt = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n";
+        user_prompt = "<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>" + prompt +
+                      "<|im_end|>\n<|im_start|>assistant\n";
     }
 
     // prefill system prompt
@@ -505,7 +571,7 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     // inference vision embedding
     if (!image_embds.empty()) {
         status = prefill_vision_prompt(
-            image_embds, n_img_patches, _m_llm_ctx_params.n_batch, &n_past, &cur_pos_id, image_size->width, image_size->height);
+                     image_embds, n_img_patches, _m_llm_ctx_params.n_batch, &n_past, &cur_pos_id, image_size->width, image_size->height);
         if (status != StatusCode::OK) {
             LOG(ERROR) << fmt::format("decode vision embedding failed, status: ", std::to_string(status));
             return status;
@@ -546,9 +612,109 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     qwen2_vl_impl::internal_output internal_out = response;
     out = qwen2_vl_impl::transform_output<OUTPUT>(internal_out);
 
-//    llama_perf_context_print(_m_llm_ctx);
-
     return status;
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param dialog
+ * @param generate_output
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::chat_completion(jinq::models::llm::Dialog& dialog, std::string& generate_output) {
+    // assemble text input
+    std::string text_prompt;
+    std::string image_url;
+    for (auto& msg : dialog.messages) {
+        std::string sys_str;
+        std::string user_str;
+        std::string assis_str;
+        if (msg.role == "system") {
+            sys_str = fmt::format("<|im_start|>system\n{}<|im_end|>\n", msg.content);
+        } else if (msg.role == "user") {
+            rapidjson::Document doc;
+            doc.Parse(msg.content.c_str());
+            if (doc.HasParseError()) {
+                LOG(WARNING) << fmt::format("invalid json string: {} has parse error", msg.content);
+                continue;
+            }
+            std::string text;
+            if (!doc.HasMember("content")) {
+                LOG(WARNING) << fmt::format("invalid json string: {}, missing \'content\' field", msg.content);
+                continue;
+            }
+            for (auto& c : doc["content"].GetArray()) {
+                std::string type = c["type"].GetString();
+                if (type == "text") {
+                    text = c["text"].GetString();
+                } else if (type == "image") {
+                    image_url = c["image"].GetString();
+                } else {
+                    LOG(WARNING) << fmt::format("not supported type: {}", type);
+                }
+            }
+            user_str = fmt::format("<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>{}<|im_end|>\n", text);
+        } else {
+            assis_str = fmt::format("<|im_start|>assistant\n{}<|im_end|>\n", msg.content);
+        }
+        text_prompt += sys_str;
+        text_prompt += user_str;
+        text_prompt += assis_str;
+    }
+
+    // prepare image data
+    bytes_input input;
+    input.text = text_prompt;
+    if (!image_url.empty()) {
+        auto status = parse_image_url_data(image_url, input);
+        if (status != StatusCode::OK) {
+            LOG(ERROR) << fmt::format("parse image url: {} failed, status: {}", image_url, std::to_string(status));
+            return status;
+        }
+    }
+
+    // run model inference
+    qwen2_vl_impl::internal_output output;
+    auto status = run(input, output);
+    if (status != StatusCode::OK) {
+        LOG(ERROR) << fmt::format("run qwen2-vl model inference session failed, status: {}", std::to_string(status));
+        return status;
+    }
+    generate_output = qwen2_vl_impl::transform_output<OUTPUT>(output);
+
+    return StatusCode::OK;
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+ModelStatus Qwen2VL<INPUT, OUTPUT>::Impl::get_model_stat() const {
+    ModelStatus stat{};
+    stat.n_ctx_size = llama_n_ctx(_m_llm_ctx);
+    stat.kv_cache_cell_nums = llama_get_kv_cache_used_cells(_m_llm_ctx);
+    stat.embed_dims = llama_n_embd(_m_llm_model);
+    stat.has_vision_tower = true;
+    stat.clip_embedding_dims = clip_n_mmproj_embd(_m_clip_ctx);
+    stat.clip_hidden_size = clip_hidden_size(_m_clip_ctx);
+    return stat;
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+void Qwen2VL<INPUT, OUTPUT>::Impl::clear_kv_cache_cell() const {
+    llama_kv_cache_clear(_m_llm_ctx);
 }
 
 /***
@@ -570,34 +736,34 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init_sampler() {
             llama_n_vocab(_m_llm_model),
             _m_smpl_params.logit_bias.size(),
             _m_smpl_params.logit_bias.data()
-                )
+        )
     );
     llama_sampler_chain_add(
         _m_smpl_chain,
         llama_sampler_init_penalties(
-            llama_n_vocab  (_m_llm_model),
+            llama_n_vocab(_m_llm_model),
             llama_token_eos(_m_llm_model),
-            llama_token_nl (_m_llm_model),
+            llama_token_nl(_m_llm_model),
             _m_smpl_params.penalty_last_n,
             _m_smpl_params.penalty_repeat,
             _m_smpl_params.penalty_freq,
             _m_smpl_params.penalty_present,
             _m_smpl_params.penalize_nl,
             _m_smpl_params.ignore_eos
-            )
+        )
     );
     auto& params = _m_smpl_params;
     if (params.mirostat == 0) {
-        for (const auto & cnstr : params.samplers) {
+        for (const auto& cnstr : params.samplers) {
             switch (cnstr) {
-            case llama::COMMON_SAMPLER_TYPE_DRY:
-            {
+            case llama::COMMON_SAMPLER_TYPE_DRY: {
                 std::vector<const char*> c_breakers;
                 c_breakers.reserve(params.dry_sequence_breakers.size());
                 for (const auto& str : params.dry_sequence_breakers) {
                     c_breakers.push_back(str.c_str());
                 }
-                llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_dry(_m_llm_model, params.dry_multiplier, params.dry_base, params.dry_allowed_length, params.dry_penalty_last_n, c_breakers.data(), c_breakers.size()));
+                llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_dry(_m_llm_model, params.dry_multiplier, params.dry_base,
+                                        params.dry_allowed_length, params.dry_penalty_last_n, c_breakers.data(), c_breakers.size()));
             }
             break;
             case llama::COMMON_SAMPLER_TYPE_TOP_K:
@@ -610,13 +776,15 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init_sampler() {
                 llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_min_p(params.min_p, params.min_keep));
                 break;
             case llama::COMMON_SAMPLER_TYPE_XTC:
-                llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_xtc(params.xtc_probability, params.xtc_threshold, params.min_keep, params.seed));
+                llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_xtc(params.xtc_probability, params.xtc_threshold,
+                                        params.min_keep, params.seed));
                 break;
             case llama::COMMON_SAMPLER_TYPE_TYPICAL_P:
                 llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_typical(params.typ_p, params.min_keep));
                 break;
             case llama::COMMON_SAMPLER_TYPE_TEMPERATURE:
-                llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_temp_ext(params.temp, params.dynatemp_range, params.dynatemp_exponent));
+                llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_temp_ext(params.temp, params.dynatemp_range,
+                                        params.dynatemp_exponent));
                 break;
             case llama::COMMON_SAMPLER_TYPE_INFILL:
                 llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_infill(_m_llm_model));
@@ -629,10 +797,12 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init_sampler() {
         llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_dist(params.seed));
     } else if (params.mirostat == 1) {
         llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_temp(params.temp));
-        llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_mirostat(llama_n_vocab(_m_llm_model), params.seed, params.mirostat_tau, params.mirostat_eta, 100));
+        llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_mirostat(llama_n_vocab(_m_llm_model), params.seed,
+                                params.mirostat_tau, params.mirostat_eta, 100));
     } else if (params.mirostat == 2) {
         llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_temp(params.temp));
-        llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_mirostat_v2(params.seed, params.mirostat_tau, params.mirostat_eta));
+        llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_mirostat_v2(params.seed, params.mirostat_tau,
+                                params.mirostat_eta));
     } else {
         LOG(ERROR) << "unknown mirostat version";
         return StatusCode::MODEL_INIT_FAILED;
@@ -653,23 +823,23 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init_sampler() {
  */
 template <typename INPUT, typename OUTPUT>
 StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::encode_image(
-    const unsigned char* input_image_bytes, int bytes_length, std::vector<float> &out_img_embeds) {
+    const unsigned char* input_image_bytes, int bytes_length, std::vector<float>& out_img_embeds) {
     // load input image
     auto* image_u8 = clip_image_u8_init();
     if (!clip_image_load_from_bytes(input_image_bytes, bytes_length, image_u8)) {
         LOG(ERROR) << fmt::format("load image from bytes failed");
         return StatusCode::VLM_QWEN_ENCODE_IMAGE_FAILED;
     }
-    LOG(INFO) << fmt::format("input image size: [width / height] --> [{} / {}]", image_u8->nx, image_u8->ny);
+//    LOG(INFO) << fmt::format("input image size: [width / height] --> [{} / {}]", image_u8->nx, image_u8->ny);
 
     // malloc embedding vector size
     clip_image_f32 image_f32;
     image_f32.nx = image_u8->nx;
     image_f32.ny = image_u8->ny;
     auto n_patches = clip_n_patches_by_img(_m_clip_ctx, &image_f32);
-    LOG(INFO) << fmt::format("clip input image into patched: {}", n_patches);
+//    LOG(INFO) << fmt::format("clip input image into patched: {}", n_patches);
     auto n_embed_dims = clip_n_mmproj_embd(_m_clip_ctx);
-    LOG(INFO) << fmt::format("clip patch embedding dims: {}", n_embed_dims);
+//    LOG(INFO) << fmt::format("clip patch embedding dims: {}", n_embed_dims);
     out_img_embeds.resize(n_patches * n_embed_dims, 0.0f);
 
     // preprocess input image
@@ -716,7 +886,7 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::encode_image(
  */
 template <typename INPUT, typename OUTPUT>
 StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::common_tokenize(
-    const std::string &text, bool add_special, bool parse_special, std::vector<int32_t> &out_tokens) {
+    const std::string& text, bool add_special, bool parse_special, std::vector<int32_t>& out_tokens) {
     // check input text
     if (text.empty()) {
         LOG(ERROR) << "input prompt is empty";
@@ -728,11 +898,12 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::common_tokenize(
     out_tokens.resize(n_tokens);
     auto text_len = static_cast<int32_t >(text.length());
     auto out_tokens_len = static_cast<int32_t >(out_tokens.size());
-    n_tokens = llama_tokenize(_m_llm_model, text.data(), text_len, out_tokens.data(), out_tokens_len, add_special, parse_special);
+    n_tokens = llama_tokenize(_m_llm_model, text.data(), text_len, out_tokens.data(), out_tokens_len, add_special,
+                              parse_special);
     if (n_tokens < 0) {
         out_tokens.resize(-n_tokens);
         int32_t check = llama_tokenize(
-            _m_llm_model, text.data(), text_len, out_tokens.data(), out_tokens_len, add_special, parse_special);
+                            _m_llm_model, text.data(), text_len, out_tokens.data(), out_tokens_len, add_special, parse_special);
         if (check != -n_tokens) {
             LOG(ERROR) << fmt::format("tokenize text: {} failed, check nums: {}, -n_tokens nums: {}. They are not equal",
                                       text, check, -n_tokens);
@@ -754,16 +925,17 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::common_tokenize(
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-std::string Qwen2VL<INPUT, OUTPUT>::Impl::common_token_to_piece(const llama_token &token, bool special) {
+std::string Qwen2VL<INPUT, OUTPUT>::Impl::common_token_to_piece(const llama_token& token, bool special) {
     std::string piece;
     piece.resize(piece.capacity());  // using string internal cache, 15 bytes + '\n'
-    const int n_chars = llama_token_to_piece(_m_llm_model, token, &piece[0], static_cast<int32_t >(piece.size()), 0, special);
+    const int n_chars = llama_token_to_piece(_m_llm_model, token, &piece[0], static_cast<int32_t >(piece.size()), 0,
+                        special);
     if (n_chars < 0) {
         piece.resize(-n_chars);
         int check = llama_token_to_piece(_m_llm_model, token, &piece[0], static_cast<int32_t>(piece.size()), 0, special);
         if (check != -n_chars) {
-            LOG(ERROR) << fmt::format("convert token: {} into piece failed, check nums: {}, -n_chars nums: {}, not equal", token, check,
-                                      -n_chars);
+            LOG(ERROR) << fmt::format(
+                "convert token: {} into piece failed, check nums: {}, -n_chars nums: {}, not equal", token, check, -n_chars);
             return "";
         }
     } else {
@@ -784,7 +956,8 @@ std::string Qwen2VL<INPUT, OUTPUT>::Impl::common_token_to_piece(const llama_toke
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::inference_tokens(std::vector<int32_t> &tokens, int n_batch, int* n_past, int* st_pos_id) {
+StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::inference_tokens(std::vector<int32_t>& tokens, int n_batch, int* n_past,
+        int* st_pos_id) {
     auto token_size = static_cast<int32_t>(tokens.size());
     std::vector<llama_pos> pos;
     for (int i = 0; i < token_size; i += n_batch) {
@@ -804,7 +977,7 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::inference_tokens(std::vector<int32_t> &
         int successfully_decode = llama_decode(_m_llm_ctx, batch);
         if (successfully_decode == 1) {
             LOG(WARNING) << "llama generate failed. could not find a KV slot for the batch "
-                            "(try reducing the size of the batch or increase the context)";
+                         "(try reducing the size of the batch or increase the context)";
         } else if (successfully_decode < 0) {
             LOG(ERROR) << "llama decode failed code: " << successfully_decode;
             return StatusCode::MODEL_RUN_SESSION_FAILED;
@@ -831,7 +1004,10 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::inference_tokens(std::vector<int32_t> &
  */
 template <typename INPUT, typename OUTPUT>
 StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::prefill_text_prompt(
-    const std::string &text, int n_batch, int *n_past, int *st_pos_id, bool add_bos) {
+    const std::string& text, int n_batch, int* n_past, int* st_pos_id, bool add_bos) {
+    if (text.empty()) {
+        return StatusCode::OK;
+    }
     std::vector<llama_token> embd_inp;
     auto status = common_tokenize(text, add_bos, true, embd_inp);
     if (status != StatusCode::OK) {
@@ -856,7 +1032,8 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::prefill_text_prompt(
  */
 template <typename INPUT, typename OUTPUT>
 StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::prefill_vision_prompt(
-    std::vector<float> &image_embd, const int n_img_tokens, int n_batch, int *n_past, int *st_pos_id, int img_w, int img_h) {
+    std::vector<float>& image_embd, const int n_img_tokens, int n_batch, int* n_past, int* st_pos_id, int img_w,
+    int img_h) {
     if (nullptr == n_past || nullptr == st_pos_id) {
         LOG(ERROR) << fmt::format("failed to decode image embeddings. n_past or st_pos_id is nullptr");
         return StatusCode::LLM_LLAMA_DECODE_FAILED;
@@ -906,7 +1083,7 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::prefill_vision_prompt(
         int successfully_decode = llama_decode(_m_llm_ctx, batch);
         if (successfully_decode == 1) {
             LOG(WARNING) << "llama generate failed. could not find a KV slot for the batch "
-                            "(try reducing the size of the batch or increase the context)";
+                         "(try reducing the size of the batch or increase the context)";
         } else if (successfully_decode < 0) {
             LOG(ERROR) << fmt::format("failed to prefill image embeddings");
             LOG(ERROR) << "llama decode failed code: " << successfully_decode;
@@ -930,7 +1107,7 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::prefill_vision_prompt(
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-bool Qwen2VL<INPUT, OUTPUT>::Impl::llama_sample(int idx, llama_token &out_sampled_token, bool grammar_first) {
+bool Qwen2VL<INPUT, OUTPUT>::Impl::llama_sample(int idx, llama_token& out_sampled_token, bool grammar_first) {
     // get logits
     std::vector<llama_token_data> cur;
     llama_token_data_array cur_p;
@@ -1001,7 +1178,7 @@ bool Qwen2VL<INPUT, OUTPUT>::Impl::llama_sample(int idx, llama_token &out_sample
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::autoregressive_generate(int *n_past, int *st_pos_id, std::string& out_piece) {
+StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::autoregressive_generate(int* n_past, int* st_pos_id, std::string& out_piece) {
     // sample output token
     llama_token sampled_token;
     llama_sample(-1, sampled_token, false);
@@ -1026,6 +1203,95 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::autoregressive_generate(int *n_past, in
     return status;
 }
 
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param image_url
+ * @param byte_data
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::parse_image_url_data(const std::string& image_url, bytes_input& bytes_data) {
+    auto is_local_file = [](const std::string & url) -> bool {
+        return FilePathUtil::is_file_exist(url);
+    };
+    auto is_url = [](const std::string & url) -> bool {
+        std::vector<std::string> url_prefixes = {"http://", "https://", "ftp://"};
+        return std::any_of(
+                   url_prefixes.begin(), url_prefixes.end(),
+                   [&](const std::string & protocol) -> bool {return url.find(protocol) != std::string::npos;});
+    };
+    auto is_b64 = [](const std::string & url) -> bool {
+        if (url.rfind("data:", 0) == 0 && url.find(";base64,") != std::string::npos) {
+            return true;
+        }
+        std::regex base64_regex("^[A-Za-z0-9+/]*(={0,2})$");
+        return (url.length() % 4 == 0) && std::regex_match(url, base64_regex);
+    };
+
+    if (is_local_file(image_url)) {
+        std::ifstream file(image_url, std::ios::binary | std::ios::ate);
+        if (!file.is_open()) {
+            LOG(ERROR) << fmt::format("Failed to open file: {}", image_url);
+            return StatusCode::VLM_QWEN_PARSE_IMAGE_URL_FAILED;
+        }
+
+        std::streamsize file_size = file.tellg();
+        file.seekg(0, std::ios::beg);
+        bytes_data.image_bytes = new unsigned char[file_size];
+        if (!file.read(reinterpret_cast<char*>(bytes_data.image_bytes), file_size)) {
+            LOG(ERROR) << fmt::format("Failed to read file: {}", image_url);
+            delete[] bytes_data.image_bytes;
+            bytes_data.image_bytes = nullptr;
+            return StatusCode::VLM_QWEN_PARSE_IMAGE_URL_FAILED;
+        }
+        bytes_data.bytes_length = file_size;
+        return StatusCode::OK;
+    } else if (is_url(image_url)) {
+        WFFacilities::WaitGroup wait_group(1);
+        StatusCode status = StatusCode::OK;
+        WFHttpTask* task = WFTaskFactory::create_http_task(image_url, 5, 5, [&](WFHttpTask * h_task) -> void {
+            int state = task->get_state();
+            int error = task->get_error();
+            protocol::HttpResponse* resp = task->get_resp();
+            auto status_code = resp->get_status_code();
+            if (state != WFT_STATE_SUCCESS) {
+                LOG(ERROR) << fmt::format("Download file from {} failed, state: {}, error: {}, error msg: {}",
+                                          image_url, state, error, WFGlobal::get_error_string(state, error));
+                status = StatusCode::VLM_QWEN_PARSE_IMAGE_URL_FAILED;
+                return;
+            }
+            auto resp_str = protocol::HttpUtil::decode_chunked_body(resp);
+            if (std::strcmp(status_code, "200") != 0) {
+                LOG(ERROR) << fmt::format("Download file from {} failed http status: {}, resp content: {}",
+                                          image_url, status_code, resp_str);
+                status = StatusCode::VLM_QWEN_PARSE_IMAGE_URL_FAILED;
+                return;
+            }
+            std::vector<unsigned char> buffer(resp_str.begin(), resp_str.end());
+            bytes_data.image_bytes = new unsigned char[buffer.size()];
+            std::memcpy(bytes_data.image_bytes, buffer.data(), buffer.size());
+            bytes_data.bytes_length = buffer.size();
+            wait_group.done();
+        });
+        task->get_req()->set_method("GET");
+        task->start();
+        wait_group.wait();
+        return status;
+    } else if (is_b64(image_url)) {
+        auto image_str = Base64::base64_decode(image_url);
+        std::vector<unsigned char> buffer(image_str.begin(), image_str.end());
+        bytes_data.image_bytes = new unsigned char[buffer.size()];
+        std::memcpy(bytes_data.image_bytes, buffer.data(), buffer.size());
+        bytes_data.bytes_length = buffer.size();
+        return StatusCode::OK;
+    } else {
+        LOG(ERROR) << fmt::format("not supported image url: {}", image_url);
+        return StatusCode::VLM_QWEN_PARSE_IMAGE_URL_FAILED;
+    }
+}
+
 /************* Export Function Sets *************/
 
 /***
@@ -1044,7 +1310,7 @@ Qwen2VL<INPUT, OUTPUT>::Qwen2VL() {
  * @tparam OUTPUT
  */
 template <typename INPUT, typename OUTPUT>
-Qwen2VL<INPUT, OUTPUT>::~Qwen2VL() = default;
+Qwen2VL<INPUT, OUTPUT>::~Qwen2VL() = default; // NOLINT(*-redundant-declaration)
 
 /***
  *
@@ -1080,6 +1346,51 @@ bool Qwen2VL<INPUT, OUTPUT>::is_successfully_initialized() const {
 template <typename INPUT, typename OUTPUT>
 StatusCode Qwen2VL<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param dialog
+ * @param generate_output
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+StatusCode Qwen2VL<INPUT, OUTPUT>::chat_completion(Dialog& dialog, std::string& generate_output) {
+    return _m_pimpl->chat_completion(dialog, generate_output);
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+ModelStatus Qwen2VL<INPUT, OUTPUT>::get_model_stat() const {
+    return _m_pimpl->get_model_stat();
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ */
+template <typename INPUT, typename OUTPUT>
+void Qwen2VL<INPUT, OUTPUT>::clear_kv_cache_cell() const {
+    return _m_pimpl->clear_kv_cache_cell();
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+llama_perf_context_data Qwen2VL<INPUT, OUTPUT>::get_context_perf() const {
+    return _m_pimpl->get_context_perf();
 }
 
 }

@@ -18,9 +18,13 @@ namespace models {
 namespace llm {
 
 struct ModelStatus {
-    uint32_t n_ctx_size;
-    int32_t kv_cache_cell_nums;
-    int32_t embed_dims;
+    uint32_t n_ctx_size = 0;
+    int32_t kv_cache_cell_nums = 0;
+    int32_t embed_dims = 0;
+
+    bool has_vision_tower = false;
+    int32_t clip_embedding_dims = 0;
+    int32_t clip_hidden_size = 0;
 };
 
 struct ChatMessage {

@@ -78,8 +78,8 @@ int main(int argc, char** argv) {
         LOG(INFO) << "assistant response: ";
         LOG(INFO) << fmt::format("---- {}", output);
     }
-
-    input.text = "what's the title in the top-left corner of the image";
+    input.image = cv::Mat();
+    input.text = "rephrase it.";
     status = generator.run(input, output);
     if (status != StatusCode::OK) {
         LOG(ERROR) << "generator run session failed";

@@ -80,6 +80,7 @@ enum StatusCode {
     // VLM relative status
     VLM_QWEN_ENCODE_IMAGE_FAILED = 140,
     VLM_QWEN_DECODE_IMAGE_EMBEDDING_FAILED = 141,
+    VLM_QWEN_PARSE_IMAGE_URL_FAILED = 142,
 };
 
 /***

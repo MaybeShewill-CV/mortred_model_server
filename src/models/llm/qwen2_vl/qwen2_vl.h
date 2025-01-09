@@ -67,6 +67,32 @@ class Qwen2VL : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
     jinq::common::StatusCode run(const INPUT &input, OUTPUT &output) override;
 
     /***
+     *
+     * @param dialog
+     * @param generate_output
+     * @param truncate
+     * @return
+     */
+    jinq::common::StatusCode chat_completion(Dialog& dialog, std::string& generate_output);
+
+    /***
+     *
+     * @return
+     */
+    jinq::models::llm::ModelStatus get_model_stat() const;
+
+    /***
+     *
+     */
+    void clear_kv_cache_cell() const;
+
+    /***
+     *
+     * @return
+     */
+    llama_perf_context_data get_context_perf() const;
+
+    /***
      * if model successfully initialized
      * @return
      */
