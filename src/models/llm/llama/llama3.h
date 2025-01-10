@@ -123,6 +123,14 @@ class Llama3 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
 
     /***
      *
+     * @param n_tokens
+     * @param seq_id
+     * @return
+     */
+    jinq::common::StatusCode kv_cache_shift_top_n(int n_tokens, int seq_id = -1);
+
+    /***
+     *
      */
     void clear_kv_cache_cell() const;
 

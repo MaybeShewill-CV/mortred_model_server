@@ -70,7 +70,6 @@ class Qwen2VL : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
      *
      * @param dialog
      * @param generate_output
-     * @param truncate
      * @return
      */
     jinq::common::StatusCode chat_completion(Dialog& dialog, std::string& generate_output);

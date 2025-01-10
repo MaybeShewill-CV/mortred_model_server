@@ -186,6 +186,14 @@ public:
 
     /***
      *
+     * @param n_tokens
+     * @param seq_id
+     * @return
+     */
+    StatusCode kv_cache_shift_top_n(int n_tokens, int seq_id = -1);
+
+    /***
+     *
      */
     void clear_kv_cache_cell() const;
 
@@ -682,8 +690,29 @@ ModelStatus Llama3<INPUT, OUTPUT>::Impl::get_model_stat() const {
     ModelStatus stat{};
     stat.n_ctx_size = llama_n_ctx(_m_ctx);
     stat.kv_cache_cell_nums = llama_get_kv_cache_used_cells(_m_ctx);
+    stat.kv_cache_token_nums = llama_get_kv_cache_token_count(_m_ctx);
+    stat.kv_cache_can_shift = llama_kv_cache_can_shift(_m_ctx);
     stat.embed_dims = llama_n_embd(_m_model);
     return stat;
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param n_tokens
+ * @param seq_id
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+StatusCode Llama3<INPUT, OUTPUT>::Impl::kv_cache_shift_top_n(int n_tokens, int seq_id) {
+    int n_keep = 1; // keep bos token
+    if(!llama_kv_cache_seq_rm(_m_ctx, seq_id, n_keep, 1 + n_tokens)) {
+        LOG(ERROR) << fmt::format("removing kv cache for seq: {} failed", seq_id);
+        return StatusCode::LLM_SHIFT_KV_CACHE_FAILED;
+    }
+    llama_kv_cache_seq_add(_m_ctx, seq_id, n_keep + n_tokens, -1, -n_tokens);
+    return StatusCode::OK;
 }
 
 /***
@@ -806,7 +835,7 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::llama_generate(std::vector<llama_token>&
         int n_ctx = llama_n_ctx(_m_ctx);
         int n_ctx_used = llama_get_kv_cache_used_cells(_m_ctx);
         if (n_ctx_used + batch.n_tokens > n_ctx) {
-            LOG(ERROR) << "context size exceeded";
+            LOG(ERROR) << "context size limit exceeded";
             return StatusCode::LLM_CONTEXT_SIZE_EXCEEDED;
         }
 
@@ -1068,6 +1097,19 @@ StatusCode Llama3<INPUT, OUTPUT>::apply_chat_template(const Dialog &dialog, bool
 template <typename INPUT, typename OUTPUT>
 ModelStatus Llama3<INPUT, OUTPUT>::get_model_stat() const {
     return _m_pimpl->get_model_stat();
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param n_tokens
+ * @param seq_id
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+StatusCode Llama3<INPUT, OUTPUT>::kv_cache_shift_top_n(int n_tokens, int seq_id) {
+    return _m_pimpl->kv_cache_shift_top_n(n_tokens, seq_id);
 }
 
 /***
