@@ -246,6 +246,14 @@ public:
 
     /***
      *
+     * @param n_tokens
+     * @param seq_id
+     * @return
+     */
+    StatusCode kv_cache_shift_top_n(int n_tokens, int seq_id = -1);
+
+    /***
+     *
      */
     void clear_kv_cache_cell() const;
 
@@ -704,6 +712,25 @@ ModelStatus Qwen2VL<INPUT, OUTPUT>::Impl::get_model_stat() const {
     stat.clip_embedding_dims = clip_n_mmproj_embd(_m_clip_ctx);
     stat.clip_hidden_size = clip_hidden_size(_m_clip_ctx);
     return stat;
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param n_tokens
+ * @param seq_id
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::kv_cache_shift_top_n(int n_tokens, int seq_id) {
+    int n_keep = 1; // keep bos token
+    if(!llama_kv_cache_seq_rm(_m_llm_ctx, seq_id, n_keep, 1 + n_tokens)) {
+        LOG(ERROR) << fmt::format("removing kv cache for seq: {} failed", seq_id);
+        return StatusCode::LLM_SHIFT_KV_CACHE_FAILED;
+    }
+    llama_kv_cache_seq_add(_m_llm_ctx, seq_id, n_keep + n_tokens, -1, -n_tokens);
+    return StatusCode::OK;
 }
 
 /***
@@ -1191,6 +1218,8 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::autoregressive_generate(int* n_past, in
     // convert token into piece
     if (llama_token_is_eog(_m_llm_model, sampled_token)) {
         out_piece = "</s>";
+    } else if (llama_token_is_control(_m_llm_model, sampled_token)) {
+        out_piece = "";
     } else {
         out_piece = common_token_to_piece(sampled_token, true);
     }
@@ -1223,11 +1252,34 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::parse_image_url_data(const std::string&
                    [&](const std::string & protocol) -> bool {return url.find(protocol) != std::string::npos;});
     };
     auto is_b64 = [](const std::string & url) -> bool {
-        if (url.rfind("data:", 0) == 0 && url.find(";base64,") != std::string::npos) {
-            return true;
+        size_t len = url.length();
+        if (len == 0 || len % 4 != 0) {
+            return false;
         }
-        std::regex base64_regex("^[A-Za-z0-9+/]*(={0,2})$");
-        return (url.length() % 4 == 0) && std::regex_match(url, base64_regex);
+
+        int padding_count = 0;
+        if (len >= 2 && url[len - 1] == '=') {
+            padding_count++;
+            if (url[len - 2] == '=') {
+                padding_count++;
+            }
+        }
+
+        auto is_base64_char = [](char c) -> bool {
+            return (isalnum(c) || c == '+' || c == '/');
+        };
+        for (size_t i = 0; i < len - padding_count; ++i) {
+            if (!is_base64_char(url[i])) {
+                return false;
+            }
+        }
+
+        for (size_t i = len - padding_count; i < len; ++i) {
+            if (url[i] != '=') {
+                return false;
+            }
+        }
+        return true;
     };
 
     if (is_local_file(image_url)) {
@@ -1370,6 +1422,19 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::chat_completion(Dialog& dialog, std::string& 
 template <typename INPUT, typename OUTPUT>
 ModelStatus Qwen2VL<INPUT, OUTPUT>::get_model_stat() const {
     return _m_pimpl->get_model_stat();
+}
+
+/***
+ *
+ * @tparam INPUT
+ * @tparam OUTPUT
+ * @param n_tokens
+ * @param seq_id
+ * @return
+ */
+template <typename INPUT, typename OUTPUT>
+StatusCode Qwen2VL<INPUT, OUTPUT>::kv_cache_shift_top_n(int n_tokens, int seq_id) {
+    return _m_pimpl->kv_cache_shift_top_n(n_tokens, seq_id);
 }
 
 /***
