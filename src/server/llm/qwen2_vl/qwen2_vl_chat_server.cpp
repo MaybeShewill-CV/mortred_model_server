@@ -174,15 +174,6 @@ class Qwen2VLChatServer::Impl {
      * @param task
      */
     void complete_chat_cb(const WFGoTask* task);
-
-    /***
-     *
-     * @param ctx
-     * @param dropped_token_ratio
-     * @param max_summary_token_ratio
-     * @return
-     */
-    StatusCode regenerate_with_cache_dialogs(seriex_ctx* ctx, float dropped_token_ratio=0.5, float max_summary_token_ratio=0.1);
 };
 
 /************ Impl Implementation ************/
@@ -407,21 +398,33 @@ void Qwen2VLChatServer::Impl::complete_chat(seriex_ctx* ctx) {
 
     // check if context exceeded occurred
     if (status == StatusCode::LLM_CONTEXT_SIZE_EXCEEDED) {
+        auto model_stat = _m_generator->get_model_stat();
+        LOG(INFO) << fmt::format("context size: {}", model_stat.n_ctx_size);
+        LOG(INFO) << fmt::format("kv cache used cell counts: {} before shift", model_stat.kv_cache_cell_nums);
+        LOG(INFO) << fmt::format("kv cache token counts: {} before shift", model_stat.kv_cache_token_nums);
+
+        // shift kv cache
+        const int n_keep = 1; // begin of the text token(bos token)
+        const int n_left = model_stat.kv_cache_cell_nums - n_keep;
+        const int n_discard = n_left / 2;
+        LOG(INFO) << fmt::format("context shift, n_keep = {}, n_left = {}, n_discard = {}", n_keep, n_left, n_discard);
         int try_times = 5;
-        float base_token_drop_ration = 0.75f;
-        float base_summary_token_ratio = 0.1f;
-        float scale_ratio = 1.4f;
         while (try_times--) {
-            status = regenerate_with_cache_dialogs(ctx, base_token_drop_ration, base_summary_token_ratio);
-            if (status == StatusCode::LLM_CONTEXT_SIZE_EXCEEDED) {
-                LOG(WARNING) << "context still exceeded during regeneration process, try another time with more token dropped";
-                base_token_drop_ration *= scale_ratio;
-                base_summary_token_ratio /= scale_ratio;
-                continue;
-            } else {
+            status = _m_generator->kv_cache_shift_top_n(n_discard, 0);
+            if (status == StatusCode::OK) {
                 break;
             }
         }
+        if (try_times < 0) {
+            LOG(ERROR) << "shift kv cache failed, clear kv cache";
+            _m_generator->clear_kv_cache_cell();
+        }
+        model_stat = _m_generator->get_model_stat();
+        LOG(INFO) << fmt::format("kv cache used cell counts: {} after shift", model_stat.kv_cache_cell_nums);
+        LOG(INFO) << fmt::format("kv cache token counts: {} after shift", model_stat.kv_cache_token_nums);
+
+        // re-generate response
+        status = _m_generator->chat_completion(task->current_dialog, ctx->gen_out);
     }
 
     // fill in ctx messages
@@ -476,104 +479,6 @@ void Qwen2VLChatServer::Impl::complete_chat_cb(const WFGoTask* task) {
     _m_waiting_jobs--;
 }
 
-/***
- *
- * @param ctx
- * @param dropped_token_ratio
- * @param max_summary_token_ratio
- * @return
- */
-StatusCode Qwen2VLChatServer::Impl::regenerate_with_cache_dialogs(
-    seriex_ctx *ctx, float dropped_token_ratio, float max_summary_token_ratio) {
-//    auto task = ctx->d_task;
-//    // prepare summary dialog
-//    Dialog summary_dialogs;
-//    auto history_dialogs = _m_user_history_dialogs[task->uuid];
-//    std::string fmt_string;
-//    auto status = _m_generator->apply_chat_template(history_dialogs, false, fmt_string);
-//    if (status != StatusCode::OK) {
-//        return status;
-//    }
-//    std::vector<llama_token > fmt_tokens;
-//    status = _m_generator->tokenize(fmt_string, fmt_tokens, true);
-//    if (status != StatusCode::OK) {
-//        return status;
-//    }
-//    auto history_dialog_tokens = fmt_tokens.size();
-//    auto drop_threshold = static_cast<int32_t >(dropped_token_ratio * static_cast<float>(history_dialog_tokens));
-//    size_t dropped_token_nums = 0;
-//    int msg_idx =0;
-//    for (; msg_idx < history_dialogs.size(); ++msg_idx) {
-//        auto role = history_dialogs[msg_idx].role;
-//        auto content = history_dialogs[msg_idx].content;
-//        Dialog tmp_dia(role, content);
-//        _m_generator->apply_chat_template(tmp_dia, false, fmt_string);
-//        _m_generator->tokenize(fmt_string, fmt_tokens, true);
-//        dropped_token_nums += fmt_tokens.size();
-//        summary_dialogs += tmp_dia;
-//        if (dropped_token_nums >= drop_threshold) {
-//            msg_idx++;
-//            break;
-//        }
-//    }
-//    auto summary_token_nums = static_cast<int32_t >(static_cast<float>(dropped_token_nums) * max_summary_token_ratio);
-//    summary_token_nums = summary_token_nums > 0 ? summary_token_nums : 1;
-//    summary_dialogs.push_back({"system", "You are an assistant skilled at generating summaries."});
-//    summary_dialogs.push_back(
-//        {"user", fmt::format("Please summarize the multi-turn conversation above "
-//                             "in content not exceeding {} tokens.", summary_token_nums)}
-//    );
-//
-//    // check summary dialog token nums
-//    _m_generator->apply_chat_template(summary_dialogs, false, fmt_string);
-//    _m_generator->tokenize(fmt_string, fmt_tokens, true);
-//    auto summary_tokens = static_cast<double>(fmt_tokens.size());
-//    auto n_ctx = _m_generator->get_model_stat().n_ctx_size;
-//    while (summary_tokens > 0.75 * n_ctx) {
-//        summary_dialogs.messages.erase(summary_dialogs.messages.begin());
-//        _m_generator->apply_chat_template(summary_dialogs, false, fmt_string);
-//        _m_generator->tokenize(fmt_string, fmt_tokens, true);
-//        summary_tokens = static_cast<double>(fmt_tokens.size());
-//    }
-//    LOG(INFO) << "n_tokens: " << summary_tokens << " used before summary";
-//
-//    // generate summary msg
-//    _m_generator->clear_kv_cache_cell();
-//    std::string summary_msg;
-//    status = _m_generator->chat_completion(summary_dialogs, summary_msg);
-//    if (status != StatusCode::OK) {
-//        return status;
-//    }
-//    LOG(INFO) << "summary msg: " << summary_msg;
-//
-//    // renew history dialogs
-//    Dialog updated_dialog(
-//        "system",
-//        fmt::format("You are a smart ai assistant from Mortred Company.Here is the summary of our previous {} rounds of "
-//                    "conversation. Summary content is {}.Please continue assisting the customer based on it.",
-//                    summary_dialogs.size(), summary_msg)
-//    );
-//    _m_generator->apply_chat_template(updated_dialog, false, fmt_string);
-//    _m_generator->tokenize(fmt_string, fmt_tokens, true);
-//    LOG(INFO) << "n_tokens: " << fmt_tokens.size() << " used after summary";
-//    for (auto i = msg_idx; i < history_dialogs.size(); ++i) {
-//        updated_dialog.push_back(history_dialogs[i]);
-//    }
-//    _m_user_history_dialogs[task->uuid].clean_cache();
-//    _m_user_history_dialogs[task->uuid] = updated_dialog;
-//
-//    // regenerate response content
-//    _m_generator->clear_kv_cache_cell();
-//    Dialog cur_dialog = updated_dialog + task->current_dialog;
-//    status = _m_generator->chat_completion(cur_dialog, ctx->gen_out);
-//
-//    // cache dialog
-//    _m_user_history_dialogs[task->uuid] += task->current_dialog;
-//    _m_user_history_dialogs[task->uuid] += Dialog("assistant", ctx->gen_out);
-
-    return StatusCode::OK;
-}
-
 /************* Export Function Sets *************/
 
 /***
@@ -604,7 +509,7 @@ StatusCode Qwen2VLChatServer::init(const decltype(toml::parse("")) &config) {
     // init server
     WFGlobalSettings settings = GLOBAL_SETTINGS_DEFAULT;
     settings.compute_threads = _m_impl->compute_threads;
-    settings.handler_threads = _m_impl->handler_threads;
+    settings.handler_threads = 1;
     WORKFLOW_library_init(&settings);
 
     WFServerParams server_params = SERVER_PARAMS_DEFAULT;
