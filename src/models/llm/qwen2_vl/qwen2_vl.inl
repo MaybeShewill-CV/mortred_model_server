@@ -282,6 +282,7 @@ private:
     llama_model* _m_llm_model = nullptr;
     llama_context_params _m_llm_ctx_params = llama_context_default_params();
     llama_context* _m_llm_ctx = nullptr;
+    const llama_vocab* _m_llm_vocab = nullptr;
     llama::common_params_sampling _m_smpl_params{};
     llama_sampler* _m_smpl_chain = nullptr;
     llama_sampler* _m_smpl_grmr = nullptr;
@@ -428,9 +429,15 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init(const toml::value& config) {
     if (qwen_cfg.contains("vocab_only")) {
         _m_llm_model_params.vocab_only = qwen_cfg.at("vocab_only").as_boolean();
     }
-    _m_llm_model = llama_load_model_from_file(language_model_path.c_str(), _m_llm_model_params);
+    _m_llm_model = llama_model_load_from_file(language_model_path.c_str(), _m_llm_model_params);
     if (_m_llm_model == nullptr) {
-        LOG(ERROR) << "load llm model from: " << language_model_path << " failed";
+        LOG(ERROR) << fmt::format("load llm model from: {} failed", language_model_path);
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    _m_llm_vocab = llama_model_get_vocab(_m_llm_model);
+    if (_m_llm_vocab == nullptr) {
+        LOG(ERROR) << "load llm model vocab failed";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
@@ -479,7 +486,7 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init(const toml::value& config) {
     if (_m_llm_model_params.vocab_only) {
         _m_llm_ctx_params = llama_context_default_params();
     }
-    _m_llm_ctx = llama_new_context_with_model(_m_llm_model, _m_llm_ctx_params);
+    _m_llm_ctx = llama_init_from_model(_m_llm_model, _m_llm_ctx_params);
     if (nullptr == _m_llm_ctx) {
         LOG(ERROR) << "failed to create the llama_context";
         return StatusCode::MODEL_INIT_FAILED;
@@ -760,7 +767,7 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init_sampler() {
     llama_sampler_chain_add(
         _m_smpl_chain,
         llama_sampler_init_logit_bias(
-            llama_n_vocab(_m_llm_model),
+            llama_vocab_n_tokens(_m_llm_vocab),
             _m_smpl_params.logit_bias.size(),
             _m_smpl_params.logit_bias.data()
         )
@@ -768,15 +775,10 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init_sampler() {
     llama_sampler_chain_add(
         _m_smpl_chain,
         llama_sampler_init_penalties(
-            llama_n_vocab(_m_llm_model),
-            llama_token_eos(_m_llm_model),
-            llama_token_nl(_m_llm_model),
             _m_smpl_params.penalty_last_n,
             _m_smpl_params.penalty_repeat,
             _m_smpl_params.penalty_freq,
-            _m_smpl_params.penalty_present,
-            _m_smpl_params.penalize_nl,
-            _m_smpl_params.ignore_eos
+            _m_smpl_params.penalty_present
         )
     );
     auto& params = _m_smpl_params;
@@ -789,8 +791,11 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init_sampler() {
                 for (const auto& str : params.dry_sequence_breakers) {
                     c_breakers.push_back(str.c_str());
                 }
-                llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_dry(_m_llm_model, params.dry_multiplier, params.dry_base,
-                                        params.dry_allowed_length, params.dry_penalty_last_n, c_breakers.data(), c_breakers.size()));
+                llama_sampler_chain_add(
+                    _m_smpl_chain,
+                    llama_sampler_init_dry(
+                        _m_llm_vocab, llama_model_n_ctx_train(_m_llm_model), params.dry_multiplier, params.dry_base,
+                        params.dry_allowed_length, params.dry_penalty_last_n, c_breakers.data(), c_breakers.size()));
             }
             break;
             case llama::COMMON_SAMPLER_TYPE_TOP_K:
@@ -814,7 +819,7 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init_sampler() {
                                         params.dynatemp_exponent));
                 break;
             case llama::COMMON_SAMPLER_TYPE_INFILL:
-                llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_infill(_m_llm_model));
+                llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_infill(_m_llm_vocab));
                 break;
             default:
                 LOG(WARNING) << fmt::format("unknown sampler type: {}", static_cast<int>(cnstr));
@@ -824,7 +829,7 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init_sampler() {
         llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_dist(params.seed));
     } else if (params.mirostat == 1) {
         llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_temp(params.temp));
-        llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_mirostat(llama_n_vocab(_m_llm_model), params.seed,
+        llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_mirostat(llama_vocab_n_tokens(_m_llm_vocab), params.seed,
                                 params.mirostat_tau, params.mirostat_eta, 100));
     } else if (params.mirostat == 2) {
         llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_temp(params.temp));
@@ -834,7 +839,7 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init_sampler() {
         LOG(ERROR) << "unknown mirostat version";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    _m_smpl_grmr = llama_sampler_init_grammar(_m_llm_model, params.grammar.c_str(), "root");
+    _m_smpl_grmr = llama_sampler_init_grammar(_m_llm_vocab, params.grammar.c_str(), "root");
 
     return StatusCode::OK;
 }
@@ -925,12 +930,11 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::common_tokenize(
     out_tokens.resize(n_tokens);
     auto text_len = static_cast<int32_t >(text.length());
     auto out_tokens_len = static_cast<int32_t >(out_tokens.size());
-    n_tokens = llama_tokenize(_m_llm_model, text.data(), text_len, out_tokens.data(), out_tokens_len, add_special,
-                              parse_special);
+    n_tokens = llama_tokenize(_m_llm_vocab, text.data(), text_len, out_tokens.data(), out_tokens_len, add_special, parse_special);
     if (n_tokens < 0) {
         out_tokens.resize(-n_tokens);
         int32_t check = llama_tokenize(
-                            _m_llm_model, text.data(), text_len, out_tokens.data(), out_tokens_len, add_special, parse_special);
+            _m_llm_vocab, text.data(), text_len, out_tokens.data(), out_tokens_len, add_special, parse_special);
         if (check != -n_tokens) {
             LOG(ERROR) << fmt::format("tokenize text: {} failed, check nums: {}, -n_tokens nums: {}. They are not equal",
                                       text, check, -n_tokens);
@@ -955,11 +959,10 @@ template <typename INPUT, typename OUTPUT>
 std::string Qwen2VL<INPUT, OUTPUT>::Impl::common_token_to_piece(const llama_token& token, bool special) {
     std::string piece;
     piece.resize(piece.capacity());  // using string internal cache, 15 bytes + '\n'
-    const int n_chars = llama_token_to_piece(_m_llm_model, token, &piece[0], static_cast<int32_t >(piece.size()), 0,
-                        special);
+    const int n_chars = llama_token_to_piece(_m_llm_vocab, token, &piece[0], static_cast<int32_t >(piece.size()), 0, special);
     if (n_chars < 0) {
         piece.resize(-n_chars);
-        int check = llama_token_to_piece(_m_llm_model, token, &piece[0], static_cast<int32_t>(piece.size()), 0, special);
+        int check = llama_token_to_piece(_m_llm_vocab, token, &piece[0], static_cast<int32_t>(piece.size()), 0, special);
         if (check != -n_chars) {
             LOG(ERROR) << fmt::format(
                 "convert token: {} into piece failed, check nums: {}, -n_chars nums: {}, not equal", token, check, -n_chars);
@@ -1139,7 +1142,7 @@ bool Qwen2VL<INPUT, OUTPUT>::Impl::llama_sample(int idx, llama_token& out_sample
     std::vector<llama_token_data> cur;
     llama_token_data_array cur_p;
     auto* logits = llama_get_logits_ith(_m_llm_ctx, idx);
-    int n_vocab = llama_n_vocab(llama_get_model(_m_llm_ctx));
+    int n_vocab = llama_vocab_n_tokens(_m_llm_vocab);
     cur.resize(n_vocab);
     for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
         cur[token_id] = llama_token_data{token_id, logits[token_id], 0.0f};
@@ -1174,7 +1177,7 @@ bool Qwen2VL<INPUT, OUTPUT>::Impl::llama_sample(int idx, llama_token& out_sample
     // resampling:
     // if the token is not valid, sample again, but first apply the grammar sampler and then the sampling chain
     logits = llama_get_logits_ith(_m_llm_ctx, idx);
-    n_vocab = llama_n_vocab(llama_get_model(_m_llm_ctx));
+    n_vocab = llama_vocab_n_tokens(_m_llm_vocab);
     cur.resize(n_vocab);
     for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
         cur[token_id] = llama_token_data{token_id, logits[token_id], 0.0f};
@@ -1216,9 +1219,9 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::autoregressive_generate(int* n_past, in
 //    }
 
     // convert token into piece
-    if (llama_token_is_eog(_m_llm_model, sampled_token)) {
+    if (llama_vocab_is_eog(_m_llm_vocab, sampled_token)) {
         out_piece = "</s>";
-    } else if (llama_token_is_control(_m_llm_model, sampled_token)) {
+    } else if (llama_vocab_is_control(_m_llm_vocab, sampled_token)) {
         out_piece = "";
     } else {
         out_piece = common_token_to_piece(sampled_token, true);

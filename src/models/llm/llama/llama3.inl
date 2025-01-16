@@ -225,6 +225,8 @@ private:
     llama_context_params _m_ctx_params = llama_context_default_params();
     // llama model context
     llama_context* _m_ctx = nullptr;
+    // llama vocab
+    const llama_vocab* _m_vocab = nullptr;
     // llama sampler params
     common_params_sampling _m_smpl_params{};
     // llama sampler
@@ -306,9 +308,15 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::init(const toml::value& config) {
     if (model_cfg.contains("vocab_only")) {
         _m_model_params.vocab_only = model_cfg.at("vocab_only").as_boolean();
     }
-    _m_model = llama_load_model_from_file(_m_model_file_path.c_str(), _m_model_params);
+    _m_model = llama_model_load_from_file(_m_model_file_path.c_str(), _m_model_params);
     if (_m_model == nullptr) {
-        LOG(ERROR) << "load llama3 model from: " << _m_model_file_path << " failed";
+        LOG(ERROR) << fmt::format("load llama3 model from: {} failed", _m_model_file_path);
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    _m_vocab = llama_model_get_vocab(_m_model);
+    if (_m_vocab == nullptr) {
+        LOG(ERROR) << "load llama3 vocab from model failed";
         return StatusCode::MODEL_INIT_FAILED;
     }
 
@@ -334,7 +342,7 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::init(const toml::value& config) {
     if (_m_model_params.vocab_only) {
         _m_ctx_params = llama_context_default_params();
     }
-    _m_ctx = llama_new_context_with_model(_m_model, _m_ctx_params);
+    _m_ctx = llama_init_from_model(_m_model, _m_ctx_params);
     if (_m_ctx == nullptr) {
         LOG(ERROR) << "failed to create the llama_context";
         return StatusCode::MODEL_INIT_FAILED;
@@ -425,7 +433,7 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::tokenize(
         return StatusCode::TOKENIZE_FAILED;
     }
 
-    const bool model_wants_add_bos = llama_add_bos_token(_m_model);
+    const bool model_wants_add_bos = llama_vocab_get_add_bos(_m_vocab);
     const bool add_bos = model_wants_add_bos && add_special;
     const bool parse_special = true;
 
@@ -435,12 +443,12 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::tokenize(
     auto prompt_size = static_cast<int32_t >(prompt.size());
     auto token_data = prompt_tokens.data();
     auto token_size = static_cast<int32_t>(prompt_tokens.size());
-    auto tokens_counts = llama_tokenize(_m_model, prompt.c_str(), prompt_size, token_data, token_size, add_bos, parse_special);
+    auto tokens_counts = llama_tokenize(_m_vocab, prompt.c_str(), prompt_size, token_data, token_size, add_bos, parse_special);
     if (tokens_counts < 0) {
         prompt_tokens.resize(-tokens_counts);
         token_data = prompt_tokens.data();
         token_size = static_cast<int32_t>(prompt_tokens.size());
-        int check = llama_tokenize(_m_model, prompt.c_str(), prompt_size, token_data, token_size, add_bos, parse_special);
+        int check = llama_tokenize(_m_vocab, prompt.c_str(), prompt_size, token_data, token_size, add_bos, parse_special);
         if (check != -tokens_counts) {
             LOG(ERROR) << fmt::format("token counts shifted after resize token container capacity, token counts: {} before resizing, "
                           "counts: {} after resizing", -tokens_counts, check);
@@ -450,7 +458,7 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::tokenize(
         prompt_tokens.resize(tokens_counts);
         token_data = prompt_tokens.data();
         token_size = static_cast<int32_t>(prompt_tokens.size());
-        int check = llama_tokenize(_m_model, prompt.c_str(), prompt_size, token_data, token_size, add_bos, parse_special);
+        int check = llama_tokenize(_m_vocab, prompt.c_str(), prompt_size, token_data, token_size, add_bos, parse_special);
         if (check != tokens_counts) {
             LOG(ERROR) << fmt::format("token counts shifted after resize token container capacity, token counts: {} before resizing, "
                                       "counts: {} after resizing", tokens_counts, check);
@@ -647,14 +655,17 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::apply_chat_template(const Dialog &dialog
     std::vector<char> buf(alloc_size);
 
     // run the first time to get the total output length
-    int32_t res = llama_chat_apply_template(
-        _m_model, nullptr, chat.data(), chat.size(), add_ass, buf.data(), static_cast<int32_t >(buf.size()));
+    auto* tmpl = llama_model_chat_template(_m_model);
+    int32_t res = llama_chat_apply_template(tmpl, chat.data(), chat.size(), add_ass, buf.data(), static_cast<int32_t >(buf.size()));
 
     // error: chat template is not supported
     if (res < 0) {
+        if (tmpl != nullptr) {
+            LOG(ERROR) << fmt::format("failed to apply custom template: {}", std::string(tmpl));
+            return StatusCode::LLM_APPLY_CHAT_TEMPLATE_FAILED;
+        }
         LOG(WARNING) << "failed to apply model's default chat template. Will try again with chatml template";
-        res = llama_chat_apply_template(
-            nullptr, "chatml", chat.data(), chat.size(), add_ass, buf.data(), static_cast<int32_t >(buf.size()));
+        res = llama_chat_apply_template("chatml", chat.data(), chat.size(), add_ass, buf.data(), static_cast<int32_t >(buf.size()));
         fallback = true;
         if (res < 0) {
             LOG(ERROR) << "failed to apply default chatml template";
@@ -666,7 +677,6 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::apply_chat_template(const Dialog &dialog
     if (res > buf.size()) {
         buf.resize(res);
         res = llama_chat_apply_template(
-            fallback ? nullptr : _m_model,
             fallback ? "chatml" : nullptr,
             chat.data(), chat.size(), add_ass, buf.data(), static_cast<int32_t >(buf.size()));
     }
@@ -742,7 +752,7 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::init_sampler() {
     llama_sampler_chain_add(
         _m_smpl_chain,
         llama_sampler_init_logit_bias(
-            llama_n_vocab(_m_model),
+            llama_vocab_n_tokens(_m_vocab),
             _m_smpl_params.logit_bias.size(),
             _m_smpl_params.logit_bias.data()
                 )
@@ -750,15 +760,10 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::init_sampler() {
     llama_sampler_chain_add(
         _m_smpl_chain,
         llama_sampler_init_penalties(
-            llama_n_vocab  (_m_model),
-            llama_token_eos(_m_model),
-            llama_token_nl (_m_model),
             _m_smpl_params.penalty_last_n,
             _m_smpl_params.penalty_repeat,
             _m_smpl_params.penalty_freq,
-            _m_smpl_params.penalty_present,
-            _m_smpl_params.penalize_nl,
-            _m_smpl_params.ignore_eos
+            _m_smpl_params.penalty_present
             )
     );
     auto& params = _m_smpl_params;
@@ -772,7 +777,11 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::init_sampler() {
                 for (const auto& str : params.dry_sequence_breakers) {
                     c_breakers.push_back(str.c_str());
                 }
-                llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_dry(_m_model, params.dry_multiplier, params.dry_base, params.dry_allowed_length, params.dry_penalty_last_n, c_breakers.data(), c_breakers.size()));
+                llama_sampler_chain_add(
+                    _m_smpl_chain,
+                    llama_sampler_init_dry(
+                        _m_vocab, llama_model_n_ctx_train(_m_model), params.dry_multiplier, params.dry_base, params.dry_allowed_length,
+                        params.dry_penalty_last_n, c_breakers.data(), c_breakers.size()));
             }
             break;
             case COMMON_SAMPLER_TYPE_TOP_K:
@@ -794,7 +803,7 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::init_sampler() {
                 llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_temp_ext(params.temp, params.dynatemp_range, params.dynatemp_exponent));
                 break;
             case COMMON_SAMPLER_TYPE_INFILL:
-                llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_infill(_m_model));
+                llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_infill(_m_vocab));
                 break;
             default:
                 LOG(WARNING) << fmt::format("unknown sampler type: {}", static_cast<int>(cnstr));
@@ -804,7 +813,7 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::init_sampler() {
         llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_dist(params.seed));
     } else if (params.mirostat == 1) {
         llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_temp(params.temp));
-        llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_mirostat(llama_n_vocab(_m_model), params.seed, params.mirostat_tau, params.mirostat_eta, 100));
+        llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_mirostat(llama_vocab_n_tokens(_m_vocab), params.seed, params.mirostat_tau, params.mirostat_eta, 100));
     } else if (params.mirostat == 2) {
         llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_temp(params.temp));
         llama_sampler_chain_add(_m_smpl_chain, llama_sampler_init_mirostat_v2(params.seed, params.mirostat_tau, params.mirostat_eta));
@@ -812,7 +821,7 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::init_sampler() {
         LOG(ERROR) << "unknown mirostat version";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    _m_smpl_grmr = llama_sampler_init_grammar(_m_model, params.grammar.c_str(), "root");
+    _m_smpl_grmr = llama_sampler_init_grammar(_m_vocab, params.grammar.c_str(), "root");
 
     return StatusCode::OK;
 }
@@ -858,26 +867,30 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::llama_generate(std::vector<llama_token>&
 //            status = StatusCode::MODEL_RUN_SESSION_FAILED;
 //            break;
 //        }
-        if (llama_token_is_eog(_m_model, new_token_id)) {
+        if (llama_vocab_is_eog(_m_vocab, new_token_id)) {
             break;
         }
 
         // convert token to output string
         std::string piece;
-        piece.resize(piece.capacity());
-        bool enable_special_token_output = false;
-        auto n_chars = llama_token_to_piece(
-            _m_model, new_token_id, &piece[0], static_cast<int32_t >(piece.size()), 0, enable_special_token_output);
-        if (n_chars < 0) {
-            piece.resize(-n_chars);
-            int check = llama_token_to_piece(
-                _m_model, new_token_id, &piece[0], static_cast<int32_t >(piece.size()), 0, enable_special_token_output);
-            if (check != -n_chars) {
-                LOG(ERROR) << fmt::format("decode token to string failed, check nums: {}, n_chars: {}", check, -n_chars);
-                return StatusCode::MODEL_RUN_SESSION_FAILED;
-            }
+        if (llama_vocab_is_control(_m_vocab, new_token_id)) {
+            piece = "";
         } else {
-            piece.resize(n_chars);
+            piece.resize(piece.capacity());
+            bool enable_special_token_output = false;
+            auto n_chars = llama_token_to_piece(
+                _m_vocab, new_token_id, &piece[0], static_cast<int32_t >(piece.size()), 0, enable_special_token_output);
+            if (n_chars < 0) {
+                piece.resize(-n_chars);
+                int check = llama_token_to_piece(
+                    _m_vocab, new_token_id, &piece[0], static_cast<int32_t >(piece.size()), 0, enable_special_token_output);
+                if (check != -n_chars) {
+                    LOG(ERROR) << fmt::format("decode token to string failed, check nums: {}, n_chars: {}", check, -n_chars);
+                    return StatusCode::MODEL_RUN_SESSION_FAILED;
+                }
+            } else {
+                piece.resize(n_chars);
+            }
         }
         generate_out += piece;
 
@@ -903,7 +916,7 @@ bool Llama3<INPUT, OUTPUT>::Impl::llama_sample(int idx, llama_token &out_sampled
     std::vector<llama_token_data> cur;
     llama_token_data_array cur_p;
     auto* logits = llama_get_logits_ith(_m_ctx, idx);
-    int n_vocab = llama_n_vocab(llama_get_model(_m_ctx));
+    int n_vocab = llama_vocab_n_tokens(_m_vocab);
     cur.resize(n_vocab);
     for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
         cur[token_id] = llama_token_data{token_id, logits[token_id], 0.0f};
@@ -938,7 +951,7 @@ bool Llama3<INPUT, OUTPUT>::Impl::llama_sample(int idx, llama_token &out_sampled
     // resampling:
     // if the token is not valid, sample again, but first apply the grammar sampler and then the sampling chain
     logits = llama_get_logits_ith(_m_ctx, idx);
-    n_vocab = llama_n_vocab(llama_get_model(_m_ctx));
+    n_vocab = llama_vocab_n_tokens(_m_vocab);
     cur.resize(n_vocab);
     for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
         cur[token_id] = llama_token_data{token_id, logits[token_id], 0.0f};
