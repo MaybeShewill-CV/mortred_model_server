@@ -8,7 +8,7 @@
 #ifdef GGML_USE_CUDA
 #include "ggml/ggml-cuda.h"
 #endif
-
+//
 //#ifdef GGML_USE_SYCL
 //#include "ggml-sycl.h"
 //#endif
@@ -36,6 +36,7 @@
 #include <map>
 #include <regex>
 #include <stdexcept>
+#include <vector>
 #include <sstream>
 #include <cinttypes>
 #include <limits>
@@ -138,14 +139,6 @@ static std::string format(const char * fmt, ...) {
 #define TN_MINICPMV_ATTN "resampler.attn.%s.%s"
 #define TN_MINICPMV_LN "resampler.ln_%s.%s"
 
-static std::map<projector_type, std::string> PROJECTOR_TYPE_NAMES = {
-    { PROJECTOR_TYPE_MLP, "mlp" },
-    { PROJECTOR_TYPE_LDP, "ldp" },
-    { PROJECTOR_TYPE_LDPV2, "ldpv2"},
-    { PROJECTOR_TYPE_RESAMPLER, "resampler"},
-    { PROJECTOR_TYPE_MERGER, "qwen2vl_merger"},
-};
-
 //
 // utilities to get data from a gguf file
 //
@@ -229,7 +222,7 @@ static std::string gguf_kv_to_str(const struct gguf_context * ctx_gguf, int i) {
             {
                 const enum gguf_type arr_type = gguf_get_arr_type(ctx_gguf, i);
                 int arr_n = gguf_get_arr_n(ctx_gguf, i);
-                const void * data = gguf_get_arr_data(ctx_gguf, i);
+                const void * data = arr_type == GGUF_TYPE_STRING ? nullptr : gguf_get_arr_data(ctx_gguf, i);
                 std::stringstream ss;
                 ss << "[";
                 for (int j = 0; j < arr_n; j++) {
@@ -379,11 +372,6 @@ static void clip_image_convert_f32_to_u8(const clip_image_f32& src, clip_image_u
     }
 }
 #endif
-
-
-//
-// clip layers
-//
 
 static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32_batch * imgs, struct clip_image_size * load_image_size, bool is_inf = false) {
     if (!ctx->has_vision_encoder) {
@@ -1021,7 +1009,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
 //    new_clip->backend = ggml_backend_cuda_init(0);
 //    LOG_INF("%s: CLIP using CUDA backend\n", __func__);
 //#endif
-
+//
 //#ifdef GGML_USE_METAL
 //    new_clip->backend = ggml_backend_metal_init();
 //    LOG_INF("%s: CLIP using Metal backend\n", __func__);
@@ -1415,12 +1403,14 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
     return new_clip;
 }
 
-struct clip_ctx * clip_model_load_cuda(const char * fname, int device_id, const int verbosity = 1) {
+// read and create ggml_context containing the tensors and their data
+struct clip_ctx * clip_model_load_cuda(const char * fname, int device_id, int verbosity) {
     struct ggml_context * meta = nullptr;
 
-    struct gguf_init_params params{};
-    params.no_alloc = true;
-    params.ctx = &meta;
+    struct gguf_init_params params = {
+        /*.no_alloc = */ true,
+        /*.ctx      = */ &meta,
+    };
 
     struct gguf_context * ctx = gguf_init_from_file(fname, params);
     if (!ctx) {
@@ -1430,7 +1420,7 @@ struct clip_ctx * clip_model_load_cuda(const char * fname, int device_id, const 
     if (verbosity >= 1) {
         const int n_tensors = gguf_get_n_tensors(ctx);
         const int n_kv = gguf_get_n_kv(ctx);
-        const int ftype = static_cast<int>(get_u32(ctx, KEY_FTYPE));
+        const int ftype = get_u32(ctx, KEY_FTYPE);
         const std::string ftype_str = get_ftype(ftype);
         const int idx_desc = get_key_idx(ctx, KEY_DESCRIPTION);
         const std::string description = gguf_get_val_str(ctx, idx_desc);
@@ -1508,7 +1498,7 @@ struct clip_ctx * clip_model_load_cuda(const char * fname, int device_id, const 
         }
     }
 
-    auto* new_clip = new clip_ctx{};
+    clip_ctx * new_clip = new clip_ctx{};
 
     // update projector type
     {
@@ -1592,13 +1582,13 @@ struct clip_ctx * clip_model_load_cuda(const char * fname, int device_id, const 
     // load tensors
     {
         std::vector<uint8_t> read_buf;
-        struct ggml_init_params ml_params = {
+        struct ggml_init_params params = {
             /*.mem_size =*/ (n_tensors + 1) * ggml_tensor_overhead(),
-            /*.mem_buffer =*/ nullptr,
+            /*.mem_buffer =*/ NULL,
             /*.no_alloc =*/ true,
         };
 
-        new_clip->ctx_data = ggml_init(ml_params);
+        new_clip->ctx_data = ggml_init(params);
         if (!new_clip->ctx_data) {
             LOG_ERR("%s: ggml_init() failed\n", __func__);
             clip_free(new_clip);
@@ -1628,14 +1618,14 @@ struct clip_ctx * clip_model_load_cuda(const char * fname, int device_id, const 
             const char * name = gguf_get_tensor_name(ctx, i);
             struct ggml_tensor * cur = ggml_get_tensor(new_clip->ctx_data, name);
             const size_t offset = gguf_get_data_offset(ctx) + gguf_get_tensor_offset(ctx, i);
-            fin.seekg(static_cast<long>(offset), std::ios::beg);
+            fin.seekg(offset, std::ios::beg);
             if (!fin) {
                 LOG_ERR("%s: failed to seek for tensor %s\n", __func__, name);
                 clip_free(new_clip);
                 gguf_free(ctx);
                 return nullptr;
             }
-            int num_bytes = static_cast<int>(ggml_nbytes(cur));
+            int num_bytes = ggml_nbytes(cur);
             if (ggml_backend_buffer_is_host(new_clip->params_buffer)) {
                 // for the CPU and Metal backend, we can read directly into the tensor
                 fin.read(reinterpret_cast<char *>(cur->data), num_bytes);
@@ -1654,19 +1644,19 @@ struct clip_ctx * clip_model_load_cuda(const char * fname, int device_id, const 
         // load vision model
         auto & vision_model = new_clip->vision_model;
         auto & hparams = vision_model.hparams;
-        hparams.hidden_size    = static_cast<int32_t >(get_u32(ctx, format(KEY_N_EMBD, "vision")));
-        hparams.n_head         = static_cast<int32_t >(get_u32(ctx, format(KEY_N_HEAD, "vision")));
-        hparams.n_intermediate = static_cast<int32_t >(get_u32(ctx, format(KEY_N_FF, "vision")));
-        hparams.n_layer        = static_cast<int32_t >(get_u32(ctx, format(KEY_N_BLOCK, "vision")));
-        hparams.image_size     = static_cast<int32_t >(get_u32(ctx, KEY_IMAGE_SIZE));
-        hparams.patch_size     = static_cast<int32_t >(get_u32(ctx, KEY_PATCH_SIZE));
-        hparams.projection_dim = static_cast<int32_t >(get_u32(ctx, format(KEY_PROJ_DIM, "vision")));
-        hparams.eps            = static_cast<float >(get_f32(ctx, format(KEY_LAYER_NORM_EPS, "vision")));
+        hparams.hidden_size    = get_u32(ctx, format(KEY_N_EMBD, "vision"));
+        hparams.n_head         = get_u32(ctx, format(KEY_N_HEAD, "vision"));
+        hparams.n_intermediate = get_u32(ctx, format(KEY_N_FF, "vision"));
+        hparams.n_layer        = get_u32(ctx, format(KEY_N_BLOCK, "vision"));
+        hparams.image_size     = get_u32(ctx, KEY_IMAGE_SIZE);
+        hparams.patch_size     = get_u32(ctx, KEY_PATCH_SIZE);
+        hparams.projection_dim = get_u32(ctx, format(KEY_PROJ_DIM, "vision"));
+        hparams.eps            = get_f32(ctx, format(KEY_LAYER_NORM_EPS, "vision"));
 
         try {
             int idx = get_key_idx(ctx, KEY_IMAGE_GRID_PINPOINTS);
             int n = gguf_get_arr_n(ctx, idx);
-            const auto * pinpoints = (const int32_t *)gguf_get_arr_data(ctx, idx);
+            const int32_t * pinpoints = (const int32_t *)gguf_get_arr_data(ctx, idx);
             for (int i = 0; i < 32 && i < n && pinpoints[i] != 0; ++i) {
                 hparams.image_grid_pinpoints[i] = pinpoints[i];
             }
@@ -1684,7 +1674,7 @@ struct clip_ctx * clip_model_load_cuda(const char * fname, int device_id, const 
         }
 
         try {
-            hparams.image_crop_resolution = static_cast<int32_t >(get_u32(ctx, KEY_IMAGE_CROP_RESOLUTION)); // llava-1.6
+            hparams.image_crop_resolution = get_u32(ctx, KEY_IMAGE_CROP_RESOLUTION); // llava-1.6
         } catch(const std::exception& /*e*/) {
             hparams.image_crop_resolution = hparams.image_size;
         }
@@ -1692,8 +1682,8 @@ struct clip_ctx * clip_model_load_cuda(const char * fname, int device_id, const 
         int idx_mean = get_key_idx(ctx, KEY_IMAGE_MEAN);
         int idx_std  = get_key_idx(ctx, KEY_IMAGE_STD);
 
-        const auto* mean_data = (const float *)gguf_get_arr_data(ctx, idx_mean);
-        const auto* std_data  = (const float *)gguf_get_arr_data(ctx, idx_std);
+        const float * mean_data = (const float *)gguf_get_arr_data(ctx, idx_mean);
+        const float * std_data  = (const float *)gguf_get_arr_data(ctx, idx_std);
 
         for (int i = 0; i < 3; ++i) {
             new_clip->image_mean[i] = mean_data[i];
@@ -1891,7 +1881,9 @@ struct clip_ctx * clip_model_load_cuda(const char * fname, int device_id, const 
     {
         new_clip->buf_compute_meta.resize(GGML_DEFAULT_GRAPH_SIZE * ggml_tensor_overhead() + ggml_graph_overhead());
         new_clip->compute_alloc = ggml_gallocr_new(ggml_backend_get_default_buffer_type(new_clip->backend));
-        clip_image_f32_batch batch{nullptr, 1};
+        clip_image_f32_batch batch;
+        batch.size = 1;
+        batch.data = nullptr;
         ggml_cgraph * gf = clip_image_build_graph(new_clip, &batch, nullptr, false);
         ggml_gallocr_reserve(new_clip->compute_alloc, gf);
         size_t compute_memory_buffer_size = ggml_gallocr_get_buffer_size(new_clip->compute_alloc, 0);
@@ -2341,7 +2333,7 @@ int clip_uhd_num_image_embeds_col(struct clip_ctx * ctx_clip) {
 // res_imgs memory is being allocated here, previous allocations will be freed if found
 bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, clip_image_f32_batch * res_imgs) {
 
-    if(clip_is_minicpmv(ctx)) {
+    if(clip_is_minicpmv(ctx)){
         int max_slice_nums = 9;
         std::vector<std::vector<clip_image_u8 *>> imgs = uhd_slice_image(img, max_slice_nums);
         res_imgs->size = 0;
@@ -2835,15 +2827,19 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
             ggml_backend_tensor_set(pos_embed, pos_embed_data, 0, ggml_nbytes(pos_embed));
             free(pos_embed_data);
         }
-    } else {
-        if (ctx->has_class_embedding) {
-            struct ggml_tensor * embeddings = ggml_graph_get_tensor(gf, "embeddings");
+    }
+    else{
+        {
+            if (ctx->has_class_embedding) {
+                struct ggml_tensor * embeddings = ggml_graph_get_tensor(gf, "embeddings");
 
-            void* zero_mem = malloc(ggml_nbytes(embeddings));
-            memset(zero_mem, 0, ggml_nbytes(embeddings));
-            ggml_backend_tensor_set(embeddings, zero_mem, 0, ggml_nbytes(embeddings));
-            free(zero_mem);
+                void* zero_mem = malloc(ggml_nbytes(embeddings));
+                memset(zero_mem, 0, ggml_nbytes(embeddings));
+                ggml_backend_tensor_set(embeddings, zero_mem, 0, ggml_nbytes(embeddings));
+                free(zero_mem);
+            }
         }
+
         if (ctx->has_qwen2vl_merger) {
             struct ggml_tensor * positions = ggml_graph_get_tensor(gf, "positions");
 
@@ -3011,7 +3007,8 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
         total_size_org += orig_size;
         total_size_new += new_size;
         gguf_set_tensor_type(ctx_out, name.c_str(), new_type);
-        gguf_set_tensor_data(ctx_out, name.c_str(), new_data, new_size);
+        GGML_ASSERT(gguf_get_tensor_size(ctx_out, gguf_find_tensor(ctx_out, name.c_str())) == new_size);
+        gguf_set_tensor_data(ctx_out, name.c_str(), new_data);
         fout.write((const char *)new_data, new_size);
         size_t pad = GGML_PAD(new_size, gguf_get_alignment(ctx_out)) - new_size;
         for (size_t j = 0; j < pad; ++j) {

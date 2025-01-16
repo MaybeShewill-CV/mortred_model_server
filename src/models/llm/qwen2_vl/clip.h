@@ -1,14 +1,17 @@
 #ifndef CLIP_H
 #define CLIP_H
 
-#include <cstddef>
-#include <cstdint>
+#include <stddef.h>
+#include <stdint.h>
 #include <vector>
+#include <map>
+#include <string>
 
 #include "ggml/ggml.h"
 #include "ggml/ggml-cpu.h"
 #include "ggml/ggml-alloc.h"
 #include "ggml/ggml-backend.h"
+#include "ggml/gguf.h"
 
 #ifdef LLAMA_SHARED
 #    if defined(_WIN32) && !defined(__MINGW32__)
@@ -61,6 +64,28 @@ struct clip_image_f32_batch {
     struct clip_image_f32 * data;
     size_t size;
 };
+
+enum projector_type {
+    PROJECTOR_TYPE_MLP,
+    PROJECTOR_TYPE_MLP_NORM,
+    PROJECTOR_TYPE_LDP,
+    PROJECTOR_TYPE_LDPV2,
+    PROJECTOR_TYPE_RESAMPLER,
+    PROJECTOR_TYPE_MERGER,
+    PROJECTOR_TYPE_UNKNOWN,
+};
+
+static std::map<projector_type, std::string> PROJECTOR_TYPE_NAMES = {
+    { PROJECTOR_TYPE_MLP, "mlp" },
+    { PROJECTOR_TYPE_LDP, "ldp" },
+    { PROJECTOR_TYPE_LDPV2, "ldpv2"},
+    { PROJECTOR_TYPE_RESAMPLER, "resampler"},
+    { PROJECTOR_TYPE_MERGER, "qwen2vl_merger"},
+};
+
+//
+// clip layers
+//
 
 struct clip_hparams {
     int32_t image_size;
@@ -128,20 +153,20 @@ struct clip_vision_model {
     struct ggml_tensor * projection;
 
     // LLaVA projection
-    struct ggml_tensor * mm_0_w = nullptr;
-    struct ggml_tensor * mm_0_b = nullptr;
-    struct ggml_tensor * mm_2_w = nullptr;
-    struct ggml_tensor * mm_2_b = nullptr;
+    struct ggml_tensor * mm_0_w = NULL;
+    struct ggml_tensor * mm_0_b = NULL;
+    struct ggml_tensor * mm_2_w = NULL;
+    struct ggml_tensor * mm_2_b = NULL;
 
-    struct ggml_tensor * image_newline = nullptr;
+    struct ggml_tensor * image_newline = NULL;
 
     // Yi type models with mlp+normalization projection
-    struct ggml_tensor * mm_1_w = nullptr; // Yi type models have 0, 1, 3, 4
-    struct ggml_tensor * mm_1_b = nullptr;
-    struct ggml_tensor * mm_3_w = nullptr;
-    struct ggml_tensor * mm_3_b = nullptr;
-    struct ggml_tensor * mm_4_w = nullptr;
-    struct ggml_tensor * mm_4_b = nullptr;
+    struct ggml_tensor * mm_1_w = NULL; // Yi type models have 0, 1, 3, 4
+    struct ggml_tensor * mm_1_b = NULL;
+    struct ggml_tensor * mm_3_w = NULL;
+    struct ggml_tensor * mm_3_b = NULL;
+    struct ggml_tensor * mm_4_w = NULL;
+    struct ggml_tensor * mm_4_b = NULL;
 
     // MobileVLM projection
     struct ggml_tensor * mm_model_mlp_1_w;
@@ -198,16 +223,6 @@ struct clip_vision_model {
     struct ggml_tensor * mm_model_ln_post_b;
 };
 
-enum projector_type {
-    PROJECTOR_TYPE_MLP,
-    PROJECTOR_TYPE_MLP_NORM,
-    PROJECTOR_TYPE_LDP,
-    PROJECTOR_TYPE_LDPV2,
-    PROJECTOR_TYPE_RESAMPLER,
-    PROJECTOR_TYPE_MERGER,
-    PROJECTOR_TYPE_UNKNOWN,
-};
-
 struct clip_ctx {
     bool has_text_encoder    = false;
     bool has_vision_encoder  = false;
@@ -236,10 +251,10 @@ struct clip_ctx {
     std::vector<uint8_t> buf_compute_meta;
 
     // memory buffers to evaluate the model
-    ggml_backend_buffer_t params_buffer  = nullptr;
+    ggml_backend_buffer_t params_buffer  = NULL;
 
-    ggml_backend_t backend       = nullptr;
-    ggml_gallocr_t compute_alloc = nullptr;
+    ggml_backend_t backend       = NULL;
+    ggml_gallocr_t compute_alloc = NULL;
 
     struct clip_image_size * load_image_size;
 };
