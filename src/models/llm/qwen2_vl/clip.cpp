@@ -6,7 +6,7 @@
 
 #define GGML_USE_CUDA
 #ifdef GGML_USE_CUDA
-#include "ggml/ggml-cuda.h"
+#include "llama_cpp/ggml-cuda.h"
 #endif
 //
 //#ifdef GGML_USE_SYCL

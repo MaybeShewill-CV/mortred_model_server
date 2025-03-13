@@ -295,11 +295,9 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::init(const toml::value& config) {
     llama_numa_init(numa);
 
     // load llama model
-    auto n_gpu_layers = static_cast<int32_t >(model_cfg.at("n_gpu_layers").as_integer());
-    auto main_gpu_device_id = static_cast<int32_t >(model_cfg.at("main_gpu_device").as_integer());
     _m_model_params.devices  = nullptr; // all available devices
-    _m_model_params.n_gpu_layers = n_gpu_layers; // number of layers to store in VRAM
-    _m_model_params.main_gpu = main_gpu_device_id;
+    _m_model_params.n_gpu_layers = static_cast<int32_t >(model_cfg.at("n_gpu_layers").as_integer()); // number of layers to store in VRAM
+    _m_model_params.main_gpu = static_cast<int32_t >(model_cfg.at("main_gpu_device").as_integer());
     _m_model_params.split_mode = LLAMA_SPLIT_MODE_LAYER; // how to split model cross gpus
     _m_model_params.vocab_only = false;
     _m_model_params.use_mmap = true; // use mmap for faster loads
@@ -327,9 +325,11 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::init(const toml::value& config) {
         return StatusCode::MODEL_INIT_FAILED;
     }
     toml::value ctx_cfg = config.at("CONTEXT");
-    auto ctx_size = llama_n_ctx_train(_m_model);
+    int32_t ctx_size = 0;
     if (ctx_cfg.contains("context_size")) {
         ctx_size = static_cast<int32_t >(ctx_cfg.at("context_size").as_integer());
+    } else {
+        ctx_size = llama_n_ctx_train(_m_model);
     }
     _m_ctx_params.n_ctx = ctx_size <= llama_n_ctx_train(_m_model) ? ctx_size : llama_n_ctx_train(_m_model); // context size
     _m_ctx_params.n_batch = _m_ctx_params.n_ctx / 2; // logical batch size for prompt processing (must be >=32 to use BLAS)
@@ -655,7 +655,7 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::apply_chat_template(const Dialog &dialog
     std::vector<char> buf(alloc_size);
 
     // run the first time to get the total output length
-    auto* tmpl = llama_model_chat_template(_m_model);
+    auto* tmpl = llama_model_chat_template(_m_model, nullptr);
     int32_t res = llama_chat_apply_template(tmpl, chat.data(), chat.size(), add_ass, buf.data(), static_cast<int32_t >(buf.size()));
 
     // error: chat template is not supported

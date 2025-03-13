@@ -7,11 +7,11 @@
 #include <map>
 #include <string>
 
-#include "ggml/ggml.h"
-#include "ggml/ggml-cpu.h"
-#include "ggml/ggml-alloc.h"
-#include "ggml/ggml-backend.h"
-#include "ggml/gguf.h"
+#include "llama_cpp/ggml-alloc.h"
+#include "llama_cpp/ggml-backend.h"
+#include "llama_cpp/ggml-cpu.h"
+#include "llama_cpp/ggml.h"
+#include "llama_cpp/gguf.h"
 
 #ifdef LLAMA_SHARED
 #    if defined(_WIN32) && !defined(__MINGW32__)
