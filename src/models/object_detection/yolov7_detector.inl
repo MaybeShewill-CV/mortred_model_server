@@ -182,6 +182,8 @@ public:
     long _m_keep_topk = 250;
     // class nums
     int _m_class_nums = 80;
+    // class id to names
+    std::map<int, std::string> _m_class_id2names;
     // input image size
     cv::Size _m_input_size_user = cv::Size();
     //　input node size
@@ -342,6 +344,17 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(
         _m_class_nums = static_cast<int>(cfg_content.at("model_class_nums").as_integer());
     }
 
+    if (!cfg_content.contains("class_names")) {
+        for (auto idx = 0; idx < _m_class_nums; ++idx) {
+            _m_class_id2names.insert(std::make_pair(idx, ""));
+        }
+    } else {
+        auto cls_names = cfg_content.at("class_names").as_array();
+        for (auto idx = 0; idx < cls_names.size(); ++idx) {
+            _m_class_id2names.insert(std::make_pair(idx, cls_names[idx].as_string()));
+        }
+    }
+
     _m_successfully_initialized = true;
     LOG(INFO) << "YoloV7 detection model: " << FilePathUtil::get_file_name(_m_model_file_path)
               << " initialization complete!!!";
@@ -407,6 +420,12 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out
     yolov7_impl::internal_output nms_result = CvUtils::nms_bboxes(bbox_result, _m_nms_threshold);
     if (nms_result.size() > _m_keep_topk) {
         nms_result.resize(_m_keep_topk);
+    }
+    for (auto& bbox : nms_result) {
+        auto cls_id = bbox.class_id;
+        if (_m_class_id2names.find(cls_id) != _m_class_id2names.end()) {
+            bbox.category = _m_class_id2names.at(cls_id);
+        }
     }
 
     // transform internal output into external output

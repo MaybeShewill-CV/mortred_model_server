@@ -424,6 +424,7 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::Impl::run(const INPUT &in, OUTPUT &ou
             landmark.x *= width_scale;
             landmark.y *= height_scale;
         }
+        face_box.category = "face";
     }
 
     // transform internal output into external output

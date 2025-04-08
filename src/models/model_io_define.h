@@ -65,6 +65,7 @@ struct face_bbox {
     cv::Rect2f bbox;
     float score;
     int32_t class_id;
+    std::string category;
     std::vector<cv::Point2f> landmarks;
 };
 using std_face_detection_output = std::vector<face_bbox>;

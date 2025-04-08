@@ -639,6 +639,9 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::trt_run(const INPUT& in, OUTPUT&
         cv::Rect2d ori_bbox = bboxes[idx];
         auto converted_bboxes = transform_bboxes(ori_bbox);
         bbox tmp_bbox {converted_bboxes, score, cls_id};
+        if (_m_class_id2names.find(cls_id) != _m_class_id2names.end()) {
+            tmp_bbox.category = _m_class_id2names.at(cls_id);
+        }
         decode_result.push_back(tmp_bbox);
     }
 

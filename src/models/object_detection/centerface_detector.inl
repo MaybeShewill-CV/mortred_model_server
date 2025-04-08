@@ -429,6 +429,9 @@ StatusCode CenterFaceDetector<INPUT, OUTPUT>::Impl::run(const INPUT &in, OUTPUT 
     if (nms_result.size() > _m_keep_topk) {
         nms_result.resize(_m_keep_topk);
     }
+    for (auto& bbox : nms_result) {
+        bbox.category = "face";
+    }
 
     // transform internal output into external output
     out = centerface_impl::transform_output<OUTPUT>(nms_result);

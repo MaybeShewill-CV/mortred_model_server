@@ -152,6 +152,7 @@ std::string YoloV8DetServer::Impl::make_response_body(
     for (auto& obj_box : model_output) {
         int cls_id = obj_box.class_id;
         auto score = obj_box.score;
+        auto category = obj_box.category;
 
         writer.StartObject();
         // write obj cls id
@@ -160,6 +161,9 @@ std::string YoloV8DetServer::Impl::make_response_body(
         // write obj score
         writer.Key("score");
         writer.String(std::to_string(score).c_str());
+        // write obj category
+        writer.Key("category");
+        writer.String(category.c_str());
         // write obj point coords
         writer.Key("points");
         writer.StartArray();

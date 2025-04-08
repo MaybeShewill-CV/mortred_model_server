@@ -184,6 +184,8 @@ private:
     long _m_keep_topk = 250;
     // 模型类别数量
     int _m_class_nums = 80;
+    // class id to names
+    std::map<int, std::string> _m_class_id2names;
     // 用户输入网络的图像尺寸
     cv::Size _m_input_size_user = cv::Size();
     //　计算图定义的输入node尺寸
@@ -404,6 +406,17 @@ StatusCode NanoDetector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""
         _m_class_nums = static_cast<int>(cfg_content.at("model_class_nums").as_integer());
     }
 
+    if (!cfg_content.contains("class_names")) {
+        for (auto idx = 0; idx < _m_class_nums; ++idx) {
+            _m_class_id2names.insert(std::make_pair(idx, ""));
+        }
+    } else {
+        auto cls_names = cfg_content.at("class_names").as_array();
+        for (auto idx = 0; idx < cls_names.size(); ++idx) {
+            _m_class_id2names.insert(std::make_pair(idx, cls_names[idx].as_string()));
+        }
+    }
+
     // generate center priors
     generate_grid_center_priors();
 
@@ -471,6 +484,12 @@ StatusCode NanoDetector<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) 
     nano_impl::internal_output nms_result = CvUtils::nms_bboxes(bbox_result, _m_nms_threshold);
     if (nms_result.size() > _m_keep_topk) {
         nms_result.resize(_m_keep_topk);
+    }
+    for (auto& bbox : nms_result) {
+        auto cls_id = bbox.class_id;
+        if (_m_class_id2names.find(cls_id) != _m_class_id2names.end()) {
+            bbox.category = _m_class_id2names.at(cls_id);
+        }
     }
 
     // transform internal output into external output
