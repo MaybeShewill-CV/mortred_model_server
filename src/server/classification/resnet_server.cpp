@@ -137,10 +137,12 @@ std::string ResNetServer::Impl::make_response_body(
     std::string msg = status == StatusCode::OK ? "success" : jinq::common::error_code_to_str(code);
     int cls_id = -1;
     float scores = -1.0;
+    std::string category;
 
     if (status == StatusCode::OK) {
         cls_id = model_output.class_id;
         scores = model_output.scores[cls_id];
+        category = model_output.category;
     }
 
     rapidjson::StringBuffer buf;
@@ -162,6 +164,8 @@ std::string ResNetServer::Impl::make_response_body(
     writer.Int(cls_id);
     writer.Key("scores");
     writer.Double(scores);
+    writer.Key("category");
+    writer.String(category.c_str());
     writer.EndObject();
     writer.EndObject();
 

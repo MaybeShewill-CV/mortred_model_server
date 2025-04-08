@@ -98,7 +98,6 @@ transform_output(const densenet_impl::internal_output& internal_out) {
     return internal_out;
 }
 
-
 }
 
 /***************** Impl Function Sets ******************/
@@ -173,6 +172,8 @@ private:
     int _m_threads_nums = 4;
     // input node size
     cv::Size _m_input_tensor_size = cv::Size(224, 224);
+    // class id to names
+    std::unordered_map<uint16_t, std::string> _m_class_id2names;
     // flag
     bool _m_successfully_initialized = false;
 
@@ -286,6 +287,23 @@ StatusCode DenseNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& 
     }
     _m_input_tensor_size = cv::Size(224, 224);
 
+    // init class id to names
+    if (cfg_content.contains("class_name_file")) {
+        std::string file_path = cfg_content.at("class_name_file").as_string();
+        if (!FilePathUtil::is_file_exist(file_path)) {
+            LOG(WARNING) << "class name file: " << file_path << " not exist";
+        } else {
+            std::ifstream file(file_path, std::ios::in);
+            std::string info;
+            uint16_t line_num = 0;
+            while (std::getline(file, info)) {
+                _m_class_id2names[line_num] = info;
+                ++line_num;
+            }
+            file.close();
+        }
+    }
+
     _m_successfully_initialized = true;
     LOG(INFO) << "DenseNet classification model initialization complete !!!";
     return StatusCode::OK;
@@ -331,6 +349,9 @@ StatusCode DenseNet<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     auto max_score = std::max_element(host_data, host_data + output_tensor_user.elementSize());
     auto cls_id = static_cast<int>(std::distance(host_data, max_score));
     internal_out.class_id = cls_id;
+    if (_m_class_id2names.find(cls_id) != _m_class_id2names.end()) {
+        internal_out.category = _m_class_id2names.at(cls_id);
+    }
     out = densenet_impl::transform_output<OUTPUT>(internal_out);
 
     return StatusCode::OK;

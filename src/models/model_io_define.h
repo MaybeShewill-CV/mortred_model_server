@@ -57,6 +57,7 @@ struct bbox {
     cv::Rect2f bbox;
     float score;
     int32_t class_id;
+    std::string category;
 };
 using std_object_detection_output = std::vector<bbox>;
 
@@ -106,6 +107,7 @@ namespace classification {
 
 struct cls_output {
     int class_id;
+    std::string category;
     std::vector<float> scores;
 };
 using std_classification_output = cls_output;
