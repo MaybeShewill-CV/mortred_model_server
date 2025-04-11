@@ -43,6 +43,7 @@ set(MODEL_SERVER_APP_LIST
     matting
     mono_depth_estimation
     llm
+    mcp
 )
 
 foreach(dir_name ${MODEL_SERVER_APP_LIST})
