@@ -51,6 +51,11 @@ class VisionMcpServer {
 
     /***
      *
+     */
+    void run();
+
+    /***
+     *
      * @return
      */
     bool is_successfully_initialized() const;
