@@ -1,0 +1,60 @@
+[
+  {
+    "name": "图片分类",
+    "description": "按照imagenet预设的1000个类别，对图片进行分类",
+    "url": "http://localhost:8092/mortred_ai_server_v1/classification/mobilenetv2",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "req_id": {
+          "type": "string",
+          "description": "全局唯一的任务id"
+        },
+        "img_data": {
+          "type": "string",
+          "description": "按照base64编码的图像内容"
+        }
+      },
+      "required": [
+        "req_id",
+        "img_data"
+      ]
+    },
+    "annotations": {
+      "title": "图片分类",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "图片目标检测",
+    "description": "按照coco预设的80个类别，检测图片中含有哪些对象，并返回对象所在的boundingbox、类别和置信度信息",
+    "url": "http://localhost:8093/mortred_ai_server_v1/obj_detection/yolov5",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "req_id": {
+          "type": "string",
+          "description": "全局唯一的任务id"
+        },
+        "img_data": {
+          "type": "string",
+          "description": "按照base64编码的图像内容"
+        }
+      },
+      "required": [
+        "req_id",
+        "img_data"
+      ]
+    },
+    "annotations": {
+      "title": "图像目标检测",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  }
+]

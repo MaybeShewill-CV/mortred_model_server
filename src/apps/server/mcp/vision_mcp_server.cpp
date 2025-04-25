@@ -1,18 +1,18 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: pphuman_segmentation_server.cpp
-* Date: 22-7-22
+* File: vision_mcp_server.cpp
+* Date: 25-4-24
 ************************************************/
 
-// bisenetv2 segmentation server tool
+// vision mcp server tool
 
+#include "workflow/WFFacilities.h"
 #include <glog/logging.h>
-#include <workflow/WFFacilities.h>
 
-#include "factory/scene_segmentation_task.h"
+#include "server/tiny_mcp/vision_mcp_server.h"
 
-using jinq::factory::scene_segmentation::create_pphuman_seg_server;
+using jinq::server::tiny_mcp::VisionMcpServer;
 
 int main(int argc, char** argv) {
 
@@ -28,28 +28,20 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    static WFFacilities::WaitGroup wait_group(1);
-
     std::string config_file_path = argv[1];
     LOG(INFO) << "cfg file path: " << config_file_path;
     auto config = toml::parse(config_file_path);
-    const auto& server_cfg = config.at("PPHUMAN_SEG_SERVER");
+    const auto& server_cfg = config.at("MCP_SERVER");
     auto port = server_cfg.at("port").as_integer();
     LOG(INFO) << "serve on port: " << port;
 
-    auto server = create_pphuman_seg_server("pphuman_segmentation_server");
+    auto server = std::make_unique<VisionMcpServer>();
     auto status = server->init(config);
     if (status != jinq::common::StatusCode::OK) {
-        LOG(INFO) << "pphuman segmentation server init failed";
+        LOG(INFO) << "vision mcp server init failed";
         return -1;
     }
-    if (server->start(port) == 0) {
-        wait_group.wait();
-        server->stop();
-    } else {
-        LOG(ERROR) << "Cannot start server";
-        return -1;
-    }
+    server->run();
 
     return 0;
 }

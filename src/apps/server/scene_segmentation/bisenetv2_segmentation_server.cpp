@@ -44,12 +44,12 @@ int main(int argc, char** argv) {
         return -1;
     }
     if (server->start(port) == 0) {
-		wait_group.wait();
-		server->stop();
-	} else {
-		LOG(ERROR) << "Cannot start server";
-		return -1;
-	}
+        wait_group.wait();
+        server->stop();
+    } else {
+        LOG(ERROR) << "Cannot start server";
+        return -1;
+    }
 
     return 0;
 }
