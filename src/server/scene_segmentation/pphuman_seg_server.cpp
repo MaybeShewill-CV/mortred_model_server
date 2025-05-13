@@ -106,12 +106,12 @@ StatusCode PPHumanSegServer::Impl::init(const decltype(toml::parse("")) &config)
     }
 
     // init server uri
-    if (!server_section.contains("server_url")) {
+    if (!server_section.contains("server_uri")) {
         LOG(ERROR) << "missing server uri field";
         _m_successfully_initialized = false;
         return StatusCode::SERVER_INIT_FAILED;
     } else {
-        _m_server_uri = server_section.at("server_url").as_string();
+        _m_server_uri = server_section.at("server_uri").as_string();
     }
 
     // init server params
