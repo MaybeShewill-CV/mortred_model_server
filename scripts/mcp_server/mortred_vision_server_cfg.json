@@ -1,0 +1,582 @@
+[
+  {
+    "name": "modnet",
+    "description": "从图像中精确地分离前景与背景",
+    "conf_path": "../../conf/server/matting/modnet/modnet_server_config.ini",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "req_id": {
+          "type": "string",
+          "description": "全局唯一的任务id"
+        },
+        "img_data": {
+          "type": "string",
+          "description": "按照base64编码的图像内容"
+        }
+      },
+      "required": [
+        "req_id",
+        "img_data"
+      ]
+    },
+    "annotations": {
+      "title": "",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "ppmatting",
+    "description": "从图像中精确地分离前景与背景",
+    "conf_path": "../../conf/server/matting/ppmatting/pp_matting_server_config.ini",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "req_id": {
+          "type": "string",
+          "description": "全局唯一的任务id"
+        },
+        "img_data": {
+          "type": "string",
+          "description": "按照base64编码的图像内容"
+        }
+      },
+      "required": [
+        "req_id",
+        "img_data"
+      ]
+    },
+    "annotations": {
+      "title": "",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "yolov7",
+    "description": "按照coco数据集定义的80种类别，检测图像上目标物体的位置和类别",
+    "conf_path": "../../conf/server/object_detection/yolov7/yolov7_server_config.ini",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "req_id": {
+          "type": "string",
+          "description": "全局唯一的任务id"
+        },
+        "img_data": {
+          "type": "string",
+          "description": "按照base64编码的图像内容"
+        }
+      },
+      "required": [
+        "req_id",
+        "img_data"
+      ]
+    },
+    "annotations": {
+      "title": "",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "yolov6",
+    "description": "按照coco数据集定义的80种类别，检测图像上目标物体的位置和类别",
+    "conf_path": "../../conf/server/object_detection/yolov6/yolov6_server_config.ini",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "req_id": {
+          "type": "string",
+          "description": "全局唯一的任务id"
+        },
+        "img_data": {
+          "type": "string",
+          "description": "按照base64编码的图像内容"
+        }
+      },
+      "required": [
+        "req_id",
+        "img_data"
+      ]
+    },
+    "annotations": {
+      "title": "",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "libface_det",
+    "description": "检测图像上人脸的位置和人脸上特征点的位置信息",
+    "conf_path": "../../conf/server/object_detection/libface_det/libface_server_config.ini",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "req_id": {
+          "type": "string",
+          "description": "全局唯一的任务id"
+        },
+        "img_data": {
+          "type": "string",
+          "description": "按照base64编码的图像内容"
+        }
+      },
+      "required": [
+        "req_id",
+        "img_data"
+      ]
+    },
+    "annotations": {
+      "title": "",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "nano_det",
+    "description": "按照coco数据集定义的80种类别，检测图像上目标物体的位置和类别",
+    "conf_path": "../../conf/server/object_detection/nano_det/nanodet_server_config.ini",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "req_id": {
+          "type": "string",
+          "description": "全局唯一的任务id"
+        },
+        "img_data": {
+          "type": "string",
+          "description": "按照base64编码的图像内容"
+        }
+      },
+      "required": [
+        "req_id",
+        "img_data"
+      ]
+    },
+    "annotations": {
+      "title": "",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "center_face_det",
+    "description": "检测图像上人脸的位置和人脸上特征点的位置信息",
+    "conf_path": "../../conf/server/object_detection/center_face_det/center_face_server_config.ini",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "req_id": {
+          "type": "string",
+          "description": "全局唯一的任务id"
+        },
+        "img_data": {
+          "type": "string",
+          "description": "按照base64编码的图像内容"
+        }
+      },
+      "required": [
+        "req_id",
+        "img_data"
+      ]
+    },
+    "annotations": {
+      "title": "",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "yolov8",
+    "description": "按照coco数据集定义的80种类别，检测图像上目标物体的位置和类别",
+    "conf_path": "../../conf/server/object_detection/yolov8/yolov8_server_config.ini",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "req_id": {
+          "type": "string",
+          "description": "全局唯一的任务id"
+        },
+        "img_data": {
+          "type": "string",
+          "description": "按照base64编码的图像内容"
+        }
+      },
+      "required": [
+        "req_id",
+        "img_data"
+      ]
+    },
+    "annotations": {
+      "title": "",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "yolov5",
+    "description": "按照coco数据集定义的80种类别，检测图像上目标物体的位置和类别",
+    "conf_path": "../../conf/server/object_detection/yolov5/yolov5_server_config.ini",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "req_id": {
+          "type": "string",
+          "description": "全局唯一的任务id"
+        },
+        "img_data": {
+          "type": "string",
+          "description": "按照base64编码的图像内容"
+        }
+      },
+      "required": [
+        "req_id",
+        "img_data"
+      ]
+    },
+    "annotations": {
+      "title": "",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "mobilenetv2",
+    "description": "按照imagenet预设的1000个类别，对图片进行分类",
+    "conf_path": "../../conf/server/classification/mobilenetv2/mobilenetv2_server_config.ini",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "req_id": {
+          "type": "string",
+          "description": "全局唯一的任务id"
+        },
+        "img_data": {
+          "type": "string",
+          "description": "按照base64编码的图像内容"
+        }
+      },
+      "required": [
+        "req_id",
+        "img_data"
+      ]
+    },
+    "annotations": {
+      "title": "",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "resnet",
+    "description": "按照imagenet预设的1000个类别，对图片进行分类",
+    "conf_path": "../../conf/server/classification/resnet/resnet50_server_config.ini",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "req_id": {
+          "type": "string",
+          "description": "全局唯一的任务id"
+        },
+        "img_data": {
+          "type": "string",
+          "description": "按照base64编码的图像内容"
+        }
+      },
+      "required": [
+        "req_id",
+        "img_data"
+      ]
+    },
+    "annotations": {
+      "title": "",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "densenet",
+    "description": "按照imagenet预设的1000个类别，对图片进行分类",
+    "conf_path": "../../conf/server/classification/densenet/densenet_server_config.ini",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "req_id": {
+          "type": "string",
+          "description": "全局唯一的任务id"
+        },
+        "img_data": {
+          "type": "string",
+          "description": "按照base64编码的图像内容"
+        }
+      },
+      "required": [
+        "req_id",
+        "img_data"
+      ]
+    },
+    "annotations": {
+      "title": "",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "superpoint",
+    "description": "检测图像上的特征点位置及其特征向量",
+    "conf_path": "../../conf/server/feature_point/superpoint/superpoint_server_cfg.ini",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "req_id": {
+          "type": "string",
+          "description": "全局唯一的任务id"
+        },
+        "img_data": {
+          "type": "string",
+          "description": "按照base64编码的图像内容"
+        }
+      },
+      "required": [
+        "req_id",
+        "img_data"
+      ]
+    },
+    "annotations": {
+      "title": "",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "metric3d",
+    "description": "使用单张图像估计图像上每个像素位置的深度",
+    "conf_path": "../../conf/server/mono_depth_estimation/metric3d/metric3d_server_cfg.ini",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "req_id": {
+          "type": "string",
+          "description": "全局唯一的任务id"
+        },
+        "img_data": {
+          "type": "string",
+          "description": "按照base64编码的图像内容"
+        }
+      },
+      "required": [
+        "req_id",
+        "img_data"
+      ]
+    },
+    "annotations": {
+      "title": "",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "depth_anything",
+    "description": "使用单张图像估计图像上每个像素位置的深度",
+    "conf_path": "../../conf/server/mono_depth_estimation/depth_anything/depth_anything_server_cfg.ini",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "req_id": {
+          "type": "string",
+          "description": "全局唯一的任务id"
+        },
+        "img_data": {
+          "type": "string",
+          "description": "按照base64编码的图像内容"
+        }
+      },
+      "required": [
+        "req_id",
+        "img_data"
+      ]
+    },
+    "annotations": {
+      "title": "",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "attentive_gan_derain",
+    "description": "对图像做质量增强",
+    "conf_path": "../../conf/server/enhancement/attentive_gan_derain/attentive_gan_server_cfg.ini",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "req_id": {
+          "type": "string",
+          "description": "全局唯一的任务id"
+        },
+        "img_data": {
+          "type": "string",
+          "description": "按照base64编码的图像内容"
+        }
+      },
+      "required": [
+        "req_id",
+        "img_data"
+      ]
+    },
+    "annotations": {
+      "title": "",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "enlightengan",
+    "description": "对图像做质量增强",
+    "conf_path": "../../conf/server/enhancement/enlightengan/enlighten_gan_server_cfg.ini",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "req_id": {
+          "type": "string",
+          "description": "全局唯一的任务id"
+        },
+        "img_data": {
+          "type": "string",
+          "description": "按照base64编码的图像内容"
+        }
+      },
+      "required": [
+        "req_id",
+        "img_data"
+      ]
+    },
+    "annotations": {
+      "title": "",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "bisenetv2",
+    "description": "按照cityscapes数据集定义的类别，对图像上的每一个像素进行分类",
+    "conf_path": "../../conf/server/scene_segmentation/bisenetv2/bisenetv2_server_config.ini",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "req_id": {
+          "type": "string",
+          "description": "全局唯一的任务id"
+        },
+        "img_data": {
+          "type": "string",
+          "description": "按照base64编码的图像内容"
+        }
+      },
+      "required": [
+        "req_id",
+        "img_data"
+      ]
+    },
+    "annotations": {
+      "title": "",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "pphuman_seg",
+    "description": "按照cityscapes数据集定义的类别，对图像上的每一个像素进行分类",
+    "conf_path": "../../conf/server/scene_segmentation/pphuman_seg/pphuman_seg_server_config.ini",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "req_id": {
+          "type": "string",
+          "description": "全局唯一的任务id"
+        },
+        "img_data": {
+          "type": "string",
+          "description": "按照base64编码的图像内容"
+        }
+      },
+      "required": [
+        "req_id",
+        "img_data"
+      ]
+    },
+    "annotations": {
+      "title": "",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "hrnet",
+    "description": "按照cityscapes数据集定义的类别，对图像上的每一个像素进行分类",
+    "conf_path": "../../conf/server/scene_segmentation/hrnet/hrnet_seg_server_config.ini",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "req_id": {
+          "type": "string",
+          "description": "全局唯一的任务id"
+        },
+        "img_data": {
+          "type": "string",
+          "description": "按照base64编码的图像内容"
+        }
+      },
+      "required": [
+        "req_id",
+        "img_data"
+      ]
+    },
+    "annotations": {
+      "title": "",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  }
+]
