@@ -8,9 +8,11 @@
 #ifndef MORTRED_MODEL_SERVER_BASE_SERVER_IMPL_H
 #define MORTRED_MODEL_SERVER_BASE_SERVER_IMPL_H
 
+#include <chrono>
+
 #include "glog/logging.h"
 #include "toml/toml.hpp"
-#include "stl_container/concurrentqueue.h"
+#include "stl_container/blockingconcurrentqueue.h"
 #include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
@@ -23,6 +25,7 @@
 #include "common/md5.h"
 #include "common/base64.h"
 #include "common/cv_utils.h"
+#include "common/json_request_parser.h"
 #include "common/status_code.h"
 #include "common/time_stamp.h"
 #include "common/file_path_util.h"
@@ -100,7 +103,7 @@ protected:
     std::atomic<size_t> _m_finished_jobs{0};
     std::atomic<size_t> _m_waiting_jobs{0};
     // worker queue
-    moodycamel::ConcurrentQueue<WORKER> _m_working_queue;
+    moodycamel::BlockingConcurrentQueue<WORKER> _m_working_queue;
     // model run timeout
     int _m_model_run_timeout = 500; // ms
     // server uri
@@ -119,11 +122,7 @@ protected:
         MODEL_OUTPUT model_output;
     };
 
-    struct cls_request {
-        std::string image_content;
-        std::string task_id;
-        bool is_valid = true;
-    };
+    using cls_request = jinq::common::JsonRequest;
 
 protected:
     /***
@@ -131,34 +130,8 @@ protected:
      * @param req_body
      * @return
      */
-     virtual cls_request parse_task_request(const std::string& req_body) {
-
-        rapidjson::Document doc;
-        doc.Parse(req_body.c_str());
-        cls_request req{};
-
-        if (doc.HasParseError() || doc.IsNull() || doc.ObjectEmpty()) {
-            req.image_content = "";
-            req.is_valid = false;
-        } else {
-            CHECK_EQ(doc.IsObject(), true);
-            if (!doc.HasMember("img_data") || !doc["img_data"].IsString()) {
-                req.image_content = "";
-                req.is_valid = false;
-            } else {
-                req.image_content = doc["img_data"].GetString();
-                req.is_valid = true;
-            }
-
-            if (!doc.HasMember("req_id") || !doc["req_id"].IsString()) {
-                req.task_id = "";
-                req.is_valid = false;
-            } else {
-                req.task_id = doc["req_id"].GetString();
-            }
-        }
-
-        return req;
+    virtual cls_request parse_task_request(const std::string& req_body) {
+        return jinq::common::parse_json_request(req_body);
     };
 
     /***
@@ -261,7 +234,21 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     // get model worker
     WORKER worker;
     auto find_worker_start_ts = Timestamp::now();
-    while (!_m_working_queue.try_dequeue(worker)) {}
+
+    if (_m_model_run_timeout > 0) {
+        // 有界等待：等 worker 也计入模型超时预算，形成背压
+        if (!_m_working_queue.wait_dequeue_timed(
+                worker, std::chrono::milliseconds(_m_model_run_timeout))) {
+            ctx->model_run_status = StatusCode::MODEL_RUN_TIMEOUT;
+            ctx->task_finished_ts = Timestamp::now().to_format_str();
+            // 关键：提前退出也必须恰好计一次 release_ctx，否则 ctx 泄漏
+            WFTaskFactory::count_by_name("release_ctx");
+            return;
+        }
+    } else {
+        // model_run_timeout <= 0 表示不设超时，用无界阻塞等待
+        _m_working_queue.wait_dequeue(worker);
+    }
     ctx->find_worker_time_consuming = (Timestamp::now() - find_worker_start_ts) * 1000;
 
     // get task receive timestamp
@@ -281,12 +268,12 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
             LOG(ERROR) << "worker run failed";
         }
     } else {
-        status = StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+        status = req.parse_status;
     }
     ctx->model_run_status = status;
 
     // restore worker queue
-    while (!_m_working_queue.enqueue(std::move(worker))) {}
+    _m_working_queue.enqueue(std::move(worker));
 
     // update ctx
     auto task_finish_ts = Timestamp::now();
