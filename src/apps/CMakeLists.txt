@@ -38,7 +38,6 @@ set(MODEL_SERVER_APP_LIST
     feature_point
     object_detection
     ocr
-    proxy
     scene_segmentation
     matting
     mono_depth_estimation
@@ -66,4 +65,4 @@ foreach(dir_name ${MODEL_TOOLS_APP_LIST})
         add_executable(${file_name}.out ${src})
         target_link_libraries(${file_name}.out common models glog::glog)
     endforeach()
-endforeach()
+    endforeach()
