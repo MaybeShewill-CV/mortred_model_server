@@ -59,7 +59,8 @@ public:
     jinq::common::StatusCode build_engine_file(
         const std::string& input_onnx_file_path,
         const std::string& output_engine_file_path,
-        TRT_PRECISION_MODE fp_mode = TRT_PRECISION_MODE::TRT_PRECISION_FP32);
+        TRT_PRECISION_MODE fp_mode = TRT_PRECISION_MODE::TRT_PRECISION_FP32,
+        const std::string& profile_json = "");
 
 private:
     class Impl;

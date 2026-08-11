@@ -472,7 +472,7 @@ StatusCode SamVitEncoder::Impl::init_trt_model(const toml::value& cfg) {
     }
 
     // bind input tensor
-    std::string input_node_name = "images";
+    std::string input_node_name = "input_image";
     auto successfully_bind = TrtHelper::setup_engine_binding(_m_trt_engine, input_node_name, _m_input_binding);
     if (!successfully_bind) {
         LOG(ERROR) << "bind input tensor failed";
@@ -637,7 +637,7 @@ StatusCode SamVitEncoder::Impl::trt_encode(const cv::Mat &input_image, std::vect
     }
 
     // do inference
-    _m_trt_execution_context->setTensorAddress("images", cuda_mem_input);
+    _m_trt_execution_context->setTensorAddress("input_image", cuda_mem_input);
     _m_trt_execution_context->setTensorAddress("image_embeddings", _m_device_memory.at(_m_output_binding.index()));
     if (!_m_trt_execution_context->enqueueV3(_m_cuda_stream)) {
         LOG(ERROR) << "excute input data for inference failed";

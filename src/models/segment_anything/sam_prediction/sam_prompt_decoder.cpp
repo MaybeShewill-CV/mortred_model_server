@@ -31,6 +31,27 @@ using trt_helper::DeviceMemory;
 using trt_helper::TrtHelper;
 using trt_helper::TrtLogger;
 
+namespace {
+
+/***
+ * pad point coords/labels to a fixed count with ignored points (0, 0) / label -1,
+ * required by the static-shape TensorRT decoder engine
+ */
+void pad_points_to_max(
+    std::vector<float>& points,
+    std::vector<float>& labels,
+    int max_point_counts) {
+    auto cur_count = static_cast<int>(points.size() / 2);
+    while (cur_count < max_point_counts) {
+        points.push_back(0.0f);
+        points.push_back(0.0f);
+        labels.push_back(-1.0f);
+        ++cur_count;
+    }
+}
+
+} // namespace
+
 class SamPromptDecoder::Impl {
   public:
     /***
@@ -786,6 +807,7 @@ StatusCode SamPromptDecoder::Impl::trt_get_mask(const std::vector<float> &image_
     total_points.push_back(0.0);
     total_points.push_back(0.0);
     total_labels.push_back(-1.0);
+    pad_points_to_max(total_points, total_labels, _m_max_decoder_point_counts);
 
     nvinfer1::Dims3 points_shape(1, static_cast<int>(total_points.size() / 2), 2);
     nvinfer1::Dims2 labels_shape(1, static_cast<int>(total_labels.size()));
@@ -1046,6 +1068,7 @@ StatusCode SamPromptDecoder::Impl::trt_get_mask(
     total_points.push_back(0.0f);
     total_points.push_back(0.0f);
     total_labels.push_back(-1.0);
+    pad_points_to_max(total_points, total_labels, _m_max_decoder_point_counts);
     nvinfer1::Dims3 points_shape(1, static_cast<int>(total_points.size() / 2), 2);
     nvinfer1::Dims2 labels_shape(1, static_cast<int>(total_labels.size()));
     _m_point_coords_binding.set_dims(points_shape);

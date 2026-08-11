@@ -359,6 +359,8 @@ StatusCode BiseNetV2<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
 
+    _m_input_size_user = internal_in.input_image.size();
+
     // preprocess image
     cv::Mat preprocessed_image = preprocess_image(internal_in.input_image);
     // run session
@@ -371,13 +373,36 @@ StatusCode BiseNetV2<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     // fetch net output
     MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
     _m_output_tensor->copyToHostTensor(&output_tensor_user);
-    auto host_data = output_tensor_user.host<int>();
-    cv::Mat result_image(_m_input_size_host, CV_32SC1, host_data);
+    // model output is float [H, W, cls_nums], compute argmax per pixel
+    auto host_data = output_tensor_user.host<float>();
+    auto output_shape = output_tensor_user.shape();
+    int cls_nums = output_shape.size() >= 3 ? output_shape[2] : 0;
+    if (cls_nums <= 0) {
+        LOG(ERROR) << "bisenetv2 unexpected output shape";
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+    cv::Mat result_image(_m_input_size_host, CV_32SC1, cv::Scalar(0));
+    for (auto row = 0; row < result_image.rows; ++row) {
+        for (auto col = 0; col < result_image.cols; ++col) {
+            const float* logit = host_data + (row * result_image.cols + col) * cls_nums;
+            int best_cls = 0;
+            float best_val = logit[0];
+            for (auto cls = 1; cls < cls_nums; ++cls) {
+                if (logit[cls] > best_val) {
+                    best_val = logit[cls];
+                    best_cls = cls;
+                }
+            }
+            result_image.at<int32_t>(row, col) = best_cls;
+        }
+    }
     cv::resize(result_image, result_image, _m_input_size_user, 0.0, 0.0, cv::INTER_NEAREST);
 
     // transform internal output into external output
     bisenetv2_impl::internal_output internal_out;
-    internal_out.segmentation_result = result_image;
+    // clone the result to avoid referencing the MNN host tensor memory which
+    // will be released when output_tensor_user is destructed
+    internal_out.segmentation_result = result_image.clone();
     out = bisenetv2_impl::transform_output<OUTPUT>(internal_out);
 
     return StatusCode::OK;

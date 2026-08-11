@@ -170,8 +170,10 @@ public:
     MNN::Session* _m_session = nullptr;
     // MNN Input tensor node
     MNN::Tensor* _m_input_tensor = nullptr;
-    // MNN Loc Output tensor node
-    MNN::Tensor* _m_output_tensor = nullptr;
+    // MNN output tensor nodes (3 yolo heads)
+    MNN::Tensor* _m_output_tensor_80 = nullptr; // "output": 80x80, stride 8
+    MNN::Tensor* _m_output_tensor_40 = nullptr; // "518": 40x40, stride 16
+    MNN::Tensor* _m_output_tensor_20 = nullptr; // "532": 20x20, stride 32
     // mnn threads
     int _m_threads_nums = 4;
     // score thresh
@@ -202,7 +204,7 @@ public:
      *
      * @return
      */
-    yolov7_impl::internal_output decode_output_tensor() const;
+    yolov7_impl::internal_output decode_outputs() const;
 };
 
 /***
@@ -293,7 +295,9 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(
     }
 
     _m_input_tensor = _m_net->getSessionInput(_m_session, "images");
-    _m_output_tensor = _m_net->getSessionOutput(_m_session, "output");
+    _m_output_tensor_80 = _m_net->getSessionOutput(_m_session, "output");
+    _m_output_tensor_40 = _m_net->getSessionOutput(_m_session, "518");
+    _m_output_tensor_20 = _m_net->getSessionOutput(_m_session, "532");
 
     if (_m_input_tensor == nullptr) {
         LOG(ERROR) << "Fetch yolov7 detection model input node failed";
@@ -301,8 +305,8 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    if (_m_output_tensor == nullptr) {
-        LOG(ERROR) << "Fetch yolov7 detection model output node failed";
+    if (_m_output_tensor_80 == nullptr || _m_output_tensor_40 == nullptr || _m_output_tensor_20 == nullptr) {
+        LOG(ERROR) << "Fetch yolov7 detection model output nodes failed";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
@@ -413,8 +417,8 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out
     _m_input_tensor->copyFromHostTensor(&input_tensor_user);
     _m_net->runSession(_m_session);
 
-    // decode output tensor
-    auto bbox_result = decode_output_tensor();
+    // decode all output heads
+    auto bbox_result = decode_outputs();
 
     // do nms
     yolov7_impl::internal_output nms_result = CvUtils::nms_bboxes(bbox_result, _m_nms_threshold);
@@ -438,98 +442,92 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out
 * @return
 */
 template<typename INPUT, typename OUTPUT>
-yolov7_impl::internal_output YoloV7Detector<INPUT, OUTPUT>::Impl::decode_output_tensor() const {
+yolov7_impl::internal_output YoloV7Detector<INPUT, OUTPUT>::Impl::decode_outputs() const {
+    // yolov7.mnn exports three raw output heads [1, 3, H, W, 85]:
+    //   "output" -> 80x80 (stride 8), "518" -> 40x40 (stride 16), "532" -> 20x20 (stride 32)
+    // values are raw (pre-activation): xy/wh are grid-relative offsets, obj/cls are logits.
+    auto sigmoid = [](float x) { return 1.0f / (1.0f + std::exp(-x)); };
 
-    // convert tensor format
-    MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::CAFFE);
-    _m_output_tensor->copyToHostTensor(&output_tensor_user);
-
-    // fetch tensor data
-    std::vector<float> output_tensordata(output_tensor_user.elementSize());
-    ::memcpy(&output_tensordata[0], output_tensor_user.host<float>(),
-             output_tensor_user.elementSize() * sizeof(float));
-
-    auto batch_nums = output_tensor_user.shape()[0];
-    auto raw_pred_bbox_nums = output_tensor_user.shape()[1];
-
-    std::vector<std::vector<float> > raw_output;
-    raw_output.resize(raw_pred_bbox_nums);
-
-    for (auto&& tmp : raw_output) {
-        tmp.resize(_m_class_nums + 5, 0.0);
-    }
-
-    for (auto index = 0; index < raw_pred_bbox_nums; ++index) {
-        for (auto idx = 0; idx < _m_class_nums + 5; idx++) {
-            raw_output[index][idx] = output_tensordata[index * (_m_class_nums + 5) + idx];
-        }
-    }
+    const MNN::Tensor* heads[3] = {_m_output_tensor_80, _m_output_tensor_40, _m_output_tensor_20};
+    const int strides[3] = {8, 16, 32};
+    const float anchors[3][3][2] = {
+        {{12, 16}, {19, 36}, {40, 28}},
+        {{36, 75}, {76, 55}, {72, 146}},
+        {{142, 110}, {192, 243}, {459, 401}},
+    };
 
     yolov7_impl::internal_output decode_result;
+    for (int hi = 0; hi < 3; ++hi) {
+        MNN::Tensor output_tensor_user(heads[hi], MNN::Tensor::DimensionType::CAFFE);
+        heads[hi]->copyToHostTensor(&output_tensor_user);
+        auto shape = output_tensor_user.shape();
+        if (shape.size() != 5) {
+            continue;
+        }
+        int anchor_nums = shape[1];
+        int grid_h = shape[2];
+        int grid_w = shape[3];
+        int attrs = shape[4];
+        const float* data = output_tensor_user.host<float>();
+        int stride = strides[hi];
 
-    for (size_t batch_num = 0; batch_num < batch_nums; ++batch_num) {
-        for (size_t bbox_index = 0; bbox_index < raw_pred_bbox_nums; ++bbox_index) {
-            std::vector<float> raw_bbox_info = raw_output[bbox_index];
-            // thresh bboxes with lower score
-            int class_id = -1;
-            float max_cls_score = 0.0;
-
-            for (auto cls_idx = 0; cls_idx < _m_class_nums; ++cls_idx) {
-                if (raw_bbox_info[cls_idx + 5] > max_cls_score) {
-                    max_cls_score = raw_bbox_info[cls_idx + 5];
-                    class_id = cls_idx;
+        for (int a = 0; a < anchor_nums && a < 3; ++a) {
+            float anchor_w = anchors[hi][a][0];
+            float anchor_h = anchors[hi][a][1];
+            for (int row = 0; row < grid_h; ++row) {
+                for (int col = 0; col < grid_w; ++col) {
+                    const float* p = data + (((a * grid_h + row) * grid_w + col) * attrs);
+                    float obj_score = sigmoid(p[4]);
+                    if (obj_score < 0.05f) {
+                        continue;
+                    }
+                    int class_id = -1;
+                    float max_cls_score = 0.0f;
+                    for (int c = 5; c < attrs; ++c) {
+                        float cls_score = sigmoid(p[c]);
+                        if (cls_score > max_cls_score) {
+                            max_cls_score = cls_score;
+                            class_id = c - 5;
+                        }
+                    }
+                    float bbox_score = obj_score * max_cls_score;
+                    if (bbox_score < _m_score_threshold) {
+                        continue;
+                    }
+                    float center_x = (2.0f * sigmoid(p[0]) - 0.5f + col) * stride;
+                    float center_y = (2.0f * sigmoid(p[1]) - 0.5f + row) * stride;
+                    float box_w = std::pow(2.0f * sigmoid(p[2]), 2.0f) * anchor_w;
+                    float box_h = std::pow(2.0f * sigmoid(p[3]), 2.0f) * anchor_h;
+                    if (box_w <= 0.0f || box_h <= 0.0f) {
+                        continue;
+                    }
+                    bbox tmp_bbox;
+                    tmp_bbox.class_id = class_id;
+                    tmp_bbox.score = bbox_score;
+                    tmp_bbox.bbox.x = center_x - box_w / 2.0f;
+                    tmp_bbox.bbox.y = center_y - box_h / 2.0f;
+                    tmp_bbox.bbox.width = box_w;
+                    tmp_bbox.bbox.height = box_h;
+                    if (tmp_bbox.bbox.area() < 5) {
+                        continue;
+                    }
+                    decode_result.push_back(tmp_bbox);
                 }
             }
-
-            auto bbox_score = raw_bbox_info[4] * max_cls_score;
-
-            if (bbox_score < _m_score_threshold) {
-                continue;
-            }
-
-            // thresh invalid bboxes
-            if (raw_bbox_info[2] <= 0 || raw_bbox_info[3] <= 0) {
-                continue;
-            }
-
-            auto bbox_area = std::sqrt(raw_bbox_info[2] * raw_bbox_info[3]);
-
-            if (bbox_area < 0 || bbox_area > std::numeric_limits<float>::max()) {
-                continue;
-            }
-
-            // rescale boxes from img_size to im0 size
-            std::vector<float> coords = {
-                raw_bbox_info[0] - raw_bbox_info[2] / 2.0f,
-                raw_bbox_info[1] - raw_bbox_info[3] / 2.0f,
-                raw_bbox_info[0] + raw_bbox_info[2] / 2.0f,
-                raw_bbox_info[1] + raw_bbox_info[3] / 2.0f
-            };
-            auto w_scale = static_cast<float>(_m_input_size_user.width) /
-                           static_cast<float>(_m_input_size_host.width);
-            auto h_scale = static_cast<float>(_m_input_size_user.height) /
-                           static_cast<float>(_m_input_size_host.height);
-            coords[0] *= w_scale;
-            coords[1] *= h_scale;
-            coords[2] *= w_scale;
-            coords[3] *= h_scale;
-
-            bbox tmp_bbox;
-            tmp_bbox.class_id = class_id;
-            tmp_bbox.score = bbox_score;
-            tmp_bbox.bbox.x = coords[0];
-            tmp_bbox.bbox.y = coords[1];
-            tmp_bbox.bbox.width = coords[2] - coords[0];
-            tmp_bbox.bbox.height = coords[3] - coords[1];
-
-            if (tmp_bbox.bbox.area() < 5) {
-                continue;
-            }
-
-            decode_result.push_back(tmp_bbox);
         }
     }
 
+    // rescale boxes from 640-space to the original image size
+    auto w_scale = static_cast<float>(_m_input_size_user.width) /
+                   static_cast<float>(_m_input_size_host.width);
+    auto h_scale = static_cast<float>(_m_input_size_user.height) /
+                   static_cast<float>(_m_input_size_host.height);
+    for (auto& bbox : decode_result) {
+        bbox.bbox.x *= w_scale;
+        bbox.bbox.y *= h_scale;
+        bbox.bbox.width *= w_scale;
+        bbox.bbox.height *= h_scale;
+    }
     return decode_result;
 }
 

@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
     }
     auto cfg = toml::parse(cfg_file_path);
 
-    int sample_size = 128;
+    int sample_size = 256;
     if (argc >= 3) {
         sample_size = std::stoi(argv[2]);
     }

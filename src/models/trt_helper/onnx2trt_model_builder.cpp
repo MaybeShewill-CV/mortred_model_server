@@ -11,6 +11,7 @@
 
 #include "glog/logging.h"
 #include "TensorRT-8.6.1.6/NvOnnxParser.h"
+#include "rapidjson/document.h"
 
 #include "common/file_path_util.h"
 #include "models/trt_helper/trt_helper.h"
@@ -61,7 +62,8 @@ public:
     StatusCode build_engine_file(
         const std::string& input_onnx_file_path,
         const std::string& output_engine_file_path,
-        TRT_PRECISION_MODE fp_mode = TRT_PRECISION_MODE::TRT_PRECISION_FP32);
+        TRT_PRECISION_MODE fp_mode = TRT_PRECISION_MODE::TRT_PRECISION_FP32,
+        const std::string& profile_json = "");
 
 private:
     std::unique_ptr<TrtLogger> _m_trt_logger;
@@ -76,8 +78,86 @@ private:
     StatusCode build_engine(
             const std::string& input_file_path,
             std::shared_ptr<nvinfer1::IHostMemory>* output,
-            TRT_PRECISION_MODE precision);
+            TRT_PRECISION_MODE precision,
+            const std::string& profile_json);
 };
+
+/***
+ *
+ * @param json_value
+ * @param dims
+ * @return
+ */
+static nvinfer1::Dims to_trt_dims(const rapidjson::Value& json_value) {
+    nvinfer1::Dims dims{};
+    if (!json_value.IsArray()) {
+        return dims;
+    }
+    dims.nbDims = static_cast<int>(json_value.Size());
+    for (rapidjson::SizeType i = 0; i < json_value.Size(); ++i) {
+        dims.d[i] = static_cast<int>(json_value[i].GetInt64());
+    }
+    return dims;
+}
+
+/***
+ *
+ * @param builder
+ * @param network
+ * @param config
+ * @param profile_json
+ * @return
+ */
+static bool setup_optimization_profiles(
+    nvinfer1::IBuilder* builder,
+    nvinfer1::INetworkDefinition* network,
+    nvinfer1::IBuilderConfig* config,
+    const std::string& profile_json) {
+    if (profile_json.empty()) {
+        return true;
+    }
+
+    rapidjson::Document doc;
+    doc.Parse(profile_json.c_str());
+    if (doc.HasParseError() || !doc.IsArray()) {
+        LOG(ERROR) << "invalid optimization profile json: " << profile_json;
+        return false;
+    }
+
+    auto* profile = builder->createOptimizationProfile();
+    if (nullptr == profile) {
+        LOG(ERROR) << "create optimization profile failed";
+        return false;
+    }
+
+    for (const auto& item : doc.GetArray()) {
+        if (!item.HasMember("name") || !item.HasMember("min") || !item.HasMember("opt") || !item.HasMember("max")) {
+            LOG(ERROR) << "profile entry must contain name/min/opt/max fields";
+            return false;
+        }
+        std::string input_name = item["name"].GetString();
+        auto min_dims = to_trt_dims(item["min"]);
+        auto opt_dims = to_trt_dims(item["opt"]);
+        auto max_dims = to_trt_dims(item["max"]);
+        if (min_dims.nbDims <= 0) {
+            LOG(ERROR) << "invalid min dims for input: " << input_name;
+            return false;
+        }
+        profile->setDimensions(
+            input_name.c_str(), nvinfer1::OptProfileSelector::kMIN, min_dims);
+        profile->setDimensions(
+            input_name.c_str(), nvinfer1::OptProfileSelector::kOPT, opt_dims);
+        profile->setDimensions(
+            input_name.c_str(), nvinfer1::OptProfileSelector::kMAX, max_dims);
+        LOG(INFO) << "set optimization profile for input: " << input_name
+                  << ", min: " << TrtHelper::dims_to_string(min_dims)
+                  << ", opt: " << TrtHelper::dims_to_string(opt_dims)
+                  << ", max: " << TrtHelper::dims_to_string(max_dims);
+    }
+
+    config->addOptimizationProfile(profile);
+    return true;
+}
 
 /***
  *
@@ -96,10 +176,11 @@ Onnx2TrtModelBuilder::Impl::Impl() {
 StatusCode Onnx2TrtModelBuilder::Impl::build_engine_file(
         const std::string &input_onnx_file_path,
         const std::string &output_engine_file_path,
-        jinq::models::trt_helper::TRT_PRECISION_MODE fp_mode) {
+        jinq::models::trt_helper::TRT_PRECISION_MODE fp_mode,
+        const std::string& profile_json) {
     // convert engine file out
     std::shared_ptr<nvinfer1::IHostMemory> engine_out;
-    auto status = build_engine(input_onnx_file_path, &engine_out, fp_mode);
+    auto status = build_engine(input_onnx_file_path, &engine_out, fp_mode, profile_json);
     if (status != StatusCode::OK) {
         LOG(ERROR) << "build engine file from onnx file failed";
         return StatusCode::TRT_CONVERT_ONNX_MODEL_FAILED;
@@ -128,7 +209,8 @@ StatusCode Onnx2TrtModelBuilder::Impl::build_engine_file(
 StatusCode Onnx2TrtModelBuilder::Impl::build_engine(
     const std::string &input_file_path,
     std::shared_ptr<nvinfer1::IHostMemory> *output,
-    jinq::models::trt_helper::TRT_PRECISION_MODE precision) {
+    jinq::models::trt_helper::TRT_PRECISION_MODE precision,
+    const std::string& profile_json) {
     // construct infer builder
     std::unique_ptr<nvinfer1::IBuilder> builder(nvinfer1::createInferBuilder(*_m_trt_logger));
     const auto explicit_batch = 1U << static_cast<uint32_t>(
@@ -161,6 +243,10 @@ StatusCode Onnx2TrtModelBuilder::Impl::build_engine(
         return StatusCode::TRT_CONVERT_ONNX_MODEL_FAILED;
     }
     LOG(INFO) << "start building and serializing engine, coffee time ...";
+    if (!setup_optimization_profiles(builder.get(), network.get(), config.get(), profile_json)) {
+        LOG(ERROR) << "setup optimization profiles failed";
+        return StatusCode::TRT_CONVERT_ONNX_MODEL_FAILED;
+    }
     std::shared_ptr<nvinfer1::IHostMemory> serialized(builder->buildSerializedNetwork(*network, *config));
     if (nullptr == serialized) {
         LOG(ERROR) << "could not build serialized engine";
@@ -198,8 +284,9 @@ Onnx2TrtModelBuilder::~Onnx2TrtModelBuilder() = default;
 StatusCode Onnx2TrtModelBuilder::build_engine_file(
     const std::string& input_onnx_file_path,
     const std::string& output_engine_file_path,
-    jinq::models::trt_helper::TRT_PRECISION_MODE fp_mode) {
-    return _m_pimpl->build_engine_file(input_onnx_file_path, output_engine_file_path, fp_mode);
+    jinq::models::trt_helper::TRT_PRECISION_MODE fp_mode,
+    const std::string& profile_json) {
+    return _m_pimpl->build_engine_file(input_onnx_file_path, output_engine_file_path, fp_mode, profile_json);
 }
 }
 }

@@ -10,6 +10,7 @@
 #include <opencv2/opencv.hpp>
 #include "glog/logging.h"
 #include "MNN/Interpreter.hpp"
+#include "onnxruntime/onnxruntime_cxx_api.h"
 
 #include "common/cv_utils.h"
 #include "common/time_stamp.h"
@@ -146,11 +147,26 @@ class MsOcrNet<INPUT, OUTPUT>::Impl {
 
     /***
      *
+     * @param config
+     * @return
+     */
+    StatusCode init_onnx(const toml::value& config);
+
+    /***
+     *
      * @param in
      * @param out
      * @return
      */
     StatusCode run(const INPUT& in, OUTPUT& out);
+
+    /***
+     *
+     * @param in
+     * @param out
+     * @return
+     */
+    StatusCode onnx_run(const INPUT& in, OUTPUT& out);
 
     /***
      *
@@ -161,6 +177,28 @@ class MsOcrNet<INPUT, OUTPUT>::Impl {
     };
 
   private:
+    enum BackendType {
+        MNN = 0,
+        ONNX = 1,
+    };
+
+    struct ONNXParams {
+        std::string model_file_path;
+        Ort::Env env{ORT_LOGGING_LEVEL_WARNING, ""};
+        Ort::SessionOptions session_options;
+        Ort::Session* session = nullptr;
+        Ort::AllocatorWithDefaultOptions allocator;
+        int thread_nums = 1;
+        std::string device = "cpu";
+        int device_id = 0;
+        std::vector<const char*> input_node_names;
+        std::vector<std::vector<int64_t>> input_node_shapes;
+        std::vector<const char*> output_node_names;
+        std::vector<std::vector<int64_t>> output_node_shapes;
+    };
+
+    BackendType _m_backend_type = MNN;
+    ONNXParams _m_onnx_params;
     // model file path
     std::string _m_model_file_path;
     // MNN Interpreter
@@ -202,6 +240,18 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& 
     }
 
     toml::value cfg_content = config.at("MSOCRNET");
+
+    // backend type dispatch
+    if (config.contains("BACKEND_DICT") && cfg_content.contains("backend_type")) {
+        auto backend_dict = config.at("BACKEND_DICT");
+        auto backend_name = cfg_content.at("backend_type").as_string();
+        _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].as_integer());
+    }
+    if (_m_backend_type == ONNX) {
+        auto onnx_status = init_onnx(config.at("MSOCRNET_ONNX"));
+        _m_successfully_initialized = (onnx_status == StatusCode::OK);
+        return onnx_status;
+    }
 
     // init model threads nums
     if (!cfg_content.contains("model_threads_num")) {
@@ -296,9 +346,6 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& 
     _m_input_size_host.width = _m_input_tensor->width();
     _m_input_size_host.height = _m_input_tensor->height();
 
-    _m_input_tensor->print();
-    _m_output_tensor->print();
-
     if (!cfg_content.contains("model_input_image_size")) {
         LOG(WARNING) << "Config doesn\'t contain model_input_image_size filed, using default value [1024, 512]";
         _m_input_size_user.width = 2048;
@@ -313,6 +360,132 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& 
     _m_successfully_initialized = true;
     LOG(INFO) << "MSOCRNet detection model: " << FilePathUtil::get_file_name(_m_model_file_path)
               << " initialization complete!!!";
+    return StatusCode::OK;
+}
+
+/***
+*
+* @param config
+* @return
+ */
+template<typename INPUT, typename OUTPUT>
+StatusCode MsOcrNet<INPUT, OUTPUT>::Impl::init_onnx(const toml::value& config) {
+    // init onnx runtime configs
+    _m_onnx_params.model_file_path = config.at("model_file_path").as_string();
+    if (!FilePathUtil::is_file_exist(_m_onnx_params.model_file_path)) {
+        LOG(ERROR) << "MsOcrNet onnx model file path: " << _m_onnx_params.model_file_path << " not exists";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    bool use_gpu = false;
+    _m_onnx_params.device = config.at("compute_backend").as_string();
+    if (std::strcmp(_m_onnx_params.device.c_str(), "cuda") == 0) {
+        use_gpu = true;
+        _m_onnx_params.device_id = config.at("gpu_device_id").as_integer();
+    }
+    _m_onnx_params.thread_nums = config.at("model_threads_num").as_integer();
+    _m_onnx_params.session_options = Ort::SessionOptions();
+    _m_onnx_params.session_options.SetIntraOpNumThreads(_m_onnx_params.thread_nums);
+    _m_onnx_params.session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+    _m_onnx_params.session_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+    if (use_gpu) {
+        OrtCUDAProviderOptions cuda_options;
+        cuda_options.device_id = _m_onnx_params.device_id;
+        cuda_options.cudnn_conv_algo_search = OrtCudnnConvAlgoSearchDefault;
+        cuda_options.gpu_mem_limit = 0;
+        cuda_options.arena_extend_strategy = 1;
+        cuda_options.do_copy_in_default_stream = 1;
+        cuda_options.has_user_compute_stream = 0;
+        cuda_options.default_memory_arena_cfg = nullptr;
+        _m_onnx_params.session_options.AppendExecutionProvider_CUDA(cuda_options);
+        _m_onnx_params.session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+    }
+    _m_onnx_params.session = new Ort::Session(
+        _m_onnx_params.env, _m_onnx_params.model_file_path.c_str(), _m_onnx_params.session_options);
+
+    // init input/output node info
+    auto input_nodes_counts = _m_onnx_params.session->GetInputCount();
+    for (size_t i = 0; i < input_nodes_counts; ++i) {
+        auto input_node_name = strdup(_m_onnx_params.session->GetInputNameAllocated(i, _m_onnx_params.allocator).get());
+        auto input_node_shape = _m_onnx_params.session->GetInputTypeInfo(i).GetTensorTypeAndShapeInfo().GetShape();
+        _m_onnx_params.input_node_names.push_back(std::move(input_node_name));
+        _m_onnx_params.input_node_shapes.push_back(input_node_shape);
+    }
+    if (_m_onnx_params.input_node_shapes[0].size() >= 4 &&
+        _m_onnx_params.input_node_shapes[0][2] > 0) {
+        _m_input_size_host.height = static_cast<int>(_m_onnx_params.input_node_shapes[0][2]);
+        _m_input_size_host.width = static_cast<int>(_m_onnx_params.input_node_shapes[0][3]);
+    } else if (config.contains("model_input_image_size")) {
+        _m_input_size_host.height = static_cast<int>(
+            config.at("model_input_image_size").as_array()[0].as_integer());
+        _m_input_size_host.width = static_cast<int>(
+            config.at("model_input_image_size").as_array()[1].as_integer());
+    } else {
+        LOG(ERROR) << "dynamic onnx input requires model_input_image_size field";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    auto output_nodes_counts = _m_onnx_params.session->GetOutputCount();
+    for (size_t i = 0; i < output_nodes_counts; ++i) {
+        auto output_node_name = strdup(_m_onnx_params.session->GetOutputNameAllocated(i, _m_onnx_params.allocator).get());
+        auto output_node_shape = _m_onnx_params.session->GetOutputTypeInfo(i).GetTensorTypeAndShapeInfo().GetShape();
+        _m_onnx_params.output_node_names.push_back(std::move(output_node_name));
+        _m_onnx_params.output_node_shapes.push_back(output_node_shape);
+    }
+
+    return StatusCode::OK;
+}
+
+/***
+*
+* @param in
+* @param out
+* @return
+ */
+template<typename INPUT, typename OUTPUT>
+StatusCode MsOcrNet<INPUT, OUTPUT>::Impl::onnx_run(const INPUT& in, OUTPUT& out) {
+    // transform external input into internal input
+    auto internal_in = msocrnet_impl::transform_input(in);
+    if (!internal_in.input_image.data || internal_in.input_image.empty()) {
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
+
+    // preprocess image
+    _m_input_size_user = internal_in.input_image.size();
+    cv::Mat preprocessed_image = preprocess_image(internal_in.input_image);
+    auto input_image_chw_data = CvUtils::convert_to_chw_vec(preprocessed_image);
+
+    // prepare input tensor
+    auto memory_info = Ort::MemoryInfo::CreateCpu(
+        OrtAllocatorType::OrtDeviceAllocator, OrtMemType::OrtMemTypeDefault);
+    std::vector<int64_t> input_shape = {1, 3, _m_input_size_host.height, _m_input_size_host.width};
+    auto input_tensor = Ort::Value::CreateTensor<float>(
+        memory_info, input_image_chw_data.data(), input_image_chw_data.size(),
+        input_shape.data(), input_shape.size());
+    std::vector<Ort::Value> input_tensors;
+    input_tensors.push_back(std::move(input_tensor));
+
+    // run session
+    auto output_tensors = _m_onnx_params.session->Run(
+        Ort::RunOptions{nullptr}, _m_onnx_params.input_node_names.data(), input_tensors.data(),
+        input_tensors.size(), _m_onnx_params.output_node_names.data(), _m_onnx_params.output_node_names.size());
+
+    // copy output tensor values (int64 argmax) into int32 mask
+    auto& out_tensor = output_tensors[0];
+    auto out_shape = out_tensor.GetTensorTypeAndShapeInfo().GetShape();
+    auto* out_data = out_tensor.template GetTensorMutableData<int64_t>();
+    auto out_counts = static_cast<int>(out_shape[1] * out_shape[2]);
+    cv::Mat seg_mask(_m_input_size_host, CV_32SC1, cv::Scalar(0));
+    for (auto idx = 0; idx < out_counts; ++idx) {
+        seg_mask.at<int32_t>(idx) = static_cast<int32_t>(out_data[idx]);
+    }
+    cv::Mat resized_mask;
+    cv::resize(seg_mask, resized_mask, _m_input_size_user, 0.0, 0.0, cv::INTER_NEAREST);
+
+    // transform internal output into external output
+    msocrnet_impl::internal_output internal_out;
+    internal_out.segmentation_result = resized_mask.clone();
+    out = msocrnet_impl::transform_output<OUTPUT>(internal_out);
+
     return StatusCode::OK;
 }
 
@@ -355,6 +528,10 @@ cv::Mat MsOcrNet<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& input_ima
  */
 template<typename INPUT, typename OUTPUT>
 StatusCode MsOcrNet<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
+    if (_m_backend_type == ONNX) {
+        return onnx_run(in, out);
+    }
+
     // transform external input into internal input
     auto internal_in = msocrnet_impl::transform_input(in);
 
@@ -380,7 +557,9 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
 
     // transform internal output into external output
     msocrnet_impl::internal_output internal_out;
-    internal_out.segmentation_result = result_image;
+    // clone the result to avoid referencing the MNN host tensor memory which
+    // will be released when output_tensor_user is destructed
+    internal_out.segmentation_result = result_image.clone();
     out = msocrnet_impl::transform_output<OUTPUT>(internal_out);
 
     return StatusCode::OK;

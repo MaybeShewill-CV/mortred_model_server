@@ -342,6 +342,9 @@ cv::Mat YoloV8Detector<INPUT, OUTPUT>::Impl::preprocess_image(
         tmp.convertTo(tmp, CV_32FC3);
     }
 
+    // normalize to [0, 1] as the onnx model expects
+    tmp /= 255.0;
+
     return tmp;
 }
 
@@ -360,8 +363,8 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::maybe_reallocate_input_device_me
     if (current_input_image_ele_size == current_input_binding_volume) {
         return StatusCode::OK;
     }
-    // reallocate input device memory
-    uint32_t bytes = current_input_image_ele_size * sizeof(uint8_t);
+    // reallocate input device memory (input data is float)
+    uint32_t bytes = current_input_image_ele_size * sizeof(float);
     if (nullptr != _m_trt_params.input_device) {
         cudaFree(_m_trt_params.input_device);
     }
@@ -491,8 +494,8 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::init_trt(const toml::value& cfg)
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    // setup input host/device memory
-    auto memo_size = _m_trt_params.input_binding.volume() * sizeof(uint8_t);
+    // setup input host/device memory (input data is float)
+    auto memo_size = _m_trt_params.input_binding.volume() * sizeof(float);
     auto cuda_status = cudaMalloc(&_m_trt_params.input_device, memo_size);
     if (cuda_status != cudaSuccess) {
         LOG(ERROR) << "allocate device memory for input image failed, err str: " << cudaGetErrorString(cuda_status);
@@ -561,7 +564,7 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::trt_run(const INPUT& in, OUTPUT&
 
     // maybe reallocate device memory
     maybe_reallocate_input_device_memory(preprocessed_image);
-    auto input_mem_size = input_binding.volume() * sizeof(uint8_t);
+    auto input_mem_size = input_binding.volume() * sizeof(float);
 
     // H2D data transfer
     auto cuda_status = cudaMemcpyAsync(

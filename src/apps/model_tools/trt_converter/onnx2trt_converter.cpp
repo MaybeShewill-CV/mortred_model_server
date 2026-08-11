@@ -8,6 +8,8 @@
 
 #include <string>
 #include <chrono>
+#include <fstream>
+#include <sstream>
 
 #include <glog/logging.h>
 
@@ -28,7 +30,7 @@ int main(int argc, char** argv) {
 
     if (argc < 3) {
         LOG(INFO) << "wrong usage";
-        LOG(INFO) << "exe onnx_file_path out_engine_file_path [fp_mode]";
+        LOG(INFO) << "exe onnx_file_path out_engine_file_path [fp_mode] [profile_json_path]";
         return -1;
     }
 
@@ -44,10 +46,22 @@ int main(int argc, char** argv) {
         fp_mode = static_cast<TRT_PRECISION_MODE>(std::stoi(argv[3]));
     }
 
+    std::string profile_json;
+    if (argc >= 5) {
+        std::ifstream profile_file(argv[4]);
+        if (!profile_file.is_open()) {
+            LOG(ERROR) << "profile json file: " << argv[4] << " not exists";
+            return -1;
+        }
+        std::stringstream buffer;
+        buffer << profile_file.rdbuf();
+        profile_json = buffer.str();
+    }
+
     Onnx2TrtModelBuilder converter;
     auto t_start = std::chrono::system_clock::now();
     auto status = converter.build_engine_file(
-            onnx_file_path, engine_file_path, fp_mode);
+            onnx_file_path, engine_file_path, fp_mode, profile_json);
     auto t_end = std::chrono::system_clock::now();
     auto t_cost = std::chrono::duration_cast<std::chrono::seconds>(t_end - t_start).count();
     if (status != StatusCode::OK) {
