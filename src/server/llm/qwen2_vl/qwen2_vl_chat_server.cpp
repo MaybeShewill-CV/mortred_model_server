@@ -431,7 +431,9 @@ void Qwen2VLChatServer::Impl::complete_chat(seriex_ctx* ctx) {
     if (status == StatusCode::OK) {
         return;
     } else {
-        auto err_msg = fmt::format("complete chat failed, status: {}", std::to_string(status));
+        auto err_msg = fmt::format("complete chat failed, status: {}, msg: {}",
+                                   std::to_string(status),
+                                   jinq::common::error_code_to_str(status));
         ctx->err_msg = err_msg;
         ctx->err_state = status;
         LOG(ERROR) << (err_msg);
