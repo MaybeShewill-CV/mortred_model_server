@@ -25,6 +25,7 @@
 
 #include "common/status_code.h"
 #include "common/file_path_util.h"
+#include "common/llm_request_parser.h"
 #include "models/model_io_define.h"
 #include "models/llm/llm_datatype.hpp"
 #include "models/llm/qwen2_vl/qwen2_vl.h"
@@ -331,39 +332,16 @@ StatusCode Qwen2VLChatServer::Impl::parse_request(const protocol::HttpRequest* r
     }
 
     std::string req_body = protocol::HttpUtil::decode_chunked_body(req);
-    rapidjson::Document doc;
-    doc.Parse(req_body.c_str());
-    if (!doc.IsObject()) {
+    auto parsed_req = jinq::common::parse_llm_chat_request(req_body);
+    if (!parsed_req.is_valid) {
         task->is_valid = false;
         LOG(ERROR) << fmt::format("parse request body failed, invalid json str: {}", req_body);
         return StatusCode::SERVER_RUN_FAILED;
     }
 
-    if (doc.HasMember("task_id")) {
-        task->task_id = doc["task_id"].GetString();
-    }
-
-    if (!doc.HasMember("data")) {
-        task->is_valid = false;
-        LOG(ERROR) << (fmt::format("invalid json str: {}, missing \"data\" field", req_body));
-        return StatusCode::SERVER_RUN_FAILED;
-    }
-    auto messages = doc["data"].GetArray();
-    for (auto& msg : messages) {
-        std::string role = msg["role"].GetString();
-        std::string content;
-        if (role == "user") {
-            rapidjson::Document tmp_doc;
-            tmp_doc.SetObject();
-            tmp_doc.AddMember("content", msg["content"].GetArray(), tmp_doc.GetAllocator());
-            rapidjson::StringBuffer buffer;
-            rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-            tmp_doc.Accept(writer);
-            content = buffer.GetString();
-        } else {
-            content = msg["content"].GetString();
-        }
-        task->current_dialog.push_back({role, content});
+    task->task_id = parsed_req.task_id;
+    for (const auto& msg : parsed_req.messages) {
+        task->current_dialog.push_back({msg.first, msg.second});
     }
 
     return StatusCode::OK;

@@ -29,6 +29,7 @@ set(TEST_LIST
     json_request_parser_unittest
     blocking_worker_queue_unittest
     status_code_unittest
+    llm_request_parser_unittest
 )
 
 foreach(src ${TEST_LIST})
