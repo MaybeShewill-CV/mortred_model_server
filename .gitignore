@@ -48,3 +48,9 @@ cmake-build-release/
 
 # python cache
 *__pycache__*
+
+# web console app
+src/apps/web_console/backend/build/
+logs/
+generated_configs/
+logs/app_server.pid

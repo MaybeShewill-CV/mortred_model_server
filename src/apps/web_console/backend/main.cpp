@@ -1,0 +1,434 @@
+/************************************************
+ * Author: Codex
+ * File: main.cpp
+ * Mortred Model Server Web Console backend (Sogou workflow)
+ ************************************************/
+
+#include <workflow/WFHttpServer.h>
+#include <workflow/WFTaskFactory.h>
+#include <workflow/WFFacilities.h>
+#include <workflow/WFTask.h>
+#include <workflow/WFTaskError.h>
+#include <workflow/Workflow.h>
+#include <workflow/HttpUtil.h>
+#include <workflow/HttpMessage.h>
+
+#include <rapidjson/document.h>
+#include <rapidjson/writer.h>
+#include <rapidjson/stringbuffer.h>
+
+#include <algorithm>
+#include <cerrno>
+#include <cstdlib>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <unordered_map>
+#include <vector>
+#include <unistd.h>
+
+#include "catalog.h"
+#include "server_manager.h"
+
+using namespace mortred_web;
+
+static Catalog g_catalog;
+static ServerManager g_manager;
+static std::string g_project_root;
+static std::string g_frontend_dir;
+static std::string g_logs_dir;
+static std::string g_generated_dir;
+
+namespace {
+
+std::string resolve_project_root() {
+    const char* env_root = getenv("APP_PROJECT_ROOT");
+    if (env_root && *env_root) {
+        return std::string(env_root);
+    }
+    // /proc/self/exe -> <root>/(build/)?src/apps/web_console/backend/.../app_server
+    // walk up until we find the project root (contains _bin and 3rd_party)
+    char buf[4096];
+    ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    if (n > 0) {
+        buf[n] = '\0';
+        std::filesystem::path p(buf);
+        auto dir = p.parent_path();
+        for (int i = 0; i < 12 && !dir.empty(); ++i) {
+            std::error_code ec;
+            if (std::filesystem::exists(dir / "_bin", ec) &&
+                std::filesystem::exists(dir / "3rd_party", ec)) {
+                return dir.string();
+            }
+            dir = dir.parent_path();
+        }
+    }
+    return ".";
+}
+
+std::string read_file(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in.is_open()) {
+        return "";
+    }
+    std::stringstream ss;
+    ss << in.rdbuf();
+    return ss.str();
+}
+
+std::string content_type_for(const std::string& path) {
+    if (path.size() > 5 && path.substr(path.size() - 5) == ".html") return "text/html; charset=utf-8";
+    if (path.size() > 3 && path.substr(path.size() - 3) == ".js") return "application/javascript; charset=utf-8";
+    if (path.size() > 4 && path.substr(path.size() - 4) == ".css") return "text/css; charset=utf-8";
+    if (path.size() > 4 && path.substr(path.size() - 4) == ".png") return "image/png";
+    if (path.size() > 4 && path.substr(path.size() - 4) == ".svg") return "image/svg+xml";
+    if (path.size() > 4 && path.substr(path.size() - 4) == ".ico") return "image/x-icon";
+    if (path.size() > 4 && path.substr(path.size() - 4) == ".json") return "application/json; charset=utf-8";
+    return "application/octet-stream";
+}
+
+std::string uri_path(const std::string& uri) {
+    auto q = uri.find('?');
+    return q == std::string::npos ? uri : uri.substr(0, q);
+}
+
+std::string query_value(const std::string& uri, const std::string& key) {
+    auto q = uri.find('?');
+    if (q == std::string::npos) {
+        return "";
+    }
+    std::string query = uri.substr(q + 1);
+    size_t pos = 0;
+    while (pos < query.size()) {
+        auto amp = query.find('&', pos);
+        std::string pair = query.substr(pos, amp == std::string::npos ? std::string::npos : amp - pos);
+        auto eq = pair.find('=');
+        if (eq != std::string::npos && pair.substr(0, eq) == key) {
+            return pair.substr(eq + 1);
+        }
+        if (amp == std::string::npos) {
+            break;
+        }
+        pos = amp + 1;
+    }
+    return "";
+}
+
+size_t parse_size(const std::string& s, size_t def) {
+    if (s.empty()) {
+        return def;
+    }
+    try {
+        size_t v = static_cast<size_t>(std::stoull(s));
+        return v;
+    } catch (...) {
+        return def;
+    }
+}
+
+void reply_json(WFHttpTask* task, int code, const std::string& body) {
+    auto* resp = task->get_resp();
+    resp->set_status_code(std::to_string(code).c_str());
+    resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
+    resp->append_output_body(body.data(), body.size());
+}
+
+void reply_ok_json(WFHttpTask* task, const std::string& body) {
+    reply_json(task, 200, body);
+}
+
+std::string json_error(const std::string& msg) {
+    rapidjson::Document d;
+    d.SetObject();
+    rapidjson::Document::AllocatorType& a = d.GetAllocator();
+    d.AddMember("ok", false, a);
+    d.AddMember("error", rapidjson::Value(msg.c_str(), msg.size(), a), a);
+    rapidjson::StringBuffer buf;
+    rapidjson::Writer<rapidjson::StringBuffer> w(buf);
+    d.Accept(w);
+    return buf.GetString();
+}
+
+struct CatalogCtx {
+    struct Item {
+        const ServerEntry* entry = nullptr;
+        bool running = false;
+    };
+    std::vector<Item> items;
+    std::vector<std::string> running_ids;
+    std::unordered_map<std::string, bool> health;
+};
+
+void build_catalog_response(WFHttpTask* server_task, const std::shared_ptr<CatalogCtx>& ctx) {
+    rapidjson::Document d;
+    d.SetObject();
+    rapidjson::Document::AllocatorType& a = d.GetAllocator();
+
+    rapidjson::Value servers(rapidjson::kArrayType);
+    for (const auto& item : ctx->items) {
+        const auto& e = *item.entry;
+        rapidjson::Value v(rapidjson::kObjectType);
+        v.AddMember("id", rapidjson::Value(e.id.c_str(), e.id.size(), a), a);
+        v.AddMember("name", rapidjson::Value(e.name.c_str(), e.name.size(), a), a);
+        v.AddMember("category", rapidjson::Value(e.category.c_str(), e.category.size(), a), a);
+        v.AddMember("exe", rapidjson::Value(e.exe.c_str(), e.exe.size(), a), a);
+        v.AddMember("port", e.port, a);
+        v.AddMember("host", rapidjson::Value(e.host.c_str(), e.host.size(), a), a);
+        v.AddMember("uri", rapidjson::Value(e.uri.c_str(), e.uri.size(), a), a);
+        v.AddMember("type", rapidjson::Value(e.type.c_str(), e.type.size(), a), a);
+        v.AddMember("generated_config", e.generated_config, a);
+        v.AddMember("running", item.running, a);
+        v.AddMember("ready", item.running && g_manager.is_ready(e.id), a);
+        auto it = ctx->health.find(e.id);
+        v.AddMember("healthy", it != ctx->health.end() ? it->second : false, a);
+        servers.PushBack(v, a);
+    }
+    d.AddMember("servers", servers, a);
+    d.AddMember("ok", true, a);
+
+    rapidjson::StringBuffer buf;
+    rapidjson::Writer<rapidjson::StringBuffer> w(buf);
+    d.Accept(w);
+    reply_ok_json(server_task, buf.GetString());
+}
+
+void handle_catalog(WFHttpTask* server_task) {
+    auto ctx = std::make_shared<CatalogCtx>();
+    for (const auto& e : g_catalog.entries()) {
+        CatalogCtx::Item item;
+        item.entry = &e;
+        item.running = g_manager.is_running(e.id);
+        ctx->items.push_back(item);
+        ctx->health[e.id] = false;
+        if (item.running) {
+            ctx->running_ids.push_back(e.id);
+        }
+    }
+    if (ctx->running_ids.empty()) {
+        build_catalog_response(server_task, ctx);
+        return;
+    }
+
+    auto* pwork = Workflow::create_parallel_work([ctx, server_task](const ParallelWork*) {
+        build_catalog_response(server_task, ctx);
+    });
+    for (const auto& id : ctx->running_ids) {
+        const auto* e = g_catalog.find(id);
+        if (!e) {
+            continue;
+        }
+        std::string url = "http://127.0.0.1:" + std::to_string(e->port) + "/hello_world";
+        auto* t = WFTaskFactory::create_http_task(url, 0, 0, [ctx, id](WFHttpTask* t) {
+            ctx->health[id] = (t->get_state() == WFT_STATE_SUCCESS);
+        });
+        t->set_receive_timeout(2000);
+        t->set_send_timeout(-1);
+        pwork->add_series(Workflow::create_series_work(t, nullptr));
+    }
+    series_of(server_task)->push_back(pwork);
+}
+
+void handle_servers_action(WFHttpTask* server_task, const std::string& path) {
+    // /api/servers/{id}/start | /stop
+    std::string rest = path.substr(std::string("/api/servers/").size());
+    auto slash = rest.rfind('/');
+    if (slash == std::string::npos) {
+        reply_json(server_task, 400, json_error("bad path"));
+        return;
+    }
+    std::string id = rest.substr(0, slash);
+    std::string action = rest.substr(slash + 1);
+    const auto* e = g_catalog.find(id);
+    if (!e) {
+        reply_json(server_task, 404, json_error("unknown server id: " + id));
+        return;
+    }
+
+    rapidjson::Document d;
+    d.SetObject();
+    rapidjson::Document::AllocatorType& a = d.GetAllocator();
+    std::string err;
+    bool ok = false;
+    if (action == "start") {
+        ok = g_manager.start(*e, err);
+    } else if (action == "stop") {
+        ok = g_manager.stop(id, err);
+    } else {
+        reply_json(server_task, 400, json_error("unknown action: " + action));
+        return;
+    }
+    d.AddMember("ok", ok, a);
+    if (!err.empty()) {
+        d.AddMember("error", rapidjson::Value(err.c_str(), err.size(), a), a);
+    }
+    rapidjson::StringBuffer buf;
+    rapidjson::Writer<rapidjson::StringBuffer> w(buf);
+    d.Accept(w);
+    reply_ok_json(server_task, buf.GetString());
+}
+
+void handle_infer(WFHttpTask* server_task) {
+    std::string body = protocol::HttpUtil::decode_chunked_body(server_task->get_req());
+    rapidjson::Document doc;
+    doc.Parse(body.c_str());
+    if (doc.HasParseError() || !doc.IsObject() || !doc.HasMember("server_id") || !doc["server_id"].IsString()) {
+        reply_json(server_task, 400, json_error("body must contain string field server_id"));
+        return;
+    }
+    std::string id = doc["server_id"].GetString();
+    const auto* e = g_catalog.find(id);
+    if (!e) {
+        reply_json(server_task, 404, json_error("unknown server id: " + id));
+        return;
+    }
+    if (!g_manager.is_running(id)) {
+        reply_json(server_task, 409, json_error("server not running: " + id));
+        return;
+    }
+    if (!g_manager.is_ready(id)) {
+        reply_json(server_task, 409, json_error(
+            "模型尚未就绪（模型加载中或启动失败），请等待日志出现就绪标记后再试: " + id));
+        return;
+    }
+
+    std::string url = "http://127.0.0.1:" + std::to_string(e->port) + e->uri;
+    auto* client = WFTaskFactory::create_http_task(url, 0, 0, [server_task](WFHttpTask* t) {
+        auto* resp = server_task->get_resp();
+        if (t->get_state() != WFT_STATE_SUCCESS) {
+            // connection refused usually means the model server is still loading
+            // (port not bound yet); make the failure message actionable
+            int code = (t->get_error() == ECONNREFUSED) ? 503 : 502;
+            resp->set_status_code(std::to_string(code).c_str());
+            resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
+            std::string err = json_error(
+                "forward to model server failed (state " + std::to_string(t->get_state()) +
+                ", errno " + std::to_string(t->get_error()) + ": " +
+                (t->get_error() != 0 ? std::strerror(t->get_error()) : "unknown") +
+                "). 若为 503/连接被拒，通常是模型仍在加载，请等待日志显示就绪后再试。");
+            resp->append_output_body(err.data(), err.size());
+            return;
+        }
+        resp->set_status_code(t->get_resp()->get_status_code());
+        resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
+        const void* data = nullptr;
+        size_t size = 0;
+        t->get_resp()->get_parsed_body(&data, &size);
+        resp->append_output_body(data, size);
+    });
+    client->get_req()->set_method("POST");
+    client->get_req()->add_header_pair("Content-Type", "application/json; charset=utf-8");
+    client->get_req()->append_output_body(body.data(), body.size());
+    client->set_send_timeout(-1);
+    client->set_receive_timeout(180000);
+    series_of(server_task)->push_back(client);
+}
+
+void handle_logs(WFHttpTask* server_task, const std::string& path, const std::string& uri) {
+    std::string rest = path.substr(std::string("/api/logs/").size());
+    auto slash = rest.find('/');
+    if (slash != std::string::npos) {
+        rest = rest.substr(0, slash);
+    }
+    if (rest.empty()) {
+        reply_json(server_task, 400, json_error("missing server id"));
+        return;
+    }
+    size_t offset = parse_size(query_value(uri, "offset"), 0);
+    size_t limit = parse_size(query_value(uri, "limit"), 200);
+    if (limit > 1000) {
+        limit = 1000;
+    }
+
+    LogBuffer* buf = g_manager.logs(rest);
+    rapidjson::Document d;
+    d.SetObject();
+    rapidjson::Document::AllocatorType& a = d.GetAllocator();
+    size_t total = buf ? buf->size() : 0;
+    std::vector<std::string> lines;
+    if (buf) {
+        lines = buf->slice(offset, limit);
+    }
+    rapidjson::Value arr(rapidjson::kArrayType);
+    for (const auto& line : lines) {
+        arr.PushBack(rapidjson::Value(line.c_str(), line.size(), a), a);
+    }
+    d.AddMember("offset", static_cast<uint64_t>(offset), a);
+    d.AddMember("total", static_cast<uint64_t>(total), a);
+    d.AddMember("lines", arr, a);
+    rapidjson::StringBuffer sbuf;
+    rapidjson::Writer<rapidjson::StringBuffer> w(sbuf);
+    d.Accept(w);
+    reply_ok_json(server_task, sbuf.GetString());
+}
+
+void serve_static(WFHttpTask* server_task, const std::string& path) {
+    std::string rel = (path == "/" || path.empty()) ? "index.html" : path.substr(1);
+    // prevent path traversal
+    if (rel.find("..") != std::string::npos) {
+        reply_json(server_task, 400, json_error("bad path"));
+        return;
+    }
+    std::string file = g_frontend_dir + "/" + rel;
+    std::string content = read_file(file);
+    if (content.empty()) {
+        reply_json(server_task, 404, json_error("not found"));
+        return;
+    }
+    auto* resp = server_task->get_resp();
+    resp->set_status_code("200");
+    resp->add_header_pair("Content-Type", content_type_for(rel).c_str());
+    resp->append_output_body(content.data(), content.size());
+}
+
+void process(WFHttpTask* server_task) {
+    std::string uri = server_task->get_req()->get_request_uri();
+    std::string method = server_task->get_req()->get_method();
+    std::string path = uri_path(uri);
+
+    if (path == "/api/catalog") {
+        handle_catalog(server_task);
+    } else if (path == "/api/health") {
+        reply_ok_json(server_task, "{\"ok\":true}");
+    } else if (path.rfind("/api/servers/", 0) == 0) {
+        handle_servers_action(server_task, path);
+    } else if (path == "/api/infer" && method == "POST") {
+        handle_infer(server_task);
+    } else if (path.rfind("/api/logs/", 0) == 0) {
+        handle_logs(server_task, path, uri);
+    } else if (path == "/" || path == "/index.html" || path == "/app.js" || path == "/style.css" ||
+               path == "/favicon.ico") {
+        serve_static(server_task, path);
+    } else {
+        reply_json(server_task, 404, json_error("not found"));
+    }
+}
+
+} // namespace
+
+int main() {
+    g_project_root = resolve_project_root();
+    g_frontend_dir = g_project_root + "/src/apps/web_console/frontend";
+    g_logs_dir = g_project_root + "/logs";
+    g_generated_dir = g_project_root + "/generated_configs";
+
+    if (!g_catalog.init(g_project_root, g_generated_dir)) {
+        fprintf(stderr, "catalog init failed, project root: %s\n", g_project_root.c_str());
+        return 1;
+    }
+    g_manager.init(g_catalog, g_project_root, g_logs_dir);
+
+    WFHttpServer server(process);
+    if (server.start(8787) == 0) {
+        fprintf(stderr, "Mortred Web Console listening on http://localhost:8787\n");
+        WFFacilities::WaitGroup wait_group(1);
+        wait_group.wait();
+        server.stop();
+    } else {
+        fprintf(stderr, "failed to start web console on port 8787\n");
+        return 1;
+    }
+    return 0;
+}
