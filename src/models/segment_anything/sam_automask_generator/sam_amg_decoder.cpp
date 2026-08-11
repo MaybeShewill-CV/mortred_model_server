@@ -8,7 +8,7 @@
 #include "sam_amg_decoder.h"
 
 #include "glog/logging.h"
-#include "stl_container/concurrentqueue.h"
+#include "stl_container/blockingconcurrentqueue.h"
 #include "TensorRT-8.6.1.6/NvInferRuntime.h"
 #include "workflow/WFFacilities.h"
 #include "workflow/Workflow.h"
@@ -126,7 +126,7 @@ class SamAmgDecoder::Impl {
         SamDecodeInput* input;
     };
     // worker queue
-    moodycamel::ConcurrentQueue<ThreadExecutor> _m_decoder_queue;
+    moodycamel::BlockingConcurrentQueue<ThreadExecutor> _m_decoder_queue;
     // worker queue size
     int _m_decoder_queue_size = 4;
     // parallel compute thread nums
@@ -659,7 +659,7 @@ void SamAmgDecoder::Impl::thread_decode_mask_proc(
     // get decoder
     auto t_start = std::chrono::high_resolution_clock::now();
     ThreadExecutor decode_executor{};
-    while (!_m_decoder_queue.try_dequeue(decode_executor)) {}
+    _m_decoder_queue.wait_dequeue(decode_executor);
     auto context = decode_executor.context;
     auto decoder_input = decode_executor.input;
     auto t_end = std::chrono::high_resolution_clock::now();
