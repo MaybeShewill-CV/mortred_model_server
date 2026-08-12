@@ -29,6 +29,7 @@
 #include "models/model_io_define.h"
 #include "models/llm/llm_datatype.hpp"
 #include "models/llm/qwen2_vl/qwen2_vl.h"
+#include "server/base_server_impl.h"
 
 namespace jinq {
 namespace server {
@@ -84,97 +85,58 @@ std::string generate_uuid() {
 }
 }
 
+using QwenVlModelPtr = std::unique_ptr<models::llm::qwen2_vl::Qwen2VL<bytes_input, std_vlm_output> >;
+
 /************ Impl Declaration ************/
 
-class Qwen2VLChatServer::Impl {
-  public:
-    /***
-    *
-    * @param cfg_file_path
-    * @return
-     */
-    StatusCode init(const decltype(toml::parse("")) &config);
-
+class Qwen2VLChatServer::Impl : public BaseAiServerImpl<QwenVlModelPtr, std::string> {
+public:
     /***
      *
-     * @param task
-     */
-    void serve_process(WFHttpTask* task);
-
-    /***
-     *
+     * @param cfg_file_path
      * @return
      */
-    bool is_successfully_initialized() const {
-        return _m_successfully_initialized;
-    };
+    StatusCode init(const decltype(toml::parse("")) &config) override;
 
-  public:
-    // server params
-    int max_connection_nums = 200;
-    int peer_resp_timeout = 15 * 1000;
-    int compute_threads = -1;
-    int handler_threads = 25;
-    size_t request_size_limit = -1;
-
-  private:
-    // init flag
-    bool _m_successfully_initialized = false;
-    // task count
-    std::atomic<size_t> _m_received_jobs{0};
-    std::atomic<size_t> _m_finished_jobs{0};
-    std::atomic<size_t> _m_waiting_jobs{0};
-    // model run timeout
-    int _m_model_run_timeout = 500; // ms
-    // server uri
-    std::string _m_server_uri;
-    // llama3 generator
-    std::unique_ptr<ModelPtr > _m_generator;
-
-  private:
-    // dialog task
-    struct dialog_task {
-        std::string task_id;
-        bool is_valid = true;
-        std::string uuid;
-        Dialog current_dialog;
-    };
-    // workflow series context
-    struct seriex_ctx {
-        protocol::HttpResponse* response = nullptr;
-        StatusCode err_state = StatusCode::OK;
-        std::string err_msg = "success";
-        std::string task_id;
-        std::string task_received_ts;
-        std::string task_finished_ts;
-        bool is_task_req_valid = false;
-        std::string gen_out;
-        dialog_task* d_task = nullptr;
-    };
-    // dialog cache
-    std::unordered_map<std::string, Dialog> _m_user_history_dialogs;
-
-  private:
+protected:
     /***
      *
      * @param req
+     * @return
+     */
+    task_request parse_task_request(const protocol::HttpRequest* req) override;
+
+    /***
+     *
+     * @param req
+     * @param ctx
+     */
+    void do_work(const task_request& req, series_ctx* ctx) override;
+
+    /***
+     *
+     * @param task_id
+     * @param status
+     * @param model_output
+     * @return
+     */
+    std::string make_response_body(
+        const std::string& task_id,
+        const StatusCode& status,
+        const std::string& model_output) override;
+
+    /***
+     *
      * @param task
      * @return
      */
-    static StatusCode parse_request(const protocol::HttpRequest* req, dialog_task* task);
+    bool handle_custom_endpoint(WFHttpTask* task) override;
 
-    /***
-     *
-     * @param task
-     * @param ctx
-     */
-    void complete_chat(seriex_ctx* ctx);
-
-    /***
-     *
-     * @param task
-     */
-    void complete_chat_cb(const WFGoTask* task);
+private:
+    // qwen2-vl generator：单 worker，入队 _m_working_queue 实现串行化与会话亲和
+    QwenVlModelPtr _m_generator;
+    // dialog cache
+    std::unordered_map<std::string, Dialog> _m_user_history_dialogs;
 };
 
 /************ Impl Implementation ************/
@@ -185,7 +147,6 @@ class Qwen2VLChatServer::Impl {
  * @return
  */
 StatusCode Qwen2VLChatServer::Impl::init(const decltype(toml::parse("")) &config) {
-    // init working queue
     if (!config.contains("QWEN2_VL_CHAT_SERVER")) {
         LOG(ERROR) << (fmt::format(R"(config file doesn't contain filed: "QWEN2_VL_CHAT_SERVER")"));
         return StatusCode::SERVER_INIT_FAILED;
@@ -206,6 +167,9 @@ StatusCode Qwen2VLChatServer::Impl::init(const decltype(toml::parse("")) &config
         return StatusCode::SERVER_INIT_FAILED;
     }
 
+    // 单 worker 入队：所有聊天请求经阻塞队列串行执行，保证 KV cache 会话亲和且无数据竞争
+    _m_working_queue.enqueue(std::move(_m_generator));
+
     // init server uri
     if (!server_section.contains("server_url")) {
         LOG(ERROR) << "missing server uri field";
@@ -221,6 +185,8 @@ StatusCode Qwen2VLChatServer::Impl::init(const decltype(toml::parse("")) &config
     compute_threads = static_cast<int>(server_section.at("compute_threads").as_integer());
     handler_threads = static_cast<int>(server_section.at("handler_threads").as_integer());
     request_size_limit = static_cast<size_t>(server_section.at("request_size_limit").as_integer());
+    // 多模态生成时间无界，不设推理超时
+    _m_model_run_timeout = -1;
 
     _m_successfully_initialized = true;
     LOG(INFO) << "qwen2-vl chat server init successfully";
@@ -229,39 +195,199 @@ StatusCode Qwen2VLChatServer::Impl::init(const decltype(toml::parse("")) &config
 
 /***
  *
- * @param task
+ * @param req
+ * @return
  */
-void Qwen2VLChatServer::Impl::serve_process(WFHttpTask* task) {
-    // welcome message
-    if (strcmp(task->get_req()->get_request_uri(), "/welcome") == 0) {
-        task->get_resp()->append_output_body("<html>Welcome to jinq ai server</html>");
+Qwen2VLChatServer::Impl::task_request Qwen2VLChatServer::Impl::parse_task_request(const protocol::HttpRequest* req) {
+    task_request result;
+
+    // 会话 id：优先复用 cookie，否则生成新 uuid
+    protocol::HttpHeaderMap map(req);
+    if (!map.key_exists("cookie")) {
+        result.session_id = server_internal_impl::generate_uuid();
+    } else {
+        result.session_id = map.get("cookie");
+    }
+
+    std::string req_body = protocol::HttpUtil::decode_chunked_body(req);
+    result.raw_body = req_body;
+
+    auto parsed_req = jinq::common::parse_llm_chat_request(req_body);
+    result.task_id = parsed_req.task_id;
+    result.is_valid = parsed_req.is_valid;
+    result.parse_status = parsed_req.parse_status;
+    if (parsed_req.is_valid) {
+        Dialog dialog;
+        for (const auto& msg : parsed_req.messages) {
+            dialog.push_back({msg.first, msg.second});
+        }
+        result.payload = dialog;
+    }
+    return result;
+}
+
+/***
+ *
+ * @param req
+ * @param ctx
+ */
+void Qwen2VLChatServer::Impl::do_work(const task_request& req, series_ctx* ctx) {
+    // 解析失败：直接按解析错误码返回统一信封
+    if (!req.is_valid) {
+        ctx->model_run_status = req.parse_status;
+        ctx->task_finished_ts = Timestamp::now().to_format_str();
+        WFTaskFactory::count_by_name("release_ctx");
         return;
     }
-    // hello world message
-    else if (strcmp(task->get_req()->get_request_uri(), "/hello_world") == 0) {
-        task->get_resp()->append_output_body("<html>Hello World !!!</html>");
-        return;
+
+    // 取单 worker：天然串行化聊天请求（会话亲和 + 互斥）
+    QwenVlModelPtr worker;
+    _m_working_queue.wait_dequeue(worker);
+
+    // task 时间戳
+    ctx->task_id = req.task_id;
+    ctx->is_task_req_valid = req.is_valid;
+    auto task_receive_ts = Timestamp::now();
+    ctx->task_received_ts = task_receive_ts.to_format_str();
+
+    // 本轮新消息（KV cache 已保留历史上下文）
+    auto current_dialog = std::any_cast<Dialog>(req.payload);
+
+    // generate response
+    auto status = worker->chat_completion(current_dialog, ctx->model_output);
+
+    // 上下文超限时 shift kv cache 后重试
+    if (status == StatusCode::LLM_CONTEXT_SIZE_EXCEEDED) {
+        auto model_stat = worker->get_model_stat();
+        LOG(INFO) << fmt::format("context size: {}", model_stat.n_ctx_size);
+        LOG(INFO) << fmt::format("kv cache used cell counts: {} before shift", model_stat.kv_cache_cell_nums);
+        LOG(INFO) << fmt::format("kv cache token counts: {} before shift", model_stat.kv_cache_token_nums);
+
+        // shift kv cache
+        const int n_keep = 1; // begin of the text token(bos token)
+        const int n_left = model_stat.kv_cache_cell_nums - n_keep;
+        const int n_discard = n_left / 2;
+        LOG(INFO) << fmt::format("context shift, n_keep = {}, n_left = {}, n_discard = {}", n_keep, n_left, n_discard);
+        int try_times = 5;
+        while (try_times--) {
+            status = worker->kv_cache_shift_top_n(n_discard, 0);
+            if (status == StatusCode::OK) {
+                break;
+            }
+        }
+        if (try_times < 0) {
+            LOG(ERROR) << "shift kv cache failed, clear kv cache";
+            worker->clear_kv_cache_cell();
+        }
+        model_stat = worker->get_model_stat();
+        LOG(INFO) << fmt::format("kv cache used cell counts: {} after shift", model_stat.kv_cache_cell_nums);
+        LOG(INFO) << fmt::format("kv cache token counts: {} after shift", model_stat.kv_cache_token_nums);
+
+        // re-generate response
+        status = worker->chat_completion(current_dialog, ctx->model_output);
     }
-    // check model stat
-    else if (strcmp(task->get_req()->get_request_uri(), "/check_model_stat") == 0) {
-        auto model_stat = _m_generator->get_model_stat();
+
+    // cache history dialog
+    if (status == StatusCode::OK) {
+        Dialog turn_dialog = current_dialog;
+        turn_dialog.push_back(ChatMessage({"assistant", ctx->model_output}));
+        auto history_iter = _m_user_history_dialogs.find(req.session_id);
+        if (history_iter != _m_user_history_dialogs.end()) {
+            _m_user_history_dialogs[req.session_id] += turn_dialog;
+        } else {
+            _m_user_history_dialogs.insert(std::make_pair(req.session_id, turn_dialog));
+        }
+        // 回写会话 cookie，供客户端后续请求维持会话
+        ctx->response->add_header_pair("Set-Cookie", req.session_id);
+    }
+
+    ctx->model_run_status = status;
+
+    // restore worker queue
+    _m_working_queue.enqueue(std::move(worker));
+
+    // update ctx
+    auto task_finish_ts = Timestamp::now();
+    ctx->task_finished_ts = task_finish_ts.to_format_str();
+    ctx->worker_run_time_consuming = (task_finish_ts - task_receive_ts) * 1000;
+    WFTaskFactory::count_by_name("release_ctx");
+}
+
+/***
+ *
+ * @param task_id
+ * @param status
+ * @param model_output
+ * @return
+ */
+std::string Qwen2VLChatServer::Impl::make_response_body(
+    const std::string& task_id,
+    const StatusCode& status,
+    const std::string& model_output) {
+    rapidjson::Document doc;
+    doc.SetObject();
+    rapidjson::Document::AllocatorType& allocator = doc.GetAllocator();
+    doc.AddMember("code", static_cast<int>(status), allocator);
+    std::string msg = "success";
+    if (status != StatusCode::OK) {
+        if (status == StatusCode::VLM_QWEN_PARSE_IMAGE_URL_FAILED) {
+            msg = "fetch image bytes data from url failed, plz check if url exists or valid";
+        } else {
+            msg = jinq::common::error_code_to_str(status);
+        }
+    }
+    doc.AddMember("msg", rapidjson::Value(msg.c_str(), msg.size(), allocator), allocator);
+    rapidjson::Value data;
+    data.SetObject();
+    data.AddMember("task_id", rapidjson::Value(task_id.c_str(), task_id.size(), allocator), allocator);
+    data.AddMember("response", rapidjson::Value(model_output.c_str(), model_output.size(), allocator), allocator);
+    doc.AddMember("data", data, allocator);
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    doc.Accept(writer);
+    return buffer.GetString();
+}
+
+/***
+ *
+ * @param task
+ * @return
+ */
+bool Qwen2VLChatServer::Impl::handle_custom_endpoint(WFHttpTask* task) {
+    const char* uri = task->get_req()->get_request_uri();
+
+    // 通过单 worker 队列访问 generator，避免与聊天推理并发竞争
+    auto access_generator = [this]() -> QwenVlModelPtr {
+        QwenVlModelPtr worker;
+        _m_working_queue.wait_dequeue(worker);
+        return worker;
+    };
+    auto release_generator = [this](QwenVlModelPtr& worker) {
+        _m_working_queue.enqueue(std::move(worker));
+    };
+
+    if (strcmp(uri, "/check_model_stat") == 0) {
+        auto worker = access_generator();
+        auto model_stat = worker->get_model_stat();
         task->get_resp()->append_output_body(fmt::format(
             "<html>n_ctx: {}\n kv cache used: {}\n clip_embedding_dims: {}\n clip_hidden_size: {} \n</html>",
-            model_stat.n_ctx_size, model_stat.kv_cache_cell_nums, model_stat.clip_embedding_dims, model_stat.clip_hidden_size));
-        return;
-    }
-    // clear kv cache
-    else if (strcmp(task->get_req()->get_request_uri(), "/clear_kv_cache") == 0) {
-        _m_generator->clear_kv_cache_cell();
-        auto model_stat = _m_generator->get_model_stat();
+            model_stat.n_ctx_size, model_stat.kv_cache_cell_nums,
+            model_stat.clip_embedding_dims, model_stat.clip_hidden_size));
+        release_generator(worker);
+        return true;
+    } else if (strcmp(uri, "/clear_kv_cache") == 0) {
+        auto worker = access_generator();
+        worker->clear_kv_cache_cell();
+        auto model_stat = worker->get_model_stat();
         task->get_resp()->append_output_body(fmt::format(
             "<html>n_ctx: {}\n kv cache used: {}\n clip_embedding_dims: {}\n clip_hidden_size: {} \n</html>",
-            model_stat.n_ctx_size, model_stat.kv_cache_cell_nums, model_stat.clip_embedding_dims, model_stat.clip_hidden_size));
-        return;
-    }
-    // clear kv cache
-    else if (strcmp(task->get_req()->get_request_uri(), "/get_context_perf") == 0) {
-        auto data = _m_generator->get_context_perf();
+            model_stat.n_ctx_size, model_stat.kv_cache_cell_nums,
+            model_stat.clip_embedding_dims, model_stat.clip_hidden_size));
+        release_generator(worker);
+        return true;
+    } else if (strcmp(uri, "/get_context_perf") == 0) {
+        auto worker = access_generator();
+        auto data = worker->get_context_perf();
         const double t_end_ms = 1e-3 * static_cast<double>(ggml_time_us());
         auto perf_str = fmt::format(
             "load time = {} ms\n"
@@ -275,188 +401,10 @@ void Qwen2VLChatServer::Impl::serve_process(WFHttpTask* task) {
         );
         task->get_resp()->append_output_body(fmt::format(
             "<html>context perf data: {}</html>", perf_str));
-        return;
+        release_generator(worker);
+        return true;
     }
-    // model service
-    else if (strcmp(task->get_req()->get_request_uri(), _m_server_uri.c_str()) == 0) {
-        // parse request body
-        auto* req = task->get_req();
-        auto* resp = task->get_resp();
-        auto* d_task = new dialog_task;
-        parse_request(req, d_task);
-        if (!d_task->is_valid) {
-            task->get_resp()->append_output_body(fmt::format("invalid request data: {}", protocol::HttpUtil::decode_chunked_body(req)));
-            return;
-        }
-        _m_waiting_jobs++;
-        _m_received_jobs++;
-
-        // init series work
-        auto* series = series_of(task);
-        auto* ctx = new seriex_ctx;
-        ctx->response = resp;
-        ctx->d_task = d_task;
-        series->set_context(ctx);
-        series->set_callback([&](const SeriesWork * s_work) -> void {
-            auto* s_ctx = (seriex_ctx*)s_work->get_context();
-            delete s_ctx;
-        });
-
-        auto&& go_proc = [this](auto&& PH1) {
-            complete_chat(std::forward<decltype(PH1)>(PH1));
-        };
-        auto* go_task = WFTaskFactory::create_go_task(_m_server_uri, go_proc, ctx);
-        auto&& go_proc_cb = [this](auto&& PH1) {
-            complete_chat_cb(std::forward<decltype(PH1)>(PH1));
-        };
-        go_task->set_callback(go_proc_cb);
-
-        *series << go_task;
-        return;
-    }
-}
-
-/***
- *
- * @param req
- * @param task
- * @return
- */
-StatusCode Qwen2VLChatServer::Impl::parse_request(const protocol::HttpRequest* req, dialog_task* task) {
-    // set task uuid
-    protocol::HttpHeaderMap map(req);
-    if (!map.key_exists("cookie")) {
-        task->uuid = server_internal_impl::generate_uuid();
-    } else {
-        task->uuid = map.get("cookie");
-    }
-
-    std::string req_body = protocol::HttpUtil::decode_chunked_body(req);
-    auto parsed_req = jinq::common::parse_llm_chat_request(req_body);
-    if (!parsed_req.is_valid) {
-        task->is_valid = false;
-        LOG(ERROR) << fmt::format("parse request body failed, invalid json str: {}", req_body);
-        return StatusCode::SERVER_RUN_FAILED;
-    }
-
-    task->task_id = parsed_req.task_id;
-    for (const auto& msg : parsed_req.messages) {
-        task->current_dialog.push_back({msg.first, msg.second});
-    }
-
-    return StatusCode::OK;
-}
-
-/***
- *
- * @param task
- * @param ctx
- */
-void Qwen2VLChatServer::Impl::complete_chat(seriex_ctx* ctx) {
-    // fetch current dialog
-    auto task = ctx->d_task;
-    Dialog dialog = task->current_dialog;
-
-    // generate response
-    auto status = _m_generator->chat_completion(task->current_dialog, ctx->gen_out);
-    if (status == StatusCode::VLM_QWEN_PARSE_IMAGE_URL_FAILED) {
-        ctx->err_state = status;
-        ctx->err_msg = "fetch image bytes data from url failed, plz check if url exists or valid";
-        return;
-    }
-
-    // cache history dialog
-    ChatMessage msg = {"assistant", ctx->gen_out};
-    dialog.push_back(msg);
-    if (_m_user_history_dialogs.find(task->uuid) != _m_user_history_dialogs.end()) {
-        _m_user_history_dialogs[task->uuid] += dialog;
-    } else {
-        _m_user_history_dialogs.insert(std::make_pair(task->uuid, dialog));
-    }
-
-    // check if context exceeded occurred
-    if (status == StatusCode::LLM_CONTEXT_SIZE_EXCEEDED) {
-        auto model_stat = _m_generator->get_model_stat();
-        LOG(INFO) << fmt::format("context size: {}", model_stat.n_ctx_size);
-        LOG(INFO) << fmt::format("kv cache used cell counts: {} before shift", model_stat.kv_cache_cell_nums);
-        LOG(INFO) << fmt::format("kv cache token counts: {} before shift", model_stat.kv_cache_token_nums);
-
-        // shift kv cache
-        const int n_keep = 1; // begin of the text token(bos token)
-        const int n_left = model_stat.kv_cache_cell_nums - n_keep;
-        const int n_discard = n_left / 2;
-        LOG(INFO) << fmt::format("context shift, n_keep = {}, n_left = {}, n_discard = {}", n_keep, n_left, n_discard);
-        int try_times = 5;
-        while (try_times--) {
-            status = _m_generator->kv_cache_shift_top_n(n_discard, 0);
-            if (status == StatusCode::OK) {
-                break;
-            }
-        }
-        if (try_times < 0) {
-            LOG(ERROR) << "shift kv cache failed, clear kv cache";
-            _m_generator->clear_kv_cache_cell();
-        }
-        model_stat = _m_generator->get_model_stat();
-        LOG(INFO) << fmt::format("kv cache used cell counts: {} after shift", model_stat.kv_cache_cell_nums);
-        LOG(INFO) << fmt::format("kv cache token counts: {} after shift", model_stat.kv_cache_token_nums);
-
-        // re-generate response
-        status = _m_generator->chat_completion(task->current_dialog, ctx->gen_out);
-    }
-
-    // fill in ctx messages
-    if (status == StatusCode::OK) {
-        return;
-    } else {
-        auto err_msg = fmt::format("complete chat failed, status: {}, msg: {}",
-                                   std::to_string(status),
-                                   jinq::common::error_code_to_str(status));
-        ctx->err_msg = err_msg;
-        ctx->err_state = status;
-        LOG(ERROR) << (err_msg);
-        return;
-    }
-}
-
-/***
- *
- * @param g_task
- */
-void Qwen2VLChatServer::Impl::complete_chat_cb(const WFGoTask* task) {
-    auto state = task->get_state();
-    auto error = task->get_error();
-    auto* ctx = (seriex_ctx*)series_of(task)->get_context();
-
-    // fill response
-    if (state != WFT_STATE_SUCCESS) {
-        ctx->err_state = StatusCode::SERVER_RUN_FAILED;
-        ctx->err_msg = fmt::format("workflow go task exec failed, state: {}, msg: {}", state, WFGlobal::get_error_string(state, error));
-        LOG(ERROR) << ctx->err_msg;
-    }
-
-    std::string task_id = ctx->is_task_req_valid ? ctx->task_id : "";
-    rapidjson::Document doc;
-    doc.SetObject();
-    rapidjson::Document::AllocatorType& allocator = doc.GetAllocator();
-    doc.AddMember("code", ctx->err_state, allocator);
-    doc.AddMember("msg", rapidjson::Value(ctx->err_msg.c_str(), allocator), allocator);
-    rapidjson::Value data;
-    data.SetObject();
-    data.AddMember("task_id",  rapidjson::Value(task_id.c_str(), allocator), allocator);
-    data.AddMember("response",  rapidjson::Value(ctx->gen_out.c_str(), allocator), allocator);
-    doc.AddMember("data", data, allocator);
-    rapidjson::StringBuffer buffer;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-    doc.Accept(writer);
-
-    auto response_body = buffer.GetString();
-    ctx->response->append_output_body(response_body);
-    ctx->response->add_header_pair("Set-Cookie", ctx->d_task->uuid);
-
-    // update task count
-    _m_finished_jobs++;
-    _m_waiting_jobs--;
+    return false;
 }
 
 /************* Export Function Sets *************/

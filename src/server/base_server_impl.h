@@ -8,7 +8,9 @@
 #ifndef MORTRED_MODEL_SERVER_BASE_SERVER_IMPL_H
 #define MORTRED_MODEL_SERVER_BASE_SERVER_IMPL_H
 
+#include <any>
 #include <chrono>
+#include <type_traits>
 
 #include "glog/logging.h"
 #include "toml/toml.hpp"
@@ -29,6 +31,7 @@
 #include "common/status_code.h"
 #include "common/time_stamp.h"
 #include "common/file_path_util.h"
+#include "models/base_model.h"
 #include "models/model_io_define.h"
 
 namespace jinq {
@@ -39,6 +42,16 @@ using jinq::common::FilePathUtil;
 using jinq::common::Md5;
 using jinq::common::StatusCode;
 using jinq::common::Timestamp;
+
+/***
+ * CV 图像 worker 特征：unique_ptr<BaseAiModel<base64_input, OUTPUT>> 走基类默认 do_work；
+ * 其他 worker（如 LLM）必须覆写 do_work。
+ */
+template <typename WORKER>
+struct is_cv_worker : std::false_type {};
+
+template <typename INPUT, typename OUTPUT>
+struct is_cv_worker<std::unique_ptr<jinq::models::BaseAiModel<INPUT, OUTPUT> > > : std::true_type {};
 
 template<typename WORKER, typename MODEL_OUTPUT>
 class BaseAiServerImpl {
@@ -110,7 +123,7 @@ protected:
     std::string _m_server_uri;
 
 protected:
-    struct seriex_ctx {
+    struct series_ctx {
         protocol::HttpResponse* response = nullptr;
         StatusCode model_run_status = StatusCode::OK;
         std::string task_id;
@@ -122,16 +135,35 @@ protected:
         MODEL_OUTPUT model_output;
     };
 
-    using cls_request = jinq::common::JsonRequest;
+    /***
+     * 通用任务请求：由各服务自行解析并填充 payload（CV：base64 图像字符串；LLM：Dialog 等）。
+     */
+    struct task_request {
+        std::string task_id;
+        std::string session_id;
+        bool is_valid = false;
+        StatusCode parse_status = StatusCode::OK;
+        std::string raw_body;
+        std::any payload;
+    };
 
 protected:
     /***
      *
-     * @param req_body
+     * @param req
      * @return
      */
-    virtual cls_request parse_task_request(const std::string& req_body) {
-        return jinq::common::parse_json_request(req_body);
+    virtual task_request parse_task_request(const protocol::HttpRequest* req) {
+        std::string req_body = protocol::HttpUtil::decode_chunked_body(req);
+        auto parsed = jinq::common::parse_json_request(req_body);
+
+        task_request result;
+        result.task_id = parsed.task_id;
+        result.is_valid = parsed.is_valid;
+        result.parse_status = parsed.parse_status;
+        result.raw_body = req_body;
+        result.payload = parsed.image_content;
+        return result;
     };
 
     /***
@@ -147,11 +179,21 @@ protected:
         const MODEL_OUTPUT& model_output) = 0;
 
     /***
+     * 自定义扩展端点钩子：URI 不属于 welcome/hello/model 时调用，
+     * 返回 true 表示已处理，false 则回 404。
+     * @param task
+     * @return
+     */
+    virtual bool handle_custom_endpoint(WFHttpTask* task) {
+        return false;
+    }
+
+    /***
      *
      * @param req
      * @param ctx
      */
-    virtual void do_work(const cls_request& req, seriex_ctx* ctx);
+    virtual void do_work(const task_request& req, series_ctx* ctx);
 
     /***
      *
@@ -186,34 +228,37 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         // parse request body
         auto* req = task->get_req();
         auto* resp = task->get_resp();
-        auto cls_task_req = parse_task_request(protocol::HttpUtil::decode_chunked_body(req));
+        auto task_req = parse_task_request(req);
         _m_waiting_jobs++;
         _m_received_jobs++;
         // init series work
         auto* series = series_of(task);
-        auto* ctx = new seriex_ctx;
+        auto* ctx = new series_ctx;
         ctx->response = resp;
         series->set_context(ctx);
         // do model work
         auto&& go_proc = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work, this, std::placeholders::_1, std::placeholders::_2);
         WFGoTask* serve_task = nullptr;
         if (_m_model_run_timeout <= 0) {
-            serve_task = WFTaskFactory::create_go_task(_m_server_uri, go_proc, cls_task_req, ctx);
+            serve_task = WFTaskFactory::create_go_task(_m_server_uri, go_proc, task_req, ctx);
         } else {
             serve_task = WFTaskFactory::create_timedgo_task(
-                0, _m_model_run_timeout * 1e6, _m_server_uri, go_proc, cls_task_req, ctx);
+                0, _m_model_run_timeout * 1e6, _m_server_uri, go_proc, task_req, ctx);
         }
         auto&& go_proc_cb = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb, this, serve_task);
         serve_task->set_callback(go_proc_cb);
         *series << serve_task;
         WFCounterTask* counter = WFTaskFactory::create_counter_task("release_ctx", 1, [](const WFCounterTask* task){
-            delete (seriex_ctx*)series_of(task)->get_context();
+            delete (series_ctx*)series_of(task)->get_context();
         });
         *series << counter;
         return;
     }
     // not found valid url
     else {
+        if (handle_custom_endpoint(task)) {
+            return;
+        }
         task->get_resp()->append_output_body("<html>404 Not Found</html>");
         return;
     }
@@ -229,8 +274,8 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
  */
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
-    const BaseAiServerImpl::cls_request& req,
-    BaseAiServerImpl::seriex_ctx* ctx) {
+    const BaseAiServerImpl::task_request& req,
+    BaseAiServerImpl::series_ctx* ctx) {
     // get model worker
     WORKER worker;
     auto find_worker_start_ts = Timestamp::now();
@@ -257,13 +302,21 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     auto task_receive_ts = Timestamp::now();
     ctx->task_received_ts = task_receive_ts.to_format_str();
 
-    // construct model input
-    models::io_define::common_io::base64_input model_input{req.image_content};
-
-    // do model inference
-    StatusCode status;
+    // construct model input: 默认实现为 CV 图像路径（payload 为 base64 字符串）
+    models::io_define::common_io::base64_input model_input;
+    StatusCode status = StatusCode::OK;
     if (req.is_valid) {
-        status = worker->run(model_input, ctx->model_output);
+        if constexpr (is_cv_worker<WORKER>::value) {
+            try {
+                model_input.input_image_content = std::any_cast<std::string>(req.payload);
+                status = worker->run(model_input, ctx->model_output);
+            } catch (const std::bad_any_cast&) {
+                status = StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+            }
+        } else {
+            // 非 CV worker 必须覆写 do_work
+            status = StatusCode::MODEL_RUN_SESSION_FAILED;
+        }
         if (status != StatusCode::OK) {
             LOG(ERROR) << "worker run failed";
         }
@@ -292,7 +345,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
     auto state = task->get_state();
-    auto* ctx = (seriex_ctx*)series_of(task)->get_context();
+    auto* ctx = (series_ctx*)series_of(task)->get_context();
 
     // fill response
     StatusCode status;
