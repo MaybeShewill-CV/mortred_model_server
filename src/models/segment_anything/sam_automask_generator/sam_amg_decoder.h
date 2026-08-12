@@ -14,11 +14,13 @@
 #include "toml/toml.hpp"
 
 #include "common/status_code.h"
-#include "sam_automask_generator.h"
+#include "models/model_io_define.h"
 
 namespace jinq {
 namespace models {
 namespace segment_anything {
+
+using AmgMaskOutput = jinq::models::io_define::segment_anything::sam_amg_output;
 
 /***
  *

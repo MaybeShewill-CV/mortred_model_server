@@ -14,16 +14,24 @@
 #include <opencv2/opencv.hpp>
 #include "toml/toml.hpp"
 
+#include "models/base_model.h"
+#include "models/model_io_define.h"
 #include "common/status_code.h"
 
 namespace jinq {
 namespace models {
 namespace segment_anything {
 
+namespace sam_predictor_impl {
+class Impl;
+}
+
 /***
- * 
+ * SAM 提示分割模型：图像 + bbox/点提示 -> 分割 mask。
+ * 统一入口 run(INPUT, OUTPUT)，按 bboxes/prompt_points 非空自动分发。
  */
-class SamPredictor {
+template <typename INPUT, typename OUTPUT>
+class SamPredictor : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
   public:
     /***
     * constructor
@@ -34,7 +42,7 @@ class SamPredictor {
     /***
      *
      */
-    ~SamPredictor();
+    ~SamPredictor() override;
 
     /***
     * constructor
@@ -54,7 +62,15 @@ class SamPredictor {
      * @param toml
      * @return
      */
-    jinq::common::StatusCode init(const decltype(toml::parse(""))& cfg);
+    jinq::common::StatusCode init(const decltype(toml::parse(""))& cfg) override;
+
+    /***
+     *
+     * @param input
+     * @param output
+     * @return
+     */
+    jinq::common::StatusCode run(const INPUT& input, OUTPUT& output) override;
 
     /***
      *
@@ -93,14 +109,15 @@ class SamPredictor {
      * if model successfully initialized
      * @return
      */
-    bool is_successfully_initialized() const;
+    bool is_successfully_initialized() const override;
 
   private:
-    class Impl;
-    std::unique_ptr<Impl> _m_pimpl;
+    std::unique_ptr<sam_predictor_impl::Impl> _m_pimpl;
 };
 }
 }
 }
+
+#include "sam_predictor.inl"
 
 #endif // MORTRED_MODEL_SERVER_SAM_PREDICTOR_H

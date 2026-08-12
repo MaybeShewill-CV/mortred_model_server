@@ -1,11 +1,13 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: fast_sam_segmentor.cpp
+ * File: fast_sam_segmentor.inl
  * Date: 23-9-14
  ************************************************/
 
-#include "fast_sam_segmentor.h"
+#include <cstring>
+#include <type_traits>
+#include <algorithm>
 
 #include "glog/logging.h"
 #include "MNN/Interpreter.hpp"
@@ -24,6 +26,59 @@ using jinq::common::Timestamp;
 
 namespace segment_anything {
 
+namespace fast_sam_segmentor_impl {
+
+using internal_input = cv::Mat;
+using internal_output = jinq::models::io_define::segment_anything::std_fast_sam_output;
+
+/***
+ * 将用户自定义输入转换为模型内部输入
+ */
+template <typename INPUT>
+typename std::enable_if<
+    std::is_same<INPUT, std::decay<internal_input>::type>::value, internal_input>::type
+transform_input(const INPUT& in) {
+    return in;
+}
+
+template <typename INPUT>
+typename std::enable_if<
+    std::is_same<INPUT, std::decay<jinq::models::io_define::common_io::mat_input>::type>::value,
+    internal_input>::type
+transform_input(const INPUT& in) {
+    return in.input_image;
+}
+
+template <typename INPUT>
+typename std::enable_if<
+    std::is_same<INPUT, std::decay<jinq::models::io_define::common_io::file_input>::type>::value,
+    internal_input>::type
+transform_input(const INPUT& in) {
+    if (!FilePathUtil::is_file_exist(in.input_image_path)) {
+        DLOG(WARNING) << "input image: " << in.input_image_path << " not exist";
+        return internal_input{};
+    }
+    return cv::imread(in.input_image_path, cv::IMREAD_UNCHANGED);
+}
+
+template <typename INPUT>
+typename std::enable_if<
+    std::is_same<INPUT, std::decay<jinq::models::io_define::common_io::base64_input>::type>::value,
+    internal_input>::type
+transform_input(const INPUT& in) {
+    return CvUtils::decode_base64_str_into_cvmat(in.input_image_content);
+}
+
+/***
+ * 将模型内部输出转换为用户自定义输出
+ */
+template <typename OUTPUT>
+typename std::enable_if<
+    std::is_same<OUTPUT, std::decay<internal_output>::type>::value, internal_output>::type
+transform_output(const internal_output& internal_out) {
+    return internal_out;
+}
+
 struct _m_preds_bbox {
     cv::Rect2f bbox;
     float score = 0.0;
@@ -31,7 +86,10 @@ struct _m_preds_bbox {
     int class_id = 0;
 };
 
-class FastSamSegmentor::Impl {
+/***
+ * FastSAM 分割模型内部实现
+ */
+class Impl {
   public:
     /***
      *
@@ -135,7 +193,7 @@ class FastSamSegmentor::Impl {
  * @param cfg
  * @return
  */
-StatusCode FastSamSegmentor::Impl::init(const decltype(toml::parse("")) &cfg) {
+StatusCode Impl::init(const decltype(toml::parse("")) &cfg) {
     // init sam encoder configs
     auto cfg_content = cfg.at("FAST_SAM");
     _m_model_path = cfg_content["model_file_path"].as_string();
@@ -250,7 +308,7 @@ StatusCode FastSamSegmentor::Impl::init(const decltype(toml::parse("")) &cfg) {
  * @param everything_mask
  * @return
  */
-StatusCode FastSamSegmentor::Impl::everything(const cv::Mat& input_image, cv::Mat& everything_mask) {
+StatusCode Impl::everything(const cv::Mat& input_image, cv::Mat& everything_mask) {
     // check input image
     if (!input_image.data || input_image.empty()) {
         return StatusCode::MODEL_RUN_SESSION_FAILED;
@@ -302,7 +360,7 @@ StatusCode FastSamSegmentor::Impl::everything(const cv::Mat& input_image, cv::Ma
  * @param input_image
  * @return
  */
-cv::Mat FastSamSegmentor::Impl::preprocess_image(const cv::Mat &input_image) const {
+cv::Mat Impl::preprocess_image(const cv::Mat &input_image) const {
 
     auto input_node_h = _m_input_tensor_size.height;
     auto input_node_w = _m_input_tensor_size.width;
@@ -332,7 +390,7 @@ cv::Mat FastSamSegmentor::Impl::preprocess_image(const cv::Mat &input_image) con
  * @param mask
  * @return
  */
-cv::Mat FastSamSegmentor::Impl::upscale_mask_image(const cv::Mat &mask) {
+cv::Mat Impl::upscale_mask_image(const cv::Mat &mask) {
     auto input_node_h = _m_preds_mask_size.height;
     auto input_node_w = _m_preds_mask_size.width;
     auto ori_img_width = static_cast<float>(_m_input_image_size.width);
@@ -359,7 +417,7 @@ cv::Mat FastSamSegmentor::Impl::upscale_mask_image(const cv::Mat &mask) {
  * @param merged_mask
  * @return
  */
-StatusCode FastSamSegmentor::Impl::decode_all_masks(std::vector<cv::Mat>& preds_masks) {
+StatusCode Impl::decode_all_masks(std::vector<cv::Mat>& preds_masks) {
     // decode output preds info
     auto output_tensor_0_host = MNN::Tensor(_m_output_tensor_0, _m_output_tensor_0->getDimensionType());
     _m_output_tensor_0->copyToHostTensor(&output_tensor_0_host);
@@ -470,45 +528,43 @@ StatusCode FastSamSegmentor::Impl::decode_all_masks(std::vector<cv::Mat>& preds_
     return StatusCode::OJBK;
 }
 
-/***
- *
- */
-FastSamSegmentor::FastSamSegmentor() {
-    _m_pimpl = std::make_unique<Impl>();
+} // namespace fast_sam_segmentor_impl
+
+/************ Template Implementation ************/
+
+template <typename INPUT, typename OUTPUT>
+FastSamSegmentor<INPUT, OUTPUT>::FastSamSegmentor() {
+    _m_pimpl = std::make_unique<fast_sam_segmentor_impl::Impl>();
 }
 
-/***
- *
- */
-FastSamSegmentor::~FastSamSegmentor() = default;
+template <typename INPUT, typename OUTPUT>
+FastSamSegmentor<INPUT, OUTPUT>::~FastSamSegmentor() = default;
 
-/***
- *
- * @param cfg
- * @return
- */
-StatusCode FastSamSegmentor::init(const decltype(toml::parse("")) &cfg) {
+template <typename INPUT, typename OUTPUT>
+jinq::common::StatusCode FastSamSegmentor<INPUT, OUTPUT>::init(const decltype(toml::parse("")) &cfg) {
     return _m_pimpl->init(cfg);
 }
 
-/***
- *
- * @param input_image
- * @param everything_mask
- * @return
- */
-StatusCode FastSamSegmentor::everything(const cv::Mat &input_image, cv::Mat &everything_mask) {
+template <typename INPUT, typename OUTPUT>
+jinq::common::StatusCode FastSamSegmentor<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
+    auto internal_input = fast_sam_segmentor_impl::transform_input(input);
+    fast_sam_segmentor_impl::internal_output internal_output;
+    auto status = _m_pimpl->everything(internal_input, internal_output);
+    output = fast_sam_segmentor_impl::transform_output<OUTPUT>(internal_output);
+    return status;
+}
+
+template <typename INPUT, typename OUTPUT>
+jinq::common::StatusCode FastSamSegmentor<INPUT, OUTPUT>::everything(
+    const cv::Mat &input_image, cv::Mat &everything_mask) {
     return _m_pimpl->everything(input_image, everything_mask);
 }
 
-/***
- *
- * @return
- */
-bool FastSamSegmentor::is_successfully_initialized() const {
+template <typename INPUT, typename OUTPUT>
+bool FastSamSegmentor<INPUT, OUTPUT>::is_successfully_initialized() const {
     return _m_pimpl->is_successfully_initialized();
 }
 
-}
-}
-}
+} // namespace segment_anything
+} // namespace models
+} // namespace jinq

@@ -15,12 +15,14 @@
 
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
-#include "models/segment_anything/sam_automask_generator/sam_automask_generator.h"
+#include "models/model_io_define.h"
+#include "factory/sam_task.h"
 
 using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;
-using jinq::models::segment_anything::SamAutoMaskGenerator;
-using jinq::models::segment_anything::AmgMaskOutput;
+using jinq::models::io_define::common_io::mat_input;
+using jinq::models::io_define::segment_anything::std_sam_amg_output;
+using jinq::factory::segment_anything::create_sam_auto_mask_generator;
 
 int main(int argc, char** argv) {
     google::InstallFailureSignalHandler();
@@ -48,17 +50,18 @@ int main(int argc, char** argv) {
         return -1;
     }
     auto cfg = toml::parse(config_file_path);
-    SamAutoMaskGenerator sam_amg;
-    sam_amg.init(cfg);
-    if (!sam_amg.is_successfully_initialized()) {
+    auto sam_amg = create_sam_auto_mask_generator<mat_input, std_sam_amg_output>("sam_amg");
+    sam_amg->init(cfg);
+    if (!sam_amg->is_successfully_initialized()) {
         LOG(ERROR) << "init sam auto mask generator model failed";
         return -1;
     }
 
-    AmgMaskOutput amg_output;
+    std_sam_amg_output amg_output;
+    mat_input model_input{input_image};
     for (auto idx = 0; idx < 10; ++idx) {
         auto t_start = std::chrono::high_resolution_clock::now();
-        sam_amg.generate(input_image, amg_output);
+        sam_amg->run(model_input, amg_output);
         auto t_end = std::chrono::high_resolution_clock::now();
         auto t_cost = std::chrono::duration_cast<std::chrono::milliseconds >(t_end - t_start).count();
         LOG(INFO) << " .... iter: " << idx + 1 << ", amg generate mask cost time: " << t_cost << " ms";

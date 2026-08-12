@@ -14,16 +14,23 @@
 #include <opencv2/opencv.hpp>
 #include "toml/toml.hpp"
 
+#include "models/base_model.h"
+#include "models/model_io_define.h"
 #include "common/status_code.h"
 
 namespace jinq {
 namespace models {
 namespace segment_anything {
 
+namespace fast_sam_segmentor_impl {
+class Impl;
+}
+
 /***
- *
+ * FastSAM 分割模型：图像 -> everything mask。
  */
-class FastSamSegmentor {
+template <typename INPUT, typename OUTPUT>
+class FastSamSegmentor : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
   public:
     /***
     * constructor
@@ -34,7 +41,7 @@ class FastSamSegmentor {
     /***
      *
      */
-    ~FastSamSegmentor();
+    ~FastSamSegmentor() override;
 
     /***
     * constructor
@@ -54,7 +61,15 @@ class FastSamSegmentor {
      * @param toml
      * @return
      */
-    jinq::common::StatusCode init(const decltype(toml::parse(""))& cfg);
+    jinq::common::StatusCode init(const decltype(toml::parse(""))& cfg) override;
+
+    /***
+     *
+     * @param input
+     * @param output
+     * @return
+     */
+    jinq::common::StatusCode run(const INPUT& input, OUTPUT& output) override;
 
     /***
      *
@@ -68,14 +83,15 @@ class FastSamSegmentor {
      * if model successfully initialized
      * @return
      */
-    bool is_successfully_initialized() const;
+    bool is_successfully_initialized() const override;
 
   private:
-    class Impl;
-    std::unique_ptr<Impl> _m_pimpl;
+    std::unique_ptr<fast_sam_segmentor_impl::Impl> _m_pimpl;
 };
 }
 }
 }
+
+#include "fast_sam_segmentor.inl"
 
 #endif // MORTRED_MODEL_SERVER_FAST_SAM_SEGMENTOR_H

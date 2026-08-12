@@ -1,11 +1,11 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: SamAutoMaskGenerator.cpp
+ * File: sam_automask_generator.inl
  * Date: 23-10-13
  ************************************************/
 
-#include "sam_automask_generator.h"
+#include <type_traits>
 
 #include "glog/logging.h"
 
@@ -28,7 +28,63 @@ namespace segment_anything {
 using jinq::models::segment_anything::SamVitEncoder;
 using jinq::models::segment_anything::SamAmgDecoder;
 
-class SamAutoMaskGenerator::Impl {
+namespace sam_automask_generator_impl {
+
+using internal_input = cv::Mat;
+using internal_output = jinq::models::io_define::segment_anything::sam_amg_output;
+
+/***
+ * 将用户自定义输入转换为模型内部输入
+ */
+template <typename INPUT>
+typename std::enable_if<
+    std::is_same<INPUT, std::decay<internal_input>::type>::value, internal_input>::type
+transform_input(const INPUT& in) {
+    return in;
+}
+
+template <typename INPUT>
+typename std::enable_if<
+    std::is_same<INPUT, std::decay<jinq::models::io_define::common_io::mat_input>::type>::value,
+    internal_input>::type
+transform_input(const INPUT& in) {
+    return in.input_image;
+}
+
+template <typename INPUT>
+typename std::enable_if<
+    std::is_same<INPUT, std::decay<jinq::models::io_define::common_io::file_input>::type>::value,
+    internal_input>::type
+transform_input(const INPUT& in) {
+    if (!FilePathUtil::is_file_exist(in.input_image_path)) {
+        DLOG(WARNING) << "input image: " << in.input_image_path << " not exist";
+        return internal_input{};
+    }
+    return cv::imread(in.input_image_path, cv::IMREAD_UNCHANGED);
+}
+
+template <typename INPUT>
+typename std::enable_if<
+    std::is_same<INPUT, std::decay<jinq::models::io_define::common_io::base64_input>::type>::value,
+    internal_input>::type
+transform_input(const INPUT& in) {
+    return CvUtils::decode_base64_str_into_cvmat(in.input_image_content);
+}
+
+/***
+ * 将模型内部输出转换为用户自定义输出
+ */
+template <typename OUTPUT>
+typename std::enable_if<
+    std::is_same<OUTPUT, std::decay<internal_output>::type>::value, internal_output>::type
+transform_output(const internal_output& internal_out) {
+    return internal_out;
+}
+
+/***
+ * SAM 自动 mask 生成模型内部实现
+ */
+class Impl {
   public:
     /***
      *
@@ -89,7 +145,7 @@ class SamAutoMaskGenerator::Impl {
  * @param cfg
  * @return
  */
-StatusCode SamAutoMaskGenerator::Impl::init(const decltype(toml::parse("")) &cfg) {
+StatusCode Impl::init(const decltype(toml::parse("")) &cfg) {
     // init sam encoder
     _m_sam_encoder = std::make_unique<SamVitEncoder>();
     _m_sam_encoder->init(cfg);
@@ -130,7 +186,7 @@ StatusCode SamAutoMaskGenerator::Impl::init(const decltype(toml::parse("")) &cfg
  * @param amg_output
  * @return
  */
-StatusCode SamAutoMaskGenerator::Impl::generate(const cv::Mat &input_image, AmgMaskOutput &amg_output) {
+StatusCode Impl::generate(const cv::Mat &input_image, AmgMaskOutput &amg_output) {
     // encode input image
     std::vector<float> img_embeds;
     auto status = _m_sam_encoder->encode(input_image, img_embeds);
@@ -152,45 +208,43 @@ StatusCode SamAutoMaskGenerator::Impl::generate(const cv::Mat &input_image, AmgM
     return StatusCode::OK;
 }
 
-/***
- *
- */
-SamAutoMaskGenerator::SamAutoMaskGenerator() {
-    _m_pimpl = std::make_unique<Impl>();
+} // namespace sam_automask_generator_impl
+
+/************ Template Implementation ************/
+
+template <typename INPUT, typename OUTPUT>
+SamAutoMaskGenerator<INPUT, OUTPUT>::SamAutoMaskGenerator() {
+    _m_pimpl = std::make_unique<sam_automask_generator_impl::Impl>();
 }
 
-/***
- *
- */
-SamAutoMaskGenerator::~SamAutoMaskGenerator() = default;
+template <typename INPUT, typename OUTPUT>
+SamAutoMaskGenerator<INPUT, OUTPUT>::~SamAutoMaskGenerator() = default;
 
-/***
- *
- * @param cfg
- * @return
- */
-StatusCode SamAutoMaskGenerator::init(const decltype(toml::parse("")) &cfg) {
+template <typename INPUT, typename OUTPUT>
+jinq::common::StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::init(const decltype(toml::parse("")) &cfg) {
     return _m_pimpl->init(cfg);
 }
 
-/***
- *
- * @param input_image
- * @param amg_output
- * @return
- */
-StatusCode SamAutoMaskGenerator::generate(const cv::Mat &input_image, AmgMaskOutput &amg_output) {
+template <typename INPUT, typename OUTPUT>
+jinq::common::StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
+    auto internal_input = sam_automask_generator_impl::transform_input(input);
+    sam_automask_generator_impl::internal_output internal_output;
+    auto status = _m_pimpl->generate(internal_input, internal_output);
+    output = sam_automask_generator_impl::transform_output<OUTPUT>(internal_output);
+    return status;
+}
+
+template <typename INPUT, typename OUTPUT>
+jinq::common::StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::generate(
+    const cv::Mat &input_image, AmgMaskOutput &amg_output) {
     return _m_pimpl->generate(input_image, amg_output);
 }
 
-/***
- *
- * @return
- */
-bool SamAutoMaskGenerator::is_successfully_initialized() const {
+template <typename INPUT, typename OUTPUT>
+bool SamAutoMaskGenerator<INPUT, OUTPUT>::is_successfully_initialized() const {
     return _m_pimpl->is_successfully_initialized();
 }
 
-}
-}
-}
+} // namespace segment_anything
+} // namespace models
+} // namespace jinq

@@ -1,13 +1,14 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: OpenAiClip.cpp
+ * File: openai_clip.inl
  * Date: 23-6-26
  ************************************************/
 
-#include "openai_clip.h"
-
 #include <cmath>
+#include <functional>
+#include <numeric>
+#include <type_traits>
 
 #include "glog/logging.h"
 
@@ -30,7 +31,72 @@ namespace clip {
 using jinq::models::clip::OpenAiClipVitEncoder;
 using jinq::models::clip::OpenAiClipTextEncoder;
 
-class OpenAiClip::Impl {
+namespace openai_clip_impl {
+
+using internal_input = jinq::models::io_define::clip::clip_input;
+using internal_output = jinq::models::io_define::clip::clip_output;
+
+/***
+ * 将用户自定义输入转换为模型内部输入
+ */
+template <typename INPUT>
+typename std::enable_if<
+    std::is_same<INPUT, std::decay<internal_input>::type>::value, internal_input>::type
+transform_input(const INPUT& in) {
+    return in;
+}
+
+template <typename INPUT>
+typename std::enable_if<
+    std::is_same<INPUT, std::decay<jinq::models::io_define::common_io::mat_input>::type>::value,
+    internal_input>::type
+transform_input(const INPUT& in) {
+    internal_input result{};
+    result.task_type = jinq::models::io_define::clip::ClipTaskType::IMAGE_EMBEDDING;
+    result.image = in.input_image;
+    return result;
+}
+
+template <typename INPUT>
+typename std::enable_if<
+    std::is_same<INPUT, std::decay<jinq::models::io_define::common_io::file_input>::type>::value,
+    internal_input>::type
+transform_input(const INPUT& in) {
+    internal_input result{};
+    result.task_type = jinq::models::io_define::clip::ClipTaskType::IMAGE_EMBEDDING;
+    if (!FilePathUtil::is_file_exist(in.input_image_path)) {
+        DLOG(WARNING) << "input image: " << in.input_image_path << " not exist";
+        return result;
+    }
+    result.image = cv::imread(in.input_image_path, cv::IMREAD_UNCHANGED);
+    return result;
+}
+
+template <typename INPUT>
+typename std::enable_if<
+    std::is_same<INPUT, std::decay<jinq::models::io_define::common_io::base64_input>::type>::value,
+    internal_input>::type
+transform_input(const INPUT& in) {
+    internal_input result{};
+    result.task_type = jinq::models::io_define::clip::ClipTaskType::IMAGE_EMBEDDING;
+    result.image = CvUtils::decode_base64_str_into_cvmat(in.input_image_content);
+    return result;
+}
+
+/***
+ * 将模型内部输出转换为用户自定义输出
+ */
+template <typename OUTPUT>
+typename std::enable_if<
+    std::is_same<OUTPUT, std::decay<internal_output>::type>::value, internal_output>::type
+transform_output(const internal_output& internal_out) {
+    return internal_out;
+}
+
+/***
+ * OpenAI CLIP 模型内部实现
+ */
+class Impl {
   public:
     /***
      *
@@ -112,7 +178,7 @@ class OpenAiClip::Impl {
  * @param cfg
  * @return
  */
-StatusCode OpenAiClip::Impl::init(const decltype(toml::parse("")) &cfg) {
+StatusCode Impl::init(const decltype(toml::parse("")) &cfg) {
     // init sam encoder
     _m_visual_encoder = std::make_unique<OpenAiClipVitEncoder>();
     _m_visual_encoder->init(cfg);
@@ -140,11 +206,11 @@ StatusCode OpenAiClip::Impl::init(const decltype(toml::parse("")) &cfg) {
 
 /***
  *
- * @param input_image
+ * @param input_text
  * @param textual_embeddings
  * @return
  */
-StatusCode OpenAiClip::Impl::get_textual_embedding(const std::string& input_text, std::vector<float> &textual_embeddings) {
+StatusCode Impl::get_textual_embedding(const std::string& input_text, std::vector<float> &textual_embeddings) {
     return _m_textual_encoder->encode(input_text, textual_embeddings);
 }
 
@@ -154,7 +220,7 @@ StatusCode OpenAiClip::Impl::get_textual_embedding(const std::string& input_text
  * @param image_embeddings
  * @return
  */
-StatusCode OpenAiClip::Impl::get_visual_embedding(const cv::Mat &input_image, std::vector<float> &image_embeddings){
+StatusCode Impl::get_visual_embedding(const cv::Mat &input_image, std::vector<float> &image_embeddings){
     return _m_visual_encoder->encode(input_image, image_embeddings);
 }
 
@@ -165,7 +231,7 @@ StatusCode OpenAiClip::Impl::get_visual_embedding(const cv::Mat &input_image, st
  * @param simi_scores
  * @return
  */
-StatusCode OpenAiClip::Impl::texts2img(
+StatusCode Impl::texts2img(
     const std::vector<std::string> &input_texts, const cv::Mat &input_image, std::vector<float> &simi_scores) {
     // get visual features
     std::vector<float> vis_feats;
@@ -223,7 +289,7 @@ StatusCode OpenAiClip::Impl::texts2img(
  * @param simi_scores
  * @return
  */
-StatusCode OpenAiClip::Impl::imgs2text(
+StatusCode Impl::imgs2text(
     const std::vector<cv::Mat> &input_images, const std::string &input_text, std::vector<float> &simi_scores) {
     // get textual features
     std::vector<float> text_feats;
@@ -274,80 +340,80 @@ StatusCode OpenAiClip::Impl::imgs2text(
     return StatusCode::OK;
 }
 
+} // namespace openai_clip_impl
 
-/***
- *
- */
-OpenAiClip::OpenAiClip() {
-    _m_pimpl = std::make_unique<Impl>();
+/************ Template Implementation ************/
+
+template <typename INPUT, typename OUTPUT>
+OpenAiClip<INPUT, OUTPUT>::OpenAiClip() {
+    _m_pimpl = std::make_unique<openai_clip_impl::Impl>();
 }
 
-/***
- *
- */
-OpenAiClip::~OpenAiClip() = default;
+template <typename INPUT, typename OUTPUT>
+OpenAiClip<INPUT, OUTPUT>::~OpenAiClip() = default;
 
-/***
- *
- * @param cfg
- * @return
- */
-StatusCode OpenAiClip::init(const decltype(toml::parse("")) &cfg) {
+template <typename INPUT, typename OUTPUT>
+jinq::common::StatusCode OpenAiClip<INPUT, OUTPUT>::init(const decltype(toml::parse("")) &cfg) {
     return _m_pimpl->init(cfg);
 }
 
-/***
- *
- * @param input_image
- * @param text_embeddings
- * @return
- */
-StatusCode OpenAiClip::get_textual_embedding(const std::string &input_text, std::vector<float> &text_embeddings) {
+template <typename INPUT, typename OUTPUT>
+jinq::common::StatusCode OpenAiClip<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
+    auto internal_input = openai_clip_impl::transform_input(input);
+    openai_clip_impl::internal_output internal_output;
+    auto status = StatusCode::OK;
+
+    switch (internal_input.task_type) {
+        case jinq::models::io_define::clip::ClipTaskType::TEXT_EMBEDDING:
+            status = _m_pimpl->get_textual_embedding(internal_input.text, internal_output.embeddings);
+            break;
+        case jinq::models::io_define::clip::ClipTaskType::IMAGE_EMBEDDING:
+            status = _m_pimpl->get_visual_embedding(internal_input.image, internal_output.embeddings);
+            break;
+        case jinq::models::io_define::clip::ClipTaskType::TEXTS_TO_IMAGE:
+            status = _m_pimpl->texts2img(internal_input.texts, internal_input.image, internal_output.simi_scores);
+            break;
+        case jinq::models::io_define::clip::ClipTaskType::IMAGES_TO_TEXT:
+            status = _m_pimpl->imgs2text(internal_input.images, internal_input.text, internal_output.simi_scores);
+            break;
+        default:
+            status = StatusCode::MODEL_RUN_SESSION_FAILED;
+            break;
+    }
+
+    output = openai_clip_impl::transform_output<OUTPUT>(internal_output);
+    return status;
+}
+
+template <typename INPUT, typename OUTPUT>
+jinq::common::StatusCode OpenAiClip<INPUT, OUTPUT>::get_textual_embedding(
+    const std::string &input_text, std::vector<float> &text_embeddings) {
     return _m_pimpl->get_textual_embedding(input_text, text_embeddings);
 }
 
-/***
- *
- * @param input_image
- * @param image_embeddings
- * @return
- */
-StatusCode OpenAiClip::get_visual_embedding(const cv::Mat &input_image, std::vector<float> &image_embeddings) {
+template <typename INPUT, typename OUTPUT>
+jinq::common::StatusCode OpenAiClip<INPUT, OUTPUT>::get_visual_embedding(
+    const cv::Mat &input_image, std::vector<float> &image_embeddings) {
     return _m_pimpl->get_visual_embedding(input_image, image_embeddings);
 }
 
-/***
- *
- * @param input_texts
- * @param input_image
- * @param simi_scores
- * @return
- */
-StatusCode OpenAiClip::texts2img(
+template <typename INPUT, typename OUTPUT>
+jinq::common::StatusCode OpenAiClip<INPUT, OUTPUT>::texts2img(
     const std::vector<std::string> &input_texts, const cv::Mat &input_image, std::vector<float> &simi_scores) {
    return _m_pimpl->texts2img(input_texts, input_image, simi_scores);
 }
 
-/***
- *
- * @param input_images
- * @param input_text
- * @param simi_scores
- * @return
- */
-StatusCode OpenAiClip::imgs2text(
+template <typename INPUT, typename OUTPUT>
+jinq::common::StatusCode OpenAiClip<INPUT, OUTPUT>::imgs2text(
     const std::vector<cv::Mat> &input_images, const std::string &input_text, std::vector<float> &simi_scores) {
    return _m_pimpl->imgs2text(input_images, input_text, simi_scores);
 }
 
-/***
- *
- * @return
- */
-bool OpenAiClip::is_successfully_initialized() const {
+template <typename INPUT, typename OUTPUT>
+bool OpenAiClip<INPUT, OUTPUT>::is_successfully_initialized() const {
     return _m_pimpl->is_successfully_initialized();
 }
 
-}
-}
-}
+} // namespace clip
+} // namespace models
+} // namespace jinq

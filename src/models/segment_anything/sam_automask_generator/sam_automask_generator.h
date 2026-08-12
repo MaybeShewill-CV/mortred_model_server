@@ -14,25 +14,25 @@
 #include <opencv2/opencv.hpp>
 #include "toml/toml.hpp"
 
+#include "models/base_model.h"
+#include "models/model_io_define.h"
 #include "common/status_code.h"
 
 namespace jinq {
 namespace models {
 namespace segment_anything {
 
-struct AmgMaskOutput {
-    std::vector<cv::Mat> segmentations;
-    std::vector<int32_t> areas;
-    std::vector<cv::Rect> bboxes;
-    std::vector<float> preds_ious;
-    std::vector<float> preds_stability_scores;
-    std::vector<cv::Point2f> point_coords;
-};
+using AmgMaskOutput = jinq::models::io_define::segment_anything::sam_amg_output;
+
+namespace sam_automask_generator_impl {
+class Impl;
+}
 
 /***
- * 
+ * SAM 自动 mask 生成模型：图像 -> 密集点网格自动生成的 mask 集合。
  */
-class SamAutoMaskGenerator {
+template <typename INPUT, typename OUTPUT>
+class SamAutoMaskGenerator : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
   public:
     /***
     * constructor
@@ -43,7 +43,7 @@ class SamAutoMaskGenerator {
     /***
      *
      */
-    ~SamAutoMaskGenerator();
+    ~SamAutoMaskGenerator() override;
 
     /***
     * constructor
@@ -63,7 +63,15 @@ class SamAutoMaskGenerator {
      * @param toml
      * @return
      */
-    jinq::common::StatusCode init(const decltype(toml::parse(""))& cfg);
+    jinq::common::StatusCode init(const decltype(toml::parse(""))& cfg) override;
+
+    /***
+     *
+     * @param input
+     * @param output
+     * @return
+     */
+    jinq::common::StatusCode run(const INPUT& input, OUTPUT& output) override;
 
     /***
      *
@@ -78,14 +86,15 @@ class SamAutoMaskGenerator {
      * if model successfully initialized
      * @return
      */
-    bool is_successfully_initialized() const;
+    bool is_successfully_initialized() const override;
 
   private:
-    class Impl;
-    std::unique_ptr<Impl> _m_pimpl;
+    std::unique_ptr<sam_automask_generator_impl::Impl> _m_pimpl;
 };
 }
 }
 }
+
+#include "sam_automask_generator.inl"
 
 #endif // MORTRED_MODEL_SERVER_SAM_AUTOMASK_GENERATOR_H

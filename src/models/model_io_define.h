@@ -38,6 +38,57 @@ struct pair_mat_input {
 
 } // namespace common_io
 
+// image clip
+namespace clip {
+
+enum class ClipTaskType {
+    TEXT_EMBEDDING = 0,
+    IMAGE_EMBEDDING = 1,
+    TEXTS_TO_IMAGE = 2,
+    IMAGES_TO_TEXT = 3,
+};
+
+struct clip_input {
+    ClipTaskType task_type = ClipTaskType::TEXT_EMBEDDING;
+    std::string text;
+    cv::Mat image;
+    std::vector<std::string> texts;
+    std::vector<cv::Mat> images;
+};
+struct clip_output {
+    std::vector<float> embeddings;
+    std::vector<float> simi_scores;
+};
+using std_clip_input = clip_input;
+using std_clip_output = clip_output;
+
+} // namespace clip
+
+// segment anything
+namespace segment_anything {
+
+struct sam_prompt_input {
+    cv::Mat image;
+    std::vector<cv::Rect> bboxes;
+    std::vector<std::vector<cv::Point2f> > prompt_points;
+};
+using std_sam_prompt_input = sam_prompt_input;
+using std_sam_prompt_output = std::vector<cv::Mat>;
+
+struct sam_amg_output {
+    std::vector<cv::Mat> segmentations;
+    std::vector<int32_t> areas;
+    std::vector<cv::Rect> bboxes;
+    std::vector<float> preds_ious;
+    std::vector<float> preds_stability_scores;
+    std::vector<cv::Point2f> point_coords;
+};
+using std_sam_amg_output = sam_amg_output;
+
+using std_fast_sam_output = cv::Mat;
+
+} // namespace segment_anything
+
 // image ocr
 namespace ocr {
 

@@ -15,11 +15,14 @@
 
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
-#include "models/segment_anything/fast_sam/fast_sam_segmentor.h"
+#include "models/model_io_define.h"
+#include "factory/sam_task.h"
 
 using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;
-using jinq::models::segment_anything::FastSamSegmentor;
+using jinq::models::io_define::common_io::mat_input;
+using jinq::models::io_define::segment_anything::std_fast_sam_output;
+using jinq::factory::segment_anything::create_fast_sam_segmentor;
 
 int main(int argc, char** argv) {
     google::InstallFailureSignalHandler();
@@ -35,10 +38,10 @@ int main(int argc, char** argv) {
         LOG(ERROR) << "config file path: " << config_file_path << " not exists";
         return -1;
     }
-    FastSamSegmentor fast_sam_model;
+    auto fast_sam_model = create_fast_sam_segmentor<mat_input, std_fast_sam_output>("fast_sam");
     auto cfg = toml::parse(config_file_path);
-    fast_sam_model.init(cfg);
-    if (!fast_sam_model.is_successfully_initialized()) {
+    fast_sam_model->init(cfg);
+    if (!fast_sam_model->is_successfully_initialized()) {
         LOG(ERROR) << "init fast-sam failed";
     }
 
@@ -50,9 +53,10 @@ int main(int argc, char** argv) {
 
     LOG(INFO) << "Start benchmarking sam predict interface ...";
     cv::Mat everything_mask;
+    mat_input model_input{input_image};
     for (auto i = 0; i < 10; ++i) {
         auto t_start = std::chrono::system_clock::now();
-        fast_sam_model.everything(input_image, everything_mask);
+        fast_sam_model->run(model_input, everything_mask);
         auto t_end = std::chrono::system_clock::now();
         auto t_cost = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
         LOG(INFO) << "... infer: " << i << ", cost time: " << t_cost;

@@ -1,11 +1,12 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: SamPredictor.cpp
+ * File: sam_predictor.inl
  * Date: 23-5-26
  ************************************************/
 
-#include "sam_predictor.h"
+#include <algorithm>
+#include <type_traits>
 
 #include "glog/logging.h"
 
@@ -28,7 +29,69 @@ namespace segment_anything {
 using jinq::models::segment_anything::SamVitEncoder;
 using jinq::models::segment_anything::SamPromptDecoder;
 
-class SamPredictor::Impl {
+namespace sam_predictor_impl {
+
+using internal_input = jinq::models::io_define::segment_anything::sam_prompt_input;
+using internal_output = jinq::models::io_define::segment_anything::std_sam_prompt_output;
+
+/***
+ * 将用户自定义输入转换为模型内部输入
+ */
+template <typename INPUT>
+typename std::enable_if<
+    std::is_same<INPUT, std::decay<internal_input>::type>::value, internal_input>::type
+transform_input(const INPUT& in) {
+    return in;
+}
+
+template <typename INPUT>
+typename std::enable_if<
+    std::is_same<INPUT, std::decay<jinq::models::io_define::common_io::mat_input>::type>::value,
+    internal_input>::type
+transform_input(const INPUT& in) {
+    internal_input result{};
+    result.image = in.input_image;
+    return result;
+}
+
+template <typename INPUT>
+typename std::enable_if<
+    std::is_same<INPUT, std::decay<jinq::models::io_define::common_io::file_input>::type>::value,
+    internal_input>::type
+transform_input(const INPUT& in) {
+    internal_input result{};
+    if (!FilePathUtil::is_file_exist(in.input_image_path)) {
+        DLOG(WARNING) << "input image: " << in.input_image_path << " not exist";
+        return result;
+    }
+    result.image = cv::imread(in.input_image_path, cv::IMREAD_UNCHANGED);
+    return result;
+}
+
+template <typename INPUT>
+typename std::enable_if<
+    std::is_same<INPUT, std::decay<jinq::models::io_define::common_io::base64_input>::type>::value,
+    internal_input>::type
+transform_input(const INPUT& in) {
+    internal_input result{};
+    result.image = CvUtils::decode_base64_str_into_cvmat(in.input_image_content);
+    return result;
+}
+
+/***
+ * 将模型内部输出转换为用户自定义输出
+ */
+template <typename OUTPUT>
+typename std::enable_if<
+    std::is_same<OUTPUT, std::decay<internal_output>::type>::value, internal_output>::type
+transform_output(const internal_output& internal_out) {
+    return internal_out;
+}
+
+/***
+ * SAM 提示分割模型内部实现
+ */
+class Impl {
 public:
     /***
      *
@@ -125,7 +188,7 @@ private:
  * @param cfg
  * @return
  */
-StatusCode SamPredictor::Impl::init(const decltype(toml::parse("")) &cfg) {
+StatusCode Impl::init(const decltype(toml::parse("")) &cfg) {
     // init sam encoder
     _m_sam_encoder = std::make_unique<SamVitEncoder>();
     _m_sam_encoder->init(cfg);
@@ -156,12 +219,10 @@ StatusCode SamPredictor::Impl::init(const decltype(toml::parse("")) &cfg) {
  *
  * @param input_image
  * @param bboxes
- * @param points
- * @param point_labels
  * @param predicted_mask
  * @return
  */
-StatusCode SamPredictor::Impl::predict(
+StatusCode Impl::predict(
     const cv::Mat& input_image,
     const std::vector<cv::Rect>& bboxes,
     std::vector<cv::Mat>& predicted_masks) {
@@ -198,7 +259,7 @@ StatusCode SamPredictor::Impl::predict(
  * @param predicted_masks
  * @return
  */
-StatusCode SamPredictor::Impl::predict(
+StatusCode Impl::predict(
     const cv::Mat &input_image,
     const std::vector<std::vector<cv::Point2f>> &prompt_points,
     std::vector<cv::Mat> &predicted_masks) {
@@ -234,7 +295,7 @@ StatusCode SamPredictor::Impl::predict(
  * @param image_embeddings
  * @return
  */
-StatusCode SamPredictor::Impl::get_embedding(
+StatusCode Impl::get_embedding(
     const cv::Mat &input_image,
     std::vector<float> &image_embeddings) {
     return _m_sam_encoder->encode(input_image, image_embeddings);
@@ -246,7 +307,7 @@ StatusCode SamPredictor::Impl::get_embedding(
  * @param target_size
  * @return
  */
-std::vector<cv::Rect2f> SamPredictor::Impl::transform_bboxes(const std::vector<cv::Rect> &bboxes, int target_size) const {
+std::vector<cv::Rect2f> Impl::transform_bboxes(const std::vector<cv::Rect> &bboxes, int target_size) const {
     auto ori_img_h = static_cast<float>(_m_ori_image_size.height);
     auto ori_img_w = static_cast<float>(_m_ori_image_size.width);
     auto long_side = std::max(ori_img_h, ori_img_w);
@@ -272,7 +333,7 @@ std::vector<cv::Rect2f> SamPredictor::Impl::transform_bboxes(const std::vector<c
  * @param target_size
  * @return
  */
-std::vector<std::vector<cv::Point2f>> SamPredictor::Impl::transform_points(
+std::vector<std::vector<cv::Point2f>> Impl::transform_points(
     const std::vector<std::vector<cv::Point2f>> &points, int target_size) const {
     auto ori_img_h = static_cast<float>(_m_ori_image_size.height);
     auto ori_img_w = static_cast<float>(_m_ori_image_size.width);
@@ -294,75 +355,66 @@ std::vector<std::vector<cv::Point2f>> SamPredictor::Impl::transform_points(
     return transformed_points;
 }
 
-/***
- *
- */
-SamPredictor::SamPredictor() {
-    _m_pimpl = std::make_unique<Impl>();
+} // namespace sam_predictor_impl
+
+/************ Template Implementation ************/
+
+template <typename INPUT, typename OUTPUT>
+SamPredictor<INPUT, OUTPUT>::SamPredictor() {
+    _m_pimpl = std::make_unique<sam_predictor_impl::Impl>();
 }
 
-/***
- *
- */
-SamPredictor::~SamPredictor() = default;
+template <typename INPUT, typename OUTPUT>
+SamPredictor<INPUT, OUTPUT>::~SamPredictor() = default;
 
-/***
- *
- * @param cfg
- * @return
- */
-StatusCode SamPredictor::init(const decltype(toml::parse("")) &cfg) {
+template <typename INPUT, typename OUTPUT>
+jinq::common::StatusCode SamPredictor<INPUT, OUTPUT>::init(const decltype(toml::parse("")) &cfg) {
     return _m_pimpl->init(cfg);
 }
 
-/***
- *
- * @param input_image
- * @param bboxes
- * @param points
- * @param point_labels
- * @param predicted_mask
- * @return
- */
-StatusCode SamPredictor::predict(
+template <typename INPUT, typename OUTPUT>
+jinq::common::StatusCode SamPredictor<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
+    auto internal_input = sam_predictor_impl::transform_input(input);
+    sam_predictor_impl::internal_output internal_output;
+    StatusCode status = StatusCode::OK;
+
+    if (!internal_input.bboxes.empty()) {
+        status = _m_pimpl->predict(internal_input.image, internal_input.bboxes, internal_output);
+    } else {
+        status = _m_pimpl->predict(internal_input.image, internal_input.prompt_points, internal_output);
+    }
+
+    output = sam_predictor_impl::transform_output<OUTPUT>(internal_output);
+    return status;
+}
+
+template <typename INPUT, typename OUTPUT>
+jinq::common::StatusCode SamPredictor<INPUT, OUTPUT>::predict(
     const cv::Mat& input_image,
     const std::vector<cv::Rect>& bboxes,
     std::vector<cv::Mat>& predicted_masks) {
     return _m_pimpl->predict(input_image, bboxes, predicted_masks);
 }
 
-/***
- *
- * @param input_image
- * @param prompt_points
- * @param predicted_masks
- * @return
- */
-StatusCode SamPredictor::predict(
+template <typename INPUT, typename OUTPUT>
+jinq::common::StatusCode SamPredictor<INPUT, OUTPUT>::predict(
     const cv::Mat &input_image,
     const std::vector<std::vector<cv::Point2f>> &prompt_points,
     std::vector<cv::Mat> &predicted_masks) {
     return _m_pimpl->predict(input_image, prompt_points, predicted_masks);
 }
 
-/***
- *
- * @param input_image
- * @param image_embeddings
- * @return
- */
-StatusCode SamPredictor::get_embedding(const cv::Mat &input_image, std::vector<float> &image_embeddings) {
+template <typename INPUT, typename OUTPUT>
+jinq::common::StatusCode SamPredictor<INPUT, OUTPUT>::get_embedding(
+    const cv::Mat &input_image, std::vector<float> &image_embeddings) {
    return _m_pimpl->get_embedding(input_image, image_embeddings);
 }
 
-/***
- *
- * @return
- */
-bool SamPredictor::is_successfully_initialized() const {
+template <typename INPUT, typename OUTPUT>
+bool SamPredictor<INPUT, OUTPUT>::is_successfully_initialized() const {
     return _m_pimpl->is_successfully_initialized();
 }
 
-}
-}
-}
+} // namespace segment_anything
+} // namespace models
+} // namespace jinq
