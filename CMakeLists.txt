@@ -53,4 +53,4 @@ add_subdirectory(src/server)
 add_subdirectory(src/apps)
 
 # add unittest
-# add_subdirectory(test EXCLUDE_FROM_ALL)
+add_subdirectory(test EXCLUDE_FROM_ALL)

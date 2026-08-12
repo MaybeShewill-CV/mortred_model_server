@@ -21,6 +21,7 @@ else ()
 endif ()
 
 include_directories(${PROJECT_ROOT_DIR}/src)
+include_directories(${PROJECT_ROOT_DIR}/3rd_party/include)
 
 set(TEST_LIST
     base64_unittest
@@ -35,10 +36,12 @@ set(TEST_LIST
 foreach(src ${TEST_LIST})
     add_executable(${src} EXCLUDE_FROM_ALL ${src}.cc)
     target_link_libraries(${src} common GTest::GTest GTest::Main)
-    add_test(${src} ${src})
+    add_test(NAME ${src} COMMAND $<TARGET_FILE:${src}> WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
     add_dependencies(check ${src})
 endforeach()
 
-foreach(src ${TEST_LIST})
-    add_test(${src}-memory-check ${memcheck_command} ./${src})
-endforeach()
+if(CMAKE_MEMORYCHECK_COMMAND)
+    foreach(src ${TEST_LIST})
+        add_test(${src}-memory-check ${memcheck_command} ./${src})
+    endforeach()
+endif()
