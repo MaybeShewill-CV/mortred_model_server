@@ -454,6 +454,22 @@ bool weights_available(const std::string& conf_rel_path) {
 
 // ============ 分类（难度 1）============
 
+TEST(model_golden, mobilenetv2_classification) {
+    std::string conf = "conf/model/classification/mobilenetv2/mobilenetv2_config.ini";
+    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    auto cfg = load_model_cfg(conf);
+    auto model = jinq::factory::classification::create_mobilenetv2_classifier<
+        mat_input, std_classification_output>("mobilenetv2_golden");
+    ASSERT_NE(model, nullptr);
+    ASSERT_EQ(model->init(cfg), StatusCode::OK);
+    cv::Mat image = read_input_image("demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG");
+    ASSERT_FALSE(image.empty());
+    mat_input input{image};
+    std_classification_output output;
+    ASSERT_EQ(model->run(input, output), StatusCode::OK);
+    expect_scores("mobilenetv2_classification", output);
+}
+
 TEST(model_golden, resnet50_classification) {
     std::string conf = "conf/model/classification/resnet/resnet50_config.ini";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
