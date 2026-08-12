@@ -29,9 +29,6 @@ foreach(dir_name ${MODEL_BENCHMARK_LIST})
         add_executable(${file_name}.out ${src})
         target_link_libraries(${file_name}.out common models factory ${WORKFLOW_LIBS} glog::glog)
     endforeach()
-
-# mortred model server web console
-add_subdirectory(web_console/backend)
 endforeach()
 
 # build server app
@@ -68,4 +65,7 @@ foreach(dir_name ${MODEL_TOOLS_APP_LIST})
         add_executable(${file_name}.out ${src})
         target_link_libraries(${file_name}.out common models glog::glog)
     endforeach()
-    endforeach()
+endforeach()
+
+# mortred model server web console
+add_subdirectory(web_console/backend)
