@@ -38,8 +38,12 @@ int main(int argc, char** argv) {
     LOG(INFO) << "serve on port: " << port;
 
     auto server = create_yolov5_det_server("yolov5_det_server");
-    server->init(config);
-    if (server->start(port) == 0) {
+        auto status = server->init(config);
+        if (status != jinq::common::StatusCode::OK) {
+            LOG(ERROR) << "server init failed, status: " << std::to_string(status);
+            return -1;
+        }
+        if (server->start(port) == 0) {
 		wait_group.wait();
 		server->stop();
     } else {
