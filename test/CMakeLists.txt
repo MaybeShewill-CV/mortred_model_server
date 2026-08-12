@@ -48,6 +48,10 @@ set(TEST_LIST
     simple_tokenizer_unittest
 )
 
+if(MORTRED_BUILD_FULL)
+    list(APPEND TEST_LIST model_golden_test)
+endif()
+
 foreach(src ${TEST_LIST})
     set(EXTRA_SRCS "")
     set(EXTRA_LIBS "")
@@ -62,6 +66,8 @@ foreach(src ${TEST_LIST})
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "model_factory_unittest")
         set(EXTRA_LIBS glog::glog)
+    elseif(${src} STREQUAL "model_golden_test")
+        set(EXTRA_LIBS glog::glog ${OpenCV_LIBS} ${MNN_LIBS})
     elseif(${src} STREQUAL "simple_tokenizer_unittest")
         set(EXTRA_SRCS ${PROJECT_ROOT_DIR}/src/models/clip/simple_tokenizer.cpp)
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
