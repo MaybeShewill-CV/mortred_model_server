@@ -17,7 +17,7 @@ using jinq::models::clip::SimpleTokenizer;
 
 static toml::value build_tokenizer_cfg() {
     toml::value cfg;
-    cfg["TOKENIZER"]["vocab_file_path"] = "weights/openai_clip/vit-b-32/bpe_simple_vocab_16e6.txt";
+    cfg["TOKENIZER"]["vocab_file_path"] = "test/testdata/bpe_simple_vocab_16e6.txt";
     return cfg;
 }
 

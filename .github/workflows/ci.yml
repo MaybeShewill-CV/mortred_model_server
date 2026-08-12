@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake \
+            libopencv-dev libgoogle-glog-dev libeigen3-dev libgtest-dev
+
+      # tests-only 模式：不依赖 CUDA/MNN/TRT/llama，只构建 common + 单测
+      - name: Configure
+        run: cmake -B build-ci -DMORTRED_BUILD_FULL=OFF
+
+      - name: Build and run unit tests
+        run: |
+          LD_LIBRARY_PATH=$PWD/_lib cmake --build build-ci --target check

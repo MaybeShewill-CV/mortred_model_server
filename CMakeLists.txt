@@ -33,24 +33,30 @@ file(GLOB_RECURSE LLAMA_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*llama*.so*
 file(GLOB_RECURSE GGML_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*ggml*.so*)
 file(GLOB_RECURSE FAISS_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*faiss*.so*)
 
+# CI / 单测模式：跳过依赖 CUDA/MNN/TRT/llama 的模型与服务，只构建 common + tests
+option(MORTRED_BUILD_FULL "Build full project (models/server/apps, requires CUDA/MNN/TRT/llama/faiss)" ON)
+
 # find package
 find_package(Threads REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(glog REQUIRED)
-find_package(CUDA REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 include_directories(${GLOG_INCLUDE_DIR})
 include_directories(${OpenCV_INCLUDE_DIRS})
-include_directories(${CUDA_INCLUDE_DIRS})
 include_directories(${EIGEN3_INCLUDE_DIR})
 
 # add subdirectory
 add_subdirectory(src/common)
-add_subdirectory(src/models)
-add_subdirectory(src/factory)
-add_subdirectory(src/server)
-add_subdirectory(src/apps)
+
+if(MORTRED_BUILD_FULL)
+    find_package(CUDA REQUIRED)
+    include_directories(${CUDA_INCLUDE_DIRS})
+    add_subdirectory(src/models)
+    add_subdirectory(src/factory)
+    add_subdirectory(src/server)
+    add_subdirectory(src/apps)
+endif()
 
 # add unittest
 add_subdirectory(test EXCLUDE_FROM_ALL)
