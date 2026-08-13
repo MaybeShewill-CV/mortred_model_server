@@ -33,6 +33,7 @@
 * [模型说明](#模型说明)
 * [文档教程](#文档教程)
 * [网络服务器配置说明](#网络服务器配置说明)
+* [安全说明](#安全说明)
 * [Model_Zoo](#model_zoo)
 
 # `快速开始`
@@ -217,6 +218,11 @@ python server/test_server.py --server mobilenetv2 --mode single
 
 * [模型网络服务器配置说明](./docs/about_model_server_configuration.zh-cn.md)
 * [代理服务器配置说明](./docs/about_proxy_server_configuration.zh-cn.md)
+
+# `安全说明`
+
+- **模型文件属于信任输入**：`src/models/llm/qwen2_vl/clip.cpp` 是从上游第三方项目移植的 GGUF 解析代码，其中将 `mm_patch_merge_type` 等字符串用 `strcpy` 写入定长 `char[32]` 缓冲，未做长度校验。恶意构造的 GGUF 模型文件可触发栈溢出。
+- 该代码属于第三方移植代码，为与上游保持同步，本仓库有意不修改它。因此**只应加载来自可信来源的模型文件**，严禁加载来源不明或未经校验的 GGUF。
 
 # `Model Zoo`
 

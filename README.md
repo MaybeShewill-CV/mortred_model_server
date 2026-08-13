@@ -35,6 +35,7 @@ All models and detectors can be downloaded from my [Hugging Face Page](https://h
 * [Tutorials](#tutorials)
 * [How To](#how-to)
 * [Web Server Configuration](#web-server-configuration)
+* [Security Notes](#security-notes)
 
 # `Quick Start`
 
@@ -223,6 +224,16 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 
 * [Description About Model Server](./docs/about_model_server_configuration.md)
 * [Description About Proxy Server](./docs/about_proxy_server_configuration.md)
+
+# `Security Notes`
+
+- **Model files are trusted input**: `src/models/llm/qwen2_vl/clip.cpp` is a GGUF
+  parsing port from an upstream third-party project. It writes strings such as
+  `mm_patch_merge_type` into a fixed `char[32]` buffer with `strcpy` without length
+  checks, so a maliciously crafted GGUF model file can trigger stack overflow.
+- This code is intentionally left unmodified to stay in sync with the upstream port.
+  Therefore, **only load model files from trusted sources**; never load untrusted or
+  unverified GGUF files.
 
 # `TODO`
 
