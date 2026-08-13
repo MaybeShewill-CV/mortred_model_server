@@ -9,6 +9,7 @@
 #define MM_AI_SERVER_MODEL_IO_DEFINE_H
 
 #include <string>
+#include <vector>
 
 #include <opencv2/opencv.hpp>
 
@@ -350,8 +351,7 @@ struct base64_input {
 };
 
 struct bytes_input {
-    unsigned char* image_bytes = nullptr;
-    size_t bytes_length = 0;
+    std::vector<unsigned char> image_bytes;
     std::string text;
 };
 

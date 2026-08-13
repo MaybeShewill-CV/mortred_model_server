@@ -61,12 +61,7 @@ typename std::enable_if<std::is_same<INPUT, mat_input>::value, internal_input>::
         return result;
     }
 
-    std::vector<unsigned char> buffer;
-    cv::imencode(".jpg", image, buffer);
-    result.image_bytes = new unsigned char[buffer.size()];
-    std::memcpy(result.image_bytes, buffer.data(), buffer.size());
-
-    result.bytes_length = buffer.size();
+    cv::imencode(".jpg", image, result.image_bytes);
     result.text = in.text;
 
     return result;
@@ -98,16 +93,18 @@ typename std::enable_if<std::is_same<INPUT, file_input>::value, internal_input>:
 
     std::streamsize file_size = file.tellg();
     file.seekg(0, std::ios::beg);
-
-    result.image_bytes = new unsigned char[file_size];
-    if (!file.read(reinterpret_cast<char*>(result.image_bytes), file_size)) {
+    if (file_size < 0) {
         LOG(ERROR) << fmt::format("Failed to read file: {}", image_path);
-        delete[] result.image_bytes;
-        result.image_bytes = nullptr;
         return result;
     }
 
-    result.bytes_length = static_cast<size_t>(file_size);
+    result.image_bytes.resize(static_cast<size_t>(file_size));
+    if (!file.read(reinterpret_cast<char*>(result.image_bytes.data()), file_size)) {
+        LOG(ERROR) << fmt::format("Failed to read file: {}", image_path);
+        result.image_bytes.clear();
+        return result;
+    }
+
     result.text = in.text;
 
     file.close();
@@ -143,11 +140,7 @@ typename std::enable_if<std::is_same<INPUT, base64_input>::value, internal_input
     }
 
     auto image_str = Base64::base64_decode(img_b64_str);
-    std::vector<unsigned char> buffer(image_str.begin(), image_str.end());
-    result.image_bytes = new unsigned char[buffer.size()];
-    std::memcpy(result.image_bytes, buffer.data(), buffer.size());
-
-    result.bytes_length = buffer.size();
+    result.image_bytes.assign(image_str.begin(), image_str.end());
     result.text = in.text;
 
     return result;
@@ -536,8 +529,9 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     auto internal_in = qwen2_vl_impl::transform_input(in);
     // encode input image
     std::vector<float> image_embds;
-    if (nullptr != internal_in.image_bytes) {
-        auto status = encode_image(internal_in.image_bytes, internal_in.bytes_length, image_embds);
+    if (!internal_in.image_bytes.empty()) {
+        auto status = encode_image(internal_in.image_bytes.data(),
+                                   static_cast<int>(internal_in.image_bytes.size()), image_embds);
         if (status != StatusCode::OK) {
             LOG(ERROR) << fmt::format("encode input image failed");
             return status;
@@ -1306,14 +1300,16 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::parse_image_url_data(const std::string&
 
         std::streamsize file_size = file.tellg();
         file.seekg(0, std::ios::beg);
-        bytes_data.image_bytes = new unsigned char[file_size];
-        if (!file.read(reinterpret_cast<char*>(bytes_data.image_bytes), file_size)) {
+        if (file_size < 0) {
             LOG(ERROR) << fmt::format("Failed to read file: {}", image_url);
-            delete[] bytes_data.image_bytes;
-            bytes_data.image_bytes = nullptr;
             return StatusCode::VLM_QWEN_PARSE_IMAGE_URL_FAILED;
         }
-        bytes_data.bytes_length = file_size;
+        bytes_data.image_bytes.resize(static_cast<size_t>(file_size));
+        if (!file.read(reinterpret_cast<char*>(bytes_data.image_bytes.data()), file_size)) {
+            LOG(ERROR) << fmt::format("Failed to read file: {}", image_url);
+            bytes_data.image_bytes.clear();
+            return StatusCode::VLM_QWEN_PARSE_IMAGE_URL_FAILED;
+        }
         return StatusCode::OK;
     } else if (is_url(image_url)) {
         WFFacilities::WaitGroup wait_group(1);
@@ -1336,10 +1332,7 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::parse_image_url_data(const std::string&
                 status = StatusCode::VLM_QWEN_PARSE_IMAGE_URL_FAILED;
                 return;
             }
-            std::vector<unsigned char> buffer(resp_str.begin(), resp_str.end());
-            bytes_data.image_bytes = new unsigned char[buffer.size()];
-            std::memcpy(bytes_data.image_bytes, buffer.data(), buffer.size());
-            bytes_data.bytes_length = buffer.size();
+            bytes_data.image_bytes.assign(resp_str.begin(), resp_str.end());
             wait_group.done();
         });
         task->get_req()->set_method("GET");
@@ -1348,10 +1341,7 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::parse_image_url_data(const std::string&
         return status;
     } else if (is_b64(image_url)) {
         auto image_str = Base64::base64_decode(image_url);
-        std::vector<unsigned char> buffer(image_str.begin(), image_str.end());
-        bytes_data.image_bytes = new unsigned char[buffer.size()];
-        std::memcpy(bytes_data.image_bytes, buffer.data(), buffer.size());
-        bytes_data.bytes_length = buffer.size();
+        bytes_data.image_bytes.assign(image_str.begin(), image_str.end());
         return StatusCode::OK;
     } else {
         LOG(ERROR) << fmt::format("not supported image url: {}", image_url);

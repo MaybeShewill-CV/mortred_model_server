@@ -47,13 +47,14 @@ const std::string &MultipartParser::gen_body_content() {
         std::future<std::string> content_futures = std::async(std::launch::async, [&file]() {
             std::ifstream ifile(file.second, std::ios::binary | std::ios::ate);
             std::streamsize size = ifile.tellg();
+            if (size < 0) {
+                return std::string();
+            }
             ifile.seekg(0, std::ios::beg);
-            char *buff = new char[size];
-            ifile.read(buff, size);
+            std::string buff(static_cast<size_t>(size), '\0');
+            ifile.read(buff.data(), size);
             ifile.close();
-            std::string ret(buff, size);
-            delete[] buff;
-            return ret;
+            return buff;
         });
         futures.push_back(std::move(content_futures));
     }

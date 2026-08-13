@@ -526,11 +526,11 @@ std::vector<float> NanoDetector<INPUT, OUTPUT>::Impl::refine_bbox_coords(const f
     auto ct_y = static_cast<float>(y * stride);
     std::vector<float> dis_pred;
     dis_pred.resize(4);
+    std::vector<float> dis_after_sm(_m_reg_max + 1);
 
     for (int i = 0; i < 4; i++) {
         float dis = 0;
-        auto* dis_after_sm = new float[_m_reg_max + 1];
-        activation_function_softmax(preds + i * (_m_reg_max + 1), dis_after_sm, _m_reg_max + 1);
+        activation_function_softmax(preds + i * (_m_reg_max + 1), dis_after_sm.data(), _m_reg_max + 1);
 
         for (int j = 0; j < _m_reg_max + 1; j++) {
             dis += static_cast<float>(j) * dis_after_sm[j];
@@ -538,7 +538,6 @@ std::vector<float> NanoDetector<INPUT, OUTPUT>::Impl::refine_bbox_coords(const f
 
         dis *= static_cast<float>(stride);
         dis_pred[i] = dis;
-        delete[] dis_after_sm;
     }
 
     float xmin = std::max(ct_x - dis_pred[0], .0f);

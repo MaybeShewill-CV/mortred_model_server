@@ -817,21 +817,21 @@ double ByteTracker::Impl::lapjv(
         cost_c.assign(cost_c_extended.begin(), cost_c_extended.end());
     }
 
-    double **cost_ptr;
-    cost_ptr = new double *[sizeof(double *) * n];
-    for (int i = 0; i < n; i++) {
-        cost_ptr[i] = new double[sizeof(double) * n];
-    }
+    std::vector<std::vector<double>> cost_rows(n, std::vector<double>(n));
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
-            cost_ptr[i][j] = cost_c[i][j];
+            cost_rows[i][j] = cost_c[i][j];
         }
     }
+    std::vector<double*> cost_ptr(n);
+    for (int i = 0; i < n; i++) {
+        cost_ptr[i] = cost_rows[i].data();
+    }
 
-    int* x_c = new int[sizeof(int) * n];
-    int *y_c = new int[sizeof(int) * n];
+    std::vector<int> x_c(n);
+    std::vector<int> y_c(n);
 
-    int ret = lapjv_internal(n, cost_ptr, x_c, y_c);
+    int ret = lapjv_internal(n, cost_ptr.data(), x_c.data(), y_c.data());
     if (ret != 0) {
         LOG(ERROR) << "Calculate Wrong!";
         return 0.0;
@@ -867,13 +867,6 @@ double ByteTracker::Impl::lapjv(
             opt += cost_ptr[i][rowsol[i]];
         }
     }
-
-    for (int i = 0; i < n; i++) {
-        delete[]cost_ptr[i];
-    }
-    delete[]cost_ptr;
-    delete[]x_c;
-    delete[]y_c;
 
     return opt;
 }
