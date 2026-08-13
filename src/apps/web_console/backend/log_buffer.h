@@ -50,7 +50,7 @@ class LogBuffer {
             _file << line << "\n";
             _file.flush();
         }
-        while (_lines.size() > kMaxLines || _bytes > kMaxBytes) {
+        while (_lines.size() > k_max_lines || _bytes > k_max_bytes) {
             _bytes -= _lines.front().size() + 1;
             _lines.pop_front();
             ++_head;
@@ -92,8 +92,8 @@ class LogBuffer {
     }
 
   private:
-    static constexpr size_t kMaxLines = 2000;
-    static constexpr size_t kMaxBytes = 1024 * 1024;
+    static constexpr size_t k_max_lines = 2000;
+    static constexpr size_t k_max_bytes = 1024 * 1024;
 
     mutable std::mutex _mu;
     std::string _path;

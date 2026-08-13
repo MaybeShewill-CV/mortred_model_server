@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <cctype>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -30,7 +31,9 @@
 #include <vector>
 #include <unistd.h>
 
+#include "auth.h"
 #include "catalog.h"
+#include "common/request_size_limit.h"
 #include "server_manager.h"
 
 using namespace mortred_web;
@@ -43,6 +46,10 @@ static std::string g_logs_dir;
 static std::string g_generated_dir;
 
 namespace {
+
+std::string g_auth_token;
+std::string g_listen_host = "127.0.0.1";
+int g_listen_port = 8787;
 
 std::string resolve_project_root() {
     const char* env_root = getenv("APP_PROJECT_ROOT");
@@ -150,6 +157,41 @@ std::string json_error(const std::string& msg) {
     rapidjson::Writer<rapidjson::StringBuffer> w(buf);
     d.Accept(w);
     return buf.GetString();
+}
+
+/***
+ * 读取请求头中指定名称的头字段（名称大小写不敏感）。
+ */
+std::string request_header_value(const protocol::HttpRequest* req,
+                                 const std::string& target_name) {
+    protocol::HttpHeaderCursor cursor(req);
+    protocol::HttpMessageHeader header;
+    std::string target = target_name;
+    std::transform(target.begin(), target.end(), target.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    while (cursor.next(&header)) {
+        std::string name(static_cast<const char*>(header.name), header.name_len);
+        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        if (name == target) {
+            return std::string(static_cast<const char*>(header.value), header.value_len);
+        }
+    }
+    return "";
+}
+
+/***
+ * 未通过鉴权时的统一 401 响应。
+ */
+void reply_unauthorized(WFHttpTask* task) {
+    auto* resp = task->get_resp();
+    resp->set_status_code("401");
+    resp->add_header_pair("WWW-Authenticate", "Bearer realm=\"Mortred\"");
+    resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
+    std::string body = json_error("unauthorized: missing or invalid bearer token");
+    resp->append_output_body(body.data(), body.size());
 }
 
 struct CatalogCtx {
@@ -320,6 +362,10 @@ void handle_infer(WFHttpTask* server_task) {
     });
     client->get_req()->set_method("POST");
     client->get_req()->add_header_pair("Content-Type", "application/json; charset=utf-8");
+    if (!e->auth_token.empty()) {
+        std::string auth_value = "Bearer " + e->auth_token;
+        client->get_req()->add_header_pair("Authorization", auth_value.c_str());
+    }
     client->get_req()->append_output_body(body.data(), body.size());
     client->set_send_timeout(-1);
     client->set_receive_timeout(180000);
@@ -388,6 +434,16 @@ void process(WFHttpTask* server_task) {
     std::string method = server_task->get_req()->get_method();
     std::string path = uri_path(uri);
 
+    // 管理 API 统一鉴权；静态资源保持可访问，便于前端加载后输入 token
+    bool is_api_path = path == "/api" || path.rfind("/api/", 0) == 0;
+    if (is_api_path &&
+        !mortred_web::is_authorized(
+            request_header_value(server_task->get_req(), "Authorization"),
+            g_auth_token)) {
+        reply_unauthorized(server_task);
+        return;
+    }
+
     if (path == "/api/catalog") {
         handle_catalog(server_task);
     } else if (path == "/api/health") {
@@ -414,20 +470,50 @@ int main() {
     g_logs_dir = g_project_root + "/logs";
     g_generated_dir = g_project_root + "/generated_configs";
 
+    const char* env_listen_host = getenv("APP_LISTEN_HOST");
+    const char* env_listen_port = getenv("APP_LISTEN_PORT");
+    const char* env_auth_token = getenv("APP_AUTH_TOKEN");
+    if (env_listen_host && *env_listen_host) {
+        g_listen_host = env_listen_host;
+    }
+    if (env_listen_port && *env_listen_port) {
+        int parsed_port = std::atoi(env_listen_port);
+        if (parsed_port > 0 && parsed_port <= 65535) {
+            g_listen_port = parsed_port;
+        }
+    }
+    if (env_auth_token && *env_auth_token) {
+        g_auth_token = env_auth_token;
+    }
+
+    // fail-closed：非回环监听必须显式配置访问令牌，否则拒绝启动
+    if (!mortred_web::is_loopback_host(g_listen_host) && g_auth_token.empty()) {
+        fprintf(stderr,
+                "refusing to start: non-loopback listen host %s requires APP_AUTH_TOKEN\n",
+                g_listen_host.c_str());
+        return 1;
+    }
+
     if (!g_catalog.init(g_project_root, g_generated_dir)) {
         fprintf(stderr, "catalog init failed, project root: %s\n", g_project_root.c_str());
         return 1;
     }
     g_manager.init(g_catalog, g_project_root, g_logs_dir);
 
-    WFHttpServer server(process);
-    if (server.start(8787) == 0) {
-        fprintf(stderr, "Mortred Web Console listening on http://localhost:8787\n");
+    WFServerParams server_params = SERVER_PARAMS_DEFAULT;
+    server_params.request_size_limit =
+        jinq::common::k_default_request_size_limit_mb * 1024 * 1024;
+    WFHttpServer server(&server_params, process);
+    if (server.start(g_listen_host.c_str(),
+                     static_cast<unsigned short>(g_listen_port)) == 0) {
+        fprintf(stderr, "Mortred Web Console listening on http://%s:%d%s\n",
+                g_listen_host.c_str(), g_listen_port,
+                g_auth_token.empty() ? " (auth disabled)" : " (auth enabled)");
         WFFacilities::WaitGroup wait_group(1);
         wait_group.wait();
         server.stop();
     } else {
-        fprintf(stderr, "failed to start web console on port 8787\n");
+        fprintf(stderr, "failed to start web console on port %d\n", g_listen_port);
         return 1;
     }
     return 0;

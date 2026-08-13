@@ -18,6 +18,7 @@ struct ServerEntry {
     std::string exe;      // executable file name in _bin
     std::string config;   // absolute config path
     std::string host;
+    std::string auth_token; // bearer token for direct inference access (empty = disabled)
     int port = 0;
     std::string uri;      // server_uri or server_url
     std::string type;     // "image" or "chat"

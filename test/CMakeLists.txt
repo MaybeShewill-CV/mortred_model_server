@@ -46,6 +46,9 @@ set(TEST_LIST
     model_factory_unittest
     byte_tracker_unittest
     simple_tokenizer_unittest
+    request_size_limit_unittest
+    web_console_auth_unittest
+    rate_limiter_unittest
 )
 
 if(MORTRED_BUILD_FULL)
@@ -71,6 +74,8 @@ foreach(src ${TEST_LIST})
     elseif(${src} STREQUAL "simple_tokenizer_unittest")
         set(EXTRA_SRCS ${PROJECT_ROOT_DIR}/src/models/clip/simple_tokenizer.cpp)
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
+    elseif(${src} STREQUAL "web_console_auth_unittest")
+        set(EXTRA_SRCS ${PROJECT_ROOT_DIR}/src/apps/web_console/backend/auth.cpp)
     endif()
     add_executable(${src} EXCLUDE_FROM_ALL ${src}.cc ${EXTRA_SRCS})
     target_link_libraries(${src} common ${EXTRA_LIBS} ${GTEST_LIBS})

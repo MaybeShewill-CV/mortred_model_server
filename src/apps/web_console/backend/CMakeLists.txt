@@ -8,12 +8,13 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 get_filename_component(PROJECT_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../.." ABSOLUTE)
-include_directories("${PROJECT_ROOT}/3rd_party/include")
+include_directories("${PROJECT_ROOT}/3rd_party/include" "${PROJECT_ROOT}/src")
 
 add_executable(app_server
     main.cpp
     catalog.cpp
     server_manager.cpp
+    auth.cpp
 )
 
 target_compile_options(app_server PRIVATE -O2 -Wno-deprecated-declarations)

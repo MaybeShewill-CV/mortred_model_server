@@ -189,6 +189,7 @@ bool Catalog::init(const std::string& project_root, const std::string& generated
         auto cfg = parse_ini(content);
         std::string section;
         std::string host = "localhost";
+        std::string auth_token;
         int port = 0;
         std::string uri;
         for (const auto& [sec, kv] : cfg) {
@@ -205,6 +206,10 @@ bool Catalog::init(const std::string& project_root, const std::string& generated
             auto hit = kv.find("host");
             if (hit != kv.end()) {
                 host = hit->second;
+            }
+            auto ait = kv.find("auth_token");
+            if (ait != kv.end()) {
+                auth_token = ait->second;
             }
             auto uit = kv.find("server_uri");
             if (uit != kv.end()) {
@@ -267,6 +272,7 @@ bool Catalog::init(const std::string& project_root, const std::string& generated
         e.exe = exe;
         e.config = cfg_path;
         e.host = host;
+        e.auth_token = auth_token;
         e.port = port;
         e.uri = uri;
         e.type = type;
@@ -313,7 +319,9 @@ void Catalog::add_missing_server(const std::string& project_root,
         "host=\"localhost\"\n"
         "max_connections=500\n"
         "peer_resp_timeout=15\n"
-        "request_size_limit=-1\n"
+        "request_size_limit=64\n"
+        "# auth_token=\"\"\n"
+        "# rate_limit_qps=0\n"
         "compute_threads=-1\n"
         "handler_threads=50\n"
         "worker_nums=1\n"

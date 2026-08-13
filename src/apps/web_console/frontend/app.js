@@ -14,6 +14,51 @@ const state = {
 const $ = (id) => document.getElementById(id);
 
 /* ---------------- helpers ---------------- */
+const TOKEN_KEY = "mortred_web_token";
+
+function getToken() {
+  return localStorage.getItem(TOKEN_KEY) || "";
+}
+
+function setToken(token) {
+  if (token) {
+    localStorage.setItem(TOKEN_KEY, token);
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+  }
+}
+
+/***
+ * 带 Bearer Token 的 fetch 封装：自动附带 token，遇到 401 时让用户重新输入并重试一次。
+ */
+async function authorizedFetch(path, options) {
+  options = options || {};
+  options.headers = Object.assign({}, options.headers || {});
+  const token = getToken();
+  if (token) {
+    options.headers["Authorization"] = "Bearer " + token;
+  }
+  let resp = await fetch(path, options);
+  if (resp.status === 401) {
+    const nextToken = prompt("访问被拒绝（401），请输入 Web Console 访问令牌：", token);
+    if (nextToken) {
+      setToken(nextToken.trim());
+      options.headers["Authorization"] = "Bearer " + nextToken.trim();
+      resp = await fetch(path, options);
+    }
+  }
+  return resp;
+}
+
+$("btn-token").onclick = () => {
+  const token = prompt("请输入 Web Console 访问令牌（Bearer Token）：", getToken());
+  if (token !== null) {
+    setToken(token.trim());
+    showToast("令牌已保存", "success");
+    loadCatalog();
+  }
+};
+
 function uid() {
   if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
   return "req-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
@@ -26,7 +71,7 @@ function escapeHtml(s) {
 }
 
 async function api(path, options) {
-  const resp = await fetch(path, options);
+  const resp = await authorizedFetch(path, options);
   const text = await resp.text();
   let data;
   try { data = JSON.parse(text); } catch (e) { data = text; }
@@ -244,7 +289,7 @@ async function sendBatch() {
     const t0 = performance.now();
     let result;
     try {
-      const resp = await fetch("/api/infer", {
+      const resp = await authorizedFetch("/api/infer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body,
@@ -326,7 +371,7 @@ async function sendChat() {
   $("chat-image-name").textContent = "";
 
   const t0 = performance.now();
-  const resp = await fetch("/api/infer", {
+  const resp = await authorizedFetch("/api/infer", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,
