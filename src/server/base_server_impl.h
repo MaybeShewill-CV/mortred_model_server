@@ -145,6 +145,11 @@ protected:
     StatusCode parse_server_security_config(const toml::table& server_section);
 
     /***
+     * 解析 server 段公共配置：5 个 server 参数 + 请求体上限归一化 + 鉴权/限流安全配置。
+     */
+    StatusCode parse_common_server_config(const toml::table& server_section);
+
+    /***
      * 获取客户端 IP，失败返回空串。
      */
     static std::string peer_ip_of(const WFHttpTask* task);
@@ -451,6 +456,24 @@ StatusCode BaseAiServerImpl<WORKER, MODEL_OUTPUT>::parse_server_security_config(
         return StatusCode::SERVER_INIT_FAILED;
     }
     return StatusCode::OK;
+}
+
+/***
+ *
+ * @param server_section
+ * @return
+ */
+template<typename WORKER, typename MODEL_OUTPUT>
+StatusCode BaseAiServerImpl<WORKER, MODEL_OUTPUT>::parse_common_server_config(
+    const toml::table& server_section) {
+    _m_max_connection_nums = static_cast<int>(server_section["max_connections"].value_or<int64_t>(0));
+    _m_peer_resp_timeout = static_cast<int>(server_section["peer_resp_timeout"].value_or<int64_t>(0)) * 1000;
+    _m_compute_threads = static_cast<int>(server_section["compute_threads"].value_or<int64_t>(0));
+    _m_handler_threads = static_cast<int>(server_section["handler_threads"].value_or<int64_t>(0));
+    if (auto limit = server_section["request_size_limit"].value_or<int64_t>(0); limit > 0) {
+        _m_request_size_limit = static_cast<size_t>(limit);
+    }
+    return parse_server_security_config(server_section);
 }
 
 /***

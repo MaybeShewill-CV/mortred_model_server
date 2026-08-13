@@ -190,9 +190,9 @@ StatusCode Qwen2VLChatServer::Impl::init(const toml::table &config) {
     }
     const toml::table& server_section = *server_section_ptr;
 
-    auto security_status = parse_server_security_config(server_section);
-    if (security_status != StatusCode::OK) {
-        return security_status;
+    auto common_status = parse_common_server_config(server_section);
+    if (common_status != StatusCode::OK) {
+        return common_status;
     }
     auto model_section = config["QWEN2_VL_CHAT_MODEL"];
     std::string model_cfg_path = model_section["model_config_file_path"].value_or<std::string>("");
@@ -228,16 +228,10 @@ StatusCode Qwen2VLChatServer::Impl::init(const toml::table &config) {
         _m_server_uri = server_section["server_url"].value_or<std::string>("");
     }
 
-    // init server params
-    _m_max_connection_nums = static_cast<int>(server_section["max_connections"].value_or<int64_t>(0));
-    _m_peer_resp_timeout = static_cast<int>(server_section["peer_resp_timeout"].value_or<int64_t>(0)) * 1000;
-    _m_compute_threads = static_cast<int>(server_section["compute_threads"].value_or<int64_t>(0));
-    _m_handler_threads = static_cast<int>(server_section["handler_threads"].value_or<int64_t>(0));
-    if (auto limit = server_section["request_size_limit"].value_or<int64_t>(0); limit > 0) {
-        _m_request_size_limit = static_cast<size_t>(limit);
-    }
     // 多模态生成时间无界，不设推理超时
     _m_model_run_timeout = -1;
+    // 单 handler 线程串行处理 HTTP 请求，保持原有行为
+    _m_handler_threads = 1;
 
     _m_successfully_initialized = true;
     LOG(INFO) << "qwen2-vl chat server init successfully";
@@ -488,23 +482,7 @@ StatusCode Qwen2VLChatServer::init(const toml::table &config) {
         return status;
     }
 
-    // init server
-    WFGlobalSettings settings = GLOBAL_SETTINGS_DEFAULT;
-    settings.compute_threads = _m_impl->_m_compute_threads;
-    settings.handler_threads = 1;
-    WORKFLOW_library_init(&settings);
-
-    WFServerParams server_params = SERVER_PARAMS_DEFAULT;
-    server_params.max_connections = _m_impl->_m_max_connection_nums;
-    server_params.peer_response_timeout = _m_impl->_m_peer_resp_timeout;
-    server_params.request_size_limit = _m_impl->_m_request_size_limit * 1024 * 1024;
-
-    auto&& proc = [&](auto arg) {
-        return this->_m_impl->serve_process(arg);
-    };
-    _m_server = std::make_unique<WFHttpServer>(&server_params, proc);
-
-    return StatusCode::OK;
+    return init_http_server(_m_impl.get());
 }
 
 /***

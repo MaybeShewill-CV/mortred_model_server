@@ -11,6 +11,7 @@
 #include <toml/toml.hpp>
 #include <workflow/WFTask.h>
 #include <workflow/WFHttpServer.h>
+#include <workflow/Workflow.h>
 
 #include "common/status_code.h"
 
@@ -91,6 +92,28 @@ public:
     }
 
 protected:
+    /***
+     * 通用 HTTP 服务装配：workflow 全局设置 + WFServerParams + WFHttpServer。
+     * 参数全部取自 Impl 的 _m_* 成员（基类有默认值兜底），
+     * 特异 server 可以不调用本方法而自行装配 _m_server。
+     */
+    template<typename IMPL>
+    jinq::common::StatusCode init_http_server(IMPL* impl) {
+        WFGlobalSettings settings = GLOBAL_SETTINGS_DEFAULT;
+        settings.compute_threads = impl->_m_compute_threads;
+        settings.handler_threads = impl->_m_handler_threads;
+        WORKFLOW_library_init(&settings);
+
+        WFServerParams server_params = SERVER_PARAMS_DEFAULT;
+        server_params.max_connections = impl->_m_max_connection_nums;
+        server_params.peer_response_timeout = impl->_m_peer_resp_timeout;
+        server_params.request_size_limit = impl->_m_request_size_limit * 1024 * 1024;
+
+        auto&& proc = [impl](auto arg) { return impl->serve_process(arg); };
+        _m_server = std::make_unique<WFHttpServer>(&server_params, proc);
+        return jinq::common::StatusCode::OK;
+    }
+
     std::unique_ptr<WFHttpServer> _m_server;
 };
 }

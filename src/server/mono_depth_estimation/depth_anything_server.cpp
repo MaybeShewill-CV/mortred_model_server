@@ -77,9 +77,9 @@ StatusCode DepthAnythingServer::Impl::init(const toml::table &config) {
     }
     const toml::table& server_section = *server_section_ptr;
 
-    auto security_status = parse_server_security_config(server_section);
-    if (security_status != StatusCode::OK) {
-        return security_status;
+    auto common_status = parse_common_server_config(server_section);
+    if (common_status != StatusCode::OK) {
+        return common_status;
     }
     auto worker_nums = static_cast<int>(server_section["worker_nums"].value_or<int64_t>(0));
     auto model_section = config["DEPTH_ANYTHING"];
@@ -127,15 +127,6 @@ StatusCode DepthAnythingServer::Impl::init(const toml::table &config) {
         return StatusCode::SERVER_INIT_FAILED;
     } else {
         _m_server_uri = server_section["server_uri"].value_or<std::string>("");
-    }
-
-    // init server params
-    _m_max_connection_nums = static_cast<int>(server_section["max_connections"].value_or<int64_t>(0));
-    _m_peer_resp_timeout = static_cast<int>(server_section["peer_resp_timeout"].value_or<int64_t>(0)) * 1000;
-    _m_compute_threads = static_cast<int>(server_section["compute_threads"].value_or<int64_t>(0));
-    _m_handler_threads = static_cast<int>(server_section["handler_threads"].value_or<int64_t>(0));
-    if (auto limit = server_section["request_size_limit"].value_or<int64_t>(0); limit > 0) {
-        _m_request_size_limit = static_cast<size_t>(limit);
     }
 
     _m_successfully_initialized = true;
@@ -215,21 +206,7 @@ jinq::common::StatusCode DepthAnythingServer::init(const toml::table &config) {
         return status;
     }
 
-    // init server
-    WFGlobalSettings settings = GLOBAL_SETTINGS_DEFAULT;
-    settings.compute_threads = _m_impl->_m_compute_threads;
-    settings.handler_threads = _m_impl->_m_handler_threads;
-    WORKFLOW_library_init(&settings);
-
-    WFServerParams server_params = SERVER_PARAMS_DEFAULT;
-    server_params.max_connections = _m_impl->_m_max_connection_nums;
-    server_params.peer_response_timeout = _m_impl->_m_peer_resp_timeout;
-    server_params.request_size_limit = _m_impl->_m_request_size_limit * 1024 * 1024;
-
-    auto&& proc = [&](auto arg) { return this->_m_impl->serve_process(arg); };
-    _m_server = std::make_unique<WFHttpServer>(&server_params, proc);
-
-    return StatusCode::OK;
+    return init_http_server(_m_impl.get());
 }
 
 /***
