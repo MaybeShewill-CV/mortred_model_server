@@ -56,47 +56,79 @@ After all prerequisites are settled down you may start to build the mortred ai s
 
 ### Setup :fire::fire::fire:
 
-**Step 1:** Prepare 3rd-party Libraries
+> Linux is the only supported build/run platform. Two build paths are provided:
+>
+> - **Path A (tests-only)**: builds the `common` library and unit tests only, for
+>   CI and quick verification. Dependencies come from vcpkg (recommended) or system
+>   apt packages.
+> - **Path B (full build)**: builds all models, servers and tools. Requires the
+>   vendored engines under `3rd_party` (MNN / WORKFLOW / ONNXRUNTIME / TensorRT /
+>   llama.cpp / faiss) and a CUDA toolkit.
 
-Copy MNN headers and libs
+#### Path A: tests-only
+
+Option A1 - vcpkg (recommended, reproducible):
 
 ```bash
-cp -r $MNN_ROOT_DIR/include/MNN ./3rd_party/include
-cp $MNN_ROOT_DIR/build/libMNN.so ./3rd_party/libs
-cp $MNN_ROOT_DIR/build/source/backend/cuda/libMNN_Cuda_Main.so ./3rd_party/libs
+# 1. Install vcpkg (or reuse an existing checkout)
+git clone https://github.com/microsoft/vcpkg.git /path/to/vcpkg
+/path/to/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+# 2. Configure (vcpkg installs opencv/glog/eigen3/gtest from vcpkg.json automatically)
+cd $PROJECT_ROOT_DIR
+cmake -B build -DMORTRED_BUILD_FULL=OFF \
+      -DCMAKE_TOOLCHAIN_FILE=/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake
+
+# 3. Build and run the unit tests
+cmake --build build --target check -j10
+ctest --test-dir build --output-on-failure
 ```
 
-Copy WORKFLOW headers and libs
+`builtin-baseline` is intentionally not hard-coded in `vcpkg.json`; if your vcpkg
+instance requires an explicit baseline, run
+`vcpkg x-update-baseline --add-initial-baseline` once and reconfigure. CI pins the
+baseline to a fixed vcpkg release automatically.
+
+Option A2 - system packages (Ubuntu 22.04):
 
 ```bash
-cp -r $WORKFLOW_ROOT_DIR/_include/workflow ./3rd_party/include
-cp -r $WORKFLOW_ROOT_DIR/_lib/libworkflow.so* ./3rd_party/libs
+sudo apt-get install -y build-essential cmake \
+  libopencv-dev libgoogle-glog-dev libeigen3-dev libgtest-dev
+# Ubuntu's libgtest-dev ships sources only; build it once:
+cd /usr/src/googletest && sudo cmake . && sudo make -j$(nproc) && sudo make install
+
+cd $PROJECT_ROOT_DIR
+cmake -B build -DMORTRED_BUILD_FULL=OFF
+cmake --build build --target check -j10
+ctest --test-dir build --output-on-failure
 ```
 
-Copy ONNXRUNTIME headers and libs
+#### Path B: full build
 
 ```bash
-cp -r $ONNXRUNTIME_ROOT_DIR/include/* ./3rd_party/include/onnxruntime
-cp -r $ONNXRUNTIME_ROOT_DIR/_lib/libonnxruntime*.so* ./3rd_party/libs
-```
+# 1. Verify / fill in the vendored 3rd-party dependencies
+#    (MNN / WORKFLOW / ONNXRUNTIME / TensorRT / llama.cpp / faiss + CUDA).
+#    If something is missing, set the corresponding *_ROOT_DIR env vars and re-run.
+./scripts/setup_full_deps.sh
 
-Copy TensorRT headers and libs
-
-```bash
-cp -r $TENSORRT_ROOT_DIR/include/* ./3rd_party/include/TensorRT-8.6.1.6
-cp -r $TENSORRT_ROOT_DIR/_lib/libnvinfer.so* ./3rd_party/libs
-cp -r $TENSORRT_ROOT_DIR/_lib/libnvinfer_builder_resource.so.8.6.1 ./3rd_party/libs
-cp -r $TENSORRT_ROOT_DIR/_lib/libnvinfer_plugin.so* ./3rd_party/libs
-cp -r $TENSORRT_ROOT_DIR/_lib/libnvonnxparser.so* ./3rd_party/libs
-```
-
-**Step 2:** Build Mortred AI Server :coffee::coffee::coffee:
-
-```bash
+# 2. Configure and build
 mkdir build && cd build
-cmake ..
+cmake ..            # optionally add -DCMAKE_TOOLCHAIN_FILE=... to also use vcpkg
 make -j10
 ```
+
+By default executables go to `$PROJECT_ROOT_DIR/_bin` and shared libraries to
+`$PROJECT_ROOT_DIR/_lib`; both are configurable with
+`-DMORTRED_BIN_OUTPUT_DIR=...` and `-DMORTRED_LIB_OUTPUT_DIR=...`.
+
+Additional CMake options:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `MORTRED_BUILD_FULL` | `ON` | Build all models/servers/apps (needs CUDA + vendored engines). Set `OFF` for tests-only. |
+| `MORTRED_ENABLE_WERROR` | `OFF` | Treat compiler warnings as errors (`-Wall -Wextra -Werror`), used by the CI quality gate. |
+| `MORTRED_BIN_OUTPUT_DIR` | `$PROJECT_ROOT_DIR/_bin` | Executable output directory. |
+| `MORTRED_LIB_OUTPUT_DIR` | `$PROJECT_ROOT_DIR/_lib` | Shared library output directory. |
 
 **Step 3:** Download Pre-Built Models :tea::tea::tea:
 

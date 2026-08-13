@@ -55,48 +55,72 @@
 
 ### 编译安装 :fire::fire::fire:
 
-**Step 1:** 准备一些第三方库的头文件和库文件
+> Linux 是唯一受支持的构建/运行平台。构建分为两条路径：
+>
+> - **路径 A（tests-only）**：只构建 `common` 库与单元测试，适合 CI 与快速验证。依赖来源为 vcpkg（推荐）或系统 apt 包。
+> - **路径 B（full build）**：构建全部模型、服务与工具，需要 `3rd_party` 下的 vendored 引擎（MNN / WORKFLOW / ONNXRUNTIME / TensorRT / llama.cpp / faiss）以及 CUDA 工具链。
 
-拷贝`MNN`的头文件和库文件到 `./3rd_party/include` 和 `./3rd_party/libs` 文件夹, `$PROJECT_ROOT_DIR` 在该文档中代表此项目的根目录，`MNN_ROOT_DIR` 代表 `MNN` 项目在你机器的根目录
+#### 路径 A：tests-only
+
+方案 A1 - vcpkg（推荐，可复现）：
 
 ```bash
+# 1. 安装 vcpkg（或复用已有实例）
+git clone https://github.com/microsoft/vcpkg.git /path/to/vcpkg
+/path/to/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+# 2. 配置（vcpkg 会按 vcpkg.json 自动安装 opencv/glog/eigen3/gtest）
 cd $PROJECT_ROOT_DIR
-cp -r $MNN_ROOT_DIR/include/MNN ./3rd_party/include
-cp $MNN_ROOT_DIR/build/libMNN.so ./3rd_party/libs
-cp $MNN_ROOT_DIR/build/source/backend/cuda/libMNN_Cuda_Main.so ./3rd_party/libs
+cmake -B build -DMORTRED_BUILD_FULL=OFF \
+      -DCMAKE_TOOLCHAIN_FILE=/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake
+
+# 3. 构建并运行单元测试
+cmake --build build --target check -j10
+ctest --test-dir build --output-on-failure
 ```
 
-同样的方式拷贝`WORKFLOW`的头文件和库文件, `WORKFLOW_ROOT_DIR` 代表 `WORKFLOW` 项目在你机器的根目录
+`vcpkg.json` 中故意不写死 `builtin-baseline`；若你的 vcpkg 实例要求显式 baseline，执行一次
+`vcpkg x-update-baseline --add-initial-baseline` 后重新配置即可（CI 会自动把 baseline 固定到指定的 vcpkg 版本）。
+
+方案 A2 - 系统包（Ubuntu 22.04）：
 
 ```bash
-cp -r $WORKFLOW_ROOT_DIR/_include/workflow ./3rd_party/include
-cp -r $WORKFLOW_ROOT_DIR/_lib/libworkflow.so* ./3rd_party/libs
+sudo apt-get install -y build-essential cmake \
+  libopencv-dev libgoogle-glog-dev libeigen3-dev libgtest-dev
+# Ubuntu 的 libgtest-dev 只提供源码，需要手动编译安装一次：
+cd /usr/src/googletest && sudo cmake . && sudo make -j$(nproc) && sudo make install
+
+cd $PROJECT_ROOT_DIR
+cmake -B build -DMORTRED_BUILD_FULL=OFF
+cmake --build build --target check -j10
+ctest --test-dir build --output-on-failure
 ```
 
-同样的方式拷贝`ONNXRUNTIME`的头文件和库文件, `ONNXRUNTIME_ROOT_DIR` 代表 `ONNXRUNTIME` 项目在你机器的根目录
+#### 路径 B：full build
 
 ```bash
-cp -r $ONNXRUNTIME_ROOT_DIR/include/* ./3rd_party/include/onnxruntime
-cp -r $ONNXRUNTIME_ROOT_DIR/_lib/libonnxruntime*.so* ./3rd_party/libs
-```
+# 1. 校验/补齐 vendored 第三方依赖
+#    （MNN / WORKFLOW / ONNXRUNTIME / TensorRT / llama.cpp / faiss + CUDA）。
+#    缺失时按提示设置对应的 *_ROOT_DIR 环境变量后重试。
+./scripts/setup_full_deps.sh
 
-同样的方式拷贝`TensorRT`的头文件和库文件, `TENSORRT_ROOT_DIR` 代表 `TensorRT` 项目在你机器的根目录
-
-```bash
-cp -r $TENSORRT_ROOT_DIR/include/* ./3rd_party/include/TensorRT-8.6.1.6
-cp -r $TENSORRT_ROOT_DIR/_lib/libnvinfer.so* ./3rd_party/libs
-cp -r $TENSORRT_ROOT_DIR/_lib/libnvinfer_builder_resource.so.8.6.1 ./3rd_party/libs
-cp -r $TENSORRT_ROOT_DIR/_lib/libnvinfer_plugin.so* ./3rd_party/libs
-cp -r $TENSORRT_ROOT_DIR/_lib/libnvonnxparser.so* ./3rd_party/libs
-```
-
-**Step 2:** 开始编译本项目 :coffee::coffee::coffee:
-
-```bash
+# 2. 配置并构建
 mkdir build && cd build
-cmake ..
+cmake ..            # 可选：追加 -DCMAKE_TOOLCHAIN_FILE=... 以同时使用 vcpkg
 make -j10
 ```
+
+默认可执行文件输出到 `$PROJECT_ROOT_DIR/_bin`，动态库输出到 `$PROJECT_ROOT_DIR/_lib`；
+两者均可用 `-DMORTRED_BIN_OUTPUT_DIR=...` 与 `-DMORTRED_LIB_OUTPUT_DIR=...` 覆盖。
+
+常用 CMake 选项：
+
+| 选项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `MORTRED_BUILD_FULL` | `ON` | 构建全部模型/服务/工具（需要 CUDA 与 vendored 引擎）；置 `OFF` 进入 tests-only 模式。 |
+| `MORTRED_ENABLE_WERROR` | `OFF` | 将编译器警告视为错误（`-Wall -Wextra -Werror`），供 CI 质量门禁使用。 |
+| `MORTRED_BIN_OUTPUT_DIR` | `$PROJECT_ROOT_DIR/_bin` | 可执行文件输出目录。 |
+| `MORTRED_LIB_OUTPUT_DIR` | `$PROJECT_ROOT_DIR/_lib` | 动态库输出目录。 |
 
 **Step 3:** 下载项目提供的一些预训练模型 :tea::tea::tea:
 
