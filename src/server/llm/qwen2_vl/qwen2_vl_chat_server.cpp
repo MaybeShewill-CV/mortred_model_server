@@ -478,7 +478,7 @@ StatusCode Qwen2VLChatServer::init(const toml::table &config) {
     // init impl
     auto status = _m_impl->init(config);
     if (status != StatusCode::OK) {
-        LOG(INFO) << "init llama3 chat server failed";
+        LOG(INFO) << "init qwen2-vl chat server failed";
         return status;
     }
 
