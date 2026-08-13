@@ -126,5 +126,5 @@ int main(int argc, char** argv) {
     }
     progress_bar->mark_as_completed();
 
-    return 1;
+    return 0;
 }

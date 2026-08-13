@@ -70,5 +70,5 @@ int main(int argc, char** argv) {
     LOG(INFO) << "---------------";
     LOG(INFO) << out_referenced_corpus;
 
-    return 1;
+    return 0;
 }

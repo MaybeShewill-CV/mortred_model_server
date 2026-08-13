@@ -78,5 +78,5 @@ int main(int argc, char** argv) {
     cv::imwrite(output_path, merge_result);
     LOG(INFO) << "fast-sam everything result image has been written into: " << output_path;
 
-    return 1;
+    return 0;
 }

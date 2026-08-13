@@ -76,5 +76,5 @@ int main(int argc, char** argv) {
         oss << tokens[i];
     }
     LOG(INFO) << fmt::format("output tokens: {}", oss.str());
-    return 1;
+    return 0;
 }
