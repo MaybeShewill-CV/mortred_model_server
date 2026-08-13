@@ -18,6 +18,7 @@
 #include <rapidjson/stringbuffer.h>
 
 #include <algorithm>
+#include <charconv>
 #include <cerrno>
 #include <cctype>
 #include <cstdlib>
@@ -27,6 +28,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 #include <unistd.h>
@@ -477,8 +479,12 @@ int main() {
         g_listen_host = env_listen_host;
     }
     if (env_listen_port && *env_listen_port) {
-        int parsed_port = std::atoi(env_listen_port);
-        if (parsed_port > 0 && parsed_port <= 65535) {
+        int parsed_port = 0;
+        std::string_view port_view(env_listen_port);
+        auto [ptr, ec] =
+            std::from_chars(port_view.data(), port_view.data() + port_view.size(), parsed_port);
+        if (ec == std::errc() && ptr == port_view.data() + port_view.size() &&
+            parsed_port > 0 && parsed_port <= 65535) {
             g_listen_port = parsed_port;
         }
     }

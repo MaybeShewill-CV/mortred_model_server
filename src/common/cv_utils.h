@@ -10,6 +10,7 @@
 
 #include <map>
 #include <random>
+#include <cstdio>
 
 #include <opencv2/opencv.hpp>
 #include "glog/logging.h"
@@ -106,7 +107,7 @@ public:
 
             cv::rectangle(input_image, bbox, bbox_color, 3);
             char buf[128];
-            sprintf(buf, "Score:%1.2f, Class: %d", conf, cls_id);
+            snprintf(buf, sizeof(buf), "Score:%.2f, Class: %d", conf, cls_id);
             cv::putText(input_image, buf, cv::Point(bbox.x - 5, bbox.y - 5),
                         cv::FONT_ITALIC, 0.8, bbox_color, 2);
         }
@@ -148,7 +149,7 @@ public:
                 input_image, polygons, true, r_polygon_color, 2, cv::LINE_AA);
             // draw text information
             char buf[64];
-            sprintf(buf, "Score:%1.2f", conf);
+            snprintf(buf, sizeof(buf), "Score:%.2f", conf);
             cv::putText(input_image, buf, cv::Point(bbox_int.x - 5, bbox_int.y - 5),
                         cv::FONT_ITALIC, 0.5, bbox_color, 1);
         }
@@ -181,7 +182,10 @@ public:
             output_image.create(input_image.size(), CV_8UC3);
         }
 
-        assert(input_image.size() == output_image.size());
+        if (input_image.size() != output_image.size()) {
+            LOG(ERROR) << "input image size mismatches output image size";
+            return;
+        }
 
         for (auto row = 0; row < input_image.rows; ++ row) {
             for (auto col = 0; col < input_image.cols; ++col) {
@@ -240,7 +244,10 @@ public:
             output_image.create(input_image.size(), CV_8UC3);
         }
 
-        assert(input_image.size() == output_image.size());
+        if (input_image.size() != output_image.size()) {
+            LOG(ERROR) << "input image size mismatches output image size";
+            return;
+        }
 
         // make colorized segmentation mask
         cv::Mat colorized_mask;
@@ -483,7 +490,11 @@ public:
     template<class T>
     static std::vector<T> convert_to_hwc_vec(const std::vector<T>& input, int c, int h, int w) {
         // only support 3 channel image
-        assert(input.size() == h * w * c);
+        if (input.size() != static_cast<size_t>(h) * w * c) {
+            LOG(ERROR) << "input size " << input.size() << " mismatches h*w*c "
+                       << static_cast<size_t>(h) * w * c;
+            return std::vector<T>();
+        }
         std::vector<T> result;
         result.resize(input.size());
 

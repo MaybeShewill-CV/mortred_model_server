@@ -9,6 +9,8 @@
 
 #include <Eigen/Cholesky>
 
+#include "glog/logging.h"
+
 namespace jinq {
 namespace models {
 namespace mot {
@@ -150,8 +152,8 @@ Eigen::Matrix<float, 1, -1> KalmanFilter::gating_distance(
     const KAL_MEAN &mean, const KAL_COVA &covariance, const std::vector<DETECTBOX> &measurements, bool only_position) {
     KAL_HDATA pa = this->project(mean, covariance);
     if (only_position) {
-        printf("not implement!");
-        exit(0);
+        LOG(ERROR) << "only_position gating distance not implemented, returning empty result";
+        return Eigen::Matrix<float, 1, -1>();
     }
     KAL_HMEAN mean1 = pa.first;
     KAL_HCOVA covariance1 = pa.second;

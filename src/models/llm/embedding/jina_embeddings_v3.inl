@@ -451,7 +451,11 @@ StatusCode JinaEmbeddingsV3<INPUT, OUTPUT>::Impl::onnx_run(const INPUT &in, OUTP
         out_embeds_count *= val;
     }
     auto token_nums = input_tokens_64.size();
-    assert(token_nums * embed_dims == out_embeds_count);
+    if (token_nums * embed_dims != static_cast<size_t>(out_embeds_count)) {
+        LOG(ERROR) << "embedding output count mismatch: expect " << (token_nums * embed_dims)
+                   << ", got " << out_embeds_count;
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
     embed_out.token_embeds.resize(token_nums, std::vector<float>(embed_dims, 0.0));
     for (auto i = 0; i < token_nums; ++i) {
         for (auto j = 0; j < embed_dims; ++j) {

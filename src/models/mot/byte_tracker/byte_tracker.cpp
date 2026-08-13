@@ -237,7 +237,12 @@ StatusCode ByteTracker::Impl::init(const toml::table &config) {
     for (auto& value : *tracked_names_arr) {
         tracked_cls_names.push_back(value.value_or<std::string>(""));
     }
-    assert(tracked_cls_ids.size() == tracked_cls_names.size());
+    if (tracked_cls_ids.size() != tracked_cls_names.size()) {
+        LOG(ERROR) << "Config field tracked_cls_ids size " << tracked_cls_ids.size()
+                   << " mismatches tracked_cls_names size " << tracked_cls_names.size();
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
     for (auto idx = 0; idx < tracked_cls_ids.size(); ++idx) {
         _m_tracked_cls_ids.insert(std::make_pair(tracked_cls_ids[idx], tracked_cls_names[idx]));
     }

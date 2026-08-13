@@ -673,7 +673,11 @@ std_feature_point_match_output LightGlue<INPUT, OUTPUT>::Impl::onnx_decode_outpu
     }
 
     // fetch valid matched feature points
-    assert(out_match_scores.size() * 2 == out_matches.size());
+    if (out_match_scores.size() * 2 != out_matches.size()) {
+        LOG(ERROR) << "match scores size " << out_match_scores.size()
+                   << " mismatches matches size " << out_matches.size();
+        return std_feature_point_match_output();
+    }
     std::vector<matched_fp> matched_fpts;
     for (int idx = 0; idx < out_match_scores.size(); idx++) {
         auto match_score = out_match_scores[idx];
@@ -1115,8 +1119,12 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::trt_extract_feature_points(
     cuda_mem_input = nullptr;
 
     // thresh feature points
-    assert(fp_scores.size() * 2 == fp_locations.size());
-    assert(fp_scores.size() * 256 == fp_descs.size());
+    if (fp_scores.size() * 2 != fp_locations.size() ||
+        fp_scores.size() * 256 != fp_descs.size()) {
+        LOG(ERROR) << "feature point output sizes mismatch: scores " << fp_scores.size()
+                   << ", locations " << fp_locations.size() << ", descs " << fp_descs.size();
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
     for (auto idx = 0; idx < fp_scores.size(); ++idx) {
         auto fp_score = fp_scores[idx];
         if (fp_score < _m_trt_params.extractor->score_thresh) {
@@ -1280,7 +1288,11 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::trt_match_feature_points(
         kpts1.push_back(fpt);
     }
 
-    assert(out_mscores.size() * 2 == out_matches.size());
+    if (out_mscores.size() * 2 != out_matches.size()) {
+        LOG(ERROR) << "match scores size " << out_mscores.size()
+                   << " mismatches matches size " << out_matches.size();
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
     for (auto idx = 0; idx < out_mscores.size(); ++idx) {
         auto match_score = out_mscores[idx];
         if (match_score < _m_match_thresh) {

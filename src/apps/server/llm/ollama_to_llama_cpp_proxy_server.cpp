@@ -8,8 +8,10 @@
 // proxy server
 
 #include <csignal>
+#include <charconv>
 #include <cstdlib>
 #include <cstdio>
+#include <string_view>
 #include <utility>
 #include "workflow/Workflow.h"
 #include "workflow/HttpMessage.h"
@@ -209,7 +211,12 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    port = atoi(argv[1]);
+    std::string_view port_arg(argv[1]);
+    auto [ptr, ec] = std::from_chars(port_arg.data(), port_arg.data() + port_arg.size(), port);
+    if (ec != std::errc() || ptr != port_arg.data() + port_arg.size() || port == 0) {
+        fprintf(stderr, "USAGE: %s <port>\n", argv[0]);
+        exit(1);
+    }
     signal(SIGINT, sig_handler);
 
     struct WFServerParams params = HTTP_SERVER_PARAMS_DEFAULT;
