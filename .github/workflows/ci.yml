@@ -2,26 +2,279 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
 
+env:
+  VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+  VCPKG_TARGET_TRIPLET: x64-linux
+  # CI 覆盖默认的 _bin/_lib，把产物收进构建目录，避免污染仓库根目录
+  MORTRED_CI_BIN_DIR: ${{ github.workspace }}/build-ci/bin
+  MORTRED_CI_LIB_DIR: ${{ github.workspace }}/build-ci/lib
+
 jobs:
-  unit-tests:
+  # ---------------------------------------------------------------------------
+  # Job A: 测试矩阵（gcc / clang，tests-only，vcpkg 依赖 + ccache 缓存）
+  # ---------------------------------------------------------------------------
+  tests:
+    name: tests (${{ matrix.compiler }})
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential cmake \
-            libopencv-dev libgoogle-glog-dev libeigen3-dev libgtest-dev
+          sudo apt-get install -y --no-install-recommends ccache jq
+          if [ "${{ matrix.compiler }}" = "clang" ]; then
+            sudo apt-get install -y --no-install-recommends clang
+            echo "CC=clang" >> "$GITHUB_ENV"
+            echo "CXX=clang++" >> "$GITHUB_ENV"
+          fi
 
-      # tests-only 模式：不依赖 CUDA/MNN/TRT/llama，只构建 common + 单测
-      - name: Configure
-        run: cmake -B build-ci -DMORTRED_BUILD_FULL=OFF
+      # 缓存 vcpkg 仓库（含 installed/ 依赖产物）与 ccache；
+      # key 同时包含 vcpkg 版本、编译器与 vcpkg.json 内容，任何变更都会失效。
+      - name: Cache vcpkg and ccache
+        id: cache-deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.VCPKG_ROOT }}
+            ~/.cache/ccache
+          key: vcpkg-2026.01.16-${{ matrix.compiler }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-2026.01.16-${{ matrix.compiler }}-
+
+      # vcpkg 不支持浅克隆，且 builtin-baseline 必须能由本地 checkout 解析，
+      # 因此固定 checkout 发布 tag（完整克隆），并在下一步把 baseline 钉到该 tag 的 HEAD。
+      - name: Checkout vcpkg (pinned release tag)
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
+          git -C "$VCPKG_ROOT" checkout --detach 2026.01.16
+
+      - name: Bootstrap vcpkg and pin builtin-baseline
+        run: |
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
+          baseline="$(git -C "$VCPKG_ROOT" rev-parse HEAD)"
+          jq --arg baseline "$baseline" '.builtin-baseline = $baseline' vcpkg.json > vcpkg.json.tmp
+          mv vcpkg.json.tmp vcpkg.json
+          echo "Pinned vcpkg builtin-baseline to: $baseline"
+
+      - name: Configure (vcpkg toolchain, tests-only)
+        run: >
+          cmake -B build-ci
+          -DMORTRED_BUILD_FULL=OFF
+          -DMORTRED_BIN_OUTPUT_DIR=$MORTRED_CI_BIN_DIR
+          -DMORTRED_LIB_OUTPUT_DIR=$MORTRED_CI_LIB_DIR
+          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build and run unit tests
         run: |
-          LD_LIBRARY_PATH=$PWD/_lib cmake --build build-ci --target check
+          LD_LIBRARY_PATH="$MORTRED_CI_LIB_DIR" cmake --build build-ci --target check -j2
+
+      - name: Run ctest with failure output
+        run: |
+          LD_LIBRARY_PATH="$MORTRED_CI_LIB_DIR" ctest --test-dir build-ci --output-on-failure
+
+      - name: Upload ctest log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctest-log-${{ matrix.compiler }}
+          path: build-ci/Testing/Temporary/LastTest.log
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Job B: 质量门禁（-Wall -Wextra -Werror 构建 + clang-format 只检查改动文件）
+  # ---------------------------------------------------------------------------
+  quality-gates:
+    name: quality gates
+    runs-on: ubuntu-22.04
+    needs: tests
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ccache clang-format jq
+
+      - name: Cache vcpkg and ccache
+        id: cache-deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.VCPKG_ROOT }}
+            ~/.cache/ccache
+          key: vcpkg-2026.01.16-gcc-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-2026.01.16-gcc-
+
+      - name: Checkout vcpkg (pinned release tag)
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
+          git -C "$VCPKG_ROOT" checkout --detach 2026.01.16
+
+      - name: Bootstrap vcpkg and pin builtin-baseline
+        run: |
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
+          baseline="$(git -C "$VCPKG_ROOT" rev-parse HEAD)"
+          jq --arg baseline "$baseline" '.builtin-baseline = $baseline' vcpkg.json > vcpkg.json.tmp
+          mv vcpkg.json.tmp vcpkg.json
+
+      - name: Configure (tests-only, warnings as errors)
+        run: >
+          cmake -B build-gate
+          -DMORTRED_BUILD_FULL=OFF
+          -DMORTRED_ENABLE_WERROR=ON
+          -DMORTRED_BIN_OUTPUT_DIR=${{ github.workspace }}/build-gate/bin
+          -DMORTRED_LIB_OUTPUT_DIR=${{ github.workspace }}/build-gate/lib
+          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build tests with -Wall -Wextra -Werror
+        run: |
+          LD_LIBRARY_PATH="${{ github.workspace }}/build-gate/lib" cmake --build build-gate --target check -j2
+
+      - name: Check formatting of changed C/C++ files
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.event.pull_request.head.sha }}"
+            changed="$(git diff --name-only "$base" "$head" -- '*.c' '*.cc' '*.cpp' '*.h' '*.hpp' '*.inl' || true)"
+          else
+            base="${{ github.event.before }}"
+            head="${{ github.event.after }}"
+            if [ "$base" = "0000000000000000000000000000000000000000" ]; then
+              changed="$(git diff-tree --no-commit-id --name-only -r "$head" -- '*.c' '*.cc' '*.cpp' '*.h' '*.hpp' '*.inl' || true)"
+            else
+              changed="$(git diff --name-only "$base" "$head" -- '*.c' '*.cc' '*.cpp' '*.h' '*.hpp' '*.inl' || true)"
+            fi
+          fi
+          if [ -z "$changed" ]; then
+            echo "No C/C++ files changed; skipping clang-format."
+            exit 0
+          fi
+
+          # 只校验本次改动新增/修改的行（-U0 的 hunk 头即变更行范围），
+          # 不因文件存量格式问题误报，同时能拦截新引入的不规范代码。
+          check_file() {
+            local file="$1"
+            local ranges=""
+            local hunk new_line start count end
+            while IFS= read -r hunk; do
+              # hunk 形如: @@ -old[,oldc] +new[,newc] @@ ...；取 + 侧起始行与行数
+              new_line="$(echo "$hunk" | sed -n 's/@@ -[0-9]*\(,[0-9]*\)\? +\([0-9][0-9]*\)\(,[0-9]*\)\? @@.*/\2\3/p')"
+              [ -n "$new_line" ] || continue
+              start="${new_line%,*}"
+              count="${new_line#*,}"
+              if [ "$count" = "$new_line" ]; then
+                count=1
+              fi
+              [ "$count" -eq 0 ] && continue
+              end=$((start + count - 1))
+              if [ -n "$ranges" ]; then
+                ranges="${ranges},"
+              fi
+              ranges="${ranges}${start}:${end}"
+            done < <(git diff --unified=0 "$base" "$head" -- "$file" | grep '^@@')
+            if [ -z "$ranges" ]; then
+              echo "skip (no added lines): $file"
+              return 0
+            fi
+            echo "checking: $file"
+            clang-format --dry-run --Werror --lines="$ranges" "$file"
+          }
+
+          for file in $changed; do
+            check_file "$file"
+          done
+
+  # ---------------------------------------------------------------------------
+  # Job C: clang-tidy（信息性，不阻塞合并；产出报告 artifact）
+  # ---------------------------------------------------------------------------
+  clang-tidy:
+    name: clang-tidy (informational)
+    runs-on: ubuntu-22.04
+    needs: tests
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang clang-tidy jq
+
+      - name: Cache vcpkg
+        id: cache-deps
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_ROOT }}
+          key: vcpkg-2026.01.16-clang-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-2026.01.16-clang-
+
+      - name: Checkout vcpkg (pinned release tag)
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
+          git -C "$VCPKG_ROOT" checkout --detach 2026.01.16
+
+      - name: Bootstrap vcpkg and pin builtin-baseline
+        run: |
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
+          baseline="$(git -C "$VCPKG_ROOT" rev-parse HEAD)"
+          jq --arg baseline "$baseline" '.builtin-baseline = $baseline' vcpkg.json > vcpkg.json.tmp
+          mv vcpkg.json.tmp vcpkg.json
+
+      - name: Configure (tests-only, export compile commands)
+        run: >
+          cmake -B build-tidy
+          -DMORTRED_BUILD_FULL=OFF
+          -DMORTRED_BIN_OUTPUT_DIR=${{ github.workspace }}/build-tidy/bin
+          -DMORTRED_LIB_OUTPUT_DIR=${{ github.workspace }}/build-tidy/lib
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+          -DCMAKE_C_COMPILER=clang
+          -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+
+      - name: Build all test targets
+        run: |
+          LD_LIBRARY_PATH="${{ github.workspace }}/build-tidy/lib" cmake --build build-tidy --target check -j2
+
+      - name: Run clang-tidy (bugprone + performance)
+        run: |
+          if command -v run-clang-tidy-14 >/dev/null 2>&1; then
+            tidy_cmd="run-clang-tidy-14"
+          elif command -v run-clang-tidy >/dev/null 2>&1; then
+            tidy_cmd="run-clang-tidy"
+          else
+            echo "run-clang-tidy not found" > clang-tidy-report.txt
+            cat clang-tidy-report.txt
+            exit 0
+          fi
+          $tidy_cmd -p build-tidy -checks='-*,bugprone-*,performance-*' \
+            "${{ github.workspace }}/src/common" "${{ github.workspace }}/test" \
+            > clang-tidy-report.txt 2>&1 || true
+          cat clang-tidy-report.txt
+
+      - name: Upload clang-tidy report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clang-tidy-report
+          path: clang-tidy-report.txt
+          if-no-files-found: ignore
