@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "mortred-model-server",
+  "version": "1.0.0",
+  "description": "AI model web server framework (common + unit-test dependency manifest; model engines such as MNN/TensorRT/llama.cpp are vendored under 3rd_party)",
+  "dependencies": [
+    "opencv",
+    "glog",
+    "eigen3",
+    "gtest"
+  ]
+}

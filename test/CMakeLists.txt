@@ -1,7 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
 
-set(CMAKE_BUILD_TYPE Release)
-
 project(mm_ai_server_test LANGUAGES C CXX)
 
 find_program(CMAKE_MEMORYCHECK_COMMAND valgrind)
@@ -9,7 +7,6 @@ set(memcheck_command ${CMAKE_MEMORYCHECK_COMMAND} ${CMAKE_MEMORYCHECK_COMMAND_OP
 
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND})
 
-enable_testing()
 find_package(GTest REQUIRED)
 
 # GTest 目标名在模块模式与配置模式下不同，做兼容选择
@@ -23,14 +20,11 @@ endif()
 
 if (WIN32)
     set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   /MP /wd4200")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP /wd4200 /std:c++14")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP /wd4200")
 else ()
-    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   -Wall -fPIC -pipe -std=gnu90")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -fPIC -pipe -std=c++17")
+    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   -Wall -fPIC -pipe")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -fPIC -pipe")
 endif ()
-
-include_directories(${PROJECT_ROOT_DIR}/src)
-include_directories(${PROJECT_ROOT_DIR}/3rd_party/include)
 
 set(TEST_LIST
     base64_unittest
@@ -60,6 +54,7 @@ endif()
 foreach(src ${TEST_LIST})
     set(EXTRA_SRCS "")
     set(EXTRA_LIBS "")
+    set(EXTRA_COMPILE_OPTIONS "")
     if(${src} STREQUAL "byte_tracker_unittest")
         set(EXTRA_SRCS
             ${PROJECT_ROOT_DIR}/src/models/mot/byte_tracker/byte_tracker.cpp
@@ -67,6 +62,8 @@ foreach(src ${TEST_LIST})
             ${PROJECT_ROOT_DIR}/src/models/mot/byte_tracker/lapjv.cpp
             ${PROJECT_ROOT_DIR}/src/models/mot/byte_tracker/strack.cpp)
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
+        # lapjv.cpp 为 vendored 第三方求解器，其存量警告不参与 -Werror 门禁
+        set(EXTRA_COMPILE_OPTIONS -Wno-unused-parameter)
     elseif(${src} STREQUAL "cv_utils_unittest")
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "cv_image_input_unittest")
@@ -85,6 +82,9 @@ foreach(src ${TEST_LIST})
     endif()
     add_executable(${src} EXCLUDE_FROM_ALL ${src}.cc ${EXTRA_SRCS})
     target_link_libraries(${src} common ${EXTRA_LIBS} ${GTEST_LIBS})
+    if(EXTRA_COMPILE_OPTIONS)
+        target_compile_options(${src} PRIVATE ${EXTRA_COMPILE_OPTIONS})
+    endif()
     add_test(NAME ${src} COMMAND $<TARGET_FILE:${src}> WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
     add_dependencies(check ${src})
 endforeach()

@@ -1,10 +1,5 @@
 # build apps
 
-include_directories(
-    ${PROJECT_ROOT_DIR}/3rd_party/include
-    ${PROJECT_ROOT_DIR}/src
-)
-
 # build benchmark apps
 set(MODEL_BENCHMARK_LIST
     classification
@@ -23,7 +18,7 @@ set(MODEL_BENCHMARK_LIST
 )
 
 foreach(dir_name ${MODEL_BENCHMARK_LIST})
-    file(GLOB_RECURSE src_list ./model_benchmark/${dir_name}/*)
+    file(GLOB_RECURSE src_list CONFIGURE_DEPENDS ./model_benchmark/${dir_name}/*)
     foreach(src ${src_list})
         string(REGEX REPLACE ".+/(.+)\\..*" "\\1" file_name ${src})
         add_executable(${file_name}.out ${src})
@@ -45,7 +40,7 @@ set(MODEL_SERVER_APP_LIST
 )
 
 foreach(dir_name ${MODEL_SERVER_APP_LIST})
-    file(GLOB_RECURSE src_list ./server/${dir_name}/*)
+    file(GLOB_RECURSE src_list CONFIGURE_DEPENDS ./server/${dir_name}/*)
     foreach(src ${src_list})
         string(REGEX REPLACE ".+/(.+)\\..*" "\\1" file_name ${src})
         add_executable(${file_name}.out ${src})
@@ -59,7 +54,7 @@ set(MODEL_TOOLS_APP_LIST
 )
 
 foreach(dir_name ${MODEL_TOOLS_APP_LIST})
-    file(GLOB_RECURSE src_list ./model_tools/${dir_name}/*.cpp)
+    file(GLOB_RECURSE src_list CONFIGURE_DEPENDS ./model_tools/${dir_name}/*.cpp)
     foreach(src ${src_list})
         string(REGEX REPLACE ".+/(.+)\\..*" "\\1" file_name ${src})
         add_executable(${file_name}.out ${src})
