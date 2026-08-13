@@ -6,6 +6,8 @@
 ************************************************/
 
 #include "resnet.h"
+#include "models/cv_image_input.h"
+#include "models/cv_image_input.h"
 
 #include <opencv2/opencv.hpp>
 #include "glog/logging.h"
@@ -42,47 +44,10 @@ using internal_output = std_classification_output;
  * @return
  */
 template<typename INPUT>
-typename std::enable_if<std::is_same<INPUT, std::decay<file_input>::type>::value, internal_input>::type
-transform_input(const INPUT& in) {
+internal_input transform_input(const INPUT& in) {
     internal_input result{};
-    if (!FilePathUtil::is_file_exist(in.input_image_path)) {
-        DLOG(WARNING) << "input image: " << in.input_image_path << " not exist";
-        return result;
-    }
-    result.input_image = cv::imread(in.input_image_path, cv::IMREAD_UNCHANGED);
+    result.input_image = jinq::models::cv_input::load_image(in);
     return result;
-}
-
-/***
- *
- * @tparam INPUT
- * @param in
- * @return
- */
-template<typename INPUT>
-typename std::enable_if<std::is_same<INPUT, std::decay<mat_input>::type>::value, internal_input>::type
-transform_input(const INPUT& in) {
-    return in;
-}
-
-/***
- *
- * @tparam INPUT
- * @param in
- * @return
- */
-template<typename INPUT>
-typename std::enable_if<std::is_same<INPUT, std::decay<base64_input>::type>::value, internal_input>::type
-transform_input(const INPUT& in) {
-    internal_input result{};
-    auto image = CvUtils::decode_base64_str_into_cvmat(in.input_image_content);
-    if (!image.data || image.empty()) {
-        DLOG(WARNING) << "image data empty";
-        return result;
-    } else {
-        result.input_image = image;
-        return result;
-    }
 }
 
 /***

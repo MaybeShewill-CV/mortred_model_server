@@ -6,6 +6,8 @@
 ************************************************/
 
 #include "yolov7_detector.h"
+#include "models/cv_image_input.h"
+#include "models/cv_image_input.h"
 
 #include <random>
 
@@ -45,50 +47,10 @@ using internal_output = std_object_detection_output;
  * @return
  */
 template<typename INPUT>
-typename std::enable_if<std::is_same<INPUT, std::decay<file_input>::type>::value, internal_input>::type
-transform_input(const INPUT& in) {
+internal_input transform_input(const INPUT& in) {
     internal_input result{};
-    if (!FilePathUtil::is_file_exist(in.input_image_path)) {
-        DLOG(WARNING) << "input image: " << in.input_image_path << " not exist";
-        return result;
-    }
-    result.input_image = cv::imread(in.input_image_path, cv::IMREAD_UNCHANGED);
+    result.input_image = jinq::models::cv_input::load_image(in);
     return result;
-}
-
-/***
- *
- * @tparam INPUT
- * @param in
- * @return
- */
-template<typename INPUT>
-typename std::enable_if<std::is_same<INPUT, std::decay<mat_input>::type>::value, internal_input>::type
-transform_input(const INPUT& in) {
-    return in;
-}
-
-/***
- *
- * @tparam INPUT
- * @param in
- * @return
- */
-template<typename INPUT>
-typename std::enable_if<std::is_same<INPUT, std::decay<base64_input>::type>::value, internal_input>::type
-transform_input(const INPUT& in) {
-    internal_input result{};
-    auto image_decode_string = jinq::common::Base64::base64_decode(in.input_image_content);
-    std::vector<uchar> image_vec_data(image_decode_string.begin(), image_decode_string.end());
-
-    if (image_vec_data.empty()) {
-        DLOG(WARNING) << "image data empty";
-        return result;
-    } else {
-        cv::Mat ret;
-        result.input_image = cv::imdecode(image_vec_data, cv::IMREAD_UNCHANGED);
-        return result;
-    }
 }
 
 /***

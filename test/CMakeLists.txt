@@ -49,6 +49,7 @@ set(TEST_LIST
     request_size_limit_unittest
     web_console_auth_unittest
     rate_limiter_unittest
+    cv_image_input_unittest
 )
 
 if(MORTRED_BUILD_FULL)
@@ -66,6 +67,8 @@ foreach(src ${TEST_LIST})
             ${PROJECT_ROOT_DIR}/src/models/mot/byte_tracker/strack.cpp)
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "cv_utils_unittest")
+        set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
+    elseif(${src} STREQUAL "cv_image_input_unittest")
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "model_factory_unittest")
         set(EXTRA_LIBS glog::glog)
