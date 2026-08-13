@@ -12,6 +12,8 @@
 #include <any>
 #include <cctype>
 #include <chrono>
+#include <memory>
+#include <mutex>
 #include <type_traits>
 
 #include <arpa/inet.h>
@@ -182,6 +184,9 @@ protected:
 
 protected:
     struct series_ctx {
+        // 保护超时场景下 do_work（写）与 do_work_cb（读）的并发访问：
+        // timedgo 超时后 callback 会提前触发，而 do_work 仍在 detached 线程中继续执行
+        std::mutex ctx_mutex;
         protocol::HttpResponse* response = nullptr;
         StatusCode model_run_status = StatusCode::OK;
         std::string task_id;
@@ -251,7 +256,7 @@ protected:
      * @param req
      * @param ctx
      */
-    virtual void do_work(const task_request& req, series_ctx* ctx);
+    virtual void do_work(const task_request& req, std::shared_ptr<series_ctx> ctx);
 
     /***
      *
@@ -306,23 +311,26 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         _m_received_jobs++;
         // init series work
         auto* series = series_of(task);
-        auto* ctx = new series_ctx;
-        ctx->response = resp;
-        series->set_context(ctx);
+        // ctx 生命周期交给 shared_ptr：timedgo 超时后 do_work 会 detached 继续执行，
+        // counter 提前释放 holder 时 do_work/do_work_cb 仍持有引用，避免 use-after-free
+        auto* ctx_holder = new std::shared_ptr<series_ctx>(std::make_shared<series_ctx>());
+        (*ctx_holder)->response = resp;
+        series->set_context(ctx_holder);
         // do model work
-        auto&& go_proc = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work, this, std::placeholders::_1, std::placeholders::_2);
+        auto&& go_proc = std::bind(
+            &BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work, this, std::placeholders::_1, *ctx_holder);
         WFGoTask* serve_task = nullptr;
         if (_m_model_run_timeout <= 0) {
-            serve_task = WFTaskFactory::create_go_task(_m_server_uri, go_proc, task_req, ctx);
+            serve_task = WFTaskFactory::create_go_task(_m_server_uri, go_proc, task_req);
         } else {
             serve_task = WFTaskFactory::create_timedgo_task(
-                0, _m_model_run_timeout * 1e6, _m_server_uri, go_proc, task_req, ctx);
+                0, _m_model_run_timeout * 1e6, _m_server_uri, go_proc, task_req);
         }
         auto&& go_proc_cb = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb, this, serve_task);
         serve_task->set_callback(go_proc_cb);
         *series << serve_task;
         WFCounterTask* counter = WFTaskFactory::create_counter_task("release_ctx", 1, [](const WFCounterTask* task){
-            delete (series_ctx*)series_of(task)->get_context();
+            delete static_cast<std::shared_ptr<series_ctx>*>(series_of(task)->get_context());
         });
         *series << counter;
         return;
@@ -348,7 +356,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     const BaseAiServerImpl::task_request& req,
-    BaseAiServerImpl::series_ctx* ctx) {
+    std::shared_ptr<BaseAiServerImpl::series_ctx> ctx) {
     // get model worker
     WORKER worker;
     auto find_worker_start_ts = Timestamp::now();
@@ -357,8 +365,11 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
         // 有界等待：等 worker 也计入模型超时预算，形成背压
         if (!_m_working_queue.wait_dequeue_timed(
                 worker, std::chrono::milliseconds(_m_model_run_timeout))) {
-            ctx->model_run_status = StatusCode::MODEL_RUN_TIMEOUT;
-            ctx->task_finished_ts = Timestamp::now().to_format_str();
+            {
+                std::lock_guard<std::mutex> lock(ctx->ctx_mutex);
+                ctx->model_run_status = StatusCode::MODEL_RUN_TIMEOUT;
+                ctx->task_finished_ts = Timestamp::now().to_format_str();
+            }
             // 关键：提前退出也必须恰好计一次 release_ctx，否则 ctx 泄漏
             WFTaskFactory::count_by_name("release_ctx");
             return;
@@ -367,13 +378,15 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
         // model_run_timeout <= 0 表示不设超时，用无界阻塞等待
         _m_working_queue.wait_dequeue(worker);
     }
-    ctx->find_worker_time_consuming = (Timestamp::now() - find_worker_start_ts) * 1000;
-
-    // get task receive timestamp
-    ctx->task_id = req.task_id;
-    ctx->is_task_req_valid = req.is_valid;
     auto task_receive_ts = Timestamp::now();
-    ctx->task_received_ts = task_receive_ts.to_format_str();
+    {
+        std::lock_guard<std::mutex> lock(ctx->ctx_mutex);
+        ctx->find_worker_time_consuming = (Timestamp::now() - find_worker_start_ts) * 1000;
+        // get task receive timestamp
+        ctx->task_id = req.task_id;
+        ctx->is_task_req_valid = req.is_valid;
+        ctx->task_received_ts = task_receive_ts.to_format_str();
+    }
 
     // construct model input: 默认实现为 CV 图像路径（payload 为 base64 字符串）
     models::io_define::common_io::base64_input model_input;
@@ -396,15 +409,17 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     } else {
         status = req.parse_status;
     }
-    ctx->model_run_status = status;
-
     // restore worker queue
     _m_working_queue.enqueue(std::move(worker));
 
-    // update ctx
-    auto task_finish_ts = Timestamp::now();
-    ctx->task_finished_ts = task_finish_ts.to_format_str();
-    ctx->worker_run_time_consuming = (task_finish_ts - task_receive_ts) * 1000;
+    {
+        std::lock_guard<std::mutex> lock(ctx->ctx_mutex);
+        ctx->model_run_status = status;
+        // update ctx
+        auto task_finish_ts = Timestamp::now();
+        ctx->task_finished_ts = task_finish_ts.to_format_str();
+        ctx->worker_run_time_consuming = (task_finish_ts - task_receive_ts) * 1000;
+    }
     WFTaskFactory::count_by_name("release_ctx");
 }
 
@@ -418,21 +433,42 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
     auto state = task->get_state();
-    auto* ctx = (series_ctx*)series_of(task)->get_context();
+    // 从 holder 取 shared_ptr 拷贝：counter 释放 holder 后 ctx 仍存活（do_work detached 场景）
+    auto* ctx_holder = static_cast<std::shared_ptr<series_ctx>*>(series_of(task)->get_context());
+    auto ctx = *ctx_holder;
 
-    // fill response
     StatusCode status;
+    std::string task_id;
+    std::string response_body;
+    std::string task_received_ts;
+    std::string task_finished_ts;
+    double worker_run_time_consuming = 0;
+    double find_worker_time_consuming = 0;
 
-    if (state != WFT_STATE_SUCCESS) {
-        LOG(ERROR) << "task: " << ctx->task_id << " model run timeout";
-        status = StatusCode::MODEL_RUN_TIMEOUT;
-    } else {
-        status = ctx->model_run_status;
+    {
+        std::lock_guard<std::mutex> lock(ctx->ctx_mutex);
+        if (state != WFT_STATE_SUCCESS) {
+            // 超时：do_work 可能仍在 detached 线程中写 ctx，必须在锁内读取；
+            // model_output 推理期间由 do_work 独占写，此处不读取，避免数据竞争
+            status = StatusCode::MODEL_RUN_TIMEOUT;
+            task_id = ctx->is_task_req_valid ? ctx->task_id : "";
+            response_body = make_response_body(task_id, status, MODEL_OUTPUT{});
+        } else {
+            // 成功：do_work 已完成（workflow 保证 happens-before），直接读取
+            status = ctx->model_run_status;
+            task_id = ctx->is_task_req_valid ? ctx->task_id : "";
+            response_body = make_response_body(task_id, status, ctx->model_output);
+        }
+        ctx->response->append_output_body(std::move(response_body));
+        task_received_ts = ctx->task_received_ts;
+        task_finished_ts = ctx->task_finished_ts;
+        worker_run_time_consuming = ctx->worker_run_time_consuming;
+        find_worker_time_consuming = ctx->find_worker_time_consuming;
     }
 
-    std::string task_id = ctx->is_task_req_valid ? ctx->task_id : "";
-    std::string response_body = make_response_body(task_id, status, ctx->model_output);
-    ctx->response->append_output_body(std::move(response_body));
+    if (state != WFT_STATE_SUCCESS) {
+        LOG(ERROR) << "task: " << task_id << " model run timeout";
+    }
 
     // update task count
     _m_finished_jobs++;
@@ -440,10 +476,10 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
 
     // output log info
     LOG(INFO) << "task id: " << task_id
-              << " received at: " << ctx->task_received_ts
-              << " finished at: " << ctx->task_finished_ts
-              << " elapse: " << ctx->worker_run_time_consuming << " ms"
-              << " find work elapse: " << ctx->find_worker_time_consuming << " ms"
+              << " received at: " << task_received_ts
+              << " finished at: " << task_finished_ts
+              << " elapse: " << worker_run_time_consuming << " ms"
+              << " find work elapse: " << find_worker_time_consuming << " ms"
               << " received jobs: " << _m_received_jobs
               << " waiting jobs: " << _m_waiting_jobs
               << " finished jobs: " << _m_finished_jobs
