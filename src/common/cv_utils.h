@@ -63,7 +63,7 @@ public:
         std::map<int, cv::Scalar> color_map;
         int class_id = 0;
 
-        while (color_map.size() != class_counts) {
+        while (color_map.size() != static_cast<size_t>(class_counts)) {
             int r = distrib(gen);
             int g = distrib(gen);
             int b = distrib(gen);
@@ -270,7 +270,7 @@ public:
         cv::Mat color_mask = cv::Mat::zeros(output_image.size(), CV_8UC3);
 
         // colorize color map
-        for (int idx = 0; idx < masks.size(); ++idx) {
+        for (size_t idx = 0; idx < masks.size(); ++idx) {
             auto color = color_map[idx];
 
             auto mask_b = masks[idx].clone();
@@ -394,8 +394,6 @@ public:
 
             while (!tmp_bboxes.empty()) {
                 auto last_elem = --std::end(tmp_bboxes);
-                const auto& rect1 = last_elem->bbox;
-
                 T last_elem_bak = *last_elem;
                 tmp_bboxes.erase(last_elem);
 

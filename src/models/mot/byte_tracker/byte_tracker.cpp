@@ -243,7 +243,7 @@ StatusCode ByteTracker::Impl::init(const toml::table &config) {
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    for (auto idx = 0; idx < tracked_cls_ids.size(); ++idx) {
+    for (size_t idx = 0; idx < tracked_cls_ids.size(); ++idx) {
         _m_tracked_cls_ids.insert(std::make_pair(tracked_cls_ids[idx], tracked_cls_names[idx]));
     }
     _m_successfully_initialized = true;
@@ -552,8 +552,8 @@ void ByteTracker::Impl::remove_duplicate_stracks(
     std::vector<STrack> &stracksa, std::vector<STrack> &stracksb) {
     std::vector<std::vector<float> > pdist = iou_distance(stracksa, stracksb);
     std::vector<std::pair<int, int> > pairs;
-    for (int i = 0; i < pdist.size(); i++) {
-        for (int j = 0; j < pdist[i].size(); j++) {
+    for (size_t i = 0; i < pdist.size(); i++) {
+        for (size_t j = 0; j < pdist[i].size(); j++) {
             if (pdist[i][j] < 0.15) {
                 pairs.emplace_back(i, j);
             }
@@ -572,14 +572,14 @@ void ByteTracker::Impl::remove_duplicate_stracks(
         }
     }
 
-    for (int i = 0; i < stracksa.size(); i++) {
+    for (size_t i = 0; i < stracksa.size(); i++) {
         auto iter = find(dupa.begin(), dupa.end(), i);
         if (iter == dupa.end()) {
             resa.push_back(stracksa[i]);
         }
     }
 
-    for (int i = 0; i < stracksb.size(); i++) {
+    for (size_t i = 0; i < stracksb.size(); i++) {
         auto iter = find(dupb.begin(), dupb.end(), i);
         if (iter == dupb.end()) {
             resb.push_back(stracksb[i]);
@@ -613,7 +613,7 @@ void ByteTracker::Impl::linear_assignment(
 
     std::vector<int> rowsol; std::vector<int> colsol;
     lapjv(cost_matrix, rowsol, colsol, true, thresh);
-    for (int i = 0; i < rowsol.size(); i++) {
+    for (size_t i = 0; i < rowsol.size(); i++) {
         if (rowsol[i] >= 0) {
             std::vector<int> match;
             match.push_back(i);
@@ -624,7 +624,7 @@ void ByteTracker::Impl::linear_assignment(
         }
     }
 
-    for (int i = 0; i < colsol.size(); i++) {
+    for (size_t i = 0; i < colsol.size(); i++) {
         if (colsol[i] < 0) {
             unmatched_b.push_back(i);
         }
@@ -652,10 +652,10 @@ std::vector<std::vector<float> > ByteTracker::Impl::ious(
     }
 
     //bbox_ious
-    for (int k = 0; k < btlbrs.size(); k++) {
+    for (size_t k = 0; k < btlbrs.size(); k++) {
         std::vector<float> ious_tmp;
         float box_area = (btlbrs[k][2] - btlbrs[k][0] + 1)*(btlbrs[k][3] - btlbrs[k][1] + 1);
-        for (int n = 0; n < atlbrs.size(); n++) {
+        for (size_t n = 0; n < atlbrs.size(); n++) {
             float iw = std::min(atlbrs[n][2], btlbrs[k][2]) - std::max(atlbrs[n][0], btlbrs[k][0]) + 1;
             if (iw > 0) {
                 float ih = std::min(atlbrs[n][3], btlbrs[k][3]) - std::max(atlbrs[n][1], btlbrs[k][1]) + 1;
@@ -812,8 +812,8 @@ double ByteTracker::Impl::lapjv(
                 cost_c_extended[i][j] = 0;
             }
         }
-        for (int i = 0; i < n_rows; i++) {
-            for (int j = 0; j < n_cols; j++) {
+        for (size_t i = 0; i < n_rows; i++) {
+            for (size_t j = 0; j < n_cols; j++) {
                 cost_c_extended[i][j] = cost_c[i][j];
             }
         }
@@ -823,13 +823,13 @@ double ByteTracker::Impl::lapjv(
     }
 
     std::vector<std::vector<double>> cost_rows(n, std::vector<double>(n));
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < n; j++) {
+    for (size_t i = 0; i < n; i++) {
+        for (size_t j = 0; j < n; j++) {
             cost_rows[i][j] = cost_c[i][j];
         }
     }
     std::vector<double*> cost_ptr(n);
-    for (int i = 0; i < n; i++) {
+    for (size_t i = 0; i < n; i++) {
         cost_ptr[i] = cost_rows[i].data();
     }
 
@@ -845,30 +845,30 @@ double ByteTracker::Impl::lapjv(
     double opt = 0.0;
 
     if (n != n_rows) {
-        for (int i = 0; i < n; i++) {
-            if (x_c[i] >= n_cols) {
+        for (size_t i = 0; i < n; i++) {
+            if (x_c[i] >= static_cast<int>(n_cols)) {
                 x_c[i] = -1;
             }
-            if (y_c[i] >= n_rows) {
+            if (y_c[i] >= static_cast<int>(n_rows)) {
                 y_c[i] = -1;
             }
         }
-        for (int i = 0; i < n_rows; i++) {
+        for (size_t i = 0; i < n_rows; i++) {
             rowsol[i] = x_c[i];
         }
-        for (int i = 0; i < n_cols; i++) {
+        for (size_t i = 0; i < n_cols; i++) {
             colsol[i] = y_c[i];
         }
 
         if (return_cost) {
-            for (int i = 0; i < rowsol.size(); i++) {
+            for (size_t i = 0; i < rowsol.size(); i++) {
                 if (rowsol[i] != -1) {
                     opt += cost_ptr[i][rowsol[i]];
                 }
             }
         }
     } else if (return_cost) {
-        for (int i = 0; i < rowsol.size(); i++) {
+        for (size_t i = 0; i < rowsol.size(); i++) {
             opt += cost_ptr[i][rowsol[i]];
         }
     }
