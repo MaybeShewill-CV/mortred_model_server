@@ -259,11 +259,16 @@ int main(int argc, char** argv) {
     static WFFacilities::WaitGroup wait_group(1);
     std::string config_file_path = argv[1];
     LOG(INFO) << "cfg file path: " << config_file_path;
-    auto config = toml::parse(config_file_path);
-    const auto& server_cfg = config.at("QWEN2_VL_CHAT_SERVER");
-    std::string host = server_cfg.at("host").as_string();
-    int64_t port = server_cfg.at("port").as_integer();
-    std::string uri = server_cfg.at("server_url").as_string();
+    auto config_parsed = toml::parse_file(config_file_path);
+    if (!config_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(config_parsed.error().description());
+        return -1;
+    }
+    auto config = std::move(config_parsed).table();
+    const auto& server_cfg = config["QWEN2_VL_CHAT_SERVER"];
+    std::string host = server_cfg["host"].value_or<std::string>("");
+    int64_t port = server_cfg["port"].value_or<int64_t>(0);
+    std::string uri = server_cfg["server_url"].value_or<std::string>("");
     LOG(INFO) << "serve on host: " << host;
     LOG(INFO) << "serve on port: " << port;
     LOG(INFO) << "serve on uri: " << uri;

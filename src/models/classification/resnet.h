@@ -54,7 +54,7 @@ public:
      * @param toml
      * @return
      */
-    jinq::common::StatusCode init(const decltype(toml::parse(""))& cfg) override;
+    jinq::common::StatusCode init(const toml::table& cfg) override;
 
     /***
      *

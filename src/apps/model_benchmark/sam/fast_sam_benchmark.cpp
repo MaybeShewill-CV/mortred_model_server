@@ -39,7 +39,12 @@ int main(int argc, char** argv) {
         return -1;
     }
     auto fast_sam_model = create_fast_sam_segmentor<mat_input, std_fast_sam_output>("fast_sam");
-    auto cfg = toml::parse(config_file_path);
+    auto cfg_parsed = toml::parse_file(config_file_path);
+    if (!cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(cfg_parsed.error().description());
+        return -1;
+    }
+    auto cfg = std::move(cfg_parsed).table();
     fast_sam_model->init(cfg);
     if (!fast_sam_model->is_successfully_initialized()) {
         LOG(ERROR) << "init fast-sam failed";

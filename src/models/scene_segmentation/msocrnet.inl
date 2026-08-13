@@ -143,14 +143,14 @@ class MsOcrNet<INPUT, OUTPUT>::Impl {
      * @param cfg_file_path
      * @return
      */
-    StatusCode init(const decltype(toml::parse(""))& config);
+    StatusCode init(const toml::table& config);
 
     /***
      *
      * @param config
      * @return
      */
-    StatusCode init_onnx(const toml::value& config);
+    StatusCode init_onnx(const toml::table& config);
 
     /***
      *
@@ -232,23 +232,35 @@ class MsOcrNet<INPUT, OUTPUT>::Impl {
 * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode MsOcrNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& config) {
+StatusCode MsOcrNet<INPUT, OUTPUT>::Impl::init(const toml::table& config) {
     if (!config.contains("MSOCRNET")) {
         LOG(ERROR) << "Config missing MSOCRNET section please check config file";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    toml::value cfg_content = config.at("MSOCRNET");
+    const toml::table* cfg_content_ptr = config["MSOCRNET"].as_table();
+    if (cfg_content_ptr == nullptr) {
+        LOG(ERROR) << "Config section MSOCRNET missing or not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    const toml::table& cfg_content = *cfg_content_ptr;
 
     // backend type dispatch
     if (config.contains("BACKEND_DICT") && cfg_content.contains("backend_type")) {
-        auto backend_dict = config.at("BACKEND_DICT");
-        auto backend_name = cfg_content.at("backend_type").as_string();
-        _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].as_integer());
+        auto backend_dict = config["BACKEND_DICT"];
+        auto backend_name = cfg_content["backend_type"].value_or<std::string>("");
+        _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].value_or<int64_t>(0));
     }
     if (_m_backend_type == ONNX) {
-        auto onnx_status = init_onnx(config.at("MSOCRNET_ONNX"));
+        const toml::table* onnx_cfg_ptr = config["MSOCRNET_ONNX"].as_table();
+        if (onnx_cfg_ptr == nullptr) {
+            LOG(ERROR) << "Config section MSOCRNET_ONNX missing or not a table";
+            _m_successfully_initialized = false;
+            return StatusCode::MODEL_INIT_FAILED;
+        }
+        auto onnx_status = init_onnx(*onnx_cfg_ptr);
         _m_successfully_initialized = (onnx_status == StatusCode::OK);
         return onnx_status;
     }
@@ -258,7 +270,7 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& 
         LOG(WARNING) << "Config file doesn\'t contain model_threads_num field, using default 4";
         _m_threads_nums = 4;
     } else {
-        _m_threads_nums = cfg_content.at("model_threads_num").as_integer();
+        _m_threads_nums = cfg_content["model_threads_num"].value_or<int64_t>(0);
     }
 
     // init interpreter
@@ -267,7 +279,7 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& 
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     } else {
-        _m_model_file_path = cfg_content.at("model_file_path").as_string();
+        _m_model_file_path = cfg_content["model_file_path"].value_or<std::string>("");
     }
 
     if (!FilePathUtil::is_file_exist(_m_model_file_path)) {
@@ -290,7 +302,7 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& 
         LOG(INFO) << "Using CPU compute backend...";
         mnn_config.type = MNN_FORWARD_CPU;
     } else {
-        std::string compute_backend = cfg_content.at("compute_backend").as_string();
+        std::string compute_backend = cfg_content["compute_backend"].value_or<std::string>("");
         if (std::strcmp(compute_backend.c_str(), "cuda") == 0) {
             mnn_config.type = MNN_FORWARD_CUDA;
         } else if (std::strcmp(compute_backend.c_str(), "cpu") == 0) {
@@ -309,13 +321,13 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& 
         LOG(WARNING) << "Config doesn\'t have backend_precision_mode field default Precision_Normal";
         backend_config.precision = MNN::BackendConfig::Precision_Normal;
     } else {
-        backend_config.precision = static_cast<MNN::BackendConfig::PrecisionMode>(cfg_content.at("backend_precision_mode").as_integer());
+        backend_config.precision = static_cast<MNN::BackendConfig::PrecisionMode>(cfg_content["backend_precision_mode"].value_or<int64_t>(0));
     }
     if (!cfg_content.contains("backend_power_mode")) {
         LOG(WARNING) << "Config doesn\'t have backend_power_mode field default Power_Normal";
         backend_config.power = MNN::BackendConfig::Power_Normal;
     } else {
-        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(cfg_content.at("backend_power_mode").as_integer());
+        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(cfg_content["backend_power_mode"].value_or<int64_t>(0));
     }
     mnn_config.backendConfig = &backend_config;
 
@@ -352,9 +364,9 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& 
         _m_input_size_user.height = 1024;
     } else {
         _m_input_size_user.width = static_cast<int>(
-            cfg_content.at("model_input_image_size").as_array()[1].as_integer());
+            cfg_content["model_input_image_size"][1].value_or<int64_t>(0));
         _m_input_size_user.height = static_cast<int>(
-            cfg_content.at("model_input_image_size").as_array()[0].as_integer());
+            cfg_content["model_input_image_size"][0].value_or<int64_t>(0));
     }
 
     _m_successfully_initialized = true;
@@ -369,20 +381,20 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& 
 * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode MsOcrNet<INPUT, OUTPUT>::Impl::init_onnx(const toml::value& config) {
+StatusCode MsOcrNet<INPUT, OUTPUT>::Impl::init_onnx(const toml::table& config) {
     // init onnx runtime configs
-    _m_onnx_params.model_file_path = config.at("model_file_path").as_string();
+    _m_onnx_params.model_file_path = config["model_file_path"].value_or<std::string>("");
     if (!FilePathUtil::is_file_exist(_m_onnx_params.model_file_path)) {
         LOG(ERROR) << "MsOcrNet onnx model file path: " << _m_onnx_params.model_file_path << " not exists";
         return StatusCode::MODEL_INIT_FAILED;
     }
     bool use_gpu = false;
-    _m_onnx_params.device = config.at("compute_backend").as_string();
+    _m_onnx_params.device = config["compute_backend"].value_or<std::string>("");
     if (std::strcmp(_m_onnx_params.device.c_str(), "cuda") == 0) {
         use_gpu = true;
-        _m_onnx_params.device_id = config.at("gpu_device_id").as_integer();
+        _m_onnx_params.device_id = config["gpu_device_id"].value_or<int64_t>(0);
     }
-    _m_onnx_params.thread_nums = config.at("model_threads_num").as_integer();
+    _m_onnx_params.thread_nums = config["model_threads_num"].value_or<int64_t>(0);
     _m_onnx_params.session_options = Ort::SessionOptions();
     _m_onnx_params.session_options.SetIntraOpNumThreads(_m_onnx_params.thread_nums);
     _m_onnx_params.session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
@@ -416,9 +428,9 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::Impl::init_onnx(const toml::value& config) {
         _m_input_size_host.width = static_cast<int>(_m_onnx_params.input_node_shapes[0][3]);
     } else if (config.contains("model_input_image_size")) {
         _m_input_size_host.height = static_cast<int>(
-            config.at("model_input_image_size").as_array()[0].as_integer());
+            config["model_input_image_size"][0].value_or<int64_t>(0));
         _m_input_size_host.width = static_cast<int>(
-            config.at("model_input_image_size").as_array()[1].as_integer());
+            config["model_input_image_size"][1].value_or<int64_t>(0));
     } else {
         LOG(ERROR) << "dynamic onnx input requires model_input_image_size field";
         return StatusCode::MODEL_INIT_FAILED;
@@ -593,7 +605,7 @@ MsOcrNet<INPUT, OUTPUT>::~MsOcrNet() = default;
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode MsOcrNet<INPUT, OUTPUT>::init(const decltype(toml::parse(""))& cfg) {
+StatusCode MsOcrNet<INPUT, OUTPUT>::init(const toml::table& cfg) {
     return _m_pimpl->init(cfg);
 }
 

@@ -138,7 +138,7 @@ public:
      * @param cfg_file_path
      * @return
      */
-    StatusCode init(const decltype(toml::parse(""))& config);
+    StatusCode init(const toml::table& config);
 
     /***
      *
@@ -192,14 +192,20 @@ private:
 * @return
 */
 template<typename INPUT, typename OUTPUT>
-StatusCode ResNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& config) {
+StatusCode ResNet<INPUT, OUTPUT>::Impl::init(const toml::table& config) {
     if (!config.contains("RESNET")) {
         LOG(ERROR) << "Config file does not contain RESNET section";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    toml::value cfg_content = config.at("RESNET");
+    const toml::table* cfg_content_ptr = config["RESNET"].as_table();
+    if (cfg_content_ptr == nullptr) {
+        LOG(ERROR) << "Config section RESNET missing or not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    const toml::table& cfg_content = *cfg_content_ptr;
 
     // init Interpreter
     if (!cfg_content.contains("model_file_path")) {
@@ -207,7 +213,7 @@ StatusCode ResNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& co
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     } else {
-        _m_model_file_path = cfg_content.at("model_file_path").as_string();
+        _m_model_file_path = cfg_content["model_file_path"].value_or<std::string>("");
     }
 
     if (!FilePathUtil::is_file_exist(_m_model_file_path)) {
@@ -227,7 +233,7 @@ StatusCode ResNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& co
         LOG(WARNING) << R"(Config file parse error, doesn't not have field "model_threads_nums", use default value 4)";
         _m_threads_nums = 4;
     } else {
-        _m_threads_nums = static_cast<int>(cfg_content.at("model_threads_num").as_integer());
+        _m_threads_nums = static_cast<int>(cfg_content["model_threads_num"].value_or<int64_t>(0));
     }
 
     // init session
@@ -237,7 +243,7 @@ StatusCode ResNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& co
         LOG(WARNING) << "Config doesn\'t have compute_backend field default cpu";
         mnn_config.type = MNN_FORWARD_CPU;
     } else {
-        std::string compute_backend = cfg_content.at("compute_backend").as_string();
+        std::string compute_backend = cfg_content["compute_backend"].value_or<std::string>("");
 
         if (std::strcmp(compute_backend.c_str(), "cuda") == 0) {
             mnn_config.type = MNN_FORWARD_CUDA;
@@ -255,13 +261,13 @@ StatusCode ResNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& co
         LOG(WARNING) << "Config doesn\'t have backend_precision_mode field default Precision_Normal";
         backend_config.precision = MNN::BackendConfig::Precision_Normal;
     } else {
-        backend_config.precision = static_cast<MNN::BackendConfig::PrecisionMode>(cfg_content.at("backend_precision_mode").as_integer());
+        backend_config.precision = static_cast<MNN::BackendConfig::PrecisionMode>(cfg_content["backend_precision_mode"].value_or<int64_t>(0));
     }
     if (!cfg_content.contains("backend_power_mode")) {
         LOG(WARNING) << "Config doesn\'t have backend_power_mode field default Power_Normal";
         backend_config.power = MNN::BackendConfig::Power_Normal;
     } else {
-        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(cfg_content.at("backend_power_mode").as_integer());
+        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(cfg_content["backend_power_mode"].value_or<int64_t>(0));
     }
     mnn_config.backendConfig = &backend_config;
 
@@ -292,7 +298,7 @@ StatusCode ResNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& co
 
     // init class id to names
     if (cfg_content.contains("class_name_file")) {
-        std::string file_path = cfg_content.at("class_name_file").as_string();
+        std::string file_path = cfg_content["class_name_file"].value_or<std::string>("");
         if (!FilePathUtil::is_file_exist(file_path)) {
             LOG(WARNING) << "class name file: " << file_path << " not exist";
         } else {
@@ -407,7 +413,7 @@ ResNet<INPUT, OUTPUT>::~ResNet() = default;
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode ResNet<INPUT, OUTPUT>::init(const decltype(toml::parse(""))& cfg) {
+StatusCode ResNet<INPUT, OUTPUT>::init(const toml::table& cfg) {
     return _m_pimpl->init(cfg);
 }
 

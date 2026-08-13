@@ -11,7 +11,7 @@
 #include <vector>
 
 #include <opencv2/opencv.hpp>
-#include "toml/parser.hpp"
+#include "toml/toml.hpp"
 
 #include "common/status_code.h"
 #include "strack.h"
@@ -54,7 +54,7 @@ class ByteTracker {
      * @param toml
      * @return
      */
-    jinq::common::StatusCode init(const decltype(toml::parse(""))& cfg);
+    jinq::common::StatusCode init(const toml::table& cfg);
 
     /***
      *

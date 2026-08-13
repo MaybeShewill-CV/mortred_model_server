@@ -107,7 +107,7 @@ class LDMSampler<INPUT, OUTPUT>::Impl {
      * @param cfg_file_path
      * @return
      */
-    StatusCode init(const decltype(toml::parse("")) &config);
+    StatusCode init(const toml::table &config);
 
     /***
      *
@@ -162,14 +162,20 @@ class LDMSampler<INPUT, OUTPUT>::Impl {
 * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode LDMSampler<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")) &config) {
+StatusCode LDMSampler<INPUT, OUTPUT>::Impl::init(const toml::table &config) {
     // init diffusion sampler
-    auto sampler_cfg_path = config.at("LDM_SAMPLER").at("latent_diffusion_cfg").as_string();
+    auto sampler_cfg_path = config["LDM_SAMPLER"]["latent_diffusion_cfg"].value_or<std::string>("");
     if (!FilePathUtil::is_file_exist(sampler_cfg_path)) {
         LOG(ERROR) << "diffusion sampler config file: " << sampler_cfg_path << " not exists";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    auto sampler_cfg = toml::parse(sampler_cfg_path);
+    auto sampler_cfg_parsed = toml::parse_file(sampler_cfg_path);
+    if (!sampler_cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(sampler_cfg_parsed.error().description());
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    auto sampler_cfg = std::move(sampler_cfg_parsed).table();
     _m_ddim_sampler = std::make_unique<DDIMSamplerPtr>();
     auto status = _m_ddim_sampler->init(sampler_cfg);
     if (status != StatusCode::OK) {
@@ -184,12 +190,18 @@ StatusCode LDMSampler<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))
     }
 
     // init vae decoder
-    auto vae_cfg_path = config.at("LDM_SAMPLER").at("vae_decoder_cfg").as_string();
+    auto vae_cfg_path = config["LDM_SAMPLER"]["vae_decoder_cfg"].value_or<std::string>("");
     if (!FilePathUtil::is_file_exist(sampler_cfg_path)) {
         LOG(ERROR) << "vae decoder model config file: " << sampler_cfg_path << " not exists";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    auto vae_decoder_cfg = toml::parse(vae_cfg_path);
+    auto vae_decoder_cfg_parsed = toml::parse_file(vae_cfg_path);
+    if (!vae_decoder_cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(vae_decoder_cfg_parsed.error().description());
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    auto vae_decoder_cfg = std::move(vae_decoder_cfg_parsed).table();
     _m_vae_decoder = std::make_unique<VAEDecoderPtr>();
     status = _m_vae_decoder->init(vae_decoder_cfg);
     if (status != StatusCode::OK) {
@@ -198,9 +210,9 @@ StatusCode LDMSampler<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))
     }
 
     // init other ldm params
-    _m_latent_dims = static_cast<int>(config.at("LDM_SAMPLER").at("latent_dims").as_integer());
-    _m_latent_scale = static_cast<float>(config.at("LDM_SAMPLER").at("latent_scale").as_floating());
-    _m_downscale = static_cast<int>(config.at("LDM_SAMPLER").at("downscale").as_integer());
+    _m_latent_dims = static_cast<int>(config["LDM_SAMPLER"]["latent_dims"].value_or<int64_t>(0));
+    _m_latent_scale = static_cast<float>(config["LDM_SAMPLER"]["latent_scale"].value_or<double>(0.0));
+    _m_downscale = static_cast<int>(config["LDM_SAMPLER"]["downscale"].value_or<int64_t>(0));
 
     _m_successfully_initialized = true;
 
@@ -346,7 +358,7 @@ LDMSampler<INPUT, OUTPUT>::~LDMSampler() = default;
 * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode LDMSampler<INPUT, OUTPUT>::init(const decltype(toml::parse("")) &cfg) {
+StatusCode LDMSampler<INPUT, OUTPUT>::init(const toml::table &cfg) {
     return _m_pimpl->init(cfg);
 }
 

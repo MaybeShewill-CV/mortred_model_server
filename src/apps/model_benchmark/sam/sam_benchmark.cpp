@@ -39,7 +39,12 @@ int main(int argc, char** argv) {
         return -1;
     }
     auto sam_model = create_sam_predictor<sam_prompt_input, std_sam_prompt_output>("sam_predictor");
-    auto cfg = toml::parse(config_file_path);
+    auto cfg_parsed = toml::parse_file(config_file_path);
+    if (!cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(cfg_parsed.error().description());
+        return -1;
+    }
+    auto cfg = std::move(cfg_parsed).table();
     sam_model->init(cfg);
     if (!sam_model->is_successfully_initialized()) {
         LOG(ERROR) << "init sam failed";

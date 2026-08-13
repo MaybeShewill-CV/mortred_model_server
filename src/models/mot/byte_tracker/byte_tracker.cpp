@@ -52,7 +52,7 @@ class ByteTracker::Impl {
      * @param cfg_file_path
      * @return
      */
-    StatusCode init(const decltype(toml::parse(""))& config);
+    StatusCode init(const toml::table& config);
 
     /***
      *
@@ -194,30 +194,48 @@ class ByteTracker::Impl {
  * @param config
  * @return
  */
-StatusCode ByteTracker::Impl::init(const decltype(toml::parse("")) &config) {
+StatusCode ByteTracker::Impl::init(const toml::table &config) {
     if (!config.contains("BYTE_TRACK")) {
         LOG(ERROR) << "Config file does not contain BYTE_TRACK section";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    toml::value cfg_content = config.at("BYTE_TRACK");
+    const toml::table* cfg_content_ptr = config["BYTE_TRACK"].as_table();
+    if (cfg_content_ptr == nullptr) {
+        LOG(ERROR) << "Config section BYTE_TRACK missing or not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    const toml::table& cfg_content = *cfg_content_ptr;
 
-    _m_track_thresh = static_cast<float>(cfg_content.at("tracker_thresh").as_floating());
-    _m_high_thresh = static_cast<float>(cfg_content.at("tracker_high_thresh").as_floating());
-    _m_match_thresh = static_cast<float>(cfg_content.at("tracker_match_thresh").as_floating());
-    _m_frame_rate = static_cast<int>(cfg_content.at("frame_rate").as_integer());
-    auto track_buffer = static_cast<float>(cfg_content.at("track_buffer").as_integer());
+    _m_track_thresh = static_cast<float>(cfg_content["tracker_thresh"].value_or<double>(0.0));
+    _m_high_thresh = static_cast<float>(cfg_content["tracker_high_thresh"].value_or<double>(0.0));
+    _m_match_thresh = static_cast<float>(cfg_content["tracker_match_thresh"].value_or<double>(0.0));
+    _m_frame_rate = static_cast<int>(cfg_content["frame_rate"].value_or<int64_t>(0));
+    auto track_buffer = static_cast<float>(cfg_content["track_buffer"].value_or<int64_t>(0));
     _m_max_time_lost = static_cast<int>(static_cast<float>(_m_frame_rate) / 30.0f * track_buffer);  // seconds
     _m_frame_id = 0;
 
     std::vector<int> tracked_cls_ids;
-    for (auto& value : cfg_content.at("tracked_cls_ids").as_array()) {
-        tracked_cls_ids.push_back(static_cast<int>(value.as_integer()));
+    const toml::array* tracked_ids_arr = cfg_content["tracked_cls_ids"].as_array();
+    if (tracked_ids_arr == nullptr) {
+        LOG(ERROR) << "Config field tracked_cls_ids is not an array";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    for (auto& value : *tracked_ids_arr) {
+        tracked_cls_ids.push_back(static_cast<int>(value.value_or<int64_t>(0)));
     }
     std::vector<std::string> tracked_cls_names;
-    for (auto& value : cfg_content.at("tracked_cls_names").as_array()) {
-        tracked_cls_names.push_back(value.as_string());
+    const toml::array* tracked_names_arr = cfg_content["tracked_cls_names"].as_array();
+    if (tracked_names_arr == nullptr) {
+        LOG(ERROR) << "Config field tracked_cls_names is not an array";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    for (auto& value : *tracked_names_arr) {
+        tracked_cls_names.push_back(value.value_or<std::string>(""));
     }
     assert(tracked_cls_ids.size() == tracked_cls_names.size());
     for (auto idx = 0; idx < tracked_cls_ids.size(); ++idx) {
@@ -880,7 +898,7 @@ ByteTracker::~ByteTracker() = default;
  * @param cfg
  * @return
  */
-StatusCode ByteTracker::init(const decltype(toml::parse("")) &cfg) {
+StatusCode ByteTracker::init(const toml::table &cfg) {
    return _m_pimpl-> init(cfg);
 }
 

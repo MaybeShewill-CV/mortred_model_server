@@ -113,7 +113,7 @@ class Impl {
      * @param cfg
      * @return
      */
-    StatusCode init(const decltype(toml::parse(""))& cfg);
+    StatusCode init(const toml::table& cfg);
 
     /***
      *
@@ -178,7 +178,7 @@ class Impl {
  * @param cfg
  * @return
  */
-StatusCode Impl::init(const decltype(toml::parse("")) &cfg) {
+StatusCode Impl::init(const toml::table &cfg) {
     // init sam encoder
     _m_visual_encoder = std::make_unique<OpenAiClipVitEncoder>();
     _m_visual_encoder->init(cfg);
@@ -353,7 +353,7 @@ template <typename INPUT, typename OUTPUT>
 OpenAiClip<INPUT, OUTPUT>::~OpenAiClip() = default;
 
 template <typename INPUT, typename OUTPUT>
-jinq::common::StatusCode OpenAiClip<INPUT, OUTPUT>::init(const decltype(toml::parse("")) &cfg) {
+jinq::common::StatusCode OpenAiClip<INPUT, OUTPUT>::init(const toml::table &cfg) {
     return _m_pimpl->init(cfg);
 }
 

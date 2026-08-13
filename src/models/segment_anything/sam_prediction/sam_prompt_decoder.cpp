@@ -83,7 +83,7 @@ class SamPromptDecoder::Impl {
      * @param cfg
      * @return
      */
-    StatusCode init(const decltype(toml::parse(""))& cfg);
+    StatusCode init(const toml::table& cfg);
 
     /***
      *
@@ -204,14 +204,14 @@ class SamPromptDecoder::Impl {
      * @param cfg
      * @return
      */
-    StatusCode init_onnx_model(const toml::value& cfg);
+    StatusCode init_onnx_model(const toml::table& cfg);
     
     /***
      *
      * @param cfg
      * @return
      */
-    StatusCode init_trt_model(const toml::value& cfg);
+    StatusCode init_trt_model(const toml::table& cfg);
     
     /***
       *
@@ -329,26 +329,26 @@ class SamPromptDecoder::Impl {
  * @param cfg
  * @return
  */
-StatusCode SamPromptDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
+StatusCode SamPromptDecoder::Impl::init(const toml::table &cfg) {
     // choose backend type
-    auto backend_dict = cfg.at("BACKEND_DICT");
-    auto backend_name = cfg.at("SAM_DECODER").at("backend_type").as_string();
-    _m_backend_type = static_cast<model_type>(backend_dict[backend_name].as_integer());
+    auto backend_dict = cfg["BACKEND_DICT"];
+    auto backend_name = cfg["SAM_DECODER"]["backend_type"].value_or<std::string>("");
+    _m_backend_type = static_cast<model_type>(backend_dict[backend_name].value_or<int64_t>(0));
 
     // init sam decoder configs
-    toml::value sam_decoder_cfg;
+    const toml::table* sam_decoder_cfg = nullptr;
     if (_m_backend_type == TRT) {
-        sam_decoder_cfg = cfg.at("SAM_TRT_DECODER");
+        sam_decoder_cfg = cfg["SAM_TRT_DECODER"].as_table();
     } else {
-        sam_decoder_cfg = cfg.at("SAM_ONNX_DECODER");
+        sam_decoder_cfg = cfg["SAM_ONNX_DECODER"].as_table();
     }
-    auto model_file_name = FilePathUtil::get_file_name(sam_decoder_cfg.at("model_file_path").as_string());
+    auto model_file_name = FilePathUtil::get_file_name((*sam_decoder_cfg)["model_file_path"].value_or<std::string>(""));
 
     StatusCode init_status;
     if (_m_backend_type == TRT) {
-        init_status = init_trt_model(sam_decoder_cfg);
+        init_status = init_trt_model(*sam_decoder_cfg);
     } else {
-        init_status = init_onnx_model(sam_decoder_cfg);
+        init_status = init_onnx_model(*sam_decoder_cfg);
     }
 
     if (init_status == StatusCode::OK) {
@@ -415,23 +415,23 @@ StatusCode SamPromptDecoder::Impl::decode(
  * @param cfg
  * @return
  */
-StatusCode SamPromptDecoder::Impl::init_onnx_model(const toml::value &cfg) {
+StatusCode SamPromptDecoder::Impl::init_onnx_model(const toml::table&cfg) {
     // ort env and memo info
     _m_env = {ORT_LOGGING_LEVEL_WARNING, ""};
 
     // init sam decoder configs
-    _m_model_path = cfg.at("model_file_path").as_string();
+    _m_model_path = cfg["model_file_path"].value_or<std::string>("");
     if (!FilePathUtil::is_file_exist(_m_model_path)) {
         LOG(ERROR) << "sam onnx prompt decoder model file path: " << _m_model_path << " not exists";
         return StatusCode::MODEL_INIT_FAILED;
     }
     bool use_gpu = false;
-    _m_model_device = cfg.at("compute_backend").as_string();
+    _m_model_device = cfg["compute_backend"].value_or<std::string>("");
     if (std::strcmp(_m_model_device.c_str(), "cuda") == 0) {
         use_gpu = true;
-        _m_device_id = cfg.at("gpu_device_id").as_integer();
+        _m_device_id = cfg["gpu_device_id"].value_or<int64_t>(0);
     }
-    _m_thread_nums = cfg.at("model_threads_num").as_integer();
+    _m_thread_nums = cfg["model_threads_num"].value_or<int64_t>(0);
     _m_sess_options.SetIntraOpNumThreads(_m_thread_nums);
     _m_sess_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
     _m_sess_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
@@ -452,7 +452,7 @@ StatusCode SamPromptDecoder::Impl::init_onnx_model(const toml::value &cfg) {
  * @param cfg
  * @return
  */
-StatusCode SamPromptDecoder::Impl::init_trt_model(const toml::value &cfg) {
+StatusCode SamPromptDecoder::Impl::init_trt_model(const toml::table&cfg) {
     // init trt runtime
     _m_trt_logger = TrtLogger();
     _m_trt_runtime = nvinfer1::createInferRuntime(_m_trt_logger);
@@ -466,7 +466,7 @@ StatusCode SamPromptDecoder::Impl::init_trt_model(const toml::value &cfg) {
         LOG(ERROR) << "Config doesn\'t have model_file_path field";
         return StatusCode::MODEL_INIT_FAILED;
     } else {
-        _m_model_path = cfg.at("model_file_path").as_string();
+        _m_model_path = cfg["model_file_path"].value_or<std::string>("");
     }
     if (!FilePathUtil::is_file_exist(_m_model_path)) {
         LOG(ERROR) << "Sam trt segmentation model file: " << _m_model_path << " not exist";
@@ -1225,7 +1225,7 @@ SamPromptDecoder::~SamPromptDecoder() = default;
  * @param cfg
  * @return
  */
-StatusCode SamPromptDecoder::init(const decltype(toml::parse("")) &cfg) {
+StatusCode SamPromptDecoder::init(const toml::table &cfg) {
     return _m_pimpl->init(cfg);
 }
 

@@ -157,7 +157,7 @@ class HRNetSegmentation<INPUT, OUTPUT>::Impl {
      * @param cfg_file_path
      * @return
      */
-    StatusCode init(const decltype(toml::parse(""))& config);
+    StatusCode init(const toml::table& config);
 
     /***
      *
@@ -258,7 +258,7 @@ class HRNetSegmentation<INPUT, OUTPUT>::Impl {
      * @param config
      * @return
      */
-    StatusCode init_trt(const toml::value& config);
+    StatusCode init_trt(const toml::table& config);
 
     /***
      *
@@ -273,7 +273,7 @@ class HRNetSegmentation<INPUT, OUTPUT>::Impl {
      * @param config
      * @return
      */
-    StatusCode init_onnx(const toml::value& config);
+    StatusCode init_onnx(const toml::table& config);
 
     /***
      *
@@ -288,7 +288,7 @@ class HRNetSegmentation<INPUT, OUTPUT>::Impl {
      * @param config
      * @return
      */
-    StatusCode init_mnn(const toml::value& config);
+    StatusCode init_mnn(const toml::table& config);
 
     /***
      *
@@ -305,30 +305,30 @@ class HRNetSegmentation<INPUT, OUTPUT>::Impl {
 * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& config) {
+StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::init(const toml::table& config) {
     // choose backend type
-    auto backend_dict = config.at("BACKEND_DICT");
-    auto backend_name = config.at("HRNET_SEGMENTATION").at("backend_type").as_string();
-    _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].as_integer());
+    auto backend_dict = config["BACKEND_DICT"];
+    auto backend_name = config["HRNET_SEGMENTATION"]["backend_type"].value_or<std::string>("");
+    _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].value_or<int64_t>(0));
 
     // init hrnet configs
-    toml::value hrnet_cfg;
+    const toml::table* hrnet_cfg = nullptr;
     if (_m_backend_type == TRT) {
-        hrnet_cfg = config.at("HRNET_SEGMENTATION_TRT");
+        hrnet_cfg = config["HRNET_SEGMENTATION_TRT"].as_table();
     } else if (_m_backend_type == ONNX) {
-        hrnet_cfg = config.at("HRNET_SEGMENTATION_ONNX");
+        hrnet_cfg = config["HRNET_SEGMENTATION_ONNX"].as_table();
     } else {
-        hrnet_cfg = config.at("HRNET_SEGMENTATION_MNN");
+        hrnet_cfg = config["HRNET_SEGMENTATION_MNN"].as_table();
     }
-    auto model_file_name = FilePathUtil::get_file_name(hrnet_cfg.at("model_file_path").as_string());
+    auto model_file_name = FilePathUtil::get_file_name((*hrnet_cfg)["model_file_path"].value_or<std::string>(""));
 
     StatusCode init_status;
     if (_m_backend_type == TRT) {
-        init_status = init_trt(hrnet_cfg);
+        init_status = init_trt(*hrnet_cfg);
     } else if (_m_backend_type == ONNX) {
-        init_status = init_onnx(hrnet_cfg);
+        init_status = init_onnx(*hrnet_cfg);
     } else {
-        init_status = init_mnn(hrnet_cfg);
+        init_status = init_mnn(*hrnet_cfg);
     }
 
     if (init_status == StatusCode::OK) {
@@ -400,7 +400,7 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& 
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::init_trt(const toml::value &config) {
+StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::init_trt(const toml::table&config) {
     // init trt runtime
     _m_trt_params.logger = TrtLogger();
     _m_trt_params.runtime = nvinfer1::createInferRuntime(_m_trt_params.logger);
@@ -414,7 +414,7 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::init_trt(const toml::value &c
         LOG(ERROR) << "config doesn\'t have model_file_path field";
         return StatusCode::MODEL_INIT_FAILED;
     } else {
-        _m_trt_params.model_file_path = config.at("model_file_path").as_string();
+        _m_trt_params.model_file_path = config["model_file_path"].value_or<std::string>("");
     }
     if (!FilePathUtil::is_file_exist(_m_trt_params.model_file_path)) {
         LOG(ERROR) << "hrnet trt segmentation model file: " << _m_trt_params.model_file_path << " not exist";
@@ -579,23 +579,23 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::trt_run(const INPUT &in, OUTP
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::init_onnx(const toml::value &config) {
+StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::init_onnx(const toml::table&config) {
     // ort env and memo info
     _m_onnx_params.env = Ort::Env(ORT_LOGGING_LEVEL_ERROR, "");
 
     // init light glue session
-    _m_onnx_params.model_file_path = config.at("model_file_path").as_string();
+    _m_onnx_params.model_file_path = config["model_file_path"].value_or<std::string>("");
     if (!FilePathUtil::is_file_exist(_m_onnx_params.model_file_path)) {
         LOG(ERROR) << "hrnet segmentation model file path: " << _m_onnx_params.model_file_path << " not exists";
         return StatusCode::MODEL_INIT_FAILED;
     }
     bool use_gpu = false;
-    _m_onnx_params.device = config.at("compute_backend").as_string();
+    _m_onnx_params.device = config["compute_backend"].value_or<std::string>("");
     if (std::strcmp(_m_onnx_params.device.c_str(), "cuda") == 0) {
         use_gpu = true;
-        _m_onnx_params.device_id = static_cast<int>(config.at("gpu_device_id").as_integer());
+        _m_onnx_params.device_id = static_cast<int>(config["gpu_device_id"].value_or<int64_t>(0));
     }
-    _m_onnx_params.thread_nums = config.at("model_threads_num").as_integer();
+    _m_onnx_params.thread_nums = config["model_threads_num"].value_or<int64_t>(0);
     _m_onnx_params.session_options = Ort::SessionOptions();
     _m_onnx_params.session_options.SetIntraOpNumThreads(_m_onnx_params.thread_nums);
     _m_onnx_params.session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
@@ -710,13 +710,13 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::onnx_run(const INPUT &in, OUT
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::init_mnn(const toml::value &config) {
+StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::init_mnn(const toml::table&config) {
     // init threads
     if (!config.contains("model_threads_num")) {
         LOG(WARNING) << "Config doesn\'t have model_threads_num field default 4";
         _m_mnn_params.threads_nums = 4;
     } else {
-        _m_mnn_params.threads_nums = static_cast<int>(config.at("model_threads_num").as_integer());
+        _m_mnn_params.threads_nums = static_cast<int>(config["model_threads_num"].value_or<int64_t>(0));
     }
 
     // init Interpreter
@@ -724,7 +724,7 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::init_mnn(const toml::value &c
         LOG(ERROR) << "Config doesn\'t have model_file_path field";
         return StatusCode::MODEL_INIT_FAILED;
     } else {
-        _m_mnn_params.model_file_path = config.at("model_file_path").as_string();
+        _m_mnn_params.model_file_path = config["model_file_path"].value_or<std::string>("");
     }
     if (!FilePathUtil::is_file_exist(_m_mnn_params.model_file_path)) {
         LOG(ERROR) << "metric3d model file: " << _m_mnn_params.model_file_path << " not exist";
@@ -742,7 +742,7 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::init_mnn(const toml::value &c
         LOG(WARNING) << "Config doesn\'t have compute_backend field default cpu";
         mnn_config.type = MNN_FORWARD_CPU;
     } else {
-        std::string compute_backend = config.at("compute_backend").as_string();
+        std::string compute_backend = config["compute_backend"].value_or<std::string>("");
         if (std::strcmp(compute_backend.c_str(), "cuda") == 0) {
             mnn_config.type = MNN_FORWARD_CUDA;
         } else if (std::strcmp(compute_backend.c_str(), "cpu") == 0) {
@@ -760,13 +760,13 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::init_mnn(const toml::value &c
         backend_config.precision = MNN::BackendConfig::Precision_Normal;
     } else {
         backend_config.precision = static_cast<MNN::BackendConfig::PrecisionMode>
-            (config.at("backend_precision_mode").as_integer());
+            (config["backend_precision_mode"].value_or<int64_t>(0));
     }
     if (!config.contains("backend_power_mode")) {
         LOG(WARNING) << "Config doesn\'t have backend_power_mode field default Power_Normal";
         backend_config.power = MNN::BackendConfig::Power_Normal;
     } else {
-        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(config.at("backend_power_mode").as_integer());
+        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(config["backend_power_mode"].value_or<int64_t>(0));
     }
     mnn_config.backendConfig = &backend_config;
 
@@ -871,7 +871,7 @@ HRNetSegmentation<INPUT, OUTPUT>::~HRNetSegmentation() = default;
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode HRNetSegmentation<INPUT, OUTPUT>::init(const decltype(toml::parse(""))& cfg) {
+StatusCode HRNetSegmentation<INPUT, OUTPUT>::init(const toml::table& cfg) {
     return _m_pimpl->init(cfg);
 }
 

@@ -53,7 +53,12 @@ int main(int argc, char** argv) {
         output_save_dir = argv[3];
     }
 
-    auto cfg = toml::parse(cfg_file_path);
+    auto cfg_parsed = toml::parse_file(cfg_file_path);
+    if (!cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(cfg_parsed.error().description());
+        return -1;
+    }
+    auto cfg = std::move(cfg_parsed).table();
     auto tracker = std::make_unique<ByteTracker>();
     tracker->init(cfg);
     if (!tracker->is_successfully_initialized()) {
@@ -62,7 +67,12 @@ int main(int argc, char** argv) {
     }
 
     YoloV5Detector<mat_input, std_object_detection_output> detector;
-    cfg = toml::parse("../conf/model/object_detection/yolov5/yolov5_config.ini");
+    cfg_parsed = toml::parse_file("../conf/model/object_detection/yolov5/yolov5_config.ini");
+    if (!cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(cfg_parsed.error().description());
+        return -1;
+    }
+    cfg = std::move(cfg_parsed).table();
     detector.init(cfg);
 
     std::vector<std::string> file_input_paths;

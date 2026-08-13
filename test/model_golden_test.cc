@@ -61,12 +61,12 @@ using jinq::models::io_define::scene_segmentation::std_scene_segmentation_output
 
 namespace {
 
-constexpr double kScoreTol = 1e-3;
-constexpr double kDetScoreTol = 1e-2;
-constexpr float kBoxIouThresh = 0.5f;
-constexpr double kFingerprintDiff = 1.0;
-constexpr double kKeypointMatchDist = 3.0;
-constexpr double kEmbeddingCosThresh = 0.999;
+constexpr double k_score_tol = 1e-3;
+constexpr double k_det_score_tol = 1e-2;
+constexpr float k_box_iou_thresh = 0.5f;
+constexpr double k_fingerprint_diff = 1.0;
+constexpr double k_keypoint_match_dist = 3.0;
+constexpr double k_embedding_cos_thresh = 0.999;
 
 bool update_golden_mode() {
     const char* env = std::getenv("MORTRED_UPDATE_GOLDEN");
@@ -78,43 +78,49 @@ std::string golden_path(const std::string& name, const std::string& ext) {
 }
 
 /*** 配置：解析 conf 文件，修正相对路径，强制 cpu 后端 */
-void fix_toml_paths(toml::value& value) {
-    if (value.is_table()) {
-        for (auto& item : value.as_table()) {
+void fix_toml_paths(toml::node& value) {
+    if (auto* tbl = value.as_table()) {
+        for (auto& item : *tbl) {
             if (item.second.is_string()) {
-                std::string s = item.second.as_string();
+                std::string s = item.second.value_or<std::string>("");
                 if (s.rfind("../", 0) == 0) {
-                    item.second = s.substr(3);
+                    item.second.ref<std::string>() = s.substr(3);
                 }
             } else {
                 fix_toml_paths(item.second);
             }
         }
-    } else if (value.is_array()) {
-        for (auto& item : value.as_array()) {
+    } else if (auto* arr = value.as_array()) {
+        for (auto& item : *arr) {
             fix_toml_paths(item);
         }
     }
 }
 
-void force_cpu_backend(toml::value& value) {
-    if (value.is_table()) {
-        for (auto& item : value.as_table()) {
+void force_cpu_backend(toml::node& value) {
+    if (auto* tbl = value.as_table()) {
+        for (auto& item : *tbl) {
             if (item.first == "compute_backend") {
-                item.second = std::string("cpu");
+                item.second.ref<std::string>() = std::string("cpu");
             } else {
                 force_cpu_backend(item.second);
             }
         }
-    } else if (value.is_array()) {
-        for (auto& item : value.as_array()) {
+    } else if (auto* arr = value.as_array()) {
+        for (auto& item : *arr) {
             force_cpu_backend(item);
         }
     }
 }
 
-toml::value load_model_cfg(const std::string& conf_rel_path) {
-    auto cfg = toml::parse(conf_rel_path);
+toml::table load_model_cfg(const std::string& conf_rel_path) {
+    auto cfg_parsed = toml::parse_file(conf_rel_path);
+    if (!cfg_parsed) {
+        LOG(ERROR) << "parse model config file failed: " << conf_rel_path << ", error: "
+                   << std::string(cfg_parsed.error().description());
+        return toml::table{};
+    }
+    auto cfg = std::move(cfg_parsed).table();
     fix_toml_paths(cfg);
     force_cpu_backend(cfg);
     return cfg;
@@ -192,7 +198,7 @@ void expect_fingerprint(const std::string& name, const cv::Mat& mat) {
     cv::Mat diff;
     cv::absdiff(golden, current, diff);
     double mean = cv::mean(diff)[0];
-    EXPECT_LE(mean, kFingerprintDiff) << "fingerprint drift for " << name << ", mean abs diff = " << mean;
+    EXPECT_LE(mean, k_fingerprint_diff) << "fingerprint drift for " << name << ", mean abs diff = " << mean;
 }
 
 void expect_scores(const std::string& name, const std_classification_output& output) {
@@ -214,7 +220,7 @@ void expect_scores(const std::string& name, const std_classification_output& out
     ASSERT_EQ(output.scores.size(), golden["scores"].GetArray().Size());
     size_t idx = 0;
     for (const auto& s : golden["scores"].GetArray()) {
-        EXPECT_NEAR(output.scores[idx], s.GetFloat(), kScoreTol) << "score mismatch at " << idx;
+        EXPECT_NEAR(output.scores[idx], s.GetFloat(), k_score_tol) << "score mismatch at " << idx;
         ++idx;
     }
 }
@@ -236,8 +242,8 @@ const std::vector<cv::Point2f>& get_landmarks(const face_bbox& box) {
 }
 
 const std::vector<cv::Point2f>& get_landmarks(const bbox&) {
-    static const std::vector<cv::Point2f> kEmpty;
-    return kEmpty;
+    static const std::vector<cv::Point2f> k_empty;
+    return k_empty;
 }
 
 template <typename BoxT>
@@ -299,16 +305,16 @@ void expect_boxes(const std::string& name, const std::vector<BoxT>& boxes, bool 
             }
         }
         ASSERT_GE(best, 0) << "unmatched detection for " << name;
-        EXPECT_GE(best_iou, kBoxIouThresh) << "low IoU for " << name;
+        EXPECT_GE(best_iou, k_box_iou_thresh) << "low IoU for " << name;
         const auto& g = golden_boxes[best];
-        EXPECT_NEAR(box.score, g["score"].GetFloat(), kDetScoreTol);
+        EXPECT_NEAR(box.score, g["score"].GetFloat(), k_det_score_tol);
         EXPECT_EQ(box.class_id, g["class_id"].GetInt());
         if (has_landmarks && g.HasMember("landmarks")) {
             ASSERT_EQ(get_landmarks(box).size(), g["landmarks"].GetArray().Size());
             rapidjson::SizeType li = 0;
             for (const auto& lp : g["landmarks"].GetArray()) {
                 cv::Point2f gp(lp[0].GetFloat(), lp[1].GetFloat());
-                EXPECT_LE(cv::norm(get_landmarks(box)[li] - gp), kKeypointMatchDist);
+                EXPECT_LE(cv::norm(get_landmarks(box)[li] - gp), k_keypoint_match_dist);
                 ++li;
             }
         }
@@ -356,8 +362,8 @@ void expect_text_regions(const std::string& name, const std_text_regions_output&
             }
         }
         ASSERT_GE(best, 0) << "unmatched text region for " << name;
-        EXPECT_GE(best_iou, kBoxIouThresh) << "low IoU for " << name;
-        EXPECT_NEAR(region.score, golden_regions[best]["score"].GetFloat(), kDetScoreTol);
+        EXPECT_GE(best_iou, k_box_iou_thresh) << "low IoU for " << name;
+        EXPECT_NEAR(region.score, golden_regions[best]["score"].GetFloat(), k_det_score_tol);
         matched[best] = true;
     }
 }
@@ -391,7 +397,7 @@ void expect_keypoints(const std::string& name, const std_feature_point_output& p
         for (const auto& p : points) {
             min_dist = std::min(min_dist, static_cast<double>(cv::norm(p.location - target)));
         }
-        if (min_dist <= kKeypointMatchDist) ++matched;
+        if (min_dist <= k_keypoint_match_dist) ++matched;
     }
     EXPECT_GE(static_cast<double>(matched) / points.size(), 0.9)
         << "keypoint match ratio low for " << name;
@@ -423,24 +429,30 @@ void expect_embeddings(const std::string& name, const std::vector<float>& embedd
         ++i;
     }
     double cosine = dot / (std::sqrt(norm_a) * std::sqrt(norm_b) + 1e-9);
-    EXPECT_GE(cosine, kEmbeddingCosThresh) << "embedding cosine similarity low for " << name;
+    EXPECT_GE(cosine, k_embedding_cos_thresh) << "embedding cosine similarity low for " << name;
 }
 
 bool weights_available(const std::string& conf_rel_path) {
-    auto cfg = toml::parse(conf_rel_path);
+    auto cfg_parsed = toml::parse_file(conf_rel_path);
+    if (!cfg_parsed) {
+        LOG(ERROR) << "parse model config file failed: " << conf_rel_path << ", error: "
+                   << std::string(cfg_parsed.error().description());
+        return false;
+    }
+    auto cfg = std::move(cfg_parsed).table();
     fix_toml_paths(cfg);
     std::vector<std::string> paths;
-    std::function<void(const toml::value&)> collect = [&](const toml::value& v) {
-        if (v.is_table()) {
-            for (const auto& item : v.as_table()) {
+    std::function<void(const toml::node&)> collect = [&](const toml::node& v) {
+        if (const auto* tbl = v.as_table()) {
+            for (const auto& item : *tbl) {
                 if (item.second.is_string() &&
                     (item.first == "model_file_path" || item.first == "vocab_file_path")) {
-                    paths.push_back(item.second.as_string());
+                    paths.push_back(item.second.value_or<std::string>(""));
                 }
                 collect(item.second);
             }
-        } else if (v.is_array()) {
-            for (const auto& item : v.as_array()) collect(item);
+        } else if (const auto* arr = v.as_array()) {
+            for (const auto& item : *arr) collect(item);
         }
     };
     collect(cfg);

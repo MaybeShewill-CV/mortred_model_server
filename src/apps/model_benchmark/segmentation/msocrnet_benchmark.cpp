@@ -62,7 +62,12 @@ int main(int argc, char** argv) {
     std_scene_segmentation_output model_output;
     // construct detector
     auto segmentor = create_msocrnet_segmentor<mat_input, std_scene_segmentation_output>("msocrnet");
-    auto cfg = toml::parse(cfg_file_path);
+    auto cfg_parsed = toml::parse_file(cfg_file_path);
+    if (!cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(cfg_parsed.error().description());
+        return -1;
+    }
+    auto cfg = std::move(cfg_parsed).table();
     segmentor->init(cfg);
     if (!segmentor->is_successfully_initialized()) {
         LOG(INFO) << "msocrnet segmentor init failed";

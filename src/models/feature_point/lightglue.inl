@@ -158,7 +158,7 @@ class LightGlue<INPUT, OUTPUT>::Impl {
      * @param cfg_file_path
      * @return
      */
-    StatusCode init(const decltype(toml::parse("")) &config);
+    StatusCode init(const toml::table &config);
 
     /***
      *
@@ -280,7 +280,7 @@ private:
      * @param config
      * @return
      */
-    StatusCode init_onnx(const toml::value& config);
+    StatusCode init_onnx(const toml::table& config);
 
     /***
      *
@@ -301,7 +301,7 @@ private:
      * @param config
      * @return
      */
-    StatusCode init_trt(const toml::value& config);
+    StatusCode init_trt(const toml::table& config);
 
     /***
      *
@@ -316,14 +316,14 @@ private:
      * @param config
      * @return
      */
-    StatusCode init_extractor(const toml::value& config);
+    StatusCode init_extractor(const toml::table& config);
 
     /***
      *
      * @param config
      * @return
      */
-    StatusCode init_matcher(const toml::value& config);
+    StatusCode init_matcher(const toml::table& config);
 
     /***
      *
@@ -374,25 +374,25 @@ private:
  * @return
  */
 template <typename INPUT, typename OUTPUT> 
-StatusCode LightGlue<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")) &config) {
+StatusCode LightGlue<INPUT, OUTPUT>::Impl::init(const toml::table &config) {
     // choose backend type
-    auto backend_dict = config.at("BACKEND_DICT");
-    auto backend_name = config.at("LIGHTGLUE").at("backend_type").as_string();
-    _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].as_integer());
+    auto backend_dict = config["BACKEND_DICT"];
+    auto backend_name = config["LIGHTGLUE"]["backend_type"].value_or<std::string>("");
+    _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].value_or<int64_t>(0));
 
     // init light-glue configs
-    toml::value lightglue_cfg;
+    const toml::table* lightglue_cfg = nullptr;
     if (_m_backend_type == ONNX) {
-        lightglue_cfg = config.at("LIGHTGLUE_ONNX");
+        lightglue_cfg = config["LIGHTGLUE_ONNX"].as_table();
     } else {
-        lightglue_cfg = config.at("LIGHTGLUE_TRT");
+        lightglue_cfg = config["LIGHTGLUE_TRT"].as_table();
     }
 
     StatusCode init_status;
     if (_m_backend_type == ONNX) {
-        init_status = init_onnx(lightglue_cfg);
+        init_status = init_onnx(*lightglue_cfg);
     } else {
-         init_status = init_trt(lightglue_cfg);
+         init_status = init_trt(*lightglue_cfg);
     }
 
     if (init_status == StatusCode::OK) {
@@ -458,23 +458,23 @@ cv::Mat LightGlue<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat &input_im
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_onnx(const toml::value& config) {
+StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_onnx(const toml::table& config) {
     // ort env and memo info
     _m_onnx_params.env = Ort::Env(ORT_LOGGING_LEVEL_ERROR, "");
 
     // init light glue session
-    _m_onnx_params.model_file_path = config.at("model_file_path").as_string();
+    _m_onnx_params.model_file_path = config["model_file_path"].value_or<std::string>("");
     if (!FilePathUtil::is_file_exist(_m_onnx_params.model_file_path)) {
         LOG(ERROR) << "lightglue model file path: " << _m_onnx_params.model_file_path << " not exists";
         return StatusCode::MODEL_INIT_FAILED;
     }
     bool use_gpu = false;
-    _m_onnx_params.device = config.at("compute_backend").as_string();
+    _m_onnx_params.device = config["compute_backend"].value_or<std::string>("");
     if (std::strcmp(_m_onnx_params.device.c_str(), "cuda") == 0) {
         use_gpu = true;
-        _m_onnx_params.device_id = static_cast<int>(config.at("gpu_device_id").as_integer());
+        _m_onnx_params.device_id = static_cast<int>(config["gpu_device_id"].value_or<int64_t>(0));
     }
-    _m_onnx_params.thread_nums = config.at("model_threads_num").as_integer();
+    _m_onnx_params.thread_nums = config["model_threads_num"].value_or<int64_t>(0);
     _m_onnx_params.session_options = Ort::SessionOptions();
     _m_onnx_params.session_options.SetIntraOpNumThreads(_m_onnx_params.thread_nums);
     _m_onnx_params.session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
@@ -511,10 +511,10 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_onnx(const toml::value& config) 
     }
 
     // init match threshold
-    _m_match_thresh = static_cast<float>(config.at("match_score_thresh").as_floating());
+    _m_match_thresh = static_cast<float>(config["match_score_thresh"].value_or<double>(0.0));
 
     // init long side length
-    _m_long_side_len = static_cast<float>(config.at("long_side_length").as_floating());
+    _m_long_side_len = static_cast<float>(config["long_side_length"].value_or<double>(0.0));
 
     LOG(INFO) << "successfully load lightglue e2e model from: " << _m_onnx_params.model_file_path;
 
@@ -704,7 +704,7 @@ std_feature_point_match_output LightGlue<INPUT, OUTPUT>::Impl::onnx_decode_outpu
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_trt(const toml::value &config) {
+StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_trt(const toml::table&config) {
     // init superpoint extractor
     auto status = init_extractor(config);
     if (status != StatusCode::OK) {
@@ -800,7 +800,7 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::trt_run(const INPUT &in, OUTPUT &out)
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_extractor(const toml::value &config) {
+StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_extractor(const toml::table&config) {
     // init trt runtime
     _m_trt_params.extractor = new SuperPointTRTExtractor;
     _m_trt_params.extractor->logger = TrtLogger();
@@ -819,7 +819,7 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_extractor(const toml::value &con
         _m_trt_params.extractor = nullptr;
         return StatusCode::MODEL_INIT_FAILED;
     } else {
-        _m_trt_params.extractor->model_file_path = config.at("extractor_model_file_path").as_string();
+        _m_trt_params.extractor->model_file_path = config["extractor_model_file_path"].value_or<std::string>("");
     }
     if (!FilePathUtil::is_file_exist(_m_trt_params.extractor->model_file_path)) {
         LOG(ERROR) << "superpoint fp extraction model file: " << _m_trt_params.extractor->model_file_path << " not exist";
@@ -879,7 +879,7 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_extractor(const toml::value &con
     }
 
     // set feature point score threshold
-    _m_trt_params.extractor->score_thresh = static_cast<float>(config.at("extract_score_thresh").as_floating());
+    _m_trt_params.extractor->score_thresh = static_cast<float>(config["extract_score_thresh"].value_or<double>(0.0));
 
     LOG(INFO) << "successfully load trt extractor model from: " << _m_trt_params.extractor->model_file_path;
     return StatusCode::OK;
@@ -893,7 +893,7 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_extractor(const toml::value &con
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_matcher(const toml::value &config) {
+StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_matcher(const toml::table&config) {
     // init trt runtime
     _m_trt_params.matcher = new LightGlueTRTMatcher;
     _m_trt_params.matcher->logger = TrtLogger();
@@ -912,7 +912,7 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_matcher(const toml::value &confi
         _m_trt_params.matcher = nullptr;
         return StatusCode::MODEL_INIT_FAILED;
     } else {
-        _m_trt_params.matcher->model_file_path = config.at("matcher_model_file_path").as_string();
+        _m_trt_params.matcher->model_file_path = config["matcher_model_file_path"].value_or<std::string>("");
     }
     if (!FilePathUtil::is_file_exist(_m_trt_params.matcher->model_file_path)) {
         LOG(ERROR) << "lightglue fp matcher model file: " << _m_trt_params.matcher->model_file_path << " not exist";
@@ -974,10 +974,10 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_matcher(const toml::value &confi
     }
 
     // init match threshold
-    _m_match_thresh = static_cast<float>(config.at("match_score_thresh").as_floating());
+    _m_match_thresh = static_cast<float>(config["match_score_thresh"].value_or<double>(0.0));
 
     // init long side length
-    _m_long_side_len = static_cast<float>(config.at("long_side_length").as_floating());
+    _m_long_side_len = static_cast<float>(config["long_side_length"].value_or<double>(0.0));
 
     LOG(INFO) << "successfully load trt matcher model from: " << _m_trt_params.matcher->model_file_path;
     return StatusCode::OK;
@@ -1327,7 +1327,7 @@ template <typename INPUT, typename OUTPUT> LightGlue<INPUT, OUTPUT>::~LightGlue(
  * @param cfg
  * @return
  */
-template <typename INPUT, typename OUTPUT> StatusCode LightGlue<INPUT, OUTPUT>::init(const decltype(toml::parse("")) &cfg) {
+template <typename INPUT, typename OUTPUT> StatusCode LightGlue<INPUT, OUTPUT>::init(const toml::table &cfg) {
     return _m_pimpl->init(cfg);
 }
 

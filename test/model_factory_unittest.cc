@@ -19,7 +19,7 @@ struct fake_model_output {};
 
 class FakeModel : public jinq::models::BaseAiModel<fake_model_input, fake_model_output> {
   public:
-    jinq::common::StatusCode init(const decltype(toml::parse(""))&) override {
+    jinq::common::StatusCode init(const toml::table&) override {
         return jinq::common::StatusCode::OK;
     }
     jinq::common::StatusCode run(const fake_model_input&, fake_model_output&) override {
@@ -34,7 +34,7 @@ using FakeModelBase = jinq::models::BaseAiModel<fake_model_input, fake_model_out
 
 class FakeServer : public jinq::server::BaseAiServer {
   public:
-    jinq::common::StatusCode init(const decltype(toml::parse(""))&) override {
+    jinq::common::StatusCode init(const toml::table&) override {
         return jinq::common::StatusCode::OK;
     }
     void serve_process(WFHttpTask*) override {}

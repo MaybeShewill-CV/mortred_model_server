@@ -56,7 +56,7 @@ class Llama3 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
      * @param toml
      * @return
      */
-    jinq::common::StatusCode init(const toml::value& cfg) override;
+    jinq::common::StatusCode init(const toml::table& cfg) override;
 
     /***
      *

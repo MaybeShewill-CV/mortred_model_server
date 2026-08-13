@@ -109,7 +109,7 @@ class DDPMUNet<INPUT, OUTPUT>::Impl {
      * @param cfg_file_path
      * @return
      */
-    StatusCode init(const decltype(toml::parse("")) &config);
+    StatusCode init(const toml::table &config);
 
     /***
      *
@@ -193,7 +193,7 @@ class DDPMUNet<INPUT, OUTPUT>::Impl {
      * @param config
      * @return
      */
-    StatusCode init_trt(const toml::value& cfg);
+    StatusCode init_trt(const toml::table& cfg);
 
     /***
      *
@@ -214,7 +214,7 @@ class DDPMUNet<INPUT, OUTPUT>::Impl {
      * @param config
      * @return
      */
-    StatusCode init_onnx(const toml::value& cfg);
+    StatusCode init_onnx(const toml::table& cfg);
 
     /***
      *
@@ -231,29 +231,29 @@ class DDPMUNet<INPUT, OUTPUT>::Impl {
 * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode DDPMUNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")) &config) {
+StatusCode DDPMUNet<INPUT, OUTPUT>::Impl::init(const toml::table &config) {
     // choose backend type
-    auto backend_dict = config.at("BACKEND_DICT");
-    auto backend_name = config.at("DDPM_UNET").at("backend_type").as_string();
-    _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].as_integer());
+    auto backend_dict = config["BACKEND_DICT"];
+    auto backend_name = config["DDPM_UNET"]["backend_type"].value_or<std::string>("");
+    _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].value_or<int64_t>(0));
 
     // init ddpm-unet configs
-    toml::value model_cfg;
+    const toml::table* model_cfg = nullptr;
     if (_m_backend_type == TRT) {
-        model_cfg = config.at("DDPM_UNET_TRT");
+        model_cfg = config["DDPM_UNET_TRT"].as_table();
     } else if (_m_backend_type == ONNX) {
-        model_cfg = config.at("DDPM_UNET_ONNX");
+        model_cfg = config["DDPM_UNET_ONNX"].as_table();
     } else {
         LOG(ERROR) << "not supported backend type: " << _m_backend_type;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    auto model_file_name = FilePathUtil::get_file_name(model_cfg.at("model_file_path").as_string());
+    auto model_file_name = FilePathUtil::get_file_name((*model_cfg)["model_file_path"].value_or<std::string>(""));
 
     StatusCode init_status;
     if (_m_backend_type == TRT) {
-        init_status = init_trt(model_cfg);
+        init_status = init_trt(*model_cfg);
     } else if (_m_backend_type == ONNX){
-        init_status = init_onnx(model_cfg);
+        init_status = init_onnx(*model_cfg);
     } else {
         LOG(ERROR) << "not supported backend type: " << _m_backend_type;
         return StatusCode::MODEL_INIT_FAILED;
@@ -298,7 +298,7 @@ StatusCode DDPMUNet<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode DDPMUNet<INPUT, OUTPUT>::Impl::init_trt(const toml::value& cfg) {
+StatusCode DDPMUNet<INPUT, OUTPUT>::Impl::init_trt(const toml::table& cfg) {
     // init trt runtime
     _m_trt_params.logger = TrtLogger();
     _m_trt_params.runtime = nvinfer1::createInferRuntime(_m_trt_params.logger);
@@ -312,7 +312,7 @@ StatusCode DDPMUNet<INPUT, OUTPUT>::Impl::init_trt(const toml::value& cfg) {
         LOG(ERROR) << "config doesn\'t have model_file_path field";
         return StatusCode::MODEL_INIT_FAILED;
     } else {
-        _m_trt_params.model_file_path = cfg.at("model_file_path").as_string();
+        _m_trt_params.model_file_path = cfg["model_file_path"].value_or<std::string>("");
     }
     if (!FilePathUtil::is_file_exist(_m_trt_params.model_file_path)) {
         LOG(ERROR) << "DDPMUNet trt estimation model file: " << _m_trt_params.model_file_path << " not exist";
@@ -521,23 +521,23 @@ ddpm_unet_impl::internal_output DDPMUNet<INPUT, OUTPUT>::Impl::trt_decode_output
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode DDPMUNet<INPUT, OUTPUT>::Impl::init_onnx(const toml::value &cfg) {
+StatusCode DDPMUNet<INPUT, OUTPUT>::Impl::init_onnx(const toml::table&cfg) {
     // ort env and memo info
     _m_onnx_params.env = Ort::Env(ORT_LOGGING_LEVEL_ERROR, "");
 
     // init session
-    _m_onnx_params.model_file_path = cfg.at("model_file_path").as_string();
+    _m_onnx_params.model_file_path = cfg["model_file_path"].value_or<std::string>("");
     if (!FilePathUtil::is_file_exist(_m_onnx_params.model_file_path)) {
         LOG(ERROR) << "ddpm denoise model file path: " << _m_onnx_params.model_file_path << " not exists";
         return StatusCode::MODEL_INIT_FAILED;
     }
     bool use_gpu = false;
-    _m_onnx_params.device = cfg.at("compute_backend").as_string();
+    _m_onnx_params.device = cfg["compute_backend"].value_or<std::string>("");
     if (std::strcmp(_m_onnx_params.device.c_str(), "cuda") == 0) {
         use_gpu = true;
-        _m_onnx_params.device_id = static_cast<int>(cfg.at("gpu_device_id").as_integer());
+        _m_onnx_params.device_id = static_cast<int>(cfg["gpu_device_id"].value_or<int64_t>(0));
     }
-    _m_onnx_params.thread_nums = cfg.at("model_threads_num").as_integer();
+    _m_onnx_params.thread_nums = cfg["model_threads_num"].value_or<int64_t>(0);
     _m_onnx_params.session_options = Ort::SessionOptions();
     _m_onnx_params.session_options.SetIntraOpNumThreads(_m_onnx_params.thread_nums);
     _m_onnx_params.session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
@@ -665,7 +665,7 @@ DDPMUNet<INPUT, OUTPUT>::~DDPMUNet() = default;
 * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode DDPMUNet<INPUT, OUTPUT>::init(const decltype(toml::parse("")) &cfg) {
+StatusCode DDPMUNet<INPUT, OUTPUT>::init(const toml::table &cfg) {
     return _m_pimpl->init(cfg);
 }
 

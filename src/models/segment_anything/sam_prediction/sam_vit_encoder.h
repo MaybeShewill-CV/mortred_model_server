@@ -53,7 +53,7 @@ class SamVitEncoder {
      * @param toml
      * @return
      */
-    jinq::common::StatusCode init(const decltype(toml::parse(""))& cfg);
+    jinq::common::StatusCode init(const toml::table& cfg);
 
     /***
      *

@@ -49,7 +49,12 @@ int main(int argc, char** argv) {
         LOG(ERROR) << "config file path: " << config_file_path << " not exists";
         return -1;
     }
-    auto cfg = toml::parse(config_file_path);
+    auto cfg_parsed = toml::parse_file(config_file_path);
+    if (!cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(cfg_parsed.error().description());
+        return -1;
+    }
+    auto cfg = std::move(cfg_parsed).table();
     auto sam_amg = create_sam_auto_mask_generator<mat_input, std_sam_amg_output>("sam_amg");
     sam_amg->init(cfg);
     if (!sam_amg->is_successfully_initialized()) {

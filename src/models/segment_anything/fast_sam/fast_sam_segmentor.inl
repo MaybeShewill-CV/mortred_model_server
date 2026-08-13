@@ -106,7 +106,7 @@ class Impl {
      * @param cfg
      * @return
      */
-    StatusCode init(const decltype(toml::parse(""))& cfg);
+    StatusCode init(const toml::table& cfg);
 
     /***
      *
@@ -193,10 +193,16 @@ class Impl {
  * @param cfg
  * @return
  */
-StatusCode Impl::init(const decltype(toml::parse("")) &cfg) {
+StatusCode Impl::init(const toml::table &cfg) {
     // init sam encoder configs
-    auto cfg_content = cfg.at("FAST_SAM");
-    _m_model_path = cfg_content["model_file_path"].as_string();
+    const toml::table* cfg_content_ptr = cfg["FAST_SAM"].as_table();
+    if (cfg_content_ptr == nullptr) {
+        LOG(ERROR) << "Config section FAST_SAM missing or not a table";
+        _m_successfully_init_model = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    const toml::table& cfg_content = *cfg_content_ptr;
+    _m_model_path = cfg_content["model_file_path"].value_or<std::string>("");
     if (!FilePathUtil::is_file_exist(_m_model_path)) {
         LOG(ERROR) << "fast sam model file path: " << _m_model_path << " not exists";
         _m_successfully_init_model = false;
@@ -214,7 +220,7 @@ StatusCode Impl::init(const decltype(toml::parse("")) &cfg) {
         LOG(WARNING) << R"(Config file parse error, doesn't not have field "model_threads_nums", use default value 4)";
         _m_thread_nums = 4;
     } else {
-        _m_thread_nums = static_cast<int>(cfg_content.at("model_threads_num").as_integer());
+        _m_thread_nums = static_cast<int>(cfg_content["model_threads_num"].value_or<int64_t>(0));
     }
 
     // init session
@@ -223,7 +229,7 @@ StatusCode Impl::init(const decltype(toml::parse("")) &cfg) {
         LOG(WARNING) << "Config doesn\'t have compute_backend field default cpu";
         mnn_config.type = MNN_FORWARD_CPU;
     } else {
-        std::string compute_backend = cfg_content.at("compute_backend").as_string();
+        std::string compute_backend = cfg_content["compute_backend"].value_or<std::string>("");
 
         if (std::strcmp(compute_backend.c_str(), "cuda") == 0) {
             mnn_config.type = MNN_FORWARD_CUDA;
@@ -240,13 +246,13 @@ StatusCode Impl::init(const decltype(toml::parse("")) &cfg) {
         LOG(WARNING) << "Config doesn\'t have backend_precision_mode field default Precision_Normal";
         backend_config.precision = MNN::BackendConfig::Precision_Normal;
     } else {
-        backend_config.precision = static_cast<MNN::BackendConfig::PrecisionMode>(cfg_content.at("backend_precision_mode").as_integer());
+        backend_config.precision = static_cast<MNN::BackendConfig::PrecisionMode>(cfg_content["backend_precision_mode"].value_or<int64_t>(0));
     }
     if (!cfg_content.contains("backend_power_mode")) {
         LOG(WARNING) << "Config doesn\'t have backend_power_mode field default Power_Normal";
         backend_config.power = MNN::BackendConfig::Power_Normal;
     } else {
-        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(cfg_content.at("backend_power_mode").as_integer());
+        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(cfg_content["backend_power_mode"].value_or<int64_t>(0));
     }
     mnn_config.backendConfig = &backend_config;
 
@@ -294,8 +300,8 @@ StatusCode Impl::init(const decltype(toml::parse("")) &cfg) {
     _m_preds_mask_size = cv::Size(_m_output_1_shape[3], _m_output_1_shape[2]);
 
     // init conf thresh and iou thresh
-    _m_conf_thresh = cfg_content.at("conf_thresh").as_floating();
-    _m_iou_thresh = cfg_content.at("iou_thresh").as_floating();
+    _m_conf_thresh = cfg_content["conf_thresh"].value_or<double>(0.0);
+    _m_iou_thresh = cfg_content["iou_thresh"].value_or<double>(0.0);
 
     _m_successfully_init_model = true;
     LOG(INFO) << "Successfully load fastsam model";
@@ -541,7 +547,7 @@ template <typename INPUT, typename OUTPUT>
 FastSamSegmentor<INPUT, OUTPUT>::~FastSamSegmentor() = default;
 
 template <typename INPUT, typename OUTPUT>
-jinq::common::StatusCode FastSamSegmentor<INPUT, OUTPUT>::init(const decltype(toml::parse("")) &cfg) {
+jinq::common::StatusCode FastSamSegmentor<INPUT, OUTPUT>::init(const toml::table &cfg) {
     return _m_pimpl->init(cfg);
 }
 

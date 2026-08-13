@@ -61,7 +61,12 @@ int main(int argc, char** argv) {
     std_scene_segmentation_output model_output;
     // construct detector
     auto segmentor = create_hrnet_segmentor<mat_input, std_scene_segmentation_output>("hrnet_segmentor");
-    auto cfg = toml::parse(cfg_file_path);
+    auto cfg_parsed = toml::parse_file(cfg_file_path);
+    if (!cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(cfg_parsed.error().description());
+        return -1;
+    }
+    auto cfg = std::move(cfg_parsed).table();
     segmentor->init(cfg);
     if (!segmentor->is_successfully_initialized()) {
         LOG(INFO) << "hrnet segmentor init failed";

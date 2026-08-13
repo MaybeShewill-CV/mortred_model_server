@@ -136,7 +136,7 @@ class DDIMSampler<INPUT, OUTPUT>::Impl {
      * @param cfg_file_path
      * @return
      */
-    StatusCode init(const decltype(toml::parse("")) &config);
+    StatusCode init(const toml::table &config);
 
     /***
      *
@@ -295,13 +295,13 @@ class DDIMSampler<INPUT, OUTPUT>::Impl {
 * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode DDIMSampler<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")) &config) {
+StatusCode DDIMSampler<INPUT, OUTPUT>::Impl::init(const toml::table &config) {
     // choose beta schedule type
-    auto ddim_sampler_cfg = config.at("DDIM_SAMPLER");
-    _m_timesteps = static_cast<int>(ddim_sampler_cfg["total_timesteps"].as_integer());
-    _m_beta_start = ddim_sampler_cfg["beta_start"].as_floating();
-    _m_beta_end = ddim_sampler_cfg["beta_end"].as_floating();
-    _m_beta_schedule = _m_beta_schedule_type_map[ddim_sampler_cfg["beta_schedule"].as_string()];
+    auto ddim_sampler_cfg = config["DDIM_SAMPLER"];
+    _m_timesteps = static_cast<int>(ddim_sampler_cfg["total_timesteps"].value_or<int64_t>(0));
+    _m_beta_start = ddim_sampler_cfg["beta_start"].value_or<double>(0.0);
+    _m_beta_end = ddim_sampler_cfg["beta_end"].value_or<double>(0.0);
+    _m_beta_schedule = _m_beta_schedule_type_map[ddim_sampler_cfg["beta_schedule"].value_or<std::string>("")];
 
     // precompute beta and alpha_cumprod
     if (_m_beta_schedule == beta_schedule_type::linear) {
@@ -567,7 +567,7 @@ DDIMSampler<INPUT, OUTPUT>::~DDIMSampler() = default;
 * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode DDIMSampler<INPUT, OUTPUT>::init(const decltype(toml::parse("")) &cfg) {
+StatusCode DDIMSampler<INPUT, OUTPUT>::init(const toml::table &cfg) {
     return _m_pimpl->init(cfg);
 }
 

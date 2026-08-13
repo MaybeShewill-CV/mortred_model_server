@@ -101,7 +101,7 @@ class Impl {
      * @param cfg
      * @return
      */
-    StatusCode init(const decltype(toml::parse(""))& cfg);
+    StatusCode init(const toml::table& cfg);
 
     /***
      *
@@ -145,7 +145,7 @@ class Impl {
  * @param cfg
  * @return
  */
-StatusCode Impl::init(const decltype(toml::parse("")) &cfg) {
+StatusCode Impl::init(const toml::table &cfg) {
     // init sam encoder
     _m_sam_encoder = std::make_unique<SamVitEncoder>();
     _m_sam_encoder->init(cfg);
@@ -168,12 +168,12 @@ StatusCode Impl::init(const decltype(toml::parse("")) &cfg) {
     _m_sam_decoder->set_encoder_input_size(_m_sam_encoder_input_size);
 
     // init decode params
-    auto decoder_cfg = cfg.at("SAM_AMG_DECODER");
-    _m_points_per_side = static_cast<int>(decoder_cfg.at("points_per_size").as_integer());
-    _m_pred_iou_thresh = static_cast<float>(decoder_cfg.at("pred_iou_thresh").as_floating());
-    _m_stability_score_thresh = static_cast<float>(decoder_cfg.at("stability_score_thresh").as_floating());
-    _m_box_nms_thresh = static_cast<float>(decoder_cfg.at("box_nms_thresh").as_floating());
-    _m_min_mask_region_area = static_cast<int>(decoder_cfg.at("min_mask_region_area").as_integer());
+    auto decoder_cfg = cfg["SAM_AMG_DECODER"];
+    _m_points_per_side = static_cast<int>(decoder_cfg["points_per_size"].value_or<int64_t>(0));
+    _m_pred_iou_thresh = static_cast<float>(decoder_cfg["pred_iou_thresh"].value_or<double>(0.0));
+    _m_stability_score_thresh = static_cast<float>(decoder_cfg["stability_score_thresh"].value_or<double>(0.0));
+    _m_box_nms_thresh = static_cast<float>(decoder_cfg["box_nms_thresh"].value_or<double>(0.0));
+    _m_min_mask_region_area = static_cast<int>(decoder_cfg["min_mask_region_area"].value_or<int64_t>(0));
 
     _m_successfully_init_model = true;
     LOG(INFO) << "Successfully load sam auto mask generator model";
@@ -221,7 +221,7 @@ template <typename INPUT, typename OUTPUT>
 SamAutoMaskGenerator<INPUT, OUTPUT>::~SamAutoMaskGenerator() = default;
 
 template <typename INPUT, typename OUTPUT>
-jinq::common::StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::init(const decltype(toml::parse("")) &cfg) {
+jinq::common::StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::init(const toml::table &cfg) {
     return _m_pimpl->init(cfg);
 }
 

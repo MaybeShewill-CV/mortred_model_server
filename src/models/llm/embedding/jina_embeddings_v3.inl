@@ -135,7 +135,7 @@ class JinaEmbeddingsV3<INPUT, OUTPUT>::Impl {
      * @param cfg_file_path
      * @return
      */
-    StatusCode init(const decltype(toml::parse("")) &config);
+    StatusCode init(const toml::table &config);
 
     /***
      *
@@ -210,7 +210,7 @@ class JinaEmbeddingsV3<INPUT, OUTPUT>::Impl {
      * @param config
      * @return
      */
-    StatusCode init_onnx(const toml::value& config);
+    StatusCode init_onnx(const toml::table& config);
 
     /***
      *
@@ -227,21 +227,27 @@ class JinaEmbeddingsV3<INPUT, OUTPUT>::Impl {
 * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode JinaEmbeddingsV3<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")) &config) {
+StatusCode JinaEmbeddingsV3<INPUT, OUTPUT>::Impl::init(const toml::table &config) {
     // choose backend type
-    auto backend_dict = config.at("BACKEND_DICT");
-    auto backend_name = config.at("JINA_EMBEDDING_V3").at("backend_type").as_string();
-    _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].as_integer());
+    auto backend_dict = config["BACKEND_DICT"];
+    auto backend_name = config["JINA_EMBEDDING_V3"]["backend_type"].value_or<std::string>("");
+    _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].value_or<int64_t>(0));
 
     // init tokenizer
-    auto tokenizer_cfg = config.at("TOKENIZER");
-    std::string tokenizer_cfg_path = tokenizer_cfg["model_file_path"].as_string();
+    auto tokenizer_cfg = config["TOKENIZER"];
+    std::string tokenizer_cfg_path = tokenizer_cfg["model_file_path"].value_or<std::string>("");
     if (!FilePathUtil::is_file_exist(tokenizer_cfg_path)) {
         LOG(ERROR) << fmt::format("tokenizer cfg path: {} not exist", tokenizer_cfg_path);
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    auto token_cfg = toml::parse(tokenizer_cfg_path);
+    auto token_cfg_parsed = toml::parse_file(tokenizer_cfg_path);
+    if (!token_cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(token_cfg_parsed.error().description());
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    auto token_cfg = std::move(token_cfg_parsed).table();
     _m_tokenizer = std::make_unique<TokenizerPtr>();
     _m_tokenizer->init(token_cfg);
     if (!_m_tokenizer->is_successfully_initialized()) {
@@ -251,17 +257,17 @@ StatusCode JinaEmbeddingsV3<INPUT, OUTPUT>::Impl::init(const decltype(toml::pars
     }
 
     // init jina embedding configs
-    toml::value embedding_cfg;
+    const toml::table* embedding_cfg = nullptr;
     if (_m_backend_type == TRT) {
-        embedding_cfg = config.at("JINA_EMBEDDING_V3_TRT");
+        embedding_cfg = config["JINA_EMBEDDING_V3_TRT"].as_table();
     } else if (_m_backend_type == ONNX) {
-        embedding_cfg = config.at("JINA_EMBEDDING_V3_ONNX");
+        embedding_cfg = config["JINA_EMBEDDING_V3_ONNX"].as_table();
     } else {
         LOG(ERROR) << fmt::format("unsupported backend type: {}", static_cast<int>(_m_backend_type));
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    std::string model_file_name = FilePathUtil::get_file_name(embedding_cfg.at("model_file_path").as_string());
+    std::string model_file_name = FilePathUtil::get_file_name((*embedding_cfg)["model_file_path"].value_or<std::string>(""));
 
     StatusCode init_status;
     if (_m_backend_type == TRT) {
@@ -269,7 +275,7 @@ StatusCode JinaEmbeddingsV3<INPUT, OUTPUT>::Impl::init(const decltype(toml::pars
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     } else {
-        init_status = init_onnx(embedding_cfg);
+        init_status = init_onnx(*embedding_cfg);
     }
 
     if (init_status == StatusCode::OK) {
@@ -310,23 +316,23 @@ StatusCode JinaEmbeddingsV3<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& o
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode JinaEmbeddingsV3<INPUT, OUTPUT>::Impl::init_onnx(const toml::value &config) {
+StatusCode JinaEmbeddingsV3<INPUT, OUTPUT>::Impl::init_onnx(const toml::table&config) {
     // ort env and memo info
     _m_onnx_params.env = Ort::Env(ORT_LOGGING_LEVEL_ERROR, "");
 
     // init light glue session
-    _m_onnx_params.model_file_path = config.at("model_file_path").as_string();
+    _m_onnx_params.model_file_path = config["model_file_path"].value_or<std::string>("");
     if (!FilePathUtil::is_file_exist(_m_onnx_params.model_file_path)) {
         LOG(ERROR) << "jina embedding v3 model file path: " << _m_onnx_params.model_file_path << " not exists";
         return StatusCode::MODEL_INIT_FAILED;
     }
     bool use_gpu = false;
-    _m_onnx_params.device = config.at("compute_backend").as_string();
+    _m_onnx_params.device = config["compute_backend"].value_or<std::string>("");
     if (std::strcmp(_m_onnx_params.device.c_str(), "cuda") == 0) {
         use_gpu = true;
-        _m_onnx_params.device_id = static_cast<int>(config.at("gpu_device_id").as_integer());
+        _m_onnx_params.device_id = static_cast<int>(config["gpu_device_id"].value_or<int64_t>(0));
     }
-    _m_onnx_params.thread_nums = config.at("model_threads_num").as_integer();
+    _m_onnx_params.thread_nums = config["model_threads_num"].value_or<int64_t>(0);
     _m_onnx_params.session_options = Ort::SessionOptions();
     _m_onnx_params.session_options.SetIntraOpNumThreads(_m_onnx_params.thread_nums);
     _m_onnx_params.session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
@@ -510,7 +516,7 @@ JinaEmbeddingsV3<INPUT, OUTPUT>::~JinaEmbeddingsV3() = default;
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode JinaEmbeddingsV3<INPUT, OUTPUT>::init(const decltype(toml::parse("")) &cfg) {
+StatusCode JinaEmbeddingsV3<INPUT, OUTPUT>::init(const toml::table &cfg) {
     return _m_pimpl->init(cfg);
 }
 

@@ -38,7 +38,12 @@ int main(int argc, char** argv) {
         LOG(INFO) << "config file: " << cfg_file_path << " not exist";
         return -1;
     }
-    auto cfg = toml::parse(cfg_file_path);
+    auto cfg_parsed = toml::parse_file(cfg_file_path);
+    if (!cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(cfg_parsed.error().description());
+        return -1;
+    }
+    auto cfg = std::move(cfg_parsed).table();
 
     std::string save_dir = "../demo_data/model_test_input/diffusion/ddpm";
     if (argc == 3) {

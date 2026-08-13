@@ -36,7 +36,12 @@ int main(int argc, char** argv) {
 
     // construct llama3 model
     Llama3<std::vector<llama_token>&, std::string> generator;
-    auto cfg = toml::parse(cfg_file_path);
+    auto cfg_parsed = toml::parse_file(cfg_file_path);
+    if (!cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(cfg_parsed.error().description());
+        return -1;
+    }
+    auto cfg = std::move(cfg_parsed).table();
     generator.init(cfg);
     if (!generator.is_successfully_initialized()) {
         LOG(INFO) << "llama3 generator init failed";

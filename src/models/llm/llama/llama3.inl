@@ -120,7 +120,7 @@ public:
      * @param config
      * @return
      */
-    StatusCode init(const toml::value& config);
+    StatusCode init(const toml::table& config);
 
     /***
      *
@@ -267,13 +267,19 @@ private:
 * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode Llama3<INPUT, OUTPUT>::Impl::init(const toml::value& config) {
+StatusCode Llama3<INPUT, OUTPUT>::Impl::init(const toml::table& config) {
     if (!config.contains("LLAMA3")) {
         LOG(ERROR) << "Config file does not contain LLAMA3 section";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    toml::value model_cfg = config.at("LLAMA3");
+    const toml::table* model_cfg_ptr = config["LLAMA3"].as_table();
+    if (model_cfg_ptr == nullptr) {
+        LOG(ERROR) << "Config section LLAMA3 missing or not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    const toml::table& model_cfg = *model_cfg_ptr;
 
     // model_file_path
     if (!model_cfg.contains("model_file_path")) {
@@ -281,7 +287,7 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::init(const toml::value& config) {
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     } else {
-        _m_model_file_path = model_cfg.at("model_file_path").as_string();
+        _m_model_file_path = model_cfg["model_file_path"].value_or<std::string>("");
     }
     if (!FilePathUtil::is_file_exist(_m_model_file_path)) {
         LOG(ERROR) << "Llama3 model file: " << _m_model_file_path << " not exist";
@@ -296,15 +302,15 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::init(const toml::value& config) {
 
     // load llama model
     _m_model_params.devices  = nullptr; // all available devices
-    _m_model_params.n_gpu_layers = static_cast<int32_t >(model_cfg.at("n_gpu_layers").as_integer()); // number of layers to store in VRAM
-    _m_model_params.main_gpu = static_cast<int32_t >(model_cfg.at("main_gpu_device").as_integer());
+    _m_model_params.n_gpu_layers = static_cast<int32_t >(model_cfg["n_gpu_layers"].value_or<int64_t>(0)); // number of layers to store in VRAM
+    _m_model_params.main_gpu = static_cast<int32_t >(model_cfg["main_gpu_device"].value_or<int64_t>(0));
     _m_model_params.split_mode = LLAMA_SPLIT_MODE_LAYER; // how to split model cross gpus
     _m_model_params.vocab_only = false;
     _m_model_params.use_mmap = true; // use mmap for faster loads
     _m_model_params.use_mlock = false; // use mlock to keep model in memory
     _m_model_params.check_tensors = false;
     if (model_cfg.contains("vocab_only")) {
-        _m_model_params.vocab_only = model_cfg.at("vocab_only").as_boolean();
+        _m_model_params.vocab_only = model_cfg["vocab_only"].value_or<bool>(false);
     }
     _m_model = llama_model_load_from_file(_m_model_file_path.c_str(), _m_model_params);
     if (_m_model == nullptr) {
@@ -324,10 +330,16 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::init(const toml::value& config) {
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    toml::value ctx_cfg = config.at("CONTEXT");
+    const toml::table* ctx_cfg_ptr = config["CONTEXT"].as_table();
+    if (ctx_cfg_ptr == nullptr) {
+        LOG(ERROR) << "Config section CONTEXT missing or not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    const toml::table& ctx_cfg = *ctx_cfg_ptr;
     int32_t ctx_size = 0;
     if (ctx_cfg.contains("context_size")) {
-        ctx_size = static_cast<int32_t >(ctx_cfg.at("context_size").as_integer());
+        ctx_size = static_cast<int32_t >(ctx_cfg["context_size"].value_or<int64_t>(0));
     } else {
         ctx_size = llama_n_ctx_train(_m_model);
     }
@@ -349,13 +361,13 @@ StatusCode Llama3<INPUT, OUTPUT>::Impl::init(const toml::value& config) {
     }
 
     // init sampler
-    auto smpl_cfg = config.at("SAMPLER");
-    _m_smpl_params.min_keep = static_cast<int32_t >(smpl_cfg.at("min_keep").as_integer());
-    _m_smpl_params.top_k = static_cast<int32_t>(smpl_cfg.at("top_k").as_integer());
-    _m_smpl_params.top_p = static_cast<float>(smpl_cfg.at("top_p").as_floating());
-    _m_smpl_params.min_p = static_cast<float>(smpl_cfg.at("min_p").as_floating());
-    _m_smpl_params.temp = static_cast<float>(smpl_cfg.at("temp").as_floating());
-    _m_smpl_params.no_perf = smpl_cfg.at("no_perf").as_boolean();
+    auto smpl_cfg = config["SAMPLER"];
+    _m_smpl_params.min_keep = static_cast<int32_t >(smpl_cfg["min_keep"].value_or<int64_t>(0));
+    _m_smpl_params.top_k = static_cast<int32_t>(smpl_cfg["top_k"].value_or<int64_t>(0));
+    _m_smpl_params.top_p = static_cast<float>(smpl_cfg["top_p"].value_or<double>(0.0));
+    _m_smpl_params.min_p = static_cast<float>(smpl_cfg["min_p"].value_or<double>(0.0));
+    _m_smpl_params.temp = static_cast<float>(smpl_cfg["temp"].value_or<double>(0.0));
+    _m_smpl_params.no_perf = smpl_cfg["no_perf"].value_or<bool>(false);
     init_sampler();
 
     std::string result = "logits ";
@@ -1000,7 +1012,7 @@ Llama3<INPUT, OUTPUT>::~Llama3() = default;
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode Llama3<INPUT, OUTPUT>::init(const toml::value& cfg) {
+StatusCode Llama3<INPUT, OUTPUT>::init(const toml::table& cfg) {
     return _m_pimpl->init(cfg);
 }
 

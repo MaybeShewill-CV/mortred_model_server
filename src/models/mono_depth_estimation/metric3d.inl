@@ -156,7 +156,7 @@ public:
      * @param cfg_file_path
      * @return
      */
-    StatusCode init(const decltype(toml::parse("")) &config);
+    StatusCode init(const toml::table &config);
 
     /***
      *
@@ -247,7 +247,7 @@ private:
      * @param config
      * @return
      */
-    StatusCode init_mnn(const toml::value& config);
+    StatusCode init_mnn(const toml::table& config);
 
     /***
      *
@@ -268,7 +268,7 @@ private:
      * @param config
      * @return
      */
-    StatusCode init_trt(const toml::value& cfg);
+    StatusCode init_trt(const toml::table& cfg);
 
     /***
      *
@@ -353,26 +353,26 @@ private:
 * @return
 */
 template <typename INPUT, typename OUTPUT>
-StatusCode Metric3D<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")) &config) {
+StatusCode Metric3D<INPUT, OUTPUT>::Impl::init(const toml::table &config) {
     // choose backend type
-    auto backend_dict = config.at("BACKEND_DICT");
-    auto backend_name = config.at("METRIC3D").at("backend_type").as_string();
-    _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].as_integer());
+    auto backend_dict = config["BACKEND_DICT"];
+    auto backend_name = config["METRIC3D"]["backend_type"].value_or<std::string>("");
+    _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].value_or<int64_t>(0));
 
     // init metric3d configs
-    toml::value metric3d_cfg;
+    const toml::table* metric3d_cfg = nullptr;
     if (_m_backend_type == MNN) {
-        metric3d_cfg = config.at("METRIC3D_MNN");
+        metric3d_cfg = config["METRIC3D_MNN"].as_table();
     } else {
-        metric3d_cfg = config.at("METRIC3D_TRT");
+        metric3d_cfg = config["METRIC3D_TRT"].as_table();
     }
-    auto model_file_name = FilePathUtil::get_file_name(metric3d_cfg.at("model_file_path").as_string());
+    auto model_file_name = FilePathUtil::get_file_name((*metric3d_cfg)["model_file_path"].value_or<std::string>(""));
 
     StatusCode init_status;
     if (_m_backend_type == MNN) {
-        init_status = init_mnn(metric3d_cfg);
+        init_status = init_mnn(*metric3d_cfg);
     } else {
-        init_status = init_trt(metric3d_cfg);
+        init_status = init_trt(*metric3d_cfg);
     }
 
     if (init_status == StatusCode::OK) {
@@ -455,13 +455,13 @@ cv::Mat Metric3D<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& input_ima
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode Metric3D<INPUT, OUTPUT>::Impl::init_mnn(const toml::value& config) {
+StatusCode Metric3D<INPUT, OUTPUT>::Impl::init_mnn(const toml::table& config) {
     // init threads
     if (!config.contains("model_threads_num")) {
         LOG(WARNING) << "Config doesn\'t have model_threads_num field default 4";
         _m_mnn_params.threads_nums = 4;
     } else {
-        _m_mnn_params.threads_nums = static_cast<int>(config.at("model_threads_num").as_integer());
+        _m_mnn_params.threads_nums = static_cast<int>(config["model_threads_num"].value_or<int64_t>(0));
     }
 
     // init Interpreter
@@ -469,7 +469,7 @@ StatusCode Metric3D<INPUT, OUTPUT>::Impl::init_mnn(const toml::value& config) {
         LOG(ERROR) << "Config doesn\'t have model_file_path field";
         return StatusCode::MODEL_INIT_FAILED;
     } else {
-        _m_mnn_params.model_file_path = config.at("model_file_path").as_string();
+        _m_mnn_params.model_file_path = config["model_file_path"].value_or<std::string>("");
     }
     if (!FilePathUtil::is_file_exist(_m_mnn_params.model_file_path)) {
         LOG(ERROR) << "metric3d model file: " << _m_mnn_params.model_file_path << " not exist";
@@ -487,7 +487,7 @@ StatusCode Metric3D<INPUT, OUTPUT>::Impl::init_mnn(const toml::value& config) {
         LOG(WARNING) << "Config doesn\'t have compute_backend field default cpu";
         mnn_config.type = MNN_FORWARD_CPU;
     } else {
-        std::string compute_backend = config.at("compute_backend").as_string();
+        std::string compute_backend = config["compute_backend"].value_or<std::string>("");
         if (std::strcmp(compute_backend.c_str(), "cuda") == 0) {
             mnn_config.type = MNN_FORWARD_CUDA;
         } else if (std::strcmp(compute_backend.c_str(), "cpu") == 0) {
@@ -505,13 +505,13 @@ StatusCode Metric3D<INPUT, OUTPUT>::Impl::init_mnn(const toml::value& config) {
         backend_config.precision = MNN::BackendConfig::Precision_Normal;
     } else {
         backend_config.precision = static_cast<MNN::BackendConfig::PrecisionMode>
-                                   (config.at("backend_precision_mode").as_integer());
+                                   (config["backend_precision_mode"].value_or<int64_t>(0));
     }
     if (!config.contains("backend_power_mode")) {
         LOG(WARNING) << "Config doesn\'t have backend_power_mode field default Power_Normal";
         backend_config.power = MNN::BackendConfig::Power_Normal;
     } else {
-        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(config.at("backend_power_mode").as_integer());
+        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(config["backend_power_mode"].value_or<int64_t>(0));
     }
     mnn_config.backendConfig = &backend_config;
 
@@ -538,14 +538,14 @@ StatusCode Metric3D<INPUT, OUTPUT>::Impl::init_mnn(const toml::value& config) {
     _m_input_size_host.height = _m_mnn_params.input_tensor->height();
 
     // init intrinsic and canonical size
-    _m_focal_length = static_cast<float>(config.at("focal_length").as_floating());
-    _m_canonical_size.width = static_cast<int>(config.at("canonical_size").as_array()[1].as_integer());
-    _m_canonical_size.height = static_cast<int>(config.at("canonical_size").as_array()[0].as_integer());
+    _m_focal_length = static_cast<float>(config["focal_length"].value_or<double>(0.0));
+    _m_canonical_size.width = static_cast<int>(config["canonical_size"][1].value_or<int64_t>(0));
+    _m_canonical_size.height = static_cast<int>(config["canonical_size"][0].value_or<int64_t>(0));
     _m_intrinsic_params = {
-        static_cast<float>(config.at("intrinsic").as_array()[0].as_floating()),
-        static_cast<float>(config.at("intrinsic").as_array()[1].as_floating()),
-        static_cast<float>(config.at("intrinsic").as_array()[2].as_floating()),
-        static_cast<float>(config.at("intrinsic").as_array()[3].as_floating()),
+        static_cast<float>(config["intrinsic"][0].value_or<double>(0.0)),
+        static_cast<float>(config["intrinsic"][1].value_or<double>(0.0)),
+        static_cast<float>(config["intrinsic"][2].value_or<double>(0.0)),
+        static_cast<float>(config["intrinsic"][3].value_or<double>(0.0)),
     };
 
     return StatusCode::OK;
@@ -658,7 +658,7 @@ metric3d_impl::internal_output Metric3D<INPUT, OUTPUT>::Impl::mnn_decode_output(
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode Metric3D<INPUT, OUTPUT>::Impl::init_trt(const toml::value& cfg) {
+StatusCode Metric3D<INPUT, OUTPUT>::Impl::init_trt(const toml::table& cfg) {
     // init trt runtime
     _m_trt_params.logger = TrtLogger();
     _m_trt_params.runtime = nvinfer1::createInferRuntime(_m_trt_params.logger);
@@ -672,7 +672,7 @@ StatusCode Metric3D<INPUT, OUTPUT>::Impl::init_trt(const toml::value& cfg) {
         LOG(ERROR) << "config doesn\'t have model_file_path field";
         return StatusCode::MODEL_INIT_FAILED;
     } else {
-        _m_trt_params.model_file_path = cfg.at("model_file_path").as_string();
+        _m_trt_params.model_file_path = cfg["model_file_path"].value_or<std::string>("");
     }
     if (!FilePathUtil::is_file_exist(_m_trt_params.model_file_path)) {
         LOG(ERROR) << "metric3d trt estimation model file: " << _m_trt_params.model_file_path << " not exist";
@@ -793,14 +793,14 @@ StatusCode Metric3D<INPUT, OUTPUT>::Impl::init_trt(const toml::value& cfg) {
     }
 
     // init intrinsic and canonical size
-    _m_focal_length = static_cast<float>(cfg.at("focal_length").as_floating());
-    _m_canonical_size.width = static_cast<int>(cfg.at("canonical_size").as_array()[1].as_integer());
-    _m_canonical_size.height = static_cast<int>(cfg.at("canonical_size").as_array()[0].as_integer());
+    _m_focal_length = static_cast<float>(cfg["focal_length"].value_or<double>(0.0));
+    _m_canonical_size.width = static_cast<int>(cfg["canonical_size"][1].value_or<int64_t>(0));
+    _m_canonical_size.height = static_cast<int>(cfg["canonical_size"][0].value_or<int64_t>(0));
     _m_intrinsic_params = {
-        static_cast<float>(cfg.at("intrinsic").as_array()[0].as_floating()),
-        static_cast<float>(cfg.at("intrinsic").as_array()[1].as_floating()),
-        static_cast<float>(cfg.at("intrinsic").as_array()[2].as_floating()),
-        static_cast<float>(cfg.at("intrinsic").as_array()[3].as_floating()),
+        static_cast<float>(cfg["intrinsic"][0].value_or<double>(0.0)),
+        static_cast<float>(cfg["intrinsic"][1].value_or<double>(0.0)),
+        static_cast<float>(cfg["intrinsic"][2].value_or<double>(0.0)),
+        static_cast<float>(cfg["intrinsic"][3].value_or<double>(0.0)),
     };
 
     return StatusCode::OK;
@@ -961,7 +961,7 @@ Metric3D<INPUT, OUTPUT>::~Metric3D() = default;
 * @return
 */
 template <typename INPUT, typename OUTPUT>
-StatusCode Metric3D<INPUT, OUTPUT>::init(const decltype(toml::parse("")) &cfg) {
+StatusCode Metric3D<INPUT, OUTPUT>::init(const toml::table &cfg) {
     return _m_pimpl->init(cfg);
 }
 

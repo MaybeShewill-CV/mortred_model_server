@@ -70,7 +70,12 @@ int main(int argc, char** argv) {
 
     // construct extractor
     auto matcher = std::make_unique<LightGlue<pair_mat_input, std_feature_point_match_output >>();
-    auto cfg = toml::parse(cfg_file_path);
+    auto cfg_parsed = toml::parse_file(cfg_file_path);
+    if (!cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(cfg_parsed.error().description());
+        return -1;
+    }
+    auto cfg = std::move(cfg_parsed).table();
     matcher->init(cfg);
     if (!matcher->is_successfully_initialized()) {
         LOG(INFO) << "lightglue matcher init failed";

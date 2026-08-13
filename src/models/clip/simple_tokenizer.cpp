@@ -47,7 +47,7 @@ class SimpleTokenizer::Impl {
      * @param cfg
      * @return
      */
-    StatusCode init(const decltype(toml::parse(""))& cfg);
+    StatusCode init(const toml::table& cfg);
 
     /***
      *
@@ -88,11 +88,11 @@ class SimpleTokenizer::Impl {
  * @param cfg
  * @return
  */
-StatusCode SimpleTokenizer::Impl::init(const decltype(toml::parse("")) &cfg) {
+StatusCode SimpleTokenizer::Impl::init(const toml::table &cfg) {
 
-    auto token_cfg = cfg.at("TOKENIZER");
+    auto token_cfg = cfg["TOKENIZER"];
 
-    auto vocab_file_path = token_cfg["vocab_file_path"].as_string();
+    auto vocab_file_path = token_cfg["vocab_file_path"].value_or<std::string>("");
     if (!FilePathUtil::is_file_exist(vocab_file_path)) {
         LOG(ERROR) << "vocab file path: " << vocab_file_path << " not exists";
         _m_successfully_init_model = false;
@@ -224,7 +224,7 @@ SimpleTokenizer::~SimpleTokenizer() = default;
  * @param cfg
  * @return
  */
-StatusCode SimpleTokenizer::init(const decltype(toml::parse("")) &cfg) {
+StatusCode SimpleTokenizer::init(const toml::table &cfg) {
     return _m_pimpl->init(cfg);
 }
 

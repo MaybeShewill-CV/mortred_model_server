@@ -219,7 +219,7 @@ public:
      * @param config
      * @return
      */
-    StatusCode init(const toml::value& config);
+    StatusCode init(const toml::table& config);
 
     /***
      *
@@ -393,8 +393,14 @@ private:
 * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init(const toml::value& config) {
-    auto qwen_cfg = config.at("QWEN2-VL");
+StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init(const toml::table& config) {
+    const toml::table* qwen_cfg_ptr = config["QWEN2-VL"].as_table();
+    if (qwen_cfg_ptr == nullptr) {
+        LOG(ERROR) << "Config section QWEN2-VL missing or not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    const toml::table& qwen_cfg = *qwen_cfg_ptr;
 
     // init language tower
     std::string language_model_path;
@@ -403,7 +409,7 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init(const toml::value& config) {
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     } else {
-        language_model_path = qwen_cfg.at("llm_model_path").as_string();
+        language_model_path = qwen_cfg["llm_model_path"].value_or<std::string>("");
     }
     if (!FilePathUtil::is_file_exist(language_model_path)) {
         LOG(ERROR) << fmt::format("llm model file: {} not exist", language_model_path);
@@ -416,8 +422,8 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init(const toml::value& config) {
     llama_numa_init(numa);
 
     // load llama model
-    auto n_gpu_layers = static_cast<int32_t >(qwen_cfg.at("n_gpu_layers").as_integer());
-    auto main_gpu_device_id = static_cast<int32_t >(qwen_cfg.at("main_gpu_device").as_integer());
+    auto n_gpu_layers = static_cast<int32_t >(qwen_cfg["n_gpu_layers"].value_or<int64_t>(0));
+    auto main_gpu_device_id = static_cast<int32_t >(qwen_cfg["main_gpu_device"].value_or<int64_t>(0));
     _m_llm_model_params.devices  = nullptr; // all available devices
     _m_llm_model_params.n_gpu_layers = n_gpu_layers; // number of layers to store in VRAM
     _m_llm_model_params.main_gpu = main_gpu_device_id;
@@ -427,7 +433,7 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init(const toml::value& config) {
     _m_llm_model_params.use_mlock = false; // use mlock to keep model in memory
     _m_llm_model_params.check_tensors = false;
     if (qwen_cfg.contains("vocab_only")) {
-        _m_llm_model_params.vocab_only = qwen_cfg.at("vocab_only").as_boolean();
+        _m_llm_model_params.vocab_only = qwen_cfg["vocab_only"].value_or<bool>(false);
     }
     _m_llm_model = llama_model_load_from_file(language_model_path.c_str(), _m_llm_model_params);
     if (_m_llm_model == nullptr) {
@@ -443,15 +449,15 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init(const toml::value& config) {
     }
 
     // init vision tower
-    std::string vision_model_path = qwen_cfg["mmproj_model_path"].as_string();
+    std::string vision_model_path = qwen_cfg["mmproj_model_path"].value_or<std::string>("");
     if (!FilePathUtil::is_file_exist(vision_model_path)) {
         LOG(ERROR) << fmt::format("clip vision model file: {} not exist", vision_model_path);
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    std::string device = qwen_cfg["vision_model_device"].as_string();
+    std::string device = qwen_cfg["vision_model_device"].value_or<std::string>("");
     if (device == "cuda") {
-        int device_id = static_cast<int>(qwen_cfg["vision_model_device_id"].as_integer());
+        int device_id = static_cast<int>(qwen_cfg["vision_model_device_id"].value_or<int64_t>(0));
         _m_clip_ctx = clip_model_load_cuda(vision_model_path.c_str(), device_id, 1);
     } else {
         _m_clip_ctx = clip_model_load(vision_model_path.c_str(), 1);
@@ -468,10 +474,16 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init(const toml::value& config) {
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    toml::value ctx_cfg = config.at("CONTEXT");
+    const toml::table* ctx_cfg_ptr = config["CONTEXT"].as_table();
+    if (ctx_cfg_ptr == nullptr) {
+        LOG(ERROR) << "Config section CONTEXT missing or not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    const toml::table& ctx_cfg = *ctx_cfg_ptr;
     auto ctx_size = llama_n_ctx_train(_m_llm_model);
     if (ctx_cfg.contains("context_size")) {
-        ctx_size = static_cast<int32_t >(ctx_cfg.at("context_size").as_integer());
+        ctx_size = static_cast<int32_t >(ctx_cfg["context_size"].value_or<int64_t>(0));
     }
     _m_llm_ctx_params.n_ctx = ctx_size <= llama_n_ctx_train(_m_llm_model) ? ctx_size : llama_n_ctx_train(
                                   _m_llm_model); // context size
@@ -493,13 +505,13 @@ StatusCode Qwen2VL<INPUT, OUTPUT>::Impl::init(const toml::value& config) {
     }
 
     // init sampler
-    auto smpl_cfg = config.at("SAMPLER");
-    _m_smpl_params.min_keep = static_cast<int32_t >(smpl_cfg.at("min_keep").as_integer());
-    _m_smpl_params.top_k = static_cast<int32_t>(smpl_cfg.at("top_k").as_integer());
-    _m_smpl_params.top_p = static_cast<float>(smpl_cfg.at("top_p").as_floating());
-    _m_smpl_params.min_p = static_cast<float>(smpl_cfg.at("min_p").as_floating());
-    _m_smpl_params.temp = static_cast<float>(smpl_cfg.at("temp").as_floating());
-    _m_smpl_params.no_perf = smpl_cfg.at("no_perf").as_boolean();
+    auto smpl_cfg = config["SAMPLER"];
+    _m_smpl_params.min_keep = static_cast<int32_t >(smpl_cfg["min_keep"].value_or<int64_t>(0));
+    _m_smpl_params.top_k = static_cast<int32_t>(smpl_cfg["top_k"].value_or<int64_t>(0));
+    _m_smpl_params.top_p = static_cast<float>(smpl_cfg["top_p"].value_or<double>(0.0));
+    _m_smpl_params.min_p = static_cast<float>(smpl_cfg["min_p"].value_or<double>(0.0));
+    _m_smpl_params.temp = static_cast<float>(smpl_cfg["temp"].value_or<double>(0.0));
+    _m_smpl_params.no_perf = smpl_cfg["no_perf"].value_or<bool>(false);
     init_sampler();
 
     std::string result = "logits ";
@@ -1375,7 +1387,7 @@ Qwen2VL<INPUT, OUTPUT>::~Qwen2VL() = default; // NOLINT(*-redundant-declaration)
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode Qwen2VL<INPUT, OUTPUT>::init(const toml::value& cfg) {
+StatusCode Qwen2VL<INPUT, OUTPUT>::init(const toml::table& cfg) {
     return _m_pimpl->init(cfg);
 }
 

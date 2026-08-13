@@ -136,7 +136,7 @@ class DDPMSampler<INPUT, OUTPUT>::Impl {
      * @param cfg_file_path
      * @return
      */
-    StatusCode init(const decltype(toml::parse("")) &config);
+    StatusCode init(const toml::table &config);
 
     /***
      *
@@ -309,13 +309,13 @@ class DDPMSampler<INPUT, OUTPUT>::Impl {
 * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode DDPMSampler<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")) &config) {
+StatusCode DDPMSampler<INPUT, OUTPUT>::Impl::init(const toml::table &config) {
     // choose beta schedule type
-    auto ddpm_sampler_cfg = config.at("DDPM_SAMPLER");
-    _m_timesteps = ddpm_sampler_cfg["timesteps"].as_integer();
-    _m_beta_start = ddpm_sampler_cfg["beta_start"].as_floating();
-    _m_beta_end = ddpm_sampler_cfg["beta_end"].as_floating();
-    _m_beta_schedule = _m_beta_schedule_type_map[ddpm_sampler_cfg["beta_schedule"].as_string()];
+    auto ddpm_sampler_cfg = config["DDPM_SAMPLER"];
+    _m_timesteps = ddpm_sampler_cfg["timesteps"].value_or<int64_t>(0);
+    _m_beta_start = ddpm_sampler_cfg["beta_start"].value_or<double>(0.0);
+    _m_beta_end = ddpm_sampler_cfg["beta_end"].value_or<double>(0.0);
+    _m_beta_schedule = _m_beta_schedule_type_map[ddpm_sampler_cfg["beta_schedule"].value_or<std::string>("")];
 
     // precompute beta and alpha_cumprod
     if (_m_beta_schedule == beta_schedule_type::linear) {
@@ -564,7 +564,7 @@ DDPMSampler<INPUT, OUTPUT>::~DDPMSampler() = default;
 * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode DDPMSampler<INPUT, OUTPUT>::init(const decltype(toml::parse("")) &cfg) {
+StatusCode DDPMSampler<INPUT, OUTPUT>::init(const toml::table &cfg) {
     return _m_pimpl->init(cfg);
 }
 

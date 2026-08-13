@@ -177,16 +177,17 @@ TEST(strack, update_and_reactivate) {
     EXPECT_EQ(lost.frame_id, 5);
 }
 
-static toml::value build_byte_track_cfg() {
-    toml::value cfg;
-    cfg["BYTE_TRACK"]["tracker_thresh"] = 0.5;
-    cfg["BYTE_TRACK"]["tracker_high_thresh"] = 0.6;
-    cfg["BYTE_TRACK"]["tracker_match_thresh"] = 0.8;
-    cfg["BYTE_TRACK"]["frame_rate"] = 30;
-    cfg["BYTE_TRACK"]["track_buffer"] = 2;
-    cfg["BYTE_TRACK"]["tracked_cls_ids"] = toml::array{0};
-    cfg["BYTE_TRACK"]["tracked_cls_names"] = toml::array{"car"};
-    return cfg;
+static toml::table build_byte_track_cfg() {
+    return std::move(toml::parse(
+        "[BYTE_TRACK]\n"
+        "tracker_thresh = 0.5\n"
+        "tracker_high_thresh = 0.6\n"
+        "tracker_match_thresh = 0.8\n"
+        "frame_rate = 30\n"
+        "track_buffer = 2\n"
+        "tracked_cls_ids = [0]\n"
+        "tracked_cls_names = [\"car\"]\n"))
+        .table();
 }
 
 static bbox make_object(float x, float y, float w, float h, float score, int cls_id) {
@@ -200,7 +201,7 @@ static bbox make_object(float x, float y, float w, float h, float score, int cls
 
 TEST(byte_tracker, init_requires_bytetrack_section) {
     ByteTracker tracker;
-    toml::value cfg = toml::table{};
+    toml::table cfg;
     EXPECT_EQ(tracker.init(cfg), StatusCode::MODEL_INIT_FAILED);
     EXPECT_FALSE(tracker.is_successfully_initialized());
 }

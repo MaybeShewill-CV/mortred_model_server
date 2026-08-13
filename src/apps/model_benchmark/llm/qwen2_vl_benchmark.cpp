@@ -58,7 +58,12 @@ int main(int argc, char** argv) {
 
     // construct qwen2-vl model
     Qwen2VL<mat_input, std_vlm_output> generator;
-    auto cfg = toml::parse(cfg_file_path);
+    auto cfg_parsed = toml::parse_file(cfg_file_path);
+    if (!cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(cfg_parsed.error().description());
+        return -1;
+    }
+    auto cfg = std::move(cfg_parsed).table();
     generator.init(cfg);
     if (!generator.is_successfully_initialized()) {
         LOG(INFO) << "qwen2-vl generator init failed";

@@ -32,9 +32,15 @@ int main(int argc, char **argv) {
 
     std::string config_file_path = argv[1];
     LOG(INFO) << "cfg file path: " << config_file_path;
-    auto config = toml::parse(config_file_path);
-    const auto &server_cfg = config.at("DENSENET_CLASSIFICATION_SERVER");
-    auto port = server_cfg.at("port").as_integer();
+    auto config_parsed = toml::parse_file(config_file_path);
+    if (!config_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(config_parsed.error().description());
+        return -1;
+    }
+    auto config = std::move(config_parsed).table();
+    const auto &server_cfg = config["DENSENET_CLASSIFICATION_SERVER"];
+    auto port = server_cfg["port"].value_or<int64_t>(0);
+    auto host = server_cfg["host"].value_or<std::string>("127.0.0.1");
     LOG(INFO) << "serve on port: " << port;
 
     auto server = create_densenet_cls_server("densenet_cls_server");
@@ -43,7 +49,7 @@ int main(int argc, char **argv) {
             LOG(ERROR) << "server init failed, status: " << std::to_string(status);
             return -1;
         }
-        if (server->start(port) == 0) {
+        if (server->start(host.c_str(), static_cast<unsigned short>(port)) == 0) {
         wait_group.wait();
         server->stop();
     } else {

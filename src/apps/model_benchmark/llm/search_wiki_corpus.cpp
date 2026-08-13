@@ -34,7 +34,12 @@ int main(int argc, char** argv) {
     int top_k = std::stoi(argv[5]);
 
     // init searcher
-    auto cfg = toml::parse(cfg_path);
+    auto cfg_parsed = toml::parse_file(cfg_path);
+    if (!cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(cfg_parsed.error().description());
+        return -1;
+    }
+    auto cfg = std::move(cfg_parsed).table();
     WikiIndexBuilder searcher;
     searcher.init(cfg);
     if (!searcher.is_successfully_initialized()) {

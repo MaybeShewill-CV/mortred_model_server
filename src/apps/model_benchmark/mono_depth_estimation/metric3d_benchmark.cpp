@@ -58,7 +58,12 @@ int main(int argc, char** argv) {
     std_mde_output model_output;
     // construct detector
     auto estimator = create_metric3d_estimator<mat_input, std_mde_output>("metric3d");
-    auto cfg = toml::parse(cfg_file_path);
+    auto cfg_parsed = toml::parse_file(cfg_file_path);
+    if (!cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(cfg_parsed.error().description());
+        return -1;
+    }
+    auto cfg = std::move(cfg_parsed).table();
     estimator->init(cfg);
     if (!estimator->is_successfully_initialized()) {
         LOG(INFO) << "metric3d estimator init failed";

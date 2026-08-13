@@ -8,9 +8,15 @@
 #ifndef MORTRED_MODEL_SERVER_BASE_SERVER_IMPL_H
 #define MORTRED_MODEL_SERVER_BASE_SERVER_IMPL_H
 
+#include <algorithm>
 #include <any>
+#include <cctype>
 #include <chrono>
 #include <type_traits>
+
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 
 #include "glog/logging.h"
 #include "toml/toml.hpp"
@@ -25,14 +31,17 @@
 #include "workflow/Workflow.h"
 
 #include "common/md5.h"
+#include "common/auth_token.h"
 #include "common/base64.h"
 #include "common/cv_utils.h"
 #include "common/json_request_parser.h"
+#include "common/request_size_limit.h"
 #include "common/status_code.h"
 #include "common/time_stamp.h"
 #include "common/file_path_util.h"
 #include "models/base_model.h"
 #include "models/model_io_define.h"
+#include "server/rate_limiter.h"
 
 namespace jinq {
 namespace server {
@@ -42,6 +51,7 @@ using jinq::common::FilePathUtil;
 using jinq::common::Md5;
 using jinq::common::StatusCode;
 using jinq::common::Timestamp;
+using jinq::common::k_default_request_size_limit_mb;
 
 /***
  * CV 图像 worker 特征：unique_ptr<BaseAiModel<base64_input, OUTPUT>> 走基类默认 do_work；
@@ -85,7 +95,7 @@ public:
      * @param cfg
      * @return
      */
-    virtual StatusCode init(const decltype(toml::parse(""))& cfg) = 0;
+    virtual StatusCode init(const toml::table& cfg) = 0;
 
     /***
     *
@@ -102,11 +112,11 @@ public:
     };
 
 public:
-    int max_connection_nums = 200;
-    int peer_resp_timeout = 15 * 1000;
-    int compute_threads = -1;
-    int handler_threads = 50;
-    size_t request_size_limit = -1;
+    int _m_max_connection_nums = 200;
+    int _m_peer_resp_timeout = 15 * 1000;
+    int _m_compute_threads = -1;
+    int _m_handler_threads = 50;
+    size_t _m_request_size_limit = k_default_request_size_limit_mb;
 
 protected:
     // init flag
@@ -121,6 +131,34 @@ protected:
     int _m_model_run_timeout = 500; // ms
     // server uri
     std::string _m_server_uri;
+    // bearer token 鉴权（空 = 关闭）
+    std::string _m_auth_token;
+    // 每客户端 IP 每秒最大请求数（<= 0 = 关闭）
+    int _m_rate_limit_qps = 0;
+    FixedWindowRateLimiter _m_rate_limiter{0};
+
+protected:
+    /***
+     * 解析鉴权与限流配置（auth_token / rate_limit_qps）。
+     * fail-closed：非回环监听必须配置 auth_token，否则拒绝启动。
+     */
+    StatusCode parse_server_security_config(const toml::table& server_section);
+
+    /***
+     * 获取客户端 IP，失败返回空串。
+     */
+    static std::string peer_ip_of(const WFHttpTask* task);
+
+    /***
+     * 读取 Authorization 请求头。
+     */
+    static std::string authorization_header_of(const protocol::HttpRequest* req);
+
+    /***
+     * 401 / 429 统一响应。
+     */
+    static void reply_unauthorized(WFHttpTask* task);
+    static void reply_rate_limited(WFHttpTask* task);
 
 protected:
     struct series_ctx {
@@ -213,18 +251,33 @@ protected:
  */
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
+    // 限流：端口上的所有请求（含健康检查）按客户端 IP 计数
+    if (_m_rate_limit_qps > 0 && !_m_rate_limiter.allow(peer_ip_of(task))) {
+        reply_rate_limited(task);
+        return;
+    }
+    // 鉴权：/welcome 与 /hello_world 保持公开（供健康检查），其余端点需要 Bearer Token
+    const char* request_uri = task->get_req()->get_request_uri();
+    bool is_health_endpoint = strcmp(request_uri, "/welcome") == 0 ||
+                              strcmp(request_uri, "/hello_world") == 0;
+    if (!is_health_endpoint &&
+        !jinq::common::is_bearer_authorized(
+            authorization_header_of(task->get_req()), _m_auth_token)) {
+        reply_unauthorized(task);
+        return;
+    }
     // welcome message
-    if (strcmp(task->get_req()->get_request_uri(), "/welcome") == 0) {
+    if (strcmp(request_uri, "/welcome") == 0) {
         task->get_resp()->append_output_body("<html>Welcome to jinq ai server</html>");
         return;
     }
     // hello world message
-    else if (strcmp(task->get_req()->get_request_uri(), "/hello_world") == 0) {
+    else if (strcmp(request_uri, "/hello_world") == 0) {
         task->get_resp()->append_output_body("<html>Hello World !!!</html>");
         return;
     }
     // model service
-    else if (strcmp(task->get_req()->get_request_uri(), _m_server_uri.c_str()) == 0) {
+    else if (strcmp(request_uri, _m_server_uri.c_str()) == 0) {
         // parse request body
         auto* req = task->get_req();
         auto* resp = task->get_resp();
@@ -376,6 +429,98 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
               << " finished jobs: " << _m_finished_jobs
               << " worker queue size: " << _m_working_queue.size_approx();
     // WFTaskFactory::count_by_name("release_ctx");
+}
+
+/***
+ *
+ * @param server_section
+ * @return
+ */
+template<typename WORKER, typename MODEL_OUTPUT>
+StatusCode BaseAiServerImpl<WORKER, MODEL_OUTPUT>::parse_server_security_config(
+    const toml::table& server_section) {
+    _m_auth_token = server_section["auth_token"].value_or<std::string>("");
+    _m_rate_limit_qps = static_cast<int>(server_section["rate_limit_qps"].value_or<int64_t>(0));
+    _m_rate_limiter.set_max_qps(_m_rate_limit_qps);
+
+    auto listen_host = server_section["host"].value_or<std::string>("127.0.0.1");
+    if (!jinq::common::is_loopback_host(listen_host) && _m_auth_token.empty()) {
+        LOG(ERROR) << "refusing to serve on non-loopback host " << listen_host
+                   << " without auth_token configured";
+        _m_successfully_initialized = false;
+        return StatusCode::SERVER_INIT_FAILED;
+    }
+    return StatusCode::OK;
+}
+
+/***
+ *
+ * @param task
+ * @return
+ */
+template<typename WORKER, typename MODEL_OUTPUT>
+std::string BaseAiServerImpl<WORKER, MODEL_OUTPUT>::peer_ip_of(const WFHttpTask* task) {
+    struct sockaddr_storage peer_addr;
+    socklen_t addr_len = sizeof(peer_addr);
+    if (task->get_peer_addr(reinterpret_cast<struct sockaddr*>(&peer_addr), &addr_len) != 0) {
+        return "";
+    }
+    char ip_buf[INET6_ADDRSTRLEN] = {0};
+    if (peer_addr.ss_family == AF_INET) {
+        auto* ipv4 = reinterpret_cast<const struct sockaddr_in*>(&peer_addr);
+        inet_ntop(AF_INET, &ipv4->sin_addr, ip_buf, sizeof(ip_buf));
+    } else if (peer_addr.ss_family == AF_INET6) {
+        auto* ipv6 = reinterpret_cast<const struct sockaddr_in6*>(&peer_addr);
+        inet_ntop(AF_INET6, &ipv6->sin6_addr, ip_buf, sizeof(ip_buf));
+    }
+    return std::string(ip_buf);
+}
+
+/***
+ *
+ * @param req
+ * @return
+ */
+template<typename WORKER, typename MODEL_OUTPUT>
+std::string BaseAiServerImpl<WORKER, MODEL_OUTPUT>::authorization_header_of(
+    const protocol::HttpRequest* req) {
+    protocol::HttpHeaderCursor cursor(req);
+    protocol::HttpMessageHeader header;
+    while (cursor.next(&header)) {
+        std::string name(static_cast<const char*>(header.name), header.name_len);
+        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        if (name == "authorization") {
+            return std::string(static_cast<const char*>(header.value), header.value_len);
+        }
+    }
+    return "";
+}
+
+/***
+ *
+ * @param task
+ */
+template<typename WORKER, typename MODEL_OUTPUT>
+void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::reply_unauthorized(WFHttpTask* task) {
+    auto* resp = task->get_resp();
+    resp->set_status_code("401");
+    resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
+    resp->append_output_body(
+        "{\"code\":401,\"msg\":\"unauthorized: missing or invalid bearer token\"}");
+}
+
+/***
+ *
+ * @param task
+ */
+template<typename WORKER, typename MODEL_OUTPUT>
+void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::reply_rate_limited(WFHttpTask* task) {
+    auto* resp = task->get_resp();
+    resp->set_status_code("429");
+    resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
+    resp->append_output_body("{\"code\":429,\"msg\":\"too many requests\"}");
 }
 }
 }

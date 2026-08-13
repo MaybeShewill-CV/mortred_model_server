@@ -26,7 +26,12 @@ int main(int argc, char** argv) {
     std::string out_dir = argv[3];
 
     WikiIndexBuilder index_builder;
-    auto cfg = toml::parse(cfg_path);
+    auto cfg_parsed = toml::parse_file(cfg_path);
+    if (!cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(cfg_parsed.error().description());
+        return -1;
+    }
+    auto cfg = std::move(cfg_parsed).table();
     index_builder.init(cfg);
     if (!index_builder.is_successfully_initialized()) {
         LOG(ERROR) << "init index builder failed";

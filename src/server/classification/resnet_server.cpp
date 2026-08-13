@@ -44,7 +44,7 @@ public:
     * @param cfg_file_path
     * @return
     */
-    StatusCode init(const decltype(toml::parse(""))& config) override;
+    StatusCode init(const toml::table& config) override;
 
 protected:
     /***
@@ -67,20 +67,37 @@ protected:
  * @param config
  * @return
  */
-StatusCode ResNetServer::Impl::init(const decltype(toml::parse("")) &config) {
+StatusCode ResNetServer::Impl::init(const toml::table &config) {
     // init working queue
-    auto server_section = config.at("RESNET_CLASSIFICATION_SERVER");
-    auto worker_nums = static_cast<int>(server_section.at("worker_nums").as_integer());
-    auto model_section = config.at("RESNET");
-    auto model_cfg_path = model_section.at("model_config_file_path").as_string();
+    const toml::table* server_section_ptr = config["RESNET_CLASSIFICATION_SERVER"].as_table();
+    if (server_section_ptr == nullptr) {
+        LOG(ERROR) << "Config section RESNET_CLASSIFICATION_SERVER missing or not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::SERVER_INIT_FAILED;
+    }
+    const toml::table& server_section = *server_section_ptr;
+
+    auto security_status = parse_server_security_config(server_section);
+    if (security_status != StatusCode::OK) {
+        return security_status;
+    }
+    auto worker_nums = static_cast<int>(server_section["worker_nums"].value_or<int64_t>(0));
+    auto model_section = config["RESNET"];
+    auto model_cfg_path = model_section["model_config_file_path"].value_or<std::string>("");
 
     if (!FilePathUtil::is_file_exist(model_cfg_path)) {
-        LOG(FATAL) << "resnet model config file not exist: " << model_cfg_path;
+        LOG(ERROR) << "resnet model config file not exist: " << model_cfg_path;
         _m_successfully_initialized = false;
         return StatusCode::SERVER_INIT_FAILED;
     }
 
-    auto model_cfg = toml::parse(model_cfg_path);
+    auto model_cfg_parsed = toml::parse_file(model_cfg_path);
+    if (!model_cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(model_cfg_parsed.error().description());
+        _m_successfully_initialized = false;
+        return StatusCode::SERVER_INIT_FAILED;
+    }
+    auto model_cfg = std::move(model_cfg_parsed).table();
     for (int index = 0; index < worker_nums; ++index) {
         auto worker = create_resnet_classifier<base64_input, std_classification_output>(
                           "worker_" + std::to_string(index + 1));
@@ -98,7 +115,7 @@ StatusCode ResNetServer::Impl::init(const decltype(toml::parse("")) &config) {
     if (!server_section.contains("model_run_timeout")) {
         _m_model_run_timeout = 500; // ms
     } else {
-        _m_model_run_timeout = static_cast<int>(server_section.at("model_run_timeout").as_integer());
+        _m_model_run_timeout = static_cast<int>(server_section["model_run_timeout"].value_or<int64_t>(0));
     }
 
     // init server uri
@@ -107,15 +124,17 @@ StatusCode ResNetServer::Impl::init(const decltype(toml::parse("")) &config) {
         _m_successfully_initialized = false;
         return StatusCode::SERVER_INIT_FAILED;
     } else {
-        _m_server_uri = server_section.at("server_uri").as_string();
+        _m_server_uri = server_section["server_uri"].value_or<std::string>("");
     }
 
     // init server params
-    max_connection_nums = static_cast<int>(server_section.at("max_connections").as_integer());
-    peer_resp_timeout = static_cast<int>(server_section.at("peer_resp_timeout").as_integer()) * 1000;
-    compute_threads = static_cast<int>(server_section.at("compute_threads").as_integer());
-    handler_threads = static_cast<int>(server_section.at("handler_threads").as_integer());
-    request_size_limit = static_cast<size_t>(server_section.at("request_size_limit").as_integer());
+    _m_max_connection_nums = static_cast<int>(server_section["max_connections"].value_or<int64_t>(0));
+    _m_peer_resp_timeout = static_cast<int>(server_section["peer_resp_timeout"].value_or<int64_t>(0)) * 1000;
+    _m_compute_threads = static_cast<int>(server_section["compute_threads"].value_or<int64_t>(0));
+    _m_handler_threads = static_cast<int>(server_section["handler_threads"].value_or<int64_t>(0));
+    if (auto limit = server_section["request_size_limit"].value_or<int64_t>(0); limit > 0) {
+        _m_request_size_limit = static_cast<size_t>(limit);
+    }
 
     _m_successfully_initialized = true;
     LOG(INFO) << "Resnet classification server init successfully";
@@ -191,7 +210,7 @@ ResNetServer::~ResNetServer() = default;
  * @param cfg
  * @return
  */
-jinq::common::StatusCode ResNetServer::init(const decltype(toml::parse("")) &config) {
+jinq::common::StatusCode ResNetServer::init(const toml::table &config) {
     // init impl
     auto status = _m_impl->init(config);
     if (status != StatusCode::OK) {
@@ -201,14 +220,14 @@ jinq::common::StatusCode ResNetServer::init(const decltype(toml::parse("")) &con
 
     // init server
     WFGlobalSettings settings = GLOBAL_SETTINGS_DEFAULT;
-    settings.compute_threads = _m_impl->compute_threads;
-    settings.handler_threads = _m_impl->handler_threads;
+    settings.compute_threads = _m_impl->_m_compute_threads;
+    settings.handler_threads = _m_impl->_m_handler_threads;
     WORKFLOW_library_init(&settings);
 
     WFServerParams server_params = SERVER_PARAMS_DEFAULT;
-    server_params.max_connections = _m_impl->max_connection_nums;
-    server_params.peer_response_timeout = _m_impl->peer_resp_timeout;
-    server_params.request_size_limit = _m_impl->request_size_limit * 1024 * 1024;
+    server_params.max_connections = _m_impl->_m_max_connection_nums;
+    server_params.peer_response_timeout = _m_impl->_m_peer_resp_timeout;
+    server_params.request_size_limit = _m_impl->_m_request_size_limit * 1024 * 1024;
 
     auto&& proc = [&](auto arg) { return this->_m_impl->serve_process(arg); };
     _m_server = std::make_unique<WFHttpServer>(&server_params, proc);

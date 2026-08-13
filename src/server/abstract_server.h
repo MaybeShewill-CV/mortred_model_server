@@ -34,7 +34,7 @@ public:
      * @param cfg
      * @return
      */
-    virtual jinq::common::StatusCode init(const decltype(toml::parse(""))& cfg) = 0;
+    virtual jinq::common::StatusCode init(const toml::table& cfg) = 0;
 
     /***
      *

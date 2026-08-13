@@ -62,7 +62,12 @@ int main(int argc, char** argv) {
     std_text_regions_output model_output;
     // construct detector
     auto detector = create_dbtext_detector<mat_input, std_text_regions_output>("dbnet");
-    auto cfg = toml::parse(cfg_file_path);
+    auto cfg_parsed = toml::parse_file(cfg_file_path);
+    if (!cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(cfg_parsed.error().description());
+        return -1;
+    }
+    auto cfg = std::move(cfg_parsed).table();
     detector->init(cfg);
 
     if (!detector->is_successfully_initialized()) {

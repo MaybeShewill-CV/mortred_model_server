@@ -7,9 +7,11 @@
 
 #include "qwen2_vl_chat_server.h"
 
+#include <iomanip>
+#include <memory>
+#include <mutex>
 #include <random>
 #include <sstream>
-#include <iomanip>
 
 #include "glog/logging.h"
 #include "toml/toml.hpp"
@@ -96,7 +98,7 @@ public:
      * @param cfg_file_path
      * @return
      */
-    StatusCode init(const decltype(toml::parse("")) &config) override;
+    StatusCode init(const toml::table &config) override;
 
 protected:
     /***
@@ -137,6 +139,35 @@ private:
     QwenVlModelPtr _m_generator;
     // dialog cache
     std::unordered_map<std::string, Dialog> _m_user_history_dialogs;
+
+    /***
+     * 状态快照：由持有 worker 的线程（init / do_work / clear_kv_cache）在独占安全点更新，
+     * 状态端点只读快照，避免 handler 线程阻塞等待推理 worker。
+     */
+    struct LlmStatusSnapshot {
+        jinq::models::llm::ModelStatus model_status;
+        llama_perf_context_data context_perf{};
+    };
+
+    mutable std::mutex _m_snapshot_mutex;
+    LlmStatusSnapshot _m_status_snapshot;
+
+    /***
+     * 在独占 worker 的安全点更新状态快照。
+     */
+    void update_status_snapshot(const QwenVlModelPtr& worker) {
+        std::lock_guard<std::mutex> lock(_m_snapshot_mutex);
+        _m_status_snapshot.model_status = worker->get_model_stat();
+        _m_status_snapshot.context_perf = worker->get_context_perf();
+    }
+
+    /***
+     * 读取状态快照（handler 线程调用，不触碰 worker 队列）。
+     */
+    LlmStatusSnapshot read_status_snapshot() const {
+        std::lock_guard<std::mutex> lock(_m_snapshot_mutex);
+        return _m_status_snapshot;
+    }
 };
 
 /************ Impl Implementation ************/
@@ -146,19 +177,36 @@ private:
  * @param config
  * @return
  */
-StatusCode Qwen2VLChatServer::Impl::init(const decltype(toml::parse("")) &config) {
+StatusCode Qwen2VLChatServer::Impl::init(const toml::table &config) {
     if (!config.contains("QWEN2_VL_CHAT_SERVER")) {
         LOG(ERROR) << (fmt::format(R"(config file doesn't contain filed: "QWEN2_VL_CHAT_SERVER")"));
         return StatusCode::SERVER_INIT_FAILED;
     }
-    auto server_section = config.at("QWEN2_VL_CHAT_SERVER");
-    auto model_section = config.at("QWEN2_VL_CHAT_MODEL");
-    std::string model_cfg_path = model_section.at("model_config_file_path").as_string();
+    const toml::table* server_section_ptr = config["QWEN2_VL_CHAT_SERVER"].as_table();
+    if (server_section_ptr == nullptr) {
+        LOG(ERROR) << "Config section QWEN2_VL_CHAT_SERVER missing or not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::SERVER_INIT_FAILED;
+    }
+    const toml::table& server_section = *server_section_ptr;
+
+    auto security_status = parse_server_security_config(server_section);
+    if (security_status != StatusCode::OK) {
+        return security_status;
+    }
+    auto model_section = config["QWEN2_VL_CHAT_MODEL"];
+    std::string model_cfg_path = model_section["model_config_file_path"].value_or<std::string>("");
     if (!FilePathUtil::is_file_exist(model_cfg_path)) {
         LOG(ERROR) << (fmt::format("model config file: {} not exist", model_cfg_path));
         return StatusCode::SERVER_INIT_FAILED;
     }
-    auto model_cfg = toml::parse(model_cfg_path);
+    auto model_cfg_parsed = toml::parse_file(model_cfg_path);
+    if (!model_cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(model_cfg_parsed.error().description());
+        _m_successfully_initialized = false;
+        return StatusCode::SERVER_INIT_FAILED;
+    }
+    auto model_cfg = std::move(model_cfg_parsed).table();
     _m_generator = std::make_unique<ModelPtr>();
     auto status = _m_generator->init(model_cfg);
     if (status != StatusCode::OK) {
@@ -168,6 +216,7 @@ StatusCode Qwen2VLChatServer::Impl::init(const decltype(toml::parse("")) &config
     }
 
     // 单 worker 入队：所有聊天请求经阻塞队列串行执行，保证 KV cache 会话亲和且无数据竞争
+    update_status_snapshot(_m_generator);
     _m_working_queue.enqueue(std::move(_m_generator));
 
     // init server uri
@@ -176,15 +225,17 @@ StatusCode Qwen2VLChatServer::Impl::init(const decltype(toml::parse("")) &config
         _m_successfully_initialized = false;
         return StatusCode::SERVER_INIT_FAILED;
     } else {
-        _m_server_uri = server_section.at("server_url").as_string();
+        _m_server_uri = server_section["server_url"].value_or<std::string>("");
     }
 
     // init server params
-    max_connection_nums = static_cast<int>(server_section.at("max_connections").as_integer());
-    peer_resp_timeout = static_cast<int>(server_section.at("peer_resp_timeout").as_integer()) * 1000;
-    compute_threads = static_cast<int>(server_section.at("compute_threads").as_integer());
-    handler_threads = static_cast<int>(server_section.at("handler_threads").as_integer());
-    request_size_limit = static_cast<size_t>(server_section.at("request_size_limit").as_integer());
+    _m_max_connection_nums = static_cast<int>(server_section["max_connections"].value_or<int64_t>(0));
+    _m_peer_resp_timeout = static_cast<int>(server_section["peer_resp_timeout"].value_or<int64_t>(0)) * 1000;
+    _m_compute_threads = static_cast<int>(server_section["compute_threads"].value_or<int64_t>(0));
+    _m_handler_threads = static_cast<int>(server_section["handler_threads"].value_or<int64_t>(0));
+    if (auto limit = server_section["request_size_limit"].value_or<int64_t>(0); limit > 0) {
+        _m_request_size_limit = static_cast<size_t>(limit);
+    }
     // 多模态生成时间无界，不设推理超时
     _m_model_run_timeout = -1;
 
@@ -304,6 +355,7 @@ void Qwen2VLChatServer::Impl::do_work(const task_request& req, series_ctx* ctx) 
     ctx->model_run_status = status;
 
     // restore worker queue
+    update_status_snapshot(worker);
     _m_working_queue.enqueue(std::move(worker));
 
     // update ctx
@@ -356,38 +408,41 @@ std::string Qwen2VLChatServer::Impl::make_response_body(
 bool Qwen2VLChatServer::Impl::handle_custom_endpoint(WFHttpTask* task) {
     const char* uri = task->get_req()->get_request_uri();
 
-    // 通过单 worker 队列访问 generator，避免与聊天推理并发竞争
-    auto access_generator = [this]() -> QwenVlModelPtr {
-        QwenVlModelPtr worker;
-        _m_working_queue.wait_dequeue(worker);
-        return worker;
-    };
-    auto release_generator = [this](QwenVlModelPtr& worker) {
-        _m_working_queue.enqueue(std::move(worker));
-    };
-
     if (strcmp(uri, "/check_model_stat") == 0) {
-        auto worker = access_generator();
-        auto model_stat = worker->get_model_stat();
+        // 只读快照：不触碰 worker 队列，handler 线程永不阻塞
+        auto snapshot = read_status_snapshot();
+        const auto& model_stat = snapshot.model_status;
         task->get_resp()->append_output_body(fmt::format(
             "<html>n_ctx: {}\n kv cache used: {}\n clip_embedding_dims: {}\n clip_hidden_size: {} \n</html>",
             model_stat.n_ctx_size, model_stat.kv_cache_cell_nums,
             model_stat.clip_embedding_dims, model_stat.clip_hidden_size));
-        release_generator(worker);
         return true;
     } else if (strcmp(uri, "/clear_kv_cache") == 0) {
-        auto worker = access_generator();
-        worker->clear_kv_cache_cell();
-        auto model_stat = worker->get_model_stat();
-        task->get_resp()->append_output_body(fmt::format(
-            "<html>n_ctx: {}\n kv cache used: {}\n clip_embedding_dims: {}\n clip_hidden_size: {} \n</html>",
-            model_stat.n_ctx_size, model_stat.kv_cache_cell_nums,
-            model_stat.clip_embedding_dims, model_stat.clip_hidden_size));
-        release_generator(worker);
+        // 清空 kv cache 需要独占 worker：异步 go task 排队执行，handler 线程立即返回
+        auto* resp = task->get_resp();
+        auto body = std::make_shared<std::string>();
+        auto go_proc = [this, body]() {
+            QwenVlModelPtr worker;
+            _m_working_queue.wait_dequeue(worker);
+            worker->clear_kv_cache_cell();
+            auto model_stat = worker->get_model_stat();
+            update_status_snapshot(worker);
+            _m_working_queue.enqueue(std::move(worker));
+            *body = fmt::format(
+                "<html>n_ctx: {}\n kv cache used: {}\n clip_embedding_dims: {}\n clip_hidden_size: {} \n</html>",
+                model_stat.n_ctx_size, model_stat.kv_cache_cell_nums,
+                model_stat.clip_embedding_dims, model_stat.clip_hidden_size);
+        };
+        auto* go_task = WFTaskFactory::create_go_task("clear_kv_cache", std::move(go_proc));
+        go_task->set_callback([resp, body](const WFGoTask*) {
+            resp->append_output_body(*body);
+        });
+        *series_of(task) << go_task;
         return true;
     } else if (strcmp(uri, "/get_context_perf") == 0) {
-        auto worker = access_generator();
-        auto data = worker->get_context_perf();
+        // 只读快照
+        auto snapshot = read_status_snapshot();
+        const auto& data = snapshot.context_perf;
         const double t_end_ms = 1e-3 * static_cast<double>(ggml_time_us());
         auto perf_str = fmt::format(
             "load time = {} ms\n"
@@ -401,7 +456,6 @@ bool Qwen2VLChatServer::Impl::handle_custom_endpoint(WFHttpTask* task) {
         );
         task->get_resp()->append_output_body(fmt::format(
             "<html>context perf data: {}</html>", perf_str));
-        release_generator(worker);
         return true;
     }
     return false;
@@ -426,7 +480,7 @@ Qwen2VLChatServer::~Qwen2VLChatServer() = default;
  * @param cfg
  * @return
  */
-StatusCode Qwen2VLChatServer::init(const decltype(toml::parse("")) &config) {
+StatusCode Qwen2VLChatServer::init(const toml::table &config) {
     // init impl
     auto status = _m_impl->init(config);
     if (status != StatusCode::OK) {
@@ -436,14 +490,14 @@ StatusCode Qwen2VLChatServer::init(const decltype(toml::parse("")) &config) {
 
     // init server
     WFGlobalSettings settings = GLOBAL_SETTINGS_DEFAULT;
-    settings.compute_threads = _m_impl->compute_threads;
+    settings.compute_threads = _m_impl->_m_compute_threads;
     settings.handler_threads = 1;
     WORKFLOW_library_init(&settings);
 
     WFServerParams server_params = SERVER_PARAMS_DEFAULT;
-    server_params.max_connections = _m_impl->max_connection_nums;
-    server_params.peer_response_timeout = _m_impl->peer_resp_timeout;
-    server_params.request_size_limit = _m_impl->request_size_limit * 1024 * 1024;
+    server_params.max_connections = _m_impl->_m_max_connection_nums;
+    server_params.peer_response_timeout = _m_impl->_m_peer_resp_timeout;
+    server_params.request_size_limit = _m_impl->_m_request_size_limit * 1024 * 1024;
 
     auto&& proc = [&](auto arg) {
         return this->_m_impl->serve_process(arg);

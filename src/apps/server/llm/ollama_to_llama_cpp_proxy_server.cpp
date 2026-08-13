@@ -21,6 +21,8 @@
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
 
+#include "common/request_size_limit.h"
+
 struct tutorial_series_context {
     std::string url;
     WFHttpTask *proxy_task = nullptr;
@@ -211,10 +213,8 @@ int main(int argc, char *argv[])
     signal(SIGINT, sig_handler);
 
     struct WFServerParams params = HTTP_SERVER_PARAMS_DEFAULT;
-    /* for safety, limit request size to 8MB. */
-//    params.request_size_limit = 8 * 1024 * 1024;
-//    params.receive_timeout = 30 * 1000 * 1000;
-//    params.peer_response_timeout = 30 * 1000 * 1000;
+    /* for safety, limit request size to the default 64MB. */
+    params.request_size_limit = jinq::common::k_default_request_size_limit_mb * 1024 * 1024;
 
     WFGlobalSettings settings = GLOBAL_SETTINGS_DEFAULT;
     settings.endpoint_params.response_timeout = -1;
@@ -222,7 +222,7 @@ int main(int argc, char *argv[])
 
     WFHttpServer server(&params, process);
 
-    if (server.start(port) == 0) {
+    if (server.start("127.0.0.1", port) == 0) {
         wait_group.wait();
         server.stop();
     } else {

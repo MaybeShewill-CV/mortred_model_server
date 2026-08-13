@@ -152,7 +152,7 @@ class YoloV8Detector<INPUT, OUTPUT>::Impl {
      * @param cfg_file_path
      * @return
      */
-    StatusCode init(const decltype(toml::parse(""))& config);
+    StatusCode init(const toml::table& config);
 
     /***
     *
@@ -236,7 +236,7 @@ class YoloV8Detector<INPUT, OUTPUT>::Impl {
      * @param config
      * @return
      */
-    StatusCode init_trt(const toml::value& cfg);
+    StatusCode init_trt(const toml::table& cfg);
 
     /***
      *
@@ -271,25 +271,25 @@ class YoloV8Detector<INPUT, OUTPUT>::Impl {
 * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& config) {
+StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::init(const toml::table& config) {
 
     // choose backend type
-    auto backend_dict = config.at("BACKEND_DICT");
-    auto backend_name = config.at("YOLOV8").at("backend_type").as_string();
-    _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].as_integer());
+    auto backend_dict = config["BACKEND_DICT"];
+    auto backend_name = config["YOLOV8"]["backend_type"].value_or<std::string>("");
+    _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].value_or<int64_t>(0));
 
     // init metric3d configs
-    toml::value yolov8_cfg;
+    const toml::table* yolov8_cfg = nullptr;
     if (_m_backend_type == TRT) {
-        yolov8_cfg = config.at("YOLOV8_TRT");
+        yolov8_cfg = config["YOLOV8_TRT"].as_table();
     } else {
         // todo implment other backend
     }
-    auto model_file_name = FilePathUtil::get_file_name(yolov8_cfg.at("model_file_path").as_string());
+    auto model_file_name = FilePathUtil::get_file_name((*yolov8_cfg)["model_file_path"].value_or<std::string>(""));
 
     StatusCode init_status;
     if (_m_backend_type == TRT) {
-        init_status = init_trt(yolov8_cfg);
+        init_status = init_trt(*yolov8_cfg);
     } else {
         // todo implment other backend
     }
@@ -389,30 +389,30 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::maybe_reallocate_input_device_me
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::init_trt(const toml::value& cfg) {
+StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::init_trt(const toml::table& cfg) {
     // init threshold
     if (!cfg.contains("model_score_threshold")) {
         _m_score_threshold = 0.4;
     } else {
-        _m_score_threshold = cfg.at("model_score_threshold").as_floating();
+        _m_score_threshold = cfg["model_score_threshold"].value_or<double>(0.0);
     }
 
     if (!cfg.contains("model_nms_threshold")) {
         _m_nms_threshold = 0.35;
     } else {
-        _m_nms_threshold = cfg.at("model_nms_threshold").as_floating();
+        _m_nms_threshold = cfg["model_nms_threshold"].value_or<double>(0.0);
     }
 
     if (!cfg.contains("model_keep_top_k")) {
         _m_keep_topk = 250;
     } else {
-        _m_keep_topk = cfg.at("model_keep_top_k").as_integer();
+        _m_keep_topk = cfg["model_keep_top_k"].value_or<int64_t>(0);
     }
 
     if (!cfg.contains("model_class_nums")) {
         _m_class_nums = 80;
     } else {
-        _m_class_nums = static_cast<int>(cfg.at("model_class_nums").as_integer());
+        _m_class_nums = static_cast<int>(cfg["model_class_nums"].value_or<int64_t>(0));
     }
 
     if (!cfg.contains("class_names")) {
@@ -420,9 +420,14 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::init_trt(const toml::value& cfg)
             _m_class_id2names.insert(std::make_pair(idx, ""));
         }
     } else {
-        auto cls_names = cfg.at("class_names").as_array();
-        for (auto idx = 0; idx < cls_names.size(); ++idx) {
-            _m_class_id2names.insert(std::make_pair(idx, cls_names[idx].as_string()));
+        const toml::array* cls_names = cfg["class_names"].as_array();
+    if (cls_names == nullptr) {
+        LOG(ERROR) << "Config field class_names is not an array";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+        for (auto idx = 0; idx < cls_names->size(); ++idx) {
+            _m_class_id2names.insert(std::make_pair(idx, (*cls_names)[idx].value_or<std::string>("")));
         }
     }
 
@@ -439,7 +444,7 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::init_trt(const toml::value& cfg)
         LOG(ERROR) << "Config doesn\'t have model_file_path field";
         return StatusCode::MODEL_INIT_FAILED;
     } else {
-        _m_trt_params.model_file_path = cfg.at("model_file_path").as_string();
+        _m_trt_params.model_file_path = cfg["model_file_path"].value_or<std::string>("");
     }
     if (!FilePathUtil::is_file_exist(_m_trt_params.model_file_path)) {
         LOG(ERROR) << "Privacy trt detection model file: " << _m_trt_params.model_file_path << " not exist";
@@ -525,8 +530,8 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::init_trt(const toml::value& cfg)
     }
 
     // set input node size
-    _m_input_size_host.height = static_cast<int>(cfg.at("input_node_size").as_array()[1].as_integer());
-    _m_input_size_host.width = static_cast<int>(cfg.at("input_node_size").as_array()[0].as_integer());
+    _m_input_size_host.height = static_cast<int>(cfg["input_node_size"][1].value_or<int64_t>(0));
+    _m_input_size_host.width = static_cast<int>(cfg["input_node_size"][0].value_or<int64_t>(0));
 
     return StatusCode::OK;
 }
@@ -681,7 +686,7 @@ YoloV8Detector<INPUT, OUTPUT>::~YoloV8Detector() = default;
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode YoloV8Detector<INPUT, OUTPUT>::init(const decltype(toml::parse(""))& cfg) {
+StatusCode YoloV8Detector<INPUT, OUTPUT>::init(const toml::table& cfg) {
     return _m_pimpl->init(cfg);
 }
 

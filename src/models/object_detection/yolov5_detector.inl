@@ -143,7 +143,7 @@ public:
      * @param cfg_file_path
      * @return
      */
-    StatusCode init(const decltype(toml::parse(""))& config);
+    StatusCode init(const toml::table& config);
 
     /***
     *
@@ -211,21 +211,27 @@ public:
 * @return
 */
 template<typename INPUT, typename OUTPUT>
-StatusCode YoloV5Detector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& config) {
+StatusCode YoloV5Detector<INPUT, OUTPUT>::Impl::init(const toml::table& config) {
     if (!config.contains("YOLOV5")) {
         LOG(ERROR) << "Config file does not contain YOLOV5 section";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    toml::value cfg_content = config.at("YOLOV5");
+    const toml::table* cfg_content_ptr = config["YOLOV5"].as_table();
+    if (cfg_content_ptr == nullptr) {
+        LOG(ERROR) << "Config section YOLOV5 missing or not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    const toml::table& cfg_content = *cfg_content_ptr;
 
     // init threads
     if (!cfg_content.contains("model_threads_num")) {
         LOG(WARNING) << "Config doesn\'t have model_threads_num field default 4";
         _m_threads_nums = 4;
     } else {
-        _m_threads_nums = static_cast<int>(cfg_content.at("model_threads_num").as_integer());
+        _m_threads_nums = static_cast<int>(cfg_content["model_threads_num"].value_or<int64_t>(0));
     }
 
     // init Interpreter
@@ -234,7 +240,7 @@ StatusCode YoloV5Detector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     } else {
-        _m_model_file_path = cfg_content.at("model_file_path").as_string();
+        _m_model_file_path = cfg_content["model_file_path"].value_or<std::string>("");
     }
 
     if (!FilePathUtil::is_file_exist(_m_model_file_path)) {
@@ -256,7 +262,7 @@ StatusCode YoloV5Detector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(
         LOG(WARNING) << "Config doesn\'t have compute_backend field default cpu";
         mnn_config.type = MNN_FORWARD_CPU;
     } else {
-        std::string compute_backend = cfg_content.at("compute_backend").as_string();
+        std::string compute_backend = cfg_content["compute_backend"].value_or<std::string>("");
 
         if (std::strcmp(compute_backend.c_str(), "cuda") == 0) {
             mnn_config.type = MNN_FORWARD_CUDA;
@@ -274,13 +280,13 @@ StatusCode YoloV5Detector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(
         LOG(WARNING) << "Config doesn\'t have backend_precision_mode field default Precision_Normal";
         backend_config.precision = MNN::BackendConfig::Precision_Normal;
     } else {
-        backend_config.precision = static_cast<MNN::BackendConfig::PrecisionMode>(cfg_content.at("backend_precision_mode").as_integer());
+        backend_config.precision = static_cast<MNN::BackendConfig::PrecisionMode>(cfg_content["backend_precision_mode"].value_or<int64_t>(0));
     }
     if (!cfg_content.contains("backend_power_mode")) {
         LOG(WARNING) << "Config doesn\'t have backend_power_mode field default Power_Normal";
         backend_config.power = MNN::BackendConfig::Power_Normal;
     } else {
-        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(cfg_content.at("backend_power_mode").as_integer());
+        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(cfg_content["backend_power_mode"].value_or<int64_t>(0));
     }
     mnn_config.backendConfig = &backend_config;
 
@@ -315,33 +321,33 @@ StatusCode YoloV5Detector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(
         _m_input_size_user.height = 640;
     } else {
         _m_input_size_user.width = static_cast<int>(
-                                       cfg_content.at("model_input_image_size").as_array()[1].as_integer());
+                                       cfg_content["model_input_image_size"][1].value_or<int64_t>(0));
         _m_input_size_user.height = static_cast<int>(
-                                        cfg_content.at("model_input_image_size").as_array()[0].as_integer());
+                                        cfg_content["model_input_image_size"][0].value_or<int64_t>(0));
     }
 
     if (!cfg_content.contains("model_score_threshold")) {
         _m_score_threshold = 0.4;
     } else {
-        _m_score_threshold = cfg_content.at("model_score_threshold").as_floating();
+        _m_score_threshold = cfg_content["model_score_threshold"].value_or<double>(0.0);
     }
 
     if (!cfg_content.contains("model_nms_threshold")) {
         _m_nms_threshold = 0.35;
     } else {
-        _m_nms_threshold = cfg_content.at("model_nms_threshold").as_floating();
+        _m_nms_threshold = cfg_content["model_nms_threshold"].value_or<double>(0.0);
     }
 
     if (!cfg_content.contains("model_keep_top_k")) {
         _m_keep_topk = 250;
     } else {
-        _m_keep_topk = cfg_content.at("model_keep_top_k").as_integer();
+        _m_keep_topk = cfg_content["model_keep_top_k"].value_or<int64_t>(0);
     }
 
     if (!cfg_content.contains("model_class_nums")) {
         _m_class_nums = 80;
     } else {
-        _m_class_nums = static_cast<int>(cfg_content.at("model_class_nums").as_integer());
+        _m_class_nums = static_cast<int>(cfg_content["model_class_nums"].value_or<int64_t>(0));
     }
 
     if (!cfg_content.contains("class_names")) {
@@ -349,9 +355,14 @@ StatusCode YoloV5Detector<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(
             _m_class_id2names.insert(std::make_pair(idx, ""));
         }
     } else {
-        auto cls_names = cfg_content.at("class_names").as_array();
-        for (auto idx = 0; idx < cls_names.size(); ++idx) {
-            _m_class_id2names.insert(std::make_pair(idx, cls_names[idx].as_string()));
+        const toml::array* cls_names = cfg_content["class_names"].as_array();
+    if (cls_names == nullptr) {
+        LOG(ERROR) << "Config field class_names is not an array";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+        for (auto idx = 0; idx < cls_names->size(); ++idx) {
+            _m_class_id2names.insert(std::make_pair(idx, (*cls_names)[idx].value_or<std::string>("")));
         }
     }
 
@@ -562,7 +573,7 @@ YoloV5Detector<INPUT, OUTPUT>::~YoloV5Detector() = default;
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode YoloV5Detector<INPUT, OUTPUT>::init(const decltype(toml::parse(""))& cfg) {
+StatusCode YoloV5Detector<INPUT, OUTPUT>::init(const toml::table& cfg) {
     return _m_pimpl->init(cfg);
 }
 

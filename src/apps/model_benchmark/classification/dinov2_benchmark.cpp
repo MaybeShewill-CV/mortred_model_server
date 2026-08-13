@@ -73,7 +73,12 @@ int main(int argc, char** argv) {
 
     // construct detector
     auto classifier = create_dinov2_classifier<mat_input, std_classification_output>("mobilenetv2");
-    auto cfg = toml::parse(cfg_file_path);
+    auto cfg_parsed = toml::parse_file(cfg_file_path);
+    if (!cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(cfg_parsed.error().description());
+        return -1;
+    }
+    auto cfg = std::move(cfg_parsed).table();
     classifier->init(cfg);
     if (!classifier->is_successfully_initialized()) {
         LOG(INFO) << "dinov2 feature extractor init failed";

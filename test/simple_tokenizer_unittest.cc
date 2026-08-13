@@ -15,16 +15,17 @@
 using jinq::common::StatusCode;
 using jinq::models::clip::SimpleTokenizer;
 
-static toml::value build_tokenizer_cfg() {
-    toml::value cfg;
-    cfg["TOKENIZER"]["vocab_file_path"] = "test/testdata/bpe_simple_vocab_16e6.txt";
-    return cfg;
+static toml::table build_tokenizer_cfg() {
+    return std::move(
+        toml::parse("TOKENIZER = { vocab_file_path = \"test/testdata/bpe_simple_vocab_16e6.txt\" }"))
+        .table();
 }
 
 TEST(simple_tokenizer, init_with_missing_vocab_fails) {
     SimpleTokenizer tokenizer;
-    toml::value cfg;
-    cfg["TOKENIZER"]["vocab_file_path"] = "no_such_vocab_file.txt";
+    toml::table cfg = std::move(
+        toml::parse("TOKENIZER = { vocab_file_path = \"no_such_vocab_file.txt\" }"))
+        .table();
     EXPECT_EQ(tokenizer.init(cfg), StatusCode::MODEL_INIT_FAILED);
     EXPECT_FALSE(tokenizer.is_successfully_initialized());
 }

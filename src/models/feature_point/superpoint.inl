@@ -148,7 +148,7 @@ class SuperPoint<INPUT, OUTPUT>::Impl {
      * @param cfg_file_path
      * @return
      */
-    StatusCode init(const decltype(toml::parse("")) &config);
+    StatusCode init(const toml::table &config);
 
     /***
      *
@@ -224,20 +224,26 @@ class SuperPoint<INPUT, OUTPUT>::Impl {
  * @return
  */
 template <typename INPUT, typename OUTPUT> 
-StatusCode SuperPoint<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")) &config) {
+StatusCode SuperPoint<INPUT, OUTPUT>::Impl::init(const toml::table &config) {
     if (!config.contains("SUPERPOINT")) {
         LOG(ERROR) << "Config file missing SUPERPOINT section please check config file";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    toml::value cfg_content = config.at("SUPERPOINT");
+    const toml::table* cfg_content_ptr = config["SUPERPOINT"].as_table();
+    if (cfg_content_ptr == nullptr) {
+        LOG(ERROR) << "Config section SUPERPOINT missing or not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    const toml::table& cfg_content = *cfg_content_ptr;
 
     // init threads
     if (!cfg_content.contains("model_threads_num")) {
         LOG(WARNING) << "Config doesn\'t have model_threads_num field default 4";
         _m_threads_nums = 4;
     } else {
-        _m_threads_nums = static_cast<int>(cfg_content.at("model_threads_num").as_integer());
+        _m_threads_nums = static_cast<int>(cfg_content["model_threads_num"].value_or<int64_t>(0));
     }
 
     // init Interpreter
@@ -246,7 +252,7 @@ StatusCode SuperPoint<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     } else {
-        _m_model_file_path = cfg_content.at("model_file_path").as_string();
+        _m_model_file_path = cfg_content["model_file_path"].value_or<std::string>("");
     }
 
     if (!FilePathUtil::is_file_exist(_m_model_file_path)) {
@@ -268,7 +274,7 @@ StatusCode SuperPoint<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))
         LOG(WARNING) << "Config doesn\'t have compute_backend field default cpu";
         mnn_config.type = MNN_FORWARD_CPU;
     } else {
-        std::string compute_backend = cfg_content.at("compute_backend").as_string();
+        std::string compute_backend = cfg_content["compute_backend"].value_or<std::string>("");
 
         if (std::strcmp(compute_backend.c_str(), "cuda") == 0) {
             mnn_config.type = MNN_FORWARD_CUDA;
@@ -286,13 +292,13 @@ StatusCode SuperPoint<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))
         LOG(WARNING) << "Config doesn\'t have backend_precision_mode field default Precision_Normal";
         backend_config.precision = MNN::BackendConfig::Precision_Normal;
     } else {
-        backend_config.precision = static_cast<MNN::BackendConfig::PrecisionMode>(cfg_content.at("backend_precision_mode").as_integer());
+        backend_config.precision = static_cast<MNN::BackendConfig::PrecisionMode>(cfg_content["backend_precision_mode"].value_or<int64_t>(0));
     }
     if (!cfg_content.contains("backend_power_mode")) {
         LOG(WARNING) << "Config doesn\'t have backend_power_mode field default Power_Normal";
         backend_config.power = MNN::BackendConfig::Power_Normal;
     } else {
-        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(cfg_content.at("backend_power_mode").as_integer());
+        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(cfg_content["backend_power_mode"].value_or<int64_t>(0));
     }
     mnn_config.backendConfig = &backend_config;
 
@@ -324,13 +330,13 @@ StatusCode SuperPoint<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))
     if (!cfg_content.contains("model_score_threshold")) {
         _m_score_threshold = 0.4;
     } else {
-        _m_score_threshold = cfg_content.at("model_score_threshold").as_floating();
+        _m_score_threshold = cfg_content["model_score_threshold"].value_or<double>(0.0);
     }
 
     if (!cfg_content.contains("model_nms_threshold")) {
         _m_nms_threshold = 0.35;
     } else {
-        _m_nms_threshold = cfg_content.at("model_nms_threshold").as_floating();
+        _m_nms_threshold = cfg_content["model_nms_threshold"].value_or<double>(0.0);
     }
 
     _m_successfully_initialized = true;
@@ -586,7 +592,7 @@ template <typename INPUT, typename OUTPUT> SuperPoint<INPUT, OUTPUT>::~SuperPoin
  * @param cfg
  * @return
  */
-template <typename INPUT, typename OUTPUT> StatusCode SuperPoint<INPUT, OUTPUT>::init(const decltype(toml::parse("")) &cfg) {
+template <typename INPUT, typename OUTPUT> StatusCode SuperPoint<INPUT, OUTPUT>::init(const toml::table &cfg) {
     return _m_pimpl->init(cfg);
 }
 

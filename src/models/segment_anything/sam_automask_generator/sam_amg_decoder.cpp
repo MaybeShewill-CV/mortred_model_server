@@ -50,7 +50,7 @@ class SamAmgDecoder::Impl {
      * @param cfg
      * @return
      */
-    StatusCode init(const decltype(toml::parse(""))& cfg);
+    StatusCode init(const toml::table& cfg);
 
     /***
      *
@@ -256,14 +256,20 @@ class SamAmgDecoder::Impl {
  * @param cfg
  * @return
  */
-StatusCode SamAmgDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
+StatusCode SamAmgDecoder::Impl::init(const toml::table &cfg) {
     // init sam vit trt config section
     if (!cfg.contains("SAM_AMG_DECODER")) {
         LOG(ERROR) << "Config file does not contain SAM_AMG_DECODER section";
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    toml::value cfg_content = cfg.at("SAM_AMG_DECODER");
+    const toml::table* cfg_content_ptr = cfg["SAM_AMG_DECODER"].as_table();
+    if (cfg_content_ptr == nullptr) {
+        LOG(ERROR) << "Config section SAM_AMG_DECODER missing or not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    const toml::table& cfg_content = *cfg_content_ptr;
 
     // init trt runtime
     _m_trt_logger = TrtLogger();
@@ -280,7 +286,7 @@ StatusCode SamAmgDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     } else {
-        _m_model_file_path = cfg_content.at("model_file_path").as_string();
+        _m_model_file_path = cfg_content["model_file_path"].value_or<std::string>("");
     }
     if (!FilePathUtil::is_file_exist(_m_model_file_path)) {
         LOG(ERROR) << "sam amg decoder model file: " << _m_model_file_path << " not exist";
@@ -302,7 +308,7 @@ StatusCode SamAmgDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
     }
 
     // init mask decoder executor queue
-    _m_decoder_queue_size = static_cast<int>(cfg_content.at("worker_queue_size").as_integer());
+    _m_decoder_queue_size = static_cast<int>(cfg_content["worker_queue_size"].value_or<int64_t>(0));
     for (auto idx = 0; idx < _m_decoder_queue_size; ++idx) {
         ThreadExecutor executor{};
         executor.context = _m_trt_engine->createExecutionContext();
@@ -317,7 +323,7 @@ StatusCode SamAmgDecoder::Impl::init(const decltype(toml::parse("")) &cfg) {
     }
 
     // init compute thread pool
-    _m_compute_thread_nums = static_cast<int>(cfg_content.at("compute_threads").as_integer());
+    _m_compute_thread_nums = static_cast<int>(cfg_content["compute_threads"].value_or<int64_t>(0));
     WFGlobalSettings settings = GLOBAL_SETTINGS_DEFAULT;
     settings.compute_threads = _m_compute_thread_nums;
     WORKFLOW_library_init(&settings);
@@ -1064,7 +1070,7 @@ SamAmgDecoder::~SamAmgDecoder() = default;
  * @param cfg
  * @return
  */
-StatusCode SamAmgDecoder::init(const decltype(toml::parse("")) &cfg) {
+StatusCode SamAmgDecoder::init(const toml::table &cfg) {
     return _m_pimpl->init(cfg);
 }
 

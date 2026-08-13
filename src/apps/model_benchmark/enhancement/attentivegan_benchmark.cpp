@@ -64,7 +64,12 @@ int main(int argc, char** argv) {
     std_enhancement_output model_output;
     // construct enhancementor
     auto enhancementor = create_attentivegan_enhancementor<mat_input, std_enhancement_output>("attentive_gan");
-    auto cfg = toml::parse(cfg_file_path);
+    auto cfg_parsed = toml::parse_file(cfg_file_path);
+    if (!cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: " << std::string(cfg_parsed.error().description());
+        return -1;
+    }
+    auto cfg = std::move(cfg_parsed).table();
     enhancementor->init(cfg);
     if (!enhancementor->is_successfully_initialized()) {
         LOG(INFO) << "attentive gan enhancementor init failed";

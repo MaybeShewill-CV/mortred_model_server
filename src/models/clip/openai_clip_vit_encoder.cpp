@@ -43,7 +43,7 @@ class OpenAiClipVitEncoder::Impl {
      * @param cfg
      * @return
      */
-    jinq::common::StatusCode init(const decltype(toml::parse(""))& cfg);
+    jinq::common::StatusCode init(const toml::table& cfg);
 
     /***
      *
@@ -112,10 +112,16 @@ class OpenAiClipVitEncoder::Impl {
  * @param cfg
  * @return
  */
-jinq::common::StatusCode OpenAiClipVitEncoder::Impl::init(const decltype(toml::parse("")) &cfg) {
+jinq::common::StatusCode OpenAiClipVitEncoder::Impl::init(const toml::table &cfg) {
     // init vit encoder configs
-    auto cfg_content = cfg.at("OPENAI_CLIP_VIT_ENCODER");
-    _m_model_path = cfg_content["model_file_path"].as_string();
+    const toml::table* cfg_content_ptr = cfg["OPENAI_CLIP_VIT_ENCODER"].as_table();
+    if (cfg_content_ptr == nullptr) {
+        LOG(ERROR) << "Config section OPENAI_CLIP_VIT_ENCODER missing or not a table";
+        _m_successfully_init_model = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    const toml::table& cfg_content = *cfg_content_ptr;
+    _m_model_path = cfg_content["model_file_path"].value_or<std::string>("");
     if (!FilePathUtil::is_file_exist(_m_model_path)) {
         LOG(ERROR) << "openai clip vit encoder model file path: " << _m_model_path << " not exists";
         _m_successfully_init_model = false;
@@ -124,8 +130,8 @@ jinq::common::StatusCode OpenAiClipVitEncoder::Impl::init(const decltype(toml::p
 
     // init session
     _m_net = MNN::Interpreter::createFromFile(_m_model_path.c_str());
-    _m_thread_nums = cfg_content["model_threads_num"].as_integer();
-    _m_model_device = cfg_content["compute_backend"].as_string();
+    _m_thread_nums = cfg_content["model_threads_num"].value_or<int64_t>(0);
+    _m_model_device = cfg_content["compute_backend"].value_or<std::string>("");
     MNN::ScheduleConfig mnn_config;
     mnn_config.numThread = _m_thread_nums;
     mnn_config.type = MNN_FORWARD_CPU;
@@ -137,13 +143,13 @@ jinq::common::StatusCode OpenAiClipVitEncoder::Impl::init(const decltype(toml::p
         LOG(WARNING) << "Config doesn\'t have backend_precision_mode field default Precision_Normal";
         backend_config.precision = MNN::BackendConfig::Precision_Normal;
     } else {
-        backend_config.precision = static_cast<MNN::BackendConfig::PrecisionMode>(cfg_content.at("backend_precision_mode").as_integer());
+        backend_config.precision = static_cast<MNN::BackendConfig::PrecisionMode>(cfg_content["backend_precision_mode"].value_or<int64_t>(0));
     }
     if (!cfg_content.contains("backend_power_mode")) {
         LOG(WARNING) << "Config doesn\'t have backend_power_mode field default Power_Normal";
         backend_config.power = MNN::BackendConfig::Power_Normal;
     } else {
-        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(cfg_content.at("backend_power_mode").as_integer());
+        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(cfg_content["backend_power_mode"].value_or<int64_t>(0));
     }
     mnn_config.backendConfig = &backend_config;
     
@@ -257,7 +263,7 @@ OpenAiClipVitEncoder::~OpenAiClipVitEncoder() = default;
  * @param cfg
  * @return
  */
-jinq::common::StatusCode OpenAiClipVitEncoder::init(const decltype(toml::parse("")) &cfg) {
+jinq::common::StatusCode OpenAiClipVitEncoder::init(const toml::table &cfg) {
     return _m_pimpl->init(cfg);
 }
 

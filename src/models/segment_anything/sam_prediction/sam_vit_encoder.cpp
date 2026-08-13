@@ -11,7 +11,7 @@
 #include "MNN/Interpreter.hpp"
 #include "onnxruntime/onnxruntime_cxx_api.h"
 #include "TensorRT-8.6.1.6/NvInferRuntime.h"
-#include "toml/value.hpp"
+#include "toml/toml.hpp"
 
 #include "common/file_path_util.h"
 #include "common/cv_utils.h"
@@ -64,7 +64,7 @@ class SamVitEncoder::Impl {
      * @param cfg
      * @return
      */
-    StatusCode init(const decltype(toml::parse(""))& cfg);
+    StatusCode init(const toml::table& cfg);
 
     /***
      *
@@ -171,21 +171,21 @@ class SamVitEncoder::Impl {
      * @param cfg
      * @return
      */
-    StatusCode init_mnn_model(const toml::value& cfg);
+    StatusCode init_mnn_model(const toml::table& cfg);
 
     /***
      *
      * @param cfg
      * @return
      */
-    StatusCode init_onnx_model(const toml::value& cfg);
+    StatusCode init_onnx_model(const toml::table& cfg);
 
     /***
      *
      * @param cfg
      * @return
      */
-    StatusCode init_trt_model(const toml::value& cfg);
+    StatusCode init_trt_model(const toml::table& cfg);
 
     /***
      *
@@ -244,30 +244,30 @@ class SamVitEncoder::Impl {
  * @param cfg
  * @return
  */
-StatusCode SamVitEncoder::Impl::init(const decltype(toml::parse("")) &cfg) {
+StatusCode SamVitEncoder::Impl::init(const toml::table &cfg) {
     // choose backend type
-    auto backend_dict = cfg.at("BACKEND_DICT");
-    auto backend_name = cfg.at("SAM_ENCODER").at("backend_type").as_string();
-    _m_backend_type = static_cast<model_type>(backend_dict[backend_name].as_integer());
+    auto backend_dict = cfg["BACKEND_DICT"];
+    auto backend_name = cfg["SAM_ENCODER"]["backend_type"].value_or<std::string>("");
+    _m_backend_type = static_cast<model_type>(backend_dict[backend_name].value_or<int64_t>(0));
     
     // init sam encoder configs
-    toml::value sam_encoder_cfg;
+    const toml::table* sam_encoder_cfg = nullptr;
     if (_m_backend_type == MNN) {
-        sam_encoder_cfg = cfg.at("SAM_MNN_ENCODER");
+        sam_encoder_cfg = cfg["SAM_MNN_ENCODER"].as_table();
     } else if (_m_backend_type == ONNX) {
-        sam_encoder_cfg = cfg.at("SAM_ONNX_ENCODER");
+        sam_encoder_cfg = cfg["SAM_ONNX_ENCODER"].as_table();
     } else {
-        sam_encoder_cfg = cfg.at("SAM_TRT_ENCODER");
+        sam_encoder_cfg = cfg["SAM_TRT_ENCODER"].as_table();
     }
-    auto model_file_name = FilePathUtil::get_file_name(sam_encoder_cfg.at("model_file_path").as_string());
+    auto model_file_name = FilePathUtil::get_file_name((*sam_encoder_cfg)["model_file_path"].value_or<std::string>(""));
 
     StatusCode init_status;
     if (_m_backend_type == MNN) {
-        init_status = init_mnn_model(sam_encoder_cfg);
+        init_status = init_mnn_model(*sam_encoder_cfg);
     } else if (_m_backend_type == ONNX) {
-        init_status = init_onnx_model(sam_encoder_cfg);
+        init_status = init_onnx_model(*sam_encoder_cfg);
     } else {
-        init_status = init_trt_model(sam_encoder_cfg);
+        init_status = init_trt_model(*sam_encoder_cfg);
     }
 
     if (init_status == StatusCode::OK) {
@@ -339,15 +339,15 @@ cv::Mat SamVitEncoder::Impl::preprocess_image(const cv::Mat &input_image) const 
  * @param cfg
  * @return
  */
-StatusCode SamVitEncoder::Impl::init_mnn_model(const toml::value& cfg) {
-    _m_model_path = cfg.at("model_file_path").as_string();
+StatusCode SamVitEncoder::Impl::init_mnn_model(const toml::table& cfg) {
+    _m_model_path = cfg["model_file_path"].value_or<std::string>("");
     if (!FilePathUtil::is_file_exist(_m_model_path)) {
         LOG(ERROR) << "sam encoder model file path: " << _m_model_path << " not exists";
         return StatusCode::MODEL_INIT_FAILED;
     }
     _m_net = MNN::Interpreter::createFromFile(_m_model_path.c_str());
-    _m_thread_nums = cfg.at("model_threads_num").as_integer();
-    _m_model_device = cfg.at("compute_backend").as_string();
+    _m_thread_nums = cfg["model_threads_num"].value_or<int64_t>(0);
+    _m_model_device = cfg["compute_backend"].value_or<std::string>("");
     MNN::ScheduleConfig mnn_config;
     mnn_config.numThread = _m_thread_nums;
     mnn_config.type = MNN_FORWARD_CPU;
@@ -384,23 +384,23 @@ StatusCode SamVitEncoder::Impl::init_mnn_model(const toml::value& cfg) {
  * @param cfg
  * @return
  */
-StatusCode SamVitEncoder::Impl::init_onnx_model(const toml::value& cfg) {
+StatusCode SamVitEncoder::Impl::init_onnx_model(const toml::table& cfg) {
     // ort env and memo info
     _m_env = {ORT_LOGGING_LEVEL_ERROR, ""};
 
     // init sam encoder configs
-    _m_model_path = cfg.at("model_file_path").as_string();
+    _m_model_path = cfg["model_file_path"].value_or<std::string>("");
     if (!FilePathUtil::is_file_exist(_m_model_path)) {
         LOG(ERROR) << "sam encoder model file path: " << _m_model_path << " not exists";
         return StatusCode::MODEL_INIT_FAILED;
     }
     bool use_gpu = false;
-    _m_model_device = cfg.at("compute_backend").as_string();
+    _m_model_device = cfg["compute_backend"].value_or<std::string>("");
     if (std::strcmp(_m_model_device.c_str(), "cuda") == 0) {
         use_gpu = true;
-        _m_device_id = static_cast<int>(cfg.at("gpu_device_id").as_integer());
+        _m_device_id = static_cast<int>(cfg["gpu_device_id"].value_or<int64_t>(0));
     }
-    _m_thread_nums = cfg.at("model_threads_num").as_integer();
+    _m_thread_nums = cfg["model_threads_num"].value_or<int64_t>(0);
     _m_onnx_sess_options.SetIntraOpNumThreads(_m_thread_nums);
     _m_onnx_sess_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
     _m_onnx_sess_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
@@ -432,7 +432,7 @@ StatusCode SamVitEncoder::Impl::init_onnx_model(const toml::value& cfg) {
  * @param cfg
  * @return
  */
-StatusCode SamVitEncoder::Impl::init_trt_model(const toml::value& cfg) {
+StatusCode SamVitEncoder::Impl::init_trt_model(const toml::table& cfg) {
     // init trt runtime
     _m_trt_logger = TrtLogger();
     _m_trt_runtime = nvinfer1::createInferRuntime(_m_trt_logger);
@@ -446,7 +446,7 @@ StatusCode SamVitEncoder::Impl::init_trt_model(const toml::value& cfg) {
         LOG(ERROR) << "Config doesn\'t have model_file_path field";
         return StatusCode::MODEL_INIT_FAILED;
     } else {
-        _m_model_path = cfg.at("model_file_path").as_string();
+        _m_model_path = cfg["model_file_path"].value_or<std::string>("");
     }
     if (!FilePathUtil::is_file_exist(_m_model_path)) {
         LOG(ERROR) << "Sam trt segmentation model file: " << _m_model_path << " not exist";
@@ -680,7 +680,7 @@ SamVitEncoder::~SamVitEncoder() = default;
  * @param cfg
  * @return
  */
-StatusCode SamVitEncoder::init(const decltype(toml::parse("")) &cfg) {
+StatusCode SamVitEncoder::init(const toml::table &cfg) {
     return _m_pimpl->init(cfg);
 }
 

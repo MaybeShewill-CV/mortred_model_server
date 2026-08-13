@@ -152,7 +152,7 @@ class DepthAnything<INPUT, OUTPUT>::Impl {
      * @param cfg_file_path
      * @return
      */
-    StatusCode init(const decltype(toml::parse("")) &config);
+    StatusCode init(const toml::table &config);
 
     /***
      *
@@ -223,7 +223,7 @@ class DepthAnything<INPUT, OUTPUT>::Impl {
      * @param config
      * @return
      */
-    StatusCode init_trt(const toml::value& cfg);
+    StatusCode init_trt(const toml::table& cfg);
 
     /***
      *
@@ -246,27 +246,27 @@ class DepthAnything<INPUT, OUTPUT>::Impl {
 * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode DepthAnything<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse("")) &config) {
+StatusCode DepthAnything<INPUT, OUTPUT>::Impl::init(const toml::table &config) {
     // choose backend type
-    auto backend_dict = config.at("BACKEND_DICT");
-    auto backend_name = config.at("DEPTH_ANYTHING").at("backend_type").as_string();
-    _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].as_integer());
+    auto backend_dict = config["BACKEND_DICT"];
+    auto backend_name = config["DEPTH_ANYTHING"]["backend_type"].value_or<std::string>("");
+    _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].value_or<int64_t>(0));
 
     // init depth anything configs
-    toml::value model_cfg;
+    const toml::table* model_cfg = nullptr;
     if (_m_backend_type == MNN) {
-        model_cfg = config.at("DEPTH_ANYTHING_MNN");
+        model_cfg = config["DEPTH_ANYTHING_MNN"].as_table();
     } else {
-        model_cfg = config.at("DEPTH_ANYTHING_TRT");
+        model_cfg = config["DEPTH_ANYTHING_TRT"].as_table();
     }
-    auto model_file_name = FilePathUtil::get_file_name(model_cfg.at("model_file_path").as_string());
+    auto model_file_name = FilePathUtil::get_file_name((*model_cfg)["model_file_path"].value_or<std::string>(""));
 
     StatusCode init_status;
     if (_m_backend_type == MNN) {
         // todo implement mnn inference
         return StatusCode::MODEL_INIT_FAILED;
     } else {
-        init_status = init_trt(model_cfg);
+        init_status = init_trt(*model_cfg);
     }
 
     if (init_status == StatusCode::OK) {
@@ -341,7 +341,7 @@ cv::Mat DepthAnything<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& inpu
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode DepthAnything<INPUT, OUTPUT>::Impl::init_trt(const toml::value& cfg) {
+StatusCode DepthAnything<INPUT, OUTPUT>::Impl::init_trt(const toml::table& cfg) {
     // init trt runtime
     _m_trt_params.logger = TrtLogger();
     _m_trt_params.runtime = nvinfer1::createInferRuntime(_m_trt_params.logger);
@@ -355,7 +355,7 @@ StatusCode DepthAnything<INPUT, OUTPUT>::Impl::init_trt(const toml::value& cfg) 
         LOG(ERROR) << "config doesn\'t have model_file_path field";
         return StatusCode::MODEL_INIT_FAILED;
     } else {
-        _m_trt_params.model_file_path = cfg.at("model_file_path").as_string();
+        _m_trt_params.model_file_path = cfg["model_file_path"].value_or<std::string>("");
     }
     if (!FilePathUtil::is_file_exist(_m_trt_params.model_file_path)) {
         LOG(ERROR) << "DepthAnything trt estimation model file: " << _m_trt_params.model_file_path << " not exist";
@@ -450,10 +450,10 @@ StatusCode DepthAnything<INPUT, OUTPUT>::Impl::init_trt(const toml::value& cfg) 
 
     // init intrinsic and canonical size
     _m_intrinsic_params = {
-        static_cast<float>(cfg.at("intrinsic").as_array()[0].as_floating()),
-        static_cast<float>(cfg.at("intrinsic").as_array()[1].as_floating()),
-        static_cast<float>(cfg.at("intrinsic").as_array()[2].as_floating()),
-        static_cast<float>(cfg.at("intrinsic").as_array()[3].as_floating()),
+        static_cast<float>(cfg["intrinsic"][0].value_or<double>(0.0)),
+        static_cast<float>(cfg["intrinsic"][1].value_or<double>(0.0)),
+        static_cast<float>(cfg["intrinsic"][2].value_or<double>(0.0)),
+        static_cast<float>(cfg["intrinsic"][3].value_or<double>(0.0)),
     };
 
     return StatusCode::OK;
@@ -587,7 +587,7 @@ DepthAnything<INPUT, OUTPUT>::~DepthAnything() = default;
 * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode DepthAnything<INPUT, OUTPUT>::init(const decltype(toml::parse("")) &cfg) {
+StatusCode DepthAnything<INPUT, OUTPUT>::init(const toml::table &cfg) {
     return _m_pimpl->init(cfg);
 }
 

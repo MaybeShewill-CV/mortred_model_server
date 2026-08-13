@@ -108,7 +108,7 @@ public:
      * @param cfg
      * @return
      */
-    StatusCode init(const decltype(toml::parse(""))& cfg);
+    StatusCode init(const toml::table& cfg);
 
     /***
      *
@@ -188,7 +188,7 @@ private:
  * @param cfg
  * @return
  */
-StatusCode Impl::init(const decltype(toml::parse("")) &cfg) {
+StatusCode Impl::init(const toml::table &cfg) {
     // init sam encoder
     _m_sam_encoder = std::make_unique<SamVitEncoder>();
     _m_sam_encoder->init(cfg);
@@ -368,7 +368,7 @@ template <typename INPUT, typename OUTPUT>
 SamPredictor<INPUT, OUTPUT>::~SamPredictor() = default;
 
 template <typename INPUT, typename OUTPUT>
-jinq::common::StatusCode SamPredictor<INPUT, OUTPUT>::init(const decltype(toml::parse("")) &cfg) {
+jinq::common::StatusCode SamPredictor<INPUT, OUTPUT>::init(const toml::table &cfg) {
     return _m_pimpl->init(cfg);
 }
 

@@ -113,7 +113,7 @@ class WikiIndexBuilder::Impl {
      * @param cfg
      * @return
      */
-    StatusCode init(const decltype(toml::parse("")) &cfg);
+    StatusCode init(const toml::table &cfg);
 
     /***
      *
@@ -295,14 +295,14 @@ class WikiIndexBuilder::Impl {
  * @param cfg
  * @return
  */
-StatusCode WikiIndexBuilder::Impl::init(const decltype(toml::parse("")) &cfg) {
-    auto wiki_cfg = cfg.at("WIKI_PREPROCESS");
+StatusCode WikiIndexBuilder::Impl::init(const toml::table &cfg) {
+    auto wiki_cfg = cfg["WIKI_PREPROCESS"];
 
     // init preprocess params
-    _m_chunk_word_size = static_cast<int32_t >(wiki_cfg["chunk_word_size"].as_integer());
-    _m_token_max_len = static_cast<int32_t >(wiki_cfg["tokenize_max_seq_len"].as_integer());
-    _m_segment_workers = static_cast<int >(wiki_cfg["segment_worker_nums"].as_integer());
-    std::string embedding_model_name = wiki_cfg["embedding_model"].as_string();
+    _m_chunk_word_size = static_cast<int32_t >(wiki_cfg["chunk_word_size"].value_or<int64_t>(0));
+    _m_token_max_len = static_cast<int32_t >(wiki_cfg["tokenize_max_seq_len"].value_or<int64_t>(0));
+    _m_segment_workers = static_cast<int >(wiki_cfg["segment_worker_nums"].value_or<int64_t>(0));
+    std::string embedding_model_name = wiki_cfg["embedding_model"].value_or<std::string>("");
     if (_m_embedding_model_map.find(embedding_model_name) == _m_embedding_model_map.end()) {
         LOG(ERROR) << fmt::format("unsupported embedding model: {}", embedding_model_name);
         _m_successfully_initialized = false;
@@ -312,14 +312,20 @@ StatusCode WikiIndexBuilder::Impl::init(const decltype(toml::parse("")) &cfg) {
 
     // init embedding models
     if (_m_embedding_type == embedding_model_type::LLAMA3_EMBEDDING) {
-        auto embed_cfg = cfg.at("LLAMA3_EMBEDDING");
-        auto encode_worker_nums = embed_cfg["encode_worker_nums"].as_integer();
-        std::string model_cfg_path = embed_cfg["embedding_cfg_path"].as_string();
+        auto embed_cfg = cfg["LLAMA3_EMBEDDING"];
+        auto encode_worker_nums = embed_cfg["encode_worker_nums"].value_or<int64_t>(0);
+        std::string model_cfg_path = embed_cfg["embedding_cfg_path"].value_or<std::string>("");
         if (!FilePathUtil::is_file_exist(model_cfg_path)) {
             LOG(ERROR) << fmt::format("embedding model cfg file: {} not exist", model_cfg_path);
             return StatusCode::MODEL_INIT_FAILED;
         }
-        auto model_cfg = toml::parse(model_cfg_path);
+        auto model_cfg_parsed = toml::parse_file(model_cfg_path);
+        if (!model_cfg_parsed) {
+            LOG(ERROR) << "parse toml config file failed, error: " << std::string(model_cfg_parsed.error().description());
+            _m_successfully_initialized = false;
+            return StatusCode::MODEL_INIT_FAILED;
+        }
+        auto model_cfg = std::move(model_cfg_parsed).table();
         for (auto i = 0; i < encode_worker_nums; ++i) {
             auto model = std::make_unique<Llama3Ptr>();
             model->init(model_cfg);
@@ -331,14 +337,20 @@ StatusCode WikiIndexBuilder::Impl::init(const decltype(toml::parse("")) &cfg) {
             _m_llama3_encoders.push_back(std::move(model));
         }
     } else if (_m_embedding_type == embedding_model_type::JINA_EMBEDDING_V3) {
-        auto embed_cfg = cfg.at("JINA_EMBEDDING_V3");
-        auto encode_worker_nums = embed_cfg["encode_worker_nums"].as_integer();
-        std::string model_cfg_path = embed_cfg["embedding_cfg_path"].as_string();
+        auto embed_cfg = cfg["JINA_EMBEDDING_V3"];
+        auto encode_worker_nums = embed_cfg["encode_worker_nums"].value_or<int64_t>(0);
+        std::string model_cfg_path = embed_cfg["embedding_cfg_path"].value_or<std::string>("");
         if (!FilePathUtil::is_file_exist(model_cfg_path)) {
             LOG(ERROR) << fmt::format("embedding model cfg file: {} not exist", model_cfg_path);
             return StatusCode::MODEL_INIT_FAILED;
         }
-        auto model_cfg = toml::parse(model_cfg_path);
+        auto model_cfg_parsed = toml::parse_file(model_cfg_path);
+        if (!model_cfg_parsed) {
+            LOG(ERROR) << "parse toml config file failed, error: " << std::string(model_cfg_parsed.error().description());
+            _m_successfully_initialized = false;
+            return StatusCode::MODEL_INIT_FAILED;
+        }
+        auto model_cfg = std::move(model_cfg_parsed).table();
         for (auto i = 0; i < encode_worker_nums; ++i) {
             auto model = std::make_unique<JinaEmdV3Ptr>();
             model->init(model_cfg);
@@ -1150,7 +1162,7 @@ WikiIndexBuilder::~WikiIndexBuilder() = default;
  * @param cfg
  * @return
  */
-StatusCode WikiIndexBuilder::init(const decltype(toml::parse("")) &cfg) {
+StatusCode WikiIndexBuilder::init(const toml::table &cfg) {
    return _m_pimpl->init(cfg);
 }
 
