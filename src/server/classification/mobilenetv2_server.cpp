@@ -81,7 +81,11 @@ StatusCode MobileNetv2Server::Impl::init(const toml::table& config) {
     if (common_status != StatusCode::OK) {
         return common_status;
     }
-    auto worker_nums = static_cast<int>(server_section["worker_nums"].value_or<int64_t>(0));
+    auto worker_nums = parse_worker_nums(server_section);
+    if (worker_nums <= 0) {
+        _m_successfully_initialized = false;
+        return StatusCode::SERVER_INIT_FAILED;
+    }
     const toml::table* model_section_ptr = config["MOBILENETV2"].as_table();
     if (model_section_ptr == nullptr) {
         LOG(ERROR) << "Config section MOBILENETV2 missing or not a table";

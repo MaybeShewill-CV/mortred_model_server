@@ -82,7 +82,11 @@ StatusCode EnlightenGanServer::Impl::init(const toml::table &config) {
     if (common_status != StatusCode::OK) {
         return common_status;
     }
-    auto worker_nums = static_cast<int>(server_section["worker_nums"].value_or<int64_t>(0));
+    auto worker_nums = parse_worker_nums(server_section);
+    if (worker_nums <= 0) {
+        _m_successfully_initialized = false;
+        return StatusCode::SERVER_INIT_FAILED;
+    }
     auto model_cfg_path = config["ENLIGHTEN_GAN"]["model_config_file_path"].value_or<std::string>("");
 
     if (!FilePathUtil::is_file_exist(model_cfg_path)) {

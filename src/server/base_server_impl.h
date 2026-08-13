@@ -54,6 +54,21 @@ using jinq::common::Timestamp;
 using jinq::common::k_default_request_size_limit_mb;
 
 /***
+ * 解析并校验 worker 数量。
+ * 缺失（value_or 回落到 0）、0 或负数都是配置错误——空 worker 队列会让
+ * do_work 的无界 wait_dequeue 永久挂起，因此返回 -1 由调用方拒绝启动。
+ */
+inline int parse_worker_nums(const toml::table& server_section) {
+    auto worker_nums = static_cast<int>(server_section["worker_nums"].value_or<int64_t>(0));
+    if (worker_nums <= 0) {
+        LOG(ERROR) << "invalid worker_nums: " << worker_nums
+                   << " (missing, zero or negative), requests would hang forever";
+        return -1;
+    }
+    return worker_nums;
+}
+
+/***
  * CV 图像 worker 特征：unique_ptr<BaseAiModel<base64_input, OUTPUT>> 走基类默认 do_work；
  * 其他 worker（如 LLM）必须覆写 do_work。
  */
