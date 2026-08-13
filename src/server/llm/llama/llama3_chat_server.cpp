@@ -111,7 +111,7 @@ protected:
      * @param req
      * @param ctx
      */
-    void do_work(const task_request& req, std::shared_ptr<series_ctx> ctx) override;
+    void do_work(const task_request& req, series_ctx* ctx) override;
 
     /***
      *
@@ -274,14 +274,11 @@ Llama3ChatServer::Impl::task_request Llama3ChatServer::Impl::parse_task_request(
  * @param req
  * @param ctx
  */
-void Llama3ChatServer::Impl::do_work(const task_request& req, std::shared_ptr<series_ctx> ctx) {
+void Llama3ChatServer::Impl::do_work(const task_request& req, series_ctx* ctx) {
     // 解析失败：直接按解析错误码返回统一信封
     if (!req.is_valid) {
-        {
-            std::lock_guard<std::mutex> lock(ctx->ctx_mutex);
-            ctx->model_run_status = req.parse_status;
-            ctx->task_finished_ts = Timestamp::now().to_format_str();
-        }
+        ctx->model_run_status = req.parse_status;
+        ctx->task_finished_ts = Timestamp::now().to_format_str();
         WFTaskFactory::count_by_name("release_ctx");
         return;
     }
@@ -290,14 +287,11 @@ void Llama3ChatServer::Impl::do_work(const task_request& req, std::shared_ptr<se
     LlamaModelPtr worker;
     _m_working_queue.wait_dequeue(worker);
 
+    // task 时间戳
+    ctx->task_id = req.task_id;
+    ctx->is_task_req_valid = req.is_valid;
     auto task_receive_ts = Timestamp::now();
-    {
-        std::lock_guard<std::mutex> lock(ctx->ctx_mutex);
-        // task 时间戳
-        ctx->task_id = req.task_id;
-        ctx->is_task_req_valid = req.is_valid;
-        ctx->task_received_ts = task_receive_ts.to_format_str();
-    }
+    ctx->task_received_ts = task_receive_ts.to_format_str();
 
     // 本轮新消息（KV cache 已保留历史上下文）
     auto current_dialog = std::any_cast<Dialog>(req.payload);
@@ -346,25 +340,20 @@ void Llama3ChatServer::Impl::do_work(const task_request& req, std::shared_ptr<se
         } else {
             _m_user_history_dialogs.insert(std::make_pair(req.session_id, turn_dialog));
         }
-        // 回写会话 cookie，供客户端后续请求维持会话（与 do_work_cb 写 response 互斥）
-        {
-            std::lock_guard<std::mutex> lock(ctx->ctx_mutex);
-            ctx->response->add_header_pair("Set-Cookie", req.session_id);
-        }
+        // 回写会话 cookie，供客户端后续请求维持会话
+        ctx->response->add_header_pair("Set-Cookie", req.session_id);
     }
+
+    ctx->model_run_status = status;
 
     // restore worker queue
     update_status_snapshot(worker);
     _m_working_queue.enqueue(std::move(worker));
 
-    {
-        std::lock_guard<std::mutex> lock(ctx->ctx_mutex);
-        ctx->model_run_status = status;
-        // update ctx
-        auto task_finish_ts = Timestamp::now();
-        ctx->task_finished_ts = task_finish_ts.to_format_str();
-        ctx->worker_run_time_consuming = (task_finish_ts - task_receive_ts) * 1000;
-    }
+    // update ctx
+    auto task_finish_ts = Timestamp::now();
+    ctx->task_finished_ts = task_finish_ts.to_format_str();
+    ctx->worker_run_time_consuming = (task_finish_ts - task_receive_ts) * 1000;
     WFTaskFactory::count_by_name("release_ctx");
 }
 
