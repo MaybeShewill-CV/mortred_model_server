@@ -313,12 +313,17 @@ StatusCode DenseNet<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     // transform output
     densenet_impl::internal_output internal_out;
 
-    for (auto index = 0; index < output_tensor_user.elementSize(); ++index) {
+    const int output_size = output_tensor_user.elementSize();
+    internal_out.scores.reserve(output_size);
+    for (int index = 0; index < output_size; ++index) {
         internal_out.scores.push_back(host_data[index]);
     }
-
-    auto max_score = std::max_element(host_data, host_data + output_tensor_user.elementSize());
-    auto cls_id = static_cast<int>(std::distance(host_data, max_score));
+    if (internal_out.scores.empty()) {
+        LOG(ERROR) << "classification model output tensor is empty";
+        return StatusCode::MODEL_EMPTY_OUTPUT;
+    }
+    auto max_score = std::max_element(internal_out.scores.begin(), internal_out.scores.end());
+    auto cls_id = static_cast<int>(std::distance(internal_out.scores.begin(), max_score));
     internal_out.class_id = cls_id;
     if (_m_class_id2names.find(cls_id) != _m_class_id2names.end()) {
         internal_out.category = _m_class_id2names.at(cls_id);

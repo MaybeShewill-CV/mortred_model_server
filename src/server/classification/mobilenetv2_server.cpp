@@ -157,7 +157,9 @@ std::string MobileNetv2Server::Impl::make_response_body(
 
     if (status == StatusCode::OK) {
         cls_id = model_output.class_id;
-        scores = model_output.scores[cls_id];
+        if (cls_id >= 0 && cls_id < static_cast<int>(model_output.scores.size())) {
+            scores = model_output.scores[cls_id];
+        }
         category = model_output.category;
     }
 

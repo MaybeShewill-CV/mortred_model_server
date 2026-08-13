@@ -23,6 +23,7 @@ namespace common {
     X(MODEL_RUN_SESSION_FAILED, 2, "model run session failed") \
     X(MODEL_EMPTY_INPUT_IMAGE, 3, "model input empty") \
     X(MODEL_RUN_TIMEOUT, 4, "model run timeout") \
+    X(MODEL_EMPTY_OUTPUT, 5, "model output empty") \
     X(SERVER_INIT_FAILED, 11, "server init failed") \
     X(SERVER_RUN_FAILED, 12, "server run failed") \
     X(FILE_READ_ERROR, 30, "file read error") \
