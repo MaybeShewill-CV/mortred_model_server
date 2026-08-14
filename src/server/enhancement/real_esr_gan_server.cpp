@@ -25,7 +25,7 @@
 namespace jinq {
 namespace server {
 
-using jinq::common::Base64;
+using jinq::common::base64;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 using jinq::server::BaseAiServerImpl;
@@ -150,8 +150,8 @@ std::string RealEsrGanServer::Impl::make_response_body(
     const std::string& task_id,
     const StatusCode& status,
     const std_enhancement_output& model_output) {
-    int code = static_cast<int>(status);
-    std::string msg = status == StatusCode::OK ? "success" : jinq::common::error_code_to_str(code);
+    int code = jinq::common::to_underlying(status);
+    std::string msg = status == StatusCode::OK ? "success" : jinq::common::status_code_to_str(status);
 
     rapidjson::StringBuffer buf;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
@@ -175,7 +175,7 @@ std::string RealEsrGanServer::Impl::make_response_body(
     } else {
         std::vector<uchar> imencode_buffer;
         cv::imencode(".jpg", model_output.enhancement_result, imencode_buffer);
-        auto output_image_data = Base64::base64_encode(imencode_buffer.data(), imencode_buffer.size());
+        auto output_image_data = base64::encode(imencode_buffer.data(), imencode_buffer.size());
         writer.String(output_image_data.c_str());
     }
 

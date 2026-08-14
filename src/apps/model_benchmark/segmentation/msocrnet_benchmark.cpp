@@ -18,7 +18,7 @@
 
 using jinq::common::FilePathUtil;
 using jinq::common::Timestamp;
-using jinq::common::CvUtils;
+using jinq::common::cv_utils;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
 using jinq::factory::scene_segmentation::create_msocrnet_segmentor;
@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
     LOG(INFO) << "cost time: " << cost_time << "s, fps: " << loop_times / cost_time;
 
     cv::Mat color_seg_result;
-    CvUtils::colorize_segmentation_mask(model_output.segmentation_result, color_seg_result, 80);
+    cv_utils::colorize_segmentation_mask(model_output.segmentation_result, color_seg_result, 80);
     std::string output_file_name = FilePathUtil::get_file_name(input_image_path);
     output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_msocrnet_result.png";
     std::string output_path = FilePathUtil::concat_path("../demo_data/model_test_input/scene_segmentation", output_file_name);

@@ -18,7 +18,7 @@
 #include "models/model_io_define.h"
 #include "factory/sam_task.h"
 
-using jinq::common::CvUtils;
+using jinq::common::cv_utils;
 using jinq::common::FilePathUtil;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::segment_anything::std_fast_sam_output;
@@ -67,7 +67,7 @@ int main(int argc, char** argv) {
         LOG(INFO) << "... infer: " << i << ", cost time: " << t_cost;
     }
     cv::Mat everything_color_mask;
-    CvUtils::colorize_sam_everything_mask(everything_mask, everything_color_mask);
+    cv_utils::colorize_sam_everything_mask(everything_mask, everything_color_mask);
     cv::Mat merge_result;
     cv::addWeighted(input_image, 0.65, everything_color_mask, 0.35, 0.0, merge_result);
 

@@ -16,7 +16,7 @@
 #include "models/model_io_define.h"
 #include "models/diffussion/ldm_sampler.h"
 
-using jinq::common::CvUtils;
+using jinq::common::cv_utils;
 using jinq::common::Timestamp;
 using jinq::common::FilePathUtil;
 using jinq::models::diffusion::LDMSampler;

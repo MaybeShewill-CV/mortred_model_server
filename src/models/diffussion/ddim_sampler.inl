@@ -23,8 +23,8 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::Base64;
-using jinq::common::CvUtils;
+using jinq::common::base64;
+using jinq::common::cv_utils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 
@@ -395,7 +395,7 @@ StatusCode DDIMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
             predict_xt[idx] = std::clamp(predict_xt[idx], 0.0f, 255.0f);
         }
         // assign output predict x0 images
-        auto hwc_data = CvUtils::convert_to_hwc_vec<float>(predict_x0, sample_channels, sample_size.height, sample_size.width);
+        auto hwc_data = cv_utils::convert_to_hwc_vec<float>(predict_x0, sample_channels, sample_size.height, sample_size.width);
         cv::Mat mid_image;
         if (sample_channels == 1) {
             mid_image = cv::Mat(sample_size, CV_32FC1, hwc_data.data());
@@ -411,7 +411,7 @@ StatusCode DDIMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
         cv::cvtColor(mid_image, mid_image, cv::COLOR_RGB2BGR);
         internal_out.predicted_x0.push_back(mid_image);
         // assign output predict samples images
-        hwc_data = CvUtils::convert_to_hwc_vec<float>(predict_xt, sample_channels, sample_size.height, sample_size.width);
+        hwc_data = cv_utils::convert_to_hwc_vec<float>(predict_xt, sample_channels, sample_size.height, sample_size.width);
         if (sample_channels == 1) {
             mid_image = cv::Mat(sample_size, CV_32FC1, hwc_data.data());
         } else if (sample_channels == 3) {

@@ -18,7 +18,7 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::CvUtils;
+using jinq::common::cv_utils;
 using jinq::common::StatusCode;
 using jinq::common::FilePathUtil;
 using jinq::common::Timestamp;
@@ -68,7 +68,7 @@ typename std::enable_if<
     std::is_same<INPUT, std::decay<jinq::models::io_define::common_io::base64_input>::type>::value,
     internal_input>::type
 transform_input(const INPUT& in) {
-    return CvUtils::decode_base64_str_into_cvmat(in.input_image_content);
+    return cv_utils::decode_base64_str_into_cvmat(in.input_image_content);
 }
 
 /***
@@ -177,7 +177,7 @@ StatusCode Impl::init(const toml::table &cfg) {
 
     _m_successfully_init_model = true;
     LOG(INFO) << "Successfully load sam auto mask generator model";
-    return StatusCode::OJBK;
+    return StatusCode::OK;
 }
 
 /***

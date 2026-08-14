@@ -153,8 +153,8 @@ std::string MobileNetv2Server::Impl::make_response_body(
     const std::string& task_id,
     const StatusCode& status,
     const std_classification_output& model_output) {
-    int code = static_cast<int>(status);
-    std::string msg = status == StatusCode::OK ? "success" : jinq::common::error_code_to_str(code);
+    int code = jinq::common::to_underlying(status);
+    std::string msg = status == StatusCode::OK ? "success" : jinq::common::status_code_to_str(status);
     int cls_id = -1;
     float scores = -1.0;
     std::string category;

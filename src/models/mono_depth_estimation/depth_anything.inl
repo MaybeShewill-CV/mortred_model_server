@@ -23,8 +23,8 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::Base64;
-using jinq::common::CvUtils;
+using jinq::common::base64;
+using jinq::common::cv_utils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 using jinq::models::io_define::common_io::base64_input;
@@ -92,6 +92,16 @@ class DepthAnything<INPUT, OUTPUT>::Impl {
         if (_m_backend_type == TRT) {
             cudaFreeHost(_m_trt_params.output_host);
             cudaStreamDestroy(_m_trt_params.cuda_stream);
+            // 释放 TensorRT 上下文/引擎/运行时
+            if (_m_trt_params.context != nullptr) {
+                _m_trt_params.context->destroy();
+            }
+            if (_m_trt_params.engine != nullptr) {
+                _m_trt_params.engine->destroy();
+            }
+            if (_m_trt_params.runtime != nullptr) {
+                _m_trt_params.runtime->destroy();
+            }
         }
     }
 
@@ -449,7 +459,7 @@ StatusCode DepthAnything<INPUT, OUTPUT>::Impl::trt_run(const INPUT& in, OUTPUT& 
     auto& input_image = internal_in.input_image;
     _m_input_size_user = input_image.size();
     auto preprocessed_image = preprocess_image(input_image);
-    auto input_chw_data = CvUtils::convert_to_chw_vec(preprocessed_image);
+    auto input_chw_data = cv_utils::convert_to_chw_vec(preprocessed_image);
 
     // h2d data transfer
     auto input_mem_size = input_binding.volume() * sizeof(float);
@@ -511,7 +521,7 @@ depth_anything_impl::internal_output DepthAnything<INPUT, OUTPUT>::Impl::trt_dec
 
     // colorize depth map
     cv::Mat colorized_depth_map;
-    CvUtils::colorize_depth_map(depth_map, colorized_depth_map);
+    cv_utils::colorize_depth_map(depth_map, colorized_depth_map);
 
     // copy result
     std_mde_output out;

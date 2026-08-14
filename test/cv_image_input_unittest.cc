@@ -50,7 +50,7 @@ TEST(cv_image_input, base64_roundtrip) {
     cv::Mat img(16, 16, CV_8UC3, cv::Scalar(10, 20, 30));
     std::vector<uchar> buf;
     cv::imencode(".jpg", img, buf);
-    auto b64 = jinq::common::Base64::base64_encode(buf.data(), buf.size());
+    auto b64 = jinq::common::base64::encode(buf.data(), buf.size());
 
     base64_input in;
     in.input_image_content = b64;

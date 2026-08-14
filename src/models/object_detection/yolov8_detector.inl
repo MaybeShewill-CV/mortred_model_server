@@ -24,8 +24,8 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::Base64;
-using jinq::common::CvUtils;
+using jinq::common::base64;
+using jinq::common::cv_utils;
 using jinq::common::Timestamp;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
@@ -93,6 +93,16 @@ class YoloV8Detector<INPUT, OUTPUT>::Impl {
             cudaFree(_m_trt_params.input_device);
             cudaFree(_m_trt_params.output_device);
             cudaFreeHost(_m_trt_params.output_host);
+            // 释放 TensorRT 上下文/引擎/运行时
+            if (_m_trt_params.context != nullptr) {
+                _m_trt_params.context->destroy();
+            }
+            if (_m_trt_params.engine != nullptr) {
+                _m_trt_params.engine->destroy();
+            }
+            if (_m_trt_params.runtime != nullptr) {
+                _m_trt_params.runtime->destroy();
+            }
         }
     }
 
@@ -527,7 +537,7 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::trt_run(const INPUT& in, OUTPUT&
     cv::Mat& input_image = internal_in.input_image;
     _m_input_size_user = input_image.size();
     auto preprocessed_image = preprocess_image(input_image);
-    auto input_chw_image_data = CvUtils::convert_to_chw_vec(preprocessed_image);
+    auto input_chw_image_data = cv_utils::convert_to_chw_vec(preprocessed_image);
 
     // maybe reallocate device memory
     maybe_reallocate_input_device_memory(preprocessed_image);

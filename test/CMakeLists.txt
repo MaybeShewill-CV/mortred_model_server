@@ -28,7 +28,6 @@ endif ()
 
 set(TEST_LIST
     base64_unittest
-    md5_unittest
     file_path_util_unittest
     json_request_parser_unittest
     blocking_worker_queue_unittest

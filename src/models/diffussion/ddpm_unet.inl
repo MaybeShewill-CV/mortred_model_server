@@ -23,8 +23,8 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::Base64;
-using jinq::common::CvUtils;
+using jinq::common::base64;
+using jinq::common::cv_utils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 using jinq::models::trt_helper::EngineBinding;
@@ -88,6 +88,16 @@ class DDPMUNet<INPUT, OUTPUT>::Impl {
         if (_m_backend_type == TRT) {
             cudaFreeHost(_m_trt_params.output_host);
             cudaStreamDestroy(_m_trt_params.cuda_stream);
+            // 释放 TensorRT 上下文/引擎/运行时
+            if (_m_trt_params.context != nullptr) {
+                _m_trt_params.context->destroy();
+            }
+            if (_m_trt_params.engine != nullptr) {
+                _m_trt_params.engine->destroy();
+            }
+            if (_m_trt_params.runtime != nullptr) {
+                _m_trt_params.runtime->destroy();
+            }
         }
     }
 

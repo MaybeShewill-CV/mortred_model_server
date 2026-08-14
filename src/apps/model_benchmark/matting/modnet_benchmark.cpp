@@ -18,7 +18,7 @@
 
 using jinq::common::FilePathUtil;
 using jinq::common::Timestamp;
-using jinq::common::CvUtils;
+using jinq::common::cv_utils;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::matting::std_matting_output;
 using jinq::factory::matting::create_modnet_segmentor;

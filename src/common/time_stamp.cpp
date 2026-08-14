@@ -7,93 +7,52 @@
 
 #include "time_stamp.h"
 
+#include <ctime>
+
 namespace jinq {
 namespace common {
 
-static_assert(sizeof(Timestamp) == sizeof(uint64_t), "Timestamp should be same size as uint64_t");
-
-/***
- *
- */
 Timestamp::Timestamp()
-        : _m_micro_sec_since_epoch(0) {
+    : _m_time_point(std::chrono::microseconds(0)) {
 }
 
-/***
- *
- * @param micro_sec_since_epoch
- */
 Timestamp::Timestamp(uint64_t micro_sec_since_epoch)
-        : _m_micro_sec_since_epoch(micro_sec_since_epoch) {
+    : _m_time_point(std::chrono::microseconds(micro_sec_since_epoch)) {
 }
 
-/***
- *
- * @param that
- */
-Timestamp::Timestamp(const Timestamp &that) = default;
-
-/***
- *
- * @param that
- * @return
- */
-Timestamp &Timestamp::operator=(const Timestamp &that) = default;
-
-/***
- *
- * @param that
- */
-void Timestamp::swap(Timestamp &that) {
-    std::swap(_m_micro_sec_since_epoch, that._m_micro_sec_since_epoch);
+Timestamp::Timestamp(time_point tp)
+    : _m_time_point(tp) {
 }
 
-/***
- *
- * @return
- */
+uint64_t Timestamp::micro_sec_since_epoch() const {
+    return static_cast<uint64_t>(_m_time_point.time_since_epoch().count());
+}
+
+Timestamp Timestamp::now() {
+    return Timestamp(
+        std::chrono::time_point_cast<std::chrono::microseconds>(clock::now()));
+}
+
 std::string Timestamp::to_str() const {
-    return std::to_string(_m_micro_sec_since_epoch / k_micro_sec_per_sec)
-           + "." + std::to_string(_m_micro_sec_since_epoch % k_micro_sec_per_sec);
+    return std::to_string(_m_time_point.time_since_epoch().count() / k_micro_sec_per_sec)
+           + "." + std::to_string(_m_time_point.time_since_epoch().count() % k_micro_sec_per_sec);
 }
 
-/***
- *
- * @return
- */
 std::string Timestamp::to_format_str() const {
     return to_format_str("%Y-%m-%d %X");
 }
 
-/***
- *
- * @param fmt
- * @return
- */
-std::string Timestamp::to_format_str(const char *fmt) const {
-    std::time_t time = static_cast<long>(_m_micro_sec_since_epoch) / k_micro_sec_per_sec;  // ms --> s
-    std::stringstream ss;
-    ss << std::put_time(std::localtime(&time), fmt);
-    return ss.str();
+std::string Timestamp::to_format_str(const char* fmt) const {
+    std::time_t seconds = std::chrono::duration_cast<std::chrono::seconds>(
+                              _m_time_point.time_since_epoch())
+                              .count();
+    std::tm tm_buf{};
+    // localtime_r: thread-safe, no static buffer (Linux only, per project scope)
+    ::localtime_r(&seconds, &tm_buf);
+    char buf[128];
+    std::strftime(buf, sizeof(buf), fmt, &tm_buf);
+    return std::string(buf);
 }
 
-/***
- *
- * @return
- */
-uint64_t Timestamp::micro_sec_since_epoch() const {
-    return _m_micro_sec_since_epoch;
-}
-
-/***
- *
- * @return
- */
-Timestamp Timestamp::now() {
-    uint64_t timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::system_clock::now().time_since_epoch()).count();
-    return Timestamp(timestamp);
-}
-
-}
-}
+}  // namespace common
+}  // namespace jinq

@@ -24,8 +24,8 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::Base64;
-using jinq::common::CvUtils;
+using jinq::common::base64;
+using jinq::common::cv_utils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 using jinq::models::io_define::common_io::base64_input;
@@ -97,6 +97,16 @@ public:
             if (status != cudaSuccess) {
                 LOG(ERROR) << "failed to free metric3d trt object. destruct cuda stream "
                               "failed code str: " << cudaGetErrorString(status);
+            }
+            // 释放 TensorRT 上下文/引擎/运行时
+            if (_m_trt_params.execution_context != nullptr) {
+                _m_trt_params.execution_context->destroy();
+            }
+            if (_m_trt_params.engine != nullptr) {
+                _m_trt_params.engine->destroy();
+            }
+            if (_m_trt_params.runtime != nullptr) {
+                _m_trt_params.runtime->destroy();
             }
         }
     }
@@ -535,13 +545,15 @@ StatusCode Metric3D<INPUT, OUTPUT>::Impl::mnn_run(const INPUT& in, OUTPUT& out) 
     // preprocess
     _m_input_size_user = internal_in.input_image.size();
     cv::Mat preprocessed_image = preprocess_image(internal_in.input_image);
-    auto input_chw_image_data = CvUtils::convert_to_chw_vec(preprocessed_image);
+    auto input_chw_image_data = cv_utils::convert_to_chw_vec(preprocessed_image);
 
     // run session
     MNN::Tensor input_tensor_user(input_tensor, MNN::Tensor::DimensionType::CAFFE);
     auto input_tensor_data = input_tensor_user.host<float>();
     auto input_tensor_size = input_tensor_user.size();
-    ::memcpy(input_tensor_data, input_chw_image_data.data(), input_tensor_size);
+    if (!cv_utils::copy_image_to_tensor(input_tensor_data, input_chw_image_data, input_tensor_size)) {
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
     input_tensor->copyFromHostTensor(&input_tensor_user);
     net->runSession(session);
 
@@ -603,7 +615,7 @@ metric3d_impl::internal_output Metric3D<INPUT, OUTPUT>::Impl::mnn_decode_output(
 
     // colorize depth map
     cv::Mat colorized_depth_map;
-    CvUtils::colorize_depth_map(depth_map, colorized_depth_map);
+    cv_utils::colorize_depth_map(depth_map, colorized_depth_map);
 
     // copy result
     std_mde_output out;
@@ -801,7 +813,7 @@ StatusCode Metric3D<INPUT, OUTPUT>::Impl::trt_run(const INPUT& in, OUTPUT& out) 
     auto& input_image = internal_in.input_image;
     _m_input_size_user = input_image.size();
     auto preprocessed_image = preprocess_image(input_image);
-    auto input_chw_data = CvUtils::convert_to_chw_vec(preprocessed_image);
+    auto input_chw_data = cv_utils::convert_to_chw_vec(preprocessed_image);
 
     // copy input data from host to device
     auto input_mem_size = input_binding.volume() * sizeof(float);
@@ -886,7 +898,7 @@ metric3d_impl::internal_output Metric3D<INPUT, OUTPUT>::Impl::trt_decode_output(
 
     // colorize depth map
     cv::Mat colorized_depth_map;
-    CvUtils::colorize_depth_map(depth_map, colorized_depth_map);
+    cv_utils::colorize_depth_map(depth_map, colorized_depth_map);
 
     // copy result
     std_mde_output out;

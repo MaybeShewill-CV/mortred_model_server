@@ -22,8 +22,8 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::CvUtils;
-using jinq::common::Base64;
+using jinq::common::cv_utils;
+using jinq::common::base64;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 using jinq::models::io_define::common_io::base64_input;
@@ -1012,7 +1012,7 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::setup_extractor_device_memory_allocat
             context->setTensorAddress(node_name.c_str(), nullptr);
         }
     }
-    return StatusCode::OJBK;
+    return StatusCode::OK;
 }
 
 /***
@@ -1039,7 +1039,7 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::setup_matcher_device_memory_allocator
             context->setTensorAddress(node_name.c_str(), nullptr);
         }
     }
-    return StatusCode::OJBK;
+    return StatusCode::OK;
 }
 
 /***
@@ -1065,7 +1065,7 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::trt_extract_feature_points(
     auto& input_image_binding = _m_trt_params.extractor->input_image_binding;
 
     // setup input image
-    auto input_chw_data = CvUtils::convert_to_chw_vec(input_image);
+    auto input_chw_data = cv_utils::convert_to_chw_vec(input_image);
     nvinfer1::Dims4 input_shape(1, 1, input_image.rows, input_image.cols);
     input_image_binding.set_dims(input_shape);
     context->setInputShape("image", input_shape);

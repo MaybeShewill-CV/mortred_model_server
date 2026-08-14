@@ -20,7 +20,7 @@
 
 using jinq::common::FilePathUtil;
 using jinq::common::Timestamp;
-using jinq::common::CvUtils;
+using jinq::common::cv_utils;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::object_detection::std_object_detection_output;
 using jinq::models::object_detection::YoloV5Detector;

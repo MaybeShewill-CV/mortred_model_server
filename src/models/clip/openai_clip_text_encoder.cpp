@@ -18,7 +18,7 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::CvUtils;
+using jinq::common::cv_utils;
 using jinq::common::StatusCode;
 using jinq::common::FilePathUtil;
 using jinq::common::Timestamp;
@@ -193,7 +193,7 @@ StatusCode OpenAiClipTextEncoder::Impl::init(const toml::table &cfg) {
 
     _m_successfully_init_model = true;
     LOG(INFO) << "Successfully load openai clip vit encoder";
-    return StatusCode::OJBK;
+    return StatusCode::OK;
 }
 
 /***
@@ -218,7 +218,9 @@ StatusCode OpenAiClipTextEncoder::Impl::encode(
     auto input_tensor_user = MNN::Tensor(_m_input_tensor, MNN::Tensor::DimensionType::CAFFE);
     auto input_tensor_data = input_tensor_user.host<float>();
     auto input_tensor_size = input_tensor_user.size();
-    ::memcpy(input_tensor_data, token_ids.data(), input_tensor_size);
+    if (!cv_utils::copy_image_to_tensor(input_tensor_data, token_ids, input_tensor_size)) {
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
     _m_input_tensor->copyFromHostTensor(&input_tensor_user);
 
     _m_net->runSession(_m_session);
@@ -234,7 +236,7 @@ StatusCode OpenAiClipTextEncoder::Impl::encode(
         text_embeddings[idx] = img_embeds_val[idx];
     }
 
-    return StatusCode::OJBK;
+    return StatusCode::OK;
 }
 
 /***

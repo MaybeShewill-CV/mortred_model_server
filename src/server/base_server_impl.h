@@ -30,7 +30,6 @@
 #include "workflow/WFHttpServer.h"
 #include "workflow/Workflow.h"
 
-#include "common/md5.h"
 #include "common/auth_token.h"
 #include "common/base64.h"
 #include "common/cv_utils.h"
@@ -45,10 +44,9 @@
 
 namespace jinq {
 namespace server {
-using jinq::common::Base64;
-using jinq::common::CvUtils;
+using jinq::common::base64;
+using jinq::common::cv_utils;
 using jinq::common::FilePathUtil;
-using jinq::common::Md5;
 using jinq::common::StatusCode;
 using jinq::common::Timestamp;
 using jinq::common::k_default_request_size_limit_mb;

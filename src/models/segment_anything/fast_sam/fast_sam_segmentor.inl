@@ -19,7 +19,7 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::CvUtils;
+using jinq::common::cv_utils;
 using jinq::common::StatusCode;
 using jinq::common::FilePathUtil;
 using jinq::common::Timestamp;
@@ -66,7 +66,7 @@ typename std::enable_if<
     std::is_same<INPUT, std::decay<jinq::models::io_define::common_io::base64_input>::type>::value,
     internal_input>::type
 transform_input(const INPUT& in) {
-    return CvUtils::decode_base64_str_into_cvmat(in.input_image_content);
+    return cv_utils::decode_base64_str_into_cvmat(in.input_image_content);
 }
 
 /***
@@ -305,7 +305,7 @@ StatusCode Impl::init(const toml::table &cfg) {
 
     _m_successfully_init_model = true;
     LOG(INFO) << "Successfully load fastsam model";
-    return StatusCode::OJBK;
+    return StatusCode::OK;
 }
 
 /***
@@ -323,11 +323,13 @@ StatusCode Impl::everything(const cv::Mat& input_image, cv::Mat& everything_mask
     // preprocess image
     _m_input_image_size = input_image.size();
     auto preprocessed_image = preprocess_image(input_image);
-    auto input_image_nchw_data = CvUtils::convert_to_chw_vec(preprocessed_image);
+    auto input_image_nchw_data = cv_utils::convert_to_chw_vec(preprocessed_image);
 
     // run session
     auto input_tensor_host = MNN::Tensor(_m_input_tensor, MNN::Tensor::DimensionType::CAFFE);
-    ::memcpy(input_tensor_host.host<float>(), input_image_nchw_data.data(), input_tensor_host.size());
+    if (!cv_utils::copy_image_to_tensor(input_tensor_host.host<float>(), input_image_nchw_data, input_tensor_host.size())) {
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
     _m_input_tensor->copyFromHostTensor(&input_tensor_host);
 
     _m_net->runSession(_m_session);
@@ -471,7 +473,7 @@ StatusCode Impl::decode_all_masks(std::vector<cv::Mat>& preds_masks) {
         }
     }
 
-    auto nms_result = CvUtils::nms_bboxes(threshed_preds, _m_iou_thresh);
+    auto nms_result = cv_utils::nms_bboxes(threshed_preds, _m_iou_thresh);
     auto c = _m_output_1_shape[1];
     auto mh = _m_preds_mask_size.height;
     auto mw = _m_preds_mask_size.width;
@@ -484,7 +486,7 @@ StatusCode Impl::decode_all_masks(std::vector<cv::Mat>& preds_masks) {
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
     std::vector<float> output_tensor_1_data_vec(output_tensor_1_data, output_tensor_1_data + output_tensor_1_host.elementSize());
-    auto mask_proto_hwc = CvUtils::convert_to_hwc_vec(output_tensor_1_data_vec, 1, c, mh * mw);
+    auto mask_proto_hwc = cv_utils::convert_to_hwc_vec(output_tensor_1_data_vec, 1, c, mh * mw);
     cv::Mat mask_proto(cv::Size(mh * mw, c), CV_32FC1, mask_proto_hwc.data());
 
     float downscale_h = static_cast<float>(mh) / static_cast<float>(_m_input_tensor_size.height);
@@ -531,7 +533,7 @@ StatusCode Impl::decode_all_masks(std::vector<cv::Mat>& preds_masks) {
         preds_masks.push_back(mask);
     }
 
-    return StatusCode::OJBK;
+    return StatusCode::OK;
 }
 
 } // namespace fast_sam_segmentor_impl

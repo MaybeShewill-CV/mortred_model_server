@@ -32,6 +32,7 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
+#include "common/cv_utils.h"
 #include "common/file_path_util.h"
 #include "common/status_code.h"
 #include "factory/classification_task.h"
@@ -47,6 +48,7 @@
 
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
+using jinq::common::cv_utils::calc_iou;
 using jinq::models::io_define::classification::std_classification_output;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::enhancement::std_enhancement_output;
@@ -223,18 +225,6 @@ void expect_scores(const std::string& name, const std_classification_output& out
         EXPECT_NEAR(output.scores[idx], s.GetFloat(), k_score_tol) << "score mismatch at " << idx;
         ++idx;
     }
-}
-
-float calc_iou(const cv::Rect2f& a, const cv::Rect2f& b) {
-    float x1 = std::max(a.x, b.x);
-    float y1 = std::max(a.y, b.y);
-    float x2 = std::min(a.x + a.width, b.x + b.width);
-    float y2 = std::min(a.y + a.height, b.y + b.height);
-    float w = std::max(0.0f, x2 - x1);
-    float h = std::max(0.0f, y2 - y1);
-    float inter = w * h;
-    float uni = a.width * a.height + b.width * b.height - inter;
-    return uni > 0 ? inter / uni : 0.0f;
 }
 
 const std::vector<cv::Point2f>& get_landmarks(const face_bbox& box) {

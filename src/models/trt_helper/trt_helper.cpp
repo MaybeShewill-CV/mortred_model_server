@@ -121,7 +121,7 @@ StatusCode TrtHelper::setup_device_memory(
         return StatusCode::TRT_ALLOC_MEMO_FAILED;
     }
 
-    StatusCode status = StatusCode::OJBK;
+    StatusCode status = StatusCode::OK;
     auto nb_bindings = engine->getNbIOTensors();
     for (int i = 0; i < nb_bindings; ++i) {
         auto tensorname = engine->getIOTensorName(i);

@@ -21,7 +21,7 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::CvUtils;
+using jinq::common::cv_utils;
 using jinq::common::StatusCode;
 using jinq::common::FilePathUtil;
 using jinq::common::Timestamp;
@@ -79,7 +79,7 @@ typename std::enable_if<
 transform_input(const INPUT& in) {
     internal_input result{};
     result.task_type = jinq::models::io_define::clip::ClipTaskType::IMAGE_EMBEDDING;
-    result.image = CvUtils::decode_base64_str_into_cvmat(in.input_image_content);
+    result.image = cv_utils::decode_base64_str_into_cvmat(in.input_image_content);
     return result;
 }
 
@@ -201,7 +201,7 @@ StatusCode Impl::init(const toml::table &cfg) {
 
     _m_successfully_init_model = true;
     LOG(INFO) << "Successfully load openai openai_clip model";
-    return StatusCode::OJBK;
+    return StatusCode::OK;
 }
 
 /***
@@ -236,7 +236,7 @@ StatusCode Impl::texts2img(
     // get visual features
     std::vector<float> vis_feats;
     auto status = get_visual_embedding(input_image, vis_feats);
-    if (status != StatusCode::OJBK) {
+    if (status != StatusCode::OK) {
         LOG(ERROR) << "get visual features failed, status: " << status;
         return status;
     }
@@ -294,7 +294,7 @@ StatusCode Impl::imgs2text(
     // get textual features
     std::vector<float> text_feats;
     auto status = get_textual_embedding(input_text, text_feats);
-    if (status != StatusCode::OJBK) {
+    if (status != StatusCode::OK) {
         LOG(ERROR) << "get textual features failed, status: " << status;
         return status;
     }

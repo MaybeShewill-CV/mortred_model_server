@@ -22,8 +22,26 @@ inline bool is_loopback_host(const std::string& host) {
     std::string lower_host = host;
     std::transform(lower_host.begin(), lower_host.end(), lower_host.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return lower_host == "localhost" || lower_host == "::1" ||
-           lower_host == "[::1]" || lower_host.rfind("127.", 0) == 0;
+    if (lower_host == "localhost" || lower_host == "::1" || lower_host == "[::1]") {
+        return true;
+    }
+    // strict 127.0.0.0/8 check: "127." followed by a dotted quad (digits and
+    // exactly two more dots), rejecting hostnames like "127.evil"
+    if (lower_host.compare(0, 4, "127.") != 0) {
+        return false;
+    }
+    int dots = 0;
+    for (size_t i = 4; i < lower_host.size(); ++i) {
+        const char ch = lower_host[i];
+        if (ch == '.') {
+            ++dots;
+            continue;
+        }
+        if (!std::isdigit(static_cast<unsigned char>(ch))) {
+            return false;
+        }
+    }
+    return dots == 2;
 }
 
 /***
@@ -64,15 +82,15 @@ inline std::string bearer_token_of(const std::string& authorization_header) {
 
 /***
  * 常量时间比较，避免通过响应时间差探测 token。
+ * 长度差异被合并进掩码，比较时长只与较长的输入有关，不泄漏长度信息。
  */
 inline bool constant_time_equals(const std::string& lhs, const std::string& rhs) {
-    if (lhs.size() != rhs.size()) {
-        return false;
-    }
-    unsigned char diff = 0;
-    for (size_t i = 0; i < lhs.size(); ++i) {
-        diff |= static_cast<unsigned char>(lhs[i]) ^
-                static_cast<unsigned char>(rhs[i]);
+    const size_t n = std::max(lhs.size(), rhs.size());
+    unsigned char diff = static_cast<unsigned char>(lhs.size() ^ rhs.size());
+    for (size_t i = 0; i < n; ++i) {
+        const unsigned char a = i < lhs.size() ? static_cast<unsigned char>(lhs[i]) : 0;
+        const unsigned char b = i < rhs.size() ? static_cast<unsigned char>(rhs[i]) : 0;
+        diff |= static_cast<unsigned char>(a ^ b);
     }
     return diff == 0;
 }

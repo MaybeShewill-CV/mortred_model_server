@@ -24,10 +24,10 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::CvUtils;
+using jinq::common::cv_utils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
-using jinq::common::Base64;
+using jinq::common::base64;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::common_io::file_input;
 using jinq::models::io_define::common_io::base64_input;
@@ -91,6 +91,16 @@ class HRNetSegmentation<INPUT, OUTPUT>::Impl {
         if (_m_backend_type == TRT) {
             cudaFreeHost(_m_trt_params.output_host);
             cudaStreamDestroy(_m_trt_params.cuda_stream);
+            // 释放 TensorRT 上下文/引擎/运行时
+            if (_m_trt_params.context != nullptr) {
+                _m_trt_params.context->destroy();
+            }
+            if (_m_trt_params.engine != nullptr) {
+                _m_trt_params.engine->destroy();
+            }
+            if (_m_trt_params.runtime != nullptr) {
+                _m_trt_params.runtime->destroy();
+            }
         } else if (_m_backend_type == ONNX) {
 
         } else {
@@ -493,7 +503,7 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::trt_run(const INPUT &in, OUTP
     auto& input_image = internal_in.input_image;
     _m_input_size_user = input_image.size();
     auto preprocessed_image = preprocess_image(input_image);
-    auto input_chw_data = CvUtils::convert_to_chw_vec(preprocessed_image);
+    auto input_chw_data = cv_utils::convert_to_chw_vec(preprocessed_image);
 
     // h2d data transfer
     auto input_mem_size = input_image_binding.volume() * sizeof(float);
@@ -627,7 +637,7 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::onnx_run(const INPUT &in, OUT
     cv::Mat preprocessed_image = preprocess_image(internal_in.input_image);
     input_node_shapes[0][2] = preprocessed_image.rows;
     input_node_shapes[0][3] = preprocessed_image.cols;
-    auto input_image_chw_data = CvUtils::convert_to_chw_vec(preprocessed_image);
+    auto input_image_chw_data = cv_utils::convert_to_chw_vec(preprocessed_image);
 
     // prepare input tensors
     auto memory_info = Ort::MemoryInfo::CreateCpu(
@@ -781,12 +791,14 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::mnn_run(const INPUT &in, OUTP
     // preprocess image
     _m_input_size_user = internal_in.input_image.size();
     cv::Mat preprocessed_image = preprocess_image(internal_in.input_image);
-    auto input_chw_data = CvUtils::convert_to_chw_vec(preprocessed_image);
+    auto input_chw_data = cv_utils::convert_to_chw_vec(preprocessed_image);
 
     // run session
     MNN::Tensor input_tensor_user(input_tensor, MNN::Tensor::DimensionType::CAFFE);
     auto input_tensor_data = input_tensor_user.host<float>();
-    ::memcpy(input_tensor_data, input_chw_data.data(), input_chw_data.size());
+    if (!cv_utils::copy_image_to_tensor(input_tensor_data, input_chw_data, input_tensor_user.size())) {
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
     input_tensor->copyFromHostTensor(&input_tensor_user);
     net->runSession(session);
 

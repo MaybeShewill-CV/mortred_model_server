@@ -23,8 +23,8 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::Base64;
-using jinq::common::CvUtils;
+using jinq::common::base64;
+using jinq::common::cv_utils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 using jinq::models::trt_helper::EngineBinding;
@@ -89,6 +89,16 @@ class AutoEncoderKL<INPUT, OUTPUT>::Impl {
         if (_m_backend_type == TRT) {
             cudaFreeHost(_m_trt_params.output_host);
             cudaStreamDestroy(_m_trt_params.cuda_stream);
+            // 释放 TensorRT 上下文/引擎/运行时
+            if (_m_trt_params.context != nullptr) {
+                _m_trt_params.context->destroy();
+            }
+            if (_m_trt_params.engine != nullptr) {
+                _m_trt_params.engine->destroy();
+            }
+            if (_m_trt_params.runtime != nullptr) {
+                _m_trt_params.runtime->destroy();
+            }
         }
     }
 
@@ -503,7 +513,7 @@ autoencoder_kl_impl::internal_output AutoEncoderKL<INPUT, OUTPUT>::Impl::trt_dec
     auto c = _m_trt_params.output_binding.dims().d[1];
     auto h = _m_trt_params.output_binding.dims().d[2];
     auto w = _m_trt_params.output_binding.dims().d[3];
-    auto hwc_data = CvUtils::convert_to_hwc_vec<uint8_t>(decode_out, c, h, w);
+    auto hwc_data = cv_utils::convert_to_hwc_vec<uint8_t>(decode_out, c, h, w);
 
     std_vae_decode_output out;
     cv::Size decode_image_size(_m_trt_params.output_binding.dims().d[3], _m_trt_params.output_binding.dims().d[2]);
@@ -659,7 +669,7 @@ autoencoder_kl_impl::internal_output AutoEncoderKL<INPUT, OUTPUT>::Impl::onnx_de
     auto c = _m_onnx_params.output_node_shapes[0][1];
     auto h = _m_onnx_params.output_node_shapes[0][2];
     auto w = _m_onnx_params.output_node_shapes[0][3];
-    auto hwc_data = CvUtils::convert_to_hwc_vec<uint8_t>(decode_out, c, h, w);
+    auto hwc_data = cv_utils::convert_to_hwc_vec<uint8_t>(decode_out, c, h, w);
 
     // construct sampled image
     std_vae_decode_output out;

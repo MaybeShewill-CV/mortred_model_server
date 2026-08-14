@@ -19,7 +19,7 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::CvUtils;
+using jinq::common::cv_utils;
 using jinq::common::StatusCode;
 using jinq::common::FilePathUtil;
 using jinq::common::Timestamp;
@@ -64,10 +64,25 @@ class SamPromptDecoder::Impl {
      */
     ~Impl() {
         if (_m_backend_type == TRT) {
-            auto status = cudaStreamDestroy(_m_cuda_stream);
-            if (status != cudaSuccess) {
-                LOG(ERROR) << "~Failed to free sam trt segment object. Destruct cuda stream "
-                              "failed code str: " << cudaGetErrorString(status);
+            if (_m_cuda_stream != nullptr) {
+                auto status = cudaStreamDestroy(_m_cuda_stream);
+                if (status != cudaSuccess) {
+                    LOG(ERROR) << "~Failed to free sam trt segment object. Destruct cuda stream "
+                                  "failed code str: " << cudaGetErrorString(status);
+                }
+            }
+            // 释放 TensorRT 执行上下文、引擎与运行时（销毁顺序：context -> engine -> runtime）
+            if (_m_trt_execution_context != nullptr) {
+                _m_trt_execution_context->destroy();
+                _m_trt_execution_context = nullptr;
+            }
+            if (_m_trt_engine != nullptr) {
+                _m_trt_engine->destroy();
+                _m_trt_engine = nullptr;
+            }
+            if (_m_trt_runtime != nullptr) {
+                _m_trt_runtime->destroy();
+                _m_trt_runtime = nullptr;
             }
         }
         if (_m_backend_type == ONNX) {
@@ -377,13 +392,13 @@ StatusCode SamPromptDecoder::Impl::decode(
     for (auto& bbox : bboxes) {
         cv::Mat out_mask;
         auto status_code= get_mask(image_embeddings, bbox, out_mask);
-        if (status_code != StatusCode::OJBK) {
+        if (status_code != StatusCode::OK) {
             return status_code;
         }
         predicted_masks.push_back(out_mask);
     }
 
-    return StatusCode::OJBK;
+    return StatusCode::OK;
 }
 
 /***
@@ -401,13 +416,13 @@ StatusCode SamPromptDecoder::Impl::decode(
     for (auto& points_per_obj : prompt_points) {
         cv::Mat out_mask;
         auto status_code= get_mask(image_embeddings, points_per_obj, out_mask);
-        if (status_code != StatusCode::OJBK) {
+        if (status_code != StatusCode::OK) {
             return status_code;
         }
         predicted_masks.push_back(out_mask);
     }
 
-    return StatusCode::OJBK;
+    return StatusCode::OK;
 }
 
 /***
@@ -444,7 +459,7 @@ StatusCode SamPromptDecoder::Impl::init_onnx_model(const toml::table&cfg) {
     _m_input_names = {"image_embeddings", "point_coords", "point_labels", "mask_input", "has_mask_input", "orig_im_size"};
     _m_output_names = {"masks", "iou_predictions", "low_res_masks"};
 
-    return StatusCode::OJBK;
+    return StatusCode::OK;
 }
 
 /***
@@ -768,7 +783,7 @@ StatusCode SamPromptDecoder::Impl::onnx_get_mask(const std::vector<float> &image
     }
     mask.copyTo(out_mask);
 
-    return StatusCode::OJBK;
+    return StatusCode::OK;
 }
 
 /***
@@ -903,7 +918,7 @@ StatusCode SamPromptDecoder::Impl::trt_get_mask(const std::vector<float> &image_
         std::distance(iou_preds_data.begin(), std::max_element(iou_preds_data.begin(), iou_preds_data.end())));
     trt_decode_output_mask(low_res_mask_data, best_mask_idx, out_mask);
 
-    return StatusCode::OJBK;
+    return StatusCode::OK;
 }
 
 /***
@@ -1034,7 +1049,7 @@ StatusCode SamPromptDecoder::Impl::onnx_get_mask(
     }
     mask.copyTo(out_mask);
 
-    return StatusCode::OJBK;
+    return StatusCode::OK;
 }
 
 /***
@@ -1163,7 +1178,7 @@ StatusCode SamPromptDecoder::Impl::trt_get_mask(
         std::distance(iou_preds_data.begin(), std::max_element(iou_preds_data.begin(), iou_preds_data.end())));
     trt_decode_output_mask(low_res_mask_data, best_mask_idx, out_mask);
 
-    return StatusCode::OJBK;
+    return StatusCode::OK;
 }
 
 /***

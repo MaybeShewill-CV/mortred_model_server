@@ -9,209 +9,80 @@
 #define MORTRED_MODEL_SERVER_TIMESTAMP_H
 
 #include <chrono>
+#include <cstdint>
 #include <string>
-#include <sstream>
-#include <iomanip>
 
 namespace jinq {
 namespace common {
+
+// thin wrapper over system_clock time_point with microsecond precision
 class Timestamp {
 public:
-    /***
-     *
-     */
+    using clock = std::chrono::system_clock;
+    using time_point = std::chrono::time_point<clock, std::chrono::microseconds>;
+
     Timestamp();
+    Timestamp(const Timestamp& that) = default;
+    Timestamp& operator=(const Timestamp& that) = default;
 
     /***
-     *
-     * @param that
-     */
-    Timestamp(const Timestamp &that);
-
-    /***
-     *
-     * @param that
-     * @return
-     */
-    Timestamp &operator=(const Timestamp &that);
-
-    /***
-     *
-     * @param micro_sec_since_epoch: The microseconds from 1970-01-01 00:00:00.
+     * @param micro_sec_since_epoch microseconds from 1970-01-01 00:00:00
      */
     explicit Timestamp(uint64_t micro_sec_since_epoch);
 
-    /***
-     *
-     * @param that
-     */
-    void swap(Timestamp &that);
-
-    /***
-     *
-     * @return
-     */
     std::string to_str() const;
-
-    /***
-     *
-     * @return
-     */
     std::string to_format_str() const;
-
-    /***
-     *
-     * @param fmt
-     * @return
-     */
-    std::string to_format_str(const char *fmt) const;
-
-    /***
-     *
-     * @return
-     */
+    std::string to_format_str(const char* fmt) const;
     uint64_t micro_sec_since_epoch() const;
 
-    /***
-     *
-     * @return
-     */
-    inline bool valid() const {
-        return _m_micro_sec_since_epoch > 0;
+    bool valid() const {
+        return micro_sec_since_epoch() > 0;
     }
 
-    /***
-     *
-     * @return
-     */
     static Timestamp now();
-
-    /***
-     *
-     * @return
-     */
     static Timestamp invalid() {
-        return {};
+        return Timestamp();
     }
 
     static const int k_micro_sec_per_sec = 1000 * 1000;
+
 private:
-    uint64_t _m_micro_sec_since_epoch;
+    explicit Timestamp(time_point tp);
+
+    time_point _m_time_point;
 };
 
-/***
- *
- * @param lhs
- * @param rhs
- * @return
- */
 inline bool operator<(const Timestamp& lhs, const Timestamp& rhs) {
     return lhs.micro_sec_since_epoch() < rhs.micro_sec_since_epoch();
 }
 
-/***
- *
- * @param lhs
- * @param rhs
- * @return
- */
 inline bool operator>(const Timestamp& lhs, const Timestamp& rhs) {
     return lhs.micro_sec_since_epoch() > rhs.micro_sec_since_epoch();
 }
 
-/***
- *
- * @param lhs
- * @param rhs
- * @return
- */
 inline bool operator<=(const Timestamp& lhs, const Timestamp& rhs) {
     return lhs.micro_sec_since_epoch() <= rhs.micro_sec_since_epoch();
 }
 
-/***
- *
- * @param lhs
- * @param rhs
- * @return
- */
 inline bool operator>=(const Timestamp& lhs, const Timestamp& rhs) {
     return lhs.micro_sec_since_epoch() >= rhs.micro_sec_since_epoch();
 }
 
-/***
- *
- * @param lhs
- * @param rhs
- * @return
- */
 inline bool operator==(const Timestamp& lhs, const Timestamp& rhs) {
     return lhs.micro_sec_since_epoch() == rhs.micro_sec_since_epoch();
 }
 
-/***
- *
- * @param lhs
- * @param rhs
- * @return
- */
 inline bool operator!=(const Timestamp& lhs, const Timestamp& rhs) {
     return lhs.micro_sec_since_epoch() != rhs.micro_sec_since_epoch();
 }
 
-/***
- *
- * @param lhs
- * @param ms
- * @return
- */
-inline Timestamp operator+(const Timestamp& lhs, uint64_t ms) {
-    return Timestamp(lhs.micro_sec_since_epoch() + ms);
-}
-
-/***
- *
- * @param lhs
- * @param seconds
- * @return
- */
-inline Timestamp operator+(const Timestamp& lhs, double seconds) {
-    auto delta = static_cast<uint64_t>(seconds * Timestamp::k_micro_sec_per_sec);
-    return Timestamp(lhs.micro_sec_since_epoch() + delta);
-}
-
-/***
- *
- * @param lhs
- * @param ms
- * @return
- */
-inline Timestamp operator-(const Timestamp& lhs, uint64_t ms) {
-    return Timestamp(lhs.micro_sec_since_epoch() - ms);
-}
-
-/***
- *
- * @param lhs
- * @param seconds
- * @return
- */
-inline Timestamp operator-(const Timestamp& lhs, double seconds) {
-    auto delta = static_cast<uint64_t>(seconds * Timestamp::k_micro_sec_per_sec);
-    return Timestamp(lhs.micro_sec_since_epoch() - delta);
-}
-
-/***
- *
- * @param high
- * @param low
- * @return
- */
+// elapsed seconds between two timestamps
 inline double operator-(const Timestamp& high, const Timestamp& low) {
     uint64_t diff = high.micro_sec_since_epoch() - low.micro_sec_since_epoch();
     return static_cast<double>(diff) / Timestamp::k_micro_sec_per_sec;
 }
-}
-}
+
+}  // namespace common
+}  // namespace jinq
 
 #endif //MORTRED_MODEL_SERVER_TIMESTAMP_H

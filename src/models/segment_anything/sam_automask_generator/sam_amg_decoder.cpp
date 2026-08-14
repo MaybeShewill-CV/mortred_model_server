@@ -21,7 +21,7 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::CvUtils;
+using jinq::common::cv_utils;
 using jinq::common::StatusCode;
 using jinq::common::FilePathUtil;
 using jinq::common::Timestamp;
@@ -43,7 +43,33 @@ class SamAmgDecoder::Impl {
     /***
      *
      */
-    ~Impl() = default;
+    ~Impl() {
+        // 清空 mask decoder 执行器队列：销毁每个执行上下文与 cuda stream，释放 SamDecodeInput
+        ThreadExecutor executor{};
+        while (_m_decoder_queue.try_dequeue(executor)) {
+            if (executor.context != nullptr) {
+                executor.context->destroy();
+                executor.context = nullptr;
+            }
+            if (executor.input != nullptr) {
+                if (executor.input->cuda_stream != nullptr) {
+                    cudaStreamDestroy(executor.input->cuda_stream);
+                }
+                // delete 触发 DeviceMemory 析构，自动释放其中 cudaMalloc 的显存
+                delete executor.input;
+                executor.input = nullptr;
+            }
+        }
+        // 释放 TensorRT 引擎与运行时（销毁顺序：engine -> runtime）
+        if (_m_trt_engine != nullptr) {
+            _m_trt_engine->destroy();
+            _m_trt_engine = nullptr;
+        }
+        if (_m_trt_runtime != nullptr) {
+            _m_trt_runtime->destroy();
+            _m_trt_runtime = nullptr;
+        }
+    }
 
     /***
      *

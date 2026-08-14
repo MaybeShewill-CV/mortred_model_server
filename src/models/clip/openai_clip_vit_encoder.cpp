@@ -19,7 +19,7 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::CvUtils;
+using jinq::common::cv_utils;
 using jinq::common::StatusCode;
 using jinq::common::FilePathUtil;
 using jinq::common::Timestamp;
@@ -181,7 +181,7 @@ jinq::common::StatusCode OpenAiClipVitEncoder::Impl::init(const toml::table &cfg
 
     _m_successfully_init_model = true;
     LOG(INFO) << "Successfully load openai clip vit encoder";
-    return StatusCode::OJBK;
+    return StatusCode::OK;
 }
 
 /***
@@ -195,7 +195,7 @@ jinq::common::StatusCode OpenAiClipVitEncoder::Impl::encode(
     std::vector<float> &image_embeddings) {
     // preprocess image
     auto preprocessed_image = preprocess_image(input_image);
-    auto input_tensor_values = CvUtils::convert_to_chw_vec(preprocessed_image);
+    auto input_tensor_values = cv_utils::convert_to_chw_vec(preprocessed_image);
     if (input_tensor_values.empty()) {
         LOG(ERROR) << "empty input data for sam vit encoder";
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
@@ -205,7 +205,9 @@ jinq::common::StatusCode OpenAiClipVitEncoder::Impl::encode(
     auto input_tensor_user = MNN::Tensor(_m_input_tensor, MNN::Tensor::DimensionType::CAFFE);
     auto input_tensor_data = input_tensor_user.host<float>();
     auto input_tensor_size = input_tensor_user.size();
-    ::memcpy(input_tensor_data, input_tensor_values.data(), input_tensor_size);
+    if (!cv_utils::copy_image_to_tensor(input_tensor_data, input_tensor_values, input_tensor_size)) {
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
     _m_input_tensor->copyFromHostTensor(&input_tensor_user);
 
     _m_net->runSession(_m_session);
@@ -221,7 +223,7 @@ jinq::common::StatusCode OpenAiClipVitEncoder::Impl::encode(
         image_embeddings[idx] = img_embeds_val[idx];
     }
 
-    return StatusCode::OJBK;
+    return StatusCode::OK;
 }
 
 /***

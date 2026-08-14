@@ -13,10 +13,8 @@
 namespace jinq {
 namespace common {
 
-/***
- * 状态码单一事实来源：枚举定义与错误文案必须同时维护在这里。
- * 新增错误码时，只需在列表中增加一行，枚举、error_code_to_str、单元测试会自动同步。
- */
+// single source of truth: enumerators, wire codes and messages are kept together.
+// wire codes are part of the HTTP API contract and must stay stable.
 #define MORTRED_STATUS_CODE_LIST(X) \
     X(OK, 0, "OK") \
     X(MODEL_INIT_FAILED, 1, "model init failed") \
@@ -25,46 +23,37 @@ namespace common {
     X(MODEL_RUN_TIMEOUT, 4, "model run timeout") \
     X(MODEL_EMPTY_OUTPUT, 5, "model output empty") \
     X(SERVER_INIT_FAILED, 11, "server init failed") \
-    X(SERVER_RUN_FAILED, 12, "server run failed") \
-    X(FILE_READ_ERROR, 30, "file read error") \
-    X(FILE_WRITE_ERROR, 31, "file write error") \
-    X(FILE_NOT_EXIST_ERROR, 32, "file not exist error") \
-    X(COMPRESS_ERROR, 40, "compress not support") \
-    X(UNCOMPRESS_ERROR, 41, "uncompress error") \
     X(JSON_DECODE_ERROR, 50, "decode json error") \
-    X(JSON_ENCODE_ERROR, 51, "encode json error") \
-    X(MYSQL_INIT_DB_CONFIG_ERROR, 60, "init mysql connection failed") \
-    X(MYSQL_SELECT_FAILED, 61, "exec select sql failed") \
-    X(MYSQL_INSERT_FAILED, 62, "exec insert sql failed") \
-    X(MYSQL_UPDATE_FAILED, 63, "exec update sql failed") \
-    X(MYSQL_DELETE_FAILED, 64, "exec delete sql failed") \
-    X(ROUTER_ADD_HANDLER_FAILED, 70, "add handler to router table failed") \
-    X(ROUTER_GET_HANDLER_FAILED, 71, "get handler from router table failed") \
-    X(ROUTER_GET_PROJECT_NAMES_FAILED, 72, "get project names from router table failed") \
-    X(ROUTER_GET_SERVICE_NAMES_FAILED, 73, "get service names from router table failed") \
-    X(ROUTER_GET_URI_NAMES_FAILED, 74, "get uri names from router table failed") \
     X(TOKENIZE_UNKNOWN_TOKEN, 80, "unknown token") \
     X(TRT_CUDA_ERROR, 90, "tensorrt cuda error") \
     X(TRT_ALLOC_MEMO_FAILED, 91, "tensorrt allocate memory failed") \
     X(TRT_CONVERT_ONNX_MODEL_FAILED, 92, "convert onnx model to trt failed") \
     X(TRT_ALLOC_DYNAMIC_SHAPE_MEMO, 93, "tensorrt allocate dynamic shape memory failed")
 
-enum StatusCode {
+enum class StatusCode {
 #define MORTRED_STATUS_CODE_DEFINE(name, value, desc) name = value,
     MORTRED_STATUS_CODE_LIST(MORTRED_STATUS_CODE_DEFINE)
 #undef MORTRED_STATUS_CODE_DEFINE
-    // 别名：与 OK 等价，不进入宏列表（避免 switch 重复 case）
-    OJBK = OK,
 };
 
-/***
- *
- * @param error_code
- * @return
- */
-std::string error_code_to_str(int error_code);
+// wire integer of a status code (stable HTTP API contract)
+constexpr int to_underlying(StatusCode code) {
+    return static_cast<int>(code);
+}
 
+// human readable message of a status code
+inline std::string status_code_to_str(StatusCode code) {
+    switch (code) {
+#define MORTRED_STATUS_CODE_TO_STR(name, value, desc) \
+    case StatusCode::name: \
+        return desc;
+        MORTRED_STATUS_CODE_LIST(MORTRED_STATUS_CODE_TO_STR)
+#undef MORTRED_STATUS_CODE_TO_STR
+    }
+    return "Unknown";
 }
-}
+
+}  // namespace common
+}  // namespace jinq
 
 #endif //MORTRED_MODEL_SERVER_STATUSCODE_H

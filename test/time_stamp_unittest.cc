@@ -22,13 +22,10 @@ TEST(time_stamp, invalid_and_now) {
     EXPECT_GT(now.micro_sec_since_epoch(), 0u);
 }
 
-TEST(time_stamp, epoch_constructor_and_arithmetic) {
+TEST(time_stamp, epoch_constructor_and_comparison) {
     Timestamp t(1000000); // 1 second since epoch
     EXPECT_EQ(t.micro_sec_since_epoch(), 1000000u);
-
-    EXPECT_EQ((t + uint64_t(500000)).micro_sec_since_epoch(), 1500000u);
-    EXPECT_EQ((t + 0.5).micro_sec_since_epoch(), 1500000u);
-    EXPECT_EQ((t - 0.5).micro_sec_since_epoch(), 500000u);
+    EXPECT_TRUE(t.valid());
 
     Timestamp high(2000000);
     Timestamp low(1000000);
@@ -38,13 +35,14 @@ TEST(time_stamp, epoch_constructor_and_arithmetic) {
     EXPECT_LE(low, high);
     EXPECT_GE(high, low);
     EXPECT_NE(high, low);
+    EXPECT_EQ(Timestamp(1000000), low);
 }
 
 TEST(time_stamp, to_str_and_format) {
-    Timestamp t(123456789); // 123 秒 + 456789 微秒
+    Timestamp t(123456789); // 123 seconds + 456789 microseconds
     EXPECT_EQ(t.to_str(), "123.456789");
 
-    // 格式化输出：%Y-%m-%d 长度为 10，且用 '-' 分隔
+    // formatted output: %Y-%m-%d is 10 chars and '-' separated
     auto date = t.to_format_str("%Y-%m-%d");
     EXPECT_EQ(date.size(), 10u);
     EXPECT_EQ(date[4], '-');

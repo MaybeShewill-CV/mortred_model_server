@@ -20,10 +20,10 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::CvUtils;
+using jinq::common::cv_utils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
-using jinq::common::Base64;
+using jinq::common::base64;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::common_io::file_input;
 using jinq::models::io_define::common_io::base64_input;
@@ -298,7 +298,9 @@ StatusCode ResNet<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
     auto input_tensor_data = input_tensor_user.host<float>();
     auto input_tensor_size = input_tensor_user.size();
-    ::memcpy(input_tensor_data, preprocessed_image.data, input_tensor_size);
+    if (!cv_utils::copy_image_to_tensor(input_tensor_data, preprocessed_image, input_tensor_size)) {
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
     _m_input_tensor->copyFromHostTensor(&input_tensor_user);
     _m_net->runSession(_m_session);
 

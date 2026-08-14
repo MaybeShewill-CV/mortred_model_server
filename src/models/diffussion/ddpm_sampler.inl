@@ -23,8 +23,8 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::Base64;
-using jinq::common::CvUtils;
+using jinq::common::base64;
+using jinq::common::cv_utils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 
@@ -391,7 +391,7 @@ StatusCode DDPMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
         std::transform(img_data.begin(), img_data.end(), img_data.begin(), [](float x) { return std::clamp(x, -1.0f, 1.0f); });
         std::transform(img_data.begin(), img_data.end(), img_data.begin(), [](float x) { return (x + 1.0f) * 0.5f * 255.0f + 0.5; });
         std::transform(img_data.begin(), img_data.end(), img_data.begin(), [](float x) { return std::clamp(x, 0.0f, 255.0f); });
-        auto hwc_data = CvUtils::convert_to_hwc_vec<float>(img_data, sample_channels, sample_size.height, sample_size.width);
+        auto hwc_data = cv_utils::convert_to_hwc_vec<float>(img_data, sample_channels, sample_size.height, sample_size.width);
         cv::Mat mid_image;
         if (sample_channels == 1) {
             mid_image = cv::Mat(sample_size, CV_32FC1, hwc_data.data());

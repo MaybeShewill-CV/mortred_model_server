@@ -20,10 +20,10 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::CvUtils;
+using jinq::common::cv_utils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
-using jinq::common::Base64;
+using jinq::common::base64;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::common_io::file_input;
 using jinq::models::io_define::common_io::base64_input;
@@ -309,7 +309,9 @@ StatusCode RealEsrGan<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     MNN::Tensor input_tensor_user_src(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
     auto input_tensor_data = input_tensor_user_src.host<float>();
     auto input_tensor_size = input_tensor_user_src.size();
-    ::memcpy(input_tensor_data, input_src.data, input_tensor_size);
+    if (!cv_utils::copy_image_to_tensor(input_tensor_data, input_src, input_tensor_size)) {
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
     _m_input_tensor->copyFromHostTensor(&input_tensor_user_src);
     _m_net->runSession(_m_session);
 

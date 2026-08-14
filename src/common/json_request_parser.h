@@ -43,7 +43,7 @@ inline JsonRequest parse_json_request(const std::string& req_body) {
     }
 
     if (doc.ObjectEmpty() || !doc.HasMember("img_data") ||
-        !doc["img_data"].IsString()) {
+        !doc["img_data"].IsString() || doc["img_data"].GetStringLength() == 0) {
         req.parse_status = StatusCode::MODEL_EMPTY_INPUT_IMAGE;
         return req;
     }

@@ -18,7 +18,7 @@
 #include "models/model_io_define.h"
 #include "factory/sam_task.h"
 
-using jinq::common::CvUtils;
+using jinq::common::cv_utils;
 using jinq::common::FilePathUtil;
 using jinq::models::io_define::segment_anything::sam_prompt_input;
 using jinq::models::io_define::segment_anything::std_sam_prompt_output;
@@ -93,7 +93,7 @@ int main(int argc, char** argv) {
     std::string output_path = FilePathUtil::concat_path(
         "../demo_data/model_test_input/sam", output_file_name);
     cv::Mat color_output;
-    CvUtils::visualize_sam_output_masks(input_image, masks, color_output);
+    cv_utils::visualize_sam_output_masks(input_image, masks, color_output);
     cv::imwrite(output_path, color_output);
     LOG(INFO) << "sam prediction result image has been written into: " << output_path;
 }

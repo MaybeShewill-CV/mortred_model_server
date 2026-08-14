@@ -111,7 +111,7 @@ StatusCode SimpleTokenizer::Impl::init(const toml::table &cfg) {
 
     _m_successfully_init_model = true;
     LOG(INFO) << "Successfully clip tokenizer";
-    return StatusCode::OJBK;
+    return StatusCode::OK;
 }
 
 /***
@@ -182,7 +182,7 @@ StatusCode SimpleTokenizer::Impl::tokenize(const std::string& input_text, std::v
     }
     tokens.push_back(49407); // end of text
 
-    return StatusCode::OJBK;
+    return StatusCode::OK;
 }
 
 /***

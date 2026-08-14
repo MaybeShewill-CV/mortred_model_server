@@ -16,7 +16,7 @@
 #include "models/model_io_define.h"
 #include "models/diffussion/ddpm_sampler.h"
 
-using jinq::common::CvUtils;
+using jinq::common::cv_utils;
 using jinq::common::Timestamp;
 using jinq::common::FilePathUtil;
 using jinq::models::io_define::diffusion::std_ddpm_input;

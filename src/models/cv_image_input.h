@@ -14,7 +14,7 @@
 
 #include "glog/logging.h"
 
-#include "common/base64.h"
+#include "common/cv_utils.h"
 #include "common/file_path_util.h"
 #include "models/model_io_define.h"
 
@@ -23,7 +23,7 @@ namespace models {
 namespace cv_input {
 
 /***
- * file_input → cv::Mat：校验文件存在后按原通道读取。
+ * file_input -> cv::Mat: reads with original channels after existence check
  */
 inline cv::Mat load_image(const io_define::common_io::file_input& in) {
     cv::Mat ret;
@@ -35,25 +35,18 @@ inline cv::Mat load_image(const io_define::common_io::file_input& in) {
 }
 
 /***
- * mat_input → cv::Mat：引用计数浅拷贝，零拷贝开销。
+ * mat_input -> cv::Mat: refcounted shallow copy, zero overhead
  */
 inline cv::Mat load_image(const io_define::common_io::mat_input& in) {
     return in.input_image;
 }
 
 /***
- * base64_input → cv::Mat：base64 解码后按原通道 imdecode。
+ * base64_input -> cv::Mat: base64 decode then imdecode with original channels
  */
 inline cv::Mat load_image(const io_define::common_io::base64_input& in) {
-    cv::Mat ret;
-    auto decoded = jinq::common::Base64::base64_decode(in.input_image_content);
-    if (decoded.empty()) {
-        DLOG(WARNING) << "image data empty";
-        return ret;
-    }
-    std::vector<uchar> image_vec_data(decoded.begin(), decoded.end());
-    cv::imdecode(image_vec_data, cv::IMREAD_UNCHANGED).copyTo(ret);
-    return ret;
+    return jinq::common::cv_utils::decode_base64_str_into_cvmat(
+        in.input_image_content, cv::IMREAD_UNCHANGED);
 }
 
 }  // namespace cv_input
