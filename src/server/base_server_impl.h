@@ -183,14 +183,23 @@ protected:
 protected:
     struct series_ctx {
         protocol::HttpResponse* response = nullptr;
-        StatusCode model_run_status = StatusCode::OK;
+        // 元数据：serve_process 创建 ctx 时写入、之后只读；
+        // do_work_cb 超时分支/正常分支均可安全读取（无并发写者）
         std::string task_id;
         std::string task_received_ts;
-        std::string task_finished_ts;
         bool is_task_req_valid = false;
+        // 推理字段：只由 do_work 写；do_work_cb 正常分支读取（go 函数结束 ->
+        // handle(ref 原子同步) -> callback，happens-before），超时分支不读取
+        StatusCode model_run_status = StatusCode::OK;
+        std::string task_finished_ts;
         double worker_run_time_consuming = 0; // ms
         double find_worker_time_consuming = 0; // ms
         MODEL_OUTPUT model_output;
+        // 推理字段（LLM）：do_work 写会话 cookie，do_work_cb 正常分支写 response header
+        std::string session_cookie;
+        // 无名 release counter：do_work 与 do_work_cb 各 count 一次（target=2）。
+        // 用指针直接 count 而非 count_by_name，避免并发请求下全局同名 counter 串扰
+        WFCounterTask* release_counter = nullptr;
     };
 
     /***
@@ -308,6 +317,11 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         auto* series = series_of(task);
         auto* ctx = new series_ctx;
         ctx->response = resp;
+        // 元数据在创建时写入、之后只读：超时 detached 场景下 do_work_cb 读取它们
+        // 不会与 do_work 的写入竞争
+        ctx->task_id = task_req.task_id;
+        ctx->is_task_req_valid = task_req.is_valid;
+        ctx->task_received_ts = Timestamp::now().to_format_str();
         series->set_context(ctx);
         // do model work
         auto&& go_proc = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work, this, std::placeholders::_1, std::placeholders::_2);
@@ -321,9 +335,15 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         auto&& go_proc_cb = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb, this, serve_task);
         serve_task->set_callback(go_proc_cb);
         *series << serve_task;
-        WFCounterTask* counter = WFTaskFactory::create_counter_task("release_ctx", 1, [](const WFCounterTask* task){
+        // release counter target=2：do_work 与 do_work_cb 各 count 一次，
+        // delete ctx 只发生在"双方都结束"之后。超时 detached 场景下 do_work 是
+        // 最后结束的一方，其 count 才触发释放，杜绝 use-after-free。
+        // 用无名 counter（指针 count）而非 count_by_name：并发请求各持自己的
+        // counter 实例，避免全局同名 counter 相互串扰。
+        auto* counter = WFTaskFactory::create_counter_task(2, [](const WFCounterTask* task){
             delete (series_ctx*)series_of(task)->get_context();
         });
+        ctx->release_counter = counter;
         *series << counter;
         return;
     }
@@ -360,7 +380,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
             ctx->model_run_status = StatusCode::MODEL_RUN_TIMEOUT;
             ctx->task_finished_ts = Timestamp::now().to_format_str();
             // 关键：提前退出也必须恰好计一次 release_ctx，否则 ctx 泄漏
-            WFTaskFactory::count_by_name("release_ctx");
+            ctx->release_counter->count();
             return;
         }
     } else {
@@ -369,11 +389,8 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     }
     ctx->find_worker_time_consuming = (Timestamp::now() - find_worker_start_ts) * 1000;
 
-    // get task receive timestamp
-    ctx->task_id = req.task_id;
-    ctx->is_task_req_valid = req.is_valid;
+    // 局部时间戳仅用于耗时统计；task_received_ts 等元数据已由 serve_process 写入 ctx
     auto task_receive_ts = Timestamp::now();
-    ctx->task_received_ts = task_receive_ts.to_format_str();
 
     // construct model input: 默认实现为 CV 图像路径（payload 为 base64 字符串）
     models::io_define::common_io::base64_input model_input;
@@ -405,7 +422,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     auto task_finish_ts = Timestamp::now();
     ctx->task_finished_ts = task_finish_ts.to_format_str();
     ctx->worker_run_time_consuming = (task_finish_ts - task_receive_ts) * 1000;
-    WFTaskFactory::count_by_name("release_ctx");
+    ctx->release_counter->count();
 }
 
 /***
@@ -420,19 +437,39 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
     auto state = task->get_state();
     auto* ctx = (series_ctx*)series_of(task)->get_context();
 
-    // fill response
     StatusCode status;
+    std::string task_id;
+    std::string response_body;
+    std::string task_finished_ts;
+    double worker_run_time_consuming = 0;
+    double find_worker_time_consuming = 0;
 
     if (state != WFT_STATE_SUCCESS) {
-        LOG(ERROR) << "task: " << ctx->task_id << " model run timeout";
+        // 超时：do_work 可能仍在 detached 线程中写推理字段，此处只读元数据
+        // （serve_process 写入、之后只读），不读取 model_output/model_run_status
+        // /finished_ts 等推理字段，避免数据竞争
         status = StatusCode::MODEL_RUN_TIMEOUT;
+        task_id = ctx->is_task_req_valid ? ctx->task_id : "";
+        response_body = make_response_body(task_id, status, MODEL_OUTPUT{});
     } else {
+        // 成功：do_work 已完成（go 函数结束 -> handle(ref 原子同步) -> callback，
+        // workflow 保证 happens-before），安全读取全部字段
         status = ctx->model_run_status;
+        task_id = ctx->is_task_req_valid ? ctx->task_id : "";
+        response_body = make_response_body(task_id, status, ctx->model_output);
+        task_finished_ts = ctx->task_finished_ts;
+        worker_run_time_consuming = ctx->worker_run_time_consuming;
+        find_worker_time_consuming = ctx->find_worker_time_consuming;
+        // LLM 会话 cookie：do_work 结束后统一写 response header（happens-before）
+        if (!ctx->session_cookie.empty()) {
+            ctx->response->add_header_pair("Set-Cookie", ctx->session_cookie);
+        }
     }
-
-    std::string task_id = ctx->is_task_req_valid ? ctx->task_id : "";
-    std::string response_body = make_response_body(task_id, status, ctx->model_output);
     ctx->response->append_output_body(std::move(response_body));
+
+    if (state != WFT_STATE_SUCCESS) {
+        LOG(ERROR) << "task: " << task_id << " model run timeout";
+    }
 
     // update task count
     _m_finished_jobs++;
@@ -441,14 +478,18 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
     // output log info
     LOG(INFO) << "task id: " << task_id
               << " received at: " << ctx->task_received_ts
-              << " finished at: " << ctx->task_finished_ts
-              << " elapse: " << ctx->worker_run_time_consuming << " ms"
-              << " find work elapse: " << ctx->find_worker_time_consuming << " ms"
+              << " finished at: " << task_finished_ts
+              << " elapse: " << worker_run_time_consuming << " ms"
+              << " find work elapse: " << find_worker_time_consuming << " ms"
               << " received jobs: " << _m_received_jobs
               << " waiting jobs: " << _m_waiting_jobs
               << " finished jobs: " << _m_finished_jobs
               << " worker queue size: " << _m_working_queue.size_approx();
-    // WFTaskFactory::count_by_name("release_ctx");
+
+    // 关键（原生 workflow 语义）：do_work 与 do_work_cb 各 count 一次（target=2），
+    // delete ctx 只发生在双方都结束之后；超时 detached 场景下 do_work 是最后
+    // 结束的一方，其 count 才触发释放，不再有 use-after-free。
+    ctx->release_counter->count();
 }
 
 /***

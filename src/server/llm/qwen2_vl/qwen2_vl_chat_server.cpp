@@ -281,7 +281,7 @@ void Qwen2VLChatServer::Impl::do_work(const task_request& req, series_ctx* ctx) 
     if (!req.is_valid) {
         ctx->model_run_status = req.parse_status;
         ctx->task_finished_ts = Timestamp::now().to_format_str();
-        WFTaskFactory::count_by_name("release_ctx");
+        ctx->release_counter->count();
         return;
     }
 
@@ -289,11 +289,8 @@ void Qwen2VLChatServer::Impl::do_work(const task_request& req, series_ctx* ctx) 
     QwenVlModelPtr worker;
     _m_working_queue.wait_dequeue(worker);
 
-    // task 时间戳
-    ctx->task_id = req.task_id;
-    ctx->is_task_req_valid = req.is_valid;
+    // 局部时间戳仅用于耗时统计；元数据（task_id 等）已由 serve_process 写入 ctx
     auto task_receive_ts = Timestamp::now();
-    ctx->task_received_ts = task_receive_ts.to_format_str();
 
     // 本轮新消息（KV cache 已保留历史上下文）
     auto current_dialog = std::any_cast<Dialog>(req.payload);
@@ -342,8 +339,10 @@ void Qwen2VLChatServer::Impl::do_work(const task_request& req, series_ctx* ctx) 
         } else {
             _m_user_history_dialogs.insert(std::make_pair(req.session_id, turn_dialog));
         }
-        // 回写会话 cookie，供客户端后续请求维持会话
-        ctx->response->add_header_pair("Set-Cookie", req.session_id);
+        // 回写会话 cookie：写入 ctx 推理字段，由 do_work_cb 正常分支统一写
+        // response header（happens-before），避免超时 detached 场景下与
+        // do_work_cb 写 response body 竞争
+        ctx->session_cookie = req.session_id;
     }
 
     ctx->model_run_status = status;
@@ -356,7 +355,7 @@ void Qwen2VLChatServer::Impl::do_work(const task_request& req, series_ctx* ctx) 
     auto task_finish_ts = Timestamp::now();
     ctx->task_finished_ts = task_finish_ts.to_format_str();
     ctx->worker_run_time_consuming = (task_finish_ts - task_receive_ts) * 1000;
-    WFTaskFactory::count_by_name("release_ctx");
+    ctx->release_counter->count();
 }
 
 /***
