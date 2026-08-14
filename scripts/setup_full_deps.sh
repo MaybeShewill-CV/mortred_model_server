@@ -7,11 +7,11 @@
 #   ./scripts/setup_full_deps.sh
 # 或通过环境变量显式指定各依赖源码根目录（脚本只会补齐缺失文件，不会覆盖已有文件）：
 #   MNN_ROOT_DIR=... WORKFLOW_ROOT_DIR=... ONNXRUNTIME_ROOT_DIR=... \
-#   TENSORRT_ROOT_DIR=... LLAMA_CPP_ROOT_DIR=... FAISS_ROOT_DIR=... \
+#   TENSORRT_ROOT_DIR=... \
 #   ./scripts/setup_full_deps.sh
 #
 # 校验范围：
-#   MNN / WORKFLOW / ONNXRUNTIME / TensorRT / llama.cpp(ggml) / faiss 的头文件与 .so，
+#   MNN / WORKFLOW / ONNXRUNTIME / TensorRT 的头文件与 .so，
 #   以及 CUDA 工具链（nvcc + libcudart）。缺失时给出明确的补齐指引并返回非零退出码。
 
 set -euo pipefail
@@ -121,24 +121,6 @@ setup_tensorrt() {
     copy_glob_if_missing "${root}/lib/libnvonnxparser*.so*" "${LIB_DIR}" "TensorRT onnx parser libs"
 }
 
-setup_llama_cpp() {
-    local root="${LLAMA_CPP_ROOT_DIR:-}"
-    [ -n "$root" ] && [ -d "$root" ] || return 0
-    announce "补齐 llama.cpp / ggml（来自 ${root}）"
-    copy_if_missing "${root}/include/llama.h" "${INCLUDE_DIR}/llama_cpp/llama.h" "llama headers"
-    copy_glob_if_missing "${root}/include/ggml*.h" "${INCLUDE_DIR}/llama_cpp/" "ggml headers"
-    copy_glob_if_missing "${root}/build/src/libllama.so*" "${LIB_DIR}" "llama libs"
-    copy_glob_if_missing "${root}/build/ggml/src/libggml*.so*" "${LIB_DIR}" "ggml libs"
-}
-
-setup_faiss() {
-    local root="${FAISS_ROOT_DIR:-}"
-    [ -n "$root" ] && [ -d "$root" ] || return 0
-    announce "补齐 faiss（来自 ${root}）"
-    copy_if_missing "${root}/include/faiss" "${INCLUDE_DIR}/faiss" "faiss headers"
-    copy_glob_if_missing "${root}/lib/libfaiss*.so*" "${LIB_DIR}" "faiss libs"
-}
-
 echo "Mortred full-build 依赖校验（缺失时自动尝试从源码根目录补齐）"
 echo "PROJECT_ROOT: ${PROJECT_ROOT}"
 
@@ -146,8 +128,6 @@ setup_mnn
 setup_workflow
 setup_onnxruntime
 setup_tensorrt
-setup_llama_cpp
-setup_faiss
 
 # ---- 存在性校验（无论是否配置了源码根目录都会执行） ----
 announce "校验 MNN"
@@ -166,15 +146,6 @@ announce "校验 TensorRT"
 ensure_any "TensorRT headers" "${INCLUDE_DIR}/TensorRT-8.6.1.6/NvInfer.h"
 ensure_any "TensorRT core libs" "${LIB_DIR}"/libnvinfer*.so* || true
 ensure_any "TensorRT onnx parser libs" "${LIB_DIR}"/libnvonnxparser*.so* || true
-
-announce "校验 llama.cpp / ggml"
-ensure_any "llama headers" "${INCLUDE_DIR}/llama_cpp/llama.h"
-ensure_any "llama libs" "${LIB_DIR}"/libllama*.so* || true
-ensure_any "ggml libs" "${LIB_DIR}"/libggml*.so* || true
-
-announce "校验 faiss"
-ensure_any "faiss headers" "${INCLUDE_DIR}/faiss/Index.h"
-ensure_any "faiss libs" "${LIB_DIR}"/libfaiss*.so* || true
 
 announce "校验 CUDA 工具链"
 if command -v nvcc >/dev/null 2>&1; then
@@ -197,8 +168,6 @@ if [ "$MISSING" -ne 0 ]; then
     echo "  WORKFLOW_ROOT_DIR=/path/to/workflow \\"
     echo "  ONNXRUNTIME_ROOT_DIR=/path/to/onnxruntime \\"
     echo "  TENSORRT_ROOT_DIR=/path/to/TensorRT-8.6.1.6 \\"
-    echo "  LLAMA_CPP_ROOT_DIR=/path/to/llama.cpp \\"
-    echo "  FAISS_ROOT_DIR=/path/to/faiss \\"
     echo "  ./scripts/setup_full_deps.sh"
     exit 1
 fi

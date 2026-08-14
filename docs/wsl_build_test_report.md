@@ -30,9 +30,9 @@
 
 ## 3. 测试方法
 
-- 从 `_bin/` 串行运行每个 benchmark（`LD_LIBRARY_PATH=../_lib:../3rd_party/libs`），逐项超时（默认 10 分钟，SAM/扩散/LLM/metric3d 30 分钟）。
-- 通过标准：退出码 0 且日志出现 `cost time`/`fps`；对 main 固定 `return 1` 的作者代码按功能完成判定；`tmp.out` 为临时调试程序（预期返回 1）。
-- 汇总：**通过 40 个**（含 1 个临时程序），**无法运行 1 个**（msocrnet，模型损坏+资源超限）。
+- 从 `_bin/` 串行运行每个 benchmark（`LD_LIBRARY_PATH=../_lib:../3rd_party/libs`），逐项超时（默认 10 分钟，SAM/扩散/metric3d 30 分钟）。
+- 通过标准：退出码 0 且日志出现 `cost time`/`fps`；对 main 固定 `return 1` 的作者代码按功能完成判定。
+- 汇总：**通过 33 个**，**无法运行 1 个**（msocrnet，模型损坏+资源超限）。
 
 ## 4. 逐项测试结果
 
@@ -40,7 +40,6 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | enhancement | attentivegan_benchmark.out | ✅ 通过 | 0 | 231.0 | 226.109 | 0.442265 |  |
 | segmentation | bisenetv2_benchmark.out | ✅ 通过 | 0 | 6.8 | 3.44306 | 29.0439 | 已修复 run() 结果悬垂指针（clone 深拷贝），29.0 fps |
-| llm | build_wiki_corpus_index.out | ✅ 通过 | 0 | 17.1 | - | - | 需 JSONL 语料+预建输出目录；默认 4 编码 worker 会显存不足，单 worker 配置通过 |
 | mot | bytetrack_benchmark.out | ✅ 通过 | 1 | 12.0 | - | - | 4 帧跟踪完成并输出 track_output_*.jpg；main 固定 return 1（作者写法） |
 | object_detection | centerface_benchmark.out | ✅ 通过 | 0 | 4.0 | 1.6368 | 61.0947 |  |
 | diffusion | cls_cond_ddim_sampler_benchmark.out | ✅ 通过 | 0 | 14.5 | 4.96852 | 0.201267 |  |
@@ -53,11 +52,9 @@
 | enhancement | enlightengan_benchmark.out | ✅ 通过 | 0 | 8.4 | 4.82968 | 20.7053 |  |
 | sam | fast_sam_benchmark.out | ✅ 通过 | 1 | 12.7 | - | - | 10 次推理完成并输出结果图；main 固定 return 1（作者写法） |
 | segmentation | hrnet_segmentation_benchmark.out | ✅ 通过 | 0 | 17.2 | 2.01735 | 4.95699 | TRT engine 已在本机重建，5.0 fps |
-| llm | jina_embedding_v3_benchmark.out | ✅ 通过 | 1 | 14.8 | 1.88939 | 0.529272 | 嵌入完成并输出 tokens；main 固定 return 1（作者写法） |
 | diffusion | ldm_sampler_benchmark.out | ✅ 通过 | 0 | 26.7 | 2.71742 | 0.367996 | latent_ddpm/autoencoder_kl TRT engine 已重建，0.37 fps |
 | object_detection | libface_benchmark.out | ✅ 通过 | 0 | 5.3 | 1.37473 | 72.7415 |  |
 | feature_point | lightglue_benchmark.out | ✅ 通过 | 0 | 15.7 | 4.78054 | 20.9181 | TRT engine 已在本机重建（动态 profile），20.9 fps |
-| llm | llama3_benchmark.out | ✅ 通过 | 0 | 69.2 | - | - | 对话/文本补全生成正常（约 69s） |
 | mono_depth | metric3d_benchmark.out | ✅ 通过 | 0 | 14.3 | 2.58335 | 3.87095 | TRT engine 已在本机重建，3.9 fps |
 | classification | mobilenetv2_benchmark.out | ✅ 通过 | 0 | 19.5 | 14.5399 | 68.7763 |  |
 | matting | modnet_benchmark.out | ✅ 通过 | 0 | 19.1 | 14.4914 | 6.90065 |  |
@@ -66,15 +63,11 @@
 | clip | openai_clip_benchmark.out | ✅ 通过 | 0 | 31.2 | 0.515538 | 96.9861 |  |
 | segmentation | pphumanseg_benchmark.out | ✅ 通过 | 0 | 5.9 | 1.75627 | 284.694 |  |
 | matting | ppmatting_benchmark.out | ✅ 通过 | 0 | 22.0 | 14.9134 | 6.70536 |  |
-| llm | qwen2_vl_benchmark.out | ✅ 通过 | 0 | 59.4 | - | - | 首轮图文回答正确；第二轮无图重述因显存图分配失败输出为空（进程返回 0） |
 | enhancement | real_esrgan_benchmark.out | ✅ 通过 | 0 | 6.4 | 3.98182 | 25.1142 |  |
 | classification | resnet_benchmark.out | ✅ 通过 | 0 | 26.6 | 17.9105 | 55.833 |  |
 | sam | sam_amg_benchmark.out | ✅ 通过 | 0 | 117.8 | - | - | encoder/amg-decoder TRT engine 已重建 |
 | sam | sam_benchmark.out | ✅ 通过 | 0 | 6.5 | - | - | 用 mobile_sam_config.ini；encoder/decoder TRT engine 已重建，decoder 运行时补 128 点填充 |
-| llm | search_wiki_corpus.out | ✅ 通过 | 1 | 15.6 | - | - | 检索输出 3 条参考语料；main 固定 return 1（作者写法） |
 | feature_point | superpoint_benchmark.out | ✅ 通过 | 0 | 3.8 | 0.298414 | 335.105 |  |
-| llm | tmp.out | ✅ 正常（临时程序） | 1 | 2.1 | - | - | 临时调试程序，编译成功且可运行；main 固定 return 1（预期行为） |
-| llm | tokenizer_benchmark.out | ✅ 通过 | 1 | 4.9 | 0.000189 | 5291.01 | 分词正常（5291 fps）；main 固定 return 1（作者写法） |
 | object_detection | yolov5_benchmark.out | ✅ 通过 | 0 | 13.8 | 3.66755 | 27.2661 |  |
 | object_detection | yolov6_benchmark.out | ✅ 通过 | 0 | 7.8 | 1.52732 | 65.474 |  |
 | object_detection | yolov7_benchmark.out | ✅ 通过 | 0 | 12.5 | 3.19534 | 31.2956 |  |
@@ -89,7 +82,5 @@
 ## 6. 附注
 
 - 全部 TRT engine 已按本机 compute 7.5 重建（FP32），旧 engine 可在 `build/old_engines/` 找回。
-- `tmp.out` 为未跟踪的临时调试文件（`src/apps/model_benchmark/llm/tmp.cpp`）。
-- `fast_sam/bytetrack/jina/search_wiki/tokenizer` 的 main 成功路径固定 `return 1`，按功能完成判定为通过。
-- `build_wiki_corpus_index` 需 JSONL 语料（每行含 id/url/title/text）、输出目录预创建，并用单编码 worker 配置避免显存不足。
+- `fast_sam/bytetrack` 的 main 成功路径固定 `return 1`，按功能完成判定为通过。
 - 完整测试日志位于 `build/test_results/`，合并结果见 `build/test_results/summary_final.json`。

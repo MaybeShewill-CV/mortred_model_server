@@ -33,10 +33,8 @@ set(TEST_LIST
     json_request_parser_unittest
     blocking_worker_queue_unittest
     status_code_unittest
-    llm_request_parser_unittest
     time_stamp_unittest
     cv_utils_unittest
-    llm_datatype_unittest
     model_factory_unittest
     byte_tracker_unittest
     simple_tokenizer_unittest

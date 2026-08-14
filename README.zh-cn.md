@@ -33,7 +33,6 @@
 * [模型说明](#模型说明)
 * [文档教程](#文档教程)
 * [网络服务器配置说明](#网络服务器配置说明)
-* [安全说明](#安全说明)
 * [Model_Zoo](#model_zoo)
 
 # `快速开始`
@@ -59,7 +58,7 @@
 > Linux 是唯一受支持的构建/运行平台。构建分为两条路径：
 >
 > - **路径 A（tests-only）**：只构建 `common` 库与单元测试，适合 CI 与快速验证。依赖来源为 vcpkg（推荐）或系统 apt 包。
-> - **路径 B（full build）**：构建全部模型、服务与工具，需要 `3rd_party` 下的 vendored 引擎（MNN / WORKFLOW / ONNXRUNTIME / TensorRT / llama.cpp / faiss）以及 CUDA 工具链。
+> - **路径 B（full build）**：构建全部模型、服务与工具，需要 `3rd_party` 下的 vendored 引擎（MNN / WORKFLOW / ONNXRUNTIME / TensorRT）以及 CUDA 工具链。
 
 #### 路径 A：tests-only
 
@@ -101,7 +100,7 @@ ctest --test-dir build --output-on-failure
 
 ```bash
 # 1. 校验/补齐 vendored 第三方依赖
-#    （MNN / WORKFLOW / ONNXRUNTIME / TensorRT / llama.cpp / faiss + CUDA）。
+#    （MNN / WORKFLOW / ONNXRUNTIME / TensorRT + CUDA）。
 #    缺失时按提示设置对应的 *_ROOT_DIR 环境变量后重试。
 ./scripts/setup_full_deps.sh
 
@@ -218,11 +217,6 @@ python server/test_server.py --server mobilenetv2 --mode single
 
 * [模型网络服务器配置说明](./docs/about_model_server_configuration.zh-cn.md)
 * [代理服务器配置说明](./docs/about_proxy_server_configuration.zh-cn.md)
-
-# `安全说明`
-
-- **模型文件属于信任输入**：`src/models/llm/qwen2_vl/clip.cpp` 是从上游第三方项目移植的 GGUF 解析代码，其中将 `mm_patch_merge_type` 等字符串用 `strcpy` 写入定长 `char[32]` 缓冲，未做长度校验。恶意构造的 GGUF 模型文件可触发栈溢出。
-- 该代码属于第三方移植代码，为与上游保持同步，本仓库有意不修改它。因此**只应加载来自可信来源的模型文件**，严禁加载来源不明或未经校验的 GGUF。
 
 # `Model Zoo`
 

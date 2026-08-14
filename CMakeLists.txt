@@ -37,12 +37,9 @@ file(GLOB_RECURSE FMT_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*fmt*so)
 file(GLOB_RECURSE ONNXRUNTIME_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*onnxruntime*so)
 file(GLOB_RECURSE NVINFER_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*nvinfer*.so*)
 file(GLOB_RECURSE TRT_ONNXPARSER_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*nvonnxparser*.so*)
-file(GLOB_RECURSE LLAMA_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*llama*.so*)
-file(GLOB_RECURSE GGML_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*ggml*.so*)
-file(GLOB_RECURSE FAISS_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*faiss*.so*)
 
-# CI / 单测模式：跳过依赖 CUDA/MNN/TRT/llama 的模型与服务，只构建 common + tests
-option(MORTRED_BUILD_FULL "Build full project (models/server/apps, requires CUDA/MNN/TRT/llama/faiss)" ON)
+# CI / 单测模式：跳过依赖 CUDA/MNN/TRT 的模型与服务，只构建 common + tests
+option(MORTRED_BUILD_FULL "Build full project (models/server/apps, requires CUDA/MNN/TRT)" ON)
 
 # CI 质量门禁：将编译器警告视为错误（tests-only 构建下启用）
 option(MORTRED_ENABLE_WERROR "Treat compiler warnings as errors (used by CI quality gate)" OFF)

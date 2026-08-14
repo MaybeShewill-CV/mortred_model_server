@@ -302,66 +302,6 @@ using std_ldm_output = ldm_sample_output;
 
 }
 
-// llm
-namespace llm {
-
-namespace text {
-
-using token_id = int32_t;
-using tokens = std::vector<int32_t >;
-
-}
-
-namespace embedding {
-
-enum pool_type {
-    EMBEDDING_MEAN_POOLING = 1,
-    EMBEDDING_NONE_POOLING = 2,
-};
-
-struct embedding_input {
-    std::string text;
-    pool_type pooling_type = EMBEDDING_MEAN_POOLING;
-};
-struct embedding_output {
-    std::vector<int32_t > token_ids;
-    std::vector<std::vector<float> > token_embeds;
-};
-
-using std_embedding_input = embedding_input;
-using std_embedding_output = embedding_output;
-
-}
-
-namespace vlm {
-
-struct file_input {
-    std::string image_path;
-    std::string text;
-};
-
-struct mat_input {
-    cv::Mat image;
-    std::string text;
-};
-
-struct base64_input {
-    std::string b64_image;
-    std::string text;
-};
-
-struct bytes_input {
-    std::vector<unsigned char> image_bytes;
-    std::string text;
-};
-
-using std_vlm_input = file_input;
-using std_vlm_output = std::string;
-
-}
-
-}
-
 } // namespace io_define
 } // namespace models
 } // namespace jinq

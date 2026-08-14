@@ -44,25 +44,10 @@ namespace common {
     X(ROUTER_GET_SERVICE_NAMES_FAILED, 73, "get service names from router table failed") \
     X(ROUTER_GET_URI_NAMES_FAILED, 74, "get uri names from router table failed") \
     X(TOKENIZE_UNKNOWN_TOKEN, 80, "unknown token") \
-    X(TOKENIZE_FAILED, 81, "tokenize failed") \
-    X(ENCODE_TOKEN_FAILED, 82, "encode token failed") \
     X(TRT_CUDA_ERROR, 90, "tensorrt cuda error") \
     X(TRT_ALLOC_MEMO_FAILED, 91, "tensorrt allocate memory failed") \
     X(TRT_CONVERT_ONNX_MODEL_FAILED, 92, "convert onnx model to trt failed") \
-    X(TRT_ALLOC_DYNAMIC_SHAPE_MEMO, 93, "tensorrt allocate dynamic shape memory failed") \
-    X(LLM_CONTEXT_SIZE_EXCEEDED, 100, "llm context size exceeded") \
-    X(LLM_APPLY_CHAT_TEMPLATE_FAILED, 101, "llm apply chat template failed") \
-    X(LLM_LLAMA_DECODE_FAILED, 102, "llm llama decode failed") \
-    X(LLM_LLAMA_SAMPLE_NEW_TOKEN_FAILED, 103, "llm llama sample new token failed") \
-    X(LLM_SHIFT_KV_CACHE_FAILED, 104, "llm shift kv cache failed") \
-    X(RAG_PARSE_WIKI_STR_FAILED, 120, "rag parse wiki string failed") \
-    X(RAG_BUILD_CORPUS_INDEX_FAILED, 121, "rag build corpus index failed") \
-    X(RAG_LOAD_INDEX_FAILED, 122, "rag load index failed") \
-    X(RAG_LOAD_SEGMENT_CORPUS_FAILED, 123, "rag load segment corpus failed") \
-    X(RAG_SEARCH_SEGMENT_CORPUS_FAILED, 124, "rag search segment corpus failed") \
-    X(VLM_QWEN_ENCODE_IMAGE_FAILED, 140, "vlm qwen encode image failed") \
-    X(VLM_QWEN_DECODE_IMAGE_EMBEDDING_FAILED, 141, "vlm qwen decode image embedding failed") \
-    X(VLM_QWEN_PARSE_IMAGE_URL_FAILED, 142, "vlm qwen parse image url failed")
+    X(TRT_ALLOC_DYNAMIC_SHAPE_MEMO, 93, "tensorrt allocate dynamic shape memory failed")
 
 enum StatusCode {
 #define MORTRED_STATUS_CODE_DEFINE(name, value, desc) name = value,

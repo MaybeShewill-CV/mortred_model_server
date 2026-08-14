@@ -35,7 +35,6 @@ All models and detectors can be downloaded from my [Hugging Face Page](https://h
 * [Tutorials](#tutorials)
 * [How To](#how-to)
 * [Web Server Configuration](#web-server-configuration)
-* [Security Notes](#security-notes)
 
 # `Quick Start`
 
@@ -64,7 +63,7 @@ After all prerequisites are settled down you may start to build the mortred ai s
 >   apt packages.
 > - **Path B (full build)**: builds all models, servers and tools. Requires the
 >   vendored engines under `3rd_party` (MNN / WORKFLOW / ONNXRUNTIME / TensorRT /
->   llama.cpp / faiss) and a CUDA toolkit.
+>   and a CUDA toolkit.
 
 #### Path A: tests-only
 
@@ -108,7 +107,7 @@ ctest --test-dir build --output-on-failure
 
 ```bash
 # 1. Verify / fill in the vendored 3rd-party dependencies
-#    (MNN / WORKFLOW / ONNXRUNTIME / TensorRT / llama.cpp / faiss + CUDA).
+#    (MNN / WORKFLOW / ONNXRUNTIME / TensorRT + CUDA).
 #    If something is missing, set the corresponding *_ROOT_DIR env vars and re-run.
 ./scripts/setup_full_deps.sh
 
@@ -224,16 +223,6 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 
 * [Description About Model Server](./docs/about_model_server_configuration.md)
 * [Description About Proxy Server](./docs/about_proxy_server_configuration.md)
-
-# `Security Notes`
-
-- **Model files are trusted input**: `src/models/llm/qwen2_vl/clip.cpp` is a GGUF
-  parsing port from an upstream third-party project. It writes strings such as
-  `mm_patch_merge_type` into a fixed `char[32]` buffer with `strcpy` without length
-  checks, so a maliciously crafted GGUF model file can trigger stack overflow.
-- This code is intentionally left unmodified to stay in sync with the upstream port.
-  Therefore, **only load model files from trusted sources**; never load untrusted or
-  unverified GGUF files.
 
 # `TODO`
 

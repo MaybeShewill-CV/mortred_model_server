@@ -26,10 +26,6 @@ TEST(status_code, sample_messages) {
               std::string("model run timeout"));
     EXPECT_EQ(error_code_to_str(StatusCode::TRT_CONVERT_ONNX_MODEL_FAILED),
               std::string("convert onnx model to trt failed"));
-    EXPECT_EQ(error_code_to_str(StatusCode::RAG_SEARCH_SEGMENT_CORPUS_FAILED),
-              std::string("rag search segment corpus failed"));
-    EXPECT_EQ(error_code_to_str(StatusCode::VLM_QWEN_PARSE_IMAGE_URL_FAILED),
-              std::string("vlm qwen parse image url failed"));
 }
 
 TEST(status_code, ojbk_alias_maps_to_ok) {
