@@ -66,29 +66,14 @@ inline int parse_worker_nums(const toml::table& server_section) {
     return worker_nums;
 }
 
-// simple RAII guard: runs the callback on scope exit (all return paths)
-template <typename F>
-class scope_guard {
-public:
-    explicit scope_guard(F&& f) : _m_func(std::move(f)) {
-    }
-    ~scope_guard() {
-        _m_func();
-    }
-    scope_guard(const scope_guard&) = delete;
-    scope_guard& operator=(const scope_guard&) = delete;
-
-private:
-    F _m_func;
-};
-
 template<typename WORKER, typename MODEL_OUTPUT>
 class BaseAiServerImpl {
 public:
     /***
      * drain in-flight go tasks before members are destroyed: wait until every
      * worker is back in the queue (a running do_work holds exactly one worker,
-     * and after returning it touches only the heap-allocated ctx). The wait is
+     * and after returning it touches only its task-owned ctx — a member of the
+     * go closure, kept alive by the framework's task lifetime). The wait is
      * deliberately unbounded — a hung model keeps its worker forever and the
      * destructor blocks; that is handled by the outer process manager (e.g.
      * web_console's SIGINT -> SIGKILL fallback), not here. Residual note: a go
@@ -201,31 +186,30 @@ protected:
     static void reply_rate_limited(WFHttpTask* task);
 
 protected:
-    struct series_ctx {
-        protocol::HttpResponse* response = nullptr;
-        // metadata: written by serve_process at creation, then read-only;
-        // safe for both branches of do_work_cb (no concurrent writers)
-        std::string task_id;
-        std::string task_received_ts;
-        bool is_task_req_valid = false;
-
-        // inference fields: written only by do_work; read by the success branch
-        // of do_work_cb (go function ends -> handle -> callback, same thread
-        // happens-before); the timeout branch never reads them
+    // inference result: a member of the go task's closure (go_task_functor::ctx),
+    // so the framework's task lifetime owns it on every path — normal completion,
+    // timeout with the routine still running detached (the timed ref(4) scheme
+    // keeps the task alive until the routine returns, WFTaskFactory.inl), cancel
+    // while running (the executor keeps popped tasks alive), cancel before
+    // dispatch (the task is destroyed together with its members). Written only
+    // by do_work; read by the success branch of do_work_cb via task->user_data.
+    struct go_result {
         StatusCode model_run_status = StatusCode::OK;
         std::string task_finished_ts;
         double worker_run_time_consuming = 0; // ms
         double find_worker_time_consuming = 0; // ms
         MODEL_OUTPUT model_output;
+    };
 
-        // lifecycle: two release points each hold one vote —
-        //   A) the series callback (runs on normal completion AND on cancel(),
-        //      workflow native semantics, Workflow.h; dismiss() is never used);
-        //   B) the end of do_work (the go function body is uninterruptible).
-        // The two points may run on different threads (timeout/cancel paths),
-        // so the refcount must be atomic; each point decrements inline and the
-        // one observing the last vote deletes the ctx.
-        std::atomic<int> release_refs{2};
+    // request metadata: bound by value into the go task's callback closure
+    // (another task member, freed with the task). Written once by serve_process
+    // before dispatch, then read-only: the timeout branch of do_work_cb reads it
+    // while do_work may still run detached, but do_work never writes it, so
+    // there is no race.
+    struct request_meta {
+        std::string task_id;
+        std::string task_received_ts;
+        bool is_task_req_valid = false;
     };
 
     /***
@@ -236,6 +220,25 @@ protected:
         bool is_valid = false;
         StatusCode parse_status = StatusCode::OK;
         std::string payload;
+    };
+
+    // the go routine carrier: the three members live inside the task object
+    // (the factory binds this functor into the go closure), so no manual
+    // release exists anywhere — task destruction frees all per-request state
+    // on every path, including cancel before dispatch.
+    struct go_task_functor {
+        BaseAiServerImpl* self;
+        task_request req;
+        go_result ctx;
+
+        void operator()(WFGoTask* task) {
+            // publish the address of THIS copy's ctx: do_work_cb, running
+            // inside done() while the task is still alive, finds the result
+            // here. Taking the address inside operator() keeps the pointer
+            // valid even if std::function/std::bind copied the callable.
+            task->user_data = &ctx;
+            self->do_work(&req, &ctx);
+        }
     };
 
 protected:
@@ -281,15 +284,17 @@ protected:
     /***
      *
      * @param req
-     * @param ctx
+     * @param result
      */
-    void do_work(const task_request& req, series_ctx* ctx);
+    void do_work(const task_request* req, go_result* result);
 
     /***
      *
      * @param task
+     * @param meta
+     * @param resp
      */
-    virtual void do_work_cb(const WFGoTask* task);
+    void do_work_cb(WFGoTask* task, const request_meta& meta, protocol::HttpResponse* resp);
 };
 
 /*********** Public Func Sets **************/
@@ -336,42 +341,40 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         auto task_req = parse_task_request(req);
         _m_waiting_jobs++;
         _m_received_jobs++;
-        // init series work
+        // init series work: all per-request state rides inside the go task
+        // object (functor members + callback closure members), so the
+        // framework's task lifetime frees it on every path — no manual
+        // release exists anywhere, including cancel before dispatch.
         auto* series = series_of(task);
-        auto* ctx = new series_ctx;
-        ctx->response = resp;
-        // 元数据在创建时写入、之后只读：超时 detached 场景下 do_work_cb 读取它们
-        // 不会与 do_work 的写入竞争
-        ctx->task_id = task_req.task_id;
-        ctx->is_task_req_valid = task_req.is_valid;
-        ctx->task_received_ts = Timestamp::now().to_format_str();
-        series->set_context(ctx);
-        // do model work
-        auto&& go_proc = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work, this, std::placeholders::_1, std::placeholders::_2);
+        request_meta meta;
+        meta.task_id = task_req.task_id;
+        meta.is_task_req_valid = task_req.is_valid;
+        meta.task_received_ts = Timestamp::now().to_format_str();
+        go_task_functor functor{this, std::move(task_req)};
+        // create the task with a null routine first, so the task pointer can
+        // be bound into the go closure (reset_go_task below): the routine then
+        // publishes its ctx address through task->user_data for do_work_cb
         WFGoTask* serve_task = nullptr;
         if (_m_model_run_timeout <= 0) {
-            serve_task = WFTaskFactory::create_go_task(_m_server_uri, go_proc, task_req, ctx);
+            serve_task = WFTaskFactory::create_go_task<std::nullptr_t>(_m_server_uri, nullptr);
         } else {
-            serve_task = WFTaskFactory::create_timedgo_task(
-                0, _m_model_run_timeout * 1e6, _m_server_uri, go_proc, task_req, ctx);
+            serve_task = WFTaskFactory::create_timedgo_task<std::nullptr_t>(
+                0, static_cast<long>(_m_model_run_timeout * 1e6), _m_server_uri, nullptr);
         }
-        auto&& go_proc_cb = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb, this, serve_task);
-        serve_task->set_callback(go_proc_cb);
+        auto&& work_cb = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb,
+                                   this, std::placeholders::_1, std::move(meta), resp);
+        serve_task->set_callback(work_cb);
+        WFTaskFactory::reset_go_task(serve_task, std::move(functor), serve_task);
         *series << serve_task;
 
-        // graph-side release point + jobs accounting: the series callback runs
-        // on both normal completion and cancel() (workflow native semantics;
-        // dismiss() is never used on this path). On cancel, do_work_cb does not
-        // run, so jobs accounting must live here or it would drift. The
-        // work-side release happens at the end of do_work; the last of the two
-        // releases deletes the ctx.
-        series->set_callback([this](const SeriesWork* series) {
+        // jobs accounting only: the series callback runs on both normal
+        // completion and cancel() (workflow native semantics; dismiss() is
+        // never used on this path). On cancel, do_work_cb does not run, so
+        // accounting must live here or it would drift. No resource release is
+        // needed here — per-request state dies with the task object itself.
+        series->set_callback([this](const SeriesWork*) {
             _m_finished_jobs++;
             _m_waiting_jobs--;
-            auto* ctx = static_cast<series_ctx*>(series->get_context());
-            if (ctx->release_refs.fetch_sub(1) == 1) {
-                delete ctx;
-            }
         });
         return;
     }
@@ -395,20 +398,12 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
  */
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
-    const BaseAiServerImpl::task_request& req,
-    BaseAiServerImpl::series_ctx* ctx) {
-    // work-side release point: the go function body is uninterruptible, so
-    // this guard runs on every return path (including the timeout-detached
-    // one). It only touches the heap-allocated ctx — no member access — so it
-    // is safe even after the destructor's queue drain has completed. On the
-    // normal path the worker is returned to the queue before this guard fires.
-    scope_guard release_guard([ctx]() {
-        if (ctx->release_refs.fetch_sub(1) == 1) {
-            delete ctx;
-        }
-    });
-
-    // get model worker
+    const BaseAiServerImpl::task_request* req,
+    BaseAiServerImpl::go_result* result) {
+    // the result is a member of the go task's closure: the framework keeps the
+    // task alive until this routine returns even when detached (timeout) or
+    // when the series is cancelled mid-run, so writing it is always safe, and
+    // its destruction is handled by the task — nothing to release here
     WORKER worker;
     auto find_worker_start_ts = Timestamp::now();
 
@@ -416,40 +411,42 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
         // 有界等待：等 worker 也计入模型超时预算，形成背压
         if (!_m_working_queue.wait_dequeue_timed(
                 worker, std::chrono::milliseconds(_m_model_run_timeout))) {
-            ctx->model_run_status = StatusCode::MODEL_RUN_TIMEOUT;
-            ctx->task_finished_ts = Timestamp::now().to_format_str();
+            result->model_run_status = StatusCode::MODEL_RUN_TIMEOUT;
+            result->task_finished_ts = Timestamp::now().to_format_str();
             return;
         }
     } else {
         // model_run_timeout <= 0 表示不设超时，用无界阻塞等待
         _m_working_queue.wait_dequeue(worker);
     }
-    ctx->find_worker_time_consuming = (Timestamp::now() - find_worker_start_ts) * 1000;
+    result->find_worker_time_consuming = (Timestamp::now() - find_worker_start_ts) * 1000;
 
-    // 局部时间戳仅用于耗时统计；task_received_ts 等元数据已由 serve_process 写入 ctx
+    // 局部时间戳仅用于耗时统计；task_id/task_received_ts 等元数据由 serve_process
+    // 写进回调闭包携带的 request_meta，routine 不接触
     auto task_receive_ts = Timestamp::now();
 
     // construct model input: base64 image content from the request payload
     models::io_define::common_io::base64_input model_input;
     StatusCode status = StatusCode::OK;
-    if (req.is_valid) {
-        model_input.input_image_content = req.payload;
-        status = worker->run(model_input, ctx->model_output);
+    if (req->is_valid) {
+        model_input.input_image_content = req->payload;
+        status = worker->run(model_input, result->model_output);
         if (status != StatusCode::OK) {
             LOG(ERROR) << "worker run failed";
         }
     } else {
-        status = req.parse_status;
+        status = req->parse_status;
     }
-    ctx->model_run_status = status;
+    result->model_run_status = status;
 
-    // restore worker queue
+    // restore worker queue: the last member touch of this routine; afterwards
+    // only the task-owned result is written, so the destructor's queue drain
+    // stays sound
     _m_working_queue.enqueue(std::move(worker));
 
-    // update ctx
     auto task_finish_ts = Timestamp::now();
-    ctx->task_finished_ts = task_finish_ts.to_format_str();
-    ctx->worker_run_time_consuming = (task_finish_ts - task_receive_ts) * 1000;
+    result->task_finished_ts = task_finish_ts.to_format_str();
+    result->worker_run_time_consuming = (task_finish_ts - task_receive_ts) * 1000;
 }
 
 /***
@@ -460,9 +457,14 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
  * @param task
  */
 template<typename WORKER, typename MODEL_OUTPUT>
-void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
+void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(
+    WFGoTask* task,
+    const BaseAiServerImpl::request_meta& meta,
+    protocol::HttpResponse* resp) {
+    // this callback runs inside done(), i.e. while the go task object — and
+    // therefore the meta bound into this closure and the result reachable via
+    // task->user_data — is still alive (WFTask.h done(): callback, then delete)
     auto state = task->get_state();
-    auto* ctx = (series_ctx*)series_of(task)->get_context();
 
     StatusCode status;
     std::string task_id;
@@ -472,23 +474,25 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
     double find_worker_time_consuming = 0;
 
     if (state != WFT_STATE_SUCCESS) {
-        // 超时：do_work 可能仍在 detached 线程中写推理字段，此处只读元数据
-        // （serve_process 写入、之后只读），不读取 model_output/model_run_status
-        // /finished_ts 等推理字段，避免数据竞争
+        // timeout: do_work may still be running detached (or may not have
+        // started — user_data may be NULL), so read the closure-carried
+        // metadata only; the routine never writes it, hence no race
         status = StatusCode::MODEL_RUN_TIMEOUT;
-        task_id = ctx->is_task_req_valid ? ctx->task_id : "";
+        task_id = meta.is_task_req_valid ? meta.task_id : "";
         response_body = make_response_body(task_id, status, MODEL_OUTPUT{});
     } else {
-        // 成功：do_work 已完成（go 函数结束 -> handle(ref 原子同步) -> callback，
-        // workflow 保证 happens-before），安全读取全部字段
-        status = ctx->model_run_status;
-        task_id = ctx->is_task_req_valid ? ctx->task_id : "";
-        response_body = make_response_body(task_id, status, ctx->model_output);
-        task_finished_ts = ctx->task_finished_ts;
-        worker_run_time_consuming = ctx->worker_run_time_consuming;
-        find_worker_time_consuming = ctx->find_worker_time_consuming;
+        // success: the routine has returned (routine -> handle -> done ->
+        // callback, workflow guarantees happens-before) and published its ctx
+        // address at entry, so every field is safe to read
+        auto* result = static_cast<go_result*>(task->user_data);
+        status = result->model_run_status;
+        task_id = meta.is_task_req_valid ? meta.task_id : "";
+        response_body = make_response_body(task_id, status, result->model_output);
+        task_finished_ts = result->task_finished_ts;
+        worker_run_time_consuming = result->worker_run_time_consuming;
+        find_worker_time_consuming = result->find_worker_time_consuming;
     }
-    ctx->response->append_output_body(std::move(response_body));
+    resp->append_output_body(std::move(response_body));
 
     if (state != WFT_STATE_SUCCESS) {
         LOG(ERROR) << "task: " << task_id << " model run timeout";
@@ -496,7 +500,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
 
     // output log info (jobs accounting is done in the series callback)
     LOG(INFO) << "task id: " << task_id
-              << " received at: " << ctx->task_received_ts
+              << " received at: " << meta.task_received_ts
               << " finished at: " << task_finished_ts
               << " elapse: " << worker_run_time_consuming << " ms"
               << " find work elapse: " << find_worker_time_consuming << " ms"
