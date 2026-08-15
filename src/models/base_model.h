@@ -29,18 +29,15 @@ public:
      */
     BaseAiModel() = default;
 
-    /***
-    * 
-    * @param transformer
-    */
-    BaseAiModel(const BaseAiModel& BaseAiModel) = default;
+    // polymorphic base: copy deleted to prevent slicing (C++ Core Guidelines C.67)
+    BaseAiModel(const BaseAiModel& transformer) = delete;
 
     /***
-     * 
+     *
      * @param transformer
      * @return
      */
-    BaseAiModel& operator=(const BaseAiModel& transformer) = default;
+    BaseAiModel& operator=(const BaseAiModel& transformer) = delete;
 
     /***
      *

@@ -130,21 +130,22 @@ StatusCode DenseNet<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
 
 ## Step 7: Add New Model Into Task Factory :factory:
 
-Task factory is used to create model object. Details about this can be found [classification_task.inl#L86-L98](../src/factory/classification_task.h)
+Task factory is used to create model object. Details about this can be found [classification_task.h](../src/factory/classification_task.h). The factory is a type-erased registry (`jinq::factory::ModelFactory`): `register_type<CONCRETE>(name)` stores a creator closure owned by the factory (thread-safe, same-name registration overwrites), and `create(name)` builds an instance by name.
 
 ```cpp
 /***
  * create densenet image classification
  * @tparam INPUT
  * @tparam OUTPUT
- * @param detector_name
+ * @param classifier_name
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_densenet_classifier(
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_densenet_classifier(
     const std::string& classifier_name) {
-    REGISTER_AI_MODEL(DenseNet, classifier_name, INPUT, OUTPUT)
-    return ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance().get_model(classifier_name);
+    auto& model_factory = ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance();
+    model_factory.register_type<DenseNet<INPUT, OUTPUT> >(classifier_name);
+    return model_factory.create(classifier_name);
 }
 ```
 

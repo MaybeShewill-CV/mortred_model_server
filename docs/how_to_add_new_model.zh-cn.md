@@ -137,21 +137,22 @@ StatusCode DenseNet<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
 
 ## Step 7: 工厂类中加入模型创建接口函数 :factory:
 
-任务工厂是用来创建模型和服务器对象的. 你可以查看 [classification_task.inl#L86-L98](../src/factory/classification_task.h) 获取细节信息。
+任务工厂是用来创建模型和服务器对象的. 你可以查看 [classification_task.h](../src/factory/classification_task.h) 获取细节信息。工厂是类型擦除的注册表（`jinq::factory::ModelFactory`）：`register_type<CONCRETE>(name)` 把创建器闭包存入工厂（工厂持有其所有权、线程安全、同名注册覆盖），`create(name)` 按名创建实例。
 
 ```cpp
 /***
  * create densenet image classification
  * @tparam INPUT
  * @tparam OUTPUT
- * @param detector_name
+ * @param classifier_name
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-static std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_densenet_classifier(
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_densenet_classifier(
     const std::string& classifier_name) {
-    REGISTER_AI_MODEL(DenseNet, classifier_name, INPUT, OUTPUT)
-    return ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance().get_model(classifier_name);
+    auto& model_factory = ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance();
+    model_factory.register_type<DenseNet<INPUT, OUTPUT> >(classifier_name);
+    return model_factory.create(classifier_name);
 }
 ```
 

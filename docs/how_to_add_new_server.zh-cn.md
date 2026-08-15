@@ -173,17 +173,18 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
 
 ## Step 5: 任务工厂中增加创建接口 :factory:
 
-在任务工厂中创建相应的接口函数，细节实现可以参考 [classification_task.inl#L100-L108](../src/factory/classification_task.h)
+在任务工厂中创建相应的接口函数，细节实现可以参考 [classification_task.h](../src/factory/classification_task.h)。工厂是类型擦除的注册表（`jinq::factory::ServerFactory`）：`register_type<CONCRETE>(name)` 把创建器闭包存入工厂（工厂持有其所有权、线程安全、同名注册覆盖），`create(name)` 按名创建实例。
 
 ```cpp
 /***
  * create densenet image classification server
- * @param detector_name
+ * @param server_name
  * @return
  */
-static std::unique_ptr<BaseAiServer> create_densenet_cls_server(const std::string& server_name) {
-    REGISTER_AI_SERVER(DenseNetServer, server_name)
-    return ServerFactory<BaseAiServer>::get_instance().get_server(server_name);
+inline std::unique_ptr<BaseAiServer> create_densenet_cls_server(const std::string& server_name) {
+    auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
+    server_factory.register_type<DenseNetServer>(server_name);
+    return server_factory.create(server_name);
 }
 ```
 

@@ -173,17 +173,18 @@ You'd better use the base class's implementation if you're a beginner otherwise 
 
 ## Step 5: Add New Server Into Task Factory :factory:
 
-Task factory is used to create model object. Details about this can be found [classification_task.inl#L100-L108](../src/factory/classification_task.h)
+Task factory is used to create server object. Details about this can be found [classification_task.h](../src/factory/classification_task.h). The factory is a type-erased registry (`jinq::factory::ServerFactory`): `register_type<CONCRETE>(name)` stores a creator closure owned by the factory (thread-safe, same-name registration overwrites), and `create(name)` builds an instance by name.
 
 ```cpp
 /***
  * create densenet image classification server
- * @param detector_name
+ * @param server_name
  * @return
  */
-static std::unique_ptr<BaseAiServer> create_densenet_cls_server(const std::string& server_name) {
-    REGISTER_AI_SERVER(DenseNetServer, server_name)
-    return ServerFactory<BaseAiServer>::get_instance().get_server(server_name);
+inline std::unique_ptr<BaseAiServer> create_densenet_cls_server(const std::string& server_name) {
+    auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
+    server_factory.register_type<DenseNetServer>(server_name);
+    return server_factory.create(server_name);
 }
 ```
 

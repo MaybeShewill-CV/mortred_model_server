@@ -8,293 +8,83 @@
 #ifndef MORTRED_MODEL_SERVER_BASE_FACTORY_H
 #define MORTRED_MODEL_SERVER_BASE_FACTORY_H
 
-#include <memory>
+#include <functional>
 #include <map>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <type_traits>
 
-#include "models/base_model.h"
-#include "server/abstract_server.h"
+#include "glog/logging.h"
 
 namespace jinq {
 namespace factory {
 
-using jinq::models::BaseAiModel;
-using jinq::server::BaseAiServer;
-
 /***
- *
- * @tparam BASE_AI_MODEL
+ * Type-erased factory shared by models and servers.
+ * Creator closures are owned by value (no dangling registrar pointers),
+ * register/create are mutex-guarded, same-name registration overwrites.
+ * @tparam BASE abstract base class
  */
-template<class BASE_AI_MODEL>
-class AiModelRegistrar {
+template<typename BASE>
+class TypeErasedFactory {
 public:
-    /***
-     *
-     * @return
-     */
-    virtual std::unique_ptr<BASE_AI_MODEL> create_model() = 0;
+    TypeErasedFactory(const TypeErasedFactory& transformer) = delete;
+    TypeErasedFactory& operator=(const TypeErasedFactory& transformer) = delete;
+    TypeErasedFactory(TypeErasedFactory&& transformer) = delete;
+    TypeErasedFactory& operator=(TypeErasedFactory&& transformer) = delete;
 
-    /***
-     *
-     * @param transformer
-     */
-    AiModelRegistrar(const AiModelRegistrar& transformer) = delete;
-
-    /***
-     *
-     * @param transformer
-     * @return
-     */
-    AiModelRegistrar& operator=(const AiModelRegistrar& transformer) = delete;
-
-    /***
-     *
-     */
-    AiModelRegistrar() = default;
-
-    /***
-     *
-     */
-    virtual ~AiModelRegistrar() = default;
-};
-
-/***
- *
- * @tparam BASE_AI_MODEL
- */
-template<class BASE_AI_MODEL>
-class ModelFactory {
-public:
-
-    /***
-     *
-     * @param transformer
-     */
-    ModelFactory(const ModelFactory& transformer) = delete;
-
-    /***
-     *
-     * @param transformer
-     * @return
-     */
-    ModelFactory& operator=(const ModelFactory& transformer) = delete;
-
-    /***
-     *
-     * @return
-     */
-    static ModelFactory<BASE_AI_MODEL>& get_instance() {
-        static ModelFactory<BASE_AI_MODEL> instance;
+    static TypeErasedFactory& get_instance() {
+        static TypeErasedFactory<BASE> instance;
         return instance;
     }
 
-    /***
-     *
-     * @param registrar
-     * @param name
-     */
-    void register_model(AiModelRegistrar<BASE_AI_MODEL>* registrar, const std::string& name) {
-        if (_m_model_registry.find(name) == _m_model_registry.end()) {
-            _m_model_registry.insert(std::make_pair(name, registrar));
-        } else {
-            _m_model_registry[name] = registrar;
+    template<typename CONCRETE>
+    void register_type(const std::string& name) {
+        static_assert(std::is_base_of<BASE, CONCRETE>::value,
+                      "TypeErasedFactory: CONCRETE must derive from BASE");
+        if (name.empty()) {
+            LOG(ERROR) << "refusing to register a creator with an empty name";
+            return;
         }
+        std::lock_guard<std::mutex> lock(_m_mutex);
+        _m_creators[name] = []() -> std::unique_ptr<BASE> {
+            return std::unique_ptr<BASE>(new CONCRETE());
+        };
     }
 
-    /***
-     *
-     * @param name
-     * @return
-     */
-    std::unique_ptr<BASE_AI_MODEL> get_model(const std::string& name) {
-        if (_m_model_registry.find(name) != _m_model_registry.end()) {
-            auto* registry = _m_model_registry[name];
-            return registry->create_model();
+    std::unique_ptr<BASE> create(const std::string& name) const {
+        creator_t creator;
+        {
+            std::lock_guard<std::mutex> lock(_m_mutex);
+            auto iter = _m_creators.find(name);
+            if (iter == _m_creators.end()) {
+                LOG(ERROR) << "no type registered with name: " << name;
+                return nullptr;
+            }
+            creator = iter->second;
         }
-
-        LOG(ERROR) << "No model named: " << name << " was found";
-        return nullptr;
+        return creator();
     }
 
 private:
-    /***
-     *
-     */
-    ModelFactory() = default;
+    TypeErasedFactory() = default;
+    ~TypeErasedFactory() = default;
 
-    /***
-     *
-     */
-    ~ModelFactory() = default;
+    using creator_t = std::function<std::unique_ptr<BASE>()>;
 
-    /***
-     *
-     */
-    std::map<std::string, AiModelRegistrar<BASE_AI_MODEL>* > _m_model_registry;
+    mutable std::mutex _m_mutex;
+    std::map<std::string, creator_t> _m_creators;
 };
 
-/***
- *
- * @tparam BASE_AI_MODEL
- * @tparam AI_MODEL
- */
-template <typename BASE_AI_MODEL, typename AI_MODEL>
-class ModelRegistrar : public AiModelRegistrar<BASE_AI_MODEL> {
-public:
+// model and server factories share this implementation; only the base differs
+template<typename BASE>
+using ModelFactory = TypeErasedFactory<BASE>;
 
-    /***
-     *
-     * @param name
-     */
-    explicit ModelRegistrar(const std::string& name) {
-        ModelFactory<BASE_AI_MODEL>::get_instance().register_model(this, name);
-    }
+template<typename BASE>
+using ServerFactory = TypeErasedFactory<BASE>;
 
-    /***
-     *
-     * @return
-     */
-    std::unique_ptr<BASE_AI_MODEL> create_model() override {
-        return std::unique_ptr<BASE_AI_MODEL>(new AI_MODEL());
-    }
-};
-
-/***
- *
- * @tparam BASE_AI_SERVER
- */
-template<class BASE_AI_SERVER>
-class AiServerRegistrar {
-public:
-    /***
-     *
-     * @return
-     */
-    virtual std::unique_ptr<BASE_AI_SERVER> create_server() = 0;
-
-    /***
-     *
-     * @param transformer
-     */
-    AiServerRegistrar(const AiServerRegistrar& transformer) = delete;
-
-    /***
-     *
-     * @param transformer
-     * @return
-     */
-    AiServerRegistrar& operator=(const AiServerRegistrar& transformer) = delete;
-
-    /***
-     *
-     */
-    AiServerRegistrar() = default;
-
-    /***
-     *
-     */
-    virtual ~AiServerRegistrar() = default;
-};
-
-/***
- *
- * @tparam BASE_AI_SERVER
- */
-template<class BASE_AI_SERVER>
-class ServerFactory {
-public:
-    /***
-     *
-     * @param transformer
-     */
-    ServerFactory(const ServerFactory& transformer) = delete;
-
-    /***
-     *
-     * @param transformer
-     * @return
-     */
-    ServerFactory& operator=(const ServerFactory& transformer) = delete;
-
-    /***
-     *
-     * @return
-     */
-    static ServerFactory<BASE_AI_SERVER>& get_instance() {
-        static ServerFactory<BASE_AI_SERVER> instance;
-        return instance;
-    }
-
-    /***
-     *
-     * @param registrar
-     * @param name
-     */
-    void register_server(AiServerRegistrar<BASE_AI_SERVER>* registrar, const std::string& name) {
-        if (_m_server_registry.find(name) == _m_server_registry.end()) {
-            _m_server_registry.insert(std::make_pair(name, registrar));
-        } else {
-            _m_server_registry[name] = registrar;
-        }
-    }
-
-    /***
-     *
-     * @param name
-     * @return
-     */
-    std::unique_ptr<BASE_AI_SERVER> get_server(const std::string& name) {
-        if (_m_server_registry.find(name) != _m_server_registry.end()) {
-            auto* registry = _m_server_registry[name];
-            return registry->create_server();
-        }
-
-        LOG(ERROR) << "No server named: " << name << " was found";
-        return nullptr;
-    }
-
-private:
-    /***
-     *
-     */
-    ServerFactory() = default;
-
-    /***
-     *
-     */
-    ~ServerFactory() = default;
-
-    /***
-     *
-     */
-    std::map<std::string, AiServerRegistrar<BASE_AI_SERVER>* > _m_server_registry;
-};
-
-/***
- *
- * @tparam BASE_AI_MODEL
- * @tparam AI_MODEL
- */
-template <typename BASE_AI_SERVER, typename AI_SERVER>
-class ServerRegistrar : public AiServerRegistrar<BASE_AI_SERVER> {
-public:
-    /***
-     *
-     * @param name
-     */
-    explicit ServerRegistrar(const std::string& name) {
-        ServerFactory<BASE_AI_SERVER>::get_instance().register_server(this, name);
-    }
-
-    /***
-     *
-     * @return
-     */
-    std::unique_ptr<BASE_AI_SERVER> create_server() override {
-        return std::unique_ptr<BASE_AI_SERVER>(new AI_SERVER());
-    }
-};
-
-}
-}
+}  // namespace factory
+}  // namespace jinq
 
 #endif //MORTRED_MODEL_SERVER_BASE_FACTORY_H

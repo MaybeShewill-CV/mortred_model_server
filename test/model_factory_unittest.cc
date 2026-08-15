@@ -4,7 +4,11 @@
  * Date: 2026-08-12
  ************************************************/
 
+#include <atomic>
 #include <memory>
+#include <string>
+#include <thread>
+#include <vector>
 
 #include <gtest/gtest.h>
 #include <glog/logging.h>
@@ -17,8 +21,15 @@
 struct fake_model_input {};
 struct fake_model_output {};
 
-class FakeModel : public jinq::models::BaseAiModel<fake_model_input, fake_model_output> {
-  public:
+// test-only polymorphic base: tag() verifies the concrete type the factory created
+class FakeModelBase : public jinq::models::BaseAiModel<fake_model_input, fake_model_output> {
+public:
+    ~FakeModelBase() override = default;
+    virtual std::string tag() const = 0;
+};
+
+class FakeModel : public FakeModelBase {
+public:
     jinq::common::StatusCode init(const toml::table&) override {
         return jinq::common::StatusCode::OK;
     }
@@ -28,12 +39,29 @@ class FakeModel : public jinq::models::BaseAiModel<fake_model_input, fake_model_
     bool is_successfully_initialized() const override {
         return true;
     }
+    std::string tag() const override {
+        return "FakeModel";
+    }
 };
 
-using FakeModelBase = jinq::models::BaseAiModel<fake_model_input, fake_model_output>;
+class FakeModel2 : public FakeModelBase {
+public:
+    jinq::common::StatusCode init(const toml::table&) override {
+        return jinq::common::StatusCode::OK;
+    }
+    jinq::common::StatusCode run(const fake_model_input&, fake_model_output&) override {
+        return jinq::common::StatusCode::OK;
+    }
+    bool is_successfully_initialized() const override {
+        return true;
+    }
+    std::string tag() const override {
+        return "FakeModel2";
+    }
+};
 
 class FakeServer : public jinq::server::BaseAiServer {
-  public:
+public:
     jinq::common::StatusCode init(const toml::table&) override {
         return jinq::common::StatusCode::OK;
     }
@@ -43,27 +71,122 @@ class FakeServer : public jinq::server::BaseAiServer {
     }
 };
 
-TEST(model_factory, register_and_get_model) {
-    jinq::factory::ModelRegistrar<FakeModelBase, FakeModel> registrar("fake_model");
+// differs from FakeServer by is_successfully_initialized() for type verification
+class FakeServer2 : public jinq::server::BaseAiServer {
+public:
+    jinq::common::StatusCode init(const toml::table&) override {
+        return jinq::common::StatusCode::OK;
+    }
+    void serve_process(WFHttpTask*) override {}
+    bool is_successfully_initialized() const override {
+        return false;
+    }
+};
 
-    auto model = jinq::factory::ModelFactory<FakeModelBase>::get_instance().get_model("fake_model");
-    EXPECT_NE(model, nullptr);
-    EXPECT_TRUE(model->is_successfully_initialized());
+using ModelFactory = jinq::factory::ModelFactory<FakeModelBase>;
+using ServerFactory = jinq::factory::ServerFactory<jinq::server::BaseAiServer>;
 
-    auto again = jinq::factory::ModelFactory<FakeModelBase>::get_instance().get_model("fake_model");
-    EXPECT_NE(again, nullptr);
+TEST(model_factory, register_and_create_model) {
+    ModelFactory::get_instance().register_type<FakeModel>("fake_model");
 
-    auto missing = jinq::factory::ModelFactory<FakeModelBase>::get_instance().get_model("no_such_model");
-    EXPECT_EQ(missing, nullptr);
+    auto model = ModelFactory::get_instance().create("fake_model");
+    ASSERT_NE(model, nullptr);
+    EXPECT_EQ(model->tag(), "FakeModel");
 }
 
-TEST(server_factory, register_and_get_server) {
-    jinq::factory::ServerRegistrar<jinq::server::BaseAiServer, FakeServer> registrar("fake_server");
+// regression: the factory must still create by name after the registering scope
+// closes (the old stack-local registrar left a dangling pointer here)
+TEST(model_factory, create_stays_valid_after_registration_scope_closes) {
+    {
+        ModelFactory::get_instance().register_type<FakeModel>("scoped_model");
+        auto first = ModelFactory::get_instance().create("scoped_model");
+        ASSERT_NE(first, nullptr);
+    }
 
-    auto server = jinq::factory::ServerFactory<jinq::server::BaseAiServer>::get_instance().get_server("fake_server");
-    EXPECT_NE(server, nullptr);
+    auto later = ModelFactory::get_instance().create("scoped_model");
+    ASSERT_NE(later, nullptr);
+    EXPECT_EQ(later->tag(), "FakeModel");
+}
+
+TEST(model_factory, re_registering_same_name_replaces_creator) {
+    auto& factory = ModelFactory::get_instance();
+    factory.register_type<FakeModel>("overwrite_me");
+    factory.register_type<FakeModel2>("overwrite_me");
+
+    auto model = factory.create("overwrite_me");
+    ASSERT_NE(model, nullptr);
+    EXPECT_EQ(model->tag(), "FakeModel2");
+}
+
+TEST(model_factory, create_unknown_name_returns_nullptr) {
+    EXPECT_EQ(ModelFactory::get_instance().create("no_such_model"), nullptr);
+}
+
+TEST(model_factory, empty_name_is_rejected) {
+    auto& factory = ModelFactory::get_instance();
+    factory.register_type<FakeModel>("");
+    EXPECT_EQ(factory.create(""), nullptr);
+}
+
+// smoke test: concurrent register/create must be thread-safe and type-correct
+TEST(model_factory, concurrent_register_and_create) {
+    constexpr int k_threads = 8;
+    constexpr int k_iterations = 100;
+    std::atomic<int> failures{0};
+
+    std::vector<std::thread> threads;
+    threads.reserve(k_threads);
+    for (int t = 0; t < k_threads; ++t) {
+        threads.emplace_back([t, &failures]() {
+            auto& factory = ModelFactory::get_instance();
+            for (int i = 0; i < k_iterations; ++i) {
+                const std::string name = "concurrent_" + std::to_string(t) + "_" + std::to_string(i);
+                factory.register_type<FakeModel>(name);
+                auto model = factory.create(name);
+                if (model == nullptr || model->tag() != "FakeModel") {
+                    ++failures;
+                }
+            }
+        });
+    }
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    EXPECT_EQ(failures.load(), 0);
+}
+
+TEST(server_factory, register_and_create_server) {
+    ServerFactory::get_instance().register_type<FakeServer>("fake_server");
+
+    auto server = ServerFactory::get_instance().create("fake_server");
+    ASSERT_NE(server, nullptr);
     EXPECT_TRUE(server->is_successfully_initialized());
+}
 
-    auto missing = jinq::factory::ServerFactory<jinq::server::BaseAiServer>::get_instance().get_server("no_such_server");
-    EXPECT_EQ(missing, nullptr);
+TEST(server_factory, create_stays_valid_after_registration_scope_closes) {
+    {
+        ServerFactory::get_instance().register_type<FakeServer>("scoped_server");
+        auto first = ServerFactory::get_instance().create("scoped_server");
+        ASSERT_NE(first, nullptr);
+    }
+
+    auto later = ServerFactory::get_instance().create("scoped_server");
+    ASSERT_NE(later, nullptr);
+    EXPECT_TRUE(later->is_successfully_initialized());
+}
+
+TEST(server_factory, re_registering_same_name_replaces_creator) {
+    auto& factory = ServerFactory::get_instance();
+    factory.register_type<FakeServer>("server_overwrite");
+    factory.register_type<FakeServer2>("server_overwrite");
+
+    auto server = factory.create("server_overwrite");
+    ASSERT_NE(server, nullptr);
+    // FakeServer2 returns false, proving the later registration won
+    EXPECT_FALSE(server->is_successfully_initialized());
+}
+
+TEST(server_factory, create_unknown_name_returns_nullptr) {
+    EXPECT_EQ(ServerFactory::get_instance().create("no_such_server"), nullptr);
 }
