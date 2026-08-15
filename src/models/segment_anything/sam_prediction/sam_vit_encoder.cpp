@@ -72,6 +72,18 @@ class SamVitEncoder::Impl {
                 _m_onnx_sess = nullptr;
             }
         }
+        if (_m_backend_type == MNN) {
+            // releaseSession first, then releaseModel, then the interpreter itself
+            // (regression: the MNN backend leaked net/session)
+            if (_m_net != nullptr) {
+                if (_m_session != nullptr) {
+                    _m_net->releaseSession(_m_session);
+                }
+                _m_net->releaseModel();
+                delete _m_net;
+                _m_net = nullptr;
+            }
+        }
     }
 
     /***

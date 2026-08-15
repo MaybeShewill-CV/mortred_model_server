@@ -7,7 +7,9 @@
 
 #include "msocrnet.h"
 #include "models/cv_image_input.h"
-#include "models/cv_image_input.h"
+
+#include <cstdlib>
+#include <cstring>
 
 #include <opencv2/opencv.hpp>
 #include "glog/logging.h"
@@ -17,7 +19,6 @@
 #include "common/cv_utils.h"
 #include "common/time_stamp.h"
 #include "common/file_path_util.h"
-#include "common/base64.h"
 
 namespace jinq {
 namespace models {
@@ -81,9 +82,25 @@ class MsOcrNet<INPUT, OUTPUT>::Impl {
      *
      */
     ~Impl() {
-        if (_m_net != nullptr && _m_session != nullptr) {
+        if (_m_net != nullptr) {
+            if (_m_session != nullptr) {
+                // releaseSession first, then releaseModel (MNN contract order)
+                _m_net->releaseSession(_m_session);
+            }
             _m_net->releaseModel();
-            _m_net->releaseSession(_m_session);
+            // the Interpreter object itself must also be released
+            delete _m_net;
+            _m_net = nullptr;
+        }
+        if (_m_onnx_params.session != nullptr) {
+            delete _m_onnx_params.session;
+            _m_onnx_params.session = nullptr;
+        }
+        for (const char* name : _m_onnx_params.input_node_names) {
+            ::free(const_cast<char*>(name));
+        }
+        for (const char* name : _m_onnx_params.output_node_names) {
+            ::free(const_cast<char*>(name));
         }
     }
 

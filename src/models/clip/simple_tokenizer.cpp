@@ -75,10 +75,6 @@ class SimpleTokenizer::Impl {
 
     // init flag
     bool _m_successfully_init_model = false;
-
-    static std::string convert_to_utf8(const std::wstring &input);
-
-    static std::wstring convert_to_wstring(const std::string &input);
 };
 
 /************ Impl Implementation ************/
@@ -183,28 +179,6 @@ StatusCode SimpleTokenizer::Impl::tokenize(const std::string& input_text, std::v
     tokens.push_back(49407); // end of text
 
     return StatusCode::OK;
-}
-
-/***
- *
- * @param input
- * @return
- */
-std::string SimpleTokenizer::Impl::convert_to_utf8(const std::wstring &input) {
-    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-    std::string result = converter.to_bytes(input);
-    return result;
-}
-
-/***
- *
- * @param input
- * @return
- */
-std::wstring SimpleTokenizer::Impl::convert_to_wstring(const std::string &input) {
-    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-    std::wstring result = converter.from_bytes(input);
-    return result;
 }
 
 /***

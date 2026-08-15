@@ -10,11 +10,11 @@
 #include <chrono>
 
 #include "glog/logging.h"
-#include "MNN/Interpreter.hpp"
 
-#include "common/file_path_util.h"
 #include "common/cv_utils.h"
+#include "common/file_path_util.h"
 #include "common/time_stamp.h"
+#include "models/mnn_helper.h"
 
 namespace jinq {
 namespace models {
@@ -70,24 +70,8 @@ class OpenAiClipVitEncoder::Impl {
     }
 
   private:
-    // model file path
-    std::string _m_model_path;
-
-    // model compute thread nums
-    uint16_t _m_thread_nums = 1;
-
-    // model backend device
-    std::string _m_model_device;
-
-    // model input/output names
-    std::string _m_input_name;
-    std::string _m_output_name;
-
-    // model session
-    MNN::Interpreter* _m_net;
-    MNN::Session* _m_session = nullptr;
-    MNN::Tensor* _m_input_tensor = nullptr;
-    MNN::Tensor* _m_output_tensor = nullptr;
+    // MNN runtime (owns interpreter/session/tensors)
+    jinq::models::MnnNet _m_net;
 
     // model input/output shape info
     std::vector<int> _m_input_shape;
@@ -121,58 +105,13 @@ jinq::common::StatusCode OpenAiClipVitEncoder::Impl::init(const toml::table &cfg
         return StatusCode::MODEL_INIT_FAILED;
     }
     const toml::table& cfg_content = *cfg_content_ptr;
-    _m_model_path = cfg_content["model_file_path"].value_or<std::string>("");
-    if (!FilePathUtil::is_file_exist(_m_model_path)) {
-        LOG(ERROR) << "openai clip vit encoder model file path: " << _m_model_path << " not exists";
+    auto init_status = _m_net.init(cfg_content, {"input"}, {"output"});
+    if (init_status != StatusCode::OK) {
         _m_successfully_init_model = false;
-        return StatusCode::MODEL_INIT_FAILED;
+        return init_status;
     }
-
-    // init session
-    _m_net = MNN::Interpreter::createFromFile(_m_model_path.c_str());
-    _m_thread_nums = cfg_content["model_threads_num"].value_or<int64_t>(0);
-    _m_model_device = cfg_content["compute_backend"].value_or<std::string>("");
-    MNN::ScheduleConfig mnn_config;
-    mnn_config.numThread = _m_thread_nums;
-    mnn_config.type = MNN_FORWARD_CPU;
-    if (std::strcmp(_m_model_device.c_str(), "cuda") == 0) {
-        mnn_config.type = MNN_FORWARD_CUDA;
-    }
-    MNN::BackendConfig backend_config;
-    if (!cfg_content.contains("backend_precision_mode")) {
-        LOG(WARNING) << "Config doesn\'t have backend_precision_mode field default Precision_Normal";
-        backend_config.precision = MNN::BackendConfig::Precision_Normal;
-    } else {
-        backend_config.precision = static_cast<MNN::BackendConfig::PrecisionMode>(cfg_content["backend_precision_mode"].value_or<int64_t>(0));
-    }
-    if (!cfg_content.contains("backend_power_mode")) {
-        LOG(WARNING) << "Config doesn\'t have backend_power_mode field default Power_Normal";
-        backend_config.power = MNN::BackendConfig::Power_Normal;
-    } else {
-        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(cfg_content["backend_power_mode"].value_or<int64_t>(0));
-    }
-    mnn_config.backendConfig = &backend_config;
-    
-    _m_session = _m_net->createSession(mnn_config);
-
-    // fetch input/output tensors
-    _m_input_name = "input";
-    _m_input_tensor = _m_net->getSessionInput(_m_session, _m_input_name.c_str());
-    if (_m_input_tensor == nullptr) {
-        LOG(ERROR) << "fetch input pixel_values tensor failed";
-        _m_successfully_init_model = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    _m_input_shape = _m_input_tensor->shape();
-
-    _m_output_name = "output";
-    _m_output_tensor = _m_net->getSessionOutput(_m_session, _m_output_name.c_str());
-    if (_m_output_tensor == nullptr) {
-        LOG(ERROR) << "fetch input output tensor failed";
-        _m_successfully_init_model = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    _m_output_shape = _m_output_tensor->shape();
+    _m_input_shape = _m_net.input("input")->shape();
+    _m_output_shape = _m_net.output("output")->shape();
 
     if (_m_input_shape.size() != 4 || _m_output_shape.size() != 2) {
         LOG(ERROR) << "invalid encoder input/output node shape";
@@ -202,18 +141,18 @@ jinq::common::StatusCode OpenAiClipVitEncoder::Impl::encode(
     }
 
     // run encoder
-    auto input_tensor_user = MNN::Tensor(_m_input_tensor, MNN::Tensor::DimensionType::CAFFE);
+    auto input_tensor_user = MNN::Tensor(_m_net.input("input"), MNN::Tensor::DimensionType::CAFFE);
     auto input_tensor_data = input_tensor_user.host<float>();
     auto input_tensor_size = input_tensor_user.size();
     if (!cv_utils::copy_image_to_tensor(input_tensor_data, input_tensor_values, input_tensor_size)) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
-    _m_input_tensor->copyFromHostTensor(&input_tensor_user);
+    _m_net.input("input")->copyFromHostTensor(&input_tensor_user);
 
-    _m_net->runSession(_m_session);
+    _m_net.run_session();
 
-    MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::CAFFE);
-    _m_output_tensor->copyToHostTensor(&output_tensor_user);
+    MNN::Tensor output_tensor_user(_m_net.output("output"), MNN::Tensor::DimensionType::CAFFE);
+    _m_net.output("output")->copyToHostTensor(&output_tensor_user);
 
     auto embeds_size = std::accumulate(
         std::begin(_m_output_shape), std::end(_m_output_shape), 1, std::multiplies());

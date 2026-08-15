@@ -7,6 +7,8 @@
 
 #include "strack.h"
 
+#include <atomic>
+
 namespace jinq {
 namespace models {
 namespace mot {
@@ -216,9 +218,9 @@ void STrack::mark_removed() {
  * @return
  */
 int STrack::next_id() {
-    static int _count = 0;
-    _count++;
-    return _count;
+    // thread-safe id allocation (regression: plain static int was racy)
+    static std::atomic<int> count{0};
+    return ++count;
 }
 
 /***

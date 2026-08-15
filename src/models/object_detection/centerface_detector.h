@@ -63,7 +63,7 @@ class CenterFaceDetector : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
     jinq::common::StatusCode run(const INPUT &input, OUTPUT &output) override;
 
     /***
-     * if db text detector successfully initialized
+     * if centerface detector successfully initialized
      * @return
      */
     bool is_successfully_initialized() const override;

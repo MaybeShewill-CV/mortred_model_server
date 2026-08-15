@@ -859,17 +859,20 @@ double ByteTracker::Impl::lapjv(
         for (size_t i = 0; i < n_cols; i++) {
             colsol[i] = y_c[i];
         }
-
-        if (return_cost) {
-            for (size_t i = 0; i < rowsol.size(); i++) {
-                if (rowsol[i] != -1) {
-                    opt += cost_ptr[i][rowsol[i]];
-                }
-            }
+    } else {
+        // square path: x_c/y_c are valid assignments directly (regression:
+        // rowsol/colsol were never filled here, leaving them uninitialized)
+        for (size_t i = 0; i < n; i++) {
+            rowsol[i] = x_c[i];
+            colsol[i] = y_c[i];
         }
-    } else if (return_cost) {
+    }
+
+    if (return_cost) {
         for (size_t i = 0; i < rowsol.size(); i++) {
-            opt += cost_ptr[i][rowsol[i]];
+            if (rowsol[i] != -1) {
+                opt += cost_ptr[i][rowsol[i]];
+            }
         }
     }
 

@@ -7,6 +7,8 @@
 
 #include "lightglue.h"
 
+#include <cstdlib>
+#include <cstring>
 #include <unordered_map>
 
 #include "glog/logging.h"
@@ -136,9 +138,23 @@ class LightGlue<INPUT, OUTPUT>::Impl {
     Impl() = default;
 
     /***
-     *
+     * release every backend resource (regression: the old default destructor
+     * leaked the ONNX session, strdup'd node names and the TRT extractor/matcher)
      */
-    ~Impl() = default;
+    ~Impl() {
+        if (_m_onnx_params.session != nullptr) {
+            delete _m_onnx_params.session;
+            _m_onnx_params.session = nullptr;
+        }
+        for (const char* name : _m_onnx_params.input_node_names) {
+            ::free(const_cast<char*>(name));
+        }
+        for (const char* name : _m_onnx_params.output_node_names) {
+            ::free(const_cast<char*>(name));
+        }
+        release_trt_extractor();
+        release_trt_matcher();
+    }
 
     /***
      *
@@ -277,6 +293,62 @@ private:
 
     /***
      *
+     */
+    void release_trt_extractor() {
+        auto* extractor = _m_trt_params.extractor;
+        if (extractor == nullptr) {
+            return;
+        }
+        for (auto& item : extractor->allocators) {
+            delete item.second;
+        }
+        extractor->allocators.clear();
+        if (extractor->cuda_stream != nullptr) {
+            cudaStreamDestroy(extractor->cuda_stream);
+        }
+        if (extractor->context != nullptr) {
+            extractor->context->destroy();
+        }
+        if (extractor->engine != nullptr) {
+            extractor->engine->destroy();
+        }
+        if (extractor->runtime != nullptr) {
+            extractor->runtime->destroy();
+        }
+        delete extractor;
+        _m_trt_params.extractor = nullptr;
+    }
+
+    /***
+     *
+     */
+    void release_trt_matcher() {
+        auto* matcher = _m_trt_params.matcher;
+        if (matcher == nullptr) {
+            return;
+        }
+        for (auto& item : matcher->allocators) {
+            delete item.second;
+        }
+        matcher->allocators.clear();
+        if (matcher->cuda_stream != nullptr) {
+            cudaStreamDestroy(matcher->cuda_stream);
+        }
+        if (matcher->context != nullptr) {
+            matcher->context->destroy();
+        }
+        if (matcher->engine != nullptr) {
+            matcher->engine->destroy();
+        }
+        if (matcher->runtime != nullptr) {
+            matcher->runtime->destroy();
+        }
+        delete matcher;
+        _m_trt_params.matcher = nullptr;
+    }
+
+    /***
+     *
      * @param config
      * @return
      */
@@ -376,16 +448,37 @@ private:
 template <typename INPUT, typename OUTPUT> 
 StatusCode LightGlue<INPUT, OUTPUT>::Impl::init(const toml::table &config) {
     // choose backend type
-    auto backend_dict = config["BACKEND_DICT"];
-    auto backend_name = config["LIGHTGLUE"]["backend_type"].value_or<std::string>("");
-    _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].value_or<int64_t>(0));
+    if (!config.contains("BACKEND_DICT") || !config.contains("LIGHTGLUE")) {
+        LOG(ERROR) << "Config section BACKEND_DICT or LIGHTGLUE missing";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    const toml::table* backend_dict = config["BACKEND_DICT"].as_table();
+    const toml::table* lightglue_section = config["LIGHTGLUE"].as_table();
+    if (backend_dict == nullptr || lightglue_section == nullptr) {
+        LOG(ERROR) << "Config section BACKEND_DICT or LIGHTGLUE not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    auto backend_name = (*lightglue_section)["backend_type"].value_or<std::string>("");
+    if (!backend_dict->contains(backend_name)) {
+        LOG(ERROR) << "unknown backend type: " << backend_name;
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    _m_backend_type = static_cast<BackendType>((*backend_dict)[backend_name].value_or<int64_t>(0));
 
     // init light-glue configs
     const toml::table* lightglue_cfg = nullptr;
     if (_m_backend_type == ONNX) {
         lightglue_cfg = config["LIGHTGLUE_ONNX"].as_table();
-    } else {
+    } else if (_m_backend_type == TRT) {
         lightglue_cfg = config["LIGHTGLUE_TRT"].as_table();
+    }
+    if (lightglue_cfg == nullptr) {
+        LOG(ERROR) << "backend config section missing or not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
     }
 
     StatusCode init_status;

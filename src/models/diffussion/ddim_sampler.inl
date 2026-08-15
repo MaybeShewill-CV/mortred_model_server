@@ -164,7 +164,7 @@ class DDIMSampler<INPUT, OUTPUT>::Impl {
     std::map<std::string, beta_schedule_type> _m_beta_schedule_type_map = {
         {"linear", linear}, {"cosine", cosine}, {"sigmoid", sigmoid}
     };
-    beta_schedule_type _m_beta_schedule;
+    beta_schedule_type _m_beta_schedule = beta_schedule_type::linear;
 
     // pre-compute coefficient
     std::vector<double> _m_betas;
@@ -172,7 +172,6 @@ class DDIMSampler<INPUT, OUTPUT>::Impl {
     int _m_timesteps = 1000;
     double _m_beta_start = 0.0;
     double _m_beta_end = 0.0;
-    std::unique_ptr<indicators::BlockProgressBar> _m_p_sample_bar;
 
     // denoise schedule
     std::unique_ptr<DenoiseModelPtr> _m_denoise_net;
@@ -206,7 +205,7 @@ class DDIMSampler<INPUT, OUTPUT>::Impl {
         auto t = ddim_sampler_impl::linspace(0, static_cast<double>(timesteps), static_cast<int>(steps));
         for (auto& val : t) {
             val /= static_cast<double>(timesteps);
-            val = (val + s) / (1.0 + s) * M_PI * 0.5;
+            val = (val + s) / (1.0 + s) * 3.14159265358979323846 * 0.5;
             val = std::cos(val);
             val = std::pow(val, 2);
         }
@@ -299,9 +298,19 @@ StatusCode DDIMSampler<INPUT, OUTPUT>::Impl::init(const toml::table &config) {
     // choose beta schedule type
     auto ddim_sampler_cfg = config["DDIM_SAMPLER"];
     _m_timesteps = static_cast<int>(ddim_sampler_cfg["total_timesteps"].value_or<int64_t>(0));
+    if (_m_timesteps <= 0) {
+        LOG(WARNING) << "invalid total_timesteps: " << _m_timesteps << ", use default 1000";
+        _m_timesteps = 1000;
+    }
     _m_beta_start = ddim_sampler_cfg["beta_start"].value_or<double>(0.0);
     _m_beta_end = ddim_sampler_cfg["beta_end"].value_or<double>(0.0);
-    _m_beta_schedule = _m_beta_schedule_type_map[ddim_sampler_cfg["beta_schedule"].value_or<std::string>("")];
+    const std::string schedule_name = ddim_sampler_cfg["beta_schedule"].value_or<std::string>("linear");
+    auto schedule_iter = _m_beta_schedule_type_map.find(schedule_name);
+    if (schedule_iter == _m_beta_schedule_type_map.end()) {
+        LOG(ERROR) << "not support beta schedule type: " << schedule_name;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    _m_beta_schedule = schedule_iter->second;
 
     // precompute beta and alpha_cumprod
     if (_m_beta_schedule == beta_schedule_type::linear) {
@@ -323,17 +332,6 @@ StatusCode DDIMSampler<INPUT, OUTPUT>::Impl::init(const toml::table &config) {
         LOG(INFO) << "init denoise net failed, status code: " << init_status;
         return init_status;
     }
-
-    // init p-sample progress bar
-    _m_p_sample_bar = std::make_unique<indicators::BlockProgressBar>();
-    _m_p_sample_bar->set_option(indicators::option::BarWidth{80});
-    _m_p_sample_bar->set_option(indicators::option::Start{"["});
-    _m_p_sample_bar->set_option(indicators::option::End{"]"});
-    _m_p_sample_bar->set_option(indicators::option::ForegroundColor{indicators::Color::white});
-    _m_p_sample_bar->set_option(indicators::option::FontStyles{std::vector<indicators::FontStyle>{indicators::FontStyle::bold}});
-    _m_p_sample_bar->set_option(indicators::option::ShowElapsedTime{true});
-    _m_p_sample_bar->set_option(indicators::option::ShowPercentage{true});
-    _m_p_sample_bar->set_option(indicators::option::ShowRemainingTime(true));
 
     if (init_status == StatusCode::OK) {
         _m_successfully_initialized = true;
@@ -463,9 +461,7 @@ std::vector<std::tuple<std::vector<float>, std::vector<float> > > DDIMSampler<IN
                 mid_sample_results.push_back(sample_result);
             }
         }
-        _m_p_sample_bar->set_progress((static_cast<float>(idx + 1) / static_cast<float>(steps.size())) * 100.0f);
     }
-    _m_p_sample_bar->mark_as_completed();
 
     return mid_sample_results;
 }

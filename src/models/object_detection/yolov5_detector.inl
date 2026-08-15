@@ -7,17 +7,13 @@
 
 #include "yolov5_detector.h"
 #include "models/cv_image_input.h"
-#include "models/cv_image_input.h"
-
-#include <random>
 
 #include <opencv2/opencv.hpp>
 #include "glog/logging.h"
-#include "MNN/Interpreter.hpp"
 
-#include "common/base64.h"
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
+#include "models/mnn_helper.h"
 
 namespace jinq {
 namespace models {
@@ -80,12 +76,7 @@ public:
     /***
      *
      */
-    ~Impl() {
-        if (_m_net != nullptr && _m_session != nullptr) {
-            _m_net->releaseModel();
-            _m_net->releaseSession(_m_session);
-        }
-    }
+    ~Impl() = default;
 
     /***
     *
@@ -124,18 +115,7 @@ public:
     };
 
 public:
-    // model file path
-    std::string _m_model_file_path;
-    // MNN Interpreter
-    MNN::Interpreter* _m_net = nullptr;
-    // MNN Session
-    MNN::Session* _m_session = nullptr;
-    // MNN Input tensor node
-    MNN::Tensor* _m_input_tensor = nullptr;
-    // MNN Loc Output tensor node
-    MNN::Tensor* _m_output_tensor = nullptr;
-    // MNN thread nums
-    int _m_threads_nums = 4;
+    jinq::models::MnnNet _m_net;
     // score thresh
     double _m_score_threshold = 0.4;
     // nms thresh
@@ -188,105 +168,13 @@ StatusCode YoloV5Detector<INPUT, OUTPUT>::Impl::init(const toml::table& config) 
     }
     const toml::table& cfg_content = *cfg_content_ptr;
 
-    // init threads
-    if (!cfg_content.contains("model_threads_num")) {
-        LOG(WARNING) << "Config doesn\'t have model_threads_num field default 4";
-        _m_threads_nums = 4;
-    } else {
-        _m_threads_nums = static_cast<int>(cfg_content["model_threads_num"].value_or<int64_t>(0));
-    }
-
-    // init Interpreter
-    if (!cfg_content.contains("model_file_path")) {
-        LOG(ERROR) << "Config doesn\'t have model_file_path field";
+    auto init_status = _m_net.init(cfg_content, {"images"}, {"output"});
+    if (init_status != StatusCode::OK) {
         _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    } else {
-        _m_model_file_path = cfg_content["model_file_path"].value_or<std::string>("");
+        return init_status;
     }
-
-    if (!FilePathUtil::is_file_exist(_m_model_file_path)) {
-        LOG(ERROR) << "YoloV5 Detection model file: " << _m_model_file_path << " not exist";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    _m_net = MNN::Interpreter::createFromFile(_m_model_file_path.c_str());
-    if (nullptr == _m_net) {
-        LOG(ERROR) << "Create yolov5 detection model interpreter failed";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // init Session
-    MNN::ScheduleConfig mnn_config;
-    if (!cfg_content.contains("compute_backend")) {
-        LOG(WARNING) << "Config doesn\'t have compute_backend field default cpu";
-        mnn_config.type = MNN_FORWARD_CPU;
-    } else {
-        std::string compute_backend = cfg_content["compute_backend"].value_or<std::string>("");
-
-        if (std::strcmp(compute_backend.c_str(), "cuda") == 0) {
-            mnn_config.type = MNN_FORWARD_CUDA;
-        } else if (std::strcmp(compute_backend.c_str(), "cpu") == 0) {
-            mnn_config.type = MNN_FORWARD_CPU;
-        } else {
-            LOG(WARNING) << "not supported compute backend use default cpu instead";
-            mnn_config.type = MNN_FORWARD_CPU;
-        }
-    }
-
-    mnn_config.numThread = _m_threads_nums;
-    MNN::BackendConfig backend_config;
-    if (!cfg_content.contains("backend_precision_mode")) {
-        LOG(WARNING) << "Config doesn\'t have backend_precision_mode field default Precision_Normal";
-        backend_config.precision = MNN::BackendConfig::Precision_Normal;
-    } else {
-        backend_config.precision = static_cast<MNN::BackendConfig::PrecisionMode>(cfg_content["backend_precision_mode"].value_or<int64_t>(0));
-    }
-    if (!cfg_content.contains("backend_power_mode")) {
-        LOG(WARNING) << "Config doesn\'t have backend_power_mode field default Power_Normal";
-        backend_config.power = MNN::BackendConfig::Power_Normal;
-    } else {
-        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(cfg_content["backend_power_mode"].value_or<int64_t>(0));
-    }
-    mnn_config.backendConfig = &backend_config;
-
-    _m_session = _m_net->createSession(mnn_config);
-
-    if (nullptr == _m_session) {
-        LOG(ERROR) << "Create obstacle detection model session failed";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    _m_input_tensor = _m_net->getSessionInput(_m_session, "images");
-    _m_output_tensor = _m_net->getSessionOutput(_m_session, "output");
-
-    if (_m_input_tensor == nullptr) {
-        LOG(ERROR) << "Fetch yolov5 detection model input node failed";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    if (_m_output_tensor == nullptr) {
-        LOG(ERROR) << "Fetch yolov5 detection model output node failed";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    _m_input_size_host.width = _m_input_tensor->width();
-    _m_input_size_host.height = _m_input_tensor->height();
-
-    if (!cfg_content.contains("model_input_image_size")) {
-        _m_input_size_user.width = 640;
-        _m_input_size_user.height = 640;
-    } else {
-        _m_input_size_user.width = static_cast<int>(
-                                       cfg_content["model_input_image_size"][1].value_or<int64_t>(0));
-        _m_input_size_user.height = static_cast<int>(
-                                        cfg_content["model_input_image_size"][0].value_or<int64_t>(0));
-    }
+    _m_input_size_host.width = _m_net.input("images")->width();
+    _m_input_size_host.height = _m_net.input("images")->height();
 
     if (!cfg_content.contains("model_score_threshold")) {
         _m_score_threshold = 0.4;
@@ -329,8 +217,7 @@ StatusCode YoloV5Detector<INPUT, OUTPUT>::Impl::init(const toml::table& config) 
     }
 
     _m_successfully_initialized = true;
-    LOG(INFO) << "YoloV5 detection model: " << FilePathUtil::get_file_name(_m_model_file_path)
-              << " initialization complete!!!";
+    LOG(INFO) << "YoloV5 detection model initialization complete!!!";
     return StatusCode::OK;
 }
 
@@ -374,19 +261,20 @@ StatusCode YoloV5Detector<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out
     }
 
     // preprocess image
+    // record the original input image size for box rescaling
     _m_input_size_user = internal_in.input_image.size();
     auto preprocessed_image = preprocess_image(internal_in.input_image);
     auto input_chw_image_data = cv_utils::convert_to_chw_vec(preprocessed_image);
 
     // run session
-    MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::CAFFE);
+    MNN::Tensor input_tensor_user(_m_net.input("images"), MNN::Tensor::DimensionType::CAFFE);
     auto input_tensor_data = input_tensor_user.host<float>();
     auto input_tensor_size = input_tensor_user.size();
     if (!cv_utils::copy_image_to_tensor(input_tensor_data, input_chw_image_data, input_tensor_size)) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
-    _m_input_tensor->copyFromHostTensor(&input_tensor_user);
-    _m_net->runSession(_m_session);
+    _m_net.input("images")->copyFromHostTensor(&input_tensor_user);
+    _m_net.run_session();
 
     // decode output tensor
     auto bbox_result = decode_output_tensor();
@@ -416,69 +304,61 @@ template<typename INPUT, typename OUTPUT>
 yolov5_impl::internal_output YoloV5Detector<INPUT, OUTPUT>::Impl::decode_output_tensor() const {
 
     // convert tensor format
-    MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::CAFFE);
-    _m_output_tensor->copyToHostTensor(&output_tensor_user);
+    MNN::Tensor output_tensor_user(_m_net.output("output"), MNN::Tensor::DimensionType::CAFFE);
+    _m_net.output("output")->copyToHostTensor(&output_tensor_user);
 
     // fetch tensor data
     std::vector<float> output_tensordata(output_tensor_user.elementSize());
     ::memcpy(&output_tensordata[0], output_tensor_user.host<float>(),
              output_tensor_user.elementSize() * sizeof(float));
 
-    auto batch_nums = output_tensor_user.shape()[0];
-    auto raw_pred_bbox_nums = output_tensor_user.shape()[1];
-
-    std::vector<std::vector<float> > raw_output;
-    raw_output.resize(raw_pred_bbox_nums);
-
-    for (auto&& tmp : raw_output) {
-        tmp.resize(_m_class_nums + 5, 0.0);
+    const auto& tensor_shape = output_tensor_user.shape();
+    if (tensor_shape.size() < 2) {
+        LOG(ERROR) << "unexpected output tensor shape";
+        return yolov5_impl::internal_output();
     }
-
-    for (auto index = 0; index < raw_pred_bbox_nums; ++index) {
-        for (auto idx = 0; idx < _m_class_nums + 5; idx++) {
-            raw_output[index][idx] = output_tensordata[index * (_m_class_nums + 5) + idx];
-        }
-    }
+    auto batch_nums = tensor_shape[0];
+    auto raw_pred_bbox_nums = tensor_shape[1];
+    const size_t row_size = static_cast<size_t>(_m_class_nums + 5);
 
     yolov5_impl::internal_output decode_result;
 
     for (size_t batch_num = 0; batch_num < batch_nums; ++batch_num) {
+        const size_t batch_offset = batch_num * raw_pred_bbox_nums * row_size;
         for (size_t bbox_index = 0; bbox_index < raw_pred_bbox_nums; ++bbox_index) {
-            std::vector<float> raw_bbox_info = raw_output[bbox_index];
+            const size_t offset = batch_offset + bbox_index * row_size;
             // thresh bboxes with lower score
             int class_id = -1;
             float max_cls_score = 0.0;
 
             for (auto cls_idx = 0; cls_idx < _m_class_nums; ++cls_idx) {
-                if (raw_bbox_info[cls_idx + 5] > max_cls_score) {
-                    max_cls_score = raw_bbox_info[cls_idx + 5];
+                const float cls_score = output_tensordata[offset + cls_idx + 5];
+                if (cls_score > max_cls_score) {
+                    max_cls_score = cls_score;
                     class_id = cls_idx;
                 }
             }
 
-            auto bbox_score = raw_bbox_info[4] * max_cls_score;
+            const float obj_score = output_tensordata[offset + 4];
+            auto bbox_score = obj_score * max_cls_score;
 
             if (bbox_score < _m_score_threshold) {
                 continue;
             }
 
+            const float box_w = output_tensordata[offset + 2];
+            const float box_h = output_tensordata[offset + 3];
             // thresh invalid bboxes
-            if (raw_bbox_info[2] <= 0 || raw_bbox_info[3] <= 0) {
-                continue;
-            }
-
-            auto bbox_area = std::sqrt(raw_bbox_info[2] * raw_bbox_info[3]);
-
-            if (bbox_area < 0 || bbox_area > std::numeric_limits<float>::max()) {
+            if (box_w <= 0 || box_h <= 0) {
                 continue;
             }
 
             // rescale boxes from img_size to im0 size
             std::vector<float> coords = {
-                raw_bbox_info[0] - raw_bbox_info[2] / 2.0f,
-                raw_bbox_info[1] - raw_bbox_info[3] / 2.0f,
-                raw_bbox_info[0] + raw_bbox_info[2] / 2.0f,
-                raw_bbox_info[1] + raw_bbox_info[3] / 2.0f
+                output_tensordata[offset + 0] - box_w / 2.0f,
+                output_tensordata[offset + 1] - box_h / 2.0f,
+                output_tensordata[offset + 0] + box_w / 2.0f,
+                output_tensordata[offset + 1] + box_h / 2.0f
             };
             auto w_scale = static_cast<float>(_m_input_size_user.width) /
                            static_cast<float>(_m_input_size_host.width);

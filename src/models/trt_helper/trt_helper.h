@@ -170,28 +170,53 @@ class DeviceMemory {
     DeviceMemory() noexcept = default;
 
     /***
-     *
+     * 禁止拷贝：裸指针所有权唯一，拷贝会导致双重 cudaFree（未定义行为）
      */
-    DeviceMemory(const DeviceMemory&) = default;
+    DeviceMemory(const DeviceMemory&) = delete;
+    DeviceMemory& operator=(const DeviceMemory&) = delete;
+
+    /***
+     * 移动语义：转移所有权，源对象置空（析构安全）
+     */
+    DeviceMemory(DeviceMemory&& other) noexcept {
+        swap(other);
+    }
+
+    DeviceMemory& operator=(DeviceMemory&& other) noexcept {
+        if (this != &other) {
+            clear();
+            swap(other);
+        }
+        return *this;
+    }
 
     /***
      *
      */
     ~DeviceMemory() noexcept {
-        for (auto& ptr : _m_memory) {
-            auto cuda_status = cudaFree(ptr);
-            if (cuda_status != cudaSuccess) {
-                LOG(ERROR) << "free cuda memory failed code str: " << cudaGetErrorString(cuda_status);
-                break;
-            }
-        }
-        DLOG(INFO) << "~destruct device memory";
+        clear();
     };
 
   public:
 
-    void swap(DeviceMemory& other) {
+    void swap(DeviceMemory& other) noexcept {
         std::swap(_m_memory, other._m_memory);
+    }
+
+    /***
+     * 逐个释放非空指针；单个失败只记录、不中断，避免泄漏后续显存
+     */
+    void clear() noexcept {
+        for (auto* ptr : _m_memory) {
+            if (ptr != nullptr) {
+                auto cuda_status = cudaFree(ptr);
+                if (cuda_status != cudaSuccess) {
+                    LOG(ERROR) << "free cuda memory failed code str: "
+                               << cudaGetErrorString(cuda_status);
+                }
+            }
+        }
+        _m_memory.clear();
     }
 
     /***
@@ -203,11 +228,14 @@ class DeviceMemory {
     }
 
     /***
-     *
+     * 最后一个元素的地址；空容器返回 nullptr（不再返回 one-past-end）
      * @return
      */
     void** back() {
-        return (void**)(_m_memory.data() + _m_memory.size());
+        if (_m_memory.empty()) {
+            return nullptr;
+        }
+        return reinterpret_cast<void**>(_m_memory.data() + _m_memory.size() - 1);
     }
 
     /***

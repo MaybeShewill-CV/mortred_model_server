@@ -5,6 +5,7 @@
  * Date: 23-6-26
  ************************************************/
 
+#include <algorithm>
 #include <cmath>
 #include <functional>
 #include <numeric>
@@ -190,7 +191,7 @@ StatusCode Impl::init(const toml::table &cfg) {
     _m_vit_encoder_input_size.height = _m_visual_encoder->get_encoder_input_shape()[2];
     _m_vit_encoder_input_size.width = _m_visual_encoder->get_encoder_input_shape()[3];
 
-    // init sam vit decoder
+    // init openai clip text encoder
     _m_textual_encoder = std::make_unique<OpenAiClipTextEncoder>();
     _m_textual_encoder->init(cfg);
     if (!_m_textual_encoder->is_successfully_initialized()) {
@@ -269,7 +270,9 @@ StatusCode Impl::texts2img(
     std::vector<float> simi_values;
     for (auto& text_feats : texts_feats) {
         auto inner_product = std::inner_product(vis_feats.begin(), vis_feats.end(), text_feats.begin(), 0.0f);
-        auto simi_value = std::exp(100.0f * inner_product);
+        // clamp the logit: exp(100*cos) overflows float when cos ~ 1.0 (inf/inf = NaN)
+        const float simi_logit = std::min(100.0f * inner_product, 80.0f);
+        auto simi_value = std::exp(simi_logit);
         simi_values.push_back(simi_value);
     }
     auto sum_values = std::accumulate(simi_values.begin(), simi_values.end(), 0.0f, std::plus{});
@@ -327,7 +330,9 @@ StatusCode Impl::imgs2text(
     std::vector<float> simi_values;
     for (auto& vis_feats : visuals_feats) {
         auto inner_product = std::inner_product(text_feats.begin(), text_feats.end(), vis_feats.begin(), 0.0f);
-        auto simi_value = std::exp(100.0f * inner_product);
+        // clamp the logit: exp(100*cos) overflows float when cos ~ 1.0 (inf/inf = NaN)
+        const float simi_logit = std::min(100.0f * inner_product, 80.0f);
+        auto simi_value = std::exp(simi_logit);
         simi_values.push_back(simi_value);
     }
     auto sum_values = std::accumulate(simi_values.begin(), simi_values.end(), 0.0f, std::plus{});

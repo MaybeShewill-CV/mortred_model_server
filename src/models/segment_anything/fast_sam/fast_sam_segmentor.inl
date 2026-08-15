@@ -10,11 +10,11 @@
 #include <algorithm>
 
 #include "glog/logging.h"
-#include "MNN/Interpreter.hpp"
 
 #include "common/file_path_util.h"
 #include "common/cv_utils.h"
 #include "common/time_stamp.h"
+#include "models/mnn_helper.h"
 
 namespace jinq {
 namespace models {
@@ -125,26 +125,13 @@ class Impl {
     }
 
   private:
-    // model file path
-    std::string _m_model_path;
-
-    // model compute thread nums
-    uint16_t _m_thread_nums = 1;
-
-    // model backend device
-    std::string _m_model_device;
-
     // model input/output names
     std::string _m_input_name;
     std::string _m_output_0_name;
     std::string _m_output_1_name;
 
-    // model session
-    MNN::Interpreter* _m_net = nullptr;
-    MNN::Session* _m_session = nullptr;
-    MNN::Tensor* _m_input_tensor = nullptr;
-    MNN::Tensor* _m_output_tensor_0 = nullptr;
-    MNN::Tensor* _m_output_tensor_1 = nullptr;
+    // MNN runtime (owns interpreter/session/tensors)
+    jinq::models::MnnNet _m_net;
 
     // model output shape info
     std::vector<int> _m_output_0_shape;
@@ -202,101 +189,35 @@ StatusCode Impl::init(const toml::table &cfg) {
         return StatusCode::MODEL_INIT_FAILED;
     }
     const toml::table& cfg_content = *cfg_content_ptr;
-    _m_model_path = cfg_content["model_file_path"].value_or<std::string>("");
-    if (!FilePathUtil::is_file_exist(_m_model_path)) {
-        LOG(ERROR) << "fast sam model file path: " << _m_model_path << " not exists";
+    // init session with named tensors
+    _m_input_name = "images";
+    _m_output_0_name = "output0";
+    _m_output_1_name = "output1";
+    auto init_status = _m_net.init(
+        cfg_content, {_m_input_name}, {_m_output_0_name, _m_output_1_name});
+    if (init_status != StatusCode::OK) {
         _m_successfully_init_model = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    _m_net = MNN::Interpreter::createFromFile(_m_model_path.c_str());
-    if (_m_net == nullptr) {
-        LOG(ERROR) << "Create Interpreter failed, model file path: " << _m_model_path;
-        _m_successfully_init_model = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    if (!cfg_content.contains("model_threads_num")) {
-        LOG(WARNING) << R"(Config file parse error, doesn't not have field "model_threads_nums", use default value 4)";
-        _m_thread_nums = 4;
-    } else {
-        _m_thread_nums = static_cast<int>(cfg_content["model_threads_num"].value_or<int64_t>(0));
-    }
-
-    // init session
-    MNN::ScheduleConfig mnn_config;
-    if (!cfg_content.contains("compute_backend")) {
-        LOG(WARNING) << "Config doesn\'t have compute_backend field default cpu";
-        mnn_config.type = MNN_FORWARD_CPU;
-    } else {
-        std::string compute_backend = cfg_content["compute_backend"].value_or<std::string>("");
-
-        if (std::strcmp(compute_backend.c_str(), "cuda") == 0) {
-            mnn_config.type = MNN_FORWARD_CUDA;
-        } else if (std::strcmp(compute_backend.c_str(), "cpu") == 0) {
-            mnn_config.type = MNN_FORWARD_CPU;
-        } else {
-            LOG(WARNING) << "not supported compute backend use default cpu instead";
-            mnn_config.type = MNN_FORWARD_CPU;
-        }
-    }
-    mnn_config.numThread = _m_thread_nums;
-    MNN::BackendConfig backend_config;
-    if (!cfg_content.contains("backend_precision_mode")) {
-        LOG(WARNING) << "Config doesn\'t have backend_precision_mode field default Precision_Normal";
-        backend_config.precision = MNN::BackendConfig::Precision_Normal;
-    } else {
-        backend_config.precision = static_cast<MNN::BackendConfig::PrecisionMode>(cfg_content["backend_precision_mode"].value_or<int64_t>(0));
-    }
-    if (!cfg_content.contains("backend_power_mode")) {
-        LOG(WARNING) << "Config doesn\'t have backend_power_mode field default Power_Normal";
-        backend_config.power = MNN::BackendConfig::Power_Normal;
-    } else {
-        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(cfg_content["backend_power_mode"].value_or<int64_t>(0));
-    }
-    mnn_config.backendConfig = &backend_config;
-
-    _m_session = _m_net->createSession(mnn_config);
-    if (_m_session == nullptr) {
-        LOG(ERROR) << "Create Session failed, model file path: " << _m_model_path;
-        _m_successfully_init_model = false;
-        return StatusCode::MODEL_INIT_FAILED;
+        return init_status;
     }
 
     // fetch input tensor
-    _m_input_name = "images";
-    _m_input_tensor = _m_net->getSessionInput(_m_session, _m_input_name.c_str());
-    if (_m_input_tensor == nullptr) {
-        LOG(INFO) << "fetch input node \'images\' failed";
+    auto* input_tensor = _m_net.input(_m_input_name);
+    if (input_tensor->shape().size() != 4) {
+        LOG(INFO) << "Invalid input tensor shape. Input tensor should be with [n, c, h, w] four dims but " << input_tensor->shape().size() << " dims instead";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    if (_m_input_tensor->shape().size() != 4) {
-        LOG(INFO) << "Invalid input tensor shape. Input tensor should be with [n, c, h, w] four dims but " << _m_input_tensor->shape().size() << " dims instead";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    _m_input_tensor_size = cv::Size(_m_input_tensor->shape()[3], _m_input_tensor->shape()[2]);
+    _m_input_tensor_size = cv::Size(input_tensor->shape()[3], input_tensor->shape()[2]);
 
     // fetch output tensor 0
-    _m_output_0_name = "output0";
-    _m_output_tensor_0 = _m_net->getSessionOutput(_m_session, _m_output_0_name.c_str());
-    if (_m_output_tensor_0 == nullptr) {
-        LOG(INFO) << "fetch output node \'output0\' failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    _m_output_0_shape = _m_output_tensor_0->shape();
+    _m_output_0_shape = _m_net.output(_m_output_0_name)->shape();
 
     // fetch output tensor 1
-    _m_output_1_name = "output1";
-    _m_output_tensor_1 = _m_net->getSessionOutput(_m_session, _m_output_1_name.c_str());
-    if (_m_output_tensor_1 == nullptr) {
-        LOG(INFO) << "fetch output node \'output1\' failed";
+    auto* output_tensor_1 = _m_net.output(_m_output_1_name);
+    if (output_tensor_1->shape().size() != 4) {
+        LOG(INFO) << "Invalid output tensor 1 shape. Output tensor 1 should be with [n, c, h, w] four dims but " << output_tensor_1->shape().size() << " dims instead";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    if (_m_output_tensor_1->shape().size() != 4) {
-        LOG(INFO) << "Invalid output tensor 1 shape. Output tensor 1 should be with [n, c, h, w] four dims but " << _m_output_tensor_1->shape().size() << " dims instead";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    _m_output_1_shape = _m_output_tensor_1->shape();
+    _m_output_1_shape = output_tensor_1->shape();
     _m_preds_mask_size = cv::Size(_m_output_1_shape[3], _m_output_1_shape[2]);
 
     // init conf thresh and iou thresh
@@ -326,13 +247,13 @@ StatusCode Impl::everything(const cv::Mat& input_image, cv::Mat& everything_mask
     auto input_image_nchw_data = cv_utils::convert_to_chw_vec(preprocessed_image);
 
     // run session
-    auto input_tensor_host = MNN::Tensor(_m_input_tensor, MNN::Tensor::DimensionType::CAFFE);
+    auto input_tensor_host = MNN::Tensor(_m_net.input(_m_input_name), MNN::Tensor::DimensionType::CAFFE);
     if (!cv_utils::copy_image_to_tensor(input_tensor_host.host<float>(), input_image_nchw_data, input_tensor_host.size())) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
-    _m_input_tensor->copyFromHostTensor(&input_tensor_host);
+    _m_net.input(_m_input_name)->copyFromHostTensor(&input_tensor_host);
 
-    _m_net->runSession(_m_session);
+    _m_net.run_session();
 
     // decode all mask
     std::vector<cv::Mat> predicted_all_masks;
@@ -427,8 +348,8 @@ cv::Mat Impl::upscale_mask_image(const cv::Mat &mask) {
  */
 StatusCode Impl::decode_all_masks(std::vector<cv::Mat>& preds_masks) {
     // decode output preds info
-    auto output_tensor_0_host = MNN::Tensor(_m_output_tensor_0, _m_output_tensor_0->getDimensionType());
-    _m_output_tensor_0->copyToHostTensor(&output_tensor_0_host);
+    auto output_tensor_0_host = MNN::Tensor(_m_net.output(_m_output_0_name), _m_net.output(_m_output_0_name)->getDimensionType());
+    _m_net.output(_m_output_0_name)->copyToHostTensor(&output_tensor_0_host);
     auto* output_tensor_0_data = output_tensor_0_host.host<float>();
     if (output_tensor_0_data == nullptr) {
         LOG(ERROR) << "fetch output tensor 0 inference result failed, output tensor 0's data is nullptr";
@@ -478,8 +399,8 @@ StatusCode Impl::decode_all_masks(std::vector<cv::Mat>& preds_masks) {
     auto mh = _m_preds_mask_size.height;
     auto mw = _m_preds_mask_size.width;
 
-    auto output_tensor_1_host = MNN::Tensor(_m_output_tensor_1, _m_output_tensor_1->getDimensionType());
-    _m_output_tensor_1->copyToHostTensor(&output_tensor_1_host);
+    auto output_tensor_1_host = MNN::Tensor(_m_net.output(_m_output_1_name), _m_net.output(_m_output_1_name)->getDimensionType());
+    _m_net.output(_m_output_1_name)->copyToHostTensor(&output_tensor_1_host);
     auto* output_tensor_1_data = output_tensor_1_host.host<float>();
     if (output_tensor_1_data == nullptr) {
         LOG(ERROR) << "fetch output tensor 1 inference result failed, output tensor 1's data is nullptr";

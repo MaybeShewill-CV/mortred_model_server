@@ -105,9 +105,13 @@ class HRNetSegmentation<INPUT, OUTPUT>::Impl {
 
         } else {
             if (nullptr != _m_mnn_params.net && nullptr != _m_mnn_params.session) {
-                _m_mnn_params.net->releaseModel();
+                // releaseSession first, then releaseModel (MNN contract order)
                 _m_mnn_params.net->releaseSession(_m_mnn_params.session);
+                _m_mnn_params.net->releaseModel();
             }
+            // the Interpreter object itself must also be released
+            delete _m_mnn_params.net;
+            _m_mnn_params.net = nullptr;
         }
     }
 

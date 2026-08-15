@@ -127,8 +127,9 @@ StatusCode TrtHelper::setup_device_memory(
         auto tensorname = engine->getIOTensorName(i);
         auto dims = context->getTensorShape(tensorname);
         bool has_dynamic_shape = false;
-        for (auto& dim : dims.d) {
-            if (dim == -1) {
+        // only inspect the declared dimensions, not the uninitialized tail of d[]
+        for (int dim_idx = 0; dim_idx < dims.nbDims; ++dim_idx) {
+            if (dims.d[dim_idx] == -1) {
                 has_dynamic_shape = true;
             }
         }

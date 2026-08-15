@@ -7,15 +7,13 @@
 
 #include "real_esrgan.h"
 #include "models/cv_image_input.h"
-#include "models/cv_image_input.h"
 
 #include <opencv2/opencv.hpp>
 #include "glog/logging.h"
-#include "MNN/Interpreter.hpp"
 
 #include "common/cv_utils.h"
-#include "common/base64.h"
 #include "common/file_path_util.h"
+#include "models/mnn_helper.h"
 
 namespace jinq {
 namespace models {
@@ -78,12 +76,7 @@ public:
     /***
      *
      */
-    ~Impl() {
-        if (_m_net != nullptr && _m_session != nullptr) {
-            _m_net->releaseModel();
-            _m_net->releaseSession(_m_session);
-        }
-    }
+    ~Impl() = default;
 
     /***
     *
@@ -122,18 +115,7 @@ public:
     };
 
 private:
-    // model file path
-    std::string _m_model_file_path;
-    // mnn interpreter
-    MNN::Interpreter* _m_net = nullptr;
-    // mnn session
-    MNN::Session* _m_session = nullptr;
-    // mnn innput tensor node
-    MNN::Tensor* _m_input_tensor = nullptr;
-    // mnn output tensor node
-    MNN::Tensor* _m_output_tensor = nullptr;
-    // mnn threads nums
-    int _m_threads_nums = 4;
+    jinq::models::MnnNet _m_net;
     //　input node size
     cv::Size _m_input_size_host = cv::Size();
     // init flag
@@ -170,99 +152,16 @@ StatusCode RealEsrGan<INPUT, OUTPUT>::Impl::init(const toml::table& config) {
     }
     const toml::table& cfg_content = *cfg_content_ptr;
 
-    // init threads
-    if (!cfg_content.contains("model_threads_num")) {
-        LOG(WARNING) << "Config doesn\'t have model_threads_num field default 4";
-        _m_threads_nums = 4;
-    } else {
-        _m_threads_nums = static_cast<int>(cfg_content["model_threads_num"].value_or<int64_t>(0));
-    }
-
-    // init interpreter
-    if (!cfg_content.contains("model_file_path")) {
-        LOG(ERROR) << "Config doesn\'t have model_file_path field";
+    auto init_status = _m_net.init(cfg_content, {"input"}, {"output"});
+    if (init_status != StatusCode::OK) {
         _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    } else {
-        _m_model_file_path = cfg_content["model_file_path"].value_or<std::string>("");
+        return init_status;
     }
-
-    if (!FilePathUtil::is_file_exist(_m_model_file_path)) {
-        LOG(ERROR) << "real-esrgan model file: " << _m_model_file_path << " not exist";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    _m_net = MNN::Interpreter::createFromFile(_m_model_file_path.c_str());
-    if (nullptr == _m_net) {
-        LOG(ERROR) << "Create real-esrgan enhancement model interpreter failed";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // init session
-    MNN::ScheduleConfig mnn_config;
-    if (!cfg_content.contains("compute_backend")) {
-        LOG(WARNING) << "Config doesn\'t have compute_backend field default cpu";
-        mnn_config.type = MNN_FORWARD_CPU;
-    } else {
-        std::string compute_backend = cfg_content["compute_backend"].value_or<std::string>("");
-
-        if (std::strcmp(compute_backend.c_str(), "cuda") == 0) {
-            mnn_config.type = MNN_FORWARD_CUDA;
-        } else if (std::strcmp(compute_backend.c_str(), "cpu") == 0) {
-            mnn_config.type = MNN_FORWARD_CPU;
-        } else {
-            LOG(WARNING) << "not supported compute backend use default cpu instead";
-            mnn_config.type = MNN_FORWARD_CPU;
-        }
-    }
-
-    mnn_config.numThread = _m_threads_nums;
-    MNN::BackendConfig backend_config;
-    if (!cfg_content.contains("backend_precision_mode")) {
-        LOG(WARNING) << "Config doesn\'t have backend_precision_mode field default Precision_Normal";
-        backend_config.precision = MNN::BackendConfig::Precision_Normal;
-    } else {
-        backend_config.precision = static_cast<MNN::BackendConfig::PrecisionMode>(cfg_content["backend_precision_mode"].value_or<int64_t>(0));
-    }
-    if (!cfg_content.contains("backend_power_mode")) {
-        LOG(WARNING) << "Config doesn\'t have backend_power_mode field default Power_Normal";
-        backend_config.power = MNN::BackendConfig::Power_Normal;
-    } else {
-        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(cfg_content["backend_power_mode"].value_or<int64_t>(0));
-    }
-    mnn_config.backendConfig = &backend_config;
-
-    _m_session = _m_net->createSession(mnn_config);
-
-    if (nullptr == _m_session) {
-        LOG(ERROR) << "Create real-esrgan enhancement model session failed";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    _m_input_tensor = _m_net->getSessionInput(_m_session, "input");
-    _m_output_tensor = _m_net->getSessionOutput(_m_session, "output");
-
-    if (_m_input_tensor == nullptr) {
-        LOG(ERROR) << "Fetch real-esrgan enhancement model input src node failed";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    if (_m_output_tensor == nullptr) {
-        LOG(ERROR) << "Fetch real-esrgan enhancement model output node failed";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    _m_input_size_host.width = _m_input_tensor->width();
-    _m_input_size_host.height = _m_input_tensor->height();
+    _m_input_size_host.width = _m_net.input("input")->width();
+    _m_input_size_host.height = _m_net.input("input")->height();
     _m_successfully_initialized = true;
 
-    LOG(INFO) << "Real-esrgan enhancement model: " << FilePathUtil::get_file_name(_m_model_file_path)
-              << " initialization complete!!!";
+    LOG(INFO) << "Real-esrgan enhancement model initialization complete!!!";
     return StatusCode::OK;
 }
 
@@ -297,28 +196,28 @@ StatusCode RealEsrGan<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     }
 
     if (internal_in.input_image.size() != _m_input_size_host) {
-        _m_net->resizeTensor(_m_input_tensor, 1, 3, internal_in.input_image.size().height,
-                             internal_in.input_image.size().width);
-        _m_net->resizeSession(_m_session);
-        _m_output_tensor = _m_net->getSessionOutput(_m_session, "output");
+        _m_net.resize_tensor(
+            _m_net.input("input"), 1, 3, internal_in.input_image.size().height,
+            internal_in.input_image.size().width);
+        _m_input_size_host = internal_in.input_image.size();
     }
 
     cv::Mat input_src = preprocess_image(internal_in.input_image);
 
     // run session
-    MNN::Tensor input_tensor_user_src(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
+    MNN::Tensor input_tensor_user_src(_m_net.input("input"), MNN::Tensor::DimensionType::TENSORFLOW);
     auto input_tensor_data = input_tensor_user_src.host<float>();
     auto input_tensor_size = input_tensor_user_src.size();
     if (!cv_utils::copy_image_to_tensor(input_tensor_data, input_src, input_tensor_size)) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
-    _m_input_tensor->copyFromHostTensor(&input_tensor_user_src);
-    _m_net->runSession(_m_session);
+    _m_net.input("input")->copyFromHostTensor(&input_tensor_user_src);
+    _m_net.run_session();
 
     // decode output tensor
     real_esrgan_impl::internal_output internal_out;
-    MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
-    _m_output_tensor->copyToHostTensor(&output_tensor_user);
+    MNN::Tensor output_tensor_user(_m_net.output("output"), MNN::Tensor::DimensionType::TENSORFLOW);
+    _m_net.output("output")->copyToHostTensor(&output_tensor_user);
     auto host_data = output_tensor_user.host<float>();
     auto element_size = output_tensor_user.elementSize();
 

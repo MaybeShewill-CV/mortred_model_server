@@ -244,28 +244,41 @@ class YoloV8Detector<INPUT, OUTPUT>::Impl {
  */
 template<typename INPUT, typename OUTPUT>
 StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::init(const toml::table& config) {
-
     // choose backend type
-    auto backend_dict = config["BACKEND_DICT"];
-    auto backend_name = config["YOLOV8"]["backend_type"].value_or<std::string>("");
-    _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].value_or<int64_t>(0));
+    if (!config.contains("BACKEND_DICT") || !config.contains("YOLOV8")) {
+        LOG(ERROR) << "Config section BACKEND_DICT or YOLOV8 missing";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    const toml::table* backend_dict = config["BACKEND_DICT"].as_table();
+    const toml::table* yolov8_section = config["YOLOV8"].as_table();
+    if (backend_dict == nullptr || yolov8_section == nullptr) {
+        LOG(ERROR) << "Config section BACKEND_DICT or YOLOV8 not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    auto backend_name = (*yolov8_section)["backend_type"].value_or<std::string>("");
+    if (!backend_dict->contains(backend_name)) {
+        LOG(ERROR) << "unknown backend type: " << backend_name;
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    _m_backend_type = static_cast<BackendType>((*backend_dict)[backend_name].value_or<int64_t>(0));
 
-    // init metric3d configs
-    const toml::table* yolov8_cfg = nullptr;
-    if (_m_backend_type == TRT) {
-        yolov8_cfg = config["YOLOV8_TRT"].as_table();
-    } else {
-        // todo implment other backend
+    if (_m_backend_type != TRT) {
+        LOG(ERROR) << "unsupported backend type: " << static_cast<int>(_m_backend_type);
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    const toml::table* yolov8_cfg = config["YOLOV8_TRT"].as_table();
+    if (yolov8_cfg == nullptr) {
+        LOG(ERROR) << "Config section YOLOV8_TRT missing or not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
     }
     auto model_file_name = FilePathUtil::get_file_name((*yolov8_cfg)["model_file_path"].value_or<std::string>(""));
 
-    StatusCode init_status;
-    if (_m_backend_type == TRT) {
-        init_status = init_trt(*yolov8_cfg);
-    } else {
-        // todo implment other backend
-    }
-
+    StatusCode init_status = init_trt(*yolov8_cfg);
     if (init_status == StatusCode::OK) {
         _m_successfully_initialized = true;
         LOG(INFO) << "Successfully load yolov8 model from: " << model_file_name;
@@ -347,7 +360,8 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::maybe_reallocate_input_device_me
     }
     // set new binding info
     _m_trt_params.input_binding.set_volume(current_input_image_ele_size);
-    nvinfer1::Dims4 input_dims(1, input_image.rows, input_image.cols, input_image.channels());
+    // layout must match the engine export (NCHW): data is transferred CHW
+    nvinfer1::Dims4 input_dims(1, input_image.channels(), input_image.rows, input_image.cols);
     _m_trt_params.input_binding.set_dims(input_dims);
 
     return StatusCode::OK;
@@ -501,9 +515,9 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::init_trt(const toml::table& cfg)
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    // set input node size
-    _m_input_size_host.height = static_cast<int>(cfg["input_node_size"][1].value_or<int64_t>(0));
-    _m_input_size_host.width = static_cast<int>(cfg["input_node_size"][0].value_or<int64_t>(0));
+    // set input node size from the engine binding (authoritative, NCHW)
+    _m_input_size_host.height = static_cast<int>(_m_trt_params.input_binding.dims().d[2]);
+    _m_input_size_host.width = static_cast<int>(_m_trt_params.input_binding.dims().d[3]);
 
     return StatusCode::OK;
 }
@@ -578,14 +592,15 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::trt_run(const INPUT& in, OUTPUT&
 
     auto begin = output_host;
     for (int i = 0; i < proposal_counts; ++i) {
-        auto cls_nums = row_size - 4;
         float cx = begin[0 * proposal_counts + i];
         float cy = begin[1 * proposal_counts + i];
         float w = begin[2 * proposal_counts + i];
         float h = begin[3 * proposal_counts + i];
 
         std::vector<float> tmp_scores;
-        for (auto j = 4; j < cls_nums; ++j) {
+        // class scores occupy columns 4..row_size-1: iterate over ALL of them
+        // (regression: the old bound j < row_size - 4 silently dropped the last 4 classes)
+        for (auto j = 4; j < row_size; ++j) {
             float score = begin[j * proposal_counts + i];
             tmp_scores.push_back(score);
         }

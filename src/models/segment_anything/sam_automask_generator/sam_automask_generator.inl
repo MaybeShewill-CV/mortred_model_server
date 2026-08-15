@@ -157,7 +157,7 @@ StatusCode Impl::init(const toml::table &cfg) {
     _m_sam_encoder_input_size.height = _m_sam_encoder->get_encoder_input_shape()[2];
     _m_sam_encoder_input_size.width = _m_sam_encoder->get_encoder_input_shape()[3];
 
-    // init sam vit decoder
+    // init sam auto mask generator decoder
     _m_sam_decoder = std::make_unique<SamAmgDecoder>();
     _m_sam_decoder->init(cfg);
     if (!_m_sam_decoder->is_successfully_initialized()) {
