@@ -77,6 +77,7 @@ StatusCode YoloV7DetServer::Impl::init(const toml::table &config) {
         return common_status;
     }
     auto worker_nums = parse_worker_nums(server_section);
+    _m_worker_nums = worker_nums > 0 ? static_cast<size_t>(worker_nums) : 0;
     if (worker_nums <= 0) {
         _m_successfully_initialized = false;
         return StatusCode::SERVER_INIT_FAILED;

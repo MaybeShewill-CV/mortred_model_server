@@ -9,10 +9,10 @@
 #define MORTRED_MODEL_SERVER_BASE_SERVER_IMPL_H
 
 #include <algorithm>
-#include <any>
+#include <atomic>
 #include <cctype>
 #include <chrono>
-#include <type_traits>
+#include <thread>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -66,23 +66,42 @@ inline int parse_worker_nums(const toml::table& server_section) {
     return worker_nums;
 }
 
-/***
- * CV 图像 worker 特征：unique_ptr<BaseAiModel<base64_input, OUTPUT>> 走基类默认 do_work；
- * 其他 worker（如 LLM）必须覆写 do_work。
- */
-template <typename WORKER>
-struct is_cv_worker : std::false_type {};
+// simple RAII guard: runs the callback on scope exit (all return paths)
+template <typename F>
+class scope_guard {
+public:
+    explicit scope_guard(F&& f) : _m_func(std::move(f)) {
+    }
+    ~scope_guard() {
+        _m_func();
+    }
+    scope_guard(const scope_guard&) = delete;
+    scope_guard& operator=(const scope_guard&) = delete;
 
-template <typename INPUT, typename OUTPUT>
-struct is_cv_worker<std::unique_ptr<jinq::models::BaseAiModel<INPUT, OUTPUT> > > : std::true_type {};
+private:
+    F _m_func;
+};
 
 template<typename WORKER, typename MODEL_OUTPUT>
 class BaseAiServerImpl {
 public:
     /***
-    *
-    */
-    virtual ~BaseAiServerImpl() = default;
+     * drain in-flight go tasks before members are destroyed: wait until every
+     * worker is back in the queue (a running do_work holds exactly one worker,
+     * and after returning it touches only the heap-allocated ctx). The wait is
+     * deliberately unbounded — a hung model keeps its worker forever and the
+     * destructor blocks; that is handled by the outer process manager (e.g.
+     * web_console's SIGINT -> SIGKILL fallback), not here. Residual note: a go
+     * task popped by the executor but preempted before its first queue access
+     * is not observable through the queue; this microsecond-level window is
+     * mitigated by stop()/wait_finish() preceding destruction in all callers.
+     */
+    virtual ~BaseAiServerImpl() {
+        constexpr int k_poll_ms = 5;
+        while (_m_working_queue.size_approx() != _m_worker_nums) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(k_poll_ms));
+        }
+    }
 
     /***
      *
@@ -140,6 +159,9 @@ protected:
     std::atomic<size_t> _m_waiting_jobs{0};
     // worker queue
     moodycamel::BlockingConcurrentQueue<WORKER> _m_working_queue;
+    // total worker count: set by the concrete server's init(); the destructor
+    // drain waits for the queue to return to this size (all workers home)
+    size_t _m_worker_nums = 0;
     // model run timeout
     int _m_model_run_timeout = 500; // ms
     // server uri
@@ -181,35 +203,39 @@ protected:
 protected:
     struct series_ctx {
         protocol::HttpResponse* response = nullptr;
-        // 元数据：serve_process 创建 ctx 时写入、之后只读；
-        // do_work_cb 超时分支/正常分支均可安全读取（无并发写者）
+        // metadata: written by serve_process at creation, then read-only;
+        // safe for both branches of do_work_cb (no concurrent writers)
         std::string task_id;
         std::string task_received_ts;
         bool is_task_req_valid = false;
-        // 推理字段：只由 do_work 写；do_work_cb 正常分支读取（go 函数结束 ->
-        // handle(ref 原子同步) -> callback，happens-before），超时分支不读取
+
+        // inference fields: written only by do_work; read by the success branch
+        // of do_work_cb (go function ends -> handle -> callback, same thread
+        // happens-before); the timeout branch never reads them
         StatusCode model_run_status = StatusCode::OK;
         std::string task_finished_ts;
         double worker_run_time_consuming = 0; // ms
         double find_worker_time_consuming = 0; // ms
         MODEL_OUTPUT model_output;
-        // 推理字段（LLM）：do_work 写会话 cookie，do_work_cb 正常分支写 response header
-        std::string session_cookie;
-        // 无名 release counter：do_work 与 do_work_cb 各 count 一次（target=2）。
-        // 用指针直接 count 而非 count_by_name，避免并发请求下全局同名 counter 串扰
-        WFCounterTask* release_counter = nullptr;
+
+        // lifecycle: two release points each hold one vote —
+        //   A) the series callback (runs on normal completion AND on cancel(),
+        //      workflow native semantics, Workflow.h; dismiss() is never used);
+        //   B) the end of do_work (the go function body is uninterruptible).
+        // The two points may run on different threads (timeout/cancel paths),
+        // so the refcount must be atomic; each point decrements inline and the
+        // one observing the last vote deletes the ctx.
+        std::atomic<int> release_refs{2};
     };
 
     /***
-     * 通用任务请求：由各服务自行解析并填充 payload（CV：base64 图像字符串；LLM：Dialog 等）。
+     * 任务请求：parse_task_request 解析 base64 图像内容与调用方追踪 id。
      */
     struct task_request {
         std::string task_id;
-        std::string session_id;
         bool is_valid = false;
         StatusCode parse_status = StatusCode::OK;
-        std::string raw_body;
-        std::any payload;
+        std::string payload;
     };
 
 protected:
@@ -218,7 +244,7 @@ protected:
      * @param req
      * @return
      */
-    virtual task_request parse_task_request(const protocol::HttpRequest* req) {
+    task_request parse_task_request(const protocol::HttpRequest* req) {
         std::string req_body = protocol::HttpUtil::decode_chunked_body(req);
         auto parsed = jinq::common::parse_json_request(req_body);
 
@@ -226,10 +252,9 @@ protected:
         result.task_id = parsed.task_id;
         result.is_valid = parsed.is_valid;
         result.parse_status = parsed.parse_status;
-        result.raw_body = req_body;
         result.payload = parsed.image_content;
         return result;
-    };
+    }
 
     /***
      *
@@ -258,7 +283,7 @@ protected:
      * @param req
      * @param ctx
      */
-    virtual void do_work(const task_request& req, series_ctx* ctx);
+    void do_work(const task_request& req, series_ctx* ctx);
 
     /***
      *
@@ -333,16 +358,21 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         auto&& go_proc_cb = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb, this, serve_task);
         serve_task->set_callback(go_proc_cb);
         *series << serve_task;
-        // release counter target=2：do_work 与 do_work_cb 各 count 一次，
-        // delete ctx 只发生在"双方都结束"之后。超时 detached 场景下 do_work 是
-        // 最后结束的一方，其 count 才触发释放，杜绝 use-after-free。
-        // 用无名 counter（指针 count）而非 count_by_name：并发请求各持自己的
-        // counter 实例，避免全局同名 counter 相互串扰。
-        auto* counter = WFTaskFactory::create_counter_task(2, [](const WFCounterTask* task){
-            delete (series_ctx*)series_of(task)->get_context();
+
+        // graph-side release point + jobs accounting: the series callback runs
+        // on both normal completion and cancel() (workflow native semantics;
+        // dismiss() is never used on this path). On cancel, do_work_cb does not
+        // run, so jobs accounting must live here or it would drift. The
+        // work-side release happens at the end of do_work; the last of the two
+        // releases deletes the ctx.
+        series->set_callback([this](const SeriesWork* series) {
+            _m_finished_jobs++;
+            _m_waiting_jobs--;
+            auto* ctx = static_cast<series_ctx*>(series->get_context());
+            if (ctx->release_refs.fetch_sub(1) == 1) {
+                delete ctx;
+            }
         });
-        ctx->release_counter = counter;
-        *series << counter;
         return;
     }
     // not found valid url
@@ -367,6 +397,17 @@ template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     const BaseAiServerImpl::task_request& req,
     BaseAiServerImpl::series_ctx* ctx) {
+    // work-side release point: the go function body is uninterruptible, so
+    // this guard runs on every return path (including the timeout-detached
+    // one). It only touches the heap-allocated ctx — no member access — so it
+    // is safe even after the destructor's queue drain has completed. On the
+    // normal path the worker is returned to the queue before this guard fires.
+    scope_guard release_guard([ctx]() {
+        if (ctx->release_refs.fetch_sub(1) == 1) {
+            delete ctx;
+        }
+    });
+
     // get model worker
     WORKER worker;
     auto find_worker_start_ts = Timestamp::now();
@@ -377,8 +418,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
                 worker, std::chrono::milliseconds(_m_model_run_timeout))) {
             ctx->model_run_status = StatusCode::MODEL_RUN_TIMEOUT;
             ctx->task_finished_ts = Timestamp::now().to_format_str();
-            // 关键：提前退出也必须恰好计一次 release_ctx，否则 ctx 泄漏
-            ctx->release_counter->count();
             return;
         }
     } else {
@@ -390,21 +429,12 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     // 局部时间戳仅用于耗时统计；task_received_ts 等元数据已由 serve_process 写入 ctx
     auto task_receive_ts = Timestamp::now();
 
-    // construct model input: 默认实现为 CV 图像路径（payload 为 base64 字符串）
+    // construct model input: base64 image content from the request payload
     models::io_define::common_io::base64_input model_input;
     StatusCode status = StatusCode::OK;
     if (req.is_valid) {
-        if constexpr (is_cv_worker<WORKER>::value) {
-            try {
-                model_input.input_image_content = std::any_cast<std::string>(req.payload);
-                status = worker->run(model_input, ctx->model_output);
-            } catch (const std::bad_any_cast&) {
-                status = StatusCode::MODEL_EMPTY_INPUT_IMAGE;
-            }
-        } else {
-            // 非 CV worker 必须覆写 do_work
-            status = StatusCode::MODEL_RUN_SESSION_FAILED;
-        }
+        model_input.input_image_content = req.payload;
+        status = worker->run(model_input, ctx->model_output);
         if (status != StatusCode::OK) {
             LOG(ERROR) << "worker run failed";
         }
@@ -420,7 +450,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     auto task_finish_ts = Timestamp::now();
     ctx->task_finished_ts = task_finish_ts.to_format_str();
     ctx->worker_run_time_consuming = (task_finish_ts - task_receive_ts) * 1000;
-    ctx->release_counter->count();
 }
 
 /***
@@ -458,10 +487,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
         task_finished_ts = ctx->task_finished_ts;
         worker_run_time_consuming = ctx->worker_run_time_consuming;
         find_worker_time_consuming = ctx->find_worker_time_consuming;
-        // LLM 会话 cookie：do_work 结束后统一写 response header（happens-before）
-        if (!ctx->session_cookie.empty()) {
-            ctx->response->add_header_pair("Set-Cookie", ctx->session_cookie);
-        }
     }
     ctx->response->append_output_body(std::move(response_body));
 
@@ -469,11 +494,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
         LOG(ERROR) << "task: " << task_id << " model run timeout";
     }
 
-    // update task count
-    _m_finished_jobs++;
-    _m_waiting_jobs--;
-
-    // output log info
+    // output log info (jobs accounting is done in the series callback)
     LOG(INFO) << "task id: " << task_id
               << " received at: " << ctx->task_received_ts
               << " finished at: " << task_finished_ts
@@ -483,11 +504,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
               << " waiting jobs: " << _m_waiting_jobs
               << " finished jobs: " << _m_finished_jobs
               << " worker queue size: " << _m_working_queue.size_approx();
-
-    // 关键（原生 workflow 语义）：do_work 与 do_work_cb 各 count 一次（target=2），
-    // delete ctx 只发生在双方都结束之后；超时 detached 场景下 do_work 是最后
-    // 结束的一方，其 count 才触发释放，不再有 use-after-free。
-    ctx->release_counter->count();
 }
 
 /***

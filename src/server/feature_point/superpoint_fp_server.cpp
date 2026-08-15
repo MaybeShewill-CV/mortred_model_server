@@ -82,6 +82,7 @@ StatusCode SuperpointFpServer::Impl::init(const toml::table &config) {
         return common_status;
     }
     auto worker_nums = parse_worker_nums(server_section);
+    _m_worker_nums = worker_nums > 0 ? static_cast<size_t>(worker_nums) : 0;
     if (worker_nums <= 0) {
         _m_successfully_initialized = false;
         return StatusCode::SERVER_INIT_FAILED;
@@ -164,28 +165,31 @@ std::string SuperpointFpServer::Impl::make_response_body(
     // write msg
     writer.Key("msg");
     writer.String(msg.c_str());
-    // write bbox
     // write down data
     writer.Key("data");
     writer.StartArray();
 
-    for (auto& fp : model_output) {
-        // fille in fp conf score
+    for (const auto& fp : model_output) {
+        // every array element must be an object: Key() inside an array is
+        // invalid JSON (rapidjson asserts in debug builds)
+        writer.StartObject();
+        // fill in fp confidence score
         writer.Key("score");
         writer.Double(fp.score);
-        // fill in fp localtion
+        // fill in fp location
         writer.Key("location");
         writer.StartArray();
         writer.Double(fp.location.x);
         writer.Double(fp.location.y);
         writer.EndArray();
-        // fille in fp descriptor
+        // fill in fp descriptor
         writer.Key("descriptor");
         writer.StartArray();
-        // for (const auto& ft_val : fp.descriptor) {
-        //     writer.Double(ft_val);
-        // }
+        for (const auto& ft_val : fp.descriptor) {
+            writer.Double(ft_val);
+        }
         writer.EndArray();
+        writer.EndObject();
     }
 
     writer.EndArray();
