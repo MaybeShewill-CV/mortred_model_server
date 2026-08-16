@@ -118,13 +118,6 @@ StatusCode PPMattingServer::Impl::init(const toml::table &config) {
         _m_working_queue.enqueue(std::move(worker));
     }
 
-    // init worker run timeout
-    if (!server_section.contains("model_run_timeout")) {
-        _m_model_run_timeout = 500; // ms
-    } else {
-        _m_model_run_timeout = static_cast<int>(server_section["model_run_timeout"].value_or<int64_t>(0));
-    }
-
     // init server uri
     if (!server_section.contains("server_uri")) {
         LOG(ERROR) << "missing server uri field";

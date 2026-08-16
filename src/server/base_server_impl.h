@@ -559,6 +559,16 @@ StatusCode BaseAiServerImpl<WORKER, MODEL_OUTPUT>::parse_common_server_config(
     if (auto limit = server_section["request_size_limit"].value_or<int64_t>(0); limit > 0) {
         _m_request_size_limit = static_cast<size_t>(limit);
     }
+    // per-request model timeout: a missing key keeps the 500 ms default; a
+    // non-positive value disables the timeout — allowed, but warned, since a
+    // hung model then holds its worker forever, subsequent requests block
+    // indefinitely and clients may never receive a response
+    _m_model_run_timeout = static_cast<int>(server_section["model_run_timeout"].value_or<int64_t>(500));
+    if (_m_model_run_timeout <= 0) {
+        LOG(WARNING) << "model_run_timeout <= 0: per-request timeout disabled; a hung model "
+                     << "keeps its worker forever, subsequent requests block indefinitely and "
+                     << "clients may never receive a response";
+    }
     return parse_server_security_config(server_section);
 }
 
