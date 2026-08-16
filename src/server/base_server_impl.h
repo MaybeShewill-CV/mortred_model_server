@@ -66,6 +66,14 @@ inline int parse_worker_nums(const toml::table& server_section) {
     return worker_nums;
 }
 
+// monotonic clock in milliseconds: immune to wall-clock adjustments, used
+// only for duration spans (stuck-worker detection)
+inline int64_t monotonic_ms() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+
 template<typename WORKER, typename MODEL_OUTPUT>
 class BaseAiServerImpl {
 public:
@@ -162,11 +170,17 @@ protected:
     // model run timeout
     int _m_model_run_timeout = 500; // ms
 
-    // stuck-worker detection: each failed full-timeout queue wait is one
-    // "queue was empty for a whole timeout" observation; K in a row means the
-    // worker has been out >= K x timeout = stuck. A successful dequeue resets.
+    // stuck-worker detection: each failed full-timeout queue wait proves the
+    // queue was empty for a whole timeout, but concurrent waits OVERLAP in
+    // time when requests queue up, so the failure count alone does not prove
+    // duration (a slow-but-healthy worker can rack up K failures in ~1x
+    // timeout). Therefore the alarm needs both: K consecutive failures AND a
+    // streak spanning >= K x timeout from the first failure — only then has
+    // the checked-out worker been gone at least that long. A successful
+    // dequeue resets both.
     enum class StuckWorkerAction { LOG, EXIT };
     std::atomic<int> _m_consecutive_wait_timeouts{0};
+    std::atomic<int64_t> _m_first_wait_timeout_ms{0};   // first failure of the streak
     StuckWorkerAction _m_stuck_worker_action = StuckWorkerAction::LOG;
     int _m_stuck_worker_threshold_times = 3;
     // server uri
@@ -433,21 +447,27 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
                 worker, std::chrono::milliseconds(_m_model_run_timeout))) {
             result->model_run_status = StatusCode::MODEL_RUN_TIMEOUT;
             result->task_finished_ts = Timestamp::now().to_format_str();
-            // each failed full-timeout wait proves the queue stayed empty for
-            // a whole timeout; K in a row proves the checked-out worker has
-            // been gone >= K x timeout — stuck. Report once per episode, or
-            // fail fast so an external supervisor restarts with fresh workers.
+            // span-based stuck judgment: K consecutive failures are necessary
+            // but not sufficient (overlapping waits make the count alone lie);
+            // require the streak to span >= K x timeout so a slow-but-healthy
+            // worker under queue pressure cannot trip the alarm
             int consecutive = _m_consecutive_wait_timeouts.fetch_add(1) + 1;
-            if (consecutive >= _m_stuck_worker_threshold_times) {
+            if (consecutive == 1) {
+                _m_first_wait_timeout_ms.store(monotonic_ms());
+            }
+            int64_t first = _m_first_wait_timeout_ms.load();
+            int64_t span_ms = first > 0 ? monotonic_ms() - first : 0;
+            int64_t threshold_ms = static_cast<int64_t>(_m_stuck_worker_threshold_times) *
+                                   _m_model_run_timeout;
+            if (consecutive >= _m_stuck_worker_threshold_times && span_ms >= threshold_ms) {
                 if (_m_stuck_worker_action == StuckWorkerAction::EXIT) {
                     LOG(FATAL) << "worker wait timed out " << consecutive
-                               << " times in a row with an empty queue (>="
-                               << _m_stuck_worker_threshold_times << " x "
-                               << _m_model_run_timeout << " ms): worker stuck, "
-                               << "exiting for supervisor restart";
+                               << " times in a row with an empty queue, spanning "
+                               << span_ms << " ms (>= " << threshold_ms
+                               << " ms): worker stuck, exiting for supervisor restart";
                 } else if (consecutive == _m_stuck_worker_threshold_times) {
                     LOG(ERROR) << "worker stuck: " << consecutive
-                               << " consecutive full-timeout waits on an empty queue";
+                               << " consecutive full-timeout waits spanning " << span_ms << " ms";
                 }
             }
             return;
@@ -456,8 +476,9 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
         // model_run_timeout <= 0 表示不设超时，用无界阻塞等待
         _m_working_queue.wait_dequeue(worker);
     }
-    // a successful dequeue means a worker is back: reset the stuck counter
+    // a successful dequeue means a worker is back: reset the stuck streak
     _m_consecutive_wait_timeouts.store(0);
+    _m_first_wait_timeout_ms.store(0);
     result->find_worker_time_consuming = (Timestamp::now() - find_worker_start_ts) * 1000;
 
     // 局部时间戳仅用于耗时统计；task_id/task_received_ts 等元数据由 serve_process
