@@ -161,6 +161,14 @@ protected:
     size_t _m_worker_nums = 0;
     // model run timeout
     int _m_model_run_timeout = 500; // ms
+
+    // stuck-worker detection: each failed full-timeout queue wait is one
+    // "queue was empty for a whole timeout" observation; K in a row means the
+    // worker has been out >= K x timeout = stuck. A successful dequeue resets.
+    enum class StuckWorkerAction { LOG, EXIT };
+    std::atomic<int> _m_consecutive_wait_timeouts{0};
+    StuckWorkerAction _m_stuck_worker_action = StuckWorkerAction::LOG;
+    int _m_stuck_worker_threshold_times = 3;
     // server uri
     std::string _m_server_uri;
     // bearer token 鉴权（空 = 关闭）
@@ -425,12 +433,31 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
                 worker, std::chrono::milliseconds(_m_model_run_timeout))) {
             result->model_run_status = StatusCode::MODEL_RUN_TIMEOUT;
             result->task_finished_ts = Timestamp::now().to_format_str();
+            // each failed full-timeout wait proves the queue stayed empty for
+            // a whole timeout; K in a row proves the checked-out worker has
+            // been gone >= K x timeout — stuck. Report once per episode, or
+            // fail fast so an external supervisor restarts with fresh workers.
+            int consecutive = _m_consecutive_wait_timeouts.fetch_add(1) + 1;
+            if (consecutive >= _m_stuck_worker_threshold_times) {
+                if (_m_stuck_worker_action == StuckWorkerAction::EXIT) {
+                    LOG(FATAL) << "worker wait timed out " << consecutive
+                               << " times in a row with an empty queue (>="
+                               << _m_stuck_worker_threshold_times << " x "
+                               << _m_model_run_timeout << " ms): worker stuck, "
+                               << "exiting for supervisor restart";
+                } else if (consecutive == _m_stuck_worker_threshold_times) {
+                    LOG(ERROR) << "worker stuck: " << consecutive
+                               << " consecutive full-timeout waits on an empty queue";
+                }
+            }
             return;
         }
     } else {
         // model_run_timeout <= 0 表示不设超时，用无界阻塞等待
         _m_working_queue.wait_dequeue(worker);
     }
+    // a successful dequeue means a worker is back: reset the stuck counter
+    _m_consecutive_wait_timeouts.store(0);
     result->find_worker_time_consuming = (Timestamp::now() - find_worker_start_ts) * 1000;
 
     // 局部时间戳仅用于耗时统计；task_id/task_received_ts 等元数据由 serve_process
@@ -568,6 +595,18 @@ StatusCode BaseAiServerImpl<WORKER, MODEL_OUTPUT>::parse_common_server_config(
         LOG(WARNING) << "model_run_timeout <= 0: per-request timeout disabled; a hung model "
                      << "keeps its worker forever, subsequent requests block indefinitely and "
                      << "clients may never receive a response";
+    }
+    // stuck-worker detection: "log" only reports; "exit" fails fast so an
+    // external supervisor restarts the process with fresh workers. The
+    // threshold counts consecutive full-timeout queue waits (only meaningful
+    // when model_run_timeout > 0)
+    auto action = server_section["stuck_worker_action"].value_or<std::string>("log");
+    _m_stuck_worker_action = (action == "exit") ? StuckWorkerAction::EXIT
+                                                : StuckWorkerAction::LOG;
+    _m_stuck_worker_threshold_times = static_cast<int>(
+        server_section["stuck_worker_threshold_times"].value_or<int64_t>(3));
+    if (_m_stuck_worker_threshold_times <= 0) {
+        _m_stuck_worker_threshold_times = 3;   // misconfigured: keep the safe default
     }
     return parse_server_security_config(server_section);
 }
