@@ -76,12 +76,24 @@ public:
      * go closure, kept alive by the framework's task lifetime). The wait is
      * deliberately unbounded — a hung model keeps its worker forever and the
      * destructor blocks; that is handled by the outer process manager (e.g.
-     * web_console's SIGINT -> SIGKILL fallback), not here. Residual note: a go
-     * task popped by the executor but preempted before its first queue access
-     * is not observable through the queue; this microsecond-level window is
-     * mitigated by stop()/wait_finish() preceding destruction in all callers.
+     * web_console's SIGINT -> SIGKILL fallback), not here. The drain only runs
+     * when init succeeded: the worker watermark is committed at the end of a
+     * successful init, so a partially-filled queue from a failed init would
+     * otherwise spin forever — on failure the queue destructor releases the
+     * remaining workers itself. Residual note: a go task popped by the
+     * executor but preempted before its first queue access is not observable
+     * through the queue; this microsecond-level window is mitigated by
+     * stop()/wait_finish() preceding destruction in all callers.
      */
     virtual ~BaseAiServerImpl() {
+        // only a fully initialized server can possibly hold exactly
+        // _m_worker_nums workers: on init failure the queue may hold a
+        // partial set (the watermark is committed only after the queue is
+        // fully filled), and the queue destructor releases those workers
+        // itself — draining here would spin forever
+        if (!_m_successfully_initialized) {
+            return;
+        }
         constexpr int k_poll_ms = 5;
         while (_m_working_queue.size_approx() != _m_worker_nums) {
             std::this_thread::sleep_for(std::chrono::milliseconds(k_poll_ms));
