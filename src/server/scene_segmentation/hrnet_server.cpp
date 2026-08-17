@@ -57,8 +57,9 @@ class HRNetServer::Impl : public BaseAiServerImpl<HRNetPtr, std_scene_segmentati
      * @param model_output
      * @return
      */
-    std::string make_response_body(
-        const std::string& task_id,
+    void fill_response_data(
+        rapidjson::Document::AllocatorType& allocator,
+        rapidjson::Document& data,
         const StatusCode& status,
         const std_scene_segmentation_output& model_output) override;
 };
@@ -142,53 +143,35 @@ StatusCode HRNetServer::Impl::init(const toml::table &config) {
  * @param model_output
  * @return
  */
-std::string HRNetServer::Impl::make_response_body(
-    const std::string& task_id,
+void HRNetServer::Impl::fill_response_data(
+    rapidjson::Document::AllocatorType& allocator,
+    rapidjson::Document& data,
     const StatusCode& status,
     const std_scene_segmentation_output& model_output) {
-    int code = jinq::common::to_underlying(status);
-    std::string msg = status == StatusCode::OK ? "success" : jinq::common::status_code_to_str(status);
-
-    rapidjson::StringBuffer buf;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
-    writer.StartObject();
-    // write req id
-    writer.Key("req_id");
-    writer.String(task_id.c_str());
-    // write code
-    writer.Key("code");
-    writer.Int(code);
-    // write msg
-    writer.Key("msg");
-    writer.String(msg.c_str());
-    // write output
-    writer.Key("data");
-    writer.StartObject();
-    writer.Key("segment_result");
-    if (model_output.segmentation_result.empty()) {
-        writer.String("");
-    } else {
-        std::vector<uchar> imencode_buffer;
-        cv::imencode(".png", model_output.segmentation_result, imencode_buffer);
-        auto output_image_data = base64::encode(imencode_buffer.data(), imencode_buffer.size());
-        writer.String(output_image_data.c_str());
+    data.SetObject();
+    if (status != StatusCode::OK) {
+        return;
     }
-    writer.Key("colorized_seg_mask");
     if (model_output.segmentation_result.empty()) {
-        writer.String("");
-    } else {
-        cv::Mat color_mask;
-        cv_utils::colorize_segmentation_mask(model_output.segmentation_result, color_mask, 80);
-        std::vector<uchar> imencode_buffer;
-        cv::imencode(".png", color_mask, imencode_buffer);
-        auto output_image_data = base64::encode(imencode_buffer.data(), imencode_buffer.size());
-        writer.String(output_image_data.c_str());
+        data.AddMember("segment_result", "", allocator);
+        data.AddMember("colorized_seg_mask", "", allocator);
+        return;
     }
+    std::vector<uchar> seg_buffer;
+    cv::imencode(".png", model_output.segmentation_result, seg_buffer);
+    auto seg_data = base64::encode(seg_buffer.data(), seg_buffer.size());
+    data.AddMember("segment_result",
+                   rapidjson::Value(seg_data.c_str(), seg_data.size(), allocator),
+                   allocator);
 
-    writer.EndObject();
-    writer.EndObject();
-
-    return buf.GetString();
+    cv::Mat color_mask;
+    cv_utils::colorize_segmentation_mask(model_output.segmentation_result, color_mask, 80);
+    std::vector<uchar> color_buffer;
+    cv::imencode(".png", color_mask, color_buffer);
+    auto color_data = base64::encode(color_buffer.data(), color_buffer.size());
+    data.AddMember("colorized_seg_mask",
+                   rapidjson::Value(color_data.c_str(), color_data.size(), allocator),
+                   allocator);
 }
 
 /***

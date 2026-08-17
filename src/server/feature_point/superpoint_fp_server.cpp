@@ -54,8 +54,9 @@ protected:
      * @param model_output
      * @return
      */
-    std::string make_response_body(
-        const std::string& task_id,
+    void fill_response_data(
+        rapidjson::Document::AllocatorType& allocator,
+        rapidjson::Document& data,
         const StatusCode& status,
         const std_feature_point_output& model_output) override;
 };
@@ -140,56 +141,32 @@ StatusCode SuperpointFpServer::Impl::init(const toml::table &config) {
  * @param model_output
  * @return
  */
-std::string SuperpointFpServer::Impl::make_response_body(
-    const std::string& task_id,
+void SuperpointFpServer::Impl::fill_response_data(
+    rapidjson::Document::AllocatorType& allocator,
+    rapidjson::Document& data,
     const StatusCode& status,
     const std_feature_point_output& model_output) {
-    int code = jinq::common::to_underlying(status);
-    std::string msg = status == StatusCode::OK ? "success" : jinq::common::status_code_to_str(status);
-
-    rapidjson::StringBuffer buf;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
-    writer.StartObject();
-    // write req id
-    writer.Key("req_id");
-    writer.String(task_id.c_str());
-    // write code
-    writer.Key("code");
-    writer.Int(code);
-    // write msg
-    writer.Key("msg");
-    writer.String(msg.c_str());
-    // write down data
-    writer.Key("data");
-    writer.StartArray();
-
-    for (const auto& fp : model_output) {
-        // every array element must be an object: Key() inside an array is
-        // invalid JSON (rapidjson asserts in debug builds)
-        writer.StartObject();
-        // fill in fp confidence score
-        writer.Key("score");
-        writer.Double(fp.score);
-        // fill in fp location
-        writer.Key("location");
-        writer.StartArray();
-        writer.Double(fp.location.x);
-        writer.Double(fp.location.y);
-        writer.EndArray();
-        // fill in fp descriptor
-        writer.Key("descriptor");
-        writer.StartArray();
-        for (const auto& ft_val : fp.descriptor) {
-            writer.Double(ft_val);
-        }
-        writer.EndArray();
-        writer.EndObject();
+    data.SetArray();
+    if (status != StatusCode::OK) {
+        return;
     }
+    for (const auto& fp : model_output) {
+        rapidjson::Value item(rapidjson::kObjectType);
+        item.AddMember("score", fp.score, allocator);
 
-    writer.EndArray();
-    writer.EndObject();
+        rapidjson::Value location(rapidjson::kArrayType);
+        location.PushBack(fp.location.x, allocator);
+        location.PushBack(fp.location.y, allocator);
+        item.AddMember("location", location, allocator);
 
-    return buf.GetString();
+        rapidjson::Value descriptor(rapidjson::kArrayType);
+        for (const auto& ft_val : fp.descriptor) {
+            descriptor.PushBack(ft_val, allocator);
+        }
+        item.AddMember("descriptor", descriptor, allocator);
+
+        data.PushBack(item, allocator);
+    }
 }
 
 /***

@@ -55,8 +55,9 @@ protected:
      * @param model_output
      * @return
      */
-    std::string make_response_body(
-        const std::string& task_id,
+    void fill_response_data(
+        rapidjson::Document::AllocatorType& allocator,
+        rapidjson::Document& data,
         const StatusCode& status,
         const std_enhancement_output& model_output) override;
 };
@@ -140,41 +141,27 @@ StatusCode EnlightenGanServer::Impl::init(const toml::table &config) {
  * @param model_output
  * @return
  */
-std::string EnlightenGanServer::Impl::make_response_body(
-    const std::string& task_id,
+void EnlightenGanServer::Impl::fill_response_data(
+    rapidjson::Document::AllocatorType& allocator,
+    rapidjson::Document& data,
     const StatusCode& status,
     const std_enhancement_output& model_output) {
-    int code = jinq::common::to_underlying(status);
-    std::string msg = status == StatusCode::OK ? "success" : jinq::common::status_code_to_str(status);
-
-    rapidjson::StringBuffer buf;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
-    writer.StartObject();
-    // write req id
-    writer.Key("req_id");
-    writer.String(task_id.c_str());
-    // write code
-    writer.Key("code");
-    writer.Int(code);
-    // write msg
-    writer.Key("msg");
-    writer.String(msg.c_str());
-    // write output
-    writer.Key("data");
-    writer.StartObject();
-    writer.Key("enhance_result");
-    if (model_output.enhancement_result.empty()) {
-        writer.String("");
-    } else {
-        std::vector<uchar> imencode_buffer;
-        cv::imencode(".jpg", model_output.enhancement_result, imencode_buffer);
-        auto output_image_data = base64::encode(imencode_buffer.data(), imencode_buffer.size());
-        writer.String(output_image_data.c_str());
+    data.SetObject();
+    if (status != StatusCode::OK) {
+        return;
     }
-    writer.EndObject();
-    writer.EndObject();
-
-    return buf.GetString();
+    if (model_output.enhancement_result.empty()) {
+        data.AddMember("enhance_result", "", allocator);
+        return;
+    }
+    std::vector<uchar> imencode_buffer;
+    cv::imencode(".jpg", model_output.enhancement_result, imencode_buffer);
+    auto output_image_data = base64::encode(imencode_buffer.data(), imencode_buffer.size());
+    data.AddMember("enhance_result",
+                   rapidjson::Value(output_image_data.c_str(),
+                                    output_image_data.size(),
+                                    allocator),
+                   allocator);
 }
 
 /***

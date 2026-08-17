@@ -54,8 +54,9 @@ protected:
      * @param model_output
      * @return
      */
-    std::string make_response_body(
-        const std::string& task_id,
+    void fill_response_data(
+        rapidjson::Document::AllocatorType& allocator,
+        rapidjson::Document& data,
         const StatusCode& status,
         const std_classification_output& model_output) override;
 };
@@ -144,49 +145,26 @@ StatusCode MobileNetv2Server::Impl::init(const toml::table& config) {
  * @param model_output
  * @return
  */
-std::string MobileNetv2Server::Impl::make_response_body(
-    const std::string& task_id,
+void MobileNetv2Server::Impl::fill_response_data(
+    rapidjson::Document::AllocatorType& allocator,
+    rapidjson::Document& data,
     const StatusCode& status,
     const std_classification_output& model_output) {
-    int code = jinq::common::to_underlying(status);
-    std::string msg = status == StatusCode::OK ? "success" : jinq::common::status_code_to_str(status);
-    int cls_id = -1;
-    float scores = -1.0;
-    std::string category;
-
-    if (status == StatusCode::OK) {
-        cls_id = model_output.class_id;
-        if (cls_id >= 0 && cls_id < static_cast<int>(model_output.scores.size())) {
-            scores = model_output.scores[cls_id];
-        }
-        category = model_output.category;
+    data.SetObject();
+    if (status != StatusCode::OK) {
+        return;
     }
-
-    rapidjson::StringBuffer buf;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
-    writer.StartObject();
-    // write req id
-    writer.Key("req_id");
-    writer.String(task_id.c_str());
-    // write code
-    writer.Key("code");
-    writer.Int(code);
-    // write msg
-    writer.Key("msg");
-    writer.String(msg.c_str());
-    // write class result
-    writer.Key("data");
-    writer.StartObject();
-    writer.Key("class_id");
-    writer.Int(cls_id);
-    writer.Key("scores");
-    writer.Double(scores);
-    writer.Key("category");
-    writer.String(category.c_str());
-    writer.EndObject();
-    writer.EndObject();
-
-    return buf.GetString();
+    data.AddMember("class_id", model_output.class_id, allocator);
+    data.AddMember("category",
+                   rapidjson::Value(model_output.category.c_str(),
+                                    model_output.category.size(),
+                                    allocator),
+                   allocator);
+    rapidjson::Value scores(rapidjson::kArrayType);
+    for (float s : model_output.scores) {
+        scores.PushBack(s, allocator);
+    }
+    data.AddMember("scores", scores, allocator);
 }
 
 /****************** MobileNetv2Server Implementation **************/

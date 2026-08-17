@@ -53,8 +53,9 @@ class CenterfaceDetServer::Impl : public BaseAiServerImpl<CenterfaceDetPtr, std_
      * @param model_output
      * @return
      */
-    std::string make_response_body(
-        const std::string& task_id,
+    void fill_response_data(
+        rapidjson::Document::AllocatorType& allocator,
+        rapidjson::Document& data,
         const StatusCode& status,
         const std_face_detection_output& model_output) override;
 };
@@ -138,83 +139,48 @@ StatusCode CenterfaceDetServer::Impl::init(const toml::table &config) {
  * @param model_output
  * @return
  */
-std::string CenterfaceDetServer::Impl::make_response_body(
-    const std::string& task_id,
+void CenterfaceDetServer::Impl::fill_response_data(
+    rapidjson::Document::AllocatorType& allocator,
+    rapidjson::Document& data,
     const StatusCode& status,
     const std_face_detection_output& model_output) {
-    int code = jinq::common::to_underlying(status);
-    std::string msg = status == StatusCode::OK ? "success" : jinq::common::status_code_to_str(status);
-
-    rapidjson::StringBuffer buf;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
-    writer.StartObject();
-    // write req id
-    writer.Key("req_id");
-    writer.String(task_id.c_str());
-    // write code
-    writer.Key("code");
-    writer.Int(code);
-    // write msg
-    writer.Key("msg");
-    writer.String(msg.c_str());
-    // write bbox
-    // write down data
-    writer.Key("data");
-    writer.StartArray();
-
-    for (auto& obj_box : model_output) {
-        int cls_id = obj_box.class_id;
-        auto score = obj_box.score;
-        auto category = obj_box.category;
-
-        writer.StartObject();
-        // write obj cls id
-        writer.Key("cls_id");
-        writer.String(std::to_string(cls_id).c_str());
-        // write obj score
-        writer.Key("score");
-        writer.String(std::to_string(score).c_str());
-        // write obj category
-        writer.Key("category");
-        writer.String(category.c_str());
-        // write obj point coords
-        writer.Key("box");
-        writer.StartArray();
-        // left top coords
-        writer.StartArray();
-        writer.Double(obj_box.bbox.x);
-        writer.Double(obj_box.bbox.y);
-        writer.EndArray();
-        // right bottom coords
-        writer.StartArray();
-        writer.Double(obj_box.bbox.x + obj_box.bbox.width);
-        writer.Double(obj_box.bbox.y + obj_box.bbox.height);
-        writer.EndArray();
-        writer.EndArray();
-        // write face landmarks
-        writer.Key("landmark");
-        writer.StartArray();
-
-        for (const auto& pt : obj_box.landmarks) {
-            writer.StartArray();
-            writer.Double(pt.x);
-            writer.Double(pt.y);
-            writer.EndArray();
-        }
-
-        writer.EndArray();
-        // write extra detail infos
-        writer.Key("detail_infos");
-        writer.StartObject();
-        writer.EndObject();
-
-        writer.EndObject();
+    data.SetArray();
+    if (status != StatusCode::OK) {
+        return;
     }
+    for (const auto& obj_box : model_output) {
+        rapidjson::Value item(rapidjson::kObjectType);
+        item.AddMember("cls_id", obj_box.class_id, allocator);
+        item.AddMember("score", obj_box.score, allocator);
+        item.AddMember("category",
+                       rapidjson::Value(obj_box.category.c_str(),
+                                        obj_box.category.size(),
+                                        allocator),
+                       allocator);
 
-    writer.EndArray();
-    writer.EndObject();
+        rapidjson::Value box(rapidjson::kArrayType);
+        rapidjson::Value left_top(rapidjson::kArrayType);
+        left_top.PushBack(obj_box.bbox.x, allocator);
+        left_top.PushBack(obj_box.bbox.y, allocator);
+        rapidjson::Value right_bottom(rapidjson::kArrayType);
+        right_bottom.PushBack(obj_box.bbox.x + obj_box.bbox.width, allocator);
+        right_bottom.PushBack(obj_box.bbox.y + obj_box.bbox.height, allocator);
+        box.PushBack(left_top, allocator);
+        box.PushBack(right_bottom, allocator);
+        item.AddMember("box", box, allocator);
 
-    return buf.GetString();
+        rapidjson::Value landmark(rapidjson::kArrayType);
+        for (const auto& pt : obj_box.landmarks) {
+            rapidjson::Value point(rapidjson::kArrayType);
+            point.PushBack(pt.x, allocator);
+            point.PushBack(pt.y, allocator);
+            landmark.PushBack(point, allocator);
+        }
+        item.AddMember("landmark", landmark, allocator);
+
+        item.AddMember("detail_infos", rapidjson::Value(rapidjson::kObjectType), allocator);
+        data.PushBack(item, allocator);
+    }
 }
 
 /***

@@ -56,8 +56,9 @@ protected:
      * @param model_output
      * @return
      */
-    std::string make_response_body(
-        const std::string& task_id,
+    void fill_response_data(
+        rapidjson::Document::AllocatorType& allocator,
+        rapidjson::Document& data,
         const StatusCode& status,
         const std_text_regions_output & model_output) override;
 };
@@ -141,71 +142,42 @@ StatusCode DBNetServer::Impl::init(const toml::table &config) {
  * @param model_output
  * @return
  */
-std::string DBNetServer::Impl::make_response_body(
-    const std::string& task_id,
+void DBNetServer::Impl::fill_response_data(
+    rapidjson::Document::AllocatorType& allocator,
+    rapidjson::Document& data,
     const StatusCode& status,
     const std_text_regions_output & model_output) {
-    int code = jinq::common::to_underlying(status);
-    std::string msg = status == StatusCode::OK ? "success" : jinq::common::status_code_to_str(status);
-
-    rapidjson::StringBuffer buf;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
-    writer.StartObject();
-    // write req id
-    writer.Key("req_id");
-    writer.String(task_id.c_str());
-    // write code
-    writer.Key("code");
-    writer.Int(code);
-    // write msg
-    writer.Key("msg");
-    writer.String(msg.c_str());
-    // write output
-    writer.Key("data");
-    writer.StartArray();
-    for (const auto& region : model_output) {
-        auto score = region.score;
-        auto bbox = region.bbox;
-        auto polygon = region.polygon;
-        // write score
-        writer.StartObject();
-        writer.Key("score");
-        writer.Double(score);
-        // write bbox
-        writer.Key("bbox");
-        writer.StartArray();
-        // left top coords
-        writer.StartArray();
-        writer.Double(bbox.x);
-        writer.Double(bbox.y);
-        writer.EndArray();
-        // right bottom coords
-        writer.StartArray();
-        writer.Double(bbox.x + bbox.width);
-        writer.Double(bbox.y + bbox.height);
-        writer.EndArray();
-        writer.EndArray();
-        // write text region polygon
-        writer.Key("polygon");
-        writer.StartArray();
-        for (const auto& pt : polygon) {
-            writer.StartArray();
-            writer.Double(pt.x);
-            writer.Double(pt.y);
-            writer.EndArray();
-        }
-        writer.EndArray();
-        // write extra detail infos
-        writer.Key("detail_infos");
-        writer.StartObject();
-        writer.EndObject();
-
-        writer.EndObject();
+    data.SetArray();
+    if (status != StatusCode::OK) {
+        return;
     }
-    writer.EndArray();
-    writer.EndObject();
+    for (const auto& region : model_output) {
+        rapidjson::Value item(rapidjson::kObjectType);
+        item.AddMember("score", region.score, allocator);
 
-    return buf.GetString();
+        rapidjson::Value bbox(rapidjson::kArrayType);
+        rapidjson::Value left_top(rapidjson::kArrayType);
+        left_top.PushBack(region.bbox.x, allocator);
+        left_top.PushBack(region.bbox.y, allocator);
+        rapidjson::Value right_bottom(rapidjson::kArrayType);
+        right_bottom.PushBack(region.bbox.x + region.bbox.width, allocator);
+        right_bottom.PushBack(region.bbox.y + region.bbox.height, allocator);
+        bbox.PushBack(left_top, allocator);
+        bbox.PushBack(right_bottom, allocator);
+        item.AddMember("bbox", bbox, allocator);
+
+        rapidjson::Value polygon(rapidjson::kArrayType);
+        for (const auto& pt : region.polygon) {
+            rapidjson::Value point(rapidjson::kArrayType);
+            point.PushBack(pt.x, allocator);
+            point.PushBack(pt.y, allocator);
+            polygon.PushBack(point, allocator);
+        }
+        item.AddMember("polygon", polygon, allocator);
+
+        item.AddMember("detail_infos", rapidjson::Value(rapidjson::kObjectType), allocator);
+        data.PushBack(item, allocator);
+    }
 }
 
 /***
