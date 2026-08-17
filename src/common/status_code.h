@@ -24,6 +24,13 @@ namespace common {
     X(MODEL_EMPTY_OUTPUT, 5, "model output empty") \
     X(SERVER_INIT_FAILED, 11, "server init failed") \
     X(JSON_DECODE_ERROR, 50, "decode json error") \
+    X(UNSUPPORTED_MEDIA_TYPE, 60, "unsupported media type") \
+    X(REQUEST_ENTITY_TOO_LARGE, 61, "request entity too large") \
+    X(METHOD_NOT_ALLOWED, 62, "method not allowed") \
+    X(NOT_FOUND, 63, "not found") \
+    X(INTERNAL_ERROR, 64, "internal server error") \
+    X(UNAUTHORIZED, 401, "unauthorized") \
+    X(RATE_LIMITED, 429, "too many requests") \
     X(TOKENIZE_UNKNOWN_TOKEN, 80, "unknown token") \
     X(TRT_CUDA_ERROR, 90, "tensorrt cuda error") \
     X(TRT_ALLOC_MEMO_FAILED, 91, "tensorrt allocate memory failed") \

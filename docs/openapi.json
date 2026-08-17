@@ -1,0 +1,70 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Mortred Model Server API",
+    "version": "1.0.0",
+    "description": "Unified HTTP API for Mortred model servers."
+  },
+  "paths": {
+    "/healthz": {
+      "get": {
+        "summary": "Liveness probe",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "summary": "Readiness probe",
+        "responses": {
+          "200": {
+            "description": "Ready"
+          },
+          "503": {
+            "description": "Not ready"
+          }
+        }
+      }
+    },
+    "/v1/classification/resnet": {
+      "post": {
+        "summary": "ResNet classification",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["img_data"],
+                "properties": {
+                  "img_data": {
+                    "type": "string",
+                    "description": "Base64 encoded image"
+                  },
+                  "req_id": {
+                    "type": "string",
+                    "description": "Optional request trace id"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "504": {
+            "description": "Model timeout"
+          }
+        }
+      }
+    }
+  }
+}
