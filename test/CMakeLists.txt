@@ -43,6 +43,7 @@ set(TEST_LIST
     cv_image_input_unittest
     worker_nums_unittest
     http_contract_test
+    prometheus_metrics_test
 )
 
 if(MORTRED_BUILD_FULL)

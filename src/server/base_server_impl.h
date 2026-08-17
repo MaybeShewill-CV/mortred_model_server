@@ -42,6 +42,7 @@
 #include "common/file_path_util.h"
 #include "models/base_model.h"
 #include "models/model_io_define.h"
+#include "server/prometheus_metrics.h"
 #include "server/http_status.h"
 #include "server/rate_limiter.h"
 
@@ -207,6 +208,7 @@ protected:
     // 每客户端 IP 每秒最大请求数（<= 0 = 关闭）
     int _m_rate_limit_qps = 0;
     FixedWindowRateLimiter _m_rate_limiter{0};
+    PrometheusMetrics _m_metrics;
 
 protected:
     /***
@@ -386,13 +388,16 @@ protected:
  */
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
+    _m_metrics.set_model(_m_server_uri);
     // 限流：端口上的所有请求（含健康检查）按客户端 IP 计数
     if (_m_rate_limit_qps > 0 && !_m_rate_limiter.allow(peer_ip_of(task))) {
+        _m_metrics.inc_http_requests(task->get_req()->get_method(), "429");
         reply_rate_limited(task);
         return;
     }
     // 鉴权：/welcome 与 /hello_world 保持公开（供健康检查），其余端点需要 Bearer Token
     const char* request_uri = task->get_req()->get_request_uri();
+    const char* request_method = task->get_req()->get_method();
     bool is_health_endpoint = strcmp(request_uri, "/welcome") == 0 ||
                               strcmp(request_uri, "/hello_world") == 0 ||
                               strcmp(request_uri, "/healthz") == 0 ||
@@ -401,6 +406,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
     if (!is_health_endpoint &&
         !jinq::common::is_bearer_authorized(
             authorization_header_of(task->get_req()), _m_auth_token)) {
+        _m_metrics.inc_http_requests(request_method, "401");
         reply_unauthorized(task);
         return;
     }
@@ -412,8 +418,10 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         return;
     }
     if (strcmp(request_uri, "/ready") == 0) {
+        const bool ready = _m_successfully_initialized && _m_working_queue.size_approx() > 0;
+        _m_metrics.set_ready(ready);
         rapidjson::Document data;
-        if (_m_successfully_initialized && _m_working_queue.size_approx() > 0) {
+        if (ready) {
             reply_json(task, "", StatusCode::OK, std::move(data));
         } else {
             reply_json(task, "", StatusCode::SERVER_INIT_FAILED, std::move(data));
@@ -425,19 +433,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         auto* resp = task->get_resp();
         resp->set_status_code("200");
         resp->add_header_pair("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
-        std::string body;
-        body += "# HELP mortred_received_jobs Total received jobs\n";
-        body += "# TYPE mortred_received_jobs counter\n";
-        body += "mortred_received_jobs " + std::to_string(_m_received_jobs.load()) + "\n";
-        body += "# HELP mortred_finished_jobs Total finished jobs\n";
-        body += "# TYPE mortred_finished_jobs counter\n";
-        body += "mortred_finished_jobs " + std::to_string(_m_finished_jobs.load()) + "\n";
-        body += "# HELP mortred_waiting_jobs Current waiting jobs\n";
-        body += "# TYPE mortred_waiting_jobs gauge\n";
-        body += "mortred_waiting_jobs " + std::to_string(_m_waiting_jobs.load()) + "\n";
-        body += "# HELP mortred_available_workers Available workers\n";
-        body += "# TYPE mortred_available_workers gauge\n";
-        body += "mortred_available_workers " + std::to_string(_m_working_queue.size_approx()) + "\n";
+        auto body = _m_metrics.render();
         resp->append_output_body(body.data(), body.size());
         return;
     }
@@ -455,6 +451,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
     else if (strcmp(request_uri, _m_server_uri.c_str()) == 0) {
         const char* request_method = task->get_req()->get_method();
         if (strcmp(request_method, "POST") != 0) {
+            _m_metrics.inc_http_requests(request_method, "405");
             rapidjson::Document data;
             reply_json(task, "", StatusCode::METHOD_NOT_ALLOWED, std::move(data));
             return;
@@ -468,6 +465,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         }
         _m_waiting_jobs++;
         _m_received_jobs++;
+        _m_metrics.inc_received_jobs();
         // init series work: all per-request state rides inside the go task
         // object (functor members + callback closure members), so the
         // framework's task lifetime frees it on every path — no manual
@@ -501,6 +499,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         // needed here — per-request state dies with the task object itself.
         series->set_callback([this](const SeriesWork*) {
             _m_finished_jobs++;
+            _m_metrics.inc_finished_jobs();
             _m_waiting_jobs--;
         });
         return;
@@ -511,6 +510,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
             return;
         }
         rapidjson::Document data;
+        _m_metrics.inc_http_requests(request_method, "404");
         reply_json(task, "", StatusCode::NOT_FOUND, std::move(data));
         return;
     }
@@ -574,6 +574,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     _m_consecutive_wait_timeouts.store(0);
     _m_first_wait_timeout_ms.store(0);
     result->find_worker_time_consuming = (Timestamp::now() - find_worker_start_ts) * 1000;
+    _m_metrics.observe_queue_wait_ms(result->find_worker_time_consuming);
 
     // 局部时间戳仅用于耗时统计；task_id/task_received_ts 等元数据由 serve_process
     // 写进回调闭包携带的 request_meta，routine 不接触
@@ -600,6 +601,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
 
     auto task_finish_ts = Timestamp::now();
     result->task_finished_ts = task_finish_ts.to_format_str();
+    _m_metrics.observe_inference_duration_ms(result->worker_run_time_consuming);
     result->worker_run_time_consuming = (task_finish_ts - task_receive_ts) * 1000;
 }
 
@@ -648,6 +650,22 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(
         find_worker_time_consuming = result->find_worker_time_consuming;
     }
     reply_json(task, task_id, status, std::move(data));
+
+    _m_metrics.inc_http_requests("POST", std::to_string(http_status_of(status)));
+    _m_metrics.observe_http_duration_ms("POST", std::to_string(http_status_of(status)),
+                                        worker_run_time_consuming + find_worker_time_consuming);
+    _m_metrics.inc_inference_requests(std::to_string(jinq::common::to_underlying(status)));
+    if (status == StatusCode::OK) {
+        _m_metrics.inc_inference_success();
+    } else {
+        _m_metrics.inc_inference_failure();
+    }
+    _m_metrics.set_workers_available(_m_working_queue.size_approx());
+    _m_metrics.set_workers_busy(_m_worker_nums > _m_working_queue.size_approx()
+                                    ? _m_worker_nums - _m_working_queue.size_approx()
+                                    : 0);
+    _m_metrics.set_queue_depth(_m_waiting_jobs.load());
+    _m_metrics.set_waiting_jobs(_m_waiting_jobs.load());
 
     if (state != WFT_STATE_SUCCESS) {
         LOG(ERROR) << "task: " << task_id << " model run timeout";
