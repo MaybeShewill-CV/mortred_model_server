@@ -12,6 +12,7 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <cstdio>
 #include <thread>
 
 #include <arpa/inet.h>
@@ -33,6 +34,7 @@
 #include "common/auth_token.h"
 #include "common/base64.h"
 #include "common/cv_utils.h"
+#include "common/http_response.h"
 #include "common/json_request_parser.h"
 #include "common/request_size_limit.h"
 #include "common/status_code.h"
@@ -40,6 +42,7 @@
 #include "common/file_path_util.h"
 #include "models/base_model.h"
 #include "models/model_io_define.h"
+#include "server/http_status.h"
 #include "server/rate_limiter.h"
 
 namespace jinq {
@@ -72,6 +75,20 @@ inline int64_t monotonic_ms() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
                std::chrono::steady_clock::now().time_since_epoch())
         .count();
+}
+
+// Generate a lightweight request id when the client does not provide one.
+inline std::string generate_req_id() {
+    const auto now = std::chrono::high_resolution_clock::now();
+    const auto nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                           now.time_since_epoch())
+                           .count();
+    static std::atomic<uint64_t> seq{0};
+    const uint64_t unique = static_cast<uint64_t>(nanos) ^
+                            (static_cast<uint64_t>(seq.fetch_add(1)) << 32);
+    char buf[32] = {0};
+    std::snprintf(buf, sizeof(buf), "%016llx", static_cast<unsigned long long>(unique));
+    return std::string(buf);
 }
 
 template<typename WORKER, typename MODEL_OUTPUT>
@@ -219,6 +236,32 @@ protected:
     static void reply_unauthorized(WFHttpTask* task);
     static void reply_rate_limited(WFHttpTask* task);
 
+    /***
+     * 统一 JSON 响应出口：设置 HTTP 状态码、Content-Type、X-Request-ID。
+     */
+    static void reply_json(WFHttpTask* task,
+                           const std::string& req_id,
+                           jinq::common::StatusCode status,
+                           rapidjson::Document&& data) {
+        auto* resp = task->get_resp();
+
+        resp->set_status_code(std::to_string(http_status_of(status)).c_str());
+        resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
+        resp->add_header_pair("X-Request-ID", req_id.c_str());
+        resp->add_header_pair("Cache-Control", "no-store");
+
+        jinq::common::HttpResponse http_resp;
+        http_resp.req_id = req_id;
+        http_resp.code = jinq::common::to_underlying(status);
+        http_resp.msg = status == jinq::common::StatusCode::OK
+                            ? "success"
+                            : jinq::common::status_code_to_str(status);
+        http_resp.data = std::move(data);
+
+        auto body = jinq::common::build_response_body(http_resp);
+        resp->append_output_body(body.data(), body.size());
+    }
+
 protected:
     // inference result: a member of the go task's closure (go_task_functor::ctx),
     // so the framework's task lifetime owns it on every path — normal completion,
@@ -300,8 +343,9 @@ protected:
      * @param model_output
      * @return
      */
-    virtual std::string make_response_body(
-        const std::string& task_id,
+    virtual void fill_response_data(
+        rapidjson::Document::AllocatorType& allocator,
+        rapidjson::Document& data,
         const StatusCode& status,
         const MODEL_OUTPUT& model_output) = 0;
 
@@ -350,11 +394,51 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
     // 鉴权：/welcome 与 /hello_world 保持公开（供健康检查），其余端点需要 Bearer Token
     const char* request_uri = task->get_req()->get_request_uri();
     bool is_health_endpoint = strcmp(request_uri, "/welcome") == 0 ||
-                              strcmp(request_uri, "/hello_world") == 0;
+                              strcmp(request_uri, "/hello_world") == 0 ||
+                              strcmp(request_uri, "/healthz") == 0 ||
+                              strcmp(request_uri, "/ready") == 0 ||
+                              strcmp(request_uri, "/metrics") == 0;
     if (!is_health_endpoint &&
         !jinq::common::is_bearer_authorized(
             authorization_header_of(task->get_req()), _m_auth_token)) {
         reply_unauthorized(task);
+        return;
+    }
+
+    // health / readiness endpoints
+    if (strcmp(request_uri, "/healthz") == 0) {
+        rapidjson::Document data;
+        reply_json(task, "", StatusCode::OK, std::move(data));
+        return;
+    }
+    if (strcmp(request_uri, "/ready") == 0) {
+        rapidjson::Document data;
+        if (_m_successfully_initialized && _m_working_queue.size_approx() > 0) {
+            reply_json(task, "", StatusCode::OK, std::move(data));
+        } else {
+            reply_json(task, "", StatusCode::SERVER_INIT_FAILED, std::move(data));
+        }
+        return;
+    }
+
+    if (strcmp(request_uri, "/metrics") == 0) {
+        auto* resp = task->get_resp();
+        resp->set_status_code("200");
+        resp->add_header_pair("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
+        std::string body;
+        body += "# HELP mortred_received_jobs Total received jobs\n";
+        body += "# TYPE mortred_received_jobs counter\n";
+        body += "mortred_received_jobs " + std::to_string(_m_received_jobs.load()) + "\n";
+        body += "# HELP mortred_finished_jobs Total finished jobs\n";
+        body += "# TYPE mortred_finished_jobs counter\n";
+        body += "mortred_finished_jobs " + std::to_string(_m_finished_jobs.load()) + "\n";
+        body += "# HELP mortred_waiting_jobs Current waiting jobs\n";
+        body += "# TYPE mortred_waiting_jobs gauge\n";
+        body += "mortred_waiting_jobs " + std::to_string(_m_waiting_jobs.load()) + "\n";
+        body += "# HELP mortred_available_workers Available workers\n";
+        body += "# TYPE mortred_available_workers gauge\n";
+        body += "mortred_available_workers " + std::to_string(_m_working_queue.size_approx()) + "\n";
+        resp->append_output_body(body.data(), body.size());
         return;
     }
     // welcome message
@@ -369,10 +453,19 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
     }
     // model service
     else if (strcmp(request_uri, _m_server_uri.c_str()) == 0) {
+        const char* request_method = task->get_req()->get_method();
+        if (strcmp(request_method, "POST") != 0) {
+            rapidjson::Document data;
+            reply_json(task, "", StatusCode::METHOD_NOT_ALLOWED, std::move(data));
+            return;
+        }
         // parse request body
         auto* req = task->get_req();
         auto* resp = task->get_resp();
         auto task_req = parse_task_request(req);
+        if (task_req.task_id.empty()) {
+            task_req.task_id = generate_req_id();
+        }
         _m_waiting_jobs++;
         _m_received_jobs++;
         // init series work: all per-request state rides inside the go task
@@ -417,7 +510,8 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         if (handle_custom_endpoint(task)) {
             return;
         }
-        task->get_resp()->append_output_body("<html>404 Not Found</html>");
+        rapidjson::Document data;
+        reply_json(task, "", StatusCode::NOT_FOUND, std::move(data));
         return;
     }
 }
@@ -528,7 +622,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(
 
     StatusCode status;
     std::string task_id;
-    std::string response_body;
+    rapidjson::Document data;
     std::string task_finished_ts;
     double worker_run_time_consuming = 0;
     double find_worker_time_consuming = 0;
@@ -539,7 +633,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(
         // metadata only; the routine never writes it, hence no race
         status = StatusCode::MODEL_RUN_TIMEOUT;
         task_id = meta.is_task_req_valid ? meta.task_id : "";
-        response_body = make_response_body(task_id, status, MODEL_OUTPUT{});
+        data.SetObject();
     } else {
         // success: the routine has returned (routine -> handle -> done ->
         // callback, workflow guarantees happens-before) and published its ctx
@@ -547,27 +641,30 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(
         auto* result = static_cast<go_result*>(task->user_data);
         status = result->model_run_status;
         task_id = meta.is_task_req_valid ? meta.task_id : "";
-        response_body = make_response_body(task_id, status, result->model_output);
+        data.SetObject();
+        fill_response_data(data.GetAllocator(), data, status, result->model_output);
         task_finished_ts = result->task_finished_ts;
         worker_run_time_consuming = result->worker_run_time_consuming;
         find_worker_time_consuming = result->find_worker_time_consuming;
     }
-    resp->append_output_body(std::move(response_body));
+    reply_json(task, task_id, status, std::move(data));
 
     if (state != WFT_STATE_SUCCESS) {
         LOG(ERROR) << "task: " << task_id << " model run timeout";
     }
 
     // output log info (jobs accounting is done in the series callback)
-    LOG(INFO) << "task id: " << task_id
-              << " received at: " << meta.task_received_ts
-              << " finished at: " << task_finished_ts
-              << " elapse: " << worker_run_time_consuming << " ms"
-              << " find work elapse: " << find_worker_time_consuming << " ms"
-              << " received jobs: " << _m_received_jobs
-              << " waiting jobs: " << _m_waiting_jobs
-              << " finished jobs: " << _m_finished_jobs
-              << " worker queue size: " << _m_working_queue.size_approx();
+    LOG(INFO) << "req_id=" << task_id
+              << " model=" << _m_server_uri
+              << " status=" << jinq::common::to_underlying(status)
+              << " received_at=" << meta.task_received_ts
+              << " finished_at=" << task_finished_ts
+              << " queue_wait_ms=" << find_worker_time_consuming
+              << " run_ms=" << worker_run_time_consuming
+              << " received_jobs=" << _m_received_jobs.load()
+              << " finished_jobs=" << _m_finished_jobs.load()
+               << " waiting_jobs=" << _m_waiting_jobs.load()
+               << " available_workers=" << _m_working_queue.size_approx();
 }
 
 /***
@@ -684,10 +781,11 @@ std::string BaseAiServerImpl<WORKER, MODEL_OUTPUT>::authorization_header_of(
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::reply_unauthorized(WFHttpTask* task) {
     auto* resp = task->get_resp();
-    resp->set_status_code("401");
+    rapidjson::Document data;
+    reply_json(task, "", jinq::common::StatusCode::UNAUTHORIZED, std::move(data));
     resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
     resp->append_output_body(
-        "{\"code\":401,\"msg\":\"unauthorized: missing or invalid bearer token\"}");
+    "");
 }
 
 /***
@@ -697,9 +795,10 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::reply_unauthorized(WFHttpTask* task
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::reply_rate_limited(WFHttpTask* task) {
     auto* resp = task->get_resp();
-    resp->set_status_code("429");
+    rapidjson::Document data;
+    reply_json(task, "", jinq::common::StatusCode::RATE_LIMITED, std::move(data));
     resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
-    resp->append_output_body("{\"code\":429,\"msg\":\"too many requests\"}");
+    // response body is produced by reply_json
 }
 }
 }
