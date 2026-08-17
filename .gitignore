@@ -31,12 +31,14 @@
 *.out
 *.app
 
-# 3rd party
+# 3rd party (vendored engines/binaries should be fetched by setup_full_deps.sh)
 3rd_party/
 3rd_party/libs/*
-demo_data/
-conf/
+
+# model weights (large, not suitable for source control)
 weights/
+
+# build outputs
 _bin/
 _lib/
 build/

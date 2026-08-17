@@ -122,6 +122,16 @@ make -j10
 | `MORTRED_BIN_OUTPUT_DIR` | `$PROJECT_ROOT_DIR/_bin` | 可执行文件输出目录。 |
 | `MORTRED_LIB_OUTPUT_DIR` | `$PROJECT_ROOT_DIR/_lib` | 动态库输出目录。 |
 
+项目提供了 CMake Presets（见 `CMakePresets.json`）：
+
+```bash
+cmake --preset tests-only
+cmake --build --preset tests-only
+ctest --preset tests-only
+```
+
+仓库目录规范与源码/配置/可执行文件映射见 [docs/repository-layout.md](docs/repository-layout.md)。
+
 **Step 3:** 下载项目提供的一些预训练模型 :tea::tea::tea:
 
 可以通过 [百度网盘](https://pan.baidu.com/s/1yneu-7X5IMIuv31Gn5ZIzg) 下载预训练模型，提取码为 `1y98`. 在项目根目录新建 `weights` 文件夹并将刚下载的预训练模型解压在该目录中。完成后的文件夹结构应该如图所示。

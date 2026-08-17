@@ -130,6 +130,16 @@ Additional CMake options:
 | `MORTRED_BIN_OUTPUT_DIR` | `$PROJECT_ROOT_DIR/_bin` | Executable output directory. |
 | `MORTRED_LIB_OUTPUT_DIR` | `$PROJECT_ROOT_DIR/_lib` | Shared library output directory. |
 
+Predefined CMake presets are available in `CMakePresets.json`:
+
+```bash
+cmake --preset tests-only
+cmake --build --preset tests-only
+ctest --preset tests-only
+```
+
+See [docs/repository-layout.md](docs/repository-layout.md) for the canonical source/config/executable mapping and repository hygiene policy.
+
 **Step 3:** Download Pre-Built Models :tea::tea::tea:
 
 Download pre-built image models via [BaiduNetDisk](https://pan.baidu.com/s/1yneu-7X5IMIuv31Gn5ZIzg) and extract code is `1y98`. Create a directory named `weights` in $PROJECT_ROOT_DIR and unzip the downloaded models in it. The weights directory  structure should looks like

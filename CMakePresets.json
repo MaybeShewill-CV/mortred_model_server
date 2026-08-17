@@ -1,0 +1,79 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 15,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "tests-only",
+      "displayName": "Tests Only (CI / quick verification)",
+      "description": "Build common library and unit tests only. No CUDA/MNN/TRT required.",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/tests-only",
+      "cacheVariables": {
+        "MORTRED_BUILD_FULL": "OFF",
+        "MORTRED_ENABLE_WERROR": "OFF",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "tests-only-werror",
+      "displayName": "Tests Only with Werror",
+      "description": "CI quality gate: build common library and tests with warnings as errors.",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/werror",
+      "cacheVariables": {
+        "MORTRED_BUILD_FULL": "OFF",
+        "MORTRED_ENABLE_WERROR": "ON",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "full",
+      "displayName": "Full Build",
+      "description": "Build all models, servers, tools and web console. Requires CUDA + vendored engines.",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/full",
+      "cacheVariables": {
+        "MORTRED_BUILD_FULL": "ON",
+        "MORTRED_ENABLE_WERROR": "OFF",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "tests-only",
+      "configurePreset": "tests-only",
+      "jobs": 8
+    },
+    {
+      "name": "tests-only-werror",
+      "configurePreset": "tests-only-werror",
+      "jobs": 8
+    },
+    {
+      "name": "full",
+      "configurePreset": "full",
+      "jobs": 8
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "tests-only",
+      "configurePreset": "tests-only",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "tests-only-werror",
+      "configurePreset": "tests-only-werror",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}
