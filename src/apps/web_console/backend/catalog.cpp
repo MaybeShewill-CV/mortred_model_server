@@ -176,7 +176,8 @@ bool Catalog::init(const std::string& project_root, const std::string& generated
     }
 
     for (const auto& entry : fs::recursive_directory_iterator(conf_dir, ec)) {
-        if (!entry.is_regular_file(ec) || entry.path().extension() != ".ini") {
+        const auto ext = entry.path().extension();
+        if (!entry.is_regular_file(ec) || (ext != ".toml" && ext != ".toml")) {
             continue;
         }
         auto cfg_path = entry.path().string();
@@ -282,11 +283,11 @@ bool Catalog::init(const std::string& project_root, const std::string& generated
     add_missing_server(project_root, generated_dir,
                        "densenet_classification_server.out", "DENSENET_CLASSIFICATION_SERVER",
                        "DENSENET", 9004, "/mortred_ai_server_v1/classification/densenet",
-                       "classification", "../conf/model/classification/densenet/densenet121_config.ini");
+                       "classification", "../conf/model/classification/densenet/densenet121_config.toml");
     add_missing_server(project_root, generated_dir,
                        "real_esrgan_server.out", "REAL_ESRGAN_SERVER",
                        "", 9012, "/mortred_ai_server_v1/enhancement/real_esrgan",
-                       "enhancement", "../conf/model/enhancement/real_esrgan/real_esrgan.ini");
+                       "enhancement", "../conf/model/enhancement/real_esrgan/real_esrgan.toml");
     return true;
 }
 
@@ -311,7 +312,7 @@ void Catalog::add_missing_server(const std::string& project_root,
 
     fs::create_directories(generated_dir, ec);
     std::string id = exe.substr(0, exe.size() - 4);
-    std::string cfg_name = id + "_cfg.ini";
+    std::string cfg_name = id + "_cfg.toml";
     std::string cfg_path = generated_dir + "/" + cfg_name;
     std::string content =
         "[" + section + "]\n"

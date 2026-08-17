@@ -18,7 +18,7 @@
 #include "common/base64.h"
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
-#include "models/diffussion/ddpm_unet.h"
+#include "models/diffusion/ddpm_unet.h"
 
 namespace jinq {
 namespace models {

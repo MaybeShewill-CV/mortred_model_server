@@ -148,7 +148,7 @@ ctest --preset tests-only
 
 ```bash
 cd $PROJECT_ROOT_DIR/_bin
-./mobilenetv2_benchmark.out ../conf/model/classification/mobilenetv2/mobilenetv2_config.ini
+./mobilenetv2_benchmark.out ../conf/model/classification/mobilenetv2/mobilenetv2_config.toml
 ```
 
 如果没有任何错误的话（应该不会有:dog:），你可以看到如下的测试结果，包含使用的模型，模型预测耗时、fps等信息
@@ -163,7 +163,7 @@ cd $PROJECT_ROOT_DIR/_bin
 
 ```bash
 cd $PROJECT_ROOT_DIR/_bin
-./mobilenetv2_classification_server.out ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.ini
+./mobilenetv2_classification_server.out ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.toml
 ```
 
 按照默认的配置文件，服务端口为`8091`，有四个模型worker等待被调用。项目中含有一个简单的python客户端来测试该服务，使用方法如下

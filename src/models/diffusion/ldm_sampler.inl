@@ -15,9 +15,9 @@
 #include "common/base64.h"
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
-#include "models/diffussion/ddim_sampler.h"
-#include "models/diffussion/ddpm_sampler.h"
-#include "models/diffussion/autoencoder_kl.h"
+#include "models/diffusion/ddim_sampler.h"
+#include "models/diffusion/ddpm_sampler.h"
+#include "models/diffusion/autoencoder_kl.h"
 
 namespace jinq {
 namespace models {

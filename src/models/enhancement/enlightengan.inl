@@ -152,7 +152,7 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::init(const toml::table& config) {
     }
     const toml::table& cfg_content = *cfg_content_ptr;
 
-    auto init_status = _m_net.init(cfg_content, {"input_src", "input_gray"}, {"output"});
+    auto init_status = _m_net.tomlt(cfg_content, {"input_src", "input_gray"}, {"output"});
     if (init_status != StatusCode::OK) {
         _m_successfully_initialized = false;
         return init_status;

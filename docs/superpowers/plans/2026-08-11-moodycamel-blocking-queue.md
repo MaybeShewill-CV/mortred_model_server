@@ -313,7 +313,7 @@ cd build && make -j10
 
 ```bash
 ./_bin/mobilenetv2_classification_server.out \
-  ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.ini &
+  ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.toml &
 # 另开终端
 python ../scripts/server/test_server.py --server mobilenetv2 --mode single
 top -H -p <server_pid>
@@ -373,7 +373,7 @@ rg -n "while \(!.*try_dequeue" src/models/segment_anything/sam_automask_generato
 
 ```bash
 cd build && make -j10
-./_bin/sam_benchmark.out ../conf/model/segment_anything/mobile_sam_config.ini
+./_bin/sam_benchmark.out ../conf/model/segment_anything/mobile_sam_config.toml
 ```
 
 预期：编译通过；SAM benchmark 正常输出解码结果（覆盖 `thread_decode_mask_proc` 路径）。
@@ -403,9 +403,9 @@ rg -n "while \(!.*try_dequeue|while \(!.*\.enqueue" src
 
 ```bash
 cd build && make -j10
-./_bin/mobilenetv2_classification_server.out ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.ini &
-./_bin/sam_benchmark.out ../conf/model/segment_anything/mobile_sam_config.ini
-./_bin/yolov5_detection_server.out ../conf/server/object_detection/yolov5/yolov5_server_config.ini &
+./_bin/mobilenetv2_classification_server.out ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.toml &
+./_bin/sam_benchmark.out ../conf/model/segment_anything/mobile_sam_config.toml
+./_bin/yolov5_detection_server.out ../conf/server/object_detection/yolov5/yolov5_server_config.toml &
 ```
 
 预期：全部目标编译通过；三个服务/工具正常启动与运行。

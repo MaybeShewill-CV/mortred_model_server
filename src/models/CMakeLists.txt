@@ -1,6 +1,23 @@
 # build models libs
 
-file(GLOB_RECURSE MODELS_LIB_SRC CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/*)
+set(MODELS_LIB_SRC
+    ${CMAKE_CURRENT_LIST_DIR}/base_model.h
+    ${CMAKE_CURRENT_LIST_DIR}/cv_image_input.h
+    ${CMAKE_CURRENT_LIST_DIR}/mnn_helper.h
+    ${CMAKE_CURRENT_LIST_DIR}/model_io_define.h
+    ${CMAKE_CURRENT_LIST_DIR}/clip/openai_clip_text_encoder.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/clip/openai_clip_vit_encoder.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/clip/simple_tokenizer.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/mot/byte_tracker/byte_tracker.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/mot/byte_tracker/kalman_filter.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/mot/byte_tracker/lapjv.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/mot/byte_tracker/strack.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/segment_anything/sam_automask_generator/sam_amg_decoder.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/segment_anything/sam_prediction/sam_prompt_decoder.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/segment_anything/sam_prediction/sam_vit_encoder.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/trt_helper/onnx2trt_model_builder.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/trt_helper/trt_helper.cpp
+)
 add_library(models SHARED ${MODELS_LIB_SRC})
 target_include_directories(
     models PUBLIC

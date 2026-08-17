@@ -105,7 +105,7 @@ jinq::common::StatusCode OpenAiClipVitEncoder::Impl::init(const toml::table &cfg
         return StatusCode::MODEL_INIT_FAILED;
     }
     const toml::table& cfg_content = *cfg_content_ptr;
-    auto init_status = _m_net.init(cfg_content, {"input"}, {"output"});
+    auto init_status = _m_net.tomlt(cfg_content, {"input"}, {"output"});
     if (init_status != StatusCode::OK) {
         _m_successfully_init_model = false;
         return init_status;

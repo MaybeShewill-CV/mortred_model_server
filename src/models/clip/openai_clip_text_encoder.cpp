@@ -109,7 +109,7 @@ StatusCode OpenAiClipTextEncoder::Impl::init(const toml::table& cfg) {
     }
     const toml::table& cfg_content = *cfg_content_ptr;
 
-    auto init_status = _m_net.init(cfg_content, {"input"}, {"output"});
+    auto init_status = _m_net.tomlt(cfg_content, {"input"}, {"output"});
     if (init_status != StatusCode::OK) {
         _m_successfully_init_model = false;
         return init_status;
@@ -118,7 +118,7 @@ StatusCode OpenAiClipTextEncoder::Impl::init(const toml::table& cfg) {
     _m_output_shape = _m_net.output("output")->shape();
 
     // init tokenizer
-    auto status = _m_tokenizer.init(cfg);
+    auto status = _m_tokenizer.tomlt(cfg);
     if (!_m_tokenizer.is_successfully_initialized()) {
         LOG(ERROR) << "init simple tokenizer failed, status code: " << status;
         _m_successfully_init_model = false;

@@ -11,7 +11,7 @@
 
 ```bash
 cd $PROJECT_ROOT/_bin
-./mobilenetv2_classification_server.out ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.ini
+./mobilenetv2_classification_server.out ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.toml
 ```
 
 正常启动后，服务会运行在 `http:://localhost:8091`, `worker_nums` workers会被唤醒占用你的GPU资源。默认情况下4个worker实例会被创建出来，当然你可以依你的gpu情况适量增大或者减少实例个数。

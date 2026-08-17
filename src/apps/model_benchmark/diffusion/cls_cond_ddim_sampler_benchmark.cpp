@@ -14,7 +14,7 @@
 
 #include "common/time_stamp.h"
 #include "models/model_io_define.h"
-#include "models/diffussion/cls_cond_ddim_sampler.h"
+#include "models/diffusion/cls_cond_ddim_sampler.h"
 
 using jinq::common::cv_utils;
 using jinq::common::Timestamp;

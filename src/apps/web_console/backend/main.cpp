@@ -500,11 +500,11 @@ int main() {
         return 1;
     }
 
-    if (!g_catalog.init(g_project_root, g_generated_dir)) {
+    if (!g_catalog.tomlt(g_project_root, g_generated_dir)) {
         fprintf(stderr, "catalog init failed, project root: %s\n", g_project_root.c_str());
         return 1;
     }
-    g_manager.init(g_catalog, g_project_root, g_logs_dir);
+    g_manager.tomlt(g_catalog, g_project_root, g_logs_dir);
 
     WFServerParams server_params = SERVER_PARAMS_DEFAULT;
     server_params.request_size_limit =

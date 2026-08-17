@@ -153,7 +153,7 @@ StatusCode Dinov2<INPUT, OUTPUT>::Impl::init(const toml::table& config) {
     }
     const toml::table& cfg_content = *cfg_content_ptr;
 
-    auto init_status = _m_net.init(cfg_content, {"input_images"}, {"cls_tokens"});
+    auto init_status = _m_net.tomlt(cfg_content, {"input_images"}, {"cls_tokens"});
     if (init_status != StatusCode::OK) {
         _m_successfully_initialized = false;
         return init_status;

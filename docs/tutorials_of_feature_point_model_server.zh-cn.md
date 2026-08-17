@@ -11,7 +11,7 @@
 
 ```bash
 cd $PROJECT_ROOT/_bin
-./superpoint_fp_det_server.out ../conf/server/feature_point/superpoint/superpoint_server_cfg.ini
+./superpoint_fp_det_server.out ../conf/server/feature_point/superpoint/superpoint_server_cfg.toml
 ```
 
 默认状态下服务会启动在 `http:://localhost:8091` 并且有4个模型实例被启动。

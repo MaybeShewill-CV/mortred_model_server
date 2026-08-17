@@ -155,7 +155,7 @@ Benchmark the mobilenetv2 classification model
 
 ```bash
 cd $PROJECT_ROOT_DIR/_bin
-./mobilenetv2_benchmark.out ../conf/model/classification/mobilenetv2/mobilenetv2_config.ini
+./mobilenetv2_benchmark.out ../conf/model/classification/mobilenetv2/mobilenetv2_config.toml
 ```
 
 You should see the mobilenetv2 model benchmark profile as follows:
@@ -170,7 +170,7 @@ The detailed description about web server configuration will be found at [Web Se
 
 ```bash
 cd $PROJECT_ROOT_DIR/_bin
-./mobilenetv2_classification_server.out ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.ini
+./mobilenetv2_classification_server.out ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.toml
 ```
 
 Model service will be start at `http://localhost:8091` with 4 workers waiting to serve. A demo python client was supplied to test the service

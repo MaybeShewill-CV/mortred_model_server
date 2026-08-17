@@ -11,7 +11,7 @@ The executable binary file was built in $PROJECT_ROOT/_bin/attentive_gan_derain_
 
 ```bash
 cd $PROJECT_ROOT/_bin
-./attentive_gan_derain_server.out ../conf/server/enhancement/attentive_gan_derain/attentive_gan_server_cfg.ini
+./attentive_gan_derain_server.out ../conf/server/enhancement/attentive_gan_derain/attentive_gan_server_cfg.toml
 ```
 
 When server successfully start on `http:://localhost:8091` you're supposed to see `worker_nums` workers were called up and occupied your GPU resources. By default 4 model workers will be created you may enlarge it if you have enough GPU memory.

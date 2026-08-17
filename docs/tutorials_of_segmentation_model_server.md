@@ -11,7 +11,7 @@ The executable binary file was built in $PROJECT_ROOT/_bin/bisenetv2_segmentatio
 
 ```bash
 cd $PROJECT_ROOT/_bin
-./bisenetv2_segmentation_server.out ../conf/server/scene_segmentation/bisenetv2/bisenetv2_server_config.ini
+./bisenetv2_segmentation_server.out ../conf/server/scene_segmentation/bisenetv2/bisenetv2_server_config.toml
 ```
 
 When server successfully start on `http:://localhost:8091` you're supposed to see `worker_nums` workers were called up and occupied your GPU resources. By default 4 model workers will be created you may enlarge it if you have enough GPU memory.

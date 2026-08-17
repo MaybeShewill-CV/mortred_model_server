@@ -193,7 +193,7 @@ StatusCode Impl::init(const toml::table &cfg) {
     _m_input_name = "images";
     _m_output_0_name = "output0";
     _m_output_1_name = "output1";
-    auto init_status = _m_net.init(
+    auto init_status = _m_net.tomlt(
         cfg_content, {_m_input_name}, {_m_output_0_name, _m_output_1_name});
     if (init_status != StatusCode::OK) {
         _m_successfully_init_model = false;

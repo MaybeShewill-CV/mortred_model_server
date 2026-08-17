@@ -11,7 +11,7 @@
 
 ```bash
 cd $PROJECT_ROOT/_bin
-./bisenetv2_segmentation_server.out ../conf/server/scene_segmentation/bisenetv2/bisenetv2_server_config.ini
+./bisenetv2_segmentation_server.out ../conf/server/scene_segmentation/bisenetv2/bisenetv2_server_config.toml
 ```
 
 默认状态下服务会启动在 `http:://localhost:8091` 并且有4个模型实例被启动。

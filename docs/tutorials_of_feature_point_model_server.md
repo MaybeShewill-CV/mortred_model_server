@@ -11,7 +11,7 @@ The executable binary file was built in $PROJECT_ROOT/_bin/superpoint_fp_det_ser
 
 ```bash
 cd $PROJECT_ROOT/_bin
-./superpoint_fp_det_server.out ../conf/server/feature_point/superpoint/superpoint_server_cfg.ini
+./superpoint_fp_det_server.out ../conf/server/feature_point/superpoint/superpoint_server_cfg.toml
 ```
 
 When server successfully start on `http:://localhost:8091` you're supposed to see `worker_nums` workers were called up and occupied your GPU resources. By default 4 model workers will be created you may enlarge it if you have enough GPU memory.

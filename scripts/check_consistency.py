@@ -6,7 +6,7 @@ Verifies a few high-signal invariants:
 1. Every source path referenced in docs/repository-layout.md exists.
 2. Every server executable in docs/repository-layout.md has a matching source file.
 3. If _bin exists, stale binaries listed in the layout policy are reported.
-4. Every conf/server/*.ini file has at least one matching server source directory.
+4. Every conf/server/*.toml file has at least one matching server source directory.
 
 Exit code 0 means consistent; non-zero means the repository needs attention.
 """
@@ -83,7 +83,7 @@ def check_server_source_mapping() -> list[str]:
             if child.is_dir():
                 # conf/server/scene_segmentation -> src/apps/server/scene_segmentation
                 src_dir = server_dir / child.name
-                if not src_dir.exists() and not list(child.glob("*.ini")):
+                if not src_dir.exists() and not list(child.glob("*.toml")) and not list(child.glob("*.toml")):
                     # Some conf dirs contain nested model dirs; only report if no ini at all.
                     errors.append(
                         f"conf/server/{child.name} has no matching src/apps/server/{child.name}"

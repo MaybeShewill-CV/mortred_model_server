@@ -1,6 +1,18 @@
 # build factory libs
 
-file(GLOB_RECURSE FACTORY_LIB_SRC CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/*)
+set(FACTORY_LIB_SRC
+    ${CMAKE_CURRENT_LIST_DIR}/base_factory.h
+    ${CMAKE_CURRENT_LIST_DIR}/classification_task.h
+    ${CMAKE_CURRENT_LIST_DIR}/clip_task.h
+    ${CMAKE_CURRENT_LIST_DIR}/enhancement_task.h
+    ${CMAKE_CURRENT_LIST_DIR}/feature_point_task.h
+    ${CMAKE_CURRENT_LIST_DIR}/matting_task.h
+    ${CMAKE_CURRENT_LIST_DIR}/mono_depth_estimate_task.h
+    ${CMAKE_CURRENT_LIST_DIR}/obj_detection_task.h
+    ${CMAKE_CURRENT_LIST_DIR}/ocr_task.h
+    ${CMAKE_CURRENT_LIST_DIR}/sam_task.h
+    ${CMAKE_CURRENT_LIST_DIR}/scene_segmentation_task.h
+)
 add_library(factory SHARED ${FACTORY_LIB_SRC})
 target_include_directories(
     factory PUBLIC

@@ -1,6 +1,16 @@
 # build common libs
 
-file(GLOB_RECURSE COMMON_LIB_SRC CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/*)
+set(COMMON_LIB_SRC
+    ${CMAKE_CURRENT_LIST_DIR}/time_stamp.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/auth_token.h
+    ${CMAKE_CURRENT_LIST_DIR}/base64.h
+    ${CMAKE_CURRENT_LIST_DIR}/cv_utils.h
+    ${CMAKE_CURRENT_LIST_DIR}/file_path_util.h
+    ${CMAKE_CURRENT_LIST_DIR}/json_request_parser.h
+    ${CMAKE_CURRENT_LIST_DIR}/request_size_limit.h
+    ${CMAKE_CURRENT_LIST_DIR}/status_code.h
+    ${CMAKE_CURRENT_LIST_DIR}/time_stamp.h
+)
 add_library(common SHARED ${COMMON_LIB_SRC})
 target_link_libraries(
     common

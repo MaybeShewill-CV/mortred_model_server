@@ -1,64 +1,85 @@
 # build apps
 
-# build benchmark apps
-set(MODEL_BENCHMARK_LIST
-    classification
-    enhancement
-    feature_point
-    object_detection
-    ocr
-    segmentation
-    matting
-    sam
-    clip
-    mono_depth_estimation
-    diffusion
-    mot
-)
+function(add_benchmark_app src)
+    get_filename_component(file_name ${src} NAME_WE)
+    add_executable(${file_name}.out ${src})
+    target_link_libraries(${file_name}.out common models factory ${WORKFLOW_LIBS} glog::glog)
+endfunction()
 
-foreach(dir_name ${MODEL_BENCHMARK_LIST})
-    file(GLOB_RECURSE src_list CONFIGURE_DEPENDS ./model_benchmark/${dir_name}/*)
-    foreach(src ${src_list})
-        string(REGEX REPLACE ".+/(.+)\\..*" "\\1" file_name ${src})
-        add_executable(${file_name}.out ${src})
-        target_link_libraries(${file_name}.out common models factory ${WORKFLOW_LIBS} glog::glog)
-    endforeach()
-endforeach()
+function(add_server_app src)
+    get_filename_component(file_name ${src} NAME_WE)
+    add_executable(${file_name}.out ${src})
+    target_link_libraries(${file_name}.out common models factory ${WORKFLOW_LIBS} glog::glog)
+endfunction()
 
-# build server app
-set(MODEL_SERVER_APP_LIST
-    classification
-    enhancement
-    feature_point
-    object_detection
-    ocr
-    scene_segmentation
-    matting
-    mono_depth_estimation
-)
+function(add_tool_app src)
+    get_filename_component(file_name ${src} NAME_WE)
+    add_executable(${file_name}.out ${src})
+    target_link_libraries(${file_name}.out common models glog::glog)
+endfunction()
 
-foreach(dir_name ${MODEL_SERVER_APP_LIST})
-    file(GLOB_RECURSE src_list CONFIGURE_DEPENDS ./server/${dir_name}/*)
-    foreach(src ${src_list})
-        string(REGEX REPLACE ".+/(.+)\\..*" "\\1" file_name ${src})
-        add_executable(${file_name}.out ${src})
-        target_link_libraries(${file_name}.out common models factory ${WORKFLOW_LIBS} glog::glog)
-    endforeach()
-endforeach()
+# --- benchmark apps ---
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/classification/densenet_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/classification/dinov2_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/classification/mobilenetv2_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/classification/resnet_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/clip/openai_clip_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/diffusion/cls_cond_ddim_sampler_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/diffusion/ddim_sampler_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/diffusion/ddpm_sampler_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/diffusion/ldm_sampler_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/enhancement/attentivegan_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/enhancement/enlightengan_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/enhancement/real_esrgan_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/feature_point/lightglue_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/feature_point/superpoint_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/matting/modnet_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/matting/ppmatting_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/mono_depth_estimation/depth_anything_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/mono_depth_estimation/metric3d_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/mot/bytetrack_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/object_detection/centerface_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/object_detection/libface_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/object_detection/nanodet_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/object_detection/yolov5_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/object_detection/yolov6_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/object_detection/yolov7_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/object_detection/yolov8_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/ocr/dbnet_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/sam/fast_sam_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/sam/sam_amg_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/sam/sam_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/segmentation/bisenetv2_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/segmentation/hrnet_segmentation_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/segmentation/msocrnet_benchmark.cpp)
+add_benchmark_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/segmentation/pphumanseg_benchmark.cpp)
 
-# build model tools app
-set(MODEL_TOOLS_APP_LIST
-    trt_converter
-)
+# --- server apps ---
+add_server_app(${CMAKE_CURRENT_LIST_DIR}/server/classification/densenet_classification_server.cpp)
+add_server_app(${CMAKE_CURRENT_LIST_DIR}/server/classification/mobilenetv2_classification_server.cpp)
+add_server_app(${CMAKE_CURRENT_LIST_DIR}/server/classification/resnet_classification_server.cpp)
+add_server_app(${CMAKE_CURRENT_LIST_DIR}/server/enhancement/attentive_gan_derain_server.cpp)
+add_server_app(${CMAKE_CURRENT_LIST_DIR}/server/enhancement/enlighten_gan_server.cpp)
+add_server_app(${CMAKE_CURRENT_LIST_DIR}/server/enhancement/real_esrgan_server.cpp)
+add_server_app(${CMAKE_CURRENT_LIST_DIR}/server/feature_point/superpoint_fp_det_server.cpp)
+add_server_app(${CMAKE_CURRENT_LIST_DIR}/server/matting/modnet_server.cpp)
+add_server_app(${CMAKE_CURRENT_LIST_DIR}/server/matting/pp_matting_server.cpp)
+add_server_app(${CMAKE_CURRENT_LIST_DIR}/server/mono_depth_estimation/depth_anything_estimation_server.cpp)
+add_server_app(${CMAKE_CURRENT_LIST_DIR}/server/mono_depth_estimation/metric3d_estimation_server.cpp)
+add_server_app(${CMAKE_CURRENT_LIST_DIR}/server/object_detection/centerface_detection_server.cpp)
+add_server_app(${CMAKE_CURRENT_LIST_DIR}/server/object_detection/libface_detection_server.cpp)
+add_server_app(${CMAKE_CURRENT_LIST_DIR}/server/object_detection/nanodet_detection_server.cpp)
+add_server_app(${CMAKE_CURRENT_LIST_DIR}/server/object_detection/yolov5_detection_server.cpp)
+add_server_app(${CMAKE_CURRENT_LIST_DIR}/server/object_detection/yolov6_detection_server.cpp)
+add_server_app(${CMAKE_CURRENT_LIST_DIR}/server/object_detection/yolov7_detection_server.cpp)
+add_server_app(${CMAKE_CURRENT_LIST_DIR}/server/object_detection/yolov8_detection_server.cpp)
+add_server_app(${CMAKE_CURRENT_LIST_DIR}/server/ocr/dbnet_text_region_detect_server.cpp)
+add_server_app(${CMAKE_CURRENT_LIST_DIR}/server/scene_segmentation/bisenetv2_segmentation_server.cpp)
+add_server_app(${CMAKE_CURRENT_LIST_DIR}/server/scene_segmentation/hrnet_segmentation_server.cpp)
+add_server_app(${CMAKE_CURRENT_LIST_DIR}/server/scene_segmentation/pphuman_segmentation_server.cpp)
 
-foreach(dir_name ${MODEL_TOOLS_APP_LIST})
-    file(GLOB_RECURSE src_list CONFIGURE_DEPENDS ./model_tools/${dir_name}/*.cpp)
-    foreach(src ${src_list})
-        string(REGEX REPLACE ".+/(.+)\\..*" "\\1" file_name ${src})
-        add_executable(${file_name}.out ${src})
-        target_link_libraries(${file_name}.out common models glog::glog)
-    endforeach()
-endforeach()
+# --- model tools ---
+add_tool_app(${CMAKE_CURRENT_LIST_DIR}/model_tools/trt_converter/onnx2trt_converter.cpp)
 
 # mortred model server web console
 add_subdirectory(web_console/backend)

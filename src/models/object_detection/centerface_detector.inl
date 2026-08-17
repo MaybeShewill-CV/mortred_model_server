@@ -190,7 +190,7 @@ StatusCode CenterFaceDetector<INPUT, OUTPUT>::Impl::init(const toml::table &conf
         _m_keep_topk = cfg_content["model_keep_top_k"].value_or<int64_t>(0);
     }
 
-    auto init_status = _m_net.init(
+    auto init_status = _m_net.tomlt(
         cfg_content, {"input.1"}, {"537", "538", "539", "540"});
     if (init_status != StatusCode::OK) {
         _m_successfully_initialized = false;

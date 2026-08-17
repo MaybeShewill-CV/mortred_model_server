@@ -66,7 +66,7 @@
 | enhancement | real_esrgan_benchmark.out | ✅ 通过 | 0 | 6.4 | 3.98182 | 25.1142 |  |
 | classification | resnet_benchmark.out | ✅ 通过 | 0 | 26.6 | 17.9105 | 55.833 |  |
 | sam | sam_amg_benchmark.out | ✅ 通过 | 0 | 117.8 | - | - | encoder/amg-decoder TRT engine 已重建 |
-| sam | sam_benchmark.out | ✅ 通过 | 0 | 6.5 | - | - | 用 mobile_sam_config.ini；encoder/decoder TRT engine 已重建，decoder 运行时补 128 点填充 |
+| sam | sam_benchmark.out | ✅ 通过 | 0 | 6.5 | - | - | 用 mobile_sam_config.toml；encoder/decoder TRT engine 已重建，decoder 运行时补 128 点填充 |
 | feature_point | superpoint_benchmark.out | ✅ 通过 | 0 | 3.8 | 0.298414 | 335.105 |  |
 | object_detection | yolov5_benchmark.out | ✅ 通过 | 0 | 13.8 | 3.66755 | 27.2661 |  |
 | object_detection | yolov6_benchmark.out | ✅ 通过 | 0 | 7.8 | 1.52732 | 65.474 |  |

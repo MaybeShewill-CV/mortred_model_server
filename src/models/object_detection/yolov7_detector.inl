@@ -170,7 +170,7 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::Impl::init(const toml::table& config) 
     }
     const toml::table& cfg_content = *cfg_content_ptr;
 
-    auto init_status = _m_net.init(cfg_content, {"images"}, {"output", "518", "532"});
+    auto init_status = _m_net.tomlt(cfg_content, {"images"}, {"output", "518", "532"});
     if (init_status != StatusCode::OK) {
         _m_successfully_initialized = false;
         return init_status;
