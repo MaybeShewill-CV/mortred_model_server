@@ -3,6 +3,7 @@
 set(SERVER_LIB_SRC
     ${CMAKE_CURRENT_LIST_DIR}/abstract_server.h
     ${CMAKE_CURRENT_LIST_DIR}/base_server_impl.h
+    ${CMAKE_CURRENT_LIST_DIR}/http_status.h
     ${CMAKE_CURRENT_LIST_DIR}/rate_limiter.h
     ${CMAKE_CURRENT_LIST_DIR}/classification/densenet_server.cpp
     ${CMAKE_CURRENT_LIST_DIR}/classification/mobilenetv2_server.cpp

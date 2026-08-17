@@ -83,8 +83,8 @@ def check_server_source_mapping() -> list[str]:
             if child.is_dir():
                 # conf/server/scene_segmentation -> src/apps/server/scene_segmentation
                 src_dir = server_dir / child.name
-                if not src_dir.exists() and not list(child.glob("*.toml")) and not list(child.glob("*.toml")):
-                    # Some conf dirs contain nested model dirs; only report if no ini at all.
+                if not src_dir.exists() and not list(child.glob("*.ini")) and not list(child.glob("*.toml")):
+                    # Some conf dirs contain nested model dirs; only report if no config at all.
                     errors.append(
                         f"conf/server/{child.name} has no matching src/apps/server/{child.name}"
                     )

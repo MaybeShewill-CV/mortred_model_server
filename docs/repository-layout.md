@@ -85,8 +85,7 @@ and must not be relied upon.
   misspelled path `src/models/diffussion/` has been removed; all code should use
   `src/models/diffusion/`.
 - Configuration files use TOML syntax. The canonical extension is `.toml`. Historical
-  `.toml` files are accepted during migration but should be renamed to `.toml` using
-  `scripts/rename_configs_to_toml.sh`.
+  `.ini` files have been migrated; no new `.ini` files should be added.
 - Server URI fields use `server_uri` consistently; `server_url` is accepted only for backward
   compatibility during migration.
 
@@ -94,7 +93,7 @@ and must not be relied upon.
 
 ```text
 conf/
-├── model/       # model inference configuration (TOML syntax, historical .toml extension)
+├── model/       # model inference configuration (TOML syntax)
 └── server/      # model server configuration
 ```
 
@@ -125,9 +124,6 @@ source creates an unmaintainable repository and violates the consistency policy.
 Before committing, run:
 
 ```bash
-# Migrate any remaining .toml configs to canonical .toml (one-time)
-./scripts/rename_configs_to_toml.sh
-
 # Remove generated/build/runtime artifacts from a local working tree
 ./scripts/clean_artifacts.sh
 
