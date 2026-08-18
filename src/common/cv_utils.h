@@ -283,6 +283,10 @@ static inline void visualize_fp_match_result(
 
 // IoU with +1 pixel offset (VOC style); zero-area boxes yield 0
 static inline float calc_iou(const cv::Rect2f& box1, const cv::Rect2f& box2) {
+    if (box1.width <= 0.0f || box1.height <= 0.0f ||
+        box2.width <= 0.0f || box2.height <= 0.0f) {
+        return 0.0f;
+    }
     float x1 = std::max(box1.x, box2.x);
     float y1 = std::max(box1.y, box2.y);
     float x2 = std::min(box1.x + box1.width, box2.x + box2.width);

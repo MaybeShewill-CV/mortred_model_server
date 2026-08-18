@@ -162,5 +162,5 @@ TEST(cv_utils, colorize_sam_mask_max_label) {
     EXPECT_EQ(color_mask.size(), mask.size());
     EXPECT_EQ(color_mask.type(), CV_8UC3);
     // label 3 is in range, so its pixels must not be painted as the id-0 fallback
-    EXPECT_NE(color_mask.at<cv::Vec3b>(0, 0)[0], 0u);
+    EXPECT_NE(color_mask.at<cv::Vec3b>(0, 0), cv::Vec3b(0, 0, 255));
 }
