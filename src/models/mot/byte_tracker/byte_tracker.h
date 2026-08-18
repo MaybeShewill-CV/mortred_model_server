@@ -8,6 +8,7 @@
 #ifndef MORTRED_MODEL_SERVER_BYTE_TRACKER_H
 #define MORTRED_MODEL_SERVER_BYTE_TRACKER_H
 
+#include <memory>
 #include <vector>
 
 #include <opencv2/opencv.hpp>

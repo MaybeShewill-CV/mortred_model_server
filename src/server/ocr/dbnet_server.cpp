@@ -25,7 +25,6 @@
 namespace jinq {
 namespace server {
 
-using jinq::common::base64;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 using jinq::server::BaseAiServerImpl;

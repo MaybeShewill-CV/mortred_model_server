@@ -7,10 +7,22 @@
 
 #include "sam_vit_encoder.h"
 
+#include <algorithm>
+#include <cerrno>
+#include <cmath>
+#include <cstdint>
+#include <cstring>
+#include <fstream>
+#include <functional>
+#include <iterator>
+#include <numeric>
+#include <sstream>
+
 #include "glog/logging.h"
 #include "MNN/Interpreter.hpp"
 #include "onnxruntime/onnxruntime_cxx_api.h"
 #include "TensorRT-8.6.1.6/NvInferRuntime.h"
+#include "cuda_runtime_api.h"
 #include "toml/toml.hpp"
 
 #include "common/file_path_util.h"
@@ -21,7 +33,7 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::cv_utils;
+using jinq::common::CvUtils;
 using jinq::common::StatusCode;
 using jinq::common::FilePathUtil;
 using jinq::common::Timestamp;
@@ -568,7 +580,7 @@ StatusCode SamVitEncoder::Impl::init_trt_model(const toml::table& cfg) {
 StatusCode SamVitEncoder::Impl::mnn_encode(const cv::Mat &input_image, std::vector<float> &image_embeddings) {
     // preprocess image
     auto preprocessed_image = preprocess_image(input_image);
-    auto input_tensor_values = cv_utils::convert_to_chw_vec(preprocessed_image);
+    auto input_tensor_values = CvUtils::convert_to_chw_vec(preprocessed_image);
     if (input_tensor_values.empty()) {
         LOG(ERROR) << "empty input data for sam vit encoder";
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
@@ -578,7 +590,7 @@ StatusCode SamVitEncoder::Impl::mnn_encode(const cv::Mat &input_image, std::vect
     auto input_tensor_user = MNN::Tensor(_m_input_tensor, MNN::Tensor::DimensionType::CAFFE);
     auto input_tensor_data = input_tensor_user.host<float>();
     auto input_tensor_size = input_tensor_user.size();
-    if (!cv_utils::copy_image_to_tensor(input_tensor_data, input_tensor_values, input_tensor_size)) {
+    if (!CvUtils::copy_image_to_tensor(input_tensor_data, input_tensor_values, input_tensor_size)) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
     _m_input_tensor->copyFromHostTensor(&input_tensor_user);
@@ -611,12 +623,12 @@ StatusCode SamVitEncoder::Impl::onnx_encode(const cv::Mat &input_image, std::vec
 
     // preprocess image
     auto preprocessed_image = preprocess_image(input_image);
-    auto input_tensor_values = cv_utils::convert_to_chw_vec(preprocessed_image);
+    auto input_tensor_values = CvUtils::convert_to_chw_vec(preprocessed_image);
     if (input_tensor_values.empty()) {
         LOG(ERROR) << "empty input data for sam vit encoder";
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
-    std::vector<int64 > input_shape;
+    std::vector<int64_t> input_shape;
     for (auto& v : _m_input_shape) {
         input_shape.push_back(static_cast<long>(v));
     }
@@ -654,7 +666,7 @@ StatusCode SamVitEncoder::Impl::onnx_encode(const cv::Mat &input_image, std::vec
 StatusCode SamVitEncoder::Impl::trt_encode(const cv::Mat &input_image, std::vector<float> &image_embeddings) {
     // preprocess input data
     auto preprocessed_image = preprocess_image(input_image);
-    auto input_chw_data = cv_utils::convert_to_chw_vec(preprocessed_image);
+    auto input_chw_data = CvUtils::convert_to_chw_vec(preprocessed_image);
 
     auto* cuda_mem_input = (float*)_m_device_memory.at(_m_input_binding.index());
     int32_t input_mem_size = static_cast<int32_t >(preprocessed_image.channels() * preprocessed_image.size().area() * sizeof(float));

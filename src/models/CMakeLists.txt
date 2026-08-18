@@ -19,6 +19,11 @@ set(MODELS_LIB_SRC
     ${CMAKE_CURRENT_LIST_DIR}/trt_helper/trt_helper.cpp
 )
 add_library(models SHARED ${MODELS_LIB_SRC})
+# lapjv.cpp 为 vendored 第三方 LAPJV 求解器，其存量警告不参与 -Werror 门禁
+set_source_files_properties(
+    ${CMAKE_CURRENT_LIST_DIR}/mot/byte_tracker/lapjv.cpp
+    PROPERTIES COMPILE_OPTIONS "-Wno-unused-parameter"
+)
 target_include_directories(
     models PUBLIC
     ${PROJECT_ROOT_DIR}/src

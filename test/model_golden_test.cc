@@ -48,7 +48,7 @@
 
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
-using jinq::common::cv_utils::calc_iou;
+using jinq::common::CvUtils;
 using jinq::models::io_define::classification::std_classification_output;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::enhancement::std_enhancement_output;
@@ -288,7 +288,7 @@ void expect_boxes(const std::string& name, const std::vector<BoxT>& boxes, bool 
             if (matched[i]) continue;
             const auto& g = golden_boxes[i];
             cv::Rect2f gbox(g["x"].GetFloat(), g["y"].GetFloat(), g["w"].GetFloat(), g["h"].GetFloat());
-            float iou = calc_iou(box.bbox, gbox);
+            float iou = CvUtils::calc_iou(box.bbox, gbox);
             if (iou > best_iou) {
                 best_iou = iou;
                 best = static_cast<int>(i);
@@ -345,7 +345,7 @@ void expect_text_regions(const std::string& name, const std_text_regions_output&
             if (matched[i]) continue;
             const auto& g = golden_regions[i];
             cv::Rect2f gbox(g["x"].GetFloat(), g["y"].GetFloat(), g["w"].GetFloat(), g["h"].GetFloat());
-            float iou = calc_iou(region.bbox, gbox);
+            float iou = CvUtils::calc_iou(region.bbox, gbox);
             if (iou > best_iou) {
                 best_iou = iou;
                 best = static_cast<int>(i);

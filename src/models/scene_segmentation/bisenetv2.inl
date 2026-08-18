@@ -19,10 +19,9 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::cv_utils;
+using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
-using jinq::common::base64;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::common_io::file_input;
 using jinq::models::io_define::common_io::base64_input;
@@ -153,7 +152,7 @@ StatusCode BiseNetV2<INPUT, OUTPUT>::Impl::init(const toml::table& config) {
     }
     const toml::table& cfg_content = *cfg_content_ptr;
 
-    auto init_status = _m_net.tomlt(cfg_content, {"input_tensor"}, {"final_output"});
+    auto init_status = _m_net.init(cfg_content, {"input_tensor"}, {"final_output"});
     if (init_status != StatusCode::OK) {
         _m_successfully_initialized = false;
         return init_status;
@@ -231,7 +230,7 @@ StatusCode BiseNetV2<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     MNN::Tensor input_tensor_user(_m_net.input("input_tensor"), MNN::Tensor::DimensionType::TENSORFLOW);
     auto input_tensor_data = input_tensor_user.host<float>();
     auto input_tensor_size = input_tensor_user.size();
-    if (!cv_utils::copy_image_to_tensor(input_tensor_data, preprocessed_image, input_tensor_size)) {
+    if (!CvUtils::copy_image_to_tensor(input_tensor_data, preprocessed_image, input_tensor_size)) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
     _m_net.input("input_tensor")->copyFromHostTensor(&input_tensor_user);

@@ -21,6 +21,7 @@
 #include <charconv>
 #include <cerrno>
 #include <cctype>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -29,16 +30,21 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 #include <unistd.h>
 
-#include "auth.h"
+#include "common/auth_token.h"
 #include "catalog.h"
 #include "common/request_size_limit.h"
 #include "server_manager.h"
 
-using namespace mortred_web;
+using mortred_web::Catalog;
+using mortred_web::LogBuffer;
+using mortred_web::ServerEntry;
+using mortred_web::ServerManager;
 
 static Catalog g_catalog;
 static ServerManager g_manager;
@@ -138,10 +144,13 @@ size_t parse_size(const std::string& s, size_t def) {
     }
 }
 
-void reply_json(WFHttpTask* task, int code, const std::string& body) {
+void reply_json(WFHttpTask* task, int code, const std::string& body,
+                const std::string& req_id = "") {
     auto* resp = task->get_resp();
     resp->set_status_code(std::to_string(code).c_str());
     resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
+    resp->add_header_pair("X-Request-ID", req_id.c_str());
+    resp->add_header_pair("Cache-Control", "no-store");
     resp->append_output_body(body.data(), body.size());
 }
 
@@ -439,7 +448,7 @@ void process(WFHttpTask* server_task) {
     // 管理 API 统一鉴权；静态资源保持可访问，便于前端加载后输入 token
     bool is_api_path = path == "/api" || path.rfind("/api/", 0) == 0;
     if (is_api_path &&
-        !mortred_web::is_authorized(
+        !jinq::common::is_bearer_authorized(
             request_header_value(server_task->get_req(), "Authorization"),
             g_auth_token)) {
         reply_unauthorized(server_task);
@@ -493,18 +502,18 @@ int main() {
     }
 
     // fail-closed：非回环监听必须显式配置访问令牌，否则拒绝启动
-    if (!mortred_web::is_loopback_host(g_listen_host) && g_auth_token.empty()) {
+    if (!jinq::common::is_loopback_host(g_listen_host) && g_auth_token.empty()) {
         fprintf(stderr,
                 "refusing to start: non-loopback listen host %s requires APP_AUTH_TOKEN\n",
                 g_listen_host.c_str());
         return 1;
     }
 
-    if (!g_catalog.tomlt(g_project_root, g_generated_dir)) {
+    if (!g_catalog.init(g_project_root, g_generated_dir)) {
         fprintf(stderr, "catalog init failed, project root: %s\n", g_project_root.c_str());
         return 1;
     }
-    g_manager.tomlt(g_catalog, g_project_root, g_logs_dir);
+    g_manager.init(g_catalog, g_project_root, g_logs_dir);
 
     WFServerParams server_params = SERVER_PARAMS_DEFAULT;
     server_params.request_size_limit =

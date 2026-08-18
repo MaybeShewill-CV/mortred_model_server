@@ -18,10 +18,9 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::cv_utils;
+using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
-using jinq::common::base64;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::common_io::file_input;
 using jinq::models::io_define::common_io::base64_input;
@@ -152,7 +151,7 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::init(const toml::table& config) {
     }
     const toml::table& cfg_content = *cfg_content_ptr;
 
-    auto init_status = _m_net.tomlt(cfg_content, {"input_src", "input_gray"}, {"output"});
+    auto init_status = _m_net.init(cfg_content, {"input_src", "input_gray"}, {"output"});
     if (init_status != StatusCode::OK) {
         _m_successfully_initialized = false;
         return init_status;
@@ -204,13 +203,13 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) 
     cv::Mat input_src;
     cv::Mat input_gray;
     preprocess_image(internal_in.input_image, input_src, input_gray);
-    auto input_src_chw_data = cv_utils::convert_to_chw_vec(input_src);
+    auto input_src_chw_data = CvUtils::convert_to_chw_vec(input_src);
 
     // run session
     MNN::Tensor input_tensor_user_src(_m_net.input("input_src"), MNN::Tensor::DimensionType::CAFFE);
     auto input_tensor_data = input_tensor_user_src.host<float>();
     auto input_tensor_size = input_tensor_user_src.size();
-    if (!cv_utils::copy_image_to_tensor(input_tensor_data, input_src_chw_data, input_tensor_size)) {
+    if (!CvUtils::copy_image_to_tensor(input_tensor_data, input_src_chw_data, input_tensor_size)) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
     _m_net.input("input_src")->copyFromHostTensor(&input_tensor_user_src);
@@ -218,7 +217,7 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) 
     MNN::Tensor input_tensor_user_gray(_m_net.input("input_gray"), MNN::Tensor::DimensionType::CAFFE);
     input_tensor_data = input_tensor_user_gray.host<float>();
     input_tensor_size = input_tensor_user_gray.size();
-    if (!cv_utils::copy_image_to_tensor(input_tensor_data, input_gray, input_tensor_size)) {
+    if (!CvUtils::copy_image_to_tensor(input_tensor_data, input_gray, input_tensor_size)) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
     _m_net.input("input_gray")->copyFromHostTensor(&input_tensor_user_gray);

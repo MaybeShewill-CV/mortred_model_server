@@ -8,13 +8,16 @@
 #ifndef MORTRED_MODEL_SERVER_TRT_HELPER_H
 #define MORTRED_MODEL_SERVER_TRT_HELPER_H
 
-#include <string>
+#include <cstdint>
 #include <memory>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include <opencv2/opencv.hpp>
 #include <glog/logging.h>
 #include "TensorRT-8.6.1.6/NvInfer.h"
+#include "cuda_runtime_api.h"
 
 #include "common/status_code.h"
 

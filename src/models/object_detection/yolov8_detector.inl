@@ -9,11 +9,17 @@
 #include "models/cv_image_input.h"
 #include "models/cv_image_input.h"
 
+#include <algorithm>
+#include <cstdint>
+#include <fstream>
+#include <iterator>
 #include <random>
+#include <sstream>
 
 #include <opencv2/opencv.hpp>
 #include "glog/logging.h"
 #include "TensorRT-8.6.1.6/NvInferRuntime.h"
+#include "cuda_runtime_api.h"
 
 #include "common/time_stamp.h"
 #include "common/base64.h"
@@ -24,8 +30,7 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::base64;
-using jinq::common::cv_utils;
+using jinq::common::CvUtils;
 using jinq::common::Timestamp;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
@@ -298,7 +303,7 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::init(const toml::table& config) 
  */
 template<typename INPUT, typename OUTPUT>
 StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
-    StatusCode infer_status;
+    StatusCode infer_status = StatusCode::MODEL_RUN_SESSION_FAILED;
     if (_m_backend_type == TRT) {
         infer_status = trt_run(in, out);
     } else {
@@ -412,7 +417,7 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::init_trt(const toml::table& cfg)
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
-        for (auto idx = 0; idx < cls_names->size(); ++idx) {
+        for (size_t idx = 0; idx < cls_names->size(); ++idx) {
             _m_class_id2names.insert(std::make_pair(idx, (*cls_names)[idx].value_or<std::string>("")));
         }
     }
@@ -551,7 +556,7 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::trt_run(const INPUT& in, OUTPUT&
     cv::Mat& input_image = internal_in.input_image;
     _m_input_size_user = input_image.size();
     auto preprocessed_image = preprocess_image(input_image);
-    auto input_chw_image_data = cv_utils::convert_to_chw_vec(preprocessed_image);
+    auto input_chw_image_data = CvUtils::convert_to_chw_vec(preprocessed_image);
 
     // maybe reallocate device memory
     maybe_reallocate_input_device_memory(preprocessed_image);
@@ -622,7 +627,7 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::trt_run(const INPUT& in, OUTPUT&
     // nms thresh
     std::vector<int> indices;
     cv::dnn::NMSBoxes(bboxes, scores, _m_score_threshold, _m_nms_threshold, indices);
-    if (indices.size() >= _m_keep_topk) {
+    if (indices.size() >= static_cast<size_t>(_m_keep_topk)) {
         indices.resize(_m_keep_topk);
     }
 
@@ -633,7 +638,7 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::trt_run(const INPUT& in, OUTPUT&
         int cls_id = cls_ids[idx];
         cv::Rect2d ori_bbox = bboxes[idx];
         auto converted_bboxes = transform_bboxes(ori_bbox);
-        bbox tmp_bbox {converted_bboxes, score, cls_id};
+        bbox tmp_bbox {converted_bboxes, score, cls_id, {}};
         if (_m_class_id2names.find(cls_id) != _m_class_id2names.end()) {
             tmp_bbox.category = _m_class_id2names.at(cls_id);
         }

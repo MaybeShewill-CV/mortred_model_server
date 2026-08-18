@@ -13,6 +13,8 @@
 #include <cctype>
 #include <chrono>
 #include <cstdio>
+#include <cstring>
+#include <utility>
 #include <thread>
 
 #include <arpa/inet.h>
@@ -48,8 +50,6 @@
 
 namespace jinq {
 namespace server {
-using jinq::common::base64;
-using jinq::common::cv_utils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 using jinq::common::Timestamp;
@@ -241,12 +241,10 @@ protected:
     /***
      * 统一 JSON 响应出口：设置 HTTP 状态码、Content-Type、X-Request-ID。
      */
-    static void reply_json(WFHttpTask* task,
+    static void reply_json(protocol::HttpResponse* resp,
                            const std::string& req_id,
                            jinq::common::StatusCode status,
                            rapidjson::Document&& data) {
-        auto* resp = task->get_resp();
-
         resp->set_status_code(std::to_string(http_status_of(status)).c_str());
         resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
         resp->add_header_pair("X-Request-ID", req_id.c_str());
@@ -262,6 +260,13 @@ protected:
 
         auto body = jinq::common::build_response_body(http_resp);
         resp->append_output_body(body.data(), body.size());
+    }
+
+    static void reply_json(WFHttpTask* task,
+                           const std::string& req_id,
+                           jinq::common::StatusCode status,
+                           rapidjson::Document&& data) {
+        reply_json(task->get_resp(), req_id, status, std::move(data));
     }
 
 protected:
@@ -358,6 +363,7 @@ protected:
      * @return
      */
     virtual bool handle_custom_endpoint(WFHttpTask* task) {
+        (void)task;
         return false;
     }
 
@@ -475,7 +481,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         meta.task_id = task_req.task_id;
         meta.is_task_req_valid = task_req.is_valid;
         meta.task_received_ts = Timestamp::now().to_format_str();
-        go_task_functor functor{this, std::move(task_req)};
+        go_task_functor functor{this, std::move(task_req), {}};
         // create the task with a null routine first, so the task pointer can
         // be bound into the go closure (reset_go_task below): the routine then
         // publishes its ctx address through task->user_data for do_work_cb
@@ -649,7 +655,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(
         worker_run_time_consuming = result->worker_run_time_consuming;
         find_worker_time_consuming = result->find_worker_time_consuming;
     }
-    reply_json(task, task_id, status, std::move(data));
+    reply_json(resp, task_id, status, std::move(data));
 
     _m_metrics.inc_http_requests("POST", std::to_string(http_status_of(status)));
     _m_metrics.observe_http_duration_ms("POST", std::to_string(http_status_of(status)),

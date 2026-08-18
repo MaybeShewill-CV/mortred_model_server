@@ -8,6 +8,8 @@
 #ifndef MORTRED_MODEL_SERVER_BASESERVER_H
 #define MORTRED_MODEL_SERVER_BASESERVER_H
 
+#include <memory>
+
 #include <toml/toml.hpp>
 #include <workflow/WFTask.h>
 #include <workflow/WFHttpServer.h>

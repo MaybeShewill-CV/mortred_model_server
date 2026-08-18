@@ -8,12 +8,12 @@
 
 #include <gtest/gtest.h>
 
-#include "apps/web_console/backend/auth.h"
+#include "common/auth_token.h"
 
-using mortred_web::bearer_token_of;
-using mortred_web::constant_time_equals;
-using mortred_web::is_authorized;
-using mortred_web::is_loopback_host;
+using jinq::common::bearer_token_of;
+using jinq::common::constant_time_equals;
+using jinq::common::is_bearer_authorized;
+using jinq::common::is_loopback_host;
 
 TEST(web_console_auth, loopback_hosts_are_recognized) {
     EXPECT_TRUE(is_loopback_host("127.0.0.1"));
@@ -50,15 +50,15 @@ TEST(web_console_auth, constant_time_equals_compares_exactly) {
 }
 
 TEST(web_console_auth, authorized_requires_matching_token) {
-    EXPECT_TRUE(is_authorized("Bearer s3cret", "s3cret"));
-    EXPECT_FALSE(is_authorized("Bearer wrong", "s3cret"));
-    EXPECT_FALSE(is_authorized("", "s3cret"));
-    EXPECT_FALSE(is_authorized("Basic abc", "s3cret"));
+    EXPECT_TRUE(is_bearer_authorized("Bearer s3cret", "s3cret"));
+    EXPECT_FALSE(is_bearer_authorized("Bearer wrong", "s3cret"));
+    EXPECT_FALSE(is_bearer_authorized("", "s3cret"));
+    EXPECT_FALSE(is_bearer_authorized("Basic abc", "s3cret"));
 }
 
 TEST(web_console_auth, empty_configured_token_allows_everything) {
-    EXPECT_TRUE(is_authorized("", ""));
-    EXPECT_TRUE(is_authorized("Bearer whatever", ""));
+    EXPECT_TRUE(is_bearer_authorized("", ""));
+    EXPECT_TRUE(is_bearer_authorized("Bearer whatever", ""));
 }
 
 int main(int argc, char** argv) {

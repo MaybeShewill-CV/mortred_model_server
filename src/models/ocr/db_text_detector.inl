@@ -18,10 +18,9 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::cv_utils;
+using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
-using jinq::common::base64;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::common_io::file_input;
 using jinq::models::io_define::common_io::base64_input;
@@ -183,7 +182,7 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::Impl::init(const toml::table& config) 
     }
     const toml::table& cfg_content = *cfg_content_ptr;
 
-    auto init_status = _m_net.tomlt(cfg_content, {"x"}, {"sigmoid_0.tmp_0"});
+    auto init_status = _m_net.init(cfg_content, {"x"}, {"sigmoid_0.tmp_0"});
     if (init_status != StatusCode::OK) {
         _m_successfully_initialized = false;
         return init_status;
@@ -261,12 +260,12 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out
     // preprocess image
     _m_input_size_user = internal_in.input_image.size();
     auto preprocessed_image = preprocess_image(internal_in.input_image);
-    auto input_chw_image_data = cv_utils::convert_to_chw_vec(preprocessed_image);
+    auto input_chw_image_data = CvUtils::convert_to_chw_vec(preprocessed_image);
     // run session
     MNN::Tensor input_tensor_user(_m_net.input("x"), MNN::Tensor::DimensionType::CAFFE);
     auto input_tensor_data = input_tensor_user.host<float>();
     auto input_tensor_size = input_tensor_user.size();
-    if (!cv_utils::copy_image_to_tensor(input_tensor_data, input_chw_image_data, input_tensor_size)) {
+    if (!CvUtils::copy_image_to_tensor(input_tensor_data, input_chw_image_data, input_tensor_size)) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
     _m_net.input("x")->copyFromHostTensor(&input_tensor_user);
@@ -323,7 +322,7 @@ dbtext_impl::internal_output DBTextDetector<INPUT, OUTPUT>::Impl::postprocess() 
     // get bboxes from bitmap
     auto bbox_result = get_boxes_from_bitmap();
 
-    if (bbox_result.size() <= _m_keep_topk) {
+    if (bbox_result.size() <= static_cast<size_t>(_m_keep_topk)) {
         return bbox_result;
     } else {
         dbtext_impl::internal_output keep_top_k(bbox_result.cbegin(), bbox_result.cbegin() + _m_keep_topk);

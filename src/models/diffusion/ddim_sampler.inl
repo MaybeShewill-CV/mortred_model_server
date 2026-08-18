@@ -9,6 +9,8 @@
 
 #include <random>
 #include <functional>
+#include <numeric>
+#include <tuple>
 #include <cmath>
 
 #include <opencv2/opencv.hpp>
@@ -23,8 +25,7 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::base64;
-using jinq::common::cv_utils;
+using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 
@@ -211,7 +212,7 @@ class DDIMSampler<INPUT, OUTPUT>::Impl {
         }
         std::transform(t.begin(), t.end(), t.begin(), [&](double x) { return x / t[0]; });
         std::vector<double> betas;
-        for (int idx = 1; idx < t.size(); ++idx) {
+        for (size_t idx = 1; idx < t.size(); ++idx) {
             auto val = t[idx] / t[idx - 1];
             val = 1.0 - val;
             betas.push_back(val);
@@ -240,7 +241,7 @@ class DDIMSampler<INPUT, OUTPUT>::Impl {
         }
         std::transform(t.begin(), t.end(), t.begin(), [&](double x) { return x / t[0]; });
         std::vector<double> betas;
-        for (int idx = 1; idx < t.size(); ++idx) {
+        for (size_t idx = 1; idx < t.size(); ++idx) {
             auto val = t[idx] / t[idx - 1];
             val = 1.0 - val;
             betas.push_back(val);
@@ -260,7 +261,7 @@ class DDIMSampler<INPUT, OUTPUT>::Impl {
             alphas.push_back(1.0 - val);
         }
         std::vector<double> alpha_cumprod;
-        for (auto idx = 0; idx < betas.size(); ++idx) {
+        for (size_t idx = 0; idx < betas.size(); ++idx) {
             auto val = std::accumulate(alphas.begin(), alphas.begin() + idx + 1, 1.0, std::multiplies<>());
             alpha_cumprod.push_back(val);
         }
@@ -383,7 +384,7 @@ StatusCode DDIMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
             internal_out.raw_sampled_images.push_back(predict_xt);
         }
         // rescale image data to [0, 255]
-        for (auto idx = 0; idx < predict_x0.size(); ++idx) {
+        for (size_t idx = 0; idx < predict_x0.size(); ++idx) {
             predict_x0[idx] = std::clamp(predict_x0[idx], -1.0f, 1.0f);
             predict_x0[idx] = (predict_x0[idx] + 1.0f) * 0.5f * 255.0f + 0.5f;
             predict_x0[idx] = std::clamp(predict_x0[idx], 0.0f, 255.0f);
@@ -393,7 +394,7 @@ StatusCode DDIMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
             predict_xt[idx] = std::clamp(predict_xt[idx], 0.0f, 255.0f);
         }
         // assign output predict x0 images
-        auto hwc_data = cv_utils::convert_to_hwc_vec<float>(predict_x0, sample_channels, sample_size.height, sample_size.width);
+        auto hwc_data = CvUtils::convert_to_hwc_vec<float>(predict_x0, sample_channels, sample_size.height, sample_size.width);
         cv::Mat mid_image;
         if (sample_channels == 1) {
             mid_image = cv::Mat(sample_size, CV_32FC1, hwc_data.data());
@@ -409,7 +410,7 @@ StatusCode DDIMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
         cv::cvtColor(mid_image, mid_image, cv::COLOR_RGB2BGR);
         internal_out.predicted_x0.push_back(mid_image);
         // assign output predict samples images
-        hwc_data = cv_utils::convert_to_hwc_vec<float>(predict_xt, sample_channels, sample_size.height, sample_size.width);
+        hwc_data = CvUtils::convert_to_hwc_vec<float>(predict_xt, sample_channels, sample_size.height, sample_size.width);
         if (sample_channels == 1) {
             mid_image = cv::Mat(sample_size, CV_32FC1, hwc_data.data());
         } else if (sample_channels == 3) {
@@ -448,7 +449,7 @@ std::vector<std::tuple<std::vector<float>, std::vector<float> > > DDIMSampler<IN
     std::vector<std::tuple<std::vector<float>, std::vector<float> > > mid_sample_results;
     std::vector<double> steps = ddim_sampler_impl::linspace(0.0, static_cast<double>(total_steps) - 1.0, sample_steps);
     std::reverse(steps.begin(), steps.end());
-    for (auto idx = 0; idx < steps.size(); ++idx) {
+    for (size_t idx = 0; idx < steps.size(); ++idx) {
         auto t = steps[idx];
         bool is_last = t == 0;
         auto t_next = is_last ? t : steps[idx + 1];
@@ -495,7 +496,7 @@ std::tuple<std::vector<float>, std::vector<float> > DDIMSampler<INPUT, OUTPUT>::
     auto alpha_t_cumprod = _m_alpha_cumprod[t];
     auto alpha_t_next_cumprod = _m_alpha_cumprod[t_next];
     std::vector<float> x0_t(xt.size());
-    for (auto idx = 0; idx < xt.size(); ++idx) {
+    for (size_t idx = 0; idx < xt.size(); ++idx) {
         auto sqrt_alpha_t_cumprod = static_cast<float>(std::sqrt(alpha_t_cumprod));
         auto val = static_cast<float>(std::sqrt(1 - alpha_t_cumprod));
         val = predict_noise[idx] * val;
@@ -510,7 +511,7 @@ std::tuple<std::vector<float>, std::vector<float> > DDIMSampler<INPUT, OUTPUT>::
 
     // compute equation(12) part 2 "direction pointing to x t" in origin paper
     std::vector<float> direction_to_xt(xt.size());
-    for (auto idx = 0; idx < xt.size(); ++idx) {
+    for (size_t idx = 0; idx < xt.size(); ++idx) {
         auto noise = predict_noise[idx];
         auto val = static_cast<float>(std::sqrt(1.0f - alpha_t_next_cumprod - std::pow(sigma_t, 2)));
         val *= noise;
@@ -525,7 +526,7 @@ std::tuple<std::vector<float>, std::vector<float> > DDIMSampler<INPUT, OUTPUT>::
 
     // compute xt-1
     std::vector<float> xt_next(xt.size());
-    for (auto idx = 0; idx < xt.size(); ++idx) {
+    for (size_t idx = 0; idx < xt.size(); ++idx) {
         auto x0_t_v = static_cast<float>(std::sqrt(alpha_t_next_cumprod)) * x0_t[idx];
         auto direct_to_xt_v = direction_to_xt[idx];
         auto random_noise_v = random_noise[idx];

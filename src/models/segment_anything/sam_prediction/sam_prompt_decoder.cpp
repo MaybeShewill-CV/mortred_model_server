@@ -7,9 +7,18 @@
 
 #include "sam_prompt_decoder.h"
 
+#include <algorithm>
+#include <cerrno>
+#include <cstdint>
+#include <cstring>
+#include <fstream>
+#include <iterator>
+#include <sstream>
+
 #include "glog/logging.h"
 #include "onnxruntime/onnxruntime_cxx_api.h"
 #include "TensorRT-8.6.1.6/NvInferRuntime.h"
+#include "cuda_runtime_api.h"
 
 #include "common/file_path_util.h"
 #include "common/cv_utils.h"
@@ -19,7 +28,6 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::cv_utils;
 using jinq::common::StatusCode;
 using jinq::common::FilePathUtil;
 using jinq::common::Timestamp;

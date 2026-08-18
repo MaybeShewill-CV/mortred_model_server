@@ -8,6 +8,7 @@
 #ifndef MORTRED_MODEL_SERVER_SAM_PROMPT_DECODER_H
 #define MORTRED_MODEL_SERVER_SAM_PROMPT_DECODER_H
 
+#include <memory>
 #include <vector>
 
 #include <opencv2/opencv.hpp>

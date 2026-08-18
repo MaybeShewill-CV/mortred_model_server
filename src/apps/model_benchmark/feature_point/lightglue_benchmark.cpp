@@ -18,7 +18,7 @@
 
 using jinq::common::FilePathUtil;
 using jinq::common::Timestamp;
-using jinq::common::cv_utils;
+using jinq::common::CvUtils;
 using jinq::models::io_define::common_io::pair_mat_input;
 using jinq::models::io_define::feature_point::matched_fp;
 using jinq::models::io_define::feature_point::std_feature_point_match_output;
@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
 
     // vis match result
     cv::Mat vis_result;
-    cv_utils::visualize_fp_match_result(src_input_image, dst_input_image, model_output, vis_result);
+    CvUtils::visualize_fp_match_result(src_input_image, dst_input_image, model_output, vis_result);
     std::string output_file_name = FilePathUtil::get_file_name(src_input_image_path);
     output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_lightglue_result.png";
     std::string output_path = FilePathUtil::concat_path("../demo_data/model_test_input/feature_point", output_file_name);

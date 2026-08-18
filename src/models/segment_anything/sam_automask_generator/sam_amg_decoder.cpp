@@ -7,9 +7,18 @@
 
 #include "sam_amg_decoder.h"
 
+#include <algorithm>
+#include <cerrno>
+#include <cstdint>
+#include <cstring>
+#include <fstream>
+#include <iterator>
+#include <sstream>
+
 #include "glog/logging.h"
 #include "stl_container/blockingconcurrentqueue.h"
 #include "TensorRT-8.6.1.6/NvInferRuntime.h"
+#include "cuda_runtime_api.h"
 #include "workflow/WFFacilities.h"
 #include "workflow/Workflow.h"
 
@@ -21,7 +30,6 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::cv_utils;
 using jinq::common::StatusCode;
 using jinq::common::FilePathUtil;
 using jinq::common::Timestamp;
@@ -444,7 +452,7 @@ StatusCode SamAmgDecoder::Impl::decode(
     StatusCode status = StatusCode::OK;
     // create workflow parallel series
     auto* p_series = Workflow::create_parallel_work([&](const ParallelWork* pwork) -> void {
-        for (auto idx = 0; idx < pwork->size(); ++idx) {
+        for (size_t idx = 0; idx < pwork->size(); ++idx) {
             auto* series_ctx = (thread_decode_seriex_ctx*)pwork->series_at(idx)->get_context();
             if (series_ctx->model_run_status != StatusCode::OK) {
                 status = series_ctx->model_run_status;
@@ -906,7 +914,7 @@ void SamAmgDecoder::Impl::filter_output_masks(
     std::vector<float> iou_threshed_ious;
     std::vector<float> iou_threshed_stability_scores;
     std::vector<cv::Point2f> iou_threshed_point_coords;
-    for (auto idx = 0; idx < pred_ious.size(); ++idx) {
+    for (size_t idx = 0; idx < pred_ious.size(); ++idx) {
         if (pred_ious[idx] >= pred_iou_thresh) {
             iou_threshed_masks.push_back(pred_masks[idx]);
             iou_threshed_ious.push_back(pred_ious[idx]);
@@ -920,7 +928,7 @@ void SamAmgDecoder::Impl::filter_output_masks(
     std::vector<float> stability_threshed_ious;
     std::vector<float> stability_scores;
     std::vector<cv::Point2f> stability_threshed_point_coords;
-    for (auto idx = 0; idx < iou_threshed_stability_scores.size(); ++idx) {
+    for (size_t idx = 0; idx < iou_threshed_stability_scores.size(); ++idx) {
         auto stability_score = iou_threshed_stability_scores[idx];
         if (stability_score >= stability_score_thresh) {
             stability_threshed_masks.push_back(iou_threshed_masks[idx]);
@@ -1015,7 +1023,7 @@ void SamAmgDecoder::Impl::filter_output_masks(
     std::vector<float> region_threshed_stability_scores;
     std::vector<cv::Point2f> region_threshed_point_coords;
     if (min_mask_region_area > 0) {
-        for (auto idx = 0; idx < nms_threshed_masks.size(); ++idx) {
+        for (size_t idx = 0; idx < nms_threshed_masks.size(); ++idx) {
             cv::Mat labels;
             cv::Mat stats;
             cv::Mat centroids;

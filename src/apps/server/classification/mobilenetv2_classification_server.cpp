@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
     auto server = create_mobilenetv2_cls_server("mobilenetv2_cls_server");
         auto status = server->init(config);
         if (status != jinq::common::StatusCode::OK) {
-            LOG(ERROR) << "server init failed, status: " << std::to_string(status);
+            LOG(ERROR) << "server init failed, status: " << std::to_string(static_cast<int>(status));
             return -1;
         }
         if (server->start(host.c_str(), static_cast<unsigned short>(port)) == 0) {

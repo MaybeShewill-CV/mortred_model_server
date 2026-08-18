@@ -9,6 +9,8 @@
 
 #include <random>
 #include <functional>
+#include <numeric>
+#include <tuple>
 #include <cmath>
 
 #include <opencv2/opencv.hpp>
@@ -23,8 +25,7 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::base64;
-using jinq::common::cv_utils;
+using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 
@@ -213,7 +214,7 @@ class DDPMSampler<INPUT, OUTPUT>::Impl {
         }
         std::transform(t.begin(), t.end(), t.begin(), [&](double x) { return x / t[0]; });
         std::vector<double> betas;
-        for (int idx = 1; idx < t.size(); ++idx) {
+        for (size_t idx = 1; idx < t.size(); ++idx) {
             auto val = t[idx] / t[idx - 1];
             val = 1.0 - val;
             betas.push_back(val);
@@ -242,7 +243,7 @@ class DDPMSampler<INPUT, OUTPUT>::Impl {
         }
         std::transform(t.begin(), t.end(), t.begin(), [&](double x) { return x / t[0]; });
         std::vector<double> betas;
-        for (int idx = 1; idx < t.size(); ++idx) {
+        for (size_t idx = 1; idx < t.size(); ++idx) {
             auto val = t[idx] / t[idx - 1];
             val = 1.0 - val;
             betas.push_back(val);
@@ -262,7 +263,7 @@ class DDPMSampler<INPUT, OUTPUT>::Impl {
             alphas.push_back(1.0 - val);
         }
         std::vector<double> alpha_cumprod;
-        for (auto idx = 0; idx < betas.size(); ++idx) {
+        for (size_t idx = 0; idx < betas.size(); ++idx) {
             auto val = std::accumulate(alphas.begin(), alphas.begin() + idx + 1, 1.0, std::multiplies<>());
             alpha_cumprod.push_back(val);
         }
@@ -391,7 +392,7 @@ StatusCode DDPMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
         std::transform(img_data.begin(), img_data.end(), img_data.begin(), [](float x) { return std::clamp(x, -1.0f, 1.0f); });
         std::transform(img_data.begin(), img_data.end(), img_data.begin(), [](float x) { return (x + 1.0f) * 0.5f * 255.0f + 0.5; });
         std::transform(img_data.begin(), img_data.end(), img_data.begin(), [](float x) { return std::clamp(x, 0.0f, 255.0f); });
-        auto hwc_data = cv_utils::convert_to_hwc_vec<float>(img_data, sample_channels, sample_size.height, sample_size.width);
+        auto hwc_data = CvUtils::convert_to_hwc_vec<float>(img_data, sample_channels, sample_size.height, sample_size.width);
         cv::Mat mid_image;
         if (sample_channels == 1) {
             mid_image = cv::Mat(sample_size, CV_32FC1, hwc_data.data());
@@ -518,7 +519,7 @@ std::vector<std::vector<float> > DDPMSampler<INPUT, OUTPUT>::Impl::p_sample(
     // loop sample
     std::vector<double> steps = ddpm_sampler_impl::linspace(0.0, static_cast<double>(timesteps) - 1.0, static_cast<int>(timesteps));
     std::reverse(steps.begin(), steps.end());
-    for (auto idx = 0; idx < steps.size(); ++idx) {
+    for (size_t idx = 0; idx < steps.size(); ++idx) {
         auto t_step = static_cast<int64_t >(steps[idx]);
         bool is_last = t_step == 0;
         xt = p_sample_once(xt, t_step, is_last, use_fixed_noise_for_psample);

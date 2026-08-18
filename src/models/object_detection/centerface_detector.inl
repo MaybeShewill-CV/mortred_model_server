@@ -18,8 +18,7 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::base64;
-using jinq::common::cv_utils;
+using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 using jinq::models::io_define::common_io::base64_input;
@@ -190,7 +189,7 @@ StatusCode CenterFaceDetector<INPUT, OUTPUT>::Impl::init(const toml::table &conf
         _m_keep_topk = cfg_content["model_keep_top_k"].value_or<int64_t>(0);
     }
 
-    auto init_status = _m_net.tomlt(
+    auto init_status = _m_net.init(
         cfg_content, {"input.1"}, {"537", "538", "539", "540"});
     if (init_status != StatusCode::OK) {
         _m_successfully_initialized = false;
@@ -254,7 +253,7 @@ StatusCode CenterFaceDetector<INPUT, OUTPUT>::Impl::run(const INPUT &in, OUTPUT 
     // preprocess
     _m_input_size_user = internal_in.input_image.size();
     cv::Mat preprocessed_image = preprocess_image(internal_in.input_image);
-    auto input_chw_image_data = cv_utils::convert_to_chw_vec(preprocessed_image);
+    auto input_chw_image_data = CvUtils::convert_to_chw_vec(preprocessed_image);
 
     // run session
     if (_m_need_resize_tensor) {
@@ -265,7 +264,7 @@ StatusCode CenterFaceDetector<INPUT, OUTPUT>::Impl::run(const INPUT &in, OUTPUT 
     MNN::Tensor input_tensor_user(_m_net.input("input.1"), MNN::Tensor::DimensionType::CAFFE);
     auto input_tensor_data = input_tensor_user.host<float>();
     auto input_tensor_size = input_tensor_user.size();
-    if (!cv_utils::copy_image_to_tensor(input_tensor_data, input_chw_image_data, input_tensor_size)) {
+    if (!CvUtils::copy_image_to_tensor(input_tensor_data, input_chw_image_data, input_tensor_size)) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
     _m_net.input("input.1")->copyFromHostTensor(&input_tensor_user);
@@ -289,7 +288,7 @@ StatusCode CenterFaceDetector<INPUT, OUTPUT>::Impl::run(const INPUT &in, OUTPUT 
     }
 
     // do nms
-    centerface_impl::internal_output nms_result = cv_utils::nms_bboxes(faces_result, _m_nms_threshold);
+    centerface_impl::internal_output nms_result = CvUtils::nms_bboxes(faces_result, _m_nms_threshold);
     if (nms_result.size() > _m_keep_topk) {
         nms_result.resize(_m_keep_topk);
     }
@@ -332,15 +331,15 @@ centerface_impl::internal_output CenterFaceDetector<INPUT, OUTPUT>::Impl::decode
             if (score < _m_score_threshold) {
                 continue;
             }
-            float s0 = 4 * exp(scale_host.host<float>()[index]);
-            float s1 = 4 * exp(scale_host.host<float>()[index + channel_step]);
+            float s0 = 4 * std::exp(scale_host.host<float>()[index]);
+            float s1 = 4 * std::exp(scale_host.host<float>()[index + channel_step]);
             float o0 = offset_host.host<float>()[index];
             float o1 = offset_host.host<float>()[index + channel_step];
 
-            float ymin = MAX(0, 4 * (h + o0 + 0.5) - 0.5 * s0);
-            float xmin = MAX(0, 4 * (w + o1 + 0.5) - 0.5 * s1);
-            float ymax = MIN(ymin + s0, _m_input_size_host.height);
-            float xmax = MIN(xmin + s1, _m_input_size_host.width);
+            float ymin = std::max(0.0f, static_cast<float>(4 * (h + o0 + 0.5) - 0.5 * s0));
+            float xmin = std::max(0.0f, static_cast<float>(4 * (w + o1 + 0.5) - 0.5 * s1));
+            float ymax = std::min(ymin + s0, static_cast<float>(_m_input_size_host.height));
+            float xmax = std::min(xmin + s1, static_cast<float>(_m_input_size_host.width));
 
             face_bbox face_info;
             face_info.score = score;

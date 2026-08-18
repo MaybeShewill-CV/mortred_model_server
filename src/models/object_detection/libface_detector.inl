@@ -21,8 +21,7 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::base64;
-using jinq::common::cv_utils;
+using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 using jinq::models::io_define::common_io::base64_input;
@@ -204,7 +203,7 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::Impl::init(const toml::table &config)
         _m_keep_topk = cfg_content["model_keep_top_k"].value_or<int64_t>(0);
     }
 
-    auto init_status = _m_net.tomlt(cfg_content, {"input"}, {"loc", "conf"});
+    auto init_status = _m_net.init(cfg_content, {"input"}, {"loc", "conf"});
     if (init_status != StatusCode::OK) {
         _m_successfully_initialized = false;
         return init_status;
@@ -265,13 +264,13 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::Impl::run(const INPUT &in, OUTPUT &ou
     // preprocess
     _m_input_size_user = internal_in.input_image.size();
     cv::Mat preprocessed_image = preprocess_image(internal_in.input_image);
-    auto input_chw_image_data = cv_utils::convert_to_chw_vec(preprocessed_image);
+    auto input_chw_image_data = CvUtils::convert_to_chw_vec(preprocessed_image);
 
     // run session
     MNN::Tensor input_tensor_user(_m_net.input("input"), MNN::Tensor::DimensionType::CAFFE);
     auto input_tensor_data = input_tensor_user.host<float>();
     auto input_tensor_size = input_tensor_user.size();
-    if (!cv_utils::copy_image_to_tensor(input_tensor_data, input_chw_image_data, input_tensor_size)) {
+    if (!CvUtils::copy_image_to_tensor(input_tensor_data, input_chw_image_data, input_tensor_size)) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
     _m_net.input("input")->copyFromHostTensor(&input_tensor_user);
@@ -280,7 +279,7 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::Impl::run(const INPUT &in, OUTPUT &ou
     // decode output tensor
     auto faces_result = decode_output_tensor();
     // do nms
-    libface_impl::internal_output nms_result = cv_utils::nms_bboxes(faces_result, _m_nms_threshold);
+    libface_impl::internal_output nms_result = CvUtils::nms_bboxes(faces_result, _m_nms_threshold);
     if (nms_result.size() > _m_keep_topk) {
         nms_result.resize(_m_keep_topk);
     }
@@ -332,8 +331,8 @@ std::vector<libface_impl::FaceAnchor> LibFaceDetector<INPUT, OUTPUT>::Impl::gene
     for (size_t k = 0; k < feature_maps.size(); ++k) {
         auto tmp_feature_map = feature_maps[k];
         auto tmp_min_sizes = min_sizes[k];
-        for (size_t i = 0; i < tmp_feature_map[0]; ++i) {
-            for (size_t j = 0; j < tmp_feature_map[1]; ++j) {
+        for (int i = 0; i < tmp_feature_map[0]; ++i) {
+            for (int j = 0; j < tmp_feature_map[1]; ++j) {
                 for (auto min_size : tmp_min_sizes) {
                     double s_kx = min_size / in_w;
                     double s_ky = min_size / in_h;
@@ -380,8 +379,8 @@ libface_impl::internal_output LibFaceDetector<INPUT, OUTPUT>::Impl::decode_outpu
 
     std::vector<face_bbox> decode_result;
 
-    for (size_t batch_num = 0; batch_num < batch_nums; ++batch_num) {
-        for (size_t bbox_index = 0; bbox_index < raw_pred_bbox_nums; ++bbox_index) {
+    for (int batch_num = 0; batch_num < batch_nums; ++batch_num) {
+        for (int bbox_index = 0; bbox_index < raw_pred_bbox_nums; ++bbox_index) {
             auto prior = priors[bbox_index];
 
             // decode conf

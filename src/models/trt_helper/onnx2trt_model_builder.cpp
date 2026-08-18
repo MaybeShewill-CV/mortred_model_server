@@ -113,6 +113,7 @@ static bool setup_optimization_profiles(
     nvinfer1::INetworkDefinition* network,
     nvinfer1::IBuilderConfig* config,
     const std::string& profile_json) {
+    (void)network;
     if (profile_json.empty()) {
         return true;
     }

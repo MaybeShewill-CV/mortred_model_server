@@ -7,6 +7,10 @@
 
 #include "openai_clip_text_encoder.h"
 
+#include <functional>
+#include <iterator>
+#include <numeric>
+
 #include "glog/logging.h"
 
 #include "common/cv_utils.h"
@@ -17,7 +21,7 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::cv_utils;
+using jinq::common::CvUtils;
 using jinq::common::StatusCode;
 using jinq::common::FilePathUtil;
 using jinq::models::clip::SimpleTokenizer;
@@ -109,7 +113,7 @@ StatusCode OpenAiClipTextEncoder::Impl::init(const toml::table& cfg) {
     }
     const toml::table& cfg_content = *cfg_content_ptr;
 
-    auto init_status = _m_net.tomlt(cfg_content, {"input"}, {"output"});
+    auto init_status = _m_net.init(cfg_content, {"input"}, {"output"});
     if (init_status != StatusCode::OK) {
         _m_successfully_init_model = false;
         return init_status;
@@ -118,7 +122,7 @@ StatusCode OpenAiClipTextEncoder::Impl::init(const toml::table& cfg) {
     _m_output_shape = _m_net.output("output")->shape();
 
     // init tokenizer
-    auto status = _m_tokenizer.tomlt(cfg);
+    auto status = _m_tokenizer.init(cfg);
     if (!_m_tokenizer.is_successfully_initialized()) {
         LOG(ERROR) << "init simple tokenizer failed, status code: " << status;
         _m_successfully_init_model = false;
@@ -166,7 +170,7 @@ StatusCode OpenAiClipTextEncoder::Impl::encode(
     auto input_tensor_user = MNN::Tensor(_m_net.input("input"), MNN::Tensor::DimensionType::CAFFE);
     auto input_tensor_data = input_tensor_user.host<float>();
     auto input_tensor_size = input_tensor_user.size();
-    if (!cv_utils::copy_image_to_tensor(input_tensor_data, token_ids, input_tensor_size)) {
+    if (!CvUtils::copy_image_to_tensor(input_tensor_data, token_ids, input_tensor_size)) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
     _m_net.input("input")->copyFromHostTensor(&input_tensor_user);

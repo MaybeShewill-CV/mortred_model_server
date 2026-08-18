@@ -7,6 +7,13 @@
 
 #include "byte_tracker.h"
 
+#include <algorithm>
+#include <climits>
+#include <cmath>
+#include <iterator>
+#include <limits>
+#include <unordered_map>
+
 #include <glog/logging.h>
 
 #include "common/status_code.h"

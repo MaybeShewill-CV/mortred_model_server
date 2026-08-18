@@ -7,14 +7,19 @@
 
 #include "lightglue.h"
 
+#include <algorithm>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <sstream>
 #include <unordered_map>
 
 #include "glog/logging.h"
 #include <opencv2/opencv.hpp>
 #include "onnxruntime/onnxruntime_cxx_api.h"
 #include "TensorRT-8.6.1.6/NvInferRuntime.h"
+#include "cuda_runtime_api.h"
 
 #include "common/base64.h"
 #include "common/cv_utils.h"
@@ -24,8 +29,7 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::cv_utils;
-using jinq::common::base64;
+using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 using jinq::models::io_define::common_io::base64_input;
@@ -85,6 +89,8 @@ class LightGlueOutputAllocator : public nvinfer1::IOutputAllocator {
      * @return
      */
     void* reallocateOutput(char const* tensorName, void* currentMemory, uint64_t size, uint64_t alignment) noexcept override {
+        (void)currentMemory;
+        (void)alignment;
         DLOG(INFO) << "reallocate cuda memo for dynamically shaped tensor: " << tensorName;
         // reallocate cuda memo
         if (size > output_size) {
@@ -105,6 +111,7 @@ class LightGlueOutputAllocator : public nvinfer1::IOutputAllocator {
      * @param dims
      */
     void notifyShape(char const* tensorName, nvinfer1::Dims const& dims) noexcept override {
+        (void)tensorName;
         output_dims = dims;
     }
 
@@ -626,7 +633,6 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::onnx_run(const INPUT &in, OUTPUT& out
     auto& sess = _m_onnx_params.session;
     auto& input_node_shapes = _m_onnx_params.input_node_shapes;
     auto& input_node_names = _m_onnx_params.input_node_names;
-    auto& output_node_shapes = _m_onnx_params.output_node_shapes;
     auto& output_node_names = _m_onnx_params.output_node_names;
     auto& output_kpts0_value = _m_onnx_params.kpts0_host;
     auto& output_kpts1_value = _m_onnx_params.kpts1_host;
@@ -752,7 +758,7 @@ std_feature_point_match_output LightGlue<INPUT, OUTPUT>::Impl::onnx_decode_outpu
     auto kpts0_w_scale = static_cast<float>(input_node_shapes[0][3]) / static_cast<float>(_m_src_input_size_user.width);
     auto kpts0_h_scale = static_cast<float>(input_node_shapes[0][2]) / static_cast<float>(_m_src_input_size_user.height);
     std::vector<cv::Point2f> kpts0;
-    for (auto idx = 0; idx < out_kpts0.size(); idx += 2) {
+    for (size_t idx = 0; idx < out_kpts0.size(); idx += 2) {
         auto fpt = cv::Point2f((out_kpts0[idx] + 0.5) / kpts0_w_scale - 0.5 , (out_kpts0[idx + 1] + 0.5) / kpts0_h_scale - 0.5);
         kpts0.push_back(fpt);
     }
@@ -760,7 +766,7 @@ std_feature_point_match_output LightGlue<INPUT, OUTPUT>::Impl::onnx_decode_outpu
     auto kpts1_w_scale = static_cast<float>(input_node_shapes[1][3]) / static_cast<float>(_m_dst_input_size_user.width);
     auto kpts1_h_scale = static_cast<float>(input_node_shapes[1][2]) / static_cast<float>(_m_dst_input_size_user.height);
     std::vector<cv::Point2f> kpts1;
-    for (auto idx = 0; idx < out_kpts1.size(); idx += 2) {
+    for (size_t idx = 0; idx < out_kpts1.size(); idx += 2) {
         auto fpt = cv::Point2f((out_kpts1[idx] + 0.5) / kpts1_w_scale - 0.5 , (out_kpts1[idx + 1] + 0.5) / kpts1_h_scale - 0.5);
         kpts1.push_back(fpt);
     }
@@ -772,14 +778,15 @@ std_feature_point_match_output LightGlue<INPUT, OUTPUT>::Impl::onnx_decode_outpu
         return std_feature_point_match_output();
     }
     std::vector<matched_fp> matched_fpts;
-    for (int idx = 0; idx < out_match_scores.size(); idx++) {
+    for (size_t idx = 0; idx < out_match_scores.size(); idx++) {
         auto match_score = out_match_scores[idx];
         if (match_score < _m_match_thresh) {
             continue;
         }
         auto kpt0_idx = out_matches[idx * 2];
         auto kpt1_idx = out_matches[idx * 2 + 1];
-        if (kpt0_idx < 0 || kpt0_idx >= kpts0.size() || kpt1_idx < 0 || kpt1_idx >= kpts1.size()) {
+        if (kpt0_idx < 0 || static_cast<size_t>(kpt0_idx) >= kpts0.size() ||
+            kpt1_idx < 0 || static_cast<size_t>(kpt1_idx) >= kpts1.size()) {
             continue;
         }
         auto kpt0 = kpts0[kpt0_idx];
@@ -1158,7 +1165,7 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::trt_extract_feature_points(
     auto& input_image_binding = _m_trt_params.extractor->input_image_binding;
 
     // setup input image
-    auto input_chw_data = cv_utils::convert_to_chw_vec(input_image);
+    auto input_chw_data = CvUtils::convert_to_chw_vec(input_image);
     nvinfer1::Dims4 input_shape(1, 1, input_image.rows, input_image.cols);
     input_image_binding.set_dims(input_shape);
     context->setInputShape("image", input_shape);
@@ -1218,7 +1225,7 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::trt_extract_feature_points(
                    << ", locations " << fp_locations.size() << ", descs " << fp_descs.size();
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
-    for (auto idx = 0; idx < fp_scores.size(); ++idx) {
+    for (size_t idx = 0; idx < fp_scores.size(); ++idx) {
         auto fp_score = fp_scores[idx];
         if (fp_score < _m_trt_params.extractor->score_thresh) {
             continue;
@@ -1371,12 +1378,12 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::trt_match_feature_points(
 
     // copy internal output
     std::vector<cv::Point2f> kpts0;
-    for (auto idx = 0; idx < input_kpts0.size(); idx += 2) {
+    for (size_t idx = 0; idx < input_kpts0.size(); idx += 2) {
         auto fpt = cv::Point2f(static_cast<float>(input_kpts0[idx]), static_cast<float>(input_kpts0[idx + 1]));
         kpts0.push_back(fpt);
     }
     std::vector<cv::Point2f> kpts1;
-    for (auto idx = 0; idx < input_kpts1.size(); idx += 2) {
+    for (size_t idx = 0; idx < input_kpts1.size(); idx += 2) {
         auto fpt = cv::Point2f(static_cast<float>(input_kpts1[idx]), static_cast<float>(input_kpts1[idx + 1]));
         kpts1.push_back(fpt);
     }
@@ -1386,14 +1393,15 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::trt_match_feature_points(
                    << " mismatches matches size " << out_matches.size();
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
-    for (auto idx = 0; idx < out_mscores.size(); ++idx) {
+    for (size_t idx = 0; idx < out_mscores.size(); ++idx) {
         auto match_score = out_mscores[idx];
         if (match_score < _m_match_thresh) {
             continue;
         }
         auto kpt0_idx = out_matches[idx * 2];
         auto kpt1_idx = out_matches[idx * 2 + 1];
-        if (kpt0_idx < 0 || kpt0_idx >= kpts0.size() || kpt1_idx < 0 || kpt1_idx >= kpts1.size()) {
+        if (kpt0_idx < 0 || static_cast<size_t>(kpt0_idx) >= kpts0.size() ||
+            kpt1_idx < 0 || static_cast<size_t>(kpt1_idx) >= kpts1.size()) {
             continue;
         }
         auto kpt0 = kpts0[kpt0_idx];

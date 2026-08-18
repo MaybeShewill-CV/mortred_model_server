@@ -18,7 +18,7 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::cv_utils;
+using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 using jinq::models::io_define::common_io::mat_input;
@@ -152,7 +152,7 @@ StatusCode PPMatting<INPUT, OUTPUT>::Impl::init(const toml::table& config) {
     }
     const toml::table& cfg_content = *cfg_content_ptr;
 
-    auto init_status = _m_net.tomlt(cfg_content, {"img"}, {});
+    auto init_status = _m_net.init(cfg_content, {"img"}, {});
     if (init_status != StatusCode::OK) {
         _m_successfully_initialized = false;
         return init_status;
@@ -219,13 +219,13 @@ StatusCode PPMatting<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     // preprocess image
     _m_input_size_user = internal_in.input_image.size();
     cv::Mat preprocessed_image = preprocess_image(internal_in.input_image);
-    auto input_chw_image_data = cv_utils::convert_to_chw_vec(preprocessed_image);
+    auto input_chw_image_data = CvUtils::convert_to_chw_vec(preprocessed_image);
 
     // run session
     MNN::Tensor input_tensor_user(_m_net.input("img"), MNN::Tensor::DimensionType::CAFFE);
     auto input_tensor_data = input_tensor_user.host<float>();
     auto input_tensor_size = input_tensor_user.size();
-    if (!cv_utils::copy_image_to_tensor(input_tensor_data, input_chw_image_data, input_tensor_size)) {
+    if (!CvUtils::copy_image_to_tensor(input_tensor_data, input_chw_image_data, input_tensor_size)) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
     _m_net.input("img")->copyFromHostTensor(&input_tensor_user);

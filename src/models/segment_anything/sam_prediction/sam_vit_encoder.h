@@ -8,6 +8,7 @@
 #ifndef MORTRED_MODEL_SERVER_SAM_VIT_ENCODER_H
 #define MORTRED_MODEL_SERVER_SAM_VIT_ENCODER_H
 
+#include <memory>
 #include <vector>
 
 #include <opencv2/opencv.hpp>

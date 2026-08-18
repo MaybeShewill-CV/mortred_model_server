@@ -45,7 +45,7 @@ inline cv::Mat load_image(const io_define::common_io::mat_input& in) {
  * base64_input -> cv::Mat: base64 decode then imdecode with original channels
  */
 inline cv::Mat load_image(const io_define::common_io::base64_input& in) {
-    return jinq::common::cv_utils::decode_base64_str_into_cvmat(
+    return jinq::common::CvUtils::decode_base64_str_into_cvmat(
         in.input_image_content, cv::IMREAD_UNCHANGED);
 }
 

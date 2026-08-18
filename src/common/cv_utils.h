@@ -23,10 +23,12 @@
 
 namespace jinq {
 namespace common {
-namespace cv_utils {
+
+class CvUtils {
+  public:
 
 // deterministic palette: golden-angle hue sweep, O(n), works for any class count
-inline std::map<int, cv::Scalar> generate_color_map(int class_counts) {
+static inline std::map<int, cv::Scalar> generate_color_map(int class_counts) {
     std::map<int, cv::Scalar> color_map;
     for (int i = 0; i < class_counts; ++i) {
         const double hue = std::fmod(i * 137.50776405003785, 360.0);
@@ -60,7 +62,7 @@ inline std::map<int, cv::Scalar> generate_color_map(int class_counts) {
 }
 
 template<typename T>
-inline void vis_object_detection(cv::Mat& input_image, const std::vector<T>& objs, int cls_nums) {
+static inline void vis_object_detection(cv::Mat& input_image, const std::vector<T>& objs, int cls_nums) {
     auto color_map = generate_color_map(cls_nums);
 
     for (const auto& obj : objs) {
@@ -82,7 +84,7 @@ inline void vis_object_detection(cv::Mat& input_image, const std::vector<T>& obj
 }
 
 template<typename T>
-inline void vis_text_detection(cv::Mat& input_image, const std::vector<T>& objs) {
+static inline void vis_text_detection(cv::Mat& input_image, const std::vector<T>& objs) {
     cv::Rect image_roi = cv::Rect(0, 0, input_image.cols, input_image.rows);
 
     for (const auto& obj : objs) {
@@ -116,13 +118,13 @@ inline void vis_text_detection(cv::Mat& input_image, const std::vector<T>& objs)
 }
 
 template<typename T>
-inline void vis_feature_points(cv::Mat& input_image, const std::vector<T>& feature_points, int radius = 4) {
+static inline void vis_feature_points(cv::Mat& input_image, const std::vector<T>& feature_points, int radius = 4) {
     for (const auto& key_pt : feature_points) {
         cv::circle(input_image, key_pt.location, static_cast<int>(radius), cv::Scalar(0, 0, 255), -1);
     }
 }
 
-inline void colorize_segmentation_mask(const cv::Mat& input_image, cv::Mat& output_image, int cls_nums) {
+static inline void colorize_segmentation_mask(const cv::Mat& input_image, cv::Mat& output_image, int cls_nums) {
     auto color_map = generate_color_map(cls_nums);
 
     if (output_image.empty()) {
@@ -152,7 +154,7 @@ inline void colorize_segmentation_mask(const cv::Mat& input_image, cv::Mat& outp
 
 // mask label ids are 0..max_value, so the palette needs max_value + 1 entries;
 // out-of-range ids are clamped to 0
-inline void colorize_sam_everything_mask(const cv::Mat& everything_mask, cv::Mat& color_mask) {
+static inline void colorize_sam_everything_mask(const cv::Mat& everything_mask, cv::Mat& color_mask) {
     if (everything_mask.empty()) {
         LOG(ERROR) << "empty everything mask";
         return;
@@ -183,7 +185,7 @@ inline void colorize_sam_everything_mask(const cv::Mat& everything_mask, cv::Mat
     }
 }
 
-inline void add_segmentation_mask(
+static inline void add_segmentation_mask(
     const cv::Mat& input_image, const cv::Mat& segment_mask,
     cv::Mat& output_image, int cls_nums) {
     // prepare color map
@@ -206,7 +208,7 @@ inline void add_segmentation_mask(
     cv::addWeighted(input_image, 0.6, colorized_mask, 0.4, 0.0, output_image);
 }
 
-inline void visualize_sam_output_masks(const cv::Mat& input_image, const std::vector<cv::Mat>& masks, cv::Mat& output_image) {
+static inline void visualize_sam_output_masks(const cv::Mat& input_image, const std::vector<cv::Mat>& masks, cv::Mat& output_image) {
     // prepare color map
     auto color_map = generate_color_map(static_cast<int>(masks.size()) + 1);
     output_image = input_image.clone();
@@ -237,7 +239,7 @@ inline void visualize_sam_output_masks(const cv::Mat& input_image, const std::ve
     cv::addWeighted(output_image, 0.6, color_mask, 0.4, 0.0, output_image);
 }
 
-inline void colorize_depth_map(const cv::Mat& depth_map, cv::Mat& color_mask) {
+static inline void colorize_depth_map(const cv::Mat& depth_map, cv::Mat& color_mask) {
     if (depth_map.empty()) {
         LOG(ERROR) << "empty depth map";
         return;
@@ -261,7 +263,7 @@ inline void colorize_depth_map(const cv::Mat& depth_map, cv::Mat& color_mask) {
 }
 
 template <class T>
-inline void visualize_fp_match_result(
+static inline void visualize_fp_match_result(
     const cv::Mat& input_image0, const cv::Mat& input_image1, const std::vector<T>& match_result, cv::Mat& out_image) {
     std::vector<cv::KeyPoint> kpts0;
     std::vector<cv::KeyPoint> kpts1;
@@ -280,7 +282,7 @@ inline void visualize_fp_match_result(
 }
 
 // IoU with +1 pixel offset (VOC style); zero-area boxes yield 0
-inline float calc_iou(const cv::Rect2f& box1, const cv::Rect2f& box2) {
+static inline float calc_iou(const cv::Rect2f& box1, const cv::Rect2f& box2) {
     float x1 = std::max(box1.x, box2.x);
     float y1 = std::max(box1.y, box2.y);
     float x2 = std::min(box1.x + box1.width, box2.x + box2.width);
@@ -296,13 +298,13 @@ inline float calc_iou(const cv::Rect2f& box1, const cv::Rect2f& box2) {
 }
 
 template<typename T>
-inline float calc_iou(const T& box1, const T& box2) {
+static inline float calc_iou(const T& box1, const T& box2) {
     return calc_iou(box1.bbox, box2.bbox);
 }
 
 // per-class NMS: boxes are expected to expose bbox/score/class_id
 template<class T>
-inline std::vector<T> nms_bboxes(const std::vector<T>& bboxes, double nms_threshold) {
+static inline std::vector<T> nms_bboxes(const std::vector<T>& bboxes, double nms_threshold) {
     std::vector<T> result;
 
     if (bboxes.empty()) {
@@ -339,7 +341,7 @@ inline std::vector<T> nms_bboxes(const std::vector<T>& bboxes, double nms_thresh
 
 // base64 -> cv::Mat; flags default to IMREAD_COLOR (legacy behavior), the model
 // input path passes IMREAD_UNCHANGED explicitly
-inline cv::Mat decode_base64_str_into_cvmat(const std::string& input, int flags = cv::IMREAD_COLOR) {
+static inline cv::Mat decode_base64_str_into_cvmat(const std::string& input, int flags = cv::IMREAD_COLOR) {
     cv::Mat ret;
     auto decoded = base64::decode(input);
     if (decoded.empty()) {
@@ -351,7 +353,7 @@ inline cv::Mat decode_base64_str_into_cvmat(const std::string& input, int flags 
     return ret;
 }
 
-inline std::string encode_cvmat_into_base64_str(const cv::Mat& input) {
+static inline std::string encode_cvmat_into_base64_str(const cv::Mat& input) {
     if (input.empty()) {
         return "";
     }
@@ -361,7 +363,7 @@ inline std::string encode_cvmat_into_base64_str(const cv::Mat& input) {
 }
 
 // HWC -> CHW float conversion; supports CV_32FC1 and CV_32FC3
-inline std::vector<float> convert_to_chw_vec(const cv::Mat& input) {
+static inline std::vector<float> convert_to_chw_vec(const cv::Mat& input) {
     std::vector<float> data;
     if (input.empty()) {
         LOG(ERROR) << "empty input mat";
@@ -395,7 +397,7 @@ inline std::vector<float> convert_to_chw_vec(const cv::Mat& input) {
 
 // CHW -> HWC conversion
 template<class T>
-inline std::vector<T> convert_to_hwc_vec(const std::vector<T>& input, int c, int h, int w) {
+static inline std::vector<T> convert_to_hwc_vec(const std::vector<T>& input, int c, int h, int w) {
     // only support 3 channel image
     if (input.size() != static_cast<size_t>(h) * w * c) {
         LOG(ERROR) << "input size " << input.size() << " mismatches h*w*c "
@@ -416,7 +418,7 @@ inline std::vector<T> convert_to_hwc_vec(const std::vector<T>& input, int c, int
     return result;
 }
 
-inline cv::Mat stack_multiple_ddpm_images(const std::vector<cv::Mat>& multi_images, const int gap=2, const int images_per_row=8) {
+static inline cv::Mat stack_multiple_ddpm_images(const std::vector<cv::Mat>& multi_images, const int gap=2, const int images_per_row=8) {
     if (multi_images.empty()) {
         LOG(ERROR) << "input image vector is empty";
         return cv::Mat();
@@ -450,7 +452,7 @@ inline cv::Mat stack_multiple_ddpm_images(const std::vector<cv::Mat>& multi_imag
 }
 
 // copy only when source and tensor byte sizes match; returns false on mismatch
-inline bool copy_image_to_tensor(void* dst, const cv::Mat& image, int dst_bytes) {
+static inline bool copy_image_to_tensor(void* dst, const cv::Mat& image, int dst_bytes) {
     size_t src_bytes = image.total() * image.elemSize();
     if (src_bytes != static_cast<size_t>(dst_bytes)) {
         LOG(ERROR) << "image byte size " << src_bytes << " mismatches tensor byte size " << dst_bytes;
@@ -461,7 +463,7 @@ inline bool copy_image_to_tensor(void* dst, const cv::Mat& image, int dst_bytes)
 }
 
 template<typename T>
-inline bool copy_image_to_tensor(void* dst, const std::vector<T>& data, int dst_bytes) {
+static inline bool copy_image_to_tensor(void* dst, const std::vector<T>& data, int dst_bytes) {
     size_t src_bytes = data.size() * sizeof(T);
     if (src_bytes != static_cast<size_t>(dst_bytes)) {
         LOG(ERROR) << "data byte size " << src_bytes << " mismatches tensor byte size " << dst_bytes;
@@ -471,7 +473,7 @@ inline bool copy_image_to_tensor(void* dst, const std::vector<T>& data, int dst_
     return true;
 }
 
-}  // namespace cv_utils
+};
 }  // namespace common
 }  // namespace jinq
 

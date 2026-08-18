@@ -9,6 +9,7 @@
 #define MORTRED_MODEL_SERVER_DATA_TYPE_H
 
 #include <cstddef>
+#include <utility>
 #include <vector>
 
 #include <eigen3/Eigen/Core>

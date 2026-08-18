@@ -37,14 +37,14 @@ class STrack {
      * @param tlbr
      * @return
      */
-    std::vector<float> static tlbr_to_tlwh(std::vector<float> &tlbr);
+    static std::vector<float> tlbr_to_tlwh(std::vector<float> &tlbr);
 
     /***
      *
      * @param stracks
      * @param kalman_filter
      */
-    void static multi_predict(std::vector<STrack*> &stracks, KalmanFilter &kalman_filter);
+    static void multi_predict(std::vector<STrack*> &stracks, KalmanFilter &kalman_filter);
 
     /***
      *

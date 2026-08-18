@@ -58,7 +58,7 @@ void STrack::activate(KalmanFilter &kalman_filter, int f_id) {
     xyah_box[1] = xyah[1];
     xyah_box[2] = xyah[2];
     xyah_box[3] = xyah[3];
-    auto mc = _m_kalman_filter.tomltiate(xyah_box);
+    auto mc = _m_kalman_filter.initiate(xyah_box);
     this->mean = mc.first;
     this->covariance = mc.second;
 

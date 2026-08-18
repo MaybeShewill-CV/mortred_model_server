@@ -83,6 +83,15 @@ jobs:
         run: |
           LD_LIBRARY_PATH="$MORTRED_CI_LIB_DIR" ctest --test-dir build-ci --output-on-failure
 
+        - name: Verify git status is clean after build
+          run: |
+            if [ -n "$(git status --porcelain)" ]; then
+              echo "Repository is not clean after build:"
+              git status --porcelain
+              exit 1
+            fi
+            echo "Repository is clean after build."
+
       - name: Upload ctest log
         if: always()
         uses: actions/upload-artifact@v4
@@ -146,6 +155,15 @@ jobs:
       - name: Build tests with -Wall -Wextra -Werror
         run: |
           LD_LIBRARY_PATH="${{ github.workspace }}/build-gate/lib" cmake --build build-gate --target check -j2
+
+        - name: Verify git status is clean after build
+          run: |
+            if [ -n "$(git status --porcelain)" ]; then
+              echo "Repository is not clean after build:"
+              git status --porcelain
+              exit 1
+            fi
+            echo "Repository is clean after build."
 
       - name: Check formatting of changed C/C++ files
         run: |

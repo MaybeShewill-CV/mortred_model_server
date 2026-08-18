@@ -26,7 +26,7 @@ namespace server {
 
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
-using jinq::common::base64;
+namespace base64 = jinq::common::base64;
 using jinq::server::BaseAiServerImpl;
 
 namespace mono_depth_estimation {

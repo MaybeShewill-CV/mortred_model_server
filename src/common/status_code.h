@@ -8,6 +8,7 @@
 #ifndef MORTRED_MODEL_SERVER_STATUSCODE_H
 #define MORTRED_MODEL_SERVER_STATUSCODE_H
 
+#include <ostream>
 #include <string>
 
 namespace jinq {
@@ -58,6 +59,10 @@ inline std::string status_code_to_str(StatusCode code) {
 #undef MORTRED_STATUS_CODE_TO_STR
     }
     return "Unknown";
+}
+
+inline std::ostream& operator<<(std::ostream& os, StatusCode code) {
+    return os << static_cast<int>(code);
 }
 
 }  // namespace common

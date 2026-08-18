@@ -18,7 +18,7 @@
 
 using jinq::common::FilePathUtil;
 using jinq::common::Timestamp;
-using jinq::common::cv_utils;
+using jinq::common::CvUtils;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::ocr::std_text_regions_output;
 using jinq::factory::ocr::create_dbtext_detector;
@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
     LOG(INFO) << "benchmark ends at: " << Timestamp::now().to_format_str();
     LOG(INFO) << "cost time: " << cost_time << "s, fps: " << loop_times / cost_time;
 
-    cv_utils::vis_text_detection(input_image, model_output);
+    CvUtils::vis_text_detection(input_image, model_output);
     std::string output_file_name = FilePathUtil::get_file_name(input_image_path);
     output_file_name = output_file_name.substr(0, output_file_name.find_last_of('.')) + "_dbnet_result.png";
     std::string output_path = FilePathUtil::concat_path("../demo_data/model_test_input/ocr", output_file_name);

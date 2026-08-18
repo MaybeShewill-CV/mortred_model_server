@@ -18,7 +18,7 @@
 #include "models/model_io_define.h"
 #include "factory/sam_task.h"
 
-using jinq::common::cv_utils;
+using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::segment_anything::std_sam_amg_output;
@@ -73,9 +73,9 @@ int main(int argc, char** argv) {
     }
 
     auto seg_mask_counts = static_cast<int>(amg_output.segmentations.size());
-    auto color_pool = cv_utils::generate_color_map(seg_mask_counts + 1);
+    auto color_pool = CvUtils::generate_color_map(seg_mask_counts + 1);
     cv::Mat color_mask = cv::Mat::zeros(amg_output.segmentations[0].size(), CV_8UC3);
-    for (auto idx = 0; idx < amg_output.segmentations.size(); ++idx) {
+    for (size_t idx = 0; idx < amg_output.segmentations.size(); ++idx) {
         auto mask = amg_output.segmentations[idx];
         auto mask_bbox = amg_output.bboxes[idx];
         auto color = color_pool[idx];

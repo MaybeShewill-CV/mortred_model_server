@@ -7,13 +7,18 @@
 
 #include "autoencoder_kl.h"
 
+#include <algorithm>
+#include <cstdint>
+#include <fstream>
 #include <random>
+#include <sstream>
 
 #include <opencv2/opencv.hpp>
 #include "glog/logging.h"
 #include "onnxruntime/onnxruntime_cxx_api.h"
 #include "TensorRT-8.6.1.6/NvInferRuntime.h"
 #include "TensorRT-8.6.1.6/NvInferPlugin.h"
+#include "cuda_runtime_api.h"
 
 #include "common/base64.h"
 #include "common/cv_utils.h"
@@ -23,8 +28,7 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::base64;
-using jinq::common::cv_utils;
+using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 using jinq::models::trt_helper::EngineBinding;
@@ -451,7 +455,7 @@ StatusCode AutoEncoderKL<INPUT, OUTPUT>::Impl::trt_run(const INPUT& in, OUTPUT& 
     // preprocess input data
     auto& decode_input_data = in.decode_data;
     auto input_ele_counts = _m_input_size.area() * _m_input_channels;
-    if (decode_input_data.size() != input_ele_counts) {
+    if (decode_input_data.size() != static_cast<size_t>(input_ele_counts)) {
         LOG(INFO) << "wrong input data size, expected: " << input_ele_counts
                   << ", got: " << decode_input_data.size()
                   << " instead";
@@ -513,7 +517,7 @@ autoencoder_kl_impl::internal_output AutoEncoderKL<INPUT, OUTPUT>::Impl::trt_dec
     auto c = _m_trt_params.output_binding.dims().d[1];
     auto h = _m_trt_params.output_binding.dims().d[2];
     auto w = _m_trt_params.output_binding.dims().d[3];
-    auto hwc_data = cv_utils::convert_to_hwc_vec<uint8_t>(decode_out, c, h, w);
+    auto hwc_data = CvUtils::convert_to_hwc_vec<uint8_t>(decode_out, c, h, w);
 
     std_vae_decode_output out;
     cv::Size decode_image_size(_m_trt_params.output_binding.dims().d[3], _m_trt_params.output_binding.dims().d[2]);
@@ -617,7 +621,7 @@ StatusCode AutoEncoderKL<INPUT, OUTPUT>::Impl::onnx_run(const INPUT &in, OUTPUT 
     // preprocess input data
     auto& input_data = in.decode_data;
     auto input_ele_counts = _m_input_size.area() * _m_input_channels;
-    if (input_data.size() != input_ele_counts) {
+    if (input_data.size() != static_cast<size_t>(input_ele_counts)) {
         LOG(INFO) << "wrong input data size, expected: " << input_ele_counts << ", got: " << input_data.size() << " instead";
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
@@ -669,7 +673,7 @@ autoencoder_kl_impl::internal_output AutoEncoderKL<INPUT, OUTPUT>::Impl::onnx_de
     auto c = _m_onnx_params.output_node_shapes[0][1];
     auto h = _m_onnx_params.output_node_shapes[0][2];
     auto w = _m_onnx_params.output_node_shapes[0][3];
-    auto hwc_data = cv_utils::convert_to_hwc_vec<uint8_t>(decode_out, c, h, w);
+    auto hwc_data = CvUtils::convert_to_hwc_vec<uint8_t>(decode_out, c, h, w);
 
     // construct sampled image
     std_vae_decode_output out;

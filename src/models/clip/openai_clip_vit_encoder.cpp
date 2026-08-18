@@ -7,6 +7,10 @@
 
 #include "openai_clip_vit_encoder.h"
 
+#include <functional>
+#include <iterator>
+#include <numeric>
+
 #include <chrono>
 
 #include "glog/logging.h"
@@ -19,7 +23,7 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::cv_utils;
+using jinq::common::CvUtils;
 using jinq::common::StatusCode;
 using jinq::common::FilePathUtil;
 using jinq::common::Timestamp;
@@ -105,7 +109,7 @@ jinq::common::StatusCode OpenAiClipVitEncoder::Impl::init(const toml::table &cfg
         return StatusCode::MODEL_INIT_FAILED;
     }
     const toml::table& cfg_content = *cfg_content_ptr;
-    auto init_status = _m_net.tomlt(cfg_content, {"input"}, {"output"});
+    auto init_status = _m_net.init(cfg_content, {"input"}, {"output"});
     if (init_status != StatusCode::OK) {
         _m_successfully_init_model = false;
         return init_status;
@@ -134,7 +138,7 @@ jinq::common::StatusCode OpenAiClipVitEncoder::Impl::encode(
     std::vector<float> &image_embeddings) {
     // preprocess image
     auto preprocessed_image = preprocess_image(input_image);
-    auto input_tensor_values = cv_utils::convert_to_chw_vec(preprocessed_image);
+    auto input_tensor_values = CvUtils::convert_to_chw_vec(preprocessed_image);
     if (input_tensor_values.empty()) {
         LOG(ERROR) << "empty input data for sam vit encoder";
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
@@ -144,7 +148,7 @@ jinq::common::StatusCode OpenAiClipVitEncoder::Impl::encode(
     auto input_tensor_user = MNN::Tensor(_m_net.input("input"), MNN::Tensor::DimensionType::CAFFE);
     auto input_tensor_data = input_tensor_user.host<float>();
     auto input_tensor_size = input_tensor_user.size();
-    if (!cv_utils::copy_image_to_tensor(input_tensor_data, input_tensor_values, input_tensor_size)) {
+    if (!CvUtils::copy_image_to_tensor(input_tensor_data, input_tensor_values, input_tensor_size)) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
     _m_net.input("input")->copyFromHostTensor(&input_tensor_user);

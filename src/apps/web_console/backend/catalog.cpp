@@ -11,6 +11,7 @@
 #include <fstream>
 #include <map>
 #include <sstream>
+#include <utility>
 
 namespace fs = std::filesystem;
 
@@ -34,9 +35,9 @@ std::string unquote(const std::string& s) {
 }
 
 /***
- * minimal ini parser: [section] + key=value lines (comments start with #)
+ * minimal TOML/INI-style parser: [section] + key=value lines (comments start with #)
  */
-std::map<std::string, std::map<std::string, std::string>> parse_ini(const std::string& content) {
+std::map<std::string, std::map<std::string, std::string>> parse_toml(const std::string& content) {
     std::map<std::string, std::map<std::string, std::string>> cfg;
     std::string section;
     std::istringstream ss(content);
@@ -177,7 +178,7 @@ bool Catalog::init(const std::string& project_root, const std::string& generated
 
     for (const auto& entry : fs::recursive_directory_iterator(conf_dir, ec)) {
         const auto ext = entry.path().extension();
-        if (!entry.is_regular_file(ec) || (ext != ".toml" && ext != ".toml")) {
+        if (!entry.is_regular_file(ec) || (ext != ".ini" && ext != ".toml")) {
             continue;
         }
         auto cfg_path = entry.path().string();
@@ -187,7 +188,7 @@ bool Catalog::init(const std::string& project_root, const std::string& generated
             continue;
         }
 
-        auto cfg = parse_ini(content);
+        auto cfg = parse_toml(content);
         std::string section;
         std::string host = "localhost";
         std::string auth_token;

@@ -8,7 +8,9 @@
 #ifndef MM_AI_SERVER_MODEL_IO_DEFINE_H
 #define MM_AI_SERVER_MODEL_IO_DEFINE_H
 
+#include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <opencv2/opencv.hpp>

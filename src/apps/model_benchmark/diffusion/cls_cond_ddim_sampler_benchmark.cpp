@@ -16,7 +16,7 @@
 #include "models/model_io_define.h"
 #include "models/diffusion/cls_cond_ddim_sampler.h"
 
-using jinq::common::cv_utils;
+using jinq::common::CvUtils;
 using jinq::common::Timestamp;
 using jinq::common::FilePathUtil;
 using jinq::models::io_define::diffusion::std_cls_cond_ddim_input;
@@ -100,8 +100,8 @@ int main(int argc, char** argv) {
     // save sampled images
     std::string save_dir = "../demo_data/model_test_input/diffusion/ddim";
     if (save_all_mid_results) {
-        auto stacked_sampled_image = cv_utils::stack_multiple_ddpm_images(model_output.sampled_images);
-        auto stacked_predict_x0_image = cv_utils::stack_multiple_ddpm_images(model_output.predicted_x0);
+        auto stacked_sampled_image = CvUtils::stack_multiple_ddpm_images(model_output.sampled_images);
+        auto stacked_predict_x0_image = CvUtils::stack_multiple_ddpm_images(model_output.predicted_x0);
         std::string save_name = "stacked_sampled_image.png";
         std::string save_path = FilePathUtil::concat_path(save_dir, save_name);
         cv::imwrite(save_path, stacked_sampled_image);

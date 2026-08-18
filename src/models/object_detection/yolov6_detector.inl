@@ -8,6 +8,7 @@
 #include "yolov6_detector.h"
 #include "models/cv_image_input.h"
 
+#include <limits>
 #include <random>
 
 #include <opencv2/opencv.hpp>
@@ -22,8 +23,7 @@ namespace models {
 
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
-using jinq::common::base64;
-using jinq::common::cv_utils;
+using jinq::common::CvUtils;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::common_io::file_input;
 using jinq::models::io_define::common_io::base64_input;
@@ -170,7 +170,7 @@ StatusCode YoloV6Detector<INPUT, OUTPUT>::Impl::init(const toml::table& config) 
     }
     const toml::table& cfg_content = *cfg_content_ptr;
 
-    auto init_status = _m_net.tomlt(cfg_content, {"images"}, {"outputs"});
+    auto init_status = _m_net.init(cfg_content, {"images"}, {"outputs"});
     if (init_status != StatusCode::OK) {
         _m_successfully_initialized = false;
         return init_status;
@@ -213,7 +213,7 @@ StatusCode YoloV6Detector<INPUT, OUTPUT>::Impl::init(const toml::table& config) 
         _m_successfully_initialized = false;
         return StatusCode::MODEL_INIT_FAILED;
     }
-        for (auto idx = 0; idx < cls_names->size(); ++idx) {
+        for (size_t idx = 0; idx < cls_names->size(); ++idx) {
             _m_class_id2names.insert(std::make_pair(idx, (*cls_names)[idx].value_or<std::string>("")));
         }
     }
@@ -265,13 +265,13 @@ StatusCode YoloV6Detector<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out
     // preprocess image
     _m_input_size_user = internal_in.input_image.size();
     auto preprocessed_image = preprocess_image(internal_in.input_image);
-    auto input_chw_image_data = cv_utils::convert_to_chw_vec(preprocessed_image);
+    auto input_chw_image_data = CvUtils::convert_to_chw_vec(preprocessed_image);
 
     // run session
     MNN::Tensor input_tensor_user(_m_net.input("images"), MNN::Tensor::DimensionType::CAFFE);
     auto input_tensor_data = input_tensor_user.host<float>();
     auto input_tensor_size = input_tensor_user.size();
-    if (!cv_utils::copy_image_to_tensor(input_tensor_data, input_chw_image_data, input_tensor_size)) {
+    if (!CvUtils::copy_image_to_tensor(input_tensor_data, input_chw_image_data, input_tensor_size)) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
     _m_net.input("images")->copyFromHostTensor(&input_tensor_user);
@@ -281,8 +281,8 @@ StatusCode YoloV6Detector<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out
     auto bbox_result = decode_output_tensor();
 
     // do nms
-    yolov6_impl::internal_output nms_result = cv_utils::nms_bboxes(bbox_result, _m_nms_threshold);
-    if (nms_result.size() > _m_keep_topk) {
+    yolov6_impl::internal_output nms_result = CvUtils::nms_bboxes(bbox_result, _m_nms_threshold);
+    if (nms_result.size() > static_cast<size_t>(_m_keep_topk)) {
         nms_result.resize(_m_keep_topk);
     }
     for (auto& bbox : nms_result) {
@@ -331,8 +331,8 @@ yolov6_impl::internal_output YoloV6Detector<INPUT, OUTPUT>::Impl::decode_output_
 
     yolov6_impl::internal_output decode_result;
 
-    for (size_t batch_num = 0; batch_num < batch_nums; ++batch_num) {
-        for (size_t bbox_index = 0; bbox_index < raw_pred_bbox_nums; ++bbox_index) {
+    for (int batch_num = 0; batch_num < batch_nums; ++batch_num) {
+        for (int bbox_index = 0; bbox_index < raw_pred_bbox_nums; ++bbox_index) {
             std::vector<float> raw_bbox_info = raw_output[bbox_index];
             // thresh bboxes with lower score
             int class_id = -1;

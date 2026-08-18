@@ -7,7 +7,9 @@
 
 #include "ddpm_unet.h"
 
+#include <fstream>
 #include <random>
+#include <sstream>
 
 #include <opencv2/opencv.hpp>
 #include "glog/logging.h"
@@ -23,8 +25,6 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::base64;
-using jinq::common::cv_utils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 using jinq::models::trt_helper::EngineBinding;
@@ -605,7 +605,6 @@ StatusCode DDPMUNet<INPUT, OUTPUT>::Impl::onnx_run(const INPUT &in, OUTPUT &out)
     auto& sess = _m_onnx_params.session;
     auto& input_node_shapes = _m_onnx_params.input_node_shapes;
     auto& input_node_names = _m_onnx_params.input_node_names;
-    auto& output_node_shapes = _m_onnx_params.output_node_shapes;
     auto& output_node_names = _m_onnx_params.output_node_names;
 
     // preprocess input data

@@ -6,6 +6,7 @@
 #ifndef MORTRED_WEB_LOG_BUFFER_H
 #define MORTRED_WEB_LOG_BUFFER_H
 
+#include <algorithm>
 #include <deque>
 #include <fstream>
 #include <mutex>

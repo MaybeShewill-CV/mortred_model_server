@@ -22,7 +22,7 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::cv_utils;
+using jinq::common::CvUtils;
 using jinq::common::StatusCode;
 using jinq::common::FilePathUtil;
 using jinq::common::Timestamp;
@@ -80,7 +80,7 @@ typename std::enable_if<
 transform_input(const INPUT& in) {
     internal_input result{};
     result.task_type = jinq::models::io_define::clip::ClipTaskType::IMAGE_EMBEDDING;
-    result.image = cv_utils::decode_base64_str_into_cvmat(in.input_image_content);
+    result.image = CvUtils::decode_base64_str_into_cvmat(in.input_image_content);
     return result;
 }
 

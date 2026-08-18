@@ -20,7 +20,6 @@
 
 using jinq::common::FilePathUtil;
 using jinq::common::Timestamp;
-using jinq::common::cv_utils;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::object_detection::std_object_detection_output;
 using jinq::models::object_detection::YoloV5Detector;
@@ -73,7 +72,11 @@ int main(int argc, char** argv) {
         return -1;
     }
     cfg = std::move(cfg_parsed).table();
-    detector.tomlt(cfg);
+    detector.init(cfg);
+    if (!detector.is_successfully_initialized()) {
+        LOG(INFO) << "init yolov5 detector failed";
+        return -1;
+    }
 
     std::vector<std::string> file_input_paths;
     cv::glob(input_image_dir + "/*.jpg", file_input_paths);

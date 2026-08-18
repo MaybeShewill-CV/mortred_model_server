@@ -19,7 +19,7 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::cv_utils;
+using jinq::common::CvUtils;
 using jinq::common::StatusCode;
 using jinq::common::FilePathUtil;
 using jinq::common::Timestamp;
@@ -66,7 +66,7 @@ typename std::enable_if<
     std::is_same<INPUT, std::decay<jinq::models::io_define::common_io::base64_input>::type>::value,
     internal_input>::type
 transform_input(const INPUT& in) {
-    return cv_utils::decode_base64_str_into_cvmat(in.input_image_content);
+    return CvUtils::decode_base64_str_into_cvmat(in.input_image_content);
 }
 
 /***
@@ -193,7 +193,7 @@ StatusCode Impl::init(const toml::table &cfg) {
     _m_input_name = "images";
     _m_output_0_name = "output0";
     _m_output_1_name = "output1";
-    auto init_status = _m_net.tomlt(
+    auto init_status = _m_net.init(
         cfg_content, {_m_input_name}, {_m_output_0_name, _m_output_1_name});
     if (init_status != StatusCode::OK) {
         _m_successfully_init_model = false;
@@ -244,11 +244,11 @@ StatusCode Impl::everything(const cv::Mat& input_image, cv::Mat& everything_mask
     // preprocess image
     _m_input_image_size = input_image.size();
     auto preprocessed_image = preprocess_image(input_image);
-    auto input_image_nchw_data = cv_utils::convert_to_chw_vec(preprocessed_image);
+    auto input_image_nchw_data = CvUtils::convert_to_chw_vec(preprocessed_image);
 
     // run session
     auto input_tensor_host = MNN::Tensor(_m_net.input(_m_input_name), MNN::Tensor::DimensionType::CAFFE);
-    if (!cv_utils::copy_image_to_tensor(input_tensor_host.host<float>(), input_image_nchw_data, input_tensor_host.size())) {
+    if (!CvUtils::copy_image_to_tensor(input_tensor_host.host<float>(), input_image_nchw_data, input_tensor_host.size())) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
     _m_net.input(_m_input_name)->copyFromHostTensor(&input_tensor_host);
@@ -275,7 +275,7 @@ StatusCode Impl::everything(const cv::Mat& input_image, cv::Mat& everything_mask
     };
     std::sort(predicted_all_masks.begin(), predicted_all_masks.end(), comp_area);
     everything_mask = cv::Mat::zeros(_m_input_image_size, CV_32SC1);
-    for (auto idx = 0; idx < predicted_all_masks.size(); ++idx) {
+    for (size_t idx = 0; idx < predicted_all_masks.size(); ++idx) {
         auto obj_id = idx + 1;
         auto mask = predicted_all_masks[idx];
         everything_mask.setTo(obj_id, mask);
@@ -394,7 +394,7 @@ StatusCode Impl::decode_all_masks(std::vector<cv::Mat>& preds_masks) {
         }
     }
 
-    auto nms_result = cv_utils::nms_bboxes(threshed_preds, _m_iou_thresh);
+    auto nms_result = CvUtils::nms_bboxes(threshed_preds, _m_iou_thresh);
     auto c = _m_output_1_shape[1];
     auto mh = _m_preds_mask_size.height;
     auto mw = _m_preds_mask_size.width;
@@ -407,7 +407,7 @@ StatusCode Impl::decode_all_masks(std::vector<cv::Mat>& preds_masks) {
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
     std::vector<float> output_tensor_1_data_vec(output_tensor_1_data, output_tensor_1_data + output_tensor_1_host.elementSize());
-    auto mask_proto_hwc = cv_utils::convert_to_hwc_vec(output_tensor_1_data_vec, 1, c, mh * mw);
+    auto mask_proto_hwc = CvUtils::convert_to_hwc_vec(output_tensor_1_data_vec, 1, c, mh * mw);
     cv::Mat mask_proto(cv::Size(mh * mw, c), CV_32FC1, mask_proto_hwc.data());
 
     float downscale_h = static_cast<float>(mh) / static_cast<float>(_m_input_tensor_size.height);

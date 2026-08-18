@@ -25,10 +25,10 @@
 namespace jinq {
 namespace server {
 
-using jinq::common::base64;
+namespace base64 = jinq::common::base64;
+using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
-using jinq::common::cv_utils;
 using jinq::server::BaseAiServerImpl;
 
 namespace scene_segmentation {
@@ -165,7 +165,7 @@ void HRNetServer::Impl::fill_response_data(
                    allocator);
 
     cv::Mat color_mask;
-    cv_utils::colorize_segmentation_mask(model_output.segmentation_result, color_mask, 80);
+    CvUtils::colorize_segmentation_mask(model_output.segmentation_result, color_mask, 80);
     std::vector<uchar> color_buffer;
     cv::imencode(".png", color_mask, color_buffer);
     auto color_data = base64::encode(color_buffer.data(), color_buffer.size());

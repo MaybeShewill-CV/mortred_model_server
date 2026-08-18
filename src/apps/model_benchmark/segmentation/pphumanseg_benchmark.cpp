@@ -18,7 +18,7 @@
 
 using jinq::common::FilePathUtil;
 using jinq::common::Timestamp;
-using jinq::common::cv_utils;
+using jinq::common::CvUtils;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
 using jinq::factory::scene_segmentation::create_pphuman_segmentor;
@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
     LOG(INFO) << "cost time: " << cost_time << "s, fps: " << loop_times / cost_time;
 
     cv::Mat colorized_result;
-    cv_utils::add_segmentation_mask(input_image, model_output.segmentation_result, colorized_result, 2);
+    CvUtils::add_segmentation_mask(input_image, model_output.segmentation_result, colorized_result, 2);
     std::string output_file_name = FilePathUtil::get_file_name(input_image_path);
     output_file_name = output_file_name.substr(
             0, output_file_name.find_last_of('.')) + "_pphumanseg_result.png";

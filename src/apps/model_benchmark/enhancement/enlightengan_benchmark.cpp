@@ -18,7 +18,6 @@
 
 using jinq::common::FilePathUtil;
 using jinq::common::Timestamp;
-using jinq::common::cv_utils;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::enhancement::std_enhancement_output;
 using jinq::factory::enhancement::create_enlightengan_enhancementor;

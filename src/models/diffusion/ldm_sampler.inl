@@ -22,8 +22,6 @@
 namespace jinq {
 namespace models {
 
-using jinq::common::base64;
-using jinq::common::cv_utils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
 
