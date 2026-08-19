@@ -7,7 +7,6 @@
 #   - _bin, _lib
 #   - all build-* / cmake-build-* directories
 #   - logs
-#   - generated_configs
 #   - Web Console backend build directory
 #
 # It does NOT remove downloaded model weights under weights/ because they may be
@@ -29,7 +28,6 @@ TARGETS=(
   "cmake-build-debug"
   "cmake-build-release"
   "logs"
-  "generated_configs"
   "src/apps/web_console/backend/build"
 )
 

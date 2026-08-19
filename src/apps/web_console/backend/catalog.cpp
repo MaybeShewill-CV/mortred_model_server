@@ -1,16 +1,25 @@
 /************************************************
  * Author: Codex
  * File: catalog.cpp
+ *
+ * Web console server registry. The registry is derived from conf/server/*.toml
+ * only: each [*_SERVER] section must declare `server_exe` (plus port / host /
+ * server_uri), so the config -> executable mapping is explicit and can never
+ * silently go stale. The previous token-overlap heuristic and the hard-coded
+ * add_missing_server entries were removed (see scripts/check_consistency.py
+ * check_server_exe_mapping for the bidirectional coverage gate).
  ************************************************/
 
 #include "catalog.h"
 
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <map>
 #include <sstream>
+#include <string>
 #include <utility>
 
 namespace fs = std::filesystem;
@@ -35,7 +44,7 @@ std::string unquote(const std::string& s) {
 }
 
 /***
- * minimal TOML/INI-style parser: [section] + key=value lines (comments start with #)
+ * minimal TOML parser: [section] + key=value lines (comments start with #)
  */
 std::map<std::string, std::map<std::string, std::string>> parse_toml(const std::string& content) {
     std::map<std::string, std::map<std::string, std::string>> cfg;
@@ -77,85 +86,7 @@ std::string to_lower(const std::string& s) {
     return out;
 }
 
-std::string normalize(const std::string& s) {
-    std::string out;
-    for (char c : to_lower(s)) {
-        if (std::isalnum(static_cast<unsigned char>(c))) {
-            out.push_back(c);
-        }
-    }
-    return out;
-}
-
-std::vector<std::string> section_tokens(const std::string& section) {
-    std::vector<std::string> tokens;
-    std::string cur;
-    for (char c : to_lower(section)) {
-        if (std::isalnum(static_cast<unsigned char>(c))) {
-            cur.push_back(c);
-        } else if (!cur.empty()) {
-            tokens.push_back(cur);
-            cur.clear();
-        }
-    }
-    if (!cur.empty()) {
-        tokens.push_back(cur);
-    }
-    // drop generic words
-    tokens.erase(std::remove_if(tokens.begin(), tokens.end(), [](const std::string& t) {
-        return t == "server" || t == "chat" || t == "cfg" || t == "config";
-    }), tokens.end());
-    return tokens;
-}
-
-std::vector<std::string> list_bin_exes(const std::string& bin_dir) {
-    std::vector<std::string> out;
-    std::error_code ec;
-    if (!fs::exists(bin_dir, ec)) {
-        return out;
-    }
-    for (const auto& entry : fs::directory_iterator(bin_dir, ec)) {
-        if (!entry.is_regular_file(ec)) {
-            continue;
-        }
-        auto name = entry.path().filename().string();
-        if (name.size() > 4 && name.substr(name.size() - 4) == ".out") {
-            out.push_back(name);
-        }
-    }
-    return out;
-}
-
-/***
- * match a conf/server config to an executable by section-name token overlap
- */
-std::string match_exe(const std::string& section, const std::string& bin_dir) {
-    auto tokens = section_tokens(section);
-    if (tokens.empty()) {
-        return "";
-    }
-    for (const auto& exe : list_bin_exes(bin_dir)) {
-        std::string exe_norm = normalize(exe);
-        if (exe_norm.find("benchmark") != std::string::npos ||
-            exe_norm.find("client") != std::string::npos ||
-            exe_norm.find("proxy") != std::string::npos) {
-            continue;
-        }
-        bool all = true;
-        for (const auto& t : tokens) {
-            if (exe_norm.find(t) == std::string::npos) {
-                all = false;
-                break;
-            }
-        }
-        if (all) {
-            return exe;
-        }
-    }
-    return "";
-}
-
-} // namespace
+}  // namespace
 
 const ServerEntry* Catalog::find(const std::string& id) const {
     for (const auto& e : _entries) {
@@ -166,10 +97,9 @@ const ServerEntry* Catalog::find(const std::string& id) const {
     return nullptr;
 }
 
-bool Catalog::init(const std::string& project_root, const std::string& generated_dir) {
+bool Catalog::init(const std::string& project_root) {
     _entries.clear();
     std::string conf_dir = project_root + "/conf/server";
-    std::string bin_dir = project_root + "/_bin";
 
     std::error_code ec;
     if (!fs::exists(conf_dir, ec)) {
@@ -177,14 +107,12 @@ bool Catalog::init(const std::string& project_root, const std::string& generated
     }
 
     for (const auto& entry : fs::recursive_directory_iterator(conf_dir, ec)) {
-        const auto ext = entry.path().extension();
-        if (!entry.is_regular_file(ec) || (ext != ".ini" && ext != ".toml")) {
+        if (!entry.is_regular_file(ec) || entry.path().extension() != ".toml") {
             continue;
         }
-        auto cfg_path = entry.path().string();
+        std::string cfg_path = entry.path().string();
         std::string content = read_file(cfg_path);
-        if (content.find("server_uri") == std::string::npos &&
-            content.find("server_url") == std::string::npos) {
+        if (content.find("server_uri") == std::string::npos) {
             continue;
         }
 
@@ -192,8 +120,9 @@ bool Catalog::init(const std::string& project_root, const std::string& generated
         std::string section;
         std::string host = "localhost";
         std::string auth_token;
-        int port = 0;
+        std::string exe;
         std::string uri;
+        int port = 0;
         for (const auto& [sec, kv] : cfg) {
             auto pit = kv.find("port");
             if (pit == kv.end()) {
@@ -214,38 +143,26 @@ bool Catalog::init(const std::string& project_root, const std::string& generated
                 auth_token = ait->second;
             }
             auto uit = kv.find("server_uri");
-            if (uit != kv.end()) {
-                uri = uit->second;
+            if (uit == kv.end()) {
+                continue;
+            }
+            uri = uit->second;
+            auto eit = kv.find("server_exe");
+            if (eit == kv.end() || eit->second.empty()) {
+                std::fprintf(stderr,
+                             "[catalog] %s: server section [%s] has no server_exe, skipped "
+                             "(add server_exe=\"<exe>.out\" to the config)\n",
+                             cfg_path.c_str(), sec.c_str());
+                section.clear();
             } else {
-                uit = kv.find("server_url");
-                if (uit != kv.end()) {
-                    uri = uit->second;
-                }
+                exe = eit->second;
             }
             break;
         }
-        if (section.empty() || port <= 0 || uri.empty()) {
+        if (section.empty() || port <= 0 || uri.empty() || exe.empty() || exe.size() <= 4) {
             continue;
         }
 
-        std::string exe = match_exe(section, bin_dir);
-        if (exe.empty()) {
-            continue;
-        }
-        // guard against mislabeled config files: the config's model dir name
-        // must appear in the matched executable name
-        {
-            fs::path cfg_rel = fs::relative(cfg_path, conf_dir, ec);
-            std::string model_dir;
-            if (cfg_rel.has_parent_path()) {
-                model_dir = cfg_rel.parent_path().filename().string();
-            }
-            std::string model_norm = normalize(model_dir);
-            std::string exe_norm = normalize(exe);
-            if (!model_norm.empty() && exe_norm.find(model_norm) == std::string::npos) {
-                continue;
-            }
-        }
         std::string id = exe.substr(0, exe.size() - 4);
         bool dup = false;
         for (const auto& e : _entries) {
@@ -263,7 +180,7 @@ bool Catalog::init(const std::string& project_root, const std::string& generated
         if (!rel.empty()) {
             auto it = rel.begin();
             if (it != rel.end()) {
-                category = it->string();
+                category = *it;
             }
         }
 
@@ -280,82 +197,7 @@ bool Catalog::init(const std::string& project_root, const std::string& generated
         e.type = type;
         _entries.push_back(std::move(e));
     }
-
-    add_missing_server(project_root, generated_dir,
-                       "densenet_classification_server.out", "DENSENET_CLASSIFICATION_SERVER",
-                       "DENSENET", 9004, "/mortred_ai_server_v1/classification/densenet",
-                       "classification", "../conf/model/classification/densenet/densenet121_config.toml");
-    add_missing_server(project_root, generated_dir,
-                       "real_esrgan_server.out", "REAL_ESRGAN_SERVER",
-                       "", 9012, "/mortred_ai_server_v1/enhancement/real_esrgan",
-                       "enhancement", "../conf/model/enhancement/real_esrgan/real_esrgan.toml");
     return true;
 }
 
-void Catalog::add_missing_server(const std::string& project_root,
-                                 const std::string& generated_dir,
-                                 const std::string& exe,
-                                 const std::string& section,
-                                 const std::string& model_section,
-                                 int port,
-                                 const std::string& uri,
-                                 const std::string& category,
-                                 const std::string& model_cfg_rel) {
-    for (const auto& e : _entries) {
-        if (e.exe == exe) {
-            return;
-        }
-    }
-    std::error_code ec;
-    if (!fs::exists(project_root + "/_bin/" + exe, ec)) {
-        return;
-    }
-
-    fs::create_directories(generated_dir, ec);
-    std::string id = exe.substr(0, exe.size() - 4);
-    std::string cfg_name = id + "_cfg.toml";
-    std::string cfg_path = generated_dir + "/" + cfg_name;
-    std::string content =
-        "[" + section + "]\n"
-        "port=" + std::to_string(port) + "\n"
-        "host=\"localhost\"\n"
-        "max_connections=500\n"
-        "peer_resp_timeout=15\n"
-        "request_size_limit=64\n"
-        "# auth_token=\"\"\n"
-        "# rate_limit_qps=0\n"
-        "compute_threads=-1\n"
-        "handler_threads=50\n"
-        "worker_nums=1\n"
-        "model_run_timeout=-1\n";
-    if (model_section.empty()) {
-        // real_esrgan style: model_config_file_path lives in the server section
-        content += "model_config_file_path=\"" + model_cfg_rel + "\"\n";
-    }
-    content += "server_uri=\"" + uri + "\"\n";
-    if (!model_section.empty()) {
-        content += "\n[" + model_section + "]\n"
-                   "model_config_file_path=\"" + model_cfg_rel + "\"\n";
-    }
-    std::ofstream out(cfg_path, std::ios::trunc);
-    if (!out.is_open()) {
-        return;
-    }
-    out << content;
-    out.close();
-
-    ServerEntry e;
-    e.id = id;
-    e.name = id;
-    e.category = category;
-    e.exe = exe;
-    e.config = cfg_path;
-    e.host = "localhost";
-    e.port = port;
-    e.uri = uri;
-    e.type = section.find("CHAT") != std::string::npos ? "chat" : "image";
-    e.generated_config = true;
-    _entries.push_back(std::move(e));
-}
-
-} // namespace mortred_web
+}  // namespace mortred_web

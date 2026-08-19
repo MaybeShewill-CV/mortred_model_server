@@ -23,6 +23,8 @@ worker_nums=1
 model_run_timeout=10000
 # server url
 server_uri="/mortred_ai_server_v1/enhancement/attentive_gan_derain"
+# explicit server executable used by the web console catalog
+server_exe="attentive_gan_derain_server.out"
 
 [ATTENTIVE_GAN_DERAIN]
-model_config_file_path="../conf/model/enhancement/attentive_gan_derain/attentive_gan_derain_config.ini"
+model_config_file_path="../conf/model/enhancement/attentive_gan_derain/attentive_gan_derain_config.toml"

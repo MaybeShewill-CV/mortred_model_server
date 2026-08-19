@@ -23,6 +23,8 @@ worker_nums=1
 model_run_timeout=1000
 # server url
 server_uri="/mortred_ai_server_v1/obj_detection/yolov8"
+# explicit server executable used by the web console catalog
+server_exe="yolov8_detection_server.out"
 
 [YOLOV8]
-model_config_file_path="../conf/model/object_detection/yolov8/yolov8_config.ini"
+model_config_file_path="../conf/model/object_detection/yolov8/yolov8_config.toml"

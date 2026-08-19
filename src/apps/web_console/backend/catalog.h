@@ -14,26 +14,28 @@ namespace mortred_web {
 struct ServerEntry {
     std::string id;       // unique id (exe name without .out)
     std::string name;     // display name
-    std::string category; // classification / enhancement / ... / llm
-    std::string exe;      // executable file name in _bin
+    std::string category; // classification / enhancement / ...
+    std::string exe;      // executable file name in _bin (declared by server_exe in conf)
     std::string config;   // absolute config path
     std::string host;
     std::string auth_token; // bearer token for direct inference access (empty = disabled)
     int port = 0;
-    std::string uri;      // server_uri or server_url
+    std::string uri;      // server_uri
     std::string type;     // "image" or "chat"
-    bool generated_config = false;
 };
 
 class Catalog {
   public:
     /***
-     * scan _bin + conf/server to build the server registry
+     * Build the server registry from conf/server/*.toml only. Every
+     * [*_SERVER] section must declare `server_exe` (plus port / host /
+     * server_uri), so the config -> executable mapping is explicit and can
+     * never silently go stale (enforced by scripts/check_consistency.py
+     * check_server_exe_mapping).
      * @param project_root project root dir
-     * @param generated_dir dir for auto-generated configs
      * @return true on success
      */
-    bool init(const std::string& project_root, const std::string& generated_dir);
+    bool init(const std::string& project_root);
 
     const std::vector<ServerEntry>& entries() const {
         return _entries;
@@ -42,19 +44,9 @@ class Catalog {
     const ServerEntry* find(const std::string& id) const;
 
   private:
-    void add_missing_server(const std::string& project_root,
-                            const std::string& generated_dir,
-                            const std::string& exe,
-                            const std::string& section,
-                            const std::string& model_section,
-                            int port,
-                            const std::string& uri,
-                            const std::string& category,
-                            const std::string& model_cfg_rel);
-
     std::vector<ServerEntry> _entries;
 };
 
-} // namespace mortred_web
+}  // namespace mortred_web
 
 #endif // MORTRED_WEB_CATALOG_H

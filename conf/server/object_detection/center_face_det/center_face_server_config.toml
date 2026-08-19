@@ -23,6 +23,8 @@ worker_nums=1
 model_run_timeout=1000
 # server url
 server_uri="/mortred_ai_server_v1/obj_detection/center_face"
+# explicit server executable used by the web console catalog
+server_exe="centerface_detection_server.out"
 
 [CENTER_FACE]
-model_config_file_path="../conf/model/object_detection/centerface/centerface_config.ini"
+model_config_file_path="../conf/model/object_detection/centerface/centerface_config.toml"

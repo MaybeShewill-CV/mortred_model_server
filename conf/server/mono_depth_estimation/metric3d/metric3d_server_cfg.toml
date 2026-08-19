@@ -23,6 +23,8 @@ worker_nums=1
 model_run_timeout=10000
 # server url
 server_uri="/mortred_ai_server_v1/mono_depth_estimation/metric3d"
+# explicit server executable used by the web console catalog
+server_exe="metric3d_estimation_server.out"
 
 [METRIC3D]
-model_config_file_path="../conf/model/mono_depth_estimation/metric3d/metric3d_512x1088.ini"
+model_config_file_path="../conf/model/mono_depth_estimation/metric3d/metric3d_512x1088.toml"

@@ -23,6 +23,8 @@ worker_nums=1
 model_run_timeout=3000
 # server url
 server_uri="/mortred_ai_server_v1/scene_segmentation/bisenetv2"
+# explicit server executable used by the web console catalog
+server_exe="bisenetv2_segmentation_server.out"
 
 [BISENETV2]
-model_config_file_path="../conf/model/scene_segmentation/bisenetv2/bisenetv2_config.ini"
+model_config_file_path="../conf/model/scene_segmentation/bisenetv2/bisenetv2_config.toml"

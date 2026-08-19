@@ -51,7 +51,6 @@ static ServerManager g_manager;
 static std::string g_project_root;
 static std::string g_frontend_dir;
 static std::string g_logs_dir;
-static std::string g_generated_dir;
 
 namespace {
 
@@ -232,7 +231,6 @@ void build_catalog_response(WFHttpTask* server_task, const std::shared_ptr<Catal
         v.AddMember("host", rapidjson::Value(e.host.c_str(), e.host.size(), a), a);
         v.AddMember("uri", rapidjson::Value(e.uri.c_str(), e.uri.size(), a), a);
         v.AddMember("type", rapidjson::Value(e.type.c_str(), e.type.size(), a), a);
-        v.AddMember("generated_config", e.generated_config, a);
         v.AddMember("running", item.running, a);
         v.AddMember("ready", item.running && g_manager.is_ready(e.id), a);
         auto it = ctx->health.find(e.id);
@@ -479,7 +477,6 @@ int main() {
     g_project_root = resolve_project_root();
     g_frontend_dir = g_project_root + "/src/apps/web_console/frontend";
     g_logs_dir = g_project_root + "/logs";
-    g_generated_dir = g_project_root + "/generated_configs";
 
     const char* env_listen_host = getenv("APP_LISTEN_HOST");
     const char* env_listen_port = getenv("APP_LISTEN_PORT");
@@ -509,7 +506,7 @@ int main() {
         return 1;
     }
 
-    if (!g_catalog.init(g_project_root, g_generated_dir)) {
+    if (!g_catalog.init(g_project_root)) {
         fprintf(stderr, "catalog init failed, project root: %s\n", g_project_root.c_str());
         return 1;
     }

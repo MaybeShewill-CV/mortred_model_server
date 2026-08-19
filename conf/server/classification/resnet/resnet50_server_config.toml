@@ -23,6 +23,8 @@ worker_nums=1
 model_run_timeout=500
 # server url
 server_uri="/mortred_ai_server_v1/classification/resnet"
+# explicit server executable used by the web console catalog
+server_exe="resnet_classification_server.out"
 
 [RESNET]
-model_config_file_path="../conf/model/classification/resnet/resnet50_config.ini"
+model_config_file_path="../conf/model/classification/resnet/resnet50_config.toml"

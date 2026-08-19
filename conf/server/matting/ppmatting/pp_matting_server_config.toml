@@ -23,6 +23,8 @@ worker_nums=1
 model_run_timeout=5000
 # server url
 server_uri="/mortred_ai_server_v1/matting/pp_matting"
+# explicit server executable used by the web console catalog
+server_exe="pp_matting_server.out"
 
 [PP_MATTING]
-model_config_file_path="../conf/model/matting/ppmatting/ppmatting_config.ini"
+model_config_file_path="../conf/model/matting/ppmatting/ppmatting_config.toml"
