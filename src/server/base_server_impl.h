@@ -12,6 +12,7 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <cstdlib>
 #include <cstdio>
 #include <cstring>
 #include <utility>
@@ -46,7 +47,9 @@
 #include "models/model_io_define.h"
 #include "server/prometheus_metrics.h"
 #include "server/http_status.h"
+#include "server/openapi_doc.h"
 #include "server/rate_limiter.h"
+#include "server/server_config_schema.h"
 
 namespace jinq {
 namespace server {
@@ -233,6 +236,17 @@ protected:
     static std::string authorization_header_of(const protocol::HttpRequest* req);
 
     /***
+     * 读取任意请求头（名称大小写不敏感）。
+     */
+    static std::string header_value_of(const protocol::HttpRequest* req,
+                                       const std::string& target_name);
+
+    /***
+     * Content-Type 是否可接受（application/json，忽略参数与大小写）。
+     */
+    static bool is_json_content_type(const std::string& content_type);
+
+    /***
      * 401 / 429 统一响应。
      */
     static void reply_unauthorized(WFHttpTask* task);
@@ -401,14 +415,15 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         reply_rate_limited(task);
         return;
     }
-    // 鉴权：/welcome 与 /hello_world 保持公开（供健康检查），其余端点需要 Bearer Token
+    // 鉴权：健康/元数据端点保持公开，其余端点需要 Bearer Token
     const char* request_uri = task->get_req()->get_request_uri();
     const char* request_method = task->get_req()->get_method();
     bool is_health_endpoint = strcmp(request_uri, "/welcome") == 0 ||
                               strcmp(request_uri, "/hello_world") == 0 ||
                               strcmp(request_uri, "/healthz") == 0 ||
                               strcmp(request_uri, "/ready") == 0 ||
-                              strcmp(request_uri, "/metrics") == 0;
+                              strcmp(request_uri, "/metrics") == 0 ||
+                              strcmp(request_uri, "/openapi.json") == 0;
     if (!is_health_endpoint &&
         !jinq::common::is_bearer_authorized(
             authorization_header_of(task->get_req()), _m_auth_token)) {
@@ -430,7 +445,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         if (ready) {
             reply_json(task, "", StatusCode::OK, std::move(data));
         } else {
-            reply_json(task, "", StatusCode::SERVER_INIT_FAILED, std::move(data));
+            reply_json(task, "", StatusCode::NOT_READY, std::move(data));
         }
         return;
     }
@@ -441,6 +456,14 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         resp->add_header_pair("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
         auto body = _m_metrics.render();
         resp->append_output_body(body.data(), body.size());
+        return;
+    }
+    if (strcmp(request_uri, "/openapi.json") == 0) {
+        auto* resp = task->get_resp();
+        resp->set_status_code("200");
+        resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
+        resp->add_header_pair("Cache-Control", "no-store");
+        resp->append_output_body(k_openapi_doc_json.data(), k_openapi_doc_json.size());
         return;
     }
     // welcome message
@@ -458,6 +481,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         const char* request_method = task->get_req()->get_method();
         if (strcmp(request_method, "POST") != 0) {
             _m_metrics.inc_http_requests(request_method, "405");
+            task->get_resp()->add_header_pair("Allow", "POST");
             rapidjson::Document data;
             reply_json(task, "", StatusCode::METHOD_NOT_ALLOWED, std::move(data));
             return;
@@ -465,6 +489,27 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         // parse request body
         auto* req = task->get_req();
         auto* resp = task->get_resp();
+        // 415：模型端点要求 application/json（缺失同样拒绝）
+        if (!is_json_content_type(header_value_of(req, "content-type"))) {
+            _m_metrics.inc_http_requests(request_method, "415");
+            rapidjson::Document data;
+            reply_json(task, "", StatusCode::UNSUPPORTED_MEDIA_TYPE, std::move(data));
+            return;
+        }
+        // 413：显式 Content-Length 超过请求体上限时直接拒绝（chunked 由 workflow 层限制）
+        const std::string content_length_str = header_value_of(req, "content-length");
+        if (!content_length_str.empty()) {
+            char* end = nullptr;
+            const unsigned long long declared =
+                std::strtoull(content_length_str.c_str(), &end, 10);
+            if (end != content_length_str.c_str() && *end == '\0' &&
+                declared > _m_request_size_limit * 1024ULL * 1024ULL) {
+                _m_metrics.inc_http_requests(request_method, "413");
+                rapidjson::Document data;
+                reply_json(task, "", StatusCode::REQUEST_ENTITY_TOO_LARGE, std::move(data));
+                return;
+            }
+        }
         auto task_req = parse_task_request(req);
         if (task_req.task_id.empty()) {
             task_req.task_id = generate_req_id();
@@ -641,7 +686,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(
         // metadata only; the routine never writes it, hence no race
         status = StatusCode::MODEL_RUN_TIMEOUT;
         task_id = meta.is_task_req_valid ? meta.task_id : "";
-        data.SetObject();
     } else {
         // success: the routine has returned (routine -> handle -> done ->
         // callback, workflow guarantees happens-before) and published its ctx
@@ -649,8 +693,10 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(
         auto* result = static_cast<go_result*>(task->user_data);
         status = result->model_run_status;
         task_id = meta.is_task_req_valid ? meta.task_id : "";
-        data.SetObject();
-        fill_response_data(data.GetAllocator(), data, status, result->model_output);
+        // 契约：仅成功时填充 data，错误时保持 data:null
+        if (status == StatusCode::OK) {
+            fill_response_data(data.GetAllocator(), data, status, result->model_output);
+        }
         task_finished_ts = result->task_finished_ts;
         worker_run_time_consuming = result->worker_run_time_consuming;
         find_worker_time_consuming = result->find_worker_time_consuming;
@@ -721,6 +767,21 @@ StatusCode BaseAiServerImpl<WORKER, MODEL_OUTPUT>::parse_server_security_config(
 template<typename WORKER, typename MODEL_OUTPUT>
 StatusCode BaseAiServerImpl<WORKER, MODEL_OUTPUT>::parse_common_server_config(
     const toml::table& server_section) {
+    // fail-fast on malformed server config: missing required keys, wrong
+    // types and probable typos are rejected instead of silently falling back
+    // to defaults (a mistyped `port` / `worker_nums` must not start a server
+    // on a random port or with the wrong worker count)
+    std::string schema_err;
+    std::vector<std::string> schema_warnings;
+    if (!validate_server_section(server_section, &schema_err, &schema_warnings)) {
+        LOG(ERROR) << "invalid server config: " << schema_err;
+        _m_successfully_initialized = false;
+        return StatusCode::SERVER_INIT_FAILED;
+    }
+    for (const auto& warning : schema_warnings) {
+        LOG(WARNING) << warning;
+    }
+
     _m_max_connection_nums = static_cast<int>(server_section["max_connections"].value_or<int64_t>(0));
     _m_peer_resp_timeout = static_cast<int>(server_section["peer_resp_timeout"].value_or<int64_t>(0)) * 1000;
     _m_compute_threads = static_cast<int>(server_section["compute_threads"].value_or<int64_t>(0));
@@ -782,16 +843,20 @@ std::string BaseAiServerImpl<WORKER, MODEL_OUTPUT>::peer_ip_of(const WFHttpTask*
  * @return
  */
 template<typename WORKER, typename MODEL_OUTPUT>
-std::string BaseAiServerImpl<WORKER, MODEL_OUTPUT>::authorization_header_of(
-    const protocol::HttpRequest* req) {
+std::string BaseAiServerImpl<WORKER, MODEL_OUTPUT>::header_value_of(
+    const protocol::HttpRequest* req, const std::string& target_name) {
     protocol::HttpHeaderCursor cursor(req);
     protocol::HttpMessageHeader header;
+    std::string target = target_name;
+    std::transform(target.begin(), target.end(), target.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
     while (cursor.next(&header)) {
         std::string name(static_cast<const char*>(header.name), header.name_len);
         std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) {
             return static_cast<char>(std::tolower(c));
         });
-        if (name == "authorization") {
+        if (name == target) {
             return std::string(static_cast<const char*>(header.value), header.value_len);
         }
     }
@@ -800,16 +865,50 @@ std::string BaseAiServerImpl<WORKER, MODEL_OUTPUT>::authorization_header_of(
 
 /***
  *
+ * @param req
+ * @return
+ */
+template<typename WORKER, typename MODEL_OUTPUT>
+std::string BaseAiServerImpl<WORKER, MODEL_OUTPUT>::authorization_header_of(
+    const protocol::HttpRequest* req) {
+    return header_value_of(req, "authorization");
+}
+
+/***
+ * Content-Type 是否可接受：大小写不敏感，忽略 charset 等参数。
+ */
+template<typename WORKER, typename MODEL_OUTPUT>
+bool BaseAiServerImpl<WORKER, MODEL_OUTPUT>::is_json_content_type(
+    const std::string& content_type) {
+    std::string ct = content_type;
+    std::transform(ct.begin(), ct.end(), ct.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    const auto semi = ct.find(';');
+    if (semi != std::string::npos) {
+        ct = ct.substr(0, semi);
+    }
+    // trim whitespace
+    size_t b = 0;
+    size_t e = ct.size();
+    while (b < e && std::isspace(static_cast<unsigned char>(ct[b]))) {
+        ++b;
+    }
+    while (e > b && std::isspace(static_cast<unsigned char>(ct[e - 1]))) {
+        --e;
+    }
+    return ct.compare(b, e - b, "application/json") == 0;
+}
+
+/***
+ *
  * @param task
  */
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::reply_unauthorized(WFHttpTask* task) {
-    auto* resp = task->get_resp();
     rapidjson::Document data;
+    task->get_resp()->add_header_pair("WWW-Authenticate", "Bearer realm=\"Mortred\"");
     reply_json(task, "", jinq::common::StatusCode::UNAUTHORIZED, std::move(data));
-    resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
-    resp->append_output_body(
-    "");
 }
 
 /***
@@ -818,11 +917,8 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::reply_unauthorized(WFHttpTask* task
  */
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::reply_rate_limited(WFHttpTask* task) {
-    auto* resp = task->get_resp();
     rapidjson::Document data;
     reply_json(task, "", jinq::common::StatusCode::RATE_LIMITED, std::move(data));
-    resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
-    // response body is produced by reply_json
 }
 }
 }

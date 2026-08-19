@@ -21,7 +21,10 @@ handler_threads=50
 worker_nums=1
 # milliseconds
 model_run_timeout=10000
-# model config file path (real_esrgan keeps this in the server section)
-model_config_file_path="../conf/model/enhancement/real_esrgan/real_esrgan.ini"
 # server url
 server_uri="/mortred_ai_server_v1/enhancement/real_esrgan"
+# explicit server executable used by the web console catalog
+server_exe="real_esrgan_server.out"
+
+[REAL_ESRGAN]
+model_config_file_path="../conf/model/enhancement/real_esrgan/real_esrgan.toml"

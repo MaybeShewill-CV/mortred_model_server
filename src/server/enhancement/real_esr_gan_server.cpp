@@ -20,6 +20,7 @@
 #include "common/file_path_util.h"
 #include "models/model_io_define.h"
 #include "server/base_server_impl.h"
+#include "server/response_serializers.h"
 #include "factory/enhancement_task.h"
 
 namespace jinq {
@@ -89,7 +90,14 @@ StatusCode RealEsrGanServer::Impl::init(const toml::table &config) {
         _m_successfully_initialized = false;
         return StatusCode::SERVER_INIT_FAILED;
     }
-    auto model_cfg_path = config["REAL_ESRGAN_SERVER"]["model_config_file_path"].value_or<std::string>("");
+    const toml::table* model_section_ptr = config["REAL_ESRGAN"].as_table();
+    if (model_section_ptr == nullptr) {
+        LOG(ERROR) << "Config section REAL_ESRGAN missing or not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::SERVER_INIT_FAILED;
+    }
+    const toml::table& model_section = *model_section_ptr;
+    auto model_cfg_path = model_section["model_config_file_path"].value_or<std::string>("");
 
     if (!FilePathUtil::is_file_exist(model_cfg_path)) {
         LOG(ERROR) << "real esr-gan model config file not exist: " << model_cfg_path;
@@ -147,22 +155,8 @@ void RealEsrGanServer::Impl::fill_response_data(
     rapidjson::Document& data,
     const StatusCode& status,
     const std_enhancement_output& model_output) {
-    data.SetObject();
-    if (status != StatusCode::OK) {
-        return;
-    }
-    if (model_output.enhancement_result.empty()) {
-        data.AddMember("enhance_result", "", allocator);
-        return;
-    }
-    std::vector<uchar> imencode_buffer;
-    cv::imencode(".jpg", model_output.enhancement_result, imencode_buffer);
-    auto output_image_data = base64::encode(imencode_buffer.data(), imencode_buffer.size());
-    data.AddMember("enhance_result",
-                   rapidjson::Value(output_image_data.c_str(),
-                                    output_image_data.size(),
-                                    allocator),
-                   allocator);
+    (void)status;  // 契约：仅成功路径调用
+    jinq::server::response::fill_enhancement(allocator, data, model_output);
 }
 
 /***

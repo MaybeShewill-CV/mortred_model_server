@@ -19,6 +19,7 @@
 
 #include "common/file_path_util.h"
 #include "common/status_code.h"
+#include "models/model_config_schema.h"
 
 namespace jinq {
 namespace models {
@@ -57,6 +58,18 @@ public:
         const toml::table& cfg,
         const std::vector<std::string>& input_names,
         const std::vector<std::string>& output_names) {
+        // contract check on the common MNN block: type errors fail fast,
+        // model-specific keys are out of scope
+        std::string schema_err;
+        std::vector<std::string> schema_warnings;
+        if (!validate_model_config_section(cfg, &schema_err, &schema_warnings)) {
+            LOG(ERROR) << "invalid model config: " << schema_err;
+            return jinq::common::StatusCode::MODEL_INIT_FAILED;
+        }
+        for (const auto& warning : schema_warnings) {
+            LOG(WARNING) << warning;
+        }
+
         if (!cfg.contains("model_file_path")) {
             LOG(ERROR) << "config does not have model_file_path field";
             return jinq::common::StatusCode::MODEL_INIT_FAILED;

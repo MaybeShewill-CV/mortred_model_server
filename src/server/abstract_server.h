@@ -9,6 +9,7 @@
 #define MORTRED_MODEL_SERVER_BASESERVER_H
 
 #include <memory>
+#include <mutex>
 
 #include <toml/toml.hpp>
 #include <workflow/WFTask.h>
@@ -101,10 +102,15 @@ protected:
      */
     template<typename IMPL>
     jinq::common::StatusCode init_http_server(IMPL* impl) {
-        WFGlobalSettings settings = GLOBAL_SETTINGS_DEFAULT;
-        settings.compute_threads = impl->_m_compute_threads;
-        settings.handler_threads = impl->_m_handler_threads;
-        WORKFLOW_library_init(&settings);
+        // workflow 全局设置只能初始化一次：单进程多 server（测试/网关形态）下
+        // 以第一个 init 的设置为准，避免重复初始化未定义行为。
+        static std::once_flag workflow_init_flag;
+        std::call_once(workflow_init_flag, [impl]() {
+            WFGlobalSettings settings = GLOBAL_SETTINGS_DEFAULT;
+            settings.compute_threads = impl->_m_compute_threads;
+            settings.handler_threads = impl->_m_handler_threads;
+            WORKFLOW_library_init(&settings);
+        });
 
         WFServerParams server_params = SERVER_PARAMS_DEFAULT;
         server_params.max_connections = impl->_m_max_connection_nums;
