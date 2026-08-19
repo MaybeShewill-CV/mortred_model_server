@@ -37,6 +37,9 @@ struct BenchmarkSpec {
     std::string display_name;      // e.g. "mobilenetv2 classifier"
     std::string usage;             // e.g. "exe config_file_path [test_image_path]"
     int loops = 100;
+    // 扩散采样族每次 run 都是一次完整采样（秒~分钟级），置 false 保持
+    // 与原实现一致的"无预热"行为；标准轻量模型保持默认 true
+    bool warmup = true;
     // CLI 形状校验：标准 main 用 standard_args_ok；diffusion 族按各自参数个数覆盖
     std::function<bool(int argc)> args_ok;
     // 输入有效性校验：标准单图 spec 检查 !input_image.empty()；
@@ -122,7 +125,9 @@ int run_benchmark(int argc, char** argv, const BenchmarkSpec<INPUT, OUTPUT>& spe
               << jinq::common::Timestamp::now().to_format_str();
 
     // warmup run: not counted (消除首次迭代冷启动偏差)
-    model->run(model_input, model_output);
+    if (spec.warmup) {
+        model->run(model_input, model_output);
+    }
 
     std::vector<double> iter_ms(static_cast<size_t>(spec.loops));
     auto ts = jinq::common::Timestamp::now();
