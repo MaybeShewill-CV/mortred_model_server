@@ -156,6 +156,45 @@ TEST(model_factory, concurrent_register_and_create) {
     EXPECT_EQ(failures.load(), 0);
 }
 
+// creator-closure registration: spec-driven servers register arbitrary lambdas
+// instead of named concrete classes
+TEST(model_factory, register_creator_builds_custom_closure) {
+    auto& factory = ModelFactory::get_instance();
+    factory.register_creator("closure_model", []() -> std::unique_ptr<FakeModelBase> {
+        return std::unique_ptr<FakeModelBase>(new FakeModel2());
+    });
+
+    auto model = factory.create("closure_model");
+    ASSERT_NE(model, nullptr);
+    EXPECT_EQ(model->tag(), "FakeModel2");
+}
+
+// creator closures follow the same overwrite-on-same-name semantics as register_type
+TEST(model_factory, register_creator_replaces_previous_registration) {
+    auto& factory = ModelFactory::get_instance();
+    factory.register_creator("closure_overwrite", []() -> std::unique_ptr<FakeModelBase> {
+        return std::unique_ptr<FakeModelBase>(new FakeModel());
+    });
+    factory.register_creator("closure_overwrite", []() -> std::unique_ptr<FakeModelBase> {
+        return std::unique_ptr<FakeModelBase>(new FakeModel2());
+    });
+
+    auto model = factory.create("closure_overwrite");
+    ASSERT_NE(model, nullptr);
+    EXPECT_EQ(model->tag(), "FakeModel2");
+}
+
+TEST(model_factory, register_creator_rejects_empty_name_and_null_closure) {
+    auto& factory = ModelFactory::get_instance();
+    factory.register_creator("", []() -> std::unique_ptr<FakeModelBase> {
+        return std::unique_ptr<FakeModelBase>(new FakeModel());
+    });
+    EXPECT_EQ(factory.create(""), nullptr);
+
+    factory.register_creator("null_closure", nullptr);
+    EXPECT_EQ(factory.create("null_closure"), nullptr);
+}
+
 TEST(server_factory, register_and_create_server) {
     ServerFactory::get_instance().register_type<FakeServer>("fake_server");
 

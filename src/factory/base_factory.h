@@ -29,6 +29,8 @@ namespace factory {
 template<typename BASE>
 class TypeErasedFactory {
 public:
+    using creator_t = std::function<std::unique_ptr<BASE>()>;
+
     TypeErasedFactory(const TypeErasedFactory& transformer) = delete;
     TypeErasedFactory& operator=(const TypeErasedFactory& transformer) = delete;
     TypeErasedFactory(TypeErasedFactory&& transformer) = delete;
@@ -53,6 +55,22 @@ public:
         };
     }
 
+    /***
+     * Register an arbitrary creator closure. Used by spec-driven generic
+     * servers whose concrete type is a template instantiation carrying a
+     * runtime spec, not a bare default-constructible class. Shares the same
+     * mutex, overwrite-on-same-name and empty-name-rejection semantics as
+     * register_type.
+     */
+    void register_creator(const std::string& name, creator_t creator) {
+        if (name.empty() || !creator) {
+            LOG(ERROR) << "refusing to register a null creator or a creator with an empty name";
+            return;
+        }
+        std::lock_guard<std::mutex> lock(_m_mutex);
+        _m_creators[name] = std::move(creator);
+    }
+
     std::unique_ptr<BASE> create(const std::string& name) const {
         creator_t creator;
         {
@@ -70,8 +88,6 @@ public:
 private:
     TypeErasedFactory() = default;
     ~TypeErasedFactory() = default;
-
-    using creator_t = std::function<std::unique_ptr<BASE>()>;
 
     mutable std::mutex _m_mutex;
     std::map<std::string, creator_t> _m_creators;
