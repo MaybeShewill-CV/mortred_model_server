@@ -50,8 +50,17 @@ def load_manifest(path: Path) -> dict:
         return json.load(f)
 
 
-def resolve_url(repo: str, revision: str, rel: str) -> str:
-    return f"https://huggingface.co/{repo}/resolve/{revision}/{rel}"
+def resolve_url(repo: str, revision: str, hf_path: str) -> str:
+    return f"https://huggingface.co/{repo}/resolve/{revision}/{hf_path}"
+
+
+def hf_path_of(item: dict) -> str:
+    """HF 仓库内路径：清单显式 hf_path 优先；否则剥掉 weights/ 前缀
+    （HF 布局 = 本地布局去掉 weights/ 前缀）。"""
+    rel = item["path"]
+    if item.get("hf_path"):
+        return item["hf_path"]
+    return rel[len("weights/"):] if rel.startswith("weights/") else rel
 
 
 def download_file(url: str, dst: Path) -> None:
@@ -111,7 +120,7 @@ def main() -> int:
         sys.exit("[ERROR] manifest has no files")
 
     selected = [f for f in files if not args.only or args.only.lower() in f["path"].lower()]
-    ok, missing, failed = 0, [], []
+    ok, missing, nohf, failed = 0, [], [], []
 
     for item in selected:
         rel = item["path"]
@@ -133,25 +142,33 @@ def main() -> int:
                 ok += 1
                 print(f"[ok]   {rel} (sha256 match)")
         else:
-            missing.append(rel)
+            if item.get("on_hf") is False:
+                # HF 上不存在：无法下载，仅提示归档源
+                nohf.append(rel)
+                print(f"[nohf] {rel} (不在 HF 仓库，需从归档获取)")
+            else:
+                missing.append(rel)
 
     if args.check:
-        print(f"\n== check done: {ok} ok, {len(missing)} missing, {len(failed)} failed")
+        print(f"\n== check done: {ok} ok, {len(missing)} missing, {len(nohf)} off-hf, {len(failed)} failed")
         for rel, why in failed:
             print(f"  [FAIL] {rel}: {why}")
         for rel in missing:
             print(f"  [MISS] {rel}")
-        return 1 if (missing or failed) else 0
+        for rel in nohf:
+            print(f"  [NOHF] {rel} (仅归档源可获取)")
+        return 1 if (missing or failed or nohf) else 0
 
     if args.dry_run:
         for rel in missing:
             print(f"[plan] {rel}")
-        print(f"\n== dry-run: {len(missing)} to download")
+        print(f"\n== dry-run: {len(missing)} to download (off-hf 不可下载: {len(nohf)})")
         return 0
 
     for rel in missing:
-        url = resolve_url(repo, revision, rel)
-        print(f"[get]  {rel}")
+        item = next((f for f in files if f["path"] == rel), {})
+        url = resolve_url(repo, revision, hf_path_of(item))
+        print(f"[get]  {rel}  <- {hf_path_of(item)}")
         try:
             download_file(url, ROOT / rel)
             actual = sha256_of(ROOT / rel)

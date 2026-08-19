@@ -10,8 +10,9 @@ cmake-build-*
 logs
 generated_configs
 weights
-3rd_party/libs
-3rd_party/.install-stamp
+# 3rd_party 整体排除：镜像内由 install_deps.sh 全自动生成，
+# 避免继承宿主机 vendored 头/库导致版本不可复现
+3rd_party
 .deps-build
 __pycache__
 *.pyc

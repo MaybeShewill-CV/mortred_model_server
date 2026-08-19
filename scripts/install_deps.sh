@@ -196,11 +196,20 @@ install_nvidia() {
     dpkg -i /tmp/cuda-keyring.deb
     apt-get update
     if [ "$CUDA_VERSION" = "12" ]; then
-        apt-get install -y --no-install-recommends \
-            cuda-toolkit-12-4 tensorrt-10.3.0.26 libcudnn9-dev-cuda-12
+        # devel 镜像/已装 CUDA 的机器跳过 toolkit，只装 TRT/cuDNN（避免包冲突）
+        if ! command -v nvcc >/dev/null 2>&1 && [ ! -x /usr/local/cuda/bin/nvcc ]; then
+            apt-get install -y --no-install-recommends cuda-toolkit-12-4
+        else
+            info "nvcc 已存在，跳过 cuda-toolkit"
+        fi
+        apt-get install -y --no-install-recommends tensorrt-10.3.0.26 libcudnn9-dev-cuda-12
     else
-        apt-get install -y --no-install-recommends \
-            cuda-toolkit-11-8 tensorrt-8.6.1.6-1+cuda11.8 libcudnn8-dev-cuda-11
+        if ! command -v nvcc >/dev/null 2>&1 && [ ! -x /usr/local/cuda/bin/nvcc ]; then
+            apt-get install -y --no-install-recommends cuda-toolkit-11-8
+        else
+            info "nvcc 已存在，跳过 cuda-toolkit"
+        fi
+        apt-get install -y --no-install-recommends tensorrt-8.6.1.6-1+cuda11.8 libcudnn8-dev-cuda-11
     fi
     # 拷入 3rd_party（头 + 库）
     local trt_inc=/usr/include/x86_64-linux-gnu
