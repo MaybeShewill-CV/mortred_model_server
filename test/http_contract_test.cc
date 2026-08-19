@@ -28,6 +28,7 @@ TEST(http_contract, client_errors_map_to_4xx) {
     EXPECT_EQ(http_status_of(StatusCode::REQUEST_ENTITY_TOO_LARGE), 413);
     EXPECT_EQ(http_status_of(StatusCode::METHOD_NOT_ALLOWED), 405);
     EXPECT_EQ(http_status_of(StatusCode::NOT_FOUND), 404);
+    EXPECT_EQ(http_status_of(StatusCode::NOT_READY), 503);
     EXPECT_EQ(http_status_of(StatusCode::UNAUTHORIZED), 401);
     EXPECT_EQ(http_status_of(StatusCode::RATE_LIMITED), 429);
 }

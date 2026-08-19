@@ -44,7 +44,16 @@ set(TEST_LIST
     worker_nums_unittest
     http_contract_test
     prometheus_metrics_test
+    response_schema_test
+    openapi_consistency_test
+    config_schema_test
 )
+
+if(WORKFLOW_LIBS)
+    # HTTP 级端到端契约测试需要链接 workflow；tests-only 构建若未提供
+    # vendored workflow 库则自动跳过（全量构建/本地开发环境会执行）。
+    list(APPEND TEST_LIST server_e2e_contract_test)
+endif()
 
 if(MORTRED_BUILD_FULL)
     list(APPEND TEST_LIST model_golden_test)
@@ -78,6 +87,12 @@ foreach(src ${TEST_LIST})
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "web_console_auth_unittest")
         set(EXTRA_SRCS ${PROJECT_ROOT_DIR}/src/apps/web_console/backend/auth.cpp)
+    elseif(${src} STREQUAL "response_schema_test")
+        set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
+    elseif(${src} STREQUAL "openapi_consistency_test")
+        set(EXTRA_LIBS glog::glog)
+    elseif(${src} STREQUAL "server_e2e_contract_test")
+        set(EXTRA_LIBS glog::glog ${WORKFLOW_LIBS} pthread)
     endif()
     add_executable(${src} EXCLUDE_FROM_ALL ${src}.cc ${EXTRA_SRCS})
     target_link_libraries(${src} common ${EXTRA_LIBS} ${GTEST_LIBS})
