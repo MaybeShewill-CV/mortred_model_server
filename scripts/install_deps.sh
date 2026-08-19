@@ -26,20 +26,21 @@ LIB_DIR="$ROOT/3rd_party/libs"
 STAMP_DIR="$ROOT/3rd_party/.install-stamp"
 BUILD_DIR="${MORTRED_DEPS_BUILD_DIR:-$ROOT/.deps-build}"
 
-# ---- 版本矩阵（两条线）----
+# ---- 版本矩阵（两条线；tag 均经 git ls-remote/HTTP HEAD 验证存在）----
 CUDA_VERSION="${CUDA_VERSION:-11}"
 if [ "$CUDA_VERSION" = "12" ]; then
     TRT_VER="10.3.0.26"
     TRT_INCLUDE_DIR="TensorRT-10.3.0"
     CUDNN_VER="9"
+    MNN_TAG="${MNN_TAG:-2.9.6}"      # CUDA 12 需要 MNN 2.9+ 后端
     MNN_CUDA_FLAGS="-DMNN_CUDA=ON -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda-12"
 else
     TRT_VER="8.6.1.6"
     TRT_INCLUDE_DIR="TensorRT-8.6.1.6"
     CUDNN_VER="8"
+    MNN_TAG="${MNN_TAG:-2.7.0}"
     MNN_CUDA_FLAGS="-DMNN_CUDA=ON"
 fi
-MNN_TAG="${MNN_TAG:-v2.7.0}"
 WORKFLOW_TAG="${WORKFLOW_TAG:-v0.10.9}"
 ONNXRUNTIME_VER="${ONNXRUNTIME_VER:-1.18.0}"
 ONNXRUNTIME_SHA256="${ONNXRUNTIME_SHA256:-}"
@@ -76,8 +77,11 @@ copy_libs() { # src_glob dst_dir label
 }
 
 # ============ header-only 小库（缺失时从上游拉取，钉版本） ============
+# install_header_only <name> <url> <archive_subdir> <dst_subdir> <stamp_name>
+# archive_subdir 为 tarball 内相对顶层的头目录（空=顶层），dst_subdir 为
+# 3rd_party/include 下的目标目录（须与 vendored 布局一致，如 toml/stb_image/stl_container）。
 install_header_only() {
-    local name="$1" url="$2" subdir="$3" stamp_name="$4"
+    local name="$1" url="$2" archive_subdir="$3" dst_subdir="$4" stamp_name="$5"
     if stamp "$stamp_name"; then
         info "$name: already installed (stamp)"
         return
@@ -92,24 +96,25 @@ install_header_only() {
     local src
     src="$(find "$tmp" -mindepth 1 -maxdepth 1 -type d | head -n1)"
     [ -n "$src" ] || fail "$name: unpack failed"
-    if [ -n "$subdir" ]; then
-        src="$src/$subdir"
+    if [ -n "$archive_subdir" ]; then
+        src="$src/$archive_subdir"
     fi
-    mkdir -p "$INCLUDE_DIR/$(basename "$src")"
-    cp -rn "$src"/* "$INCLUDE_DIR/$(basename "$src")"/ 2>/dev/null || true
+    [ -d "$src" ] || fail "$name: archive subdir '$archive_subdir' missing"
+    mkdir -p "$INCLUDE_DIR/$dst_subdir"
+    cp -rn "$src"/* "$INCLUDE_DIR/$dst_subdir"/ 2>/dev/null || true
     mark "$stamp_name"
 }
 
-# ============ fmt（源码构建，钉 tag） ============
+# ============ fmt（源码构建，钉 tag；git tag 为 9.1.0，无 9.1.1） ============
 install_fmt() {
     if stamp fmt; then info "fmt: already installed"; return; fi
-    announce "build fmt 9.1.1"
+    announce "build fmt 9.1.0"
     require_cmd git "git"
     require_cmd cmake "cmake"
     local src="$BUILD_DIR/fmt-src"
     mkdir -p "$src"
     if [ ! -d "$src/.git" ]; then
-        git clone --depth 1 --branch 9.1.1 https://github.com/fmtlib/fmt.git "$src"
+        git clone --depth 1 --branch 9.1.0 https://github.com/fmtlib/fmt.git "$src"
     fi
     cmake -S "$src" -B "$src/build-mortred" -DCMAKE_BUILD_TYPE=Release -DFMT_TEST=OFF -DFMT_DOC=OFF
     cmake --build "$src/build-mortred" -j"$JOBS"
@@ -351,15 +356,15 @@ case "$MODE" in
     nvidia) install_nvidia ;;
     all)
         install_header_only rapidjson \
-            "https://github.com/Tencent/rapidjson/archive/refs/tags/v1.1.0.tar.gz" "include" "rapidjson"
+            "https://github.com/Tencent/rapidjson/archive/refs/tags/v1.1.0.tar.gz" "include" "rapidjson" "rapidjson"
         install_header_only toml11 \
-            "https://github.com/ToruNiina/toml11/archive/refs/tags/v3.7.1.tar.gz" "toml11" "toml11"
+            "https://github.com/ToruNiina/toml11/archive/refs/tags/v3.7.1.tar.gz" "toml" "toml" "toml11"
         install_header_only stb_image \
-            "https://github.com/nothings/stb/archive/refs/tags/0a538a1a2f0e4d166c6e5d3e1e9a1d8b0e1f2a3b.tar.gz" "" "stb_image"
+            "https://github.com/nothings/stb/archive/2c980bb59875b0d32144a71867fbdebb2f77cd20.tar.gz" "" "stb_image" "stb_image"
         install_header_only indicators \
-            "https://github.com/p-ranav/indicators/archive/refs/tags/v2.3.tar.gz" "include" "indicators"
+            "https://github.com/p-ranav/indicators/archive/refs/tags/v2.3.tar.gz" "include" "indicators" "indicators"
         install_header_only moodycamel \
-            "https://github.com/cameron314/concurrentqueue/archive/refs/tags/v1.0.4.tar.gz" "concurrentqueue" "moodycamel"
+            "https://github.com/cameron314/concurrentqueue/archive/refs/tags/v1.0.4.tar.gz" "" "stl_container" "moodycamel"
         install_fmt
         install_workflow
         install_onnxruntime
