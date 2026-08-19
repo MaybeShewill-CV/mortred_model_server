@@ -95,3 +95,17 @@
 4. P4 引擎重建清单与脚本（GPU 机实测）
 5. P2 Docker（GPU 机/CI 构建验证）
 6. P5 文档与 CI 收尾
+
+## 7. 实施进度（2026-08 更新）
+
+| 交付物 | 状态 | 验证 |
+|---|---|---|
+| `scripts/install_deps.sh` | ✅ 已实现并提交 | `--check` 本机实测通过（11 头 + 11 库全 ok，工具链缺失项如实标记）；`--all` 实际构建待 Linux/GPU 机验证 |
+| `Dockerfile` + compose + entrypoint + `MORTRED_INSTALL` | ✅ 已实现并提交 | 待 `docker build` 实机验证（需 Docker/Linux） |
+| `scripts/fetch_weights.py` + `conf/weights_manifest.json` | ✅ 已实现并提交（141 文件 sha256 基线） | `--check` 抽样往返、路径穿越防护实测通过；真实下载待有 HF 网络环境验证 |
+| `scripts/convert_trt_engines.sh` + `conf/trt_engines.json` + profiles | ✅ 已实现并提交（19 引擎） | `--list`/`--only` 实测通过；实际转换待 GPU + full build 验证 |
+| 一致性门禁（不变量 10：引擎清单覆盖） | ✅ 已实现并提交 | `check_consistency.py` 通过 |
+| CI deploy-tools job、README 双语部署章节、systemd 单元 | ✅ 已实现并提交 | 语法/清单校验通过 |
+
+**剩余待验证项**（需 Linux + GPU + 网络环境）：`install_deps.sh --all` 全流程、
+`docker build`、HF 实际下载、引擎实转与 golden 回归。
