@@ -100,6 +100,25 @@ install_header_only() {
     mark "$stamp_name"
 }
 
+# ============ fmt（源码构建，钉 tag） ============
+install_fmt() {
+    if stamp fmt; then info "fmt: already installed"; return; fi
+    announce "build fmt 9.1.1"
+    require_cmd git "git"
+    require_cmd cmake "cmake"
+    local src="$BUILD_DIR/fmt-src"
+    mkdir -p "$src"
+    if [ ! -d "$src/.git" ]; then
+        git clone --depth 1 --branch 9.1.1 https://github.com/fmtlib/fmt.git "$src"
+    fi
+    cmake -S "$src" -B "$src/build-mortred" -DCMAKE_BUILD_TYPE=Release -DFMT_TEST=OFF -DFMT_DOC=OFF
+    cmake --build "$src/build-mortred" -j"$JOBS"
+    mkdir -p "$INCLUDE_DIR/fmt"
+    cp -rn "$src/include/fmt"/*.h "$INCLUDE_DIR/fmt"/ 2>/dev/null || true
+    copy_libs "$src/build-mortred/libfmt.so*" "$LIB_DIR" "fmt libs"
+    mark fmt
+}
+
 # ============ workflow（源码构建，钉 tag） ============
 install_workflow() {
     if stamp workflow; then info "workflow: already installed"; return; fi
@@ -332,6 +351,7 @@ case "$MODE" in
             "https://github.com/p-ranav/indicators/archive/refs/tags/v2.3.tar.gz" "include" "indicators"
         install_header_only moodycamel \
             "https://github.com/cameron314/concurrentqueue/archive/refs/tags/v1.0.4.tar.gz" "concurrentqueue" "moodycamel"
+        install_fmt
         install_workflow
         install_onnxruntime
         install_mnn

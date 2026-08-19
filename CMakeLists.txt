@@ -80,3 +80,16 @@ endif()
 # add unittest
 enable_testing()
 add_subdirectory(test EXCLUDE_FROM_ALL)
+
+# 安装目标（MORTRED_INSTALL=ON 时启用）：树式安装 + $ORIGIN/../lib RPATH，
+# 使 /opt/mortred 等安装前缀无需 LD_LIBRARY_PATH 即可运行。
+# Docker 构建（Dockerfile build 阶段）依赖此目标。
+if(MORTRED_INSTALL)
+    set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib")
+    set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
+    install(DIRECTORY ${MORTRED_BIN_OUTPUT_DIR}/ DESTINATION bin)
+    install(DIRECTORY ${MORTRED_LIB_OUTPUT_DIR}/ DESTINATION lib)
+    install(DIRECTORY ${PROJECT_ROOT_DIR}/3rd_party/libs/ DESTINATION lib)
+    install(DIRECTORY conf docs demo_data scripts resources DESTINATION .)
+    install(DIRECTORY src/apps/web_console/frontend DESTINATION src/apps/web_console)
+endif()

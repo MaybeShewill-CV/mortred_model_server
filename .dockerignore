@@ -1,0 +1,17 @@
+# 构建上下文排除项（避免把大文件/产物拷入镜像构建上下文）
+.git
+.gitignore
+.idea
+_bin
+_lib
+build
+build-*
+cmake-build-*
+logs
+generated_configs
+weights
+3rd_party/libs
+3rd_party/.install-stamp
+.deps-build
+__pycache__
+*.pyc

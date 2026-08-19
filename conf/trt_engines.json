@@ -1,0 +1,24 @@
+{
+  "_description": "TRT engine 重建清单：engine 是 config 期望的路径（相对仓库根），onnx 是转换源，fp 为精度模式（0=FP32, 1=FP16），profile 为动态 shape 的 optimization profile JSON（相对仓库根）。由 scripts/convert_trt_engines.sh 消费；缺失的 onnx 先用 scripts/fetch_weights.py 下载。",
+  "engines": [
+    {"model": "cls_cond_ddpm_netease_album_cover", "onnx": "weights/diffusion/ddpm/cls_cond_ddpm_netease_album_cover_128x128.onnx", "engine": "weights/diffusion/ddpm/cls_cond_ddpm_netease_album_cover_128x128.engine", "fp": 1, "profile": null},
+    {"model": "ddpm_unet_celeba_hq_256", "onnx": "weights/diffusion/ddpm/ddpm_unet_celeba-hq-256x256.onnx", "engine": "weights/diffusion/ddpm/ddpm_unet_celeba-hq-256x256.engine", "fp": 1, "profile": null},
+    {"model": "ddpm_unet_celeba_hq_128", "onnx": "weights/diffusion/ddpm/ddpm_unet_celeba-hq-128x128.onnx", "engine": "weights/diffusion/ddpm/ddpm_unet_celeba-hq-128x128.engine", "fp": 1, "profile": null},
+    {"model": "autoencoder_kl_decoder", "onnx": "weights/diffusion/ldm/autoencoder_kl_decoder.onnx", "engine": "weights/diffusion/ldm/autoencoder_kl_decoder.engine", "fp": 1, "profile": null},
+    {"model": "latent_ddpm_celeba_hq", "onnx": "weights/diffusion/ldm/latent_ddpm_celeba-hq.onnx", "engine": "weights/diffusion/ldm/latent_ddpm_celeba-hq.engine", "fp": 1, "profile": null},
+    {"model": "lightglue_extractor", "onnx": "weights/feature_point/lightglue/extractor.onnx", "engine": "weights/feature_point/lightglue/extractor.engine", "fp": 1, "profile": "conf/trt_profiles/lightglue_extractor.json"},
+    {"model": "lightglue_matcher", "onnx": "weights/feature_point/lightglue/matcher.onnx", "engine": "weights/feature_point/lightglue/matcher.engine", "fp": 1, "profile": "conf/trt_profiles/lightglue_matcher.json"},
+    {"model": "depth_anything_vitb14", "onnx": "weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.onnx", "engine": "weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.engine", "fp": 1, "profile": null},
+    {"model": "depth_anything_vitl14", "onnx": "weights/mono_depth_estimation/depth_anything/depth_anything_vitl14.onnx", "engine": "weights/mono_depth_estimation/depth_anything/depth_anything_vitl14.engine", "fp": 1, "profile": null},
+    {"model": "depth_anything_vits14", "onnx": "weights/mono_depth_estimation/depth_anything/depth_anything_vits14.onnx", "engine": "weights/mono_depth_estimation/depth_anything/depth_anything_vits14.engine", "fp": 1, "profile": null},
+    {"model": "metric3d_1088x1920", "onnx": "weights/mono_depth_estimation/metric3d/metric3d_750k_1088x1920.onnx", "engine": "weights/mono_depth_estimation/metric3d/metric3d_750k_1088x1920.engine", "fp": 1, "profile": null},
+    {"model": "metric3d_512x1088", "onnx": "weights/mono_depth_estimation/metric3d/metric3d_750k_512x1088.onnx", "engine": "weights/mono_depth_estimation/metric3d/metric3d_750k_512x1088.engine", "fp": 1, "profile": null},
+    {"model": "yolov8s", "onnx": "weights/object_detection/yolov8/yolov8s.onnx", "engine": "weights/object_detection/yolov8/yolov8s.engine", "fp": 1, "profile": null},
+    {"model": "hrnetw48_ccd_fp32", "onnx": "weights/scene_segmentation/hrnet/hrnetw48_ccd.onnx", "engine": "weights/scene_segmentation/hrnet/hrnetw48_ccd_fp32.engine", "fp": 0, "profile": null},
+    {"model": "mobile_sam_encoder", "onnx": "weights/sam/mobile_sam/mobile_sam_encoder.onnx", "engine": "weights/sam/mobile_sam/sm61/mobile_sam_encoder.engine", "fp": 1, "profile": null},
+    {"model": "mobile_sam_decoder", "onnx": "weights/sam/mobile_sam/mobile_sam_decoder.onnx", "engine": "weights/sam/mobile_sam/sm61/mobile_sam_decoder.engine", "fp": 1, "profile": null},
+    {"model": "mobile_sam_amg_decoder", "onnx": "weights/sam/mobile_sam/sm86/mobile_sam_amg_decoder.onnx", "engine": "weights/sam/mobile_sam/sm61/mobile_sam_amg_decoder.engine", "fp": 1, "profile": null, "note": "sm61 无 onnx 源，暂用 sm86 源；如 shape 不符请改用匹配的 onnx"},
+    {"model": "nano_sam_encoder_fp16", "onnx": "weights/sam/nano_sam/nano_sam_encoder.onnx", "engine": "weights/sam/nano_sam/sm61/nano_sam_encoder_fp16.engine", "fp": 1, "profile": null},
+    {"model": "nano_sam_decoder", "onnx": "weights/sam/nano_sam/nano_sam_decoder.onnx", "engine": "weights/sam/nano_sam/sm61/nano_sam_decoder.engine", "fp": 1, "profile": null}
+  ]
+}
