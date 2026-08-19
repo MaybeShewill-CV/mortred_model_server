@@ -21,13 +21,14 @@
 #include "models/object_detection/yolov7_detector.h"
 #include "models/object_detection/yolov8_detector.h"
 #include "server/abstract_server.h"
+#include "server/generic_ai_server.h"
+#include "server/response_serializers.h"
 #include "server/object_detection/centerface_det_server.h"
 #include "server/object_detection/libface_det_server.h"
 #include "server/object_detection/nano_det_server.h"
 #include "server/object_detection/yolov5_det_server.h"
 #include "server/object_detection/yolov6_det_server.h"
 #include "server/object_detection/yolov7_det_server.h"
-#include "server/object_detection/yolov8_det_server.h"
 
 namespace jinq {
 namespace factory {
@@ -50,7 +51,6 @@ using jinq::server::object_detection::NanoDetServer;
 using jinq::server::object_detection::YoloV5DetServer;
 using jinq::server::object_detection::YoloV6DetServer;
 using jinq::server::object_detection::YoloV7DetServer;
-using jinq::server::object_detection::YoloV8DetServer;
 
 // create yolov5 object detection model
 template<typename INPUT, typename OUTPUT>
@@ -138,7 +138,19 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_yolov8_detector(const std::s
 // create yolov8 object detection server
 inline std::unique_ptr<BaseAiServer> create_yolov8_det_server(const std::string& server_name) {
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_type<YoloV8DetServer>(server_name);
+    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
+        using Output = jinq::models::io_define::object_detection::std_object_detection_output;
+        jinq::server::AiServerSpec<Output> spec;
+        spec.server_section = "YOLOV8_DETECTION_SERVER";
+        spec.model_section = "YOLOV8";
+        spec.display_name = "Yolov8 object detection";
+        spec.make_worker = [](const std::string& name) {
+            return create_yolov8_detector<jinq::server::Base64Input, Output>(name);
+        };
+        spec.fill_response = &jinq::server::response::fill_object_detection;
+        return std::unique_ptr<BaseAiServer>(
+            new jinq::server::AiModelServer<Output>(std::move(spec)));
+    });
     return server_factory.create(server_name);
 }
 

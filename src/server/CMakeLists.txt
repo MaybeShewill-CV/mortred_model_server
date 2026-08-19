@@ -3,6 +3,7 @@
 set(SERVER_LIB_SRC
     ${CMAKE_CURRENT_LIST_DIR}/abstract_server.h
     ${CMAKE_CURRENT_LIST_DIR}/base_server_impl.h
+    ${CMAKE_CURRENT_LIST_DIR}/generic_ai_server.h
     ${CMAKE_CURRENT_LIST_DIR}/http_status.h
     ${CMAKE_CURRENT_LIST_DIR}/prometheus_metrics.h
     ${CMAKE_CURRENT_LIST_DIR}/rate_limiter.h
@@ -23,7 +24,6 @@ set(SERVER_LIB_SRC
     ${CMAKE_CURRENT_LIST_DIR}/object_detection/yolov5_det_server.cpp
     ${CMAKE_CURRENT_LIST_DIR}/object_detection/yolov6_det_server.cpp
     ${CMAKE_CURRENT_LIST_DIR}/object_detection/yolov7_det_server.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/object_detection/yolov8_det_server.cpp
     ${CMAKE_CURRENT_LIST_DIR}/ocr/dbnet_server.cpp
     ${CMAKE_CURRENT_LIST_DIR}/scene_segmentation/bisenetv2_server.cpp
     ${CMAKE_CURRENT_LIST_DIR}/scene_segmentation/hrnet_server.cpp
