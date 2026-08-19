@@ -16,7 +16,7 @@
 #include "models/matting/modnet_matting.h"
 #include "models/matting/pp_matting.h"
 #include "server/abstract_server.h"
-#include "server/generic_ai_server.h"
+#include "server/generic_cv_server.h"
 #include "server/response_serializers.h"
 
 namespace jinq {
@@ -51,7 +51,7 @@ inline std::unique_ptr<BaseAiServer> create_pp_matting_server(const std::string&
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
     server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
         using Output = jinq::models::io_define::matting::std_matting_output;
-        jinq::server::AiServerSpec<Output> spec;
+        jinq::server::CvServerSpec<Output> spec;
         spec.server_section = "PP_MATTING_SERVER";
         spec.model_section = "PP_MATTING";
         spec.display_name = "pp matting";
@@ -60,7 +60,7 @@ inline std::unique_ptr<BaseAiServer> create_pp_matting_server(const std::string&
         };
         spec.fill_response = &jinq::server::response::fill_matting;
         return std::unique_ptr<BaseAiServer>(
-            new jinq::server::AiModelServer<Output>(std::move(spec)));
+            new jinq::server::CvModelServer<Output>(std::move(spec)));
     });
     return server_factory.create(server_name);
 }
@@ -70,7 +70,7 @@ inline std::unique_ptr<BaseAiServer> create_modnet_server(const std::string& ser
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
     server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
         using Output = jinq::models::io_define::matting::std_matting_output;
-        jinq::server::AiServerSpec<Output> spec;
+        jinq::server::CvServerSpec<Output> spec;
         spec.server_section = "MODNET_SERVER";
         spec.model_section = "MODNET";
         spec.display_name = "modnet";
@@ -79,7 +79,7 @@ inline std::unique_ptr<BaseAiServer> create_modnet_server(const std::string& ser
         };
         spec.fill_response = &jinq::server::response::fill_matting;
         return std::unique_ptr<BaseAiServer>(
-            new jinq::server::AiModelServer<Output>(std::move(spec)));
+            new jinq::server::CvModelServer<Output>(std::move(spec)));
     });
     return server_factory.create(server_name);
 }

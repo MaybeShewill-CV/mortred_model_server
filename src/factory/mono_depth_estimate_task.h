@@ -16,7 +16,7 @@
 #include "models/mono_depth_estimation/depth_anything.h"
 #include "models/mono_depth_estimation/metric3d.h"
 #include "server/abstract_server.h"
-#include "server/generic_ai_server.h"
+#include "server/generic_cv_server.h"
 #include "server/response_serializers.h"
 
 namespace jinq {
@@ -51,7 +51,7 @@ inline std::unique_ptr<BaseAiServer> create_metric3d_estimation_server(const std
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
     server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
         using Output = jinq::models::io_define::mono_depth_estimation::std_mde_output;
-        jinq::server::AiServerSpec<Output> spec;
+        jinq::server::CvServerSpec<Output> spec;
         spec.server_section = "METRIC3D_ESTIMATION_SERVER";
         spec.model_section = "METRIC3D";
         spec.display_name = "metric3d estimation";
@@ -60,7 +60,7 @@ inline std::unique_ptr<BaseAiServer> create_metric3d_estimation_server(const std
         };
         spec.fill_response = &jinq::server::response::fill_depth_estimation;
         return std::unique_ptr<BaseAiServer>(
-            new jinq::server::AiModelServer<Output>(std::move(spec)));
+            new jinq::server::CvModelServer<Output>(std::move(spec)));
     });
     return server_factory.create(server_name);
 }
@@ -70,7 +70,7 @@ inline std::unique_ptr<BaseAiServer> create_depth_anything_estimation_server(con
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
     server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
         using Output = jinq::models::io_define::mono_depth_estimation::std_mde_output;
-        jinq::server::AiServerSpec<Output> spec;
+        jinq::server::CvServerSpec<Output> spec;
         spec.server_section = "DEPTH_ANYTHING_ESTIMATION_SERVER";
         spec.model_section = "DEPTH_ANYTHING";
         spec.display_name = "depth anything estimation";
@@ -79,7 +79,7 @@ inline std::unique_ptr<BaseAiServer> create_depth_anything_estimation_server(con
         };
         spec.fill_response = &jinq::server::response::fill_depth_estimation;
         return std::unique_ptr<BaseAiServer>(
-            new jinq::server::AiModelServer<Output>(std::move(spec)));
+            new jinq::server::CvModelServer<Output>(std::move(spec)));
     });
     return server_factory.create(server_name);
 }

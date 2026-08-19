@@ -1,6 +1,6 @@
 # How To Add New Server
 
-Here is brief instruction about how to add a new server in this framework. Since the registry-driven refactor, adding a server no longer means writing a ~200-line hand-written class: every server is a single `AiServerSpec` entry (two TOML section names, a worker factory and a response filler) registered through a creator closure. The generic implementation lives in [jinq::server::AiModelServer&lt;MODEL_OUTPUT&gt;](../src/server/generic_ai_server.h) on top of [jinq::server::BaseAiServerImpl&lt;WORKER, MODEL_OUTPUT&gt;](../src/server/base_server_impl.h), which keeps providing auth, rate limiting, request validation, per-request timeout, the worker pool, Prometheus metrics and the `/openapi.json` endpoint. The model input uses base64 encoded images uniformly. The example below adds a densenet image classification server; the model itself comes from [how_to_add_new_model.md](../docs/how_to_add_new_model.md).
+Here is brief instruction about how to add a new server in this framework. Since the registry-driven refactor, adding a server no longer means writing a ~200-line hand-written class: every server is a single `CvServerSpec` entry (two TOML section names, a worker factory and a response filler) registered through a creator closure. The generic implementation lives in [jinq::server::CvModelServer&lt;MODEL_OUTPUT&gt;](../src/server/generic_cv_server.h) on top of [jinq::server::BaseAiServerImpl&lt;WORKER, MODEL_OUTPUT&gt;](../src/server/base_server_impl.h), which keeps providing auth, rate limiting, request validation, per-request timeout, the worker pool, Prometheus metrics and the `/openapi.json` endpoint. The model input uses base64 encoded images uniformly. The example below adds a densenet image classification server; the model itself comes from [how_to_add_new_model.md](../docs/how_to_add_new_model.md).
 
 ## Step 1: Define Your Own Output Data Type :monkey_face:
 
@@ -20,7 +20,7 @@ namespace classification {
 output shape, define it here first — the server spec and the response serializer both
 refer to it.
 
-## Step 2: Register An AiServerSpec Entry
+## Step 2: Register An CvServerSpec Entry
 
 Open the task header of the model's family (`src/factory/classification_task.h` for the example) and write the server create function as a spec-closure registration:
 
@@ -30,7 +30,7 @@ inline std::unique_ptr<BaseAiServer> create_densenet_cls_server(const std::strin
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
     server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
         using Output = jinq::models::io_define::classification::std_classification_output;
-        jinq::server::AiServerSpec<Output> spec;
+        jinq::server::CvServerSpec<Output> spec;
         spec.server_section = "DENSENET_CLASSIFICATION_SERVER";  // server TOML section
         spec.model_section = "DENSENET";                          // holds model_config_file_path
         spec.display_name = "Densenet classification";
@@ -39,13 +39,13 @@ inline std::unique_ptr<BaseAiServer> create_densenet_cls_server(const std::strin
         };
         spec.fill_response = &jinq::server::response::fill_classification;
         return std::unique_ptr<BaseAiServer>(
-            new jinq::server::AiModelServer<Output>(std::move(spec)));
+            new jinq::server::CvModelServer<Output>(std::move(spec)));
     });
     return server_factory.create(server_name);
 }
 ```
 
-That is the whole per-server footprint. `AiModelServer<Output>::init` reads the server
+That is the whole per-server footprint. `CvModelServer<Output>::init` reads the server
 section (worker pool, timeouts, auth, rate limit — see
 [about_model_server_configuration.md](../docs/about_model_server_configuration.md)),
 loads the model config referenced by the model section, creates `worker_nums` workers and

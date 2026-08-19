@@ -18,7 +18,7 @@
 #include "models/scene_segmentation/msocrnet.h"
 #include "models/scene_segmentation/pp_humanseg.h"
 #include "server/abstract_server.h"
-#include "server/generic_ai_server.h"
+#include "server/generic_cv_server.h"
 #include "server/response_serializers.h"
 
 namespace jinq {
@@ -71,7 +71,7 @@ inline std::unique_ptr<BaseAiServer> create_bisenetv2_server(const std::string& 
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
     server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
         using Output = jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
-        jinq::server::AiServerSpec<Output> spec;
+        jinq::server::CvServerSpec<Output> spec;
         spec.server_section = "BISENETV2_SERVER";
         spec.model_section = "BISENETV2";
         spec.display_name = "bisenetv2 segmentation";
@@ -80,7 +80,7 @@ inline std::unique_ptr<BaseAiServer> create_bisenetv2_server(const std::string& 
         };
         spec.fill_response = &jinq::server::response::fill_scene_segmentation;
         return std::unique_ptr<BaseAiServer>(
-            new jinq::server::AiModelServer<Output>(std::move(spec)));
+            new jinq::server::CvModelServer<Output>(std::move(spec)));
     });
     return server_factory.create(server_name);
 }
@@ -90,7 +90,7 @@ inline std::unique_ptr<BaseAiServer> create_pphuman_seg_server(const std::string
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
     server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
         using Output = jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
-        jinq::server::AiServerSpec<Output> spec;
+        jinq::server::CvServerSpec<Output> spec;
         spec.server_section = "PPHUMAN_SEG_SERVER";
         spec.model_section = "PPHUMAN_SEG";
         spec.display_name = "pphuman segmentation";
@@ -99,7 +99,7 @@ inline std::unique_ptr<BaseAiServer> create_pphuman_seg_server(const std::string
         };
         spec.fill_response = &jinq::server::response::fill_scene_segmentation;
         return std::unique_ptr<BaseAiServer>(
-            new jinq::server::AiModelServer<Output>(std::move(spec)));
+            new jinq::server::CvModelServer<Output>(std::move(spec)));
     });
     return server_factory.create(server_name);
 }
@@ -109,7 +109,7 @@ inline std::unique_ptr<BaseAiServer> create_hrnet_server(const std::string& serv
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
     server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
         using Output = jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
-        jinq::server::AiServerSpec<Output> spec;
+        jinq::server::CvServerSpec<Output> spec;
         spec.server_section = "HRNET_SERVER";
         spec.model_section = "HRNET";
         spec.display_name = "hrnet segmentation";
@@ -118,7 +118,7 @@ inline std::unique_ptr<BaseAiServer> create_hrnet_server(const std::string& serv
         };
         spec.fill_response = &jinq::server::response::fill_scene_segmentation;
         return std::unique_ptr<BaseAiServer>(
-            new jinq::server::AiModelServer<Output>(std::move(spec)));
+            new jinq::server::CvModelServer<Output>(std::move(spec)));
     });
     return server_factory.create(server_name);
 }

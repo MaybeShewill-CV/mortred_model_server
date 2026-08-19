@@ -1,15 +1,15 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
- * File: generic_ai_server.h
+ * File: generic_cv_server.h
  * Date: 2026-08-19
  *
  * Registry-driven generic model server: the single implementation that all
  * 22 former hand-written concrete servers delegate to. Per-model variation
- * lives in AiServerSpec (TOML sections, worker factory, response filler).
+ * lives in CvServerSpec (TOML sections, worker factory, response filler).
  ************************************************/
 
-#ifndef MORTRED_MODEL_SERVER_GENERIC_AI_SERVER_H
-#define MORTRED_MODEL_SERVER_GENERIC_AI_SERVER_H
+#ifndef MORTRED_MODEL_SERVER_GENERIC_CV_SERVER_H
+#define MORTRED_MODEL_SERVER_GENERIC_CV_SERVER_H
 
 #include <functional>
 #include <memory>
@@ -32,13 +32,13 @@ namespace server {
 using Base64Input = jinq::models::io_define::common_io::base64_input;
 
 template<typename MODEL_OUTPUT>
-using AiWorkerPtr = std::unique_ptr<jinq::models::BaseAiModel<Base64Input, MODEL_OUTPUT>>;
+using CvWorkerPtr = std::unique_ptr<jinq::models::BaseAiModel<Base64Input, MODEL_OUTPUT>>;
 
 template<typename MODEL_OUTPUT>
-using AiWorkerFactory = std::function<AiWorkerPtr<MODEL_OUTPUT>(const std::string&)>;
+using CvWorkerFactory = std::function<CvWorkerPtr<MODEL_OUTPUT>(const std::string&)>;
 
 template<typename MODEL_OUTPUT>
-using AiResponseFiller = void (*)(rapidjson::Document::AllocatorType&,
+using CvResponseFiller = void (*)(rapidjson::Document::AllocatorType&,
                                   rapidjson::Document&,
                                   const MODEL_OUTPUT&);
 
@@ -47,22 +47,22 @@ using AiResponseFiller = void (*)(rapidjson::Document::AllocatorType&,
  * that used to be a ~200-line Impl copy.
  */
 template<typename MODEL_OUTPUT>
-struct AiServerSpec {
+struct CvServerSpec {
     std::string server_section;        // e.g. "YOLOV8_DETECTION_SERVER"
     std::string model_section;         // e.g. "YOLOV8" (holds model_config_file_path)
     std::string display_name;          // e.g. "Yolov8 object detection"
-    AiWorkerFactory<MODEL_OUTPUT> make_worker;
-    AiResponseFiller<MODEL_OUTPUT> fill_response;
+    CvWorkerFactory<MODEL_OUTPUT> make_worker;
+    CvResponseFiller<MODEL_OUTPUT> fill_response;
 };
 
 template<typename MODEL_OUTPUT>
-class AiModelServer final : public BaseAiServer {
+class CvModelServer final : public BaseAiServer {
   public:
-    explicit AiModelServer(AiServerSpec<MODEL_OUTPUT> spec)
+    explicit CvModelServer(CvServerSpec<MODEL_OUTPUT> spec)
         : _m_spec(std::move(spec)), _m_impl(std::make_unique<Impl>(_m_spec)) {}
 
-    AiModelServer(const AiModelServer&) = delete;
-    AiModelServer& operator=(const AiModelServer&) = delete;
+    CvModelServer(const CvModelServer&) = delete;
+    CvModelServer& operator=(const CvModelServer&) = delete;
 
     jinq::common::StatusCode init(const toml::table& config) override {
         auto status = _m_impl->init(config);
@@ -82,9 +82,9 @@ class AiModelServer final : public BaseAiServer {
     }
 
   private:
-    class Impl : public BaseAiServerImpl<AiWorkerPtr<MODEL_OUTPUT>, MODEL_OUTPUT> {
+    class Impl : public BaseAiServerImpl<CvWorkerPtr<MODEL_OUTPUT>, MODEL_OUTPUT> {
       public:
-        explicit Impl(const AiServerSpec<MODEL_OUTPUT>& spec) : _m_spec(spec) {}
+        explicit Impl(const CvServerSpec<MODEL_OUTPUT>& spec) : _m_spec(spec) {}
 
         jinq::common::StatusCode init(const toml::table& config) override;
 
@@ -97,17 +97,17 @@ class AiModelServer final : public BaseAiServer {
         }
 
       private:
-        const AiServerSpec<MODEL_OUTPUT>& _m_spec;
+        const CvServerSpec<MODEL_OUTPUT>& _m_spec;
     };
 
-    AiServerSpec<MODEL_OUTPUT> _m_spec;
+    CvServerSpec<MODEL_OUTPUT> _m_spec;
     std::unique_ptr<Impl> _m_impl;
 };
 
 /*********** Public Func Sets **************/
 
 template<typename MODEL_OUTPUT>
-jinq::common::StatusCode AiModelServer<MODEL_OUTPUT>::Impl::init(const toml::table& config) {
+jinq::common::StatusCode CvModelServer<MODEL_OUTPUT>::Impl::init(const toml::table& config) {
     const toml::table* server_section_ptr = config[_m_spec.server_section].as_table();
     if (server_section_ptr == nullptr) {
         LOG(ERROR) << "Config section " << _m_spec.server_section << " missing or not a table";
@@ -177,4 +177,4 @@ jinq::common::StatusCode AiModelServer<MODEL_OUTPUT>::Impl::init(const toml::tab
 }  // namespace server
 }  // namespace jinq
 
-#endif  // MORTRED_MODEL_SERVER_GENERIC_AI_SERVER_H
+#endif  // MORTRED_MODEL_SERVER_GENERIC_CV_SERVER_H

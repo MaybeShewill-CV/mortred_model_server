@@ -1,6 +1,6 @@
 # 如何新增一个模型服务
 
-本框架中新增一个 server 自注册表化重构后不再需要编写约 200 行的模板类：每个服务只是一条 `AiServerSpec` 注册项（两个 TOML 段名、worker 工厂、响应序列化器），通过 creator 闭包注册。通用实现位于 [jinq::server::AiModelServer&lt;MODEL_OUTPUT&gt;](../src/server/generic_ai_server.h)，它构建在 [jinq::server::BaseAiServerImpl&lt;WORKER, MODEL_OUTPUT&gt;](../src/server/base_server_impl.h) 之上，后者继续提供鉴权、限流、请求校验、单请求超时、worker 池、Prometheus 指标与 `/openapi.json` 端点。模型输入统一使用 base64 编码图像。下面以新增 densenet 图像分类服务为例；模型本身参考[如何新增模型](../docs/how_to_add_new_model.zh-cn.md)。
+本框架中新增一个 server 自注册表化重构后不再需要编写约 200 行的模板类：每个服务只是一条 `CvServerSpec` 注册项（两个 TOML 段名、worker 工厂、响应序列化器），通过 creator 闭包注册。通用实现位于 [jinq::server::CvModelServer&lt;MODEL_OUTPUT&gt;](../src/server/generic_cv_server.h)，它构建在 [jinq::server::BaseAiServerImpl&lt;WORKER, MODEL_OUTPUT&gt;](../src/server/base_server_impl.h) 之上，后者继续提供鉴权、限流、请求校验、单请求超时、worker 池、Prometheus 指标与 `/openapi.json` 端点。模型输入统一使用 base64 编码图像。下面以新增 densenet 图像分类服务为例；模型本身参考[如何新增模型](../docs/how_to_add_new_model.zh-cn.md)。
 
 ## 第 1 步：定义输出数据类型 :monkey_face:
 
@@ -18,7 +18,7 @@ namespace classification {
 
 `class_id` 等于 `scores` 中最大分数的下标。如果你的任务需要新的输出结构，先在此定义——server spec 与响应序列化器都引用它。
 
-## 第 2 步：注册一条 AiServerSpec
+## 第 2 步：注册一条 CvServerSpec
 
 打开模型所属任务的工厂头文件（示例为 `src/factory/classification_task.h`），将 server 创建函数写为 spec 闭包注册：
 
@@ -28,7 +28,7 @@ inline std::unique_ptr<BaseAiServer> create_densenet_cls_server(const std::strin
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
     server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
         using Output = jinq::models::io_define::classification::std_classification_output;
-        jinq::server::AiServerSpec<Output> spec;
+        jinq::server::CvServerSpec<Output> spec;
         spec.server_section = "DENSENET_CLASSIFICATION_SERVER";  // server TOML 段
         spec.model_section = "DENSENET";                          // 含 model_config_file_path
         spec.display_name = "Densenet classification";
@@ -37,13 +37,13 @@ inline std::unique_ptr<BaseAiServer> create_densenet_cls_server(const std::strin
         };
         spec.fill_response = &jinq::server::response::fill_classification;
         return std::unique_ptr<BaseAiServer>(
-            new jinq::server::AiModelServer<Output>(std::move(spec)));
+            new jinq::server::CvModelServer<Output>(std::move(spec)));
     });
     return server_factory.create(server_name);
 }
 ```
 
-这就是新增一个服务的全部代码量。`AiModelServer<Output>::init` 会读取 server 段
+这就是新增一个服务的全部代码量。`CvModelServer<Output>::init` 会读取 server 段
 （worker 池、超时、鉴权、限流，见[服务配置说明](../docs/about_model_server_configuration.zh-cn.md)）、
 加载 model 段引用的模型配置、创建 `worker_nums` 个 worker 并装配 HTTP 服务——
 即此前 22 个手写类重复的那套流程。

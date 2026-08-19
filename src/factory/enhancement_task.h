@@ -17,7 +17,7 @@
 #include "models/enhancement/enlightengan.h"
 #include "models/enhancement/real_esrgan.h"
 #include "server/abstract_server.h"
-#include "server/generic_ai_server.h"
+#include "server/generic_cv_server.h"
 #include "server/response_serializers.h"
 
 namespace jinq {
@@ -45,7 +45,7 @@ inline std::unique_ptr<BaseAiServer> create_enlightengan_server(const std::strin
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
     server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
         using Output = jinq::models::io_define::enhancement::std_enhancement_output;
-        jinq::server::AiServerSpec<Output> spec;
+        jinq::server::CvServerSpec<Output> spec;
         spec.server_section = "ENLIGHTEN_GAN_SERVER";
         spec.model_section = "ENLIGHTEN_GAN";
         spec.display_name = "enlighten gan";
@@ -54,7 +54,7 @@ inline std::unique_ptr<BaseAiServer> create_enlightengan_server(const std::strin
         };
         spec.fill_response = &jinq::server::response::fill_enhancement;
         return std::unique_ptr<BaseAiServer>(
-            new jinq::server::AiModelServer<Output>(std::move(spec)));
+            new jinq::server::CvModelServer<Output>(std::move(spec)));
     });
     return server_factory.create(server_name);
 }
@@ -72,7 +72,7 @@ inline std::unique_ptr<BaseAiServer> create_attentivegan_derain_server(const std
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
     server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
         using Output = jinq::models::io_define::enhancement::std_enhancement_output;
-        jinq::server::AiServerSpec<Output> spec;
+        jinq::server::CvServerSpec<Output> spec;
         spec.server_section = "ATTENTIVE_GAN_DERAIN_SERVER";
         spec.model_section = "ATTENTIVE_GAN_DERAIN";
         spec.display_name = "attentive gan derain";
@@ -81,7 +81,7 @@ inline std::unique_ptr<BaseAiServer> create_attentivegan_derain_server(const std
         };
         spec.fill_response = &jinq::server::response::fill_enhancement;
         return std::unique_ptr<BaseAiServer>(
-            new jinq::server::AiModelServer<Output>(std::move(spec)));
+            new jinq::server::CvModelServer<Output>(std::move(spec)));
     });
     return server_factory.create(server_name);
 }
@@ -99,7 +99,7 @@ inline std::unique_ptr<BaseAiServer> create_realesrgan_server(const std::string&
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
     server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
         using Output = jinq::models::io_define::enhancement::std_enhancement_output;
-        jinq::server::AiServerSpec<Output> spec;
+        jinq::server::CvServerSpec<Output> spec;
         spec.server_section = "REAL_ESRGAN_SERVER";
         spec.model_section = "REAL_ESRGAN";
         spec.display_name = "real esr-gan";
@@ -108,7 +108,7 @@ inline std::unique_ptr<BaseAiServer> create_realesrgan_server(const std::string&
         };
         spec.fill_response = &jinq::server::response::fill_enhancement;
         return std::unique_ptr<BaseAiServer>(
-            new jinq::server::AiModelServer<Output>(std::move(spec)));
+            new jinq::server::CvModelServer<Output>(std::move(spec)));
     });
     return server_factory.create(server_name);
 }

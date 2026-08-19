@@ -15,7 +15,7 @@
 #include "models/base_model.h"
 #include "models/feature_point/superpoint.h"
 #include "server/abstract_server.h"
-#include "server/generic_ai_server.h"
+#include "server/generic_cv_server.h"
 #include "server/response_serializers.h"
 
 namespace jinq {
@@ -41,7 +41,7 @@ inline std::unique_ptr<BaseAiServer> create_superpoint_fp_server(const std::stri
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
     server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
         using Output = jinq::models::io_define::feature_point::std_feature_point_output;
-        jinq::server::AiServerSpec<Output> spec;
+        jinq::server::CvServerSpec<Output> spec;
         spec.server_section = "SUPERPOINT_FP_SERVER";
         spec.model_section = "SUPERPOINT";
         spec.display_name = "Superpoint feature point detection";
@@ -50,7 +50,7 @@ inline std::unique_ptr<BaseAiServer> create_superpoint_fp_server(const std::stri
         };
         spec.fill_response = &jinq::server::response::fill_feature_points;
         return std::unique_ptr<BaseAiServer>(
-            new jinq::server::AiModelServer<Output>(std::move(spec)));
+            new jinq::server::CvModelServer<Output>(std::move(spec)));
     });
     return server_factory.create(server_name);
 }
