@@ -125,7 +125,7 @@ jobs:
 
       - name: Upload ctest log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ctest-log-${{ matrix.compiler }}
           path: build-ci/Testing/Temporary/LastTest.log
@@ -347,7 +347,7 @@ jobs:
 
       - name: Upload clang-tidy report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: clang-tidy-report
           path: clang-tidy-report.txt
