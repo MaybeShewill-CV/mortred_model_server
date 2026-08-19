@@ -31,25 +31,28 @@ using jinq::models::segment_anything::SamPredictor;
 // create sam prompt predictor model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_sam_predictor(const std::string& model_name) {
-    auto& model_factory = ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance();
-    model_factory.template register_type<SamPredictor<INPUT, OUTPUT> >(model_name);
-    return model_factory.create(model_name);
+    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
+    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    (void)model_name;
+    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new SamPredictor<INPUT, OUTPUT>());
 }
 
 // create sam auto mask generator model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_sam_auto_mask_generator(const std::string& model_name) {
-    auto& model_factory = ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance();
-    model_factory.template register_type<SamAutoMaskGenerator<INPUT, OUTPUT> >(model_name);
-    return model_factory.create(model_name);
+    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
+    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    (void)model_name;
+    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new SamAutoMaskGenerator<INPUT, OUTPUT>());
 }
 
 // create fast sam segmentation model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_fast_sam_segmentor(const std::string& model_name) {
-    auto& model_factory = ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance();
-    model_factory.template register_type<FastSamSegmentor<INPUT, OUTPUT> >(model_name);
-    return model_factory.create(model_name);
+    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
+    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    (void)model_name;
+    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new FastSamSegmentor<INPUT, OUTPUT>());
 }
 
 }  // namespace segment_anything

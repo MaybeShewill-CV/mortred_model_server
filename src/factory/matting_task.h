@@ -33,17 +33,19 @@ using jinq::models::matting::PPMatting;
 // create modnet matting model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_modnet_segmentor(const std::string& segmentor_name) {
-    auto& model_factory = ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance();
-    model_factory.template register_type<ModNetMatting<INPUT, OUTPUT> >(segmentor_name);
-    return model_factory.create(segmentor_name);
+    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
+    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    (void)segmentor_name;
+    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new ModNetMatting<INPUT, OUTPUT>());
 }
 
 // create pp human matting model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_ppmatting_segmentor(const std::string& segmentor_name) {
-    auto& model_factory = ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance();
-    model_factory.template register_type<PPMatting<INPUT, OUTPUT> >(segmentor_name);
-    return model_factory.create(segmentor_name);
+    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
+    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    (void)segmentor_name;
+    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new PPMatting<INPUT, OUTPUT>());
 }
 
 // create pp matting server

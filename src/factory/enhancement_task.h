@@ -35,9 +35,10 @@ using jinq::models::enhancement::RealEsrGan;
 // create enlighten-gan low light enhancement model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_enlightengan_enhancementor(const std::string& enhancementor_name) {
-    auto& model_factory = ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance();
-    model_factory.template register_type<EnlightenGan<INPUT, OUTPUT> >(enhancementor_name);
-    return model_factory.create(enhancementor_name);
+    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
+    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    (void)enhancementor_name;
+    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new EnlightenGan<INPUT, OUTPUT>());
 }
 
 // create enlighten gan enhancement server
@@ -62,9 +63,10 @@ inline std::unique_ptr<BaseAiServer> create_enlightengan_server(const std::strin
 // create attentive gan derain model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_attentivegan_enhancementor(const std::string& enhancementor_name) {
-    auto& model_factory = ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance();
-    model_factory.template register_type<AttentiveGanDerain<INPUT, OUTPUT> >(enhancementor_name);
-    return model_factory.create(enhancementor_name);
+    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
+    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    (void)enhancementor_name;
+    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new AttentiveGanDerain<INPUT, OUTPUT>());
 }
 
 // create attentive gan derain server
@@ -89,9 +91,10 @@ inline std::unique_ptr<BaseAiServer> create_attentivegan_derain_server(const std
 // create real esrgan super resolution model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_realesrgan_enhancementor(const std::string& enhancementor_name) {
-    auto& model_factory = ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance();
-    model_factory.template register_type<RealEsrGan<INPUT, OUTPUT> >(enhancementor_name);
-    return model_factory.create(enhancementor_name);
+    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
+    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    (void)enhancementor_name;
+    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new RealEsrGan<INPUT, OUTPUT>());
 }
 
 // create real esrgan super resolution server

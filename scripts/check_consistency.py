@@ -372,6 +372,19 @@ def check_trt_engine_manifest() -> list[str]:
     return errors
 
 
+def check_factory_register_type_banned() -> list[str]:
+    """src/factory/*_task.h 禁止 register_type：模型 create 一律直接构造，
+    服务 create 用 register_creator 闭包（消除"每次创建写全局注册表"反模式）。"""
+    errors: list[str] = []
+    for header in sorted((ROOT / "src" / "factory").glob("*_task.h")):
+        for i, line in enumerate(header.read_text(encoding="utf-8").splitlines(), 1):
+            if "register_type" in line:
+                errors.append(
+                    f"{header.relative_to(ROOT)}:{i}: register_type is banned in task "
+                    f"headers (models construct directly; servers use register_creator)")
+    return errors
+
+
 def main() -> int:
     args = parse_args()
     errors: list[str] = []
@@ -383,6 +396,7 @@ def main() -> int:
     errors.extend(check_server_config_structure())
     errors.extend(check_server_exe_mapping())
     errors.extend(check_trt_engine_manifest())
+    errors.extend(check_factory_register_type_banned())
     errors.extend(check_demo_client_health())
     if args.check_stale_binaries:
         errors.extend(check_stale_binaries())

@@ -33,17 +33,19 @@ using jinq::models::mono_depth_estimation::Metric3D;
 // create metric3d mono depth estimation model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_metric3d_estimator(const std::string& estimator_name) {
-    auto& model_factory = ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance();
-    model_factory.template register_type<Metric3D<INPUT, OUTPUT> >(estimator_name);
-    return model_factory.create(estimator_name);
+    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
+    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    (void)estimator_name;
+    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new Metric3D<INPUT, OUTPUT>());
 }
 
 // create depth anything mono depth estimation model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_depth_anything_estimator(const std::string& estimator_name) {
-    auto& model_factory = ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance();
-    model_factory.template register_type<DepthAnything<INPUT, OUTPUT> >(estimator_name);
-    return model_factory.create(estimator_name);
+    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
+    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    (void)estimator_name;
+    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new DepthAnything<INPUT, OUTPUT>());
 }
 
 // create metric3d depth estimation server

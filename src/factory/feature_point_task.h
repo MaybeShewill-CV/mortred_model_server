@@ -31,9 +31,10 @@ using jinq::models::feature_point::SuperPoint;
 // create superpoint feature point extractor model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_superpoint_extractor(const std::string& extractor_name) {
-    auto& model_factory = ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance();
-    model_factory.template register_type<SuperPoint<INPUT, OUTPUT> >(extractor_name);
-    return model_factory.create(extractor_name);
+    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
+    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    (void)extractor_name;
+    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new SuperPoint<INPUT, OUTPUT>());
 }
 
 // create superpoint feature point server

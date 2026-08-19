@@ -37,9 +37,10 @@ using jinq::models::classification::ResNet;
 // create mobilenetv2 classification model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_mobilenetv2_classifier(const std::string& classifier_name) {
-    auto& model_factory = ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance();
-    model_factory.template register_type<MobileNetv2<INPUT, OUTPUT> >(classifier_name);
-    return model_factory.create(classifier_name);
+    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
+    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    (void)classifier_name;
+    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new MobileNetv2<INPUT, OUTPUT>());
 }
 
 // create mobilenetv2 classification server
@@ -64,9 +65,10 @@ inline std::unique_ptr<BaseAiServer> create_mobilenetv2_cls_server(const std::st
 // create resnet classification model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_resnet_classifier(const std::string& classifier_name) {
-    auto& model_factory = ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance();
-    model_factory.template register_type<ResNet<INPUT, OUTPUT> >(classifier_name);
-    return model_factory.create(classifier_name);
+    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
+    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    (void)classifier_name;
+    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new ResNet<INPUT, OUTPUT>());
 }
 
 // create resnet classification server
@@ -91,9 +93,10 @@ inline std::unique_ptr<BaseAiServer> create_resnet_cls_server(const std::string&
 // create densenet classification model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_densenet_classifier(const std::string& classifier_name) {
-    auto& model_factory = ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance();
-    model_factory.template register_type<DenseNet<INPUT, OUTPUT> >(classifier_name);
-    return model_factory.create(classifier_name);
+    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
+    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    (void)classifier_name;
+    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new DenseNet<INPUT, OUTPUT>());
 }
 
 // create densenet classification server
@@ -118,9 +121,10 @@ inline std::unique_ptr<BaseAiServer> create_densenet_cls_server(const std::strin
 // create dinov2 classification model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_dinov2_classifier(const std::string& classifier_name) {
-    auto& model_factory = ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance();
-    model_factory.template register_type<Dinov2<INPUT, OUTPUT> >(classifier_name);
-    return model_factory.create(classifier_name);
+    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
+    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    (void)classifier_name;
+    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new Dinov2<INPUT, OUTPUT>());
 }
 
 }  // namespace classification

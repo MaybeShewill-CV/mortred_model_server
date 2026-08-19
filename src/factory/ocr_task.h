@@ -31,9 +31,10 @@ using jinq::models::ocr::DBTextDetector;
 // create db text detector model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_dbtext_detector(const std::string& detector_name) {
-    auto& model_factory = ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance();
-    model_factory.template register_type<DBTextDetector<INPUT, OUTPUT> >(detector_name);
-    return model_factory.create(detector_name);
+    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
+    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    (void)detector_name;
+    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new DBTextDetector<INPUT, OUTPUT>());
 }
 
 // create dbnet text region detection server
