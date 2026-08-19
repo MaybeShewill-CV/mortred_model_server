@@ -4,9 +4,31 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      # 勾选后才会运行 clang 编译行与 clang-tidy job（依赖构建约多 30-60 分钟）
+      full-matrix:
+        description: 'Include clang compiler row and clang-tidy job'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
-  VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+  # vcpkg 版本单一来源；升级时只需改这里
+  VCPKG_TAG: 2026.01.16
+  # vcpkg 克隆到 runner 临时目录（workspace 之外），保证构建后仓库工作区干净
+  VCPKG_ROOT: ${{ runner.temp }}/vcpkg
+  # 带 pinned builtin-baseline 的 manifest 副本（不改动仓库内 vcpkg.json）
+  VCPKG_MANIFEST_DIR: ${{ runner.temp }}/vcpkg-manifest
+  # 依赖安装目录同样放在 workspace 之外
+  VCPKG_INSTALLED_DIR: ${{ runner.temp }}/vcpkg-installed
   VCPKG_TARGET_TRIPLET: x64-linux
   # CI 覆盖默认的 _bin/_lib，把产物收进构建目录，避免污染仓库根目录
   MORTRED_CI_BIN_DIR: ${{ github.workspace }}/build-ci/bin
@@ -19,6 +41,9 @@ jobs:
   tests:
     name: tests (${{ matrix.compiler }})
     runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    # 日常 PR 只跑 gcc 行，省一半依赖构建；clang 行仅在手动触发 full-matrix 时运行
+    if: ${{ matrix.compiler == 'gcc' || (github.event_name == 'workflow_dispatch' && github.event.inputs['full-matrix'] == 'true') }}
     strategy:
       fail-fast: false
       matrix:
@@ -36,33 +61,38 @@ jobs:
             echo "CXX=clang++" >> "$GITHUB_ENV"
           fi
 
-      # 缓存 vcpkg 仓库（含 installed/ 依赖产物）与 ccache；
-      # key 同时包含 vcpkg 版本、编译器与 vcpkg.json 内容，任何变更都会失效。
+      # 缓存 vcpkg 仓库、已安装的依赖产物与 ccache；
+      # key 包含 vcpkg 版本、编译器与 vcpkg.json 内容，任何变更都会失效。
+      # gcc 与 quality-gates 共享同一 key，避免重复构建同一套依赖。
       - name: Cache vcpkg and ccache
         id: cache-deps
         uses: actions/cache@v4
         with:
           path: |
             ${{ env.VCPKG_ROOT }}
+            ${{ env.VCPKG_INSTALLED_DIR }}
             ~/.cache/ccache
-          key: vcpkg-2026.01.16-${{ matrix.compiler }}-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-${{ env.VCPKG_TAG }}-${{ matrix.compiler }}-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
-            vcpkg-2026.01.16-${{ matrix.compiler }}-
+            vcpkg-${{ env.VCPKG_TAG }}-${{ matrix.compiler }}-
 
-      # vcpkg 不支持浅克隆，且 builtin-baseline 必须能由本地 checkout 解析，
-      # 因此固定 checkout 发布 tag（完整克隆），并在下一步把 baseline 钉到该 tag 的 HEAD。
+      # vcpkg 不支持浅克隆，因此固定 checkout 发布 tag（完整克隆）。
       - name: Checkout vcpkg (pinned release tag)
         if: steps.cache-deps.outputs.cache-hit != 'true'
         run: |
           git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
-          git -C "$VCPKG_ROOT" checkout --detach 2026.01.16
+          git -C "$VCPKG_ROOT" checkout --detach "$VCPKG_TAG"
 
-      - name: Bootstrap vcpkg and pin builtin-baseline
+      # 在 workspace 之外准备带 pinned builtin-baseline 的 manifest 副本，
+      # 仓库内 vcpkg.json 保持不动：CI 构建始终可复现，且不会弄脏工作区。
+      # 若希望本地构建也可复现，在有网机器上执行一次
+      # `vcpkg x-update-baseline --add-initial-baseline` 并提交结果即可。
+      - name: Bootstrap vcpkg and prepare pinned manifest
         run: |
           "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
           baseline="$(git -C "$VCPKG_ROOT" rev-parse HEAD)"
-          jq --arg baseline "$baseline" '.builtin-baseline = $baseline' vcpkg.json > vcpkg.json.tmp
-          mv vcpkg.json.tmp vcpkg.json
+          mkdir -p "$VCPKG_MANIFEST_DIR"
+          jq --arg baseline "$baseline" '.builtin-baseline = $baseline' vcpkg.json > "$VCPKG_MANIFEST_DIR/vcpkg.json"
           echo "Pinned vcpkg builtin-baseline to: $baseline"
 
       - name: Configure (vcpkg toolchain, tests-only)
@@ -71,26 +101,27 @@ jobs:
           -DMORTRED_BUILD_FULL=OFF
           -DMORTRED_BIN_OUTPUT_DIR=$MORTRED_CI_BIN_DIR
           -DMORTRED_LIB_OUTPUT_DIR=$MORTRED_CI_LIB_DIR
+          -DVCPKG_MANIFEST_DIR=$VCPKG_MANIFEST_DIR
+          -DVCPKG_INSTALLED_DIR=$VCPKG_INSTALLED_DIR
+          -DVCPKG_MANIFEST_MODE=ON
           -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
+      # check 目标会先构建全部测试再运行 ctest；CTEST_OUTPUT_ON_FAILURE=1 让失败输出完整。
+      # 一次构建 + 一次测试，避免重复执行。
       - name: Build and run unit tests
         run: |
-          LD_LIBRARY_PATH="$MORTRED_CI_LIB_DIR" cmake --build build-ci --target check -j2
+          LD_LIBRARY_PATH="$MORTRED_CI_LIB_DIR" CTEST_OUTPUT_ON_FAILURE=1 cmake --build build-ci --target check -j"$(nproc)"
 
-      - name: Run ctest with failure output
+      - name: Verify git status is clean after build
         run: |
-          LD_LIBRARY_PATH="$MORTRED_CI_LIB_DIR" ctest --test-dir build-ci --output-on-failure
-
-        - name: Verify git status is clean after build
-          run: |
-            if [ -n "$(git status --porcelain)" ]; then
-              echo "Repository is not clean after build:"
-              git status --porcelain
-              exit 1
-            fi
-            echo "Repository is clean after build."
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Repository is not clean after build:"
+            git status --porcelain
+            exit 1
+          fi
+          echo "Repository is clean after build."
 
       - name: Upload ctest log
         if: always()
@@ -106,6 +137,7 @@ jobs:
   quality-gates:
     name: quality gates
     runs-on: ubuntu-22.04
+    timeout-minutes: 90
     needs: tests
     steps:
       - uses: actions/checkout@v4
@@ -123,23 +155,25 @@ jobs:
         with:
           path: |
             ${{ env.VCPKG_ROOT }}
+            ${{ env.VCPKG_INSTALLED_DIR }}
             ~/.cache/ccache
-          key: vcpkg-2026.01.16-gcc-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-${{ env.VCPKG_TAG }}-gcc-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
-            vcpkg-2026.01.16-gcc-
+            vcpkg-${{ env.VCPKG_TAG }}-gcc-
 
       - name: Checkout vcpkg (pinned release tag)
         if: steps.cache-deps.outputs.cache-hit != 'true'
         run: |
           git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
-          git -C "$VCPKG_ROOT" checkout --detach 2026.01.16
+          git -C "$VCPKG_ROOT" checkout --detach "$VCPKG_TAG"
 
-      - name: Bootstrap vcpkg and pin builtin-baseline
+      - name: Bootstrap vcpkg and prepare pinned manifest
         run: |
           "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
           baseline="$(git -C "$VCPKG_ROOT" rev-parse HEAD)"
-          jq --arg baseline "$baseline" '.builtin-baseline = $baseline' vcpkg.json > vcpkg.json.tmp
-          mv vcpkg.json.tmp vcpkg.json
+          mkdir -p "$VCPKG_MANIFEST_DIR"
+          jq --arg baseline "$baseline" '.builtin-baseline = $baseline' vcpkg.json > "$VCPKG_MANIFEST_DIR/vcpkg.json"
+          echo "Pinned vcpkg builtin-baseline to: $baseline"
 
       - name: Configure (tests-only, warnings as errors)
         run: >
@@ -148,22 +182,25 @@ jobs:
           -DMORTRED_ENABLE_WERROR=ON
           -DMORTRED_BIN_OUTPUT_DIR=${{ github.workspace }}/build-gate/bin
           -DMORTRED_LIB_OUTPUT_DIR=${{ github.workspace }}/build-gate/lib
+          -DVCPKG_MANIFEST_DIR=$VCPKG_MANIFEST_DIR
+          -DVCPKG_INSTALLED_DIR=$VCPKG_INSTALLED_DIR
+          -DVCPKG_MANIFEST_MODE=ON
           -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build tests with -Wall -Wextra -Werror
         run: |
-          LD_LIBRARY_PATH="${{ github.workspace }}/build-gate/lib" cmake --build build-gate --target check -j2
+          LD_LIBRARY_PATH="${{ github.workspace }}/build-gate/lib" CTEST_OUTPUT_ON_FAILURE=1 cmake --build build-gate --target check -j"$(nproc)"
 
-        - name: Verify git status is clean after build
-          run: |
-            if [ -n "$(git status --porcelain)" ]; then
-              echo "Repository is not clean after build:"
-              git status --porcelain
-              exit 1
-            fi
-            echo "Repository is clean after build."
+      - name: Verify git status is clean after build
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Repository is not clean after build:"
+            git status --porcelain
+            exit 1
+          fi
+          echo "Repository is clean after build."
 
       - name: Check formatting of changed C/C++ files
         run: |
@@ -220,43 +257,59 @@ jobs:
             check_file "$file"
           done
 
+      - name: Repository consistency checks
+        run: |
+          set -euo pipefail
+          python3 scripts/check_consistency.py
+          python3 scripts/gen_openapi.py --check
+          CHECK_ALLOW_GENERATED=1 ./scripts/check_repo_clean.sh
+          python3 -m py_compile scripts/server/test_server.py scripts/server/locust_performance.py
+          python3 scripts/server/test_server.py --list
+
   # ---------------------------------------------------------------------------
   # Job C: clang-tidy（信息性，不阻塞合并；产出报告 artifact）
+  # 仅在手动触发 full-matrix 时运行，避免每次 PR 都做一次 clang 依赖构建
   # ---------------------------------------------------------------------------
   clang-tidy:
     name: clang-tidy (informational)
     runs-on: ubuntu-22.04
+    timeout-minutes: 90
     needs: tests
     continue-on-error: true
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs['full-matrix'] == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Install tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clang clang-tidy jq
+          sudo apt-get install -y --no-install-recommends clang clang-tidy clang-tools jq
 
       - name: Cache vcpkg
         id: cache-deps
         uses: actions/cache@v4
         with:
-          path: ${{ env.VCPKG_ROOT }}
-          key: vcpkg-2026.01.16-clang-${{ hashFiles('vcpkg.json') }}
+          path: |
+            ${{ env.VCPKG_ROOT }}
+            ${{ env.VCPKG_INSTALLED_DIR }}
+            ~/.cache/ccache
+          key: vcpkg-${{ env.VCPKG_TAG }}-clang-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
-            vcpkg-2026.01.16-clang-
+            vcpkg-${{ env.VCPKG_TAG }}-clang-
 
       - name: Checkout vcpkg (pinned release tag)
         if: steps.cache-deps.outputs.cache-hit != 'true'
         run: |
           git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
-          git -C "$VCPKG_ROOT" checkout --detach 2026.01.16
+          git -C "$VCPKG_ROOT" checkout --detach "$VCPKG_TAG"
 
-      - name: Bootstrap vcpkg and pin builtin-baseline
+      - name: Bootstrap vcpkg and prepare pinned manifest
         run: |
           "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
           baseline="$(git -C "$VCPKG_ROOT" rev-parse HEAD)"
-          jq --arg baseline "$baseline" '.builtin-baseline = $baseline' vcpkg.json > vcpkg.json.tmp
-          mv vcpkg.json.tmp vcpkg.json
+          mkdir -p "$VCPKG_MANIFEST_DIR"
+          jq --arg baseline "$baseline" '.builtin-baseline = $baseline' vcpkg.json > "$VCPKG_MANIFEST_DIR/vcpkg.json"
+          echo "Pinned vcpkg builtin-baseline to: $baseline"
 
       - name: Configure (tests-only, export compile commands)
         run: >
@@ -264,6 +317,9 @@ jobs:
           -DMORTRED_BUILD_FULL=OFF
           -DMORTRED_BIN_OUTPUT_DIR=${{ github.workspace }}/build-tidy/bin
           -DMORTRED_LIB_OUTPUT_DIR=${{ github.workspace }}/build-tidy/lib
+          -DVCPKG_MANIFEST_DIR=$VCPKG_MANIFEST_DIR
+          -DVCPKG_INSTALLED_DIR=$VCPKG_INSTALLED_DIR
+          -DVCPKG_MANIFEST_MODE=ON
           -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           -DCMAKE_C_COMPILER=clang
           -DCMAKE_CXX_COMPILER=clang++
@@ -271,7 +327,7 @@ jobs:
 
       - name: Build all test targets
         run: |
-          LD_LIBRARY_PATH="${{ github.workspace }}/build-tidy/lib" cmake --build build-tidy --target check -j2
+          LD_LIBRARY_PATH="${{ github.workspace }}/build-tidy/lib" CTEST_OUTPUT_ON_FAILURE=1 cmake --build build-tidy --target check -j"$(nproc)"
 
       - name: Run clang-tidy (bugprone + performance)
         run: |
@@ -280,12 +336,12 @@ jobs:
           elif command -v run-clang-tidy >/dev/null 2>&1; then
             tidy_cmd="run-clang-tidy"
           else
-            echo "run-clang-tidy not found" > clang-tidy-report.txt
-            cat clang-tidy-report.txt
-            exit 0
+            # 工具缺失时显式失败（continue-on-error 下不会阻塞合并，但会报红）
+            echo "run-clang-tidy not found (install the clang-tools package)" >&2
+            exit 1
           fi
           $tidy_cmd -p build-tidy -checks='-*,bugprone-*,performance-*' \
-            "${{ github.workspace }}/src/common" "${{ github.workspace }}/test" \
+            "${{ github.workspace }}/src/common" "${{ github.workspace }}/src/server" "${{ github.workspace }}/test" \
             > clang-tidy-report.txt 2>&1 || true
           cat clang-tidy-report.txt
 

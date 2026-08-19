@@ -1,0 +1,56 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # 每周一 03:00 UTC
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [cpp]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-and-quality
+
+      # 用系统包提供依赖（README Path A2），避免与主 CI 的 vcpkg 缓存/时间竞争；
+      # 分析范围与 tests-only 构建一致（common + test）。
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libopencv-dev libgoogle-glog-dev libeigen3-dev
+          cd /usr/src/googletest && sudo cmake . && sudo make -j"$(nproc)" && sudo make install
+
+      - name: Configure (tests-only)
+        run: cmake -B build-codeql -DMORTRED_BUILD_FULL=OFF
+
+      # init 之后执行构建即被 CodeQL 追踪（C++ 必须走真实编译）
+      - name: Build
+        run: cmake --build build-codeql --target check -j"$(nproc)"
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

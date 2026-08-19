@@ -1,0 +1,20 @@
+version: 2
+updates:
+  # 自动升级 GitHub Actions 版本（升级后建议按 commit SHA 锁定）
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+    open-pull-requests-limit: 5
+
+  # 自动更新 vcpkg 清单（含 builtin-baseline）。
+  # 注意：升级 baseline 后需同步检查 ci.yml 中的 VCPKG_TAG。
+  - package-ecosystem: "vcpkg"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+    open-pull-requests-limit: 5
