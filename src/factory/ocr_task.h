@@ -15,7 +15,8 @@
 #include "models/base_model.h"
 #include "models/ocr/db_text_detector.h"
 #include "server/abstract_server.h"
-#include "server/ocr/dbnet_server.h"
+#include "server/generic_ai_server.h"
+#include "server/response_serializers.h"
 
 namespace jinq {
 namespace factory {
@@ -26,7 +27,6 @@ using jinq::server::BaseAiServer;
 namespace ocr {
 
 using jinq::models::ocr::DBTextDetector;
-using jinq::server::ocr::DBNetServer;
 
 // create db text detector model
 template<typename INPUT, typename OUTPUT>
@@ -39,7 +39,19 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_dbtext_detector(const std::s
 // create dbnet text region detection server
 inline std::unique_ptr<BaseAiServer> create_dbtext_detection_server(const std::string& server_name) {
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_type<DBNetServer>(server_name);
+    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
+        using Output = jinq::models::io_define::ocr::std_text_regions_output;
+        jinq::server::AiServerSpec<Output> spec;
+        spec.server_section = "DBNET_SERVER";
+        spec.model_section = "DBNET";
+        spec.display_name = "dbnet";
+        spec.make_worker = [](const std::string& name) {
+            return create_dbtext_detector<jinq::server::Base64Input, Output>(name);
+        };
+        spec.fill_response = &jinq::server::response::fill_text_regions;
+        return std::unique_ptr<BaseAiServer>(
+            new jinq::server::AiModelServer<Output>(std::move(spec)));
+    });
     return server_factory.create(server_name);
 }
 

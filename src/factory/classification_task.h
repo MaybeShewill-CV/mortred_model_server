@@ -18,9 +18,8 @@
 #include "models/classification/mobilenetv2.h"
 #include "models/classification/resnet.h"
 #include "server/abstract_server.h"
-#include "server/classification/densenet_server.h"
-#include "server/classification/mobilenetv2_server.h"
-#include "server/classification/resnet_server.h"
+#include "server/generic_ai_server.h"
+#include "server/response_serializers.h"
 
 namespace jinq {
 namespace factory {
@@ -34,9 +33,6 @@ using jinq::models::classification::DenseNet;
 using jinq::models::classification::Dinov2;
 using jinq::models::classification::MobileNetv2;
 using jinq::models::classification::ResNet;
-using jinq::server::classification::DenseNetServer;
-using jinq::server::classification::MobileNetv2Server;
-using jinq::server::classification::ResNetServer;
 
 // create mobilenetv2 classification model
 template<typename INPUT, typename OUTPUT>
@@ -49,7 +45,19 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_mobilenetv2_classifier(const
 // create mobilenetv2 classification server
 inline std::unique_ptr<BaseAiServer> create_mobilenetv2_cls_server(const std::string& server_name) {
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_type<MobileNetv2Server>(server_name);
+    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
+        using Output = jinq::models::io_define::classification::std_classification_output;
+        jinq::server::AiServerSpec<Output> spec;
+        spec.server_section = "MOBILENETV2_CLASSIFICATION_SERVER";
+        spec.model_section = "MOBILENETV2";
+        spec.display_name = "Mobilenetv2 classification";
+        spec.make_worker = [](const std::string& name) {
+            return create_mobilenetv2_classifier<jinq::server::Base64Input, Output>(name);
+        };
+        spec.fill_response = &jinq::server::response::fill_classification;
+        return std::unique_ptr<BaseAiServer>(
+            new jinq::server::AiModelServer<Output>(std::move(spec)));
+    });
     return server_factory.create(server_name);
 }
 
@@ -64,7 +72,19 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_resnet_classifier(const std:
 // create resnet classification server
 inline std::unique_ptr<BaseAiServer> create_resnet_cls_server(const std::string& server_name) {
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_type<ResNetServer>(server_name);
+    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
+        using Output = jinq::models::io_define::classification::std_classification_output;
+        jinq::server::AiServerSpec<Output> spec;
+        spec.server_section = "RESNET_CLASSIFICATION_SERVER";
+        spec.model_section = "RESNET";
+        spec.display_name = "Resnet classification";
+        spec.make_worker = [](const std::string& name) {
+            return create_resnet_classifier<jinq::server::Base64Input, Output>(name);
+        };
+        spec.fill_response = &jinq::server::response::fill_classification;
+        return std::unique_ptr<BaseAiServer>(
+            new jinq::server::AiModelServer<Output>(std::move(spec)));
+    });
     return server_factory.create(server_name);
 }
 
@@ -79,7 +99,19 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_densenet_classifier(const st
 // create densenet classification server
 inline std::unique_ptr<BaseAiServer> create_densenet_cls_server(const std::string& server_name) {
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_type<DenseNetServer>(server_name);
+    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
+        using Output = jinq::models::io_define::classification::std_classification_output;
+        jinq::server::AiServerSpec<Output> spec;
+        spec.server_section = "DENSENET_CLASSIFICATION_SERVER";
+        spec.model_section = "DENSENET";
+        spec.display_name = "densenet classification";
+        spec.make_worker = [](const std::string& name) {
+            return create_densenet_classifier<jinq::server::Base64Input, Output>(name);
+        };
+        spec.fill_response = &jinq::server::response::fill_classification;
+        return std::unique_ptr<BaseAiServer>(
+            new jinq::server::AiModelServer<Output>(std::move(spec)));
+    });
     return server_factory.create(server_name);
 }
 

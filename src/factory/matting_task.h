@@ -16,8 +16,8 @@
 #include "models/matting/modnet_matting.h"
 #include "models/matting/pp_matting.h"
 #include "server/abstract_server.h"
-#include "server/matting/modnet_server.h"
-#include "server/matting/pp_matting_server.h"
+#include "server/generic_ai_server.h"
+#include "server/response_serializers.h"
 
 namespace jinq {
 namespace factory {
@@ -29,8 +29,6 @@ namespace matting {
 
 using jinq::models::matting::ModNetMatting;
 using jinq::models::matting::PPMatting;
-using jinq::server::matting::ModNetServer;
-using jinq::server::matting::PPMattingServer;
 
 // create modnet matting model
 template<typename INPUT, typename OUTPUT>
@@ -51,14 +49,38 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_ppmatting_segmentor(const st
 // create pp matting server
 inline std::unique_ptr<BaseAiServer> create_pp_matting_server(const std::string& server_name) {
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_type<PPMattingServer>(server_name);
+    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
+        using Output = jinq::models::io_define::matting::std_matting_output;
+        jinq::server::AiServerSpec<Output> spec;
+        spec.server_section = "PP_MATTING_SERVER";
+        spec.model_section = "PP_MATTING";
+        spec.display_name = "pp matting";
+        spec.make_worker = [](const std::string& name) {
+            return create_ppmatting_segmentor<jinq::server::Base64Input, Output>(name);
+        };
+        spec.fill_response = &jinq::server::response::fill_matting;
+        return std::unique_ptr<BaseAiServer>(
+            new jinq::server::AiModelServer<Output>(std::move(spec)));
+    });
     return server_factory.create(server_name);
 }
 
 // create modnet matting server
 inline std::unique_ptr<BaseAiServer> create_modnet_server(const std::string& server_name) {
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_type<ModNetServer>(server_name);
+    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
+        using Output = jinq::models::io_define::matting::std_matting_output;
+        jinq::server::AiServerSpec<Output> spec;
+        spec.server_section = "MODNET_SERVER";
+        spec.model_section = "MODNET";
+        spec.display_name = "modnet";
+        spec.make_worker = [](const std::string& name) {
+            return create_modnet_segmentor<jinq::server::Base64Input, Output>(name);
+        };
+        spec.fill_response = &jinq::server::response::fill_matting;
+        return std::unique_ptr<BaseAiServer>(
+            new jinq::server::AiModelServer<Output>(std::move(spec)));
+    });
     return server_factory.create(server_name);
 }
 

@@ -16,8 +16,8 @@
 #include "models/mono_depth_estimation/depth_anything.h"
 #include "models/mono_depth_estimation/metric3d.h"
 #include "server/abstract_server.h"
-#include "server/mono_depth_estimation/depth_anything_server.h"
-#include "server/mono_depth_estimation/metric3d_server.h"
+#include "server/generic_ai_server.h"
+#include "server/response_serializers.h"
 
 namespace jinq {
 namespace factory {
@@ -29,8 +29,6 @@ namespace mono_depth_estimation {
 
 using jinq::models::mono_depth_estimation::DepthAnything;
 using jinq::models::mono_depth_estimation::Metric3D;
-using jinq::server::mono_depth_estimation::DepthAnythingServer;
-using jinq::server::mono_depth_estimation::Metric3DServer;
 
 // create metric3d mono depth estimation model
 template<typename INPUT, typename OUTPUT>
@@ -51,14 +49,38 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_depth_anything_estimator(con
 // create metric3d depth estimation server
 inline std::unique_ptr<BaseAiServer> create_metric3d_estimation_server(const std::string& server_name) {
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_type<Metric3DServer>(server_name);
+    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
+        using Output = jinq::models::io_define::mono_depth_estimation::std_mde_output;
+        jinq::server::AiServerSpec<Output> spec;
+        spec.server_section = "METRIC3D_ESTIMATION_SERVER";
+        spec.model_section = "METRIC3D";
+        spec.display_name = "metric3d estimation";
+        spec.make_worker = [](const std::string& name) {
+            return create_metric3d_estimator<jinq::server::Base64Input, Output>(name);
+        };
+        spec.fill_response = &jinq::server::response::fill_depth_estimation;
+        return std::unique_ptr<BaseAiServer>(
+            new jinq::server::AiModelServer<Output>(std::move(spec)));
+    });
     return server_factory.create(server_name);
 }
 
 // create depth anything depth estimation server
 inline std::unique_ptr<BaseAiServer> create_depth_anything_estimation_server(const std::string& server_name) {
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_type<DepthAnythingServer>(server_name);
+    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
+        using Output = jinq::models::io_define::mono_depth_estimation::std_mde_output;
+        jinq::server::AiServerSpec<Output> spec;
+        spec.server_section = "DEPTH_ANYTHING_ESTIMATION_SERVER";
+        spec.model_section = "DEPTH_ANYTHING";
+        spec.display_name = "depth anything estimation";
+        spec.make_worker = [](const std::string& name) {
+            return create_depth_anything_estimator<jinq::server::Base64Input, Output>(name);
+        };
+        spec.fill_response = &jinq::server::response::fill_depth_estimation;
+        return std::unique_ptr<BaseAiServer>(
+            new jinq::server::AiModelServer<Output>(std::move(spec)));
+    });
     return server_factory.create(server_name);
 }
 

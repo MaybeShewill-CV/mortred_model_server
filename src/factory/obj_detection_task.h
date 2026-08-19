@@ -23,12 +23,6 @@
 #include "server/abstract_server.h"
 #include "server/generic_ai_server.h"
 #include "server/response_serializers.h"
-#include "server/object_detection/centerface_det_server.h"
-#include "server/object_detection/libface_det_server.h"
-#include "server/object_detection/nano_det_server.h"
-#include "server/object_detection/yolov5_det_server.h"
-#include "server/object_detection/yolov6_det_server.h"
-#include "server/object_detection/yolov7_det_server.h"
 
 namespace jinq {
 namespace factory {
@@ -45,12 +39,6 @@ using jinq::models::object_detection::YoloV5Detector;
 using jinq::models::object_detection::YoloV6Detector;
 using jinq::models::object_detection::YoloV7Detector;
 using jinq::models::object_detection::YoloV8Detector;
-using jinq::server::object_detection::CenterfaceDetServer;
-using jinq::server::object_detection::LibfaceDetServer;
-using jinq::server::object_detection::NanoDetServer;
-using jinq::server::object_detection::YoloV5DetServer;
-using jinq::server::object_detection::YoloV6DetServer;
-using jinq::server::object_detection::YoloV7DetServer;
 
 // create yolov5 object detection model
 template<typename INPUT, typename OUTPUT>
@@ -63,7 +51,19 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_yolov5_detector(const std::s
 // create yolov5 object detection server
 inline std::unique_ptr<BaseAiServer> create_yolov5_det_server(const std::string& server_name) {
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_type<YoloV5DetServer>(server_name);
+    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
+        using Output = jinq::models::io_define::object_detection::std_object_detection_output;
+        jinq::server::AiServerSpec<Output> spec;
+        spec.server_section = "YOLOV5_DETECTION_SERVER";
+        spec.model_section = "YOLOV5";
+        spec.display_name = "Yolov5 object detection";
+        spec.make_worker = [](const std::string& name) {
+            return create_yolov5_detector<jinq::server::Base64Input, Output>(name);
+        };
+        spec.fill_response = &jinq::server::response::fill_object_detection;
+        return std::unique_ptr<BaseAiServer>(
+            new jinq::server::AiModelServer<Output>(std::move(spec)));
+    });
     return server_factory.create(server_name);
 }
 
@@ -78,7 +78,19 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_yolov6_detector(const std::s
 // create yolov6 object detection server
 inline std::unique_ptr<BaseAiServer> create_yolov6_det_server(const std::string& server_name) {
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_type<YoloV6DetServer>(server_name);
+    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
+        using Output = jinq::models::io_define::object_detection::std_object_detection_output;
+        jinq::server::AiServerSpec<Output> spec;
+        spec.server_section = "YOLOV6_DETECTION_SERVER";
+        spec.model_section = "YOLOV6";
+        spec.display_name = "Yolov6 object detection";
+        spec.make_worker = [](const std::string& name) {
+            return create_yolov6_detector<jinq::server::Base64Input, Output>(name);
+        };
+        spec.fill_response = &jinq::server::response::fill_object_detection;
+        return std::unique_ptr<BaseAiServer>(
+            new jinq::server::AiModelServer<Output>(std::move(spec)));
+    });
     return server_factory.create(server_name);
 }
 
@@ -93,7 +105,19 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_nanodet_detector(const std::
 // create nanodet object detection server
 inline std::unique_ptr<BaseAiServer> create_nanodet_det_server(const std::string& server_name) {
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_type<NanoDetServer>(server_name);
+    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
+        using Output = jinq::models::io_define::object_detection::std_object_detection_output;
+        jinq::server::AiServerSpec<Output> spec;
+        spec.server_section = "NANODET_DETECTION_SERVER";
+        spec.model_section = "NANODET";
+        spec.display_name = "NanoDet object detection";
+        spec.make_worker = [](const std::string& name) {
+            return create_nanodet_detector<jinq::server::Base64Input, Output>(name);
+        };
+        spec.fill_response = &jinq::server::response::fill_object_detection;
+        return std::unique_ptr<BaseAiServer>(
+            new jinq::server::AiModelServer<Output>(std::move(spec)));
+    });
     return server_factory.create(server_name);
 }
 
@@ -108,7 +132,19 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_libface_detector(const std::
 // create libface detection server
 inline std::unique_ptr<BaseAiServer> create_libface_det_server(const std::string& server_name) {
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_type<LibfaceDetServer>(server_name);
+    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
+        using Output = jinq::models::io_define::object_detection::std_face_detection_output;
+        jinq::server::AiServerSpec<Output> spec;
+        spec.server_section = "LIBFACE_DETECTION_SERVER";
+        spec.model_section = "LIBFACE";
+        spec.display_name = "libface object detection";
+        spec.make_worker = [](const std::string& name) {
+            return create_libface_detector<jinq::server::Base64Input, Output>(name);
+        };
+        spec.fill_response = &jinq::server::response::fill_face_detection;
+        return std::unique_ptr<BaseAiServer>(
+            new jinq::server::AiModelServer<Output>(std::move(spec)));
+    });
     return server_factory.create(server_name);
 }
 
@@ -123,7 +159,19 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_yolov7_detector(const std::s
 // create yolov7 object detection server
 inline std::unique_ptr<BaseAiServer> create_yolov7_det_server(const std::string& server_name) {
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_type<YoloV7DetServer>(server_name);
+    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
+        using Output = jinq::models::io_define::object_detection::std_object_detection_output;
+        jinq::server::AiServerSpec<Output> spec;
+        spec.server_section = "YOLOV7_DETECTION_SERVER";
+        spec.model_section = "YOLOV7";
+        spec.display_name = "Yolov7 object detection";
+        spec.make_worker = [](const std::string& name) {
+            return create_yolov7_detector<jinq::server::Base64Input, Output>(name);
+        };
+        spec.fill_response = &jinq::server::response::fill_object_detection;
+        return std::unique_ptr<BaseAiServer>(
+            new jinq::server::AiModelServer<Output>(std::move(spec)));
+    });
     return server_factory.create(server_name);
 }
 
@@ -165,7 +213,19 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_centerface_detector(const st
 // create centerface detection server
 inline std::unique_ptr<BaseAiServer> create_centerface_det_server(const std::string& server_name) {
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_type<CenterfaceDetServer>(server_name);
+    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
+        using Output = jinq::models::io_define::object_detection::std_face_detection_output;
+        jinq::server::AiServerSpec<Output> spec;
+        spec.server_section = "CENTER_FACE_DETECTION_SERVER";
+        spec.model_section = "CENTER_FACE";
+        spec.display_name = "center face object detection";
+        spec.make_worker = [](const std::string& name) {
+            return create_centerface_detector<jinq::server::Base64Input, Output>(name);
+        };
+        spec.fill_response = &jinq::server::response::fill_face_detection;
+        return std::unique_ptr<BaseAiServer>(
+            new jinq::server::AiModelServer<Output>(std::move(spec)));
+    });
     return server_factory.create(server_name);
 }
 
