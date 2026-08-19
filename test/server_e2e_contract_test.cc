@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <map>
 #include <memory>
@@ -521,6 +522,25 @@ TEST(server_e2e_contract, content_length_over_limit_returns_413) {
                              k_json_auth_headers);
 
     EXPECT_EQ(resp.status, 413);
+}
+
+TEST(server_e2e_contract, metrics_inference_duration_sum_is_positive_after_request) {
+    ServerHandle handle = start_server();
+    const std::string body = "{\"img_data\":\"aGVsbG8=\"}";
+    auto resp = send_request(handle.port, "POST", "/test/model", body, k_json_auth_headers);
+    ASSERT_EQ(resp.status, 200);
+
+    auto metrics = send_request(handle.port, "GET", "/metrics", "", {});
+    ASSERT_EQ(metrics.status, 200);
+    const std::string key = "mortred_inference_duration_ms_sum";
+    const auto pos = metrics.body.find(key);
+    ASSERT_NE(pos, std::string::npos) << metrics.body;
+    const auto value_pos = metrics.body.find(' ', pos + key.size());
+    ASSERT_NE(value_pos, std::string::npos);
+    const double sum = std::atof(
+        metrics.body.substr(value_pos + 1, metrics.body.find('\n', value_pos)).c_str());
+    EXPECT_GT(sum, 0.0) << "inference duration histogram must observe the real "
+                        << "run time, not the pre-assignment zero";
 }
 
 int main(int argc, char** argv) {

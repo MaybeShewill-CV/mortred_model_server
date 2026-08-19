@@ -652,8 +652,9 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
 
     auto task_finish_ts = Timestamp::now();
     result->task_finished_ts = task_finish_ts.to_format_str();
-    _m_metrics.observe_inference_duration_ms(result->worker_run_time_consuming);
+    // 先计算再观测：原顺序观测的是赋值前的 0，直方图恒记 0（复评遗留 #1）
     result->worker_run_time_consuming = (task_finish_ts - task_receive_ts) * 1000;
+    _m_metrics.observe_inference_duration_ms(result->worker_run_time_consuming);
 }
 
 /***
