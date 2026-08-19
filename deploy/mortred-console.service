@@ -1,0 +1,36 @@
+# Mortred Model Server - Web Console systemd 单元（裸机部署）
+#
+# 安装：
+#   sudo cmake --install build --prefix /opt/mortred   # 或手工安装到 /opt/mortred
+#   sudo useradd -r -s /usr/sbin/nologin mortred
+#   sudo mkdir -p /etc/mortred && sudo chown mortred:mortred /etc/mortred
+#   sudo cp deploy/mortred-console.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now mortred-console
+#
+# 敏感配置（APP_AUTH_TOKEN 等）放 /etc/mortred/console.env（chmod 600）：
+#   APP_AUTH_TOKEN=<token>
+
+[Unit]
+Description=Mortred Model Server Web Console
+Documentation=https://github.com/MaybeShewill-CV/mortred_model_server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mortred
+Group=mortred
+Environment=APP_PROJECT_ROOT=/opt/mortred
+Environment=APP_LISTEN_HOST=127.0.0.1
+Environment=APP_LISTEN_PORT=8787
+Environment=LD_LIBRARY_PATH=/opt/mortred/lib
+EnvironmentFile=-/etc/mortred/console.env
+ExecStart=/opt/mortred/bin/app_server
+Restart=on-failure
+RestartSec=3
+# 模型 worker 与连接较多时放宽文件描述符上限
+LimitNOFILE=65536
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

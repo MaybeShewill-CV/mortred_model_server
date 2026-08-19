@@ -136,7 +136,24 @@ ctest --preset tests-only
 
 **Step 3:** 下载项目提供的一些预训练模型 :tea::tea::tea:
 
-可以通过 [百度网盘](https://pan.baidu.com/s/1yneu-7X5IMIuv31Gn5ZIzg) 下载预训练模型，提取码为 `1y98`. 在项目根目录新建 `weights` 文件夹并将刚下载的预训练模型解压在该目录中。完成后的文件夹结构应该如图所示。
+通过内置脚本自动下载预训练模型（Hugging Face 源，无需手动下载）：
+
+```bash
+cd $PROJECT_ROOT_DIR
+python3 scripts/fetch_weights.py            # 下载全部权重到 weights/
+python3 scripts/fetch_weights.py --check    # 校验完整性（sha256）
+```
+
+如果本机 GPU/TRT 版本与预置引擎不匹配，请先按 [部署说明](#部署说明) 重新生成
+硬件适配的 TensorRT engine：
+
+```bash
+cd $PROJECT_ROOT_DIR
+./scripts/convert_trt_engines.sh --list     # 查看引擎清单
+./scripts/convert_trt_engines.sh            # 为当前机器生成缺失引擎
+```
+
+完成后的文件夹结构应该如图所示。
 
 <p align="left">
   <img src='./resources/images/weights_folder_structure.png' alt='weights_folder_architecture'>
@@ -300,6 +317,45 @@ python server/test_server.py --server mobilenetv2 --mode single
     </tr>
   </tbody>
 </table>
+
+# `部署说明`
+
+## 一键安装第三方依赖
+
+通过单个脚本把全部第三方依赖（MNN / WORKFLOW / ONNXRUNTIME / TensorRT / CUDA /
+fmt / 头文件库）构建并安装进 `3rd_party/{include,libs}`，无需手动编译与拷贝：
+
+```bash
+./scripts/install_deps.sh --all     # 构建/安装全部（CUDA 11 基线线）
+./scripts/install_deps.sh --check   # 校验完整性并打印版本
+./scripts/install_deps.sh --cuda-version 12   # 切换到 CUDA 12 / TRT 10 线
+```
+
+## Docker（全自动构建运行环境）
+
+```bash
+docker build -t mortred_model_server .
+docker run --gpus all -p 8787:8787 \
+  -v $PWD/weights:/opt/mortred/weights \
+  -e APP_AUTH_TOKEN=your-token \
+  mortred_model_server
+# 或：docker compose up -d（见 docker-compose.yml）
+```
+
+镜像会自动构建全部依赖与完整项目、运行单元/e2e 测试并交付 web console；
+模型权重通过 volume 挂载，不内置于镜像。
+
+## TensorRT 引擎重建（硬件适配）
+
+预置引擎可能与你的 GPU 架构 / TRT 版本不匹配，请用 ONNX 源为本机重新生成：
+
+```bash
+./scripts/convert_trt_engines.sh --list    # 查看引擎清单（19 个）
+./scripts/convert_trt_engines.sh           # 生成缺失引擎（FP16 + 动态 profile）
+./scripts/convert_trt_engines.sh --force   # 全部重建
+```
+
+完整计划、版本矩阵与验收标准见 [docs/deployment-and-deps-plan.md](docs/deployment-and-deps-plan.md)。
 
 # `TODO`
 

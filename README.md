@@ -147,7 +147,24 @@ See [docs/repository-layout.md](docs/repository-layout.md) for the canonical sou
 
 **Step 3:** Download Pre-Built Models :tea::tea::tea:
 
-Download pre-built image models via [BaiduNetDisk](https://pan.baidu.com/s/1yneu-7X5IMIuv31Gn5ZIzg) and extract code is `1y98`. Create a directory named `weights` in $PROJECT_ROOT_DIR and unzip the downloaded models in it. The weights directory  structure should looks like
+Download pre-built models with the built-in script (Hugging Face source, no manual download):
+
+```bash
+cd $PROJECT_ROOT_DIR
+python3 scripts/fetch_weights.py            # download all weights into weights/
+python3 scripts/fetch_weights.py --check    # verify integrity (sha256)
+```
+
+If your GPU/TRT version differs from the prebuilt engines, regenerate
+hardware-adapted TensorRT engines first (see [Deployment](#deployment)):
+
+```bash
+cd $PROJECT_ROOT_DIR
+./scripts/convert_trt_engines.sh --list     # show the engine manifest
+./scripts/convert_trt_engines.sh            # convert missing engines for this machine
+```
+
+The weights directory structure should look like
 
 <p align="left">
   <img src='./resources/images/weights_folder_structure.png' alt='weights_folder_architecture'>
@@ -237,6 +254,48 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 # `Web Server Configuration`
 
 * [Description About Model Server](./docs/about_model_server_configuration.md)
+
+# `Deployment`
+
+## One-command dependency install
+
+Build and install all third-party dependencies (MNN / WORKFLOW / ONNXRUNTIME /
+TensorRT / CUDA / fmt / header-only libs) into `3rd_party/{include,libs}` with
+a single script — no manual compilation or copying:
+
+```bash
+./scripts/install_deps.sh --all     # build/install everything (CUDA 11 baseline)
+./scripts/install_deps.sh --check   # verify integrity and print versions
+./scripts/install_deps.sh --cuda-version 12   # switch to the CUDA 12 / TRT 10 line
+```
+
+## Docker (fully automated build)
+
+```bash
+docker build -t mortred_model_server .
+docker run --gpus all -p 8787:8787 \
+  -v $PWD/weights:/opt/mortred/weights \
+  -e APP_AUTH_TOKEN=your-token \
+  mortred_model_server
+# or: docker compose up -d   (see docker-compose.yml)
+```
+
+The image builds all deps + the full project, runs the unit/e2e tests, and
+ships the web console; model weights are mounted, not baked in.
+
+## TensorRT engine regeneration (hardware-adapted)
+
+Prebuilt engines may mismatch your GPU architecture / TRT version. Regenerate
+them from the ONNX sources for this machine:
+
+```bash
+./scripts/convert_trt_engines.sh --list    # show the manifest (19 engines)
+./scripts/convert_trt_engines.sh           # convert missing engines (FP16 + dynamic profiles)
+./scripts/convert_trt_engines.sh --force   # rebuild everything
+```
+
+See [docs/deployment-and-deps-plan.md](docs/deployment-and-deps-plan.md) for the
+full plan, version matrix and acceptance criteria.
 
 # `TODO`
 

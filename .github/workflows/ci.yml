@@ -352,3 +352,55 @@ jobs:
           name: clang-tidy-report
           path: clang-tidy-report.txt
           if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Job D: 部署工具链门禁（无需构建依赖）
+  # 校验部署脚本语法、清单 JSON/YAML 合法性与静态自检（--list / --dry-run），
+  # 确保安装/权重下载/引擎转换工具链不因改动而失效。
+  # ---------------------------------------------------------------------------
+  deploy-tools:
+    name: deploy tools
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3 python3-pip
+          pip3 install --quiet --break-system-packages pyyaml || pip3 install --quiet pyyaml
+
+      - name: Validate deployment scripts (bash -n / py_compile)
+        run: |
+          set -euo pipefail
+          for f in scripts/install_deps.sh scripts/convert_trt_engines.sh \
+                   scripts/docker_entrypoint.sh scripts/check_repo_clean.sh \
+                   scripts/clean_artifacts.sh scripts/setup_full_deps.sh; do
+            bash -n "$f"
+          done
+          python3 -m py_compile \
+            scripts/fetch_weights.py scripts/gen_weights_manifest.py \
+            scripts/check_consistency.py scripts/gen_openapi.py scripts/repo_toml.py
+
+      - name: Validate manifests (JSON / YAML)
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          for f in ['conf/trt_engines.json',
+                    'conf/trt_profiles/lightglue_extractor.json',
+                    'conf/trt_profiles/lightglue_matcher.json',
+                    'conf/weights_manifest.json']:
+              json.load(open(f, encoding='utf-8-sig'))
+              print(f'[ok] {f}')
+          import yaml
+          yaml.safe_load(open('docker-compose.yml', encoding='utf-8'))
+          print('[ok] docker-compose.yml')
+          PY
+
+      - name: Static self-checks (engine list / weights dry-run)
+        run: |
+          set -euo pipefail
+          python3 scripts/convert_trt_engines.sh --list
+          python3 scripts/fetch_weights.py --dry-run
+          python3 scripts/check_consistency.py

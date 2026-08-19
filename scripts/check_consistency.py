@@ -19,6 +19,9 @@ Verifies a few high-signal invariants:
    section).
 9. Bidirectional `server_exe` <-> src/apps/server coverage, so the web
    console catalog cannot silently miss or invent a server.
+10. Every engine referenced by conf/model [*_TRT] sections is declared in
+    conf/trt_engines.json, so the engine-regeneration script can never miss a
+    config-required engine.
 
 Exit code 0 means consistent; non-zero means the repository needs attention.
 """
@@ -330,6 +333,45 @@ def check_server_exe_mapping() -> list[str]:
     return errors
 
 
+def check_trt_engine_manifest() -> list[str]:
+    """Every engine referenced by conf/model [*_TRT] sections (any key ending
+    with `model_file_path`) must be declared in conf/trt_engines.json, so the
+    engine-regeneration script (scripts/convert_trt_engines.sh) can never miss
+    a config-required engine."""
+    errors: list[str] = []
+    manifest_path = ROOT / "conf" / "trt_engines.json"
+    if not manifest_path.exists():
+        return errors
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        errors.append(f"conf/trt_engines.json is not valid JSON: {exc}")
+        return errors
+    declared = {e.get("engine") for e in manifest.get("engines", [])}
+    for cfg in sorted((ROOT / "conf" / "model").rglob("*.toml")):
+        try:
+            table = load_toml(cfg)
+        except (ValueError, OSError):
+            continue
+        for sec, kv in table.items():
+            if not sec.endswith("_TRT") or not isinstance(kv, dict):
+                continue
+            for key, value in kv.items():
+                if not key.endswith("model_file_path") or not value:
+                    continue
+                resolved = (ROOT / "_bin" / value).resolve()
+                try:
+                    rel = resolved.relative_to(ROOT).as_posix()
+                except ValueError:
+                    continue
+                if rel not in declared:
+                    errors.append(
+                        f"{cfg.relative_to(ROOT)} [{sec}] {key} engine {rel} "
+                        "missing from conf/trt_engines.json"
+                    )
+    return errors
+
+
 def main() -> int:
     args = parse_args()
     errors: list[str] = []
@@ -340,6 +382,7 @@ def main() -> int:
     errors.extend(check_openapi_doc_header_sync())
     errors.extend(check_server_config_structure())
     errors.extend(check_server_exe_mapping())
+    errors.extend(check_trt_engine_manifest())
     errors.extend(check_demo_client_health())
     if args.check_stale_binaries:
         errors.extend(check_stale_binaries())
