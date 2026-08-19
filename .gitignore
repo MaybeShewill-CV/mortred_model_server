@@ -46,6 +46,7 @@ build-ci/
 build-werror/
 build-gate/
 build-tidy/
+.deps-build/
 Testing/
 cmake-build-debug/
 cmake-build-release/
