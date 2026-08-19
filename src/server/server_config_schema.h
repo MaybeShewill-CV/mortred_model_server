@@ -131,11 +131,14 @@ inline bool validate_server_section(const toml::table& section,
 
     // known keys: type checks; unknown scalar keys: typo-or-warn
     for (const auto& [key, value] : section) {
-        if (key_in(key, server_required_string_keys()) || key_in(key, server_optional_string_keys())) {
+        // toml::v3::key 不能隐式转换为 std::string（operator+/string 形参均不匹配），
+        // 循环内统一使用物化的 key_name
+        const std::string key_name(key.str());
+        if (key_in(key_name, server_required_string_keys()) || key_in(key_name, server_optional_string_keys())) {
             if (!value.is_string()) {
-                return fail("key '" + key + "' must be a string");
+                return fail("key '" + key_name + "' must be a string");
             }
-            if (key == "stuck_worker_action") {
+            if (key_name == "stuck_worker_action") {
                 const std::string action = value.value_or<std::string>("");
                 if (action != "log" && action != "exit") {
                     return fail("key 'stuck_worker_action' must be 'log' or 'exit', got '" + action + "'");
@@ -143,9 +146,9 @@ inline bool validate_server_section(const toml::table& section,
             }
             continue;
         }
-        if (key_in(key, server_required_int_keys()) || key_in(key, server_optional_int_keys())) {
+        if (key_in(key_name, server_required_int_keys()) || key_in(key_name, server_optional_int_keys())) {
             if (!value.is_integer()) {
-                return fail("key '" + key + "' must be an integer");
+                return fail("key '" + key_name + "' must be an integer");
             }
             continue;
         }
@@ -153,24 +156,24 @@ inline bool validate_server_section(const toml::table& section,
         if (value.is_table() || value.is_array()) {
             // structured values are not part of the flat server schema
             if (warnings != nullptr) {
-                warnings->push_back("server section key '" + key + "' is a table/array (not part of the server schema)");
+                warnings->push_back("server section key '" + key_name + "' is a table/array (not part of the server schema)");
             }
             continue;
         }
         std::string best;
         size_t best_distance = 3;
         for (const auto& k : known) {
-            const size_t d = detail::edit_distance(key, k);
+            const size_t d = detail::edit_distance(key_name, k);
             if (d < best_distance) {
                 best_distance = d;
                 best = k;
             }
         }
         if (best_distance <= 2) {
-            return fail("unknown key '" + key + "' in server section (did you mean '" + best + "'?)");
+            return fail("unknown key '" + key_name + "' in server section (did you mean '" + best + "'?)");
         }
         if (warnings != nullptr) {
-            warnings->push_back("unknown key '" + key + "' in server section (ignored)");
+            warnings->push_back("unknown key '" + key_name + "' in server section (ignored)");
         }
     }
     return true;

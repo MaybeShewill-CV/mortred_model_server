@@ -196,7 +196,12 @@ HttpResp send_request(int port,
     size_t sent = 0;
     while (sent < request.size()) {
         const ssize_t n = send(fd, request.data() + sent, request.size() - sent, 0);
-        ASSERT_GT(n, 0);
+        // ASSERT_* 宏展开为 return;（void），不能出现在返回 HttpResp 的函数里
+        if (n <= 0) {
+            ADD_FAILURE() << "send() failed";
+            close(fd);
+            return HttpResp{};
+        }
         sent += static_cast<size_t>(n);
     }
 
@@ -289,10 +294,11 @@ std::string build_config(int port, const std::string& extra, int request_size_li
     cfg << "compute_threads=2\n";
     cfg << "handler_threads=4\n";
     cfg << "worker_nums=1\n";
-    cfg << "model_run_timeout=500\n";
     cfg << "server_uri=\"/test/model\"\n";
     cfg << "auth_token=\"test-secret\"\n";
-    cfg << "rate_limit_qps=0\n";
+    // model_run_timeout 与 rate_limit_qps 不写入基底：需要覆盖它们的用例
+    // 通过 extra 传入，TOML 不允许重复键（parse 会直接失败）；
+    // 不传时服务端有相同默认值（500ms / 不限流）
     cfg << extra;
     return cfg.str();
 }
@@ -300,6 +306,27 @@ std::string build_config(int port, const std::string& extra, int request_size_li
 struct ServerHandle {
     int port = 0;
     std::unique_ptr<ContractTestServer> server;
+
+    ServerHandle() = default;
+
+    // 用户声明的析构函数会抑制隐式移动构造/赋值；多分支 return handle
+    // 无法全部走 NRVO，必须显式提供移动语义（唯一所有权转移）
+    ServerHandle(ServerHandle&& other) noexcept
+        : port(other.port), server(std::move(other.server)) {
+        other.port = 0;
+    }
+
+    ServerHandle& operator=(ServerHandle&& other) noexcept {
+        if (this != &other) {
+            if (server) {
+                server->stop();
+            }
+            port = other.port;
+            server = std::move(other.server);
+            other.port = 0;
+        }
+        return *this;
+    }
 
     ~ServerHandle() {
         if (server) {

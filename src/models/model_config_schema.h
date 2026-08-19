@@ -38,19 +38,23 @@ inline bool validate_model_config_section(const toml::table& section,
     (void)warnings;
 
     for (const auto& [key, value] : section) {
-        if (key == "model_file_path" || key == "class_name_file") {
+        // toml::v3::key 无到 std::string 的隐式转换（str() 返回 string_view），
+        // 错误消息统一使用物化的 key_name
+        const std::string key_name(key.str());
+        // 注意：此 toml11 版本中 key == "literal" 恒为 false，必须用 key_name 比较
+        if (key_name == "model_file_path" || key_name == "class_name_file") {
             if (!value.is_string() || value.value_or<std::string>("").empty()) {
-                return fail("key '" + key + "' must be a non-empty string");
+                return fail("key '" + key_name + "' must be a non-empty string");
             }
-        } else if (key == "model_threads_num" || key == "backend_precision_mode" ||
-                   key == "backend_power_mode" || key == "compute_threads") {
+        } else if (key_name == "model_threads_num" || key_name == "backend_precision_mode" ||
+                   key_name == "backend_power_mode" || key_name == "compute_threads") {
             if (!value.is_integer()) {
-                return fail("key '" + key + "' must be an integer");
+                return fail("key '" + key_name + "' must be an integer");
             }
-            if (key == "model_threads_num" && value.value_or<int64_t>(0) <= 0) {
+            if (key_name == "model_threads_num" && value.value_or<int64_t>(0) <= 0) {
                 return fail("key 'model_threads_num' must be positive");
             }
-        } else if (key == "compute_backend") {
+        } else if (key_name == "compute_backend") {
             if (!value.is_string()) {
                 return fail("key 'compute_backend' must be a string");
             }
@@ -58,7 +62,7 @@ inline bool validate_model_config_section(const toml::table& section,
             if (backend != "cpu" && backend != "cuda") {
                 return fail("key 'compute_backend' must be 'cpu' or 'cuda', got '" + backend + "'");
             }
-        } else if (key == "model_input_image_size") {
+        } else if (key_name == "model_input_image_size") {
             if (!value.is_array()) {
                 return fail("key 'model_input_image_size' must be an array of two integers");
             }

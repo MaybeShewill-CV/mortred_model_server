@@ -39,7 +39,14 @@ std::vector<std::string> collect_files(const std::string& dir, const std::string
 toml::table parse_text(const std::string& text) {
     std::istringstream iss(text);
     auto parsed = toml::parse(iss);
-    return std::move(parsed).table();
+    auto root = std::move(parsed).table();
+    // 单元测试的文本只含一个 [X]/[M] 小节；校验器期望的是小节内表而非根表
+    if (!root.empty()) {
+        if (auto* section = root.begin()->second.as_table()) {
+            return std::move(*section);
+        }
+    }
+    return root;
 }
 
 bool is_server_section(const std::string& key) {
@@ -59,14 +66,16 @@ TEST(config_schema, every_server_section_passes) {
         ASSERT_TRUE(parsed) << path;
         auto table = std::move(parsed).table();
         for (const auto& [key, value] : table) {
-            if (!is_server_section(key)) {
+            // toml::v3::key 需物化为 std::string（str() 返回 string_view）
+            const std::string key_name(key.str());
+            if (!is_server_section(key_name)) {
                 continue;
             }
             const auto* section = value.as_table();
-            ASSERT_TRUE(section != nullptr) << path << " section " << key;
+            ASSERT_TRUE(section != nullptr) << path << " section " << key_name;
             std::string err;
             EXPECT_TRUE(validate_server_section(*section, &err))
-                << path << " [" << key << "]: " << err;
+                << path << " [" << key_name << "]: " << err;
             ++checked;
         }
     }
@@ -93,7 +102,7 @@ TEST(config_schema, every_model_section_passes_contract) {
 }
 
 TEST(config_schema, missing_required_key_fails) {
-    auto table = parse_text("[X]\nhost=\"localhost\"\nserver_uri=\"/x\"\n");
+    auto table = parse_text("[X]\nhost=\"localhost\"\nport=9000\nserver_uri=\"/x\"\n");
     std::string err;
     EXPECT_FALSE(validate_server_section(table, &err));
     EXPECT_NE(err.find("worker_nums"), std::string::npos) << err;
@@ -101,7 +110,7 @@ TEST(config_schema, missing_required_key_fails) {
 
 TEST(config_schema, typo_key_fails_with_suggestion) {
     auto table = parse_text(
-        "[X]\nhost=\"localhost\"\nport=9000\nserver_uri=\"/x\"\nworker_numsx=4\n");
+        "[X]\nhost=\"localhost\"\nport=9000\nserver_uri=\"/x\"\nworker_nums=4\nworker_numsx=4\n");
     std::string err;
     EXPECT_FALSE(validate_server_section(table, &err));
     EXPECT_NE(err.find("worker_nums"), std::string::npos) << err;

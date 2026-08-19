@@ -137,7 +137,7 @@ inline void fill_scene_segmentation(
                    allocator);
     cv::Mat color_mask = out.colorized_seg_mask;
     if (color_mask.empty() && !out.segmentation_result.empty()) {
-        jinq::common::cv_utils::colorize_segmentation_mask(
+        jinq::common::CvUtils::colorize_segmentation_mask(
             out.segmentation_result, color_mask, 80);
     }
     data.AddMember("colorized_mask",
