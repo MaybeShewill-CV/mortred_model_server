@@ -43,6 +43,9 @@ inline int http_status_of(jinq::common::StatusCode code) {
         case StatusCode::NOT_FOUND:
             return 404;
 
+        case StatusCode::NOT_READY:
+            return 503;
+
         case StatusCode::MODEL_RUN_TIMEOUT:
             return 504;
 

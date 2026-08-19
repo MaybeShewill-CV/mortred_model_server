@@ -79,21 +79,32 @@ StatusCode init(const decltype(toml::parse(""))& config) override;
 
 /***
  *
- * @param task_id
- * @param status
- * @param model_output
- * @return
+ * @param allocator rapidjson allocator
+ * @param data data member to fill (the base class only calls this on OK;
+ *             non-OK responses carry data:null)
+ * @param status model run status
+ * @param model_output model output
  */
-std::string make_response_body(const std::string& task_id, const StatusCode& status, const std_classification_output& model_output) override;
+void fill_response_data(rapidjson::Document::AllocatorType& allocator,
+                        rapidjson::Document& data,
+                        const StatusCode& status,
+                        const std_classification_output& model_output) override;
 ```
 
 `init` interface is used to initialize model server due to each server's specific configuration. You may checkout [about_model_server_configuration.md](../docs/about_model_server_configuration.md) for server's configuration details.
 
-`make_response_body` is used to transfor model's output into response content. User must implement the interface function consdering each server may have special response format.
+`fill_response_data` is used to fill the unified response envelope's `data` member.
+Prefer delegating to the matching serializer in `src/server/response_serializers.h`;
+field names and JSON types follow `docs/openapi.json` `components.schemas`.
 
 ## Step 4: Implment SubClass Server Interface Function （optional）
 
 That interface can be directly inherit from base class's implementation. Major module of server process is first `parse client request` second run model session which is packaged into a `WFGoTask` finally make response and reply to client which is implemented in `WFGoTask_CallBack Function`. Main server's code structure is
+
+> Note: the snippet below reflects the early internal flow. The current base class
+> already provides `serve_process` / `do_work` / `do_work_cb` (auth, rate limiting,
+> request validation, timeout and worker pool); a new server usually only needs to
+> implement `init` and `fill_response_data`.
 
 ```cpp
 /***
@@ -160,7 +171,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
     auto* ctx = (seriex_ctx*)series_of(task)->get_context();
     StatusCode status = ctx->model_run_status;
     std::string task_id = ctx->is_task_req_valid ? ctx->task_id : "";
-    std::string response_body = make_response_body(task_id, status, ctx->model_output);
+    // current version: the base class calls fill_response_data and sets HTTP status/headers
 
     // reply to client
     ctx->response->append_output_body(std::move(response_body));

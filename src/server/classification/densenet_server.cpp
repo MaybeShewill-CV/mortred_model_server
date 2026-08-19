@@ -18,6 +18,7 @@
 #include "common/file_path_util.h"
 #include "models/model_io_define.h"
 #include "server/base_server_impl.h"
+#include "server/response_serializers.h"
 #include "factory/classification_task.h"
 
 namespace jinq {
@@ -143,21 +144,8 @@ void DenseNetServer::Impl::fill_response_data(
     rapidjson::Document& data,
     const StatusCode& status,
     const std_classification_output& model_output) {
-    data.SetObject();
-    if (status != StatusCode::OK) {
-        return;
-    }
-    data.AddMember("class_id", model_output.class_id, allocator);
-    data.AddMember("category",
-                   rapidjson::Value(model_output.category.c_str(),
-                                    model_output.category.size(),
-                                    allocator),
-                   allocator);
-    rapidjson::Value scores(rapidjson::kArrayType);
-    for (float s : model_output.scores) {
-        scores.PushBack(s, allocator);
-    }
-    data.AddMember("scores", scores, allocator);
+    (void)status;  // 契约：仅成功路径调用
+    jinq::server::response::fill_classification(allocator, data, model_output);
 }
 
 /***

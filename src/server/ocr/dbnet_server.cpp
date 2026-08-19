@@ -20,6 +20,7 @@
 #include "common/file_path_util.h"
 #include "models/model_io_define.h"
 #include "server/base_server_impl.h"
+#include "server/response_serializers.h"
 #include "factory/ocr_task.h"
 
 namespace jinq {
@@ -146,37 +147,8 @@ void DBNetServer::Impl::fill_response_data(
     rapidjson::Document& data,
     const StatusCode& status,
     const std_text_regions_output & model_output) {
-    data.SetArray();
-    if (status != StatusCode::OK) {
-        return;
-    }
-    for (const auto& region : model_output) {
-        rapidjson::Value item(rapidjson::kObjectType);
-        item.AddMember("score", region.score, allocator);
-
-        rapidjson::Value bbox(rapidjson::kArrayType);
-        rapidjson::Value left_top(rapidjson::kArrayType);
-        left_top.PushBack(region.bbox.x, allocator);
-        left_top.PushBack(region.bbox.y, allocator);
-        rapidjson::Value right_bottom(rapidjson::kArrayType);
-        right_bottom.PushBack(region.bbox.x + region.bbox.width, allocator);
-        right_bottom.PushBack(region.bbox.y + region.bbox.height, allocator);
-        bbox.PushBack(left_top, allocator);
-        bbox.PushBack(right_bottom, allocator);
-        item.AddMember("bbox", bbox, allocator);
-
-        rapidjson::Value polygon(rapidjson::kArrayType);
-        for (const auto& pt : region.polygon) {
-            rapidjson::Value point(rapidjson::kArrayType);
-            point.PushBack(pt.x, allocator);
-            point.PushBack(pt.y, allocator);
-            polygon.PushBack(point, allocator);
-        }
-        item.AddMember("polygon", polygon, allocator);
-
-        item.AddMember("detail_infos", rapidjson::Value(rapidjson::kObjectType), allocator);
-        data.PushBack(item, allocator);
-    }
+    (void)status;  // 契约：仅成功路径调用
+    jinq::server::response::fill_text_regions(allocator, data, model_output);
 }
 
 /***

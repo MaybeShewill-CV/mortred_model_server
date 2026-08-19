@@ -18,6 +18,7 @@
 #include "common/file_path_util.h"
 #include "models/model_io_define.h"
 #include "server/base_server_impl.h"
+#include "server/response_serializers.h"
 #include "factory/obj_detection_task.h"
 
 namespace jinq {
@@ -140,34 +141,8 @@ void YoloV5DetServer::Impl::fill_response_data(
     rapidjson::Document& data,
     const StatusCode& status,
     const std_object_detection_output& model_output) {
-    data.SetArray();
-    if (status != StatusCode::OK) {
-        return;
-    }
-    for (const auto& obj_box : model_output) {
-        rapidjson::Value item(rapidjson::kObjectType);
-        item.AddMember("cls_id", obj_box.class_id, allocator);
-        item.AddMember("score", obj_box.score, allocator);
-        item.AddMember("category",
-                       rapidjson::Value(obj_box.category.c_str(),
-                                        obj_box.category.size(),
-                                        allocator),
-                       allocator);
-
-        rapidjson::Value points(rapidjson::kArrayType);
-        rapidjson::Value left_top(rapidjson::kArrayType);
-        left_top.PushBack(obj_box.bbox.x, allocator);
-        left_top.PushBack(obj_box.bbox.y, allocator);
-        rapidjson::Value right_bottom(rapidjson::kArrayType);
-        right_bottom.PushBack(obj_box.bbox.x + obj_box.bbox.width, allocator);
-        right_bottom.PushBack(obj_box.bbox.y + obj_box.bbox.height, allocator);
-        points.PushBack(left_top, allocator);
-        points.PushBack(right_bottom, allocator);
-        item.AddMember("points", points, allocator);
-
-        item.AddMember("detail_infos", rapidjson::Value(rapidjson::kObjectType), allocator);
-        data.PushBack(item, allocator);
-    }
+    (void)status;  // 契约：仅成功路径调用
+    jinq::server::response::fill_object_detection(allocator, data, model_output);
 }
 
 /***

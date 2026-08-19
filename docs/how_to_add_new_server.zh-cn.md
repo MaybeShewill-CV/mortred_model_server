@@ -79,21 +79,30 @@ StatusCode init(const decltype(toml::parse(""))& config) override;
 
 /***
  *
- * @param task_id
- * @param status
- * @param model_output
- * @return
+ * @param allocator rapidjson 分配器
+ * @param data 待填充的 data 字段（基类只在 OK 时调用，错误时 data 为 null）
+ * @param status 模型运行状态
+ * @param model_output 模型输出
  */
-std::string make_response_body(const std::string& task_id, const StatusCode& status, const std_classification_output& model_output) override;
+void fill_response_data(rapidjson::Document::AllocatorType& allocator,
+                        rapidjson::Document& data,
+                        const StatusCode& status,
+                        const std_classification_output& model_output) override;
 ```
 
 `init` 负责根据每个Server不同的配置参数来初始化Server. 关于Server参数配置可以查看文档 [about_model_server_configuration.md](../docs/about_model_server_configuration.zh-cn.md)。
 
-`make_response_body` 接口负责将模型的输出转换成服务端的response信息返回给客户端。
+`fill_response_data` 接口负责把模型输出填充到统一响应 envelope 的 `data` 字段。
+推荐直接委托 `src/server/response_serializers.h` 中对应输出类型的序列化函数，
+字段名与 JSON 类型以 `docs/openapi.json` 的 `components.schemas` 为准。
 
 ## Step 4: 实现子类的 `serve_process` 接口函数 （可选）
 
 该函数主要负责服务端的serve逻辑，如果没有特殊需求一般可以直接继承自基类. 该函数的主要过程分为三步，首选通过 `parse client request` 来获取客户端发送的图像数据，其次是调用模型inference过程，在这里该计算任务被包装成一个 `WFGoTask`，最后在 `WFGoTask_CallBack Function` 计算任务的回调函数中将模型的输出转换成服务端的response信息返回给客户端。主要的代码结构如下
+
+> 注意：下面的代码片段为早期版本的内部流程示意。当前基类已经内置
+> `serve_process` / `do_work` / `do_work_cb`（统一鉴权、限流、请求体校验、
+> 超时与 worker 池），新增 server 通常只需实现 `init` 与 `fill_response_data`。
 
 ```cpp
 /***
@@ -160,7 +169,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
     auto* ctx = (seriex_ctx*)series_of(task)->get_context();
     StatusCode status = ctx->model_run_status;
     std::string task_id = ctx->is_task_req_valid ? ctx->task_id : "";
-    std::string response_body = make_response_body(task_id, status, ctx->model_output);
+    // 当前版本：基类统一调用 fill_response_data 并设置 HTTP 状态码/响应头
 
     // reply to client
     ctx->response->append_output_body(std::move(response_body));

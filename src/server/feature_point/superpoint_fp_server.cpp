@@ -19,6 +19,7 @@
 #include "common/file_path_util.h"
 #include "models/model_io_define.h"
 #include "server/base_server_impl.h"
+#include "server/response_serializers.h"
 #include "factory/feature_point_task.h"
 
 namespace jinq {
@@ -146,27 +147,8 @@ void SuperpointFpServer::Impl::fill_response_data(
     rapidjson::Document& data,
     const StatusCode& status,
     const std_feature_point_output& model_output) {
-    data.SetArray();
-    if (status != StatusCode::OK) {
-        return;
-    }
-    for (const auto& fp : model_output) {
-        rapidjson::Value item(rapidjson::kObjectType);
-        item.AddMember("score", fp.score, allocator);
-
-        rapidjson::Value location(rapidjson::kArrayType);
-        location.PushBack(fp.location.x, allocator);
-        location.PushBack(fp.location.y, allocator);
-        item.AddMember("location", location, allocator);
-
-        rapidjson::Value descriptor(rapidjson::kArrayType);
-        for (const auto& ft_val : fp.descriptor) {
-            descriptor.PushBack(ft_val, allocator);
-        }
-        item.AddMember("descriptor", descriptor, allocator);
-
-        data.PushBack(item, allocator);
-    }
+    (void)status;  // 契约：仅成功路径调用
+    jinq::server::response::fill_feature_points(allocator, data, model_output);
 }
 
 /***

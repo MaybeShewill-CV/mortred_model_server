@@ -30,6 +30,7 @@ namespace common {
     X(METHOD_NOT_ALLOWED, 62, "method not allowed") \
     X(NOT_FOUND, 63, "not found") \
     X(INTERNAL_ERROR, 64, "internal server error") \
+    X(NOT_READY, 65, "service not ready") \
     X(UNAUTHORIZED, 401, "unauthorized") \
     X(RATE_LIMITED, 429, "too many requests") \
     X(TOKENIZE_UNKNOWN_TOKEN, 80, "unknown token") \

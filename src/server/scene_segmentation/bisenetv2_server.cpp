@@ -20,6 +20,7 @@
 #include "common/cv_utils.h"
 #include "models/model_io_define.h"
 #include "server/base_server_impl.h"
+#include "server/response_serializers.h"
 #include "factory/scene_segmentation_task.h"
 
 namespace jinq {
@@ -148,30 +149,8 @@ void BiseNetV2Server::Impl::fill_response_data(
     rapidjson::Document& data,
     const StatusCode& status,
     const std_scene_segmentation_output& model_output) {
-    data.SetObject();
-    if (status != StatusCode::OK) {
-        return;
-    }
-    if (model_output.segmentation_result.empty()) {
-        data.AddMember("segment_result", "", allocator);
-        data.AddMember("colorized_seg_mask", "", allocator);
-        return;
-    }
-    std::vector<uchar> seg_buffer;
-    cv::imencode(".png", model_output.segmentation_result, seg_buffer);
-    auto seg_data = base64::encode(seg_buffer.data(), seg_buffer.size());
-    data.AddMember("segment_result",
-                   rapidjson::Value(seg_data.c_str(), seg_data.size(), allocator),
-                   allocator);
-
-    cv::Mat color_mask;
-    CvUtils::colorize_segmentation_mask(model_output.segmentation_result, color_mask, 80);
-    std::vector<uchar> color_buffer;
-    cv::imencode(".png", color_mask, color_buffer);
-    auto color_data = base64::encode(color_buffer.data(), color_buffer.size());
-    data.AddMember("colorized_seg_mask",
-                   rapidjson::Value(color_data.c_str(), color_data.size(), allocator),
-                   allocator);
+    (void)status;  // 契约：仅成功路径调用
+    jinq::server::response::fill_scene_segmentation(allocator, data, model_output);
 }
 
 /***

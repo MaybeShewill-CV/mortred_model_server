@@ -20,6 +20,7 @@
 #include "common/file_path_util.h"
 #include "models/model_io_define.h"
 #include "server/base_server_impl.h"
+#include "server/response_serializers.h"
 #include "factory/matting_task.h"
 
 namespace jinq {
@@ -147,22 +148,8 @@ void PPMattingServer::Impl::fill_response_data(
     rapidjson::Document& data,
     const StatusCode& status,
     const std_matting_output& model_output) {
-    data.SetObject();
-    if (status != StatusCode::OK) {
-        return;
-    }
-    if (model_output.matting_result.empty()) {
-        data.AddMember("segment_result", "", allocator);
-        return;
-    }
-    std::vector<uchar> imencode_buffer;
-    cv::imencode(".png", model_output.matting_result, imencode_buffer);
-    auto output_image_data = base64::encode(imencode_buffer.data(), imencode_buffer.size());
-    data.AddMember("segment_result",
-                   rapidjson::Value(output_image_data.c_str(),
-                                    output_image_data.size(),
-                                    allocator),
-                   allocator);
+    (void)status;  // 契约：仅成功路径调用
+    jinq::server::response::fill_matting(allocator, data, model_output);
 }
 
 /***
