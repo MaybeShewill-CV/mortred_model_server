@@ -1,12 +1,10 @@
-# 如何增加新的DL模型服务
+# 如何新增一个模型服务
 
-下面是一个简要教程教大家如何快速新增一个DL模型服务. 所有的模型服务类都继承自 [jinq::server::BaseAiServer](../src/server/abstract_server.h) 接口类。除去接口用户更应该关心的是这个实现类 [jinq::server::BaseAiServerImpl<WORKER, MODEL_OUTPUT>](../src/server/base_server_impl.h)，它负责了整个服务类的功能实现. `WORKER` 指代的是该框架内的DL模型，例如在文档 [how_to_add_new_model.md](../docs/how_to_add_new_model.md) 中新增的 `DenseNet` 图像分类模型. `MODEL_OUTPUT` 是指代用户自定义的模型输出. 出于效率和便捷性考虑，DL模型输入统一使用 `base64` 编码的图像。服务的主要处理过程可以抽象为三步，首先解析客户端发送的请求并获取其中的base64编码图像内容，其次将任务丢入 `worker_queue` 中等待模型计算处理，最后获取模型输出并将其填入response返回给客户端。接下来将通过一个例子讲述如何将之前新增的 `densenet` 分类模型包装成为服务
+本框架中新增一个 server 自注册表化重构后不再需要编写约 200 行的模板类：每个服务只是一条 `AiServerSpec` 注册项（两个 TOML 段名、worker 工厂、响应序列化器），通过 creator 闭包注册。通用实现位于 [jinq::server::AiModelServer&lt;MODEL_OUTPUT&gt;](../src/server/generic_ai_server.h)，它构建在 [jinq::server::BaseAiServerImpl&lt;WORKER, MODEL_OUTPUT&gt;](../src/server/base_server_impl.h) 之上，后者继续提供鉴权、限流、请求校验、单请求超时、worker 池、Prometheus 指标与 `/openapi.json` 端点。模型输入统一使用 base64 编码图像。下面以新增 densenet 图像分类服务为例；模型本身参考[如何新增模型](../docs/how_to_add_new_model.zh-cn.md)。
 
-## Step 1: 定义模型的输出数据格式 :monkey_face:
+## 第 1 步：定义输出数据类型 :monkey_face:
 
-This step is the same as adding a new model. Default model's output data type for different kind of vision tasks can be found in [model_io_define.h](../src/models/model_io_define.h). Those structs which are named after std** represent the default model output.
-
-这一步和新增DL模型中的步骤是完全相同的. 例如默认的分类模型输出为
+与新增模型一致。各视觉任务的默认输出类型定义在 [model_io_define.h](../src/models/model_io_define.h) 中，以 `std_*_output` 命名。分类任务默认输出：
 
 ```cpp
 namespace classification {
@@ -15,226 +13,78 @@ namespace classification {
         std::vector<float> scores;
     };
     using std_classification_output = cls_output;
-} 
-```
-
-class_id 等于scores序列中最大值的索引号.
-
-## Step 2: 继承一个新的Server类
-
-新的Server类继承自 [jinq::server::BaseAiServer](../src/server/abstract_server.h) 并且仅仅用来定义统一接口。该类的private成员 `_m_impl` 用来负责具体的服务实现. 代码细节可参考 [densenet_server.h](../src/server/classification/densenet_server.h). 主要的结构如下
-
-```cpp
-namespace jinq {
-namespace server {
-namespace classification {
-class DenseNetServer : public jinq::server::BaseAiServer {
-public:
-    DenseNetServer();
-
-    ~DenseNetServer() override;
-
-    DenseNetServer(const DenseNetServer& transformer) = delete;
-
-    DenseNetServer& operator=(const DenseNetServer& transformer) = delete;
-
-    jinq::common::StatusCode init(const decltype(toml::parse(""))& cfg) override;
-
-    void serve_process(WFHttpTask* task) override;
-
-    bool is_successfully_initialized() const override;
-
-private:
-    class Impl;
-    std::unique_ptr<Impl> _m_impl;
-};
-}
-}
 }
 ```
 
-私有成员 `_m_impl` 继承自 [BaseAiServerImpl<WORKER, MODEL_OUTPUT>](../src/server/base_server_impl.h)。`WORKER` 模板参数代表着任务工厂所能创建的DL模型，`MODEL_OUTPUT` 代表用户自定义的模型输出。整体 `DenseNetServer::Impl` 实现主体结构如下
+`class_id` 等于 `scores` 中最大分数的下标。如果你的任务需要新的输出结构，先在此定义——server spec 与响应序列化器都引用它。
+
+## 第 2 步：注册一条 AiServerSpec
+
+打开模型所属任务的工厂头文件（示例为 `src/factory/classification_task.h`），将 server 创建函数写为 spec 闭包注册：
 
 ```cpp
-using jinq::models::io_define::classification::std_classification_output;
-using jinq::factory::classification::create_densenet_classifier;
-using DenseNetPtr = decltype(create_densenet_classifier<base64_input, std_classification_output>(""));
-
-class DenseNetServer::Impl : public BaseAiServerImpl<DenseNetPtr, std_classification_output>
-```
-
-代码细节可参考 [densenet_server.cpp#L40-L61](../src/server/classification/densenet_server.cpp)
-
-## Step 3: 实现子类的接口函数
-
-每个Server实现子类都需要实现这两个特殊的接口函数。
-
-```cpp
-/***
-*
-* @param config
-* @return
-*/
-StatusCode init(const decltype(toml::parse(""))& config) override;
-
-/***
- *
- * @param allocator rapidjson 分配器
- * @param data 待填充的 data 字段（基类只在 OK 时调用，错误时 data 为 null）
- * @param status 模型运行状态
- * @param model_output 模型输出
- */
-void fill_response_data(rapidjson::Document::AllocatorType& allocator,
-                        rapidjson::Document& data,
-                        const StatusCode& status,
-                        const std_classification_output& model_output) override;
-```
-
-`init` 负责根据每个Server不同的配置参数来初始化Server. 关于Server参数配置可以查看文档 [about_model_server_configuration.md](../docs/about_model_server_configuration.zh-cn.md)。
-
-`fill_response_data` 接口负责把模型输出填充到统一响应 envelope 的 `data` 字段。
-推荐直接委托 `src/server/response_serializers.h` 中对应输出类型的序列化函数，
-字段名与 JSON 类型以 `docs/openapi.json` 的 `components.schemas` 为准。
-
-## Step 4: 实现子类的 `serve_process` 接口函数 （可选）
-
-该函数主要负责服务端的serve逻辑，如果没有特殊需求一般可以直接继承自基类. 该函数的主要过程分为三步，首选通过 `parse client request` 来获取客户端发送的图像数据，其次是调用模型inference过程，在这里该计算任务被包装成一个 `WFGoTask`，最后在 `WFGoTask_CallBack Function` 计算任务的回调函数中将模型的输出转换成服务端的response信息返回给客户端。主要的代码结构如下
-
-> 注意：下面的代码片段为早期版本的内部流程示意。当前基类已经内置
-> `serve_process` / `do_work` / `do_work_cb`（统一鉴权、限流、请求体校验、
-> 超时与 worker 池），新增 server 通常只需实现 `init` 与 `fill_response_data`。
-
-```cpp
-/***
- * parse client request and start a go task to run model session
- * @tparam WORKER
- * @tparam MODEL_INPUT
- * @tparam MODEL_OUTPUT
- * @param task
- */
-template<typename WORKER, typename MODEL_OUTPUT>
-void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
-    // parse client request
-    auto* req = task->get_req();
-    auto* resp = task->get_resp();
-    auto cls_task_req = parse_task_request(protocol::HttpUtil::decode_chunked_body(req));
-
-    // construct a go task to run model session
-    auto* series = series_of(task);
-
-    auto&& go_proc = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work, this, std::placeholders::_1, std::placeholders::_2);
-    WFGoTask* serve_task = WFTaskFactory::create_go_task(_m_server_uri, go_proc, cls_task_req, ctx);
-    auto&& go_proc_cb = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb, this, serve_task);
-    serve_task->set_callback(go_proc_cb);
-    *series << serve_task;
-
-    return;
-}
-
-/***
- * run model session and get model output
- * @tparam WORKER
- * @tparam MODEL_INPUT
- * @tparam MODEL_OUTPUT
- * @param req
- * @param ctx
- */
-template<typename WORKER, typename MODEL_OUTPUT>
-void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(const BaseAiServerImpl::cls_request& req, BaseAiServerImpl::seriex_ctx* ctx) {
-    // fetch a model worker from worker_queue
-    WORKER worker;
-    while (!_m_working_queue.try_dequeue(worker)) {}
-
-    // run model session
-    models::io_define::common_io::base64_input model_input{req.image_content};
-    StatusCode status = worker->run(model_input, ctx->model_output);
-
-    // return work back to queue
-    while (!_m_working_queue.enqueue(std::move(worker))) {}
-
-    ...
-}
-
-/***
- * make response and reply to client
- * @tparam WORKER
- * @tparam MODEL_INPUT
- * @tparam MODEL_OUTPUT
- * @param task
- */
-template<typename WORKER, typename MODEL_OUTPUT>
-void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
-    ...
-    // make response body
-    auto* ctx = (seriex_ctx*)series_of(task)->get_context();
-    StatusCode status = ctx->model_run_status;
-    std::string task_id = ctx->is_task_req_valid ? ctx->task_id : "";
-    // 当前版本：基类统一调用 fill_response_data 并设置 HTTP 状态码/响应头
-
-    // reply to client
-    ctx->response->append_output_body(std::move(response_body));
-
-    ...
-}
-```
-
-如果是新手的话推荐直接继承基类的实现过程，如果你有特殊的需求那么可以自行修改实现过程。
-
-## Step 5: 任务工厂中增加创建接口 :factory:
-
-在任务工厂中创建相应的接口函数，细节实现可以参考 [classification_task.h](../src/factory/classification_task.h)。工厂是类型擦除的注册表（`jinq::factory::ServerFactory`）：`register_type<CONCRETE>(name)` 把创建器闭包存入工厂（工厂持有其所有权、线程安全、同名注册覆盖），`create(name)` 按名创建实例。
-
-```cpp
-/***
- * create densenet image classification server
- * @param server_name
- * @return
- */
+// create densenet classification server
 inline std::unique_ptr<BaseAiServer> create_densenet_cls_server(const std::string& server_name) {
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_type<DenseNetServer>(server_name);
+    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
+        using Output = jinq::models::io_define::classification::std_classification_output;
+        jinq::server::AiServerSpec<Output> spec;
+        spec.server_section = "DENSENET_CLASSIFICATION_SERVER";  // server TOML 段
+        spec.model_section = "DENSENET";                          // 含 model_config_file_path
+        spec.display_name = "Densenet classification";
+        spec.make_worker = [](const std::string& name) {
+            return create_densenet_classifier<jinq::server::Base64Input, Output>(name);
+        };
+        spec.fill_response = &jinq::server::response::fill_classification;
+        return std::unique_ptr<BaseAiServer>(
+            new jinq::server::AiModelServer<Output>(std::move(spec)));
+    });
     return server_factory.create(server_name);
 }
 ```
 
-## Step 6: 创建一个新的图像分类服务app :airplane:
+这就是新增一个服务的全部代码量。`AiModelServer<Output>::init` 会读取 server 段
+（worker 池、超时、鉴权、限流，见[服务配置说明](../docs/about_model_server_configuration.zh-cn.md)）、
+加载 model 段引用的模型配置、创建 `worker_nums` 个 worker 并装配 HTTP 服务——
+即此前 22 个手写类重复的那套流程。
 
-至此为止你已经成功添加了一个全新的图像分类服务。现在就来创建一个分类服务app来测试下效果吧. 完整的代码可参考 [densenet_classification_server.cpp](../src/apps/server/classification/densenet_classification_server.cpp)
+如果输出是全新结构，先在 [src/server/response_serializers.h](../src/server/response_serializers.h)
+补充对应序列化器并让 `spec.fill_response` 指向它；字段名与 JSON 类型必须与
+`docs/openapi.json` 的 `components.schemas` 一致（用 `python scripts/gen_openapi.py` 重新生成）。
+
+## 第 3 步：接线可执行入口
+
+在 `src/apps/server/<task>/` 下新建薄壳 main（路径与可执行名属于仓库布局契约，
+`scripts/check_consistency.py` 会校验），委托给公共入口：
 
 ```cpp
+// densenet classification server tool
+
+#include "apps/common/model_server_main.h"
+#include "factory/classification_task.h"
+
 int main(int argc, char** argv) {
-
-    static WFFacilities::WaitGroup wait_group(1);
-
-    std::string config_file_path = argv[1];
-    LOG(INFO) << "cfg file path: " << config_file_path;
-    auto config = toml::parse(config_file_path);
-    const auto &server_cfg = config.at("DENSENET_CLASSIFICATION_SERVER");
-    auto port = server_cfg.at("port").as_integer();
-    LOG(INFO) << "serve on port: " << port;
-
-    auto server = create_densenet_cls_server("densenet_cls_server");
-    server->init(config);
-    if (server->start(port) == 0) {
-        wait_group.wait();
-        server->stop();
-    } else {
-        LOG(ERROR) << "Cannot start server";
-        return -1;
-    }
-
-    return 0;
+    return jinq::apps::run_model_server_main(
+        argc, argv, "DENSENET_CLASSIFICATION_SERVER",
+        [](const std::string& server_name) {
+            return jinq::factory::classification::create_densenet_cls_server(server_name);
+        });
 }
 ```
 
-不出意外 :smile: 你就可以得到一个和文档 [toturials_of_classification_model_server](../docs/toturials_of_classification_model_server.md) 中描述相同的高性能图像分类服务器了。
+然后：
 
-祝你好运 !!! :trophy::trophy::trophy:
+1. 在 `src/apps/CMakeLists.txt` 中添加目标（`add_server_app(...)`）；
+2. 在 `conf/server/<task>/<model>/` 下添加配置（复制同类配置并调整
+   `server_uri`、`port`、`worker_nums`）；
+3. 在 `docs/repository-layout.md` 中补充可执行文件行（一致性门禁会校验该映射，
+   以及 `model_config_file_path` 指向的文件存在）；
+4. 通过 `scripts/gen_openapi.py` 在 `docs/openapi.json` 中声明新的 `server_uri`。
 
-## 参考
+## 第 4 步：框架已经替你做的事
 
-完整代码如下
-
-* [Base Server Impl Implement](../src/server/base_server_impl.h)
-* [DenseNet Server Implement](../src/server/classification/densenet_server.cpp)
-* [DenseNet Server App](../src/apps/server/classification/densenet_classification_server.cpp)
+通常不需要触碰请求服务逻辑。`BaseAiServerImpl` 提供
+`serve_process` / `do_work` / `do_work_cb`：JSON 请求解析（含 400/413/415/405 契约错误）、
+Bearer 鉴权、按 IP 限流、阻塞队列取 worker（计入超时预算）、模型推理、经
+`fill_response` 的响应序列化、Prometheus 指标与结构化请求日志。仅当需要额外端点时
+才使用扩展点（`handle_custom_endpoint`）。

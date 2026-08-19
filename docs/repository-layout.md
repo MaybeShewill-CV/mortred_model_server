@@ -27,6 +27,7 @@ generated executables, configuration files, and documentation.
 ```text
 src/
 ├── apps/
+│   ├── common/              # shared app entry points: model_server_main, benchmark_runner
 │   ├── model_benchmark/     # per-model benchmark executables
 │   ├── model_tools/         # conversion and model utilities
 │   ├── server/              # model server executables

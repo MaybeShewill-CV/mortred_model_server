@@ -3,15 +3,15 @@
  * File: model_golden_test.cc
  * Date: 2026-08-12
  *
- * 视觉模型推理黄金回归测试（L2）：
- * - 固定输入 + 固定配置运行真实模型，与 test/golden/ 中的基线输出比较，
- *   用于快速验证"修改模型推理函数后行为未改变"。
- * - 权重不在 git 仓库：权重缺失时 GTEST_SKIP（本地/GPU 机器才执行）。
- * - MORTRED_UPDATE_GOLDEN=1 时重新生成黄金文件（不比较）。
- * - 配置统一处理：相对路径修正（../xxx -> xxx）、compute_backend 强制 cpu，
- *   保证结果可移植与确定性。
- * - 覆盖模型按难度递增：分类 -> 检测 -> 分割 -> OCR -> Matting -> 增强 ->
- *   特征点 -> SAM -> CLIP。
+ * ?????????????L2??
+ * - ???? + ???????????? test/golden/ ?????????
+ *   ??????"??????????????"?
+ * - ???? git ???????? GTEST_SKIP???/GPU ???????
+ * - MORTRED_UPDATE_GOLDEN=1 ???????????????
+ * - ??????????????../xxx -> xxx??compute_backend ?? cpu?
+ *   ????????????
+ * - ???????????? -> ?? -> ?? -> OCR -> Matting -> ?? ->
+ *   ??? -> SAM -> CLIP?
  ************************************************/
 
 #include <algorithm>
@@ -79,7 +79,7 @@ std::string golden_path(const std::string& name, const std::string& ext) {
     return "test/golden/" + name + ext;
 }
 
-/*** 配置：解析 conf 文件，修正相对路径，强制 cpu 后端 */
+/*** ????? conf ???????????? cpu ?? */
 void fix_toml_paths(toml::node& value) {
     if (auto* tbl = value.as_table()) {
         for (auto& item : *tbl) {
@@ -132,7 +132,7 @@ cv::Mat read_input_image(const std::string& path) {
     return cv::imread(path, cv::IMREAD_COLOR);
 }
 
-/*** 黄金 JSON 读写 */
+/*** ?? JSON ?? */
 std::string serialize_json(const rapidjson::Document& doc) {
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
@@ -158,7 +158,7 @@ void write_golden_text(const std::string& name, const std::string& ext, const st
     out << content;
 }
 
-/*** 图像指纹：任意类型 Mat -> 64x64 CV_8UC3，用于可移植比较 */
+/*** ????????? Mat -> 64x64 CV_8UC3???????? */
 cv::Mat make_fingerprint(const cv::Mat& src) {
     cv::Mat normalized;
     if (src.type() == CV_32SC1) {
@@ -454,10 +454,10 @@ bool weights_available(const std::string& conf_rel_path) {
 
 } // namespace
 
-// ============ 分类（难度 1）============
+// ============ ????? 1?============
 
 TEST(model_golden, mobilenetv2_classification) {
-    std::string conf = "conf/model/classification/mobilenetv2/mobilenetv2_config.ini";
+    std::string conf = "conf/model/classification/mobilenetv2/mobilenetv2_config.toml";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::classification::create_mobilenetv2_classifier<
@@ -473,7 +473,7 @@ TEST(model_golden, mobilenetv2_classification) {
 }
 
 TEST(model_golden, resnet50_classification) {
-    std::string conf = "conf/model/classification/resnet/resnet50_config.ini";
+    std::string conf = "conf/model/classification/resnet/resnet50_config.toml";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::classification::create_resnet_classifier<
@@ -489,7 +489,7 @@ TEST(model_golden, resnet50_classification) {
 }
 
 TEST(model_golden, densenet121_classification) {
-    std::string conf = "conf/model/classification/densenet/densenet121_config.ini";
+    std::string conf = "conf/model/classification/densenet/densenet121_config.toml";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::classification::create_densenet_classifier<
@@ -505,7 +505,7 @@ TEST(model_golden, densenet121_classification) {
 }
 
 TEST(model_golden, dinov2_classification) {
-    std::string conf = "conf/model/classification/dinov2/dinov2_vitb14_config.ini";
+    std::string conf = "conf/model/classification/dinov2/dinov2_vitb14_config.toml";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::classification::create_dinov2_classifier<
@@ -520,10 +520,10 @@ TEST(model_golden, dinov2_classification) {
     expect_scores("dinov2_classification", output);
 }
 
-// ============ 检测（难度 2）============
+// ============ ????? 2?============
 
 TEST(model_golden, nanodet_detection) {
-    std::string conf = "conf/model/object_detection/nano_det/nanodet_config.ini";
+    std::string conf = "conf/model/object_detection/nano_det/nanodet_config.toml";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::object_detection::create_nanodet_detector<
@@ -539,7 +539,7 @@ TEST(model_golden, nanodet_detection) {
 }
 
 TEST(model_golden, yolov5_detection) {
-    std::string conf = "conf/model/object_detection/yolov5/yolov5_config.ini";
+    std::string conf = "conf/model/object_detection/yolov5/yolov5_config.toml";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::object_detection::create_yolov5_detector<
@@ -555,7 +555,7 @@ TEST(model_golden, yolov5_detection) {
 }
 
 TEST(model_golden, yolov6_detection) {
-    std::string conf = "conf/model/object_detection/yolov6/yolov6_config.ini";
+    std::string conf = "conf/model/object_detection/yolov6/yolov6_config.toml";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::object_detection::create_yolov6_detector<
@@ -571,7 +571,7 @@ TEST(model_golden, yolov6_detection) {
 }
 
 TEST(model_golden, yolov7_detection) {
-    std::string conf = "conf/model/object_detection/yolov7/yolov7_config.ini";
+    std::string conf = "conf/model/object_detection/yolov7/yolov7_config.toml";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::object_detection::create_yolov7_detector<
@@ -587,7 +587,7 @@ TEST(model_golden, yolov7_detection) {
 }
 
 TEST(model_golden, centerface_detection) {
-    std::string conf = "conf/model/object_detection/centerface/centerface_config.ini";
+    std::string conf = "conf/model/object_detection/centerface/centerface_config.toml";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::object_detection::create_centerface_detector<
@@ -603,7 +603,7 @@ TEST(model_golden, centerface_detection) {
 }
 
 TEST(model_golden, libface_detection) {
-    std::string conf = "conf/model/object_detection/libfacedetection/640x480_config.ini";
+    std::string conf = "conf/model/object_detection/libfacedetection/640x480_config.toml";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::object_detection::create_libface_detector<
@@ -618,10 +618,10 @@ TEST(model_golden, libface_detection) {
     expect_boxes("libface_detection", output, true);
 }
 
-// ============ 分割（难度 3）============
+// ============ ????? 3?============
 
 TEST(model_golden, bisenetv2_segmentation) {
-    std::string conf = "conf/model/scene_segmentation/bisenetv2/bisenetv2_config.ini";
+    std::string conf = "conf/model/scene_segmentation/bisenetv2/bisenetv2_config.toml";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::scene_segmentation::create_bisenetv2_segmentor<
@@ -637,7 +637,7 @@ TEST(model_golden, bisenetv2_segmentation) {
 }
 
 TEST(model_golden, pphuman_segmentation) {
-    std::string conf = "conf/model/scene_segmentation/pphuman/pphuman_config.ini";
+    std::string conf = "conf/model/scene_segmentation/pphuman/pphuman_config.toml";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::scene_segmentation::create_pphuman_segmentor<
@@ -652,10 +652,10 @@ TEST(model_golden, pphuman_segmentation) {
     expect_fingerprint("pphuman_segmentation", output.segmentation_result);
 }
 
-// ============ OCR（难度 3）============
+// ============ OCR??? 3?============
 
 TEST(model_golden, dbnet_text_detection) {
-    std::string conf = "conf/model/ocr/db_text_detector/dbnet_config.ini";
+    std::string conf = "conf/model/ocr/db_text_detector/dbnet_config.toml";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::ocr::create_dbtext_detector<
@@ -670,10 +670,10 @@ TEST(model_golden, dbnet_text_detection) {
     expect_text_regions("dbnet_text_detection", output);
 }
 
-// ============ Matting（难度 4）============
+// ============ Matting??? 4?============
 
 TEST(model_golden, modnet_matting) {
-    std::string conf = "conf/model/matting/modnet/modnet_config.ini";
+    std::string conf = "conf/model/matting/modnet/modnet_config.toml";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::matting::create_modnet_segmentor<
@@ -689,7 +689,7 @@ TEST(model_golden, modnet_matting) {
 }
 
 TEST(model_golden, ppmatting_matting) {
-    std::string conf = "conf/model/matting/ppmatting/ppmatting_config.ini";
+    std::string conf = "conf/model/matting/ppmatting/ppmatting_config.toml";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::matting::create_ppmatting_segmentor<
@@ -704,10 +704,10 @@ TEST(model_golden, ppmatting_matting) {
     expect_fingerprint("ppmatting_matting", output.matting_result);
 }
 
-// ============ 增强（难度 4）============
+// ============ ????? 4?============
 
 TEST(model_golden, enlightengan_enhancement) {
-    std::string conf = "conf/model/enhancement/enlighten_gan/enlightengan.ini";
+    std::string conf = "conf/model/enhancement/enlighten_gan/enlightengan.toml";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::enhancement::create_enlightengan_enhancementor<
@@ -723,7 +723,7 @@ TEST(model_golden, enlightengan_enhancement) {
 }
 
 TEST(model_golden, attentivegan_enhancement) {
-    std::string conf = "conf/model/enhancement/attentive_gan_derain/attentive_gan_derain_config.ini";
+    std::string conf = "conf/model/enhancement/attentive_gan_derain/attentive_gan_derain_config.toml";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::enhancement::create_attentivegan_enhancementor<
@@ -739,7 +739,7 @@ TEST(model_golden, attentivegan_enhancement) {
 }
 
 TEST(model_golden, realesrgan_enhancement) {
-    std::string conf = "conf/model/enhancement/real_esrgan/real_esrgan.ini";
+    std::string conf = "conf/model/enhancement/real_esrgan/real_esrgan.toml";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::enhancement::create_realesrgan_enhancementor<
@@ -754,10 +754,10 @@ TEST(model_golden, realesrgan_enhancement) {
     expect_fingerprint("realesrgan_enhancement", output.enhancement_result);
 }
 
-// ============ 特征点（难度 5）============
+// ============ ?????? 5?============
 
 TEST(model_golden, superpoint_feature_point) {
-    std::string conf = "conf/model/feature_point/superpoint/superpoint_config.ini";
+    std::string conf = "conf/model/feature_point/superpoint/superpoint_config.toml";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::feature_point::create_superpoint_extractor<
@@ -772,10 +772,10 @@ TEST(model_golden, superpoint_feature_point) {
     expect_keypoints("superpoint_feature_point", output);
 }
 
-// ============ SAM（难度 6）============
+// ============ SAM??? 6?============
 
 TEST(model_golden, fastsam_segmentation) {
-    std::string conf = "conf/model/segment_anything/fast_sam_s_config.ini";
+    std::string conf = "conf/model/segment_anything/fast_sam_s_config.toml";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::segment_anything::create_fast_sam_segmentor<
@@ -790,10 +790,10 @@ TEST(model_golden, fastsam_segmentation) {
     expect_fingerprint("fastsam_segmentation", output);
 }
 
-// ============ CLIP（难度 7）============
+// ============ CLIP??? 7?============
 
 TEST(model_golden, openai_clip_embedding) {
-    std::string conf = "conf/model/openai_clip/vit_b_32_config.ini";
+    std::string conf = "conf/model/openai_clip/vit_b_32_config.toml";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::clip::create_openai_clip<

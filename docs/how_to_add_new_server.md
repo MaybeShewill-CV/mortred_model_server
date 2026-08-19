@@ -1,12 +1,10 @@
 # How To Add New Server
 
-Here is brief instruction about how to add a new server in this frame work. All model server are inherited from [jinq::server::BaseAiServer](../src/server/abstract_server.h) which determin the server's interface function. You're supposed to pay more attention to [jinq::server::BaseAiServerImpl<WORKER, MODEL_OUTPUT>](../src/server/base_server_impl.h). It's the actual implemention of the base server and all specific servers are inherited from this implementation. `WORKER` is the model in this framework for example the new densenet image classification model in [how_to_add_new_model.md](../docs/how_to_add_new_model.md). `MODEL_OUTPUT` is model's output defined by users. The input of the model uses base64 encoded images uniformly considring convenience and efficiency. Server's main process consist three major module first parse client's request data and fetch base64 encoded input image second send that image into worker queue waiting to run inference finally make response and reply to the client. I will show you an example to help you add a new densenet image classification server in the next sections.
+Here is brief instruction about how to add a new server in this framework. Since the registry-driven refactor, adding a server no longer means writing a ~200-line hand-written class: every server is a single `AiServerSpec` entry (two TOML section names, a worker factory and a response filler) registered through a creator closure. The generic implementation lives in [jinq::server::AiModelServer&lt;MODEL_OUTPUT&gt;](../src/server/generic_ai_server.h) on top of [jinq::server::BaseAiServerImpl&lt;WORKER, MODEL_OUTPUT&gt;](../src/server/base_server_impl.h), which keeps providing auth, rate limiting, request validation, per-request timeout, the worker pool, Prometheus metrics and the `/openapi.json` endpoint. The model input uses base64 encoded images uniformly. The example below adds a densenet image classification server; the model itself comes from [how_to_add_new_model.md](../docs/how_to_add_new_model.md).
 
 ## Step 1: Define Your Own Output Data Type :monkey_face:
 
-This step is the same as adding a new model. Default model's output data type for different kind of vision tasks can be found in [model_io_define.h](../src/models/model_io_define.h). Those structs which are named after std** represent the default model output. 
-
-For example the default model output for classification task is
+This step is the same as adding a new model. Default model output types for each vision task live in [model_io_define.h](../src/models/model_io_define.h); the types named `std_*_output` are the default outputs. For classification:
 
 ```cpp
 namespace classification {
@@ -15,228 +13,84 @@ namespace classification {
         std::vector<float> scores;
     };
     using std_classification_output = cls_output;
-} 
-```
-
-class_id equals max score's idx in scores.
-
-## Step 2: Inherit Your New Model Server
-
-The new model server inherit from [jinq::server::BaseAiServer](../src/server/abstract_server.h) and is only response for interface. The class private member `_m_impl` is responsible for actual implementation. Detailed code can be found [densenet_server.h](../src/server/classification/densenet_server.h). Main structure is
-
-```cpp
-namespace jinq {
-namespace server {
-namespace classification {
-class DenseNetServer : public jinq::server::BaseAiServer {
-public:
-    DenseNetServer();
-
-    ~DenseNetServer() override;
-
-    DenseNetServer(const DenseNetServer& transformer) = delete;
-
-    DenseNetServer& operator=(const DenseNetServer& transformer) = delete;
-
-    jinq::common::StatusCode init(const decltype(toml::parse(""))& cfg) override;
-
-    void serve_process(WFHttpTask* task) override;
-
-    bool is_successfully_initialized() const override;
-
-private:
-    class Impl;
-    std::unique_ptr<Impl> _m_impl;
-};
-}
-}
 }
 ```
 
-Private class member `_m_impl` inherit from [BaseAiServerImpl<WORKER, MODEL_OUTPUT>](../src/server/base_server_impl.h). Here `WORKER` represent the densenet model which can be create by factory function and `MODEL_OUTPUT` use the default classification model's output so `DenseNetServer::Impl` can be constructed like
+`class_id` equals the index of the max score in `scores`. If your task needs a new
+output shape, define it here first — the server spec and the response serializer both
+refer to it.
+
+## Step 2: Register An AiServerSpec Entry
+
+Open the task header of the model's family (`src/factory/classification_task.h` for the example) and write the server create function as a spec-closure registration:
 
 ```cpp
-using jinq::models::io_define::classification::std_classification_output;
-using jinq::factory::classification::create_densenet_classifier;
-using DenseNetPtr = decltype(create_densenet_classifier<base64_input, std_classification_output>(""));
-
-class DenseNetServer::Impl : public BaseAiServerImpl<DenseNetPtr, std_classification_output>
-```
-
-Detailed code can be found [densenet_server.cpp#L40-L61](../src/server/classification/densenet_server.cpp)
-
-## Step 3: Implement SubClass Specific Interface
-
-Each server impl subclass should implement two specific interface
-
-```cpp
-/***
-*
-* @param config
-* @return
-*/
-StatusCode init(const decltype(toml::parse(""))& config) override;
-
-/***
- *
- * @param allocator rapidjson allocator
- * @param data data member to fill (the base class only calls this on OK;
- *             non-OK responses carry data:null)
- * @param status model run status
- * @param model_output model output
- */
-void fill_response_data(rapidjson::Document::AllocatorType& allocator,
-                        rapidjson::Document& data,
-                        const StatusCode& status,
-                        const std_classification_output& model_output) override;
-```
-
-`init` interface is used to initialize model server due to each server's specific configuration. You may checkout [about_model_server_configuration.md](../docs/about_model_server_configuration.md) for server's configuration details.
-
-`fill_response_data` is used to fill the unified response envelope's `data` member.
-Prefer delegating to the matching serializer in `src/server/response_serializers.h`;
-field names and JSON types follow `docs/openapi.json` `components.schemas`.
-
-## Step 4: Implment SubClass Server Interface Function （optional）
-
-That interface can be directly inherit from base class's implementation. Major module of server process is first `parse client request` second run model session which is packaged into a `WFGoTask` finally make response and reply to client which is implemented in `WFGoTask_CallBack Function`. Main server's code structure is
-
-> Note: the snippet below reflects the early internal flow. The current base class
-> already provides `serve_process` / `do_work` / `do_work_cb` (auth, rate limiting,
-> request validation, timeout and worker pool); a new server usually only needs to
-> implement `init` and `fill_response_data`.
-
-```cpp
-/***
- * parse client request and start a go task to run model session
- * @tparam WORKER
- * @tparam MODEL_INPUT
- * @tparam MODEL_OUTPUT
- * @param task
- */
-template<typename WORKER, typename MODEL_OUTPUT>
-void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
-    // parse client request
-    auto* req = task->get_req();
-    auto* resp = task->get_resp();
-    auto cls_task_req = parse_task_request(protocol::HttpUtil::decode_chunked_body(req));
-
-    // construct a go task to run model session
-    auto* series = series_of(task);
-
-    auto&& go_proc = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work, this, std::placeholders::_1, std::placeholders::_2);
-    WFGoTask* serve_task = WFTaskFactory::create_go_task(_m_server_uri, go_proc, cls_task_req, ctx);
-    auto&& go_proc_cb = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb, this, serve_task);
-    serve_task->set_callback(go_proc_cb);
-    *series << serve_task;
-
-    return;
-}
-
-/***
- * run model session and get model output
- * @tparam WORKER
- * @tparam MODEL_INPUT
- * @tparam MODEL_OUTPUT
- * @param req
- * @param ctx
- */
-template<typename WORKER, typename MODEL_OUTPUT>
-void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(const BaseAiServerImpl::cls_request& req, BaseAiServerImpl::seriex_ctx* ctx) {
-    // fetch a model worker from worker_queue
-    WORKER worker;
-    while (!_m_working_queue.try_dequeue(worker)) {}
-
-    // run model session
-    models::io_define::common_io::base64_input model_input{req.image_content};
-    StatusCode status = worker->run(model_input, ctx->model_output);
-
-    // return work back to queue
-    while (!_m_working_queue.enqueue(std::move(worker))) {}
-
-    ...
-}
-
-/***
- * make response and reply to client
- * @tparam WORKER
- * @tparam MODEL_INPUT
- * @tparam MODEL_OUTPUT
- * @param task
- */
-template<typename WORKER, typename MODEL_OUTPUT>
-void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(const WFGoTask* task) {
-    ...
-    // make response body
-    auto* ctx = (seriex_ctx*)series_of(task)->get_context();
-    StatusCode status = ctx->model_run_status;
-    std::string task_id = ctx->is_task_req_valid ? ctx->task_id : "";
-    // current version: the base class calls fill_response_data and sets HTTP status/headers
-
-    // reply to client
-    ctx->response->append_output_body(std::move(response_body));
-
-    ...
-}
-```
-
-You'd better use the base class's implementation if you're a beginner otherwise you can implement your own serve logic if you've got some specific needs.
-
-## Step 5: Add New Server Into Task Factory :factory:
-
-Task factory is used to create server object. Details about this can be found [classification_task.h](../src/factory/classification_task.h). The factory is a type-erased registry (`jinq::factory::ServerFactory`): `register_type<CONCRETE>(name)` stores a creator closure owned by the factory (thread-safe, same-name registration overwrites), and `create(name)` builds an instance by name.
-
-```cpp
-/***
- * create densenet image classification server
- * @param server_name
- * @return
- */
+// create densenet classification server
 inline std::unique_ptr<BaseAiServer> create_densenet_cls_server(const std::string& server_name) {
     auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_type<DenseNetServer>(server_name);
+    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
+        using Output = jinq::models::io_define::classification::std_classification_output;
+        jinq::server::AiServerSpec<Output> spec;
+        spec.server_section = "DENSENET_CLASSIFICATION_SERVER";  // server TOML section
+        spec.model_section = "DENSENET";                          // holds model_config_file_path
+        spec.display_name = "Densenet classification";
+        spec.make_worker = [](const std::string& name) {
+            return create_densenet_classifier<jinq::server::Base64Input, Output>(name);
+        };
+        spec.fill_response = &jinq::server::response::fill_classification;
+        return std::unique_ptr<BaseAiServer>(
+            new jinq::server::AiModelServer<Output>(std::move(spec)));
+    });
     return server_factory.create(server_name);
 }
 ```
 
-## Step 6: Make A New Server App :airplane:
+That is the whole per-server footprint. `AiModelServer<Output>::init` reads the server
+section (worker pool, timeouts, auth, rate limit — see
+[about_model_server_configuration.md](../docs/about_model_server_configuration.md)),
+loads the model config referenced by the model section, creates `worker_nums` workers and
+assembles the HTTP server — the exact flow the former 22 hand-written classes duplicated.
 
-You have already add a new ai model server till this step. Now let's make a server app to verify. Comple code can be found [densenet_classification_server.cpp](../src/apps/server/classification/densenet_classification_server.cpp)
+If your output is a brand-new shape, add the matching serializer in
+[src/server/response_serializers.h](../src/server/response_serializers.h) and point
+`spec.fill_response` at it; field names and JSON types must follow
+`docs/openapi.json` `components.schemas` (regenerate with `python scripts/gen_openapi.py`).
+
+## Step 3: Wire The Executable
+
+Create a thin main under `src/apps/server/<task>/` (the path and executable name are part
+of the repository layout contract checked by `scripts/check_consistency.py`) that
+delegates to the shared entry:
 
 ```cpp
+// densenet classification server tool
+
+#include "apps/common/model_server_main.h"
+#include "factory/classification_task.h"
+
 int main(int argc, char** argv) {
-
-    static WFFacilities::WaitGroup wait_group(1);
-
-    std::string config_file_path = argv[1];
-    LOG(INFO) << "cfg file path: " << config_file_path;
-    auto config = toml::parse(config_file_path);
-    const auto &server_cfg = config.at("DENSENET_CLASSIFICATION_SERVER");
-    auto port = server_cfg.at("port").as_integer();
-    LOG(INFO) << "serve on port: " << port;
-
-    auto server = create_densenet_cls_server("densenet_cls_server");
-    server->init(config);
-    if (server->start(port) == 0) {
-        wait_group.wait();
-        server->stop();
-    } else {
-        LOG(ERROR) << "Cannot start server";
-        return -1;
-    }
-
-    return 0;
+    return jinq::apps::run_model_server_main(
+        argc, argv, "DENSENET_CLASSIFICATION_SERVER",
+        [](const std::string& server_name) {
+            return jinq::factory::classification::create_densenet_cls_server(server_name);
+        });
 }
 ```
 
-If nothing wrong happened :smile: you should get a similar server described in [toturials_of_classification_model_server](../docs/toturials_of_classification_model_server.md)
+Then:
 
-Good Luck !!! :trophy::trophy::trophy:
+1. add the target in `src/apps/CMakeLists.txt` (`add_server_app(...)`);
+2. add a config under `conf/server/<task>/<model>/` (copy a sibling config and adjust
+   `server_uri`, `port`, `worker_nums`);
+3. add the executable row to `docs/repository-layout.md` (the consistency gate checks
+   this mapping and that the referenced `model_config_file_path` exists);
+4. declare the new `server_uri` in `docs/openapi.json` via `scripts/gen_openapi.py`.
 
-## Reference
+## Step 4: What The Base Framework Already Does For You
 
-Complete implementation code can be found
-
-* [Base Server Impl Implement](../src/server/base_server_impl.h)
-* [DenseNet Server Implement](../src/server/classification/densenet_server.cpp)
-* [DenseNet Server App](../src/apps/server/classification/densenet_classification_server.cpp)
+You usually do NOT need to touch request serving. `BaseAiServerImpl` provides
+`serve_process` / `do_work` / `do_work_cb`: JSON request parsing (with 400/413/415/405
+contract errors), bearer auth, per-IP rate limiting, worker checkout from the blocking
+queue (timeout budgeted), model inference, response serialization through
+`fill_response`, Prometheus metrics and structured request logs. Override points exist
+(`handle_custom_endpoint`) only if you need extra endpoints.
