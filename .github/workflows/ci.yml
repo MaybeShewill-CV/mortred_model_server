@@ -23,12 +23,13 @@ concurrency:
 env:
   # vcpkg 版本单一来源；升级时只需改这里
   VCPKG_TAG: 2026.01.16
-  # vcpkg 克隆到 runner 临时目录（workspace 之外），保证构建后仓库工作区干净
-  VCPKG_ROOT: ${{ runner.temp }}/vcpkg
+  # vcpkg 克隆到 workspace 之外（github.workspace 的上级目录），保证构建后仓库工作区干净。
+  # 注意：runner 上下文在 workflow 级 env 不可用（仅 step 级可用），这里只能用 github 上下文
+  VCPKG_ROOT: ${{ github.workspace }}/../vcpkg
   # 带 pinned builtin-baseline 的 manifest 副本（不改动仓库内 vcpkg.json）
-  VCPKG_MANIFEST_DIR: ${{ runner.temp }}/vcpkg-manifest
+  VCPKG_MANIFEST_DIR: ${{ github.workspace }}/../vcpkg-manifest
   # 依赖安装目录同样放在 workspace 之外
-  VCPKG_INSTALLED_DIR: ${{ runner.temp }}/vcpkg-installed
+  VCPKG_INSTALLED_DIR: ${{ github.workspace }}/../vcpkg-installed
   VCPKG_TARGET_TRIPLET: x64-linux
   # CI 覆盖默认的 _bin/_lib，把产物收进构建目录，避免污染仓库根目录
   MORTRED_CI_BIN_DIR: ${{ github.workspace }}/build-ci/bin
@@ -42,12 +43,13 @@ jobs:
     name: tests (${{ matrix.compiler }})
     runs-on: ubuntu-22.04
     timeout-minutes: 90
-    # 日常 PR 只跑 gcc 行，省一半依赖构建；clang 行仅在手动触发 full-matrix 时运行
-    if: ${{ matrix.compiler == 'gcc' || (github.event_name == 'workflow_dispatch' && github.event.inputs['full-matrix'] == 'true') }}
+    # 日常 PR 只跑 gcc 行（省一半依赖构建）；clang 行仅在手动触发 full-matrix 时运行。
+    # matrix 上下文不能用于 job 级 if（仅 github/needs/vars/inputs 可用），
+    # 因此改为在 strategy.matrix 定义里用 fromJSON 按触发方式生成矩阵。
     strategy:
       fail-fast: false
       matrix:
-        compiler: [gcc, clang]
+        compiler: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.full-matrix == 'true' && '["gcc","clang"]' || '["gcc"]') }}
     steps:
       - uses: actions/checkout@v7
 
@@ -276,7 +278,7 @@ jobs:
     timeout-minutes: 90
     needs: tests
     continue-on-error: true
-    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs['full-matrix'] == 'true' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.full-matrix == 'true' }}
     steps:
       - uses: actions/checkout@v7
 
@@ -404,3 +406,11 @@ jobs:
           python3 scripts/convert_trt_engines.sh --list
           python3 scripts/fetch_weights.py --dry-run
           python3 scripts/check_consistency.py
+
+      # 静态 lint workflow 文件：actionlint 能捕获上下文作用域错误（如 runner 用于
+      # workflow 级 env、matrix 用于 job 级 if），防止 Invalid workflow file 复发
+      - name: Lint GitHub Actions workflows (actionlint)
+        run: |
+          set -euo pipefail
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color .github/workflows/
