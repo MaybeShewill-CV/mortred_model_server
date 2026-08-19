@@ -1,0 +1,7 @@
+# 统一行尾策略：文本文件按内容自动识别，脚本类强制 LF，
+# 避免 Windows 检出 CRLF 破坏 bash/python 脚本与 CI 一致性。
+* text=auto
+*.sh text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
