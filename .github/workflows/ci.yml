@@ -49,7 +49,7 @@ jobs:
       matrix:
         compiler: [gcc, clang]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install build tools
         run: |
@@ -140,7 +140,7 @@ jobs:
     timeout-minutes: 90
     needs: tests
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -278,7 +278,7 @@ jobs:
     continue-on-error: true
     if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs['full-matrix'] == 'true' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install tools
         run: |
@@ -362,7 +362,7 @@ jobs:
     name: deploy tools
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install tools
         run: |
