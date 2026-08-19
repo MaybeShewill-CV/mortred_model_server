@@ -66,7 +66,7 @@ jobs:
       # gcc 与 quality-gates 共享同一 key，避免重复构建同一套依赖。
       - name: Cache vcpkg and ccache
         id: cache-deps
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ${{ env.VCPKG_ROOT }}
@@ -151,7 +151,7 @@ jobs:
 
       - name: Cache vcpkg and ccache
         id: cache-deps
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ${{ env.VCPKG_ROOT }}
@@ -287,7 +287,7 @@ jobs:
 
       - name: Cache vcpkg
         id: cache-deps
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ${{ env.VCPKG_ROOT }}
