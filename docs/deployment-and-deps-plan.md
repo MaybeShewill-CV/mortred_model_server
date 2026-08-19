@@ -102,7 +102,7 @@
 |---|---|---|
 | `scripts/install_deps.sh` | ✅ 已实现并提交 | `--check` 本机实测通过（11 头 + 11 库全 ok，工具链缺失项如实标记）；`--all` 实际构建待 Linux/GPU 机验证 |
 | `Dockerfile` + compose + entrypoint + `MORTRED_INSTALL` | ✅ 已实现并提交 | 待 `docker build` 实机验证（需 Docker/Linux） |
-| `scripts/fetch_weights.py` + `conf/weights_manifest.json` | ✅ 已实现并提交（141 文件 sha256 基线） | `--check` 抽样往返、路径穿越防护实测通过；真实下载待有 HF 网络环境验证 |
+| `scripts/fetch_weights.py` + `conf/weights_manifest.json` | ✅ 已实现并提交（141 文件 sha256 基线，on_hf=61） | `--check` 抽样往返、路径穿越防护、**HF 路径映射修正**与**真实下载**（bpe 文件 sha256 与原件一致）均已实测通过；全量权重下载待网络带宽允许的环境 |
 | `scripts/convert_trt_engines.sh` + `conf/trt_engines.json` + profiles | ✅ 已实现并提交（19 引擎） | `--list`/`--only` 实测通过；实际转换待 GPU + full build 验证 |
 | 一致性门禁（不变量 10：引擎清单覆盖） | ✅ 已实现并提交 | `check_consistency.py` 通过 |
 | CI deploy-tools job、README 双语部署章节、systemd 单元 | ✅ 已实现并提交 | 语法/清单校验通过 |
