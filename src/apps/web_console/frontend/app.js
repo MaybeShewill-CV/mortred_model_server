@@ -5,7 +5,6 @@ const state = {
   servers: [],
   selectedId: null,
   files: [],            // [{name, url, base64}]
-  chatImage: null,      // {name, base64}
   batchAbort: null,
   logs: {},             // id -> {offset, filter, paused, follow}
   logServerId: null,
@@ -180,7 +179,6 @@ async function controlServer(id, action) {
 function selectServer(id) {
   if (id !== state.selectedId) {
     clearResults();
-    $("chat-history").innerHTML = "";
     // log panel follows the sidebar selection
     if (state.logServerId !== id) {
       state.logServerId = id;
@@ -193,13 +191,7 @@ function selectServer(id) {
   renderServerList();
   if (!s) return;
   $("selected-server-info").textContent = `${s.name}  :${s.port}${s.uri}${s.running && !s.ready ? "（启动中…）" : ""}`;
-  if (s.type === "chat") {
-    $("image-input-area").classList.add("hidden");
-    $("chat-input-area").classList.remove("hidden");
-  } else {
-    $("chat-input-area").classList.add("hidden");
-    $("image-input-area").classList.remove("hidden");
-  }
+  $("image-input-area").classList.remove("hidden");
 }
 
 function clearResults() {
@@ -329,71 +321,6 @@ function setBatchProgress(done, total) {
   $("batch-progress-text").textContent = `${done} / ${total}`;
 }
 
-/* ---------------- chat ---------------- */
-$("btn-chat-image").onclick = () => $("chat-image-input").click();
-$("chat-image-input").onchange = async (ev) => {
-  const f = ev.target.files[0];
-  if (!f) return;
-  state.chatImage = { name: f.name, base64: await loadImageAsBase64(f) };
-  $("chat-image-name").textContent = "已附加：" + f.name;
-};
-
-$("btn-chat-send").onclick = () => sendChat();
-$("chat-text").addEventListener("keydown", (ev) => {
-  if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); sendChat(); }
-});
-
-async function sendChat() {
-  const s = serverById(state.selectedId);
-  if (!s || s.type !== "chat") return;
-  if (!s.running) { alert("请先启动该 server"); return; }
-  if (!s.ready) { showToast(`${s.name} 尚未就绪（模型加载中），请稍候再试`, "error"); return; }
-  const text = $("chat-text").value.trim();
-  if (!text) return;
-
-  // keep only the latest chat turn's returns on the page
-  clearResults();
-  const isVLM = s.id.indexOf("qwen2_vl") !== -1;
-  const data = [{ role: "system", content: "You are a smart AI assistant from Mortred Company." }];
-  if (isVLM) {
-    const content = [{ type: "text", text }];
-    if (state.chatImage) content.push({ type: "image", image: state.chatImage.base64 });
-    data.push({ role: "user", content });
-  } else {
-    data.push({ role: "user", content: text });
-  }
-
-  const reqId = uid();
-  const body = JSON.stringify({ server_id: s.id, req_id: reqId, data });
-  appendChatBubble("user", text + (state.chatImage ? "\n[图片] " + state.chatImage.name : ""));
-  $("chat-text").value = "";
-  state.chatImage = null;
-  $("chat-image-name").textContent = "";
-
-  const t0 = performance.now();
-  const resp = await authorizedFetch("/api/infer", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body,
-  });
-  const raw = await resp.text();
-  let parsed = raw;
-  try { parsed = JSON.parse(raw); } catch (e) { /* keep raw */ }
-  const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
-  const answer = parsed && parsed.data && parsed.data.response ? parsed.data.response : raw;
-  appendChatBubble("assistant", answer);
-  addResultCard(s, { name: reqId, url: null, base64: null }, { ok: resp.ok, status: resp.status, data: parsed, raw }, reqId, elapsed);
-}
-
-function appendChatBubble(role, text) {
-  const box = $("chat-history");
-  const div = document.createElement("div");
-  div.className = "chat-msg " + role;
-  div.textContent = text;
-  box.appendChild(div);
-  box.scrollTop = box.scrollHeight;
-}
-
 /* ---------------- results ---------------- */
 function addResultCard(server, input, result, reqId, elapsed) {
   const box = $("results-list");
@@ -468,10 +395,10 @@ function visualize(server, input, result) {
     base.innerHTML = `
       <div class="compare">
         <figure>${imgUrl ? `<img src="${imgUrl}">` : ""}<figcaption>输入</figcaption></figure>
-        <figure><img src="${base64ToSrc(payload && payload.colorized_seg_mask)}"><figcaption>分割结果</figcaption></figure>
+        <figure><img src="${base64ToSrc(payload && payload.colorized_mask)}"><figcaption>分割结果</figcaption></figure>
       </div>`;
   } else if (cat === "matting") {
-    const seg = base64ToSrc(payload && payload.segment_result);
+    const seg = base64ToSrc(payload && payload.image);
     base.innerHTML = `
       <div class="compare">
         <figure>${imgUrl ? `<img src="${imgUrl}">` : ""}<figcaption>输入</figcaption></figure>
@@ -482,13 +409,13 @@ function visualize(server, input, result) {
     base.innerHTML = `
       <div class="compare">
         <figure>${imgUrl ? `<img src="${imgUrl}">` : ""}<figcaption>输入</figcaption></figure>
-        <figure><img src="${base64ToSrc(payload && payload.enhance_result)}"><figcaption>增强结果</figcaption></figure>
+        <figure><img src="${base64ToSrc(payload && payload.image)}"><figcaption>增强结果</figcaption></figure>
       </div>`;
   } else if (cat === "mono_depth_estimation") {
     base.innerHTML = `
       <div class="compare">
         <figure>${imgUrl ? `<img src="${imgUrl}">` : ""}<figcaption>输入</figcaption></figure>
-        <figure><img src="${base64ToSrc(payload && payload.estimate_result)}"><figcaption>深度估计</figcaption></figure>
+        <figure><img src="${base64ToSrc(payload && payload.image)}"><figcaption>深度估计</figcaption></figure>
       </div>`;
   } else if (cat === "ocr") {
     const canvas = document.createElement("canvas");
@@ -508,12 +435,6 @@ function visualize(server, input, result) {
     canvas.className = "overlay";
     drawKeypoints(canvas, imgUrl, payload);
     base.appendChild(canvas);
-  } else if (cat === "llm") {
-    const answer = payload && payload.response ? payload.response : JSON.stringify(data);
-    const div = document.createElement("div");
-    div.className = "chat-msg assistant";
-    div.textContent = answer;
-    base.appendChild(div);
   } else {
     base.textContent = "（该类别暂无专门可视化，见原始返回）";
   }
@@ -531,21 +452,20 @@ function drawDetection(canvas, imgUrl, boxes) {
     ctx.drawImage(img, 0, 0);
     const colors = ["#f87171", "#60a5fa", "#4ade80", "#facc15", "#c084fc", "#fb923c"];
     boxes.forEach((b, i) => {
-      const pts = b.points || [];
+      const bbox = b.bbox || [];
       const color = colors[i % colors.length];
       ctx.strokeStyle = color;
       ctx.lineWidth = 3;
-      if (pts.length >= 2 && Array.isArray(pts[0])) {
-        const x = pts[0][0], y = pts[0][1];
-        const x2 = pts[1][0], y2 = pts[1][1];
-        ctx.strokeRect(x, y, x2 - x, y2 - y);
+      if (bbox.length >= 4) {
+        const x = bbox[0], y = bbox[1];
+        ctx.strokeRect(x, y, bbox[2] - x, bbox[3] - y);
         ctx.fillStyle = color;
         ctx.font = "bold 16px sans-serif";
         ctx.fillText(`${b.category || ""} ${(b.score || "")}`, x, y > 18 ? y - 6 : y + 18);
       }
-      if (Array.isArray(b.landmark)) {
+      if (Array.isArray(b.landmarks)) {
         ctx.fillStyle = color;
-        b.landmark.forEach((p) => {
+        b.landmarks.forEach((p) => {
           if (Array.isArray(p)) { ctx.beginPath(); ctx.arc(p[0], p[1], 3, 0, Math.PI * 2); ctx.fill(); }
         });
       }
