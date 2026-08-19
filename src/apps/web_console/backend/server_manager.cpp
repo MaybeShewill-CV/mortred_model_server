@@ -17,6 +17,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#include "ready_probe.h"
+
 namespace mortred_web {
 
 namespace {
@@ -236,21 +238,22 @@ bool ServerManager::is_running(const std::string& id) const {
 }
 
 bool ServerManager::is_ready(const std::string& id) {
-    if (!is_running(id)) {
-        return false;
-    }
-    auto* buf = logs(id);
-    if (buf == nullptr) {
-        return false;
-    }
-    auto lines = buf->slice(0, 2000);
-    for (const auto& line : lines) {
-        if (line.find("server init successfully") != std::string::npos ||
-            line.find("initialization complete") != std::string::npos) {
-            return true;
+    int port = -1;
+    {
+        std::lock_guard<std::mutex> lock(_mu);
+        auto it = _procs.find(id);
+        if (it == _procs.end() || !it->second->running.load()) {
+            return false;
         }
+        auto port_it = _ports.find(id);
+        if (port_it == _ports.end()) {
+            return false;
+        }
+        port = port_it->second;
     }
-    return false;
+    // 探测真实 /ready 端点（2xx 即就绪），取代日志字符串匹配：
+    // 日志文案一旦调整 grep 即失效，而 /ready 是受 e2e 契约测试保护的稳定接口
+    return endpoint_ready(port, "/ready", 1000);
 }
 
 ServerManager::Status ServerManager::status(const std::string& id) const {

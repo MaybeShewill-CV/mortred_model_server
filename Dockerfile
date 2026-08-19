@@ -26,6 +26,9 @@ RUN ./scripts/install_deps.sh --all \
 # ---------- 阶段 2：full build + 测试 + 安装树 ----------
 FROM nvidia/cuda:11.8.0-devel-ubuntu20.04 AS build
 
+# CI 质量门禁等场景注入额外 CMake 开关（如 -DMORTRED_ENABLE_WERROR=ON）
+ARG EXTRA_CMAKE_FLAGS=""
+
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libgoogle-glog-dev libeigen3-dev libopencv-dev libgtest-dev \
@@ -36,6 +39,7 @@ COPY --from=deps /src/3rd_party /src/3rd_party
 COPY . /src/
 RUN cmake -S /src -B /src/build \
         -DMORTRED_BUILD_FULL=ON -DMORTRED_INSTALL=ON -DCMAKE_BUILD_TYPE=Release \
+        ${EXTRA_CMAKE_FLAGS} \
     && cmake --build /src/build -j"$(nproc)" \
     && (cd /src/build && ctest --output-on-failure || true) \
     && cmake --install /src/build --prefix /opt/mortred

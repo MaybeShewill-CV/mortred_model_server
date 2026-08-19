@@ -45,8 +45,8 @@ class ServerManager {
     bool is_running(const std::string& id) const;
 
     /***
-     * true when the model server has logged its ready marker
-     * ("server init successfully" / "initialization complete")
+     * true when the model server's real /ready endpoint answers 2xx
+     * (short-timeout HTTP probe; log-grep heuristic removed)
      */
     bool is_ready(const std::string& id);
 

@@ -14,11 +14,11 @@
 
 </div>
 
-Morted AI Model Server is a toy web server for deep learning models. Server tries its best to make the most usage of your cpu and gpu resources. All dl models are trained by `tensorflow/pytorch` and deployed via [MNN](https://github.com/alibaba/MNN) toolkit and supply web service through [workflow](https://github.com/sogou/workflow) framework finally.
+   Mortred AI Model Server is a toy web server for deep learning models. Server tries its best to make the most usage of your cpu and gpu resources. All dl models are trained by `tensorflow/pytorch` and deployed via [MNN](https://github.com/alibaba/MNN) toolkit and supply web service through [workflow](https://github.com/sogou/workflow) framework finally.
 
 Do not hesitate to let me know if you find bugs here cause I'm a c-with-struct noob :upside_down_face:
 
-The three major components are illustrated on the architecture picture bellow.
+The three major components are illustrated on the architecture picture below.
 
 <p align="center">
   <img src='./resources/images/simple_architecture.png' alt='simple_architecture' height="400px" width="500px">
@@ -208,7 +208,7 @@ The client will repeatly post [demo images](./demo_data/model_test_input/classif
 Client output should be like
 ![mobilenetv2_client_exam_output](./resources/images/exam_client_output.png)
 
-For more server demo you may find them in [Torturials](#tutorials) :point_down::point_down::point_down:
+For more server demo you may find them in [Tutorials](#tutorials) :point_down::point_down::point_down:
 
 # `Benchmark`
 

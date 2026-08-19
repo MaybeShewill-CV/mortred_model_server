@@ -8,7 +8,7 @@ on:
     inputs:
       # 勾选后才会运行 clang 编译行与 clang-tidy job（依赖构建约多 30-60 分钟）
       full-matrix:
-        description: 'Include clang compiler row and clang-tidy job'
+        description: 'Include clang compiler row, clang-tidy job and docker full-werror job'
         type: boolean
         default: false
 
@@ -401,6 +401,7 @@ jobs:
           PY
 
       - name: Static self-checks (engine list / weights dry-run)
+
         run: |
           set -euo pipefail
           python3 scripts/convert_trt_engines.sh --list
@@ -414,3 +415,31 @@ jobs:
           set -euo pipefail
           bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
           ./actionlint -color .github/workflows/
+
+  # ---------------------------------------------------------------------------
+  # Job E: 全量构建 -Werror 门禁（Docker 载体，复用 install_deps.sh 全自动依赖）
+  # --------------------------------------------------------------------------
+  full-werror:
+    name: full build werror (docker)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    # push 到 main 常跑；PR 默认跳过（镜像依赖层构建较重），手动 full-matrix 可触发
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.full-matrix == 'true') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 只构建到 build 阶段（依赖编译 + 全量 -Werror 编译即门禁目的，无需 runtime 层）
+      - name: Build full project with warnings as errors
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: build
+          push: false
+          load: false
+          build-args: |
+            EXTRA_CMAKE_FLAGS=-DMORTRED_ENABLE_WERROR=ON
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

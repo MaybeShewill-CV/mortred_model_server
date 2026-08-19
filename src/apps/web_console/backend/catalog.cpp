@@ -2,8 +2,8 @@
  * Author: Codex
  * File: catalog.cpp
  *
- * Web console server registry. The registry is derived from conf/server/*.toml
- * only: each [*_SERVER] section must declare `server_exe` (plus port / host /
+ * Web console server registry. The registry is derived from the TOML configs
+ * under conf/server only: each [*_SERVER] section must declare `server_exe` (plus port / host /
  * server_uri), so the config -> executable mapping is explicit and can never
  * silently go stale. The previous token-overlap heuristic and the hard-coded
  * add_missing_server entries were removed (see scripts/check_consistency.py

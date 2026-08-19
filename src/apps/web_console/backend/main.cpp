@@ -341,7 +341,7 @@ void handle_infer(WFHttpTask* server_task) {
     }
     if (!g_manager.is_ready(id)) {
         reply_json(server_task, 409, json_error(
-            "模型尚未就绪（模型加载中或启动失败），请等待日志出现就绪标记后再试: " + id));
+            "模型尚未就绪（模型加载中或启动失败），请等待 /ready 返回 200 后再试: " + id));
         return;
     }
 
@@ -358,7 +358,7 @@ void handle_infer(WFHttpTask* server_task) {
                 "forward to model server failed (state " + std::to_string(t->get_state()) +
                 ", errno " + std::to_string(t->get_error()) + ": " +
                 (t->get_error() != 0 ? std::strerror(t->get_error()) : "unknown") +
-                "). 若为 503/连接被拒，通常是模型仍在加载，请等待日志显示就绪后再试。");
+                "). 若为 503/连接被拒，通常是模型仍在加载，请等待 /ready 返回 200 后再试。");
             resp->append_output_body(err.data(), err.size());
             return;
         }

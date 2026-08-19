@@ -39,6 +39,7 @@ set(TEST_LIST
     simple_tokenizer_unittest
     request_size_limit_unittest
     web_console_auth_unittest
+    ready_probe_unittest
     rate_limiter_unittest
     cv_image_input_unittest
     worker_nums_unittest
@@ -87,6 +88,8 @@ foreach(src ${TEST_LIST})
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "web_console_auth_unittest")
         set(EXTRA_SRCS ${PROJECT_ROOT_DIR}/src/apps/web_console/backend/auth.cpp)
+    elseif(${src} STREQUAL "ready_probe_unittest")
+        set(EXTRA_LIBS pthread)
     elseif(${src} STREQUAL "response_schema_test")
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "openapi_consistency_test")

@@ -27,7 +27,7 @@ struct ServerEntry {
 class Catalog {
   public:
     /***
-     * Build the server registry from conf/server/*.toml only. Every
+     * Build the server registry from the TOML configs under conf/server only. Every
      * [*_SERVER] section must declare `server_exe` (plus port / host /
      * server_uri), so the config -> executable mapping is explicit and can
      * never silently go stale (enforced by scripts/check_consistency.py
