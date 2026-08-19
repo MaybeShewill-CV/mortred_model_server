@@ -14,7 +14,7 @@ cd $PROJECT_ROOT/_bin
 ./mobilenetv2_classification_server.out ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.toml
 ```
 
-When server successfully start on `http:://localhost:8091` you're supposed to see `worker_nums` workers were called up and occupied your GPU resources. By default 4 model workers will be created you may enlarge it if you have enough GPU memory.
+When the server starts successfully at the `port` configured in your server config (`conf/server/<task>/<model>/*.toml`), `worker_nums` workers will be spawned and occupy your GPU resources. The shipped configs default to `worker_nums=1`; you may enlarge it if you have enough GPU memory.
 
 `Classification Server Ready to Serve`
 ![classification_server_ready_to_serve](../resources/images/mobilenetv2_server_ready.png)
@@ -48,24 +48,28 @@ You may get the class_id and the score from the response.
 
 ## Description Of Python Client
 
-The script at [test_server.py](../scripts/server/test_server.py) not only supports a sequencially toy client but also supports locust pressure test mode.
+The script at [test_server.py](../scripts/server/test_server.py) not only supports a sequential toy client but also supports locust pressure test mode. It reads `host` / `port` / `server_uri` directly from the server config under `conf/server/`, so the target URL always matches the running server:
 
-Python test config file was stored at [py_demo_scripts_cfg.yaml](../conf/py_demo/py_demo_script_cfg.yaml).
+```bash
+# list all discoverable model servers
+python server/test_server.py --list
 
-`Sample Client Config File`
-![client_cfg_file](../resources/images/sample_client_cfg.png)
+# single mode: post a demo image 1000 times
+python server/test_server.py --server mobilenetv2 --mode single
 
-**URL:** the server's url path
+# locust pressure test
+python server/test_server.py --server mobilenetv2 --mode locust --users 20 --spawn-rate 10 --time 10m
+```
 
-**SOURCE_IMAGE_PATH:** the source image path used for testing
+**--server:** the server section name or a unique prefix, e.g. `mobilenetv2`, `yolov5`
 
-**MODE:** client test mode only supported `single` and `locust`. The client will simply post the same requests `LOOP_TIMES` times when switched to `single` mode but run a bunch of concurrent requests when switched to `locust` mode.
+**--mode:** `single` posts the same request `--times` times; `locust` runs a headless concurrent pressure test
 
-**U:** The max concurrent client counts
+**--image:** override the demo input image (a per-model default under `demo_data/model_test_input` is used otherwise)
 
-**R:** started client counts every seconds
+**--dry-run:** print the request plan without sending anything
 
-**T:** how long will the pressure test lasts
+**--users / --spawn-rate / --time:** locust concurrency, spawn rate and test duration
 
 For detailed usage of Locust library you may find some help from [locust documents](https://docs.locust.io/en/stable/)
 
@@ -77,7 +81,7 @@ export PYTHONPATH=$PWD:$PYTHONPATH
 python server/test_server.py --server mobilenetv2 --mode locust
 ```
 
-Here is server's output under pressure test with default 4 workers
+Here is server's output under pressure test with `worker_nums=4` configured
 
 `mobile client output with locust mode`
 ![locust_client_output](../resources/images/locust_client_output.png)

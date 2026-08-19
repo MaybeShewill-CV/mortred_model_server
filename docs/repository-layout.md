@@ -82,7 +82,7 @@ and must not be relied upon.
 ## Naming conventions
 
 - The canonical diffusion model directory is `src/models/diffusion/`. The historical
-  misspelled path `src/models/diffussion/` has been removed; all code should use
+  misspelled directory name (diffussion) has been removed; all code should use
   `src/models/diffusion/`.
 - Configuration files use TOML syntax. The canonical extension is `.toml`. Historical
   `.ini` files have been migrated; no new `.ini` files should be added.
@@ -118,6 +118,10 @@ The following files are **not** part of the current repository layout. If they a
 
 Their source code is not present in this repository snapshot. Keeping binaries without
 source creates an unmaintainable repository and violates the consistency policy.
+
+The proxy server is **not implemented** in this repository; the placeholder docs
+about_proxy_server_configuration (English and Chinese variants) were removed. Do not
+re-add them until an actual proxy server exists.
 
 ## Consistency checks
 

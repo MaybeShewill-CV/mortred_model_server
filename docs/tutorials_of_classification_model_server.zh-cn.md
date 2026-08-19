@@ -14,7 +14,7 @@ cd $PROJECT_ROOT/_bin
 ./mobilenetv2_classification_server.out ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.toml
 ```
 
-正常启动后，服务会运行在 `http:://localhost:8091`, `worker_nums` workers会被唤醒占用你的GPU资源。默认情况下4个worker实例会被创建出来，当然你可以依你的gpu情况适量增大或者减少实例个数。
+正常启动后，服务会运行在服务器配置（`conf/server/<task>/<model>/*.toml`）中 `port` 指定的端口，`worker_nums` 个模型实例会被创建并占用 GPU 资源。仓库自带配置默认 `worker_nums=1`，你可以按 GPU 显存情况适当调整。
 
 `图像分类服务器被正常启动`
 ![classification_server_ready_to_serve](../resources/images/mobilenetv2_server_ready.png)
@@ -48,24 +48,28 @@ python server/test_server.py --server mobilenetv2 --mode single
 
 ## Python 客户端代码说明
 
-[test_server.py](../scripts/server/test_server.py) 所创建的简单python客户端不仅支持顺序发送并且支持基于locust的并发压测模式。
+[test_server.py](../scripts/server/test_server.py) 所创建的简单python客户端不仅支持顺序发送并且支持基于locust的并发压测模式。客户端直接读取 `conf/server/` 下的服务器配置（`host` / `port` / `server_uri`），因此测试目标 URL 始终与正在运行的服务器一致：
 
-客户端使用的配置文件存放在 [py_demo_scripts_cfg.yaml](../conf/py_demo/py_demo_script_cfg.yaml).
+```bash
+# 列出所有可用的模型服务器
+python server/test_server.py --list
 
-`Python客户端配置文件示例`
-![client_cfg_file](../resources/images/sample_client_cfg.png)
+# single 模式：发送演示图片 1000 次
+python server/test_server.py --server mobilenetv2 --mode single
 
-**URL:** 服务的url地址
+# locust 压测模式
+python server/test_server.py --server mobilenetv2 --mode locust --users 20 --spawn-rate 10 --time 10m
+```
 
-**SOURCE_IMAGE_PATH:** post的图像文件地址
+**--server:** 服务器配置段名或唯一前缀，例如 `mobilenetv2`、`yolov5`
 
-**MODE:** 目前客户端只支持 `single` 和 `locust` 两种模式. `single` 模式下客户端会顺序发送 `SOURCE_IMAGE_PATH` 图像 `LOOP_TIMES` 次。`locust`模式下会并发多个请求。
+**--mode:** `single` 顺序发送 `--times` 次请求；`locust` 并发压测
 
-**U:** 客户端最大并发数
+**--image:** 覆盖演示输入图片（默认使用 `demo_data/model_test_input` 下按模型选择的示例图）
 
-**R:** 每秒增加的客户端数量
+**--dry-run:** 只打印请求计划，不发送任何请求
 
-**T:** 压测持续时间
+**--users / --spawn-rate / --time:** locust 并发数、每秒启动数与压测时长
 
 关于 `Locust` 库的详细文档可以查询 [locust documents](https://docs.locust.io/en/stable/)
 
@@ -77,7 +81,7 @@ export PYTHONPATH=$PWD:$PYTHONPATH
 python server/test_server.py --server mobilenetv2 --mode locust
 ```
 
-在使用默认配置的4个模型实例情况下服务端和客户端的输出如下图所示
+在服务器配置 `worker_nums=4` 的情况下，服务端和客户端的输出如下图所示
 
 `压测模式下的客户端输出`
 ![locust_client_output](../resources/images/locust_client_output.png)

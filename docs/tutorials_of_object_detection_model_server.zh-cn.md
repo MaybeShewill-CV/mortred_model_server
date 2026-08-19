@@ -14,7 +14,7 @@ cd $PROJECT_ROOT/_bin
 ./yolov5_detection_server.out ../conf/server/object_detection/yolov5/yolov5_server_config.toml
 ```
 
-默认状态下服务会启动在 `http:://localhost:8091` 并且有4个模型实例被启动。你可以通过修改模型配置来使用不同的yolov5模型，比如 `yolov5s`、`yolov5m`、`yolov5x` etc
+正常启动后，服务会运行在服务器配置（`conf/server/<task>/<model>/*.toml`）中 `port` 指定的端口，`worker_nums` 个模型实例会被创建并占用 GPU 资源。仓库自带配置默认 `worker_nums=1`，你可以按 GPU 显存情况适当调整。你可以通过修改模型配置来使用不同的yolov5模型，比如 `yolov5s`、`yolov5m`、`yolov5x` etc
 
 ## Python 客户端示例
 

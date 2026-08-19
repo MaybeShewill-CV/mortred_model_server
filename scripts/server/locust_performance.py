@@ -11,12 +11,14 @@ locust pressure test
 import base64
 import hashlib
 import json
+import os
 import time
 
 import locust
 
-URL = ''
-SRC_IMAGE_PATH = ''
+# injected by test_server.py (locust mode); no file mutation at runtime
+URL = os.environ.get('LOCUST_URL', '')
+SRC_IMAGE_PATH = os.environ.get('LOCUST_IMG', '')
 
 
 class ClientBehavior(locust.TaskSet):

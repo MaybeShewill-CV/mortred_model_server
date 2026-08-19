@@ -10,6 +10,8 @@
 
    | [English](README.md) | [中文](README.zh-cn.md) |
 
+   [![CI](https://github.com/MaybeShewill-CV/mortred_model_server/actions/workflows/ci.yml/badge.svg)](https://github.com/MaybeShewill-CV/mortred_model_server/actions/workflows/ci.yml)
+
 </div>
 
 这是一个易于使用的面向DL模型的Web服务器，致力于充分发挥单机的cpu和gpu性能。整个服务器的架构大致可以分成三层，最底层的DL模型开发依赖于 `tensorflow/pytorch` 框架，中间的DL模型推理引擎主要依赖 [MNN](https://github.com/alibaba/MNN) 它具有高性能、易于适配多种计算后端的优势，上层的DL模型网络服务依赖高性能C++服务器引擎 [workflow](https://github.com/sogou/workflow) 来完成.
@@ -166,7 +168,7 @@ cd $PROJECT_ROOT_DIR/_bin
 ./mobilenetv2_classification_server.out ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.toml
 ```
 
-按照默认的配置文件，服务端口为`8091`，有四个模型worker等待被调用。项目中含有一个简单的python客户端来测试该服务，使用方法如下
+按照默认的配置文件（`conf/server/classification/mobilenetv2/mobilenetv2_server_config.toml`），服务端口为`9002`，`worker_nums=1` 个模型 worker 等待被调用。项目中含有一个简单的python客户端来测试该服务，使用方法如下
 
 ```bash
 cd $PROJECT_ROOT_DIR/scripts
@@ -226,7 +228,6 @@ python server/test_server.py --server mobilenetv2 --mode single
 # `网络服务器配置说明`
 
 * [模型网络服务器配置说明](./docs/about_model_server_configuration.zh-cn.md)
-* [代理服务器配置说明](./docs/about_proxy_server_configuration.zh-cn.md)
 
 # `Model Zoo`
 

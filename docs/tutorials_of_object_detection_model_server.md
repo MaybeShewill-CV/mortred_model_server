@@ -14,7 +14,7 @@ cd $PROJECT_ROOT/_bin
 ./yolov5_detection_server.out ../conf/server/object_detection/yolov5/yolov5_server_config.toml
 ```
 
-When server successfully start on `http:://localhost:8091` you're supposed to see `worker_nums` workers were called up and occupied your GPU resources. By default 4 model workers will be created you may enlarge it if you have enough GPU memory.
+When the server starts successfully at the `port` configured in your server config (`conf/server/<task>/<model>/*.toml`), `worker_nums` workers will be spawned and occupy your GPU resources. The shipped configs default to `worker_nums=1`; you may enlarge it if you have enough GPU memory.
 
 You may switch yolov5 model eg. yolov5s yolov5m etc by modifying model configuration. You may find instruction at [about_model_configuration.md#L20](../docs/about_model_configuration.md)
 

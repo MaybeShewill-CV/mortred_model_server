@@ -10,6 +10,8 @@
 
    | [English](README.md) | [中文](README.zh-cn.md) |
 
+   [![CI](https://github.com/MaybeShewill-CV/mortred_model_server/actions/workflows/ci.yml/badge.svg)](https://github.com/MaybeShewill-CV/mortred_model_server/actions/workflows/ci.yml)
+
 </div>
 
 Morted AI Model Server is a toy web server for deep learning models. Server tries its best to make the most usage of your cpu and gpu resources. All dl models are trained by `tensorflow/pytorch` and deployed via [MNN](https://github.com/alibaba/MNN) toolkit and supply web service through [workflow](https://github.com/sogou/workflow) framework finally.
@@ -87,7 +89,10 @@ ctest --test-dir build --output-on-failure
 `builtin-baseline` is intentionally not hard-coded in `vcpkg.json`; if your vcpkg
 instance requires an explicit baseline, run
 `vcpkg x-update-baseline --add-initial-baseline` once and reconfigure. CI pins the
-baseline to a fixed vcpkg release automatically.
+baseline to a fixed vcpkg release tag (`VCPKG_TAG` in `.github/workflows/ci.yml`)
+in a workspace-external manifest copy, so CI builds are reproducible without
+touching this file. For fully reproducible local builds, commit the result of the
+`x-update-baseline` command above.
 
 Option A2 - system packages (Ubuntu 22.04):
 
@@ -173,7 +178,7 @@ cd $PROJECT_ROOT_DIR/_bin
 ./mobilenetv2_classification_server.out ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.toml
 ```
 
-Model service will be start at `http://localhost:8091` with 4 workers waiting to serve. A demo python client was supplied to test the service
+Model service will start at the `port` configured in the server config (`conf/server/classification/mobilenetv2/mobilenetv2_server_config.toml`, default `9002`, `worker_nums=1`). A demo python client was supplied to test the service
 
 ```bash
 cd $PROJECT_ROOT_DIR/scripts
@@ -232,7 +237,6 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 # `Web Server Configuration`
 
 * [Description About Model Server](./docs/about_model_server_configuration.md)
-* [Description About Proxy Server](./docs/about_proxy_server_configuration.md)
 
 # `TODO`
 
