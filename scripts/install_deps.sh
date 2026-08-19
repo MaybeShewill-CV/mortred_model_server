@@ -207,14 +207,19 @@ install_nvidia() {
         else
             info "nvcc 已存在，跳过 cuda-toolkit"
         fi
-        apt-get install -y --no-install-recommends tensorrt-10.3.0.26 libcudnn9-dev-cuda-12
+        # TRT 10 / cuDNN 9 开发包（拷贝头文件与库到 3rd_party 需要 -dev）
+        apt-get install -y --no-install-recommends \
+            libnvinfer-dev libnvinfer-plugin-dev libnvonnxparser-dev \
+            libcudnn9-dev-cuda-12
     else
         if ! command -v nvcc >/dev/null 2>&1 && [ ! -x /usr/local/cuda/bin/nvcc ]; then
             apt-get install -y --no-install-recommends cuda-toolkit-11-8
         else
             info "nvcc 已存在，跳过 cuda-toolkit"
         fi
-        apt-get install -y --no-install-recommends tensorrt-8.6.1.6-1+cuda11.8 libcudnn8-dev-cuda-11
+        apt-get install -y --no-install-recommends \
+            libnvinfer-dev libnvinfer-plugin-dev libnvonnxparser-dev \
+            libcudnn8-dev-cuda-11
     fi
     # 拷入 3rd_party（头 + 库）
     local trt_inc=/usr/include/x86_64-linux-gnu

@@ -57,7 +57,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && dpkg -i /tmp/cuda-keyring.deb && rm /tmp/cuda-keyring.deb \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-        tensorrt-8.6.1.6-1+cuda11.8 libcudnn8 \
+        libnvinfer8 libnvinfer-plugin8 libnvonnxparser8 libcudnn8 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /opt/mortred /opt/mortred

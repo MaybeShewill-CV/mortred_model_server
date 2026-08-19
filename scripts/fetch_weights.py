@@ -131,6 +131,10 @@ def main() -> int:
         dst = ROOT / rel
         expect = item.get("sha256", "")
         if dst.exists():
+            if args.dry_run:
+                # dry-run 只报告将要下载的文件，不哈希已存在文件（避免大模型耗时）
+                ok += 1
+                continue
             actual = sha256_of(dst)
             if expect and actual != expect:
                 if args.check:
