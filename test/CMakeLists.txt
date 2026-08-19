@@ -50,7 +50,7 @@ set(TEST_LIST
     config_schema_test
 )
 
-if(WORKFLOW_LIBS)
+if(MORTRED_WORKFLOW_AVAILABLE)
     # HTTP 级端到端契约测试需要链接 workflow；tests-only 构建若未提供
     # vendored workflow 库则自动跳过（全量构建/本地开发环境会执行）。
     list(APPEND TEST_LIST server_e2e_contract_test)
@@ -82,7 +82,7 @@ foreach(src ${TEST_LIST})
     elseif(${src} STREQUAL "model_factory_unittest")
         set(EXTRA_LIBS glog::glog)
     elseif(${src} STREQUAL "model_golden_test")
-        set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} ${MNN_LIBS})
+        set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn vendored::mnn_cuda)
     elseif(${src} STREQUAL "simple_tokenizer_unittest")
         set(EXTRA_SRCS ${PROJECT_ROOT_DIR}/src/models/clip/simple_tokenizer.cpp)
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
@@ -95,7 +95,7 @@ foreach(src ${TEST_LIST})
     elseif(${src} STREQUAL "openapi_consistency_test")
         set(EXTRA_LIBS glog::glog)
     elseif(${src} STREQUAL "server_e2e_contract_test")
-        set(EXTRA_LIBS glog::glog ${WORKFLOW_LIBS} pthread)
+        set(EXTRA_LIBS glog::glog vendored::workflow pthread)
     endif()
     add_executable(${src} EXCLUDE_FROM_ALL ${src}.cc ${EXTRA_SRCS})
     target_link_libraries(${src} common ${EXTRA_LIBS} ${GTEST_LIBS})
@@ -108,6 +108,8 @@ endforeach()
 
 if(CMAKE_MEMORYCHECK_COMMAND)
     foreach(src ${TEST_LIST})
-        add_test(${src}-memory-check ${memcheck_command} ./${src})
+        # 现代签名 + 生成器表达式定位二进制（旧式 ./${src} 相对项目根，实际指向不存在的路径）
+        add_test(NAME ${src}-memory-check
+                 COMMAND ${memcheck_command} $<TARGET_FILE:${src}>)
     endforeach()
 endif()

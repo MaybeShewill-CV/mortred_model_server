@@ -8,8 +8,6 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 get_filename_component(PROJECT_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../.." ABSOLUTE)
-include_directories(SYSTEM "${PROJECT_ROOT}/3rd_party/include")
-include_directories("${PROJECT_ROOT}/src")
 
 add_executable(app_server
     main.cpp
@@ -17,7 +15,11 @@ add_executable(app_server
     server_manager.cpp
 )
 
-target_compile_options(app_server PRIVATE -O2 -Wno-deprecated-declarations)
-target_link_libraries(app_server workflow pthread)
-target_link_directories(app_server PRIVATE "${PROJECT_ROOT}/3rd_party/libs")
-target_link_options(app_server PRIVATE "-Wl,-rpath,${PROJECT_ROOT}/3rd_party/libs")
+target_include_directories(app_server SYSTEM PRIVATE "${PROJECT_ROOT}/3rd_party/include")
+target_include_directories(app_server PRIVATE "${PROJECT_ROOT}/src")
+# 不再硬编码 -O2：让 CMAKE_BUILD_TYPE 决定优化级别；链接 imported workflow target
+target_compile_options(app_server PRIVATE -Wno-deprecated-declarations)
+target_link_libraries(app_server PRIVATE vendored::workflow Threads::Threads)
+# 运行期在 3rd_party/libs 找 libworkflow/libssl（构建期 RPATH，非安装期）
+set_target_properties(app_server PROPERTIES
+    BUILD_RPATH "${PROJECT_ROOT}/3rd_party/libs")

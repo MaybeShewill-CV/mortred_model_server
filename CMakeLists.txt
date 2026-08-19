@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.18)
 
 project(mortred_model_server LANGUAGES C CXX)
 
@@ -7,10 +7,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS ON)
-
-# 兼容既有代码对 deprecated OpenCV API 的大量使用；警告即错误开关由 CI 质量门禁单独控制
-add_compile_options(-Wno-deprecated-declarations)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(PROJECT_ROOT_DIR ${CMAKE_CURRENT_LIST_DIR})
 
@@ -29,14 +26,12 @@ message(STATUS "\tBuild Type: ${CMAKE_BUILD_TYPE}")
 # 输出目录可配置，默认保持历史路径 _bin/_lib（web_console/ServerManager 依赖该布局）
 set(MORTRED_BIN_OUTPUT_DIR ${PROJECT_ROOT_DIR}/_bin CACHE PATH "Executable output directory")
 set(MORTRED_LIB_OUTPUT_DIR ${PROJECT_ROOT_DIR}/_lib CACHE PATH "Shared library output directory")
-set(EXECUTABLE_OUTPUT_PATH ${MORTRED_BIN_OUTPUT_DIR})
-set(LIBRARY_OUTPUT_PATH ${MORTRED_LIB_OUTPUT_DIR})
-file(GLOB MNN_LIBS ${PROJECT_ROOT_DIR}/3rd_party/libs/*MNN*so*)
-file(GLOB_RECURSE WORKFLOW_LIBS ${PROJECT_ROOT_DIR}/3rd_party/libs/*workflow*so)
-file(GLOB_RECURSE FMT_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*fmt*so)
-file(GLOB_RECURSE ONNXRUNTIME_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*onnxruntime*so)
-file(GLOB_RECURSE NVINFER_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*nvinfer*.so*)
-file(GLOB_RECURSE TRT_ONNXPARSER_LIBRARIES ${PROJECT_ROOT_DIR}/3rd_party/libs/*nvonnxparser*.so*)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${MORTRED_BIN_OUTPUT_DIR})
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${MORTRED_LIB_OUTPUT_DIR})
+
+# vendored 依赖：显式 imported target（精确 soname + 缺失即致命错 + 变更自动重配置）
+include(${PROJECT_ROOT_DIR}/cmake/VendoredDeps.cmake)
+mortred_probe_workflow()
 
 # CI / 单测模式：跳过依赖 CUDA/MNN/TRT 的模型与服务，只构建 common + tests
 option(MORTRED_BUILD_FULL "Build full project (models/server/apps, requires CUDA/MNN/TRT)" ON)
@@ -70,7 +65,15 @@ target_include_directories(mortred_common_includes SYSTEM INTERFACE
 add_subdirectory(src/common)
 
 if(MORTRED_BUILD_FULL)
-    find_package(CUDA REQUIRED)
+    find_package(CUDAToolkit REQUIRED)
+    # CUDA 推理栈（MNN-TRT 后端 / onnxruntime / TensorRT）：精确版本，缺失即失败
+    mortred_import_shared(mnn            libMNN.so)
+    mortred_import_shared(mnn_cuda       libMNN_Cuda_Main.so)
+    mortred_import_shared(fmt            libfmt.so.9)
+    mortred_import_shared(onnxruntime    libonnxruntime.so.1.18.0)
+    mortred_import_shared(nvinfer        libnvinfer.so.8)
+    mortred_import_shared(nvinfer_plugin libnvinfer_plugin.so.8)
+    mortred_import_shared(nvonnxparser   libnvonnxparser.so.8)
     add_subdirectory(src/models)
     add_subdirectory(src/factory)
     add_subdirectory(src/server)

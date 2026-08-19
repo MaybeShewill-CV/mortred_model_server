@@ -31,19 +31,23 @@ target_include_directories(
 target_include_directories(
     models SYSTEM PUBLIC
     ${PROJECT_ROOT_DIR}/3rd_party/include
-    ${CUDA_INCLUDE_DIRS}
 )
 target_link_libraries(
     models
+    PUBLIC
     common
-    ${MNN_LIBS}
+    vendored::mnn
+    vendored::mnn_cuda
+    vendored::workflow
+    vendored::fmt
+    vendored::onnxruntime
+    vendored::nvinfer
+    vendored::nvinfer_plugin
+    vendored::nvonnxparser
+    CUDA::cudart
     ${OpenCV_LIBS}
     glog::glog
-    ${ONNXRUNTIME_LIBRARIES}
-    ${FMT_LIBRARIES}
-    ${NVINFER_LIBRARIES}
-    ${TRT_ONNXPARSER_LIBRARIES}
-    ${CUDA_LIBRARIES}
-    ${WORKFLOW_LIBS}
 )
+# 弃用压制只作用于确需 OpenCV 旧 API 的目标（替代原全局压制）
+target_compile_options(models PRIVATE -Wno-deprecated-declarations)
 set_target_properties(models PROPERTIES LINKER_LANGUAGE CXX)
