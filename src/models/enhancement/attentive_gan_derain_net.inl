@@ -202,7 +202,10 @@ StatusCode AttentiveGanDerain<INPUT, OUTPUT>::Impl::run(const INPUT &in, OUTPUT 
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
     _m_net.input("input_tensor")->copyFromHostTensor(&input_tensor_user);
-    _m_net.run_session();
+    const auto run_session_status = _m_net.run_session();
+    if (run_session_status != StatusCode::OK) {
+        return run_session_status;
+    }
     // postprocess
     cv::Mat output_image = postprocess();
     if (output_image.size() != _m_input_size_user) {
@@ -326,7 +329,7 @@ template <typename INPUT, typename OUTPUT> bool AttentiveGanDerain<INPUT, OUTPUT
  * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode AttentiveGanDerain<INPUT, OUTPUT>::run(const INPUT &input, OUTPUT &output) {
+StatusCode AttentiveGanDerain<INPUT, OUTPUT>::run_impl(const INPUT&input, OUTPUT &output) {
     return _m_pimpl->run(input, output);
 }
 

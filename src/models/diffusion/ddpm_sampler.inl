@@ -589,7 +589,7 @@ bool DDPMSampler<INPUT, OUTPUT>::is_successfully_initialized() const {
 * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode DDPMSampler<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
+StatusCode DDPMSampler<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
 }
 

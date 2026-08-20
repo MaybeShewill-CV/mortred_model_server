@@ -226,7 +226,7 @@ jinq::common::StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::init(const toml::t
 }
 
 template <typename INPUT, typename OUTPUT>
-jinq::common::StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
+jinq::common::StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPUT& output) {
     auto internal_input = sam_automask_generator_impl::transform_input(input);
     sam_automask_generator_impl::internal_output internal_output;
     auto status = _m_pimpl->generate(internal_input, internal_output);

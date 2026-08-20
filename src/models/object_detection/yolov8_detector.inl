@@ -702,7 +702,7 @@ bool YoloV8Detector<INPUT, OUTPUT>::is_successfully_initialized() const {
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode YoloV8Detector<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
+StatusCode YoloV8Detector<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
 }
 

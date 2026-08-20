@@ -363,7 +363,7 @@ jinq::common::StatusCode OpenAiClip<INPUT, OUTPUT>::init(const toml::table &cfg)
 }
 
 template <typename INPUT, typename OUTPUT>
-jinq::common::StatusCode OpenAiClip<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
+jinq::common::StatusCode OpenAiClip<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPUT& output) {
     auto internal_input = openai_clip_impl::transform_input(input);
     openai_clip_impl::internal_output internal_output;
     auto status = StatusCode::OK;

@@ -218,7 +218,10 @@ StatusCode DenseNet<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
     _m_net.input("input_tensor")->copyFromHostTensor(&input_tensor_user);
-    _m_net.run_session();
+    const auto run_session_status = _m_net.run_session();
+    if (run_session_status != StatusCode::OK) {
+        return run_session_status;
+    }
     // decode output tensor
     MNN::Tensor output_tensor_user(_m_net.output("output_tensor"), _m_net.output("output_tensor")->getDimensionType());
     _m_net.output("output_tensor")->copyToHostTensor(&output_tensor_user);
@@ -323,7 +326,7 @@ bool DenseNet<INPUT, OUTPUT>::is_successfully_initialized() const {
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode DenseNet<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
+StatusCode DenseNet<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
 }
 

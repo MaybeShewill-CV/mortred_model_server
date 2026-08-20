@@ -159,8 +159,16 @@ public:
         return _m_session;
     }
 
-    void run_session() const {
-        _m_net->runSession(_m_session);
+    // run the session and propagate MNN execution failures (regression: the
+    // previous void wrapper swallowed runSession's ErrorCode and callers
+    // reported OK even when inference failed)
+    jinq::common::StatusCode run_session() const {
+        const auto error_code = _m_net->runSession(_m_session);
+        if (error_code != MNN::NO_ERROR) {
+            LOG(ERROR) << "run mnn session failed, mnn error code: " << static_cast<int>(error_code);
+            return jinq::common::StatusCode::MODEL_RUN_SESSION_FAILED;
+        }
+        return jinq::common::StatusCode::OK;
     }
 
     // dynamic input shape support: resize the tensor and re-allocate the session,

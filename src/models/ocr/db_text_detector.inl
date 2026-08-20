@@ -269,7 +269,10 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
     _m_net.input("x")->copyFromHostTensor(&input_tensor_user);
-    _m_net.run_session();
+    const auto run_session_status = _m_net.run_session();
+    if (run_session_status != StatusCode::OK) {
+        return run_session_status;
+    }
     // postprocess
     dbtext_impl::internal_output text_regions = postprocess();
     // transform internal output into external output
@@ -443,7 +446,7 @@ bool DBTextDetector<INPUT, OUTPUT>::is_successfully_initialized() const {
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode DBTextDetector<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
+StatusCode DBTextDetector<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
 }
 

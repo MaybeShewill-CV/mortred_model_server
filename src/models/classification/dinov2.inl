@@ -214,7 +214,10 @@ StatusCode Dinov2<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
     _m_net.input("input_images")->copyFromHostTensor(&input_tensor_user);
-    _m_net.run_session();
+    const auto run_session_status = _m_net.run_session();
+    if (run_session_status != StatusCode::OK) {
+        return run_session_status;
+    }
 
     // decode output tensor
     MNN::Tensor output_tensor_user(_m_net.output("cls_tokens"), MNN::Tensor::DimensionType::CAFFE);
@@ -320,7 +323,7 @@ bool Dinov2<INPUT, OUTPUT>::is_successfully_initialized() const {
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode Dinov2<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
+StatusCode Dinov2<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
 }
 

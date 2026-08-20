@@ -175,7 +175,10 @@ StatusCode OpenAiClipTextEncoder::Impl::encode(
     }
     _m_net.input("input")->copyFromHostTensor(&input_tensor_user);
 
-    _m_net.run_session();
+    const auto run_session_status = _m_net.run_session();
+    if (run_session_status != StatusCode::OK) {
+        return run_session_status;
+    }
 
     MNN::Tensor output_tensor_user(_m_net.output("output"), MNN::Tensor::DimensionType::CAFFE);
     _m_net.output("output")->copyToHostTensor(&output_tensor_user);

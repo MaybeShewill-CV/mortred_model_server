@@ -336,10 +336,22 @@ private:
 */
 template <typename INPUT, typename OUTPUT>
 StatusCode Metric3D<INPUT, OUTPUT>::Impl::init(const toml::table &config) {
-    // choose backend type
-    auto backend_dict = config["BACKEND_DICT"];
-    auto backend_name = config["METRIC3D"]["backend_type"].value_or<std::string>("");
-    _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].value_or<int64_t>(0));
+    // choose backend type (fail fast on missing sections / unknown backend
+    // names instead of silently falling back to backend 0)
+    const toml::table* backend_dict_ptr = config["BACKEND_DICT"].as_table();
+    const toml::table* section_ptr = config["METRIC3D"].as_table();
+    if (backend_dict_ptr == nullptr || section_ptr == nullptr) {
+        LOG(ERROR) << "Config section BACKEND_DICT or METRIC3D missing or not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    const auto backend_name = (*section_ptr)["backend_type"].value_or<std::string>("");
+    if (!backend_dict_ptr->contains(backend_name)) {
+        LOG(ERROR) << "unknown backend type: " << backend_name;
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    _m_backend_type = static_cast<BackendType>((*backend_dict_ptr)[backend_name].value_or<int64_t>(0));
 
     // init metric3d configs
     const toml::table* metric3d_cfg = nullptr;
@@ -347,6 +359,11 @@ StatusCode Metric3D<INPUT, OUTPUT>::Impl::init(const toml::table &config) {
         metric3d_cfg = config["METRIC3D_MNN"].as_table();
     } else {
         metric3d_cfg = config["METRIC3D_TRT"].as_table();
+    }
+    if (metric3d_cfg == nullptr) {
+        LOG(ERROR) << "Config section METRIC3D_MNN/METRIC3D_TRT missing or not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
     }
     auto model_file_name = FilePathUtil::get_file_name((*metric3d_cfg)["model_file_path"].value_or<std::string>(""));
 
@@ -969,7 +986,7 @@ bool Metric3D<INPUT, OUTPUT>::is_successfully_initialized() const {
 * @return
 */
 template <typename INPUT, typename OUTPUT>
-StatusCode Metric3D<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
+StatusCode Metric3D<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
 }
 

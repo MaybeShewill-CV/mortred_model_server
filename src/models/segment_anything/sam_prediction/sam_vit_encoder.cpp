@@ -15,6 +15,7 @@
 #include <fstream>
 #include <functional>
 #include <iterator>
+#include <memory>
 #include <numeric>
 #include <sstream>
 
@@ -78,12 +79,7 @@ class SamVitEncoder::Impl {
                 _m_trt_runtime = nullptr;
             }
         }
-        if (_m_backend_type == ONNX) {
-            if (nullptr != _m_onnx_sess) {
-                delete _m_onnx_sess;
-                _m_onnx_sess = nullptr;
-            }
-        }
+        // ONNX session is owned by unique_ptr and released automatically
         if (_m_backend_type == MNN) {
             // releaseSession first, then releaseModel, then the interpreter itself
             // (regression: the MNN backend leaked net/session)
@@ -158,7 +154,9 @@ class SamVitEncoder::Impl {
     Ort::SessionOptions _m_onnx_sess_options;
 
     // onnx model session
-    Ort::Session* _m_onnx_sess = nullptr;
+        // RAII: the session is released on destruction (regression: the old
+        // raw pointer was never deleted on the ONNX backend path)
+        std::unique_ptr<Ort::Session> _m_onnx_sess;
 
     // model input/output shape info
     std::vector<int> _m_input_shape;
@@ -451,7 +449,7 @@ StatusCode SamVitEncoder::Impl::init_onnx_model(const toml::table& cfg) {
 
     _m_input_name = "input_image";
     _m_output_name = "image_embeddings";
-    _m_onnx_sess = new Ort::Session(_m_env, _m_model_path.c_str(), _m_onnx_sess_options);
+    _m_onnx_sess = std::make_unique<Ort::Session>(_m_env, _m_model_path.c_str(), _m_onnx_sess_options);
     auto input_shape = _m_onnx_sess->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
     for (auto& v : input_shape) {
         _m_input_shape.push_back(static_cast<int>(v));

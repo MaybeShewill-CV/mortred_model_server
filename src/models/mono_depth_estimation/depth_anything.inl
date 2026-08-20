@@ -222,10 +222,22 @@ class DepthAnything<INPUT, OUTPUT>::Impl {
  */
 template <typename INPUT, typename OUTPUT>
 StatusCode DepthAnything<INPUT, OUTPUT>::Impl::init(const toml::table &config) {
-    // choose backend type
-    auto backend_dict = config["BACKEND_DICT"];
-    auto backend_name = config["DEPTH_ANYTHING"]["backend_type"].value_or<std::string>("");
-    _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].value_or<int64_t>(0));
+    // choose backend type (fail fast on missing sections / unknown backend
+    // names instead of silently falling back to backend 0)
+    const toml::table* backend_dict_ptr = config["BACKEND_DICT"].as_table();
+    const toml::table* section_ptr = config["DEPTH_ANYTHING"].as_table();
+    if (backend_dict_ptr == nullptr || section_ptr == nullptr) {
+        LOG(ERROR) << "Config section BACKEND_DICT or DEPTH_ANYTHING missing or not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    const auto backend_name = (*section_ptr)["backend_type"].value_or<std::string>("");
+    if (!backend_dict_ptr->contains(backend_name)) {
+        LOG(ERROR) << "unknown backend type: " << backend_name;
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    _m_backend_type = static_cast<BackendType>((*backend_dict_ptr)[backend_name].value_or<int64_t>(0));
 
     // init depth anything configs
     const toml::table* model_cfg = nullptr;
@@ -233,6 +245,11 @@ StatusCode DepthAnything<INPUT, OUTPUT>::Impl::init(const toml::table &config) {
         model_cfg = config["DEPTH_ANYTHING_MNN"].as_table();
     } else {
         model_cfg = config["DEPTH_ANYTHING_TRT"].as_table();
+    }
+    if (model_cfg == nullptr) {
+        LOG(ERROR) << "Config section DEPTH_ANYTHING_MNN/DEPTH_ANYTHING_TRT missing or not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
     }
     auto model_file_name = FilePathUtil::get_file_name((*model_cfg)["model_file_path"].value_or<std::string>(""));
 
@@ -586,7 +603,7 @@ bool DepthAnything<INPUT, OUTPUT>::is_successfully_initialized() const {
 * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode DepthAnything<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
+StatusCode DepthAnything<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
 }
 

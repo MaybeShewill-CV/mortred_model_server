@@ -373,7 +373,7 @@ jinq::common::StatusCode SamPredictor<INPUT, OUTPUT>::init(const toml::table &cf
 }
 
 template <typename INPUT, typename OUTPUT>
-jinq::common::StatusCode SamPredictor<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
+jinq::common::StatusCode SamPredictor<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPUT& output) {
     auto internal_input = sam_predictor_impl::transform_input(input);
     sam_predictor_impl::internal_output internal_output;
     StatusCode status = StatusCode::OK;

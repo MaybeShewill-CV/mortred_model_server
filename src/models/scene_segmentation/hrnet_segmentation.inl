@@ -103,8 +103,6 @@ class HRNetSegmentation<INPUT, OUTPUT>::Impl {
             if (_m_trt_params.runtime != nullptr) {
                 _m_trt_params.runtime->destroy();
             }
-        } else if (_m_backend_type == ONNX) {
-
         } else {
             if (nullptr != _m_mnn_params.net && nullptr != _m_mnn_params.session) {
                 // releaseSession first, then releaseModel (MNN contract order)
@@ -162,7 +160,9 @@ class HRNetSegmentation<INPUT, OUTPUT>::Impl {
         int device_id = 0;
         Ort::Env env;
         Ort::SessionOptions session_options;
-        Ort::Session* session = nullptr;
+        // RAII: the session is released on destruction (regression: the old
+        // raw pointer was never deleted on the ONNX backend path)
+        std::unique_ptr<Ort::Session> session;
         Ort::AllocatorWithDefaultOptions allocator;
         // input/output node info
         std::vector<const char*> input_node_names;
@@ -284,10 +284,22 @@ class HRNetSegmentation<INPUT, OUTPUT>::Impl {
  */
 template<typename INPUT, typename OUTPUT>
 StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::init(const toml::table& config) {
-    // choose backend type
-    auto backend_dict = config["BACKEND_DICT"];
-    auto backend_name = config["HRNET_SEGMENTATION"]["backend_type"].value_or<std::string>("");
-    _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].value_or<int64_t>(0));
+    // choose backend type (fail fast on missing sections / unknown backend
+    // names instead of silently falling back to backend 0)
+    const toml::table* backend_dict_ptr = config["BACKEND_DICT"].as_table();
+    const toml::table* section_ptr = config["HRNET_SEGMENTATION"].as_table();
+    if (backend_dict_ptr == nullptr || section_ptr == nullptr) {
+        LOG(ERROR) << "Config section BACKEND_DICT or HRNET_SEGMENTATION missing or not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    const auto backend_name = (*section_ptr)["backend_type"].value_or<std::string>("");
+    if (!backend_dict_ptr->contains(backend_name)) {
+        LOG(ERROR) << "unknown backend type: " << backend_name;
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    _m_backend_type = static_cast<BackendType>((*backend_dict_ptr)[backend_name].value_or<int64_t>(0));
 
     // init hrnet configs
     const toml::table* hrnet_cfg = nullptr;
@@ -297,6 +309,11 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::init(const toml::table& confi
         hrnet_cfg = config["HRNET_SEGMENTATION_ONNX"].as_table();
     } else {
         hrnet_cfg = config["HRNET_SEGMENTATION_MNN"].as_table();
+    }
+    if (hrnet_cfg == nullptr) {
+        LOG(ERROR) << "Config section HRNET_SEGMENTATION_TRT/ONNX/MNN missing or not a table";
+        _m_successfully_initialized = false;
+        return StatusCode::MODEL_INIT_FAILED;
     }
     auto model_file_name = FilePathUtil::get_file_name((*hrnet_cfg)["model_file_path"].value_or<std::string>(""));
 
@@ -590,7 +607,8 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::Impl::init_onnx(const toml::table&c
         _m_onnx_params.session_options.AppendExecutionProvider_CUDA(cuda_options);
         _m_onnx_params.session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
     }
-    _m_onnx_params.session = new Ort::Session(_m_onnx_params.env, _m_onnx_params.model_file_path.c_str(), _m_onnx_params.session_options);
+    _m_onnx_params.session = std::make_unique<Ort::Session>(
+        _m_onnx_params.env, _m_onnx_params.model_file_path.c_str(), _m_onnx_params.session_options);
 
     // init input/output nodes info
     auto input_nodes_counts = _m_onnx_params.session->GetInputCount();
@@ -874,7 +892,7 @@ bool HRNetSegmentation<INPUT, OUTPUT>::is_successfully_initialized() const {
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode HRNetSegmentation<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
+StatusCode HRNetSegmentation<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
 }
 

@@ -380,7 +380,7 @@ bool LDMSampler<INPUT, OUTPUT>::is_successfully_initialized() const {
 * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode LDMSampler<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
+StatusCode LDMSampler<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
 }
 

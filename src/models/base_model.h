@@ -10,6 +10,8 @@
 
 #include "toml/toml.hpp"
 
+#include "glog/logging.h"
+
 #include "common/status_code.h"
 
 namespace jinq {
@@ -47,13 +49,33 @@ public:
     virtual jinq::common::StatusCode init(const toml::table& cfg) = 0;
 
     /***
+     * Non-virtual lifecycle guard (NVI): running an uninitialized model
+     * (never inited, or init failed) returns MODEL_INIT_FAILED instead of
+     * dereferencing null backend resources. Concrete inference lives in
+     * run_impl.
      *
      * @param input
      * @param output
      * @return
      */
-    virtual jinq::common::StatusCode run(const INPUT& in, OUTPUT& out) = 0;
+    jinq::common::StatusCode run(const INPUT& in, OUTPUT& out) {
+        if (!is_successfully_initialized()) {
+            LOG(ERROR) << "model is not successfully initialized, refuse to run";
+            return jinq::common::StatusCode::MODEL_INIT_FAILED;
+        }
+        return run_impl(in, out);
+    }
 
+    /***
+     *
+     * @param input
+     * @param output
+     * @return
+     */
+  protected:
+    virtual jinq::common::StatusCode run_impl(const INPUT& in, OUTPUT& out) = 0;
+
+  public:
     /***
      *
      * @return

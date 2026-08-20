@@ -149,10 +149,6 @@ class LightGlue<INPUT, OUTPUT>::Impl {
      * leaked the ONNX session, strdup'd node names and the TRT extractor/matcher)
      */
     ~Impl() {
-        if (_m_onnx_params.session != nullptr) {
-            delete _m_onnx_params.session;
-            _m_onnx_params.session = nullptr;
-        }
         for (const char* name : _m_onnx_params.input_node_names) {
             ::free(const_cast<char*>(name));
         }
@@ -206,7 +202,8 @@ private:
         int device_id = 0;
         Ort::Env env;
         Ort::SessionOptions session_options;
-        Ort::Session* session = nullptr;
+        // RAII owned session (replaces the manual delete in ~Impl)
+        std::unique_ptr<Ort::Session> session;
         Ort::AllocatorWithDefaultOptions allocator;
         // input/output node info
         std::vector<const char*> input_node_names;
@@ -591,7 +588,8 @@ StatusCode LightGlue<INPUT, OUTPUT>::Impl::init_onnx(const toml::table& config) 
         _m_onnx_params.session_options.AppendExecutionProvider_CUDA(cuda_options);
         _m_onnx_params.session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
     }
-    _m_onnx_params.session = new Ort::Session(_m_onnx_params.env, _m_onnx_params.model_file_path.c_str(), _m_onnx_params.session_options);
+    _m_onnx_params.session = std::make_unique<Ort::Session>(
+        _m_onnx_params.env, _m_onnx_params.model_file_path.c_str(), _m_onnx_params.session_options);
 
     // init input/output nodes info
     auto input_nodes_counts = _m_onnx_params.session->GetInputCount();
@@ -1463,7 +1461,7 @@ template <typename INPUT, typename OUTPUT> bool LightGlue<INPUT, OUTPUT>::is_suc
  * @return
  */
 template <typename INPUT, typename OUTPUT> 
-StatusCode LightGlue<INPUT, OUTPUT>::run(const INPUT &input, OUTPUT& output) {
+StatusCode LightGlue<INPUT, OUTPUT>::run_impl(const INPUT&input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
 }
 

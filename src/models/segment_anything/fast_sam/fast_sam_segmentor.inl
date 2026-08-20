@@ -253,7 +253,10 @@ StatusCode Impl::everything(const cv::Mat& input_image, cv::Mat& everything_mask
     }
     _m_net.input(_m_input_name)->copyFromHostTensor(&input_tensor_host);
 
-    _m_net.run_session();
+    const auto run_session_status = _m_net.run_session();
+    if (run_session_status != StatusCode::OK) {
+        return run_session_status;
+    }
 
     // decode all mask
     std::vector<cv::Mat> predicted_all_masks;
@@ -475,7 +478,7 @@ jinq::common::StatusCode FastSamSegmentor<INPUT, OUTPUT>::init(const toml::table
 }
 
 template <typename INPUT, typename OUTPUT>
-jinq::common::StatusCode FastSamSegmentor<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
+jinq::common::StatusCode FastSamSegmentor<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPUT& output) {
     auto internal_input = fast_sam_segmentor_impl::transform_input(input);
     fast_sam_segmentor_impl::internal_output internal_output;
     auto status = _m_pimpl->everything(internal_input, internal_output);

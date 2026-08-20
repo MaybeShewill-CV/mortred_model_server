@@ -60,7 +60,7 @@ class LibFaceDetector : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
      * @param output
      * @return
      */
-    jinq::common::StatusCode run(const INPUT &input, OUTPUT &output) override;
+    jinq::common::StatusCode run_impl(const INPUT&input, OUTPUT &output) override;
 
     /***
      * if libface detector successfully initialized

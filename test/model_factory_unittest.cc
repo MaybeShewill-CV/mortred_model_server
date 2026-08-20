@@ -33,7 +33,7 @@ public:
     jinq::common::StatusCode init(const toml::table&) override {
         return jinq::common::StatusCode::OK;
     }
-    jinq::common::StatusCode run(const fake_model_input&, fake_model_output&) override {
+    jinq::common::StatusCode run_impl(const fake_model_input&, fake_model_output&) override {
         return jinq::common::StatusCode::OK;
     }
     bool is_successfully_initialized() const override {
@@ -49,7 +49,7 @@ public:
     jinq::common::StatusCode init(const toml::table&) override {
         return jinq::common::StatusCode::OK;
     }
-    jinq::common::StatusCode run(const fake_model_input&, fake_model_output&) override {
+    jinq::common::StatusCode run_impl(const fake_model_input&, fake_model_output&) override {
         return jinq::common::StatusCode::OK;
     }
     bool is_successfully_initialized() const override {

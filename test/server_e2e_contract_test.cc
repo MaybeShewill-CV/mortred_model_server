@@ -52,7 +52,7 @@ public:
         return StatusCode::OK;
     }
 
-    StatusCode run(const base64_input&, TestOutput& out) override {
+    StatusCode run_impl(const base64_input&, TestOutput& out) override {
         if (_m_delay_ms > 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(_m_delay_ms));
         }
@@ -98,8 +98,13 @@ public:
             const int fail_code =
                 static_cast<int>(section["fake_fail_code"].value_or<int64_t>(0));
             for (int i = 0; i < worker_nums; ++i) {
-                _m_working_queue.enqueue(
-                    std::make_unique<FakeModel>(delay_ms, static_cast<StatusCode>(fail_code)));
+                // lifecycle contract: workers must be initialized before serving;
+                // the old test relied on run() not checking initialization
+                auto worker = std::make_unique<FakeModel>(delay_ms, static_cast<StatusCode>(fail_code));
+                if (worker->init(config) != StatusCode::OK) {
+                    return StatusCode::SERVER_INIT_FAILED;
+                }
+                _m_working_queue.enqueue(std::move(worker));
             }
             if (!section.contains("server_uri")) {
                 return StatusCode::SERVER_INIT_FAILED;

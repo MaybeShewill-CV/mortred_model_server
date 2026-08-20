@@ -268,7 +268,10 @@ StatusCode CenterFaceDetector<INPUT, OUTPUT>::Impl::run(const INPUT &in, OUTPUT 
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
     _m_net.input("input.1")->copyFromHostTensor(&input_tensor_user);
-    _m_net.run_session();
+    const auto run_session_status = _m_net.run_session();
+    if (run_session_status != StatusCode::OK) {
+        return run_session_status;
+    }
 
     // decode output tensor
     auto faces_result = decode_output_tensor();
@@ -414,7 +417,7 @@ bool CenterFaceDetector<INPUT, OUTPUT>::is_successfully_initialized() const {
  * @return
  */
 template <typename INPUT, typename OUTPUT> 
-StatusCode CenterFaceDetector<INPUT, OUTPUT>::run(const INPUT &input, OUTPUT &output) {
+StatusCode CenterFaceDetector<INPUT, OUTPUT>::run_impl(const INPUT&input, OUTPUT &output) {
     return _m_pimpl->run(input, output);
 }
 

@@ -13,6 +13,7 @@
 #include <cstring>
 #include <fstream>
 #include <iterator>
+#include <memory>
 #include <sstream>
 
 #include "glog/logging.h"
@@ -93,12 +94,7 @@ class SamPromptDecoder::Impl {
                 _m_trt_runtime = nullptr;
             }
         }
-        if (_m_backend_type == ONNX) {
-            if (nullptr != _m_decoder_sess) {
-                delete _m_decoder_sess;
-                _m_decoder_sess = nullptr;
-            }
-        }
+        // ONNX session is owned by unique_ptr and released automatically
     };
 
     /***
@@ -181,7 +177,7 @@ class SamPromptDecoder::Impl {
     Ort::SessionOptions _m_sess_options;
 
     // model session
-    Ort::Session* _m_decoder_sess = nullptr;
+        std::unique_ptr<Ort::Session> _m_decoder_sess;
 
     // model input/output shape info`
     std::vector<int> _m_encoder_input_shape;
@@ -463,7 +459,7 @@ StatusCode SamPromptDecoder::Impl::init_onnx_model(const toml::table&cfg) {
         cuda_options.device_id = _m_device_id;
         _m_sess_options.AppendExecutionProvider_CUDA(cuda_options);
     }
-    _m_decoder_sess = new Ort::Session(_m_env, _m_model_path.c_str(), _m_sess_options);
+    _m_decoder_sess = std::make_unique<Ort::Session>(_m_env, _m_model_path.c_str(), _m_sess_options);
     _m_input_names = {"image_embeddings", "point_coords", "point_labels", "mask_input", "has_mask_input", "orig_im_size"};
     _m_output_names = {"masks", "iou_predictions", "low_res_masks"};
 

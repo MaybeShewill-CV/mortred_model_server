@@ -274,7 +274,10 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::Impl::run(const INPUT &in, OUTPUT &ou
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
     _m_net.input("input")->copyFromHostTensor(&input_tensor_user);
-    _m_net.run_session();
+    const auto run_session_status = _m_net.run_session();
+    if (run_session_status != StatusCode::OK) {
+        return run_session_status;
+    }
 
     // decode output tensor
     auto faces_result = decode_output_tensor();
@@ -474,7 +477,7 @@ bool LibFaceDetector<INPUT, OUTPUT>::is_successfully_initialized() const {
  * @return
  */
 template <typename INPUT, typename OUTPUT> 
-StatusCode LibFaceDetector<INPUT, OUTPUT>::run(const INPUT &input, OUTPUT &output) {
+StatusCode LibFaceDetector<INPUT, OUTPUT>::run_impl(const INPUT&input, OUTPUT &output) {
     return _m_pimpl->run(input, output);
 }
 

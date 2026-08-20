@@ -91,10 +91,6 @@ class MsOcrNet<INPUT, OUTPUT>::Impl {
             delete _m_net;
             _m_net = nullptr;
         }
-        if (_m_onnx_params.session != nullptr) {
-            delete _m_onnx_params.session;
-            _m_onnx_params.session = nullptr;
-        }
         for (const char* name : _m_onnx_params.input_node_names) {
             ::free(const_cast<char*>(name));
         }
@@ -164,7 +160,8 @@ class MsOcrNet<INPUT, OUTPUT>::Impl {
         std::string model_file_path;
         Ort::Env env{ORT_LOGGING_LEVEL_WARNING, ""};
         Ort::SessionOptions session_options;
-        Ort::Session* session = nullptr;
+        // RAII owned session (replaces the manual delete in ~Impl)
+        std::unique_ptr<Ort::Session> session;
         Ort::AllocatorWithDefaultOptions allocator;
         int thread_nums = 1;
         std::string device = "cpu";
@@ -227,9 +224,19 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::Impl::init(const toml::table& config) {
 
     // backend type dispatch
     if (config.contains("BACKEND_DICT") && cfg_content.contains("backend_type")) {
-        auto backend_dict = config["BACKEND_DICT"];
+        const toml::table* backend_dict_ptr = config["BACKEND_DICT"].as_table();
+        if (backend_dict_ptr == nullptr) {
+            LOG(ERROR) << "Config section BACKEND_DICT is not a table";
+            _m_successfully_initialized = false;
+            return StatusCode::MODEL_INIT_FAILED;
+        }
         auto backend_name = cfg_content["backend_type"].value_or<std::string>("");
-        _m_backend_type = static_cast<BackendType>(backend_dict[backend_name].value_or<int64_t>(0));
+        if (!backend_dict_ptr->contains(backend_name)) {
+            LOG(ERROR) << "unknown backend type: " << backend_name;
+            _m_successfully_initialized = false;
+            return StatusCode::MODEL_INIT_FAILED;
+        }
+        _m_backend_type = static_cast<BackendType>((*backend_dict_ptr)[backend_name].value_or<int64_t>(0));
     }
     if (_m_backend_type == ONNX) {
         const toml::table* onnx_cfg_ptr = config["MSOCRNET_ONNX"].as_table();
@@ -389,7 +396,7 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::Impl::init_onnx(const toml::table& config) {
         _m_onnx_params.session_options.AppendExecutionProvider_CUDA(cuda_options);
         _m_onnx_params.session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
     }
-    _m_onnx_params.session = new Ort::Session(
+    _m_onnx_params.session = std::make_unique<Ort::Session>(
         _m_onnx_params.env, _m_onnx_params.model_file_path.c_str(), _m_onnx_params.session_options);
 
     // init input/output node info
@@ -609,7 +616,7 @@ bool MsOcrNet<INPUT, OUTPUT>::is_successfully_initialized() const {
  * @return
  */
 template<typename INPUT, typename OUTPUT>
-StatusCode MsOcrNet<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
+StatusCode MsOcrNet<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
 }
 

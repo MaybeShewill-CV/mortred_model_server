@@ -594,7 +594,7 @@ bool ClsCondDDIMSampler<INPUT, OUTPUT>::is_successfully_initialized() const {
 * @return
  */
 template <typename INPUT, typename OUTPUT>
-StatusCode ClsCondDDIMSampler<INPUT, OUTPUT>::run(const INPUT& input, OUTPUT& output) {
+StatusCode ClsCondDDIMSampler<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPUT& output) {
     return _m_pimpl->run(input, output);
 }
 
