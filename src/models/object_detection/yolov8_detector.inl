@@ -116,7 +116,7 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
     const auto& tensor = outputs.front().tensor;
-    const auto* out_data = tensor.data<float>();
+    const auto* out_data = tensor.template data<float>();
     if (tensor.shape.size() != 3) {
         LOG(ERROR) << "unexpected yolov8 output shape: "
                    << jinq::models::backend::shape_to_string(tensor.shape);

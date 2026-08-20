@@ -1,11 +1,19 @@
 [DB_TEXT]
-model_file_path="../weights/ocr/db_text_detector/db_model_large.mnn"
-model_threads_num=4
+
+[DB_TEXT.backend]
+type = "mnn"
+model_file_path = "../weights/ocr/db_text_detector/db_model_large.mnn"
+device = "cuda"
+threads = 4
+input_layout = "nchw"
+input_names = ["x"]
+output_names = ["sigmoid_0.tmp_0"]
+precision_mode = 0
+power_mode = 0
+
+[DB_TEXT.params]
 model_input_image_size=[544, 960]
 model_class_nums=80
 model_score_threshold=0.3
 model_nms_threshold=0.35
 model_keep_top_k=250
-compute_backend="cuda"
-backend_precision_mode=0
-backend_power_mode=0

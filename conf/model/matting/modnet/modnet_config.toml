@@ -1,6 +1,12 @@
 [MODNET_MATTING]
-model_file_path="../weights/matting/modnet/modnet_hrnet_w18.mnn"
-model_threads_num=4
-compute_backend="cuda"
-backend_precision_mode=0
-backend_power_mode=0
+
+[MODNET_MATTING.backend]
+type = "mnn"
+model_file_path = "../weights/matting/modnet/modnet_hrnet_w18.mnn"
+device = "cuda"
+threads = 4
+input_layout = "nchw"
+input_names = ["img"]
+output_names = ["sigmoid_2.tmp_0"]
+precision_mode = 0
+power_mode = 0

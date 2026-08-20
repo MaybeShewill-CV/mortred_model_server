@@ -8,68 +8,38 @@
 #ifndef MORTRED_MODEL_SERVER_ATTENTIVE_GAN_DERAIN_NET_H
 #define MORTRED_MODEL_SERVER_ATTENTIVE_GAN_DERAIN_NET_H
 
-#include <memory>
+#include <vector>
 
 #include "toml/toml.hpp"
 
-#include "common/status_code.h"
-#include "models/base_model.h"
+#include "models/backend/backend_cv_model.h"
+#include "models/backend/tensor.h"
 #include "models/model_io_define.h"
 
 namespace jinq {
 namespace models {
 namespace enhancement {
 
-template <typename INPUT, typename OUTPUT> class AttentiveGanDerain : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT>
+class AttentiveGanDerain : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   public:
-    /***
-     * construct function
-     * @param config
-     */
     AttentiveGanDerain();
+    ~AttentiveGanDerain() override = default;
 
-    /***
-     *
-     */
-    ~AttentiveGanDerain() override;
-
-    /***
-     * construct function
-     * @param transformer
-     */
-    AttentiveGanDerain(const AttentiveGanDerain &transformer) = delete;
-
-    /***
-     * construct function
-     * @param transformer
-     * @return
-     */
-    AttentiveGanDerain &operator=(const AttentiveGanDerain &transformer) = delete;
-
-    /***
-     *
-     * @param toml
-     * @return
-     */
-    jinq::common::StatusCode init(const toml::table &cfg) override;
-
-    /***
-     *
-     * @param input
-     * @param output
-     * @return
-     */
-    jinq::common::StatusCode run_impl(const INPUT&input, OUTPUT &output) override;
-
-    /***
-     * if model successfully initialized
-     * @return
-     */
-    bool is_successfully_initialized() const override;
+    AttentiveGanDerain(const AttentiveGanDerain& transformer) = delete;
+    AttentiveGanDerain& operator=(const AttentiveGanDerain& transformer) = delete;
 
   private:
-    class Impl;
-    std::unique_ptr<Impl> _m_pimpl;
+    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
+
+    jinq::common::StatusCode postprocess(
+        const std::vector<jinq::models::backend::NamedTensor>& outputs,
+        OUTPUT& output) override;
+
+    jinq::common::StatusCode on_init(const toml::table& params) override;
+
+    cv::Size _m_input_size_user;
+    cv::Size _m_input_size_host;
 };
 
 } // namespace enhancement

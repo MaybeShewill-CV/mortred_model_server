@@ -8,71 +8,55 @@
 #ifndef MORTRED_MODEL_SERVER_DB_TEXT_DETECTOR_H
 #define MORTRED_MODEL_SERVER_DB_TEXT_DETECTOR_H
 
-#include <memory>
+#include <string>
+#include <vector>
 
+#include <opencv2/opencv.hpp>
 #include "toml/toml.hpp"
 
-#include "models/base_model.h"
+#include "models/backend/backend_cv_model.h"
+#include "models/backend/tensor.h"
 #include "models/model_io_define.h"
-#include "common/status_code.h"
 
 namespace jinq {
 namespace models {
 namespace ocr {
 
 template<typename INPUT, typename OUTPUT>
-class DBTextDetector : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
+class DBTextDetector : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
 public:
-
-    /***
-    * constructor
-    * @param config
-    */
     DBTextDetector();
+    ~DBTextDetector() override = default;
 
-    /***
-     *
-     */
-    ~DBTextDetector() override;
-
-    /***
-    * constructor
-    * @param transformer
-    */
     DBTextDetector(const DBTextDetector& transformer) = delete;
-
-    /***
-     * constructor
-     * @param transformer
-     * @return
-     */
     DBTextDetector& operator=(const DBTextDetector& transformer) = delete;
 
-    /***
-     *
-     * @param toml
-     * @return
-     */
-    jinq::common::StatusCode init(const toml::table& cfg) override;
-
-    /***
-     *
-     * @param input
-     * @param output
-     * @return
-     */
-    jinq::common::StatusCode run_impl(const INPUT& input, OUTPUT& output) override;
-
-
-    /***
-     * if db text detector successfully initialized
-     * @return
-     */
-    bool is_successfully_initialized() const override;
-
 private:
-    class Impl;
-    std::unique_ptr<Impl> _m_pimpl;
+    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
+
+    jinq::common::StatusCode postprocess(
+        const std::vector<jinq::models::backend::NamedTensor>& outputs,
+        OUTPUT& output) override;
+
+    jinq::common::StatusCode on_init(const toml::table& params) override;
+
+    jinq::common::StatusCode get_boxes_from_bitmap(
+        const cv::Mat& seg_prob_mat, const cv::Mat& seg_score_mat,
+        OUTPUT& output) const;
+
+    // score thresh
+    double _m_score_threshold = 0.4;
+    // rotate bbox short side thresh
+    float _m_sside_threshold = 3;
+    // top_k keep thresh
+    long _m_keep_topk = 250;
+    // user input size
+    cv::Size _m_input_size_user = cv::Size();
+    // input tensor size
+    cv::Size _m_input_size_host = cv::Size();
+    // model io names
+    std::string _m_input_name;
+    std::string _m_output_name;
 };
 
 }

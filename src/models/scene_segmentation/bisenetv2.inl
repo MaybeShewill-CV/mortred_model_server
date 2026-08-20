@@ -6,249 +6,96 @@
 ************************************************/
 
 #include "bisenetv2.h"
-#include "models/cv_image_input.h"
+
+#include <cstring>
+#include <utility>
 
 #include <opencv2/opencv.hpp>
 #include "glog/logging.h"
 
-#include "common/cv_utils.h"
-#include "common/time_stamp.h"
-#include "common/file_path_util.h"
-#include "models/mnn_helper.h"
-
 namespace jinq {
 namespace models {
-
-using jinq::common::CvUtils;
-using jinq::common::FilePathUtil;
-using jinq::common::StatusCode;
-using jinq::models::io_define::common_io::mat_input;
-using jinq::models::io_define::common_io::file_input;
-using jinq::models::io_define::common_io::base64_input;
-using jinq::common::Timestamp;
-
 namespace scene_segmentation {
-using jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
 
-namespace bisenetv2_impl {
-
-using internal_input = mat_input;
-using internal_output = std_scene_segmentation_output;
-
-/***
-*
-* @tparam INPUT
-* @param in
-* @return
-*/
-template<typename INPUT>
-internal_input transform_input(const INPUT& in) {
-    internal_input result{};
-    result.input_image = jinq::models::cv_input::load_image(in);
-    return result;
-}
-
-/***
-* transform different type of internal output into external output
-* @tparam EXTERNAL_OUTPUT
-* @tparam dummy
-* @param in
-* @return
-*/
-template<typename OUTPUT>
-typename std::enable_if<std::is_same<OUTPUT, std::decay<std_scene_segmentation_output>::type>::value, std_scene_segmentation_output>::type
-transform_output(const bisenetv2_impl::internal_output& internal_out) {
-    return internal_out;
-}
-
-}
-
-/***************** Impl Function Sets ******************/
+using SegmentationOutput =
+    jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
+using jinq::models::backend::NamedTensor;
+using jinq::common::StatusCode;
 
 template<typename INPUT, typename OUTPUT>
-class BiseNetV2<INPUT, OUTPUT>::Impl {
-public:
-    /***
-     *
-     */
-    Impl() = default;
-
-    /***
-     *
-     */
-    ~Impl() = default;
-
-    /***
-    *
-    * @param transformer
-    */
-    Impl(const Impl& transformer) = delete;
-
-    /***
-     *
-     * @param transformer
-     * @return
-     */
-    Impl& operator=(const Impl& transformer) = delete;
-
-    /***
-     *
-     * @param cfg_file_path
-     * @return
-     */
-    StatusCode init(const toml::table& config);
-
-    /***
-     *
-     * @param in
-     * @param out
-     * @return
-     */
-    StatusCode run(const INPUT& in, OUTPUT& out);
-
-    /***
-     *
-     * @return
-     */
-    bool is_successfully_initialized() const {
-        return _m_successfully_initialized;
-    };
-
-private:
-    jinq::models::MnnNet _m_net;
-    // user input tensor size
-    cv::Size _m_input_size_user = cv::Size();
-    // model input tensor size
-    cv::Size _m_input_size_host = cv::Size();
-    // init flag
-    bool _m_successfully_initialized = false;
-
-private:
-    /***
-     * preprocess image
-     * @param input_image : 输入图像
-     */
-    cv::Mat preprocess_image(const cv::Mat& input_image) const;
-};
-
-/***
-*
-* @param cfg_file_path
-* @return
-*/
-template<typename INPUT, typename OUTPUT>
-StatusCode BiseNetV2<INPUT, OUTPUT>::Impl::init(const toml::table& config) {
-    if (!config.contains("BISENETV2")) {
-        LOG(ERROR) << "Config missing BISENETV2 section please check config file";
-        _m_successfully_initialized = false;
+StatusCode BiseNetV2<INPUT, OUTPUT>::on_init(const toml::table& params) {
+    (void)params;
+    const auto& input_info = this->session().inputs().front();
+    if (input_info.shape.size() != 4 || input_info.shape[3] != 3) {
+        LOG(ERROR) << "unexpected bisenetv2 input shape: " << input_info.to_string()
+                   << ", expected [N,H,W,3] (nhwc)";
         return StatusCode::MODEL_INIT_FAILED;
     }
-
-    const toml::table* cfg_content_ptr = config["BISENETV2"].as_table();
-    if (cfg_content_ptr == nullptr) {
-        LOG(ERROR) << "Config section BISENETV2 missing or not a table";
-        _m_successfully_initialized = false;
+    _m_input_size_host.height = static_cast<int>(input_info.shape[1]);
+    _m_input_size_host.width = static_cast<int>(input_info.shape[2]);
+    if (_m_input_size_host.area() <= 0) {
+        LOG(ERROR) << "invalid bisenetv2 input tensor size: " << input_info.to_string();
         return StatusCode::MODEL_INIT_FAILED;
     }
-    const toml::table& cfg_content = *cfg_content_ptr;
-
-    auto init_status = _m_net.init(cfg_content, {"input_tensor"}, {"final_output"});
-    if (init_status != StatusCode::OK) {
-        _m_successfully_initialized = false;
-        return init_status;
-    }
-    _m_input_size_host.width = _m_net.input("input_tensor")->width();
-    _m_input_size_host.height = _m_net.input("input_tensor")->height();
-
-    if (!cfg_content.contains("model_input_image_size")) {
-        LOG(WARNING) << "Config doesn\'t contain model_input_image_size filed, using default value [1024, 512]";
-        _m_input_size_user.width = 1024;
-        _m_input_size_user.height = 512;
-    } else {
-        _m_input_size_user.width = static_cast<int>(
-                                       cfg_content["model_input_image_size"][1].value_or<int64_t>(0));
-        _m_input_size_user.height = static_cast<int>(
-                                        cfg_content["model_input_image_size"][0].value_or<int64_t>(0));
-    }
-
-    _m_successfully_initialized = true;
-    LOG(INFO) << "BiseNetv2 detection model initialization complete!!!";
     return StatusCode::OK;
 }
 
-/***
-*
-* @tparam INPUT
-* @tparam OUTPUT
-* @param input_image
-* @return
-*/
 template<typename INPUT, typename OUTPUT>
-cv::Mat BiseNetV2<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& input_image) const {
-    cv::Mat tmp;
-    // swap channles
-    cv::cvtColor(input_image, tmp, cv::COLOR_BGR2RGB);
+std::vector<NamedTensor> BiseNetV2<INPUT, OUTPUT>::preprocess(const cv::Mat& input_image) {
+    _m_input_size_user = input_image.size();
 
-    // resize image
+    cv::Mat tmp;
+    cv::cvtColor(input_image, tmp, cv::COLOR_BGR2RGB);
     if (tmp.size() != _m_input_size_host) {
         cv::resize(tmp, tmp, _m_input_size_host);
     }
-
-    // convert image data type
     if (tmp.type() != CV_32FC3) {
         tmp.convertTo(tmp, CV_32FC3);
     }
-
-    // normalize image
     tmp /= 255.0;
     cv::subtract(tmp, cv::Scalar(0.5, 0.5, 0.5), tmp);
     cv::divide(tmp, cv::Scalar(0.5, 0.5, 0.5), tmp);
 
-    return tmp;
+    NamedTensor named;
+    named.name = this->session().inputs().front().name;
+    named.tensor = jinq::models::backend::Tensor::make<float>(
+        {1, _m_input_size_host.height, _m_input_size_host.width, 3});
+    const auto bytes = tmp.total() * tmp.elemSize();
+    if (bytes != named.tensor.byte_size()) {
+        LOG(ERROR) << "preprocessed image byte size " << bytes
+                   << " mismatches input tensor byte size " << named.tensor.byte_size();
+        return {};
+    }
+    std::memcpy(named.tensor.buffer.data(), tmp.data, bytes);
+
+    std::vector<NamedTensor> inputs;
+    inputs.push_back(std::move(named));
+    return inputs;
 }
 
-/***
- *
- * @param in
- * @param out
- * @return
- */
 template<typename INPUT, typename OUTPUT>
-StatusCode BiseNetV2<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
-    // transform external input into internal input
-    auto internal_in = bisenetv2_impl::transform_input(in);
-
-    if (!internal_in.input_image.data || internal_in.input_image.empty()) {
-        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+StatusCode BiseNetV2<INPUT, OUTPUT>::postprocess(
+    const std::vector<NamedTensor>& outputs, OUTPUT& output) {
+    if (outputs.empty()) {
+        LOG(ERROR) << "bisenetv2 output tensor is empty";
+        return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-
-    _m_input_size_user = internal_in.input_image.size();
-
-    // preprocess image
-    cv::Mat preprocessed_image = preprocess_image(internal_in.input_image);
-    // run session
-    MNN::Tensor input_tensor_user(_m_net.input("input_tensor"), MNN::Tensor::DimensionType::TENSORFLOW);
-    auto input_tensor_data = input_tensor_user.host<float>();
-    auto input_tensor_size = input_tensor_user.size();
-    if (!CvUtils::copy_image_to_tensor(input_tensor_data, preprocessed_image, input_tensor_size)) {
-        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
-    }
-    _m_net.input("input_tensor")->copyFromHostTensor(&input_tensor_user);
-    const auto run_session_status = _m_net.run_session();
-    if (run_session_status != StatusCode::OK) {
-        return run_session_status;
-    }
-    // fetch net output
-    MNN::Tensor output_tensor_user(_m_net.output("final_output"), MNN::Tensor::DimensionType::TENSORFLOW);
-    _m_net.output("final_output")->copyToHostTensor(&output_tensor_user);
-    // model output is float [H, W, cls_nums], compute argmax per pixel
-    auto host_data = output_tensor_user.host<float>();
-    auto output_shape = output_tensor_user.shape();
-    int cls_nums = output_shape.size() >= 3 ? output_shape[2] : 0;
-    if (cls_nums <= 0) {
+    const auto& tensor = outputs.front().tensor;
+    if (tensor.shape.empty()) {
         LOG(ERROR) << "bisenetv2 unexpected output shape";
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
+    const auto* host_data = tensor.template data<float>();
+    const auto cls_nums = tensor.shape.back();
+    if (cls_nums <= 0 ||
+        tensor.element_count() <
+            static_cast<int64_t>(_m_input_size_host.area()) * cls_nums) {
+        LOG(ERROR) << "bisenetv2 unexpected output shape: "
+                   << jinq::models::backend::shape_to_string(tensor.shape);
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+
+    // model output is float [H, W, cls_nums], compute argmax per pixel
     cv::Mat result_image(_m_input_size_host, CV_32SC1, cv::Scalar(0));
     for (auto row = 0; row < result_image.rows; ++row) {
         for (auto col = 0; col < result_image.cols; ++col) {
@@ -266,71 +113,17 @@ StatusCode BiseNetV2<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     }
     cv::resize(result_image, result_image, _m_input_size_user, 0.0, 0.0, cv::INTER_NEAREST);
 
-    // transform internal output into external output
-    bisenetv2_impl::internal_output internal_out;
-    // clone the result to avoid referencing the MNN host tensor memory which
-    // will be released when output_tensor_user is destructed
-    internal_out.segmentation_result = result_image.clone();
-    out = bisenetv2_impl::transform_output<OUTPUT>(internal_out);
-
+    SegmentationOutput internal_out;
+    internal_out.segmentation_result = std::move(result_image);
+    output = std::move(internal_out);
     return StatusCode::OK;
 }
 
 /************* Export Function Sets *************/
 
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- */
 template<typename INPUT, typename OUTPUT>
-BiseNetV2<INPUT, OUTPUT>::BiseNetV2() {
-    _m_pimpl = std::make_unique<Impl>();
-}
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- */
-template<typename INPUT, typename OUTPUT>
-BiseNetV2<INPUT, OUTPUT>::~BiseNetV2() = default;
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param cfg
- * @return
- */
-template<typename INPUT, typename OUTPUT>
-StatusCode BiseNetV2<INPUT, OUTPUT>::init(const toml::table& cfg) {
-    return _m_pimpl->init(cfg);
-}
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @return
- */
-template<typename INPUT, typename OUTPUT>
-bool BiseNetV2<INPUT, OUTPUT>::is_successfully_initialized() const {
-    return _m_pimpl->is_successfully_initialized();
-}
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param input
- * @param output
- * @return
- */
-template<typename INPUT, typename OUTPUT>
-StatusCode BiseNetV2<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPUT& output) {
-    return _m_pimpl->run(input, output);
-}
+BiseNetV2<INPUT, OUTPUT>::BiseNetV2()
+    : jinq::models::BackendCvModel<INPUT, OUTPUT>("BISENETV2") {}
 
 }
 }

@@ -97,7 +97,8 @@ inline int64_t shape_volume(const std::vector<int64_t>& shape) {
 
 inline bool shape_is_dynamic(const std::vector<int64_t>& shape) {
     for (const auto& dim : shape) {
-        if (dim < 0) {
+        // -1 for onnx/tensorrt profiles, 0 for unset mnn dims
+        if (dim <= 0) {
             return true;
         }
     }

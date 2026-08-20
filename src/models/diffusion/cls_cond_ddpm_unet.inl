@@ -15,8 +15,8 @@ namespace jinq {
 namespace models {
 namespace diffusion {
 
-using UnetInput = jinq::models::io_define::diffusion::std_cls_cond_ddpm_unet_input;
-using UnetOutput = jinq::models::io_define::diffusion::std_cls_cond_ddpm_unet_output;
+using ClsCondUnetInput = jinq::models::io_define::diffusion::std_cls_cond_ddpm_unet_input;
+using ClsCondUnetOutput = jinq::models::io_define::diffusion::std_cls_cond_ddpm_unet_output;
 using jinq::models::backend::NamedTensor;
 using jinq::models::backend::TensorInfo;
 using jinq::common::StatusCode;
@@ -84,7 +84,7 @@ StatusCode ClsCondDDPMUNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTe
     }
     const auto& tensor = outputs.front().tensor;
     const auto* data = tensor.data<float>();
-    UnetOutput internal_out;
+    ClsCondUnetOutput internal_out;
     internal_out.predict_noise.resize(static_cast<size_t>(tensor.element_count()));
     std::memcpy(internal_out.predict_noise.data(), data, tensor.byte_size());
     output = std::move(internal_out);

@@ -1,426 +1,195 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: CenterFace.cpp
+ * File: centerface_detector.cpp
  * Date: 23-10-18
  ************************************************/
 
 #include "centerface_detector.h"
-#include "models/cv_image_input.h"
+
+#include <algorithm>
+#include <cmath>
+#include <cstring>
 
 #include <opencv2/opencv.hpp>
 #include "glog/logging.h"
 
 #include "common/cv_utils.h"
-#include "common/file_path_util.h"
-#include "models/mnn_helper.h"
 
 namespace jinq {
 namespace models {
-
-using jinq::common::CvUtils;
-using jinq::common::FilePathUtil;
-using jinq::common::StatusCode;
-using jinq::models::io_define::common_io::base64_input;
-using jinq::models::io_define::common_io::file_input;
-using jinq::models::io_define::common_io::mat_input;
-
 namespace object_detection {
 
-using jinq::models::io_define::object_detection::face_bbox;
-using jinq::models::io_define::object_detection::std_face_detection_output;
+using FaceBBox = jinq::models::io_define::object_detection::face_bbox;
+using FaceOutput = jinq::models::io_define::object_detection::std_face_detection_output;
+using jinq::models::backend::NamedTensor;
+using jinq::common::StatusCode;
 
-namespace centerface_impl {
-
-using internal_input = mat_input;
-using internal_output = std_face_detection_output;
-
-/***
- *
- * @tparam INPUT
- * @param in
- * @return
- */
-template<typename INPUT>
-internal_input transform_input(const INPUT& in) {
-    internal_input result{};
-    result.input_image = jinq::models::cv_input::load_image(in);
-    return result;
-}
-
-/***
- * transform different type of internal output into external output
- * @tparam EXTERNAL_OUTPUT
- * @tparam dummy
- * @param in
- * @return
- */
-template <typename OUTPUT>
-typename std::enable_if<std::is_same<OUTPUT, std::decay<std_face_detection_output>::type>::value, std_face_detection_output>::type
-transform_output(const centerface_impl::internal_output &internal_out) {
-    return internal_out;
-}
-
-} // namespace centerface_impl
-
-/***************** Impl Function Sets ******************/
-
-template <typename INPUT, typename OUTPUT> 
-class CenterFaceDetector<INPUT, OUTPUT>::Impl {
-  public:
-    /***
-     *
-     */
-    Impl() = default;
-
-    /***
-     *
-     */
-    ~Impl() = default;
-
-    /***
-     *
-     * @param transformer
-     */
-    Impl(const Impl &transformer) = delete;
-
-    /***
-     *
-     * @param transformer
-     * @return
-     */
-    Impl &operator=(const Impl &transformer) = delete;
-
-    /***
-     *
-     * @param cfg_file_path
-     * @return
-     */
-    StatusCode init(const toml::table &config);
-
-    /***
-     *
-     * @param in
-     * @param out
-     * @return
-     */
-    StatusCode run(const INPUT &in, OUTPUT &out);
-
-    /***
-     *
-     * @return
-     */
-    bool is_successfully_initialized() const { return _m_successfully_initialized; };
-
-  private:
-    jinq::models::MnnNet _m_net;
-    // score thresh
-    double _m_score_threshold = 0.6;
-    // nms thresh
-    double _m_nms_threshold = 0.3;
-    // top_k keep
-    size_t _m_keep_topk = 250;
-    // input image size
-    cv::Size _m_input_size_user = cv::Size();
-    //　input node size
-    cv::Size _m_input_size_host = cv::Size();
-    // resize session flag
-    bool _m_need_resize_tensor = false;
-    // init flag
-    bool _m_successfully_initialized = false;
-
-  private:
-    /***
-     * preprocess
-     * @param input_image
-     */
-    cv::Mat preprocess_image(const cv::Mat &input_image);
-
-    /***
-     *
-     * @return
-     */
-    centerface_impl::internal_output decode_output_tensor();
-};
-
-/***
- *
- * @param cfg_file_path
- * @return
- */
-template <typename INPUT, typename OUTPUT> 
-StatusCode CenterFaceDetector<INPUT, OUTPUT>::Impl::init(const toml::table &config) {
-    if (!config.contains("CENTER_FACE")) {
-        LOG(ERROR) << "Config missing CENTER_FACE section";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    const toml::table* cfg_content_ptr = config["CENTER_FACE"].as_table();
-    if (cfg_content_ptr == nullptr) {
-        LOG(ERROR) << "Config section CENTER_FACE missing or not a table";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    const toml::table& cfg_content = *cfg_content_ptr;
-
-    // init score thresh
-    if (!cfg_content.contains("model_score_threshold")) {
-        LOG(WARNING) << "Config missing model_score_threshold field, use default 0.5";
-        _m_score_threshold = 0.5;
-    } else {
-        _m_score_threshold = cfg_content["model_score_threshold"].value_or<double>(0.0);
+template<typename INPUT, typename OUTPUT>
+StatusCode CenterFaceDetector<INPUT, OUTPUT>::on_init(const toml::table& params) {
+    if (params.contains("model_score_threshold")) {
+        _m_score_threshold = params["model_score_threshold"].value_or<double>(0.0);
     }
     _m_score_threshold = std::max(_m_score_threshold, 0.5);
-
-    // nms thresh
-    if (!cfg_content.contains("model_nms_threshold")) {
-        LOG(WARNING) << "Config missing model_nms_threshold field, use default 0.3";
-        _m_nms_threshold = 0.3;
-    } else {
-        _m_nms_threshold = cfg_content["model_nms_threshold"].value_or<double>(0.0);
+    if (params.contains("model_nms_threshold")) {
+        _m_nms_threshold = params["model_nms_threshold"].value_or<double>(0.0);
+    }
+    if (params.contains("model_keep_top_k")) {
+        _m_keep_topk = static_cast<size_t>(params["model_keep_top_k"].value_or<int64_t>(0));
     }
 
-    // top k
-    if (!cfg_content.contains("model_keep_top_k")) {
-        LOG(WARNING) << "Config missing model_keep_top_k field, use default 250";
-        _m_keep_topk = 250;
-    } else {
-        _m_keep_topk = cfg_content["model_keep_top_k"].value_or<int64_t>(0);
+    const auto& input_info = this->session().inputs().front();
+    if (input_info.shape.size() != 4 || input_info.shape[1] != 3) {
+        LOG(ERROR) << "unexpected centerface input shape: " << input_info.to_string()
+                   << ", expected [N,3,H,W] (nchw)";
+        return StatusCode::MODEL_INIT_FAILED;
     }
-
-    auto init_status = _m_net.init(
-        cfg_content, {"input.1"}, {"537", "538", "539", "540"});
-    if (init_status != StatusCode::OK) {
-        _m_successfully_initialized = false;
-        return init_status;
-    }
-    _m_input_size_host.width = _m_net.input("input.1")->width();
-    _m_input_size_host.height = _m_net.input("input.1")->height();
-
-    _m_successfully_initialized = true;
-    LOG(INFO) << "CenterFace model initialization complete!!!";
+    _m_input_size_host.height = static_cast<int>(input_info.shape[2]);
+    _m_input_size_host.width = static_cast<int>(input_info.shape[3]);
     return StatusCode::OK;
 }
 
-/***
- *
- * @param input_image
- * @return
- */
-template <typename INPUT, typename OUTPUT>
-cv::Mat CenterFaceDetector<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat &input_image) {
-    cv::Mat tmp;
-    // bgr to rgb
-    cv::cvtColor(input_image, tmp, cv::COLOR_BGR2RGB);
-
-    // resize image
-    int width = input_image.cols;
-    int height = input_image.rows;
-    int width_resized = static_cast<int>(std::ceil(static_cast<float>(width) / 32.0f) * 32);
-    int height_resized = static_cast<int>(std::ceil(static_cast<float>(height) / 32.0f) * 32);
-    cv::resize(tmp, tmp, cv::Size(width_resized, height_resized));
-    if (width_resized != _m_input_size_host.width || height_resized != _m_input_size_host.height) {
-        _m_need_resize_tensor = true;
-        _m_input_size_host.width = width_resized;
-        _m_input_size_host.height = height_resized;
-    } else {
-        _m_need_resize_tensor = false;
+template<typename INPUT, typename OUTPUT>
+const NamedTensor* CenterFaceDetector<INPUT, OUTPUT>::find_output(
+    const std::vector<NamedTensor>& outputs, const std::string& name) const {
+    for (const auto& item : outputs) {
+        if (item.name == name) {
+            return &item;
+        }
     }
+    return nullptr;
+}
 
-    // convert to float32
+template<typename INPUT, typename OUTPUT>
+std::vector<NamedTensor> CenterFaceDetector<INPUT, OUTPUT>::preprocess(const cv::Mat& input_image) {
+    // bgr -> rgb, dynamic resize to a multiple of 32 (the session resizes itself)
+    _m_input_size_user = input_image.size();
+    cv::Mat tmp;
+    cv::cvtColor(input_image, tmp, cv::COLOR_BGR2RGB);
+    const auto width_resized =
+        static_cast<int>(std::ceil(static_cast<float>(input_image.cols) / 32.0f) * 32);
+    const auto height_resized =
+        static_cast<int>(std::ceil(static_cast<float>(input_image.rows) / 32.0f) * 32);
+    cv::resize(tmp, tmp, cv::Size(width_resized, height_resized));
+    _m_input_size_host = cv::Size(width_resized, height_resized);
     if (tmp.type() != CV_32FC3) {
         tmp.convertTo(tmp, CV_32FC3);
     }
 
-    return tmp;
+    const auto chw_data = jinq::common::CvUtils::convert_to_chw_vec(tmp);
+    std::vector<NamedTensor> inputs;
+    NamedTensor named;
+    named.name = this->session().inputs().front().name;
+    named.tensor = jinq::models::backend::Tensor::make<float>({1, 3, height_resized, width_resized});
+    if (chw_data.size() * sizeof(float) != named.tensor.byte_size()) {
+        LOG(ERROR) << "preprocessed chw data mismatches the input tensor";
+        return {};
+    }
+    std::memcpy(named.tensor.buffer.data(), chw_data.data(), named.tensor.byte_size());
+    inputs.push_back(std::move(named));
+    return inputs;
 }
 
-/***
- *
- * @param in
- * @param out
- * @return
- */
-template <typename INPUT, typename OUTPUT> 
-StatusCode CenterFaceDetector<INPUT, OUTPUT>::Impl::run(const INPUT &in, OUTPUT &out) {
-    // transform external input into internal input
-    auto internal_in = centerface_impl::transform_input(in);
-    if (!internal_in.input_image.data || internal_in.input_image.empty()) {
-        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+template<typename INPUT, typename OUTPUT>
+StatusCode CenterFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>& outputs,
+                                                          OUTPUT& output) {
+    const auto* heatmap = find_output(outputs, "537");
+    const auto* scale = find_output(outputs, "538");
+    const auto* offset = find_output(outputs, "539");
+    const auto* landmark = find_output(outputs, "540");
+    if (heatmap == nullptr || scale == nullptr || offset == nullptr || landmark == nullptr) {
+        LOG(ERROR) << "centerface outputs 537/538/539/540 missing";
+        return StatusCode::MODEL_EMPTY_OUTPUT;
     }
 
-    // preprocess
-    _m_input_size_user = internal_in.input_image.size();
-    cv::Mat preprocessed_image = preprocess_image(internal_in.input_image);
-    auto input_chw_image_data = CvUtils::convert_to_chw_vec(preprocessed_image);
-
-    // run session
-    if (_m_need_resize_tensor) {
-        _m_net.resize_tensor(
-            _m_net.input("input.1"), {1, 3, _m_input_size_host.height, _m_input_size_host.width});
-        _m_need_resize_tensor = false;
+    // heatmap layout: [1,1,H,W] over the /4 feature map
+    const jinq::models::backend::Tensor& heat_tensor = heatmap->tensor;
+    if (heat_tensor.shape.size() != 4) {
+        LOG(ERROR) << "unexpected centerface heatmap shape: "
+                   << jinq::models::backend::shape_to_string(heat_tensor.shape);
+        return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    MNN::Tensor input_tensor_user(_m_net.input("input.1"), MNN::Tensor::DimensionType::CAFFE);
-    auto input_tensor_data = input_tensor_user.host<float>();
-    auto input_tensor_size = input_tensor_user.size();
-    if (!CvUtils::copy_image_to_tensor(input_tensor_data, input_chw_image_data, input_tensor_size)) {
-        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
-    }
-    _m_net.input("input.1")->copyFromHostTensor(&input_tensor_user);
-    const auto run_session_status = _m_net.run_session();
-    if (run_session_status != StatusCode::OK) {
-        return run_session_status;
-    }
+    const int output_height = static_cast<int>(heat_tensor.shape[2]);
+    const int output_width = static_cast<int>(heat_tensor.shape[3]);
+    const int channel_step = output_width * output_height;
+    const auto* heat_data = heat_tensor.template data<float>();
+    const auto* scale_data = scale->tensor.template data<float>();
+    const auto* offset_data = offset->tensor.template data<float>();
+    const auto* landmark_data = landmark->tensor.template data<float>();
 
-    // decode output tensor
-    auto faces_result = decode_output_tensor();
-
-    // refine bbox coords
-    auto width_scale = _m_input_size_user.width / static_cast<float>(_m_input_size_host.width);
-    auto height_scale = _m_input_size_user.height / static_cast<float>(_m_input_size_host.height);
-    for (auto &face_box : faces_result) {
-        face_box.bbox.x *= width_scale;
-        face_box.bbox.y *= height_scale;
-        face_box.bbox.width *= width_scale;
-        face_box.bbox.height *= height_scale;
-        for (auto &landmark : face_box.landmarks) {
-            landmark.x *= width_scale;
-            landmark.y *= height_scale;
-        }
-    }
-
-    // do nms
-    centerface_impl::internal_output nms_result = CvUtils::nms_bboxes(faces_result, _m_nms_threshold);
-    if (nms_result.size() > _m_keep_topk) {
-        nms_result.resize(_m_keep_topk);
-    }
-    for (auto& bbox : nms_result) {
-        bbox.category = "face";
-    }
-
-    // transform internal output into external output
-    out = centerface_impl::transform_output<OUTPUT>(nms_result);
-    return StatusCode::OK;
-}
-
-/***
- *
- * @param in
- * @param out
- * @return
- */
-template <typename INPUT, typename OUTPUT> 
-centerface_impl::internal_output CenterFaceDetector<INPUT, OUTPUT>::Impl::decode_output_tensor() {
-    // convert tensor format
-    MNN::Tensor heatmap_host(_m_net.output("537"), MNN::Tensor::DimensionType::CAFFE);
-    MNN::Tensor scale_host(_m_net.output("538"), MNN::Tensor::DimensionType::CAFFE);
-    MNN::Tensor offset_host(_m_net.output("539"), MNN::Tensor::DimensionType::CAFFE);
-    MNN::Tensor landmark_host(_m_net.output("540"), MNN::Tensor::DimensionType::CAFFE);
-    _m_net.output("537")->copyToHostTensor(&heatmap_host);
-    _m_net.output("538")->copyToHostTensor(&scale_host);
-    _m_net.output("539")->copyToHostTensor(&offset_host);
-    _m_net.output("540")->copyToHostTensor(&landmark_host);
-
-    // decode face info
-    int output_width = heatmap_host.width();
-    int output_height = heatmap_host.height();
-    int channel_step = output_width * output_height;
-    std::vector<face_bbox> decode_result;
+    std::vector<FaceBBox> decode_result;
     for (int h = 0; h < output_height; ++h) {
         for (int w = 0; w < output_width; ++w) {
-            int index = h * output_width + w;
-            float score = heatmap_host.host<float>()[index];
+            const int index = h * output_width + w;
+            const float score = heat_data[index];
             if (score < _m_score_threshold) {
                 continue;
             }
-            float s0 = 4 * std::exp(scale_host.host<float>()[index]);
-            float s1 = 4 * std::exp(scale_host.host<float>()[index + channel_step]);
-            float o0 = offset_host.host<float>()[index];
-            float o1 = offset_host.host<float>()[index + channel_step];
+            const float s0 = 4 * std::exp(scale_data[index]);
+            const float s1 = 4 * std::exp(scale_data[index + channel_step]);
+            const float o0 = offset_data[index];
+            const float o1 = offset_data[index + channel_step];
 
-            float ymin = std::max(0.0f, static_cast<float>(4 * (h + o0 + 0.5) - 0.5 * s0));
-            float xmin = std::max(0.0f, static_cast<float>(4 * (w + o1 + 0.5) - 0.5 * s1));
-            float ymax = std::min(ymin + s0, static_cast<float>(_m_input_size_host.height));
-            float xmax = std::min(xmin + s1, static_cast<float>(_m_input_size_host.width));
+            const float ymin = std::max(0.0f, static_cast<float>(4 * (h + o0 + 0.5) - 0.5 * s0));
+            const float xmin = std::max(0.0f, static_cast<float>(4 * (w + o1 + 0.5) - 0.5 * s1));
+            const float ymax = std::min(ymin + s0, static_cast<float>(_m_input_size_host.height));
+            const float xmax = std::min(xmin + s1, static_cast<float>(_m_input_size_host.width));
 
-            face_bbox face_info;
+            FaceBBox face_info;
             face_info.score = score;
             face_info.bbox.x = xmin;
             face_info.bbox.y = ymin;
             face_info.bbox.width = (xmax - xmin);
             face_info.bbox.height = (ymax - ymin);
-
             for (int num = 0; num < 5; ++num) {
-                cv::Point2f landmark;
-                landmark.x = s1 * landmark_host.host<float>()[(2 * num + 1) * channel_step + index] + xmin;
-                landmark.y = s0 * landmark_host.host<float>()[(2 * num + 0) * channel_step + index] + ymin;
-                face_info.landmarks.push_back(landmark);
+                cv::Point2f point;
+                point.x = s1 * landmark_data[(2 * num + 1) * channel_step + index] + xmin;
+                point.y = s0 * landmark_data[(2 * num + 0) * channel_step + index] + ymin;
+                face_info.landmarks.push_back(point);
             }
             face_info.class_id = 0;
             decode_result.push_back(face_info);
         }
     }
 
-    return decode_result;
+    // refine bbox coords back into the user image space
+    const auto width_scale =
+        _m_input_size_user.width / static_cast<float>(_m_input_size_host.width);
+    const auto height_scale =
+        _m_input_size_user.height / static_cast<float>(_m_input_size_host.height);
+    for (auto& face_box : decode_result) {
+        face_box.bbox.x *= width_scale;
+        face_box.bbox.y *= height_scale;
+        face_box.bbox.width *= width_scale;
+        face_box.bbox.height *= height_scale;
+        for (auto& point : face_box.landmarks) {
+            point.x *= width_scale;
+            point.y *= height_scale;
+        }
+    }
+
+    auto nms_result = jinq::common::CvUtils::nms_bboxes(decode_result, _m_nms_threshold);
+    if (nms_result.size() > _m_keep_topk) {
+        nms_result.resize(_m_keep_topk);
+    }
+    for (auto& bbox : nms_result) {
+        bbox.category = "face";
+    }
+    FaceOutput faces;
+    faces.reserve(nms_result.size());
+    for (const auto& bbox : nms_result) {
+        faces.push_back(bbox);
+    }
+    output = std::move(faces);
+    return StatusCode::OK;
 }
 
 /************* Export Function Sets *************/
 
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- */
-template <typename INPUT, typename OUTPUT> 
-CenterFaceDetector<INPUT, OUTPUT>::CenterFaceDetector() { 
-    _m_pimpl = std::make_unique<Impl>(); 
+template<typename INPUT, typename OUTPUT>
+CenterFaceDetector<INPUT, OUTPUT>::CenterFaceDetector()
+    : jinq::models::BackendCvModel<INPUT, OUTPUT>("CENTER_FACE") {}
+
 }
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- */
-template <typename INPUT, typename OUTPUT> 
-CenterFaceDetector<INPUT, OUTPUT>::~CenterFaceDetector() = default;
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param cfg
- * @return
- */
-template <typename INPUT, typename OUTPUT> 
-StatusCode CenterFaceDetector<INPUT, OUTPUT>::init(const toml::table &cfg) {
-    return _m_pimpl->init(cfg);
 }
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @return
- */
-template <typename INPUT, typename OUTPUT> 
-bool CenterFaceDetector<INPUT, OUTPUT>::is_successfully_initialized() const {
-    return _m_pimpl->is_successfully_initialized();
 }
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param input
- * @param output
- * @return
- */
-template <typename INPUT, typename OUTPUT> 
-StatusCode CenterFaceDetector<INPUT, OUTPUT>::run_impl(const INPUT&input, OUTPUT &output) {
-    return _m_pimpl->run(input, output);
-}
-
-} // namespace object_detection
-} // namespace models
-} // namespace jinq

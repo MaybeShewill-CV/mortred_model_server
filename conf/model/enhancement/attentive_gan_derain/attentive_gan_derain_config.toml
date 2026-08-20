@@ -1,7 +1,12 @@
 [ATTENTIVEGANDERAIN]
-model_file_path="../weights/enhancement/attentive_gan_derain/attentive_gan_derain.model"
-model_threads_num=4
-model_input_image_size=[240, 320]
-compute_backend="cuda"
-backend_precision_mode=0
-backend_power_mode=0
+[ATTENTIVEGANDERAIN.backend]
+type = "mnn"
+model_file_path = "../weights/enhancement/attentive_gan_derain/attentive_gan_derain.model"
+device = "cuda"
+threads = 4
+input_layout = "nhwc"
+precision_mode = 0
+power_mode = 0
+
+[ATTENTIVEGANDERAIN.params]
+model_input_image_size = [240, 320]

@@ -1,6 +1,12 @@
 [BISENETV2]
-model_file_path="../weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.mnn"
-model_threads_num=4
-compute_backend="cuda"
-backend_precision_mode=0
-backend_power_mode=0
+
+[BISENETV2.backend]
+type = "mnn"
+model_file_path = "../weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.mnn"
+device = "cuda"
+threads = 4
+input_layout = "nhwc"
+input_names = ["input_tensor"]
+output_names = ["final_output"]
+precision_mode = 0
+power_mode = 0
