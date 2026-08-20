@@ -102,7 +102,13 @@ void fix_toml_paths(toml::node& value) {
 void force_cpu_backend(toml::node& value) {
     if (auto* tbl = value.as_table()) {
         for (auto& item : *tbl) {
-            if (item.first == "compute_backend") {
+            // 新 schema：[SECTION.backend] 内的 device；旧 schema：compute_backend
+            if (item.first == "backend" && item.second.is_table()) {
+                auto& backend_table = item.second.ref<toml::table>();
+                if (backend_table.contains("device")) {
+                    backend_table["device"].ref<std::string>() = std::string("cpu");
+                }
+            } else if (item.first == "compute_backend") {
                 item.second.ref<std::string>() = std::string("cpu");
             } else {
                 force_cpu_backend(item.second);

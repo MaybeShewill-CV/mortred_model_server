@@ -94,12 +94,9 @@ TEST(BackendConfigGuard, DdpmUnetUnknownBackendNameFailsCleanly) {
     jinq::models::diffusion::DDPMUNet<std_ddpm_unet_input, std_ddpm_unet_output> model;
     auto cfg = parse_toml_or_fail(R"toml(
 [DDPM_UNET]
-backend_type="nonexistent"
-[DDPM_UNET_TRT]
+[DDPM_UNET.backend]
+type="nonexistent"
 model_file_path="whatever.engine"
-[BACKEND_DICT]
-trt=0
-onnx=1
 )toml");
     EXPECT_EQ(model.init(cfg), StatusCode::MODEL_INIT_FAILED);
 }
@@ -146,11 +143,9 @@ TEST(BackendConfigGuard, Yolov8UnknownBackendNameFailsCleanly) {
     jinq::models::object_detection::YoloV8Detector<mat_input, std_object_detection_output> model;
     auto cfg = parse_toml_or_fail(R"toml(
 [YOLOV8]
-backend_type="nonexistent"
-[YOLOV8_TRT]
+[YOLOV8.backend]
+type="nonexistent"
 model_file_path="whatever.engine"
-[BACKEND_DICT]
-trt=0
 )toml");
     EXPECT_EQ(model.init(cfg), StatusCode::MODEL_INIT_FAILED);
 }

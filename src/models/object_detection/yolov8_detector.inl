@@ -1,711 +1,187 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: yolov8_detector.inl
+ * File: yolov8_detector.cpp
  * Date: 24-3-13
  ************************************************/
 
 #include "yolov8_detector.h"
-#include "models/cv_image_input.h"
-#include "models/cv_image_input.h"
 
 #include <algorithm>
-#include <cstdint>
-#include <fstream>
-#include <iterator>
-#include <random>
-#include <sstream>
+#include <cstring>
 
-#include <opencv2/opencv.hpp>
+#include <opencv2/dnn.hpp>
 #include "glog/logging.h"
-#include "TensorRT-8.6.1.6/NvInferRuntime.h"
-#include "cuda_runtime_api.h"
 
-#include "common/time_stamp.h"
-#include "common/base64.h"
 #include "common/cv_utils.h"
-#include "common/file_path_util.h"
-#include "models/trt_helper/trt_helper.h"
 
 namespace jinq {
 namespace models {
-
-using jinq::common::CvUtils;
-using jinq::common::Timestamp;
-using jinq::common::FilePathUtil;
-using jinq::common::StatusCode;
-using jinq::models::io_define::common_io::mat_input;
-using jinq::models::io_define::common_io::file_input;
-using jinq::models::io_define::common_io::base64_input;
-
 namespace object_detection {
 
-using trt_helper::TrtHelper;
-using trt_helper::TrtLogger;
-using trt_helper::DeviceMemory;
-using trt_helper::EngineBinding;
-using jinq::models::io_define::object_detection::bbox;
-using jinq::models::io_define::object_detection::std_object_detection_output;
-
-namespace yolov8_impl {
-
-using internal_input = mat_input;
-using internal_output = std_object_detection_output;
-
-/***
- *
- * @tparam INPUT
- * @param in
- * @return
- */
-template<typename INPUT>
-internal_input transform_input(const INPUT& in) {
-    internal_input result{};
-    result.input_image = jinq::models::cv_input::load_image(in);
-    return result;
-}
-
-/***
-* transform different type of internal output into external output
-* @tparam EXTERNAL_OUTPUT
-* @tparam dummy
-* @param in
-* @return
- */
-template<typename OUTPUT>
-typename std::enable_if<std::is_same<OUTPUT, std::decay<std_object_detection_output>::type>::value, std_object_detection_output>::type
-transform_output(const yolov8_impl::internal_output& internal_out) {
-    return internal_out;
-}
-}
-
-/***************** Impl Function Sets ******************/
+using DetectionOutput = jinq::models::io_define::object_detection::std_object_detection_output;
+using jinq::models::backend::NamedTensor;
+using jinq::common::StatusCode;
 
 template<typename INPUT, typename OUTPUT>
-class YoloV8Detector<INPUT, OUTPUT>::Impl {
-  public:
-    /***
-     *
-     */
-    Impl() = default;
-
-    /***
-     *
-     */
-    ~Impl() {
-        if (_m_backend_type == TRT) {
-            cudaStreamDestroy(_m_trt_params.cuda_stream);
-            cudaFree(_m_trt_params.input_device);
-            cudaFree(_m_trt_params.output_device);
-            cudaFreeHost(_m_trt_params.output_host);
-            // 释放 TensorRT 上下文/引擎/运行时
-            if (_m_trt_params.context != nullptr) {
-                _m_trt_params.context->destroy();
-            }
-            if (_m_trt_params.engine != nullptr) {
-                _m_trt_params.engine->destroy();
-            }
-            if (_m_trt_params.runtime != nullptr) {
-                _m_trt_params.runtime->destroy();
-            }
+StatusCode YoloV8Detector<INPUT, OUTPUT>::on_init(const toml::table& params) {
+    if (params.contains("model_score_threshold")) {
+        _m_score_threshold = params["model_score_threshold"].value_or<double>(0.0);
+    }
+    if (params.contains("model_nms_threshold")) {
+        _m_nms_threshold = params["model_nms_threshold"].value_or<double>(0.0);
+    }
+    if (params.contains("model_keep_top_k")) {
+        _m_keep_topk = static_cast<int>(params["model_keep_top_k"].value_or<int64_t>(0));
+    }
+    if (params.contains("model_class_nums")) {
+        _m_class_nums = static_cast<int>(params["model_class_nums"].value_or<int64_t>(0));
+    }
+    if (params.contains("class_names")) {
+        const toml::array* cls_names = params["class_names"].as_array();
+        if (cls_names == nullptr) {
+            LOG(ERROR) << "params key 'class_names' is not an array";
+            return StatusCode::MODEL_INIT_FAILED;
         }
-    }
-
-    /***
-    *
-    * @param transformer
-     */
-    Impl(const Impl& transformer) = delete;
-
-    /***
-     *
-     * @param transformer
-     * @return
-     */
-    Impl& operator=(const Impl& transformer) = delete;
-
-    /***
-     *
-     * @param cfg_file_path
-     * @return
-     */
-    StatusCode init(const toml::table& config);
-
-    /***
-    *
-    * @param in
-    * @param out
-    * @return
-     */
-    StatusCode run(const INPUT& in, OUTPUT& out);
-
-    /***
-     *
-     * @return
-     */
-    bool is_successfully_initialized() const {
-        return _m_successfully_initialized;
-    };
-
-  private:
-    struct TRTParams {
-        // model file path
-        std::string model_file_path;
-        // trt context
-        TrtLogger logger;
-        nvinfer1::IRuntime* runtime = nullptr;
-        nvinfer1::ICudaEngine* engine = nullptr;
-        nvinfer1::IExecutionContext* context = nullptr;
-        cudaStream_t cuda_stream = nullptr;
-        // trt bindings
-        EngineBinding input_binding;
-        EngineBinding output_binding;
-        // trt host/device memory
-        float* output_host = nullptr;
-        void* input_device = nullptr;
-        void* output_device = nullptr;
-    };
-
-    enum BackendType {
-        TRT = 0,
-    };
-
-  private:
-    // model backend type
-    BackendType _m_backend_type = TRT;
-
-    // trt net params
-    TRTParams _m_trt_params;
-
-    // score thresh
-    double _m_score_threshold = 0.4;
-    // nms thresh
-    double _m_nms_threshold = 0.35;
-    // top_k keep thresh
-    long _m_keep_topk = 250;
-    // class nums
-    int _m_class_nums = 80;
-    // class id to names
-    std::map<int, std::string> _m_class_id2names;
-    // input image size
-    cv::Size _m_input_size_user = cv::Size();
-    //　input node size
-    cv::Size _m_input_size_host = cv::Size();
-    // init flag
-    bool _m_successfully_initialized = false;
-
-  private:
-    /***
-     * preprocess
-     * @param input_image : input image
-     */
-    cv::Mat preprocess_image(const cv::Mat& input_image) const;
-
-    /***
-     *
-     * @param input_image
-     * @return
-     */
-    StatusCode maybe_reallocate_input_device_memory(const cv::Mat& input_image);
-
-    /***
-     *
-     * @param config
-     * @return
-     */
-    StatusCode init_trt(const toml::table& cfg);
-
-    /***
-     *
-     * @param in
-     * @param out
-     * @return
-     */
-    StatusCode trt_run(const INPUT& in, OUTPUT& out);
-
-    /***
-     *
-     * @tparam T
-     * @param bbox
-     * @return
-     */
-    cv::Rect2f transform_bboxes(const cv::Rect2d& bbox) {
-        auto w_scale = static_cast<float>(_m_input_size_user.width) / static_cast<float>(_m_input_size_host.width);
-        auto h_scale = static_cast<float>(_m_input_size_user.height) / static_cast<float>(_m_input_size_host.height);
-        cv::Rect2f result;
-        result.x = static_cast<float>(bbox.x * w_scale);
-        result.y = static_cast<float>(bbox.y * h_scale);
-        result.width = static_cast<float>(bbox.width * w_scale);
-        result.height = static_cast<float>(bbox.height * h_scale);
-
-        return result;
-    }
-};
-
-/***
-*
-* @param cfg_file_path
-* @return
- */
-template<typename INPUT, typename OUTPUT>
-StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::init(const toml::table& config) {
-    // choose backend type
-    if (!config.contains("BACKEND_DICT") || !config.contains("YOLOV8")) {
-        LOG(ERROR) << "Config section BACKEND_DICT or YOLOV8 missing";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    const toml::table* backend_dict = config["BACKEND_DICT"].as_table();
-    const toml::table* yolov8_section = config["YOLOV8"].as_table();
-    if (backend_dict == nullptr || yolov8_section == nullptr) {
-        LOG(ERROR) << "Config section BACKEND_DICT or YOLOV8 not a table";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    auto backend_name = (*yolov8_section)["backend_type"].value_or<std::string>("");
-    if (!backend_dict->contains(backend_name)) {
-        LOG(ERROR) << "unknown backend type: " << backend_name;
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    _m_backend_type = static_cast<BackendType>((*backend_dict)[backend_name].value_or<int64_t>(0));
-
-    if (_m_backend_type != TRT) {
-        LOG(ERROR) << "unsupported backend type: " << static_cast<int>(_m_backend_type);
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    const toml::table* yolov8_cfg = config["YOLOV8_TRT"].as_table();
-    if (yolov8_cfg == nullptr) {
-        LOG(ERROR) << "Config section YOLOV8_TRT missing or not a table";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    auto model_file_name = FilePathUtil::get_file_name((*yolov8_cfg)["model_file_path"].value_or<std::string>(""));
-
-    StatusCode init_status = init_trt(*yolov8_cfg);
-    if (init_status == StatusCode::OK) {
-        _m_successfully_initialized = true;
-        LOG(INFO) << "Successfully load yolov8 model from: " << model_file_name;
+        for (size_t idx = 0; idx < cls_names->size(); ++idx) {
+            _m_class_id2names[static_cast<int>(idx)] = (*cls_names)[idx].value_or<std::string>("");
+        }
     } else {
-        _m_successfully_initialized = false;
-        LOG(INFO) << "Failed load yolov8 model from: " << model_file_name;
-    }
-
-    return init_status;
-}
-
-/***
-*
-* @param in
-* @param out
-* @return
- */
-template<typename INPUT, typename OUTPUT>
-StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
-    StatusCode infer_status = StatusCode::MODEL_RUN_SESSION_FAILED;
-    if (_m_backend_type == TRT) {
-        infer_status = trt_run(in, out);
-    } else {
-        // todo implment other backend
-    }
-    return infer_status;
-}
-
-/***
- *
- * @param input_image
- * @return
- */
-template<typename INPUT, typename OUTPUT>
-cv::Mat YoloV8Detector<INPUT, OUTPUT>::Impl::preprocess_image(
-    const cv::Mat& input_image) const {
-    // convert bgr 2 rgb
-    cv::Mat tmp;
-    cv::cvtColor(input_image, tmp, cv::COLOR_BGR2RGB);
-
-    // resize image
-    cv::resize(tmp, tmp, _m_input_size_host);
-
-    // type cast
-    if (tmp.type() != CV_32FC3) {
-        tmp.convertTo(tmp, CV_32FC3);
-    }
-
-    // normalize to [0, 1] as the onnx model expects
-    tmp /= 255.0;
-
-    return tmp;
-}
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param input_image
- * @return
- */
-template<typename INPUT, typename OUTPUT>
-StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::maybe_reallocate_input_device_memory(const cv::Mat& input_image) {
-    auto current_input_binding_volume = _m_trt_params.input_binding.volume();
-    auto current_input_image_ele_size = input_image.rows * input_image.cols * input_image.channels();
-    // no need to reallocate
-    if (current_input_image_ele_size == current_input_binding_volume) {
-        return StatusCode::OK;
-    }
-    // reallocate input device memory (input data is float)
-    uint32_t bytes = current_input_image_ele_size * sizeof(float);
-    if (nullptr != _m_trt_params.input_device) {
-        cudaFree(_m_trt_params.input_device);
-    }
-    auto cuda_status = cudaMalloc(&_m_trt_params.input_device, bytes);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "reallocate input device memory failed, err str: " << cudaGetErrorString(cuda_status);
-        return StatusCode::TRT_ALLOC_MEMO_FAILED;
-    }
-    // set new binding info
-    _m_trt_params.input_binding.set_volume(current_input_image_ele_size);
-    // layout must match the engine export (NCHW): data is transferred CHW
-    nvinfer1::Dims4 input_dims(1, input_image.channels(), input_image.rows, input_image.cols);
-    _m_trt_params.input_binding.set_dims(input_dims);
-
-    return StatusCode::OK;
-}
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param cfg
- * @return
- */
-template<typename INPUT, typename OUTPUT>
-StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::init_trt(const toml::table& cfg) {
-    // init threshold
-    if (!cfg.contains("model_score_threshold")) {
-        _m_score_threshold = 0.4;
-    } else {
-        _m_score_threshold = cfg["model_score_threshold"].value_or<double>(0.0);
-    }
-
-    if (!cfg.contains("model_nms_threshold")) {
-        _m_nms_threshold = 0.35;
-    } else {
-        _m_nms_threshold = cfg["model_nms_threshold"].value_or<double>(0.0);
-    }
-
-    if (!cfg.contains("model_keep_top_k")) {
-        _m_keep_topk = 250;
-    } else {
-        _m_keep_topk = cfg["model_keep_top_k"].value_or<int64_t>(0);
-    }
-
-    if (!cfg.contains("model_class_nums")) {
-        _m_class_nums = 80;
-    } else {
-        _m_class_nums = static_cast<int>(cfg["model_class_nums"].value_or<int64_t>(0));
-    }
-
-    if (!cfg.contains("class_names")) {
         for (auto idx = 0; idx < _m_class_nums; ++idx) {
             _m_class_id2names.insert(std::make_pair(idx, ""));
         }
-    } else {
-        const toml::array* cls_names = cfg["class_names"].as_array();
-    if (cls_names == nullptr) {
-        LOG(ERROR) << "Config field class_names is not an array";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-        for (size_t idx = 0; idx < cls_names->size(); ++idx) {
-            _m_class_id2names.insert(std::make_pair(idx, (*cls_names)[idx].value_or<std::string>("")));
-        }
     }
 
-    // init trt runtime
-    _m_trt_params.logger = TrtLogger();
-    _m_trt_params.runtime = nvinfer1::createInferRuntime(_m_trt_params.logger);
-    if (nullptr == _m_trt_params.runtime) {
-        LOG(ERROR) << "init tensorrt runtime failed";
+    const auto& input_info = this->session().inputs().front();
+    if (input_info.shape.size() != 4 || input_info.shape[1] != 3) {
+        LOG(ERROR) << "unexpected yolov8 input shape: " << input_info.to_string()
+                   << ", expected [N,3,H,W] (nchw)";
         return StatusCode::MODEL_INIT_FAILED;
     }
-
-    // init trt engine
-    if (!cfg.contains("model_file_path")) {
-        LOG(ERROR) << "Config doesn\'t have model_file_path field";
-        return StatusCode::MODEL_INIT_FAILED;
-    } else {
-        _m_trt_params.model_file_path = cfg["model_file_path"].value_or<std::string>("");
-    }
-    if (!FilePathUtil::is_file_exist(_m_trt_params.model_file_path)) {
-        LOG(ERROR) << "Privacy trt detection model file: " << _m_trt_params.model_file_path << " not exist";
+    _m_input_size_host.height = static_cast<int>(input_info.shape[2]);
+    _m_input_size_host.width = static_cast<int>(input_info.shape[3]);
+    if (_m_input_size_host.area() <= 0) {
+        LOG(ERROR) << "yolov8 input shape has dynamic/invalid H/W: " << input_info.to_string();
         return StatusCode::MODEL_INIT_FAILED;
     }
-    std::ifstream fgie(_m_trt_params.model_file_path, std::ios_base::in | std::ios_base::binary);
-    if (!fgie) {
-        LOG(ERROR) << "read model file: " << _m_trt_params.model_file_path << " failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    std::stringstream buffer;
-    buffer << fgie.rdbuf();
-    std::string stream_model(buffer.str());
-    _m_trt_params.engine = _m_trt_params.runtime->deserializeCudaEngine(stream_model.data(), stream_model.size());
-    if (nullptr == _m_trt_params.engine) {
-        LOG(ERROR) << "deserialize trt engine failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // init trt execution context
-    _m_trt_params.context = _m_trt_params.engine->createExecutionContext();
-    if (nullptr == _m_trt_params.context) {
-        LOG(ERROR) << "create trt context failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // bind input tensor
-    std::string input_node_name = "images";
-    auto successfully_bind = TrtHelper::setup_engine_binding(
-        _m_trt_params.engine, input_node_name, _m_trt_params.input_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind input tensor failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (_m_trt_params.input_binding.dims().nbDims != 4) {
-        std::string input_shape_str = TrtHelper::dims_to_string(_m_trt_params.input_binding.dims());
-        LOG(ERROR) << "wrong input tensor shape: " << input_shape_str << " expected: [N, C, H, W]";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // bind output tensor
-    std::string output_node_name = "output0";
-    successfully_bind = TrtHelper::setup_engine_binding(
-        _m_trt_params.engine, output_node_name, _m_trt_params.output_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind output tensor failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (_m_trt_params.output_binding.dims().nbDims != 3) {
-        std::string output_shape_str = TrtHelper::dims_to_string(_m_trt_params.output_binding.dims());
-        LOG(ERROR) << "wrong output tensor shape: " << output_shape_str << " expected: [N, C, H]";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // setup input host/device memory (input data is float)
-    auto memo_size = _m_trt_params.input_binding.volume() * sizeof(float);
-    auto cuda_status = cudaMalloc(&_m_trt_params.input_device, memo_size);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "allocate device memory for input image failed, err str: " << cudaGetErrorString(cuda_status);
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // setup output host/device memory
-    memo_size = _m_trt_params.output_binding.volume() * sizeof(float);
-    cuda_status = cudaMallocHost(reinterpret_cast<void**>(&_m_trt_params.output_host), memo_size);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "allocate host memory for output node failed, err str: " << cudaGetErrorString(cuda_status);
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    cuda_status = cudaMalloc(&_m_trt_params.output_device, memo_size);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "allocate device memory for output node failed, err str: " << cudaGetErrorString(cuda_status);
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // init cuda stream
-    if (cudaStreamCreate(&_m_trt_params.cuda_stream) != cudaSuccess) {
-        LOG(ERROR) << "ERROR: cuda stream creation failed." << std::endl;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // set input node size from the engine binding (authoritative, NCHW)
-    _m_input_size_host.height = static_cast<int>(_m_trt_params.input_binding.dims().d[2]);
-    _m_input_size_host.width = static_cast<int>(_m_trt_params.input_binding.dims().d[3]);
-
     return StatusCode::OK;
 }
 
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param in
- * @param out
- * @return
- */
 template<typename INPUT, typename OUTPUT>
-StatusCode YoloV8Detector<INPUT, OUTPUT>::Impl::trt_run(const INPUT& in, OUTPUT& out) {
-    // init envs
-    auto& context = _m_trt_params.context;
-    auto& cuda_stream = _m_trt_params.cuda_stream;
-    auto& input_binding = _m_trt_params.input_binding;
-    auto& output_binding = _m_trt_params.output_binding;
-    auto& output_host = _m_trt_params.output_host;
-    auto& input_device = _m_trt_params.input_device;
-    auto& output_device = _m_trt_params.output_device;
-
-    // transform external input into internal input
-    auto internal_in = yolov8_impl::transform_input(in);
-    if (!internal_in.input_image.data || internal_in.input_image.empty()) {
-        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
-    }
-
-    // preprocess input data
-    cv::Mat& input_image = internal_in.input_image;
+std::vector<NamedTensor> YoloV8Detector<INPUT, OUTPUT>::preprocess(const cv::Mat& input_image) {
+    // bgr -> rgb -> resize -> [0,1] normalize, emitted as f32 nchw
     _m_input_size_user = input_image.size();
-    auto preprocessed_image = preprocess_image(input_image);
-    auto input_chw_image_data = CvUtils::convert_to_chw_vec(preprocessed_image);
-
-    // maybe reallocate device memory
-    maybe_reallocate_input_device_memory(preprocessed_image);
-    auto input_mem_size = input_binding.volume() * sizeof(float);
-
-    // H2D data transfer
-    auto cuda_status = cudaMemcpyAsync(
-        input_device, (float*)input_chw_image_data.data(), input_mem_size, cudaMemcpyHostToDevice, cuda_stream);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "copy input image memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
-        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    cv::Mat tmp;
+    cv::cvtColor(input_image, tmp, cv::COLOR_BGR2RGB);
+    cv::resize(tmp, tmp, _m_input_size_host);
+    if (tmp.type() != CV_32FC3) {
+        tmp.convertTo(tmp, CV_32FC3);
     }
+    tmp /= 255.0;
 
-    // do inference
-    context->setInputTensorAddress("images", input_device);
-    context->setTensorAddress("output0", output_device);
-    if (!context->enqueueV3(cuda_stream)) {
-        LOG(ERROR) << "enqueue input data for inference failed";
-        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    const auto chw_data = jinq::common::CvUtils::convert_to_chw_vec(tmp);
+    std::vector<NamedTensor> inputs;
+    NamedTensor named;
+    named.name = this->session().inputs().front().name;
+    named.tensor = jinq::models::backend::Tensor::make<float>(
+        {1, 3, _m_input_size_host.height, _m_input_size_host.width});
+    if (chw_data.size() * sizeof(float) != named.tensor.byte_size()) {
+        LOG(ERROR) << "preprocessed chw data size mismatches the input tensor";
+        return {};
     }
+    std::memcpy(named.tensor.buffer.data(), chw_data.data(), named.tensor.byte_size());
+    inputs.push_back(std::move(named));
+    return inputs;
+}
 
-    // d2h data transfer
-    cuda_status = cudaMemcpyAsync(
-        output_host, output_device, output_binding.volume() * sizeof(float), cudaMemcpyDeviceToHost, cuda_stream);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "async copy output tensor back from device memory to host memory failed, error str: "
-                   << cudaGetErrorString(cuda_status);
-        return StatusCode::MODEL_RUN_SESSION_FAILED;
+template<typename INPUT, typename OUTPUT>
+cv::Rect2f YoloV8Detector<INPUT, OUTPUT>::transform_bboxes(const cv::Rect2d& bbox) const {
+    const auto w_scale = static_cast<float>(_m_input_size_user.width) /
+                         static_cast<float>(_m_input_size_host.width);
+    const auto h_scale = static_cast<float>(_m_input_size_user.height) /
+                         static_cast<float>(_m_input_size_host.height);
+    cv::Rect2f result;
+    result.x = static_cast<float>(bbox.x * w_scale);
+    result.y = static_cast<float>(bbox.y * h_scale);
+    result.width = static_cast<float>(bbox.width * w_scale);
+    result.height = static_cast<float>(bbox.height * h_scale);
+    return result;
+}
+
+template<typename INPUT, typename OUTPUT>
+StatusCode YoloV8Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>& outputs,
+                                                      OUTPUT& output) {
+    if (outputs.empty()) {
+        LOG(ERROR) << "yolov8 output tensor is empty";
+        return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    cudaStreamSynchronize(cuda_stream);
+    const auto& tensor = outputs.front().tensor;
+    const auto* out_data = tensor.data<float>();
+    if (tensor.shape.size() != 3) {
+        LOG(ERROR) << "unexpected yolov8 output shape: "
+                   << jinq::models::backend::shape_to_string(tensor.shape);
+        return StatusCode::MODEL_EMPTY_OUTPUT;
+    }
+    const auto row_size = tensor.shape[1];
+    const auto proposal_counts = tensor.shape[2];
 
-    // decode output bboxes
-    auto proposal_counts = output_binding.dims().d[2];
-    auto row_size = output_binding.dims().d[1];
     std::vector<cv::Rect2d> bboxes;
     std::vector<float> scores;
     std::vector<int> cls_ids;
-
-    auto begin = output_host;
-    for (int i = 0; i < proposal_counts; ++i) {
-        float cx = begin[0 * proposal_counts + i];
-        float cy = begin[1 * proposal_counts + i];
-        float w = begin[2 * proposal_counts + i];
-        float h = begin[3 * proposal_counts + i];
+    for (int64_t i = 0; i < proposal_counts; ++i) {
+        const float cx = out_data[0 * proposal_counts + i];
+        const float cy = out_data[1 * proposal_counts + i];
+        const float w = out_data[2 * proposal_counts + i];
+        const float h = out_data[3 * proposal_counts + i];
 
         std::vector<float> tmp_scores;
-        // class scores occupy columns 4..row_size-1: iterate over ALL of them
-        // (regression: the old bound j < row_size - 4 silently dropped the last 4 classes)
-        for (auto j = 4; j < row_size; ++j) {
-            float score = begin[j * proposal_counts + i];
-            tmp_scores.push_back(score);
+        // class scores occupy rows 4..row_size-1 (all of them, the last 4
+        // classes must not be dropped)
+        for (int64_t j = 4; j < row_size; ++j) {
+            tmp_scores.push_back(out_data[j * proposal_counts + i]);
         }
-        auto max_score = std::max_element(std::begin(tmp_scores), std::end(tmp_scores));
+        const auto max_score = std::max_element(tmp_scores.begin(), tmp_scores.end());
         if (*max_score < _m_score_threshold) {
             continue;
-        } else {
-            float cls_score = *max_score;
-            int cls_id = static_cast<int>(std::distance(tmp_scores.begin(), max_score));
-            float x = cx - w / 2.0f;
-            float y = cy - h / 2.0f;
-
-            bboxes.emplace_back(x, y, w, h);
-            scores.push_back(cls_score);
-            cls_ids.push_back(cls_id);
         }
+        const float cls_score = *max_score;
+        const int cls_id = static_cast<int>(std::distance(tmp_scores.begin(), max_score));
+        const float x = cx - w / 2.0f;
+        const float y = cy - h / 2.0f;
+
+        bboxes.emplace_back(x, y, w, h);
+        scores.push_back(cls_score);
+        cls_ids.push_back(cls_id);
     }
 
-    // nms thresh
     std::vector<int> indices;
     cv::dnn::NMSBoxes(bboxes, scores, _m_score_threshold, _m_nms_threshold, indices);
     if (indices.size() >= static_cast<size_t>(_m_keep_topk)) {
-        indices.resize(_m_keep_topk);
+        indices.resize(static_cast<size_t>(_m_keep_topk));
     }
 
-    // transform bboxes from network space to user space
-    yolov8_impl::internal_output decode_result;
-    for (auto& idx : indices) {
-        float score = scores[idx];
-        int cls_id = cls_ids[idx];
-        cv::Rect2d ori_bbox = bboxes[idx];
-        auto converted_bboxes = transform_bboxes(ori_bbox);
-        bbox tmp_bbox {converted_bboxes, score, cls_id, {}};
-        if (_m_class_id2names.find(cls_id) != _m_class_id2names.end()) {
-            tmp_bbox.category = _m_class_id2names.at(cls_id);
+    DetectionOutput decode_result;
+    for (const auto& idx : indices) {
+        const float score = scores[idx];
+        const int cls_id = cls_ids[idx];
+        const auto converted = transform_bboxes(bboxes[idx]);
+        jinq::models::io_define::object_detection::bbox tmp_bbox{converted, score, cls_id, {}};
+        const auto name_iter = _m_class_id2names.find(cls_id);
+        if (name_iter != _m_class_id2names.end()) {
+            tmp_bbox.category = name_iter->second;
         }
         decode_result.push_back(tmp_bbox);
     }
-
-    // transform internal output into external output
-    out = yolov8_impl::transform_output<OUTPUT>(decode_result);
+    output = std::move(decode_result);
     return StatusCode::OK;
 }
 
 /************* Export Function Sets *************/
 
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- */
 template<typename INPUT, typename OUTPUT>
-YoloV8Detector<INPUT, OUTPUT>::YoloV8Detector() {
-    _m_pimpl = std::make_unique<Impl>();
+YoloV8Detector<INPUT, OUTPUT>::YoloV8Detector()
+    : jinq::models::BackendCvModel<INPUT, OUTPUT>("YOLOV8") {}
+
 }
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- */
-template<typename INPUT, typename OUTPUT>
-YoloV8Detector<INPUT, OUTPUT>::~YoloV8Detector() = default;
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param cfg
- * @return
- */
-template<typename INPUT, typename OUTPUT>
-StatusCode YoloV8Detector<INPUT, OUTPUT>::init(const toml::table& cfg) {
-    return _m_pimpl->init(cfg);
 }
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @return
- */
-template<typename INPUT, typename OUTPUT>
-bool YoloV8Detector<INPUT, OUTPUT>::is_successfully_initialized() const {
-    return _m_pimpl->is_successfully_initialized();
 }
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param input
- * @param output
- * @return
- */
-template<typename INPUT, typename OUTPUT>
-StatusCode YoloV8Detector<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPUT& output) {
-    return _m_pimpl->run(input, output);
-}
-
-} // namespace object_detection
-} // namespace models
-} // namespace jinq

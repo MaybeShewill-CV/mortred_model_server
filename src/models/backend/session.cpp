@@ -1,0 +1,58 @@
+/************************************************
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: backend/session.cpp
+ * Date: 2026-08-20
+ ************************************************/
+
+#include "models/backend/session.h"
+
+#include "glog/logging.h"
+
+#include "models/backend/mnn_session.h"
+#include "models/backend/ort_session.h"
+#include "models/backend/trt_session.h"
+
+namespace jinq {
+namespace models {
+namespace backend {
+
+std::unique_ptr<InferenceSession> InferenceSession::create(const BackendConfig& config,
+                                                           std::string* err) {
+    if (err != nullptr) {
+        err->clear();
+    }
+    std::unique_ptr<InferenceSession> session;
+    if (config.is_mnn()) {
+        auto mnn_session = std::make_unique<MnnSession>();
+        const auto status = mnn_session->init(config, err);
+        if (status != jinq::common::StatusCode::OK) {
+            return nullptr;
+        }
+        session = std::move(mnn_session);
+    } else if (config.is_onnx()) {
+        auto ort_session = std::make_unique<OrtSession>();
+        const auto status = ort_session->init(config, err);
+        if (status != jinq::common::StatusCode::OK) {
+            return nullptr;
+        }
+        session = std::move(ort_session);
+    } else if (config.is_tensorrt()) {
+        auto trt_session = std::make_unique<TrtSession>();
+        const auto status = trt_session->init(config, err);
+        if (status != jinq::common::StatusCode::OK) {
+            return nullptr;
+        }
+        session = std::move(trt_session);
+    } else {
+        if (err != nullptr) {
+            *err = "unknown backend type '" + config.type + "', expected mnn | onnx | tensorrt";
+        }
+        return nullptr;
+    }
+    return session;
+}
+
+}  // namespace backend
+}  // namespace models
+}  // namespace jinq
