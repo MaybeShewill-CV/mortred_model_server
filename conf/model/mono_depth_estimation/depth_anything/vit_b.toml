@@ -1,14 +1,10 @@
 [DEPTH_ANYTHING]
-backend_type="trt"
+[DEPTH_ANYTHING.backend]
+type = "tensorrt"
+model_file_path = "../weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.engine"
+device = "cuda"
 
-[DEPTH_ANYTHING_TRT]
-model_file_path="../weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.engine"
-focal_length=0.0
+[DEPTH_ANYTHING.params]
+focal_length = 0.0
 # intrinsic fx fy cx cy
-intrinsic=[0.0, 0.0, 0.0, 0.0]
-
-[DEPTH_ANYTHING_MNN]
-
-[BACKEND_DICT]
-trt=0
-#mnn=1
+intrinsic = [0.0, 0.0, 0.0, 0.0]

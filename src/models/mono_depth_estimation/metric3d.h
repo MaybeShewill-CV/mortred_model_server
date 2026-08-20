@@ -1,81 +1,64 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: Metric3d.h
- * Date: 23-10-26
+ * File: metric3d.h
  ************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_METRIC3D_H
 #define MORTRED_MODEL_SERVER_METRIC3D_H
 
-#include <memory>
+#include <vector>
 
 #include "toml/toml.hpp"
 
-#include "common/status_code.h"
-#include "models/base_model.h"
+#include "models/backend/backend_cv_model.h"
+#include "models/backend/tensor.h"
 #include "models/model_io_define.h"
 
 namespace jinq {
 namespace models {
 namespace mono_depth_estimation {
 
-template <typename INPUT, typename OUTPUT> 
-class Metric3D : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
+template<typename INPUT, typename OUTPUT>
+class Metric3D : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   public:
-    /***
-     * constructor
-     * @param config
-     */
     Metric3D();
+    ~Metric3D() override = default;
 
-    /***
-     *
-     */
-    ~Metric3D() override;
-
-    /***
-     * constructor
-     * @param transformer
-     */
-    Metric3D(const Metric3D &transformer) = delete;
-
-    /***
-     * constructor
-     * @param transformer
-     * @return
-     */
-    Metric3D &operator=(const Metric3D &transformer) = delete;
-
-    /***
-     *
-     * @param toml
-     * @return
-     */
-    jinq::common::StatusCode init(const toml::table &cfg) override;
-
-    /***
-     *
-     * @param input
-     * @param output
-     * @return
-     */
-    jinq::common::StatusCode run_impl(const INPUT&input, OUTPUT &output) override;
-
-    /***
-     * if model successfully initialized
-     * @return
-     */
-    bool is_successfully_initialized() const override;
+    Metric3D(const Metric3D& transformer) = delete;
+    Metric3D& operator=(const Metric3D& transformer) = delete;
 
   private:
-    class Impl;
-    std::unique_ptr<Impl> _m_pimpl;
+    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
+
+    jinq::common::StatusCode postprocess(
+        const std::vector<jinq::models::backend::NamedTensor>& outputs,
+        OUTPUT& output) override;
+
+    jinq::common::StatusCode on_init(const toml::table& params) override;
+
+    const jinq::models::backend::NamedTensor* find_output(
+        const std::vector<jinq::models::backend::NamedTensor>& outputs,
+        const std::string& name) const;
+
+    void calculate_pad_info(int& pad_h, int& pad_w) const;
+
+    float calculate_label_scale_factor() const;
+
+    // focal length
+    float _m_focal_length = 0.0f;
+    // intrinsic params fx fy cx cy
+    std::vector<float> _m_intrinsic_params = {0.0f, 0.0f, 0.0f, 0.0f};
+    // user image size of the current run
+    cv::Size _m_input_size_user = cv::Size();
+    // network input node size
+    cv::Size _m_input_size_host = cv::Size();
 };
-} // namespace mono_depth_estimation
-} // namespace models
-} // namespace jinq
+
+}
+}
+}
 
 #include "metric3d.inl"
 
-#endif // MORTRED_MODEL_SERVER_METRIC3D_H
+#endif //MORTRED_MODEL_SERVER_METRIC3D_H

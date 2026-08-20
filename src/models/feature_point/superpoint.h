@@ -1,82 +1,68 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: superpoint.h
-* Date: 22-6-15
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: superpoint.h
+ ************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_SUPERPOINT_H
 #define MORTRED_MODEL_SERVER_SUPERPOINT_H
 
-#include <memory>
-
 #include "toml/toml.hpp"
 
-#include "common/status_code.h"
-#include "models/base_model.h"
+#include "models/backend/backend_cv_model.h"
+#include "models/backend/tensor.h"
 #include "models/model_io_define.h"
 
 namespace jinq {
 namespace models {
 namespace feature_point {
 
-template <typename INPUT, typename OUTPUT>
-class SuperPoint : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
+template<typename INPUT, typename OUTPUT>
+class SuperPoint : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   public:
-    /***
-     * constructor
-     * @param config
-     */
     SuperPoint();
+    ~SuperPoint() override = default;
 
-    /***
-     *
-     */
-    ~SuperPoint() override;
-
-    /***
-     * constructor
-     * @param transformer
-     */
-    SuperPoint(const SuperPoint &transformer) = delete;
-
-    /***
-     * constructor
-     * @param transformer
-     * @return
-     */
-    SuperPoint &operator=(const SuperPoint &transformer) = delete;
-
-    /***
-     *
-     * @param toml
-     * @return
-     */
-    jinq::common::StatusCode init(const toml::table &cfg) override;
-
-    /***
-     *
-     * @param input
-     * @param output
-     * @return
-     */
-    jinq::common::StatusCode run_impl(const INPUT& input, OUTPUT& output) override;
-
-    /***
-     * if superpoint detector successfully initialized
-     * @return
-     */
-    bool is_successfully_initialized() const override;
+    SuperPoint(const SuperPoint& transformer) = delete;
+    SuperPoint& operator=(const SuperPoint& transformer) = delete;
 
   private:
-    class Impl;
-    std::unique_ptr<Impl> _m_pimpl;
+    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
+
+    jinq::common::StatusCode postprocess(
+        const std::vector<jinq::models::backend::NamedTensor>& outputs,
+        OUTPUT& output) override;
+
+    jinq::common::StatusCode on_init(const toml::table& params) override;
+
+    const jinq::models::backend::NamedTensor* find_output(
+        const std::vector<jinq::models::backend::NamedTensor>& outputs,
+        const std::string& name) const;
+
+    void decode_fp_location_and_score(
+        const jinq::models::backend::NamedTensor& semi,
+        jinq::models::io_define::feature_point::std_feature_point_output& key_points) const;
+
+    void decode_fp_descriptor(
+        const jinq::models::backend::NamedTensor& desc,
+        jinq::models::io_define::feature_point::std_feature_point_output& key_points) const;
+
+    // score thresh
+    double _m_score_threshold = 0.015;
+    // nms thresh
+    double _m_nms_threshold = 4.0;
+    // dense map cell size
+    int _m_cell_size = 8;
+    // user image size of the current run
+    cv::Size _m_input_size_user = cv::Size();
+    // network input node size
+    cv::Size _m_input_size_host = cv::Size();
 };
 
-} // namespace feature_point
-} // namespace models
-} // namespace jinq
+}
+}
+}
 
 #include "superpoint.inl"
 
-#endif // MORTRED_MODEL_SERVER_SUPERPOINT_H
+#endif //MORTRED_MODEL_SERVER_SUPERPOINT_H
