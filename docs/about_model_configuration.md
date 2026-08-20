@@ -1,40 +1,66 @@
-<b><font color='black' size='8' face='Helvetica'> About Model Configuration </font></b>
+# About Model Configuration
 
-All model's configurations are stored in $PROJECT_ROOT_DIR/conf/model folder.
+All model configurations live in `conf/model/`. The unified backend layer uses
+a two-table schema per model section:
 
-<b><font color='GrayB' size='6' face='Helvetica'> Common Configuration </font></b>
+```toml
+[YOLOV8]                       # model section, one per model
+[YOLOV8.backend]               # backend selection (shared by all models)
+type = "tensorrt"              # mnn | onnx | tensorrt
+model_file_path = "../weights/object_detection/yolov8/yolov8s.engine"
+device = "cuda"                # cpu | cuda (default cpu)
+device_id = 0                  # optional, cuda device index
+threads = 4                    # cpu threads for mnn/onnx (default 4)
+input_layout = "auto"          # mnn only: auto | nhwc | nchw
+precision_mode = 0             # mnn only: BackendConfig::PrecisionMode
+power_mode = 0                 # mnn only: BackendConfig::PowerMode
+input_names = ["images"]       # optional, defaults to the model file io
+output_names = ["output0"]     # optional, filters aux output nodes
 
-Use mobilenetv2's model configuration for example
-![common_model_config](../resources/images/common_model_config_example.png)
+[YOLOV8.params]                # model specific keys, consumed by on_init
+model_score_threshold = 0.25
+model_nms_threshold = 0.5
+class_names = ['person', 'bicycle']
+```
 
-**model_file_path:** model's weights file path
+## Key reference
 
-**model_threads_num:** computing threads nums when cpu backend was used. recommand to use the amount of cpu core
+| key | scope | description |
+|-----|-------|-------------|
+| `type` | backend | inference engine: `mnn`, `onnx` (ONNX Runtime) or `tensorrt` |
+| `model_file_path` | backend | weights file (`.mnn`, `.onnx`, `.engine`) |
+| `device` | backend | `cpu` or `cuda`; TRT engines always run on cuda |
+| `device_id` / `gpu_device_id` | backend | cuda device index (alias accepted) |
+| `threads` | backend | intra-op threads for mnn / onnx cpu |
+| `input_layout` | backend (mnn) | host tensor byte order: `nhwc` for TF-style exports, `nchw` for CHW exports, `auto` follows the model file |
+| `precision_mode` / `power_mode` | backend (mnn) | `MNN::BackendConfig` modes |
+| `input_names` / `output_names` | backend | io name override/filter, useful for models exposing auxiliary outputs |
+| everything else | params | model specific (thresholds, class names, sizes); key names are unchanged from the historical configs |
 
-**compute_backend:** compute backend only "cpu" and "cuda" was supported for now
+Multi-engine models (SAM encoder + decoder, lightglue extractor + matcher) use
+one `<key>_backend` sub-table per engine instead of the primary `backend`
+table, and orchestrate the sessions in `run_sessions`.
 
-<b><font color='GrayB' size='6' face='Helvetica'> Special Model Configuration </font></b>
+## Migration from the old schema
 
-<b><font color='GrayZ' size='5' face='Helvetica'> ----- Image Objection Model Configuration </font></b>
+The historical schema (`[SECTION]` + `backend_type` + `[SECTION_TRT]` /
+`[SECTION_ONNX]` / `[SECTION_MNN]` + `[BACKEND_DICT]`) is no longer supported.
+Migrate with:
 
-Use yolov5's model configuration for example
-![yolov5_model_config](../resources/images/yolov5_model_cfg_example.png)
+```bash
+python scripts/migrate_model_config.py --dry-run   # preview + report
+python scripts/migrate_model_config.py             # in-place migration
+python scripts/migrate_model_config.py --check     # CI gate (exit 1 on drift)
+```
 
-**model_score_threshold:** obj-bbox's score threshold only keep objs with score higher than this
+Mapping: `compute_backend -> device`, `gpu_device_id -> device_id`,
+`model_threads_num -> threads`, `backend_precision_mode -> precision_mode`,
+`backend_power_mode -> power_mode`, `trt -> tensorrt`; all other keys move
+into `[SECTION.params]` with unchanged names and semantics.
 
-**model_nms_threshold:** nms threshold used for merging bboxes aimed at the same objs
+## Testing notes
 
-**model_keep_top_k:** maxinum count of kept objects
-
-**model_class_nums:** total number of categories the model can recognize
-
-<b><font color='GrayZ' size='5' face='Helvetica'> ----- SuperPoint Model Configuration </font></b>
-
-Superpoint's model configuration for example
-![superpoint_model_config](../resources/images/superpoint_model_cfg_example.png)
-
-**model_nms_threshold:** only one feature point can be kept in radius of this threshold
-
-**max_track_length:** only track images which are closer than this distance
-
-**nn_dis_thresh:** thoses points whose feature distances are smaller than this will be regarded as the same point
+`model_golden_test` rewrites `../`-prefixed paths relative to the repo root and
+forces `backend.device = "cpu"` (and the legacy `compute_backend`) so cpu-only
+CI stays deterministic; TensorRT engines still require a GPU and are skipped
+when unavailable.
