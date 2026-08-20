@@ -1,78 +1,48 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: dinov2.h
- * Date: 23-6-12
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: dinov2.h
+************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_DINOV2_H
 #define MORTRED_MODEL_SERVER_DINOV2_H
 
-#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 #include "toml/toml.hpp"
 
-#include "models/base_model.h"
+#include "models/backend/backend_cv_model.h"
+#include "models/backend/tensor.h"
 #include "models/model_io_define.h"
-#include "common/status_code.h"
 
 namespace jinq {
 namespace models {
 namespace classification {
 
 template<typename INPUT, typename OUTPUT>
-class Dinov2 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
+class Dinov2 : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   public:
-
-    /***
-    * constructor
-    * @param config
-     */
     Dinov2();
+    ~Dinov2() override = default;
 
-    /***
-     *
-     */
-    ~Dinov2() override;
-
-    /***
-    * constructor
-    * @param transformer
-     */
     Dinov2(const Dinov2& transformer) = delete;
-
-    /***
-     * constructor
-     * @param transformer
-     * @return
-     */
     Dinov2& operator=(const Dinov2& transformer) = delete;
 
-    /***
-     *
-     * @param toml
-     * @return
-     */
-    jinq::common::StatusCode init(const toml::table& cfg) override;
-
-    /***
-     *
-     * @param input
-     * @param output
-     * @return
-     */
-    jinq::common::StatusCode run_impl(const INPUT& input, OUTPUT& output) override;
-
-
-    /***
-     * if classifier successfully initialized
-     * @return
-     */
-    bool is_successfully_initialized() const override;
-
   private:
-    class Impl;
-    std::unique_ptr<Impl> _m_pimpl;
+    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
+
+    jinq::common::StatusCode postprocess(
+        const std::vector<jinq::models::backend::NamedTensor>& outputs,
+        OUTPUT& output) override;
+
+    jinq::common::StatusCode on_init(const toml::table& params) override;
+
+    // class id to names
+    std::unordered_map<uint16_t, std::string> _m_class_id2names;
+    // network input tensor size
+    cv::Size _m_input_tensor_size = cv::Size(224, 224);
 };
 
 }
@@ -81,4 +51,4 @@ class Dinov2 : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
 
 #include "dinov2.inl"
 
-#endif // MORTRED_MODEL_SERVER_DINOV2_H
+#endif //MORTRED_MODEL_SERVER_DINOV2_H

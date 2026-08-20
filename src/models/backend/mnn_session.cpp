@@ -51,27 +51,49 @@ std::vector<int> to_mnn_dims(const std::vector<int64_t>& shape) {
     return dims;
 }
 
-/*** mnn stores dims canonically (nchw); host layouts follow the dim type */
-std::vector<int64_t> to_host_shape(const std::vector<int>& dims,
-                                   const MNN::Tensor::DimensionType& dim_type) {
+/*** logical nchw dims of a tensor whose storage follows its dim type */
+std::vector<int64_t> to_nchw(const std::vector<int>& dims,
+                             const MNN::Tensor::DimensionType& device_dim_type) {
     std::vector<int64_t> shape;
     shape.reserve(dims.size());
     for (const auto& dim : dims) {
         shape.push_back(dim);
     }
-    if (dim_type == MNN::Tensor::DimensionType::TENSORFLOW && shape.size() == 4) {
-        return {shape[0], shape[2], shape[3], shape[1]};
+    if (device_dim_type == MNN::Tensor::DimensionType::TENSORFLOW && shape.size() == 4) {
+        // stored [N,H,W,C] -> logical [N,C,H,W]
+        return {shape[0], shape[3], shape[1], shape[2]};
     }
     return shape;
 }
 
-std::vector<int> to_internal_dims(const std::vector<int64_t>& host_shape,
-                                  const MNN::Tensor::DimensionType& dim_type) {
-    if (dim_type == MNN::Tensor::DimensionType::TENSORFLOW && host_shape.size() == 4) {
-        return {static_cast<int>(host_shape[0]), static_cast<int>(host_shape[3]),
-                static_cast<int>(host_shape[1]), static_cast<int>(host_shape[2])};
+std::vector<int64_t> to_host_shape(const std::vector<int>& dims,
+                                   const MNN::Tensor::DimensionType& device_dim_type,
+                                   const MNN::Tensor::DimensionType& host_dim_type) {
+    const auto nchw = to_nchw(dims, device_dim_type);
+    if (host_dim_type == MNN::Tensor::DimensionType::TENSORFLOW && nchw.size() == 4) {
+        // host wants [N,H,W,C]
+        return {nchw[0], nchw[2], nchw[3], nchw[1]};
     }
-    return to_mnn_dims(host_shape);
+    return nchw;
+}
+
+std::vector<int> to_internal_dims(const std::vector<int64_t>& host_shape,
+                                  const MNN::Tensor::DimensionType& device_dim_type,
+                                  const MNN::Tensor::DimensionType& dim_type) {
+    std::vector<int64_t> nchw = host_shape;
+    if (dim_type == MNN::Tensor::DimensionType::TENSORFLOW && nchw.size() == 4) {
+        // host [N,H,W,C] -> logical [N,C,H,W]
+        nchw = {nchw[0], nchw[3], nchw[1], nchw[2]};
+    }
+    std::vector<int> dims;
+    dims.reserve(nchw.size());
+    for (const auto& dim : nchw) {
+        dims.push_back(static_cast<int>(dim));
+    }
+    if (device_dim_type == MNN::Tensor::DimensionType::TENSORFLOW && dims.size() == 4) {
+        return {dims[0], dims[2], dims[3], dims[1]};
+    }
+    return dims;
 }
 
 }  // namespace
@@ -148,6 +170,7 @@ StatusCode MnnSession::init(const BackendConfig& config, std::string* err) {
             dim_type = MNN::Tensor::DimensionType::CAFFE;
         }
         input_dim_types[item.first] = dim_type;
+        _m_input_device_dim_types[item.first] = item.second->getDimensionType();
         _m_input_tensors[item.first] = item.second;
     }
     for (const auto& item : all_outputs) {
@@ -196,7 +219,8 @@ StatusCode MnnSession::init(const BackendConfig& config, std::string* err) {
             }
             return StatusCode::MODEL_INIT_FAILED;
         }
-        info.shape = to_host_shape(item.second->shape(), input_dim_types.at(item.first));
+        info.shape = to_host_shape(item.second->shape(), _m_input_device_dim_types.at(item.first),
+                                   input_dim_types.at(item.first));
         info.dynamic = shape_is_dynamic(info.shape);
         _m_input_dim_types[item.first] = input_dim_types.at(item.first);
         _m_input_infos.push_back(std::move(info));
@@ -211,7 +235,9 @@ StatusCode MnnSession::init(const BackendConfig& config, std::string* err) {
             }
             return StatusCode::MODEL_INIT_FAILED;
         }
-        info.shape = to_host_shape(item.second->shape(), item.second->getDimensionType());
+        for (const auto& dim : item.second->shape()) {
+            info.shape.push_back(dim);
+        }
         info.dynamic = shape_is_dynamic(info.shape);
         _m_output_infos.push_back(std::move(info));
     }
@@ -279,10 +305,13 @@ StatusCode MnnSession::run(const std::vector<NamedTensor>& inputs,
                        << shape_to_string(named.tensor.shape);
             return StatusCode::MODEL_RUN_SESSION_FAILED;
         }
-        const auto dim_type = _m_input_dim_types.at(named.name);
-        const auto current_host_shape = to_host_shape(mnn_tensor->shape(), dim_type);
+        const auto host_dim_type = _m_input_dim_types.at(named.name);
+        const auto device_dim_type = _m_input_device_dim_types.at(named.name);
+        const auto current_host_shape =
+            to_host_shape(mnn_tensor->shape(), device_dim_type, host_dim_type);
         if (!shape_equal(current_host_shape, named.tensor.shape)) {
-            _m_interpreter->resizeTensor(mnn_tensor, to_internal_dims(named.tensor.shape, dim_type));
+            _m_interpreter->resizeTensor(
+                mnn_tensor, to_internal_dims(named.tensor.shape, device_dim_type, host_dim_type));
             need_resize = true;
         }
     }
@@ -328,7 +357,9 @@ StatusCode MnnSession::run(const std::vector<NamedTensor>& inputs,
         NamedTensor named;
         named.name = info.name;
         named.tensor.dtype = info.dtype;
-        named.tensor.shape = to_host_shape(host_tensor.shape(), mnn_tensor->getDimensionType());
+        for (const auto& dim : host_tensor.shape()) {
+            named.tensor.shape.push_back(dim);
+        }
         const auto bytes = static_cast<size_t>(host_tensor.size());
         named.tensor.buffer.resize(bytes);
         std::memcpy(named.tensor.buffer.data(), host_tensor.host<void>(), bytes);

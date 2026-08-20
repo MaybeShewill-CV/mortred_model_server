@@ -58,6 +58,7 @@ class MnnSession : public InferenceSession {
     std::map<std::string, MNN::Tensor*> _m_input_tensors;
     std::map<std::string, MNN::Tensor*> _m_output_tensors;
     std::map<std::string, MNN::Tensor::DimensionType> _m_input_dim_types;
+    std::map<std::string, MNN::Tensor::DimensionType> _m_input_device_dim_types;
     std::vector<TensorInfo> _m_input_infos;
     std::vector<TensorInfo> _m_output_infos;
     std::string _m_model_file_path;

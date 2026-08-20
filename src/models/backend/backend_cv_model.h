@@ -39,6 +39,17 @@ struct is_image_input<
     std::void_t<decltype(cv_input::load_image(std::declval<const INPUT&>()))>>
     : std::true_type {};
 
+inline bool has_extra_backend_table(const toml::table& model_section) {
+    for (const auto& item : model_section) {
+        const std::string key(item.first.str());
+        if (key.size() > 8 && key.substr(key.size() - 8) == "_backend" &&
+            item.second.is_table()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 }  // namespace detail
 
 /***
@@ -76,16 +87,25 @@ class BackendCvModel : public BaseAiModel<INPUT, OUTPUT> {
         }
         _m_model_section = *model_section;
 
-        std::string backend_err;
-        if (!backend::parse_backend_config(*model_section, &_m_backend_config, &backend_err)) {
-            LOG(ERROR) << "invalid backend config in [" << _m_section_name << "]: " << backend_err;
-            return jinq::common::StatusCode::MODEL_INIT_FAILED;
-        }
-        std::string session_err;
-        _m_session = backend::InferenceSession::create(_m_backend_config, &session_err);
-        if (_m_session == nullptr) {
-            LOG(ERROR) << "create " << _m_backend_config.type << " session for ["
-                       << _m_section_name << "] failed: " << session_err;
+        const bool has_primary_backend = model_section->contains("backend");
+        const bool has_extra_backends = detail::has_extra_backend_table(*model_section);
+        if (has_primary_backend) {
+            std::string backend_err;
+            if (!backend::parse_backend_config(*model_section, &_m_backend_config, &backend_err)) {
+                LOG(ERROR) << "invalid backend config in [" << _m_section_name
+                           << "]: " << backend_err;
+                return jinq::common::StatusCode::MODEL_INIT_FAILED;
+            }
+            std::string session_err;
+            _m_session = backend::InferenceSession::create(_m_backend_config, &session_err);
+            if (_m_session == nullptr) {
+                LOG(ERROR) << "create " << _m_backend_config.type << " session for ["
+                           << _m_section_name << "] failed: " << session_err;
+                return jinq::common::StatusCode::MODEL_INIT_FAILED;
+            }
+        } else if (!has_extra_backends) {
+            LOG(ERROR) << "config section [" << _m_section_name
+                       << "] has neither [backend] nor any [<name>_backend] sub-table";
             return jinq::common::StatusCode::MODEL_INIT_FAILED;
         }
 
@@ -202,9 +222,22 @@ class BackendCvModel : public BaseAiModel<INPUT, OUTPUT> {
         return backend::InferenceSession::create(extra_config, &err);
     }
 
+    /***
+     * multi-session orchestration hook. Models without a primary [backend]
+     * table (lightglue, sam encoder+decoder, clip dual encoder, ...) override
+     * this and drive their sessions themselves; the default implementation is
+     * an error because it must never run silently.
+     */
+    virtual jinq::common::StatusCode run_sessions(const INPUT& input, OUTPUT& output) {
+        (void)input;
+        (void)output;
+        LOG(ERROR) << "multi-session model does not implement run_sessions";
+        return jinq::common::StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+
     jinq::common::StatusCode run_impl(const INPUT& input, OUTPUT& output) final {
         if (_m_session == nullptr) {
-            return jinq::common::StatusCode::MODEL_INIT_FAILED;
+            return run_sessions(input, output);
         }
         auto tensors = make_inputs(input);
         if (tensors.empty()) {
