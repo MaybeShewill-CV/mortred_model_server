@@ -8,69 +8,39 @@
 #ifndef MM_AI_SERVER_ENLIGHTENGAN_H
 #define MM_AI_SERVER_ENLIGHTENGAN_H
 
-#include <memory>
+#include <vector>
 
 #include "toml/toml.hpp"
 
-#include "common/status_code.h"
-#include "models/base_model.h"
+#include "models/backend/backend_cv_model.h"
+#include "models/backend/tensor.h"
 #include "models/model_io_define.h"
 
 namespace jinq {
 namespace models {
 namespace enhancement {
 
-template <typename INPUT, typename OUTPUT> 
-class EnlightenGan : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT>
+class EnlightenGan : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   public:
-    /***
-     * construct function
-     * @param config
-     */
     EnlightenGan();
+    ~EnlightenGan() override = default;
 
-    /***
-     *
-     */
-    ~EnlightenGan() override;
-
-    /***
-     * construct function
-     * @param transformer
-     */
-    EnlightenGan(const EnlightenGan &transformer) = delete;
-
-    /***
-     * construct function
-     * @param transformer
-     * @return
-     */
-    EnlightenGan &operator=(const EnlightenGan &transformer) = delete;
-
-    /***
-     *
-     * @param toml
-     * @return
-     */
-    jinq::common::StatusCode init(const toml::table &cfg) override;
-
-    /***
-     *
-     * @param input
-     * @param output
-     * @return
-     */
-    jinq::common::StatusCode run_impl(const INPUT&input, OUTPUT &output) override;
-
-    /***
-     * if model successfully initialized
-     * @return
-     */
-    bool is_successfully_initialized() const override;
+    EnlightenGan(const EnlightenGan& transformer) = delete;
+    EnlightenGan& operator=(const EnlightenGan& transformer) = delete;
 
   private:
-    class Impl;
-    std::unique_ptr<Impl> _m_pimpl;
+    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
+
+    jinq::common::StatusCode postprocess(
+        const std::vector<jinq::models::backend::NamedTensor>& outputs,
+        OUTPUT& output) override;
+
+    jinq::common::StatusCode on_init(const toml::table& params) override;
+
+    cv::Size _m_input_size_user;
+    cv::Size _m_input_size_host;
+    cv::Mat _m_input_alpha;
 };
 
 } // namespace enhancement

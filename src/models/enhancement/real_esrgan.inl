@@ -6,335 +6,133 @@
 ************************************************/
 
 #include "real_esrgan.h"
-#include "models/cv_image_input.h"
+
+#include <cstring>
 
 #include <opencv2/opencv.hpp>
-#include "glog/logging.h"
 
-#include "common/cv_utils.h"
-#include "common/file_path_util.h"
-#include "models/mnn_helper.h"
+#include "glog/logging.h"
 
 namespace jinq {
 namespace models {
-
-using jinq::common::CvUtils;
-using jinq::common::FilePathUtil;
-using jinq::common::StatusCode;
-using jinq::models::io_define::common_io::mat_input;
-using jinq::models::io_define::common_io::file_input;
-using jinq::models::io_define::common_io::base64_input;
-
 namespace enhancement {
 
+using jinq::common::StatusCode;
+using jinq::models::backend::NamedTensor;
 using jinq::models::io_define::enhancement::std_enhancement_output;
 
-namespace real_esrgan_impl {
-
-using internal_input = mat_input;
-using internal_output = std_enhancement_output;
-
-/***
- *
- * @tparam INPUT
- * @param in
- * @return
- */
-template<typename INPUT>
-internal_input transform_input(const INPUT& in) {
-    internal_input result{};
-    result.input_image = jinq::models::cv_input::load_image(in);
-    return result;
-}
-
-/***
-* transform different type of internal output into external output
-* @tparam EXTERNAL_OUTPUT
-* @tparam dummy
-* @param in
-* @return
-*/
-template<typename OUTPUT>
-typename std::enable_if<std::is_same<OUTPUT, std::decay<std_enhancement_output>::type>::value, std_enhancement_output>::type
-transform_output(const real_esrgan_impl::internal_output& internal_out) {
-    return internal_out;
-}
-
-}
-
-/***************** Impl Function Sets ******************/
-
-template<typename INPUT, typename OUTPUT>
-class RealEsrGan<INPUT, OUTPUT>::Impl {
-public:
-    /***
-     *
-     */
-    Impl() = default;
-
-    /***
-     *
-     */
-    ~Impl() = default;
-
-    /***
-    *
-    * @param transformer
-    */
-    Impl(const Impl& transformer) = delete;
-
-    /***
-     *
-     * @param transformer
-     * @return
-     */
-    Impl& operator=(const Impl& transformer) = delete;
-
-    /***
-     *
-     * @param cfg_file_path
-     * @return
-     */
-    StatusCode init(const toml::table& config);
-
-    /***
-     *
-     * @param in
-     * @param out
-     * @return
-     */
-    StatusCode run(const INPUT& in, OUTPUT& out);
-
-    /***
-     *
-     * @return
-     */
-    bool is_successfully_initialized() const {
-        return _m_successfully_initialized;
-    };
-
-private:
-    jinq::models::MnnNet _m_net;
-    //　input node size
-    cv::Size _m_input_size_host = cv::Size();
-    // init flag
-    bool _m_successfully_initialized = false;
-
-private:
-    /***
-    *
-    * @param input_image
-    * @return
-    */
-    static cv::Mat preprocess_image(const cv::Mat& input_image);
-};
-
-
-/***
-*
-* @param cfg_file_path
-* @return
-*/
-template<typename INPUT, typename OUTPUT>
-StatusCode RealEsrGan<INPUT, OUTPUT>::Impl::init(const toml::table& config) {
-    if (!config.contains("REALESRGAN")) {
-        LOG(ERROR) << "Config file missing REALESRGAN section please check";
-        _m_successfully_initialized = false;
+template <typename INPUT, typename OUTPUT>
+StatusCode RealEsrGan<INPUT, OUTPUT>::on_init(const toml::table& params) {
+    (void)params;
+    const auto& inputs = this->session().inputs();
+    if (inputs.size() != 1 || inputs.front().shape.size() != 4 ||
+            inputs.front().shape[3] != 3) {
+        LOG(ERROR) << "unexpected real esrgan input io: "
+                   << (inputs.empty() ? std::string("empty") : inputs.front().to_string())
+                   << ", expected [N,H,W,3]";
         return StatusCode::MODEL_INIT_FAILED;
     }
-
-    const toml::table* cfg_content_ptr = config["REALESRGAN"].as_table();
-    if (cfg_content_ptr == nullptr) {
-        LOG(ERROR) << "Config section REALESRGAN missing or not a table";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    const toml::table& cfg_content = *cfg_content_ptr;
-
-    auto init_status = _m_net.init(cfg_content, {"input"}, {"output"});
-    if (init_status != StatusCode::OK) {
-        _m_successfully_initialized = false;
-        return init_status;
-    }
-    _m_input_size_host.width = _m_net.input("input")->width();
-    _m_input_size_host.height = _m_net.input("input")->height();
-    _m_successfully_initialized = true;
-
-    LOG(INFO) << "Real-esrgan enhancement model initialization complete!!!";
+    _m_input_size_host.height = static_cast<int>(inputs.front().shape[1]);
+    _m_input_size_host.width = static_cast<int>(inputs.front().shape[2]);
+    // dynamic input (unset mnn dims): the size is resolved per run in preprocess
     return StatusCode::OK;
 }
 
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param in
- * @param out
- * @return
- */
-template<typename INPUT, typename OUTPUT>
-StatusCode RealEsrGan<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
-    // transform external input into internal input
-    auto internal_in = real_esrgan_impl::transform_input(in);
-
-    if (!internal_in.input_image.data || internal_in.input_image.empty()) {
-        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+template <typename INPUT, typename OUTPUT>
+std::vector<NamedTensor> RealEsrGan<INPUT, OUTPUT>::preprocess(const cv::Mat& input_image) {
+    if (input_image.size().height < 10 || input_image.size().width < 10 ||
+            (input_image.channels() != 3 && input_image.channels() != 4)) {
+        LOG(ERROR) << "invalid real esrgan image size or channels: "
+                   << input_image.size() << ", channels=" << input_image.channels();
+        return {};
     }
 
-    // preprocess image
-    if (!internal_in.input_image.data || internal_in.input_image.empty() ||
-            internal_in.input_image.size().height < 10 || internal_in.input_image.size().width < 10) {
-        LOG(ERROR) << "invalid image data or empty image";
-        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
-    }
-
-    if (internal_in.input_image.channels() != 3 && internal_in.input_image.channels() != 4) {
-        LOG(ERROR) << "input image should have 3 or 4 channels, but got: "
-                   << internal_in.input_image.channels() << " instead";
-        return StatusCode::MODEL_RUN_SESSION_FAILED;
-    }
-
-    if (internal_in.input_image.size() != _m_input_size_host) {
-        _m_net.resize_tensor(
-            _m_net.input("input"), 1, 3, internal_in.input_image.size().height,
-            internal_in.input_image.size().width);
-        _m_input_size_host = internal_in.input_image.size();
-    }
-
-    cv::Mat input_src = preprocess_image(internal_in.input_image);
-
-    // run session
-    MNN::Tensor input_tensor_user_src(_m_net.input("input"), MNN::Tensor::DimensionType::TENSORFLOW);
-    auto input_tensor_data = input_tensor_user_src.host<float>();
-    auto input_tensor_size = input_tensor_user_src.size();
-    if (!CvUtils::copy_image_to_tensor(input_tensor_data, input_src, input_tensor_size)) {
-        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
-    }
-    _m_net.input("input")->copyFromHostTensor(&input_tensor_user_src);
-    const auto run_session_status = _m_net.run_session();
-    if (run_session_status != StatusCode::OK) {
-        return run_session_status;
-    }
-
-    // decode output tensor
-    real_esrgan_impl::internal_output internal_out;
-    MNN::Tensor output_tensor_user(_m_net.output("output"), MNN::Tensor::DimensionType::TENSORFLOW);
-    _m_net.output("output")->copyToHostTensor(&output_tensor_user);
-    auto host_data = output_tensor_user.host<float>();
-    auto element_size = output_tensor_user.elementSize();
-
-    std::vector<uchar> output_img_data;
-    output_img_data.resize(element_size);
-
-    for (auto index = 0; index < element_size; ++index) {
-        auto pix_val_f = host_data[index] * 255.0;
-
-        if (pix_val_f < 0.0) {
-            pix_val_f = 0.0;
-        }
-
-        if (pix_val_f >= 255) {
-            pix_val_f = 255.0;
-        }
-
-        auto pix_val = static_cast<uchar>(pix_val_f);
-        output_img_data[index] = pix_val;
-    }
-
-    auto output_w = output_tensor_user.width();
-    auto output_h = output_tensor_user.height();
-    cv::Mat result_image(cv::Size(output_w, output_h), CV_8UC3, output_img_data.data());
-    cv::cvtColor(result_image, internal_out.enhancement_result, cv::COLOR_RGB2BGR);
-
-    // transform internal output into external output
-    out = real_esrgan_impl::transform_output<OUTPUT>(internal_out);
-    return StatusCode::OK;
-}
-
-
-/***
-*
-* @param input_image
-* @param output_src
-* @param output_gray
-*/
-template<typename INPUT, typename OUTPUT>
-cv::Mat RealEsrGan<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& input_image) {
     cv::Mat output_src;
     input_image.copyTo(output_src);
-
     if (output_src.channels() == 4) {
         cv::cvtColor(output_src, output_src, cv::COLOR_BGRA2RGB);
     } else {
         cv::cvtColor(output_src, output_src, cv::COLOR_BGR2RGB);
     }
-
-    // normalize
     if (output_src.type() != CV_32FC3) {
         output_src.convertTo(output_src, CV_32FC3);
     }
-
     output_src /= 255.0;
 
-    return output_src;
+    std::vector<NamedTensor> tensors;
+    NamedTensor named;
+    named.name = this->session().inputs().front().name;
+    named.tensor = jinq::models::backend::Tensor::make<float>(
+        {1, output_src.rows, output_src.cols, 3});
+    const auto bytes = output_src.total() * output_src.elemSize();
+    if (bytes != named.tensor.byte_size()) {
+        LOG(ERROR) << "preprocessed real esrgan image byte size mismatches tensor";
+        return {};
+    }
+    if (output_src.isContinuous()) {
+        std::memcpy(named.tensor.buffer.data(), output_src.data, bytes);
+    } else {
+        uint8_t* dst = named.tensor.buffer.data();
+        for (int row = 0; row < output_src.rows; ++row) {
+            const auto row_bytes = static_cast<size_t>(output_src.cols) * output_src.elemSize();
+            std::memcpy(dst, output_src.ptr(row), row_bytes);
+            dst += row_bytes;
+        }
+    }
+    tensors.push_back(std::move(named));
+    return tensors;
 }
 
-/************* Export Function Sets *************/
+template <typename INPUT, typename OUTPUT>
+StatusCode RealEsrGan<INPUT, OUTPUT>::postprocess(
+    const std::vector<NamedTensor>& outputs, OUTPUT& output) {
+    if (outputs.empty()) {
+        LOG(ERROR) << "real esrgan output tensor is empty";
+        return StatusCode::MODEL_EMPTY_OUTPUT;
+    }
+    const auto& tensor = outputs.front().tensor;
+    // the exported mnn output is nchw ([1,3,H,W]); the old TENSORFLOW host
+    // wrapper reordered it to hwc, do the same here
+    if (tensor.shape.size() != 4 || tensor.shape[0] != 1 || tensor.shape[1] != 3) {
+        LOG(ERROR) << "unexpected real esrgan output shape: "
+                   << jinq::models::backend::shape_to_string(tensor.shape);
+        return StatusCode::MODEL_EMPTY_OUTPUT;
+    }
+    const auto output_h = static_cast<int>(tensor.shape[2]);
+    const auto output_w = static_cast<int>(tensor.shape[3]);
+    if (output_w <= 0 || output_h <= 0 ||
+            tensor.element_count() != 3 * output_w * output_h) {
+        LOG(ERROR) << "invalid real esrgan output shape: "
+                   << jinq::models::backend::shape_to_string(tensor.shape);
+        return StatusCode::MODEL_EMPTY_OUTPUT;
+    }
 
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- */
-template<typename INPUT, typename OUTPUT>
-RealEsrGan<INPUT, OUTPUT>::RealEsrGan() {
-    _m_pimpl = std::make_unique<Impl>();
-}
+    const auto* host_data = tensor.template data<float>();
+    std::vector<uchar> output_img_data(static_cast<size_t>(tensor.element_count()));
+    for (int64_t index = 0; index < tensor.element_count(); ++index) {
+        auto pix_val_f = host_data[index] * 255.0;
+        if (pix_val_f < 0.0) {
+            pix_val_f = 0.0;
+        }
+        if (pix_val_f >= 255) {
+            pix_val_f = 255.0;
+        }
+        output_img_data[static_cast<size_t>(index)] = static_cast<uchar>(pix_val_f);
+    }
 
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- */
-template<typename INPUT, typename OUTPUT>
-RealEsrGan<INPUT, OUTPUT>::~RealEsrGan() = default;
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param cfg
- * @return
- */
-template<typename INPUT, typename OUTPUT>
-StatusCode RealEsrGan<INPUT, OUTPUT>::init(const toml::table& cfg) {
-    return _m_pimpl->init(cfg);
-}
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @return
- */
-template<typename INPUT, typename OUTPUT>
-bool RealEsrGan<INPUT, OUTPUT>::is_successfully_initialized() const {
-    return _m_pimpl->is_successfully_initialized();
-}
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param input
- * @param output
- * @return
- */
-template<typename INPUT, typename OUTPUT>
-StatusCode RealEsrGan<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPUT& output) {
-    return _m_pimpl->run(input, output);
+    auto hwc_data = jinq::common::CvUtils::convert_to_hwc_vec<uchar>(
+        output_img_data, 3, output_h, output_w);
+    std_enhancement_output internal_out;
+    cv::Mat result_image(cv::Size(output_w, output_h), CV_8UC3, hwc_data.data());
+    cv::cvtColor(result_image, internal_out.enhancement_result, cv::COLOR_RGB2BGR);
+    output = std::move(internal_out);
+    return StatusCode::OK;
 }
 
-}
-}
-}
+template <typename INPUT, typename OUTPUT>
+RealEsrGan<INPUT, OUTPUT>::RealEsrGan()
+    : jinq::models::BackendCvModel<INPUT, OUTPUT>("REALESRGAN") {}
+
+} // namespace enhancement
+} // namespace models
+} // namespace jinq

@@ -1,9 +1,14 @@
 [CENTER_FACE]
-model_file_path="../weights/object_detection/centerface_detection/centerface.model"
-model_threads_num=4
-model_score_threshold=0.5
-model_nms_threshold=0.5
-model_keep_top_k=1000
-compute_backend="cpu"
-backend_precision_mode=0
-backend_power_mode=0
+[CENTER_FACE.backend]
+type = "mnn"
+model_file_path = "../weights/object_detection/centerface_detection/centerface.model"
+device = "cpu"
+threads = 4
+input_layout = "nchw"
+precision_mode = 0
+power_mode = 0
+
+[CENTER_FACE.params]
+model_score_threshold = 0.5
+model_nms_threshold = 0.5
+model_keep_top_k = 1000

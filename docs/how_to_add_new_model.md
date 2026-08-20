@@ -1,213 +1,107 @@
-# How To Add New Model
+# How To Add New Model (Unified Backend Layer)
 
-Here is brief instruction about how to add a new model in this frame work. All models are inherited from [jinq::models::BaseAiModel<INPUT, OUTPUT>](../src/models/base_model.h). `INPUT` and `OUTPUT` was defined by users which helps a lot when users have different type of input data. The process of running the model is mainly divided into three steps. Firstly transform the user defined input data into model's internal input data type which usually is a OpenCV mat. Secondly do model inference. Finally transform model's internal output data type into user defined output data type. I will show you an example to help you add a new densenet image classification model.
+All CV models now inherit from
+[`jinq::models::BackendCvModel<INPUT, OUTPUT>`](../src/models/backend/backend_cv_model.h).
+The base class implements the full lifecycle:
 
-## Step 1: Define Your Own Input Data Type :cowboy_hat_face:
-
-For example your model's input data type is a base64 encoded image. You may add the new input data in [model_io_define.h](../src/models/model_io_define.h)
-
-```cpp
-namespace io_define {
-namespace common_io {
-    struct base64_input {
-        std::string input_image_content;
-    };
-} // namespace common_io
+```text
+init:      parse [SECTION.backend] -> create InferenceSession -> on_init([SECTION.params])
+run_impl:  make_inputs -> preprocess -> session.run -> postprocess
 ```
 
-## Step 2: Define Your Own Output Data Type :monkey_face:
+A standard single-image model only implements **preprocess** (cv::Mat to named
+tensors) and **postprocess** (named tensors to task output). Backend plumbing
+(MNN / ONNX Runtime / TensorRT session management, dtype & shape validation,
+dynamic shape handling, host/device copies) lives in
+[`src/models/backend/`](../src/models/backend/) and is never repeated per model.
 
-For beginners you'd better use the default output type. Default model's output data type for different kind of vision tasks can be found in [model_io_define.h](../src/models/model_io_define.h). Those structs which are named after std** represent the default model output. 
+## Step 1: Pick the IO types
 
-For example the default model output for classification task is
+Input types live in [model_io_define.h](../src/models/model_io_define.h).
+`mat_input`, `file_input` and `base64_input` are loadable images and work with
+the default `make_inputs` path. Task default outputs (`std_*_output`) are the
+recommended choice.
 
-```cpp
-namespace classification {
-    struct cls_output {
-        int class_id;
-        std::vector<float> scores;
-    };
-    using std_classification_output = cls_output;
-} 
-```
+## Step 2: Write the model class
 
-class_id equals max score's idx in scores.
+Reference implementations (read these first):
 
-the default model output for object detection task is
-
-```cpp
-namespace object_detection {
-    struct bbox {
-        cv::Rect2f bbox;
-        float score;
-        int32_t class_id;
-    };
-    using std_object_detection_output = std::vector<bbox>;
-}
-```
-
-bbox consist of the obj's location, catogory and confidence. Object detection's result of image is a set of bboxes.
-
-## Step 3: Implement The Transform Function from User Defined Input to Model's Internal Input :dog:
-
-Usually the model's input is a OpenCV format mat which can be seen at [densenet.inl#L33-L35](../src/models/classification/densenet.inl). User should implement the function to transform user defined input into internal input by themselves.
-
-For example if you defined a base64 encoded image as your input data type. Then you're supposed implement the transform funciton at [densenet.inl#L73-L94](../src/models/classification/densenet.inl)
-![base64_transform_code](../resources/images/eg_transform_base64_to_mat.png)
-
-## Step 4: Implement The Transform Function from User Defined Output to Model's Internal Output :pig_nose:
-
-If you use the default output type then your transform function equals a simple assignment funciton like [densenet.inl#L96-L110](../src/models/classification/densenet.inl)
-![output_transform_code](../resources/images/eg_transform_output.png)
-
-Of course you may define your own customized output data format.
-
-## Step 5: Implement The `init` Interface Function :mouse:
-
-Usually model's init function is used to setup model's interpreter, session, tensor resource and determinate the computing backend. You may checkout [densenet.inl#L199-L343](../src/models/classification/densenet.inl) for details. Init funciton's structure is
+- [mobilenetv2.h](../src/models/classification/mobilenetv2.h) / [.inl](../src/models/classification/mobilenetv2.inl) — MNN single image classification
+- [yolov8_detector.h](../src/models/object_detection/yolov8_detector.h) / [.inl](../src/models/object_detection/yolov8_detector.inl) — TensorRT detection with decode + NMS
+- [ddpm_unet.h](../src/models/diffusion/ddpm_unet.h) / [.inl](../src/models/diffusion/ddpm_unet.inl) — ONNX Runtime with non-image inputs (`make_inputs` override)
 
 ```cpp
-/***
-*
-* @param config
-* @return
-*/
 template<typename INPUT, typename OUTPUT>
-StatusCode DenseNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& config) {
-    // do init task
-    ...
-    return StatusCode::OK;
-}
+class MyModel : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+  public:
+    MyModel() : jinq::models::BackendCvModel<INPUT, OUTPUT>("MY_MODEL") {}
+
+  private:
+    // image -> named input tensors (required for image models)
+    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
+
+    // named output tensors -> task output
+    jinq::common::StatusCode postprocess(
+        const std::vector<jinq::models::backend::NamedTensor>& outputs,
+        OUTPUT& output) override;
+
+    // optional: read model specific keys from [MY_MODEL.params]
+    jinq::common::StatusCode on_init(const toml::table& params) override;
+};
 ```
 
-## Step 6: Implement The `run` Interface Function :elephant:
+Notes:
 
-This interface function is responsible for the main model inference process. Three major modules of this process are first transfor input second run model's session finally transfor output. The main code for densenet model is
+- The constructor passes the config section name (`"MY_MODEL"`).
+- `session().inputs()` / `session().outputs()` expose
+  `TensorInfo{name, dtype, shape, dynamic}`; derive the network input size from
+  it instead of hardcoding.
+- Emit tensors with `backend::Tensor::make<float>(shape)`; the shape must be
+  concrete and match the layout the model file expects (nhwc for MNN
+  TENSORFLOW-style exports with `input_layout = "nhwc"`, nchw for
+  TensorRT / ONNX models).
+- Multi-output models pick tensors by `name` (see `find_output` in
+  [centerface_detector.inl](../src/models/object_detection/centerface_detector.inl)).
+- Non-image inputs (token ids, latent vectors, image pairs) override
+  `make_inputs` instead of `preprocess`.
+- Multi-engine models (encoder + decoder) configure `<key>_backend` sub-tables,
+  build extra sessions with `make_session("<key>_backend")` and orchestrate
+  them in the `run_sessions` override.
 
-```cpp
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param in
- * @param out
- * @return
- */
-template<typename INPUT, typename OUTPUT>
-StatusCode DenseNet<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
+## Step 3: Write the config
 
-    // first transform external input into internal input
-    auto internal_in = densenet_impl::transform_input(in);
-    if (!internal_in.input_image.data || internal_in.input_image.empty()) {
-        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
-    }
+```toml
+[MY_MODEL]
+[MY_MODEL.backend]
+type = "mnn"                # mnn | onnx | tensorrt
+model_file_path = "../weights/my_model/model.mnn"
+device = "cuda"             # cpu | cuda
+threads = 4
+input_layout = "nhwc"       # mnn only: auto | nhwc | nchw
 
-    // second run session
-    auto preprocessed_image = preprocess_image(internal_in.input_image);
-    MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
-    auto input_tensor_data = input_tensor_user.host<float>();
-    auto input_tensor_size = input_tensor_user.size();
-    ::memcpy(input_tensor_data, preprocessed_image.data, input_tensor_size);
-    _m_input_tensor->copyFromHostTensor(&input_tensor_user);
-    _m_net->runSession(_m_session);
-    MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
-    _m_output_tensor->copyToHostTensor(&output_tensor_user);
-    auto* host_data = output_tensor_user.host<float>();
-
-    // finally transform output
-    densenet_impl::internal_output internal_out;
-    for (auto index = 0; index < output_tensor_user.elementSize(); ++index) {
-        internal_out.scores.push_back(host_data[index]);
-    }
-    auto max_score = std::max_element(host_data, host_data + output_tensor_user.elementSize());
-    auto cls_id = static_cast<int>(std::distance(host_data, max_score));
-    internal_out.class_id = cls_id;
-    out = densenet_impl::transform_output<OUTPUT>(internal_out);
-
-    return StatusCode::OK;
-}
+[MY_MODEL.params]
+score_threshold = 0.25
 ```
 
-## Step 7: Add New Model Into Task Factory :factory:
+See [about_model_configuration.md](about_model_configuration.md) for the full
+key reference. Old `BACKEND_DICT` / `XXX_TRT` / `XXX_ONNX` / `XXX_MNN`
+three-section configs are gone; use
+[`scripts/migrate_model_config.py`](../scripts/migrate_model_config.py) to
+migrate them (`--dry-run` first, `--check` in CI).
 
-Task factory is used to create model object. Details about this can be found [classification_task.h](../src/factory/classification_task.h). The factory is a type-erased registry (`jinq::factory::ModelFactory`): `register_type<CONCRETE>(name)` stores a creator closure owned by the factory (thread-safe, same-name registration overwrites), and `create(name)` builds an instance by name.
+## Step 4: Register in the factory
 
-```cpp
-/***
- * create densenet image classification
- * @tparam INPUT
- * @tparam OUTPUT
- * @param classifier_name
- * @return
- */
-template<typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_densenet_classifier(
-    const std::string& classifier_name) {
-    auto& model_factory = ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance();
-    model_factory.register_type<DenseNet<INPUT, OUTPUT> >(classifier_name);
-    return model_factory.create(classifier_name);
-}
+Add a `create_my_model` function in the task factory and a server spec if the
+model should be served over HTTP. The `BaseAiModel` contract is unchanged, so
+apps and servers need no backend knowledge.
+
+## Step 5: Verify
+
+```bash
+cmake --preset full && cmake --build --preset full
+scripts/run_tests.sh build/full -R model_golden_test --output-on-failure
 ```
 
-## Step 8: Make A Benchmark App For New Model :airplane:
-
-You have already add a new ai model till this step. Now let's make a benchmark app to verify your new model. Comple code can be found [densenet_benchmark.cpp](../src/apps/model_benchmark/classification/densenet_benchmark.cpp)
-
-```cpp
-int main(int argc, char** argv) {
-
-    // construct model input
-    std::string input_image_path = "../demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG";
-    cv::Mat input_image = cv::imread(input_image_path, cv::IMREAD_COLOR);
-    struct mat_input model_input {
-            input_image
-    };
-    std_classification_output model_output{};
-
-    // construct detector
-    std::string cfg_file_path = argv[1];
-    LOG(INFO) << "config file path: " << cfg_file_path;
-    auto cfg = toml::parse(cfg_file_path);
-    auto classifier = create_densenet_classifier<mat_input, std_classification_output>("densenet");
-    classifier->init(cfg);
-    if (!classifier->is_successfully_initialized()) {
-        LOG(INFO) << "densenet classifier init failed";
-        return -1;
-    }
-
-    // run benchmark
-    int loop_times = 1000;
-    LOG(INFO) << "input test image size: " << input_image.size();
-    LOG(INFO) << "classifier run loop times: " << loop_times;
-    LOG(INFO) << "start densenet benchmark at: " << Timestamp::now().to_format_str();
-    auto ts = Timestamp::now();
-    for (int i = 0; i < loop_times; ++i) {
-        classifier->run(model_input, model_output);
-    }
-
-    auto cost_time = Timestamp::now() - ts;
-    LOG(INFO) << "benchmark ends at: " << Timestamp::now().to_format_str();
-    LOG(INFO) << "cost time: " << cost_time << "s, fps: " << loop_times / cost_time;
-
-    LOG(INFO) << "classify id: " << model_output.class_id;
-    auto max_score = std::max_element(model_output.scores.begin(), model_output.scores.end());
-    LOG(INFO) << "max classify socre: " << *max_score;
-    LOG(INFO) << "max classify id: " << static_cast<int>(std::distance(model_output.scores.begin(), max_score));
-
-    return 1;
-}
-```
-
-If nothing wrong happened :smile: you should get a similar benchmark result like
-
-`densenet benchmark result`
-![densenet_bench_mark](../resources/images/densenet_model_benchmark_result.png)
-
-Good Luck !!! :trophy::trophy::trophy:
-
-## Reference
-
-Complete implementation code can be found
-
-* [DenseNet Model Implement](../src/models/classification/densenet.inl)
-* [DenseNet Model BenchMark App](../src/apps/model_benchmark/classification/densenet_benchmark.cpp)
+Add a golden case with real weights to
+[test/model_golden_test.cc](../test/model_golden_test.cc) (tolerances are per
+task: score/box-IoU for detection, fingerprint diff for dense outputs).

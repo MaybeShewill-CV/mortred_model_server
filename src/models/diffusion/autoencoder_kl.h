@@ -2,18 +2,18 @@
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
  * File: autoencoder_kl.h
- * Date: 24-5-23
  ************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_AUTOENCODER_KL_H
 #define MORTRED_MODEL_SERVER_AUTOENCODER_KL_H
 
-#include <memory>
+#include <vector>
 
 #include "toml/toml.hpp"
 
 #include "common/status_code.h"
-#include "models/base_model.h"
+#include "models/backend/backend_cv_model.h"
+#include "models/backend/tensor.h"
 #include "models/model_io_define.h"
 
 namespace jinq {
@@ -21,61 +21,26 @@ namespace models {
 namespace diffusion {
 
 template <typename INPUT, typename OUTPUT>
-class AutoEncoderKL : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
+class AutoEncoderKL : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   public:
-    /***
-     * constructor
-     * @param config
-     */
     AutoEncoderKL();
+    ~AutoEncoderKL() override = default;
 
-    /***
-     *
-     */
-    ~AutoEncoderKL() override;
-
-    /***
-     * constructor
-     * @param transformer
-     */
-    AutoEncoderKL(const AutoEncoderKL &transformer) = delete;
-
-    /***
-     * constructor
-     * @param transformer
-     * @return
-     */
-    AutoEncoderKL &operator=(const AutoEncoderKL &transformer) = delete;
-
-    /***
-     *
-     * @param toml
-     * @return
-     */
-    jinq::common::StatusCode init(const toml::table &cfg) override;
-
-    /***
-     *
-     * @param input
-     * @param output
-     * @return
-     */
-    jinq::common::StatusCode run_impl(const INPUT&input, OUTPUT &output) override;
-
-    /***
-     * if model successfully initialized
-     * @return
-     */
-    bool is_successfully_initialized() const override;
+    AutoEncoderKL(const AutoEncoderKL& transformer) = delete;
+    AutoEncoderKL& operator=(const AutoEncoderKL& transformer) = delete;
 
   private:
-    class Impl;
-    std::unique_ptr<Impl> _m_pimpl;
+    std::vector<jinq::models::backend::NamedTensor> make_inputs(const INPUT& input) override;
+
+    jinq::common::StatusCode postprocess(
+        const std::vector<jinq::models::backend::NamedTensor>& outputs,
+        OUTPUT& output) override;
 };
+
 } // namespace diffusion
 } // namespace models
 } // namespace jinq
 
 #include "autoencoder_kl.inl"
 
-#endif // MORTRED_MODEL_SERVER_AUTOENCODER_KL_H
+#endif //MORTRED_MODEL_SERVER_AUTOENCODER_KL_H

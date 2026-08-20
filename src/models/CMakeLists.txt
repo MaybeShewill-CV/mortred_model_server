@@ -2,6 +2,17 @@
 
 set(MODELS_LIB_SRC
     ${CMAKE_CURRENT_LIST_DIR}/base_model.h
+    ${CMAKE_CURRENT_LIST_DIR}/backend/backend_config.h
+    ${CMAKE_CURRENT_LIST_DIR}/backend/backend_cv_model.h
+    ${CMAKE_CURRENT_LIST_DIR}/backend/mnn_session.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/backend/mnn_session.h
+    ${CMAKE_CURRENT_LIST_DIR}/backend/ort_session.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/backend/ort_session.h
+    ${CMAKE_CURRENT_LIST_DIR}/backend/session.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/backend/session.h
+    ${CMAKE_CURRENT_LIST_DIR}/backend/tensor.h
+    ${CMAKE_CURRENT_LIST_DIR}/backend/trt_session.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/backend/trt_session.h
     ${CMAKE_CURRENT_LIST_DIR}/cv_image_input.h
     ${CMAKE_CURRENT_LIST_DIR}/mnn_helper.h
     ${CMAKE_CURRENT_LIST_DIR}/model_io_define.h
@@ -32,6 +43,16 @@ target_include_directories(
     models SYSTEM PUBLIC
     ${PROJECT_ROOT_DIR}/3rd_party/include
 )
+# TensorRT 头文件目录随版本切换（TensorRT-8.6.1.6 / TensorRT-10.x），新代码一律
+# #include "NvInfer.h" 等未带版本前缀的官方路径
+file(GLOB MORTRED_TRT_INCLUDE_DIRS "${PROJECT_ROOT_DIR}/3rd_party/include/TensorRT-*")
+list(SORT MORTRED_TRT_INCLUDE_DIRS)
+list(GET MORTRED_TRT_INCLUDE_DIRS 0 MORTRED_TRT_INCLUDE_DIR)
+if(NOT MORTRED_TRT_INCLUDE_DIR)
+    message(FATAL_ERROR "no vendored TensorRT include dir found under 3rd_party/include/TensorRT-*")
+endif()
+message(STATUS "vendored tensorrt headers: ${MORTRED_TRT_INCLUDE_DIR}")
+target_include_directories(models SYSTEM PUBLIC ${MORTRED_TRT_INCLUDE_DIR})
 target_link_libraries(
     models
     PUBLIC

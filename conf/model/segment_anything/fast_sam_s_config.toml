@@ -1,8 +1,13 @@
 [FAST_SAM]
-model_file_path="../weights/sam/fastsam_s/FastSAM-s.mnn"
-model_threads_num=4
-compute_backend="cuda"
-backend_precision_mode=0
-backend_power_mode=0
-conf_thresh=0.4
-iou_thresh=0.9
+[FAST_SAM.backend]
+type = "mnn"
+model_file_path = "../weights/sam/fastsam_s/FastSAM-s.mnn"
+device = "cuda"
+threads = 4
+input_layout = "nchw"
+precision_mode = 0
+power_mode = 0
+
+[FAST_SAM.params]
+conf_thresh = 0.4
+iou_thresh = 0.9

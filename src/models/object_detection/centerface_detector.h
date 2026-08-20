@@ -1,81 +1,64 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: centerface_detector.h
- * Date: 23-10-18
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: centerface_detector.h
+* Date: 23-10-18
+************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_CENTERFACE_DETECTOR_H
 #define MORTRED_MODEL_SERVER_CENTERFACE_DETECTOR_H
 
-#include <memory>
+#include <string>
+#include <vector>
 
 #include "toml/toml.hpp"
 
-#include "common/status_code.h"
-#include "models/base_model.h"
+#include "models/backend/backend_cv_model.h"
+#include "models/backend/tensor.h"
 #include "models/model_io_define.h"
 
 namespace jinq {
 namespace models {
 namespace object_detection {
 
-template <typename INPUT, typename OUTPUT> 
-class CenterFaceDetector : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
+template<typename INPUT, typename OUTPUT>
+class CenterFaceDetector : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   public:
-    /***
-     * constructor
-     * @param config
-     */
     CenterFaceDetector();
+    ~CenterFaceDetector() override = default;
 
-    /***
-     *
-     */
-    ~CenterFaceDetector() override;
-
-    /***
-     * constructor
-     * @param transformer
-     */
-    CenterFaceDetector(const CenterFaceDetector &transformer) = delete;
-
-    /***
-     * constructor
-     * @param transformer
-     * @return
-     */
-    CenterFaceDetector &operator=(const CenterFaceDetector &transformer) = delete;
-
-    /***
-     *
-     * @param toml
-     * @return
-     */
-    jinq::common::StatusCode init(const toml::table &cfg) override;
-
-    /***
-     *
-     * @param input
-     * @param output
-     * @return
-     */
-    jinq::common::StatusCode run_impl(const INPUT&input, OUTPUT &output) override;
-
-    /***
-     * if centerface detector successfully initialized
-     * @return
-     */
-    bool is_successfully_initialized() const override;
+    CenterFaceDetector(const CenterFaceDetector& transformer) = delete;
+    CenterFaceDetector& operator=(const CenterFaceDetector& transformer) = delete;
 
   private:
-    class Impl;
-    std::unique_ptr<Impl> _m_pimpl;
+    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
+
+    jinq::common::StatusCode postprocess(
+        const std::vector<jinq::models::backend::NamedTensor>& outputs,
+        OUTPUT& output) override;
+
+    jinq::common::StatusCode on_init(const toml::table& params) override;
+
+    const jinq::models::backend::NamedTensor* find_output(
+        const std::vector<jinq::models::backend::NamedTensor>& outputs,
+        const std::string& name) const;
+
+    // score thresh
+    double _m_score_threshold = 0.6;
+    // nms thresh
+    double _m_nms_threshold = 0.3;
+    // top_k keep
+    size_t _m_keep_topk = 250;
+    // input image size
+    cv::Size _m_input_size_user = cv::Size();
+    // input node size
+    cv::Size _m_input_size_host = cv::Size();
 };
-} // namespace object_detection
-} // namespace models
-} // namespace jinq
+
+}
+}
+}
 
 #include "centerface_detector.inl"
 
-#endif // MORTRED_MODEL_SERVER_CENTERFACE_DETECTOR_H
+#endif //MORTRED_MODEL_SERVER_CENTERFACE_DETECTOR_H

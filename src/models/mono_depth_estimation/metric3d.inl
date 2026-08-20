@@ -1,995 +1,195 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: metric3d.inl
-* Date: 23-10-26
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: metric3d.cpp
+ ************************************************/
 
 #include "metric3d.h"
-#include "models/cv_image_input.h"
-#include "models/cv_image_input.h"
 
 #include <algorithm>
-#include <cerrno>
-#include <cstdint>
-#include <fstream>
-#include <random>
-#include <sstream>
+#include <cstring>
 
-#include "MNN/Interpreter.hpp"
-#include "glog/logging.h"
 #include <opencv2/opencv.hpp>
-#include "TensorRT-8.6.1.6/NvInferRuntime.h"
-#include "cuda_runtime_api.h"
+#include "glog/logging.h"
 
-#include "common/base64.h"
 #include "common/cv_utils.h"
-#include "common/file_path_util.h"
-#include "models/trt_helper/trt_helper.h"
 
 namespace jinq {
 namespace models {
-
-using jinq::common::CvUtils;
-using jinq::common::FilePathUtil;
-using jinq::common::StatusCode;
-using jinq::models::io_define::common_io::base64_input;
-using jinq::models::io_define::common_io::file_input;
-using jinq::models::io_define::common_io::mat_input;
-using jinq::models::trt_helper::EngineBinding;
-using jinq::models::trt_helper::TrtHelper;
-using jinq::models::trt_helper::TrtLogger;
-
 namespace mono_depth_estimation {
 
-using jinq::models::io_define::mono_depth_estimation::std_mde_output;
+using MdeOutput = jinq::models::io_define::mono_depth_estimation::std_mde_output;
+using jinq::models::backend::NamedTensor;
+using jinq::common::StatusCode;
 
-namespace metric3d_impl {
-
-using internal_input = mat_input;
-using internal_output = std_mde_output;
-
-/***
-*
-* @tparam INPUT
-* @param in
-* @return
-*/
-template<typename INPUT>
-internal_input transform_input(const INPUT& in) {
-    internal_input result{};
-    result.input_image = jinq::models::cv_input::load_image(in);
-    return result;
-}
-
-/***
-* transform different type of internal output into external output
-* @tparam EXTERNAL_OUTPUT
-* @tparam dummy
-* @param in
-* @return
-*/
-template <typename OUTPUT>
-typename std::enable_if<std::is_same<OUTPUT, std::decay<std_mde_output>::type>::value, std_mde_output>::type
-transform_output(const metric3d_impl::internal_output& internal_out) {
-    return internal_out;
-}
-
-} // namespace metric3d_impl
-
-/***************** Impl Function Sets ******************/
-
-template <typename INPUT, typename OUTPUT>
-class Metric3D<INPUT, OUTPUT>::Impl {
-public:
-    /***
-     *
-     */
-    Impl() = default;
-
-    /***
-     *
-     */
-    ~Impl() {
-        if (_m_backend_type == MNN) {
-            if (nullptr != _m_mnn_params.net && nullptr != _m_mnn_params.session) {
-                // releaseSession first, then releaseModel (MNN contract order)
-                _m_mnn_params.net->releaseSession(_m_mnn_params.session);
-                _m_mnn_params.net->releaseModel();
-            }
-            // the Interpreter object itself must also be released
-            delete _m_mnn_params.net;
-            _m_mnn_params.net = nullptr;
-        }
-        if (_m_backend_type == TRT) {
-            auto status = cudaStreamDestroy(_m_trt_params.cuda_stream);
-            if (status != cudaSuccess) {
-                LOG(ERROR) << "failed to free metric3d trt object. destruct cuda stream "
-                              "failed code str: " << cudaGetErrorString(status);
-            }
-            // 释放 TensorRT 上下文/引擎/运行时
-            if (_m_trt_params.execution_context != nullptr) {
-                _m_trt_params.execution_context->destroy();
-            }
-            if (_m_trt_params.engine != nullptr) {
-                _m_trt_params.engine->destroy();
-            }
-            if (_m_trt_params.runtime != nullptr) {
-                _m_trt_params.runtime->destroy();
+template<typename INPUT, typename OUTPUT>
+StatusCode Metric3D<INPUT, OUTPUT>::on_init(const toml::table& params) {
+    if (params.contains("focal_length")) {
+        _m_focal_length = static_cast<float>(params["focal_length"].value_or<double>(0.0));
+    }
+    if (params.contains("intrinsic")) {
+        const toml::array* intrinsic = params["intrinsic"].as_array();
+        if (intrinsic != nullptr && intrinsic->size() == 4) {
+            for (size_t idx = 0; idx < 4; ++idx) {
+                _m_intrinsic_params[idx] =
+                    static_cast<float>((*intrinsic)[idx].value_or<double>(0.0));
             }
         }
     }
-
-    /***
-     *
-     * @param transformer
-     */
-    Impl(const Impl& transformer) = delete;
-
-    /***
-     *
-     * @param transformer
-     * @return
-     */
-    Impl& operator=(const Impl& transformer) = delete;
-
-    /***
-     *
-     * @param cfg_file_path
-     * @return
-     */
-    StatusCode init(const toml::table &config);
-
-    /***
-     *
-     * @param in
-     * @param out
-     * @return
-     */
-    StatusCode run(const INPUT& in, OUTPUT& out);
-
-    /***
-     *
-     * @return
-     */
-    bool is_successfully_initialized() const {
-        return _m_successfully_initialized;
-    };
-
-private:
-    struct MNNParams {
-        std::string model_file_path;
-        MNN::Interpreter* net = nullptr;
-        MNN::Session* session = nullptr;
-        MNN::Tensor* input_tensor = nullptr;
-        MNN::Tensor* confidence_output_tensor = nullptr;
-        MNN::Tensor* preds_depth_output_tensor = nullptr;
-        uint threads_nums = 4;
-    };
-
-    struct TRTParams {
-        // model file path
-        std::string model_file_path;
-        // trt context
-        TrtLogger logger;
-        nvinfer1::IRuntime* runtime = nullptr;
-        nvinfer1::ICudaEngine* engine = nullptr;
-        nvinfer1::IExecutionContext* execution_context = nullptr;
-        cudaStream_t cuda_stream = nullptr;
-        // trt bindings
-        EngineBinding input_image_binding;
-        EngineBinding output_depth_binding;
-        EngineBinding output_confidence_binding;
-        // trt memory
-        void* input_image_device = nullptr;
-        void* output_depth_device = nullptr;
-        void* output_confidence_device = nullptr;
-        float* output_depth_host = nullptr;
-        float* output_confidence_host = nullptr;
-    };
-
-    enum BackendType {
-        MNN = 0,
-        TRT = 1,
-    };
-
-private:
-    // model backend type
-    BackendType _m_backend_type = MNN;
-
-    // mnn net params
-    MNNParams _m_mnn_params;
-
-    // trt net params
-    TRTParams _m_trt_params;
-
-    // input image size
-    cv::Size _m_input_size_user = cv::Size();
-    //　input node size
-    cv::Size _m_input_size_host = cv::Size();
-    // canonical size
-    cv::Size _m_canonical_size = cv::Size();
-    // focal length
-    float _m_focal_length = 0.0f;
-    // intrinsic params
-    std::vector<float> _m_intrinsic_params = {0.0, 0.0, 0.0, 0.0};
-
-    // init flag
-    bool _m_successfully_initialized = false;
-
-private:
-    /***
-     * preprocess
-     * @param input_image
-     */
-    cv::Mat preprocess_image(const cv::Mat& input_image);
-
-    /***
-     *
-     * @param config
-     * @return
-     */
-    StatusCode init_mnn(const toml::table& config);
-
-    /***
-     *
-     * @param in
-     * @param out
-     * @return
-     */
-    StatusCode mnn_run(const INPUT& in, OUTPUT& out);
-
-    /***
-     *
-     * @return
-     */
-    metric3d_impl::internal_output mnn_decode_output();
-
-    /***
-     *
-     * @param config
-     * @return
-     */
-    StatusCode init_trt(const toml::table& cfg);
-
-    /***
-     *
-     * @param in
-     * @param out
-     * @return
-     */
-    StatusCode trt_run(const INPUT& in, OUTPUT& out);
-
-    /***
-     *
-     * @return
-     */
-    metric3d_impl::internal_output trt_decode_output();
-
-    /***
-     *
-     * @return
-     */
-    float calculate_label_scale_factor() {
-        auto ori_focal = (_m_intrinsic_params[0] + _m_intrinsic_params[1]) / 2.0f;
-        auto canonical_focal = _m_focal_length;
-        auto src_w = _m_input_size_user.width;
-        auto src_h = _m_input_size_user.height;
-        auto resize_ratio_h = static_cast<float>(_m_input_size_host.height) / static_cast<float>(src_h);
-        auto resize_ratio_w = static_cast<float>(_m_input_size_host.width) / static_cast<float>(src_w);
-        auto to_scale_ratio = std::min(resize_ratio_h, resize_ratio_w);
-        auto resize_label_scale_factor = 1.0f / to_scale_ratio;
-        auto cano_label_scale_ratio = canonical_focal / ori_focal;
-        auto label_scale_factor = cano_label_scale_ratio * resize_label_scale_factor;
-
-        return label_scale_factor;
+    const auto& input_info = this->session().inputs().front();
+    if (input_info.shape.size() != 4 || input_info.shape[1] != 3 || input_info.dynamic) {
+        LOG(ERROR) << "unexpected metric3d input shape: " << input_info.to_string()
+                   << ", expected static [N,3,H,W] (nchw)";
+        return StatusCode::MODEL_INIT_FAILED;
     }
+    _m_input_size_host.height = static_cast<int>(input_info.shape[2]);
+    _m_input_size_host.width = static_cast<int>(input_info.shape[3]);
+    return StatusCode::OK;
+}
 
-    /***
-     *
-     * @param pad_h
-     * @param pad_w
-     */
-    void calculate_pad_info(int& pad_h, int& pad_w) {
-        auto src_w = _m_input_size_user.width;
-        auto src_h = _m_input_size_user.height;
-        auto resize_ratio_h = static_cast<float>(_m_input_size_host.height) / static_cast<float>(src_h);
-        auto resize_ratio_w = static_cast<float>(_m_input_size_host.width) / static_cast<float>(src_w);
-        auto to_scale_ratio = std::min(resize_ratio_h, resize_ratio_w);
-        auto resize_ratio = 1.0f * to_scale_ratio;
-        auto reshape_h = static_cast<int>(resize_ratio * static_cast<float>(src_h));
-        auto reshape_w = static_cast<int>(resize_ratio * static_cast<float>(src_w));
-        pad_h = std::max(_m_input_size_host.height - reshape_h, 0);
-        pad_w = std::max(_m_input_size_host.width - reshape_w, 0);
-    }
-
-    /***
-     *
-     * @param input_file_path
-     * @param file_content
-     * @return
-     */
-    static bool read_model_file(const std::string& input_file_path, std::vector<unsigned char>& file_content) {
-        // read file
-        std::ifstream file(input_file_path, std::ios::binary);
-        if (!file.is_open() || file.eof() || file.fail() || file.bad()) {
-            LOG(ERROR) << "open input file: " << input_file_path << " failed, error: " << strerror(errno);
-            return false;
+template<typename INPUT, typename OUTPUT>
+const NamedTensor* Metric3D<INPUT, OUTPUT>::find_output(
+    const std::vector<NamedTensor>& outputs, const std::string& name) const {
+    for (const auto& item : outputs) {
+        if (item.name == name) {
+            return &item;
         }
-        file.unsetf(std::ios::skipws);
-        std::streampos file_size;
-        file.seekg(0, std::ios::end);
-        file_size = file.tellg();
-        file.seekg(0, std::ios::beg);
-
-        file_content.resize(file_size);
-        file.read(reinterpret_cast<std::ifstream::char_type*>(&file_content.front()), file_size);
-        file.close();
-        return true;
     }
-};
-
-/***
-*
-* @param cfg_file_path
-* @return
-*/
-template <typename INPUT, typename OUTPUT>
-StatusCode Metric3D<INPUT, OUTPUT>::Impl::init(const toml::table &config) {
-    // choose backend type (fail fast on missing sections / unknown backend
-    // names instead of silently falling back to backend 0)
-    const toml::table* backend_dict_ptr = config["BACKEND_DICT"].as_table();
-    const toml::table* section_ptr = config["METRIC3D"].as_table();
-    if (backend_dict_ptr == nullptr || section_ptr == nullptr) {
-        LOG(ERROR) << "Config section BACKEND_DICT or METRIC3D missing or not a table";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    const auto backend_name = (*section_ptr)["backend_type"].value_or<std::string>("");
-    if (!backend_dict_ptr->contains(backend_name)) {
-        LOG(ERROR) << "unknown backend type: " << backend_name;
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    _m_backend_type = static_cast<BackendType>((*backend_dict_ptr)[backend_name].value_or<int64_t>(0));
-
-    // init metric3d configs
-    const toml::table* metric3d_cfg = nullptr;
-    if (_m_backend_type == MNN) {
-        metric3d_cfg = config["METRIC3D_MNN"].as_table();
-    } else {
-        metric3d_cfg = config["METRIC3D_TRT"].as_table();
-    }
-    if (metric3d_cfg == nullptr) {
-        LOG(ERROR) << "Config section METRIC3D_MNN/METRIC3D_TRT missing or not a table";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    auto model_file_name = FilePathUtil::get_file_name((*metric3d_cfg)["model_file_path"].value_or<std::string>(""));
-
-    StatusCode init_status;
-    if (_m_backend_type == MNN) {
-        init_status = init_mnn(*metric3d_cfg);
-    } else {
-        init_status = init_trt(*metric3d_cfg);
-    }
-
-    if (init_status == StatusCode::OK) {
-        _m_successfully_initialized = true;
-        LOG(INFO) << "Successfully load metric3d model from: " << model_file_name;
-    } else {
-        _m_successfully_initialized = false;
-        LOG(INFO) << "Failed load metric3d model from: " << model_file_name;
-    }
-
-    return init_status;
+    return nullptr;
 }
 
-/***
-*
-* @param in
-* @param out
-* @return
- */
-template <typename INPUT, typename OUTPUT>
-StatusCode Metric3D<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
-    StatusCode infer_status;
-    if (_m_backend_type == MNN) {
-        infer_status = mnn_run(in, out);
-    } else {
-        infer_status = trt_run(in, out);
-    }
-    return infer_status;
+template<typename INPUT, typename OUTPUT>
+void Metric3D<INPUT, OUTPUT>::calculate_pad_info(int& pad_h, int& pad_w) const {
+    const auto src_w = _m_input_size_user.width;
+    const auto src_h = _m_input_size_user.height;
+    const auto resize_ratio_h =
+        static_cast<float>(_m_input_size_host.height) / static_cast<float>(src_h);
+    const auto resize_ratio_w =
+        static_cast<float>(_m_input_size_host.width) / static_cast<float>(src_w);
+    const auto to_scale_ratio = std::min(resize_ratio_h, resize_ratio_w);
+    const auto reshape_h = static_cast<int>(to_scale_ratio * static_cast<float>(src_h));
+    const auto reshape_w = static_cast<int>(to_scale_ratio * static_cast<float>(src_w));
+    pad_h = std::max(_m_input_size_host.height - reshape_h, 0);
+    pad_w = std::max(_m_input_size_host.width - reshape_w, 0);
 }
 
-/***
-*
-* @param input_image
-* @return
-*/
-template <typename INPUT, typename OUTPUT>
-cv::Mat Metric3D<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& input_image) {
+template<typename INPUT, typename OUTPUT>
+float Metric3D<INPUT, OUTPUT>::calculate_label_scale_factor() const {
+    const auto ori_focal = (_m_intrinsic_params[0] + _m_intrinsic_params[1]) / 2.0f;
+    const auto canonical_focal = _m_focal_length;
+    const auto src_w = _m_input_size_user.width;
+    const auto src_h = _m_input_size_user.height;
+    const auto resize_ratio_h =
+        static_cast<float>(_m_input_size_host.height) / static_cast<float>(src_h);
+    const auto resize_ratio_w =
+        static_cast<float>(_m_input_size_host.width) / static_cast<float>(src_w);
+    const auto to_scale_ratio = std::min(resize_ratio_h, resize_ratio_w);
+    const auto resize_label_scale_factor = 1.0f / to_scale_ratio;
+    const auto cano_label_scale_ratio = canonical_focal / ori_focal;
+    return cano_label_scale_ratio * resize_label_scale_factor;
+}
+
+template<typename INPUT, typename OUTPUT>
+std::vector<NamedTensor> Metric3D<INPUT, OUTPUT>::preprocess(const cv::Mat& input_image) {
+    // bgr -> rgb -> keep-ratio resize -> center pad -> mean/std (f32 nchw)
+    _m_input_size_user = input_image.size();
     cv::Mat tmp;
-    // bgr to rgb
     cv::cvtColor(input_image, tmp, cv::COLOR_BGR2RGB);
-
-    // convert to float32
     if (tmp.type() != CV_32FC3) {
         tmp.convertTo(tmp, CV_32FC3);
     }
-
-    // resize image
-    auto src_w = _m_input_size_user.width;
-    auto src_h = _m_input_size_user.height;
-    auto resize_ratio_h = static_cast<float>(_m_input_size_host.height) / static_cast<float>(src_h);
-    auto resize_ratio_w = static_cast<float>(_m_input_size_host.width) / static_cast<float>(src_w);
-    auto to_scale_ratio = std::min(resize_ratio_h, resize_ratio_w);
-    auto resize_ratio = 1.0f * to_scale_ratio;
-    auto reshape_h = static_cast<int>(resize_ratio * static_cast<float>(src_h));
-    auto reshape_w = static_cast<int>(resize_ratio * static_cast<float>(src_w));
-    auto pad_h = std::max(_m_input_size_host.height - reshape_h, 0);
-    auto pad_w = std::max(_m_input_size_host.width - reshape_w, 0);
-    auto pad_h_half = static_cast<int>(pad_h / 2);
-    auto pad_w_half = static_cast<int>(pad_w / 2);
+    const auto src_w = _m_input_size_user.width;
+    const auto src_h = _m_input_size_user.height;
+    const auto resize_ratio_h =
+        static_cast<float>(_m_input_size_host.height) / static_cast<float>(src_h);
+    const auto resize_ratio_w =
+        static_cast<float>(_m_input_size_host.width) / static_cast<float>(src_w);
+    const auto to_scale_ratio = std::min(resize_ratio_h, resize_ratio_w);
+    const auto reshape_h = static_cast<int>(to_scale_ratio * static_cast<float>(src_h));
+    const auto reshape_w = static_cast<int>(to_scale_ratio * static_cast<float>(src_w));
+    const auto pad_h = std::max(_m_input_size_host.height - reshape_h, 0);
+    const auto pad_w = std::max(_m_input_size_host.width - reshape_w, 0);
+    const auto pad_h_half = pad_h / 2;
+    const auto pad_w_half = pad_w / 2;
 
     cv::resize(tmp, tmp, cv::Size(reshape_w, reshape_h));
-    cv::copyMakeBorder(
-        tmp, tmp, pad_h_half, pad_h - pad_h_half, pad_w_half, pad_w - pad_w_half,
-        cv::BORDER_CONSTANT, cv::Scalar(123.675, 116.28, 103.53));
-
-    // subtract mean
+    cv::copyMakeBorder(tmp, tmp, pad_h_half, pad_h - pad_h_half, pad_w_half, pad_w - pad_w_half,
+                       cv::BORDER_CONSTANT, cv::Scalar(123.675, 116.28, 103.53));
     cv::subtract(tmp, cv::Scalar(123.675, 116.28, 103.53), tmp);
-
-    // div std
     cv::divide(tmp, cv::Scalar(58.395, 57.12, 57.375), tmp);
 
-    return tmp;
+    const auto chw_data = jinq::common::CvUtils::convert_to_chw_vec(tmp);
+    std::vector<NamedTensor> inputs;
+    NamedTensor named;
+    named.name = this->session().inputs().front().name;
+    named.tensor = jinq::models::backend::Tensor::make<float>(
+        {1, 3, _m_input_size_host.height, _m_input_size_host.width});
+    if (chw_data.size() * sizeof(float) != named.tensor.byte_size()) {
+        LOG(ERROR) << "preprocessed chw data mismatches the input tensor";
+        return {};
+    }
+    std::memcpy(named.tensor.buffer.data(), chw_data.data(), named.tensor.byte_size());
+    inputs.push_back(std::move(named));
+    return inputs;
 }
 
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param config
- * @return
- */
-template <typename INPUT, typename OUTPUT>
-StatusCode Metric3D<INPUT, OUTPUT>::Impl::init_mnn(const toml::table& config) {
-    // init threads
-    if (!config.contains("model_threads_num")) {
-        LOG(WARNING) << "Config doesn\'t have model_threads_num field default 4";
-        _m_mnn_params.threads_nums = 4;
-    } else {
-        _m_mnn_params.threads_nums = static_cast<int>(config["model_threads_num"].value_or<int64_t>(0));
+template<typename INPUT, typename OUTPUT>
+StatusCode Metric3D<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>& outputs,
+                                                OUTPUT& output) {
+    const auto* depth_tensor = find_output(outputs, "prediction");
+    const auto* confidence_tensor = find_output(outputs, "confidence");
+    if (depth_tensor == nullptr || confidence_tensor == nullptr) {
+        LOG(ERROR) << "metric3d outputs 'prediction'/'confidence' missing";
+        return StatusCode::MODEL_EMPTY_OUTPUT;
+    }
+    const auto* depth_data = depth_tensor->tensor.template data<float>();
+    const auto* conf_data = confidence_tensor->tensor.template data<float>();
+    if (depth_tensor->tensor.element_count() <
+            static_cast<int64_t>(_m_input_size_host.area()) ||
+        confidence_tensor->tensor.element_count() <
+            static_cast<int64_t>(_m_input_size_host.area())) {
+        LOG(ERROR) << "metric3d maps smaller than the input map";
+        return StatusCode::MODEL_EMPTY_OUTPUT;
     }
 
-    // init Interpreter
-    if (!config.contains("model_file_path")) {
-        LOG(ERROR) << "Config doesn\'t have model_file_path field";
-        return StatusCode::MODEL_INIT_FAILED;
-    } else {
-        _m_mnn_params.model_file_path = config["model_file_path"].value_or<std::string>("");
-    }
-    if (!FilePathUtil::is_file_exist(_m_mnn_params.model_file_path)) {
-        LOG(ERROR) << "metric3d model file: " << _m_mnn_params.model_file_path << " not exist";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    _m_mnn_params.net = MNN::Interpreter::createFromFile(_m_mnn_params.model_file_path.c_str());
-    if (nullptr == _m_mnn_params.net) {
-        LOG(ERROR) << "Create metric3d model interpreter failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // init Session
-    MNN::ScheduleConfig mnn_config;
-    if (!config.contains("compute_backend")) {
-        LOG(WARNING) << "Config doesn\'t have compute_backend field default cpu";
-        mnn_config.type = MNN_FORWARD_CPU;
-    } else {
-        std::string compute_backend = config["compute_backend"].value_or<std::string>("");
-        if (std::strcmp(compute_backend.c_str(), "cuda") == 0) {
-            mnn_config.type = MNN_FORWARD_CUDA;
-        } else if (std::strcmp(compute_backend.c_str(), "cpu") == 0) {
-            mnn_config.type = MNN_FORWARD_CPU;
-        } else {
-            LOG(WARNING) << "not supported compute backend use default cpu instead";
-            mnn_config.type = MNN_FORWARD_CPU;
-        }
-    }
-
-    mnn_config.numThread = _m_mnn_params.threads_nums;
-    MNN::BackendConfig backend_config;
-    if (!config.contains("backend_precision_mode")) {
-        LOG(WARNING) << "Config doesn\'t have backend_precision_mode field default Precision_Normal";
-        backend_config.precision = MNN::BackendConfig::Precision_Normal;
-    } else {
-        backend_config.precision = static_cast<MNN::BackendConfig::PrecisionMode>
-                                   (config["backend_precision_mode"].value_or<int64_t>(0));
-    }
-    if (!config.contains("backend_power_mode")) {
-        LOG(WARNING) << "Config doesn\'t have backend_power_mode field default Power_Normal";
-        backend_config.power = MNN::BackendConfig::Power_Normal;
-    } else {
-        backend_config.power = static_cast<MNN::BackendConfig::PowerMode>(config["backend_power_mode"].value_or<int64_t>(0));
-    }
-    mnn_config.backendConfig = &backend_config;
-
-    _m_mnn_params.session = _m_mnn_params.net->createSession(mnn_config);
-    if (nullptr == _m_mnn_params.session) {
-        LOG(ERROR) << "create metric3d model session failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    _m_mnn_params.input_tensor = _m_mnn_params.net->getSessionInput(_m_mnn_params.session, "input_image");
-    _m_mnn_params.confidence_output_tensor = _m_mnn_params.net->getSessionOutput(_m_mnn_params.session, "confidence");
-    _m_mnn_params.preds_depth_output_tensor = _m_mnn_params.net->getSessionOutput(_m_mnn_params.session, "prediction");
-    if (nullptr == _m_mnn_params.input_tensor) {
-        LOG(ERROR) << "fetch metric3d model input node failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (nullptr == _m_mnn_params.confidence_output_tensor || nullptr == _m_mnn_params.preds_depth_output_tensor) {
-        LOG(ERROR) << "fetch metric3d model output node failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // init hose size and user size
-    _m_input_size_host.width = _m_mnn_params.input_tensor->width();
-    _m_input_size_host.height = _m_mnn_params.input_tensor->height();
-
-    // init intrinsic and canonical size
-    _m_focal_length = static_cast<float>(config["focal_length"].value_or<double>(0.0));
-    _m_canonical_size.width = static_cast<int>(config["canonical_size"][1].value_or<int64_t>(0));
-    _m_canonical_size.height = static_cast<int>(config["canonical_size"][0].value_or<int64_t>(0));
-    _m_intrinsic_params = {
-        static_cast<float>(config["intrinsic"][0].value_or<double>(0.0)),
-        static_cast<float>(config["intrinsic"][1].value_or<double>(0.0)),
-        static_cast<float>(config["intrinsic"][2].value_or<double>(0.0)),
-        static_cast<float>(config["intrinsic"][3].value_or<double>(0.0)),
-    };
-
-    return StatusCode::OK;
-}
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param config
- * @return
- */
-template <typename INPUT, typename OUTPUT>
-StatusCode Metric3D<INPUT, OUTPUT>::Impl::mnn_run(const INPUT& in, OUTPUT& out) {
-    // transform external input into internal input
-    auto internal_in = metric3d_impl::transform_input(in);
-    if (!internal_in.input_image.data || internal_in.input_image.empty()) {
-        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
-    }
-    auto& net = _m_mnn_params.net;
-    auto& session = _m_mnn_params.session;
-    auto& input_tensor = _m_mnn_params.input_tensor;
-
-    // preprocess
-    _m_input_size_user = internal_in.input_image.size();
-    cv::Mat preprocessed_image = preprocess_image(internal_in.input_image);
-    auto input_chw_image_data = CvUtils::convert_to_chw_vec(preprocessed_image);
-
-    // run session
-    MNN::Tensor input_tensor_user(input_tensor, MNN::Tensor::DimensionType::CAFFE);
-    auto input_tensor_data = input_tensor_user.host<float>();
-    auto input_tensor_size = input_tensor_user.size();
-    if (!CvUtils::copy_image_to_tensor(input_tensor_data, input_chw_image_data, input_tensor_size)) {
-        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
-    }
-    input_tensor->copyFromHostTensor(&input_tensor_user);
-    net->runSession(session);
-
-    // decode output tensor
-    auto depth_out = mnn_decode_output();
-
-    // transform internal output into external output
-    out = metric3d_impl::transform_output<OUTPUT>(depth_out);
-    return StatusCode::OK;
-}
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param config
- * @return
- */
-template <typename INPUT, typename OUTPUT>
-metric3d_impl::internal_output Metric3D<INPUT, OUTPUT>::Impl::mnn_decode_output() {
-    // fetch output value
-    auto& confidence_out_tensor_host = _m_mnn_params.confidence_output_tensor;
-    auto& depth_out_tensor_host = _m_mnn_params.preds_depth_output_tensor;
-    MNN::Tensor confidence_out_tensor_user(confidence_out_tensor_host, MNN::Tensor::DimensionType::CAFFE);
-    confidence_out_tensor_host->copyToHostTensor(&confidence_out_tensor_user);
-    MNN::Tensor depth_out_tensor_user(depth_out_tensor_host, MNN::Tensor::DimensionType::CAFFE);
-    depth_out_tensor_host->copyToHostTensor(&depth_out_tensor_user);
-
-    // make depth and confidence map
     cv::Mat depth_map = cv::Mat::zeros(_m_input_size_host, CV_32FC1);
     cv::Mat confidence_map = cv::Mat::zeros(_m_input_size_host, CV_32FC1);
     for (auto row = 0; row < _m_input_size_host.height; ++row) {
-        auto depth_row_data = depth_map.ptr<float>(row);
-        auto conf_row_data = confidence_map.ptr<float>(row);
+        auto* depth_row = depth_map.ptr<float>(row);
+        auto* conf_row = confidence_map.ptr<float>(row);
         for (auto col = 0; col < _m_input_size_host.width; ++col) {
-            auto idx = 1 * 1 * row * _m_input_size_host.width + col;
-            depth_row_data[col] = depth_out_tensor_user.host<float>()[idx] < 0 ? 0 : depth_out_tensor_user.host<float>()[idx];
-            conf_row_data[col] = confidence_out_tensor_user.host<float>()[idx];
+            const auto idx = row * _m_input_size_host.width + col;
+            depth_row[col] = depth_data[idx] < 0 ? 0 : depth_data[idx];
+            conf_row[col] = conf_data[idx];
         }
     }
 
-    // crop pad info
+    // crop the center padding, rescale and undo the canonical focal scaling
     int pad_h = 0;
     int pad_w = 0;
     calculate_pad_info(pad_h, pad_w);
-    auto crop_roi = cv::Rect(
-        static_cast<int>(pad_w / 2), static_cast<int>(pad_h / 2),depth_map.cols - pad_w, depth_map.rows - pad_h);
+    auto crop_roi = cv::Rect(pad_w / 2, pad_h / 2, depth_map.cols - pad_w, depth_map.rows - pad_h);
     crop_roi = crop_roi & cv::Rect(0, 0, depth_map.cols, depth_map.rows);
     depth_map(crop_roi).copyTo(depth_map);
     confidence_map(crop_roi).copyTo(confidence_map);
-
-    // rescale into input image size
     cv::resize(depth_map, depth_map, _m_input_size_user);
     cv::resize(confidence_map, confidence_map, _m_input_size_user);
+    cv::divide(depth_map, calculate_label_scale_factor(), depth_map);
 
-    // rescale depth value
-    auto label_scale_factor = calculate_label_scale_factor();
-    cv::divide(depth_map, label_scale_factor, depth_map);
-
-    // colorize depth map
-    cv::Mat colorized_depth_map;
-    CvUtils::colorize_depth_map(depth_map, colorized_depth_map);
-
-    // copy result
-    std_mde_output out;
-    confidence_map.copyTo(out.confidence_map);
-    depth_map.copyTo(out.depth_map);
-    colorized_depth_map.copyTo(out.colorized_depth_map);
-    return out;
-}
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param config
- * @return
- */
-template <typename INPUT, typename OUTPUT>
-StatusCode Metric3D<INPUT, OUTPUT>::Impl::init_trt(const toml::table& cfg) {
-    // init trt runtime
-    _m_trt_params.logger = TrtLogger();
-    _m_trt_params.runtime = nvinfer1::createInferRuntime(_m_trt_params.logger);
-    if(nullptr == _m_trt_params.runtime) {
-        LOG(ERROR) << "init tensorrt runtime failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // init trt engine
-    if (!cfg.contains("model_file_path")) {
-        LOG(ERROR) << "config doesn\'t have model_file_path field";
-        return StatusCode::MODEL_INIT_FAILED;
-    } else {
-        _m_trt_params.model_file_path = cfg["model_file_path"].value_or<std::string>("");
-    }
-    if (!FilePathUtil::is_file_exist(_m_trt_params.model_file_path)) {
-        LOG(ERROR) << "metric3d trt estimation model file: " << _m_trt_params.model_file_path << " not exist";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    std::vector<unsigned char> model_file_content;
-    if (!read_model_file(_m_trt_params.model_file_path, model_file_content)) {
-        LOG(ERROR) << "read model file: " << _m_trt_params.model_file_path << " failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    auto model_content_length = sizeof(model_file_content[0]) * model_file_content.size();
-    _m_trt_params.engine = _m_trt_params.runtime->deserializeCudaEngine(model_file_content.data(), model_content_length);
-    if (nullptr == _m_trt_params.engine) {
-        LOG(ERROR) << "deserialize trt engine failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // init trt execution context
-    _m_trt_params.execution_context = _m_trt_params.engine->createExecutionContext();
-    if (nullptr == _m_trt_params.execution_context) {
-        LOG(ERROR) << "create trt engine failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // bind input tensor
-    std::string input_node_name = "input_image";
-    auto successfully_bind = TrtHelper::setup_engine_binding(_m_trt_params.engine, input_node_name, _m_trt_params.input_image_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind input tensor failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (_m_trt_params.input_image_binding.dims().nbDims != 4) {
-        std::string input_shape_str = TrtHelper::dims_to_string(_m_trt_params.input_image_binding.dims());
-        LOG(ERROR) << "wrong input tensor shape: " << input_shape_str << " expected: [N, C, H, W]";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (_m_trt_params.input_image_binding.is_dynamic()) {
-        LOG(ERROR) << "trt not support dynamic input tensors";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    _m_input_size_host.height = _m_trt_params.input_image_binding.dims().d[2];
-    _m_input_size_host.width = _m_trt_params.input_image_binding.dims().d[3];
-
-    // bind output tensor
-    std::string output_node_name = "prediction";
-    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_params.engine, output_node_name, _m_trt_params.output_depth_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind predicted depth output tensor failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (_m_trt_params.output_depth_binding.dims().nbDims != 4) {
-        std::string output_shape_str = TrtHelper::dims_to_string(_m_trt_params.output_depth_binding.dims());
-        LOG(ERROR) << "wrong output tensor shape: " << output_shape_str << " expected: [N, C, H, W]";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (_m_trt_params.output_depth_binding.is_dynamic()) {
-        LOG(ERROR) << "trt not support dynamic output tensors";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    output_node_name = "confidence";
-    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_params.engine, output_node_name, _m_trt_params.output_confidence_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind predicted confidence output tensor failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (_m_trt_params.output_confidence_binding.dims().nbDims != 4) {
-        std::string output_shape_str = TrtHelper::dims_to_string(_m_trt_params.output_confidence_binding.dims());
-        LOG(ERROR) << "wrong output tensor shape: " << output_shape_str << " expected: [N, C, H, W]";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (_m_trt_params.output_confidence_binding.is_dynamic()) {
-        LOG(ERROR) << "trt not support dynamic output tensors";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // setup input host/device memory
-    auto memo_size = _m_trt_params.input_image_binding.volume() * sizeof(float);
-    auto cuda_status = cudaMalloc(&_m_trt_params.input_image_device, memo_size);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "allocate device memory for input image failed, err str: " << cudaGetErrorString(cuda_status);
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // setup output host/device memory
-    memo_size = _m_trt_params.output_depth_binding.volume() * sizeof(float);
-    cuda_status = cudaMallocHost(reinterpret_cast<void**>(&_m_trt_params.output_depth_host), memo_size);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "allocate host memory for output node failed, err str: " << cudaGetErrorString(cuda_status);
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    cuda_status = cudaMalloc(&_m_trt_params.output_depth_device, memo_size);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "allocate device memory for output node failed, err str: " << cudaGetErrorString(cuda_status);
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    memo_size = _m_trt_params.output_confidence_binding.volume() * sizeof(float);
-    cuda_status = cudaMallocHost(reinterpret_cast<void**>(&_m_trt_params.output_confidence_host), memo_size);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "allocate host memory for output node failed, err str: " << cudaGetErrorString(cuda_status);
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    cuda_status = cudaMalloc(&_m_trt_params.output_confidence_device, memo_size);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "allocate device memory for output node failed, err str: " << cudaGetErrorString(cuda_status);
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // init cuda stream
-    if (cudaStreamCreate(&_m_trt_params.cuda_stream) != cudaSuccess) {
-        LOG(ERROR) << "ERROR: cuda stream creation failed." << std::endl;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // init intrinsic and canonical size
-    _m_focal_length = static_cast<float>(cfg["focal_length"].value_or<double>(0.0));
-    _m_canonical_size.width = static_cast<int>(cfg["canonical_size"][1].value_or<int64_t>(0));
-    _m_canonical_size.height = static_cast<int>(cfg["canonical_size"][0].value_or<int64_t>(0));
-    _m_intrinsic_params = {
-        static_cast<float>(cfg["intrinsic"][0].value_or<double>(0.0)),
-        static_cast<float>(cfg["intrinsic"][1].value_or<double>(0.0)),
-        static_cast<float>(cfg["intrinsic"][2].value_or<double>(0.0)),
-        static_cast<float>(cfg["intrinsic"][3].value_or<double>(0.0)),
-    };
-
+    MdeOutput internal_out;
+    internal_out.depth_map = depth_map.clone();
+    internal_out.confidence_map = confidence_map.clone();
+    jinq::common::CvUtils::colorize_depth_map(depth_map, internal_out.colorized_depth_map);
+    output = std::move(internal_out);
     return StatusCode::OK;
-}
-
-/****
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param in
- * @param out
- * @return
- */
-template <typename INPUT, typename OUTPUT>
-StatusCode Metric3D<INPUT, OUTPUT>::Impl::trt_run(const INPUT& in, OUTPUT& out) {
-    // init sess
-    auto& context = _m_trt_params.execution_context;
-    auto& input_binding = _m_trt_params.input_image_binding;
-    auto& out_depth_binding = _m_trt_params.output_depth_binding;
-    auto& out_confidence_binding = _m_trt_params.output_confidence_binding;
-    auto& input_device = _m_trt_params.input_image_device;
-    auto& out_depth_device = _m_trt_params.output_depth_device;
-    auto& out_depth_host = _m_trt_params.output_depth_host;
-    auto& out_confidence_device = _m_trt_params.output_confidence_device;
-    auto& out_confidence_host = _m_trt_params.output_confidence_host;
-    auto& cuda_stream = _m_trt_params.cuda_stream;
-
-    // transform external input into internal input
-    auto internal_in = metric3d_impl::transform_input(in);
-    if (!internal_in.input_image.data || internal_in.input_image.empty()) {
-        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
-    }
-
-    // preprocess input data
-    auto& input_image = internal_in.input_image;
-    _m_input_size_user = input_image.size();
-    auto preprocessed_image = preprocess_image(input_image);
-    auto input_chw_data = CvUtils::convert_to_chw_vec(preprocessed_image);
-
-    // copy input data from host to device
-    auto input_mem_size = input_binding.volume() * sizeof(float);
-    auto cuda_status = cudaMemcpyAsync(input_device, input_chw_data.data(), input_mem_size, cudaMemcpyHostToDevice, cuda_stream);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "copy input image memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
-        return StatusCode::MODEL_RUN_SESSION_FAILED;
-    }
-
-    // do inference
-    context->setTensorAddress("input_image", input_device);
-    context->setTensorAddress("confidence", out_confidence_device);
-    context->setTensorAddress("prediction", out_depth_device);
-    if (!context->enqueueV3(cuda_stream)) {
-        LOG(ERROR) << "execute input data for inference failed";
-        return StatusCode::MODEL_RUN_SESSION_FAILED;
-    }
-
-    // async copy inference result back to host
-    cuda_status = cudaMemcpyAsync(
-        out_confidence_host, out_confidence_device, out_confidence_binding.volume() * sizeof(float), cudaMemcpyDeviceToHost, cuda_stream);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "async copy output tensor back from device memory to host memory failed, error str: "
-                   << cudaGetErrorString(cuda_status);
-        return StatusCode::MODEL_RUN_SESSION_FAILED;
-    }
-    cuda_status = cudaMemcpyAsync(
-        out_depth_host, out_depth_device, out_depth_binding.volume() * sizeof(float), cudaMemcpyDeviceToHost, cuda_stream);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "async copy output tensor back from device memory to host memory failed, error str: "
-                   << cudaGetErrorString(cuda_status);
-        return StatusCode::MODEL_RUN_SESSION_FAILED;
-    }
-    cudaStreamSynchronize(cuda_stream);
-
-    // decode output
-    auto depth_out = trt_decode_output();
-
-    // transform internal output into external output
-    out = metric3d_impl::transform_output<OUTPUT>(depth_out);
-    return StatusCode::OK;
-}
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @return
- */
-template <typename INPUT, typename OUTPUT>
-metric3d_impl::internal_output Metric3D<INPUT, OUTPUT>::Impl::trt_decode_output() {
-    // make depth and confidence map
-    cv::Mat depth_map = cv::Mat::zeros(_m_input_size_host, CV_32FC1);
-    cv::Mat confidence_map = cv::Mat::zeros(_m_input_size_host, CV_32FC1);
-    for (auto row = 0; row < _m_input_size_host.height; ++row) {
-        auto depth_row_data = depth_map.ptr<float>(row);
-        auto conf_row_data = confidence_map.ptr<float>(row);
-        for (auto col = 0; col < _m_input_size_host.width; ++col) {
-            auto idx = 1 * 1 * row * _m_input_size_host.width + col;
-            depth_row_data[col] = _m_trt_params.output_depth_host[idx] < 0 ? 0 : _m_trt_params.output_depth_host[idx];
-            conf_row_data[col] = _m_trt_params.output_confidence_host[idx];
-        }
-    }
-
-    // crop pad info
-    int pad_h = 0;
-    int pad_w = 0;
-    calculate_pad_info(pad_h, pad_w);
-    auto crop_roi = cv::Rect(
-        static_cast<int>(pad_w / 2), static_cast<int>(pad_h / 2),depth_map.cols - pad_w, depth_map.rows - pad_h);
-    crop_roi = crop_roi & cv::Rect(0, 0, depth_map.cols, depth_map.rows);
-    depth_map(crop_roi).copyTo(depth_map);
-    confidence_map(crop_roi).copyTo(confidence_map);
-
-    // rescale into input image size
-    cv::resize(depth_map, depth_map, _m_input_size_user);
-    cv::resize(confidence_map, confidence_map, _m_input_size_user);
-
-    // rescale depth value
-    auto label_scale_factor = calculate_label_scale_factor();
-    cv::divide(depth_map, label_scale_factor, depth_map);
-
-    // colorize depth map
-    cv::Mat colorized_depth_map;
-    CvUtils::colorize_depth_map(depth_map, colorized_depth_map);
-
-    // copy result
-    std_mde_output out;
-    confidence_map.copyTo(out.confidence_map);
-    depth_map.copyTo(out.depth_map);
-    colorized_depth_map.copyTo(out.colorized_depth_map);
-    return out;
 }
 
 /************* Export Function Sets *************/
 
-/***
-*
-* @tparam INPUT
-* @tparam OUTPUT
-*/
-template <typename INPUT, typename OUTPUT>
-Metric3D<INPUT, OUTPUT>::Metric3D() {
-    _m_pimpl = std::make_unique<Impl>();
+template<typename INPUT, typename OUTPUT>
+Metric3D<INPUT, OUTPUT>::Metric3D()
+    : jinq::models::BackendCvModel<INPUT, OUTPUT>("METRIC3D") {}
+
 }
-
-/***
-*
-* @tparam INPUT
-* @tparam OUTPUT
-*/
-template <typename INPUT, typename OUTPUT>
-Metric3D<INPUT, OUTPUT>::~Metric3D() = default;
-
-/***
-*
-* @tparam INPUT
-* @tparam OUTPUT
-* @param cfg
-* @return
-*/
-template <typename INPUT, typename OUTPUT>
-StatusCode Metric3D<INPUT, OUTPUT>::init(const toml::table &cfg) {
-    return _m_pimpl->init(cfg);
 }
-
-/***
-*
-* @tparam INPUT
-* @tparam OUTPUT
-* @return
-*/
-template <typename INPUT, typename OUTPUT>
-bool Metric3D<INPUT, OUTPUT>::is_successfully_initialized() const {
-    return _m_pimpl->is_successfully_initialized();
 }
-
-/***
-*
-* @tparam INPUT
-* @tparam OUTPUT
-* @param input
-* @param output
-* @return
-*/
-template <typename INPUT, typename OUTPUT>
-StatusCode Metric3D<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPUT& output) {
-    return _m_pimpl->run(input, output);
-}
-
-} // namespace mono_depth_estimation
-} // namespace models
-} // namespace jinq

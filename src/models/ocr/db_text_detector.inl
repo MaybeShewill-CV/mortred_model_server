@@ -6,228 +6,84 @@
 ************************************************/
 
 #include "db_text_detector.h"
-#include "models/cv_image_input.h"
 
-#include <opencv2/opencv.hpp>
+#include <algorithm>
+#include <cstring>
+
 #include "glog/logging.h"
 
 #include "common/cv_utils.h"
-#include "common/file_path_util.h"
-#include "models/mnn_helper.h"
 
 namespace jinq {
 namespace models {
+namespace ocr {
 
 using jinq::common::CvUtils;
-using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
-using jinq::models::io_define::common_io::mat_input;
-using jinq::models::io_define::common_io::file_input;
-using jinq::models::io_define::common_io::base64_input;
-
-namespace ocr {
-using jinq::models::io_define::ocr::text_region;
-using jinq::models::io_define::ocr::std_text_regions_output;
-
-namespace dbtext_impl {
-
-using internal_input = mat_input;
-using internal_output = std_text_regions_output;
-
-/***
- *
- * @tparam INPUT
- * @param in
- * @return
- */
-template<typename INPUT>
-internal_input transform_input(const INPUT& in) {
-    internal_input result{};
-    result.input_image = jinq::models::cv_input::load_image(in);
-    return result;
-}
-
-/***
-* transform different type of internal output into external output
-* @tparam EXTERNAL_OUTPUT
-* @tparam dummy
-* @param in
-* @return
-*/
-template<typename OUTPUT>
-typename std::enable_if<std::is_same<OUTPUT, std::decay<std_text_regions_output>::type>::value, std_text_regions_output>::type
-transform_output(const dbtext_impl::internal_output& internal_out) {
-    return internal_out;
-}
-
-
-}
-
-/***************** Impl Function Sets ******************/
+using jinq::models::backend::NamedTensor;
+using jinq::models::backend::Tensor;
+using TextRegion = jinq::models::io_define::ocr::text_region;
+using TextRegions = jinq::models::io_define::ocr::std_text_regions_output;
 
 template<typename INPUT, typename OUTPUT>
-class DBTextDetector<INPUT, OUTPUT>::Impl {
-public:
-    /***
-     *
-     */
-    Impl() = default;
-
-    /***
-     *
-     */
-    ~Impl() = default;
-
-    /***
-    *
-    * @param transformer
-    */
-    Impl(const Impl& transformer) = delete;
-
-    /***
-     *
-     * @param transformer
-     * @return
-     */
-    Impl& operator=(const Impl& transformer) = delete;
-
-    /***
-     *
-     * @param cfg_file_path
-     * @return
-     */
-    StatusCode init(const toml::table& config);
-
-    /***
-     *
-     * @param in
-     * @param out
-     * @return
-     */
-    StatusCode run(const INPUT& in, OUTPUT& out);
-
-    /***
-     *
-     * @return
-     */
-    bool is_successfully_initialized() const {
-        return _m_successfully_initialized;
-    };
-
-private:
-    jinq::models::MnnNet _m_net;
-    // score thresh
-    double _m_score_threshold = 0.4;
-    // rotate bbox short side thresh
-    float _m_sside_threshold = 3;
-    // top_k keep thresh
-    long _m_keep_topk = 250;
-    // user input size
-    cv::Size _m_input_size_user = cv::Size();
-    //　input tensor size
-    cv::Size _m_input_size_host = cv::Size();
-    // segmentation prob mat
-    cv::Mat _m_seg_prob_mat;
-    // segmentation score map
-    cv::Mat _m_seg_score_mat;
-    // init flag
-    bool _m_successfully_initialized = false;
-
-private:
-    /***
-     * preprocess func
-     * @param input_image : input image
-     */
-    cv::Mat preprocess_image(const cv::Mat& input_image) const;
-
-    /***
-     *
-     * @return
-     */
-    dbtext_impl::internal_output postprocess() const;
-
-    /***
-     *
-     * @return
-     */
-    void decode_segmentation_result_mat() const;
-
-    /***
-     *
-     * @param seg_probs_mat
-     * @return
-     */
-    dbtext_impl::internal_output get_boxes_from_bitmap() const;
-};
-
-
-/***
-*
-* @param cfg_file_path
-* @return
-*/
-template<typename INPUT, typename OUTPUT>
-StatusCode DBTextDetector<INPUT, OUTPUT>::Impl::init(const toml::table& config) {
-    if (!config.contains("DB_TEXT")) {
-        LOG(ERROR) << "Config file missing DB_TEXT section please check";
-        _m_successfully_initialized = false;
+StatusCode DBTextDetector<INPUT, OUTPUT>::on_init(const toml::table& params) {
+    const auto& inputs = this->session().inputs();
+    const auto& outputs = this->session().outputs();
+    if (inputs.empty() || outputs.empty()) {
+        LOG(ERROR) << "db text model exposes no io tensors";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    const auto& input_info = inputs.front();
+    if (input_info.shape.size() != 4 || input_info.shape[1] != 3) {
+        LOG(ERROR) << "unexpected db text input shape: " << input_info.to_string()
+                   << ", expected [N,3,H,W] (nchw)";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    _m_input_name = input_info.name;
+    _m_input_size_host.height = static_cast<int>(input_info.shape[2]);
+    _m_input_size_host.width = static_cast<int>(input_info.shape[3]);
+    if (_m_input_size_host.width <= 0 || _m_input_size_host.height <= 0) {
+        LOG(ERROR) << "invalid db text input size: " << input_info.to_string();
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    const toml::table* cfg_content_ptr = config["DB_TEXT"].as_table();
-    if (cfg_content_ptr == nullptr) {
-        LOG(ERROR) << "Config section DB_TEXT missing or not a table";
-        _m_successfully_initialized = false;
+    const auto output_iter = std::find_if(
+        outputs.begin(), outputs.end(), [](const auto& item) {
+            return item.name == "sigmoid_0.tmp_0";
+        });
+    if (output_iter == outputs.end()) {
+        LOG(ERROR) << "db text output tensor 'sigmoid_0.tmp_0' is missing";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    const toml::table& cfg_content = *cfg_content_ptr;
+    _m_output_name = output_iter->name;
 
-    auto init_status = _m_net.init(cfg_content, {"x"}, {"sigmoid_0.tmp_0"});
-    if (init_status != StatusCode::OK) {
-        _m_successfully_initialized = false;
-        return init_status;
-    }
-    _m_input_size_host.width = _m_net.input("x")->width();
-    _m_input_size_host.height = _m_net.input("x")->height();
-    _m_seg_prob_mat.create(_m_input_size_host, CV_8UC1);
-    _m_seg_score_mat.create(_m_input_size_host, CV_32FC1);
-
-    if (!cfg_content.contains("model_input_image_size")) {
+    if (params.contains("model_input_image_size")) {
+        const toml::array* size = params["model_input_image_size"].as_array();
+        if (size == nullptr || size->size() != 2) {
+            LOG(ERROR) << "params key 'model_input_image_size' must be [height, width]";
+            return StatusCode::MODEL_INIT_FAILED;
+        }
+        _m_input_size_user.height = static_cast<int>((*size)[0].value_or<int64_t>(0));
+        _m_input_size_user.width = static_cast<int>((*size)[1].value_or<int64_t>(0));
+    } else {
         _m_input_size_user.width = 640;
         _m_input_size_user.height = 640;
-    } else {
-        _m_input_size_user.width = static_cast<int>(
-                                       cfg_content["model_input_image_size"][1].value_or<int64_t>(0));
-        _m_input_size_user.height = static_cast<int>(
-                                        cfg_content["model_input_image_size"][0].value_or<int64_t>(0));
+    }
+    if (params.contains("model_score_threshold")) {
+        _m_score_threshold = params["model_score_threshold"].value_or<double>(0.0);
+    }
+    if (params.contains("model_keep_top_k")) {
+        _m_keep_topk = params["model_keep_top_k"].value_or<int64_t>(0);
     }
 
-    if (!cfg_content.contains("model_score_threshold")) {
-        _m_score_threshold = 0.4;
-    } else {
-        _m_score_threshold = cfg_content["model_score_threshold"].value_or<double>(0.0);
-    }
-
-    if (!cfg_content.contains("model_keep_top_k")) {
-        _m_keep_topk = 250;
-    } else {
-        _m_keep_topk = cfg_content["model_keep_top_k"].value_or<int64_t>(0);
-    }
-
-    _m_successfully_initialized = true;
     LOG(INFO) << "DB_Text detection model initialization complete!!!";
     return StatusCode::OK;
 }
 
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param input_image
- * @return
- */
 template<typename INPUT, typename OUTPUT>
-cv::Mat DBTextDetector<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& input_image) const {
+std::vector<NamedTensor> DBTextDetector<INPUT, OUTPUT>::preprocess(const cv::Mat& input_image) {
+    _m_input_size_user = input_image.size();
+
     // resize image
     cv::Mat tmp;
     cv::resize(input_image, tmp, _m_input_size_host);
@@ -236,127 +92,82 @@ cv::Mat DBTextDetector<INPUT, OUTPUT>::Impl::preprocess_image(const cv::Mat& inp
     if (tmp.type() != CV_32FC3) {
         tmp.convertTo(tmp, CV_32FC3);
     }
-
     tmp /= 255.0;
     cv::subtract(tmp, cv::Scalar(0.485, 0.456, 0.406), tmp);
     cv::divide(tmp, cv::Scalar(0.229, 0.224, 0.225), tmp);
 
-    return tmp;
+    const auto input_chw_image_data = CvUtils::convert_to_chw_vec(tmp);
+    NamedTensor named;
+    named.name = _m_input_name;
+    named.tensor = Tensor::make<float>(
+        {1, 3, _m_input_size_host.height, _m_input_size_host.width});
+    if (input_chw_image_data.size() * sizeof(float) != named.tensor.byte_size()) {
+        LOG(ERROR) << "preprocessed db text image size mismatches input tensor";
+        return {};
+    }
+    std::memcpy(named.tensor.buffer.data(), input_chw_image_data.data(),
+                named.tensor.byte_size());
+    return {std::move(named)};
 }
 
-/***
- *
- * @param in
- * @param out
- * @return
- */
 template<typename INPUT, typename OUTPUT>
-StatusCode DBTextDetector<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
-    // transform external input into internal input
-    auto internal_in = dbtext_impl::transform_input(in);
-    if (!internal_in.input_image.data || internal_in.input_image.empty()) {
-        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+StatusCode DBTextDetector<INPUT, OUTPUT>::postprocess(
+    const std::vector<NamedTensor>& outputs, OUTPUT& output) {
+    const auto output_iter = std::find_if(
+        outputs.begin(), outputs.end(),
+        [this](const NamedTensor& item) { return item.name == _m_output_name; });
+    if (output_iter == outputs.end()) {
+        LOG(ERROR) << "db text inference result tensor is missing";
+        return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    // preprocess image
-    _m_input_size_user = internal_in.input_image.size();
-    auto preprocessed_image = preprocess_image(internal_in.input_image);
-    auto input_chw_image_data = CvUtils::convert_to_chw_vec(preprocessed_image);
-    // run session
-    MNN::Tensor input_tensor_user(_m_net.input("x"), MNN::Tensor::DimensionType::CAFFE);
-    auto input_tensor_data = input_tensor_user.host<float>();
-    auto input_tensor_size = input_tensor_user.size();
-    if (!CvUtils::copy_image_to_tensor(input_tensor_data, input_chw_image_data, input_tensor_size)) {
-        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    const auto& tensor = output_iter->tensor;
+    if (tensor.dtype != jinq::models::backend::DType::F32 ||
+        tensor.element_count() <= 0) {
+        LOG(ERROR) << "invalid db text inference result tensor";
+        return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    _m_net.input("x")->copyFromHostTensor(&input_tensor_user);
-    const auto run_session_status = _m_net.run_session();
-    if (run_session_status != StatusCode::OK) {
-        return run_session_status;
-    }
-    // postprocess
-    dbtext_impl::internal_output text_regions = postprocess();
-    // transform internal output into external output
-    out = dbtext_impl::transform_output<OUTPUT>(text_regions);
-    
-    return StatusCode::OK;
-}
+    const auto* output_data = tensor.template data<float>();
+    const auto ele_size = tensor.element_count();
 
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- */
-template<typename INPUT, typename OUTPUT>
-void DBTextDetector<INPUT, OUTPUT>::Impl::decode_segmentation_result_mat() const {
-    // convert tensor format
-    MNN::Tensor output_tensor_user(_m_net.output("sigmoid_0.tmp_0"), MNN::Tensor::DimensionType::CAFFE);
-    _m_net.output("sigmoid_0.tmp_0")->copyToHostTensor(&output_tensor_user);
-
-    // construct segmentation prob map
-    auto ele_size = output_tensor_user.elementSize();
-    std::vector<uchar> seg_mat_vec;
-    seg_mat_vec.resize(ele_size);
-
+    // construct segmentation prob and score maps. The score values below the
+    // threshold are zeroed before contours are decoded, exactly as before.
+    std::vector<float> score_data(output_data, output_data + ele_size);
+    std::vector<uchar> seg_mat_vec(ele_size);
     for (int index = 0; index < ele_size; ++index) {
-        if (output_tensor_user.host<float>()[index] >= _m_score_threshold) {
-            seg_mat_vec[index] = static_cast<uchar>(output_tensor_user.host<float>()[index] * 255.0);
+        if (score_data[index] >= _m_score_threshold) {
+            seg_mat_vec[index] = static_cast<uchar>(score_data[index] * 255.0);
         } else {
             seg_mat_vec[index] = static_cast<uchar>(0);
-            output_tensor_user.host<float>()[index] = 0.0;
+            score_data[index] = 0.0f;
         }
     }
+    cv::Mat seg_prob_mat(_m_input_size_host, CV_8UC1, seg_mat_vec.data());
+    cv::Mat seg_score_mat(_m_input_size_host, CV_32FC1, score_data.data());
 
-    ::memcpy(_m_seg_prob_mat.data, seg_mat_vec.data(), seg_mat_vec.size() * sizeof(uchar));
-
-    // construct segmentation score map
-    ::memcpy(_m_seg_score_mat.data, output_tensor_user.host<float>(), ele_size * sizeof(float));
+    return get_boxes_from_bitmap(seg_prob_mat, seg_score_mat, output);
 }
 
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @return
- */
 template<typename INPUT, typename OUTPUT>
-dbtext_impl::internal_output DBTextDetector<INPUT, OUTPUT>::Impl::postprocess() const {
-    // decode seg prob mat
-    decode_segmentation_result_mat();
-    // get bboxes from bitmap
-    auto bbox_result = get_boxes_from_bitmap();
+StatusCode DBTextDetector<INPUT, OUTPUT>::get_boxes_from_bitmap(
+    const cv::Mat& seg_prob_mat, const cv::Mat& seg_score_mat, OUTPUT& output) const {
+    TextRegions result;
+    const auto host_width = static_cast<float>(_m_input_size_host.width);
+    const auto host_height = static_cast<float>(_m_input_size_host.height);
+    const auto user_width = static_cast<float>(_m_input_size_user.width);
+    const auto user_height = static_cast<float>(_m_input_size_user.height);
 
-    if (bbox_result.size() <= static_cast<size_t>(_m_keep_topk)) {
-        return bbox_result;
-    } else {
-        dbtext_impl::internal_output keep_top_k(bbox_result.cbegin(), bbox_result.cbegin() + _m_keep_topk);
-        return keep_top_k;
-    }
-}
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @return
- */
-template<typename INPUT, typename OUTPUT>
-dbtext_impl::internal_output DBTextDetector<INPUT, OUTPUT>::Impl::get_boxes_from_bitmap() const {
-    dbtext_impl::internal_output result;
-    auto host_width = static_cast<float>(_m_input_size_host.width);
-    auto host_height = static_cast<float>(_m_input_size_host.height);
-    auto user_width = static_cast<float>(_m_input_size_user.width);
-    auto user_height = static_cast<float>(_m_input_size_user.height);
     // contours analysis
-    std::vector<std::vector<cv::Point> > contours;
+    std::vector<std::vector<cv::Point>> contours;
     std::vector<cv::Vec4i> hierarchy;
-    cv::findContours(_m_seg_prob_mat, contours, hierarchy, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
+    cv::findContours(seg_prob_mat, contours, hierarchy, cv::RETR_LIST,
+                     cv::CHAIN_APPROX_SIMPLE);
 
     for (const auto& contour : contours) {
-        cv::RotatedRect r_bbox = cv::minAreaRect(contour);
+        const cv::RotatedRect r_bbox = cv::minAreaRect(contour);
         cv::Rect2f r_bounding_box = r_bbox.boundingRect2f();
         cv::Point2f r_vertices[4];
         r_bbox.points(r_vertices);
-        auto sside = std::min(r_bbox.size.height, r_bbox.size.width);
+        const auto sside = std::min(r_bbox.size.height, r_bbox.size.width);
 
         // thresh those with short sside
         if (sside < _m_sside_threshold) {
@@ -364,9 +175,9 @@ dbtext_impl::internal_output DBTextDetector<INPUT, OUTPUT>::Impl::get_boxes_from
         }
 
         // calculate rotated bbox score
-        auto valid_roi = r_bounding_box & cv::Rect2f(0, 0, _m_seg_score_mat.cols, _m_seg_score_mat.rows);
-        float score = static_cast<float>(cv::mean(_m_seg_score_mat(valid_roi))[0]);
-
+        const auto valid_roi = r_bounding_box &
+                               cv::Rect2f(0, 0, seg_score_mat.cols, seg_score_mat.rows);
+        const float score = static_cast<float>(cv::mean(seg_score_mat(valid_roi))[0]);
         if (score < _m_score_threshold) {
             continue;
         }
@@ -376,79 +187,30 @@ dbtext_impl::internal_output DBTextDetector<INPUT, OUTPUT>::Impl::get_boxes_from
             pt.x = pt.x * user_width / host_width;
             pt.y = pt.y * user_height / host_height;
         }
-
         r_bounding_box.x = r_bounding_box.x * user_width / host_width;
         r_bounding_box.y = r_bounding_box.y * user_height / host_height;
         r_bounding_box.width = r_bounding_box.width * user_width / host_width;
         r_bounding_box.height = r_bounding_box.height * user_height / host_height;
 
-        text_region region;
+        TextRegion region;
         region.bbox = r_bounding_box;
         region.polygon = std::vector<cv::Point2f>(r_vertices, r_vertices + 4);
         region.score = score;
-
         result.push_back(region);
     }
 
-    return result;
+    if (result.size() > static_cast<size_t>(_m_keep_topk)) {
+        result.resize(static_cast<size_t>(_m_keep_topk));
+    }
+    output = std::move(result);
+    return StatusCode::OK;
 }
-
 
 /************* Export Function Sets *************/
 
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- */
 template<typename INPUT, typename OUTPUT>
-DBTextDetector<INPUT, OUTPUT>::DBTextDetector() {
-    _m_pimpl = std::make_unique<Impl>();
-}
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- */
-template<typename INPUT, typename OUTPUT>
-DBTextDetector<INPUT, OUTPUT>::~DBTextDetector() = default;
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param cfg
- * @return
- */
-template<typename INPUT, typename OUTPUT>
-StatusCode DBTextDetector<INPUT, OUTPUT>::init(const toml::table& cfg) {
-    return _m_pimpl->init(cfg);
-}
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @return
- */
-template<typename INPUT, typename OUTPUT>
-bool DBTextDetector<INPUT, OUTPUT>::is_successfully_initialized() const {
-    return _m_pimpl->is_successfully_initialized();
-}
-
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param input
- * @param output
- * @return
- */
-template<typename INPUT, typename OUTPUT>
-StatusCode DBTextDetector<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPUT& output) {
-    return _m_pimpl->run(input, output);
-}
+DBTextDetector<INPUT, OUTPUT>::DBTextDetector()
+    : jinq::models::BackendCvModel<INPUT, OUTPUT>("DB_TEXT") {}
 
 }
 }

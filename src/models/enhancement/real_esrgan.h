@@ -8,12 +8,12 @@
 #ifndef MORTRED_MODEL_SERVER_REALESRGAN_H
 #define MORTRED_MODEL_SERVER_REALESRGAN_H
 
-#include <memory>
+#include <vector>
 
 #include "toml/toml.hpp"
 
-#include "common/status_code.h"
-#include "models/base_model.h"
+#include "models/backend/backend_cv_model.h"
+#include "models/backend/tensor.h"
 #include "models/model_io_define.h"
 
 namespace jinq {
@@ -21,56 +21,24 @@ namespace models {
 namespace enhancement {
 
 template <typename INPUT, typename OUTPUT>
-class RealEsrGan : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
-public:
-    /***
-     * construct function
-     * @param config
-     */
+class RealEsrGan : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+  public:
     RealEsrGan();
+    ~RealEsrGan() override = default;
 
-    /***
-     *
-     */
-    ~RealEsrGan() override;
-
-    /***
-     * construct function
-     * @param transformer
-     */
     RealEsrGan(const RealEsrGan& transformer) = delete;
-
-    /***
-     * construct function
-     * @param transformer
-     * @return
-     */
     RealEsrGan& operator=(const RealEsrGan& transformer) = delete;
 
-    /***
-     *
-     * @param toml
-     * @return
-     */
-    jinq::common::StatusCode init(const toml::table &cfg) override;
+  private:
+    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
 
-    /***
-     *
-     * @param input
-     * @param output
-     * @return
-     */
-    jinq::common::StatusCode run_impl(const INPUT& input, OUTPUT& output) override;
+    jinq::common::StatusCode postprocess(
+        const std::vector<jinq::models::backend::NamedTensor>& outputs,
+        OUTPUT& output) override;
 
-    /***
-     * model init flag
-     * @return
-     */
-    bool is_successfully_initialized() const override;
+    jinq::common::StatusCode on_init(const toml::table& params) override;
 
-private:
-    class Impl;
-    std::unique_ptr<Impl> _m_pimpl;
+    cv::Size _m_input_size_host;
 };
 
 } // namespace enhancement
@@ -79,4 +47,4 @@ private:
 
 #include "real_esrgan.inl"
 
-#endif //MORTRED_MODEL_SERVER_REALESRGAN_H
+#endif // MORTRED_MODEL_SERVER_REALESRGAN_H

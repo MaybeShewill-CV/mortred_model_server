@@ -2,82 +2,49 @@
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
  * File: hrnet_segmentation.h
- * Date: 23-11-17
  ************************************************/
 
-#ifndef MORTRED_MODEL_SERVER_HRNETSEGMENTATION_H
-#define MORTRED_MODEL_SERVER_HRNETSEGMENTATION_H
-
-#include <memory>
+#ifndef MORTRED_MODEL_SERVER_HRNET_SEGMENTATION_H
+#define MORTRED_MODEL_SERVER_HRNET_SEGMENTATION_H
 
 #include "toml/toml.hpp"
 
-#include "models/base_model.h"
+#include "models/backend/backend_cv_model.h"
+#include "models/backend/tensor.h"
 #include "models/model_io_define.h"
-#include "common/status_code.h"
 
 namespace jinq {
 namespace models {
 namespace scene_segmentation {
 
 template<typename INPUT, typename OUTPUT>
-class HRNetSegmentation : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
+class HRNetSegmentation : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   public:
-
-    /***
-    * constructor
-    * @param config
-     */
     HRNetSegmentation();
+    ~HRNetSegmentation() override = default;
 
-    /***
-     *
-     */
-    ~HRNetSegmentation() override;
-
-    /***
-    * constructor
-    * @param transformer
-     */
     HRNetSegmentation(const HRNetSegmentation& transformer) = delete;
-
-    /***
-     * constructor
-     * @param transformer
-     * @return
-     */
     HRNetSegmentation& operator=(const HRNetSegmentation& transformer) = delete;
 
-    /***
-     *
-     * @param toml
-     * @return
-     */
-    jinq::common::StatusCode init(const toml::table& cfg) override;
-
-    /***
-     *
-     * @param input
-     * @param output
-     * @return
-     */
-    jinq::common::StatusCode run_impl(const INPUT& input, OUTPUT& output) override;
-
-
-    /***
-     * if model successfully initialized
-     * @return
-     */
-    bool is_successfully_initialized() const override;
-
   private:
-    class Impl;
-    std::unique_ptr<Impl> _m_pimpl;
+    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
+
+    jinq::common::StatusCode postprocess(
+        const std::vector<jinq::models::backend::NamedTensor>& outputs,
+        OUTPUT& output) override;
+
+    jinq::common::StatusCode on_init(const toml::table& params) override;
+
+    // user image size of the current run
+    cv::Size _m_input_size_user = cv::Size();
+    // network input node size
+    cv::Size _m_input_size_host = cv::Size();
 };
+
 }
 }
 }
 
 #include "hrnet_segmentation.inl"
 
-#endif // MORTRED_MODEL_SERVER_HRNETSEGMENTATION_H
+#endif //MORTRED_MODEL_SERVER_HRNET_SEGMENTATION_H

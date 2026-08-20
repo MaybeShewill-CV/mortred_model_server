@@ -1,8 +1,13 @@
 [RESNET]
-model_file_path="../weights/classification/resnet/resnet-50.mnn"
-model_threads_num=4
-model_input_image_size=[224, 224]
-compute_backend="cuda"
-backend_precision_mode=2
-backend_power_mode=0
-class_name_file="../conf/model/classification/imagenet_classes.txt"
+[RESNET.backend]
+type = "mnn"
+model_file_path = "../weights/classification/resnet/resnet-50.mnn"
+device = "cuda"
+threads = 4
+input_layout = "nhwc"
+precision_mode = 2
+power_mode = 0
+
+[RESNET.params]
+model_input_image_size = [224, 224]
+class_name_file = "../conf/model/classification/imagenet_classes.txt"

@@ -2,78 +2,47 @@
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
 * File: resnet.h
-* Date: 22-6-14
 ************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_RESNET_H
 #define MORTRED_MODEL_SERVER_RESNET_H
 
-
-#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 #include "toml/toml.hpp"
 
-#include "models/base_model.h"
+#include "models/backend/backend_cv_model.h"
+#include "models/backend/tensor.h"
 #include "models/model_io_define.h"
-#include "common/status_code.h"
 
 namespace jinq {
 namespace models {
 namespace classification {
 
 template<typename INPUT, typename OUTPUT>
-class ResNet : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
-public:
-
-    /***
-    * constructor
-    * @param config
-    */
+class ResNet : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+  public:
     ResNet();
+    ~ResNet() override = default;
 
-    /***
-     *
-     */
-    ~ResNet() override;
-
-    /***
-    * constructor
-    * @param transformer
-    */
     ResNet(const ResNet& transformer) = delete;
-
-    /***
-     * constructor
-     * @param transformer
-     * @return
-     */
     ResNet& operator=(const ResNet& transformer) = delete;
 
-    /***
-     *
-     * @param toml
-     * @return
-     */
-    jinq::common::StatusCode init(const toml::table& cfg) override;
+  private:
+    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
 
-    /***
-     *
-     * @param input
-     * @param output
-     * @return
-     */
-    jinq::common::StatusCode run_impl(const INPUT& input, OUTPUT& output) override;
+    jinq::common::StatusCode postprocess(
+        const std::vector<jinq::models::backend::NamedTensor>& outputs,
+        OUTPUT& output) override;
 
+    jinq::common::StatusCode on_init(const toml::table& params) override;
 
-    /***
-     * if resnet classifier successfully initialized
-     * @return
-     */
-    bool is_successfully_initialized() const override;
-
-private:
-    class Impl;
-    std::unique_ptr<Impl> _m_pimpl;
+    // class id to names
+    std::unordered_map<uint16_t, std::string> _m_class_id2names;
+    // network input tensor size
+    cv::Size _m_input_tensor_size = cv::Size(224, 224);
 };
 
 }

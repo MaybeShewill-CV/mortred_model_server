@@ -1,8 +1,13 @@
 [MOBILENETV2]
-model_file_path="../weights/classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn"
-model_threads_num=4
-model_input_image_size=[224, 224]
-compute_backend="cuda"
-backend_precision_mode=0
-backend_power_mode=0
-class_name_file="../conf/model/classification/imagenet_classes.txt"
+[MOBILENETV2.backend]
+type = "mnn"
+model_file_path = "../weights/classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn"
+device = "cuda"
+threads = 4
+input_layout = "nhwc"
+precision_mode = 0
+power_mode = 0
+
+[MOBILENETV2.params]
+model_input_image_size = [224, 224]
+class_name_file = "../conf/model/classification/imagenet_classes.txt"
