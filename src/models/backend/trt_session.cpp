@@ -94,6 +94,96 @@ void SessionLogger::log(Severity severity, const char* msg) noexcept {
 
 }  // namespace trt_detail
 
+/***
+ * TensorRT calls this allocator when an output shape depends on runtime data
+ * (for example the lightglue extractor's NMS output).  It owns the device
+ * allocation and records the shape communicated through notifyShape.
+ */
+class TrtSession::DynamicOutputAllocator final : public nvinfer1::IOutputAllocator {
+  public:
+    DynamicOutputAllocator() = default;
+    ~DynamicOutputAllocator() override {
+        release();
+    }
+
+    void* reallocateOutput(char const* tensor_name, void* current_memory, uint64_t size,
+                           uint64_t alignment) noexcept override {
+        (void)tensor_name;
+        (void)current_memory;
+        (void)alignment;
+        allocation_failed = false;
+        if (size == 0) {
+            allocation_failed = true;
+            return nullptr;
+        }
+        if (memory != nullptr && allocated_bytes >= size) {
+            return memory;
+        }
+        release();
+        const auto status = cudaMalloc(&memory, size);
+        if (status != cudaSuccess || memory == nullptr) {
+            LOG(ERROR) << "allocate dynamic tensorrt output failed: "
+                       << cudaGetErrorString(status);
+            memory = nullptr;
+            allocation_failed = true;
+            return nullptr;
+        }
+        allocated_bytes = size;
+        return memory;
+    }
+
+    void notifyShape(char const* tensor_name, nvinfer1::Dims const& dims) noexcept override {
+        (void)tensor_name;
+        shape = dims;
+        shape_notified = true;
+    }
+
+    void reset_for_run() {
+        shape = nvinfer1::Dims{};
+        shape_notified = false;
+        allocation_failed = false;
+    }
+
+    bool failed() const {
+        return allocation_failed;
+    }
+
+    bool has_shape() const {
+        return shape_notified;
+    }
+
+    std::vector<int64_t> reported_shape() const {
+        return from_trt_dims(shape);
+    }
+
+    size_t capacity() const {
+        return allocated_bytes;
+    }
+
+    void* data() const {
+        return memory;
+    }
+
+  private:
+    void release() {
+        if (memory != nullptr) {
+            const auto status = cudaFree(memory);
+            if (status != cudaSuccess) {
+                LOG(ERROR) << "free dynamic tensorrt output failed: "
+                           << cudaGetErrorString(status);
+            }
+            memory = nullptr;
+        }
+        allocated_bytes = 0;
+    }
+
+    void* memory = nullptr;
+    size_t allocated_bytes = 0;
+    nvinfer1::Dims shape{};
+    bool shape_notified = false;
+    bool allocation_failed = false;
+};
+
 TrtSession::DeviceBuffer& TrtSession::DeviceBuffer::operator=(DeviceBuffer&& other) noexcept {
     if (this != &other) {
         if (memory != nullptr) {
@@ -159,6 +249,10 @@ TrtSession::~TrtSession() {
     _m_engine = nullptr;
     delete _m_runtime;
     _m_runtime = nullptr;
+    for (auto& item : _m_output_allocators) {
+        delete item.second;
+    }
+    _m_output_allocators.clear();
 }
 
 StatusCode TrtSession::init(const BackendConfig& config, std::string* err) {
@@ -304,6 +398,26 @@ StatusCode TrtSession::init(const BackendConfig& config, std::string* err) {
         }
     }
 
+    // Outputs whose shape cannot be inferred from the input shape require an
+    // IOutputAllocator. Without one, getTensorShape() remains dynamic and there
+    // is no concrete output address to bind before enqueueV3().
+    for (const auto& info : _m_output_infos) {
+        if (!info.dynamic) {
+            continue;
+        }
+        auto* allocator = new DynamicOutputAllocator();
+        _m_output_allocators.emplace(info.name, allocator);
+        const bool allocator_ready =
+            _m_context->setOutputAllocator(info.name.c_str(), allocator) &&
+            _m_context->setTensorAddress(info.name.c_str(), nullptr);
+        if (!allocator_ready) {
+            if (err != nullptr) {
+                *err = "configure tensorrt output allocator failed: " + info.name;
+            }
+            return StatusCode::MODEL_INIT_FAILED;
+        }
+    }
+
     const auto cuda_status = cudaStreamCreate(&_m_stream);
     if (cuda_status != cudaSuccess) {
         if (err != nullptr) {
@@ -384,10 +498,27 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
         }
     }
 
-    // resolve + bind outputs (shapes are only known after the input shapes)
-    std::vector<std::pair<const TensorInfo*, std::vector<int64_t>>> resolved_outputs;
+    // Resolve and bind outputs whose shape is inferable from the inputs.
+    // Runtime-data-dependent outputs are left to their IOutputAllocator.
+    struct ResolvedOutput {
+        const TensorInfo* info;
+        std::vector<int64_t> shape;
+        void* memory;
+    };
+    std::vector<ResolvedOutput> resolved_outputs;
     resolved_outputs.reserve(_m_output_infos.size());
     for (const auto& info : _m_output_infos) {
+        resolved_outputs.push_back({&info, {}, nullptr});
+    }
+    for (auto& item : _m_output_allocators) {
+        item.second->reset_for_run();
+    }
+    for (size_t idx = 0; idx < _m_output_infos.size(); ++idx) {
+        const auto& info = _m_output_infos[idx];
+        const auto allocator_iter = _m_output_allocators.find(info.name);
+        if (allocator_iter != _m_output_allocators.end()) {
+            continue;
+        }
         auto shape = from_trt_dims(_m_context->getTensorShape(info.name.c_str()));
         if (shape_is_dynamic(shape)) {
             LOG(ERROR) << "tensorrt output '" << info.name << "' shape unresolved after input "
@@ -405,7 +536,7 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
             LOG(ERROR) << "tensorrt set output tensor address failed: " << info.name;
             return StatusCode::MODEL_RUN_SESSION_FAILED;
         }
-        resolved_outputs.emplace_back(&info, std::move(shape));
+        resolved_outputs[idx] = {&info, std::move(shape), buffer.memory};
     }
 
     if (!_m_context->enqueueV3(_m_stream)) {
@@ -418,11 +549,47 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
         return StatusCode::TRT_CUDA_ERROR;
     }
 
+    for (size_t idx = 0; idx < _m_output_infos.size(); ++idx) {
+        const auto& info = _m_output_infos[idx];
+        const auto allocator_iter = _m_output_allocators.find(info.name);
+        if (allocator_iter == _m_output_allocators.end()) {
+            continue;
+        }
+        const auto* allocator = allocator_iter->second;
+        if (allocator->failed() || allocator->data() == nullptr) {
+            LOG(ERROR) << "tensorrt dynamic output '" << info.name << "' allocation failed";
+            return StatusCode::TRT_ALLOC_DYNAMIC_SHAPE_MEMO;
+        }
+        auto shape = allocator->reported_shape();
+        if (!allocator->has_shape() || shape_is_dynamic(shape)) {
+            shape = from_trt_dims(_m_context->getTensorShape(info.name.c_str()));
+        }
+        if (shape_is_dynamic(shape)) {
+            LOG(ERROR) << "tensorrt dynamic output '" << info.name
+                       << "' shape unresolved after inference: " << shape_to_string(shape);
+            return StatusCode::TRT_ALLOC_DYNAMIC_SHAPE_MEMO;
+        }
+        const auto bytes =
+            static_cast<size_t>(shape_volume(shape)) * dtype_size(info.dtype);
+        if (bytes == 0 || allocator->capacity() < bytes) {
+            LOG(ERROR) << "tensorrt dynamic output '" << info.name << "' allocation "
+                       << allocator->capacity() << " bytes is smaller than output "
+                       << bytes << " bytes";
+            return StatusCode::TRT_ALLOC_DYNAMIC_SHAPE_MEMO;
+        }
+        resolved_outputs[idx] = {&info, std::move(shape), allocator->data()};
+    }
+
     outputs.clear();
     outputs.reserve(resolved_outputs.size());
     for (const auto& item : resolved_outputs) {
-        const auto& info = *item.first;
-        const auto& shape = item.second;
+        if (item.memory == nullptr) {
+            LOG(ERROR) << "tensorrt output '" << item.info->name
+                       << "' was not bound to device memory";
+            return StatusCode::MODEL_RUN_SESSION_FAILED;
+        }
+        const auto& info = *item.info;
+        const auto& shape = item.shape;
         NamedTensor named;
         named.name = info.name;
         named.tensor.dtype = info.dtype;
@@ -430,9 +597,8 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
         const auto bytes =
             static_cast<size_t>(shape_volume(shape)) * dtype_size(info.dtype);
         named.tensor.buffer.resize(bytes);
-        auto& buffer = _m_device_buffers.at(info.name);
         const auto cuda_status = cudaMemcpyAsync(
-            named.tensor.buffer.data(), buffer.memory, bytes, cudaMemcpyDeviceToHost, _m_stream);
+            named.tensor.buffer.data(), item.memory, bytes, cudaMemcpyDeviceToHost, _m_stream);
         if (cuda_status != cudaSuccess) {
             LOG(ERROR) << "tensorrt D2H copy failed for '" << info.name
                        << "': " << cudaGetErrorString(cuda_status);

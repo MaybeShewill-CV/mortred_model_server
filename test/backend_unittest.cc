@@ -11,6 +11,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -36,6 +37,10 @@ using jinq::models::backend::TensorInfo;
 constexpr const char* kMnnModel = "weights/classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn";
 constexpr const char* kOnnxModel = "weights/diffusion/ddpm/ddpm_unet_celeba-hq-128x128.onnx";
 constexpr const char* kTrtModel = "weights/object_detection/yolov8/yolov8s.engine";
+constexpr const char* kLightglueExtractor =
+    "weights/feature_point/lightglue/extractor.engine";
+constexpr const char* kFeatureImage =
+    "demo_data/model_test_input/feature_point/match_test_01.jpg";
 
 bool file_exists(const std::string& path) {
     return jinq::common::FilePathUtil::is_file_exist(path);
@@ -265,6 +270,56 @@ TEST(OrtSession, InitAndRunDdpmUnet) {
     auto bad_inputs = inputs;
     bad_inputs[1].tensor = Tensor::make<int32_t>(t_info.shape);
     EXPECT_EQ(session->run(bad_inputs, outputs), StatusCode::MODEL_RUN_SESSION_FAILED);
+}
+
+TEST(TrtSession, ResolvesLightglueDynamicOutputs) {
+    if (!file_exists(kLightglueExtractor) || !file_exists(kFeatureImage)) {
+        GTEST_SKIP() << "lightglue weights or test image not available";
+    }
+    std::string err;
+    auto session =
+        InferenceSession::create(make_config("tensorrt", kLightglueExtractor, "cuda"), &err);
+    if (session == nullptr) {
+        GTEST_SKIP() << "tensorrt/gpu unavailable: " << err;
+    }
+
+    const auto& image_info = find_info(session->inputs(), "image");
+    EXPECT_TRUE(image_info.dynamic);
+    cv::Mat image = cv::imread(kFeatureImage, cv::IMREAD_COLOR);
+    ASSERT_FALSE(image.empty());
+    cv::resize(image, image, cv::Size(128, 96));
+    cv::cvtColor(image, image, cv::COLOR_BGR2GRAY);
+    image.convertTo(image, CV_32FC1, 1.0 / 255.0);
+
+    NamedTensor named;
+    named.name = image_info.name;
+    named.tensor = Tensor::make<float>({1, 1, image.rows, image.cols});
+    ASSERT_EQ(image.total() * image.elemSize(), named.tensor.byte_size());
+    std::memcpy(named.tensor.buffer.data(), image.data, named.tensor.byte_size());
+    std::vector<NamedTensor> inputs;
+    inputs.push_back(std::move(named));
+
+    std::vector<NamedTensor> outputs;
+    ASSERT_EQ(session->run(inputs, outputs), StatusCode::OK);
+    const auto find_output = [&outputs](const std::string& name) {
+        const auto iter = std::find_if(outputs.begin(), outputs.end(),
+                                       [&name](const NamedTensor& item) {
+                                           return item.name == name;
+                                       });
+        return iter == outputs.end() ? nullptr : &*iter;
+    };
+    const auto* keypoints = find_output("keypoints");
+    const auto* scores = find_output("scores");
+    const auto* descriptors = find_output("descriptors");
+    ASSERT_NE(keypoints, nullptr);
+    ASSERT_NE(scores, nullptr);
+    ASSERT_NE(descriptors, nullptr);
+    ASSERT_GT(scores->tensor.element_count(), 0);
+    EXPECT_TRUE(keypoints->tensor.shape_is_concrete());
+    EXPECT_TRUE(scores->tensor.shape_is_concrete());
+    EXPECT_TRUE(descriptors->tensor.shape_is_concrete());
+    EXPECT_EQ(keypoints->tensor.element_count(), scores->tensor.element_count() * 2);
+    EXPECT_EQ(descriptors->tensor.element_count(), scores->tensor.element_count() * 256);
 }
 
 TEST(TrtSession, InitAndRunYolov8) {

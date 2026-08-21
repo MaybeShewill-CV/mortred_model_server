@@ -131,7 +131,9 @@ class BackendCvModel : public BaseAiModel<INPUT, OUTPUT> {
     }
 
     bool is_successfully_initialized() const final {
-        return _m_successfully_initialized && _m_session != nullptr;
+        // Multi-engine models own their sessions in derived state and have no
+        // primary _m_session; init() clears this flag on every failure path.
+        return _m_successfully_initialized;
     }
 
   protected:

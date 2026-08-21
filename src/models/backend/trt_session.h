@@ -62,6 +62,8 @@ class TrtSession : public InferenceSession {
                                  std::vector<NamedTensor>& outputs) override;
 
   private:
+    class DynamicOutputAllocator;
+
     struct DeviceBuffer {
         void* memory = nullptr;
         size_t bytes = 0;
@@ -86,6 +88,7 @@ class TrtSession : public InferenceSession {
     nvinfer1::IExecutionContext* _m_context = nullptr;
     cudaStream_t _m_stream = nullptr;
     std::map<std::string, DeviceBuffer> _m_device_buffers;
+    std::map<std::string, DynamicOutputAllocator*> _m_output_allocators;
     std::vector<TensorInfo> _m_input_infos;
     std::vector<TensorInfo> _m_output_infos;
     std::string _m_model_file_path;

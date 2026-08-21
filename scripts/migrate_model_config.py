@@ -72,6 +72,7 @@ class SectionMigration:
     old_backend: str
     source_section: str
     backend: Dict[str, Any] = field(default_factory=dict)
+    extra_backends: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     params: Dict[str, Any] = field(default_factory=dict)
     removed_sections: List[str] = field(default_factory=list)
     key_moves: List[str] = field(default_factory=list)
@@ -133,7 +134,13 @@ def is_table(value: Any) -> bool:
 
 def is_migrated_model_section(table: Mapping[str, Any]) -> bool:
     backend = table.get("backend")
-    return is_table(backend) and backend.get("type") in {"tensorrt", "onnx", "mnn"}
+    if is_table(backend) and backend.get("type") in {"tensorrt", "onnx", "mnn"}:
+        return True
+    return any(
+        key.endswith("_backend") and is_table(value) and value.get("type") in
+        {"tensorrt", "onnx", "mnn"}
+        for key, value in table.items()
+    )
 
 
 def is_pure_mnn_section(table: Mapping[str, Any]) -> bool:
@@ -245,6 +252,63 @@ def build_key_moves(
     return moves
 
 
+def migrate_lightglue_section(
+    data: Mapping[str, Any], section: str, warnings: List[str]
+) -> Optional[SectionMigration]:
+    """Migrate the two-engine lightglue TRT schema into *_backend tables."""
+
+    source_name = section + "_TRT"
+    source_table = data.get(source_name)
+    if not is_table(source_table):
+        warnings.append(
+            f"lightglue section [{section}] has no two-engine [{source_name}] source"
+        )
+        return None
+
+    backend_common: Dict[str, Any] = {"type": "tensorrt"}
+    for old_key, new_key in BACKEND_SOURCE_KEYS.items():
+        if old_key in source_table:
+            backend_common[new_key] = source_table[old_key]
+    if "compute_backend" not in source_table:
+        backend_common["device"] = "cpu"
+
+    engine_paths = {
+        "extractor_backend": "extractor_model_file_path",
+        "matcher_backend": "matcher_model_file_path",
+    }
+    extra_backends: Dict[str, Dict[str, Any]] = {}
+    for backend_key, path_key in engine_paths.items():
+        model_path = source_table.get(path_key)
+        if not isinstance(model_path, str) or not model_path:
+            warnings.append(
+                f"lightglue source [{source_name}] is missing {path_key}; left unchanged"
+            )
+            return None
+        engine_backend = dict(backend_common)
+        engine_backend["model_file_path"] = model_path
+        extra_backends[backend_key] = engine_backend
+
+    excluded_keys = set(BACKEND_SOURCE_KEYS) | set(engine_paths.values()) | {"input_layout"}
+    params: Dict[str, Any] = {
+        key: value for key, value in source_table.items() if key not in excluded_keys
+    }
+    key_moves = [
+        f"{path_key} -> {backend_key}.model_file_path"
+        for backend_key, path_key in engine_paths.items()
+    ]
+    key_moves.extend(f"{key} -> params.{key}" for key in params)
+    return SectionMigration(
+        section=section,
+        old_backend="trt",
+        source_section=source_name,
+        backend={"type": "tensorrt"},
+        extra_backends=extra_backends,
+        params=params,
+        removed_sections=[section] + associated_source_sections(data, section),
+        key_moves=key_moves,
+    )
+
+
 def migrate_section(
     data: Mapping[str, Any], section: str, warnings: List[str]
 ) -> Optional[SectionMigration]:
@@ -272,6 +336,8 @@ def migrate_section(
                     "backend_type; left unchanged"
                 )
             return None
+    if section == "LIGHTGLUE" and target_type == "tensorrt":
+        return migrate_lightglue_section(data, section, warnings)
 
     old_backend = "trt" if target_type == "tensorrt" else target_type
     source_suffix = source_suffix_for_target(target_type)
@@ -389,10 +455,16 @@ def migrate_document(
     for section in data:
         if section in migrated_names:
             migration = next(item for item in migrations if item.section == section)
-            output[section] = {
-                "backend": dict(migration.backend),
-                "params": dict(migration.params),
-            }
+            if migration.extra_backends:
+                output[section] = {
+                    key: dict(value) for key, value in migration.extra_backends.items()
+                }
+                output[section]["params"] = dict(migration.params)
+            else:
+                output[section] = {
+                    "backend": dict(migration.backend),
+                    "params": dict(migration.params),
+                }
     for section, value in data.items():
         if not is_table(value) or section in migrated_names or section in remove_names:
             continue
@@ -558,9 +630,15 @@ def describe_migration(result: FileMigration) -> List[str]:
             if migration.source_section != migration.section
             else " (flat source)"
         )
+        backend_keys = (
+            list(migration.extra_backends)
+            if migration.extra_backends
+            else ["backend"]
+        )
         lines.append(
             f"  [{migration.section}] {migration.old_backend}{source_note} -> "
-            f"[{migration.section}.backend] type={migration.backend['type']}, "
+            + ", ".join(f"[{migration.section}.{key}]" for key in backend_keys)
+            + f" type={migration.backend['type']}, "
             f"[{migration.section}.params] keys={len(migration.params)}"
         )
     return lines
@@ -598,13 +676,20 @@ def report_text(results: Sequence[FileMigration], root: Path) -> str:
             lines.append("  Status: already migrated / no old-schema model section")
 
         for migration in result.migrations:
+            backend_keys = (
+                list(migration.extra_backends)
+                if migration.extra_backends
+                else ["backend"]
+            )
             lines.extend(
                 [
                     f"  SECTION [{migration.section}]",
                     "    Old: backend_type={}; source=[{}]".format(
                         migration.old_backend, migration.source_section
                     ),
-                    f"    New: [{migration.section}.backend], [{migration.section}.params]",
+                    "    New: "
+                    + ", ".join(f"[{migration.section}.{key}]" for key in backend_keys)
+                    + f", [{migration.section}.params]",
                     f"    Backend type: {migration.backend['type']}",
                 ]
             )
@@ -758,6 +843,22 @@ use_explicit_nchw=false
 model_file_path="../weights/yolov8s.onnx"
 compute_backend="cuda"
 
+[LIGHTGLUE]
+backend_type="trt"
+
+[LIGHTGLUE_ONNX]
+model_file_path="../weights/lightglue.onnx"
+compute_backend="cuda"
+
+[LIGHTGLUE_TRT]
+extractor_model_file_path="../weights/extractor.engine"
+matcher_model_file_path="../weights/matcher.engine"
+compute_backend="cuda"
+gpu_device_id=0
+extract_score_thresh=0.1
+match_score_thresh=0.5
+long_side_length=512.0
+
 [DDPM_UNET]
 backend_type="onnx"
 
@@ -828,10 +929,18 @@ def run_selftest() -> int:
     original = parse_toml_text(SELFTEST_TOML)
     result = migrate_document(Path("selftest.toml"), original)
 
-    assert_equal(len(result.migrations), 6, "six model sections should migrate")
+    assert_equal(len(result.migrations), 7, "seven model sections should migrate")
     assert_equal(
         sorted(migration.section for migration in result.migrations),
-        ["DDPM_UNET", "LIBFACE", "MNET", "MOBILENETV2", "SAM_ENCODER", "YOLOV8"],
+        [
+            "DDPM_UNET",
+            "LIBFACE",
+            "LIGHTGLUE",
+            "MNET",
+            "MOBILENETV2",
+            "SAM_ENCODER",
+            "YOLOV8",
+        ],
         "migrated section set",
     )
     assert_equal(
@@ -858,6 +967,35 @@ def run_selftest() -> int:
             "device": "cpu",
         },
         "TRT backend",
+    )
+    assert_equal(
+        set(result.migrated["LIGHTGLUE"].keys()),
+        {"extractor_backend", "matcher_backend", "params"},
+        "lightglue multi-engine section keys",
+    )
+    assert_equal(
+        result.migrated["LIGHTGLUE"]["extractor_backend"],
+        {
+            "type": "tensorrt",
+            "model_file_path": "../weights/extractor.engine",
+            "device": "cuda",
+            "device_id": 0,
+        },
+        "lightglue extractor backend",
+    )
+    assert_equal(
+        result.migrated["LIGHTGLUE"]["matcher_backend"]["model_file_path"],
+        "../weights/matcher.engine",
+        "lightglue matcher path",
+    )
+    assert_equal(
+        result.migrated["LIGHTGLUE"]["params"],
+        {
+            "extract_score_thresh": 0.1,
+            "match_score_thresh": 0.5,
+            "long_side_length": 512.0,
+        },
+        "lightglue params",
     )
     assert_equal(result.migrated["YOLOV8"]["params"], expected_yolo_params, "TRT params")
 
