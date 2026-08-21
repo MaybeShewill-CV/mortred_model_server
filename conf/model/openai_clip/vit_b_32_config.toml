@@ -1,18 +1,26 @@
-[OPENAI_CLIP_VIT_ENCODER]
-model_file_path="../weights/openai_clip/vit-b-32/visual.mnn"
-model_threads_num=4
-compute_backend="cuda"
-backend_precision_mode=0
-backend_power_mode=0
+[OPENAI_CLIP]
 
-[OPENAI_CLIP_TEXT_ENCODER]
-model_file_path="../weights/openai_clip/vit-b-32/textual.mnn"
-model_threads_num=4
-compute_backend="cuda"
-backend_precision_mode=0
-backend_power_mode=0
+[OPENAI_CLIP.visual_backend]
+type = "mnn"
+model_file_path = "../weights/openai_clip/vit-b-32/visual.mnn"
+device = "cuda"
+threads = 4
+precision_mode = 0
+power_mode = 0
+input_names = ["input"]
+output_names = ["output"]
 
-[TOKENIZER]
-vocab_file_path="../weights/openai_clip/vit-b-32/bpe_simple_vocab_16e6.txt"
-context_length=77
-truncate_context=true
+[OPENAI_CLIP.text_backend]
+type = "mnn"
+model_file_path = "../weights/openai_clip/vit-b-32/textual.mnn"
+device = "cuda"
+threads = 4
+precision_mode = 0
+power_mode = 0
+input_names = ["input"]
+output_names = ["output"]
+
+[OPENAI_CLIP.params]
+vocab_file_path = "../weights/openai_clip/vit-b-32/bpe_simple_vocab_16e6.txt"
+context_length = 77
+truncate_context = true

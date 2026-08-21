@@ -309,6 +309,63 @@ def migrate_lightglue_section(
     )
 
 
+def migrate_openai_clip_section(
+    data: Mapping[str, Any], warnings: List[str]
+) -> Optional[SectionMigration]:
+    """Merge the old CLIP encoder sections and tokenizer into [OPENAI_CLIP]."""
+
+    source_names = ["OPENAI_CLIP_VIT_ENCODER", "OPENAI_CLIP_TEXT_ENCODER"]
+    source_tables: List[Mapping[str, Any]] = []
+    for name in source_names:
+        table = data.get(name)
+        if not is_table(table):
+            warnings.append(f"openai clip source section [{name}] is missing; left unchanged")
+            return None
+        source_tables.append(table)
+
+    tokenizer_table = data.get("TOKENIZER")
+    if not is_table(tokenizer_table) or "vocab_file_path" not in tokenizer_table:
+        warnings.append("openai clip [TOKENIZER] is missing or invalid; left unchanged")
+        return None
+
+    extra_backends: Dict[str, Dict[str, Any]] = {}
+    key_moves: List[str] = []
+    for backend_key, source_table, source_name in zip(
+        ("visual_backend", "text_backend"), source_tables, source_names
+    ):
+        model_path = source_table.get("model_file_path")
+        if not isinstance(model_path, str) or not model_path:
+            warnings.append(
+                f"openai clip source [{source_name}] has no model_file_path; left unchanged"
+            )
+            return None
+        backend = {"type": "mnn", "model_file_path": model_path}
+        for old_key, new_key in BACKEND_SOURCE_KEYS.items():
+            if old_key in source_table:
+                backend[new_key] = source_table[old_key]
+        if "compute_backend" not in source_table:
+            backend["device"] = "cpu"
+        extra_backends[backend_key] = backend
+        key_moves.append(f"{source_name}.model_file_path -> {backend_key}.model_file_path")
+
+    params = dict(tokenizer_table)
+    for source_table in source_tables:
+        for key, value in source_table.items():
+            if key not in BACKEND_SOURCE_KEYS and key != "input_layout":
+                params[key] = value
+    key_moves.extend(f"TOKENIZER.{key} -> params.{key}" for key in params)
+    return SectionMigration(
+        section="OPENAI_CLIP",
+        old_backend="mnn",
+        source_section="+".join(source_names),
+        backend={"type": "mnn"},
+        extra_backends=extra_backends,
+        params=params,
+        removed_sections=source_names + ["TOKENIZER"],
+        key_moves=key_moves,
+    )
+
+
 def migrate_section(
     data: Mapping[str, Any], section: str, warnings: List[str]
 ) -> Optional[SectionMigration]:
@@ -413,6 +470,16 @@ def migrate_document(
     migrations: List[SectionMigration] = []
     already_migrated: List[str] = []
 
+    clip_selected = selected_sections is None or "OPENAI_CLIP" in selected_sections
+    clip_migration = (
+        migrate_openai_clip_section(data, warnings) if clip_selected else None
+    )
+    if clip_migration is not None:
+        migrations.append(clip_migration)
+    clip_consumed_sections = (
+        set(clip_migration.removed_sections) if clip_migration is not None else set()
+    )
+
     # Surface flat tables that look model-like but do not satisfy the pure-MNN
     # rule from the migration contract.  Their values are copied unchanged.
     for section, value in data.items():
@@ -430,7 +497,7 @@ def migrate_document(
             )
 
     for section in candidates:
-        if section in source_sections:
+        if section in source_sections or section in clip_consumed_sections:
             continue
         if selected_sections is not None and section.upper() not in selected_sections:
             continue
@@ -444,6 +511,8 @@ def migrate_document(
         for item in migrations
         for name in associated_source_sections(data, item.section)
     }
+    for item in migrations:
+        remove_names.update(item.removed_sections)
     if migrations:
         remove_names.add("BACKEND_DICT")
 
@@ -465,6 +534,19 @@ def migrate_document(
                     "backend": dict(migration.backend),
                     "params": dict(migration.params),
                 }
+    for migration in migrations:
+        if migration.section in data:
+            continue
+        if migration.extra_backends:
+            output[migration.section] = {
+                key: dict(value) for key, value in migration.extra_backends.items()
+            }
+            output[migration.section]["params"] = dict(migration.params)
+        else:
+            output[migration.section] = {
+                "backend": dict(migration.backend),
+                "params": dict(migration.params),
+            }
     for section, value in data.items():
         if not is_table(value) or section in migrated_names or section in remove_names:
             continue
@@ -907,6 +989,25 @@ model_score_threshold=0.75
 model_nms_threshold=0.35
 model_keep_top_k=250
 
+[OPENAI_CLIP_VIT_ENCODER]
+model_file_path="../weights/visual.mnn"
+compute_backend="cuda"
+model_threads_num=4
+backend_precision_mode=0
+backend_power_mode=0
+
+[OPENAI_CLIP_TEXT_ENCODER]
+model_file_path="../weights/textual.mnn"
+compute_backend="cuda"
+model_threads_num=4
+backend_precision_mode=0
+backend_power_mode=0
+
+[TOKENIZER]
+vocab_file_path="../weights/bpe_simple_vocab_16e6.txt"
+context_length=77
+truncate_context=true
+
 [LEGACY_MODEL]
 model_file_path="../weights/legacy.bin"
 compute_backend="cuda"
@@ -929,7 +1030,7 @@ def run_selftest() -> int:
     original = parse_toml_text(SELFTEST_TOML)
     result = migrate_document(Path("selftest.toml"), original)
 
-    assert_equal(len(result.migrations), 7, "seven model sections should migrate")
+    assert_equal(len(result.migrations), 8, "eight model sections should migrate")
     assert_equal(
         sorted(migration.section for migration in result.migrations),
         [
@@ -938,6 +1039,7 @@ def run_selftest() -> int:
             "LIGHTGLUE",
             "MNET",
             "MOBILENETV2",
+            "OPENAI_CLIP",
             "SAM_ENCODER",
             "YOLOV8",
         ],
@@ -1054,6 +1156,40 @@ def run_selftest() -> int:
         },
         "pure MNN .model params",
     )
+    assert_equal(
+        set(result.migrated["OPENAI_CLIP"].keys()),
+        {"visual_backend", "text_backend", "params"},
+        "openai clip multi-engine section keys",
+    )
+    assert_equal(
+        result.migrated["OPENAI_CLIP"]["visual_backend"],
+        {
+            "type": "mnn",
+            "model_file_path": "../weights/visual.mnn",
+            "device": "cuda",
+            "threads": 4,
+            "precision_mode": 0,
+            "power_mode": 0,
+        },
+        "openai clip visual backend",
+    )
+    assert_equal(
+        result.migrated["OPENAI_CLIP"]["text_backend"]["model_file_path"],
+        "../weights/textual.mnn",
+        "openai clip text model path",
+    )
+    assert_equal(
+        result.migrated["OPENAI_CLIP"]["params"],
+        {
+            "vocab_file_path": "../weights/bpe_simple_vocab_16e6.txt",
+            "context_length": 77,
+            "truncate_context": True,
+        },
+        "openai clip tokenizer params",
+    )
+    assert "TOKENIZER" not in result.migrated
+    assert "OPENAI_CLIP_VIT_ENCODER" not in result.migrated
+    assert "OPENAI_CLIP_TEXT_ENCODER" not in result.migrated
     assert_equal(
         result.migrated["MNET"]["params"],
         {"model_input_image_size": [224, 224]},

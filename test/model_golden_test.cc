@@ -807,6 +807,13 @@ TEST(model_golden, openai_clip_embedding) {
         jinq::models::io_define::clip::clip_output>("openai_clip_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
+    jinq::models::io_define::clip::clip_input text_input;
+    text_input.task_type = jinq::models::io_define::clip::ClipTaskType::TEXT_EMBEDDING;
+    text_input.text = "a photo of fox";
+    jinq::models::io_define::clip::clip_output text_output;
+    ASSERT_EQ(model->run(text_input, text_output), StatusCode::OK);
+    expect_embeddings("openai_clip_text_embedding", text_output.embeddings);
+
     cv::Mat image = read_input_image("demo_data/model_test_input/clip/fox.jpg");
     ASSERT_FALSE(image.empty());
     jinq::models::io_define::clip::clip_input input;

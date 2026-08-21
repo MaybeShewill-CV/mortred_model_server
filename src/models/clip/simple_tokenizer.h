@@ -61,7 +61,7 @@ class SimpleTokenizer {
      * @param text_embeddings
      * @return
      */
-    jinq::common::StatusCode tokenize(const std::string& input_text, std::vector<int>& token);
+    jinq::common::StatusCode tokenize(const std::string& input_text, std::vector<int>& token) const;
 
     /***
      * if model successfully initialized

@@ -9,118 +9,100 @@
 #define MORTRED_MODEL_SERVER_OPENAICLIP_H
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <opencv2/opencv.hpp>
 #include "toml/toml.hpp"
 
-#include "models/base_model.h"
+#include "models/backend/backend_cv_model.h"
+#include "models/backend/session.h"
+#include "models/backend/tensor.h"
+#include "models/clip/simple_tokenizer.h"
 #include "models/model_io_define.h"
-#include "common/status_code.h"
 
 namespace jinq {
 namespace models {
 namespace clip {
 
-namespace openai_clip_impl {
-class Impl;
-}
-
 /***
- * OpenAI CLIP 多模态模型：文本/图像 embedding 与图文相似度计算。
- * 统一入口为 run(INPUT, OUTPUT)，按 clip_input.task_type 分发到各子能力。
+ * OpenAI CLIP multi-engine model. The visual and text encoders are unified
+ * inference sessions, while the BPE tokenizer is model-local preprocessing.
  */
-template <typename INPUT, typename OUTPUT>
-class OpenAiClip : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
+template<typename INPUT, typename OUTPUT>
+class OpenAiClip : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   public:
-    /***
-    * constructor
-    * @param config
-     */
     OpenAiClip();
-    
-    /***
-     *
-     */
-    ~OpenAiClip() override;
+    ~OpenAiClip() override = default;
 
-    /***
-    * constructor
-    * @param transformer
-     */
     OpenAiClip(const OpenAiClip& transformer) = delete;
-
-    /***
-     * constructor
-     * @param transformer
-     * @return
-     */
     OpenAiClip& operator=(const OpenAiClip& transformer) = delete;
 
-    /***
-     *
-     * @param toml
-     * @return
-     */
-    jinq::common::StatusCode init(const toml::table& cfg) override;
+    jinq::common::StatusCode get_textual_embedding(
+        const std::string& input_text, std::vector<float>& text_embeddings);
 
-    /***
-     *
-     * @param input
-     * @param output
-     * @return
-     */
-    jinq::common::StatusCode run_impl(const INPUT& input, OUTPUT& output) override;
+    jinq::common::StatusCode get_visual_embedding(
+        const cv::Mat& input_image, std::vector<float>& image_embeddings);
 
-    /***
-     *
-     * @param input_text
-     * @param text_embeddings
-     * @return
-     */
-    jinq::common::StatusCode get_textual_embedding(const std::string& input_text, std::vector<float>& text_embeddings);
-
-    /***
-     *
-     * @param input_image
-     * @param image_embeddings
-     * @return
-     */
-    jinq::common::StatusCode get_visual_embedding(const cv::Mat& input_image, std::vector<float>& image_embeddings);
-
-    /***
-     *
-     * @param input_texts
-     * @param input_image
-     * @param simi_scores
-     * @return
-     */
     jinq::common::StatusCode texts2img(
-        const std::vector<std::string>& input_texts, const cv::Mat& input_image, std::vector<float>& simi_scores);
+        const std::vector<std::string>& input_texts, const cv::Mat& input_image,
+        std::vector<float>& simi_scores);
 
-    /***
-     *
-     * @param input_texts
-     * @param input_image
-     * @param simi_scores
-     * @return
-     */
     jinq::common::StatusCode imgs2text(
-        const std::vector<cv::Mat>& input_images, const std::string& input_text, std::vector<float>& simi_scores);
-
-
-    /***
-     * if model successfully initialized
-     * @return
-     */
-    bool is_successfully_initialized() const override;
+        const std::vector<cv::Mat>& input_images, const std::string& input_text,
+        std::vector<float>& simi_scores);
 
   private:
-    std::unique_ptr<openai_clip_impl::Impl> _m_pimpl;
+    using ClipInput = jinq::models::io_define::clip::clip_input;
+    using ClipOutput = jinq::models::io_define::clip::clip_output;
+    using ClipTaskType = jinq::models::io_define::clip::ClipTaskType;
+
+    jinq::common::StatusCode on_init(const toml::table& params) override;
+
+    jinq::common::StatusCode run_sessions(const INPUT& input, OUTPUT& output) override;
+
+    jinq::common::StatusCode postprocess(
+        const std::vector<jinq::models::backend::NamedTensor>& outputs,
+        OUTPUT& output) override;
+
+    jinq::common::StatusCode encode_text(
+        const std::string& input_text, std::vector<float>& text_embeddings) const;
+
+    jinq::common::StatusCode encode_image(
+        const cv::Mat& input_image, std::vector<float>& image_embeddings) const;
+
+    cv::Mat preprocess_image(const cv::Mat& input_image) const;
+
+    void tokenize(const std::string& input_text, std::vector<int32_t>& token_ids) const;
+
+    const jinq::models::backend::NamedTensor* find_output(
+        const std::vector<jinq::models::backend::NamedTensor>& outputs,
+        const std::string& name) const;
+
+    static const jinq::models::backend::TensorInfo* find_info(
+        const jinq::models::backend::InferenceSession& session, const std::string& name);
+
+    static jinq::common::StatusCode validate_visual_io(
+        const jinq::models::backend::InferenceSession& session);
+
+    static jinq::common::StatusCode validate_text_io(
+        const jinq::models::backend::InferenceSession& session);
+
+    static bool normalize_embedding(std::vector<float>& embedding);
+
+    static bool embeddings_compatible(
+        const std::vector<float>& lhs, const std::vector<float>& rhs);
+
+    std::unique_ptr<jinq::models::backend::InferenceSession> _m_visual_encoder;
+    std::unique_ptr<jinq::models::backend::InferenceSession> _m_text_encoder;
+    SimpleTokenizer _m_tokenizer;
+    int _m_context_length = 77;
+    bool _m_truncate_context = true;
 };
-}
-}
-}
+
+} // namespace clip
+} // namespace models
+} // namespace jinq
 
 #include "openai_clip.inl"
 

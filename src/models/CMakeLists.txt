@@ -16,8 +16,6 @@ set(MODELS_LIB_SRC
     ${CMAKE_CURRENT_LIST_DIR}/cv_image_input.h
     ${CMAKE_CURRENT_LIST_DIR}/mnn_helper.h
     ${CMAKE_CURRENT_LIST_DIR}/model_io_define.h
-    ${CMAKE_CURRENT_LIST_DIR}/clip/openai_clip_text_encoder.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/clip/openai_clip_vit_encoder.cpp
     ${CMAKE_CURRENT_LIST_DIR}/clip/simple_tokenizer.cpp
     ${CMAKE_CURRENT_LIST_DIR}/mot/byte_tracker/byte_tracker.cpp
     ${CMAKE_CURRENT_LIST_DIR}/mot/byte_tracker/kalman_filter.cpp

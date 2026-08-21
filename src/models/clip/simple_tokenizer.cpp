@@ -55,7 +55,7 @@ class SimpleTokenizer::Impl {
      * @param token
      * @return
      */
-    StatusCode tokenize(const std::string& input_text, std::vector<int>& token);
+    StatusCode tokenize(const std::string& input_text, std::vector<int>& token) const;
 
     /***
      * if model successfully initialized
@@ -86,7 +86,20 @@ class SimpleTokenizer::Impl {
  */
 StatusCode SimpleTokenizer::Impl::init(const toml::table &cfg) {
 
-    auto token_cfg = cfg["TOKENIZER"];
+    const toml::table* token_cfg_ptr = nullptr;
+    if (cfg.contains("TOKENIZER")) {
+        token_cfg_ptr = cfg["TOKENIZER"].as_table();
+        if (token_cfg_ptr == nullptr) {
+            LOG(ERROR) << "Config section TOKENIZER is not a table";
+            _m_successfully_init_model = false;
+            return StatusCode::MODEL_INIT_FAILED;
+        }
+    } else {
+        // New unified model schema keeps tokenizer keys directly in
+        // [OPENAI_CLIP.params].
+        token_cfg_ptr = &cfg;
+    }
+    const toml::table& token_cfg = *token_cfg_ptr;
 
     auto vocab_file_path = token_cfg["vocab_file_path"].value_or<std::string>("");
     if (!FilePathUtil::is_file_exist(vocab_file_path)) {
@@ -116,7 +129,8 @@ StatusCode SimpleTokenizer::Impl::init(const toml::table &cfg) {
  * @param token
  * @return
  */
-StatusCode SimpleTokenizer::Impl::tokenize(const std::string& input_text, std::vector<int32_t> &tokens) {
+StatusCode SimpleTokenizer::Impl::tokenize(
+    const std::string& input_text, std::vector<int32_t> &tokens) const {
     std::vector<std::string> words;
     // first split the text into words
     std::string str = input_text;
@@ -208,7 +222,8 @@ StatusCode SimpleTokenizer::init(const toml::table &cfg) {
  * @param token
  * @return
  */
-StatusCode SimpleTokenizer::tokenize(const std::string& input_text, std::vector<int> &token) {
+StatusCode SimpleTokenizer::tokenize(
+    const std::string& input_text, std::vector<int> &token) const {
     return _m_pimpl->tokenize(input_text, token);
 }
 
