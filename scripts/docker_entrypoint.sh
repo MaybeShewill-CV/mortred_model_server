@@ -10,6 +10,13 @@ export APP_LISTEN_HOST="${APP_LISTEN_HOST:-0.0.0.0}"
 export APP_LISTEN_PORT="${APP_LISTEN_PORT:-8787}"
 # 运行库：优先安装树 lib（含 3rd_party 库），再兜底系统路径
 export LD_LIBRARY_PATH="/opt/mortred/lib:${LD_LIBRARY_PATH:-}"
+# 引擎转换工具（trtexec）默认位置：安装树 bin/（install_deps.sh --nvidia 拷贝）
+export TRTEXEC="${TRTEXEC:-/opt/mortred/bin/trtexec}"
+# 安装树布局：控制台 spawn 模型子进程的目录名（安装树为 bin/lib，3rd_party 库并入 lib；
+# 见 CMakeLists.txt MORTRED_INSTALL；源码树直跑保持默认 _bin/_lib/3rd_party/libs）
+export APP_BIN_DIR="${APP_BIN_DIR:-bin}"
+export APP_LIB_DIR="${APP_LIB_DIR:-lib}"
+export APP_LIBS_DIR="${APP_LIBS_DIR:-lib}"
 
 if [ -z "${APP_AUTH_TOKEN:-}" ] && [ "${APP_LISTEN_HOST}" != "127.0.0.1" ] && [ "${APP_LISTEN_HOST}" != "localhost" ]; then
     echo "[entrypoint] WARNING: 非回环监听未配置 APP_AUTH_TOKEN，console 将拒绝启动（fail-closed）" >&2

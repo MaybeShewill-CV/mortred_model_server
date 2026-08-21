@@ -50,6 +50,8 @@ STALE_BINARIES = [
     "tokenizer_benchmark.out",
     "llm_request_parser_unittest",
     "llm_datatype_unittest",
+    # 自研 ONNX->TRT 转换器已移除，改用外部 trtexec（scripts/convert_trt_engines.sh）
+    "onnx2trt_converter.out",
 ]
 
 
@@ -385,6 +387,42 @@ def check_factory_register_type_banned() -> list[str]:
     return errors
 
 
+def check_security_scan() -> list[str]:
+    """源码级安全 lint：禁止危险调用（system/popen/strcpy/strcat/gets/scanf）。
+    防止历史漏洞类模式回潮（评审时全仓为零命中，此处转为强制门禁）。"""
+    errors: list[str] = []
+    banned = re.compile(r"\b(system|popen|strcpy|strcat|gets|scanf)\s*\(")
+    src_root = ROOT / "src"
+    if not src_root.exists():
+        return errors
+    for path in sorted(src_root.rglob("*")):
+        if not path.is_file() or path.suffix not in (".h", ".hpp", ".inl", ".cpp", ".cc", ".c"):
+            continue
+        for i, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+            stripped = line.lstrip()
+            if stripped.startswith("//") or stripped.startswith("/*") or stripped.startswith("*"):
+                continue  # 注释行跳过，降低误报
+            if banned.search(line):
+                errors.append(f"{path.relative_to(ROOT)}:{i}: banned call: {line.strip()}")
+    return errors
+
+
+def check_ci_no_python3_runs_sh() -> list[str]:
+    """.github/workflows/*.yml 中禁止用 python3 执行 bash 脚本（历史 bug：
+    ci.yml 曾用 `python3 scripts/convert_trt_engines.sh --list` 让 deploy-tools 必失败）。"""
+    errors: list[str] = []
+    wf_dir = ROOT / ".github" / "workflows"
+    if not wf_dir.exists():
+        return errors
+    for wf in sorted(wf_dir.glob("*.yml")):
+        for i, line in enumerate(wf.read_text(encoding="utf-8").splitlines(), 1):
+            if re.search(r"python3?\s+scripts/[^\s]+\.sh\b", line):
+                errors.append(
+                    f"{wf.relative_to(ROOT)}:{i}: 禁止用 python3 执行 bash 脚本（改用 bash）: {line.strip()}"
+                )
+    return errors
+
+
 def main() -> int:
     args = parse_args()
     errors: list[str] = []
@@ -397,6 +435,8 @@ def main() -> int:
     errors.extend(check_server_exe_mapping())
     errors.extend(check_trt_engine_manifest())
     errors.extend(check_factory_register_type_banned())
+    errors.extend(check_security_scan())
+    errors.extend(check_ci_no_python3_runs_sh())
     errors.extend(check_demo_client_health())
     if args.check_stale_binaries:
         errors.extend(check_stale_binaries())

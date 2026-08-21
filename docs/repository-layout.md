@@ -29,7 +29,6 @@ src/
 ├── apps/
 │   ├── common/              # shared app entry points: model_server_main, benchmark_runner
 │   ├── model_benchmark/     # per-model benchmark executables
-│   ├── model_tools/         # conversion and model utilities
 │   ├── server/              # model server executables
 │   └── web_console/         # web console backend + frontend
 ├── common/                  # shared utility library: base64, cv_utils, auth, parser...
@@ -77,8 +76,11 @@ and must not be relied upon.
 | Executable group | Source |
 |---|---|
 | `*_benchmark.out` | `src/apps/model_benchmark/` |
-| `onnx2trt_converter.out` | `src/apps/model_tools/trt_converter/` |
 | `app_server` | `src/apps/web_console/backend/` |
+
+> ONNX→TensorRT 引擎转换不再内置自研转换器，统一由外部 `trtexec`（TensorRT 官方 CLI）
+> 执行，驱动脚本为 `scripts/convert_trt_engines.sh`；`trtexec` 由
+> `scripts/install_deps.sh` 的 `--nvidia` 模式安装到 `3rd_party/bin/`。
 
 ## Naming conventions
 

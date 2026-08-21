@@ -9,12 +9,6 @@ function(add_mortred_app src)
     target_compile_options(${file_name}.out PRIVATE -Wno-deprecated-declarations)
 endfunction()
 
-function(add_tool_app src)
-    get_filename_component(file_name ${src} NAME_WE)
-    add_executable(${file_name}.out ${src})
-    target_link_libraries(${file_name}.out common models glog::glog)
-endfunction()
-
 # --- benchmark apps ---
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/classification/densenet_benchmark.cpp)
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/classification/dinov2_benchmark.cpp)
@@ -74,9 +68,6 @@ add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/server/ocr/dbnet_text_region_detect_se
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/server/scene_segmentation/bisenetv2_segmentation_server.cpp)
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/server/scene_segmentation/hrnet_segmentation_server.cpp)
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/server/scene_segmentation/pphuman_segmentation_server.cpp)
-
-# --- model tools ---
-add_tool_app(${CMAKE_CURRENT_LIST_DIR}/model_tools/trt_converter/onnx2trt_converter.cpp)
 
 # mortred model server web console
 add_subdirectory(web_console/backend)

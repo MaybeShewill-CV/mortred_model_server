@@ -35,6 +35,7 @@ mortred_probe_workflow()
 
 # CI / 单测模式：跳过依赖 CUDA/MNN/TRT 的模型与服务，只构建 common + tests
 option(MORTRED_BUILD_FULL "Build full project (models/server/apps, requires CUDA/MNN/TRT)" ON)
+option(MORTRED_INSTALL "Create the tree-style install target (bin/lib tree)" OFF)
 
 # CI 质量门禁：将编译器警告视为错误（tests-only 构建下启用）
 option(MORTRED_ENABLE_WERROR "Treat compiler warnings as errors (used by CI quality gate)" OFF)
@@ -84,15 +85,25 @@ endif()
 enable_testing()
 add_subdirectory(test EXCLUDE_FROM_ALL)
 
-# 安装目标（MORTRED_INSTALL=ON 时启用）：树式安装 + $ORIGIN/../lib RPATH，
-# 使 /opt/mortred 等安装前缀无需 LD_LIBRARY_PATH 即可运行。
+# 安装目标（MORTRED_INSTALL=ON 时启用）：树式安装 bin/lib。
+# 运行时入口（Docker/systemd）显式设置 LD_LIBRARY_PATH=/opt/mortred/lib；
+# 不能依赖构建输出的 RUNPATH，它可能包含源码树/构建机的绝对路径。
 # Docker 构建（Dockerfile build 阶段）依赖此目标。
 if(MORTRED_INSTALL)
-    set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib")
-    set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
-    install(DIRECTORY ${MORTRED_BIN_OUTPUT_DIR}/ DESTINATION bin)
+    install(DIRECTORY ${MORTRED_BIN_OUTPUT_DIR}/ DESTINATION bin
+            FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                             GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
     install(DIRECTORY ${MORTRED_LIB_OUTPUT_DIR}/ DESTINATION lib)
     install(DIRECTORY ${PROJECT_ROOT_DIR}/3rd_party/libs/ DESTINATION lib)
-    install(DIRECTORY conf docs demo_data scripts resources DESTINATION .)
+    # trtexec（外部引擎转换 CLI，install_deps.sh --nvidia 拷入）随安装树进入 bin/
+    if(EXISTS ${PROJECT_ROOT_DIR}/3rd_party/bin)
+        install(DIRECTORY ${PROJECT_ROOT_DIR}/3rd_party/bin/ DESTINATION bin
+                FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                                 GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+    endif()
+    install(DIRECTORY conf docs demo_data resources DESTINATION .)
+    install(DIRECTORY scripts DESTINATION .
+            FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                             GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
     install(DIRECTORY src/apps/web_console/frontend DESTINATION src/apps/web_console)
 endif()

@@ -4,6 +4,21 @@ on:
   push:
     branches: [main]
   pull_request:
+    # 与 ci.yml 的 paths 口径一致：纯 weights/resources/demo_data 改动跳过
+    paths:
+      - 'src/**'
+      - 'CMakeLists.txt'
+      - 'CMakePresets.json'
+      - 'cmake/**'
+      - 'scripts/**'
+      - 'conf/**'
+      - 'test/**'
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'vcpkg.json'
+      - '.github/**'
+      - 'docs/**'
+      - 'deploy/**'
   schedule:
     # 每周一 03:00 UTC
     - cron: '0 3 * * 1'
@@ -18,39 +33,120 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # 两种模式：
+  #   pr    —— PR/schedule：tests-only（成本低，覆盖 common + test）
+  #   full  —— push main / 手动：Docker 全量构建 + 容器内 CodeQL 追踪（覆盖 apps/模型层）
+  # 修复：原 codeql.yml 只扫 tests-only 范围，apps/web_console/模型层完全不参与安全分析。
   analyze:
-    name: Analyze (${{ matrix.language }})
+    name: Analyze (${{ matrix.mode }})
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        language: [cpp]
+        mode: ${{ fromJSON((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && '["pr","full"]' || '["pr"]') }}
     steps:
       - uses: actions/checkout@v7
 
-      - name: Initialize CodeQL
+      # ================= PR / schedule：tests-only（与主 CI tests-only 构建一致） =================
+      - if: matrix.mode == 'pr'
+        name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
-          languages: ${{ matrix.language }}
+          languages: cpp
           queries: security-and-quality
 
-      # 用系统包提供依赖（README Path A2），避免与主 CI 的 vcpkg 缓存/时间竞争；
-      # 分析范围与 tests-only 构建一致（common + test）。
-      - name: Install system dependencies
+      - if: matrix.mode == 'pr'
+        name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libopencv-dev libgoogle-glog-dev libeigen3-dev
           cd /usr/src/googletest && sudo cmake . && sudo make -j"$(nproc)" && sudo make install
 
-      - name: Configure (tests-only)
+      - if: matrix.mode == 'pr'
+        name: Configure (tests-only)
         run: cmake -B build-codeql -DMORTRED_BUILD_FULL=OFF
 
-      # init 之后执行构建即被 CodeQL 追踪（C++ 必须走真实编译）
-      - name: Build
+      - if: matrix.mode == 'pr'
+        name: Build
         run: cmake --build build-codeql --target check -j"$(nproc)"
 
-      - name: Perform CodeQL Analysis
+      - if: matrix.mode == 'pr'
+        name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
         with:
-          category: "/language:${{ matrix.language }}"
+          category: "/language:cpp"
+
+      # ================= full：push main / 手动（Docker 全量构建 + 容器内 CodeQL 全流程） =================
+      # 说明：tests-only 无法编译 apps/模型层（缺 vendored MNN/TRT/workflow），因此 full 模式在
+      # Docker build 镜像（install_deps.sh 全自动依赖）内做真实编译追踪并产出 SARIF。
+      # init 步骤仅用于下载 codeql bundle 到 runner toolcache（不参与本模式的分析流程）。
+      # 注意：本模式首次推送 main 后需人工确认（容器内 codeql 流程无法在本地沙箱验证）。
+      - if: matrix.mode == 'full'
+        name: Download CodeQL CLI (via init)
+        uses: github/codeql-action/init@v4
+        with:
+          languages: cpp
+          queries: security-and-quality
+
+      - if: matrix.mode == 'full'
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - if: matrix.mode == 'full'
+        name: Build full image (deps cached)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: build
+          push: false
+          load: true
+          tags: mortred-full:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 定位 toolcache 中的 codeql bundle 根（含 codeql/ CLI 与 ql/ 查询包）
+      - if: matrix.mode == 'full'
+        name: Locate CodeQL bundle in toolcache
+        id: codeql-home
+        run: |
+          set -euo pipefail
+          CODEQL_BIN="$(find "$RUNNER_TOOL_CACHE" -type f -path '*/codeql/codeql' | head -n1)"
+          test -n "$CODEQL_BIN" || { echo "codeql CLI not found in toolcache" >&2; exit 1; }
+          CODEQL_HOME="$(dirname "$(dirname "$CODEQL_BIN")")"
+          echo "home=$CODEQL_HOME" >> "$GITHUB_OUTPUT"
+
+      - if: matrix.mode == 'full'
+        name: Create CodeQL database (full compile tracing, in container)
+        run: |
+          set -euo pipefail
+          # 注意：不能把 workspace 挂载到 /src —— 那会遮蔽镜像内 docker build 阶段构建好的
+          # /src/build 与 /src/3rd_party（二者被 .gitignore 排除、不在工作区中），
+          # 导致 cmake --build /src/build 无物可建。数据库保留在容器内，SARIF 经 /out 挂载输出。
+          docker run --rm \
+            -v "${{ steps.codeql-home.outputs.home }}":/opt/codeql:ro \
+            -v "${{ github.workspace }}":/out \
+            -w /src \
+            mortred-full:ci \
+            bash -c 'export PATH=/opt/codeql/codeql:$PATH; rm -rf /src/codeql-db; codeql database create /src/codeql-db --language=cpp --source-root=/src --command="cmake --build /src/build --clean-first -j4"'
+
+      - if: matrix.mode == 'full'
+        name: Analyze (in container) and normalize SARIF paths
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "${{ steps.codeql-home.outputs.home }}":/opt/codeql:ro \
+            -v "${{ github.workspace }}":/out \
+            -w /src \
+            mortred-full:ci \
+            bash -c 'export PATH=/opt/codeql/codeql:$PATH; codeql database analyze /src/codeql-db --format=sarif-latest --output=/out/codeql-results.sarif cpp-queries:codeql-suites/cpp-security-and-quality.qls'
+          # SARIF 内为容器绝对路径 /src/src/...，归一化为仓库相对路径 src/... 以便 GitHub 关联文件
+          # 容器内以 root 写入 /out/codeql-results.sarif，先归还给 runner 用户以便改写
+          sudo chown "$USER" codeql-results.sarif
+          sed -i 's#/src/src/#src/#g' codeql-results.sarif
+
+      - if: matrix.mode == 'full'
+        name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: codeql-results.sarif

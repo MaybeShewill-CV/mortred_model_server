@@ -3,7 +3,7 @@
 #
 # 基线线：CUDA 11.8 + TensorRT 8.6.1 + cuDNN 8（与 3rd_party 已备集合一致）。
 # CUDA 12 / TRT 10 线：替换 base 为 12.x 并在 install_deps.sh 加 --cuda-version 12
-# （需先完成 TRT10 源码迁移，见 docs/deployment-and-deps-plan.md 工作包 P0）。
+# （引擎转换使用外部 trtexec，需用与本机 TRT 版本匹配的 CLI 重建）。
 #
 # 构建：docker build -t mortred_model_server .
 # 运行：docker run --gpus all -p 8787:8787 -v <weights>:/opt/mortred/weights -e APP_AUTH_TOKEN=... mortred_model_server
@@ -13,7 +13,7 @@ FROM nvidia/cuda:11.8.0-devel-ubuntu20.04 AS deps
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        build-essential git cmake curl ca-certificates \
+        build-essential git cmake curl ca-certificates jq \
         libssl-dev libgoogle-glog-dev libeigen3-dev \
     && rm -rf /var/lib/apt/lists/*
 
@@ -37,11 +37,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /src
 COPY --from=deps /src/3rd_party /src/3rd_party
 COPY . /src/
+# 注：测试目标均为 EXCLUDE_FROM_ALL（test/CMakeLists.txt），必须显式构建 check 目标
+# （先构建全部测试再跑 ctest --output-on-failure；LD_LIBRARY_PATH 供测试加载动态库）
 RUN cmake -S /src -B /src/build \
         -DMORTRED_BUILD_FULL=ON -DMORTRED_INSTALL=ON -DCMAKE_BUILD_TYPE=Release \
         ${EXTRA_CMAKE_FLAGS} \
     && cmake --build /src/build -j"$(nproc)" \
-    && (cd /src/build && ctest --output-on-failure || true) \
+    && LD_LIBRARY_PATH=/src/_lib:/src/3rd_party/libs cmake --build /src/build --target check -j"$(nproc)" \
     && cmake --install /src/build --prefix /opt/mortred
 
 # ---------- 阶段 3：运行时（只装运行库） ----------

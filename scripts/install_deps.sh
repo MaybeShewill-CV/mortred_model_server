@@ -3,8 +3,7 @@
 #
 # 目标：替代"手动编译第三方库 + 手工拷贝进 3rd_party"的流程。默认对齐本仓库
 # 已验证的 CUDA 11 / TensorRT 8.6 基线线；`--cuda-version 12` 切换到
-# CUDA 12 / TensorRT 10 线（注意：TRT 10 需要先完成源码迁移，见
-# docs/deployment-and-deps-plan.md 工作包 P0）。
+# CUDA 12 / TensorRT 10 线（engine 必须用匹配版本的 trtexec 重建）。
 #
 # 用法:
 #   ./scripts/install_deps.sh --check            # 校验 3rd_party 完整性并打印版本
@@ -12,9 +11,13 @@
 #   ./scripts/install_deps.sh --workflow         # 仅构建安装 workflow
 #   ./scripts/install_deps.sh --mnn              # 仅构建安装 MNN
 #   ./scripts/install_deps.sh --onnxruntime      # 仅下载安装 onnxruntime
-#   ./scripts/install_deps.sh --nvidia           # CUDA/TensorRT/cuDNN（需 root + NVIDIA apt）
+#   ./scripts/install_deps.sh --nvidia           # CUDA/TensorRT/cuDNN/trtexec（需 root + NVIDIA apt）
 #   ./scripts/install_deps.sh --cuda-version 12  # 切换到 CUDA 12 / TRT 10 线
 #   ./scripts/install_deps.sh --offline DIR      # 使用预下载包目录（离线）
+#   环境变量:
+#   ONNXRUNTIME_SHA256=<hex>  显式钉 onnxruntime tarball 哈希（最高优先级）；
+#                             未设置时查脚本内 ONNXRUNTIME_SHA256S 表，再否则取
+#                             官方 release API 的资产 digest；三者皆无则拒绝安装。
 #
 # 幂等：每个依赖安装成功后在 3rd_party/.install-stamp/ 留下 stamp；重跑自动跳过。
 
@@ -44,6 +47,19 @@ fi
 WORKFLOW_TAG="${WORKFLOW_TAG:-v0.10.9}"
 ONNXRUNTIME_VER="${ONNXRUNTIME_VER:-1.18.0}"
 ONNXRUNTIME_SHA256="${ONNXRUNTIME_SHA256:-}"
+# onnxruntime 官方 tarball 的 sha256 钉死表（版本 -> 哈希）。校验优先级：
+#   1) 环境变量 ONNXRUNTIME_SHA256（最高，离线/CI 用）
+#   2) 本表（离线/气隙环境用）
+#   3) 官方 release API 的资产 digest（联网自动，GitHub 对每个 release asset 发布 sha256）
+#   三者皆无 -> 拒绝安装（绝不静默跳过校验）。
+# 获取哈希（有网环境执行一次，与官方发布页资产核对后填入本表即可离线安装）：
+#   curl -fsSL -o /tmp/ort.tgz https://github.com/microsoft/onnxruntime/releases/download/v1.18.0/onnxruntime-linux-x64-gpu-1.18.0.tgz
+#   sha256sum /tmp/ort.tgz
+# 示例（把 <64位十六进制> 替换为上面命令的输出）：
+# declare -A ONNXRUNTIME_SHA256S=(
+#     ["1.18.0"]="<64位十六进制>"
+# )
+declare -A ONNXRUNTIME_SHA256S=()
 OFFLINE_DIR=""
 JOBS="$(nproc 2>/dev/null || echo 4)"
 
@@ -179,14 +195,31 @@ install_onnxruntime() {
     else
         curl -fSL "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VER}/${tgz}" -o "$pkg_path"
     fi
+    # ---- fail-closed sha256 校验（绝不静默跳过）----
+    # 优先级：显式 env ONNXRUNTIME_SHA256 > 钉死表 ONNXRUNTIME_SHA256S > 官方 release API digest
+    local expect_sha=""
     if [ -n "$ONNXRUNTIME_SHA256" ]; then
-        echo "$ONNXRUNTIME_SHA256  $pkg_path" | sha256sum -c - || fail "onnxruntime sha256 mismatch"
+        expect_sha="$ONNXRUNTIME_SHA256"
+    elif [ -n "${ONNXRUNTIME_SHA256S[$ONNXRUNTIME_VER]:-}" ]; then
+        expect_sha="${ONNXRUNTIME_SHA256S[$ONNXRUNTIME_VER]}"
+    else
+        # GitHub 对每个 release asset 发布 sha256（assets[].digest），官方渠道 + TLS
+        require_cmd jq "jq"
+        expect_sha="$(curl -fsSL "https://api.github.com/repos/microsoft/onnxruntime/releases/tags/v${ONNXRUNTIME_VER}" \
+            | jq -r --arg name "$tgz" '.assets[] | select(.name == $name) | .digest' \
+            | sed 's/^sha256://' || true)"
     fi
+    [ -n "$expect_sha" ] || fail "无法获取 onnxruntime ${ONNXRUNTIME_VER} 的 sha256：设置 ONNXRUNTIME_SHA256 或填入 ONNXRUNTIME_SHA256S 表（获取：curl -fsSL -o /tmp/ort.tgz https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VER}/${tgz} && sha256sum /tmp/ort.tgz）"
+    echo "$expect_sha  $pkg_path" | sha256sum -c - || fail "onnxruntime sha256 mismatch"
     tar -xzf "$pkg_path" -C "$dst"
     local src="$dst/onnxruntime-linux-x64-gpu-${ONNXRUNTIME_VER}"
     mkdir -p "$INCLUDE_DIR/onnxruntime"
     cp -rn "$src/include/onnxruntime"/* "$INCLUDE_DIR/onnxruntime"/ 2>/dev/null || true
     copy_libs "$src/lib/libonnxruntime*.so*" "$LIB_DIR" "onnxruntime libs"
+
+    # 留痕：tgz 校验值 + 已安装库哈希，供 --check 复核（防篡改/损坏）
+    echo "$expect_sha  $pkg_path" > "$STAMP_DIR/onnxruntime.sha256"
+    (cd "$LIB_DIR" && find . -maxdepth 1 -name 'libonnxruntime.so*' -type f -print0 | sort -z | xargs -0 -r sha256sum > "$STAMP_DIR/onnxruntime.libs.sha256")
     mark onnxruntime
 }
 
@@ -207,10 +240,11 @@ install_nvidia() {
         else
             info "nvcc 已存在，跳过 cuda-toolkit"
         fi
-        # TRT 10 / cuDNN 9 开发包（拷贝头文件与库到 3rd_party 需要 -dev）
+        # TRT 10 / cuDNN 9 开发包（拷贝头文件与库到 3rd_party 需要 -dev）；
+        # tensorrt 元包提供 /usr/src/tensorrt/bin/trtexec（外部引擎转换 CLI）
         apt-get install -y --no-install-recommends \
             libnvinfer-dev libnvinfer-plugin-dev libnvonnxparser-dev \
-            libcudnn9-dev-cuda-12
+            libcudnn9-dev-cuda-12 tensorrt
     else
         if ! command -v nvcc >/dev/null 2>&1 && [ ! -x /usr/local/cuda/bin/nvcc ]; then
             apt-get install -y --no-install-recommends cuda-toolkit-11-8
@@ -219,7 +253,16 @@ install_nvidia() {
         fi
         apt-get install -y --no-install-recommends \
             libnvinfer-dev libnvinfer-plugin-dev libnvonnxparser-dev \
-            libcudnn8-dev-cuda-11
+            libcudnn8-dev-cuda-11 tensorrt
+    fi
+    # trtexec：TensorRT 官方 CLI（tensorrt 元包提供 /usr/src/tensorrt/bin/trtexec），
+    # 拷入 3rd_party/bin 供 scripts/convert_trt_engines.sh 使用（随安装树进入 bin/）
+    if [ -x /usr/src/tensorrt/bin/trtexec ]; then
+        mkdir -p "$ROOT/3rd_party/bin"
+        cp -n /usr/src/tensorrt/bin/trtexec "$ROOT/3rd_party/bin/trtexec"
+        info "trtexec: copied into 3rd_party/bin"
+    else
+        info "trtexec: 未在 /usr/src/tensorrt/bin 找到（转换前请确认 tensorrt 包已安装）"
     fi
     # 拷入 3rd_party（头 + 库）
     local trt_inc=/usr/include/x86_64-linux-gnu
@@ -258,6 +301,12 @@ check() {
     else
         echo "  [!!] nvcc MISSING (full build 需要 CUDA 工具链)"
         problems+=("nvcc")
+    fi
+    if [ -x "$ROOT/3rd_party/bin/trtexec" ] || command -v trtexec >/dev/null 2>&1; then
+        echo "  [ok] tool: trtexec"
+    else
+        echo "  [!!] tool: trtexec MISSING（sudo ./scripts/install_deps.sh --nvidia 或系统 TensorRT 包）"
+        problems+=("trtexec")
     fi
 
     # 2) vendored 头
@@ -312,6 +361,18 @@ check() {
             problems+=("lib $name")
         fi
     done
+
+    # 4) onnxruntime 产物哈希复核（防篡改/损坏；安装时已留痕）
+    if [ -f "$STAMP_DIR/onnxruntime.libs.sha256" ]; then
+        if (cd "$LIB_DIR" && sha256sum -c "$STAMP_DIR/onnxruntime.libs.sha256" >/dev/null 2>&1); then
+            echo "  [ok] onnxruntime lib hash (stamp 复核)"
+        else
+            echo "  [!!] onnxruntime lib hash MISMATCH（库文件被篡改/损坏，请重装 onnxruntime）"
+            problems+=("onnxruntime lib hash")
+        fi
+    else
+        echo "  [warn] onnxruntime 无哈希留痕（先运行 install_deps.sh --onnxruntime 生成）"
+    fi
 
     echo ""
     if [ "${#problems[@]}" -eq 0 ]; then

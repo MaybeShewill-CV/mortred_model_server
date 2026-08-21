@@ -24,6 +24,10 @@ Environment=APP_PROJECT_ROOT=/opt/mortred
 Environment=APP_LISTEN_HOST=127.0.0.1
 Environment=APP_LISTEN_PORT=8787
 Environment=LD_LIBRARY_PATH=/opt/mortred/lib
+# 安装树布局：控制台 spawn 模型子进程的目录名（CMake 安装树为 bin/lib，3rd_party 库并入 lib）
+Environment=APP_BIN_DIR=bin
+Environment=APP_LIB_DIR=lib
+Environment=APP_LIBS_DIR=lib
 EnvironmentFile=-/etc/mortred/console.env
 ExecStart=/opt/mortred/bin/app_server
 Restart=on-failure

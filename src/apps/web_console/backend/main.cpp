@@ -64,7 +64,8 @@ std::string resolve_project_root() {
         return std::string(env_root);
     }
     // /proc/self/exe -> <root>/(build/)?src/apps/web_console/backend/.../app_server
-    // walk up until we find the project root (contains _bin and 3rd_party)
+    // walk up until we find the project root (source-tree: _bin + 3rd_party;
+    // install-tree: bin + lib, see CMakeLists.txt MORTRED_INSTALL)
     char buf[4096];
     ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
     if (n > 0) {
@@ -73,8 +74,15 @@ std::string resolve_project_root() {
         auto dir = p.parent_path();
         for (int i = 0; i < 12 && !dir.empty(); ++i) {
             std::error_code ec;
-            if (std::filesystem::exists(dir / "_bin", ec) &&
-                std::filesystem::exists(dir / "3rd_party", ec)) {
+            // 双布局探测：源码树（_bin + 3rd_party）与安装树（bin + lib）都接受，
+            // 修复安装树部署下 resolve 失败返回 "." 的问题（bin/lib 由 CMake
+            // MORTRED_INSTALL 生成，3rd_party 库已并入 lib）
+            const bool has_bin  = std::filesystem::exists(dir / "_bin", ec) ||
+                                  std::filesystem::exists(dir / "bin", ec);
+            ec.clear();
+            const bool has_third = std::filesystem::exists(dir / "3rd_party", ec) ||
+                                   std::filesystem::exists(dir / "lib", ec);
+            if (has_bin && has_third) {
                 return dir.string();
             }
             dir = dir.parent_path();

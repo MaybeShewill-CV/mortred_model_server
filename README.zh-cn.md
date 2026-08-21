@@ -347,7 +347,10 @@ docker run --gpus all -p 8787:8787 \
 
 ## TensorRT 引擎重建（硬件适配）
 
-预置引擎可能与你的 GPU 架构 / TRT 版本不匹配，请用 ONNX 源为本机重新生成：
+预置引擎可能与你的 GPU 架构 / TRT 版本不匹配，请用 ONNX 源为本机重新生成。
+转换依赖外部 `trtexec`（TensorRT 官方 CLI）：`sudo ./scripts/install_deps.sh --nvidia`
+会自动安装到 `3rd_party/bin/`，或使用系统 TensorRT 包自带版本（可用
+`--trtexec /path/to/trtexec` 指定）：
 
 ```bash
 ./scripts/convert_trt_engines.sh --list    # 查看引擎清单（19 个）
@@ -355,7 +358,7 @@ docker run --gpus all -p 8787:8787 \
 ./scripts/convert_trt_engines.sh --force   # 全部重建
 ```
 
-完整计划、版本矩阵与验收标准见 [docs/deployment-and-deps-plan.md](docs/deployment-and-deps-plan.md)。
+脚本会探测本机 TensorRT 主版本并选择对应的 workspace 参数；本机存在多个 TensorRT 时可用 `--trtexec` 指定。
 
 # `TODO`
 

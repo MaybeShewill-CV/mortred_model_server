@@ -286,7 +286,10 @@ ships the web console; model weights are mounted, not baked in.
 ## TensorRT engine regeneration (hardware-adapted)
 
 Prebuilt engines may mismatch your GPU architecture / TRT version. Regenerate
-them from the ONNX sources for this machine:
+them from the ONNX sources for this machine. Conversion uses the external
+`trtexec` CLI (TensorRT official tool): `sudo ./scripts/install_deps.sh --nvidia`
+installs it into `3rd_party/bin/`, or point to your system TensorRT copy with
+`--trtexec /path/to/trtexec`:
 
 ```bash
 ./scripts/convert_trt_engines.sh --list    # show the manifest (19 engines)
@@ -294,8 +297,8 @@ them from the ONNX sources for this machine:
 ./scripts/convert_trt_engines.sh --force   # rebuild everything
 ```
 
-See [docs/deployment-and-deps-plan.md](docs/deployment-and-deps-plan.md) for the
-full plan, version matrix and acceptance criteria.
+The script detects the local TensorRT major version and emits the matching
+workspace flag. Use `--trtexec` when multiple TensorRT installations coexist.
 
 # `TODO`
 

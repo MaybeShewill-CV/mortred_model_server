@@ -4,6 +4,24 @@ on:
   push:
     branches: [main]
   pull_request:
+    # 仅与构建/代码/配置/CI/文档相关的改动触发；纯 weights/resources/demo_data 改动跳过
+    paths:
+      - 'src/**'
+      - 'CMakeLists.txt'
+      - 'CMakePresets.json'
+      - 'cmake/**'
+      - 'scripts/**'
+      - 'conf/**'
+      - 'test/**'
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'vcpkg.json'
+      - '.github/**'
+      - 'docs/**'
+      - 'deploy/**'
+  schedule:
+    # 每日 02:00 UTC：nightly 全量门禁（见 jobs.nightly）
+    - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
       # 勾选后才会运行 clang 编译行与 clang-tidy job（依赖构建约多 30-60 分钟）
@@ -404,9 +422,52 @@ jobs:
 
         run: |
           set -euo pipefail
-          python3 scripts/convert_trt_engines.sh --list
+          bash scripts/convert_trt_engines.sh --list
           python3 scripts/fetch_weights.py --dry-run
           python3 scripts/check_consistency.py
+
+      # trtexec 契约测试：用假 trtexec 在无 GPU 环境验证 convert_trt_engines.sh 的
+      # flag 组成、成功/失败退出码与产物校验语义（自研转换器移除后由外部 trtexec 驱动）
+      - name: convert_trt_engines.sh contract tests (mock trtexec)
+        run: |
+          set -euo pipefail
+          TMP="$(mktemp -d)"
+          cat > "$TMP/trtexec" <<'EOF'
+          #!/usr/bin/env bash
+          if [[ "$*" == *--help* ]]; then echo "TensorRT version: 8.6.1.6"; exit 0; fi
+          [ "${FAKE_FAIL:-0}" = "1" ] && exit 3
+          [ "${FAKE_NO_OUTPUT:-0}" = "1" ] && exit 0
+          for a in "$@"; do case "$a" in --saveEngine=*) echo engine > "${a#--saveEngine=}";; esac; done
+          exit 0
+          EOF
+          chmod +x "$TMP/trtexec"
+          # 占位 onnx（对应 conf/trt_engines.json 中两条真实条目；weights/ 为 gitignored 临时空间）
+          mkdir -p weights/diffusion/ddpm weights/feature_point/lightglue
+          touch weights/diffusion/ddpm/ddpm_unet_celeba-hq-128x128.onnx
+          touch weights/feature_point/lightglue/extractor.onnx
+          # 1) --list 无需 trtexec
+          bash scripts/convert_trt_engines.sh --list | grep -q "total: 19"
+          # 2) --dry-run flag 组成：fp16 + TRT8 workspace 字节 + buildOnly
+          out="$(TRTEXEC="$TMP/trtexec" bash scripts/convert_trt_engines.sh --only ddpm_unet_celeba-hq-128 --force --dry-run)"
+          echo "$out" | grep -q -- "--fp16"
+          echo "$out" | grep -q -- "--workspace=6442450944"
+          echo "$out" | grep -q -- "--buildOnly"
+          # 3) profile JSON -> --minShapes/--optShapes/--maxShapes 翻译
+          #    --only 按引擎路径过滤（见 convert_trt_engines.sh），extractor 命中 extractor.engine 且不误中 matcher
+          out2="$(TRTEXEC="$TMP/trtexec" bash scripts/convert_trt_engines.sh --only extractor --force --dry-run)"
+          echo "$out2" | grep -q -- "--minShapes=image:1x3x64x64 --optShapes=image:1x3x256x256 --maxShapes=image:1x3x512x512"
+          # 4) 成功路径：mock 产出非空 engine -> 脚本退出 0
+          TRTEXEC="$TMP/trtexec" bash scripts/convert_trt_engines.sh --only ddpm_unet_celeba-hq-128 --force
+          # 5) 失败路径：mock 返回非 0 -> 脚本必须非 0（失败不再被吞）
+          rm -f weights/diffusion/ddpm/ddpm_unet_celeba-hq-128x128.engine
+          if TRTEXEC="$TMP/trtexec" FAKE_FAIL=1 bash scripts/convert_trt_engines.sh --only ddpm_unet_celeba-hq-128 --force; then
+            echo "expected non-zero exit on converter failure" >&2; exit 1
+          fi
+          # 6) 产物校验：mock 返回 0 但不写 engine -> 脚本必须非 0
+          if TRTEXEC="$TMP/trtexec" FAKE_NO_OUTPUT=1 bash scripts/convert_trt_engines.sh --only ddpm_unet_celeba-hq-128 --force; then
+            echo "expected non-zero exit on missing engine artifact" >&2; exit 1
+          fi
+          rm -rf "$TMP"
 
       # 静态 lint workflow 文件：actionlint 能捕获上下文作用域错误（如 runner 用于
       # workflow 级 env、matrix 用于 job 级 if），防止 Invalid workflow file 复发
@@ -433,6 +494,63 @@ jobs:
 
       # 只构建到 build 阶段（依赖编译 + 全量 -Werror 编译即门禁目的，无需 runtime 层）
       - name: Build full project with warnings as errors
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: build
+          push: false
+          load: false
+          build-args: |
+            EXTRA_CMAKE_FLAGS=-DMORTRED_ENABLE_WERROR=ON
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------------------------
+  # Job F: PR 全量编译门禁（Docker 载体 + gha 缓存；仅 C++/构建相关 PR 触发）。
+  # 修复"PR 阶段应用层零编译"：22 个 server / 34 个 benchmark / web_console 的代码
+  # 在 PR 阶段即可编译验证（依赖层缓存命中后全量编译约 20-40 分钟）。
+  # ---------------------------------------------------------------------------
+  full-build-pr:
+    name: full build (PR gate)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    if: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 与 full-werror 完全相同的载体：依赖层经 gha 缓存复用，全量 -Werror 编译
+      - name: Build full project with warnings as errors
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: build
+          push: false
+          load: false
+          build-args: |
+            EXTRA_CMAKE_FLAGS=-DMORTRED_ENABLE_WERROR=ON
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------------------------
+  # Job G: 每日全量门禁（schedule / 手动触发）：main 上每天跑一次 full -Werror
+  # 构建 + 单测 + e2e 契约（Dockerfile 内 ctest 不再 || true，测试失败即红）。
+  # 带权重的 golden 行为测试与 P0-1（模型层修复）一起落地，不在本 job 内。
+  # ---------------------------------------------------------------------------
+  nightly:
+    name: nightly full build (docker)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Nightly full build + tests (warnings as errors)
         uses: docker/build-push-action@v6
         with:
           context: .

@@ -70,9 +70,16 @@ void close_all_fds() {
 
 void ServerManager::init(const Catalog& catalog, const std::string& project_root, const std::string& logs_dir) {
     _catalog = &catalog;
-    _bin_dir = project_root + "/_bin";
-    _lib_dir = project_root + "/_lib";
-    _libs_dir = project_root + "/3rd_party/libs";
+    // 目录名可配置：安装树部署（Docker/systemd）通过 APP_BIN_DIR / APP_LIB_DIR /
+    // APP_LIBS_DIR 注入 bin / lib / lib；源码树直跑保持默认 _bin / _lib /
+    // 3rd_party/libs（兼容既有布局与测试）。修复：CMake 安装树是 bin/lib，
+    // 原硬编码 _bin/_lib/3rd_party/libs 使部署环境下 spawn 模型服务必然 execl 127。
+    const char* bin_dir  = getenv("APP_BIN_DIR");
+    const char* lib_dir  = getenv("APP_LIB_DIR");
+    const char* libs_dir = getenv("APP_LIBS_DIR");
+    _bin_dir  = project_root + "/" + (bin_dir  && *bin_dir  ? bin_dir  : "_bin");
+    _lib_dir  = project_root + "/" + (lib_dir  && *lib_dir  ? lib_dir  : "_lib");
+    _libs_dir = project_root + "/" + (libs_dir && *libs_dir ? libs_dir : "3rd_party/libs");
     _logs_dir = logs_dir;
     std::error_code ec;
     std::filesystem::create_directories(_logs_dir, ec);
@@ -190,6 +197,27 @@ bool ServerManager::start(const ServerEntry& entry, std::string& err) {
     get_or_create_log(entry.id)->reset();
     get_or_create_log(entry.id)->append("[app] 启动请求已发送 (pid " + std::to_string(pid) + ")");
     spawn_waiters(entry.id, _procs[entry.id].get());
+
+    // 快速失败检测（消除"假启动"）：子进程 spawn 后立即退出（如 execl 失败
+    // _exit(127)、依赖库缺失）时，waiter 线程会很快置 running=false 并通知 _cv。
+    // 短超时探测：健康进程（正在加载模型）在窗口内 running 仍为 true，继续视为已启动；
+    // 已退出则返回失败，退出原因可从该服务日志缓冲查看。
+    // 注意：此处不 erase 死条目——waiter/reader 线程可能仍在收尾，销毁 joinable
+    // std::thread 会 terminate；死条目 running=false，is_running/重复 start/
+    // 端口冲突检查都会正确跳过。
+    constexpr int k_spawn_probe_ms = 200;
+    {
+        std::unique_lock<std::mutex> lock(_mu);
+        _cv.wait_for(lock, std::chrono::milliseconds(k_spawn_probe_ms), [this, &entry]() {
+            auto it = _procs.find(entry.id);
+            return it == _procs.end() || !it->second->running.load();
+        });
+        auto it = _procs.find(entry.id);
+        if (it != _procs.end() && !it->second->running.load()) {
+            err = "model server exited immediately after start (see logs: " + entry.id + ")";
+            return false;
+        }
+    }
     return true;
 }
 

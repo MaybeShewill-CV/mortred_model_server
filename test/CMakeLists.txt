@@ -5,7 +5,7 @@ project(mm_ai_server_test LANGUAGES C CXX)
 find_program(CMAKE_MEMORYCHECK_COMMAND valgrind)
 set(memcheck_command ${CMAKE_MEMORYCHECK_COMMAND} ${CMAKE_MEMORYCHECK_COMMAND_OPTIONS} --error-exitcode=1 --leak-check=full)
 
-add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND})
+add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)
 
 find_package(GTest REQUIRED)
 

@@ -23,8 +23,6 @@ set(MODELS_LIB_SRC
     ${CMAKE_CURRENT_LIST_DIR}/segment_anything/sam_automask_generator/sam_amg_decoder.cpp
     ${CMAKE_CURRENT_LIST_DIR}/segment_anything/sam_prediction/sam_prompt_decoder.cpp
     ${CMAKE_CURRENT_LIST_DIR}/segment_anything/sam_prediction/sam_vit_encoder.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/trt_helper/onnx2trt_model_builder.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/trt_helper/trt_helper.cpp
 )
 add_library(models SHARED ${MODELS_LIB_SRC})
 # lapjv.cpp 为 vendored 第三方 LAPJV 求解器，其存量警告不参与 -Werror 门禁

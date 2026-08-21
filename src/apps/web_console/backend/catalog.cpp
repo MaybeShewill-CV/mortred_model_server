@@ -159,7 +159,11 @@ bool Catalog::init(const std::string& project_root) {
             }
             break;
         }
-        if (section.empty() || port <= 0 || uri.empty() || exe.empty() || exe.size() <= 4) {
+        if (section.empty() || port <= 0 || uri.empty() || exe.empty() ||
+            exe.size() <= 4 || exe.compare(exe.size() - 4, 4, ".out") != 0) {
+            std::fprintf(stderr,
+                         "[catalog] %s: invalid server_exe (must end with .out): '%s'\n",
+                         cfg_path.c_str(), exe.c_str());
             continue;
         }
 
