@@ -1,7 +1,7 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: SamPredictor.h
+ * File: sam_predictor.h
  * Date: 23-5-26
  ************************************************/
 
@@ -14,109 +14,70 @@
 #include <opencv2/opencv.hpp>
 #include "toml/toml.hpp"
 
-#include "models/base_model.h"
+#include "models/backend/backend_cv_model.h"
+#include "models/backend/session.h"
+#include "models/backend/tensor.h"
 #include "models/model_io_define.h"
-#include "common/status_code.h"
 
 namespace jinq {
 namespace models {
 namespace segment_anything {
 
-namespace sam_predictor_impl {
-class Impl;
-}
+class SamPromptDecoder;
+class SamVitEncoder;
 
 /***
- * SAM 提示分割模型：图像 + bbox/点提示 -> 分割 mask。
- * 统一入口 run(INPUT, OUTPUT)，按 bboxes/prompt_points 非空自动分发。
+ * SAM prompt segmentation model with independent encoder and decoder sessions.
  */
-template <typename INPUT, typename OUTPUT>
-class SamPredictor : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
+template<typename INPUT, typename OUTPUT>
+class SamPredictor : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   public:
-    /***
-    * constructor
-    * @param config
-     */
     SamPredictor();
-    
-    /***
-     *
-     */
     ~SamPredictor() override;
 
-    /***
-    * constructor
-    * @param transformer
-     */
-    SamPredictor(const SamPredictor& transformer) = delete;
+    SamPredictor(const SamPredictor&) = delete;
+    SamPredictor& operator=(const SamPredictor&) = delete;
 
-    /***
-     * constructor
-     * @param transformer
-     * @return
-     */
-    SamPredictor& operator=(const SamPredictor& transformer) = delete;
-
-    /***
-     *
-     * @param toml
-     * @return
-     */
-    jinq::common::StatusCode init(const toml::table& cfg) override;
-
-    /***
-     *
-     * @param input
-     * @param output
-     * @return
-     */
-    jinq::common::StatusCode run_impl(const INPUT& input, OUTPUT& output) override;
-
-    /***
-     *
-     * @param input_image
-     * @param bboxes
-     * @param predicted_masks
-     * @return
-     */
     jinq::common::StatusCode predict(
         const cv::Mat& input_image,
         const std::vector<cv::Rect>& bboxes,
         std::vector<cv::Mat>& predicted_masks);
 
-    /***
-     *
-     * @param input_image
-     * @param prompt_points
-     * @param predicted_masks
-     * @return
-     */
     jinq::common::StatusCode predict(
         const cv::Mat& input_image,
-        const std::vector<std::vector<cv::Point2f> >& prompt_points,
+        const std::vector<std::vector<cv::Point2f>>& prompt_points,
         std::vector<cv::Mat>& predicted_masks);
 
-    /***
-     *
-     * @param input_image
-     * @param image_embeddings
-     * @return
-     */
-    jinq::common::StatusCode get_embedding(const cv::Mat& input_image, std::vector<float>& image_embeddings);
-
-
-    /***
-     * if model successfully initialized
-     * @return
-     */
-    bool is_successfully_initialized() const override;
+    jinq::common::StatusCode get_embedding(
+        const cv::Mat& input_image, std::vector<float>& image_embeddings);
 
   private:
-    std::unique_ptr<sam_predictor_impl::Impl> _m_pimpl;
+    using SamInput = jinq::models::io_define::segment_anything::sam_prompt_input;
+    using SamOutput = jinq::models::io_define::segment_anything::std_sam_prompt_output;
+
+    jinq::common::StatusCode on_init(const toml::table& params) override;
+
+    jinq::common::StatusCode run_sessions(const INPUT& input, OUTPUT& output) override;
+
+    jinq::common::StatusCode postprocess(
+        const std::vector<jinq::models::backend::NamedTensor>& outputs,
+        OUTPUT& output) override;
+
+    std::vector<cv::Rect2f> transform_bboxes(
+        const std::vector<cv::Rect>& bboxes, int target_size) const;
+
+    std::vector<std::vector<cv::Point2f>> transform_points(
+        const std::vector<std::vector<cv::Point2f>>& points, int target_size) const;
+
+    std::unique_ptr<SamVitEncoder> _m_encoder;
+    std::unique_ptr<SamPromptDecoder> _m_decoder;
+    cv::Size _m_ori_image_size;
+    cv::Size _m_encoder_input_size;
 };
-}
-}
-}
+
+} // namespace segment_anything
+} // namespace models
+} // namespace jinq
 
 #include "sam_predictor.inl"
 

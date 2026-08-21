@@ -1,7 +1,7 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: SamPromptDecoder.h
+ * File: sam_prompt_decoder.h
  * Date: 23-6-7
  ************************************************/
 
@@ -15,96 +15,51 @@
 #include "toml/toml.hpp"
 
 #include "common/status_code.h"
+#include "models/backend/session.h"
 
 namespace jinq {
 namespace models {
 namespace segment_anything {
 
 /***
- *
+ * SAM prompt decoder backed by the unified inference-session layer. ONNX
+ * models may expose the full-resolution "masks" output, while TensorRT
+ * engines normally expose "low_res_masks" plus IoU predictions.
  */
 class SamPromptDecoder {
   public:
-    /***
-    * constructor
-    * @param config
-     */
-    SamPromptDecoder();
-
-    /***
-     *
-     */
+    explicit SamPromptDecoder(
+        std::unique_ptr<jinq::models::backend::InferenceSession> session);
     ~SamPromptDecoder();
 
-    /***
-    * constructor
-    * @param transformer
-     */
-    SamPromptDecoder(const SamPromptDecoder& transformer) = delete;
+    SamPromptDecoder(const SamPromptDecoder&) = delete;
+    SamPromptDecoder& operator=(const SamPromptDecoder&) = delete;
 
-    /***
-     * constructor
-     * @param transformer
-     * @return
-     */
-    SamPromptDecoder& operator=(const SamPromptDecoder& transformer) = delete;
+    jinq::common::StatusCode init();
 
-    /***
-     *
-     * @param toml
-     * @return
-     */
-    jinq::common::StatusCode init(const toml::table& cfg);
+    void set_ori_image_size(const cv::Size& ori_image_size);
 
-    /***
-     *
-     * @param ori_img_size
-     */
-    void set_ori_image_size(const cv::Size& ori_img_size);
-
-    /***
-     *
-     * @param ori_img_size
-     */
     void set_encoder_input_size(const cv::Size& input_node_size);
 
-    /***
-     *
-     * @param image_embeddings
-     * @param bboxes
-     * @param predicted_masks
-     * @return
-     */
     jinq::common::StatusCode decode(
         const std::vector<float>& image_embeddings,
         const std::vector<cv::Rect2f>& bboxes,
         std::vector<cv::Mat>& predicted_masks);
 
-    /***
-     *
-     * @param image_embeddings
-     * @param bboxes
-     * @param predicted_masks
-     * @return
-     */
     jinq::common::StatusCode decode(
         const std::vector<float>& image_embeddings,
-        const std::vector<std::vector<cv::Point2f> >& points,
+        const std::vector<std::vector<cv::Point2f>>& points,
         std::vector<cv::Mat>& predicted_masks);
 
-
-    /***
-     * if model successfully initialized
-     * @return
-     */
     bool is_successfully_initialized() const;
 
   private:
     class Impl;
     std::unique_ptr<Impl> _m_pimpl;
 };
-}
-}
-}
+
+} // namespace segment_anything
+} // namespace models
+} // namespace jinq
 
 #endif // MORTRED_MODEL_SERVER_SAM_PROMPT_DECODER_H

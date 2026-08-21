@@ -1,11 +1,15 @@
-[SAM_VIT_ENCODER]
-model_file_path="../weights/sam/vit_l/sam_vit_l_encoder.mnn"
-model_threads_num=4
-compute_backend="cuda"
-gpu_device_id=0
+[SAM_PREDICTOR]
 
-[SAM_VIT_DECODER]
-model_file_path="../weights/sam/vit_l/sam_vit_l_decoder.onnx"
-model_threads_num=4
-compute_backend="cpu"
-gpu_device_id=0
+[SAM_PREDICTOR.encoder_backend]
+type = "mnn"
+model_file_path = "../weights/sam/vit_l/sam_vit_l_encoder.mnn"
+device = "cuda"
+threads = 4
+input_names = ["input_image"]
+output_names = ["image_embeddings"]
+
+[SAM_PREDICTOR.decoder_backend]
+type = "onnx"
+model_file_path = "../weights/sam/vit_l/sam_vit_l_decoder.onnx"
+device = "cpu"
+threads = 4

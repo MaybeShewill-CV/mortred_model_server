@@ -17,15 +17,15 @@
 
 #include "glog/logging.h"
 #include "stl_container/blockingconcurrentqueue.h"
-#include "TensorRT-8.6.1.6/NvInferRuntime.h"
-#include "cuda_runtime_api.h"
 #include "workflow/WFFacilities.h"
 #include "workflow/Workflow.h"
 
 #include "common/file_path_util.h"
 #include "common/cv_utils.h"
 #include "common/time_stamp.h"
-#include "models/trt_helper/trt_helper.h"
+#include "models/backend/backend_config.h"
+#include "models/backend/session.h"
+#include "models/backend/tensor.h"
 
 namespace jinq {
 namespace models {
@@ -36,10 +36,11 @@ using jinq::common::Timestamp;
 
 namespace segment_anything {
 
-using trt_helper::EngineBinding;
-using trt_helper::DeviceMemory;
-using trt_helper::TrtHelper;
-using trt_helper::TrtLogger;
+using jinq::models::backend::BackendConfig;
+using jinq::models::backend::InferenceSession;
+using jinq::models::backend::NamedTensor;
+using jinq::models::backend::Tensor;
+using jinq::models::backend::TensorInfo;
 
 class SamAmgDecoder::Impl {
   public:
@@ -52,31 +53,13 @@ class SamAmgDecoder::Impl {
      *
      */
     ~Impl() {
-        // 清空 mask decoder 执行器队列：销毁每个执行上下文与 cuda stream，释放 SamDecodeInput
-        ThreadExecutor executor{};
-        while (_m_decoder_queue.try_dequeue(executor)) {
-            if (executor.context != nullptr) {
-                executor.context->destroy();
-                executor.context = nullptr;
-            }
-            if (executor.input != nullptr) {
-                if (executor.input->cuda_stream != nullptr) {
-                    cudaStreamDestroy(executor.input->cuda_stream);
-                }
-                // delete 触发 DeviceMemory 析构，自动释放其中 cudaMalloc 的显存
-                delete executor.input;
-                executor.input = nullptr;
-            }
+        // The queue stores non-owning session pointers; clear it before the
+        // owning unique_ptr vector is destroyed.
+        InferenceSession* session = nullptr;
+        while (_m_decoder_queue.try_dequeue(session)) {
+            // No explicit deletion: ownership remains in _m_sessions.
         }
-        // 释放 TensorRT 引擎与运行时（销毁顺序：engine -> runtime）
-        if (_m_trt_engine != nullptr) {
-            _m_trt_engine->destroy();
-            _m_trt_engine = nullptr;
-        }
-        if (_m_trt_runtime != nullptr) {
-            _m_trt_runtime->destroy();
-            _m_trt_runtime = nullptr;
-        }
+        _m_sessions.clear();
     }
 
     /***
@@ -127,42 +110,15 @@ class SamAmgDecoder::Impl {
     }
 
   private:
-    // model file path
-    std::string _m_model_file_path;
+    // One session per parallel executor. InferenceSession is not thread
+    // safe, so execution contexts are never shared across Workflow tasks.
+    std::vector<std::unique_ptr<InferenceSession>> _m_sessions;
 
-    // model input/output names
-    std::vector<const char*> _m_input_names;
-    std::vector<const char*> _m_output_names;
-
-    // tensorrt engine
-    TrtLogger _m_trt_logger;
-    nvinfer1::IRuntime* _m_trt_runtime = nullptr;
-    nvinfer1::ICudaEngine* _m_trt_engine = nullptr;
-
-    // decoder thread executor
-    struct SamDecodeInput {
-        // bindings
-        EngineBinding image_embedding_binding;
-        EngineBinding point_coords_binding;
-        EngineBinding point_labels_binding;
-        EngineBinding mask_input_binding;
-        EngineBinding has_mask_input_binding;
-        EngineBinding low_res_masks_output_binding;
-        EngineBinding iou_predictions_output_binding;
-
-        // device memory
-        DeviceMemory device_memory;
-        cudaStream_t cuda_stream = nullptr;
-    };
-    // thread executor
-    struct ThreadExecutor {
-        nvinfer1::IExecutionContext* context;
-        SamDecodeInput* input;
-    };
-    // worker queue
-    moodycamel::BlockingConcurrentQueue<ThreadExecutor> _m_decoder_queue;
+    // worker queue of non-owning session pointers
+    moodycamel::BlockingConcurrentQueue<InferenceSession*> _m_decoder_queue;
     // worker queue size
     int _m_decoder_queue_size = 4;
+
     // parallel compute thread nums
     int _m_compute_thread_nums = 1;
     // parallel decode context
@@ -190,14 +146,6 @@ class SamAmgDecoder::Impl {
     bool _m_successfully_initialized = false;
 
   private:
-    /***
-     *
-     * @param input_file_path
-     * @param file_content
-     * @return
-     */
-    static bool read_model_file(const std::string& input_file_path, std::vector<unsigned char>& file_content);
-
     /***
      *
      * @param image_embeddings
@@ -229,12 +177,13 @@ class SamAmgDecoder::Impl {
         int mask_idx,
         cv::Mat& out_mask);
 
-    /***
-     *
-     * @param decoder_input
-     * @return
-     */
-    StatusCode init_thread_executor(ThreadExecutor& executor);
+    bool validate_session(const InferenceSession& session) const;
+
+    const TensorInfo* find_info(
+        const InferenceSession& session, const std::string& name) const;
+
+    const TensorInfo* find_output(
+        const InferenceSession& session, const std::string& name) const;
 
     /***
      *
@@ -291,80 +240,62 @@ class SamAmgDecoder::Impl {
  * @return
  */
 StatusCode SamAmgDecoder::Impl::init(const toml::table &cfg) {
-    // init sam vit trt config section
-    if (!cfg.contains("SAM_AMG_DECODER")) {
-        LOG(ERROR) << "Config file does not contain SAM_AMG_DECODER section";
-        _m_successfully_initialized = false;
+    const toml::table* model_section = cfg["SAM_AMG"].as_table();
+    if (model_section == nullptr) {
+        LOG(ERROR) << "config section [SAM_AMG] missing or not a table";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    const toml::table* cfg_content_ptr = cfg["SAM_AMG_DECODER"].as_table();
-    if (cfg_content_ptr == nullptr) {
-        LOG(ERROR) << "Config section SAM_AMG_DECODER missing or not a table";
-        _m_successfully_initialized = false;
+    const toml::table* backend_table = (*model_section)["amg_decoder_backend"].as_table();
+    if (backend_table == nullptr) {
+        LOG(ERROR) << "config section [SAM_AMG.amg_decoder_backend] missing";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    const toml::table& cfg_content = *cfg_content_ptr;
-
-    // init trt runtime
-    _m_trt_logger = TrtLogger();
-    _m_trt_runtime = nvinfer1::createInferRuntime(_m_trt_logger);
-    if(nullptr == _m_trt_runtime) {
-        LOG(ERROR) << "init tensorrt runtime failed";
-        _m_successfully_initialized = false;
+    BackendConfig backend_config;
+    std::string backend_err;
+    if (!jinq::models::backend::parse_backend_table(
+            *backend_table, &backend_config, &backend_err)) {
+        LOG(ERROR) << "invalid sam amg decoder backend config: " << backend_err;
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    // init trt engine
-    if (!cfg_content.contains("model_file_path")) {
-        LOG(ERROR) << "Config doesn\'t have model_file_path field";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    } else {
-        _m_model_file_path = cfg_content["model_file_path"].value_or<std::string>("");
-    }
-    if (!FilePathUtil::is_file_exist(_m_model_file_path)) {
-        LOG(ERROR) << "sam amg decoder model file: " << _m_model_file_path << " not exist";
-        _m_successfully_initialized = false;
+    const toml::table* params = (*model_section)["params"].as_table();
+    if (params == nullptr) {
+        LOG(ERROR) << "config section [SAM_AMG.params] missing";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    std::vector<unsigned char> model_file_content;
-    if (!read_model_file(_m_model_file_path, model_file_content)) {
-        LOG(ERROR) << "read model file: " << _m_model_file_path << " failed";
-        _m_successfully_initialized = false;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    auto model_content_length = sizeof(model_file_content[0]) * model_file_content.size();
-    _m_trt_engine = _m_trt_runtime->deserializeCudaEngine(model_file_content.data(), model_content_length);
-    if (nullptr == _m_trt_engine) {
-        LOG(ERROR) << "deserialize trt engine failed";
-        _m_successfully_initialized = false;
+    _m_decoder_queue_size = static_cast<int>((*params)["worker_queue_size"].value_or<int64_t>(4));
+    _m_compute_thread_nums = static_cast<int>((*params)["compute_threads"].value_or<int64_t>(1));
+    if (_m_decoder_queue_size <= 0 || _m_compute_thread_nums == 0) {
+        LOG(ERROR) << "invalid sam amg decoder worker/compute thread counts";
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    // init mask decoder executor queue
-    _m_decoder_queue_size = static_cast<int>(cfg_content["worker_queue_size"].value_or<int64_t>(0));
-    for (auto idx = 0; idx < _m_decoder_queue_size; ++idx) {
-        ThreadExecutor executor{};
-        executor.context = _m_trt_engine->createExecutionContext();
-        executor.input = new SamDecodeInput;
-        auto init_status = init_thread_executor(executor);
-        if (init_status != StatusCode::OK) {
-            LOG(ERROR) << "init thread mask decode executor failed, status code: " << init_status;
-            _m_successfully_initialized = false;
+    _m_sessions.reserve(static_cast<size_t>(_m_decoder_queue_size));
+    for (int idx = 0; idx < _m_decoder_queue_size; ++idx) {
+        std::string session_err;
+        auto session = InferenceSession::create(backend_config, &session_err);
+        if (session == nullptr) {
+            LOG(ERROR) << "create sam amg decoder session failed: " << session_err;
+            _m_sessions.clear();
             return StatusCode::MODEL_INIT_FAILED;
         }
-        _m_decoder_queue.enqueue(executor);
+        if (!validate_session(*session)) {
+            _m_sessions.clear();
+            return StatusCode::MODEL_INIT_FAILED;
+        }
+        _m_sessions.push_back(std::move(session));
+    }
+    for (auto& session : _m_sessions) {
+        _m_decoder_queue.enqueue(session.get());
     }
 
-    // init compute thread pool
-    _m_compute_thread_nums = static_cast<int>(cfg_content["compute_threads"].value_or<int64_t>(0));
-    WFGlobalSettings settings = GLOBAL_SETTINGS_DEFAULT;
+    struct WFGlobalSettings settings = GLOBAL_SETTINGS_DEFAULT;
     settings.compute_threads = _m_compute_thread_nums;
     WORKFLOW_library_init(&settings);
 
     _m_successfully_initialized = true;
-    LOG(INFO) << "Successfully load sam amg decoder from: " << FilePathUtil::get_file_name(_m_model_file_path);
-
+    LOG(INFO) << "Successfully load sam amg decoder with "
+              << _m_sessions.size() << " unified sessions";
     return StatusCode::OK;
 }
 
@@ -404,31 +335,6 @@ StatusCode SamAmgDecoder::Impl::decode_everything(
                         stability_score_thresh, box_nms_thresh, min_mask_region_area,amg_output);
 
     return status;
-}
-
-/***
- *
- * @param input_file_path
- * @param file_content
- * @return
- */
-bool SamAmgDecoder::Impl::read_model_file(const std::string &input_file_path, std::vector<unsigned char> &file_content) {
-    // read file
-    std::ifstream file(input_file_path, std::ios::binary);
-    if (!file.is_open() || file.eof() || file.fail() || file.bad()) {
-        LOG(ERROR) << "open input file: " << input_file_path << " failed, error: " << strerror(errno);
-        return false;
-    }
-    file.unsetf(std::ios::skipws);
-    std::streampos file_size;
-    file.seekg(0, std::ios::end);
-    file_size = file.tellg();
-    file.seekg(0, std::ios::beg);
-
-    file_content.resize(file_size);
-    file.read(reinterpret_cast<std::ifstream::char_type*>(&file_content.front()), file_size);
-    file.close();
-    return true;
 }
 
 /***
@@ -524,7 +430,6 @@ void SamAmgDecoder::Impl::decode_output_mask(
     mask = mask(cropped_roi);
     // resize mask into ori image size
     cv::resize(mask, mask, _m_ori_image_size);
-    
     mask.copyTo(out_mask);
 }
 
@@ -533,157 +438,45 @@ void SamAmgDecoder::Impl::decode_output_mask(
  * @param executor
  * @return
  */
-StatusCode SamAmgDecoder::Impl::init_thread_executor(ThreadExecutor& executor) {
-//    auto& engine = executor.trt_engine;
-    auto context = executor.context;
-    auto decoder_input = executor.input;
-
-    // bind image embedding tensor
-    auto& image_embedding_binding = decoder_input->image_embedding_binding;
-    std::string input_node_name = "image_embeddings";
-    auto successfully_bind = TrtHelper::setup_engine_binding(
-        _m_trt_engine, input_node_name, image_embedding_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind input tensor image_embeddings failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (image_embedding_binding.dims().nbDims != 4) {
-        std::string input_shape_str;
-        for (auto idx = 0; idx < image_embedding_binding.dims().nbDims; ++idx) {
-            input_shape_str += std::to_string(image_embedding_binding.dims().d[idx]) + ",";
+bool SamAmgDecoder::Impl::validate_session(const InferenceSession& session) const {
+    const std::vector<std::string> required_inputs = {
+        "image_embeddings", "point_coords", "point_labels", "mask_input", "has_mask_input"};
+    for (const auto& name : required_inputs) {
+        const auto* info = find_info(session, name);
+        if (info == nullptr || info->dtype != jinq::models::backend::DType::F32) {
+            LOG(ERROR) << "sam amg decoder input missing or invalid: " << name;
+            return false;
         }
-        LOG(ERROR) << "wrong input tensor shape: " << input_shape_str << " expected: [N, C, H, W]";
-        return StatusCode::MODEL_INIT_FAILED;
+        if (name != "point_coords" && name != "point_labels" && info->dynamic) {
+            LOG(ERROR) << "sam amg decoder input '" << name << "' must be static";
+            return false;
+        }
     }
-    if (image_embedding_binding.is_dynamic()) {
-        LOG(ERROR) << "trt not support dynamic input tensors";
-        return StatusCode::MODEL_INIT_FAILED;
+    const auto* low_res = find_output(session, "low_res_masks");
+    const auto* iou = find_output(session, "iou_predictions");
+    if (low_res == nullptr || iou == nullptr ||
+        low_res->dtype != jinq::models::backend::DType::F32 ||
+        iou->dtype != jinq::models::backend::DType::F32) {
+        LOG(ERROR) << "sam amg decoder outputs low_res_masks/iou_predictions are invalid";
+        return false;
     }
+    return true;
+}
 
-    // bind point coords tensor
-    input_node_name = "point_coords";
-    auto& point_coords_binding = decoder_input->point_coords_binding;
-    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_engine, input_node_name, point_coords_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind input tensor point_coords failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (point_coords_binding.dims().nbDims != 3) {
-        auto input_shape_str = TrtHelper::dims_to_string(point_coords_binding.dims());
-        LOG(ERROR) << "wrong input tensor shape: " << input_shape_str << " expected: [B, N, 2]";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (point_coords_binding.is_dynamic()) {
-        LOG(ERROR) << "trt not support dynamic input tensors";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
+const TensorInfo* SamAmgDecoder::Impl::find_info(
+    const InferenceSession& session, const std::string& name) const {
+    const auto iter = std::find_if(
+        session.inputs().begin(), session.inputs().end(),
+        [&name](const TensorInfo& info) { return info.name == name; });
+    return iter == session.inputs().end() ? nullptr : &*iter;
+}
 
-    // bind point labels tensor
-    input_node_name = "point_labels";
-    auto& point_labels_binding = decoder_input->point_labels_binding;
-    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_engine, input_node_name, point_labels_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind input tensor point_labels failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (point_labels_binding.dims().nbDims != 2) {
-        std::string input_shape_str = TrtHelper::dims_to_string(point_labels_binding.dims());
-        LOG(ERROR) << "wrong input tensor shape: " << input_shape_str << " expected: [B, N]";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (point_labels_binding.is_dynamic()) {
-        LOG(ERROR) << "trt not support dynamic input tensors";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // bind mask input tensor
-    input_node_name = "mask_input";
-    auto& mask_input_binding = decoder_input->mask_input_binding;
-    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_engine, input_node_name, mask_input_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind input tensor mask_input failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (mask_input_binding.dims().nbDims != 4) {
-        std::string input_shape_str = TrtHelper::dims_to_string(mask_input_binding.dims());
-        LOG(ERROR) << "wrong input tensor shape: " << input_shape_str << " expected: [B, N, H, W]";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (mask_input_binding.is_dynamic()) {
-        LOG(ERROR) << "trt not support dynamic input tensors";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // bind has mask input tensor
-    input_node_name = "has_mask_input";
-    auto& has_mask_input_binding = decoder_input->has_mask_input_binding;
-    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_engine, input_node_name, has_mask_input_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind input tensor mask_input failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (has_mask_input_binding.dims().nbDims != 1) {
-        std::string input_shape_str = TrtHelper::dims_to_string(has_mask_input_binding.dims());
-        LOG(ERROR) << "wrong input tensor shape: " << input_shape_str << " expected: [N,]";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (has_mask_input_binding.is_dynamic()) {
-        LOG(ERROR) << "trt not support dynamic input tensors";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // bind low res masks output tensor
-    std::string output_node_name = "low_res_masks";
-    auto& low_res_masks_output_binding = decoder_input->low_res_masks_output_binding;
-    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_engine, output_node_name, low_res_masks_output_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind output tensor failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (low_res_masks_output_binding.dims().nbDims != 4) {
-        std::string output_shape_str = TrtHelper::dims_to_string(low_res_masks_output_binding.dims());
-        LOG(ERROR) << "wrong output tensor shape: " << output_shape_str << " expected: [N, C, H, W]";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (low_res_masks_output_binding.is_dynamic()) {
-        LOG(ERROR) << "trt not support dynamic output tensors";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // bind iou predictions output tensor
-    output_node_name = "iou_predictions";
-    auto& iou_predictions_output_binding = decoder_input->iou_predictions_output_binding;
-    successfully_bind = TrtHelper::setup_engine_binding(_m_trt_engine, output_node_name, iou_predictions_output_binding);
-    if (!successfully_bind) {
-        LOG(ERROR) << "bind output tensor failed";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (iou_predictions_output_binding.dims().nbDims != 2) {
-        std::string output_shape_str = TrtHelper::dims_to_string(iou_predictions_output_binding.dims());
-        LOG(ERROR) << "wrong output tensor shape: " << output_shape_str << " expected: [N, C]";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    if (iou_predictions_output_binding.is_dynamic()) {
-        LOG(ERROR) << "trt not support dynamic output tensors";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // setup device memory
-    auto set_device_memo_status = TrtHelper::setup_device_memory(
-        _m_trt_engine, context, decoder_input->device_memory);
-    if (set_device_memo_status != StatusCode::OK) {
-        LOG(ERROR) << "setup device memory for model failed, status code: " << set_device_memo_status;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    // init cuda stream
-    auto& cuda_stream = decoder_input->cuda_stream;
-    if (cudaStreamCreate(&cuda_stream) != cudaSuccess) {
-        LOG(ERROR) << "ERROR: cuda stream creation failed." << std::endl;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    return StatusCode::OK;
+const TensorInfo* SamAmgDecoder::Impl::find_output(
+    const InferenceSession& session, const std::string& name) const {
+    const auto iter = std::find_if(
+        session.outputs().begin(), session.outputs().end(),
+        [&name](const TensorInfo& info) { return info.name == name; });
+    return iter == session.outputs().end() ? nullptr : &*iter;
 }
 
 /***
@@ -696,153 +489,109 @@ void SamAmgDecoder::Impl::thread_decode_mask_proc(
     const std::vector<float> &image_embeddings,
     const cv::Point2f &point,
     thread_decode_seriex_ctx *ctx) {
-    // get decoder
-    auto t_start = std::chrono::high_resolution_clock::now();
-    ThreadExecutor decode_executor{};
-    _m_decoder_queue.wait_dequeue(decode_executor);
-    auto context = decode_executor.context;
-    auto decoder_input = decode_executor.input;
-    auto t_end = std::chrono::high_resolution_clock::now();
-    auto t_cost = std::chrono::duration_cast<std::chrono::milliseconds >(t_end - t_start).count();
-    ctx->dequeue_thread_executor_time_consuming = t_cost;
-
-    // prepare input bindings
-    auto& image_embedding_binding = decoder_input->image_embedding_binding;
-    auto& point_coords_binding = decoder_input->point_coords_binding;
-    auto& point_labels_binding = decoder_input->point_labels_binding;
-    auto& mask_input_binding = decoder_input->mask_input_binding;
-    auto& has_mask_input_binding = decoder_input->has_mask_input_binding;
-    auto& low_res_masks_output_binding = decoder_input->low_res_masks_output_binding;
-    auto& iou_predictions_output_binding = decoder_input->iou_predictions_output_binding;
-
-    auto& device_memory = decoder_input->device_memory;
-    auto& cuda_stream = decoder_input->cuda_stream;
-
-    // init image embedding cuda memo copy
-    t_start = std::chrono::high_resolution_clock::now();
-    auto input_mem_size = static_cast<int32_t>(image_embeddings.size() * sizeof(float));
-    auto cuda_status = cudaMemcpyAsync(
-        device_memory.at(image_embedding_binding.index()), image_embeddings.data(), input_mem_size,
-        cudaMemcpyHostToDevice, cuda_stream);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "copy image embedding memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
-        ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;
+    InferenceSession* session = nullptr;
+    _m_decoder_queue.wait_dequeue(session);
+    if (session == nullptr) {
+        ctx->model_run_status = StatusCode::MODEL_INIT_FAILED;
         return;
     }
 
-    // init point coords/labels memo
-    std::vector<float> total_points;
-    total_points.push_back(point.x);
-    total_points.push_back(point.y);
-    total_points.push_back(0.0f);
-    total_points.push_back(0.0f);
-    std::vector<float> total_labels = {1.0, -1.0};
-    input_mem_size = static_cast<int32_t >(total_points.size() * sizeof(float));
-    cuda_status = cudaMemcpyAsync(
-        device_memory.at(point_coords_binding.index()), total_points.data(), input_mem_size,
-        cudaMemcpyHostToDevice, cuda_stream);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "copy point coords memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
-        ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;
-        return;
+    auto fill = [](std::vector<NamedTensor>& inputs, const std::string& name,
+                   const std::vector<float>& values,
+                   const std::vector<int64_t>& shape) {
+        NamedTensor named;
+        named.name = name;
+        named.tensor = Tensor::make<float>(shape);
+        if (values.size() != static_cast<size_t>(named.tensor.element_count())) {
+            return false;
+        }
+        std::memcpy(named.tensor.buffer.data(), values.data(), named.tensor.byte_size());
+        inputs.push_back(std::move(named));
+        return true;
+    };
+
+    const auto& sess_inputs = session->inputs();
+    auto info = [&sess_inputs](const std::string& name) {
+        const auto iter = std::find_if(
+            sess_inputs.begin(), sess_inputs.end(),
+            [&name](const TensorInfo& item) { return item.name == name; });
+        return iter == sess_inputs.end() ? nullptr : &*iter;
+    };
+
+    std::vector<float> points = {point.x, point.y, 0.0f, 0.0f};
+    std::vector<float> labels = {1.0f, -1.0f};
+    const auto* point_coords_info = info("point_coords");
+    const auto* point_labels_info = info("point_labels");
+    if (!point_coords_info->dynamic && !point_labels_info->dynamic) {
+        while (static_cast<int64_t>(labels.size()) < point_coords_info->shape[1]) {
+            points.push_back(0.0f);
+            points.push_back(0.0f);
+            labels.push_back(-1.0f);
+        }
     }
-    input_mem_size = static_cast<int32_t >(total_labels.size() * sizeof(float));
-    cuda_status = cudaMemcpyAsync(
-        device_memory.at(point_labels_binding.index()), total_labels.data(), input_mem_size,
-        cudaMemcpyHostToDevice, cuda_stream);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "copy point labels memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
+    std::vector<NamedTensor> inputs;
+    const auto* embedding_info = info("image_embeddings");
+    const auto* mask_info = info("mask_input");
+    const auto* has_mask_info = info("has_mask_input");
+    if (!fill(inputs, "image_embeddings", image_embeddings, embedding_info->shape) ||
+        !fill(
+            inputs, "point_coords", points,
+            {1, static_cast<int64_t>(labels.size()), 2}) ||
+        !fill(inputs, "point_labels", labels, {1, static_cast<int64_t>(labels.size())}) ||
+        !fill(
+            inputs, "mask_input",
+            std::vector<float>(
+                static_cast<size_t>(jinq::models::backend::shape_volume(mask_info->shape))),
+            mask_info->shape) ||
+        !fill(
+            inputs, "has_mask_input",
+            std::vector<float>(
+                static_cast<size_t>(
+                    jinq::models::backend::shape_volume(has_mask_info->shape))),
+            has_mask_info->shape)) {
+        LOG(ERROR) << "create sam amg decoder input tensors failed";
         ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;
+        _m_decoder_queue.enqueue(session);
         return;
     }
 
-    // init masks cuda memo
-    std::vector<float> mask_tensor_values(1 * 1 * 256 * 256, 0.0);
-    input_mem_size = static_cast<int32_t >(mask_tensor_values.size() * sizeof(float));
-    cuda_status = cudaMemcpyAsync(
-        device_memory.at(mask_input_binding.index()), mask_tensor_values.data(), input_mem_size,
-        cudaMemcpyHostToDevice, cuda_stream);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "copy mask tensor memo to gpu failed, error str: " << cudaGetErrorString(cuda_status);
-        ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;
+    std::vector<NamedTensor> outputs;
+    ctx->model_run_status = session->run(inputs, outputs);
+    if (ctx->model_run_status != StatusCode::OK) {
+        _m_decoder_queue.enqueue(session);
         return;
     }
 
-    // init has mask input tensor
-    std::vector<float> has_mask_tensor_values(1, 0.0);
-    input_mem_size = static_cast<int32_t >(has_mask_tensor_values.size() * sizeof(float));
-    cuda_status = cudaMemcpyAsync(
-        device_memory.at(has_mask_input_binding.index()), has_mask_tensor_values.data(), input_mem_size,
-        cudaMemcpyHostToDevice, cuda_stream);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "copy has mask tensor value to gpu failed, error str: " << cudaGetErrorString(cuda_status);
-        ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;
-        return;
-    }
-    cudaStreamSynchronize(cuda_stream);
-    t_end = std::chrono::high_resolution_clock::now();
-    t_cost = std::chrono::duration_cast<std::chrono::milliseconds >(t_end - t_start).count();
-    ctx->gpu_memo_cpy_time_consuming = t_cost;
-
-    // do inference
-    t_start = std::chrono::high_resolution_clock::now();
-    context->setInputTensorAddress("image_embeddings", device_memory.at(image_embedding_binding.index()));
-    context->setInputTensorAddress("point_coords", device_memory.at(point_coords_binding.index()));
-    context->setInputTensorAddress("point_labels", device_memory.at(point_labels_binding.index()));
-    context->setInputTensorAddress("mask_input", device_memory.at(mask_input_binding.index()));
-    context->setInputTensorAddress("has_mask_input", device_memory.at(has_mask_input_binding.index()));
-    context->setTensorAddress("low_res_masks", device_memory.at(low_res_masks_output_binding.index()));
-    context->setTensorAddress("iou_predictions", device_memory.at(iou_predictions_output_binding.index()));
-    if (!context->enqueueV3(cuda_stream)) {
-        LOG(ERROR) << "excute input data for inference failed";
-        ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;
+    const auto find_named = [&outputs](const std::string& name) {
+        const auto iter = std::find_if(
+            outputs.begin(), outputs.end(),
+            [&name](const NamedTensor& item) { return item.name == name; });
+        return iter == outputs.end() ? nullptr : &*iter;
+    };
+    const auto* low_res = find_named("low_res_masks");
+    const auto* iou = find_named("iou_predictions");
+    if (low_res == nullptr || iou == nullptr ||
+        low_res->tensor.shape.size() != 4 ||
+        iou->tensor.element_count() <= 0) {
+        LOG(ERROR) << "sam amg decoder outputs are invalid";
+        ctx->model_run_status = StatusCode::MODEL_EMPTY_OUTPUT;
+        _m_decoder_queue.enqueue(session);
         return;
     }
 
-    std::vector<float> low_res_mask_data;
-    low_res_mask_data.resize(low_res_masks_output_binding.volume());
-    cuda_status = cudaMemcpyAsync(
-        low_res_mask_data.data(),device_memory.at(low_res_masks_output_binding.index()),
-        low_res_masks_output_binding.volume() * sizeof(float),cudaMemcpyDeviceToHost, cuda_stream);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "async copy output tensor back from device memory to host memory failed, error str: "
-                   << cudaGetErrorString(cuda_status);
-        ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;
-        return;
-    }
-    std::vector<float> iou_preds_data;
-    iou_preds_data.resize(iou_predictions_output_binding.volume());
-    cuda_status = cudaMemcpyAsync(
-        iou_preds_data.data(), device_memory.at(iou_predictions_output_binding.index()),
-        iou_predictions_output_binding.volume() * sizeof(float), cudaMemcpyDeviceToHost, cuda_stream);
-    if (cuda_status != cudaSuccess) {
-        LOG(ERROR) << "async copy output tensor back from device memory to host memory failed, error str: "
-                   << cudaGetErrorString(cuda_status);
-        ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;
-        return;
-    }
-    cudaStreamSynchronize(cuda_stream);
-    t_end = std::chrono::high_resolution_clock::now();
-    t_cost = std::chrono::duration_cast<std::chrono::milliseconds >(t_end - t_start).count();
-    ctx->model_inference_consuming = t_cost;
-
-    // parse output mask
-    t_start = std::chrono::high_resolution_clock::now();
-    int best_mask_idx = static_cast<int>(
-        std::distance(iou_preds_data.begin(), std::max_element(iou_preds_data.begin(), iou_preds_data.end())));
-    decode_output_mask(low_res_mask_data, best_mask_idx, ctx->decoded_masks);
-    ctx->pred_iou = iou_preds_data[best_mask_idx];
+    const auto* iou_data = iou->tensor.template data<float>();
+    const int best_idx = static_cast<int>(
+        std::distance(iou_data, std::max_element(iou_data, iou_data + iou->tensor.element_count())));
+    const auto& mask_tensor = low_res->tensor;
+    const auto* mask_data = mask_tensor.template data<float>() +
+                             static_cast<int64_t>(best_idx) * mask_tensor.shape[2] * mask_tensor.shape[3];
+    std::vector<float> low_res_mask_data(
+        mask_data, mask_data + mask_tensor.shape[2] * mask_tensor.shape[3]);
+    decode_output_mask(low_res_mask_data, 0, ctx->decoded_masks);
+    ctx->pred_iou = iou_data[best_idx];
     ctx->stability_score = calculate_stability_score(ctx->decoded_masks);
-    t_end = std::chrono::high_resolution_clock::now();
-    t_cost = std::chrono::duration_cast<std::chrono::milliseconds >(t_end - t_start).count();
-    ctx->decode_mask_time_consuming = t_cost;
-
-    // restore worker queue
-    t_start = std::chrono::high_resolution_clock::now();
-    _m_decoder_queue.enqueue(decode_executor);
-    t_end = std::chrono::high_resolution_clock::now();
-    t_cost = std::chrono::duration_cast<std::chrono::milliseconds >(t_end - t_start).count();
-    ctx->enqueue_thread_executor_time_consuming = t_cost;
+    ctx->point_coord = point;
+    _m_decoder_queue.enqueue(session);
 }
 
 /***

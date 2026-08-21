@@ -796,6 +796,44 @@ TEST(model_golden, fastsam_segmentation) {
     expect_fingerprint("fastsam_segmentation", output);
 }
 
+TEST(model_golden, sam_prompt_prediction) {
+    std::string conf = "conf/model/segment_anything/mobile_sam_config.toml";
+    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    auto cfg = load_model_cfg(conf);
+    auto model = jinq::factory::segment_anything::create_sam_predictor<
+        jinq::models::io_define::segment_anything::sam_prompt_input,
+        jinq::models::io_define::segment_anything::std_sam_prompt_output>("sam_golden");
+    ASSERT_NE(model, nullptr);
+    ASSERT_EQ(model->init(cfg), StatusCode::OK);
+    cv::Mat image = read_input_image("demo_data/model_test_input/sam/truck.jpg");
+    ASSERT_FALSE(image.empty());
+    jinq::models::io_define::segment_anything::sam_prompt_input input;
+    input.image = image;
+    input.bboxes = {cv::Rect(483, 683, 158, 132)};
+    jinq::models::io_define::segment_anything::std_sam_prompt_output output;
+    ASSERT_EQ(model->run(input, output), StatusCode::OK);
+    ASSERT_FALSE(output.empty());
+    expect_fingerprint("sam_prompt_prediction", output.front());
+}
+
+TEST(model_golden, sam_automask_generation) {
+    std::string conf = "conf/model/segment_anything/mobile_sam_amg_config.toml";
+    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    auto cfg = load_model_cfg(conf);
+    auto model = jinq::factory::segment_anything::create_sam_auto_mask_generator<
+        mat_input, jinq::models::io_define::segment_anything::sam_amg_output>(
+            "sam_amg_golden");
+    ASSERT_NE(model, nullptr);
+    ASSERT_EQ(model->init(cfg), StatusCode::OK);
+    cv::Mat image = read_input_image("demo_data/model_test_input/sam/truck.jpg");
+    ASSERT_FALSE(image.empty());
+    mat_input input{image};
+    jinq::models::io_define::segment_anything::sam_amg_output output;
+    ASSERT_EQ(model->run(input, output), StatusCode::OK);
+    ASSERT_FALSE(output.segmentations.empty());
+    expect_fingerprint("sam_automask_generation", output.segmentations.front());
+}
+
 // ============ CLIP??? 7?============
 
 TEST(model_golden, openai_clip_embedding) {

@@ -12,6 +12,8 @@
 #include "sam_amg_decoder.h"
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
+#include "models/backend/backend_config.h"
+#include "models/backend/session.h"
 #include "common/time_stamp.h"
 #include "models/segment_anything/sam_prediction/sam_vit_encoder.h"
 
@@ -146,9 +148,31 @@ class Impl {
  * @return
  */
 StatusCode Impl::init(const toml::table &cfg) {
+    const toml::table* model_section = cfg["SAM_AMG"].as_table();
+    if (model_section == nullptr) {
+        LOG(ERROR) << "config section [SAM_AMG] missing or not a table";
+        _m_successfully_init_model = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    const toml::table* encoder_backend = (*model_section)["encoder_backend"].as_table();
+    if (encoder_backend == nullptr) {
+        LOG(ERROR) << "config section [SAM_AMG.encoder_backend] missing";
+        _m_successfully_init_model = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    jinq::models::backend::BackendConfig encoder_config;
+    std::string encoder_err;
+    if (!jinq::models::backend::parse_backend_table(
+            *encoder_backend, &encoder_config, &encoder_err)) {
+        LOG(ERROR) << "invalid sam encoder backend config: " << encoder_err;
+        _m_successfully_init_model = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
     // init sam encoder
-    _m_sam_encoder = std::make_unique<SamVitEncoder>();
-    _m_sam_encoder->init(cfg);
+    _m_sam_encoder = std::make_unique<SamVitEncoder>(
+        jinq::models::backend::InferenceSession::create(encoder_config, &encoder_err));
+    const auto encoder_init_status = _m_sam_encoder->init();
     if (!_m_sam_encoder->is_successfully_initialized()) {
         LOG(ERROR) << "init sam vit encoder failed";
         _m_successfully_init_model = false;
@@ -168,12 +192,19 @@ StatusCode Impl::init(const toml::table &cfg) {
     _m_sam_decoder->set_encoder_input_size(_m_sam_encoder_input_size);
 
     // init decode params
-    auto decoder_cfg = cfg["SAM_AMG_DECODER"];
-    _m_points_per_side = static_cast<int>(decoder_cfg["points_per_size"].value_or<int64_t>(0));
-    _m_pred_iou_thresh = static_cast<float>(decoder_cfg["pred_iou_thresh"].value_or<double>(0.0));
-    _m_stability_score_thresh = static_cast<float>(decoder_cfg["stability_score_thresh"].value_or<double>(0.0));
-    _m_box_nms_thresh = static_cast<float>(decoder_cfg["box_nms_thresh"].value_or<double>(0.0));
-    _m_min_mask_region_area = static_cast<int>(decoder_cfg["min_mask_region_area"].value_or<int64_t>(0));
+    const toml::table* params = (*model_section)["params"].as_table();
+    if (params == nullptr) {
+        LOG(ERROR) << "config section [SAM_AMG.params] missing";
+        _m_successfully_init_model = false;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    _m_points_per_side = static_cast<int>((*params)["points_per_side"].value_or<int64_t>(32));
+    _m_pred_iou_thresh = static_cast<float>((*params)["pred_iou_thresh"].value_or<double>(0.88));
+    _m_stability_score_thresh =
+        static_cast<float>((*params)["stability_score_thresh"].value_or<double>(0.95));
+    _m_box_nms_thresh = static_cast<float>((*params)["box_nms_thresh"].value_or<double>(0.7));
+    _m_min_mask_region_area =
+        static_cast<int>((*params)["min_mask_region_area"].value_or<int64_t>(0));
 
     _m_successfully_init_model = true;
     LOG(INFO) << "Successfully load sam auto mask generator model";
