@@ -35,7 +35,7 @@ using jinq::models::io_define::diffusion::std_ddpm_input;
 using jinq::models::io_define::diffusion::std_ddpm_output;
 using jinq::models::io_define::diffusion::std_ddpm_unet_input;
 using jinq::models::io_define::diffusion::std_ddpm_unet_output;
-using DenoiseModelPtr = jinq::models::diffusion::DDPMUNet<std_ddpm_unet_input, std_ddpm_unet_output>;
+using DenoiseModel = DDPMSamplerDenoiseModel;
 
 namespace ddpm_sampler_impl {
 
@@ -112,7 +112,8 @@ class DDPMSampler<INPUT, OUTPUT>::Impl {
     /***
      *
      */
-    Impl() = default;
+    explicit Impl(std::shared_ptr<DenoiseModel> denoise_model = nullptr)
+        : _m_denoise_net(std::move(denoise_model)) {}
 
     /***
      *
@@ -177,7 +178,8 @@ class DDPMSampler<INPUT, OUTPUT>::Impl {
     std::vector<float> _m_fixed_noise_for_psample;
 
     // denoise schedule
-    std::unique_ptr<DenoiseModelPtr> _m_denoise_net;
+    std::shared_ptr<DenoiseModel> _m_denoise_net;
+    StatusCode _m_sample_status = StatusCode::OK;
 
     // init flag
     bool _m_successfully_initialized = false;
@@ -332,8 +334,13 @@ StatusCode DDPMSampler<INPUT, OUTPUT>::Impl::init(const toml::table &config) {
     _m_alpha_cumprod = precompute_alpha_cumprod(_m_betas);
 
     // init denoise model
-    _m_denoise_net = std::make_unique<DenoiseModelPtr>();
-    auto init_status = _m_denoise_net->init(config);
+    if (_m_denoise_net == nullptr) {
+        _m_denoise_net = std::make_shared<DenoiseModel>();
+    }
+    auto init_status = StatusCode::OK;
+    if (!_m_denoise_net->is_successfully_initialized()) {
+        init_status = _m_denoise_net->init(config);
+    }
     if (!_m_denoise_net->is_successfully_initialized()) {
         LOG(INFO) << "init denoise net failed, status code: " << init_status;
         return init_status;
@@ -379,11 +386,15 @@ StatusCode DDPMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     auto save_raw_output = transformed_input.save_raw_output;
 
     // p-sample loop
+    _m_sample_status = StatusCode::OK;
     auto mid_sample_results = p_sample(sample_size, sample_timestep, sample_channels, save_all_mid_results, use_fixed_noise_for_psample);
+    if (_m_sample_status != StatusCode::OK) {
+        LOG(ERROR) << "ddpm sampling failed, status code: " << _m_sample_status;
+        return _m_sample_status;
+    }
 
     // transform sampled results into cv::Mat
     ddpm_sampler_impl::internal_output internal_out;
-    StatusCode sample_status = StatusCode::OK;
     for (auto& img_data : mid_sample_results) {
         if (save_raw_output) {
             internal_out.out_raw_predictions.push_back(img_data);
@@ -411,7 +422,7 @@ StatusCode DDPMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
 
     // transform output
     out = ddpm_sampler_impl::transform_output<OUTPUT>(internal_out);
-    return sample_status;
+    return StatusCode::OK;
 }
 
 /***
@@ -462,6 +473,7 @@ std::vector<float> DDPMSampler<INPUT, OUTPUT>::Impl::p_sample_once(
     auto status = _m_denoise_net->run(denoise_in, denoise_out);
     if (status != StatusCode::OK) {
         LOG(ERROR) << "denoise model run session failed, status code: " << status;
+        _m_sample_status = status;
         std::vector<float> result(xt.size());
         return result;
     }
@@ -523,6 +535,9 @@ std::vector<std::vector<float> > DDPMSampler<INPUT, OUTPUT>::Impl::p_sample(
         auto t_step = static_cast<int64_t >(steps[idx]);
         bool is_last = t_step == 0;
         xt = p_sample_once(xt, t_step, is_last, use_fixed_noise_for_psample);
+        if (_m_sample_status != StatusCode::OK) {
+            break;
+        }
         if (save_all_mid_results) {
             mid_sample_results.push_back(xt);
         } else {
@@ -548,6 +563,11 @@ template <typename INPUT, typename OUTPUT>
 DDPMSampler<INPUT, OUTPUT>::DDPMSampler() {
     _m_pimpl = std::make_unique<Impl>();
 }
+
+template <typename INPUT, typename OUTPUT>
+DDPMSampler<INPUT, OUTPUT>::DDPMSampler(
+    std::shared_ptr<DDPMSamplerDenoiseModel> denoise_model)
+    : _m_pimpl(std::make_unique<Impl>(std::move(denoise_model))) {}
 
 /***
 *

@@ -18,6 +18,7 @@
 #include "models/diffusion/ddim_sampler.h"
 #include "models/diffusion/ddpm_sampler.h"
 #include "models/diffusion/autoencoder_kl.h"
+#include "models/diffusion/ddpm_unet.h"
 
 namespace jinq {
 namespace models {
@@ -39,6 +40,8 @@ using jinq::models::io_define::diffusion::std_ldm_output;
 using DDPMSamplerPtr = jinq::models::diffusion::DDPMSampler<std_ddpm_input, std_ddpm_output>;
 using DDIMSamplerPtr = jinq::models::diffusion::DDIMSampler<std_ddim_input, std_ddim_output>;
 using VAEDecoderPtr = jinq::models::diffusion::AutoEncoderKL<std_vae_decode_input, std_vae_decode_output>;
+using LatentDenoiseModel = jinq::models::diffusion::DDPMUNet<
+    std_ddpm_unet_input, std_ddpm_unet_output>;
 
 namespace ldm_sampler_impl {
 
@@ -127,6 +130,7 @@ class LDMSampler<INPUT, OUTPUT>::Impl {
     // latent sampler
     std::unique_ptr<DDIMSamplerPtr> _m_ddim_sampler;
     std::unique_ptr<DDPMSamplerPtr> _m_ddpm_sampler;
+    std::shared_ptr<LatentDenoiseModel> _m_latent_denoise_model;
 
     // vae decoder
     std::unique_ptr<VAEDecoderPtr> _m_vae_decoder;
@@ -174,13 +178,23 @@ StatusCode LDMSampler<INPUT, OUTPUT>::Impl::init(const toml::table &config) {
         return StatusCode::MODEL_INIT_FAILED;
     }
     auto sampler_cfg = std::move(sampler_cfg_parsed).table();
-    _m_ddim_sampler = std::make_unique<DDIMSamplerPtr>();
-    auto status = _m_ddim_sampler->init(sampler_cfg);
+
+    // DDPM and DDIM are two schedulers over the same latent UNet. Create and
+    // initialize the network once, then inject it into both schedulers.
+    _m_latent_denoise_model = std::make_shared<LatentDenoiseModel>();
+    auto status = _m_latent_denoise_model->init(sampler_cfg);
+    if (status != StatusCode::OK) {
+        LOG(ERROR) << "init shared latent denoise model failed, status code: " << status;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    _m_ddim_sampler = std::make_unique<DDIMSamplerPtr>(_m_latent_denoise_model);
+    status = _m_ddim_sampler->init(sampler_cfg);
     if (status != StatusCode::OK) {
         LOG(ERROR) << "init latent ddim sampler failed, status code: " << status;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    _m_ddpm_sampler = std::make_unique<DDPMSamplerPtr>();
+    _m_ddpm_sampler = std::make_unique<DDPMSamplerPtr>(_m_latent_denoise_model);
     status = _m_ddpm_sampler->init(sampler_cfg);
     if (status != StatusCode::OK) {
         LOG(ERROR) << "init latent ddpm sampler failed, status code: " << status;

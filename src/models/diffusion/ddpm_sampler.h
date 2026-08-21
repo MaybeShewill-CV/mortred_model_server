@@ -20,6 +20,13 @@ namespace jinq {
 namespace models {
 namespace diffusion {
 
+template<typename INPUT, typename OUTPUT>
+class DDPMUNet;
+
+using DDPMSamplerDenoiseModel = DDPMUNet<
+    jinq::models::io_define::diffusion::std_ddpm_unet_input,
+    jinq::models::io_define::diffusion::std_ddpm_unet_output>;
+
 template <typename INPUT, typename OUTPUT>
 class DDPMSampler : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
   public:
@@ -28,6 +35,12 @@ class DDPMSampler : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
      * @param config
      */
     DDPMSampler();
+
+    /***
+     * share an already-owned denoise model; composite samplers use this to
+     * avoid loading the same engine once per scheduler
+     */
+    explicit DDPMSampler(std::shared_ptr<DDPMSamplerDenoiseModel> denoise_model);
 
     /***
      *

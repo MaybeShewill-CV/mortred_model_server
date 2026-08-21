@@ -32,6 +32,28 @@ const TensorInfo* find_info(const std::vector<TensorInfo>& infos, const std::str
     return nullptr;
 }
 
+bool make_integer_scalar(NamedTensor& named, const TensorInfo& info, int64_t value) {
+    named.tensor = jinq::models::backend::Tensor::make<int64_t>(info.shape);
+    named.tensor.data<int64_t>()[0] = value;
+    return true;
+}
+
+bool make_integer_scalar(NamedTensor& named, const TensorInfo& info, int32_t value) {
+    named.tensor = jinq::models::backend::Tensor::make<int32_t>(info.shape);
+    named.tensor.data<int32_t>()[0] = value;
+    return true;
+}
+
+bool write_integer_scalar(NamedTensor& named, const TensorInfo& info, int64_t value) {
+    if (info.dtype == jinq::models::backend::DType::I64) {
+        return make_integer_scalar(named, info, static_cast<int64_t>(value));
+    }
+    if (info.dtype == jinq::models::backend::DType::I32) {
+        return make_integer_scalar(named, info, static_cast<int32_t>(value));
+    }
+    return false;
+}
+
 }  // namespace
 
 template <typename INPUT, typename OUTPUT>
@@ -63,14 +85,18 @@ std::vector<NamedTensor> ClsCondDDPMUNet<INPUT, OUTPUT>::make_inputs(const INPUT
 
     NamedTensor timestep;
     timestep.name = "t";
-    timestep.tensor = jinq::models::backend::Tensor::make<int64_t>(t_info->shape);
-    timestep.tensor.data<int64_t>()[0] = input.timestep;
+    if (!write_integer_scalar(timestep, *t_info, input.timestep)) {
+        LOG(ERROR) << "unsupported cls cond ddpm unet timestep dtype: " << t_info->to_string();
+        return {};
+    }
     inputs.push_back(std::move(timestep));
 
     NamedTensor cls_id;
     cls_id.name = "cls_id";
-    cls_id.tensor = jinq::models::backend::Tensor::make<int64_t>(cls_info->shape);
-    cls_id.tensor.data<int64_t>()[0] = input.cls_id;
+    if (!write_integer_scalar(cls_id, *cls_info, input.cls_id)) {
+        LOG(ERROR) << "unsupported cls cond ddpm unet cls_id dtype: " << cls_info->to_string();
+        return {};
+    }
     inputs.push_back(std::move(cls_id));
     return inputs;
 }

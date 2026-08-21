@@ -54,8 +54,18 @@ std::vector<NamedTensor> DDPMUNet<INPUT, OUTPUT>::make_inputs(const INPUT& input
 
     NamedTensor timestep;
     timestep.name = "t";
-    timestep.tensor = jinq::models::backend::Tensor::make<int64_t>(t_info->shape);
-    timestep.tensor.data<int64_t>()[0] = input.timestep;
+    if (t_info->dtype == jinq::models::backend::DType::I64) {
+        timestep.tensor = jinq::models::backend::Tensor::make<int64_t>(t_info->shape);
+        timestep.tensor.data<int64_t>()[0] = input.timestep;
+    } else if (t_info->dtype == jinq::models::backend::DType::I32) {
+        // TensorRT builders commonly lower scalar int64 timestep inputs to
+        // int32; follow the dtype exposed by the deployed engine.
+        timestep.tensor = jinq::models::backend::Tensor::make<int32_t>(t_info->shape);
+        timestep.tensor.data<int32_t>()[0] = static_cast<int32_t>(input.timestep);
+    } else {
+        LOG(ERROR) << "unsupported ddpm unet timestep dtype: " << t_info->to_string();
+        return {};
+    }
     inputs.push_back(std::move(timestep));
     return inputs;
 }
