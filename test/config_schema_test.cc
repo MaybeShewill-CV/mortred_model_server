@@ -3,11 +3,11 @@
  * File: config_schema_test.cc
  *
  * Machine-enforced config schema coverage:
- * - every conf/server/*.toml [*_SERVER] section must pass the strict server
+ * - every server section under conf/server must pass the strict server
  *   schema (missing required keys / wrong types / probable typos fail);
- * - every conf/model/*.toml section must pass the common-MNN contract;
- * - negative cases pin the fail-fast behavior (typo suggestion, type error,
- *   missing key) and the forward-compat warning behavior.
+ * - every inference-owning model section under conf/model must expose a valid unified
+ *   backend table;
+ * - negative cases pin fail-fast backend parsing behavior.
  ************************************************/
 
 #include <filesystem>
@@ -19,10 +19,11 @@
 #include <toml/toml.hpp>
 
 #include "server/server_config_schema.h"
-#include "models/model_config_schema.h"
+#include "models/backend/backend_config.h"
 
 using jinq::server::validate_server_section;
-using jinq::models::validate_model_config_section;
+using jinq::models::backend::parse_backend_table;
+using jinq::models::backend::parse_backend_config;
 
 namespace {
 
@@ -55,6 +56,20 @@ bool is_server_section(const std::string& key) {
            key.compare(key.size() - suffix.size(), suffix.size(), suffix) == 0;
 }
 
+bool has_backend_contract(const toml::table& section) {
+    if (section.contains("backend")) {
+        return true;
+    }
+    for (const auto& [key, value] : section) {
+        const std::string key_name(key.str());
+        if (key_name.size() > 8 &&
+            key_name.compare(key_name.size() - 8, 8, "_backend") == 0 && value.is_table()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 }  // namespace
 
 TEST(config_schema, every_server_section_passes) {
@@ -82,7 +97,7 @@ TEST(config_schema, every_server_section_passes) {
     EXPECT_GT(checked, 0);
 }
 
-TEST(config_schema, every_model_section_passes_contract) {
+TEST(config_schema, every_model_backend_passes_contract) {
     const auto files = collect_files("conf/model", ".toml");
     ASSERT_FALSE(files.empty());
     for (const auto& path : files) {
@@ -91,12 +106,26 @@ TEST(config_schema, every_model_section_passes_contract) {
         auto table = std::move(parsed).table();
         for (const auto& [key, value] : table) {
             const auto* section = value.as_table();
-            if (section == nullptr) {
+            if (section == nullptr || !has_backend_contract(*section)) {
                 continue;
             }
-            std::string err;
-            EXPECT_TRUE(validate_model_config_section(*section, &err))
-                << path << " [" << key << "]: " << err;
+            if (section->contains("backend")) {
+                std::string err;
+                EXPECT_TRUE(parse_backend_config(*section, nullptr, &err))
+                    << path << " [" << key << "]: " << err;
+                continue;
+            }
+            for (const auto& [backend_key, backend_value] : *section) {
+                const std::string backend_key_name(backend_key.str());
+                if (backend_key_name.size() <= 8 ||
+                    backend_key_name.compare(backend_key_name.size() - 8, 8, "_backend") != 0 ||
+                    !backend_value.is_table()) {
+                    continue;
+                }
+                std::string err;
+                EXPECT_TRUE(parse_backend_table(*backend_value.as_table(), nullptr, &err))
+                    << path << " [" << key << "." << backend_key << "]: " << err;
+            }
         }
     }
 }
@@ -134,17 +163,17 @@ TEST(config_schema, unrelated_unknown_key_warns_but_passes) {
     EXPECT_EQ(warnings.size(), 1u);
 }
 
-TEST(config_schema, bad_compute_backend_fails) {
-    auto table = parse_text("[M]\nmodel_file_path=\"x.mnn\"\ncompute_backend=\"tensorrt\"\n");
+TEST(config_schema, unknown_model_backend_fails) {
+    auto table = parse_text("[M]\n[M.backend]\ntype=\"nonexistent\"\nmodel_file_path=\"x.mnn\"\n");
     std::string err;
-    EXPECT_FALSE(validate_model_config_section(table, &err));
-    EXPECT_NE(err.find("compute_backend"), std::string::npos) << err;
+    EXPECT_FALSE(parse_backend_config(table, nullptr, &err));
+    EXPECT_NE(err.find("type"), std::string::npos) << err;
 }
 
 TEST(config_schema, empty_model_file_path_fails) {
-    auto table = parse_text("[M]\nmodel_file_path=\"\"\n");
+    auto table = parse_text("[M]\n[M.backend]\ntype=\"mnn\"\nmodel_file_path=\"\"\n");
     std::string err;
-    EXPECT_FALSE(validate_model_config_section(table, &err));
+    EXPECT_FALSE(parse_backend_config(table, nullptr, &err));
     EXPECT_NE(err.find("model_file_path"), std::string::npos) << err;
 }
 

@@ -1,7 +1,7 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: SamAutoMaskGenerator.h
+ * File: sam_automask_generator.h
  * Date: 23-10-13
  ************************************************/
 
@@ -14,86 +14,57 @@
 #include <opencv2/opencv.hpp>
 #include "toml/toml.hpp"
 
-#include "models/base_model.h"
+#include "models/backend/backend_cv_model.h"
+#include "models/backend/session.h"
+#include "models/backend/tensor.h"
 #include "models/model_io_define.h"
-#include "common/status_code.h"
 
 namespace jinq {
 namespace models {
 namespace segment_anything {
 
-using AmgMaskOutput = jinq::models::io_define::segment_anything::sam_amg_output;
-
-namespace sam_automask_generator_impl {
-class Impl;
-}
+class SamAmgDecoder;
+class SamVitEncoder;
 
 /***
- * SAM 自动 mask 生成模型：图像 -> 密集点网格自动生成的 mask 集合。
+ * SAM automatic mask generator with independent encoder and AMG decoder
+ * sessions.
  */
-template <typename INPUT, typename OUTPUT>
-class SamAutoMaskGenerator : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
+template<typename INPUT, typename OUTPUT>
+class SamAutoMaskGenerator : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   public:
-    /***
-    * constructor
-    * @param config
-     */
     SamAutoMaskGenerator();
-    
-    /***
-     *
-     */
     ~SamAutoMaskGenerator() override;
 
-    /***
-    * constructor
-    * @param transformer
-     */
-    SamAutoMaskGenerator(const SamAutoMaskGenerator& transformer) = delete;
+    SamAutoMaskGenerator(const SamAutoMaskGenerator&) = delete;
+    SamAutoMaskGenerator& operator=(const SamAutoMaskGenerator&) = delete;
 
-    /***
-     * constructor
-     * @param transformer
-     * @return
-     */
-    SamAutoMaskGenerator& operator=(const SamAutoMaskGenerator& transformer) = delete;
-
-    /***
-     *
-     * @param toml
-     * @return
-     */
-    jinq::common::StatusCode init(const toml::table& cfg) override;
-
-    /***
-     *
-     * @param input
-     * @param output
-     * @return
-     */
-    jinq::common::StatusCode run_impl(const INPUT& input, OUTPUT& output) override;
-
-    /***
-     *
-     * @param input_image
-     * @param bboxes
-     * @param predicted_masks
-     * @return
-     */
-    jinq::common::StatusCode generate(const cv::Mat& input_image, AmgMaskOutput& amg_output);
-
-    /***
-     * if model successfully initialized
-     * @return
-     */
-    bool is_successfully_initialized() const override;
+    jinq::common::StatusCode generate(
+        const cv::Mat& input_image,
+        jinq::models::io_define::segment_anything::sam_amg_output& amg_output);
 
   private:
-    std::unique_ptr<sam_automask_generator_impl::Impl> _m_pimpl;
+    jinq::common::StatusCode on_init(const toml::table& params) override;
+
+    jinq::common::StatusCode run_sessions(const INPUT& input, OUTPUT& output) override;
+
+    jinq::common::StatusCode postprocess(
+        const std::vector<jinq::models::backend::NamedTensor>& outputs,
+        OUTPUT& output) override;
+
+    std::unique_ptr<SamVitEncoder> _m_encoder;
+    std::unique_ptr<SamAmgDecoder> _m_decoder;
+    cv::Size _m_encoder_input_size;
+    int _m_points_per_side = 32;
+    float _m_pred_iou_thresh = 0.88f;
+    float _m_stability_score_thresh = 0.95f;
+    float _m_box_nms_thresh = 0.7f;
+    int _m_min_mask_region_area = 0;
 };
-}
-}
-}
+
+} // namespace segment_anything
+} // namespace models
+} // namespace jinq
 
 #include "sam_automask_generator.inl"
 

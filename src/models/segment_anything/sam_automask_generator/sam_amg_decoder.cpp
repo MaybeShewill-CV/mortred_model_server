@@ -240,12 +240,7 @@ class SamAmgDecoder::Impl {
  * @return
  */
 StatusCode SamAmgDecoder::Impl::init(const toml::table &cfg) {
-    const toml::table* model_section = cfg["SAM_AMG"].as_table();
-    if (model_section == nullptr) {
-        LOG(ERROR) << "config section [SAM_AMG] missing or not a table";
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    const toml::table* backend_table = (*model_section)["amg_decoder_backend"].as_table();
+    const toml::table* backend_table = cfg["amg_decoder_backend"].as_table();
     if (backend_table == nullptr) {
         LOG(ERROR) << "config section [SAM_AMG.amg_decoder_backend] missing";
         return StatusCode::MODEL_INIT_FAILED;
@@ -258,7 +253,7 @@ StatusCode SamAmgDecoder::Impl::init(const toml::table &cfg) {
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    const toml::table* params = (*model_section)["params"].as_table();
+    const toml::table* params = cfg["params"].as_table();
     if (params == nullptr) {
         LOG(ERROR) << "config section [SAM_AMG.params] missing";
         return StatusCode::MODEL_INIT_FAILED;

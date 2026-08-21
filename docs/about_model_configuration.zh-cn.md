@@ -1,39 +1,111 @@
-<b><font color='black' size='8' face='Helvetica'> 模型Inference配置文件说明 </font></b>
+# 模型配置说明
 
-所有的模型inference配置文件都存放在 `$PROJECT_ROOT_DIR/conf/model` 文件夹下
+所有模型配置都位于 `conf/model/`。统一推理后端层要求每个模型使用
+`[模型名.backend]` 与 `[模型名.params]` 两张表：
 
-<b><font color='GrayB' size='6' face='Helvetica'> 通用字段说明 </font></b>
+```toml
+[YOLOV8]
+[YOLOV8.backend]
+type = "tensorrt"              # mnn | onnx | tensorrt
+model_file_path = "../weights/object_detection/yolov8/yolov8s.engine"
+device = "cuda"                # cpu | cuda，默认 cpu
+device_id = 0                  # 可选，CUDA 设备序号
+threads = 4                    # MNN / ONNX CPU 线程数，默认 4
+input_layout = "auto"          # 仅 MNN：auto | nhwc | nchw
+precision_mode = 0             # 仅 MNN：BackendConfig::PrecisionMode
+power_mode = 0                 # 仅 MNN：BackendConfig::PowerMode
+input_names = ["images"]       # 可选，默认枚举模型 I/O
+output_names = ["output0"]     # 可选，可过滤辅助输出
 
-以 `MobilenetV2` 模型为例说明
-![common_model_config](../resources/images/common_model_config_example.png)
+[YOLOV8.params]
+model_score_threshold = 0.25
+model_nms_threshold = 0.5
+class_names = ["person", "bicycle"]
+```
 
-**model_file_path:** 模型文件路径
+## 字段速查
 
-**model_threads_num:** 使用cpu作为计算后端时的线程数量，推荐使用和cpu物理核心数相同的线程数。
+| 字段 | 所属表 | 含义 |
+|---|---|---|
+| `type` | `backend` | 推理引擎：`mnn`、`onnx` 或 `tensorrt` |
+| `model_file_path` | `backend` | 权重或 engine 文件 |
+| `device` | `backend` | `cpu` 或 `cuda`；TensorRT engine 始终在 CUDA 上执行 |
+| `device_id` / `gpu_device_id` | `backend` | CUDA 设备序号，二者等价 |
+| `threads` | `backend` | MNN / ONNX CPU 推理线程数 |
+| `input_layout` | `backend` | MNN host 张量布局：`nhwc`、`nchw` 或按模型自动识别 |
+| `precision_mode` / `power_mode` | `backend` | MNN `BackendConfig` 配置 |
+| `input_names` / `output_names` | `backend` | I/O 名称覆盖或过滤 |
+| 其他字段 | `params` | 模型特有参数；名称和历史配置保持一致 |
 
-**compute_backend:** 计算后端，目前支持 `cpu` 和 `cuda` 两种配置，这也是服务器端最常见的计算后端。
+## 多引擎模型
 
-<b><font color='GrayB' size='6' face='Helvetica'> 一些特殊的模型配置参数说明 </font></b>
+多引擎模型不使用 primary `[backend]`，而是为每个引擎配置一张
+`<key>_backend` 子表，并在 `run_sessions()` 中编排多个 session：
 
-<b><font color='GrayZ' size='5' face='Helvetica'> ----- 图像目标检测模型配置 </font></b>
+```toml
+[SAM_PREDICTOR]
 
-以 `yolov5` 模型为例说明
-![yolov5_model_config](../resources/images/yolov5_model_cfg_example.png)
+[SAM_PREDICTOR.encoder_backend]
+type = "tensorrt"
+model_file_path = "../weights/sam/mobile_sam/sm61/mobile_sam_encoder.engine"
+device = "cuda"
 
-**model_score_threshold:** 目标bbox得分阈值，检测结果仅保存得分超过阈值的目标
+[SAM_PREDICTOR.decoder_backend]
+type = "tensorrt"
+model_file_path = "../weights/sam/mobile_sam/sm61/mobile_sam_decoder.engine"
+device = "cuda"
+```
 
-**model_nms_threshold:** nms阈值
+当前多引擎模型包括：
 
-**model_keep_top_k:** 一幅图像上可检测的最大目标数量
+- SAM predictor：encoder + prompt decoder
+- SAM automatic mask generator：encoder + AMG decoder
+- LightGlue：SuperPoint extractor + matcher
+- OpenAI CLIP：visual encoder + text encoder
 
-**model_class_nums:** 模型可识别的所有目标类别数量
+Diffusion sampler 是采样调度器，不是单次推理模型。DDPM / DDIM /
+class-conditioned DDIM / LDM 继续作为 `BaseAiModel` 编排层；真正持有
+session 的是 `DDPMUNet`、`ClsCondDDPMUNet` 和 `AutoEncoderKL`。
 
-<b><font color='GrayZ' size='5' face='Helvetica'> ----- SuperPoint模型配置 </font></b>
+## 从旧 schema 迁移
 
-![superpoint_model_config](../resources/images/superpoint_model_cfg_example.png)
+历史结构：
 
-**model_nms_threshold:** nms阈值，阈值范围内只保留一个特征点
+```toml
+[SECTION]
+backend_type = "trt"
 
-**max_track_length:** 只track阈值距离内的图像序列
+[SECTION_TRT]
+model_file_path = "..."
 
-**nn_dis_thresh:** 最近邻阈值，特征距离小于阈值的会被认为是同一个对象
+[BACKEND_DICT]
+trt = 0
+onnx = 1
+mnn = 2
+```
+
+该结构已不支持。使用迁移脚本：
+
+```bash
+python scripts/migrate_model_config.py --dry-run
+python scripts/migrate_model_config.py
+python scripts/migrate_model_config.py --check
+```
+
+字段映射：
+
+```text
+compute_backend       -> backend.device
+gpu_device_id         -> backend.device_id
+model_threads_num     -> backend.threads
+backend_precision_mode -> backend.precision_mode
+backend_power_mode    -> backend.power_mode
+trt                   -> backend.type = "tensorrt"
+其他模型特有字段        -> params.*
+```
+
+## 测试说明
+
+`model_golden_test` 会把 `../` 前缀路径改写为仓库根路径，并将
+`backend.device` 强制为 `cpu`，保证无 GPU 的 CI 环境可复现。TensorRT
+engine 仍需要 GPU；权重或 GPU 不可用时相关 golden 用例会跳过。

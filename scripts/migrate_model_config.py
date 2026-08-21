@@ -366,6 +366,155 @@ def migrate_openai_clip_section(
     )
 
 
+def infer_backend_type_from_path(model_path: Any) -> Optional[str]:
+    if not isinstance(model_path, str):
+        return None
+    lower_path = model_path.lower()
+    if lower_path.endswith(".mnn"):
+        return "mnn"
+    if lower_path.endswith((".engine", ".plan", ".trt")):
+        return "tensorrt"
+    if lower_path.endswith(".onnx"):
+        return "onnx"
+    return None
+
+
+def sam_backend_from_table(
+    source_table: Mapping[str, Any], section: str, warnings: List[str]
+) -> Optional[Dict[str, Any]]:
+    target_type = normalize_backend_type(source_table.get("backend_type"))
+    model_path = source_table.get("model_file_path")
+    if target_type is None:
+        target_type = infer_backend_type_from_path(model_path)
+    if target_type is None or not isinstance(model_path, str) or not model_path:
+        warnings.append(
+            f"cannot infer backend/model path for sam source [{section}]; left unchanged"
+        )
+        return None
+
+    backend: Dict[str, Any] = {"type": target_type, "model_file_path": model_path}
+    for old_key, new_key in BACKEND_SOURCE_KEYS.items():
+        if old_key in source_table:
+            backend[new_key] = source_table[old_key]
+    if "compute_backend" not in source_table:
+        backend["device"] = "cpu"
+    return backend
+
+
+def sam_source_table(
+    data: Mapping[str, Any], base_section: str, warnings: List[str]
+) -> Optional[Tuple[str, Mapping[str, Any]]]:
+    base_table = data.get(base_section)
+    if not is_table(base_table):
+        return None
+    target_type = normalize_backend_type(base_table.get("backend_type"))
+    if target_type is None:
+        return base_section, base_table
+
+    suffix = source_suffix_for_target(target_type)
+    source_name = selected_source_section(data, base_section, suffix)
+    source_table = data.get(source_name)
+    if not is_table(source_table):
+        warnings.append(
+            f"sam section [{base_section}] selects backend '{target_type}' but source "
+            f"[{source_name}] is missing; left unchanged"
+        )
+        return None
+    return source_name, source_table
+
+
+def migrate_sam_sections(
+    data: Mapping[str, Any], warnings: List[str]
+) -> List[SectionMigration]:
+    migrations: List[SectionMigration] = []
+
+    encoder_sources: Tuple[str, ...]
+    decoder_sources: Tuple[str, ...]
+    if "SAM_VIT_ENCODER" in data or "SAM_VIT_DECODER" in data:
+        encoder_sources = ("SAM_VIT_ENCODER",)
+        decoder_sources = ("SAM_VIT_DECODER",)
+    else:
+        encoder_sources = ("SAM_ENCODER",)
+        decoder_sources = ("SAM_DECODER",)
+
+    encoder = sam_source_table(data, encoder_sources[0], warnings)
+    decoder = sam_source_table(data, decoder_sources[0], warnings)
+    if encoder is not None and decoder is not None:
+        encoder_source_name, encoder_table = encoder
+        decoder_source_name, decoder_table = decoder
+        encoder_backend = sam_backend_from_table(
+            encoder_table, encoder_source_name, warnings)
+        decoder_backend = sam_backend_from_table(
+            decoder_table, decoder_source_name, warnings)
+        if encoder_backend is not None and decoder_backend is not None:
+            removed_sections = [
+                encoder_sources[0], decoder_sources[0],
+                *associated_source_sections(data, encoder_sources[0]),
+                *associated_source_sections(data, decoder_sources[0]),
+            ]
+            migrations.append(
+                SectionMigration(
+                    section="SAM_PREDICTOR",
+                    old_backend=encoder_backend["type"],
+                    source_section=f"{encoder_source_name}+{decoder_source_name}",
+                    backend={"type": encoder_backend["type"]},
+                    extra_backends={
+                        "encoder_backend": encoder_backend,
+                        "decoder_backend": decoder_backend,
+                    },
+                    params={},
+                    removed_sections=list(dict.fromkeys(removed_sections)),
+                    key_moves=[
+                        f"{encoder_source_name}.model_file_path -> encoder_backend.model_file_path",
+                        f"{decoder_source_name}.model_file_path -> decoder_backend.model_file_path",
+                    ],
+                )
+            )
+
+    encoder = sam_source_table(data, "SAM_ENCODER", warnings)
+    amg_decoder_table = data.get("SAM_AMG_DECODER")
+    if encoder is not None and is_table(amg_decoder_table):
+        encoder_source_name, encoder_table = encoder
+        encoder_backend = sam_backend_from_table(
+            encoder_table, encoder_source_name, warnings)
+        decoder_backend = sam_backend_from_table(
+            amg_decoder_table, "SAM_AMG_DECODER", warnings)
+        if encoder_backend is not None and decoder_backend is not None:
+            excluded_keys = set(BACKEND_SOURCE_KEYS) | {
+                "backend_type", "input_layout", "points_per_size"
+            }
+            params = {
+                key: value for key, value in amg_decoder_table.items()
+                if key not in excluded_keys
+            }
+            if "points_per_size" in amg_decoder_table:
+                params["points_per_side"] = amg_decoder_table["points_per_size"]
+            removed_sections = [
+                "SAM_ENCODER", "SAM_AMG_DECODER",
+                *associated_source_sections(data, "SAM_ENCODER"),
+            ]
+            migrations.append(
+                SectionMigration(
+                    section="SAM_AMG",
+                    old_backend=encoder_backend["type"],
+                    source_section=f"{encoder_source_name}+SAM_AMG_DECODER",
+                    backend={"type": encoder_backend["type"]},
+                    extra_backends={
+                        "encoder_backend": encoder_backend,
+                        "amg_decoder_backend": decoder_backend,
+                    },
+                    params=params,
+                    removed_sections=list(dict.fromkeys(removed_sections)),
+                    key_moves=[
+                        f"{encoder_source_name}.model_file_path -> encoder_backend.model_file_path",
+                        "SAM_AMG_DECODER.model_file_path -> amg_decoder_backend.model_file_path",
+                        *[f"SAM_AMG_DECODER.{key} -> params.{key}" for key in params],
+                    ],
+                )
+            )
+    return migrations
+
+
 def migrate_section(
     data: Mapping[str, Any], section: str, warnings: List[str]
 ) -> Optional[SectionMigration]:
@@ -470,6 +619,12 @@ def migrate_document(
     migrations: List[SectionMigration] = []
     already_migrated: List[str] = []
 
+    sam_migrations = migrate_sam_sections(data, warnings)
+    migrations.extend(sam_migrations)
+    sam_consumed_sections = {
+        name for item in sam_migrations for name in item.removed_sections
+    }
+
     clip_selected = selected_sections is None or "OPENAI_CLIP" in selected_sections
     clip_migration = (
         migrate_openai_clip_section(data, warnings) if clip_selected else None
@@ -497,7 +652,11 @@ def migrate_document(
             )
 
     for section in candidates:
-        if section in source_sections or section in clip_consumed_sections:
+        if (
+            section in source_sections
+            or section in clip_consumed_sections
+            or section in sam_consumed_sections
+        ):
             continue
         if selected_sections is not None and section.upper() not in selected_sections:
             continue
@@ -960,6 +1119,22 @@ model_file_path="../weights/sam_encoder.engine"
 [SAM_ONNX_ENCODER]
 model_file_path="../weights/sam_encoder.onnx"
 
+[SAM_DECODER]
+backend_type="trt"
+
+[SAM_TRT_DECODER]
+model_file_path="../weights/sam_decoder.engine"
+
+[SAM_AMG_DECODER]
+model_file_path="../weights/sam_amg_decoder.engine"
+worker_queue_size=8
+compute_threads=-1
+points_per_size=32
+pred_iou_thresh=0.88
+stability_score_thresh=0.95
+box_nms_thresh=0.7
+min_mask_region_area=0
+
 [MNET]
 backend_type="mnn"
 
@@ -1030,7 +1205,7 @@ def run_selftest() -> int:
     original = parse_toml_text(SELFTEST_TOML)
     result = migrate_document(Path("selftest.toml"), original)
 
-    assert_equal(len(result.migrations), 8, "eight model sections should migrate")
+    assert_equal(len(result.migrations), 9, "nine model sections should migrate")
     assert_equal(
         sorted(migration.section for migration in result.migrations),
         [
@@ -1040,7 +1215,8 @@ def run_selftest() -> int:
             "MNET",
             "MOBILENETV2",
             "OPENAI_CLIP",
-            "SAM_ENCODER",
+            "SAM_AMG",
+            "SAM_PREDICTOR",
             "YOLOV8",
         ],
         "migrated section set",
@@ -1116,13 +1292,76 @@ def run_selftest() -> int:
         result.migrated["DDPM_UNET"]["params"], {"timesteps": 1000}, "ONNX params"
     )
     assert_equal(
-        result.migrated["SAM_ENCODER"]["backend"],
+        set(result.migrated["SAM_PREDICTOR"].keys()),
+        {"encoder_backend", "decoder_backend", "params"},
+        "SAM predictor multi-engine section keys",
+    )
+    assert_equal(
+        result.migrated["SAM_PREDICTOR"]["encoder_backend"],
         {
             "type": "tensorrt",
             "model_file_path": "../weights/sam_encoder.engine",
             "device": "cpu",
         },
-        "SAM infix-source backend",
+        "SAM infix-source encoder backend",
+    )
+    assert_equal(
+        result.migrated["SAM_PREDICTOR"]["decoder_backend"]["model_file_path"],
+        "../weights/sam_decoder.engine",
+        "SAM infix-source decoder path",
+    )
+    assert_equal(
+        result.migrated["SAM_AMG"]["amg_decoder_backend"]["model_file_path"],
+        "../weights/sam_amg_decoder.engine",
+        "SAM AMG decoder path",
+    )
+    assert_equal(
+        result.migrated["SAM_AMG"]["params"],
+        {
+            "worker_queue_size": 8,
+            "compute_threads": -1,
+            "points_per_side": 32,
+            "pred_iou_thresh": 0.88,
+            "stability_score_thresh": 0.95,
+            "box_nms_thresh": 0.7,
+            "min_mask_region_area": 0,
+        },
+        "SAM AMG params",
+    )
+    vit_original = parse_toml_text(
+        """
+        [SAM_VIT_ENCODER]
+        model_file_path="../weights/sam_vit_encoder.mnn"
+        compute_backend="cuda"
+        model_threads_num=4
+
+        [SAM_VIT_DECODER]
+        model_file_path="../weights/sam_vit_decoder.onnx"
+        compute_backend="cpu"
+        model_threads_num=4
+        """
+    )
+    vit_result = migrate_document(Path("sam-vit-selftest.toml"), vit_original)
+    assert_equal(len(vit_result.migrations), 1, "one SAM ViT model should migrate")
+    assert_equal(
+        vit_result.migrated["SAM_PREDICTOR"]["encoder_backend"],
+        {
+            "type": "mnn",
+            "model_file_path": "../weights/sam_vit_encoder.mnn",
+            "device": "cuda",
+            "threads": 4,
+        },
+        "SAM ViT encoder backend",
+    )
+    assert_equal(
+        vit_result.migrated["SAM_PREDICTOR"]["decoder_backend"],
+        {
+            "type": "onnx",
+            "model_file_path": "../weights/sam_vit_decoder.onnx",
+            "device": "cpu",
+            "threads": 4,
+        },
+        "SAM ViT decoder backend",
     )
     assert_equal(
         result.migrated["MNET"]["backend"],

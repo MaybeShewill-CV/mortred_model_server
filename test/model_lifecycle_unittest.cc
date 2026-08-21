@@ -24,7 +24,8 @@
 #include "models/mono_depth_estimation/depth_anything.h"
 #include "models/mono_depth_estimation/metric3d.h"
 #include "models/object_detection/yolov8_detector.h"
-#include "models/segment_anything/sam_predictor.h"
+#include "models/segment_anything/sam_prediction/sam_predictor.h"
+#include "models/segment_anything/sam_automask_generator/sam_automask_generator.h"
 #include "models/scene_segmentation/hrnet_segmentation.h"
 #include "models/scene_segmentation/msocrnet.h"
 
@@ -42,6 +43,7 @@ using jinq::models::io_define::diffusion::std_vae_decode_output;
 using jinq::models::io_define::mono_depth_estimation::std_mde_output;
 using jinq::models::io_define::object_detection::std_object_detection_output;
 using jinq::models::io_define::segment_anything::sam_prompt_input;
+using jinq::models::io_define::segment_anything::sam_amg_output;
 using jinq::models::io_define::segment_anything::std_sam_prompt_output;
 using jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
 
@@ -156,6 +158,12 @@ model_file_path="whatever.engine"
 TEST(BackendConfigGuard, SamPredictorEmptyConfigFailsCleanly) {
     jinq::models::segment_anything::SamPredictor<sam_prompt_input,
                                                   std_sam_prompt_output> model;
+    toml::table empty_cfg;
+    EXPECT_EQ(model.init(empty_cfg), StatusCode::MODEL_INIT_FAILED);
+}
+
+TEST(BackendConfigGuard, SamAutoMaskGeneratorEmptyConfigFailsCleanly) {
+    jinq::models::segment_anything::SamAutoMaskGenerator<mat_input, sam_amg_output> model;
     toml::table empty_cfg;
     EXPECT_EQ(model.init(empty_cfg), StatusCode::MODEL_INIT_FAILED);
 }
