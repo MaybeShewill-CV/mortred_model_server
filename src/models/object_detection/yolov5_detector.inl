@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: yolov5_detector.cpp
-* Date: 22-6-7
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: yolov5_detector.inl
+ * Date: 22-6-7
+ ************************************************/
 
 #include "yolov5_detector.h"
 

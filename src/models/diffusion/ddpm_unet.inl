@@ -1,7 +1,7 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: DDPMUNet.cpp
+ * File: ddpm_unet.inl
  * Date: 24-4-23
  ************************************************/
 

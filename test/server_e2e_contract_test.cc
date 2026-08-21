@@ -2,9 +2,10 @@
  * Author: Codex
  * File: server_e2e_contract_test.cc
  *
- * HTTP 级端到端契约测试：线程模式起真实 WFHttpServer + 假模型，
- * 验证统一 envelope、HTTP 状态码、响应头与 data:null 语义。
- * 需要 workflow 库链接（tests-only 构建未提供时自动跳过注册）。
+ * HTTP-level end-to-end contract test: runs a real WFHttpServer + fake model
+ * in thread mode, verifying the unified envelope, HTTP status codes, response
+ * headers, and data:null semantics. Requires workflow linkage (auto-skips when
+ * the tests-only build does not provide it).
  ************************************************/
 
 #include <arpa/inet.h>
@@ -202,7 +203,8 @@ HttpResp send_request(int port,
     size_t sent = 0;
     while (sent < request.size()) {
         const ssize_t n = send(fd, request.data() + sent, request.size() - sent, 0);
-        // ASSERT_* 宏展开为 return;（void），不能出现在返回 HttpResp 的函数里
+        // ASSERT_* expands to return; (void), so it cannot appear in a function
+        // returning HttpResp
         if (n <= 0) {
             ADD_FAILURE() << "send() failed";
             close(fd);
@@ -302,9 +304,10 @@ std::string build_config(int port, const std::string& extra, int request_size_li
     cfg << "worker_nums=1\n";
     cfg << "server_uri=\"/test/model\"\n";
     cfg << "auth_token=\"test-secret\"\n";
-    // model_run_timeout 与 rate_limit_qps 不写入基底：需要覆盖它们的用例
-    // 通过 extra 传入，TOML 不允许重复键（parse 会直接失败）；
-    // 不传时服务端有相同默认值（500ms / 不限流）
+    // model_run_timeout and rate_limit_qps are not written to the base config:
+    // cases that need them pass them via extra, because TOML forbids duplicate
+    // keys (parse would fail outright); when absent the server uses the same
+    // defaults (500ms / unlimited)
     cfg << extra;
     return cfg.str();
 }
@@ -315,8 +318,9 @@ struct ServerHandle {
 
     ServerHandle() = default;
 
-    // 用户声明的析构函数会抑制隐式移动构造/赋值；多分支 return handle
-    // 无法全部走 NRVO，必须显式提供移动语义（唯一所有权转移）
+    // a user-declared destructor suppresses implicit move ctor/assignment;
+    // multi-branch return handles cannot all use NRVO, so move semantics must
+    // be provided explicitly (unique ownership transfer)
     ServerHandle(ServerHandle&& other) noexcept
         : port(other.port), server(std::move(other.server)) {
         other.port = 0;

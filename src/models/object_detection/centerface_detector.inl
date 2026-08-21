@@ -1,7 +1,7 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: centerface_detector.cpp
+ * File: centerface_detector.inl
  * Date: 23-10-18
  ************************************************/
 

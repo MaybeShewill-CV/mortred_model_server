@@ -2,6 +2,7 @@
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
 * File: dinov2.h
+* Date: 23-6-12
 ************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_DINOV2_H
@@ -20,6 +21,7 @@
 namespace jinq {
 namespace models {
 namespace classification {
+using jinq::common::StatusCode;
 
 template<typename INPUT, typename OUTPUT>
 class Dinov2 : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
@@ -33,11 +35,11 @@ class Dinov2 : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   private:
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
 
-    jinq::common::StatusCode postprocess(
+    StatusCode postprocess(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,
         OUTPUT& output) override;
 
-    jinq::common::StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table& params) override;
 
     // class id to names
     std::unordered_map<uint16_t, std::string> _m_class_id2names;

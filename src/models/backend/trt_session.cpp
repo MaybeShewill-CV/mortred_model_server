@@ -1,8 +1,8 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: backend/trt_session.cpp
- * Date: 2026-08-20
+ * File: trt_session.cpp
+ * Date: 26-8-20
  ************************************************/
 
 #include "models/backend/trt_session.h"

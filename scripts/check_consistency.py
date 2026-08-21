@@ -50,7 +50,8 @@ STALE_BINARIES = [
     "tokenizer_benchmark.out",
     "llm_request_parser_unittest",
     "llm_datatype_unittest",
-    # 自研 ONNX->TRT 转换器已移除，改用外部 trtexec（scripts/convert_trt_engines.sh）
+    # the in-house ONNX->TRT converter was removed; external trtexec is used
+    # instead (scripts/convert_trt_engines.sh)
     "onnx2trt_converter.out",
 ]
 
@@ -144,8 +145,9 @@ def check_server_model_config_paths() -> list[str]:
         if model_cfg_path is None:
             errors.append(f"conf/server config has no model_config_file_path: {cfg.relative_to(ROOT)}")
             continue
-        # model_config_file_path 是相对服务进程工作目录（文档约定为 _bin）的路径，
-        # 例如 ../conf/model/... 实际指向仓库根的 conf/model/...。
+        # model_config_file_path is relative to the server process working dir
+        # (documented as _bin), e.g. ../conf/model/... actually points at the
+        # repo root conf/model/...
         resolved = (ROOT / "_bin" / model_cfg_path).resolve()
         if not resolved.exists():
             errors.append(
@@ -375,8 +377,9 @@ def check_trt_engine_manifest() -> list[str]:
 
 
 def check_factory_register_type_banned() -> list[str]:
-    """src/factory/*_task.h 禁止 register_type：模型 create 一律直接构造，
-    服务 create 用 register_creator 闭包（消除"每次创建写全局注册表"反模式）。"""
+    """src/factory/*_task.h must not call register_type: models construct
+    directly; servers use the register_creator closure (avoids the
+    "write the global registry on every create" anti-pattern)."""
     errors: list[str] = []
     for header in sorted((ROOT / "src" / "factory").glob("*_task.h")):
         for i, line in enumerate(header.read_text(encoding="utf-8").splitlines(), 1):
@@ -388,8 +391,10 @@ def check_factory_register_type_banned() -> list[str]:
 
 
 def check_security_scan() -> list[str]:
-    """源码级安全 lint：禁止危险调用（system/popen/strcpy/strcat/gets/scanf）。
-    防止历史漏洞类模式回潮（评审时全仓为零命中，此处转为强制门禁）。"""
+    """Source-level security lint: bans dangerous calls
+    (system/popen/strcpy/strcat/gets/scanf). Prevents historical vulnerability
+    patterns from returning (review found zero hits repo-wide; enforced as a
+    hard gate here)."""
     errors: list[str] = []
     banned = re.compile(r"\b(system|popen|strcpy|strcat|gets|scanf)\s*\(")
     src_root = ROOT / "src"
@@ -401,15 +406,16 @@ def check_security_scan() -> list[str]:
         for i, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
             stripped = line.lstrip()
             if stripped.startswith("//") or stripped.startswith("/*") or stripped.startswith("*"):
-                continue  # 注释行跳过，降低误报
+                continue  # skip comment lines to reduce false positives
             if banned.search(line):
                 errors.append(f"{path.relative_to(ROOT)}:{i}: banned call: {line.strip()}")
     return errors
 
 
 def check_ci_no_python3_runs_sh() -> list[str]:
-    """.github/workflows/*.yml 中禁止用 python3 执行 bash 脚本（历史 bug：
-    ci.yml 曾用 `python3 scripts/convert_trt_engines.sh --list` 让 deploy-tools 必失败）。"""
+    """.github/workflows/*.yml must not run bash scripts via python3 (historical
+    bug: ci.yml used `python3 scripts/convert_trt_engines.sh --list`, which made
+    deploy-tools always fail)."""
     errors: list[str] = []
     wf_dir = ROOT / ".github" / "workflows"
     if not wf_dir.exists():
@@ -418,7 +424,7 @@ def check_ci_no_python3_runs_sh() -> list[str]:
         for i, line in enumerate(wf.read_text(encoding="utf-8").splitlines(), 1):
             if re.search(r"python3?\s+scripts/[^\s]+\.sh\b", line):
                 errors.append(
-                    f"{wf.relative_to(ROOT)}:{i}: 禁止用 python3 执行 bash 脚本（改用 bash）: {line.strip()}"
+                    f"{wf.relative_to(ROOT)}:{i}: running bash scripts via python3 is banned (use bash): {line.strip()}"
                 )
     return errors
 

@@ -1,17 +1,17 @@
-# VendoredDeps.cmake —— vendored 二进制依赖的显式声明（替代 file(GLOB)）
+# VendoredDeps.cmake - explicit declarations of vendored binary deps (replaces file(GLOB))
 #
-# 设计目标：
-# 1. 符号链接链折叠为单一精确文件（libworkflow.so/.so.0/.so.0.10.9 → 一个 target）
-# 2. 缺失即 configure 期致命错并给出修复命令，而不是链接/运行期的晦涩失败
-# 3. 精确 soname 钉版本（与 scripts/install_deps.sh 版本矩阵对齐），
-#    错误版本（如 TRT 10）混入会被"找不到 libnvinfer.so.8"直接拦截
-# 4. 精确文件变更自动触发重新配置（CONFIGURE_DEPENDS），无 GLOB 陈旧性
+# Design goals:
+# 1. Symlink chains collapse to a single exact file (libworkflow.so/.so.0/.so.0.10.9 -> one target)
+# 2. Missing libs fail fatally at configure time with a fix command, not obscure link/run errors
+# 3. Exact sonames pin versions (aligned with the scripts/install_deps.sh version matrix);
+#    wrong versions (e.g. TRT 10) are blocked by "libnvinfer.so.8 not found"
+# 4. Exact-file changes trigger automatic reconfigure (CONFIGURE_DEPENDS), no GLOB staleness
 
 set(MORTRED_3RD_LIBS "${PROJECT_ROOT_DIR}/3rd_party/libs" CACHE PATH
     "Directory holding the vendored shared libraries installed by scripts/install_deps.sh")
 
-# 运行时组件（providers/builder_resource/cudnn 等）由动态加载器按需 dlopen，
-# 不在此声明为链接项。
+# Runtime components (providers/builder_resource/cudnn etc.) are dlopened on demand
+# by the dynamic loader; not declared as link items here.
 
 function(mortred_import_shared name soname)
     find_library(mortred_lib_${name} NAMES ${soname}
@@ -29,8 +29,8 @@ function(mortred_import_shared name soname)
     message(STATUS "vendored ${name}: ${mortred_lib_${name}}")
 endfunction()
 
-# 可选探测（tests-only 场景）：vendored workflow 存在则契约 e2e 测试可运行，
-# 不存在（CI vcpkg 路径）则自动跳过——与旧的 if(WORKFLOW_LIBS) 行为一致。
+# Optional probe (tests-only case): vendored workflow present => e2e contract tests can run;
+# absent (CI vcpkg path) => skipped automatically, matching the old if(WORKFLOW_LIBS) behavior.
 macro(mortred_probe_workflow)
     find_library(mortred_workflow_lib NAMES libworkflow.so
                  HINTS "${MORTRED_3RD_LIBS}" NO_DEFAULT_PATH)

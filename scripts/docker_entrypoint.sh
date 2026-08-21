@@ -1,25 +1,26 @@
 #!/usr/bin/env bash
-# docker_entrypoint.sh - 容器启动入口：环境注入 + 启动 web console（app_server）。
+# docker_entrypoint.sh - container entrypoint: inject environment + start web console (app_server).
 #
-# 模型子进程由 console 在容器内管理；权重/引擎经 volume 挂载到
-# /opt/mortred/weights（镜像内不包含权重）。
+# Model subprocesses are managed by the console inside the container; weights/engines are
+# volume-mounted at /opt/mortred/weights (the image contains no weights).
 set -euo pipefail
 
 export APP_PROJECT_ROOT="${APP_PROJECT_ROOT:-/opt/mortred}"
 export APP_LISTEN_HOST="${APP_LISTEN_HOST:-0.0.0.0}"
 export APP_LISTEN_PORT="${APP_LISTEN_PORT:-8787}"
-# 运行库：优先安装树 lib（含 3rd_party 库），再兜底系统路径
+# Runtime libs: prefer the installed tree lib (contains 3rd_party libs), then fall back to system paths
 export LD_LIBRARY_PATH="/opt/mortred/lib:${LD_LIBRARY_PATH:-}"
-# 引擎转换工具（trtexec）默认位置：安装树 bin/（install_deps.sh --nvidia 拷贝）
+# Engine conversion tool (trtexec) default location: installed tree bin/ (copied by install_deps.sh --nvidia)
 export TRTEXEC="${TRTEXEC:-/opt/mortred/bin/trtexec}"
-# 安装树布局：控制台 spawn 模型子进程的目录名（安装树为 bin/lib，3rd_party 库并入 lib；
-# 见 CMakeLists.txt MORTRED_INSTALL；源码树直跑保持默认 _bin/_lib/3rd_party/libs）
+# Installed tree layout: directory names the console uses to spawn model subprocesses
+# (installed tree is bin/lib, 3rd_party libs merged into lib; see CMakeLists.txt MORTRED_INSTALL;
+# running from the source tree keeps defaults _bin/_lib/3rd_party/libs)
 export APP_BIN_DIR="${APP_BIN_DIR:-bin}"
 export APP_LIB_DIR="${APP_LIB_DIR:-lib}"
 export APP_LIBS_DIR="${APP_LIBS_DIR:-lib}"
 
 if [ -z "${APP_AUTH_TOKEN:-}" ] && [ "${APP_LISTEN_HOST}" != "127.0.0.1" ] && [ "${APP_LISTEN_HOST}" != "localhost" ]; then
-    echo "[entrypoint] WARNING: 非回环监听未配置 APP_AUTH_TOKEN，console 将拒绝启动（fail-closed）" >&2
+    echo "[entrypoint] WARNING: non-loopback listening without APP_AUTH_TOKEN; console will refuse to start (fail-closed)" >&2
 fi
 
 echo "[entrypoint] starting mortred web console on ${APP_LISTEN_HOST}:${APP_LISTEN_PORT}"

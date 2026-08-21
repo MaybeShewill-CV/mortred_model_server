@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: enlightengan.inl
-* Date: 22-6-13
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: enlightengan.inl
+ * Date: 22-6-13
+ ************************************************/
 
 #include "enlightengan.h"
 

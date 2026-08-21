@@ -1,7 +1,9 @@
 /************************************************
- * Author: Codex
- * File: server_manager.h
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: server_manager.h
+* Date: 26-8-12
+************************************************/
 
 #ifndef MORTRED_WEB_SERVER_MANAGER_H
 #define MORTRED_WEB_SERVER_MANAGER_H

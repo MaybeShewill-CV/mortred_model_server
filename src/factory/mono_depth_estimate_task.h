@@ -33,8 +33,8 @@ using jinq::models::mono_depth_estimation::Metric3D;
 // create metric3d mono depth estimation model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_metric3d_estimator(const std::string& estimator_name) {
-    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
-    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    // Direct construction: no global registry writes (no side effects or mutex
+    // overhead); avoids re-registering on every create. name kept for compatibility.
     (void)estimator_name;
     return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new Metric3D<INPUT, OUTPUT>());
 }
@@ -42,8 +42,8 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_metric3d_estimator(const std
 // create depth anything mono depth estimation model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_depth_anything_estimator(const std::string& estimator_name) {
-    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
-    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    // Direct construction: no global registry writes (no side effects or mutex
+    // overhead); avoids re-registering on every create. name kept for compatibility.
     (void)estimator_name;
     return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new DepthAnything<INPUT, OUTPUT>());
 }

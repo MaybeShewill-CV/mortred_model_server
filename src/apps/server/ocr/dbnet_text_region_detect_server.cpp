@@ -1,8 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* File: dbnet_text_region_detect_server.cpp
-* Date: 2026-08-19
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: dbnet_text_region_detect_server.cpp
+ * Date: 26-8-19
+ ************************************************/
 
 // dbnet_text_region_detect server tool
 

@@ -1,8 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* File: modnet_benchmark.cpp
-* Date: 2026-08-19
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: modnet_benchmark.cpp
+ * Date: 26-8-19
+ ************************************************/
 
 // modnet benchmark tool
 

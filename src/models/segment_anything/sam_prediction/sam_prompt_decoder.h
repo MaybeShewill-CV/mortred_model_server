@@ -1,9 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: sam_prompt_decoder.h
- * Date: 23-6-7
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: sam_prompt_decoder.h
+* Date: 23-6-7
+************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_SAM_PROMPT_DECODER_H
 #define MORTRED_MODEL_SERVER_SAM_PROMPT_DECODER_H
@@ -20,6 +20,7 @@
 namespace jinq {
 namespace models {
 namespace segment_anything {
+using jinq::common::StatusCode;
 
 /***
  * SAM prompt decoder backed by the unified inference-session layer. ONNX
@@ -35,18 +36,18 @@ class SamPromptDecoder {
     SamPromptDecoder(const SamPromptDecoder&) = delete;
     SamPromptDecoder& operator=(const SamPromptDecoder&) = delete;
 
-    jinq::common::StatusCode init();
+    StatusCode init();
 
     void set_ori_image_size(const cv::Size& ori_image_size);
 
     void set_encoder_input_size(const cv::Size& input_node_size);
 
-    jinq::common::StatusCode decode(
+    StatusCode decode(
         const std::vector<float>& image_embeddings,
         const std::vector<cv::Rect2f>& bboxes,
         std::vector<cv::Mat>& predicted_masks);
 
-    jinq::common::StatusCode decode(
+    StatusCode decode(
         const std::vector<float>& image_embeddings,
         const std::vector<std::vector<cv::Point2f>>& points,
         std::vector<cv::Mat>& predicted_masks);

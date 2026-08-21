@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-fetch_weights.py - 从 Hugging Face 自动下载/校验模型权重。
+fetch_weights.py - automatically download/verify model weights from Hugging Face.
 
-替代"从百度网盘手动下载"的流程：权重清单 conf/weights_manifest.json 声明
-repo、revision 与每个文件（路径/size/sha256），本脚本按清单下载到 weights/，
-已存在且 sha256 匹配的文件自动跳过（可断点续传）。
+Replaces the manual Baidu-netdisk download flow: the manifest
+conf/weights_manifest.json declares the repo, revision and every file
+(path/size/sha256); this script downloads per the manifest into weights/,
+skipping files that already exist with a matching sha256 (resumable).
 
-用法（在仓库根目录执行）:
-  python3 scripts/fetch_weights.py                    # 下载全部缺失权重
-  python3 scripts/fetch_weights.py --only yolov8      # 只下载路径含 yolov8 的文件
-  python3 scripts/fetch_weights.py --check            # 只校验已存在文件，不下载
-  python3 scripts/fetch_weights.py --dry-run          # 打印将要下载的文件
-  python3 scripts/fetch_weights.py --manifest FILE    # 指定清单（默认 conf/weights_manifest.json）
+Usage (run from the repo root):
+  python3 scripts/fetch_weights.py                    # download all missing weights
+  python3 scripts/fetch_weights.py --only yolov8      # only files whose path contains yolov8
+  python3 scripts/fetch_weights.py --check            # only verify existing files, no download
+  python3 scripts/fetch_weights.py --dry-run          # print what would be downloaded
+  python3 scripts/fetch_weights.py --manifest FILE    # custom manifest (default conf/weights_manifest.json)
 
-依赖: requests（或 huggingface_hub，二选一即可）；生成清单用
-  python3 scripts/gen_weights_manifest.py
+Deps: requests (or huggingface_hub, either is enough); to regenerate the
+manifest use python3 scripts/gen_weights_manifest.py
 """
 
 from __future__ import annotations
@@ -45,7 +46,7 @@ def sha256_of(path: Path, chunk: int = 1024 * 1024) -> str:
 def load_manifest(path: Path) -> dict:
     if not path.exists():
         sys.exit(f"[ERROR] manifest not found: {path} (run python3 scripts/gen_weights_manifest.py)")
-    # utf-8-sig：容忍 Windows 编辑器可能写入的 BOM
+    # utf-8-sig: tolerate a BOM that Windows editors may write
     with open(path, encoding="utf-8-sig") as f:
         return json.load(f)
 
@@ -55,8 +56,8 @@ def resolve_url(repo: str, revision: str, hf_path: str) -> str:
 
 
 def hf_path_of(item: dict) -> str:
-    """HF 仓库内路径：清单显式 hf_path 优先；否则剥掉 weights/ 前缀
-    （HF 布局 = 本地布局去掉 weights/ 前缀）。"""
+    """Path inside the HF repo: explicit manifest hf_path wins; otherwise strip
+    the weights/ prefix (HF layout = local layout minus the weights/ prefix)."""
     rel = item["path"]
     if item.get("hf_path"):
         return item["hf_path"]
@@ -64,7 +65,7 @@ def hf_path_of(item: dict) -> str:
 
 
 def download_file(url: str, dst: Path) -> None:
-    # 优先 huggingface_hub（带断点续传/多线程），退回 requests
+    # prefer huggingface_hub (resumable/multithreaded), fall back to requests
     try:
         import huggingface_hub  # noqa: F401
         from huggingface_hub import hf_hub_download
@@ -92,7 +93,8 @@ def download_file(url: str, dst: Path) -> None:
 
 
 def is_safe_weights_rel(rel: str) -> bool:
-    """路径安全：拒绝含 .. / . 段，且 resolve 后必须仍在 weights/ 内（防路径穿越）。"""
+    """Path safety: reject segments like .. / ., and the resolved path must stay
+    under weights/ (prevents path traversal)."""
     if any(part in ("..", ".") for part in Path(rel).parts):
         return False
     try:
@@ -104,9 +106,9 @@ def is_safe_weights_rel(rel: str) -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true", help="只校验已存在文件，不下载")
-    parser.add_argument("--dry-run", action="store_true", help="只打印将要下载的文件")
-    parser.add_argument("--only", type=str, default="", help="只处理路径包含该子串的文件")
+    parser.add_argument("--check", action="store_true", help="only verify existing files, no download")
+    parser.add_argument("--dry-run", action="store_true", help="only print what would be downloaded")
+    parser.add_argument("--only", type=str, default="", help="only process files whose path contains this substring")
     parser.add_argument("--manifest", type=str, default=str(DEFAULT_MANIFEST))
     args = parser.parse_args()
 
@@ -124,7 +126,7 @@ def main() -> int:
 
     for item in selected:
         rel = item["path"]
-        # 路径安全：只允许 weights/ 内、且 resolve 后不越界的相对路径
+        # path safety: only relative paths under weights/ that do not escape after resolve
         if not rel.startswith("weights/") or not is_safe_weights_rel(rel):
             failed.append((rel, "unsafe path (must stay under weights/)"))
             continue
@@ -132,7 +134,8 @@ def main() -> int:
         expect = item.get("sha256", "")
         if dst.exists():
             if args.dry_run:
-                # dry-run 只报告将要下载的文件，不哈希已存在文件（避免大模型耗时）
+                # dry-run only reports files to download and does not hash
+                # existing files (avoids hashing large models)
                 ok += 1
                 continue
             actual = sha256_of(dst)
@@ -140,16 +143,16 @@ def main() -> int:
                 if args.check:
                     failed.append((rel, f"sha256 mismatch (got {actual[:12]}…, want {expect[:12]}…)"))
                 else:
-                    dst.unlink()  # 损坏文件：删除重新下载
+                    dst.unlink()  # corrupted file: delete and re-download
                     missing.append(rel)
             else:
                 ok += 1
                 print(f"[ok]   {rel} (sha256 match)")
         else:
             if item.get("on_hf") is False:
-                # HF 上不存在：无法下载，仅提示归档源
+                # not on HF: cannot download, just note the archive source
                 nohf.append(rel)
-                print(f"[nohf] {rel} (不在 HF 仓库，需从归档获取)")
+                print(f"[nohf] {rel} (not in the HF repo; get it from the archive source)")
             else:
                 missing.append(rel)
 
@@ -160,13 +163,13 @@ def main() -> int:
         for rel in missing:
             print(f"  [MISS] {rel}")
         for rel in nohf:
-            print(f"  [NOHF] {rel} (仅归档源可获取)")
+            print(f"  [NOHF] {rel} (archive source only)")
         return 1 if (missing or failed or nohf) else 0
 
     if args.dry_run:
         for rel in missing:
             print(f"[plan] {rel}")
-        print(f"\n== dry-run: {len(missing)} to download (off-hf 不可下载: {len(nohf)})")
+        print(f"\n== dry-run: {len(missing)} to download (off-hf not downloadable: {len(nohf)})")
         return 0
 
     for rel in missing:

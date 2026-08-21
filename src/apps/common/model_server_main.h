@@ -1,12 +1,13 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * File: model_server_main.h
- * Date: 2026-08-19
- *
- * Shared main() body for all model server executables: glog setup, config
- * parsing, host/port extraction, server start and wait. Per-server mains
- * shrink to a section name + factory callback.
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: model_server_main.h
+* Date: 26-8-19
+************************************************/
+
+// Shared main() body for all model server executables: glog setup, config
+// parsing, host/port extraction, server start and wait. Per-server mains
+// reduce to a section name + factory callback.
 #ifndef MORTRED_APPS_MODEL_SERVER_MAIN_H
 #define MORTRED_APPS_MODEL_SERVER_MAIN_H
 
@@ -22,6 +23,7 @@
 
 namespace jinq {
 namespace apps {
+using jinq::common::StatusCode;
 
 inline int run_model_server_main(
     int argc, char** argv,
@@ -59,7 +61,7 @@ inline int run_model_server_main(
     // factory registration key: process-internal registry, no external consumer
     auto server = make_server("server");
     auto status = server->init(config);
-    if (status != jinq::common::StatusCode::OK) {
+    if (status != StatusCode::OK) {
         LOG(ERROR) << "server init failed, status: "
                    << std::to_string(static_cast<int>(status));
         return -1;

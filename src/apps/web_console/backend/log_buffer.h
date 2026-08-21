@@ -1,7 +1,9 @@
 /************************************************
- * Author: Codex
- * File: log_buffer.h
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: log_buffer.h
+* Date: 26-8-12
+************************************************/
 
 #ifndef MORTRED_WEB_LOG_BUFFER_H
 #define MORTRED_WEB_LOG_BUFFER_H

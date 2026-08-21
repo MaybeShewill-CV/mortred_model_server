@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: lightglue.inl
-* Date: 23-11-03
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: lightglue.inl
+ * Date: 23-11-3
+ ************************************************/
 
 #include "lightglue.h"
 

@@ -1,10 +1,11 @@
 /************************************************
- * Author: Codex
- * File: http_response.h
- * Date: 2026-08-26
- *
- * Unified HTTP JSON response envelope used by all model servers.
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: http_response.h
+* Date: 26-8-17
+************************************************/
+
+// Unified HTTP JSON response envelope used by all model servers.
 
 #ifndef MORTRED_COMMON_HTTP_RESPONSE_H
 #define MORTRED_COMMON_HTTP_RESPONSE_H

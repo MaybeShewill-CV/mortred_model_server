@@ -1,7 +1,7 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: clip_tokenizer.cpp
+ * File: simple_tokenizer.cpp
  * Date: 23-7-6
  ************************************************/
 

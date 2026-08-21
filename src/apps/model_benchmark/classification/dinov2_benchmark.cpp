@@ -1,8 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* File: dinov2_benchmark.cpp
-* Date: 2026-08-19
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: dinov2_benchmark.cpp
+ * Date: 26-8-19
+ ************************************************/
 
 // dinov2 benchmark tool
 

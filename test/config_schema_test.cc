@@ -41,7 +41,8 @@ toml::table parse_text(const std::string& text) {
     std::istringstream iss(text);
     auto parsed = toml::parse(iss);
     auto root = std::move(parsed).table();
-    // 单元测试的文本只含一个 [X]/[M] 小节；校验器期望的是小节内表而非根表
+    // unit-test texts contain a single [X]/[M] section; the validator expects
+    // the section subtable, not the root table
     if (!root.empty()) {
         if (auto* section = root.begin()->second.as_table()) {
             return std::move(*section);
@@ -81,7 +82,7 @@ TEST(config_schema, every_server_section_passes) {
         ASSERT_TRUE(parsed) << path;
         auto table = std::move(parsed).table();
         for (const auto& [key, value] : table) {
-            // toml::v3::key 需物化为 std::string（str() 返回 string_view）
+            // toml::v3::key must be materialized to std::string (str() returns a string_view)
             const std::string key_name(key.str());
             if (!is_server_section(key_name)) {
                 continue;

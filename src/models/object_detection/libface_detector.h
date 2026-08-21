@@ -1,9 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: libface_detector.h
- * Date: 22-6-10
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: libface_detector.h
+* Date: 22-6-10
+************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_LIBFACE_DETECTOR_H
 #define MORTRED_MODEL_SERVER_LIBFACE_DETECTOR_H
@@ -20,6 +20,7 @@
 namespace jinq {
 namespace models {
 namespace object_detection {
+using jinq::common::StatusCode;
 
 template<typename INPUT, typename OUTPUT>
 class LibFaceDetector : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
@@ -40,11 +41,11 @@ class LibFaceDetector : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
 
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
 
-    jinq::common::StatusCode postprocess(
+    StatusCode postprocess(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,
         OUTPUT& output) override;
 
-    jinq::common::StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table& params) override;
 
     const jinq::models::backend::NamedTensor* find_output(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,

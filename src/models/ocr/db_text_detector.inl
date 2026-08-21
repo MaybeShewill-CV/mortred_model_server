@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: db_text_detector.cpp
-* Date: 22-6-6
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: db_text_detector.inl
+ * Date: 22-6-6
+ ************************************************/
 
 #include "db_text_detector.h"
 

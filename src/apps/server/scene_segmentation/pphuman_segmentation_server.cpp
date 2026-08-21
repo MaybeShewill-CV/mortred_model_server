@@ -1,8 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* File: pphuman_segmentation_server.cpp
-* Date: 2026-08-19
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: pphuman_segmentation_server.cpp
+ * Date: 26-8-19
+ ************************************************/
 
 // pphuman_segmentation server tool
 

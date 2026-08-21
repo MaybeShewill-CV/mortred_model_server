@@ -1,11 +1,12 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * File: benchmark_runner.h
- * Date: 2026-08-19
- *
- * Shared benchmark main() driver: arg/config handling, model init, warmup,
- * timed loop with mean/p50/p99 statistics, and per-task input/output hooks.
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: benchmark_runner.h
+* Date: 26-8-19
+************************************************/
+
+// Shared benchmark main() driver: arg/config handling, model init, warmup,
+// timed loop with mean/p50/p99 statistics, and per-task input/output hooks.
 #ifndef MORTRED_APPS_BENCHMARK_RUNNER_H
 #define MORTRED_APPS_BENCHMARK_RUNNER_H
 
@@ -37,22 +38,27 @@ struct BenchmarkSpec {
     std::string display_name;      // e.g. "mobilenetv2 classifier"
     std::string usage;             // e.g. "exe config_file_path [test_image_path]"
     int loops = 100;
-    // 扩散采样族每次 run 都是一次完整采样（秒~分钟级），置 false 保持
-    // 与原实现一致的"无预热"行为；标准轻量模型保持默认 true
+    // each diffusion-family run is a full sampling pass (seconds to minutes);
+    // keep warmup off to match the original no-warmup behavior; standard light
+    // models keep the default true
     bool warmup = true;
-    // CLI 形状校验：标准 main 用 standard_args_ok；diffusion 族按各自参数个数覆盖
+    // CLI shape check: standard mains use standard_args_ok; diffusion mains
+    // override per their own arg counts
     std::function<bool(int argc)> args_ok;
-    // 输入有效性校验：标准单图 spec 检查 !input_image.empty()；
-    // diffusion/lightglue 等自定义输入返回 true（由 make_input 自行保证）
+    // input validity check: standard single-image specs check
+    // !input_image.empty(); diffusion/lightglue custom inputs return true
+    // (make_input guarantees it)
     std::function<bool(const INPUT&)> input_ok;
-    // 从 CLI + config 构造模型输入；标准单图 main 用 make_single_image_input
+    // build the model input from CLI + config; standard single-image mains use
+    // make_single_image_input
     std::function<INPUT(int argc, char** argv, const toml::table& cfg)> make_input;
-    // 输出命名/可视化所需的输入图路径（无图 benchmark 返回 ""）
+    // input image path for output naming/visualization ("" when the benchmark
+    // has no image)
     std::function<std::string(int argc, char** argv)> image_path_of;
-    // 建模：走工厂 create_X 或直接 make_unique（diffusion 族）
+    // model construction: factory create_X or direct make_unique (diffusion)
     std::function<std::unique_ptr<jinq::models::BaseAiModel<INPUT, OUTPUT>>(const std::string&)>
         make_model;
-    // 循环后调用一次：记日志 / 可视化 / 保存
+    // called once after the loop: logging / visualization / saving
     std::function<void(const INPUT& in, const OUTPUT& out, const std::string& image_path)>
         handle_output;
 };
@@ -107,7 +113,8 @@ int run_benchmark(int argc, char** argv, const BenchmarkSpec<INPUT, OUTPUT>& spe
     }
     auto cfg = std::move(cfg_parsed).table();
 
-    // 与原实现一致：输入缺失/解码失败时直接退出
+    // matches the original behavior: exit directly when the input is missing or
+    // fails to decode
     INPUT model_input = spec.make_input(argc, argv, cfg);
     if (!spec.input_ok(model_input)) {
         return -1;
@@ -124,7 +131,7 @@ int run_benchmark(int argc, char** argv, const BenchmarkSpec<INPUT, OUTPUT>& spe
     LOG(INFO) << "start " << spec.display_name << " benchmark at: "
               << jinq::common::Timestamp::now().to_format_str();
 
-    // warmup run: not counted (消除首次迭代冷启动偏差)
+    // warmup run: not counted (removes first-iteration cold-start bias)
     if (spec.warmup) {
         model->run(model_input, model_output);
     }

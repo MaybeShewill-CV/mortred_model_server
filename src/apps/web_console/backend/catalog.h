@@ -1,7 +1,9 @@
 /************************************************
- * Author: Codex
- * File: catalog.h
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: catalog.h
+* Date: 26-8-12
+************************************************/
 
 #ifndef MORTRED_WEB_CATALOG_H
 #define MORTRED_WEB_CATALOG_H

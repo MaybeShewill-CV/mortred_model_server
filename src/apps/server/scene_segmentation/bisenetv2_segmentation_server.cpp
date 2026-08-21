@@ -1,8 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* File: bisenetv2_segmentation_server.cpp
-* Date: 2026-08-19
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: bisenetv2_segmentation_server.cpp
+ * Date: 26-8-19
+ ************************************************/
 
 // bisenetv2_segmentation server tool
 

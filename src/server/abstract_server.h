@@ -1,7 +1,7 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: base_server.h
+* File: abstract_server.h
 * Date: 22-6-21
 ************************************************/
 
@@ -20,6 +20,7 @@
 
 namespace jinq {
 namespace server {
+using jinq::common::StatusCode;
 class BaseAiServer {
 public:
     /***
@@ -28,7 +29,7 @@ public:
     virtual ~BaseAiServer() = default;
 
     /***
-     * 构造函数
+     * Constructor
      * @param config
      */
     BaseAiServer() = default;
@@ -38,7 +39,7 @@ public:
      * @param cfg
      * @return
      */
-    virtual jinq::common::StatusCode init(const toml::table& cfg) = 0;
+    virtual StatusCode init(const toml::table& cfg) = 0;
 
     /***
      *
@@ -96,14 +97,14 @@ public:
 
 protected:
     /***
-     * 通用 HTTP 服务装配：workflow 全局设置 + WFServerParams + WFHttpServer。
-     * 参数全部取自 Impl 的 _m_* 成员（基类有默认值兜底），
-     * 特异 server 可以不调用本方法而自行装配 _m_server。
+     * Generic HTTP server assembly: workflow global settings + WFServerParams + WFHttpServer.
+     * All params come from the Impl's _m_* members (base class provides defaults);
+     * specific servers may skip this and assemble _m_server themselves.
      */
     template<typename IMPL>
-    jinq::common::StatusCode init_http_server(IMPL* impl) {
-        // workflow 全局设置只能初始化一次：单进程多 server（测试/网关形态）下
-        // 以第一个 init 的设置为准，避免重复初始化未定义行为。
+    StatusCode init_http_server(IMPL* impl) {
+        // workflow global settings may be initialized only once: with multiple servers
+        // in one process (tests/gateway), the first init wins to avoid re-init UB.
         static std::once_flag workflow_init_flag;
         std::call_once(workflow_init_flag, [impl]() {
             WFGlobalSettings settings = GLOBAL_SETTINGS_DEFAULT;
@@ -119,7 +120,7 @@ protected:
 
         auto&& proc = [impl](auto arg) { return impl->serve_process(arg); };
         _m_server = std::make_unique<WFHttpServer>(&server_params, proc);
-        return jinq::common::StatusCode::OK;
+        return StatusCode::OK;
     }
 
     std::unique_ptr<WFHttpServer> _m_server;

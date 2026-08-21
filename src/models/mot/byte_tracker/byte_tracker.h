@@ -1,9 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: byte_tracker.h
- * Date: 24-5-30
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: byte_tracker.h
+* Date: 24-5-30
+************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_BYTE_TRACKER_H
 #define MORTRED_MODEL_SERVER_BYTE_TRACKER_H
@@ -22,6 +22,7 @@ namespace jinq {
 namespace models {
 namespace mot {
 namespace byte_tracker {
+using jinq::common::StatusCode;
 
 class ByteTracker {
   public:
@@ -55,7 +56,7 @@ class ByteTracker {
      * @param toml
      * @return
      */
-    jinq::common::StatusCode init(const toml::table& cfg);
+    StatusCode init(const toml::table& cfg);
 
     /***
      *

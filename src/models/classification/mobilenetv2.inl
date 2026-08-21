@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: mobilenetv2.cpp
-* Date: 22-6-13
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: mobilenetv2.inl
+ * Date: 22-6-13
+ ************************************************/
 
 #include "mobilenetv2.h"
 
@@ -20,17 +20,18 @@
 namespace jinq {
 namespace models {
 namespace classification {
+using jinq::common::StatusCode;
 
 using ClassificationOutput = jinq::models::io_define::classification::std_classification_output;
 using jinq::models::backend::NamedTensor;
 
 template<typename INPUT, typename OUTPUT>
-jinq::common::StatusCode MobileNetv2<INPUT, OUTPUT>::on_init(const toml::table& params) {
+StatusCode MobileNetv2<INPUT, OUTPUT>::on_init(const toml::table& params) {
     const auto& input_info = this->session().inputs().front();
     if (input_info.shape.size() != 4 || input_info.shape[3] != 3) {
         LOG(ERROR) << "unexpected classification input shape: " << input_info.to_string()
                    << ", expected [N,H,W,3] (nhwc)";
-        return jinq::common::StatusCode::MODEL_INIT_FAILED;
+        return StatusCode::MODEL_INIT_FAILED;
     }
     _m_input_tensor_size.height = static_cast<int>(input_info.shape[1]);
     _m_input_tensor_size.width = static_cast<int>(input_info.shape[2]);
@@ -39,13 +40,13 @@ jinq::common::StatusCode MobileNetv2<INPUT, OUTPUT>::on_init(const toml::table& 
         const toml::array* size = params["model_input_image_size"].as_array();
         if (size == nullptr || size->size() != 2) {
             LOG(ERROR) << "params key 'model_input_image_size' must be [height, width]";
-            return jinq::common::StatusCode::MODEL_INIT_FAILED;
+            return StatusCode::MODEL_INIT_FAILED;
         }
         _m_input_tensor_size.height = static_cast<int>((*size)[0].value_or<int64_t>(0));
         _m_input_tensor_size.width = static_cast<int>((*size)[1].value_or<int64_t>(0));
         if (_m_input_tensor_size.width <= 0 || _m_input_tensor_size.height <= 0) {
             LOG(ERROR) << "invalid model_input_image_size";
-            return jinq::common::StatusCode::MODEL_INIT_FAILED;
+            return StatusCode::MODEL_INIT_FAILED;
         }
     }
 
@@ -63,7 +64,7 @@ jinq::common::StatusCode MobileNetv2<INPUT, OUTPUT>::on_init(const toml::table& 
             }
         }
     }
-    return jinq::common::StatusCode::OK;
+    return StatusCode::OK;
 }
 
 template<typename INPUT, typename OUTPUT>
@@ -97,18 +98,18 @@ std::vector<NamedTensor> MobileNetv2<INPUT, OUTPUT>::preprocess(const cv::Mat& i
 }
 
 template<typename INPUT, typename OUTPUT>
-jinq::common::StatusCode MobileNetv2<INPUT, OUTPUT>::postprocess(
+StatusCode MobileNetv2<INPUT, OUTPUT>::postprocess(
     const std::vector<NamedTensor>& outputs, OUTPUT& output) {
     if (outputs.empty()) {
         LOG(ERROR) << "classification model output tensor is empty";
-        return jinq::common::StatusCode::MODEL_EMPTY_OUTPUT;
+        return StatusCode::MODEL_EMPTY_OUTPUT;
     }
     const auto& tensor = outputs.front().tensor;
     const auto* scores = tensor.data<float>();
     const auto score_count = tensor.element_count();
     if (score_count <= 0) {
         LOG(ERROR) << "classification model output tensor is empty";
-        return jinq::common::StatusCode::MODEL_EMPTY_OUTPUT;
+        return StatusCode::MODEL_EMPTY_OUTPUT;
     }
 
     ClassificationOutput internal_out;
@@ -124,7 +125,7 @@ jinq::common::StatusCode MobileNetv2<INPUT, OUTPUT>::postprocess(
         internal_out.category = name_iter->second;
     }
     output = std::move(internal_out);
-    return jinq::common::StatusCode::OK;
+    return StatusCode::OK;
 }
 
 /************* Export Function Sets *************/

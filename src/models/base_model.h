@@ -16,6 +16,7 @@
 
 namespace jinq {
 namespace models {
+using jinq::common::StatusCode;
 
 template<typename INPUT, typename OUTPUT>
 class BaseAiModel {
@@ -46,7 +47,7 @@ public:
      * @param cfg
      * @return
      */
-    virtual jinq::common::StatusCode init(const toml::table& cfg) = 0;
+    virtual StatusCode init(const toml::table& cfg) = 0;
 
     /***
      * Non-virtual lifecycle guard (NVI): running an uninitialized model
@@ -58,10 +59,10 @@ public:
      * @param output
      * @return
      */
-    jinq::common::StatusCode run(const INPUT& in, OUTPUT& out) {
+    StatusCode run(const INPUT& in, OUTPUT& out) {
         if (!is_successfully_initialized()) {
             LOG(ERROR) << "model is not successfully initialized, refuse to run";
-            return jinq::common::StatusCode::MODEL_INIT_FAILED;
+            return StatusCode::MODEL_INIT_FAILED;
         }
         return run_impl(in, out);
     }
@@ -73,7 +74,7 @@ public:
      * @return
      */
   protected:
-    virtual jinq::common::StatusCode run_impl(const INPUT& in, OUTPUT& out) = 0;
+    virtual StatusCode run_impl(const INPUT& in, OUTPUT& out) = 0;
 
   public:
     /***

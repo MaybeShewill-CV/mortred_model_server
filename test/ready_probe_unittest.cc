@@ -3,8 +3,8 @@
  * File: ready_probe_unittest.cc
  * Date: 2026-08-19
  *
- * ServerManager 就绪探测契约：HTTP GET /ready，2xx 即就绪；
- * 非 2xx / 连接被拒 / 超时均视为未就绪。
+ * ServerManager readiness probe contract: HTTP GET /ready, 2xx = ready;
+ * non-2xx / connection refused / timeout all mean not ready.
  ************************************************/
 
 #include <arpa/inet.h>
@@ -22,8 +22,9 @@
 
 namespace {
 
-// 起一次性监听 socket：接受单个连接并发送 canned 响应后关闭。
-// 返回绑定的本地端口；canned_response 为空表示接受后不响应（超时剧本）。
+// Starts a one-shot listening socket: accepts a single connection, sends the
+// canned response, then closes. Returns the bound local port; an empty
+// canned_response means accept but do not respond (timeout scenario).
 int start_one_shot_listener(const std::string& canned_response) {
     const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
@@ -48,7 +49,8 @@ int start_one_shot_listener(const std::string& canned_response) {
             if (!canned_response.empty()) {
                 ::send(conn, canned_response.data(), canned_response.size(), 0);
             } else {
-                // 超时剧本：挂住连接不响应，让探测端走 SO_RCVTIMEO 路径
+                // timeout scenario: hold the connection without responding so
+                // the probe takes the SO_RCVTIMEO path
                 std::this_thread::sleep_for(std::chrono::milliseconds(1500));
             }
             ::close(conn);
@@ -75,7 +77,7 @@ TEST(ready_probe, http_503_means_not_ready) {
 }
 
 TEST(ready_probe, connection_refused_means_not_ready) {
-    // 绑定后立即关闭，留下一个几乎必然空闲的端口
+    // bind then close immediately, leaving a port that is almost certainly free
     const int port = start_one_shot_listener("");
     ASSERT_GT(port, 0);
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -89,6 +91,6 @@ TEST(ready_probe, no_response_times_out_as_not_ready) {
     EXPECT_FALSE(mortred_web::endpoint_ready(port, "/ready", 300));
     const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                  std::chrono::steady_clock::now() - t0).count();
-    // 超时必须被尊重（不会挂死）；留出调度余量
+    // the timeout must be honored (no hang); leave scheduling slack
     EXPECT_LT(elapsed_ms, 1500);
 }

@@ -27,8 +27,8 @@ using jinq::models::clip::OpenAiClip;
 // create openai clip model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_openai_clip(const std::string& model_name) {
-    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
-    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    // Direct construction: no global registry writes (no side effects or mutex
+    // overhead); avoids re-registering on every create. name kept for compatibility.
     (void)model_name;
     return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new OpenAiClip<INPUT, OUTPUT>());
 }

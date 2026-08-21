@@ -1,8 +1,9 @@
 /************************************************
- * Author: Codex
- * File: json_request_parser.h
- * Date: 2026-08-11
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: json_request_parser.h
+* Date: 26-8-11
+************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_JSON_REQUEST_PARSER_H
 #define MORTRED_MODEL_SERVER_JSON_REQUEST_PARSER_H
@@ -17,7 +18,7 @@ namespace jinq {
 namespace common {
 
 /***
- * 通用图像服务请求：base64 图像内容 + 调用方追踪 id
+ * Generic image service request: base64 image content + caller trace id
  */
 struct JsonRequest {
     std::string image_content;
@@ -27,9 +28,9 @@ struct JsonRequest {
 };
 
 /***
- * 纯函数：解析图像服务请求体（JSON 格式）。
- * 任何解析失败都返回 is_valid=false 并携带精确的 parse_status，
- * 绝不抛出异常、绝不断言（外部输入路径不允许 CHECK/assert）。
+ * Pure function: parse an image service request body (JSON).
+ * Any failure returns is_valid=false with a precise parse_status.
+ * Never throws and never asserts (external input paths forbid CHECK/assert).
  */
 inline JsonRequest parse_json_request(const std::string& req_body) {
     JsonRequest req;

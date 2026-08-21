@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    # 与 ci.yml 的 paths 口径一致：纯 weights/resources/demo_data 改动跳过
+    # Same paths policy as ci.yml: skip pure weights/resources/demo_data changes
     paths:
       - 'src/**'
       - 'CMakeLists.txt'
@@ -20,7 +20,7 @@ on:
       - 'docs/**'
       - 'deploy/**'
   schedule:
-    # 每周一 03:00 UTC
+    # Every Monday 03:00 UTC
     - cron: '0 3 * * 1'
   workflow_dispatch:
 
@@ -33,10 +33,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # 两种模式：
-  #   pr    —— PR/schedule：tests-only（成本低，覆盖 common + test）
-  #   full  —— push main / 手动：Docker 全量构建 + 容器内 CodeQL 追踪（覆盖 apps/模型层）
-  # 修复：原 codeql.yml 只扫 tests-only 范围，apps/web_console/模型层完全不参与安全分析。
+  # Two modes:
+  #   pr    —— PR/schedule: tests-only (low cost, covers common + test)
+  #   full  —— push main / manual: Docker full build + in-container CodeQL tracing (covers apps/model layers)
+  # Fix: old codeql.yml scanned only the tests-only scope; apps/web_console/model layers had no security analysis.
   analyze:
     name: Analyze (${{ matrix.mode }})
     runs-on: ubuntu-22.04
@@ -48,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # ================= PR / schedule：tests-only（与主 CI tests-only 构建一致） =================
+      # ================= PR / schedule: tests-only (same as the main CI tests-only build) =================
       - if: matrix.mode == 'pr'
         name: Initialize CodeQL
         uses: github/codeql-action/init@v4
@@ -77,11 +77,11 @@ jobs:
         with:
           category: "/language:cpp"
 
-      # ================= full：push main / 手动（Docker 全量构建 + 容器内 CodeQL 全流程） =================
-      # 说明：tests-only 无法编译 apps/模型层（缺 vendored MNN/TRT/workflow），因此 full 模式在
-      # Docker build 镜像（install_deps.sh 全自动依赖）内做真实编译追踪并产出 SARIF。
-      # init 步骤仅用于下载 codeql bundle 到 runner toolcache（不参与本模式的分析流程）。
-      # 注意：本模式首次推送 main 后需人工确认（容器内 codeql 流程无法在本地沙箱验证）。
+      # ================= full: push main / manual (Docker full build + full in-container CodeQL flow) =================
+      # Note: tests-only can't compile apps/model layers (vendored MNN/TRT/workflow missing), so full mode does
+      # real compile tracing inside the Docker build image (install_deps.sh automated deps) and produces SARIF.
+      # The init step only downloads the codeql bundle to the runner toolcache (not part of this mode's analysis).
+      # Note: first push to main needs manual confirmation (the in-container codeql flow can't be validated in a local sandbox).
       - if: matrix.mode == 'full'
         name: Download CodeQL CLI (via init)
         uses: github/codeql-action/init@v4
@@ -105,7 +105,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # 定位 toolcache 中的 codeql bundle 根（含 codeql/ CLI 与 ql/ 查询包）
+      # Locate the codeql bundle root in toolcache (contains the codeql/ CLI and ql/ query packs)
       - if: matrix.mode == 'full'
         name: Locate CodeQL bundle in toolcache
         id: codeql-home
@@ -120,9 +120,9 @@ jobs:
         name: Create CodeQL database (full compile tracing, in container)
         run: |
           set -euo pipefail
-          # 注意：不能把 workspace 挂载到 /src —— 那会遮蔽镜像内 docker build 阶段构建好的
-          # /src/build 与 /src/3rd_party（二者被 .gitignore 排除、不在工作区中），
-          # 导致 cmake --build /src/build 无物可建。数据库保留在容器内，SARIF 经 /out 挂载输出。
+          # Note: don't mount the workspace at /src — that would shadow /src/build and /src/3rd_party
+          # built during the image's docker build stage (both gitignored, absent from the workspace),
+          # leaving cmake --build /src/build with nothing to build. DB stays in the container; SARIF goes out via /out mount.
           docker run --rm \
             -v "${{ steps.codeql-home.outputs.home }}":/opt/codeql:ro \
             -v "${{ github.workspace }}":/out \
@@ -140,8 +140,8 @@ jobs:
             -w /src \
             mortred-full:ci \
             bash -c 'export PATH=/opt/codeql/codeql:$PATH; codeql database analyze /src/codeql-db --format=sarif-latest --output=/out/codeql-results.sarif cpp-queries:codeql-suites/cpp-security-and-quality.qls'
-          # SARIF 内为容器绝对路径 /src/src/...，归一化为仓库相对路径 src/... 以便 GitHub 关联文件
-          # 容器内以 root 写入 /out/codeql-results.sarif，先归还给 runner 用户以便改写
+          # SARIF contains container-absolute paths /src/src/...; normalize to repo-relative src/... so GitHub can link files.
+          # The container writes /out/codeql-results.sarif as root; chown it back to the runner user for rewriting.
           sudo chown "$USER" codeql-results.sarif
           sed -i 's#/src/src/#src/#g' codeql-results.sarif
 

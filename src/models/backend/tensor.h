@@ -1,9 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: backend/tensor.h
- * Date: 2026-08-20
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: tensor.h
+* Date: 26-8-20
+************************************************/
 
 #ifndef MORTRED_MODELS_BACKEND_TENSOR_H
 #define MORTRED_MODELS_BACKEND_TENSOR_H

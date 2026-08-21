@@ -1,7 +1,7 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: ldm_sampler.cpp
+ * File: ldm_sampler.inl
  * Date: 24-5-24
  ************************************************/
 

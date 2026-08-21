@@ -21,6 +21,7 @@
 namespace jinq {
 namespace models {
 namespace ocr {
+using jinq::common::StatusCode;
 
 template<typename INPUT, typename OUTPUT>
 class DBTextDetector : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
@@ -34,13 +35,13 @@ public:
 private:
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
 
-    jinq::common::StatusCode postprocess(
+    StatusCode postprocess(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,
         OUTPUT& output) override;
 
-    jinq::common::StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table& params) override;
 
-    jinq::common::StatusCode get_boxes_from_bitmap(
+    StatusCode get_boxes_from_bitmap(
         const cv::Mat& seg_prob_mat, const cv::Mat& seg_score_mat,
         OUTPUT& output) const;
 

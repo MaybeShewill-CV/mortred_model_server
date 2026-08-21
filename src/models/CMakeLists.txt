@@ -25,7 +25,7 @@ set(MODELS_LIB_SRC
     ${CMAKE_CURRENT_LIST_DIR}/segment_anything/sam_prediction/sam_vit_encoder.cpp
 )
 add_library(models SHARED ${MODELS_LIB_SRC})
-# lapjv.cpp 为 vendored 第三方 LAPJV 求解器，其存量警告不参与 -Werror 门禁
+# lapjv.cpp is a vendored third-party LAPJV solver; its pre-existing warnings skip the -Werror gate
 set_source_files_properties(
     ${CMAKE_CURRENT_LIST_DIR}/mot/byte_tracker/lapjv.cpp
     PROPERTIES COMPILE_OPTIONS "-Wno-unused-parameter"
@@ -38,8 +38,8 @@ target_include_directories(
     models SYSTEM PUBLIC
     ${PROJECT_ROOT_DIR}/3rd_party/include
 )
-# TensorRT 头文件目录随版本切换（TensorRT-8.6.1.6 / TensorRT-10.x），新代码一律
-# #include "NvInfer.h" 等未带版本前缀的官方路径
+# TensorRT header dir switches with version (TensorRT-8.6.1.6 / TensorRT-10.x); new code always
+# uses version-less official paths such as #include "NvInfer.h"
 file(GLOB MORTRED_TRT_INCLUDE_DIRS "${PROJECT_ROOT_DIR}/3rd_party/include/TensorRT-*")
 list(SORT MORTRED_TRT_INCLUDE_DIRS)
 list(GET MORTRED_TRT_INCLUDE_DIRS 0 MORTRED_TRT_INCLUDE_DIR)
@@ -64,6 +64,6 @@ target_link_libraries(
     ${OpenCV_LIBS}
     glog::glog
 )
-# 弃用压制只作用于确需 OpenCV 旧 API 的目标（替代原全局压制）
+# Deprecation suppression applies only to targets needing old OpenCV APIs (replaces the old global suppression)
 target_compile_options(models PRIVATE -Wno-deprecated-declarations)
 set_target_properties(models PROPERTIES LINKER_LANGUAGE CXX)

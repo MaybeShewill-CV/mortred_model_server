@@ -2,9 +2,9 @@
  * Author: Codex
  * File: response_schema_test.cc
  *
- * 校验 src/server/response_serializers.h 的输出 schema：
- * 键名与 JSON 类型必须与 docs/openapi.json components.schemas 一致。
- * 这类测试防止"数字被序列化成字符串/字段改名"类回归。
+ * Verifies the output schema of src/server/response_serializers.h:
+ * key names and JSON types must match docs/openapi.json components.schemas.
+ * Prevents regressions like numbers serialized as strings or renamed fields.
  ************************************************/
 
 #include <string>

@@ -1,8 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: depth_anything.h
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: depth_anything.h
+* Date: 24-1-25
+************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_DEPTH_ANYTHING_H
 #define MORTRED_MODEL_SERVER_DEPTH_ANYTHING_H
@@ -16,6 +17,7 @@
 namespace jinq {
 namespace models {
 namespace mono_depth_estimation {
+using jinq::common::StatusCode;
 
 template<typename INPUT, typename OUTPUT>
 class DepthAnything : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
@@ -29,11 +31,11 @@ class DepthAnything : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   private:
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
 
-    jinq::common::StatusCode postprocess(
+    StatusCode postprocess(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,
         OUTPUT& output) override;
 
-    jinq::common::StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table& params) override;
 
     // user image size of the current run
     cv::Size _m_input_size_user = cv::Size();

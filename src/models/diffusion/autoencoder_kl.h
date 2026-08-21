@@ -1,8 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: autoencoder_kl.h
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: autoencoder_kl.h
+* Date: 26-8-17
+************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_AUTOENCODER_KL_H
 #define MORTRED_MODEL_SERVER_AUTOENCODER_KL_H
@@ -19,6 +20,7 @@
 namespace jinq {
 namespace models {
 namespace diffusion {
+using jinq::common::StatusCode;
 
 template <typename INPUT, typename OUTPUT>
 class AutoEncoderKL : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
@@ -32,7 +34,7 @@ class AutoEncoderKL : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   private:
     std::vector<jinq::models::backend::NamedTensor> make_inputs(const INPUT& input) override;
 
-    jinq::common::StatusCode postprocess(
+    StatusCode postprocess(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,
         OUTPUT& output) override;
 };

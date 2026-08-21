@@ -1,9 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: backend/backend_cv_model.h
- * Date: 2026-08-20
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: backend_cv_model.h
+* Date: 26-8-20
+************************************************/
 
 #ifndef MORTRED_MODELS_BACKEND_BACKEND_CV_MODEL_H
 #define MORTRED_MODELS_BACKEND_BACKEND_CV_MODEL_H
@@ -27,6 +27,7 @@
 
 namespace jinq {
 namespace models {
+using jinq::common::StatusCode;
 
 namespace detail {
 
@@ -72,18 +73,18 @@ class BackendCvModel : public BaseAiModel<INPUT, OUTPUT> {
     BackendCvModel(const BackendCvModel&) = delete;
     BackendCvModel& operator=(const BackendCvModel&) = delete;
 
-    jinq::common::StatusCode init(const toml::table& cfg) final {
+    StatusCode init(const toml::table& cfg) final {
         _m_successfully_initialized = false;
         _m_session.reset();
 
         if (!cfg.contains(_m_section_name)) {
             LOG(ERROR) << "config section [" << _m_section_name << "] missing";
-            return jinq::common::StatusCode::MODEL_INIT_FAILED;
+            return StatusCode::MODEL_INIT_FAILED;
         }
         const toml::table* model_section = cfg[_m_section_name].as_table();
         if (model_section == nullptr) {
             LOG(ERROR) << "config section [" << _m_section_name << "] missing or not a table";
-            return jinq::common::StatusCode::MODEL_INIT_FAILED;
+            return StatusCode::MODEL_INIT_FAILED;
         }
         _m_model_section = *model_section;
 
@@ -94,19 +95,19 @@ class BackendCvModel : public BaseAiModel<INPUT, OUTPUT> {
             if (!backend::parse_backend_config(*model_section, &_m_backend_config, &backend_err)) {
                 LOG(ERROR) << "invalid backend config in [" << _m_section_name
                            << "]: " << backend_err;
-                return jinq::common::StatusCode::MODEL_INIT_FAILED;
+                return StatusCode::MODEL_INIT_FAILED;
             }
             std::string session_err;
             _m_session = backend::InferenceSession::create(_m_backend_config, &session_err);
             if (_m_session == nullptr) {
                 LOG(ERROR) << "create " << _m_backend_config.type << " session for ["
                            << _m_section_name << "] failed: " << session_err;
-                return jinq::common::StatusCode::MODEL_INIT_FAILED;
+                return StatusCode::MODEL_INIT_FAILED;
             }
         } else if (!has_extra_backends) {
             LOG(ERROR) << "config section [" << _m_section_name
                        << "] has neither [backend] nor any [<name>_backend] sub-table";
-            return jinq::common::StatusCode::MODEL_INIT_FAILED;
+            return StatusCode::MODEL_INIT_FAILED;
         }
 
         _m_params = toml::table{};
@@ -114,20 +115,20 @@ class BackendCvModel : public BaseAiModel<INPUT, OUTPUT> {
             const toml::table* params = model_section->at("params").as_table();
             if (params == nullptr) {
                 LOG(ERROR) << "[" << _m_section_name << ".params] must be a table";
-                return jinq::common::StatusCode::MODEL_INIT_FAILED;
+                return StatusCode::MODEL_INIT_FAILED;
             }
             _m_params = *params;
         }
 
         const auto init_status = on_init(_m_params);
-        if (init_status != jinq::common::StatusCode::OK) {
+        if (init_status != StatusCode::OK) {
             LOG(ERROR) << "model specific init for [" << _m_section_name << "] failed";
             _m_session.reset();
             return init_status;
         }
 
         _m_successfully_initialized = true;
-        return jinq::common::StatusCode::OK;
+        return StatusCode::OK;
     }
 
     bool is_successfully_initialized() const final {
@@ -154,13 +155,13 @@ class BackendCvModel : public BaseAiModel<INPUT, OUTPUT> {
     }
 
     /*** standard hook: named output tensors -> task output */
-    virtual jinq::common::StatusCode postprocess(const std::vector<backend::NamedTensor>& outputs,
+    virtual StatusCode postprocess(const std::vector<backend::NamedTensor>& outputs,
                                                  OUTPUT& output) = 0;
 
     /*** optional hook: model specific keys from [SECTION.params] */
-    virtual jinq::common::StatusCode on_init(const toml::table& params) {
+    virtual StatusCode on_init(const toml::table& params) {
         (void)params;
-        return jinq::common::StatusCode::OK;
+        return StatusCode::OK;
     }
 
     /***
@@ -230,24 +231,24 @@ class BackendCvModel : public BaseAiModel<INPUT, OUTPUT> {
      * this and drive their sessions themselves; the default implementation is
      * an error because it must never run silently.
      */
-    virtual jinq::common::StatusCode run_sessions(const INPUT& input, OUTPUT& output) {
+    virtual StatusCode run_sessions(const INPUT& input, OUTPUT& output) {
         (void)input;
         (void)output;
         LOG(ERROR) << "multi-session model does not implement run_sessions";
-        return jinq::common::StatusCode::MODEL_RUN_SESSION_FAILED;
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
 
-    jinq::common::StatusCode run_impl(const INPUT& input, OUTPUT& output) final {
+    StatusCode run_impl(const INPUT& input, OUTPUT& output) final {
         if (_m_session == nullptr) {
             return run_sessions(input, output);
         }
         auto tensors = make_inputs(input);
         if (tensors.empty()) {
-            return jinq::common::StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+            return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
         }
         std::vector<backend::NamedTensor> outputs;
         const auto run_status = _m_session->run(tensors, outputs);
-        if (run_status != jinq::common::StatusCode::OK) {
+        if (run_status != StatusCode::OK) {
             return run_status;
         }
         return postprocess(outputs, output);

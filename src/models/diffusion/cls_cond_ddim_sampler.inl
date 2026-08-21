@@ -1,7 +1,7 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: cls_cond_ddim_sampler.cpp
+ * File: cls_cond_ddim_sampler.inl
  * Date: 24-5-8
  ************************************************/
 

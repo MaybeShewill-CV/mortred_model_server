@@ -1,8 +1,9 @@
 /************************************************
- * Author: Codex
- * File: rate_limiter.h
- * Date: 2026-08-13
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: rate_limiter.h
+* Date: 26-8-13
+************************************************/
 
 #ifndef MORTRED_SERVER_RATE_LIMITER_H
 #define MORTRED_SERVER_RATE_LIMITER_H
@@ -17,8 +18,8 @@ namespace jinq {
 namespace server {
 
 /***
- * 固定窗口限流器：按 key（如客户端 IP）限制每秒最大请求数。
- * max_qps <= 0 表示不限流。
+ * Fixed-window rate limiter: caps requests per second per key (e.g. client IP).
+ * max_qps <= 0 disables limiting.
  */
 class FixedWindowRateLimiter {
 public:
@@ -27,7 +28,7 @@ public:
         : _m_max_qps(max_qps), _m_window_ms(window_ms) {}
 
     /***
-     * 更新每秒上限；<= 0 表示关闭限流。
+     * Update the per-second cap; <= 0 disables limiting.
      */
     void set_max_qps(int max_qps) {
         std::lock_guard<std::mutex> lock(_m_mutex);
@@ -36,7 +37,7 @@ public:
     }
 
     /***
-     * 当前窗口内是否允许该 key 再发起一次请求。
+     * Whether the key may make another request in the current window.
      */
     bool allow(const std::string& key) {
         std::lock_guard<std::mutex> lock(_m_mutex);
@@ -71,7 +72,7 @@ private:
     };
 
     /***
-     * 清理非当前窗口的过期记录，避免内存无限增长。
+     * Drop stale records from non-current windows to bound memory growth.
      */
     void prune_locked(int64_t current_window) {
         if (_m_windows.size() < k_max_entries) {

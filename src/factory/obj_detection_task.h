@@ -1,7 +1,7 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: image_object_detection_task.h
+* File: obj_detection_task.h
 * Date: 22-6-8
 ************************************************/
 
@@ -43,8 +43,8 @@ using jinq::models::object_detection::YoloV8Detector;
 // create yolov5 object detection model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_yolov5_detector(const std::string& detector_name) {
-    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
-    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    // Direct construction: no global registry writes (no side effects or mutex
+    // overhead); avoids re-registering on every create. name kept for compatibility.
     (void)detector_name;
     return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new YoloV5Detector<INPUT, OUTPUT>());
 }
@@ -71,8 +71,8 @@ inline std::unique_ptr<BaseAiServer> create_yolov5_det_server(const std::string&
 // create yolov6 object detection model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_yolov6_detector(const std::string& detector_name) {
-    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
-    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    // Direct construction: no global registry writes (no side effects or mutex
+    // overhead); avoids re-registering on every create. name kept for compatibility.
     (void)detector_name;
     return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new YoloV6Detector<INPUT, OUTPUT>());
 }
@@ -99,8 +99,8 @@ inline std::unique_ptr<BaseAiServer> create_yolov6_det_server(const std::string&
 // create nanodet object detection model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_nanodet_detector(const std::string& detector_name) {
-    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
-    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    // Direct construction: no global registry writes (no side effects or mutex
+    // overhead); avoids re-registering on every create. name kept for compatibility.
     (void)detector_name;
     return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new NanoDetector<INPUT, OUTPUT>());
 }
@@ -127,8 +127,8 @@ inline std::unique_ptr<BaseAiServer> create_nanodet_det_server(const std::string
 // create libface detection model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_libface_detector(const std::string& detector_name) {
-    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
-    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    // Direct construction: no global registry writes (no side effects or mutex
+    // overhead); avoids re-registering on every create. name kept for compatibility.
     (void)detector_name;
     return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new LibFaceDetector<INPUT, OUTPUT>());
 }
@@ -155,8 +155,8 @@ inline std::unique_ptr<BaseAiServer> create_libface_det_server(const std::string
 // create yolov7 object detection model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_yolov7_detector(const std::string& detector_name) {
-    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
-    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    // Direct construction: no global registry writes (no side effects or mutex
+    // overhead); avoids re-registering on every create. name kept for compatibility.
     (void)detector_name;
     return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new YoloV7Detector<INPUT, OUTPUT>());
 }
@@ -183,8 +183,8 @@ inline std::unique_ptr<BaseAiServer> create_yolov7_det_server(const std::string&
 // create yolov8 object detection model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_yolov8_detector(const std::string& detector_name) {
-    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
-    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    // Direct construction: no global registry writes (no side effects or mutex
+    // overhead); avoids re-registering on every create. name kept for compatibility.
     (void)detector_name;
     return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new YoloV8Detector<INPUT, OUTPUT>());
 }
@@ -211,8 +211,8 @@ inline std::unique_ptr<BaseAiServer> create_yolov8_det_server(const std::string&
 // create centerface detection model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_centerface_detector(const std::string& detector_name) {
-    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
-    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    // Direct construction: no global registry writes (no side effects or mutex
+    // overhead); avoids re-registering on every create. name kept for compatibility.
     (void)detector_name;
     return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new CenterFaceDetector<INPUT, OUTPUT>());
 }

@@ -1,8 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* File: nanodet_detection_server.cpp
-* Date: 2026-08-19
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: nanodet_detection_server.cpp
+ * Date: 26-8-19
+ ************************************************/
 
 // nanodet_detection server tool
 

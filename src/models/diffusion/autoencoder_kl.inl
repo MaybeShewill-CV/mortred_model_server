@@ -1,7 +1,8 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: autoencoder_kl.cpp
+ * File: autoencoder_kl.inl
+ * Date: 26-8-17
  ************************************************/
 
 #include "autoencoder_kl.h"

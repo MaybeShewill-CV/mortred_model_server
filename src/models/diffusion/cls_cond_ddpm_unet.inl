@@ -1,7 +1,8 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: cls_cond_ddpm_unet.cpp
+ * File: cls_cond_ddpm_unet.inl
+ * Date: 26-8-17
  ************************************************/
 
 #include "cls_cond_ddpm_unet.h"

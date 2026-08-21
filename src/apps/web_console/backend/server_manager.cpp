@@ -1,6 +1,8 @@
 /************************************************
- * Author: Codex
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
  * File: server_manager.cpp
+ * Date: 26-8-12
  ************************************************/
 
 #include "server_manager.h"
@@ -70,10 +72,12 @@ void close_all_fds() {
 
 void ServerManager::init(const Catalog& catalog, const std::string& project_root, const std::string& logs_dir) {
     _catalog = &catalog;
-    // 目录名可配置：安装树部署（Docker/systemd）通过 APP_BIN_DIR / APP_LIB_DIR /
-    // APP_LIBS_DIR 注入 bin / lib / lib；源码树直跑保持默认 _bin / _lib /
-    // 3rd_party/libs（兼容既有布局与测试）。修复：CMake 安装树是 bin/lib，
-    // 原硬编码 _bin/_lib/3rd_party/libs 使部署环境下 spawn 模型服务必然 execl 127。
+    // directory names are configurable: install-tree deploys (Docker/systemd)
+    // inject bin/lib/lib via APP_BIN_DIR / APP_LIB_DIR / APP_LIBS_DIR; source
+    // trees keep the defaults _bin / _lib / 3rd_party/libs (compatible with the
+    // existing layout and tests). Fix: the CMake install tree is bin/lib, while
+    // the old hard-coded _bin/_lib/3rd_party/libs made spawned model servers
+    // always execl(127) in deployed environments.
     const char* bin_dir  = getenv("APP_BIN_DIR");
     const char* lib_dir  = getenv("APP_LIB_DIR");
     const char* libs_dir = getenv("APP_LIBS_DIR");
@@ -198,13 +202,16 @@ bool ServerManager::start(const ServerEntry& entry, std::string& err) {
     get_or_create_log(entry.id)->append("[app] 启动请求已发送 (pid " + std::to_string(pid) + ")");
     spawn_waiters(entry.id, _procs[entry.id].get());
 
-    // 快速失败检测（消除"假启动"）：子进程 spawn 后立即退出（如 execl 失败
-    // _exit(127)、依赖库缺失）时，waiter 线程会很快置 running=false 并通知 _cv。
-    // 短超时探测：健康进程（正在加载模型）在窗口内 running 仍为 true，继续视为已启动；
-    // 已退出则返回失败，退出原因可从该服务日志缓冲查看。
-    // 注意：此处不 erase 死条目——waiter/reader 线程可能仍在收尾，销毁 joinable
-    // std::thread 会 terminate；死条目 running=false，is_running/重复 start/
-    // 端口冲突检查都会正确跳过。
+    // fast-failure detection (no "false start"): if the child exits right after
+    // spawn (e.g. execl fails with _exit(127) or a dependency is missing), the
+    // waiter thread quickly sets running=false and notifies _cv. Short probe: a
+    // healthy process (still loading its model) keeps running=true in the window
+    // and is treated as started; if it already exited, return failure and the
+    // reason is in that service's log buffer.
+    // Note: dead entries are NOT erased here — waiter/reader threads may still
+    // be finishing, and destroying a joinable std::thread would terminate; dead
+    // entries have running=false, which is_running/repeated start/port-conflict
+    // checks all skip correctly.
     constexpr int k_spawn_probe_ms = 200;
     {
         std::unique_lock<std::mutex> lock(_mu);
@@ -279,8 +286,9 @@ bool ServerManager::is_ready(const std::string& id) {
         }
         port = port_it->second;
     }
-    // 探测真实 /ready 端点（2xx 即就绪），取代日志字符串匹配：
-    // 日志文案一旦调整 grep 即失效，而 /ready 是受 e2e 契约测试保护的稳定接口
+    // probe the real /ready endpoint (2xx = ready) instead of matching log text:
+    // log wording can change and break greps, while /ready is a stable endpoint
+    // protected by the e2e contract tests
     return endpoint_ready(port, "/ready", 1000);
 }
 

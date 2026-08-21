@@ -17,9 +17,9 @@ add_executable(app_server
 
 target_include_directories(app_server SYSTEM PRIVATE "${PROJECT_ROOT}/3rd_party/include")
 target_include_directories(app_server PRIVATE "${PROJECT_ROOT}/src")
-# 不再硬编码 -O2：让 CMAKE_BUILD_TYPE 决定优化级别；链接 imported workflow target
+# No hardcoded -O2: let CMAKE_BUILD_TYPE decide the optimization level; link imported workflow target
 target_compile_options(app_server PRIVATE -Wno-deprecated-declarations)
 target_link_libraries(app_server PRIVATE vendored::workflow Threads::Threads)
-# 运行期在 3rd_party/libs 找 libworkflow/libssl（构建期 RPATH，非安装期）
+# At runtime look for libworkflow/libssl in 3rd_party/libs (build-time RPATH, not install-time)
 set_target_properties(app_server PROPERTIES
     BUILD_RPATH "${PROJECT_ROOT}/3rd_party/libs")

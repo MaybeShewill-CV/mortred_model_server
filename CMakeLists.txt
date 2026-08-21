@@ -11,7 +11,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(PROJECT_ROOT_DIR ${CMAKE_CURRENT_LIST_DIR})
 
-# 构建类型：仅在未指定时默认 Release，不再强制覆盖用户的 Debug/RelWithDebInfo 选择
+# Build type: default to Release only when unspecified; never override a user's Debug/RelWithDebInfo choice
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type (Debug/Release/RelWithDebInfo)" FORCE)
 endif()
@@ -23,21 +23,21 @@ message(STATUS "\tProcessor: ${CMAKE_SYSTEM_PROCESSOR}")
 message(STATUS "\tBuild Path: ${CMAKE_CURRENT_BINARY_DIR}")
 message(STATUS "\tBuild Type: ${CMAKE_BUILD_TYPE}")
 
-# 输出目录可配置，默认保持历史路径 _bin/_lib（web_console/ServerManager 依赖该布局）
+# Output dirs configurable; default to legacy _bin/_lib layout (web_console/ServerManager depends on it)
 set(MORTRED_BIN_OUTPUT_DIR ${PROJECT_ROOT_DIR}/_bin CACHE PATH "Executable output directory")
 set(MORTRED_LIB_OUTPUT_DIR ${PROJECT_ROOT_DIR}/_lib CACHE PATH "Shared library output directory")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${MORTRED_BIN_OUTPUT_DIR})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${MORTRED_LIB_OUTPUT_DIR})
 
-# vendored 依赖：显式 imported target（精确 soname + 缺失即致命错 + 变更自动重配置）
+# Vendored deps: explicit imported targets (exact soname + fatal error if missing + auto-reconfigure on change)
 include(${PROJECT_ROOT_DIR}/cmake/VendoredDeps.cmake)
 mortred_probe_workflow()
 
-# CI / 单测模式：跳过依赖 CUDA/MNN/TRT 的模型与服务，只构建 common + tests
+# CI / unit-test mode: skip CUDA/MNN/TRT-dependent models and servers; build only common + tests
 option(MORTRED_BUILD_FULL "Build full project (models/server/apps, requires CUDA/MNN/TRT)" ON)
 option(MORTRED_INSTALL "Create the tree-style install target (bin/lib tree)" OFF)
 
-# CI 质量门禁：将编译器警告视为错误（tests-only 构建下启用）
+# CI quality gate: treat compiler warnings as errors (enabled in tests-only builds)
 option(MORTRED_ENABLE_WERROR "Treat compiler warnings as errors (used by CI quality gate)" OFF)
 if(MORTRED_ENABLE_WERROR)
     add_compile_options(-Wall -Wextra -Werror)
@@ -49,8 +49,8 @@ find_package(OpenCV REQUIRED)
 find_package(glog REQUIRED)
 find_package(Eigen3 REQUIRED)
 
-# 公共 include 作用域：由各库目标以 PUBLIC 形式向外传播，替代全局 include_directories。
-# 3rd_party 与系统依赖标记为 SYSTEM：vendored 头文件的警告不参与 -Werror 质量门禁。
+# Common include scope: propagated PUBLICly by library targets instead of global include_directories.
+# 3rd_party and system deps marked SYSTEM: vendored header warnings are exempt from the -Werror gate.
 add_library(mortred_common_includes INTERFACE)
 target_include_directories(mortred_common_includes INTERFACE
     ${PROJECT_ROOT_DIR}/src
@@ -67,7 +67,7 @@ add_subdirectory(src/common)
 
 if(MORTRED_BUILD_FULL)
     find_package(CUDAToolkit REQUIRED)
-    # CUDA 推理栈（MNN-TRT 后端 / onnxruntime / TensorRT）：精确版本，缺失即失败
+    # CUDA inference stack (MNN-TRT backend / onnxruntime / TensorRT): exact versions, fail if missing
     mortred_import_shared(mnn            libMNN.so)
     mortred_import_shared(mnn_cuda       libMNN_Cuda_Main.so)
     mortred_import_shared(fmt            libfmt.so.9)
@@ -85,17 +85,17 @@ endif()
 enable_testing()
 add_subdirectory(test EXCLUDE_FROM_ALL)
 
-# 安装目标（MORTRED_INSTALL=ON 时启用）：树式安装 bin/lib。
-# 运行时入口（Docker/systemd）显式设置 LD_LIBRARY_PATH=/opt/mortred/lib；
-# 不能依赖构建输出的 RUNPATH，它可能包含源码树/构建机的绝对路径。
-# Docker 构建（Dockerfile build 阶段）依赖此目标。
+# Install target (enabled with MORTRED_INSTALL=ON): tree-style install of bin/lib.
+# Runtime entry (Docker/systemd) sets LD_LIBRARY_PATH=/opt/mortred/lib explicitly;
+# do not rely on the build's RUNPATH, which may contain absolute source/build-machine paths.
+# The Docker build stage depends on this target.
 if(MORTRED_INSTALL)
     install(DIRECTORY ${MORTRED_BIN_OUTPUT_DIR}/ DESTINATION bin
             FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
                              GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
     install(DIRECTORY ${MORTRED_LIB_OUTPUT_DIR}/ DESTINATION lib)
     install(DIRECTORY ${PROJECT_ROOT_DIR}/3rd_party/libs/ DESTINATION lib)
-    # trtexec（外部引擎转换 CLI，install_deps.sh --nvidia 拷入）随安装树进入 bin/
+    # trtexec (external engine-conversion CLI, copied by install_deps.sh --nvidia) lands in bin/
     if(EXISTS ${PROJECT_ROOT_DIR}/3rd_party/bin)
         install(DIRECTORY ${PROJECT_ROOT_DIR}/3rd_party/bin/ DESTINATION bin
                 FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE

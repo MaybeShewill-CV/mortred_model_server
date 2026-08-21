@@ -1,9 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: OpenAiClip.h
- * Date: 23-6-26
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: openai_clip.h
+* Date: 23-6-26
+************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_OPENAICLIP_H
 #define MORTRED_MODEL_SERVER_OPENAICLIP_H
@@ -24,6 +24,7 @@
 namespace jinq {
 namespace models {
 namespace clip {
+using jinq::common::StatusCode;
 
 /***
  * OpenAI CLIP multi-engine model. The visual and text encoders are unified
@@ -38,17 +39,17 @@ class OpenAiClip : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
     OpenAiClip(const OpenAiClip& transformer) = delete;
     OpenAiClip& operator=(const OpenAiClip& transformer) = delete;
 
-    jinq::common::StatusCode get_textual_embedding(
+    StatusCode get_textual_embedding(
         const std::string& input_text, std::vector<float>& text_embeddings);
 
-    jinq::common::StatusCode get_visual_embedding(
+    StatusCode get_visual_embedding(
         const cv::Mat& input_image, std::vector<float>& image_embeddings);
 
-    jinq::common::StatusCode texts2img(
+    StatusCode texts2img(
         const std::vector<std::string>& input_texts, const cv::Mat& input_image,
         std::vector<float>& simi_scores);
 
-    jinq::common::StatusCode imgs2text(
+    StatusCode imgs2text(
         const std::vector<cv::Mat>& input_images, const std::string& input_text,
         std::vector<float>& simi_scores);
 
@@ -57,18 +58,18 @@ class OpenAiClip : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
     using ClipOutput = jinq::models::io_define::clip::clip_output;
     using ClipTaskType = jinq::models::io_define::clip::ClipTaskType;
 
-    jinq::common::StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table& params) override;
 
-    jinq::common::StatusCode run_sessions(const INPUT& input, OUTPUT& output) override;
+    StatusCode run_sessions(const INPUT& input, OUTPUT& output) override;
 
-    jinq::common::StatusCode postprocess(
+    StatusCode postprocess(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,
         OUTPUT& output) override;
 
-    jinq::common::StatusCode encode_text(
+    StatusCode encode_text(
         const std::string& input_text, std::vector<float>& text_embeddings) const;
 
-    jinq::common::StatusCode encode_image(
+    StatusCode encode_image(
         const cv::Mat& input_image, std::vector<float>& image_embeddings) const;
 
     cv::Mat preprocess_image(const cv::Mat& input_image) const;
@@ -82,10 +83,10 @@ class OpenAiClip : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
     static const jinq::models::backend::TensorInfo* find_info(
         const jinq::models::backend::InferenceSession& session, const std::string& name);
 
-    static jinq::common::StatusCode validate_visual_io(
+    static StatusCode validate_visual_io(
         const jinq::models::backend::InferenceSession& session);
 
-    static jinq::common::StatusCode validate_text_io(
+    static StatusCode validate_text_io(
         const jinq::models::backend::InferenceSession& session);
 
     static bool normalize_embedding(std::vector<float>& embedding);

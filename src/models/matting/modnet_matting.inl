@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: modnet_matting.cpp
-* Date: 22-7-19
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: modnet_matting.inl
+ * Date: 22-7-19
+ ************************************************/
 
 #include "modnet_matting.h"
 

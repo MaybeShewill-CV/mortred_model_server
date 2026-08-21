@@ -1,7 +1,8 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: hrnet_segmentation.cpp
+ * File: hrnet_segmentation.inl
+ * Date: 23-11-17
  ************************************************/
 
 #include "hrnet_segmentation.h"

@@ -1,9 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: yolov8_detector.h
- * Date: 24-3-13
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: yolov8_detector.h
+* Date: 24-3-13
+************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_YOLOV8_DETECTOR_H
 #define MORTRED_MODEL_SERVER_YOLOV8_DETECTOR_H
@@ -21,6 +21,7 @@
 namespace jinq {
 namespace models {
 namespace object_detection {
+using jinq::common::StatusCode;
 
 template<typename INPUT, typename OUTPUT>
 class YoloV8Detector : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
@@ -34,11 +35,11 @@ class YoloV8Detector : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   private:
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
 
-    jinq::common::StatusCode postprocess(
+    StatusCode postprocess(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,
         OUTPUT& output) override;
 
-    jinq::common::StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table& params) override;
 
     cv::Rect2f transform_bboxes(const cv::Rect2d& bbox) const;
 

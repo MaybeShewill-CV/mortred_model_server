@@ -1,7 +1,8 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
  * File: ldm_sampler_benchmark.cpp
- * Date: 2026-08-19
+ * Date: 26-8-19
  ************************************************/
 
 // ldm-sampler benchmark tool

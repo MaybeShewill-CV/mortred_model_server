@@ -1,9 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: backend/mnn_session.h
- * Date: 2026-08-20
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: mnn_session.h
+* Date: 26-8-20
+************************************************/
 
 #ifndef MORTRED_MODELS_BACKEND_MNN_SESSION_H
 #define MORTRED_MODELS_BACKEND_MNN_SESSION_H
@@ -22,6 +22,7 @@
 namespace jinq {
 namespace models {
 namespace backend {
+using jinq::common::StatusCode;
 
 /***
  * RAII MNN inference session. Owns the interpreter and session, caches the
@@ -37,7 +38,7 @@ class MnnSession : public InferenceSession {
     MnnSession& operator=(const MnnSession&) = delete;
 
     /*** build the session; returns non-OK status and fills err on failure */
-    jinq::common::StatusCode init(const BackendConfig& config, std::string* err = nullptr);
+    StatusCode init(const BackendConfig& config, std::string* err = nullptr);
 
     const std::vector<TensorInfo>& inputs() const override {
         return _m_input_infos;
@@ -47,11 +48,11 @@ class MnnSession : public InferenceSession {
         return _m_output_infos;
     }
 
-    jinq::common::StatusCode run(const std::vector<NamedTensor>& inputs,
+    StatusCode run(const std::vector<NamedTensor>& inputs,
                                  std::vector<NamedTensor>& outputs) override;
 
   private:
-    jinq::common::StatusCode refresh_io_tensors();
+    StatusCode refresh_io_tensors();
 
     std::unique_ptr<MNN::Interpreter> _m_interpreter;
     MNN::Session* _m_session = nullptr;

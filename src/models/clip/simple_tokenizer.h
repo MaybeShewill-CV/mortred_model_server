@@ -1,9 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: clip_tokenizer.h
- * Date: 23-7-6
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: simple_tokenizer.h
+* Date: 23-7-6
+************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_SIMPLE_TOKENIZER_H
 #define MORTRED_MODEL_SERVER_SIMPLE_TOKENIZER_H
@@ -18,6 +18,7 @@
 namespace jinq {
 namespace models {
 namespace clip {
+using jinq::common::StatusCode;
 
 /***
  *
@@ -53,7 +54,7 @@ class SimpleTokenizer {
      * @param toml
      * @return
      */
-    jinq::common::StatusCode init(const toml::table& cfg);
+    StatusCode init(const toml::table& cfg);
 
     /***
      *
@@ -61,7 +62,7 @@ class SimpleTokenizer {
      * @param text_embeddings
      * @return
      */
-    jinq::common::StatusCode tokenize(const std::string& input_text, std::vector<int>& token) const;
+    StatusCode tokenize(const std::string& input_text, std::vector<int>& token) const;
 
     /***
      * if model successfully initialized

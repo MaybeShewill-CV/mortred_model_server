@@ -1,8 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* File: superpoint_fp_det_server.cpp
-* Date: 2026-08-19
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: superpoint_fp_det_server.cpp
+ * Date: 26-8-19
+ ************************************************/
 
 // superpoint_fp_det server tool
 

@@ -1,11 +1,11 @@
 # build apps
 
-# benchmark / server app 装配完全同构，共用一个函数（原为两个逐字相同的复制）
+# benchmark / server app assembly is identical; share one function (previously two verbatim copies)
 function(add_mortred_app src)
     get_filename_component(file_name ${src} NAME_WE)
     add_executable(${file_name}.out ${src})
     target_link_libraries(${file_name}.out common models factory vendored::workflow glog::glog)
-    # app 侧实例化 .inl 模板（含 OpenCV 旧 API 调用），弃用压制随目标下发
+    # Apps instantiate .inl templates (with old OpenCV API calls); deprecation suppression goes per-target
     target_compile_options(${file_name}.out PRIVATE -Wno-deprecated-declarations)
 endfunction()
 

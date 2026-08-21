@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# verify_deployment.sh - 部署改造验收脚本（在目标 Linux + GPU 机器上执行）。
+# verify_deployment.sh - deployment acceptance script (run on the target Linux + GPU machine).
 #
-# 依次执行并汇总：
-#   1. 部署脚本语法（bash -n / py_compile）
-#   2. 清单 JSON / docker-compose YAML 合法性
-#   3. convert_trt_engines.sh --list（引擎清单完整性）
-#   4. fetch_weights.py --dry-run（权重清单可解析、HF 路径映射可用）
-#   5. install_deps.sh --check（3rd_party 完整性；仅 --full 模式强制通过）
-#   6. fetch_weights.py --check（本地权重 sha256；缺失权重时仅 --full 模式失败）
+# Runs and summarizes, in order:
+#   1. Deployment script syntax (bash -n / py_compile)
+#   2. Manifest JSON / docker-compose YAML validity
+#   3. convert_trt_engines.sh --list (engine manifest completeness)
+#   4. fetch_weights.py --dry-run (weights manifest parses, HF path mapping works)
+#   5. install_deps.sh --check (3rd_party completeness; enforced only in --full mode)
+#   6. fetch_weights.py --check (local weights sha256; missing weights fail only in --full mode)
 #
-# 用法:
-#   ./scripts/verify_deployment.sh            # --full：所有检查必须通过（目标机器）
-#   ./scripts/verify_deployment.sh --basic    # 仅静态检查（未装依赖/无 GPU 的开发机）
-#   ./scripts/verify_deployment.sh --verbose  # 打印每条检查的详细输出
+# Usage:
+#   ./scripts/verify_deployment.sh            # --full: all checks must pass (target machine)
+#   ./scripts/verify_deployment.sh --basic    # static checks only (dev box without deps/GPU)
+#   ./scripts/verify_deployment.sh --verbose  # print detailed output for each check
 
 set -uo pipefail
 
@@ -31,7 +31,7 @@ for arg in "$@"; do
     esac
 done
 
-# 解析一个真正可执行的 python（跳过 PATH 中的失效存根，如 WindowsApps 的 python3 别名）
+# Resolve a working python (skip broken PATH stubs like WindowsApps python3 aliases)
 resolve_python() {
     local cand p
     for cand in python3 python py; do
@@ -62,9 +62,9 @@ check() { # check <name> <cmd...>
     fi
 }
 
-echo "== Mortred 部署验收（mode=$MODE）=="
+echo "== Mortred deployment acceptance (mode=$MODE) =="
 
-# 1) 脚本语法
+# 1) Script syntax
 for f in scripts/install_deps.sh scripts/convert_trt_engines.sh \
          scripts/docker_entrypoint.sh scripts/check_repo_clean.sh \
          scripts/clean_artifacts.sh scripts/setup_full_deps.sh; do
@@ -74,7 +74,7 @@ check "py_compile fetch/gen/check" "$PY" -m py_compile \
     "$ROOT/scripts/fetch_weights.py" "$ROOT/scripts/gen_weights_manifest.py" \
     "$ROOT/scripts/check_consistency.py" "$ROOT/scripts/gen_openapi.py" "$ROOT/scripts/repo_toml.py"
 
-# 2) 清单合法性
+# 2) Manifest validity
 check "JSON: trt_engines/profiles/weights" "$PY" - "$ROOT" <<'PY'
 import json, sys
 from pathlib import Path
@@ -86,44 +86,44 @@ for f in ["conf/trt_engines.json",
     json.loads((root / f).read_text(encoding="utf-8-sig"))
 PY
 if "$PY" -c "import yaml" >/dev/null 2>&1; then
-    # 路径经 argv 传递（MSYS 会对独立参数做 Windows 路径转换；-c 字符串内不做）
+    # Path passed via argv (MSYS converts standalone args to Windows paths; not inside -c strings)
     check "YAML: docker-compose.yml" "$PY" -c "import yaml,sys; yaml.safe_load(open(sys.argv[1], encoding='utf-8'))" "$ROOT/docker-compose.yml"
 else
-    echo "  [warn] yaml 模块缺失，跳过 docker-compose.yml 校验（pip install pyyaml）"
+    echo "  [warn] yaml module missing, skipping docker-compose.yml validation (pip install pyyaml)"
 fi
 
-# 3) 引擎清单
+# 3) Engine manifest
 check "convert_trt_engines.sh --list" bash "$ROOT/scripts/convert_trt_engines.sh" --list
 
-# 4) 权重清单 dry-run
+# 4) Weights manifest dry-run
 check "fetch_weights.py --dry-run" "$PY" "$ROOT/scripts/fetch_weights.py" --dry-run
 
-# 5) 3rd_party 完整性（--basic 模式下失败仅警告）
+# 5) 3rd_party completeness (failure is only a warning in --basic mode)
 if [ "$MODE" = "full" ]; then
     check "install_deps.sh --check" bash "$ROOT/scripts/install_deps.sh" --check
 else
     if bash "$ROOT/scripts/install_deps.sh" --check >/dev/null 2>&1; then
         echo "  [ok]   install_deps.sh --check"
     else
-        echo "  [warn] install_deps.sh --check 未通过（basic 模式：依赖未安装属预期）"
+        echo "  [warn] install_deps.sh --check failed (basic mode: missing deps are expected)"
     fi
 fi
 
-# 6) 本地权重校验（--basic 模式：抽样小文件验证机制，不做全量哈希）
+# 6) Local weights check (--basic mode: sample small files to verify the mechanism, no full hashing)
 if [ "$MODE" = "full" ]; then
     check "fetch_weights.py --check" "$PY" "$ROOT/scripts/fetch_weights.py" --check
 else
     if "$PY" "$ROOT/scripts/fetch_weights.py" --check --only bpe_simple_vocab >/dev/null 2>&1; then
-        echo "  [ok]   fetch_weights.py --check（抽样 bpe_simple_vocab）"
+        echo "  [ok]   fetch_weights.py --check (sampled bpe_simple_vocab)"
     else
-        echo "  [warn] fetch_weights.py 抽样校验未通过（先运行 fetch_weights.py 下载权重）"
+        echo "  [warn] fetch_weights.py sampled check failed (run fetch_weights.py to download weights first)"
     fi
 fi
 
 echo ""
 if [ "$FAILED" -eq 0 ]; then
-    echo "== 验收通过（mode=$MODE）=="
+    echo "== acceptance passed (mode=$MODE) =="
     exit 0
 fi
-echo "== 验收未通过：$FAILED 项失败（见上）=="
+echo "== acceptance failed: $FAILED check(s) failed (see above) =="
 exit 1

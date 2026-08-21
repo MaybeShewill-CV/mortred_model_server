@@ -1,7 +1,7 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: RealEsrGan.h
+* File: real_esrgan.h
 * Date: 22-9-29
 ************************************************/
 
@@ -19,6 +19,7 @@
 namespace jinq {
 namespace models {
 namespace enhancement {
+using jinq::common::StatusCode;
 
 template <typename INPUT, typename OUTPUT>
 class RealEsrGan : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
@@ -32,11 +33,11 @@ class RealEsrGan : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   private:
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
 
-    jinq::common::StatusCode postprocess(
+    StatusCode postprocess(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,
         OUTPUT& output) override;
 
-    jinq::common::StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table& params) override;
 
     cv::Size _m_input_size_host;
 };

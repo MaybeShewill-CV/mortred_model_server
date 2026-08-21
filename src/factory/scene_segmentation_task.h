@@ -1,7 +1,7 @@
 /************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
-* File: scene_segmentation.h
+* File: scene_segmentation_task.h
 * Date: 22-6-9
 ************************************************/
 
@@ -37,8 +37,8 @@ using jinq::models::scene_segmentation::PPHumanSeg;
 // create bisenetv2 scene segmentation model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_bisenetv2_segmentor(const std::string& segmentor_name) {
-    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
-    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    // Direct construction: no global registry writes (no side effects or mutex
+    // overhead); avoids re-registering on every create. name kept for compatibility.
     (void)segmentor_name;
     return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new BiseNetV2<INPUT, OUTPUT>());
 }
@@ -46,8 +46,8 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_bisenetv2_segmentor(const st
 // create pp human segmentation model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_pphuman_segmentor(const std::string& segmentor_name) {
-    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
-    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    // Direct construction: no global registry writes (no side effects or mutex
+    // overhead); avoids re-registering on every create. name kept for compatibility.
     (void)segmentor_name;
     return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new PPHumanSeg<INPUT, OUTPUT>());
 }
@@ -55,8 +55,8 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_pphuman_segmentor(const std:
 // create msocrnet scene segmentation model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_msocrnet_segmentor(const std::string& segmentor_name) {
-    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
-    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    // Direct construction: no global registry writes (no side effects or mutex
+    // overhead); avoids re-registering on every create. name kept for compatibility.
     (void)segmentor_name;
     return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new MsOcrNet<INPUT, OUTPUT>());
 }
@@ -64,8 +64,8 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_msocrnet_segmentor(const std
 // create hrnet scene segmentation model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_hrnet_segmentor(const std::string& segmentor_name) {
-    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
-    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    // Direct construction: no global registry writes (no side effects or mutex
+    // overhead); avoids re-registering on every create. name kept for compatibility.
     (void)segmentor_name;
     return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new HRNetSegmentation<INPUT, OUTPUT>());
 }

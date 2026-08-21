@@ -1,12 +1,13 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * File: generic_cv_server.h
- * Date: 2026-08-19
- *
- * Registry-driven generic model server: the single implementation that all
- * 22 former hand-written concrete servers delegate to. Per-model variation
- * lives in CvServerSpec (TOML sections, worker factory, response filler).
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: generic_cv_server.h
+* Date: 26-8-19
+************************************************/
+
+// Registry-driven generic model server: the single implementation that all
+// former hand-written concrete servers delegate to. Per-model variation lives
+// in CvServerSpec (TOML sections, worker factory, response filler).
 
 #ifndef MORTRED_MODEL_SERVER_GENERIC_CV_SERVER_H
 #define MORTRED_MODEL_SERVER_GENERIC_CV_SERVER_H
@@ -28,6 +29,7 @@
 
 namespace jinq {
 namespace server {
+using jinq::common::StatusCode;
 
 using Base64Input = jinq::models::io_define::common_io::base64_input;
 
@@ -64,9 +66,9 @@ class CvModelServer final : public BaseAiServer {
     CvModelServer(const CvModelServer&) = delete;
     CvModelServer& operator=(const CvModelServer&) = delete;
 
-    jinq::common::StatusCode init(const toml::table& config) override {
+    StatusCode init(const toml::table& config) override {
         auto status = _m_impl->init(config);
-        if (status != jinq::common::StatusCode::OK) {
+        if (status != StatusCode::OK) {
             LOG(INFO) << "init " << _m_spec.display_name << " server failed";
             return status;
         }
@@ -86,13 +88,13 @@ class CvModelServer final : public BaseAiServer {
       public:
         explicit Impl(const CvServerSpec<MODEL_OUTPUT>& spec) : _m_spec(spec) {}
 
-        jinq::common::StatusCode init(const toml::table& config) override;
+        StatusCode init(const toml::table& config) override;
 
         void fill_response_data(rapidjson::Document::AllocatorType& allocator,
                                 rapidjson::Document& data,
-                                const jinq::common::StatusCode& status,
+                                const StatusCode& status,
                                 const MODEL_OUTPUT& model_output) override {
-            (void)status;  // 契约：仅成功路径调用
+            (void)status;  // contract: only called on the success path
             _m_spec.fill_response(allocator, data, model_output);
         }
 
@@ -107,36 +109,36 @@ class CvModelServer final : public BaseAiServer {
 /*********** Public Func Sets **************/
 
 template<typename MODEL_OUTPUT>
-jinq::common::StatusCode CvModelServer<MODEL_OUTPUT>::Impl::init(const toml::table& config) {
+StatusCode CvModelServer<MODEL_OUTPUT>::Impl::init(const toml::table& config) {
     const toml::table* server_section_ptr = config[_m_spec.server_section].as_table();
     if (server_section_ptr == nullptr) {
         LOG(ERROR) << "Config section " << _m_spec.server_section << " missing or not a table";
         this->_m_successfully_initialized = false;
-        return jinq::common::StatusCode::SERVER_INIT_FAILED;
+        return StatusCode::SERVER_INIT_FAILED;
     }
     const toml::table& server_section = *server_section_ptr;
 
     auto common_status = this->parse_common_server_config(server_section);
-    if (common_status != jinq::common::StatusCode::OK) {
+    if (common_status != StatusCode::OK) {
         return common_status;
     }
     auto worker_nums = parse_worker_nums(server_section);
     if (worker_nums <= 0) {
         this->_m_successfully_initialized = false;
-        return jinq::common::StatusCode::SERVER_INIT_FAILED;
+        return StatusCode::SERVER_INIT_FAILED;
     }
 
     const toml::table* model_section_ptr = config[_m_spec.model_section].as_table();
     if (model_section_ptr == nullptr) {
         LOG(ERROR) << "Config section " << _m_spec.model_section << " missing or not a table";
         this->_m_successfully_initialized = false;
-        return jinq::common::StatusCode::SERVER_INIT_FAILED;
+        return StatusCode::SERVER_INIT_FAILED;
     }
     auto model_cfg_path = (*model_section_ptr)["model_config_file_path"].value_or<std::string>("");
     if (!jinq::common::FilePathUtil::is_file_exist(model_cfg_path)) {
         LOG(ERROR) << _m_spec.display_name << " model config file not exist: " << model_cfg_path;
         this->_m_successfully_initialized = false;
-        return jinq::common::StatusCode::SERVER_INIT_FAILED;
+        return StatusCode::SERVER_INIT_FAILED;
     }
 
     auto model_cfg_parsed = toml::parse_file(model_cfg_path);
@@ -144,16 +146,16 @@ jinq::common::StatusCode CvModelServer<MODEL_OUTPUT>::Impl::init(const toml::tab
         LOG(ERROR) << "parse toml config file failed, error: "
                    << std::string(model_cfg_parsed.error().description());
         this->_m_successfully_initialized = false;
-        return jinq::common::StatusCode::SERVER_INIT_FAILED;
+        return StatusCode::SERVER_INIT_FAILED;
     }
     auto model_cfg = std::move(model_cfg_parsed).table();
 
     for (int index = 0; index < worker_nums; ++index) {
         auto worker = _m_spec.make_worker("worker_" + std::to_string(index + 1));
         if (!worker->is_successfully_initialized()) {
-            if (worker->init(model_cfg) != jinq::common::StatusCode::OK) {
+            if (worker->init(model_cfg) != StatusCode::OK) {
                 this->_m_successfully_initialized = false;
-                return jinq::common::StatusCode::SERVER_INIT_FAILED;
+                return StatusCode::SERVER_INIT_FAILED;
             }
         }
         this->_m_working_queue.enqueue(std::move(worker));
@@ -163,7 +165,7 @@ jinq::common::StatusCode CvModelServer<MODEL_OUTPUT>::Impl::init(const toml::tab
     if (!server_section.contains("server_uri")) {
         LOG(ERROR) << "missing server uri field";
         this->_m_successfully_initialized = false;
-        return jinq::common::StatusCode::SERVER_INIT_FAILED;
+        return StatusCode::SERVER_INIT_FAILED;
     }
     this->_m_server_uri = server_section["server_uri"].value_or<std::string>("");
 
@@ -171,7 +173,7 @@ jinq::common::StatusCode CvModelServer<MODEL_OUTPUT>::Impl::init(const toml::tab
     this->_m_worker_nums = static_cast<size_t>(worker_nums);
     this->_m_successfully_initialized = true;
     LOG(INFO) << _m_spec.display_name << " server init successfully";
-    return jinq::common::StatusCode::OK;
+    return StatusCode::OK;
 }
 
 }  // namespace server

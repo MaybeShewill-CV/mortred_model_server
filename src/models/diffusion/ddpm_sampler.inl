@@ -1,7 +1,7 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: DDPMSampler.cpp
+ * File: ddpm_sampler.inl
  * Date: 24-4-23
  ************************************************/
 

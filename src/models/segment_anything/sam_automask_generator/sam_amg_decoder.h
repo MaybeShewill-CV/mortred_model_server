@@ -1,9 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: sam_trt_everything_decoder.h
- * Date: 23-9-20
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: sam_amg_decoder.h
+* Date: 23-9-20
+************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_SAM_AMG_DECODER_H
 #define MORTRED_MODEL_SERVER_SAM_AMG_DECODER_H
@@ -20,6 +20,7 @@
 namespace jinq {
 namespace models {
 namespace segment_anything {
+using jinq::common::StatusCode;
 
 using AmgMaskOutput = jinq::models::io_define::segment_anything::sam_amg_output;
 
@@ -57,7 +58,7 @@ class SamAmgDecoder {
      * @param toml
      * @return
      */
-    jinq::common::StatusCode init(const toml::table& cfg);
+    StatusCode init(const toml::table& cfg);
 
     /***
      *
@@ -83,7 +84,7 @@ class SamAmgDecoder {
      * @param min_mask_region_area
      * @return
      */
-    jinq::common::StatusCode decode_everything(
+    StatusCode decode_everything(
         const std::vector<float>& image_embeddings,
         AmgMaskOutput& output, int points_per_side = 32, float pred_iou_thresh = 0.88,
         float stability_score_thresh = 0.95, float box_nms_thresh = 0.7, int min_mask_region_area = 0);

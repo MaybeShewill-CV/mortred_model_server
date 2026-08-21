@@ -1,17 +1,16 @@
 /************************************************
- * Author: Codex
- * File: server_config_schema.h
- *
- * Declarative schema + validator for [*_SERVER] config sections.
- *
- * Policy:
- * - missing required keys / wrong value types -> error (fail-fast);
- * - unknown keys within edit distance 2 of a known key are treated as typos
- *   -> error with a "did you mean" suggestion;
- * - other unknown scalar keys -> warning only (forward compatibility for
- *   test-only / future keys);
- * - `server_url` is accepted as a deprecated alias of `server_uri`.
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: server_config_schema.h
+* Date: 26-8-19
+************************************************/
+
+// Declarative schema + validator for [*_SERVER] config sections. Policy:
+// - missing required keys / wrong value types -> error (fail-fast);
+// - unknown keys within edit distance 2 of a known key -> error with a
+//   "did you mean" suggestion;
+// - other unknown scalar keys -> warning only (forward compatibility);
+// - `server_url` is accepted as a deprecated alias of `server_uri`.
 
 #ifndef MORTRED_SERVER_CONFIG_SCHEMA_H
 #define MORTRED_SERVER_CONFIG_SCHEMA_H
@@ -131,8 +130,8 @@ inline bool validate_server_section(const toml::table& section,
 
     // known keys: type checks; unknown scalar keys: typo-or-warn
     for (const auto& [key, value] : section) {
-        // toml::v3::key 不能隐式转换为 std::string（operator+/string 形参均不匹配），
-        // 循环内统一使用物化的 key_name
+        // toml::v3::key cannot implicitly convert to std::string (operator+ /
+        // string params both mismatch), so use the materialized key_name in the loop
         const std::string key_name(key.str());
         if (key_in(key_name, server_required_string_keys()) || key_in(key_name, server_optional_string_keys())) {
             if (!value.is_string()) {

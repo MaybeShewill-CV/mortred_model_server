@@ -1,7 +1,7 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: sam_trt_everything_decoder.cpp
+ * File: sam_amg_decoder.cpp
  * Date: 23-9-20
  ************************************************/
 

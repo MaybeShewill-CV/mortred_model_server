@@ -1,8 +1,9 @@
 /************************************************
- * Author: Codex
- * File: cv_image_input.h
- * Date: 2026-08-13
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: cv_image_input.h
+* Date: 26-8-13
+************************************************/
 
 #ifndef MORTRED_MODELS_CV_IMAGE_INPUT_H
 #define MORTRED_MODELS_CV_IMAGE_INPUT_H

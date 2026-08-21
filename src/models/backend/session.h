@@ -1,9 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: backend/session.h
- * Date: 2026-08-20
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: session.h
+* Date: 26-8-20
+************************************************/
 
 #ifndef MORTRED_MODELS_BACKEND_SESSION_H
 #define MORTRED_MODELS_BACKEND_SESSION_H
@@ -19,6 +19,7 @@
 namespace jinq {
 namespace models {
 namespace backend {
+using jinq::common::StatusCode;
 
 /***
  * Metadata of one model io tensor. shape may contain -1 dims for dynamic
@@ -70,7 +71,7 @@ class InferenceSession {
      * buffers are reused inside the session, the returned tensors own a host
      * copy with the concrete run-time shapes.
      */
-    virtual jinq::common::StatusCode run(const std::vector<NamedTensor>& inputs,
+    virtual StatusCode run(const std::vector<NamedTensor>& inputs,
                                          std::vector<NamedTensor>& outputs) = 0;
 };
 

@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: RealEsrGan.cpp
-* Date: 22-9-29
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: real_esrgan.inl
+ * Date: 22-9-29
+ ************************************************/
 
 #include "real_esrgan.h"
 

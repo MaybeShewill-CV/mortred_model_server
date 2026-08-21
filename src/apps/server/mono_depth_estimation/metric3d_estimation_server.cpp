@@ -1,8 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* File: metric3d_estimation_server.cpp
-* Date: 2026-08-19
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: metric3d_estimation_server.cpp
+ * Date: 26-8-19
+ ************************************************/
 
 // metric3d_estimation server tool
 

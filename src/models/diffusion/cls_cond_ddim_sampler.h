@@ -1,9 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: cls_cond_ddim_sampler.h
- * Date: 24-5-8
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: cls_cond_ddim_sampler.h
+* Date: 24-5-8
+************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_CLS_COND_DDIM_SAMPLER_H
 #define MORTRED_MODEL_SERVER_CLS_COND_DDIM_SAMPLER_H
@@ -19,6 +19,7 @@
 namespace jinq {
 namespace models {
 namespace diffusion {
+using jinq::common::StatusCode;
 
 template <typename INPUT, typename OUTPUT>
 class ClsCondDDIMSampler : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
@@ -52,7 +53,7 @@ class ClsCondDDIMSampler : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
      * @param toml
      * @return
      */
-    jinq::common::StatusCode init(const toml::table &cfg) override;
+    StatusCode init(const toml::table &cfg) override;
 
     /***
      *
@@ -60,7 +61,7 @@ class ClsCondDDIMSampler : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
      * @param output
      * @return
      */
-    jinq::common::StatusCode run_impl(const INPUT&input, OUTPUT &output) override;
+    StatusCode run_impl(const INPUT&input, OUTPUT &output) override;
 
     /***
      * if model successfully initialized

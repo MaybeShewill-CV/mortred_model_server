@@ -21,6 +21,7 @@
 namespace jinq {
 namespace models {
 namespace object_detection {
+using jinq::common::StatusCode;
 
 template<typename INPUT, typename OUTPUT>
 class NanoDetector : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
@@ -41,11 +42,11 @@ class NanoDetector : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   private:
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
 
-    jinq::common::StatusCode postprocess(
+    StatusCode postprocess(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,
         OUTPUT& output) override;
 
-    jinq::common::StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table& params) override;
 
     const jinq::models::backend::NamedTensor* find_output(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,

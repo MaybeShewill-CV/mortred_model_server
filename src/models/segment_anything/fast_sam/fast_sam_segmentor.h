@@ -1,9 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: fast_sam_segmentor.h
- * Date: 23-9-14
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: fast_sam_segmentor.h
+* Date: 23-9-14
+************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_FAST_SAM_SEGMENTOR_H
 #define MORTRED_MODEL_SERVER_FAST_SAM_SEGMENTOR_H
@@ -22,9 +22,10 @@
 namespace jinq {
 namespace models {
 namespace segment_anything {
+using jinq::common::StatusCode;
 
 /***
- * FastSAM 分割模型：图像 -> everything mask。
+ * FastSAM segmentation model: image -> everything mask.
  */
 template <typename INPUT, typename OUTPUT>
 class FastSamSegmentor : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
@@ -38,11 +39,11 @@ class FastSamSegmentor : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   private:
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
 
-    jinq::common::StatusCode postprocess(
+    StatusCode postprocess(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,
         OUTPUT& output) override;
 
-    jinq::common::StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table& params) override;
 
     const jinq::models::backend::NamedTensor* find_output(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,

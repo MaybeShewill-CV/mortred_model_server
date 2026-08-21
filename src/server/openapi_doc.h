@@ -1,13 +1,14 @@
 /************************************************
- * Author: Codex
- * File: openapi_doc.h
- *
- * Embedded OpenAPI document served at GET /openapi.json.
- * GENERATED FILE: do not edit by hand. Regenerate with:
- *   python scripts/gen_openapi.py
- * The content must stay byte-identical to docs/openapi.json
- * (enforced by scripts/check_consistency.py).
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: openapi_doc.h
+* Date: 26-8-19
+************************************************/
+
+// GENERATED FILE: do not edit by hand. Regenerate with:
+//   python scripts/gen_openapi.py
+// The content must stay byte-identical to docs/openapi.json
+// (enforced by scripts/check_consistency.py).
 
 #ifndef MORTRED_SERVER_OPENAPI_DOC_H
 #define MORTRED_SERVER_OPENAPI_DOC_H

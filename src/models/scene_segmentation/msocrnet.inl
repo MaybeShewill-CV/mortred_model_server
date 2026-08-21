@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: msocrnet.cpp
-* Date: 23-3-11
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: msocrnet.inl
+ * Date: 23-3-11
+ ************************************************/
 
 #include "msocrnet.h"
 

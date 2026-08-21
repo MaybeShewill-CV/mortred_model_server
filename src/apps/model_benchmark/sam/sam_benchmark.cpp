@@ -1,7 +1,7 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: test_sam.cpp
+ * File: sam_benchmark.cpp
  * Date: 23-5-24
  ************************************************/
 // test sam

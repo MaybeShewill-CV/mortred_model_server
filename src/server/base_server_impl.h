@@ -59,9 +59,10 @@ using jinq::common::Timestamp;
 using jinq::common::k_default_request_size_limit_mb;
 
 /***
- * 解析并校验 worker 数量。
- * 缺失（value_or 回落到 0）、0 或负数都是配置错误——空 worker 队列会让
- * do_work 的无界 wait_dequeue 永久挂起，因此返回 -1 由调用方拒绝启动。
+ * Parse and validate the worker count.
+ * Missing (value_or falls back to 0), zero or negative are config errors — an
+ * empty worker queue would hang do_work's unbounded wait_dequeue forever, so
+ * return -1 and let the caller refuse to start.
  */
 inline int parse_worker_nums(const toml::table& server_section) {
     auto worker_nums = static_cast<int>(server_section["worker_nums"].value_or<int64_t>(0));
@@ -206,58 +207,60 @@ protected:
     int _m_stuck_worker_threshold_times = 3;
     // server uri
     std::string _m_server_uri;
-    // bearer token 鉴权（空 = 关闭）
+    // bearer token auth (empty = disabled)
     std::string _m_auth_token;
-    // 每客户端 IP 每秒最大请求数（<= 0 = 关闭）
+    // max requests per second per client IP (<= 0 = disabled)
     int _m_rate_limit_qps = 0;
     FixedWindowRateLimiter _m_rate_limiter{0};
     PrometheusMetrics _m_metrics;
 
 protected:
     /***
-     * 解析鉴权与限流配置（auth_token / rate_limit_qps）。
-     * fail-closed：非回环监听必须配置 auth_token，否则拒绝启动。
+     * Parse auth and rate-limit config (auth_token / rate_limit_qps).
+     * Fail-closed: non-loopback listeners must configure auth_token or refuse
+     * to start.
      */
     StatusCode parse_server_security_config(const toml::table& server_section);
 
     /***
-     * 解析 server 段公共配置：5 个 server 参数 + 请求体上限归一化 + 鉴权/限流安全配置。
+     * Parse common server-section config: 5 server params + request size limit
+     * normalization + auth/rate-limit security config.
      */
     StatusCode parse_common_server_config(const toml::table& server_section);
 
     /***
-     * 获取客户端 IP，失败返回空串。
+     * Get the client IP; returns "" on failure.
      */
     static std::string peer_ip_of(const WFHttpTask* task);
 
     /***
-     * 读取 Authorization 请求头。
+     * Read the Authorization request header.
      */
     static std::string authorization_header_of(const protocol::HttpRequest* req);
 
     /***
-     * 读取任意请求头（名称大小写不敏感）。
+     * Read any request header (name lookup is case-insensitive).
      */
     static std::string header_value_of(const protocol::HttpRequest* req,
                                        const std::string& target_name);
 
     /***
-     * Content-Type 是否可接受（application/json，忽略参数与大小写）。
+     * Whether Content-Type is acceptable (application/json, ignoring params and case).
      */
     static bool is_json_content_type(const std::string& content_type);
 
     /***
-     * 401 / 429 统一响应。
+     * Unified 401 / 429 responses.
      */
     static void reply_unauthorized(WFHttpTask* task);
     static void reply_rate_limited(WFHttpTask* task);
 
     /***
-     * 统一 JSON 响应出口：设置 HTTP 状态码、Content-Type、X-Request-ID。
+     * Unified JSON response exit: sets HTTP status, Content-Type, X-Request-ID.
      */
     static void reply_json(protocol::HttpResponse* resp,
                            const std::string& req_id,
-                           jinq::common::StatusCode status,
+                           StatusCode status,
                            rapidjson::Document&& data) {
         resp->set_status_code(std::to_string(http_status_of(status)).c_str());
         resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
@@ -267,7 +270,7 @@ protected:
         jinq::common::HttpResponse http_resp;
         http_resp.req_id = req_id;
         http_resp.code = jinq::common::to_underlying(status);
-        http_resp.msg = status == jinq::common::StatusCode::OK
+        http_resp.msg = status == StatusCode::OK
                             ? "success"
                             : jinq::common::status_code_to_str(status);
         http_resp.data = std::move(data);
@@ -278,7 +281,7 @@ protected:
 
     static void reply_json(WFHttpTask* task,
                            const std::string& req_id,
-                           jinq::common::StatusCode status,
+                           StatusCode status,
                            rapidjson::Document&& data) {
         reply_json(task->get_resp(), req_id, status, std::move(data));
     }
@@ -311,7 +314,8 @@ protected:
     };
 
     /***
-     * 任务请求：parse_task_request 解析 base64 图像内容与调用方追踪 id。
+     * Task request: parse_task_request parses the base64 image content and the
+     * caller trace id.
      */
     struct task_request {
         std::string task_id;
@@ -371,8 +375,8 @@ protected:
         const MODEL_OUTPUT& model_output) = 0;
 
     /***
-     * 自定义扩展端点钩子：URI 不属于 welcome/hello/model 时调用，
-     * 返回 true 表示已处理，false 则回 404。
+     * Custom extension endpoint hook: called when the URI is not
+     * welcome/hello/model. Return true if handled, false to reply 404.
      * @param task
      * @return
      */
@@ -409,13 +413,13 @@ protected:
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
     _m_metrics.set_model(_m_server_uri);
-    // 限流：端口上的所有请求（含健康检查）按客户端 IP 计数
+    // rate limit: all requests on the port (incl. health checks) count per client IP
     if (_m_rate_limit_qps > 0 && !_m_rate_limiter.allow(peer_ip_of(task))) {
         _m_metrics.inc_http_requests(task->get_req()->get_method(), "429");
         reply_rate_limited(task);
         return;
     }
-    // 鉴权：健康/元数据端点保持公开，其余端点需要 Bearer Token
+    // auth: health/metadata endpoints stay public, others require a Bearer Token
     const char* request_uri = task->get_req()->get_request_uri();
     const char* request_method = task->get_req()->get_method();
     bool is_health_endpoint = strcmp(request_uri, "/welcome") == 0 ||
@@ -489,14 +493,14 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         // parse request body
         auto* req = task->get_req();
         auto* resp = task->get_resp();
-        // 415：模型端点要求 application/json（缺失同样拒绝）
+        // 415: model endpoints require application/json (missing is also rejected)
         if (!is_json_content_type(header_value_of(req, "content-type"))) {
             _m_metrics.inc_http_requests(request_method, "415");
             rapidjson::Document data;
             reply_json(task, "", StatusCode::UNSUPPORTED_MEDIA_TYPE, std::move(data));
             return;
         }
-        // 413：显式 Content-Length 超过请求体上限时直接拒绝（chunked 由 workflow 层限制）
+        // 413: reject when the declared Content-Length exceeds the limit (chunked is capped by the workflow layer)
         const std::string content_length_str = header_value_of(req, "content-length");
         if (!content_length_str.empty()) {
             char* end = nullptr;
@@ -587,7 +591,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     auto find_worker_start_ts = Timestamp::now();
 
     if (_m_model_run_timeout > 0) {
-        // 有界等待：等 worker 也计入模型超时预算，形成背压
+        // bounded wait: waiting for a worker counts toward the model timeout budget (backpressure)
         if (!_m_working_queue.wait_dequeue_timed(
                 worker, std::chrono::milliseconds(_m_model_run_timeout))) {
             result->model_run_status = StatusCode::MODEL_RUN_TIMEOUT;
@@ -618,7 +622,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
             return;
         }
     } else {
-        // model_run_timeout <= 0 表示不设超时，用无界阻塞等待
+        // model_run_timeout <= 0 means no timeout: use an unbounded blocking wait
         _m_working_queue.wait_dequeue(worker);
     }
     // a successful dequeue means a worker is back: reset the stuck streak
@@ -627,8 +631,9 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     result->find_worker_time_consuming = (Timestamp::now() - find_worker_start_ts) * 1000;
     _m_metrics.observe_queue_wait_ms(result->find_worker_time_consuming);
 
-    // 局部时间戳仅用于耗时统计；task_id/task_received_ts 等元数据由 serve_process
-    // 写进回调闭包携带的 request_meta，routine 不接触
+    // local timestamps are for duration stats only; metadata like task_id and
+    // task_received_ts is written by serve_process into the closure-carried
+    // request_meta, which this routine never touches
     auto task_receive_ts = Timestamp::now();
 
     // construct model input: base64 image content from the request payload
@@ -652,7 +657,8 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
 
     auto task_finish_ts = Timestamp::now();
     result->task_finished_ts = task_finish_ts.to_format_str();
-    // 先计算再观测：原顺序观测的是赋值前的 0，直方图恒记 0（复评遗留 #1）
+    // compute before observing: the old order observed the pre-assignment 0,
+    // so the histogram always recorded 0 (review leftover #1)
     result->worker_run_time_consuming = (task_finish_ts - task_receive_ts) * 1000;
     _m_metrics.observe_inference_duration_ms(result->worker_run_time_consuming);
 }
@@ -694,7 +700,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(
         auto* result = static_cast<go_result*>(task->user_data);
         status = result->model_run_status;
         task_id = meta.is_task_req_valid ? meta.task_id : "";
-        // 契约：仅成功时填充 data，错误时保持 data:null
+        // contract: fill data only on success, keep data:null on error
         if (status == StatusCode::OK) {
             fill_response_data(data.GetAllocator(), data, status, result->model_output);
         }
@@ -876,7 +882,7 @@ std::string BaseAiServerImpl<WORKER, MODEL_OUTPUT>::authorization_header_of(
 }
 
 /***
- * Content-Type 是否可接受：大小写不敏感，忽略 charset 等参数。
+ * Whether Content-Type is acceptable: case-insensitive, ignoring params like charset.
  */
 template<typename WORKER, typename MODEL_OUTPUT>
 bool BaseAiServerImpl<WORKER, MODEL_OUTPUT>::is_json_content_type(
@@ -909,7 +915,7 @@ template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::reply_unauthorized(WFHttpTask* task) {
     rapidjson::Document data;
     task->get_resp()->add_header_pair("WWW-Authenticate", "Bearer realm=\"Mortred\"");
-    reply_json(task, "", jinq::common::StatusCode::UNAUTHORIZED, std::move(data));
+    reply_json(task, "", StatusCode::UNAUTHORIZED, std::move(data));
 }
 
 /***
@@ -919,7 +925,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::reply_unauthorized(WFHttpTask* task
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::reply_rate_limited(WFHttpTask* task) {
     rapidjson::Document data;
-    reply_json(task, "", jinq::common::StatusCode::RATE_LIMITED, std::move(data));
+    reply_json(task, "", StatusCode::RATE_LIMITED, std::move(data));
 }
 }
 }

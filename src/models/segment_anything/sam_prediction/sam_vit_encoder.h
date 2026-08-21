@@ -1,9 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: sam_vit_encoder.h
- * Date: 23-6-7
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: sam_vit_encoder.h
+* Date: 23-6-7
+************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_SAM_VIT_ENCODER_H
 #define MORTRED_MODEL_SERVER_SAM_VIT_ENCODER_H
@@ -20,6 +20,7 @@
 namespace jinq {
 namespace models {
 namespace segment_anything {
+using jinq::common::StatusCode;
 
 /***
  * SAM ViT image encoder backed by the unified inference-session layer.
@@ -33,9 +34,9 @@ class SamVitEncoder {
     SamVitEncoder(const SamVitEncoder&) = delete;
     SamVitEncoder& operator=(const SamVitEncoder&) = delete;
 
-    jinq::common::StatusCode init();
+    StatusCode init();
 
-    jinq::common::StatusCode encode(
+    StatusCode encode(
         const cv::Mat& input_image, std::vector<float>& image_embeddings);
 
     std::vector<int> get_encoder_input_shape() const;

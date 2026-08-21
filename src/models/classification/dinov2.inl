@@ -1,8 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: dinov2.cpp
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: dinov2.inl
+ * Date: 23-6-12
+ ************************************************/
 
 #include "dinov2.h"
 
@@ -19,23 +20,24 @@
 namespace jinq {
 namespace models {
 namespace classification {
+using jinq::common::StatusCode;
 
 using ClassificationOutput = jinq::models::io_define::classification::std_classification_output;
 using jinq::models::backend::NamedTensor;
 
 template<typename INPUT, typename OUTPUT>
-jinq::common::StatusCode Dinov2<INPUT, OUTPUT>::on_init(const toml::table& params) {
+StatusCode Dinov2<INPUT, OUTPUT>::on_init(const toml::table& params) {
     const auto& input_info = this->session().inputs().front();
     if (input_info.shape.size() != 4 || input_info.shape[1] != 3) {
         LOG(ERROR) << "unexpected classification input shape: " << input_info.to_string()
                    << ", expected [N,3,H,W] (nchw)";
-        return jinq::common::StatusCode::MODEL_INIT_FAILED;
+        return StatusCode::MODEL_INIT_FAILED;
     }
     _m_input_tensor_size.height = static_cast<int>(input_info.shape[2]);
     _m_input_tensor_size.width = static_cast<int>(input_info.shape[3]);
     if (_m_input_tensor_size.area() <= 0) {
         LOG(ERROR) << "invalid dinov2 input shape: " << input_info.to_string();
-        return jinq::common::StatusCode::MODEL_INIT_FAILED;
+        return StatusCode::MODEL_INIT_FAILED;
     }
 
     if (params.contains("class_name_file")) {
@@ -52,7 +54,7 @@ jinq::common::StatusCode Dinov2<INPUT, OUTPUT>::on_init(const toml::table& param
             }
         }
     }
-    return jinq::common::StatusCode::OK;
+    return StatusCode::OK;
 }
 
 template<typename INPUT, typename OUTPUT>
@@ -82,18 +84,18 @@ std::vector<NamedTensor> Dinov2<INPUT, OUTPUT>::preprocess(const cv::Mat& input_
 }
 
 template<typename INPUT, typename OUTPUT>
-jinq::common::StatusCode Dinov2<INPUT, OUTPUT>::postprocess(
+StatusCode Dinov2<INPUT, OUTPUT>::postprocess(
     const std::vector<NamedTensor>& outputs, OUTPUT& output) {
     if (outputs.empty()) {
         LOG(ERROR) << "classification model output tensor is empty";
-        return jinq::common::StatusCode::MODEL_EMPTY_OUTPUT;
+        return StatusCode::MODEL_EMPTY_OUTPUT;
     }
     const auto& tensor = outputs.front().tensor;
     const auto* scores = tensor.data<float>();
     const auto score_count = tensor.element_count();
     if (score_count <= 0) {
         LOG(ERROR) << "classification model output tensor is empty";
-        return jinq::common::StatusCode::MODEL_EMPTY_OUTPUT;
+        return StatusCode::MODEL_EMPTY_OUTPUT;
     }
 
     ClassificationOutput internal_out;
@@ -111,7 +113,7 @@ jinq::common::StatusCode Dinov2<INPUT, OUTPUT>::postprocess(
         internal_out.category = name_iter->second;
     }
     output = std::move(internal_out);
-    return jinq::common::StatusCode::OK;
+    return StatusCode::OK;
 }
 
 /************* Export Function Sets *************/

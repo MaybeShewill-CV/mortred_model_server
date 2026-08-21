@@ -1,14 +1,14 @@
 /************************************************
- * Author: Codex
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
  * File: catalog.cpp
- *
- * Web console server registry. The registry is derived from the TOML configs
- * under conf/server only: each [*_SERVER] section must declare `server_exe` (plus port / host /
- * server_uri), so the config -> executable mapping is explicit and can never
- * silently go stale. The previous token-overlap heuristic and the hard-coded
- * add_missing_server entries were removed (see scripts/check_consistency.py
- * check_server_exe_mapping for the bidirectional coverage gate).
+ * Date: 26-8-12
  ************************************************/
+
+// Web console server registry, derived from conf/server TOML configs only:
+// each [*_SERVER] section must declare server_exe (plus port/host/server_uri),
+// so the config -> executable mapping is explicit and never stale.
+// See scripts/check_consistency.py check_server_exe_mapping for the coverage gate.
 
 #include "catalog.h"
 

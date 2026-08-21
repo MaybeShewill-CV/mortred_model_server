@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: pp_humanseg.cpp
-* Date: 22-7-20
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: pp_humanseg.inl
+ * Date: 22-7-20
+ ************************************************/
 
 #include "pp_humanseg.h"
 

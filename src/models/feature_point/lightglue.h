@@ -2,7 +2,7 @@
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
 * File: lightglue.h
-* Date: 23-11-03
+* Date: 23-11-3
 ************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_LIGHTGLUE_H
@@ -22,6 +22,7 @@
 namespace jinq {
 namespace models {
 namespace feature_point {
+using jinq::common::StatusCode;
 
 template<typename INPUT, typename OUTPUT>
 class LightGlue : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
@@ -39,20 +40,20 @@ class LightGlue : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
         std::vector<float> descriptors;
     };
 
-    jinq::common::StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table& params) override;
 
-    jinq::common::StatusCode run_sessions(const INPUT& input, OUTPUT& output) override;
+    StatusCode run_sessions(const INPUT& input, OUTPUT& output) override;
 
-    jinq::common::StatusCode postprocess(
+    StatusCode postprocess(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,
         OUTPUT& output) override;
 
     cv::Mat preprocess_image(const cv::Mat& input_image) const;
 
-    jinq::common::StatusCode extract_feature_points(
+    StatusCode extract_feature_points(
         const cv::Mat& input_image, FeaturePoints& feature_points) const;
 
-    jinq::common::StatusCode match_feature_points(
+    StatusCode match_feature_points(
         const FeaturePoints& src_features,
         const FeaturePoints& dst_features,
         jinq::models::io_define::feature_point::std_feature_point_match_output& matches) const;
@@ -64,7 +65,7 @@ class LightGlue : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
     static const jinq::models::backend::TensorInfo* find_info(
         const jinq::models::backend::InferenceSession& session, const std::string& name);
 
-    static jinq::common::StatusCode validate_io(
+    static StatusCode validate_io(
         const jinq::models::backend::InferenceSession& session);
 
     std::unique_ptr<jinq::models::backend::InferenceSession> _m_extractor;

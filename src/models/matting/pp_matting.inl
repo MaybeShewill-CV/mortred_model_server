@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: pp_matting.cpp
-* Date: 22-7-19
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: pp_matting.inl
+ * Date: 22-7-19
+ ************************************************/
 
 #include "pp_matting.h"
 

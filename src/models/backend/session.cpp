@@ -1,8 +1,8 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: backend/session.cpp
- * Date: 2026-08-20
+ * File: session.cpp
+ * Date: 26-8-20
  ************************************************/
 
 #include "models/backend/session.h"
@@ -16,6 +16,7 @@
 namespace jinq {
 namespace models {
 namespace backend {
+using jinq::common::StatusCode;
 
 std::unique_ptr<InferenceSession> InferenceSession::create(const BackendConfig& config,
                                                            std::string* err) {
@@ -26,21 +27,21 @@ std::unique_ptr<InferenceSession> InferenceSession::create(const BackendConfig& 
     if (config.is_mnn()) {
         auto mnn_session = std::make_unique<MnnSession>();
         const auto status = mnn_session->init(config, err);
-        if (status != jinq::common::StatusCode::OK) {
+        if (status != StatusCode::OK) {
             return nullptr;
         }
         session = std::move(mnn_session);
     } else if (config.is_onnx()) {
         auto ort_session = std::make_unique<OrtSession>();
         const auto status = ort_session->init(config, err);
-        if (status != jinq::common::StatusCode::OK) {
+        if (status != StatusCode::OK) {
             return nullptr;
         }
         session = std::move(ort_session);
     } else if (config.is_tensorrt()) {
         auto trt_session = std::make_unique<TrtSession>();
         const auto status = trt_session->init(config, err);
-        if (status != jinq::common::StatusCode::OK) {
+        if (status != StatusCode::OK) {
             return nullptr;
         }
         session = std::move(trt_session);

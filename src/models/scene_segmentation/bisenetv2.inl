@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: bisenetv2.cpp
-* Date: 22-6-9
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: bisenetv2.inl
+ * Date: 22-6-9
+ ************************************************/
 
 #include "bisenetv2.h"
 

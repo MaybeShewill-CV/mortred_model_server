@@ -18,6 +18,7 @@
 namespace jinq {
 namespace models {
 namespace scene_segmentation {
+using jinq::common::StatusCode;
 
 template<typename INPUT, typename OUTPUT>
 class MsOcrNet : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
@@ -31,11 +32,11 @@ public:
 private:
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
 
-    jinq::common::StatusCode postprocess(
+    StatusCode postprocess(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,
         OUTPUT& output) override;
 
-    jinq::common::StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table& params) override;
 
     // network input size
     cv::Size _m_input_size_host = cv::Size();

@@ -1,7 +1,8 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
  * File: cls_cond_ddim_sampler_benchmark.cpp
- * Date: 2026-08-19
+ * Date: 26-8-19
  ************************************************/
 
 // cls-cond-ddim-sampler benchmark tool

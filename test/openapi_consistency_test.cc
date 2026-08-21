@@ -2,12 +2,12 @@
  * Author: Codex
  * File: openapi_consistency_test.cc
  *
- * 校验 docs/openapi.json 与仓库现实一致：
- * - 合法 OpenAPI 3.0 文档；
- * - 每个 conf/server/*.toml 的 server_uri 都出现在 paths 中；
- * - 模型路径都声明了 Bearer 鉴权，健康端点保持公开；
- * - 契约状态码对应的 response 组件齐备。
- * 运行目录为仓库根（见 test/CMakeLists.txt WORKING_DIRECTORY）。
+ * Verifies docs/openapi.json matches repository reality:
+ * - a valid OpenAPI 3.0 document;
+ * - every conf/server/*.toml server_uri appears in paths;
+ * - model paths declare Bearer auth while health endpoints stay public;
+ * - response components exist for all contract status codes.
+ * Run from the repository root (see test/CMakeLists.txt WORKING_DIRECTORY).
  ************************************************/
 
 #include <filesystem>

@@ -1,7 +1,8 @@
 /************************************************
- * Author: Codex
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
  * File: auth.cpp
- * Date: 2026-08-13
+ * Date: 26-8-13
  ************************************************/
 
 #include "auth.h"

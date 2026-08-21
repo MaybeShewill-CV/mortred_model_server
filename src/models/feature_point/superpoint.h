@@ -1,8 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: superpoint.h
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: superpoint.h
+* Date: 22-6-15
+************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_SUPERPOINT_H
 #define MORTRED_MODEL_SERVER_SUPERPOINT_H
@@ -16,6 +17,7 @@
 namespace jinq {
 namespace models {
 namespace feature_point {
+using jinq::common::StatusCode;
 
 template<typename INPUT, typename OUTPUT>
 class SuperPoint : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
@@ -29,11 +31,11 @@ class SuperPoint : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   private:
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
 
-    jinq::common::StatusCode postprocess(
+    StatusCode postprocess(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,
         OUTPUT& output) override;
 
-    jinq::common::StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table& params) override;
 
     const jinq::models::backend::NamedTensor* find_output(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,

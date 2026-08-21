@@ -1,8 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: metric3d.h
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: metric3d.h
+* Date: 23-10-27
+************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_METRIC3D_H
 #define MORTRED_MODEL_SERVER_METRIC3D_H
@@ -18,6 +19,7 @@
 namespace jinq {
 namespace models {
 namespace mono_depth_estimation {
+using jinq::common::StatusCode;
 
 template<typename INPUT, typename OUTPUT>
 class Metric3D : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
@@ -31,11 +33,11 @@ class Metric3D : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   private:
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
 
-    jinq::common::StatusCode postprocess(
+    StatusCode postprocess(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,
         OUTPUT& output) override;
 
-    jinq::common::StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table& params) override;
 
     const jinq::models::backend::NamedTensor* find_output(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,

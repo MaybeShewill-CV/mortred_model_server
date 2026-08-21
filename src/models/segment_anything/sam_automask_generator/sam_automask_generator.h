@@ -1,9 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: sam_automask_generator.h
- * Date: 23-10-13
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: sam_automask_generator.h
+* Date: 23-10-13
+************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_SAM_AUTOMASK_GENERATOR_H
 #define MORTRED_MODEL_SERVER_SAM_AUTOMASK_GENERATOR_H
@@ -22,6 +22,7 @@
 namespace jinq {
 namespace models {
 namespace segment_anything {
+using jinq::common::StatusCode;
 
 class SamAmgDecoder;
 class SamVitEncoder;
@@ -39,16 +40,16 @@ class SamAutoMaskGenerator : public jinq::models::BackendCvModel<INPUT, OUTPUT> 
     SamAutoMaskGenerator(const SamAutoMaskGenerator&) = delete;
     SamAutoMaskGenerator& operator=(const SamAutoMaskGenerator&) = delete;
 
-    jinq::common::StatusCode generate(
+    StatusCode generate(
         const cv::Mat& input_image,
         jinq::models::io_define::segment_anything::sam_amg_output& amg_output);
 
   private:
-    jinq::common::StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table& params) override;
 
-    jinq::common::StatusCode run_sessions(const INPUT& input, OUTPUT& output) override;
+    StatusCode run_sessions(const INPUT& input, OUTPUT& output) override;
 
-    jinq::common::StatusCode postprocess(
+    StatusCode postprocess(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,
         OUTPUT& output) override;
 

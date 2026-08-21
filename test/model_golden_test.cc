@@ -102,7 +102,7 @@ void fix_toml_paths(toml::node& value) {
 void force_cpu_backend(toml::node& value) {
     if (auto* tbl = value.as_table()) {
         for (auto& item : *tbl) {
-            // 新 schema：[SECTION.backend] 内的 device；旧 schema：compute_backend
+            // new schema: device inside [SECTION.backend]; old schema: compute_backend
             if (item.first == "backend" && item.second.is_table()) {
                 auto& backend_table = item.second.ref<toml::table>();
                 if (backend_table.contains("device")) {

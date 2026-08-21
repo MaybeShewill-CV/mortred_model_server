@@ -88,7 +88,7 @@ TEST(lapjv, optimal_assignment_2x2) {
     auto ret = lapjv_internal(n, cost, x, y);
     EXPECT_EQ(ret, 0);
 
-    // 分配必须是合法置换，且总代价为最优值 2
+    // the assignment must be a valid permutation with the optimal total cost 2
     EXPECT_TRUE((x[0] == 0 && x[1] == 1) || (x[0] == 1 && x[1] == 0));
     EXPECT_DOUBLE_EQ(cost[0][x[0]] + cost[1][x[1]], 2.0);
 }
@@ -225,11 +225,11 @@ TEST(byte_tracker, stable_id_across_frames_and_lost) {
     EXPECT_EQ(frame2[0].track_id, track_id);
     EXPECT_EQ(frame2[0].state, TrackState::Tracked);
 
-    // 物体消失：跟踪目标进入 lost，输出为空
+    // object disappears: the track enters lost, output is empty
     auto frame3 = tracker.update({});
     EXPECT_TRUE(frame3.empty());
 
-    // 继续空帧不应崩溃
+    // more empty frames must not crash
     auto frame4 = tracker.update({});
     EXPECT_TRUE(frame4.empty());
 }
@@ -239,7 +239,7 @@ TEST(byte_tracker, untracked_class_is_ignored) {
     auto cfg = build_byte_track_cfg();
     ASSERT_EQ(tracker.init(cfg), StatusCode::OK);
 
-    // class_id=1 不在 tracked_cls_ids 中，应被过滤
+    // class_id=1 is not in tracked_cls_ids, so it must be filtered out
     auto obj = make_object(10, 10, 50, 50, 0.9f, 1);
     auto frame = tracker.update({obj});
     EXPECT_TRUE(frame.empty());
@@ -250,7 +250,7 @@ TEST(byte_tracker, low_score_object_not_activated) {
     auto cfg = build_byte_track_cfg();
     ASSERT_EQ(tracker.init(cfg), StatusCode::OK);
 
-    // score 0.3 < tracker_thresh 0.5，进入 low 检测，不作为新目标激活
+    // score 0.3 < tracker_thresh 0.5: goes to low-score detection, not activated
     auto obj = make_object(10, 10, 50, 50, 0.3f, 0);
     auto frame = tracker.update({obj});
     EXPECT_TRUE(frame.empty());

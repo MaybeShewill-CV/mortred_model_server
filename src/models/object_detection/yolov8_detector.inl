@@ -1,7 +1,7 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: yolov8_detector.cpp
+ * File: yolov8_detector.inl
  * Date: 24-3-13
  ************************************************/
 

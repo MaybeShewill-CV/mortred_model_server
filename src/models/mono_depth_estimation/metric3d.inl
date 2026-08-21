@@ -1,7 +1,8 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: metric3d.cpp
+ * File: metric3d.inl
+ * Date: 23-10-27
  ************************************************/
 
 #include "metric3d.h"

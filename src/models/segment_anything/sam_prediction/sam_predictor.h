@@ -1,9 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: sam_predictor.h
- * Date: 23-5-26
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: sam_predictor.h
+* Date: 23-5-26
+************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_SAM_PREDICTOR_H
 #define MORTRED_MODEL_SERVER_SAM_PREDICTOR_H
@@ -22,6 +22,7 @@
 namespace jinq {
 namespace models {
 namespace segment_anything {
+using jinq::common::StatusCode;
 
 class SamPromptDecoder;
 class SamVitEncoder;
@@ -38,28 +39,28 @@ class SamPredictor : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
     SamPredictor(const SamPredictor&) = delete;
     SamPredictor& operator=(const SamPredictor&) = delete;
 
-    jinq::common::StatusCode predict(
+    StatusCode predict(
         const cv::Mat& input_image,
         const std::vector<cv::Rect>& bboxes,
         std::vector<cv::Mat>& predicted_masks);
 
-    jinq::common::StatusCode predict(
+    StatusCode predict(
         const cv::Mat& input_image,
         const std::vector<std::vector<cv::Point2f>>& prompt_points,
         std::vector<cv::Mat>& predicted_masks);
 
-    jinq::common::StatusCode get_embedding(
+    StatusCode get_embedding(
         const cv::Mat& input_image, std::vector<float>& image_embeddings);
 
   private:
     using SamInput = jinq::models::io_define::segment_anything::sam_prompt_input;
     using SamOutput = jinq::models::io_define::segment_anything::std_sam_prompt_output;
 
-    jinq::common::StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table& params) override;
 
-    jinq::common::StatusCode run_sessions(const INPUT& input, OUTPUT& output) override;
+    StatusCode run_sessions(const INPUT& input, OUTPUT& output) override;
 
-    jinq::common::StatusCode postprocess(
+    StatusCode postprocess(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,
         OUTPUT& output) override;
 

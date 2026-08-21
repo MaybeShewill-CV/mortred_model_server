@@ -1,10 +1,11 @@
 /************************************************
- * Author: Codex
- * File: http_status.h
- * Date: 2026-08-26
- *
- * Maps business StatusCode to HTTP status codes.
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: http_status.h
+* Date: 26-8-17
+************************************************/
+
+// Maps business StatusCode to HTTP status codes.
 
 #ifndef MORTRED_SERVER_HTTP_STATUS_H
 #define MORTRED_SERVER_HTTP_STATUS_H
@@ -13,10 +14,9 @@
 
 namespace jinq {
 namespace server {
+using jinq::common::StatusCode;
 
-inline int http_status_of(jinq::common::StatusCode code) {
-    using jinq::common::StatusCode;
-
+inline int http_status_of(StatusCode code) {
     switch (code) {
         case StatusCode::OK:
             return 200;

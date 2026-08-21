@@ -1,8 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* File: real_esrgan_benchmark.cpp
-* Date: 2026-08-19
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: real_esrgan_benchmark.cpp
+ * Date: 26-8-19
+ ************************************************/
 
 // real_esrgan benchmark tool
 

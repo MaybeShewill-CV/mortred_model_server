@@ -1,9 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: backend/ort_session.h
- * Date: 2026-08-20
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: ort_session.h
+* Date: 26-8-20
+************************************************/
 
 #ifndef MORTRED_MODELS_BACKEND_ORT_SESSION_H
 #define MORTRED_MODELS_BACKEND_ORT_SESSION_H
@@ -21,6 +21,7 @@
 namespace jinq {
 namespace models {
 namespace backend {
+using jinq::common::StatusCode;
 
 /***
  * RAII ONNX Runtime inference session. Env/SessionOptions/Session are owned
@@ -34,7 +35,7 @@ class OrtSession : public InferenceSession {
     OrtSession(const OrtSession&) = delete;
     OrtSession& operator=(const OrtSession&) = delete;
 
-    jinq::common::StatusCode init(const BackendConfig& config, std::string* err = nullptr);
+    StatusCode init(const BackendConfig& config, std::string* err = nullptr);
 
     const std::vector<TensorInfo>& inputs() const override {
         return _m_input_infos;
@@ -44,7 +45,7 @@ class OrtSession : public InferenceSession {
         return _m_output_infos;
     }
 
-    jinq::common::StatusCode run(const std::vector<NamedTensor>& inputs,
+    StatusCode run(const std::vector<NamedTensor>& inputs,
                                  std::vector<NamedTensor>& outputs) override;
 
   private:

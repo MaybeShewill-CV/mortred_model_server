@@ -1,7 +1,8 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: depth_anything.cpp
+ * File: depth_anything.inl
+ * Date: 24-1-25
  ************************************************/
 
 #include "depth_anything.h"

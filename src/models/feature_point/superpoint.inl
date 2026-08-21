@@ -1,7 +1,8 @@
 /************************************************
  * Copyright MaybeShewill-CV. All Rights Reserved.
  * Author: MaybeShewill-CV
- * File: superpoint.cpp
+ * File: superpoint.inl
+ * Date: 22-6-15
  ************************************************/
 
 #include "superpoint.h"

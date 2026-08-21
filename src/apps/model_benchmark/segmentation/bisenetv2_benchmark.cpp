@@ -1,8 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* File: bisenetv2_benchmark.cpp
-* Date: 2026-08-19
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: bisenetv2_benchmark.cpp
+ * Date: 26-8-19
+ ************************************************/
 
 // bisenetv2 benchmark tool
 

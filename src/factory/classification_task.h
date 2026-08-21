@@ -37,8 +37,8 @@ using jinq::models::classification::ResNet;
 // create mobilenetv2 classification model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_mobilenetv2_classifier(const std::string& classifier_name) {
-    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
-    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    // Direct construction: no global registry writes (no side effects or mutex
+    // overhead); avoids re-registering on every create. name kept for compatibility.
     (void)classifier_name;
     return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new MobileNetv2<INPUT, OUTPUT>());
 }
@@ -65,8 +65,8 @@ inline std::unique_ptr<BaseAiServer> create_mobilenetv2_cls_server(const std::st
 // create resnet classification model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_resnet_classifier(const std::string& classifier_name) {
-    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
-    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    // Direct construction: no global registry writes (no side effects or mutex
+    // overhead); avoids re-registering on every create. name kept for compatibility.
     (void)classifier_name;
     return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new ResNet<INPUT, OUTPUT>());
 }
@@ -93,8 +93,8 @@ inline std::unique_ptr<BaseAiServer> create_resnet_cls_server(const std::string&
 // create densenet classification model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_densenet_classifier(const std::string& classifier_name) {
-    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
-    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    // Direct construction: no global registry writes (no side effects or mutex
+    // overhead); avoids re-registering on every create. name kept for compatibility.
     (void)classifier_name;
     return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new DenseNet<INPUT, OUTPUT>());
 }
@@ -121,8 +121,8 @@ inline std::unique_ptr<BaseAiServer> create_densenet_cls_server(const std::strin
 // create dinov2 classification model
 template<typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_dinov2_classifier(const std::string& classifier_name) {
-    // 直接构造：模型创建不写全局注册表（无副作用、无互斥开销），
-    // 消除"每次 create 都 register"反模式；name 仅保留以兼容调用方
+    // Direct construction: no global registry writes (no side effects or mutex
+    // overhead); avoids re-registering on every create. name kept for compatibility.
     (void)classifier_name;
     return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new Dinov2<INPUT, OUTPUT>());
 }

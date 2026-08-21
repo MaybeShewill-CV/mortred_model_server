@@ -28,7 +28,8 @@ function setToken(token) {
 }
 
 /***
- * 带 Bearer Token 的 fetch 封装：自动附带 token，遇到 401 时让用户重新输入并重试一次。
+ * fetch wrapper carrying the Bearer Token: attaches the token automatically and,
+ * on a 401, prompts the user to re-enter it and retries once.
  */
 async function authorizedFetch(path, options) {
   options = options || {};

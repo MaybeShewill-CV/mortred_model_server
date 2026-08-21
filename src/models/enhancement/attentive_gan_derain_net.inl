@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: attentive_gan_derain_net.inl
-* Date: 22-6-14
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: attentive_gan_derain_net.inl
+ * Date: 22-6-14
+ ************************************************/
 
 #include "attentive_gan_derain_net.h"
 

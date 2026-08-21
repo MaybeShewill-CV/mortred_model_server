@@ -33,10 +33,10 @@ TEST(blocking_worker_queue, wait_blocks_until_wakeup) {
         done = true;
     });
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    EXPECT_FALSE(done.load()) << "空队列时 wait_dequeue 不应立即返回";
+    EXPECT_FALSE(done.load()) << "wait_dequeue on an empty queue must not return immediately";
     q.enqueue(std::unique_ptr<int>(new int(7)));
     waiter.join();
-    EXPECT_TRUE(done.load()) << "enqueue 后等待者应被唤醒";
+    EXPECT_TRUE(done.load()) << "the waiter must be woken after enqueue";
 }
 
 TEST(blocking_worker_queue, timed_wait_timeout) {

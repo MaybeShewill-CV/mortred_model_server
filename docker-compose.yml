@@ -1,11 +1,11 @@
-# Mortred Model Server - 容器编排示例
+# Mortred Model Server - example container orchestration
 #
-# 使用：
+# Usage:
 #   docker compose build
 #   APP_AUTH_TOKEN=your-token docker compose up -d
-#   权重目录挂载：默认 ./weights，可改 WEIGHTS_DIR
+#   Weights dir mount: default ./weights, override with WEIGHTS_DIR
 #
-# 模型端口（9001-9072）按需映射；web console 固定 8787。
+# Map model ports (9001-9072) as needed; web console is fixed at 8787.
 services:
   mortred:
     build: .
@@ -17,7 +17,7 @@ services:
       APP_LISTEN_PORT: "8787"
     ports:
       - "8787:8787"
-      # 常用模型端口（按需取消注释）
+      # Common model ports (uncomment as needed)
       # - "9002:9002"   # mobilenetv2
       # - "9053:9053"   # yolov5
       # - "9056:9056"   # yolov8

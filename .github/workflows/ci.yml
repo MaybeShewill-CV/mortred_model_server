@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    # 仅与构建/代码/配置/CI/文档相关的改动触发；纯 weights/resources/demo_data 改动跳过
+    # Trigger only on build/code/config/CI/docs changes; skip pure weights/resources/demo_data changes
     paths:
       - 'src/**'
       - 'CMakeLists.txt'
@@ -20,11 +20,11 @@ on:
       - 'docs/**'
       - 'deploy/**'
   schedule:
-    # 每日 02:00 UTC：nightly 全量门禁（见 jobs.nightly）
+    # Daily 02:00 UTC: nightly full gate (see jobs.nightly)
     - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
-      # 勾选后才会运行 clang 编译行与 clang-tidy job（依赖构建约多 30-60 分钟）
+      # If checked, runs the clang compiler row and clang-tidy job (~30-60 min extra dep build)
       full-matrix:
         description: 'Include clang compiler row, clang-tidy job and docker full-werror job'
         type: boolean
@@ -39,31 +39,31 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # vcpkg 版本单一来源；升级时只需改这里
+  # Single source of truth for the vcpkg version; update only here when upgrading
   VCPKG_TAG: 2026.01.16
-  # vcpkg 克隆到 workspace 之外（github.workspace 的上级目录），保证构建后仓库工作区干净。
-  # 注意：runner 上下文在 workflow 级 env 不可用（仅 step 级可用），这里只能用 github 上下文
+  # Clone vcpkg outside the workspace (parent of github.workspace) so the repo worktree stays clean after builds.
+  # Note: runner context is unavailable in workflow-level env (step-level only); only the github context works here
   VCPKG_ROOT: ${{ github.workspace }}/../vcpkg
-  # 带 pinned builtin-baseline 的 manifest 副本（不改动仓库内 vcpkg.json）
+  # Manifest copy with a pinned builtin-baseline (leaves the repo vcpkg.json untouched)
   VCPKG_MANIFEST_DIR: ${{ github.workspace }}/../vcpkg-manifest
-  # 依赖安装目录同样放在 workspace 之外
+  # Dependency install dir also lives outside the workspace
   VCPKG_INSTALLED_DIR: ${{ github.workspace }}/../vcpkg-installed
   VCPKG_TARGET_TRIPLET: x64-linux
-  # CI 覆盖默认的 _bin/_lib，把产物收进构建目录，避免污染仓库根目录
+  # CI overrides the default _bin/_lib; collect artifacts in the build dir to avoid polluting the repo root
   MORTRED_CI_BIN_DIR: ${{ github.workspace }}/build-ci/bin
   MORTRED_CI_LIB_DIR: ${{ github.workspace }}/build-ci/lib
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Job A: 测试矩阵（gcc / clang，tests-only，vcpkg 依赖 + ccache 缓存）
+  # Job A: test matrix (gcc / clang, tests-only, vcpkg deps + ccache cache)
   # ---------------------------------------------------------------------------
   tests:
     name: tests (${{ matrix.compiler }})
     runs-on: ubuntu-22.04
     timeout-minutes: 90
-    # 日常 PR 只跑 gcc 行（省一半依赖构建）；clang 行仅在手动触发 full-matrix 时运行。
-    # matrix 上下文不能用于 job 级 if（仅 github/needs/vars/inputs 可用），
-    # 因此改为在 strategy.matrix 定义里用 fromJSON 按触发方式生成矩阵。
+    # Daily PRs run only the gcc row (halves dep builds); the clang row runs only on manual full-matrix.
+    # matrix context can't be used in job-level if (only github/needs/vars/inputs are available),
+    # so the matrix is generated via fromJSON in strategy.matrix based on the trigger type.
     strategy:
       fail-fast: false
       matrix:
@@ -81,9 +81,9 @@ jobs:
             echo "CXX=clang++" >> "$GITHUB_ENV"
           fi
 
-      # 缓存 vcpkg 仓库、已安装的依赖产物与 ccache；
-      # key 包含 vcpkg 版本、编译器与 vcpkg.json 内容，任何变更都会失效。
-      # gcc 与 quality-gates 共享同一 key，避免重复构建同一套依赖。
+      # Cache the vcpkg repo, installed dependency artifacts, and ccache;
+      # the key includes the vcpkg version, compiler, and vcpkg.json content — any change invalidates it.
+      # gcc and quality-gates share the same key to avoid rebuilding the same dependency set.
       - name: Cache vcpkg and ccache
         id: cache-deps
         uses: actions/cache@v6
@@ -96,17 +96,17 @@ jobs:
           restore-keys: |
             vcpkg-${{ env.VCPKG_TAG }}-${{ matrix.compiler }}-
 
-      # vcpkg 不支持浅克隆，因此固定 checkout 发布 tag（完整克隆）。
+      # vcpkg doesn't support shallow clones, so checkout a pinned release tag (full clone).
       - name: Checkout vcpkg (pinned release tag)
         if: steps.cache-deps.outputs.cache-hit != 'true'
         run: |
           git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
           git -C "$VCPKG_ROOT" checkout --detach "$VCPKG_TAG"
 
-      # 在 workspace 之外准备带 pinned builtin-baseline 的 manifest 副本，
-      # 仓库内 vcpkg.json 保持不动：CI 构建始终可复现，且不会弄脏工作区。
-      # 若希望本地构建也可复现，在有网机器上执行一次
-      # `vcpkg x-update-baseline --add-initial-baseline` 并提交结果即可。
+      # Prepare a manifest copy with a pinned builtin-baseline outside the workspace,
+      # leaving the repo vcpkg.json untouched: CI builds stay reproducible and the worktree stays clean.
+      # For reproducible local builds, run once on a networked machine:
+      # `vcpkg x-update-baseline --add-initial-baseline` and commit the result.
       - name: Bootstrap vcpkg and prepare pinned manifest
         run: |
           "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
@@ -128,8 +128,8 @@ jobs:
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
-      # check 目标会先构建全部测试再运行 ctest；CTEST_OUTPUT_ON_FAILURE=1 让失败输出完整。
-      # 一次构建 + 一次测试，避免重复执行。
+      # The check target builds all tests then runs ctest; CTEST_OUTPUT_ON_FAILURE=1 gives full failure output.
+      # One build + one test run, avoiding duplicate execution.
       - name: Build and run unit tests
         run: |
           LD_LIBRARY_PATH="$MORTRED_CI_LIB_DIR" CTEST_OUTPUT_ON_FAILURE=1 cmake --build build-ci --target check -j"$(nproc)"
@@ -152,7 +152,7 @@ jobs:
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
-  # Job B: 质量门禁（-Wall -Wextra -Werror 构建 + clang-format 只检查改动文件）
+  # Job B: quality gates (-Wall -Wextra -Werror build + clang-format checking only changed files)
   # ---------------------------------------------------------------------------
   quality-gates:
     name: quality gates
@@ -243,14 +243,14 @@ jobs:
             exit 0
           fi
 
-          # 只校验本次改动新增/修改的行（-U0 的 hunk 头即变更行范围），
-          # 不因文件存量格式问题误报，同时能拦截新引入的不规范代码。
+          # Only check lines added/modified by this change (-U0 hunk headers give the line ranges),
+          # so pre-existing format issues don't cause false reports while new non-conformant code is still caught.
           check_file() {
             local file="$1"
             local ranges=""
             local hunk new_line start count end
             while IFS= read -r hunk; do
-              # hunk 形如: @@ -old[,oldc] +new[,newc] @@ ...；取 + 侧起始行与行数
+              # Hunk format: @@ -old[,oldc] +new[,newc] @@ ...; take the start line and count from the + side
               new_line="$(echo "$hunk" | sed -n 's/@@ -[0-9]*\(,[0-9]*\)\? +\([0-9][0-9]*\)\(,[0-9]*\)\? @@.*/\2\3/p')"
               [ -n "$new_line" ] || continue
               start="${new_line%,*}"
@@ -287,8 +287,8 @@ jobs:
           python3 scripts/server/test_server.py --list
 
   # ---------------------------------------------------------------------------
-  # Job C: clang-tidy（信息性，不阻塞合并；产出报告 artifact）
-  # 仅在手动触发 full-matrix 时运行，避免每次 PR 都做一次 clang 依赖构建
+  # Job C: clang-tidy (informational, non-blocking; produces a report artifact)
+  # Runs only on manual full-matrix to avoid a clang dependency build on every PR
   # ---------------------------------------------------------------------------
   clang-tidy:
     name: clang-tidy (informational)
@@ -356,7 +356,7 @@ jobs:
           elif command -v run-clang-tidy >/dev/null 2>&1; then
             tidy_cmd="run-clang-tidy"
           else
-            # 工具缺失时显式失败（continue-on-error 下不会阻塞合并，但会报红）
+            # Fail explicitly when the tool is missing (non-blocking under continue-on-error, but shows red)
             echo "run-clang-tidy not found (install the clang-tools package)" >&2
             exit 1
           fi
@@ -374,9 +374,9 @@ jobs:
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
-  # Job D: 部署工具链门禁（无需构建依赖）
-  # 校验部署脚本语法、清单 JSON/YAML 合法性与静态自检（--list / --dry-run），
-  # 确保安装/权重下载/引擎转换工具链不因改动而失效。
+  # Job D: deploy toolchain gate (no build deps needed)
+  # Validates deploy script syntax, manifest JSON/YAML validity, and static self-checks (--list / --dry-run),
+  # ensuring the install/weight-download/engine-conversion toolchain doesn't break from changes.
   # ---------------------------------------------------------------------------
   deploy-tools:
     name: deploy tools
@@ -426,8 +426,8 @@ jobs:
           python3 scripts/fetch_weights.py --dry-run
           python3 scripts/check_consistency.py
 
-      # trtexec 契约测试：用假 trtexec 在无 GPU 环境验证 convert_trt_engines.sh 的
-      # flag 组成、成功/失败退出码与产物校验语义（自研转换器移除后由外部 trtexec 驱动）
+      # trtexec contract test: a mock trtexec validates convert_trt_engines.sh's flag composition,
+      # success/failure exit codes, and artifact validation semantics in a GPU-less env (external trtexec drives conversion)
       - name: convert_trt_engines.sh contract tests (mock trtexec)
         run: |
           set -euo pipefail
@@ -441,36 +441,36 @@ jobs:
           exit 0
           EOF
           chmod +x "$TMP/trtexec"
-          # 占位 onnx（对应 conf/trt_engines.json 中两条真实条目；weights/ 为 gitignored 临时空间）
+          # Placeholder onnx files (match the two real entries in conf/trt_engines.json; weights/ is a gitignored temp area)
           mkdir -p weights/diffusion/ddpm weights/feature_point/lightglue
           touch weights/diffusion/ddpm/ddpm_unet_celeba-hq-128x128.onnx
           touch weights/feature_point/lightglue/extractor.onnx
-          # 1) --list 无需 trtexec
+          # 1) --list needs no trtexec
           bash scripts/convert_trt_engines.sh --list | grep -q "total: 19"
-          # 2) --dry-run flag 组成：fp16 + TRT8 workspace 字节 + buildOnly
+          # 2) --dry-run flag composition: fp16 + TRT8 workspace bytes + buildOnly
           out="$(TRTEXEC="$TMP/trtexec" bash scripts/convert_trt_engines.sh --only ddpm_unet_celeba-hq-128 --force --dry-run)"
           echo "$out" | grep -q -- "--fp16"
           echo "$out" | grep -q -- "--workspace=6442450944"
           echo "$out" | grep -q -- "--buildOnly"
-          # 3) profile JSON -> --minShapes/--optShapes/--maxShapes 翻译
-          #    --only 按引擎路径过滤（见 convert_trt_engines.sh），extractor 命中 extractor.engine 且不误中 matcher
+          # 3) profile JSON -> --minShapes/--optShapes/--maxShapes translation
+          #    --only filters by engine path (see convert_trt_engines.sh); extractor hits extractor.engine without hitting matcher
           out2="$(TRTEXEC="$TMP/trtexec" bash scripts/convert_trt_engines.sh --only extractor --force --dry-run)"
           echo "$out2" | grep -q -- "--minShapes=image:1x3x64x64 --optShapes=image:1x3x256x256 --maxShapes=image:1x3x512x512"
-          # 4) 成功路径：mock 产出非空 engine -> 脚本退出 0
+          # 4) Success path: mock writes a non-empty engine -> script exits 0
           TRTEXEC="$TMP/trtexec" bash scripts/convert_trt_engines.sh --only ddpm_unet_celeba-hq-128 --force
-          # 5) 失败路径：mock 返回非 0 -> 脚本必须非 0（失败不再被吞）
+          # 5) Failure path: mock returns non-zero -> script must exit non-zero (failures no longer swallowed)
           rm -f weights/diffusion/ddpm/ddpm_unet_celeba-hq-128x128.engine
           if TRTEXEC="$TMP/trtexec" FAKE_FAIL=1 bash scripts/convert_trt_engines.sh --only ddpm_unet_celeba-hq-128 --force; then
             echo "expected non-zero exit on converter failure" >&2; exit 1
           fi
-          # 6) 产物校验：mock 返回 0 但不写 engine -> 脚本必须非 0
+          # 6) Artifact validation: mock returns 0 but writes no engine -> script must exit non-zero
           if TRTEXEC="$TMP/trtexec" FAKE_NO_OUTPUT=1 bash scripts/convert_trt_engines.sh --only ddpm_unet_celeba-hq-128 --force; then
             echo "expected non-zero exit on missing engine artifact" >&2; exit 1
           fi
           rm -rf "$TMP"
 
-      # 静态 lint workflow 文件：actionlint 能捕获上下文作用域错误（如 runner 用于
-      # workflow 级 env、matrix 用于 job 级 if），防止 Invalid workflow file 复发
+      # Statically lint the workflow files: actionlint catches context-scope errors (e.g. runner used in
+      # workflow-level env, matrix in job-level if), preventing "Invalid workflow file" recurrences
       - name: Lint GitHub Actions workflows (actionlint)
         run: |
           set -euo pipefail
@@ -478,13 +478,13 @@ jobs:
           ./actionlint -color .github/workflows/
 
   # ---------------------------------------------------------------------------
-  # Job E: 全量构建 -Werror 门禁（Docker 载体，复用 install_deps.sh 全自动依赖）
+  # Job E: full-build -Werror gate (Docker carrier, reuses install_deps.sh for fully automated deps)
   # --------------------------------------------------------------------------
   full-werror:
     name: full build werror (docker)
     runs-on: ubuntu-22.04
     timeout-minutes: 120
-    # push 到 main 常跑；PR 默认跳过（镜像依赖层构建较重），手动 full-matrix 可触发
+    # Always runs on push to main; skipped on PRs by default (image dep layers are heavy to build), manual full-matrix can trigger
     if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.full-matrix == 'true') }}
     steps:
       - uses: actions/checkout@v4
@@ -492,7 +492,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 只构建到 build 阶段（依赖编译 + 全量 -Werror 编译即门禁目的，无需 runtime 层）
+      # Build only up to the build stage (dependency compile + full -Werror compile is the gate; no runtime layer needed)
       - name: Build full project with warnings as errors
         uses: docker/build-push-action@v6
         with:
@@ -506,9 +506,9 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ---------------------------------------------------------------------------
-  # Job F: PR 全量编译门禁（Docker 载体 + gha 缓存；仅 C++/构建相关 PR 触发）。
-  # 修复"PR 阶段应用层零编译"：22 个 server / 34 个 benchmark / web_console 的代码
-  # 在 PR 阶段即可编译验证（依赖层缓存命中后全量编译约 20-40 分钟）。
+  # Job F: PR full-compile gate (Docker carrier + gha cache; triggered only by C++/build-related PRs).
+  # Fixes "zero app-layer compilation on PRs": 22 server / 34 benchmark / web_console sources
+  # get compile-verified at PR time (~20-40 min full build after a dependency-cache hit).
   # ---------------------------------------------------------------------------
   full-build-pr:
     name: full build (PR gate)
@@ -521,7 +521,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 与 full-werror 完全相同的载体：依赖层经 gha 缓存复用，全量 -Werror 编译
+      # Exactly the same carrier as full-werror: dependency layers reused via gha cache, full -Werror compile
       - name: Build full project with warnings as errors
         uses: docker/build-push-action@v6
         with:
@@ -535,9 +535,9 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ---------------------------------------------------------------------------
-  # Job G: 每日全量门禁（schedule / 手动触发）：main 上每天跑一次 full -Werror
-  # 构建 + 单测 + e2e 契约（Dockerfile 内 ctest 不再 || true，测试失败即红）。
-  # 带权重的 golden 行为测试与 P0-1（模型层修复）一起落地，不在本 job 内。
+  # Job G: daily full gate (schedule / manual): runs a full -Werror build + unit tests + e2e
+  # contract on main once a day (ctest in the Dockerfile no longer || true; test failures turn red).
+  # Weighted golden behavior tests land together with P0-1 (model-layer fixes), not in this job.
   # ---------------------------------------------------------------------------
   nightly:
     name: nightly full build (docker)

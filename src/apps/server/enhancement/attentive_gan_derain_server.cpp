@@ -1,8 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* File: attentive_gan_derain_server.cpp
-* Date: 2026-08-19
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: attentive_gan_derain_server.cpp
+ * Date: 26-8-19
+ ************************************************/
 
 // attentive_gan_derain server tool
 

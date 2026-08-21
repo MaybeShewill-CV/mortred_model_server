@@ -1,10 +1,11 @@
 /************************************************
- * Author: Codex
- * File: prometheus_metrics.h
- * Date: 2026-08-26
- *
- * Minimal thread-safe Prometheus metrics collector for model servers.
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: prometheus_metrics.h
+* Date: 26-8-18
+************************************************/
+
+// Minimal thread-safe Prometheus metrics collector for model servers.
 
 #ifndef MORTRED_SERVER_PROMETHEUS_METRICS_H
 #define MORTRED_SERVER_PROMETHEUS_METRICS_H

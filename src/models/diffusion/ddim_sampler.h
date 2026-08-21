@@ -1,9 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: ddim_sampler.h
- * Date: 24-4-28
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: ddim_sampler.h
+* Date: 24-4-28
+************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_DDIM_SAMPLER_H
 #define MORTRED_MODEL_SERVER_DDIM_SAMPLER_H
@@ -19,6 +19,7 @@
 namespace jinq {
 namespace models {
 namespace diffusion {
+using jinq::common::StatusCode;
 
 template<typename INPUT, typename OUTPUT>
 class DDPMUNet;
@@ -65,7 +66,7 @@ class DDIMSampler : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
      * @param toml
      * @return
      */
-    jinq::common::StatusCode init(const toml::table &cfg) override;
+    StatusCode init(const toml::table &cfg) override;
 
     /***
      *
@@ -73,7 +74,7 @@ class DDIMSampler : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
      * @param output
      * @return
      */
-    jinq::common::StatusCode run_impl(const INPUT&input, OUTPUT &output) override;
+    StatusCode run_impl(const INPUT&input, OUTPUT &output) override;
 
     /***
      * if model successfully initialized

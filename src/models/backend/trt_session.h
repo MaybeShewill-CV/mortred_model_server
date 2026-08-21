@@ -1,9 +1,9 @@
 /************************************************
- * Copyright MaybeShewill-CV. All Rights Reserved.
- * Author: MaybeShewill-CV
- * File: backend/trt_session.h
- * Date: 2026-08-20
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: trt_session.h
+* Date: 26-8-20
+************************************************/
 
 #ifndef MORTRED_MODELS_BACKEND_TRT_SESSION_H
 #define MORTRED_MODELS_BACKEND_TRT_SESSION_H
@@ -23,6 +23,7 @@
 namespace jinq {
 namespace models {
 namespace backend {
+using jinq::common::StatusCode;
 
 namespace trt_detail {
 
@@ -48,7 +49,7 @@ class TrtSession : public InferenceSession {
     TrtSession(const TrtSession&) = delete;
     TrtSession& operator=(const TrtSession&) = delete;
 
-    jinq::common::StatusCode init(const BackendConfig& config, std::string* err = nullptr);
+    StatusCode init(const BackendConfig& config, std::string* err = nullptr);
 
     const std::vector<TensorInfo>& inputs() const override {
         return _m_input_infos;
@@ -58,7 +59,7 @@ class TrtSession : public InferenceSession {
         return _m_output_infos;
     }
 
-    jinq::common::StatusCode run(const std::vector<NamedTensor>& inputs,
+    StatusCode run(const std::vector<NamedTensor>& inputs,
                                  std::vector<NamedTensor>& outputs) override;
 
   private:
@@ -79,7 +80,7 @@ class TrtSession : public InferenceSession {
         DeviceBuffer& operator=(DeviceBuffer&& other) noexcept;
         ~DeviceBuffer();
 
-        jinq::common::StatusCode ensure(size_t size_bytes);
+        StatusCode ensure(size_t size_bytes);
     };
 
     trt_detail::SessionLogger _m_logger;

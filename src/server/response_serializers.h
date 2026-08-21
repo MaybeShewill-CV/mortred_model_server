@@ -1,12 +1,14 @@
 /************************************************
- * Author: Codex
- * File: response_serializers.h
- *
- * Single source of truth for model-server response `data` payloads.
- * Every concrete server delegates its fill_response_data() to one of these
- * functions, so field names and JSON types stay consistent across tasks.
- * The schemas here must match docs/openapi.json components.schemas.
- ************************************************/
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: response_serializers.h
+* Date: 26-8-19
+************************************************/
+
+// Single source of truth for model-server response `data` payloads. Every
+// concrete server delegates its fill_response_data() to one of these functions
+// so field names and JSON types stay consistent. Schemas must match
+// docs/openapi.json components.schemas.
 
 #ifndef MORTRED_SERVER_RESPONSE_SERIALIZERS_H
 #define MORTRED_SERVER_RESPONSE_SERIALIZERS_H
@@ -27,7 +29,7 @@ namespace response {
 
 using AllocatorType = rapidjson::Document::AllocatorType;
 
-/*** 统一 bbox 表示：[x1, y1, x2, y2] ***/
+/*** Unified bbox: [x1, y1, x2, y2] ***/
 inline rapidjson::Value make_bbox(AllocatorType& allocator, const cv::Rect2f& bbox) {
     rapidjson::Value arr(rapidjson::kArrayType);
     arr.PushBack(bbox.x, allocator);
@@ -37,7 +39,7 @@ inline rapidjson::Value make_bbox(AllocatorType& allocator, const cv::Rect2f& bb
     return arr;
 }
 
-/*** 图像编码为 base64 字符串（空图返回空串） ***/
+/*** Encode image as base64 string (empty image -> "") ***/
 inline std::string encode_image(const cv::Mat& image, const char* ext) {
     if (image.empty()) {
         return "";
@@ -51,7 +53,7 @@ inline rapidjson::Value make_string(AllocatorType& allocator, const std::string&
     return rapidjson::Value(value.c_str(), value.size(), allocator);
 }
 
-/*** 分类：class_id / category / scores ***/
+/*** Classification: class_id / category / scores ***/
 inline void fill_classification(AllocatorType& allocator,
                                 rapidjson::Document& data,
                                 const jinq::models::io_define::classification::std_classification_output& out) {
@@ -65,7 +67,7 @@ inline void fill_classification(AllocatorType& allocator,
     data.AddMember("scores", scores, allocator);
 }
 
-/*** 目标检测：class_id / score / category / bbox / detail_infos ***/
+/*** Object detection: class_id / score / category / bbox / detail_infos ***/
 inline void fill_object_detection(AllocatorType& allocator,
                                   rapidjson::Document& data,
                                   const jinq::models::io_define::object_detection::std_object_detection_output& out) {
@@ -81,7 +83,7 @@ inline void fill_object_detection(AllocatorType& allocator,
     }
 }
 
-/*** 人脸检测：在检测基础上增加 landmarks ***/
+/*** Face detection: detection fields plus landmarks ***/
 inline void fill_face_detection(AllocatorType& allocator,
                                 rapidjson::Document& data,
                                 const jinq::models::io_define::object_detection::std_face_detection_output& out) {
@@ -105,7 +107,7 @@ inline void fill_face_detection(AllocatorType& allocator,
     }
 }
 
-/*** OCR 文本区域：score / bbox / polygon / detail_infos ***/
+/*** OCR text regions: score / bbox / polygon / detail_infos ***/
 inline void fill_text_regions(AllocatorType& allocator,
                               rapidjson::Document& data,
                               const jinq::models::io_define::ocr::std_text_regions_output& out) {
@@ -127,7 +129,7 @@ inline void fill_text_regions(AllocatorType& allocator,
     }
 }
 
-/*** 场景分割：image + colorized_mask（PNG base64） ***/
+/*** Scene segmentation: image + colorized_mask (PNG base64) ***/
 inline void fill_scene_segmentation(
     AllocatorType& allocator,
     rapidjson::Document& data,
@@ -144,7 +146,7 @@ inline void fill_scene_segmentation(
                    make_string(allocator, encode_image(color_mask, ".png")), allocator);
 }
 
-/*** 抠图：image（PNG base64） ***/
+/*** Matting: image (PNG base64) ***/
 inline void fill_matting(AllocatorType& allocator,
                          rapidjson::Document& data,
                          const jinq::models::io_define::matting::std_matting_output& out) {
@@ -153,7 +155,7 @@ inline void fill_matting(AllocatorType& allocator,
                    allocator);
 }
 
-/*** 图像增强：image（JPG base64） ***/
+/*** Enhancement: image (JPG base64) ***/
 inline void fill_enhancement(AllocatorType& allocator,
                              rapidjson::Document& data,
                              const jinq::models::io_define::enhancement::std_enhancement_output& out) {
@@ -162,7 +164,7 @@ inline void fill_enhancement(AllocatorType& allocator,
                    allocator);
 }
 
-/*** 单目深度：image（PNG base64，颜色化深度图） ***/
+/*** Mono depth: image (PNG base64, colorized depth map) ***/
 inline void fill_depth_estimation(AllocatorType& allocator,
                                   rapidjson::Document& data,
                                   const jinq::models::io_define::mono_depth_estimation::std_mde_output& out) {
@@ -171,7 +173,7 @@ inline void fill_depth_estimation(AllocatorType& allocator,
                    allocator);
 }
 
-/*** 特征点：score / location / descriptor ***/
+/*** Feature points: score / location / descriptor ***/
 inline void fill_feature_points(AllocatorType& allocator,
                                 rapidjson::Document& data,
                                 const jinq::models::io_define::feature_point::std_feature_point_output& out) {

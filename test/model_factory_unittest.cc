@@ -18,6 +18,8 @@
 #include "models/base_model.h"
 #include "server/abstract_server.h"
 
+using jinq::common::StatusCode;
+
 struct fake_model_input {};
 struct fake_model_output {};
 
@@ -30,11 +32,11 @@ public:
 
 class FakeModel : public FakeModelBase {
 public:
-    jinq::common::StatusCode init(const toml::table&) override {
-        return jinq::common::StatusCode::OK;
+    StatusCode init(const toml::table&) override {
+        return StatusCode::OK;
     }
-    jinq::common::StatusCode run_impl(const fake_model_input&, fake_model_output&) override {
-        return jinq::common::StatusCode::OK;
+    StatusCode run_impl(const fake_model_input&, fake_model_output&) override {
+        return StatusCode::OK;
     }
     bool is_successfully_initialized() const override {
         return true;
@@ -46,11 +48,11 @@ public:
 
 class FakeModel2 : public FakeModelBase {
 public:
-    jinq::common::StatusCode init(const toml::table&) override {
-        return jinq::common::StatusCode::OK;
+    StatusCode init(const toml::table&) override {
+        return StatusCode::OK;
     }
-    jinq::common::StatusCode run_impl(const fake_model_input&, fake_model_output&) override {
-        return jinq::common::StatusCode::OK;
+    StatusCode run_impl(const fake_model_input&, fake_model_output&) override {
+        return StatusCode::OK;
     }
     bool is_successfully_initialized() const override {
         return true;
@@ -62,8 +64,8 @@ public:
 
 class FakeServer : public jinq::server::BaseAiServer {
 public:
-    jinq::common::StatusCode init(const toml::table&) override {
-        return jinq::common::StatusCode::OK;
+    StatusCode init(const toml::table&) override {
+        return StatusCode::OK;
     }
     void serve_process(WFHttpTask*) override {}
     bool is_successfully_initialized() const override {
@@ -74,8 +76,8 @@ public:
 // differs from FakeServer by is_successfully_initialized() for type verification
 class FakeServer2 : public jinq::server::BaseAiServer {
 public:
-    jinq::common::StatusCode init(const toml::table&) override {
-        return jinq::common::StatusCode::OK;
+    StatusCode init(const toml::table&) override {
+        return StatusCode::OK;
     }
     void serve_process(WFHttpTask*) override {}
     bool is_successfully_initialized() const override {
