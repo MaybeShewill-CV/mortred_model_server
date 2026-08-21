@@ -494,7 +494,7 @@ jobs:
 
       # Build only up to the build stage (dependency compile + full -Werror compile is the gate; no runtime layer needed)
       - name: Build full project with warnings as errors
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: build
@@ -523,7 +523,7 @@ jobs:
 
       # Exactly the same carrier as full-werror: dependency layers reused via gha cache, full -Werror compile
       - name: Build full project with warnings as errors
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: build
@@ -551,7 +551,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Nightly full build + tests (warnings as errors)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: build

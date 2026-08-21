@@ -95,7 +95,7 @@ jobs:
 
       - if: matrix.mode == 'full'
         name: Build full image (deps cached)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: build
