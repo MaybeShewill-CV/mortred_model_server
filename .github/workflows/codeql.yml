@@ -91,7 +91,7 @@ jobs:
 
       - if: matrix.mode == 'full'
         name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - if: matrix.mode == 'full'
         name: Build full image (deps cached)
