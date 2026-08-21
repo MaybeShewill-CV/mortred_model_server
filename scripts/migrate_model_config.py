@@ -140,7 +140,7 @@ def is_pure_mnn_section(table: Mapping[str, Any]) -> bool:
     model_path = table.get("model_file_path")
     return (
         isinstance(model_path, str)
-        and model_path.lower().endswith(".mnn")
+        and model_path.lower().endswith((".mnn", ".model"))
         and "compute_backend" in table
     )
 
@@ -798,8 +798,16 @@ backend_power_mode=0
 model_score_threshold=0.1
 class_name_file="../conf/classes.txt"
 
+[LIBFACE]
+model_file_path="../weights/libface.model"
+compute_backend="cuda"
+model_threads_num=1
+model_score_threshold=0.75
+model_nms_threshold=0.35
+model_keep_top_k=250
+
 [LEGACY_MODEL]
-model_file_path="../weights/legacy.model"
+model_file_path="../weights/legacy.bin"
 compute_backend="cuda"
 keep_me=true
 
@@ -820,10 +828,10 @@ def run_selftest() -> int:
     original = parse_toml_text(SELFTEST_TOML)
     result = migrate_document(Path("selftest.toml"), original)
 
-    assert_equal(len(result.migrations), 5, "five model sections should migrate")
+    assert_equal(len(result.migrations), 6, "six model sections should migrate")
     assert_equal(
         sorted(migration.section for migration in result.migrations),
-        ["DDPM_UNET", "MNET", "MOBILENETV2", "SAM_ENCODER", "YOLOV8"],
+        ["DDPM_UNET", "LIBFACE", "MNET", "MOBILENETV2", "SAM_ENCODER", "YOLOV8"],
         "migrated section set",
     )
     assert_equal(
@@ -888,6 +896,25 @@ def run_selftest() -> int:
             "input_layout": "nchw",
         },
         "MNN backend",
+    )
+    assert_equal(
+        result.migrated["LIBFACE"]["backend"],
+        {
+            "type": "mnn",
+            "model_file_path": "../weights/libface.model",
+            "device": "cuda",
+            "threads": 1,
+        },
+        "pure MNN .model backend",
+    )
+    assert_equal(
+        result.migrated["LIBFACE"]["params"],
+        {
+            "model_score_threshold": 0.75,
+            "model_nms_threshold": 0.35,
+            "model_keep_top_k": 250,
+        },
+        "pure MNN .model params",
     )
     assert_equal(
         result.migrated["MNET"]["params"],

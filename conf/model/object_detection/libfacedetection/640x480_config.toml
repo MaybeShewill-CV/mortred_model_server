@@ -1,10 +1,16 @@
 [LIBFACE]
-model_file_path="../weights/object_detection/libfacedetection/face_detection_640x480_model.model"
-model_threads_num=1
-model_input_image_size=[640, 480]
-model_score_threshold=0.75
-model_nms_threshold=0.35
-model_keep_top_k=250
-compute_backend="cuda"
-backend_precision_mode=0
-backend_power_mode=0
+[LIBFACE.backend]
+type = "mnn"
+model_file_path = "../weights/object_detection/libfacedetection/face_detection_640x480_model.model"
+device = "cuda"
+threads = 1
+precision_mode = 0
+power_mode = 0
+input_names = ["input"]
+output_names = ["loc", "conf"]
+
+[LIBFACE.params]
+model_input_image_size = [640, 480]
+model_score_threshold = 0.75
+model_nms_threshold = 0.35
+model_keep_top_k = 250
