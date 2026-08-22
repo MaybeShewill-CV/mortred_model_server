@@ -70,6 +70,11 @@ inline const std::vector<std::string>& server_optional_string_keys() {
     return k;
 }
 
+inline const std::vector<std::string>& server_optional_bool_keys() {
+    static const std::vector<std::string> k = {"async_enabled"};
+    return k;
+}
+
 /***
  * Optional integer keys.
  */
@@ -78,7 +83,8 @@ inline const std::vector<std::string>& server_optional_int_keys() {
         "max_connections", "peer_resp_timeout", "request_size_limit",
         "compute_threads", "handler_threads", "model_run_timeout",
         "rate_limit_qps", "stuck_worker_threshold_times", "max_queue_depth",
-        "max_batch_size", "max_batch_delay_ms"};
+        "max_batch_size", "max_batch_delay_ms", "async_timeout", "async_max_queue",
+        "async_job_ttl", "async_max_completed"};
     return k;
 }
 
@@ -97,6 +103,7 @@ inline std::vector<std::string> all_server_keys() {
     for (const auto& k : server_required_int_keys()) all.push_back(k);
     for (const auto& k : server_optional_string_keys()) all.push_back(k);
     for (const auto& k : server_optional_int_keys()) all.push_back(k);
+    for (const auto& k : server_optional_bool_keys()) all.push_back(k);
     return all;
 }
 
@@ -134,6 +141,12 @@ inline bool validate_server_section(const toml::table& section,
         // toml::v3::key cannot implicitly convert to std::string (operator+ /
         // string params both mismatch), so use the materialized key_name in the loop
         const std::string key_name(key.str());
+        if (key_in(key_name, server_optional_bool_keys())) {
+            if (!value.is_boolean()) {
+                return fail("key '" + key_name + "' must be a boolean");
+            }
+            continue;
+        }
         if (key_in(key_name, server_required_string_keys()) || key_in(key_name, server_optional_string_keys())) {
             if (!value.is_string()) {
                 return fail("key '" + key_name + "' must be a string");

@@ -20,14 +20,17 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <thread>
+#include <unordered_map>
 
 #include <rapidjson/document.h>
 #include <rapidjson/stringbuffer.h>
@@ -61,6 +64,14 @@ ControlConfig g_cfg;
 std::string g_root;
 std::string g_ui_dir;
 std::string g_auth_token;
+// async job routing: job_id -> server_id (recorded at submit, used for proxy)
+std::mutex g_job_route_mu;
+std::unordered_map<std::string, std::string> g_job_routes;
+
+// forward declarations (defined below in dependency order)
+void proxy_to_model_jobs_with_body(WFHttpTask* task, const std::string& server_id,
+                                   const std::string& jobs_path, const std::string& method,
+                                   const std::string& body);
 
 std::string resolve_project_root() {
     if (const char* env = std::getenv("MORTRED_PROJECT_ROOT"); env != nullptr && *env != '\0') {
@@ -453,6 +464,214 @@ void serve_static(WFHttpTask* task, const std::string& path) {
     resp->append_output_body(content.data(), content.size());
 }
 
+/*** forward a request to a model server's async job endpoint (proxy) */
+void proxy_to_model_jobs(WFHttpTask* task, const std::string& server_id,
+                         const std::string& jobs_path_and_query) {
+    const auto* entry = g_catalog.find(server_id);
+    if (entry == nullptr) {
+        reply_json(task, 404, json_error("unknown server id: " + server_id));
+        return;
+    }
+    const auto s = g_supervisor->status(server_id);
+    if (s.pid < 0 || !s.ready) {
+        reply_json(task, 503, json_error("server not ready: " + server_id));
+        return;
+    }
+    const std::string url = "http://127.0.0.1:" + std::to_string(entry->port) + jobs_path_and_query;
+    const std::string internal_token = g_supervisor->internal_token();
+    const std::string req_body = protocol::HttpUtil::decode_chunked_body(task->get_req());
+    const std::string req_method = task->get_req()->get_method();
+
+    auto* client = WFTaskFactory::create_http_task(
+        url, 0, 300000, [task, server_id](WFHttpTask* t) {
+            auto* resp = task->get_resp();
+            if (t->get_state() != WFT_STATE_SUCCESS) {
+                resp->set_status_code("502");
+                resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
+                const std::string err = json_error("job proxy to '" + server_id + "' failed");
+                resp->append_output_body(err.data(), err.size());
+                return;
+            }
+            resp->set_status_code(t->get_resp()->get_status_code());
+            // forward relevant headers (Location, Retry-After, Content-Type)
+            protocol::HttpHeaderCursor cursor(t->get_resp());
+            protocol::HttpMessageHeader h;
+            while (cursor.next(&h)) {
+                std::string name(static_cast<const char*>(h.name), h.name_len);
+                std::string lower;
+                std::transform(name.begin(), name.end(), std::back_inserter(lower),
+                               [](unsigned char c) { return std::tolower(c); });
+                if (lower == "location" || lower == "retry-after" || lower == "content-type") {
+                    const std::string value(static_cast<const char*>(h.value), h.value_len);
+                    resp->add_header_pair(name.c_str(), value.c_str());
+                }
+            }
+            const void* data = nullptr;
+            size_t size = 0;
+            t->get_resp()->get_parsed_body(&data, &size);
+            resp->append_output_body(data, size);
+            // record the job -> server routing on 202 responses
+            if (std::string(t->get_resp()->get_status_code()) == "202") {
+                // parse the body to extract job_id
+                rapidjson::Document d;
+                d.Parse(static_cast<const char*>(data), size);
+                if (!d.HasParseError() && d.IsObject() && d.HasMember("job_id") &&
+                    d["job_id"].IsString()) {
+                    std::lock_guard<std::mutex> lock(g_job_route_mu);
+                    g_job_routes[d["job_id"].GetString()] = server_id;
+                }
+            }
+        });
+    client->get_req()->set_method(req_method.c_str());
+    if (!req_body.empty()) {
+        client->get_req()->append_output_body(req_body.data(), req_body.size());
+        client->get_req()->add_header_pair("Content-Type", "application/json; charset=utf-8");
+    }
+    if (!internal_token.empty()) {
+        const std::string auth = "Bearer " + internal_token;
+        client->get_req()->add_header_pair("Authorization", auth.c_str());
+    }
+    client->set_receive_timeout(300000);
+    series_of(task)->push_back(client);
+}
+
+/*** handle /api/v1/jobs* endpoints: submit + proxy */
+void handle_jobs(WFHttpTask* task, const std::string& path, const std::string& full_uri) {
+    const std::string method = task->get_req()->get_method();
+
+    if (path == "/api/v1/jobs" && method == "POST") {
+        // parse the body to find the target model
+        const std::string body = protocol::HttpUtil::decode_chunked_body(task->get_req());
+        rapidjson::Document doc;
+        doc.Parse(body.c_str());
+        if (doc.HasParseError() || !doc.IsObject() || !doc.HasMember("model") ||
+            !doc["model"].IsString()) {
+            reply_json(task, 400, json_error("body must contain string field 'model'"));
+            return;
+        }
+        const std::string model = doc["model"].GetString();
+        // strip the "model" field and forward the rest to the model server
+        doc.EraseMember("model");
+        rapidjson::StringBuffer buf;
+        rapidjson::Writer<rapidjson::StringBuffer> w(buf);
+        doc.Accept(w);
+        task->get_req()->append_output_body("");  // clear
+        // rebuild the request body without the model field
+        const std::string forward_body = buf.GetString();
+        auto* client_req_body = new std::string(forward_body);
+        proxy_to_model_jobs_with_body(task, model, "/jobs", "POST", *client_req_body);
+        delete client_req_body;
+        return;
+    }
+
+    if (path.rfind("/api/v1/jobs/", 0) == 0 && method == "GET") {
+        const std::string rest = path.substr(std::string("/api/v1/jobs/").size());
+        const auto slash = rest.find('/');
+        const std::string job_id =
+            slash == std::string::npos ? rest : rest.substr(0, slash);
+        const std::string action =
+            slash == std::string::npos ? "" : rest.substr(slash + 1);
+
+        // look up which server owns this job
+        std::string server_id;
+        {
+            std::lock_guard<std::mutex> lock(g_job_route_mu);
+            const auto it = g_job_routes.find(job_id);
+            if (it != g_job_routes.end()) {
+                server_id = it->second;
+            }
+        }
+        if (server_id.empty()) {
+            reply_json(task, 404, json_error("job not found (unknown or expired): " + job_id));
+            return;
+        }
+
+        std::string jobs_path = "/jobs/" + job_id;
+        if (action == "wait" || action == "result") {
+            jobs_path += "/" + action;
+        }
+        // forward query string if present
+        const auto q = full_uri.find('?');
+        if (q != std::string::npos) {
+            jobs_path += full_uri.substr(q);
+        }
+        proxy_to_model_jobs(task, server_id, jobs_path);
+        return;
+    }
+
+    reply_json(task, 404, json_error("not found"));
+}
+
+/*** proxy helper that takes an explicit body (for submit after stripping 'model') */
+void proxy_to_model_jobs_with_body(WFHttpTask* task, const std::string& server_id,
+                                   const std::string& jobs_path, const std::string& method,
+                                   const std::string& body) {
+    const auto* entry = g_catalog.find(server_id);
+    if (entry == nullptr) {
+        reply_json(task, 404, json_error("unknown model: " + server_id));
+        return;
+    }
+    const auto s = g_supervisor->status(server_id);
+    if (s.pid < 0 || !s.ready) {
+        reply_json(task, 503, json_error("server not ready: " + server_id));
+        return;
+    }
+    const std::string url = "http://127.0.0.1:" + std::to_string(entry->port) + jobs_path;
+    const std::string internal_token = g_supervisor->internal_token();
+
+    auto* client = WFTaskFactory::create_http_task(
+        url, 0, 300000, [task, server_id](WFHttpTask* t) {
+            auto* resp = task->get_resp();
+            if (t->get_state() != WFT_STATE_SUCCESS) {
+                resp->set_status_code("502");
+                resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
+                const std::string err = json_error("job submit to '" + server_id + "' failed");
+                resp->append_output_body(err.data(), err.size());
+                return;
+            }
+            resp->set_status_code(t->get_resp()->get_status_code());
+            resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
+            // forward Location header (202 + job URL)
+            protocol::HttpHeaderCursor cursor(t->get_resp());
+            protocol::HttpMessageHeader h;
+            while (cursor.next(&h)) {
+                std::string name(static_cast<const char*>(h.name), h.name_len);
+                std::string lower;
+                std::transform(name.begin(), name.end(), std::back_inserter(lower),
+                               [](unsigned char c) { return std::tolower(c); });
+                if (lower == "location") {
+                    const std::string loc(static_cast<const char*>(h.value), h.value_len);
+                    resp->add_header_pair("Location", loc.c_str());
+                }
+            }
+            const void* data = nullptr;
+            size_t size = 0;
+            t->get_resp()->get_parsed_body(&data, &size);
+            resp->append_output_body(data, size);
+            // record routing on 202
+            if (std::string(t->get_resp()->get_status_code()) == "202") {
+                rapidjson::Document d;
+                d.Parse(static_cast<const char*>(data), size);
+                if (!d.HasParseError() && d.IsObject() && d.HasMember("job_id") &&
+                    d["job_id"].IsString()) {
+                    std::lock_guard<std::mutex> lock(g_job_route_mu);
+                    g_job_routes[d["job_id"].GetString()] = server_id;
+                }
+            }
+        });
+    client->get_req()->set_method(method.c_str());
+    if (!body.empty()) {
+        client->get_req()->append_output_body(body.data(), body.size());
+        client->get_req()->add_header_pair("Content-Type", "application/json; charset=utf-8");
+    }
+    if (!internal_token.empty()) {
+        const std::string auth = "Bearer " + internal_token;
+        client->get_req()->add_header_pair("Authorization", auth.c_str());
+    }
+    client->set_receive_timeout(300000);
+    series_of(task)->push_back(client);
+}
+
 void process(WFHttpTask* task) {
     const std::string path = uri_path(task->get_req()->get_request_uri());
     const std::string method = task->get_req()->get_method();
@@ -493,6 +712,13 @@ void process(WFHttpTask* task) {
         handle_metrics(task);
     } else if (path == "/api/v1/infer" && method == "POST") {
         handle_infer(task);
+    } else if (path.rfind("/api/v1/jobs", 0) == 0 &&
+               (path.size() == 14 || path[14] == '/')) {
+        const std::string full_uri =
+            task->get_req()->get_request_uri() == nullptr
+                ? ""
+                : task->get_req()->get_request_uri();
+        handle_jobs(task, path, full_uri);
     } else if (path.rfind("/api/v1/servers/", 0) == 0) {
         const std::string rest = path.substr(std::string("/api/v1/servers/").size());
         const auto slash = rest.rfind('/');
