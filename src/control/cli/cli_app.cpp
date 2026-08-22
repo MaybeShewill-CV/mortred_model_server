@@ -1,0 +1,202 @@
+/************************************************
+* Copyright MaybeShewill-CV. All Rights Reserved.
+* Author: MaybeShewill-CV
+* File: mortredctl.cpp
+* Date: 26-8-22
+************************************************/
+
+// Thin REST client for mortred-supervisor: status / catalog / lifecycle
+// actions / logs / inference smoke test. Machine-readable output (raw JSON).
+
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <vector>
+
+#include <workflow/WFFacilities.h>
+#include <workflow/WFTaskFactory.h>
+#include <workflow/Workflow.h>
+
+#include "common/base64.h"
+
+#include "control/cli/cli_app.h"
+
+namespace {
+
+struct Options {
+    std::string addr;  // http://host:port
+    std::string token;
+};
+
+struct HttpResult {
+    int status = 0;
+    std::string body;
+};
+
+HttpResult http_request(const Options& opt, const std::string& method, const std::string& path,
+                        const std::string& body) {
+    HttpResult out;
+    const std::string url = opt.addr + path;
+    WFFacilities::WaitGroup wg(1);
+    auto* task = WFTaskFactory::create_http_task(
+        url, 0, 0, [&wg, &out](WFHttpTask* t) {
+            if (t->get_state() == WFT_STATE_SUCCESS) {
+                out.status = std::atoi(t->get_resp()->get_status_code());
+                const void* data = nullptr;
+                size_t size = 0;
+                t->get_resp()->get_parsed_body(&data, &size);
+                out.body.assign(static_cast<const char*>(data), size);
+            } else {
+                out.status = -1;
+                out.body = std::string("transport failure: state ") +
+                           std::to_string(t->get_state()) + ", errno " +
+                           std::to_string(t->get_error());
+            }
+            wg.done();
+        });
+    task->get_req()->set_method(method.c_str());
+    if (!body.empty()) {
+        task->get_req()->append_output_body(body.data(), body.size());
+        task->get_req()->add_header_pair("Content-Type", "application/json; charset=utf-8");
+    }
+    if (!opt.token.empty()) {
+        const std::string auth = "Bearer " + opt.token;
+        task->get_req()->add_header_pair("Authorization", auth.c_str());
+    }
+    task->set_receive_timeout(300000);  // infer can take a while
+    task->start();
+    wg.wait();
+    return out;
+}
+
+std::string read_file_bytes(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in.is_open()) {
+        return "";
+    }
+    std::stringstream ss;
+    ss << in.rdbuf();
+    return ss.str();
+}
+
+void usage() {
+    std::fprintf(stderr,
+                 "usage: mortredctl [--addr URL] [--token T] <command> [args]\n"
+                 "  commands: status [id] | catalog | start <id> | stop <id> | restart <id>\n"
+                 "            logs <id> [--offset N] [--limit N]\n"
+                 "            infer <id> --image <path>\n"
+                 "  env: MORTREDCTL_ADDR (default http://127.0.0.1:8787), MORTREDCTL_TOKEN\n");
+}
+
+}  // namespace
+
+namespace mortred {
+namespace control {
+
+int run_cli(int argc, char** argv) {
+    Options opt;
+    if (const char* env = std::getenv("MORTREDCTL_ADDR"); env != nullptr && *env != '\0') {
+        opt.addr = env;
+    } else {
+        opt.addr = "http://127.0.0.1:8787";
+    }
+    if (const char* env = std::getenv("MORTREDCTL_TOKEN"); env != nullptr && *env != '\0') {
+        opt.token = env;
+    }
+
+    std::vector<std::string> args;
+    for (int i = 1; i < argc; ++i) {
+        args.emplace_back(argv[i]);
+    }
+    size_t index = 0;
+    auto next = [&](const char* what) -> std::string {
+        if (index >= args.size()) {
+            std::fprintf(stderr, "missing value for %s\n", what);
+            usage();
+            std::exit(2);
+        }
+        return args[index++];
+    };
+    while (index < args.size() && (args[index] == "--addr" || args[index] == "--token")) {
+        if (args[index] == "--addr") {
+            ++index;
+            opt.addr = next("--addr");
+        } else {
+            ++index;
+            opt.token = next("--token");
+        }
+    }
+    if (index >= args.size()) {
+        usage();
+        return 2;
+    }
+    const std::string cmd = next("command");
+
+    HttpResult r;
+    if (cmd == "status" || cmd == "catalog") {
+        r = http_request(opt, "GET", "/api/v1/" + cmd, "");
+    } else if (cmd == "start" || cmd == "stop" || cmd == "restart") {
+        const std::string id = next("server id");
+        r = http_request(opt, "POST", "/api/v1/servers/" + id + "/" + cmd, "{}");
+    } else if (cmd == "logs") {
+        const std::string id = next("server id");
+        size_t offset = 0;
+        size_t limit = 200;
+        while (index < args.size()) {
+            const std::string flag = next("flag");
+            if (flag == "--offset") {
+                offset = static_cast<size_t>(std::stoull(next("--offset")));
+            } else if (flag == "--limit") {
+                limit = static_cast<size_t>(std::stoull(next("--limit")));
+            } else {
+                std::fprintf(stderr, "unknown logs flag: %s\n", flag.c_str());
+                return 2;
+            }
+        }
+        r = http_request(opt, "GET",
+                         "/api/v1/servers/" + id + "/logs?offset=" + std::to_string(offset) +
+                             "&limit=" + std::to_string(limit),
+                         "");
+    } else if (cmd == "infer") {
+        const std::string id = next("server id");
+        std::string image_path;
+        while (index < args.size()) {
+            const std::string flag = next("flag");
+            if (flag == "--image") {
+                image_path = next("--image");
+            } else {
+                std::fprintf(stderr, "unknown infer flag: %s\n", flag.c_str());
+                return 2;
+            }
+        }
+        if (image_path.empty()) {
+            std::fprintf(stderr, "infer requires --image <path>\n");
+            return 2;
+        }
+        const std::string bytes = read_file_bytes(image_path);
+        if (bytes.empty()) {
+            std::fprintf(stderr, "cannot read image file: %s\n", image_path.c_str());
+            return 2;
+        }
+        const std::string b64 = jinq::common::base64::encode(
+            reinterpret_cast<const unsigned char*>(bytes.data()), bytes.size());
+        const std::string body = "{\"server_id\":\"" + id + "\",\"img_data\":\"" + b64 + "\"}";
+        r = http_request(opt, "POST", "/api/v1/infer", body);
+    } else {
+        std::fprintf(stderr, "unknown command: %s\n", cmd.c_str());
+        usage();
+        return 2;
+    }
+
+    std::fwrite(r.body.data(), 1, r.body.size(), stdout);
+    if (!r.body.empty() && r.body.back() != '\n') {
+        std::fputc('\n', stdout);
+    }
+    return r.status >= 200 && r.status < 300 ? 0 : 1;
+}
+
+}  // namespace control
+}  // namespace mortred

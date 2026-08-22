@@ -1,0 +1,47 @@
+# Mortred Model Server - mortred-supervisor systemd unit (host deployment)
+#
+# 安装:
+#   sudo cmake --install build --prefix /opt/mortred   # 或手工安装到 /opt/mortred
+#   sudo useradd -r -s /usr/sbin/nologin mortred
+#   sudo mkdir -p /etc/mortred && sudo chown mortred:mortred /etc/mortred
+#   sudo cp deploy/mortred-supervisor.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now mortred-supervisor
+#
+# 敏感配置（token 等）放 /etc/mortred/supervisor.env（chmod 600）:
+#   MORTRED_API_TOKEN=<management token>
+#   MORTRED_GATEWAY_AUTH_TOKEN=<inference token>
+#
+# The supervisor manages mortred-gateway + all model servers; systemd only
+# supervises the supervisor itself.
+
+[Unit]
+Description=Mortred Model Server Supervisor
+Documentation=https://github.com/MaybeShewill-CV/mortred_model_server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mortred
+Group=mortred
+Environment=MORTRED_PROJECT_ROOT=/opt/mortred
+Environment=MORTRED_API_HOST=127.0.0.1
+Environment=MORTRED_API_PORT=8787
+Environment=LD_LIBRARY_PATH=/opt/mortred/lib
+Environment=APP_BIN_DIR=bin
+Environment=APP_LIB_DIR=lib
+Environment=APP_LIBS_DIR=lib
+EnvironmentFile=-/etc/mortred/supervisor.env
+ExecStart=/opt/mortred/bin/mortred-supervisor.out
+Restart=always
+RestartSec=3
+# 模型 worker 与连接较多时放宽文件描述符上限
+LimitNOFILE=65536
+# ordered shutdown (models first, gateway last) may take a while
+TimeoutStopSec=120
+KillSignal=SIGTERM
+NoNewPrivileges=true
+OOMPolicy=continue
+
+[Install]
+WantedBy=multi-user.target

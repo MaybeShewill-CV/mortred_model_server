@@ -1,0 +1,40 @@
+# mortred control-plane configuration (supervisor + gateway).
+# Supervision policy lives HERE, not in the per-model server configs.
+# Secret values (tokens) should come from environment variables, not this file:
+#   MORTRED_API_TOKEN, MORTRED_GATEWAY_AUTH_TOKEN
+
+[supervisor]
+# management REST API + embedded UI
+api_host = "127.0.0.1"
+api_port = 8787
+# autostart eligible model servers when the supervisor starts (env
+# MORTRED_AUTOSTART=true|false overrides; containers default to true)
+autostart_default = false
+# gateway starts first, then models with this width (1 = sequential, safest
+# for GPU memory; raise for CPU models)
+start_concurrency = 1
+# managed process logs: <log_dir>/<server id>.log, rotated at this size
+log_dir = "logs"
+log_rotate_mb = 10
+# process layout (source tree defaults; the container/install tree injects
+# APP_BIN_DIR/APP_LIB_DIR/APP_LIBS_DIR = bin/lib/lib)
+# bin_dir = "_bin"
+# lib_dir = "_lib"
+# libs_dir = "3rd_party/libs"
+
+[gateway]
+# the single external inference entry; model servers stay loopback-only
+host = "127.0.0.1"
+port = 8080
+request_size_limit_mb = 64
+max_connections = 1000
+upstream_send_timeout_ms = 180000
+upstream_recv_timeout_ms = 180000
+
+# Per-server supervision overrides; <id> is the server_exe stem
+# (e.g. yolov8_detection_server). Absent keys fall back to the defaults above.
+#
+# [servers.yolov8_detection_server]
+# enabled = true
+# autostart = true
+# restart_policy = "on-failure"   # on-failure | always | no
