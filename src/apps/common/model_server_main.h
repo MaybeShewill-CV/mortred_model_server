@@ -14,6 +14,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <cstdlib>
 
 #include <glog/logging.h>
 #include <workflow/WFFacilities.h>
@@ -56,6 +57,21 @@ inline int run_model_server_main(
     const auto& server_cfg = config[server_section];
     auto port = server_cfg["port"].value_or<int64_t>(0);
     auto host = server_cfg["host"].value_or<std::string>("127.0.0.1");
+    // environment overrides (highest precedence): the supervisor injects these
+    // to force loopback binding + internal auth for managed children
+    if (const char* env = std::getenv("MORTRED_LISTEN_HOST"); env != nullptr && *env != '\0') {
+        host = env;
+    }
+    if (const char* env = std::getenv("MORTRED_LISTEN_PORT"); env != nullptr && *env != '\0') {
+        try {
+            const int env_port = std::stoi(env);
+            if (env_port > 0 && env_port <= 65535) {
+                port = env_port;
+            }
+        } catch (...) {
+            LOG(WARNING) << "ignoring invalid MORTRED_LISTEN_PORT: " << env;
+        }
+    }
     LOG(INFO) << "serve on port: " << port;
 
     // factory registration key: process-internal registry, no external consumer

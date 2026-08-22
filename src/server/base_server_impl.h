@@ -106,7 +106,7 @@ public:
      * go closure, kept alive by the framework's task lifetime). The wait is
      * deliberately unbounded — a hung model keeps its worker forever and the
      * destructor blocks; that is handled by the outer process manager (e.g.
-     * web_console's SIGINT -> SIGKILL fallback), not here. The drain only runs
+     * mortred-supervisor's SIGINT -> SIGKILL fallback), not here. The drain only runs
      * when init succeeded: the worker watermark is committed at the end of a
      * successful init, so a partially-filled queue from a failed init would
      * otherwise spin forever — on failure the queue destructor releases the
@@ -753,10 +753,19 @@ template<typename WORKER, typename MODEL_OUTPUT>
 StatusCode BaseAiServerImpl<WORKER, MODEL_OUTPUT>::parse_server_security_config(
     const toml::table& server_section) {
     _m_auth_token = server_section["auth_token"].value_or<std::string>("");
+    // env override: the supervisor injects a per-boot internal token so that
+    // managed model servers are protected even with an empty TOML token
+    if (const char* env = std::getenv("MORTRED_AUTH_TOKEN"); env != nullptr && *env != '\0') {
+        _m_auth_token = env;
+    }
     _m_rate_limit_qps = static_cast<int>(server_section["rate_limit_qps"].value_or<int64_t>(0));
     _m_rate_limiter.set_max_qps(_m_rate_limit_qps);
 
     auto listen_host = server_section["host"].value_or<std::string>("127.0.0.1");
+    // the fail-closed check must judge the EFFECTIVE host (env override wins)
+    if (const char* env = std::getenv("MORTRED_LISTEN_HOST"); env != nullptr && *env != '\0') {
+        listen_host = env;
+    }
     if (!jinq::common::is_loopback_host(listen_host) && _m_auth_token.empty()) {
         LOG(ERROR) << "refusing to serve on non-loopback host " << listen_host
                    << " without auth_token configured";
