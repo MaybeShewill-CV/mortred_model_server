@@ -43,6 +43,7 @@
 #include <workflow/Workflow.h>
 
 #include "common/auth_token.h"
+#include "control/api_key_manager.h"
 #include "common/request_size_limit.h"
 #include "control/catalog.h"
 #include "control/control_config.h"
@@ -67,6 +68,7 @@ std::string g_auth_token;
 // async job routing: job_id -> server_id (recorded at submit, used for proxy)
 std::mutex g_job_route_mu;
 std::unordered_map<std::string, std::string> g_job_routes;
+mortred::control::ApiKeyManager g_api_keys;
 
 // forward declarations (defined below in dependency order)
 void proxy_to_model_jobs_with_body(WFHttpTask* task, const std::string& server_id,
@@ -1004,6 +1006,37 @@ void process(WFHttpTask* task) {
         handle_jobs(task, path, full_uri);
     } else if (path == "/api/v1/pipelines" && method == "POST") {
         handle_pipelines(task);
+    } else if (path == "/api/v1/keys" && method == "GET") {
+        // list API keys (name, scope, enabled, usage stats - never the hash)
+        auto* resp = task->get_resp();
+        resp->set_status_code("200");
+        resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
+        rapidjson::Document d;
+        d.SetObject();
+        auto& a = d.GetAllocator();
+        rapidjson::Value arr(rapidjson::kArrayType);
+        for (const auto& info : g_api_keys.list_keys()) {
+            rapidjson::Value item(rapidjson::kObjectType);
+            item.AddMember("name", rapidjson::Value(info.name.c_str(), info.name.size(), a), a);
+            item.AddMember("scope",
+                           rapidjson::Value(info.scope.c_str(), info.scope.size(), a), a);
+            item.AddMember("enabled", info.enabled, a);
+            item.AddMember("total_requests",
+                           static_cast<uint64_t>(info.total_requests), a);
+            item.AddMember("total_rejected",
+                           static_cast<uint64_t>(info.total_rejected), a);
+            arr.PushBack(item, a);
+        }
+        d.AddMember("keys", arr, a);
+        rapidjson::StringBuffer buf;
+        rapidjson::Writer<rapidjson::StringBuffer> w(buf);
+        d.Accept(w);
+        resp->append_output_body(buf.GetString(), buf.GetSize());
+    } else if (path == "/api/v1/keys/reload" && method == "POST") {
+        // hot-reload API keys from the config file
+        const bool ok = g_api_keys.reload();
+        reply_json(task, ok ? 200 : 500,
+                   ok ? "{\"ok\":true}" : "{\"ok\":false,\"error\":\"reload failed\"}");
     } else if (path.rfind("/api/v1/pipelines/", 0) == 0 && method == "GET") {
         const std::string id = path.substr(std::string("/api/v1/pipelines/").size());
         handle_pipeline_status(task, id);
@@ -1121,6 +1154,18 @@ int run_supervisor() {
         std::fprintf(stderr, "mortred-supervisor: catalog init failed: %s\n",
                      catalog_err.c_str());
         return 1;
+    }
+
+    // load API keys if the config exists (shared with the gateway)
+    {
+        const std::string api_keys_path =
+            (std::filesystem::path(g_root) / "conf" / "api_keys.toml").string();
+        if (std::filesystem::exists(api_keys_path)) {
+            if (g_api_keys.load(api_keys_path)) {
+                std::fprintf(stderr, "mortred-supervisor: loaded %zu API keys\n",
+                             g_api_keys.key_count());
+            }
+        }
     }
 
     g_supervisor = std::make_unique<ProcessSupervisor>(g_root, g_cfg, config_path);

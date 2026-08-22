@@ -29,6 +29,7 @@
 #include <workflow/Workflow.h>
 
 #include "common/auth_token.h"
+#include "control/api_key_manager.h"
 #include "control/catalog.h"
 #include "control/control_config.h"
 #include "server/prometheus_metrics.h"
@@ -43,6 +44,7 @@ using mortred::control::ControlConfig;
 Catalog g_catalog;
 ControlConfig g_cfg;
 std::string g_auth_token;       // external bearer token ("" = loopback mode)
+mortred::control::ApiKeyManager g_api_keys;  // multi-key auth (P0-4)
 std::string g_internal_token;   // shared with model servers via supervisor env
 jinq::server::PrometheusMetrics g_metrics;
 
@@ -208,12 +210,35 @@ void process(WFHttpTask* task) {
         return;
     }
     // external auth is enforced here, once, for every model endpoint
-    if (!jinq::common::is_bearer_authorized(
-            header_value(task->get_req(), "authorization"), g_auth_token)) {
+    const std::string auth_header = header_value(task->get_req(), "authorization");
+    bool authorized = false;
+    std::string key_name;
+
+    // try multi-key auth first (P0-4)
+    if (g_api_keys.key_count() > 0) {
+        const auto* key = g_api_keys.authenticate(auth_header);
+        if (key != nullptr && mortred::control::ApiKeyManager::has_scope(key, "inference")) {
+            authorized = true;
+            key_name = key->name;
+        }
+    }
+
+    // fallback to single static token (legacy compatibility)
+    if (!authorized &&
+        jinq::common::is_bearer_authorized(auth_header, g_auth_token)) {
+        authorized = true;
+        key_name = "legacy";
+    }
+
+    if (!authorized) {
         g_metrics.inc_http_requests(method, "401");
         task->get_resp()->add_header_pair("WWW-Authenticate", "Bearer realm=\"Mortred\"");
         reply_error(task, 401, "unauthorized");
         return;
+    }
+    // tag the request with the key name for upstream logging
+    if (!key_name.empty()) {
+        task->get_resp()->add_header_pair("X-Mortred-Key", key_name.c_str());
     }
     forward_to_model(task, *entry);
 }
@@ -274,6 +299,24 @@ int run_gateway(int argc, char** argv) {
         return 1;
     }
     g_metrics.set_model("gateway");
+
+    // multi-key auth: load from conf/api_keys.toml if present (P0-4)
+    // falls back to the single static token if the file doesn't exist
+    {
+        const std::string api_keys_path =
+            (std::filesystem::path(root) / "conf" / "api_keys.toml").string();
+        if (std::filesystem::exists(api_keys_path)) {
+            if (g_api_keys.load(api_keys_path)) {
+                std::fprintf(stderr, "mortred-gateway: loaded %zu API keys from %s\n",
+                             g_api_keys.key_count(), api_keys_path.c_str());
+            } else {
+                std::fprintf(stderr,
+                             "mortred-gateway: WARNING: failed to parse %s "
+                             "(falling back to static token)\n",
+                             api_keys_path.c_str());
+            }
+        }
+    }
 
     WFServerParams params = SERVER_PARAMS_DEFAULT;
     params.max_connections = g_cfg.gateway.max_connections;

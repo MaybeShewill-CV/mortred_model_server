@@ -1,0 +1,32 @@
+# API Key configuration for mortred-gateway (P0-4 multi-tenant auth).
+#
+# Keys are stored as SHA-256 hashes - NEVER in plaintext.
+# To generate a hash: echo -n "your-secret-key" | sha256sum
+#
+# Hot reload: the gateway reloads this file when it receives SIGHUP
+# (or on restart). Removed keys take effect immediately for new requests.
+
+[keys.tenant-a]
+# hash of "my-secret-key-for-tenant-a"
+hash = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
+scope = "inference"
+rate_limit_qps = 100
+enabled = true
+
+[keys.tenant-b]
+hash = "b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3"
+scope = "inference"
+rate_limit_qps = 50
+enabled = true
+
+[keys.admin]
+# admin scope: can access management endpoints too
+hash = "c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4"
+scope = "all"
+rate_limit_qps = 0
+enabled = true
+
+[keys.disabled-example]
+hash = "d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5"
+scope = "inference"
+enabled = false
