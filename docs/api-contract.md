@@ -124,6 +124,11 @@ a `max_batch_delay_ms` collection window), plus the
 `mortred_queue_rejected_total` / `mortred_batch_size` /
 `mortred_batch_window_wait_ms` metrics.
 
+Per-item failure isolation: within a batch, a failing item (bad image,
+decode error) returns its own error code while its batch mates keep their
+results; only session-level failures (engine errors) fail every participating
+item.
+
 ## Model inference response
 
 ```json

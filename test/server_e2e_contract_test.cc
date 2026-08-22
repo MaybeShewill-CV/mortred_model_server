@@ -60,6 +60,12 @@ public:
         if (_m_fail_code != StatusCode::OK) {
             return _m_fail_code;
         }
+        // per-item failure trigger for the batch isolation test: a payload
+        // containing "fail-me" fails THIS item only (default run_batch loops
+        // run_impl, so the batch mates keep their results)
+        if (in.input_image_content.find("fail-me") != std::string::npos) {
+            return StatusCode::MODEL_RUN_SESSION_FAILED;
+        }
         // echo the payload length: the batch distribution test detects any
         // cross-entry result mixup through per-request distinct values
         out.value = static_cast<int>(in.input_image_content.size());
@@ -657,6 +663,49 @@ TEST(server_e2e_contract, batch_timeout_returns_504) {
                                    "{\"img_data\":\"aGVsbG8=\",\"req_id\":\"slow\"}",
                                    k_json_auth_headers);
     EXPECT_EQ(resp.status, 504);
+}
+
+TEST(server_e2e_contract, batch_item_failure_isolated) {
+    // good + bad + good in one batch: the bad item reports its own error,
+    // its batch mates must still return their correct results
+    ServerHandle handle = start_server(
+        "model_run_timeout=5000\nfake_delay_ms=20\nmax_batch_size=4\nmax_batch_delay_ms=500\n");
+
+    HttpResp resp_a;
+    HttpResp resp_c;
+    const std::string payload_a(17, 'a');
+    const std::string payload_c(31, 'c');
+    std::thread sender_a([&handle, &resp_a, &payload_a]() {
+        resp_a = send_request(handle.port, "POST", "/test/model",
+                              "{\"img_data\":\"" + payload_a + "\",\"req_id\":\"a\"}",
+                              k_json_auth_headers);
+    });
+    std::thread sender_c([&handle, &resp_c, &payload_c]() {
+        resp_c = send_request(handle.port, "POST", "/test/model",
+                              "{\"img_data\":\"" + payload_c + "\",\"req_id\":\"c\"}",
+                              k_json_auth_headers);
+    });
+    // the "fail-me" item rides in the same collection window
+    const auto resp_b =
+        send_request(handle.port, "POST", "/test/model",
+                     "{\"img_data\":\"fail-me\",\"req_id\":\"b\"}", k_json_auth_headers);
+    sender_a.join();
+    sender_c.join();
+
+    EXPECT_EQ(resp_b.status, 500);
+    auto doc_b = parse_body(resp_b.body);
+    ASSERT_FALSE(doc_b.HasParseError());
+    EXPECT_TRUE(doc_b["data"].IsNull()) << "failed items keep data:null";
+
+    ASSERT_EQ(resp_a.status, 200) << "the failing item must not fail its batch mates";
+    auto doc_a = parse_body(resp_a.body);
+    ASSERT_FALSE(doc_a.HasParseError());
+    EXPECT_EQ(doc_a["data"]["value"].GetInt(), 17);
+
+    ASSERT_EQ(resp_c.status, 200) << "the failing item must not fail its batch mates";
+    auto doc_c = parse_body(resp_c.body);
+    ASSERT_FALSE(doc_c.HasParseError());
+    EXPECT_EQ(doc_c["data"]["value"].GetInt(), 31);
 }
 
 int main(int argc, char** argv) {

@@ -496,7 +496,8 @@ TEST(model_golden, mobilenetv2_batch_matches_single) {
 
     std::vector<mat_input> batch_inputs(4, mat_input{image});
     std::vector<std_classification_output> batch_outputs;
-    ASSERT_EQ(model->run_batch(batch_inputs, batch_outputs), StatusCode::OK);
+    std::vector<StatusCode> item_status;
+    ASSERT_EQ(model->run_batch(batch_inputs, batch_outputs, item_status), StatusCode::OK);
     ASSERT_EQ(batch_outputs.size(), 4u);
     for (size_t idx = 0; idx < batch_outputs.size(); ++idx) {
         EXPECT_EQ(batch_outputs[idx].class_id, single.class_id) << "item " << idx;
@@ -522,6 +523,34 @@ TEST(model_golden, resnet50_classification) {
     std_classification_output output;
     ASSERT_EQ(model->run(input, output), StatusCode::OK);
     expect_scores("resnet50_classification", output);
+}
+
+TEST(model_golden, densenet_batch_matches_single) {
+    // generic smart-batch path (BackendCvModel::run_batch): packed [N,...]
+    // run must be numerically equivalent to N single runs
+    std::string conf = "conf/model/classification/densenet/densenet121_config.toml";
+    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    auto cfg = load_model_cfg(conf);
+    auto model = jinq::factory::classification::create_densenet_classifier<
+        mat_input, std_classification_output>("densenet_golden");
+    ASSERT_NE(model, nullptr);
+    ASSERT_EQ(model->init(cfg), StatusCode::OK);
+    cv::Mat image =
+        read_input_image("demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG");
+    ASSERT_FALSE(image.empty());
+
+    std_classification_output single;
+    ASSERT_EQ(model->run(mat_input{image}, single), StatusCode::OK);
+
+    std::vector<mat_input> batch_inputs(4, mat_input{image});
+    std::vector<std_classification_output> batch_outputs;
+    std::vector<StatusCode> item_status;
+    ASSERT_EQ(model->run_batch(batch_inputs, batch_outputs, item_status), StatusCode::OK);
+    ASSERT_EQ(batch_outputs.size(), 4u);
+    for (size_t idx = 0; idx < batch_outputs.size(); ++idx) {
+        EXPECT_EQ(item_status[idx], StatusCode::OK) << "item " << idx;
+        EXPECT_EQ(batch_outputs[idx].class_id, single.class_id) << "item " << idx;
+    }
 }
 
 TEST(model_golden, densenet121_classification) {

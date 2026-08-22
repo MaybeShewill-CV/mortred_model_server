@@ -429,10 +429,10 @@ protected:
      * @param req
      * @param result
      */
-    void do_work(const task_request* req, go_result* result);
+    void do_work(task_request* req, go_result* result);
 
     /*** enqueue into the batch queue and wait for the runner's completion */
-    void run_via_batch(const task_request* req, go_result* result);
+    void run_via_batch(task_request* req, go_result* result);
 
     /*** dedicated collector thread (max_batch_size > 1 only) */
     void batch_loop();
@@ -654,7 +654,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
  */
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
-    const BaseAiServerImpl::task_request* req,
+    BaseAiServerImpl::task_request* req,
     BaseAiServerImpl::go_result* result) {
     // the result is a member of the go task's closure: the framework keeps the
     // task alive until this routine returns even when detached (timeout) or
@@ -751,10 +751,13 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
  */
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::run_via_batch(
-    const BaseAiServerImpl::task_request* req,
+    BaseAiServerImpl::task_request* req,
     BaseAiServerImpl::go_result* result) {
     auto entry = std::make_shared<batch_entry>();
-    entry->req = *req;
+    // move (not copy) the payload into the entry: after enqueue the requester
+    // never reads req again, and the heap buffer simply changes owner - one
+    // payload buffer per request instead of two
+    entry->req = std::move(*req);
     const std::shared_ptr<batch_entry> kept = entry;
     _m_batch_queue.enqueue(std::move(entry));
 
@@ -890,21 +893,31 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::process_batch(
     std::vector<models::io_define::common_io::base64_input> inputs;
     inputs.reserve(valid.size());
     for (const auto& entry : valid) {
-        inputs.push_back(models::io_define::common_io::base64_input{entry->req.payload});
+        models::io_define::common_io::base64_input input;
+        // second and last ownership transfer of the payload (entry -> inputs);
+        // nothing reads entry->req.payload after this point
+        input.input_image_content = std::move(entry->req.payload);
+        inputs.push_back(std::move(input));
     }
     std::vector<MODEL_OUTPUT> outputs;
+    std::vector<StatusCode> item_status;
     const auto run_start = Timestamp::now();
-    const auto status = worker->run_batch(inputs, outputs);
+    const auto status = worker->run_batch(inputs, outputs, item_status);
     const double run_ms = (Timestamp::now() - run_start) * 1000;
     update_run_time_ewma(static_cast<int64_t>(run_ms));
     _m_metrics.observe_inference_duration_ms(run_ms);
     _m_working_queue.enqueue(std::move(worker));
 
     for (size_t idx = 0; idx < valid.size(); ++idx) {
-        if (status == StatusCode::OK && idx < outputs.size()) {
-            complete_batch_entry(valid[idx], status, std::move(outputs[idx]), run_ms, wait_ms);
+        // per-item status isolation: a failing item reports its own error,
+        // its batch mates keep their results; a size mismatch can only come
+        // from a broken run_batch override - fall back to the aggregate
+        const StatusCode entry_status = idx < item_status.size() ? item_status[idx] : status;
+        if (entry_status == StatusCode::OK && idx < outputs.size()) {
+            complete_batch_entry(valid[idx], entry_status, std::move(outputs[idx]), run_ms,
+                                 wait_ms);
         } else {
-            complete_batch_entry(valid[idx], status, MODEL_OUTPUT{}, run_ms, wait_ms);
+            complete_batch_entry(valid[idx], entry_status, MODEL_OUTPUT{}, run_ms, wait_ms);
         }
     }
 }

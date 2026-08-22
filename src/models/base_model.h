@@ -70,21 +70,28 @@ public:
     }
 
     /***
-     * Batched inference entry (NVI guarded like run()). The default loops
-     * run_impl per item so every existing model stays correct under a batch
-     * scheduler; batch-capable models override it with a single N-dim session
-     * run. A single non-OK status fails the whole batch (per-item failures of
-     * valid batches are not distinguishable at this interface level).
+     * Batched inference entry (NVI guarded like run()). item_status is
+     * index-aligned with in; the aggregate return is OK only when every item
+     * succeeded. Per-item failures (preprocess / postprocess) are ISOLATED:
+     * one bad item never fails its batch mates. Session-level failures cannot
+     * be attributed to an item and are broadcast to all participating items -
+     * implementations must follow this contract. The default loops run_impl
+     * per item so every model stays correct under a batch scheduler; batch
+     * capable models override it with a single N-dim session run.
      */
-    virtual StatusCode run_batch(const std::vector<INPUT>& in, std::vector<OUTPUT>& out) {
+    virtual StatusCode run_batch(const std::vector<INPUT>& in,
+                                 std::vector<OUTPUT>& out,
+                                 std::vector<StatusCode>& item_status) {
         out.assign(in.size(), OUTPUT{});
+        item_status.assign(in.size(), StatusCode::OK);
+        StatusCode aggregate = StatusCode::OK;
         for (size_t idx = 0; idx < in.size(); ++idx) {
-            const auto status = run(in[idx], out[idx]);
-            if (status != StatusCode::OK) {
-                return status;
+            item_status[idx] = run(in[idx], out[idx]);
+            if (item_status[idx] != StatusCode::OK) {
+                aggregate = item_status[idx];
             }
         }
-        return StatusCode::OK;
+        return aggregate;
     }
 
     /***
