@@ -23,6 +23,10 @@ worker_nums=1
 model_run_timeout=1000
 # max queued requests before the server answers 429 (overload protection)
 max_queue_depth=32
+# dynamic batching pilot: packed [N,3,640,640] runs against the batch profile
+# engine (conf/trt_profiles/yolov8s.json, opt=8 anchors the server batch size)
+max_batch_size=8
+max_batch_delay_ms=5
 # server url
 server_uri="/mortred_ai_server_v1/obj_detection/yolov8"
 # explicit server executable used by the web console catalog

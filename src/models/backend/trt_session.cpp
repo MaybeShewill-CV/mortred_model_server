@@ -428,7 +428,27 @@ StatusCode TrtSession::init(const BackendConfig& config, std::string* err) {
 
     _m_model_file_path = config.model_file_path;
     for (const auto& info : _m_input_infos) {
-        LOG(INFO) << "tensorrt session input: " << info.to_string();
+        // batch-capability self check: a dynamic input is only usable up to
+        // the engine's optimization profile - surface min/opt/max so an
+        // operator can immediately see whether a rebuilt engine really
+        // carries the batch profile (and which N range it accepts)
+        if (info.dynamic) {
+            // dynamic dims require an optimization profile at build time, so
+            // profile 0 always exists for a dynamic input (8.6 header API)
+            const auto shape_min = from_trt_dims(_m_engine->getProfileShape(
+                info.name.c_str(), 0, nvinfer1::OptProfileSelector::kMIN));
+            const auto shape_opt = from_trt_dims(_m_engine->getProfileShape(
+                info.name.c_str(), 0, nvinfer1::OptProfileSelector::kOPT));
+            const auto shape_max = from_trt_dims(_m_engine->getProfileShape(
+                info.name.c_str(), 0, nvinfer1::OptProfileSelector::kMAX));
+            LOG(INFO) << "tensorrt session input: " << info.to_string()
+                      << " profile min" << shape_to_string(shape_min)
+                      << " opt" << shape_to_string(shape_opt)
+                      << " max" << shape_to_string(shape_max);
+        } else {
+            LOG(INFO) << "tensorrt session input: " << info.to_string()
+                      << " (static; batched shapes will be rejected)";
+        }
     }
     for (const auto& info : _m_output_infos) {
         LOG(INFO) << "tensorrt session output: " << info.to_string();
