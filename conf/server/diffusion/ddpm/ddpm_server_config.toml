@@ -1,0 +1,17 @@
+[DDPM_SERVER]
+port=9070
+host="localhost"
+max_connections=100
+peer_resp_timeout=600
+request_size_limit=64
+compute_threads=-1
+handler_threads=10
+worker_nums=1
+server_uri="/mortred_ai_server_v1/diffusion/ddpm"
+server_exe="ddpm_server.out"
+# long-task async: DDPM sampling takes seconds to minutes
+async_enabled=true
+async_timeout=600000
+async_max_queue=8
+model_run_timeout=0
+model_config_file_path="../conf/model/diffusion/ddpm/ddpm_celeba-hq.toml"

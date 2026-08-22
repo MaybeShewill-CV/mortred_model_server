@@ -72,6 +72,23 @@ std::unordered_map<std::string, std::string> g_job_routes;
 void proxy_to_model_jobs_with_body(WFHttpTask* task, const std::string& server_id,
                                    const std::string& jobs_path, const std::string& method,
                                    const std::string& body);
+void handle_pipelines(WFHttpTask* task);
+void handle_pipeline_status(WFHttpTask* task, const std::string& id);
+void handle_graceful_restart(WFHttpTask* task, const std::string& server_id);
+bool server_has_active_jobs(const std::string& server_id);
+
+// pipeline job state (in supervisor memory)
+struct PipelineJob {
+    std::string id;
+    std::string state;  // running / done / failed
+    int current_step = 0;
+    int total_steps = 0;
+    std::string error;
+    std::string result_json;
+    int64_t submitted_at_ms = 0;
+};
+std::mutex g_pipeline_mu;
+std::unordered_map<std::string, std::shared_ptr<PipelineJob>> g_pipeline_jobs;
 
 std::string resolve_project_root() {
     if (const char* env = std::getenv("MORTRED_PROJECT_ROOT"); env != nullptr && *env != '\0') {
@@ -672,6 +689,272 @@ void proxy_to_model_jobs_with_body(WFHttpTask* task, const std::string& server_i
     series_of(task)->push_back(client);
 }
 
+/*** execute one synchronous inference step (supervisor -> model server) */
+std::string pipeline_step_infer(const std::string& server_id, const std::string& body_json,
+                                bool* ok, std::string* err) {
+    *ok = false;
+    const auto* entry = g_catalog.find(server_id);
+    if (entry == nullptr) {
+        *err = "unknown model: " + server_id;
+        return "";
+    }
+    const auto s = g_supervisor->status(server_id);
+    if (s.pid < 0 || !s.ready) {
+        *err = "server not ready: " + server_id;
+        return "";
+    }
+    const std::string url = "http://127.0.0.1:" + std::to_string(entry->port) + entry->uri;
+    const std::string internal_token = g_supervisor->internal_token();
+
+    // synchronous HTTP call via WaitGroup
+    std::string result_body;
+    int http_code = 0;
+    WFFacilities::WaitGroup wg(1);
+    auto* client = WFTaskFactory::create_http_task(
+        url, 0, 300000, [&wg, &result_body, &http_code](WFHttpTask* t) {
+            if (t->get_state() == WFT_STATE_SUCCESS) {
+                http_code = std::atoi(t->get_resp()->get_status_code());
+                const void* data = nullptr;
+                size_t size = 0;
+                t->get_resp()->get_parsed_body(&data, &size);
+                result_body.assign(static_cast<const char*>(data), size);
+            } else {
+                http_code = 502;
+                result_body = "{\"error\":\"connection failed\"}";
+            }
+            wg.done();
+        });
+    client->get_req()->set_method("POST");
+    client->get_req()->append_output_body(body_json.data(), body_json.size());
+    client->get_req()->add_header_pair("Content-Type", "application/json; charset=utf-8");
+    if (!internal_token.empty()) {
+        const std::string auth = "Bearer " + internal_token;
+        client->get_req()->add_header_pair("Authorization", auth.c_str());
+    }
+    client->set_receive_timeout(300000);
+    client->start();
+    wg.wait();
+
+    if (http_code != 200) {
+        *err = "step failed with HTTP " + std::to_string(http_code);
+        return "";
+    }
+    *ok = true;
+    return result_body;
+}
+
+/*** POST /api/v1/pipelines: multi-model sequential pipeline */
+void handle_pipelines(WFHttpTask* task) {
+    const std::string body = protocol::HttpUtil::decode_chunked_body(task->get_req());
+    rapidjson::Document doc;
+    doc.Parse(body.c_str());
+    if (doc.HasParseError() || !doc.IsObject() || !doc.HasMember("steps") ||
+        !doc["steps"].IsArray() || doc["steps"].Empty()) {
+        reply_json(task, 400, json_error("body must contain non-empty 'steps' array"));
+        return;
+    }
+
+    auto job = std::make_shared<PipelineJob>();
+    job->id = "pipe_" + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                            std::chrono::system_clock::now().time_since_epoch())
+                                            .count());
+    job->state = "running";
+    job->total_steps = static_cast<int>(doc["steps"].Size());
+    job->submitted_at_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::steady_clock::now().time_since_epoch())
+                                .count();
+
+    // extract the steps
+    std::vector<std::pair<std::string, std::string>> steps;  // (model, input_key)
+    for (const auto& step : doc["steps"].GetArray()) {
+        if (!step.IsObject() || !step.HasMember("model") || !step["model"].IsString()) {
+            reply_json(task, 400, json_error("each step must have 'model' string field"));
+            return;
+        }
+        std::string input_key = "img_data";
+        if (step.HasMember("input") && step["input"].IsString()) {
+            input_key = step["input"].GetString();
+        }
+        steps.emplace_back(step["model"].GetString(), input_key);
+    }
+
+    // extract the initial input fields (everything except 'steps')
+    rapidjson::Document initial_input;
+    initial_input.CopyFrom(doc, initial_input.GetAllocator());
+    initial_input.EraseMember("steps");
+    rapidjson::StringBuffer buf;
+    rapidjson::Writer<rapidjson::StringBuffer> w(buf);
+    initial_input.Accept(w);
+    std::string current_input = buf.GetString();
+
+    // register the pipeline job
+    {
+        std::lock_guard<std::mutex> lock(g_pipeline_mu);
+        g_pipeline_jobs[job->id] = job;
+    }
+
+    // reply 202 immediately; execute the pipeline in a go task
+    auto* series = series_of(task);
+    auto* go = WFTaskFactory::create_go_task("pipeline", [job, steps, current_input]() mutable {
+        std::string current_body = current_input;
+        for (int step_idx = 0; step_idx < static_cast<int>(steps.size()); ++step_idx) {
+            const auto& [model, input_key] = steps[step_idx];
+            {
+                std::lock_guard<std::mutex> lock(g_pipeline_mu);
+                job->current_step = step_idx + 1;
+            }
+
+            // if input_key starts with "prev_output.", extract from previous result
+            if (input_key.rfind("prev_output.", 0) == 0) {
+                const std::string field = input_key.substr(12);
+                // parse the previous result and extract the field
+                rapidjson::Document prev;
+                prev.Parse(current_body.c_str());
+                if (!prev.HasParseError() && prev.IsObject() && prev.HasMember("data") &&
+                    prev["data"].IsObject() && prev["data"].HasMember(field.c_str())) {
+                    // rebuild the input with the extracted field as img_data
+                    rapidjson::Document next;
+                    next.SetObject();
+                    auto& a = next.GetAllocator();
+                    next.AddMember("img_data",
+                                   rapidjson::Value(prev["data"][field.c_str()], a), a);
+                    rapidjson::StringBuffer nb;
+                    rapidjson::Writer<rapidjson::StringBuffer> nw(nb);
+                    next.Accept(nw);
+                    current_body = nb.GetString();
+                } else {
+                    std::lock_guard<std::mutex> lock(g_pipeline_mu);
+                    job->state = "failed";
+                    job->error = "step " + std::to_string(step_idx + 1) +
+                                 ": cannot extract '" + field + "' from previous output";
+                    return;
+                }
+            }
+
+            bool ok = false;
+            std::string err;
+            const std::string result = pipeline_step_infer(model, current_body, &ok, &err);
+            if (!ok) {
+                std::lock_guard<std::mutex> lock(g_pipeline_mu);
+                job->state = "failed";
+                job->error = "step " + std::to_string(step_idx + 1) + " (" + model +
+                             "): " + err;
+                return;
+            }
+            current_body = result;
+        }
+        std::lock_guard<std::mutex> lock(g_pipeline_mu);
+        job->state = "done";
+        job->result_json = current_body;
+    });
+    series->push_back(go);
+
+    // reply 202
+    auto* resp = task->get_resp();
+    resp->set_status_code("202");
+    resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
+    rapidjson::Document d;
+    d.SetObject();
+    auto& a = d.GetAllocator();
+    d.AddMember("pipeline_id", rapidjson::Value(job->id.c_str(), job->id.size(), a), a);
+    d.AddMember("state", "running", a);
+    d.AddMember("total_steps", job->total_steps, a);
+    rapidjson::StringBuffer rb;
+    rapidjson::Writer<rapidjson::StringBuffer> rw(rb);
+    d.Accept(rw);
+    resp->append_output_body(rb.GetString(), rb.GetSize());
+}
+
+/*** GET /api/v1/pipelines/{id}: poll pipeline status */
+void handle_pipeline_status(WFHttpTask* task, const std::string& id) {
+    std::shared_ptr<PipelineJob> job;
+    {
+        std::lock_guard<std::mutex> lock(g_pipeline_mu);
+        const auto it = g_pipeline_jobs.find(id);
+        if (it != g_pipeline_jobs.end()) {
+            job = it->second;
+        }
+    }
+    if (job == nullptr) {
+        reply_json(task, 404, json_error("pipeline not found: " + id));
+        return;
+    }
+    auto* resp = task->get_resp();
+    resp->set_status_code("200");
+    resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
+    rapidjson::Document d;
+    d.SetObject();
+    auto& a = d.GetAllocator();
+    d.AddMember("pipeline_id", rapidjson::Value(id.c_str(), id.size(), a), a);
+    d.AddMember("state", rapidjson::Value(job->state.c_str(), job->state.size(), a), a);
+    d.AddMember("current_step", job->current_step, a);
+    d.AddMember("total_steps", job->total_steps, a);
+    if (!job->error.empty()) {
+        d.AddMember("error", rapidjson::Value(job->error.c_str(), job->error.size(), a), a);
+    }
+    if (job->state == "done" && !job->result_json.empty()) {
+        d.AddMember("result", rapidjson::Value(job->result_json.c_str(),
+                                                job->result_json.size(), a), a);
+    }
+    rapidjson::StringBuffer buf;
+    rapidjson::Writer<rapidjson::StringBuffer> w(buf);
+    d.Accept(w);
+    resp->append_output_body(buf.GetString(), buf.GetSize());
+}
+
+/*** check if a model server has active async jobs (graceful drain support) */
+bool server_has_active_jobs(const std::string& server_id) {
+    std::lock_guard<std::mutex> lock(g_job_route_mu);
+    for (const auto& [job_id, sid] : g_job_routes) {
+        (void)job_id;
+        if (sid == server_id) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/*** graceful drain: wait up to timeout for async jobs to complete before restart */
+void handle_graceful_restart(WFHttpTask* task, const std::string& server_id) {
+    constexpr int k_drain_timeout_ms = 120000;  // 2 min
+    constexpr int k_poll_interval_ms = 2000;
+
+    auto* series = series_of(task);
+    auto* go = WFTaskFactory::create_go_task(
+        "graceful_restart", [task, server_id, k_drain_timeout_ms, k_poll_interval_ms]() {
+            const auto start = std::chrono::steady_clock::now();
+            bool drained = false;
+            while (std::chrono::duration_cast<std::chrono::milliseconds>(
+                       std::chrono::steady_clock::now() - start)
+                       .count() < k_drain_timeout_ms) {
+                if (!server_has_active_jobs(server_id)) {
+                    drained = true;
+                    break;
+                }
+                std::this_thread::sleep_for(
+                    std::chrono::milliseconds(k_poll_interval_ms));
+            }
+            std::string err;
+            const bool ok = g_supervisor->restart_server(server_id, &err);
+            auto* resp = task->get_resp();
+            resp->set_status_code(ok ? "200" : "500");
+            resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
+            rapidjson::Document d;
+            d.SetObject();
+            auto& a = d.GetAllocator();
+            d.AddMember("ok", ok, a);
+            d.AddMember("drained", drained, a);
+            if (!err.empty()) {
+                d.AddMember("error", rapidjson::Value(err.c_str(), err.size(), a), a);
+            }
+            rapidjson::StringBuffer buf;
+            rapidjson::Writer<rapidjson::StringBuffer> w(buf);
+            d.Accept(w);
+            resp->append_output_body(buf.GetString(), buf.GetSize());
+        });
+    series->push_back(go);
+}
+
 void process(WFHttpTask* task) {
     const std::string path = uri_path(task->get_req()->get_request_uri());
     const std::string method = task->get_req()->get_method();
@@ -719,6 +1002,11 @@ void process(WFHttpTask* task) {
                 ? ""
                 : task->get_req()->get_request_uri();
         handle_jobs(task, path, full_uri);
+    } else if (path == "/api/v1/pipelines" && method == "POST") {
+        handle_pipelines(task);
+    } else if (path.rfind("/api/v1/pipelines/", 0) == 0 && method == "GET") {
+        const std::string id = path.substr(std::string("/api/v1/pipelines/").size());
+        handle_pipeline_status(task, id);
     } else if (path.rfind("/api/v1/servers/", 0) == 0) {
         const std::string rest = path.substr(std::string("/api/v1/servers/").size());
         const auto slash = rest.rfind('/');
@@ -739,6 +1027,10 @@ void process(WFHttpTask* task) {
             }
             handle_logs(task, id, full_uri);
         } else if (method == "POST") {
+            if (action == "graceful_restart") {
+                handle_graceful_restart(task, id);
+                return;
+            }
             handle_server_action(task, id, action);
         } else {
             reply_json(task, 405, json_error("method not allowed"));

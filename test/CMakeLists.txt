@@ -49,6 +49,7 @@ set(TEST_LIST
     response_schema_test
     openapi_consistency_test
     config_schema_test
+    async_job_unittest
     restart_policy_unittest
     catalog_unittest
     control_config_unittest
@@ -103,6 +104,8 @@ foreach(src ${TEST_LIST})
         set(EXTRA_SRCS ${PROJECT_ROOT_DIR}/src/models/clip/simple_tokenizer.cpp)
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "ready_probe_unittest")
+        set(EXTRA_LIBS pthread)
+    elseif(${src} STREQUAL "async_job_unittest")
         set(EXTRA_LIBS pthread)
     elseif(${src} STREQUAL "supervisor_unittest")
         set(EXTRA_LIBS control pthread)

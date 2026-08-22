@@ -66,6 +66,21 @@ public:
         queue_rejected_++;
     }
 
+    void inc_async_jobs(const std::string& state) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        async_jobs_[state]++;
+    }
+
+    void set_async_queue_depth(size_t n) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        async_queue_depth_ = n;
+    }
+
+    void observe_async_job_duration_ms(double ms) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        observe_histogram_locked(async_duration_, inference_duration_buckets_, "", ms);
+    }
+
     void observe_batch_size(double n) {
         std::lock_guard<std::mutex> lock(mutex_);
         observe_histogram_locked(batch_size_, batch_size_buckets_, "", n);
@@ -159,6 +174,22 @@ public:
         ss << "# HELP mortred_queue_rejected_total Requests rejected by the queue depth limit\n";
         ss << "# TYPE mortred_queue_rejected_total counter\n";
         ss << "mortred_queue_rejected_total{model=\"" << model_ << "\"} " << queue_rejected_ << "\n";
+
+        ss << "# HELP mortred_async_jobs_total Async jobs by state\n";
+        ss << "# TYPE mortred_async_jobs_total counter\n";
+        for (const auto& kv : async_jobs_) {
+            ss << "mortred_async_jobs_total{model=\"" << model_
+               << "\",state=\"" << kv.first << "\"} " << kv.second << "\n";
+        }
+
+        ss << "# HELP mortred_async_queue_depth Current async job queue depth\n";
+        ss << "# TYPE mortred_async_queue_depth gauge\n";
+        ss << "mortred_async_queue_depth{model=\"" << model_ << "\"} " << async_queue_depth_ << "\n";
+
+        ss << "# HELP mortred_async_job_duration_ms Async job duration\n";
+        ss << "# TYPE mortred_async_job_duration_ms histogram\n";
+        render_histogram_locked(ss, "mortred_async_job_duration_ms", async_duration_,
+                                inference_duration_buckets_);
 
         ss << "# HELP mortred_queue_wait_duration_ms Worker queue wait duration\n";
         ss << "# TYPE mortred_queue_wait_duration_ms histogram\n";
@@ -279,6 +310,9 @@ private:
     Histogram queue_wait_;
     std::vector<double> queue_wait_buckets_;
     uint64_t queue_rejected_ = 0;
+    std::map<std::string, uint64_t> async_jobs_;
+    size_t async_queue_depth_ = 0;
+    Histogram async_duration_;
     Histogram batch_size_;
     std::vector<double> batch_size_buckets_;
     Histogram batch_wait_;

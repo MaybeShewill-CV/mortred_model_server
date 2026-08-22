@@ -1,0 +1,16 @@
+[LDM_SERVER]
+port=9073
+host="localhost"
+max_connections=100
+peer_resp_timeout=600
+request_size_limit=64
+compute_threads=-1
+handler_threads=10
+worker_nums=1
+server_uri="/mortred_ai_server_v1/diffusion/ldm"
+server_exe="ldm_server.out"
+async_enabled=true
+async_timeout=600000
+async_max_queue=8
+model_run_timeout=0
+model_config_file_path="../conf/model/diffusion/ldm/ldm_celeba-hq.toml"

@@ -546,6 +546,7 @@ protected:
             std::lock_guard<std::mutex> lock(_m_async_mu);
             job->state = AsyncJobState::RUNNING;
         }
+        _m_metrics.inc_async_jobs("running");
         async_notify_state_change(job);
 
         // dequeue a worker (shared pool with sync requests)
@@ -565,6 +566,8 @@ protected:
                 job->completed_at_ms = monotonic_ms();
                 --_m_async_queue_depth;
             }
+            _m_metrics.inc_async_jobs("timeout");
+            _m_metrics.set_async_queue_depth(static_cast<size_t>(_m_async_queue_depth));
             async_notify_state_change(job);
             return;
         }
@@ -591,6 +594,11 @@ protected:
             job->completed_at_ms = monotonic_ms();
             --_m_async_queue_depth;
         }
+        _m_metrics.inc_async_jobs(status == StatusCode::OK ? "done" : "failed");
+        _m_metrics.observe_async_job_duration_ms(job->result.worker_run_time_consuming);
+        _m_metrics.set_async_queue_depth(_m_async_queue_depth > 0
+                                             ? static_cast<size_t>(_m_async_queue_depth)
+                                             : 0);
         async_notify_state_change(job);
     }
 
@@ -657,6 +665,8 @@ protected:
             std::lock_guard<std::mutex> lock(_m_async_mu);
             ++_m_async_queue_depth;
         }
+        _m_metrics.inc_async_jobs("submitted");
+        _m_metrics.set_async_queue_depth(static_cast<size_t>(_m_async_queue_depth));
         async_store_job(job);
 
         // schedule the async execution via a WFGoTask
