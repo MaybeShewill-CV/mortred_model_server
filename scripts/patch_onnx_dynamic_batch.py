@@ -71,8 +71,8 @@ def patch_deep(path: Path) -> int:
         if arr.ndim == 1 and len(arr) > 0 and arr[0] == 1:
             arr[0] = 0
             new_tensor = numpy_helper.from_array(arr, node.input[1])
-            if hasattr(target, "t"):  # Constant node attribute
-                target.CopyFrom(new_tensor)
+            if hasattr(target, "t"):  # Constant node AttributeProto
+                target.t.CopyFrom(new_tensor)
             else:  # graph initializer
                 target.CopyFrom(new_tensor)
             fixed += 1

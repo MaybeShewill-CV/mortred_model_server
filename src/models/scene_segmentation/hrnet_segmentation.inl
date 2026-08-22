@@ -27,8 +27,10 @@ template<typename INPUT, typename OUTPUT>
 StatusCode HRNetSegmentation<INPUT, OUTPUT>::on_init(const toml::table& params) {
     (void)params;
     const auto& input_info = this->session().inputs().front();
+    // dynamic batch (shape[0] == -1) is fine: only the spatial dims must be
+    // concrete; a batch-profile engine reports input_info.dynamic on dim0 only
     if (input_info.shape.size() != 4 || input_info.shape[1] != 3 ||
-        input_info.dynamic) {
+        input_info.shape[2] <= 0 || input_info.shape[3] <= 0) {
         LOG(ERROR) << "unexpected hrnet input shape: " << input_info.to_string()
                    << ", expected static [N,3,H,W] (nchw)";
         return StatusCode::MODEL_INIT_FAILED;

@@ -28,7 +28,11 @@ StatusCode DepthAnything<INPUT, OUTPUT>::on_init(const toml::table& params) {
     // models; the relative-depth head does not consume them
     (void)params;
     const auto& input_info = this->session().inputs().front();
-    if (input_info.shape.size() != 4 || input_info.shape[1] != 3 || input_info.dynamic) {
+    // dynamic batch (shape[0] == -1) is fine: only the spatial dims must be
+    // concrete for preprocessing; a batch-profile engine reports input_info.dynamic
+    // because dim0 is -1, but dims 1..3 are always concrete
+    if (input_info.shape.size() != 4 || input_info.shape[1] != 3 ||
+        input_info.shape[2] <= 0 || input_info.shape[3] <= 0) {
         LOG(ERROR) << "unexpected depth anything input shape: " << input_info.to_string()
                    << ", expected static [N,3,H,W] (nchw)";
         return StatusCode::MODEL_INIT_FAILED;

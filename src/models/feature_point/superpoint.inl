@@ -33,7 +33,9 @@ StatusCode SuperPoint<INPUT, OUTPUT>::on_init(const toml::table& params) {
         _m_nms_threshold = params["model_nms_threshold"].value_or<double>(0.0);
     }
     const auto& input_info = this->session().inputs().front();
-    if (input_info.shape.size() != 4 || input_info.shape[1] != 1 || input_info.dynamic) {
+    // dynamic batch (shape[0] == -1) is fine: spatial dims must be concrete
+    if (input_info.shape.size() != 4 || input_info.shape[1] != 1 ||
+        input_info.shape[2] <= 0 || input_info.shape[3] <= 0) {
         LOG(ERROR) << "unexpected superpoint input shape: " << input_info.to_string()
                    << ", expected static [N,1,H,W] (nchw)";
         return StatusCode::MODEL_INIT_FAILED;
