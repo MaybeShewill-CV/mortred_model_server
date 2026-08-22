@@ -42,8 +42,12 @@ And if you want to adjust some of those configuration params you may do it by mo
 ```toml
 # 等待队列上限：超过后立即返回 429 + Retry-After（0 = 不限制）
 max_queue_depth=32
-# 动态批处理：收集并发请求合成一次 [N,H,W,3] 推理（默认 1 = 关闭）
-# 仅适用于支持动态 batch 的模型（当前：mobilenetv2 / resnet50，MNN 后端）
+# 动态批处理：收集并发请求打包成一次 [N,...] 推理（默认 1 = 关闭）
+# 适用于全部单 session 图像模型（分类/检测/分割/OCR/抠图/增强/深度/
+# 特征点/FastSAM）：引擎支持动态 batch（MNN）即获得真批收益；TRT 静态
+# batch=1 引擎会自动逐条回退（行为正确、无收益，重建带 batch profile
+# 的引擎后获得收益）。多 session 模型（lightglue/SAM/CLIP）与 diffusion
+# 采样器不适用批处理。
 max_batch_size=8
 # 批收集窗口毫秒数：首条请求到达后最多等待这么久凑批
 max_batch_delay_ms=5

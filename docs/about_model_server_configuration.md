@@ -39,9 +39,14 @@ And if you want to adjust some of those configuration params you may do it by mo
 ```toml
 # max queued requests before the server answers 429 + Retry-After (0 = unlimited)
 max_queue_depth=32
-# dynamic batching: collect concurrent requests into one [N,H,W,3] run
-# (default 1 = off; only models with a dynamic batch dim, currently
-# mobilenetv2 / resnet50 on the MNN backend)
+# dynamic batching: collect concurrent requests into one packed [N,...] run
+# (default 1 = off). Works for ALL single-session image models
+# (classification/detection/segmentation/OCR/matting/enhancement/depth/
+# feature-point/FastSAM): engines with dynamic batch (MNN) gain real
+# throughput; TRT engines built with a static batch-1 profile transparently
+# fall back to per-item runs (correct, no gain until the engine is rebuilt
+# with a batch profile). Multi-session models (lightglue/SAM/CLIP) and
+# diffusion samplers are not batchable.
 max_batch_size=8
 # batch collection window in ms: how long the first request waits for peers
 max_batch_delay_ms=5

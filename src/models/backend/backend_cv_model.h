@@ -138,6 +138,27 @@ class BackendCvModel : public BaseAiModel<INPUT, OUTPUT> {
         return _m_successfully_initialized;
     }
 
+    /***
+     * Generic smart batch - every single-session model gets real batching
+     * for free. Packs the per-item make_inputs tensors positionally into
+     * [N,...] tensors, runs ONE session, splits the outputs back by leading
+     * dim and postprocesses per item (isolation contract as documented on
+     * BaseAiModel::run_batch). When the engine rejects the batched shape
+     * (e.g. a TRT engine built with a static batch-1 profile) or the output
+     * layout is not batch-splittable, it transparently falls back to per-item
+     * single runs: correct everywhere, faster wherever dynamic N is
+     * supported. Multi-session models (lightglue / sam / clip) keep the
+     * default per-item loop.
+     */
+    StatusCode run_batch(const std::vector<INPUT>& in,
+                         std::vector<OUTPUT>& out,
+                         std::vector<StatusCode>& item_status) override {
+        if (_m_session == nullptr) {
+            return BaseAiModel<INPUT, OUTPUT>::run_batch(in, out, item_status);
+        }
+        return run_image_batch(in, out, item_status);
+    }
+
   protected:
     explicit BackendCvModel(std::string section_name)
         : _m_section_name(std::move(section_name)) {}
@@ -244,6 +265,163 @@ class BackendCvModel : public BaseAiModel<INPUT, OUTPUT> {
             items.push_back(std::move(item));
         }
         return items;
+    }
+
+    /*** per-item fallback when a packed run is impossible (see run_batch) */
+    static std::vector<size_t> indices_of(
+        const std::vector<std::pair<size_t, std::vector<backend::NamedTensor>>>& prepared) {
+        std::vector<size_t> indices;
+        indices.reserve(prepared.size());
+        for (const auto& entry : prepared) {
+            indices.push_back(entry.first);
+        }
+        return indices;
+    }
+
+    StatusCode run_batch_fallback(const std::vector<INPUT>& inputs,
+                                  const std::vector<size_t>& valid_items,
+                                  std::vector<OUTPUT>& outputs,
+                                  std::vector<StatusCode>& item_status) {
+        StatusCode aggregate = StatusCode::OK;
+        for (const size_t idx : valid_items) {
+            item_status[idx] = run_impl(inputs[idx], outputs[idx]);
+            if (item_status[idx] != StatusCode::OK) {
+                aggregate = item_status[idx];
+            }
+        }
+        return aggregate;
+    }
+
+    /*** generic packed-batch implementation shared by all single-session models */
+    StatusCode run_image_batch(const std::vector<INPUT>& inputs,
+                               std::vector<OUTPUT>& outputs,
+                               std::vector<StatusCode>& item_status) {
+        outputs.clear();
+        item_status.assign(inputs.size(), StatusCode::OK);
+        if (inputs.empty()) {
+            LOG(ERROR) << "batch input is empty";
+            return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+        }
+        if (!is_successfully_initialized()) {
+            LOG(ERROR) << "model is not successfully initialized, refuse to run batch";
+            outputs.assign(inputs.size(), OUTPUT{});
+            item_status.assign(inputs.size(), StatusCode::MODEL_INIT_FAILED);
+            return StatusCode::MODEL_INIT_FAILED;
+        }
+        outputs.assign(inputs.size(), OUTPUT{});
+
+        // 1) per-item inputs; a failing item is isolated and dropped
+        std::vector<std::pair<size_t, std::vector<backend::NamedTensor>>> prepared;
+        prepared.reserve(inputs.size());
+        for (size_t idx = 0; idx < inputs.size(); ++idx) {
+            auto tensors = make_inputs(inputs[idx]);
+            if (tensors.empty()) {
+                LOG(ERROR) << "batch item " << idx << ": input is empty";
+                item_status[idx] = StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+                continue;
+            }
+            prepared.emplace_back(idx, std::move(tensors));
+        }
+        if (prepared.empty()) {
+            return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+        }
+
+        // 2) packing precondition: identical slot layout, leading dim == 1
+        const auto& first_tensors = prepared.front().second;
+        const size_t slot_count = first_tensors.size();
+        for (const auto& [idx, tensors] : prepared) {
+            (void)idx;
+            if (tensors.size() != slot_count) {
+                return run_batch_fallback(inputs, indices_of(prepared), outputs, item_status);
+            }
+            for (size_t slot = 0; slot < slot_count; ++slot) {
+                const auto& a = first_tensors[slot].tensor;
+                const auto& b = tensors[slot].tensor;
+                if (a.shape != b.shape || a.shape.empty() || a.shape[0] != 1 ||
+                    a.dtype != b.dtype) {
+                    return run_batch_fallback(inputs, indices_of(prepared), outputs,
+                                              item_status);
+                }
+            }
+        }
+
+        // 3) pack each slot into {N, rest...}
+        const size_t batch_n = prepared.size();
+        std::vector<backend::NamedTensor> batch_inputs(slot_count);
+        for (size_t slot = 0; slot < slot_count; ++slot) {
+            const auto& proto = first_tensors[slot].tensor;
+            auto& packed = batch_inputs[slot];
+            packed.name = first_tensors[slot].name;
+            packed.tensor.dtype = proto.dtype;
+            packed.tensor.shape = proto.shape;
+            packed.tensor.shape[0] = static_cast<int64_t>(batch_n);
+            const size_t item_bytes = proto.byte_size();
+            packed.tensor.buffer.resize(item_bytes * batch_n);
+            for (size_t pos = 0; pos < batch_n; ++pos) {
+                const auto& src = prepared[pos].second[slot].tensor;
+                std::memcpy(packed.tensor.buffer.data() + pos * item_bytes,
+                            src.buffer.data(), item_bytes);
+            }
+        }
+
+        // 4) one session run; engine rejection (static batch profile etc.)
+        //    falls back to per-item runs
+        std::vector<backend::NamedTensor> batch_outputs;
+        if (_m_session->run(batch_inputs, batch_outputs) != StatusCode::OK) {
+            LOG(INFO) << "packed batch rejected by the engine, falling back to "
+                      << batch_n << " single runs";
+            return run_batch_fallback(inputs, indices_of(prepared), outputs, item_status);
+        }
+
+        // 5) split: every output must carry the batch on its leading dim
+        if (batch_outputs.size() == 0) {
+            return run_batch_fallback(inputs, indices_of(prepared), outputs, item_status);
+        }
+        std::vector<std::vector<backend::Tensor>> per_slot_items(batch_outputs.size());
+        for (size_t slot = 0; slot < batch_outputs.size(); ++slot) {
+            const auto& tensor = batch_outputs[slot].tensor;
+            if (tensor.shape.empty() || tensor.shape[0] != static_cast<int64_t>(batch_n)) {
+                return run_batch_fallback(inputs, indices_of(prepared), outputs,
+                                          item_status);
+            }
+            backend::Tensor item_proto;
+            item_proto.dtype = tensor.dtype;
+            item_proto.shape = tensor.shape;
+            item_proto.shape[0] = 1;
+            // byte_size() is buffer-based and the proto carries no buffer:
+            // derive the item size from the concrete shape instead
+            const size_t item_bytes =
+                static_cast<size_t>(backend::shape_volume(item_proto.shape)) *
+                backend::dtype_size(item_proto.dtype);
+            if (item_bytes == 0 || tensor.buffer.size() < item_bytes * batch_n) {
+                return run_batch_fallback(inputs, indices_of(prepared), outputs,
+                                          item_status);
+            }
+            per_slot_items[slot].reserve(batch_n);
+            for (size_t pos = 0; pos < batch_n; ++pos) {
+                backend::Tensor item = item_proto;
+                item.buffer.assign(tensor.buffer.begin() + static_cast<std::ptrdiff_t>(pos * item_bytes),
+                                   tensor.buffer.begin() + static_cast<std::ptrdiff_t>((pos + 1) * item_bytes));
+                per_slot_items[slot].push_back(std::move(item));
+            }
+        }
+
+        // 6) per-item postprocess (isolation)
+        StatusCode aggregate = StatusCode::OK;
+        for (size_t pos = 0; pos < batch_n; ++pos) {
+            const size_t idx = prepared[pos].first;
+            std::vector<backend::NamedTensor> item_outputs;
+            item_outputs.reserve(batch_outputs.size());
+            for (size_t slot = 0; slot < batch_outputs.size(); ++slot) {
+                item_outputs.push_back({batch_outputs[slot].name,
+                                        per_slot_items[slot][pos]});
+            }
+            item_status[idx] = postprocess(item_outputs, outputs[idx]);
+            if (item_status[idx] != StatusCode::OK) {
+                aggregate = item_status[idx];
+            }
+        }
+        return aggregate;
     }
 
     const backend::BackendConfig& backend_config() const {
