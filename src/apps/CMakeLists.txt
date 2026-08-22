@@ -69,6 +69,13 @@ add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/server/scene_segmentation/bisenetv2_se
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/server/scene_segmentation/hrnet_segmentation_server.cpp)
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/server/scene_segmentation/pphuman_segmentation_server.cpp)
 
+# --- diffusion / SAM AMG servers (async long-task, P0-8) ---
+add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/server/diffusion/ddpm_server.cpp)
+add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/server/diffusion/ddim_server.cpp)
+add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/server/diffusion/cls_cond_ddim_server.cpp)
+add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/server/diffusion/ldm_server.cpp)
+add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/server/segment_anything/sam_amg_server.cpp)
+
 # --- control-plane executables ---
 # src/apps produces every executable; the implementations live in src/control
 # (thin mains here + *_app.cpp compiled in, mirroring the models/.inl pattern).
