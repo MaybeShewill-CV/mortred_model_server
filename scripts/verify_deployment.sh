@@ -69,7 +69,8 @@ echo "== Mortred deployment acceptance (mode=$MODE) =="
 # 1) Script syntax
 for f in scripts/install_deps.sh scripts/convert_trt_engines.sh \
          scripts/docker_entrypoint.sh scripts/check_repo_clean.sh \
-         scripts/clean_artifacts.sh scripts/setup_full_deps.sh; do
+         scripts/clean_artifacts.sh scripts/setup_full_deps.sh \
+         scripts/bench_batch.sh; do
     check "bash -n $f" bash -n "$ROOT/$f"
 done
 check "py_compile fetch/gen/check" "$PY" -m py_compile \

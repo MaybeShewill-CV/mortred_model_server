@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <functional>
 #include <memory>
 #include <numeric>
@@ -93,7 +94,7 @@ inline jinq::models::io_define::common_io::mat_input make_single_image_input(
 }
 
 template<typename INPUT, typename OUTPUT>
-int run_benchmark(int argc, char** argv, const BenchmarkSpec<INPUT, OUTPUT>& spec) {
+int run_single_benchmark(int argc, char** argv, const BenchmarkSpec<INPUT, OUTPUT>& spec) {
     if (!spec.args_ok(argc)) {
         LOG(ERROR) << "wrong usage";
         LOG(INFO) << spec.usage;
@@ -159,6 +160,148 @@ int run_benchmark(int argc, char** argv, const BenchmarkSpec<INPUT, OUTPUT>& spe
 
     spec.handle_output(model_input, model_output, spec.image_path_of(argc, argv));
     return 0;
+}
+
+/***
+ * Batch mode: exe config [positional inputs...] --batch N [--loops M].
+ *
+ * Functional check first (one batch, every item must report OK - this is the
+ * "is batch infer working" gate), then a timed loop for throughput numbers.
+ * The batch is N copies of the standard input, exactly like a server batch
+ * of N identical requests.
+ */
+template<typename INPUT, typename OUTPUT>
+int run_batch_benchmark(int argc, char** argv, const BenchmarkSpec<INPUT, OUTPUT>& spec,
+                        int batch_n, int loops_override) {
+    if (batch_n < 1) {
+        LOG(ERROR) << "--batch must be >= 1";
+        LOG(INFO) << spec.usage << " [--batch N] [--loops M]";
+        return -1;
+    }
+    const std::string cfg_file_path = argv[1];
+    if (!jinq::common::FilePathUtil::is_file_exist(cfg_file_path)) {
+        LOG(ERROR) << "config file: " << cfg_file_path << " not exist";
+        return -1;
+    }
+    auto cfg_parsed = toml::parse_file(cfg_file_path);
+    if (!cfg_parsed) {
+        LOG(ERROR) << "parse toml config file failed, error: "
+                   << std::string(cfg_parsed.error().description());
+        return -1;
+    }
+    auto cfg = std::move(cfg_parsed).table();
+
+    INPUT model_input = spec.make_input(argc, argv, cfg);
+    if (!spec.input_ok(model_input)) {
+        return -1;
+    }
+    auto model = spec.make_model(spec.model_name);
+    model->init(cfg);
+    if (!model->is_successfully_initialized()) {
+        LOG(ERROR) << spec.display_name << " init failed";
+        return -1;
+    }
+
+    const std::vector<INPUT> batch_inputs(static_cast<size_t>(batch_n), model_input);
+    std::vector<OUTPUT> batch_outputs;
+    std::vector<jinq::common::StatusCode> item_status;
+
+    LOG(INFO) << "start " << spec.display_name << " BATCH check (batch=" << batch_n
+              << ") at: " << jinq::common::Timestamp::now().to_format_str();
+    // functional gate: one batch where every item must succeed
+    const auto check_status = model->run_batch(batch_inputs, batch_outputs, item_status);
+    size_t failed_items = 0;
+    for (const auto status : item_status) {
+        if (status != jinq::common::StatusCode::OK) {
+            ++failed_items;
+        }
+    }
+    LOG(INFO) << "batch check: aggregate=" << jinq::common::to_underlying(check_status)
+              << ", failed_items=" << failed_items << "/" << batch_n;
+    if (check_status != jinq::common::StatusCode::OK || failed_items != 0) {
+        LOG(ERROR) << "batch functional check FAILED for " << spec.display_name;
+        return -1;
+    }
+    if (batch_outputs.size() != batch_inputs.size()) {
+        LOG(ERROR) << "batch output size mismatch: " << batch_outputs.size()
+                   << " != " << batch_inputs.size();
+        return -1;
+    }
+    LOG(INFO) << "batch functional check PASSED (all " << batch_n << " items OK)";
+
+    // timed loop (capped: this mode is a functional gate first, a perf
+    // estimate second; diffusion-family runs stay tractable)
+    const int loops = loops_override > 0 ? loops_override : std::min(spec.loops, 10);
+    if (spec.warmup) {
+        model->run_batch(batch_inputs, batch_outputs, item_status);
+    }
+    std::vector<double> iter_ms(static_cast<size_t>(loops));
+    const auto ts = jinq::common::Timestamp::now();
+    for (int i = 0; i < loops; ++i) {
+        const auto t0 = std::chrono::steady_clock::now();
+        const auto status = model->run_batch(batch_inputs, batch_outputs, item_status);
+        const auto t1 = std::chrono::steady_clock::now();
+        if (status != jinq::common::StatusCode::OK) {
+            LOG(ERROR) << "run_batch failed at loop " << i << ": "
+                       << jinq::common::to_underlying(status);
+            return -1;
+        }
+        iter_ms[static_cast<size_t>(i)] =
+            std::chrono::duration<double, std::milli>(t1 - t0).count();
+    }
+    const double cost_time = jinq::common::Timestamp::now() - ts;
+
+    std::sort(iter_ms.begin(), iter_ms.end());
+    const double mean_ms = std::accumulate(iter_ms.begin(), iter_ms.end(), 0.0) / iter_ms.size();
+    const double p99_ms = iter_ms[static_cast<size_t>(
+        std::ceil(0.99 * static_cast<double>(iter_ms.size())) - 1)];
+    LOG(INFO) << "batch benchmark ends at: " << jinq::common::Timestamp::now().to_format_str();
+    LOG(INFO) << "batch=" << batch_n << ", loops=" << loops << ", cost=" << cost_time
+              << "s, batch/s=" << loops / cost_time
+              << ", img/s=" << (static_cast<double>(loops) * batch_n) / cost_time
+              << ", mean_batch_ms=" << mean_ms << ", mean_img_ms=" << mean_ms / batch_n
+              << ", p99_batch_ms=" << p99_ms;
+
+    if (!batch_outputs.empty()) {
+        spec.handle_output(model_input, batch_outputs.front(), spec.image_path_of(argc, argv));
+    }
+    return 0;
+}
+
+/***
+ * Benchmark entry: extracts the generic --batch N / --loops M flags BEFORE
+ * the spec sees argv (specs only understand their own positional arguments),
+ * then dispatches to the single or batch runner.
+ */
+template<typename INPUT, typename OUTPUT>
+int run_benchmark(int argc, char** argv, const BenchmarkSpec<INPUT, OUTPUT>& spec) {
+    int batch_n = 0;
+    int loops_override = 0;
+    std::vector<char*> clean_argv;
+    clean_argv.push_back(argv[0]);
+    for (int i = 1; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if ((arg == "--batch" || arg == "--loops") && i + 1 < argc) {
+            const int value = std::atoi(argv[i + 1]);
+            if (arg == "--batch") {
+                batch_n = value;
+            } else {
+                loops_override = value;
+            }
+            ++i;
+            continue;
+        }
+        clean_argv.push_back(argv[i]);
+    }
+    const int clean_argc = static_cast<int>(clean_argv.size());
+    if (batch_n >= 1) {
+        return run_batch_benchmark(clean_argc, clean_argv.data(), spec, batch_n,
+                                   loops_override);
+    }
+    if (loops_override > 0) {
+        LOG(WARNING) << "--loops without --batch has no effect";
+    }
+    return run_single_benchmark(clean_argc, clean_argv.data(), spec);
 }
 
 }  // namespace apps
