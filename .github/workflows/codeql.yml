@@ -36,7 +36,7 @@ jobs:
   # Two modes:
   #   pr    —— PR/schedule: tests-only (low cost, covers common + test)
   #   full  —— push main / manual: Docker full build + in-container CodeQL tracing (covers apps/model layers)
-  # Fix: old codeql.yml scanned only the tests-only scope; apps/web_console/model layers had no security analysis.
+# Fix: old codeql.yml scanned only the tests-only scope; apps/model layers had no security analysis.
   analyze:
     name: Analyze (${{ matrix.mode }})
     runs-on: ubuntu-22.04

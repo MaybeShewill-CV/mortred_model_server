@@ -18,7 +18,7 @@ Verifies a few high-signal invariants:
    (`model_config_file_path` lives in the [MODEL] subtable, not the server
    section).
 9. Bidirectional `server_exe` <-> src/apps/server coverage, so the web
-   console catalog cannot silently miss or invent a server.
+supervisor/gateway catalog cannot silently miss or invent a server.
 10. Every engine referenced by conf/model [*_TRT] sections is declared in
     conf/trt_engines.json, so the engine-regeneration script can never miss a
     config-required engine.
@@ -299,7 +299,7 @@ def check_server_exe_mapping() -> list[str]:
 
     Every server config must declare an existing server executable and every
     server executable must be declared by exactly one config, so the web
-    console catalog can never silently miss or invent a server.
+    supervisor/gateway catalog can never silently miss or invent a server.
     """
     errors: list[str] = []
     server_src = ROOT / "src" / "apps" / "server"

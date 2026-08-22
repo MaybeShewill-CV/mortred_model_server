@@ -5,23 +5,19 @@
 #   APP_AUTH_TOKEN=your-token docker compose up -d
 #   Weights dir mount: default ./weights, override with WEIGHTS_DIR
 #
-# Map model ports (9001-9072) as needed; web console is fixed at 8787.
+# Two external ports only: supervisor (management) 8787 + gateway (inference) 8080.
 services:
   mortred:
     build: .
     image: mortred_model_server:latest
     container_name: mortred
     environment:
-      APP_AUTH_TOKEN: "${APP_AUTH_TOKEN:?set APP_AUTH_TOKEN to protect the console}"
-      APP_LISTEN_HOST: "0.0.0.0"
-      APP_LISTEN_PORT: "8787"
+      MORTRED_API_TOKEN: "${MORTRED_API_TOKEN:?set MORTRED_API_TOKEN to protect the supervisor API}"
+      MORTRED_GATEWAY_AUTH_TOKEN: "${MORTRED_GATEWAY_AUTH_TOKEN:?set MORTRED_GATEWAY_AUTH_TOKEN to protect inference}"
+      MORTRED_AUTOSTART: "true"
     ports:
       - "8787:8787"
-      # Common model ports (uncomment as needed)
-      # - "9002:9002"   # mobilenetv2
-      # - "9053:9053"   # yolov5
-      # - "9056:9056"   # yolov8
-      # - "9060:9060"   # dbnet ocr
+      - "8080:8080"
     volumes:
       - "${WEIGHTS_DIR:-./weights}:/opt/mortred/weights"
     deploy:
@@ -32,7 +28,7 @@ services:
               count: all
               capabilities: [gpu]
     healthcheck:
-      test: ["CMD", "curl", "-fs", "http://localhost:8787/api/health"]
+      test: ["CMD", "curl", "-fs", "http://localhost:8787/api/v1/health"]
       interval: 30s
       timeout: 5s
       retries: 3

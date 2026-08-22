@@ -19,7 +19,7 @@ generated executables, configuration files, and documentation.
 | `_lib/` | CMake shared-library output directory | No (ignored) |
 | `build*/` | CMake build directories | No (ignored) |
 | `logs/` | Runtime logs | No (ignored) |
-| `generated_configs/` | Web Console auto-generated server configs | No (ignored) |
+| `generated_configs/` | legacy generated server configs | No (ignored) |
 | `weights/` | Large model weight files downloaded by users | No (ignored) |
 
 ## Source tree layout
@@ -30,7 +30,9 @@ src/
 │   ├── common/              # shared app entry points: model_server_main, benchmark_runner
 │   ├── model_benchmark/     # per-model benchmark executables
 │   ├── server/              # model server executables
-│   └── web_console/         # web console backend + frontend
+│   ├── supervisor/          # control-plane daemon (REST API + embedded UI)
+│   ├── gateway/             # data-plane reverse proxy
+│   └── cli/                 # mortredctl operations CLI
 ├── common/                  # shared utility library: base64, cv_utils, auth, parser...
 ├── factory/                 # model/server type-erased factory and registration headers
 ├── models/                  # model inference implementations
@@ -47,7 +49,7 @@ and must not be relied upon.
 
 | Executable | Source | Server config directory |
 |---|---|---|
-| `app_server` | `src/apps/web_console/backend/` | environment / scripts |
+| `mortred-supervisor` | `src/apps/control/supervisor.cpp` (impl: `src/control/`) | environment / conf/mortred.toml |
 | `resnet_classification_server.out` | `src/apps/server/classification/resnet_classification_server.cpp` | `conf/server/classification/resnet/` |
 | `mobilenetv2_classification_server.out` | `src/apps/server/classification/mobilenetv2_classification_server.cpp` | `conf/server/classification/mobilenetv2/` |
 | `densenet_classification_server.out` | `src/apps/server/classification/densenet_classification_server.cpp` | `conf/server/classification/densenet/` |
@@ -76,7 +78,7 @@ and must not be relied upon.
 | Executable group | Source |
 |---|---|
 | `*_benchmark.out` | `src/apps/model_benchmark/` |
-| `app_server` | `src/apps/web_console/backend/` |
+| `mortred-supervisor` / `mortred-gateway` / `mortredctl` | `src/apps/control/` (impl: `src/control/`) |
 
 > ONNX→TensorRT 引擎转换不再内置自研转换器，统一由外部 `trtexec`（TensorRT 官方 CLI）
 > 执行，驱动脚本为 `scripts/convert_trt_engines.sh`；`trtexec` 由
@@ -102,7 +104,7 @@ conf/
 
 Every server config should reference a model config through `model_config_file_path`.
 Every server config should be discoverable from the matching server executable via the
-Web Console catalog.
+supervisor/gateway catalog (`Catalog` in `src/control/`).
 
 ## Stale artifacts policy
 

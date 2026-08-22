@@ -18,7 +18,7 @@
 
 #include <gtest/gtest.h>
 
-#include "apps/web_console/backend/ready_probe.h"
+#include "control/ready_probe.h"
 
 namespace {
 
@@ -66,14 +66,14 @@ TEST(ready_probe, http_200_means_ready) {
     const int port = start_one_shot_listener(
         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}");
     ASSERT_GT(port, 0);
-    EXPECT_TRUE(mortred_web::endpoint_ready(port, "/ready", 1000));
+    EXPECT_TRUE(mortred::control::endpoint_ready(port, "/ready", 1000));
 }
 
 TEST(ready_probe, http_503_means_not_ready) {
     const int port = start_one_shot_listener(
         "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\n\r\n");
     ASSERT_GT(port, 0);
-    EXPECT_FALSE(mortred_web::endpoint_ready(port, "/ready", 1000));
+    EXPECT_FALSE(mortred::control::endpoint_ready(port, "/ready", 1000));
 }
 
 TEST(ready_probe, connection_refused_means_not_ready) {
@@ -81,14 +81,14 @@ TEST(ready_probe, connection_refused_means_not_ready) {
     const int port = start_one_shot_listener("");
     ASSERT_GT(port, 0);
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    EXPECT_FALSE(mortred_web::endpoint_ready(port, "/ready", 500));
+    EXPECT_FALSE(mortred::control::endpoint_ready(port, "/ready", 500));
 }
 
 TEST(ready_probe, no_response_times_out_as_not_ready) {
     const int port = start_one_shot_listener("");
     ASSERT_GT(port, 0);
     const auto t0 = std::chrono::steady_clock::now();
-    EXPECT_FALSE(mortred_web::endpoint_ready(port, "/ready", 300));
+    EXPECT_FALSE(mortred::control::endpoint_ready(port, "/ready", 300));
     const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                  std::chrono::steady_clock::now() - t0).count();
     // the timeout must be honored (no hang); leave scheduling slack

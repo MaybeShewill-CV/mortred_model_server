@@ -8,6 +8,7 @@
 #   4. fetch_weights.py --dry-run (weights manifest parses, HF path mapping works)
 #   5. install_deps.sh --check (3rd_party completeness; enforced only in --full mode)
 #   6. fetch_weights.py --check (local weights sha256; missing weights fail only in --full mode)
+#   7. live gateway probes (--live mode only: healthz public + inference requires token)
 #
 # Usage:
 #   ./scripts/verify_deployment.sh            # --full: all checks must pass (target machine)
@@ -25,6 +26,7 @@ for arg in "$@"; do
     case "$arg" in
         --basic) MODE="basic" ;;
         --full) MODE="full" ;;
+        --live) MODE="live" ;;
         --verbose) VERBOSE=1 ;;
         -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
         *) echo "[ERROR] unknown argument: $arg" >&2; exit 1 ;;
@@ -117,6 +119,29 @@ else
         echo "  [ok]   fetch_weights.py --check (sampled bpe_simple_vocab)"
     else
         echo "  [warn] fetch_weights.py sampled check failed (run fetch_weights.py to download weights first)"
+    fi
+fi
+
+# 7) Live gateway probes (--live): /healthz must be public; model routes must
+#    reject unauthenticated inference with 401 (fail-closed gateway contract).
+if [ "$MODE" = "live" ]; then
+    GATEWAY="${MORTRED_GATEWAY_ADDR:-127.0.0.1:8080}"
+    route="$(grep -rh -m1 'server_uri' "$ROOT/conf/server" 2>/dev/null | head -1 | sed 's/.*"\(\/[^\"]*\)".*/\1/')"
+    code="$(curl -s -o /dev/null -w '%{http_code}' "http://$GATEWAY/healthz" || echo 000)"
+    if [ "$code" = "200" ]; then
+        echo "  [ok]   gateway /healthz public (200)"
+    else
+        echo "  [FAIL] gateway /healthz expected 200, got $code ($GATEWAY)"
+        FAILED=$((FAILED+1))
+    fi
+    if [ -n "$route" ]; then
+        code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://$GATEWAY$route" || echo 000)"
+        if [ "$code" = "401" ]; then
+            echo "  [ok]   gateway inference requires token (401 on $route)"
+        else
+            echo "  [FAIL] gateway $route unauthenticated POST expected 401, got $code"
+            FAILED=$((FAILED+1))
+        fi
     fi
 fi
 

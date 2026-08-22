@@ -64,6 +64,8 @@ target_include_directories(mortred_common_includes SYSTEM INTERFACE
 
 # add subdirectory
 add_subdirectory(src/common)
+# control-plane module: supervision lib + gateway/supervisor/cli (see src/control)
+add_subdirectory(src/control)
 
 if(MORTRED_BUILD_FULL)
     find_package(CUDAToolkit REQUIRED)
@@ -105,5 +107,5 @@ if(MORTRED_INSTALL)
     install(DIRECTORY scripts DESTINATION .
             FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
                              GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
-    install(DIRECTORY src/apps/web_console/frontend DESTINATION src/apps/web_console)
+    install(DIRECTORY src/control/supervisor/ui DESTINATION share/mortred)
 endif()

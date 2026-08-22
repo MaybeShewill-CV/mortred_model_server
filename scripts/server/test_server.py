@@ -167,7 +167,8 @@ def build_payload(image_path: Path) -> dict:
     }
 
 
-def run_single(entry: dict, image_path: Path, times: int, dry_run: bool) -> int:
+def run_single(entry: dict, image_path: Path, times: int, dry_run: bool,
+               token: str = "") -> int:
     url = entry["url"]
     print("server      : %s" % entry["section"])
     print("url         : %s" % url)
@@ -182,9 +183,10 @@ def run_single(entry: dict, image_path: Path, times: int, dry_run: bool) -> int:
         print("requests is required for single mode: pip install requests")
         return 1
     payload = build_payload(image_path)
+    headers = {"Authorization": "Bearer %s" % token} if token else {}
     for i in range(times):
         try:
-            resp = requests.post(url=url, data=json.dumps(payload), timeout=30)
+            resp = requests.post(url=url, data=json.dumps(payload), headers=headers, timeout=30)
             print("[%d/%d] http=%d %s" % (i + 1, times, resp.status_code, resp.text[:200]))
         except Exception as exc:  # noqa: BLE001 - demo client, surface the error
             print("request failed: %s" % exc)
@@ -232,6 +234,11 @@ def main() -> int:
     parser.add_argument("-u", "--users", type=int, default=20, help="locust number of users")
     parser.add_argument("-r", "--spawn-rate", type=int, default=10, help="locust spawn rate")
     parser.add_argument("-t", "--time", type=str, default="10m", help="locust test duration")
+    parser.add_argument("--gateway", nargs="?", const="127.0.0.1:8080", default="",
+                        help="route requests through mortred-gateway (optional HOST:PORT, "
+                             "default 127.0.0.1:8080) instead of the model port directly")
+    parser.add_argument("--token", default="",
+                        help="bearer token sent as Authorization header (gateway auth)")
     args = parser.parse_args()
 
     entries = build_catalog(ROOT)
@@ -255,6 +262,10 @@ def main() -> int:
     if err:
         print(err)
         return 1
+    if args.gateway:
+        entry = dict(entry)
+        entry["url"] = "http://%s%s" % (args.gateway, entry["uri"])
+        print("via gateway : %s" % args.gateway)
 
     if args.image:
         image_path = Path(args.image)
@@ -270,7 +281,7 @@ def main() -> int:
         return 1
 
     if args.mode == "single":
-        return run_single(entry, image_path, args.times, args.dry_run)
+        return run_single(entry, image_path, args.times, args.dry_run, token=args.token)
     return run_locust(entry, image_path, args.users, args.spawn_rate, args.time, args.dry_run)
 
 

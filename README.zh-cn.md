@@ -335,15 +335,19 @@ fmt / 头文件库）构建并安装进 `3rd_party/{include,libs}`，无需手�
 
 ```bash
 docker build -t mortred_model_server .
-docker run --gpus all -p 8787:8787 \
+docker run --gpus all -p 8080:8080 -p 8787:8787 \
   -v $PWD/weights:/opt/mortred/weights \
-  -e APP_AUTH_TOKEN=your-token \
+  -e MORTRED_GATEWAY_AUTH_TOKEN=your-inference-token \
+  -e MORTRED_API_TOKEN=your-management-token \
   mortred_model_server
 # 或：docker compose up -d（见 docker-compose.yml）
 ```
 
-镜像会自动构建全部依赖与完整项目、运行单元/e2e 测试并交付 web console；
-模型权重通过 volume 挂载，不内置于镜像。
+镜像会自动构建全部依赖与完整项目、运行单元/e2e 测试并交付控制面；
+模型权重通过 volume 挂载，不内置于镜像。容器内拓扑：`mortred-supervisor`
+（管理面 :8787，内嵌 Web UI + REST API）监督 `mortred-gateway`（数据面
+:8080，推理统一入口）与全部模型进程；模型进程仅绑定 127.0.0.1，不再
+逐端口暴露。对外暴露必须由反向代理终结 TLS。
 
 ## TensorRT 引擎重建（硬件适配）
 

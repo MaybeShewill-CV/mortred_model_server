@@ -32,13 +32,13 @@ set(TEST_LIST
     json_request_parser_unittest
     blocking_worker_queue_unittest
     status_code_unittest
+    auth_token_unittest
     time_stamp_unittest
     cv_utils_unittest
     model_factory_unittest
     byte_tracker_unittest
     simple_tokenizer_unittest
     request_size_limit_unittest
-    web_console_auth_unittest
     ready_probe_unittest
     rate_limiter_unittest
     cv_image_input_unittest
@@ -48,6 +48,10 @@ set(TEST_LIST
     response_schema_test
     openapi_consistency_test
     config_schema_test
+    restart_policy_unittest
+    catalog_unittest
+    control_config_unittest
+    supervisor_unittest
 )
 
 if(MORTRED_WORKFLOW_AVAILABLE)
@@ -60,7 +64,12 @@ if(MORTRED_BUILD_FULL)
     list(APPEND TEST_LIST model_golden_test)
     list(APPEND TEST_LIST model_lifecycle_unittest)
     list(APPEND TEST_LIST backend_unittest)
+    list(APPEND TEST_LIST gateway_e2e_test)
 endif()
+
+# deterministic model-server stand-in used by supervision/gateway e2e tests
+add_executable(fake_model_server EXCLUDE_FROM_ALL fake_model_server.cc)
+target_link_libraries(fake_model_server PRIVATE Threads::Threads)
 
 foreach(src ${TEST_LIST})
     set(EXTRA_SRCS "")
@@ -92,10 +101,18 @@ foreach(src ${TEST_LIST})
     elseif(${src} STREQUAL "simple_tokenizer_unittest")
         set(EXTRA_SRCS ${PROJECT_ROOT_DIR}/src/models/clip/simple_tokenizer.cpp)
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
-    elseif(${src} STREQUAL "web_console_auth_unittest")
-        set(EXTRA_SRCS ${PROJECT_ROOT_DIR}/src/apps/web_console/backend/auth.cpp)
     elseif(${src} STREQUAL "ready_probe_unittest")
         set(EXTRA_LIBS pthread)
+    elseif(${src} STREQUAL "supervisor_unittest")
+        set(EXTRA_LIBS control pthread)
+    elseif(${src} STREQUAL "catalog_unittest")
+        set(EXTRA_LIBS control pthread)
+    elseif(${src} STREQUAL "control_config_unittest")
+        set(EXTRA_LIBS control pthread)
+    elseif(${src} STREQUAL "restart_policy_unittest")
+        set(EXTRA_LIBS control pthread)
+    elseif(${src} STREQUAL "gateway_e2e_test")
+        set(EXTRA_LIBS control pthread)
     elseif(${src} STREQUAL "response_schema_test")
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "openapi_consistency_test")
@@ -105,12 +122,27 @@ foreach(src ${TEST_LIST})
     endif()
     add_executable(${src} EXCLUDE_FROM_ALL ${src}.cc ${EXTRA_SRCS})
     target_link_libraries(${src} common ${EXTRA_LIBS} ${GTEST_LIBS})
+    if(${src} STREQUAL "supervisor_unittest")
+        target_compile_definitions(${src} PRIVATE
+            MORTRED_FAKE_BIN_DEFAULT="$<TARGET_FILE:fake_model_server>")
+    elseif(${src} STREQUAL "gateway_e2e_test")
+        target_compile_definitions(${src} PRIVATE
+            MORTRED_FAKE_BIN_DEFAULT="$<TARGET_FILE:fake_model_server>"
+            MORTRED_GATEWAY_BIN_DEFAULT="$<TARGET_FILE:mortred-gateway.out>")
+    endif()
     if(EXTRA_COMPILE_OPTIONS)
         target_compile_options(${src} PRIVATE ${EXTRA_COMPILE_OPTIONS})
     endif()
     add_test(NAME ${src} COMMAND $<TARGET_FILE:${src}> WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
     add_dependencies(check ${src})
 endforeach()
+
+# e2e helper binaries: supervision tests need the fake model server; the
+# gateway e2e test additionally needs the real gateway binary (full builds)
+add_dependencies(supervisor_unittest fake_model_server)
+if(MORTRED_BUILD_FULL)
+    add_dependencies(gateway_e2e_test fake_model_server mortred-gateway.out)
+endif()
 
 if(CMAKE_MEMORYCHECK_COMMAND)
     foreach(src ${TEST_LIST})

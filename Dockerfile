@@ -50,9 +50,12 @@ RUN cmake -S /src -B /src/build \
 FROM nvidia/cuda:11.8.0-runtime-ubuntu20.04 AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    APP_PROJECT_ROOT=/opt/mortred \
-    APP_LISTEN_HOST=0.0.0.0 \
-    APP_LISTEN_PORT=8787
+    MORTRED_PROJECT_ROOT=/opt/mortred \
+    MORTRED_API_HOST=0.0.0.0 \
+    MORTRED_API_PORT=8787 \
+    MORTRED_GATEWAY_HOST=0.0.0.0 \
+    MORTRED_GATEWAY_PORT=8080 \
+    MORTRED_AUTOSTART=true
 
 # TensorRT / cuDNN / OpenCL / glog / OpenCV 运行库（NVIDIA apt + ubuntu apt）
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -71,10 +74,10 @@ COPY --from=build /opt/mortred /opt/mortred
 # 权重与引擎不进入镜像：运行时挂载 -v <weights>:/opt/mortred/weights
 VOLUME ["/opt/mortred/weights"]
 
-# web console 8787；模型端口 9001-9072 按需映射
-EXPOSE 8787 9001 9002 9003 9010 9011 9012 9020 9030 9031 9040 9041 9050 9051 9052 9053 9054 9055 9056 9060 9070 9071 9072
+# supervisor (management) 8787 + gateway (inference) 8080; model servers stay loopback
+EXPOSE 8787 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD curl -fs http://localhost:8787/api/health || exit 1
+    CMD curl -fs http://localhost:8787/api/v1/health || exit 1
 
 ENTRYPOINT ["/opt/mortred/scripts/docker_entrypoint.sh"]

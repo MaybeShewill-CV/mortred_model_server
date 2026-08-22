@@ -1,5 +1,19 @@
 # HTTP API Contract
 
+## Topology note: mortred-gateway
+
+Production traffic goes through **mortred-gateway** (default `:8080`): each
+model `server_uri` is routed to its loopback model server. The gateway enforces
+the external Bearer token (`MORTRED_GATEWAY_AUTH_TOKEN`), maps a dead upstream
+to `503` and transport failures to `502`; all model-server status codes below
+pass through unchanged. `GET /healthz` and `GET /metrics` are public on the
+gateway. Model ports are loopback-only and must not be exposed; TLS must be
+terminated by a reverse proxy in front of the gateway.
+
+The supervisor (`:8787`) exposes the management REST API under `/api/v1/`
+(health/catalog/status/lifecycle/logs/metrics + an infer test proxy) and the
+embedded web UI; `mortredctl` is its CLI client.
+
 All model servers follow a unified HTTP JSON contract. The authoritative machine-readable
 description is `docs/openapi.json` (served by every model server at `GET /openapi.json`);
 this document is the human-readable summary. Any change to status codes, endpoints or

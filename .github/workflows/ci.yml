@@ -507,7 +507,7 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Job F: PR full-compile gate (Docker carrier + gha cache; triggered only by C++/build-related PRs).
-  # Fixes "zero app-layer compilation on PRs": 22 server / 34 benchmark / web_console sources
+# Fixes "zero app-layer compilation on PRs": server / benchmark / control-plane sources
   # get compile-verified at PR time (~20-40 min full build after a dependency-cache hit).
   # ---------------------------------------------------------------------------
   full-build-pr:
