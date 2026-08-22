@@ -35,6 +35,7 @@
 * [模型说明](#模型说明)
 * [文档教程](#文档教程)
 * [网络服务器配置说明](#网络服务器配置说明)
+* [HTTP API 契约](./docs/api-contract.zh-cn.md)
 * [Model_Zoo](#model_zoo)
 
 # `快速开始`
@@ -245,6 +246,7 @@ python server/test_server.py --server mobilenetv2 --mode single
 # `网络服务器配置说明`
 
 * [模型网络服务器配置说明](./docs/about_model_server_configuration.zh-cn.md)
+* [HTTP API 契约（含网关拓扑、鉴权、状态码映射、过载行为）](./docs/api-contract.zh-cn.md)
 
 # `Model Zoo`
 

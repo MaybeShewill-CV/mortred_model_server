@@ -1,5 +1,8 @@
 # HTTP API Contract
 
+| [English](api-contract.md) | [中文](api-contract.zh-cn.md) |
+|---|---|
+
 ## Topology note: mortred-gateway
 
 Production traffic goes through **mortred-gateway** (default `:8080`): each
@@ -78,6 +81,7 @@ On error:
 | 4 | Model run timeout | 504 |
 | 401 | Unauthorized | 401 |
 | 429 | Rate limited | 429 |
+| 429 | Queue full (`max_queue_depth` exceeded; carries `Retry-After`) | 429 |
 | others | Server error | 500 |
 
 ## Common headers
@@ -108,6 +112,17 @@ check; they are marked `deprecated` in the OpenAPI document.
   "img_data": "base64 encoded image"
 }
 ```
+
+## Overload behaviour
+
+When `max_queue_depth > 0` and the waiting queue is full, the model server
+rejects immediately with `429` and a `Retry-After` header (estimated drain
+time from queue depth, run-time EWMA and worker count, clamped to 1-60s). The
+gateway forwards both verbatim. New optional server keys: `max_queue_depth`
+(0 = unlimited), `max_batch_size` (default 1; >1 enables dynamic batching with
+a `max_batch_delay_ms` collection window), plus the
+`mortred_queue_rejected_total` / `mortred_batch_size` /
+`mortred_batch_window_wait_ms` metrics.
 
 ## Model inference response
 

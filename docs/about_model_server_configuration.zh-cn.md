@@ -35,3 +35,18 @@ And if you want to adjust some of those configuration params you may do it by mo
 
 `workflow全局配置参数代码段`
 ![benchmakr_code_snappit](../resources/images/workflow_global_config.png)
+# 过载保护与动态批处理（可选）
+
+详细语义见 [HTTP API 契约 · 过载行为](api-contract.zh-cn.md#过载行为)。
+
+```toml
+# 等待队列上限：超过后立即返回 429 + Retry-After（0 = 不限制）
+max_queue_depth=32
+# 动态批处理：收集并发请求合成一次 [N,H,W,3] 推理（默认 1 = 关闭）
+# 仅适用于支持动态 batch 的模型（当前：mobilenetv2 / resnet50，MNN 后端）
+max_batch_size=8
+# 批收集窗口毫秒数：首条请求到达后最多等待这么久凑批
+max_batch_delay_ms=5
+```
+
+队列上限调优公式：`max_queue_depth ≈ worker_nums × 目标排队秒数 / 单次推理时长（秒）`。

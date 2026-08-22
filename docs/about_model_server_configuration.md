@@ -33,3 +33,16 @@ And if you want to adjust some of those configuration params you may do it by mo
 
 `Init Workflow Global Configuration Code Snappit`
 ![benchmakr_code_snappit](../resources/images/workflow_global_config.png)
+
+# Overload Protection & Dynamic Batching (optional)
+
+```toml
+# max queued requests before the server answers 429 + Retry-After (0 = unlimited)
+max_queue_depth=32
+# dynamic batching: collect concurrent requests into one [N,H,W,3] run
+# (default 1 = off; only models with a dynamic batch dim, currently
+# mobilenetv2 / resnet50 on the MNN backend)
+max_batch_size=8
+# batch collection window in ms: how long the first request waits for peers
+max_batch_delay_ms=5
+```

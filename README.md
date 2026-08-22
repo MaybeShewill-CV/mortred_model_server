@@ -37,6 +37,7 @@ All models and detectors can be downloaded from my [Hugging Face Page](https://h
 * [Tutorials](#tutorials)
 * [How To](#how-to)
 * [Web Server Configuration](#web-server-configuration)
+* [HTTP API Contract](./docs/api-contract.md)
 
 # `Quick Start`
 
@@ -254,6 +255,7 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 # `Web Server Configuration`
 
 * [Description About Model Server](./docs/about_model_server_configuration.md)
+* [HTTP API Contract (topology, auth, status mapping, overload behaviour)](./docs/api-contract.md)
 
 # `Deployment`
 
