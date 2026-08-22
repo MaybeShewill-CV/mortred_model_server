@@ -32,7 +32,13 @@ class ResNet : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
     ResNet(const ResNet& transformer) = delete;
     ResNet& operator=(const ResNet& transformer) = delete;
 
+    /*** single [N,H,W,3] session run for N requests (MNN supports dynamic N) */
+    StatusCode run_batch(const std::vector<INPUT>& in, std::vector<OUTPUT>& out) override;
+
   private:
+    // image -> normalized CV_32FC3 HWC mat of _m_input_tensor_size (batch share)
+    cv::Mat preprocess_mat(const cv::Mat& image);
+
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
 
     StatusCode postprocess(

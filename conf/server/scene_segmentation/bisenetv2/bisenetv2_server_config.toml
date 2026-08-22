@@ -21,6 +21,8 @@ handler_threads=50
 worker_nums=1
 # milliseconds
 model_run_timeout=3000
+# max queued requests before the server answers 429 (overload protection)
+max_queue_depth=32
 # server url
 server_uri="/mortred_ai_server_v1/scene_segmentation/bisenetv2"
 # explicit server executable used by the web console catalog

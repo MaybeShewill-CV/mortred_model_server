@@ -152,6 +152,19 @@ void forward_to_model(WFHttpTask* task, const mortred::control::ServerEntry& ent
             resp->set_status_code(t->get_resp()->get_status_code());
             resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
             resp->add_header_pair("X-Mortred-Model", route.c_str());
+            // forward upstream overload hints (429 + Retry-After) verbatim
+            protocol::HttpHeaderCursor cursor(t->get_resp());
+            protocol::HttpMessageHeader header;
+            while (cursor.next(&header)) {
+                std::string name(static_cast<const char*>(header.name), header.name_len);
+                std::transform(name.begin(), name.end(), name.begin(),
+                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                if (name == "retry-after") {
+                    const std::string value(static_cast<const char*>(header.value),
+                                            header.value_len);
+                    resp->add_header_pair("Retry-After", value.c_str());
+                }
+            }
             const void* data = nullptr;
             size_t size = 0;
             t->get_resp()->get_parsed_body(&data, &size);

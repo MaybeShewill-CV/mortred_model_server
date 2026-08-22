@@ -22,6 +22,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -44,6 +45,7 @@ namespace {
 struct HttpResp {
     int status = 0;
     std::string body;
+    std::map<std::string, std::string> headers;
 };
 
 HttpResp send_request(int port, const std::string& method, const std::string& path,
@@ -95,6 +97,27 @@ HttpResp send_request(int port, const std::string& method, const std::string& pa
     const auto sp = response.find(' ');
     if (sp != std::string::npos) {
         out.status = std::atoi(response.substr(sp + 1, 3).c_str());
+    }
+    const auto headers_end = response.find("\r\n\r\n");
+    if (headers_end != std::string::npos) {
+        size_t line_start = response.find("\r\n") + 2;  // skip the status line
+        while (line_start < headers_end) {
+            const size_t line_end = response.find("\r\n", line_start);
+            const std::string line =
+                response.substr(line_start, line_end - line_start);
+            const auto colon = line.find(':');
+            if (colon != std::string::npos) {
+                std::string name = line.substr(0, colon);
+                std::transform(name.begin(), name.end(), name.begin(),
+                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                std::string value = line.substr(colon + 1);
+                if (!value.empty() && value[0] == ' ') {
+                    value.erase(0, 1);
+                }
+                out.headers[name] = value;
+            }
+            line_start = line_end + 2;
+        }
     }
     const auto body_pos = response.find("\r\n\r\n");
     if (body_pos != std::string::npos) {
@@ -230,6 +253,30 @@ TEST_F(GatewayE2ETest, dead_upstream_maps_to_503) {
     const auto r = send_request(gateway_port_, "POST", "/mortred_ai_server_v1/test/fake", "{}",
                                 "ext-token");
     EXPECT_EQ(r.status, 503);
+}
+
+TEST_F(GatewayE2ETest, upstream_overload_headers_pass_through) {
+    // restart the fake in overloaded mode: 429 + Retry-After must arrive at
+    // the client verbatim (the whole point of end-to-end backpressure)
+    stop(fake_pid_);
+    const char* fake_bin = std::getenv("MORTRED_FAKE_BIN");
+    if (fake_bin == nullptr) {
+        fake_bin = MORTRED_FAKE_BIN_DEFAULT;
+    }
+    fake_pid_ = spawn(fake_bin, {"--port", std::to_string(model_port_), "--mode", "overloaded"},
+                      {});
+    for (int i = 0; i < 50; ++i) {
+        if (mortred::control::endpoint_ready(model_port_, "/ready", 500)) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    const auto r = send_request(gateway_port_, "POST", "/mortred_ai_server_v1/test/fake", "{}",
+                                "ext-token");
+    EXPECT_EQ(r.status, 429);
+    ASSERT_NE(r.headers.find("retry-after"), r.headers.end())
+        << "gateway must forward the upstream Retry-After hint";
+    EXPECT_EQ(r.headers.at("retry-after"), "2");
 }
 
 TEST_F(GatewayE2ETest, metrics_endpoint_renders) {

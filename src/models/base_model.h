@@ -12,6 +12,8 @@
 
 #include "glog/logging.h"
 
+#include <vector>
+
 #include "common/status_code.h"
 
 namespace jinq {
@@ -65,6 +67,24 @@ public:
             return StatusCode::MODEL_INIT_FAILED;
         }
         return run_impl(in, out);
+    }
+
+    /***
+     * Batched inference entry (NVI guarded like run()). The default loops
+     * run_impl per item so every existing model stays correct under a batch
+     * scheduler; batch-capable models override it with a single N-dim session
+     * run. A single non-OK status fails the whole batch (per-item failures of
+     * valid batches are not distinguishable at this interface level).
+     */
+    virtual StatusCode run_batch(const std::vector<INPUT>& in, std::vector<OUTPUT>& out) {
+        out.assign(in.size(), OUTPUT{});
+        for (size_t idx = 0; idx < in.size(); ++idx) {
+            const auto status = run(in[idx], out[idx]);
+            if (status != StatusCode::OK) {
+                return status;
+            }
+        }
+        return StatusCode::OK;
     }
 
     /***

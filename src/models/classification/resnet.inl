@@ -68,7 +68,7 @@ StatusCode ResNet<INPUT, OUTPUT>::on_init(const toml::table& params) {
 }
 
 template<typename INPUT, typename OUTPUT>
-std::vector<NamedTensor> ResNet<INPUT, OUTPUT>::preprocess(const cv::Mat& input_image) {
+cv::Mat ResNet<INPUT, OUTPUT>::preprocess_mat(const cv::Mat& input_image) {
     // resize -> center crop -> rgb -> per channel normalize (f32 nhwc)
     cv::Mat tmp;
     cv::resize(input_image, tmp, cv::Size(256, 256));
@@ -80,7 +80,12 @@ std::vector<NamedTensor> ResNet<INPUT, OUTPUT>::preprocess(const cv::Mat& input_
     tmp.convertTo(tmp, CV_32FC3);
     cv::subtract(tmp, cv::Scalar(123.68f, 116.78f, 103.94f), tmp);
     cv::divide(tmp, cv::Scalar(58.395f, 57.12f, 57.375f), tmp);
+    return tmp;
+}
 
+template<typename INPUT, typename OUTPUT>
+std::vector<NamedTensor> ResNet<INPUT, OUTPUT>::preprocess(const cv::Mat& input_image) {
+    const cv::Mat tmp = preprocess_mat(input_image);
     std::vector<NamedTensor> inputs;
     NamedTensor named;
     named.name = this->session().inputs().front().name;
@@ -95,6 +100,63 @@ std::vector<NamedTensor> ResNet<INPUT, OUTPUT>::preprocess(const cv::Mat& input_
     std::memcpy(named.tensor.buffer.data(), tmp.data, bytes);
     inputs.push_back(std::move(named));
     return inputs;
+}
+
+template<typename INPUT, typename OUTPUT>
+StatusCode ResNet<INPUT, OUTPUT>::run_batch(const std::vector<INPUT>& in,
+                                            std::vector<OUTPUT>& out) {
+    out.clear();
+    if (in.empty()) {
+        LOG(ERROR) << "batch input is empty";
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
+    if (!this->is_successfully_initialized()) {
+        LOG(ERROR) << "model is not successfully initialized, refuse to run batch";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    std::vector<cv::Mat> mats;
+    mats.reserve(in.size());
+    for (const auto& item : in) {
+        const cv::Mat image = jinq::models::cv_input::load_image(item);
+        if (image.empty()) {
+            LOG(ERROR) << "batch item image is empty";
+            return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+        }
+        mats.push_back(preprocess_mat(image));
+    }
+
+    backend::NamedTensor named;
+    if (!this->pack_nhwc_batch(this->session().inputs().front().name, mats, &named)) {
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
+    std::vector<backend::NamedTensor> inputs;
+    inputs.push_back(std::move(named));
+    std::vector<backend::NamedTensor> outputs;
+    const auto status = this->session().run(inputs, outputs);
+    if (status != StatusCode::OK) {
+        return status;
+    }
+    if (outputs.empty()) {
+        LOG(ERROR) << "batched classification output is empty";
+        return StatusCode::MODEL_EMPTY_OUTPUT;
+    }
+
+    const auto items = this->split_batch_output(outputs.front().tensor,
+                                                static_cast<int64_t>(in.size()));
+    if (items.size() != in.size()) {
+        return StatusCode::MODEL_EMPTY_OUTPUT;
+    }
+    out.resize(in.size());
+    for (size_t idx = 0; idx < items.size(); ++idx) {
+        std::vector<backend::NamedTensor> item_outputs;
+        item_outputs.push_back({outputs.front().name, items[idx]});
+        const auto post_status = postprocess(item_outputs, out[idx]);
+        if (post_status != StatusCode::OK) {
+            return post_status;
+        }
+    }
+    return StatusCode::OK;
 }
 
 template<typename INPUT, typename OUTPUT>

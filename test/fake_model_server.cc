@@ -93,9 +93,16 @@ void handle_client(int fd, const std::string& mode) {
     } else if (method == "GET") {
         body = "ok";
     }
+    std::string extra_headers;
+    if (mode == "overloaded" && method == "POST") {
+        status = "429 Too Many Requests";
+        body = "{\"code\":429}";
+        extra_headers = "Retry-After: 2\r\n";
+    }
     const std::string resp = "HTTP/1.1 " + status + "\r\n" +
                              "Content-Type: application/json; charset=utf-8\r\n" +
                              "Content-Length: " + std::to_string(body.size()) + "\r\n" +
+                             extra_headers +
                              "Connection: close\r\n\r\n" + body;
     ::send(fd, resp.data(), resp.size(), 0);
     ::close(fd);

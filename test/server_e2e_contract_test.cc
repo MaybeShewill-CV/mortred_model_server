@@ -53,14 +53,16 @@ public:
         return StatusCode::OK;
     }
 
-    StatusCode run_impl(const base64_input&, TestOutput& out) override {
+    StatusCode run_impl(const base64_input& in, TestOutput& out) override {
         if (_m_delay_ms > 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(_m_delay_ms));
         }
         if (_m_fail_code != StatusCode::OK) {
             return _m_fail_code;
         }
-        out.value = 1;
+        // echo the payload length: the batch distribution test detects any
+        // cross-entry result mixup through per-request distinct values
+        out.value = static_cast<int>(in.input_image_content.size());
         return StatusCode::OK;
     }
 
@@ -406,7 +408,7 @@ TEST(server_e2e_contract, success_returns_200_with_envelope_and_headers) {
     EXPECT_STREQ(doc["req_id"].GetString(), "req-1");
     ASSERT_TRUE(doc["data"].IsObject());
     EXPECT_TRUE(doc["data"]["ok"].GetBool());
-    EXPECT_EQ(doc["data"]["value"].GetInt(), 1);
+    EXPECT_EQ(doc["data"]["value"].GetInt(), 8);
 }
 
 TEST(server_e2e_contract, bad_json_returns_400_with_null_data) {
@@ -550,6 +552,111 @@ TEST(server_e2e_contract, metrics_inference_duration_sum_is_positive_after_reque
         metrics.body.substr(value_pos + 1, metrics.body.find('\n', value_pos)).c_str());
     EXPECT_GT(sum, 0.0) << "inference duration histogram must observe the real "
                         << "run time, not the pre-assignment zero";
+}
+
+namespace {
+
+double metrics_value(const std::string& body, const std::string& key) {
+    // sample lines look like `name{model="..."} 42`; HELP/TYPE lines (`# HELP
+    // name ...`) must not be parsed - match the key only when a label block
+    // follows it
+    size_t pos = 0;
+    while ((pos = body.find(key, pos)) != std::string::npos) {
+        const size_t after = pos + key.size();
+        if (after < body.size() && body[after] == '{') {
+            const auto value_pos = body.find(' ', after);
+            if (value_pos != std::string::npos) {
+                return std::atof(
+                    body.substr(value_pos + 1, body.find('\n', value_pos)).c_str());
+            }
+        }
+        pos = after;
+    }
+    ADD_FAILURE() << "metric sample line not found: " << key << "\n" << body;
+    return -1.0;
+}
+
+}  // namespace
+
+TEST(server_e2e_contract, queue_limit_returns_429_with_retry_after) {
+    ServerHandle handle =
+        start_server("model_run_timeout=5000\nfake_delay_ms=300\nmax_queue_depth=1\n");
+
+    // request A occupies the single queue slot (300ms fake inference)
+    HttpResp resp_a;
+    std::thread sender_a([&handle, &resp_a]() {
+        resp_a = send_request(handle.port, "POST", "/test/model",
+                              "{\"img_data\":\"aGVsbG8=\",\"req_id\":\"a\"}",
+                              k_json_auth_headers);
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    // request B arrives while the queue is full: fast-fail instead of queueing
+    const auto resp_b =
+        send_request(handle.port, "POST", "/test/model",
+                     "{\"img_data\":\"aGVsbG8=\",\"req_id\":\"b\"}", k_json_auth_headers);
+    sender_a.join();
+
+    EXPECT_EQ(resp_a.status, 200);
+    EXPECT_EQ(resp_b.status, 429);
+    ASSERT_NE(resp_b.headers.find("retry-after"), resp_b.headers.end())
+        << "overload responses must carry a Retry-After hint";
+    const int retry_after = std::atoi(resp_b.headers.at("retry-after").c_str());
+    EXPECT_GE(retry_after, 1);
+    EXPECT_LE(retry_after, 60);
+
+    const auto metrics = send_request(handle.port, "GET", "/metrics", "", {});
+    EXPECT_GT(metrics_value(metrics.body, "mortred_queue_rejected_total"), 0.0);
+}
+
+TEST(server_e2e_contract, batch_collects_and_distributes_per_request_results) {
+    ServerHandle handle = start_server(
+        "model_run_timeout=5000\nfake_delay_ms=50\nmax_batch_size=4\nmax_batch_delay_ms=800\n");
+
+    constexpr int kRequests = 4;
+    std::vector<HttpResp> responses(kRequests);
+    std::vector<std::thread> senders;
+    for (int i = 0; i < kRequests; ++i) {
+        // distinct payload sizes -> distinct echoed values: any cross-entry
+        // mixup in the batch distribution would be visible in the response
+        const std::string payload(static_cast<size_t>(10 + i * 7), 'a');
+        const std::string body =
+            "{\"img_data\":\"" + payload + "\",\"req_id\":\"batch-" + std::to_string(i) + "\"}";
+        senders.emplace_back([&handle, &responses, i, body]() {
+            responses[i] =
+                send_request(handle.port, "POST", "/test/model", body, k_json_auth_headers);
+        });
+    }
+    for (auto& sender : senders) {
+        sender.join();
+    }
+
+    for (int i = 0; i < kRequests; ++i) {
+        ASSERT_EQ(responses[i].status, 200) << "request " << i;
+        const auto doc = parse_body(responses[i].body);
+        ASSERT_FALSE(doc.HasParseError());
+        EXPECT_EQ(doc["data"]["value"].GetInt(), 10 + i * 7)
+            << "request " << i << " received another entry's result";
+    }
+
+    // all four requests went through the batch path: 4 observed items in
+    // fewer than 4 batches proves real coalescing happened (exactly-one-
+    // batch assertions would be timing-fragile on loaded CI machines)
+    const auto metrics = send_request(handle.port, "GET", "/metrics", "", {});
+    EXPECT_EQ(metrics_value(metrics.body, "mortred_batch_size_sum"), 4.0);
+    const double batch_count = metrics_value(metrics.body, "mortred_batch_size_count");
+    EXPECT_GE(batch_count, 1.0);
+    EXPECT_LT(batch_count, 4.0) << "no coalescing happened: 4 batches of size 1";
+}
+
+TEST(server_e2e_contract, batch_timeout_returns_504) {
+    // the batch waiter honors model_run_timeout exactly like the single path
+    ServerHandle handle = start_server(
+        "model_run_timeout=200\nfake_delay_ms=500\nmax_batch_size=4\nmax_batch_delay_ms=50\n");
+    const auto resp = send_request(handle.port, "POST", "/test/model",
+                                   "{\"img_data\":\"aGVsbG8=\",\"req_id\":\"slow\"}",
+                                   k_json_auth_headers);
+    EXPECT_EQ(resp.status, 504);
 }
 
 int main(int argc, char** argv) {

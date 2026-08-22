@@ -77,7 +77,8 @@ inline const std::vector<std::string>& server_optional_int_keys() {
     static const std::vector<std::string> k = {
         "max_connections", "peer_resp_timeout", "request_size_limit",
         "compute_threads", "handler_threads", "model_run_timeout",
-        "rate_limit_qps", "stuck_worker_threshold_times"};
+        "rate_limit_qps", "stuck_worker_threshold_times", "max_queue_depth",
+        "max_batch_size", "max_batch_delay_ms"};
     return k;
 }
 

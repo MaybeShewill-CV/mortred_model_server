@@ -9,6 +9,7 @@
 #define MORTRED_MODELS_BACKEND_BACKEND_CV_MODEL_H
 
 #include <memory>
+#include <cstring>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -186,6 +187,63 @@ class BackendCvModel : public BaseAiModel<INPUT, OUTPUT> {
     /*** the primary inference session created from [SECTION.backend] */
     backend::InferenceSession& session() {
         return *_m_session;
+    }
+
+    /***
+     * Batch helpers for fixed-size NHWC image models: pack N preprocessed
+     * CV_32FC3 HWC mats (identical H/W) into one [N,H,W,3] f32 input tensor.
+     * Returns false on empty input or shape mismatch.
+     */
+    static bool pack_nhwc_batch(const std::string& input_name,
+                                const std::vector<cv::Mat>& mats,
+                                backend::NamedTensor* out) {
+        if (out == nullptr || mats.empty()) {
+            return false;
+        }
+        const int rows = mats.front().rows;
+        const int cols = mats.front().cols;
+        for (const auto& mat : mats) {
+            if (mat.empty() || mat.type() != CV_32FC3 || mat.rows != rows || mat.cols != cols) {
+                LOG(ERROR) << "batch preprocess mismatch: expected " << rows << "x" << cols
+                           << " CV_32FC3 mats";
+                return false;
+            }
+        }
+        out->name = input_name;
+        out->tensor = backend::Tensor::make<float>({static_cast<int64_t>(mats.size()), rows, cols, 3});
+        const size_t item_bytes = static_cast<size_t>(rows) * cols * 3 * sizeof(float);
+        for (size_t idx = 0; idx < mats.size(); ++idx) {
+            std::memcpy(out->tensor.buffer.data() + idx * item_bytes, mats[idx].data, item_bytes);
+        }
+        return true;
+    }
+
+    /***
+     * Slice a leading-dim batched output tensor into N per-item 1-D tensors
+     * (contiguous copies). Classification postprocess reads scores by element
+     * count, so the 1-D shape is sufficient; returns an empty vector when the
+     * element count is not divisible by n.
+     */
+    static std::vector<backend::Tensor> split_batch_output(const backend::Tensor& tensor,
+                                                           int64_t n) {
+        std::vector<backend::Tensor> items;
+        if (n <= 0 || tensor.element_count() <= 0 || tensor.element_count() % n != 0) {
+            LOG(ERROR) << "cannot split batched output: elements=" << tensor.element_count()
+                       << " n=" << n;
+            return items;
+        }
+        const int64_t per = tensor.element_count() / n;
+        const size_t per_bytes = static_cast<size_t>(per) * backend::dtype_size(tensor.dtype);
+        items.reserve(static_cast<size_t>(n));
+        for (int64_t idx = 0; idx < n; ++idx) {
+            backend::Tensor item;
+            item.dtype = tensor.dtype;
+            item.shape = {per};
+            item.buffer.resize(per_bytes);
+            std::memcpy(item.buffer.data(), tensor.buffer.data() + idx * per_bytes, per_bytes);
+            items.push_back(std::move(item));
+        }
+        return items;
     }
 
     const backend::BackendConfig& backend_config() const {

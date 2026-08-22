@@ -44,6 +44,7 @@ set(TEST_LIST
     cv_image_input_unittest
     worker_nums_unittest
     http_contract_test
+    backpressure_unittest
     prometheus_metrics_test
     response_schema_test
     openapi_consistency_test

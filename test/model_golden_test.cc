@@ -478,6 +478,36 @@ TEST(model_golden, mobilenetv2_classification) {
     expect_scores("mobilenetv2_classification", output);
 }
 
+TEST(model_golden, mobilenetv2_batch_matches_single) {
+    // batch=N must be numerically equivalent to N single runs (the batched
+    // [N,H,W,3] session run is the whole point of the batching upgrade)
+    std::string conf = "conf/model/classification/mobilenetv2/mobilenetv2_config.toml";
+    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    auto cfg = load_model_cfg(conf);
+    auto model = jinq::factory::classification::create_mobilenetv2_classifier<
+        mat_input, std_classification_output>("mobilenetv2_golden");
+    ASSERT_NE(model, nullptr);
+    ASSERT_EQ(model->init(cfg), StatusCode::OK);
+    cv::Mat image = read_input_image("demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG");
+    ASSERT_FALSE(image.empty());
+
+    std_classification_output single;
+    ASSERT_EQ(model->run(mat_input{image}, single), StatusCode::OK);
+
+    std::vector<mat_input> batch_inputs(4, mat_input{image});
+    std::vector<std_classification_output> batch_outputs;
+    ASSERT_EQ(model->run_batch(batch_inputs, batch_outputs), StatusCode::OK);
+    ASSERT_EQ(batch_outputs.size(), 4u);
+    for (size_t idx = 0; idx < batch_outputs.size(); ++idx) {
+        EXPECT_EQ(batch_outputs[idx].class_id, single.class_id) << "item " << idx;
+        ASSERT_EQ(batch_outputs[idx].scores.size(), single.scores.size());
+        for (size_t k = 0; k < single.scores.size(); ++k) {
+            EXPECT_NEAR(batch_outputs[idx].scores[k], single.scores[k], k_score_tol)
+                << "item " << idx << " score " << k;
+        }
+    }
+}
+
 TEST(model_golden, resnet50_classification) {
     std::string conf = "conf/model/classification/resnet/resnet50_config.toml";
     if (!weights_available(conf)) GTEST_SKIP() << "weights not available";

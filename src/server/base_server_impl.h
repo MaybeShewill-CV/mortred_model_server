@@ -12,9 +12,12 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <condition_variable>
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
+#include <memory>
+#include <mutex>
 #include <utility>
 #include <thread>
 
@@ -49,6 +52,7 @@
 #include "server/http_status.h"
 #include "server/openapi_doc.h"
 #include "server/rate_limiter.h"
+#include "server/backpressure.h"
 #include "server/server_config_schema.h"
 
 namespace jinq {
@@ -116,6 +120,12 @@ public:
      * stop()/wait_finish() preceding destruction in all callers.
      */
     virtual ~BaseAiServerImpl() {
+        // stop the batch runner first: it may hold a worker, and queued
+        // entries must be failed before the worker drain below
+        if (_m_batch_thread.joinable()) {
+            _m_batch_running.store(false);
+            _m_batch_thread.join();
+        }
         // only a fully initialized server can possibly hold exactly
         // _m_worker_nums workers: on init failure the queue may hold a
         // partial set (the watermark is committed only after the queue is
@@ -213,6 +223,20 @@ protected:
     int _m_rate_limit_qps = 0;
     FixedWindowRateLimiter _m_rate_limiter{0};
     PrometheusMetrics _m_metrics;
+    // defined below: owns one queued request of the batch path
+    struct batch_entry;
+    // overload protection: max queued jobs before 429 (0 = unlimited)
+    int _m_max_queue_depth = 0;
+    // EWMA (alpha 0.2) of the worker run time in ms; seeds from the configured
+    // timeout and feeds the Retry-After estimate of rejected requests
+    std::atomic<int64_t> _m_run_time_ewma_ms{500};
+    // dynamic batching; the defaults keep the exact single-request path
+    // (max_batch_size == 1 never touches _m_batch_queue / _m_batch_thread)
+    int _m_max_batch_size = 1;
+    int _m_max_batch_delay_ms = 5;
+    moodycamel::BlockingConcurrentQueue<std::shared_ptr<batch_entry>> _m_batch_queue;
+    std::atomic<bool> _m_batch_running{false};
+    std::thread _m_batch_thread;
 
 protected:
     /***
@@ -324,6 +348,21 @@ protected:
         std::string payload;
     };
 
+    /***
+     * One queued request in the batch path. The entry OWNS its request copy
+     * and result storage: the requesting go task may time out and disappear
+     * while the entry is still queued, and the runner keeps a shared_ptr, so
+     * the last owner frees the entry - no use-after-free is possible on any
+     * interleaving of (requester timeout) vs (batch completion).
+     */
+    struct batch_entry {
+        task_request req;
+        go_result result;
+        bool done = false;
+        std::mutex mu;
+        std::condition_variable cv;
+    };
+
     // the go routine carrier: the three members live inside the task object
     // (the factory binds this functor into the go closure), so no manual
     // release exists anywhere — task destruction frees all per-request state
@@ -391,6 +430,25 @@ protected:
      * @param result
      */
     void do_work(const task_request* req, go_result* result);
+
+    /*** enqueue into the batch queue and wait for the runner's completion */
+    void run_via_batch(const task_request* req, go_result* result);
+
+    /*** dedicated collector thread (max_batch_size > 1 only) */
+    void batch_loop();
+
+    /*** acquire one worker, run run_batch, distribute results to entries */
+    void process_batch(std::vector<std::shared_ptr<batch_entry>>& batch);
+
+    /*** publish one entry's result and wake its waiter */
+    void complete_batch_entry(const std::shared_ptr<batch_entry>& entry,
+                              StatusCode status,
+                              MODEL_OUTPUT&& output,
+                              double run_ms,
+                              double wait_ms);
+
+    /*** lock-free EWMA of the worker run time (Retry-After arithmetic) */
+    void update_run_time_ewma(int64_t run_ms);
 
     /***
      *
@@ -518,6 +576,21 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         if (task_req.task_id.empty()) {
             task_req.task_id = generate_req_id();
         }
+        // overload protection: reject before any per-request state is created
+        // when the waiting queue is full. The Retry-After hint estimates the
+        // drain time from queue depth, run-time EWMA and the worker count.
+        if (_m_max_queue_depth > 0 &&
+            _m_waiting_jobs.load() >= static_cast<size_t>(_m_max_queue_depth)) {
+            _m_metrics.inc_queue_rejected();
+            _m_metrics.inc_http_requests(request_method, "429");
+            const int retry_after = compute_retry_after_seconds(
+                _m_waiting_jobs.load(), _m_run_time_ewma_ms.load(), _m_worker_nums);
+            task->get_resp()->add_header_pair("Retry-After",
+                                              std::to_string(retry_after).c_str());
+            rapidjson::Document data;
+            reply_json(task, "", StatusCode::RATE_LIMITED, std::move(data));
+            return;
+        }
         _m_waiting_jobs++;
         _m_received_jobs++;
         _m_metrics.inc_received_jobs();
@@ -587,6 +660,12 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     // task alive until this routine returns even when detached (timeout) or
     // when the series is cancelled mid-run, so writing it is always safe, and
     // its destruction is handled by the task — nothing to release here
+    // batch path (opt-in): collect concurrent requests per model and run them
+    // as one batch; the single-request path below stays verbatim otherwise
+    if (_m_max_batch_size > 1) {
+        run_via_batch(req, result);
+        return;
+    }
     WORKER worker;
     auto find_worker_start_ts = Timestamp::now();
 
@@ -661,6 +740,206 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     // so the histogram always recorded 0 (review leftover #1)
     result->worker_run_time_consuming = (task_finish_ts - task_receive_ts) * 1000;
     _m_metrics.observe_inference_duration_ms(result->worker_run_time_consuming);
+    update_run_time_ewma(static_cast<int64_t>(result->worker_run_time_consuming));
+}
+
+/***
+ * Batch-side counterpart of do_work: hand the request to the collector and
+ * sleep on the entry. Timeout semantics mirror the single path: the waiter
+ * wakes with MODEL_RUN_TIMEOUT within model_run_timeout; the runner keeps its
+ * own shared_ptr, so a timed-out entry is discarded safely afterwards.
+ */
+template<typename WORKER, typename MODEL_OUTPUT>
+void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::run_via_batch(
+    const BaseAiServerImpl::task_request* req,
+    BaseAiServerImpl::go_result* result) {
+    auto entry = std::make_shared<batch_entry>();
+    entry->req = *req;
+    const std::shared_ptr<batch_entry> kept = entry;
+    _m_batch_queue.enqueue(std::move(entry));
+
+    const auto wait_start = Timestamp::now();
+    std::unique_lock<std::mutex> lock(kept->mu);
+    bool done = true;
+    if (_m_model_run_timeout > 0) {
+        done = kept->cv.wait_for(lock, std::chrono::milliseconds(_m_model_run_timeout),
+                                 [&kept]() { return kept->done; });
+    } else {
+        kept->cv.wait(lock, [&kept]() { return kept->done; });
+    }
+    const double wait_ms = (Timestamp::now() - wait_start) * 1000;
+    if (!done) {
+        result->model_run_status = StatusCode::MODEL_RUN_TIMEOUT;
+        result->task_finished_ts = Timestamp::now().to_format_str();
+        result->find_worker_time_consuming = wait_ms;
+        result->worker_run_time_consuming = 0;
+        return;
+    }
+    result->model_run_status = kept->result.model_run_status;
+    result->model_output = std::move(kept->result.model_output);
+    result->task_finished_ts = std::move(kept->result.task_finished_ts);
+    result->worker_run_time_consuming = kept->result.worker_run_time_consuming;
+    result->find_worker_time_consuming = kept->result.find_worker_time_consuming;
+}
+
+/***
+ * Collector thread: block for the first entry, then keep collecting within
+ * the delay window (bounded by max_batch_size), then hand the batch to
+ * process_batch. The 100ms poll keeps shutdown responsive without a sentinel.
+ */
+template<typename WORKER, typename MODEL_OUTPUT>
+void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::batch_loop() {
+    std::vector<std::shared_ptr<batch_entry>> batch;
+    while (_m_batch_running.load()) {
+        std::shared_ptr<batch_entry> first;
+        if (!_m_batch_queue.wait_dequeue_timed(first, std::chrono::milliseconds(100))) {
+            continue;
+        }
+        batch.clear();
+        batch.push_back(std::move(first));
+        const int64_t window_deadline = monotonic_ms() + _m_max_batch_delay_ms;
+        while (batch.size() < static_cast<size_t>(_m_max_batch_size)) {
+            const int remain_ms = static_cast<int>(window_deadline - monotonic_ms());
+            if (remain_ms <= 0) {
+                break;
+            }
+            std::shared_ptr<batch_entry> next;
+            if (!_m_batch_queue.wait_dequeue_timed(next,
+                                                   std::chrono::milliseconds(remain_ms))) {
+                break;
+            }
+            batch.push_back(std::move(next));
+        }
+        // opportunistically drain entries that arrived while the window raced
+        while (batch.size() < static_cast<size_t>(_m_max_batch_size)) {
+            std::shared_ptr<batch_entry> extra;
+            if (!_m_batch_queue.try_dequeue(extra)) {
+                break;
+            }
+            batch.push_back(std::move(extra));
+        }
+        _m_metrics.observe_batch_size(static_cast<double>(batch.size()));
+        process_batch(batch);
+    }
+    // shutdown: fail everything still queued so waiters wake immediately
+    std::shared_ptr<batch_entry> pending;
+    while (_m_batch_queue.try_dequeue(pending)) {
+        complete_batch_entry(pending, StatusCode::MODEL_RUN_TIMEOUT, MODEL_OUTPUT{}, 0, 0);
+    }
+}
+
+template<typename WORKER, typename MODEL_OUTPUT>
+void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::process_batch(
+    std::vector<std::shared_ptr<batch_entry>>& batch) {
+    // invalid requests never reach a worker: fail them individually with the
+    // parse status they would have seen on the single path
+    std::vector<std::shared_ptr<batch_entry>> valid;
+    valid.reserve(batch.size());
+    for (const auto& entry : batch) {
+        if (entry->req.is_valid) {
+            valid.push_back(entry);
+        } else {
+            complete_batch_entry(entry, entry->req.parse_status, MODEL_OUTPUT{}, 0, 0);
+        }
+    }
+    if (valid.empty()) {
+        return;
+    }
+
+    // worker acquisition mirrors the single path, timeout and stuck detection
+    // included: a batch-starved server must fail entries, not hang them
+    WORKER worker;
+    const auto wait_start = Timestamp::now();
+    bool got_worker = true;
+    if (_m_model_run_timeout > 0) {
+        got_worker = _m_working_queue.wait_dequeue_timed(
+            worker, std::chrono::milliseconds(_m_model_run_timeout));
+    } else {
+        _m_working_queue.wait_dequeue(worker);
+    }
+    const double wait_ms = (Timestamp::now() - wait_start) * 1000;
+    if (!got_worker) {
+        const int consecutive = _m_consecutive_wait_timeouts.fetch_add(1) + 1;
+        if (consecutive == 1) {
+            _m_first_wait_timeout_ms.store(monotonic_ms());
+        }
+        const int64_t first = _m_first_wait_timeout_ms.load();
+        const int64_t span_ms = first > 0 ? monotonic_ms() - first : 0;
+        const int64_t threshold_ms =
+            static_cast<int64_t>(_m_stuck_worker_threshold_times) * _m_model_run_timeout;
+        if (consecutive >= _m_stuck_worker_threshold_times && span_ms >= threshold_ms) {
+            if (_m_stuck_worker_action == StuckWorkerAction::EXIT) {
+                LOG(FATAL) << "batch runner starved for " << consecutive
+                           << " timeout(s) spanning " << span_ms
+                           << "ms: worker stuck, exiting for supervisor restart";
+            } else if (consecutive == _m_stuck_worker_threshold_times) {
+                LOG(ERROR) << "worker stuck (batch path): " << consecutive
+                           << " full-timeout waits spanning " << span_ms << " ms";
+            }
+        }
+        for (const auto& entry : valid) {
+            complete_batch_entry(entry, StatusCode::MODEL_RUN_TIMEOUT, MODEL_OUTPUT{}, 0,
+                                 wait_ms);
+        }
+        return;
+    }
+    _m_consecutive_wait_timeouts.store(0);
+    _m_first_wait_timeout_ms.store(0);
+    _m_metrics.observe_queue_wait_ms(wait_ms);
+
+    std::vector<models::io_define::common_io::base64_input> inputs;
+    inputs.reserve(valid.size());
+    for (const auto& entry : valid) {
+        inputs.push_back(models::io_define::common_io::base64_input{entry->req.payload});
+    }
+    std::vector<MODEL_OUTPUT> outputs;
+    const auto run_start = Timestamp::now();
+    const auto status = worker->run_batch(inputs, outputs);
+    const double run_ms = (Timestamp::now() - run_start) * 1000;
+    update_run_time_ewma(static_cast<int64_t>(run_ms));
+    _m_metrics.observe_inference_duration_ms(run_ms);
+    _m_working_queue.enqueue(std::move(worker));
+
+    for (size_t idx = 0; idx < valid.size(); ++idx) {
+        if (status == StatusCode::OK && idx < outputs.size()) {
+            complete_batch_entry(valid[idx], status, std::move(outputs[idx]), run_ms, wait_ms);
+        } else {
+            complete_batch_entry(valid[idx], status, MODEL_OUTPUT{}, run_ms, wait_ms);
+        }
+    }
+}
+
+template<typename WORKER, typename MODEL_OUTPUT>
+void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::complete_batch_entry(
+    const std::shared_ptr<batch_entry>& entry,
+    StatusCode status,
+    MODEL_OUTPUT&& output,
+    double run_ms,
+    double wait_ms) {
+    {
+        std::lock_guard<std::mutex> lock(entry->mu);
+        entry->result.model_run_status = status;
+        entry->result.model_output = std::move(output);
+        entry->result.task_finished_ts = Timestamp::now().to_format_str();
+        entry->result.worker_run_time_consuming = run_ms;
+        entry->result.find_worker_time_consuming = wait_ms;
+        entry->done = true;
+    }
+    entry->cv.notify_all();
+}
+
+template<typename WORKER, typename MODEL_OUTPUT>
+void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::update_run_time_ewma(int64_t run_ms) {
+    int64_t observed = _m_run_time_ewma_ms.load(std::memory_order_relaxed);
+    while (true) {
+        const double next = static_cast<double>(observed) +
+                            0.2 * (static_cast<double>(run_ms) - static_cast<double>(observed));
+        const int64_t next_i = static_cast<int64_t>(next);
+        if (_m_run_time_ewma_ms.compare_exchange_weak(observed, next_i,
+                                                      std::memory_order_relaxed)) {
+            break;
+        }
+    }
 }
 
 /***
@@ -826,6 +1105,35 @@ StatusCode BaseAiServerImpl<WORKER, MODEL_OUTPUT>::parse_common_server_config(
         server_section["stuck_worker_threshold_times"].value_or<int64_t>(3));
     if (_m_stuck_worker_threshold_times <= 0) {
         _m_stuck_worker_threshold_times = 3;   // misconfigured: keep the safe default
+    }
+    // overload protection + dynamic batching; the defaults (0 / 1 / 5ms)
+    // preserve the legacy behaviour byte for byte
+    _m_max_queue_depth = static_cast<int>(server_section["max_queue_depth"].value_or<int64_t>(0));
+    if (_m_max_queue_depth < 0) {
+        LOG(WARNING) << "max_queue_depth < 0: queue depth limit disabled";
+        _m_max_queue_depth = 0;
+    }
+    _m_max_batch_size = static_cast<int>(server_section["max_batch_size"].value_or<int64_t>(1));
+    if (_m_max_batch_size < 1) {
+        LOG(WARNING) << "max_batch_size < 1: batching disabled";
+        _m_max_batch_size = 1;
+    }
+    _m_max_batch_delay_ms =
+        static_cast<int>(server_section["max_batch_delay_ms"].value_or<int64_t>(5));
+    if (_m_max_batch_delay_ms < 0) {
+        LOG(WARNING) << "max_batch_delay_ms < 0: using the 5ms default";
+        _m_max_batch_delay_ms = 5;
+    }
+    // seed the run-time EWMA with the configured budget until real samples
+    // arrive, so Retry-After is a plausible hint from the very first reject
+    _m_run_time_ewma_ms.store(_m_model_run_timeout > 0 ? _m_model_run_timeout : 500);
+    if (_m_max_batch_size > 1) {
+        LOG(INFO) << "dynamic batching enabled: max_batch_size=" << _m_max_batch_size
+                  << ", max_batch_delay_ms=" << _m_max_batch_delay_ms;
+        if (!_m_batch_thread.joinable()) {
+            _m_batch_running.store(true);
+            _m_batch_thread = std::thread([this]() { batch_loop(); });
+        }
     }
     return parse_server_security_config(server_section);
 }

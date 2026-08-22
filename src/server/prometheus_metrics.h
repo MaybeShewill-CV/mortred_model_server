@@ -27,6 +27,8 @@ public:
         http_duration_buckets_ = {5, 10, 25, 50, 100, 250, 500, 1000, 2000, 5000, 10000};
         queue_wait_buckets_ = {1, 5, 10, 25, 50, 100, 250, 500};
         inference_duration_buckets_ = {1, 2, 5, 10, 25, 50, 100, 250, 500, 1000, 5000};
+        batch_size_buckets_ = {1, 2, 4, 8, 16, 32};
+        batch_wait_buckets_ = {1, 2, 5, 10, 25, 50, 100, 250, 500};
     }
 
     void set_model(const std::string& model) {
@@ -57,6 +59,21 @@ public:
     void inc_inference_failure() {
         std::lock_guard<std::mutex> lock(mutex_);
         inference_failure_++;
+    }
+
+    void inc_queue_rejected() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        queue_rejected_++;
+    }
+
+    void observe_batch_size(double n) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        observe_histogram_locked(batch_size_, batch_size_buckets_, "", n);
+    }
+
+    void observe_batch_window_wait_ms(double ms) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        observe_histogram_locked(batch_wait_, batch_wait_buckets_, "", ms);
     }
 
     void observe_queue_wait_ms(double ms) {
@@ -139,6 +156,10 @@ public:
         ss << "# TYPE mortred_inference_failure_total counter\n";
         ss << "mortred_inference_failure_total{model=\"" << model_ << "\"} " << inference_failure_ << "\n";
 
+        ss << "# HELP mortred_queue_rejected_total Requests rejected by the queue depth limit\n";
+        ss << "# TYPE mortred_queue_rejected_total counter\n";
+        ss << "mortred_queue_rejected_total{model=\"" << model_ << "\"} " << queue_rejected_ << "\n";
+
         ss << "# HELP mortred_queue_wait_duration_ms Worker queue wait duration\n";
         ss << "# TYPE mortred_queue_wait_duration_ms histogram\n";
         render_histogram_locked(ss, "mortred_queue_wait_duration_ms", queue_wait_, queue_wait_buckets_);
@@ -146,6 +167,14 @@ public:
         ss << "# HELP mortred_inference_duration_ms Model inference duration\n";
         ss << "# TYPE mortred_inference_duration_ms histogram\n";
         render_histogram_locked(ss, "mortred_inference_duration_ms", inference_duration_, inference_duration_buckets_);
+
+        ss << "# HELP mortred_batch_size Executed batch sizes\n";
+        ss << "# TYPE mortred_batch_size histogram\n";
+        render_histogram_locked(ss, "mortred_batch_size", batch_size_, batch_size_buckets_);
+
+        ss << "# HELP mortred_batch_window_wait_ms Batch collection window wait\n";
+        ss << "# TYPE mortred_batch_window_wait_ms histogram\n";
+        render_histogram_locked(ss, "mortred_batch_window_wait_ms", batch_wait_, batch_wait_buckets_);
 
         ss << "# HELP mortred_workers_available Available workers\n";
         ss << "# TYPE mortred_workers_available gauge\n";
@@ -249,6 +278,11 @@ private:
     std::vector<double> inference_duration_buckets_;
     Histogram queue_wait_;
     std::vector<double> queue_wait_buckets_;
+    uint64_t queue_rejected_ = 0;
+    Histogram batch_size_;
+    std::vector<double> batch_size_buckets_;
+    Histogram batch_wait_;
+    std::vector<double> batch_wait_buckets_;
 
     size_t workers_available_ = 0;
     size_t workers_busy_ = 0;
