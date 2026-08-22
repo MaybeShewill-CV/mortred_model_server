@@ -1,0 +1,116 @@
+# Mortred Model Server - Prometheus alerting rules
+
+groups:
+  - name: mortred-availability
+    rules:
+      - alert: MortredGatewayDown
+        expr: up{job="mortred-gateway"} == 0
+        for: 30s
+        labels: { severity: critical }
+        annotations:
+          summary: "Gateway is down"
+          description: "The inference gateway (:8080) has been unreachable for 30s."
+
+      - alert: MortredSupervisorDown
+        expr: up{job="mortred-supervisor"} == 0
+        for: 60s
+        labels: { severity: critical }
+        annotations:
+          summary: "Supervisor is down"
+          description: "Control plane (:8787) unreachable for 60s. Process management is lost."
+
+      - alert: MortredModelServerDown
+        expr: up{job=~"mortred-model-.*"} == 0
+        for: 60s
+        labels: { severity: warning }
+        annotations:
+          summary: "Model server {{ $labels.job }} is down"
+          description: "A model server has been unreachable for 60s."
+
+      - alert: MortredModelNotReady
+        expr: mortred_ready{job=~"mortred-model-.*"} == 0
+        for: 120s
+        labels: { severity: warning }
+        annotations:
+          summary: "Model {{ $labels.job }} not ready"
+          description: "Readiness probe failing for 2 minutes."
+
+  - name: mortred-performance
+    rules:
+      - alert: MortredHighQueueDepth
+        expr: mortred_queue_depth > 20
+        for: 60s
+        labels: { severity: warning }
+        annotations:
+          summary: "High queue depth on {{ $labels.model }}"
+          description: "Queue depth {{ $value }} for 60s."
+
+      - alert: MortredOverloadRejections
+        expr: rate(mortred_queue_rejected_total[5m]) > 0.1
+        for: 120s
+        labels: { severity: warning }
+        annotations:
+          summary: "Overload rejections on {{ $labels.model }}"
+          description: "429 rejections at {{ $value }}/s for 2 minutes."
+
+      - alert: MortredHighLatency
+        expr: histogram_quantile(0.95, rate(mortred_inference_duration_ms_bucket[5m])) > 2000
+        for: 300s
+        labels: { severity: warning }
+        annotations:
+          summary: "High p95 latency on {{ $labels.model }}"
+          description: "p95 latency {{ $value }}ms exceeds 2s for 5 minutes."
+
+      - alert: MortredHighErrorRate
+        expr: rate(mortred_http_requests_total{status=~"5.."}[5m]) / rate(mortred_http_requests_total[5m]) > 0.05
+        for: 120s
+        labels: { severity: critical }
+        annotations:
+          summary: "High 5xx rate on {{ $labels.model }}"
+          description: "5xx error rate {{ $value | humanizePercentage }} for 2 minutes."
+
+      - alert: MortredAllWorkersBusy
+        expr: mortred_workers_available == 0 and mortred_workers_busy > 0
+        for: 120s
+        labels: { severity: critical }
+        annotations:
+          summary: "All workers busy on {{ $labels.model }}"
+          description: "No available workers for 2 minutes; possible stuck worker."
+
+  - name: mortred-async
+    rules:
+      - alert: MortredAsyncQueueFull
+        expr: mortred_async_queue_depth > 10
+        for: 120s
+        labels: { severity: warning }
+        annotations:
+          summary: "Async queue deep on {{ $labels.model }}"
+          description: "Async job queue depth {{ $value }} for 2 minutes."
+
+      - alert: MortredAsyncTimeouts
+        expr: rate(mortred_async_jobs_total{state="timeout"}[5m]) > 0.05
+        for: 120s
+        labels: { severity: warning }
+        annotations:
+          summary: "Async timeouts on {{ $labels.model }}"
+          description: "Async jobs timing out at {{ $value }}/s."
+
+  - name: mortred-batch
+    rules:
+      - alert: MortredBatchNotCoalescing
+        expr: avg(mortred_batch_size_sum / mortred_batch_size_count) < 1.5
+        for: 600s
+        labels: { severity: info }
+        annotations:
+          summary: "Batch not coalescing on {{ $labels.model }}"
+          description: "Average batch size {{ $value }}; batching enabled but ineffective."
+
+  - name: mortred-supervisor
+    rules:
+      - alert: MortredRestartStorm
+        expr: rate(mortred_supervisor_restarts_total[5m]) > 0.2
+        for: 120s
+        labels: { severity: critical }
+        annotations:
+          summary: "Restart storm on {{ $labels.server }}"
+          description: "Process restarts at {{ $value }}/s; model server is crash-looping."

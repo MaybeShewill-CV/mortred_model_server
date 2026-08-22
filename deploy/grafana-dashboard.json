@@ -1,0 +1,100 @@
+{
+  "title": "Mortred Model Server",
+  "uid": "mortred",
+  "tags": ["mortred", "ai", "inference"],
+  "timezone": "browser",
+  "refresh": "15s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "title": "Service Availability",
+      "type": "stat", "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "up{job=~\"mortred-.*\"}", "legendFormat": "{{job}}" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [
+        { "color": "red", "value": null }, { "color": "green", "value": 1 }
+      ]}}}
+    },
+    {
+      "id": 2, "title": "Inference Rate (req/s)",
+      "type": "timeseries", "gridPos": { "h": 8, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "expr": "sum(rate(mortred_http_requests_total{status=\"200\"}[1m])) by (model)", "legendFormat": "{{model}}" }]
+    },
+    {
+      "id": 3, "title": "Error Rate (5xx %)",
+      "type": "timeseries", "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 },
+      "targets": [{
+        "expr": "100 * sum(rate(mortred_http_requests_total{status=~\"5..\"}[5m])) by (model) / sum(rate(mortred_http_requests_total[5m])) by (model)",
+        "legendFormat": "{{model}}"
+      }],
+      "fieldConfig": { "defaults": { "unit": "percent", "max": 100,
+        "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }]
+      }}}
+    },
+    {
+      "id": 4, "title": "Overload Rejections (429/s)",
+      "type": "timeseries", "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "sum(rate(mortred_queue_rejected_total[5m])) by (model)", "legendFormat": "{{model}}" }]
+    },
+    {
+      "id": 5, "title": "Inference Latency p50 / p95 / p99 (ms)",
+      "type": "timeseries", "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(mortred_inference_duration_ms_bucket[5m])) by (le, model))", "legendFormat": "p50 {{model}}" },
+        { "expr": "histogram_quantile(0.95, sum(rate(mortred_inference_duration_ms_bucket[5m])) by (le, model))", "legendFormat": "p95 {{model}}" },
+        { "expr": "histogram_quantile(0.99, sum(rate(mortred_inference_duration_ms_bucket[5m])) by (le, model))", "legendFormat": "p99 {{model}}" }
+      ]
+    },
+    {
+      "id": 6, "title": "Queue Depth",
+      "type": "timeseries", "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "targets": [{ "expr": "mortred_queue_depth", "legendFormat": "{{model}}" }]
+    },
+    {
+      "id": 7, "title": "Workers (busy / available)",
+      "type": "timeseries", "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "targets": [
+        { "expr": "mortred_workers_busy", "legendFormat": "busy {{model}}" },
+        { "expr": "mortred_workers_available", "legendFormat": "available {{model}}" }
+      ]
+    },
+    {
+      "id": 8, "title": "Batch Size Distribution",
+      "type": "timeseries", "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
+      "targets": [{
+        "expr": "sum(mortred_batch_size_sum) by (model) / sum(mortred_batch_size_count) by (model)",
+        "legendFormat": "avg {{model}}"
+      }]
+    },
+    {
+      "id": 9, "title": "Batch Collection Window Wait (ms)",
+      "type": "timeseries", "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
+      "targets": [{
+        "expr": "histogram_quantile(0.95, sum(rate(mortred_batch_window_wait_ms_bucket[5m])) by (le, model))",
+        "legendFormat": "p95 {{model}}"
+      }]
+    },
+    {
+      "id": 10, "title": "Async Jobs by State",
+      "type": "timeseries", "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
+      "targets": [{ "expr": "sum(rate(mortred_async_jobs_total[5m])) by (state)", "legendFormat": "{{state}}" }]
+    },
+    {
+      "id": 11, "title": "Async Queue Depth",
+      "type": "timeseries", "gridPos": { "h": 8, "w": 8, "x": 0, "y": 24 },
+      "targets": [{ "expr": "mortred_async_queue_depth", "legendFormat": "{{model}}" }]
+    },
+    {
+      "id": 12, "title": "Supervisor Process States",
+      "type": "stat", "gridPos": { "h": 8, "w": 8, "x": 8, "y": 24 },
+      "targets": [{ "expr": "mortred_supervisor_state", "legendFormat": "{{server}}" }],
+      "fieldConfig": { "defaults": { "mappings": [
+        { "type": "value", "options": { "0": { "text": "stopped", "color": "gray" }, "1": { "text": "starting", "color": "yellow" }, "2": { "text": "running", "color": "green" }, "3": { "text": "backoff", "color": "orange" }, "4": { "text": "failed", "color": "red" } }
+      }]}}
+    },
+    {
+      "id": 13, "title": "Process Restart Rate",
+      "type": "timeseries", "gridPos": { "h": 8, "w": 8, "x": 16, "y": 24 },
+      "targets": [{ "expr": "rate(mortred_supervisor_restarts_total[5m])", "legendFormat": "{{server}}" }]
+    }
+  ]
+}

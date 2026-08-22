@@ -1,0 +1,43 @@
+# Monitoring stack for Mortred Model Server
+#
+# Usage:
+#   docker compose -f deploy/docker-compose.monitoring.yml up -d
+#
+# Access:
+#   Prometheus: http://localhost:9090
+#   Grafana:    http://localhost:3000 (admin/admin)
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: mortred-prometheus
+    ports: ["9090:9090"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # replace localhost targets in prometheus.yml with host.docker.internal
+    # when running Prometheus inside Docker on Linux
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: mortred-grafana
+    ports: ["3000:3000"]
+    volumes:
+      - ./grafana-dashboard.json:/var/lib/grafana/dashboards/mortred.json:ro
+      - grafana-data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/mortred.json
+    depends_on: [prometheus]
+
+volumes:
+  prometheus-data:
+  grafana-data:

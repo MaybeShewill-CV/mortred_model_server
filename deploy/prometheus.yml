@@ -1,0 +1,57 @@
+# Mortred Model Server - Prometheus scrape configuration
+#
+# Install:
+#   sudo cp deploy/prometheus.yml /etc/prometheus/prometheus.yml
+#   sudo cp deploy/alert-rules.yml /etc/prometheus/alert-rules.yml
+#   sudo systemctl restart prometheus
+#
+# Or run standalone:
+#   prometheus --config.file=deploy/prometheus.yml --storage.tsdb.path=/tmp/prom-data
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alert-rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+scrape_configs:
+  - job_name: mortred-gateway
+    static_configs:
+      - targets: ['localhost:8080']
+        labels: { component: gateway }
+
+  - job_name: mortred-supervisor
+    static_configs:
+      - targets: ['localhost:8787']
+        labels: { component: supervisor }
+
+  - job_name: mortred-model-mobilenetv2
+    static_configs:
+      - targets: ['localhost:9002']
+        labels: { component: model, model: mobilenetv2 }
+
+  - job_name: mortred-model-yolov8
+    static_configs:
+      - targets: ['localhost:9056']
+        labels: { component: model, model: yolov8 }
+
+  - job_name: mortred-model-hrnet
+    static_configs:
+      - targets: ['localhost:9071']
+        labels: { component: model, model: hrnet }
+
+  - job_name: mortred-model-metric3d
+    static_configs:
+      - targets: ['localhost:9041']
+        labels: { component: model, model: metric3d }
+
+  - job_name: mortred-model-ddpm
+    static_configs:
+      - targets: ['localhost:9070']
+        labels: { component: model, model: ddpm }
