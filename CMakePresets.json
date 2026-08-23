@@ -1,8 +1,8 @@
 ﻿{
-  "version": 3,
+  "version": 4,
   "cmakeMinimumRequired": {
     "major": 3,
-    "minor": 18,
+    "minor": 22,
     "patch": 0
   },
   "configurePresets": [
@@ -158,6 +158,30 @@
       "configurePreset": "tests-only-asan",
       "output": {
         "outputOnFailure": true
+      }
+    },
+    {
+      "name": "full",
+      "displayName": "Full Test Suite (gpu profile)",
+      "description": "Run every test of the full build. The vendored engine libs live outside the build tree, so the preset exports an absolute LD_LIBRARY_PATH (ctest runs tests from their build dir; a relative path would not resolve).",
+      "configurePreset": "full",
+      "output": {
+        "outputOnFailure": true
+      },
+      "environment": {
+        "LD_LIBRARY_PATH": "${sourceDir}/_lib:${sourceDir}/3rd_party/libs"
+      }
+    },
+    {
+      "name": "full-cpu",
+      "displayName": "Full Test Suite (cpu profile)",
+      "description": "Run every test of the full cpu-profile build (TensorRT compiled out).",
+      "configurePreset": "full-cpu",
+      "output": {
+        "outputOnFailure": true
+      },
+      "environment": {
+        "LD_LIBRARY_PATH": "${sourceDir}/_lib:${sourceDir}/3rd_party/libs"
       }
     }
   ]
