@@ -1,4 +1,4 @@
-﻿name: CI
+name: CI
 
 on:
   push:
@@ -657,7 +657,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # Build only up to the build stage (dependency compile + full -Werror compile is the gate; no runtime layer needed)
       - name: Build full project with warnings as errors
@@ -686,7 +686,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # Exactly the same carrier as full-werror: dependency layers reused via gha cache, full -Werror compile
       - name: Build full project with warnings as errors
@@ -715,7 +715,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Nightly full build + tests (warnings as errors)
         uses: docker/build-push-action@v6
