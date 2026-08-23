@@ -153,7 +153,10 @@ install_fmt() {
     if [ ! -d "$src/.git" ]; then
         git clone --depth 1 --branch 9.1.0 https://github.com/fmtlib/fmt.git "$src"
     fi
-    cmake -S "$src" -B "$src/build-mortred" -DCMAKE_BUILD_TYPE=Release -DFMT_TEST=OFF -DFMT_DOC=OFF
+    # BUILD_SHARED_LIBS=ON: fmt defaults to a static lib, but the vendored tree
+    # and vendored::fmt expect libfmt.so.9 - fresh containers proved the default
+    # produces only libfmt.a and copy_libs then finds nothing
+    cmake -S "$src" -B "$src/build-mortred" -DCMAKE_BUILD_TYPE=Release -DFMT_TEST=OFF -DFMT_DOC=OFF -DBUILD_SHARED_LIBS=ON
     cmake --build "$src/build-mortred" -j"$JOBS"
     mkdir -p "$INCLUDE_DIR/fmt"
     cp -rn "$src/include/fmt"/*.h "$INCLUDE_DIR/fmt"/ 2>/dev/null || true

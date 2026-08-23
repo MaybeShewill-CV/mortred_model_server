@@ -112,7 +112,7 @@ jobs:
           "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
           baseline="$(git -C "$VCPKG_ROOT" rev-parse HEAD)"
           mkdir -p "$VCPKG_MANIFEST_DIR"
-          jq --arg baseline "$baseline" '.builtin-baseline = $baseline' vcpkg.json > "$VCPKG_MANIFEST_DIR/vcpkg.json"
+          jq --arg baseline "$baseline" '.["builtin-baseline"] = $baseline' vcpkg.json > "$VCPKG_MANIFEST_DIR/vcpkg.json"
           echo "Pinned vcpkg builtin-baseline to: $baseline"
 
       - name: Configure (vcpkg toolchain, tests-only)
@@ -192,7 +192,7 @@ jobs:
           "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
           baseline="$(git -C "$VCPKG_ROOT" rev-parse HEAD)"
           mkdir -p "$VCPKG_MANIFEST_DIR"
-          jq --arg baseline "$baseline" '.builtin-baseline = $baseline' vcpkg.json > "$VCPKG_MANIFEST_DIR/vcpkg.json"
+          jq --arg baseline "$baseline" '.["builtin-baseline"] = $baseline' vcpkg.json > "$VCPKG_MANIFEST_DIR/vcpkg.json"
           echo "Pinned vcpkg builtin-baseline to: $baseline"
 
       - name: Configure (tests-only, warnings as errors)
@@ -329,7 +329,7 @@ jobs:
           "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
           baseline="$(git -C "$VCPKG_ROOT" rev-parse HEAD)"
           mkdir -p "$VCPKG_MANIFEST_DIR"
-          jq --arg baseline "$baseline" '.builtin-baseline = $baseline' vcpkg.json > "$VCPKG_MANIFEST_DIR/vcpkg.json"
+          jq --arg baseline "$baseline" '.["builtin-baseline"] = $baseline' vcpkg.json > "$VCPKG_MANIFEST_DIR/vcpkg.json"
           echo "Pinned vcpkg builtin-baseline to: $baseline"
 
       - name: Configure and run TSAN gate (async tests)
@@ -495,7 +495,7 @@ jobs:
           "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
           baseline="$(git -C "$VCPKG_ROOT" rev-parse HEAD)"
           mkdir -p "$VCPKG_MANIFEST_DIR"
-          jq --arg baseline "$baseline" '.builtin-baseline = $baseline' vcpkg.json > "$VCPKG_MANIFEST_DIR/vcpkg.json"
+          jq --arg baseline "$baseline" '.["builtin-baseline"] = $baseline' vcpkg.json > "$VCPKG_MANIFEST_DIR/vcpkg.json"
           echo "Pinned vcpkg builtin-baseline to: $baseline"
 
       - name: Configure (tests-only, export compile commands)
