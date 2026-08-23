@@ -119,12 +119,12 @@ jobs:
         run: >
           cmake -B build-ci
           -DMORTRED_BUILD_FULL=OFF
-          -DMORTRED_BIN_OUTPUT_DIR=$MORTRED_CI_BIN_DIR
-          -DMORTRED_LIB_OUTPUT_DIR=$MORTRED_CI_LIB_DIR
-          -DVCPKG_MANIFEST_DIR=$VCPKG_MANIFEST_DIR
-          -DVCPKG_INSTALLED_DIR=$VCPKG_INSTALLED_DIR
+          -DMORTRED_BIN_OUTPUT_DIR="$MORTRED_CI_BIN_DIR"
+          -DMORTRED_LIB_OUTPUT_DIR="$MORTRED_CI_LIB_DIR"
+          -DVCPKG_MANIFEST_DIR="$VCPKG_MANIFEST_DIR"
+          -DVCPKG_INSTALLED_DIR="$VCPKG_INSTALLED_DIR"
           -DVCPKG_MANIFEST_MODE=ON
-          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+          -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
@@ -202,10 +202,10 @@ jobs:
           -DMORTRED_ENABLE_WERROR=ON
           -DMORTRED_BIN_OUTPUT_DIR=${{ github.workspace }}/build-gate/bin
           -DMORTRED_LIB_OUTPUT_DIR=${{ github.workspace }}/build-gate/lib
-          -DVCPKG_MANIFEST_DIR=$VCPKG_MANIFEST_DIR
-          -DVCPKG_INSTALLED_DIR=$VCPKG_INSTALLED_DIR
+          -DVCPKG_MANIFEST_DIR="$VCPKG_MANIFEST_DIR"
+          -DVCPKG_INSTALLED_DIR="$VCPKG_INSTALLED_DIR"
           -DVCPKG_MANIFEST_MODE=ON
-          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+          -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
@@ -341,10 +341,10 @@ jobs:
             -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
             -DMORTRED_BIN_OUTPUT_DIR=${{ github.workspace }}/build-tsan/bin \
             -DMORTRED_LIB_OUTPUT_DIR=${{ github.workspace }}/build-tsan/lib \
-            -DVCPKG_MANIFEST_DIR=$VCPKG_MANIFEST_DIR \
-            -DVCPKG_INSTALLED_DIR=$VCPKG_INSTALLED_DIR \
+            -DVCPKG_MANIFEST_DIR="$VCPKG_MANIFEST_DIR" \
+            -DVCPKG_INSTALLED_DIR="$VCPKG_INSTALLED_DIR" \
             -DVCPKG_MANIFEST_MODE=ON \
-            -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           LD_LIBRARY_PATH="${{ github.workspace }}/build-tsan/lib" \
@@ -366,10 +366,10 @@ jobs:
             -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
             -DMORTRED_BIN_OUTPUT_DIR=${{ github.workspace }}/build-asan/bin \
             -DMORTRED_LIB_OUTPUT_DIR=${{ github.workspace }}/build-asan/lib \
-            -DVCPKG_MANIFEST_DIR=$VCPKG_MANIFEST_DIR \
-            -DVCPKG_INSTALLED_DIR=$VCPKG_INSTALLED_DIR \
+            -DVCPKG_MANIFEST_DIR="$VCPKG_MANIFEST_DIR" \
+            -DVCPKG_INSTALLED_DIR="$VCPKG_INSTALLED_DIR" \
             -DVCPKG_MANIFEST_MODE=ON \
-            -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           LD_LIBRARY_PATH="${{ github.workspace }}/build-asan/lib" CTEST_OUTPUT_ON_FAILURE=1 \
@@ -504,13 +504,13 @@ jobs:
           -DMORTRED_BUILD_FULL=OFF
           -DMORTRED_BIN_OUTPUT_DIR=${{ github.workspace }}/build-tidy/bin
           -DMORTRED_LIB_OUTPUT_DIR=${{ github.workspace }}/build-tidy/lib
-          -DVCPKG_MANIFEST_DIR=$VCPKG_MANIFEST_DIR
-          -DVCPKG_INSTALLED_DIR=$VCPKG_INSTALLED_DIR
+          -DVCPKG_MANIFEST_DIR="$VCPKG_MANIFEST_DIR"
+          -DVCPKG_INSTALLED_DIR="$VCPKG_INSTALLED_DIR"
           -DVCPKG_MANIFEST_MODE=ON
           -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           -DCMAKE_C_COMPILER=clang
           -DCMAKE_CXX_COMPILER=clang++
-          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+          -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build all test targets
         run: |
