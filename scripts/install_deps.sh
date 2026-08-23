@@ -33,6 +33,9 @@ BUILD_DIR="${MORTRED_DEPS_BUILD_DIR:-$ROOT/.deps-build}"
 
 # ---- Version matrix (two lines; tags verified to exist via git ls-remote/HTTP HEAD) ----
 CUDA_VERSION="${CUDA_VERSION:-11}"
+# NVIDIA base images (nvidia/cuda:*) export CUDA_VERSION="11.8.0" style values;
+# normalize to the major line so the env bleed cannot fail the 11|12 validation
+CUDA_VERSION="${CUDA_VERSION%%.*}"
 if [ "$CUDA_VERSION" = "12" ]; then
     TRT_VER="10.3.0.26"
     TRT_INCLUDE_DIR="TensorRT-10.3.0"
