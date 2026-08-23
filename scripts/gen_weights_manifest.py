@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 gen_weights_manifest.py - generate/update conf/weights_manifest.json (weight

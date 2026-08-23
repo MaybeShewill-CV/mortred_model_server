@@ -1,4 +1,4 @@
-﻿[HRNET_SEGMENTATION_SERVER]
+[HRNET_SEGMENTATION_SERVER]
 # deployment profile filter: this entry only appears when MORTRED_PROFILE=cpu
 profile="cpu"
 port=9071

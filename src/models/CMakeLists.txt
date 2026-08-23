@@ -1,4 +1,4 @@
-﻿# build models libs
+# build models libs
 
 set(MODELS_LIB_SRC
     ${CMAKE_CURRENT_LIST_DIR}/base_model.h

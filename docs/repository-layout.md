@@ -1,4 +1,4 @@
-﻿# Repository Layout
+# Repository Layout
 
 This document defines the canonical repository layout and the mapping between source files,
 generated executables, configuration files, and documentation.

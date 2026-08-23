@@ -1,4 +1,4 @@
-﻿# build apps
+# build apps
 
 # benchmark / server app assembly is identical; share one function (previously two verbatim copies)
 function(add_mortred_app src)

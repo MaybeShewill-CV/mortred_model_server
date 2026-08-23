@@ -8,6 +8,10 @@
 // Thin REST client for mortred-supervisor: status / catalog / lifecycle
 // actions / logs / inference smoke test. Machine-readable output (raw JSON).
 
+#include <filesystem>
+#include <sys/wait.h>
+#include <unistd.h>
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -143,17 +147,45 @@ int run_cli(int argc, char** argv) {
             if (const char* env = std::getenv("MORTRED_PROJECT_ROOT"); env != nullptr && *env != '\0') {
                 return std::string(env);
             }
-            // installed tree layout: bin/mortredctl.out + scripts/
-            return std::string("..");
+            // resolve from the executable itself: <root>/bin/mortredctl.out
+            // in both the installed tree and the source-tree _bin layout
+            // (never relative to the caller's cwd)
+            char buf[4096] = {0};
+            const ssize_t n = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+            if (n > 0) {
+                std::filesystem::path exe(buf);
+                auto dir = exe.parent_path();
+                if (dir.filename() == "bin" || dir.filename() == "_bin") {
+                    return dir.parent_path().string();
+                }
+                return dir.string();
+            }
+            return std::string(".");
         }();
-        std::ostringstream cmd_line;
-        cmd_line << '"' << root << "/scripts/mortredctl_" << cmd << ".sh\"";
+        const std::string script = root + "/scripts/mortredctl_" + cmd + ".sh";
+        // fork/execvp (NOT std::system): the consistency checker bans
+        // shell-spawning calls, and direct execvp passes arguments without
+        // any shell re-parsing
+        std::vector<char*> child_argv;
+        child_argv.push_back(const_cast<char*>(script.c_str()));
         // remaining args (e.g. upgrade v0.2.0 / init --profile cpu)
         while (index < args.size()) {
-            cmd_line << " \"" << args[index++] << '"';
+            child_argv.push_back(const_cast<char*>(args[index++].c_str()));
         }
-        const int rc = std::system(cmd_line.str().c_str());
-        return rc == 0 ? 0 : 1;
+        child_argv.push_back(nullptr);
+        const pid_t pid = ::fork();
+        if (pid < 0) {
+            std::fprintf(stderr, "mortredctl: fork failed\n");
+            return 1;
+        }
+        if (pid == 0) {
+            ::execvp(child_argv[0], child_argv.data());
+            std::fprintf(stderr, "mortredctl: cannot execute %s\n", script.c_str());
+            ::_exit(127);
+        }
+        int status = 0;
+        ::waitpid(pid, &status, 0);
+        return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
     }
 
     HttpResult r;

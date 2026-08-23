@@ -1,4 +1,4 @@
-﻿[RESNET_CLASSIFICATION_SERVER]
+[RESNET_CLASSIFICATION_SERVER]
 # deployment profile filter: this entry only appears when MORTRED_PROFILE=cpu
 profile="cpu"
 port=9003

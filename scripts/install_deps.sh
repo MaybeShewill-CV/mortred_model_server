@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 # install_deps.sh - one-shot build/install of all Mortred third-party deps into 3rd_party/{include,libs}
 #
 # Goal: replace the "manually compile third-party libs + hand-copy into 3rd_party" flow. Defaults to this repo's

@@ -1,4 +1,4 @@
-﻿[YOLOV8_DETECTION_SERVER]
+[YOLOV8_DETECTION_SERVER]
 # deployment profile filter: this entry only appears when MORTRED_PROFILE=cpu
 profile="cpu"
 port=9056

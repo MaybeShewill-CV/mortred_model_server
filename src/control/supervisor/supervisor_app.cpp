@@ -1,4 +1,4 @@
-﻿/************************************************
+/************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
 * File: main.cpp (mortred-supervisor)

@@ -1,4 +1,4 @@
-﻿# HTTP API Contract
+# HTTP API Contract
 
 | [English](api-contract.md) | [涓枃](api-contract.zh-cn.md) |
 |---|---|

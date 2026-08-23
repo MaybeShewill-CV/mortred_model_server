@@ -1,4 +1,4 @@
-﻿# HTTP API 契约
+# HTTP API 契约
 
 | [English](api-contract.md) | [中文](api-contract.zh-cn.md) |
 |---|---|

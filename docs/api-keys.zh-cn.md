@@ -1,4 +1,4 @@
-﻿# API Key 管理指南
+# API Key 管理指南
 
 | [English](api-keys.md) | [中文](api-keys.zh-cn.md) |
 |---|---|

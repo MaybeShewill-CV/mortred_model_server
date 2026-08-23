@@ -13,4 +13,6 @@ async_enabled=true
 async_timeout=600000
 async_max_queue=8
 model_run_timeout=0
+
+[DDIM]
 model_config_file_path="../conf/model/diffusion/ddpm/ddim_celeba-hq.toml"

@@ -1,4 +1,4 @@
-﻿name: CI
+name: CI
 
 on:
   push:
@@ -40,7 +40,7 @@ concurrency:
 
 env:
   # Single source of truth for the vcpkg version; update only here when upgrading
-  VCPKG_TAG: 2026.01.16
+  VCPKG_TAG: 2026.07.29
   # Clone vcpkg outside the workspace (parent of github.workspace) so the repo worktree stays clean after builds.
   # Note: runner context is unavailable in workflow-level env (step-level only); only the github context works here
   VCPKG_ROOT: ${{ github.workspace }}/../vcpkg

@@ -1,4 +1,4 @@
-﻿# CPU profile variant of resnet50_config.toml: identical MNN model, CPU schedule.
+# CPU profile variant of resnet50_config.toml: identical MNN model, CPU schedule.
 [RESNET]
 [RESNET.backend]
 type = "mnn"

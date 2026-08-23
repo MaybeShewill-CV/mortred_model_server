@@ -1,4 +1,4 @@
-﻿# CPU profile variant of yolov8_config.toml: ONNX Runtime CPU provider
+# CPU profile variant of yolov8_config.toml: ONNX Runtime CPU provider
 # instead of the TRT engine (engines are hardware/TRT-version specific).
 [YOLOV8]
 [YOLOV8.backend]

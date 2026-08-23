@@ -1,4 +1,4 @@
-﻿# Async Job Table (Architecture & Concurrency Contract)
+# Async Job Table (Architecture & Concurrency Contract)
 
 This document records the P0 correctness rework of the async-job subsystem: what
 was broken, how [`src/server/async_job_table.h`](../src/server/async_job_table.h)

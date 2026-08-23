@@ -1,4 +1,4 @@
-﻿# Mortred Model Server - container orchestration for BOTH deployment profiles.
+# Mortred Model Server - container orchestration for BOTH deployment profiles.
 #
 # GPU profile (default, full CUDA/TensorRT stack):
 #   docker compose --profile gpu up -d

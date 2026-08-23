@@ -1,4 +1,4 @@
-﻿# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1
 # Mortred Model Server - 全自动构建运行环境
 #
 # 基线线：CUDA 11.8 + TensorRT 8.6.1 + cuDNN 8（与 3rd_party 已备集合一致）。

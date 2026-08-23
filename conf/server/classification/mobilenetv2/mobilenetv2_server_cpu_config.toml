@@ -1,4 +1,4 @@
-﻿[MOBILENETV2_CLASSIFICATION_SERVER]
+[MOBILENETV2_CLASSIFICATION_SERVER]
 # deployment profile filter: this entry only appears when MORTRED_PROFILE=cpu
 profile="cpu"
 port=9002

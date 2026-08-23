@@ -1,4 +1,4 @@
-﻿# 异步任务账本（架构与并发契约）
+# 异步任务账本（架构与并发契约）
 
 本文记录异步任务子系统的 P0 正确性重构：缺陷是什么、
 [`src/server/async_job_table.h`](../src/server/async_job_table.h) 如何修复、
