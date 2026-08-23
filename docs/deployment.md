@@ -1,87 +1,654 @@
-﻿# Deployment Guide (Linux)
+# Deployment Guide (Linux)
 
-Mortred targets Linux only. This document is the operational counterpart of
-the [Quick Start](../README.md): profiles, distribution tracks, the three
-first-hour entries, upgrades and the acceptance gates.
+> Mortred targets Linux only. This is the complete operations manual behind the
+> [Quick Start](../README.md): architecture, decision guide, step-by-step
+> walkthroughs of all three install tracks, the profile system, weights and
+> engine management, security, upgrades/rollback, monitoring and troubleshooting.
+>
+> **After reading this you can**: bring Mortred up on a clean Ubuntu machine in
+> 20 minutes and pass the acceptance gates.
 
-## Profiles: one switch, four layers
+---
 
-`cpu` and `gpu` are not two products - one profile switch drives the build,
-the dependency set, the model catalog and the weight subset:
+## Contents
 
-| Layer | Switch | cpu | gpu (default) |
+- [1. Architecture](#1-architecture)
+- [2. Five-Minute Decision Guide](#2-five-minute-decision-guide)
+- [3. Prerequisites](#3-prerequisites)
+- [4. Entry 1: One-Line Bootstrap](#4-entry-1-one-line-bootstrap)
+- [5. Entry 2: Docker Compose](#5-entry-2-docker-compose)
+- [6. Entry 3: Tarball + systemd](#6-entry-3-tarball--systemd)
+- [7. Building from Source](#7-building-from-source)
+- [8. The Profile System](#8-the-profile-system)
+- [9. Weights Management](#9-weights-management)
+- [10. TensorRT Engines (GPU only)](#10-tensorrt-engines-gpu-only)
+- [11. Authentication & Security](#11-authentication--security)
+- [12. Upgrades & Rollback](#12-upgrades--rollback)
+- [13. Monitoring](#13-monitoring)
+- [14. Troubleshooting](#14-troubleshooting)
+- [15. FAQ](#15-faq)
+- [16. Acceptance Gates](#16-acceptance-gates)
+
+---
+
+## 1. Architecture
+
+A Mortred deployment is **one control plane** plus **a set of model processes**,
+all on the same machine (or inside the same container):
+
+```mermaid
+flowchart LR
+    subgraph Clients["External clients"]
+        C["SDK / curl / browser"]
+    end
+
+    subgraph ControlPlane["Control plane (the only two exposed ports)"]
+        GW["mortred-gateway :8080<br/>inference entry · auth · rate limit · routing"]
+        SUP["mortred-supervisor :8787<br/>process mgmt · web console · mgmt API"]
+    end
+
+    subgraph DataPlane["Data plane (loopback only, unreachable externally)"]
+        M1["mobilenetv2_server :9002"]
+        M2["yolov8_server :9056"]
+        M3["...more model servers"]
+    end
+
+    C -->|"POST /mortred_ai_server_v1/..."| GW
+    GW -->|"internal token"| M1
+    GW --> M2
+    GW --> M3
+    SUP -.->|"spawn/restart/probe"| M1
+    SUP -.-> M2
+    SUP -.-> M3
+    C -->|"Web console / mgmt API"| SUP
+```
+
+**Key design decisions**:
+
+| Decision | Meaning |
+|---|---|
+| Only 2 external ports | gateway `8080` (inference), supervisor `8787` (management + web UI) |
+| Model servers bind loopback only | Nothing bypasses the gateway; supervisor injects an internal token |
+| The supervisor manages everything | Crashed model servers restart with backoff; crash-loop protection |
+| Fail-closed | Non-loopback listener without a token **refuses to start** |
+
+**Ports at a glance**:
+
+| Port | Process | Purpose | Auth |
 |---|---|---|---|
-| Build | `MORTRED_BUILD_PROFILE` | TRT compiled out | full CUDA/TRT stack |
-| Dependencies | `install_deps.sh --cpu` | MNN-CPU + ORT-CPU | + CUDA/TRT/cuDNN (root) |
-| Catalog | server TOML `profile` field | curated `*_cpu` configs only | everything |
-| Weights | `fetch_weights.py --profile` | curated subset | full manifest |
+| `8080` | mortred-gateway | inference `/mortred_ai_server_v1/...`, `/healthz`, `/metrics` | Bearer token (or API key) |
+| `8787` | mortred-supervisor | mgmt API `/api/v1/*`, web console | Bearer token |
+| `9002+` | model servers | loopback only | internal token |
 
-Runtime selection is `MORTRED_PROFILE=cpu|gpu` (default `gpu`); absent
-`profile` fields mean `gpu`, so the cpu catalog is always explicitly curated.
-The curated cpu model set (mobilenetv2, resnet50, yolov8, hrnet) is frozen
-per release - extending it is a CHANGELOG-worthy change, not a config tweak.
+---
 
-## Distribution tracks (equal citizens)
+## 2. Five-Minute Decision Guide
 
-- **Docker**: `docker build --target mortred-cpu` or the default gpu target;
-  `docker compose --profile cpu|gpu up -d`. Images are published per release
-  as `ghcr.io/<owner>/mortred_model_server:vX.Y.Z-cpu|-gpu`.
-- **Tarball**: `scripts/make_release_tarball.sh <profile> <version>`
-  produces a self-contained archive (installed tree + systemd unit +
-  `install.sh`) with a `.sha256`. `install.sh` wires runtime apt deps,
-  `/opt/mortred`, the `mortred` user and the systemd unit. Weights are never
-  bundled (tens of GB); `install.sh` prints the matching
-  `fetch_weights.py --profile` command.
+### 2.1 First, the profile: cpu or gpu?
 
-Both tracks are validated by the same `scripts/verify_deployment.sh`.
-
-## First-hour entries (one core, three shells)
-
-All three end at `mortredctl doctor`:
-
-1. **bootstrap one-liner** (`scripts/bootstrap.sh`): hardware detection
-   (nvidia-smi) → docker track or latest release tarball. Thin by design.
-2. **docker compose**: profile flag + weight fetch; tokens via environment.
-3. **tarball + systemd**: installer, `supervisor.env` tokens, weight fetch,
-   `systemctl start`.
-
-`mortredctl init [--profile]` is the programmatic core (detect / fetch /
-verify); `mortredctl doctor` runs the live acceptance; `mortredctl upgrade
-[version]` performs an in-place upgrade (see below).
-
-## TensorRT engines (gpu only)
-
-Engines are hardware/TRT-version specific artifacts and are never shipped.
-Convert the missing ones per machine:
-
-```bash
-./scripts/convert_trt_engines.sh --list   # manifest
-./scripts/convert_trt_engines.sh          # convert missing (FP16 + profiles)
+```mermaid
+flowchart TD
+    A["NVIDIA GPU present?"] -->|"nvidia-smi -L succeeds"| GPU["gpu profile"]
+    A -->|"no GPU / unsure"| CPU["cpu profile"]
+    GPU --> G1["full model zoo<br/>MNN-CUDA / ORT-CUDA / TensorRT"]
+    CPU --> C1["curated 4 models<br/>MNN-CPU / ORT-CPU, no TensorRT"]
 ```
 
-Containers may opt into conversion before autostart with
-`MORTRED_AUTO_BUILD_ENGINES=true` (off by default - conversion is
-minutes-long). `doctor` warns about missing engines without failing.
+| | `gpu` (default) | `cpu` |
+|---|---|---|
+| **Backends** | MNN-CUDA / ORT-CUDA / TensorRT | MNN-CPU / ORT-CPU (TensorRT compiled out) |
+| **Hardware** | NVIDIA GPU + driver, CUDA 11.8 or 12 line | any x64 machine |
+| **Models** | everything (classification/detection/OCR/seg/SAM/diffusion/CLIP/MOT...) | curated: mobilenetv2, resnet50, yolov8, hrnet |
+| **Weight size** | full manifest (tens of GB) | curated subset (~1 GB) |
+| **Engine conversion** | required, once per machine (§10) | not needed |
 
-## Upgrades
+> **Unsure? Pick cpu.** The worst case of a wrong choice is redoing with the other
+> profile; the data-plane configs are fully compatible.
 
-- `mortredctl upgrade` (or `upgrade vX.Y.Z`): downloads the release tarball
-  for the RUNNING profile, verifies sha256, backs up `conf/` to
-  `conf.backup-<timestamp>`, installs over `/opt/mortred` (weights untouched),
-  restarts the service and runs `doctor`.
-- In-place upgrades are supported between ADJACENT minor versions. Across
-  larger jumps: export configs, fresh-install the target version, migrate
-  configs manually (`scripts/migrate_model_config.py` helps).
-- Config compatibility breaks are called out in `CHANGELOG.md` per version.
+### 2.2 Then, the track: Docker or tarball?
 
-## Acceptance gates
+| | Docker track | Tarball track |
+|---|---|---|
+| **For** | Docker shops; fastest path to a running service | bare-metal prod; no Docker; native systemd |
+| **Artifact** | dual images (`ghcr.io/...:vX.Y.Z-cpu/-gpu`) | self-contained tarball + `install.sh` + systemd unit |
+| **Upgrade** | swap image tag | `mortredctl upgrade` (in place, conf backed up) |
+| **Isolation** | container-level | apt deps installed by the installer |
+| **Shared** | same `verify_deployment.sh` acceptance, same profile system, same `mortredctl` core | |
+
+All three entries (bootstrap / compose / tarball) **share one mortredctl core**
+and converge on `mortredctl doctor` - there are no divergent paths.
+
+---
+
+## 3. Prerequisites
+
+### 3.1 Hardware
+
+| Profile | Minimum | Recommended |
+|---|---|---|
+| cpu | 2 cores / 4 GB / 10 GB disk | 8 cores / 16 GB / SSD |
+| gpu | the above + any CUDA 11/12 GPU | RTX 3060+ / 8 GB VRAM / 50 GB disk |
+
+### 3.2 OS and software
+
+| Item | Requirement | Check |
+|---|---|---|
+| OS | Ubuntu 20.04 / 22.04 (x64) | `lsb_release -rs` |
+| curl | any recent version | `curl --version` |
+| python3 | ≥ 3.8 (weights only) | `python3 --version` |
+| docker + compose | Docker track only | `docker compose version` |
+| sudo | tarball installer only | - |
+| NVIDIA driver | gpu profile only | `nvidia-smi` |
+
+### 3.3 Network
+
+- **Install time**: access to GitHub Releases / Hugging Face (weights). Offline: §9.4.
+- **Runtime**: local listeners only; external exposure is your reverse proxy's decision.
+
+---
+
+## 4. Entry 1: One-Line Bootstrap
+
+The fastest path - hardware detection, track selection, straight through:
 
 ```bash
-./scripts/verify_deployment.sh --basic   # static: syntax/manifests/deps
-./scripts/verify_deployment.sh --full    # + local weights sha256 + 3rd_party
-./scripts/verify_deployment.sh --live    # + gateway probes (healthz/auth)
-mortredctl doctor                        # live wrapper
+curl -fsSL https://raw.githubusercontent.com/MaybeSheWill-CV/mortred_model_server/main/scripts/bootstrap.sh | bash
 ```
 
-CI runs the cpu-profile full build + test suite on a GPU-less runner for
-every change - the conditional-compilation path cannot silently rot.
+**What it does**:
+
+1. Probes `nvidia-smi -L` → recommends `gpu` or `cpu`;
+2. Docker present → prints the three-step compose instructions (§5);
+3. No Docker → downloads the latest release tarball for the profile, verifies
+   sha256, runs `sudo ./install.sh` (§6);
+4. Neither possible → prints the source-build path (§7).
+
+**Expected output** (no GPU, Docker present):
+
+```text
+== Mortred bootstrap ==
+  detected profile: cpu
+== docker track ==
+next:
+  1. git clone https://github.com/MaybeShewill-CV/mortred_model_server.git && cd mortred_model_server
+  2. python3 scripts/fetch_weights.py --profile cpu
+  3. MORTRED_API_TOKEN=<mgmt> MORTRED_GATEWAY_AUTH_TOKEN=<infer> \
+         docker compose --profile cpu up -d
+  4. curl -fs http://localhost:8787/api/v1/health
+```
+
+> The bootstrap stays deliberately thin: detection and delegation only. Upgrading
+> mortredctl upgrades every entry point.
+
+---
+
+## 5. Entry 2: Docker Compose
+
+### 5.1 Install (four steps)
+
+```bash
+# 1. get the code (compose file + weight scripts live in the repo)
+git clone https://github.com/MaybeShewill-CV/mortred_model_server.git
+cd mortred_model_server
+
+# 2. fetch the weight subset for your profile (resumable + sha256 verified)
+python3 scripts/fetch_weights.py --profile cpu     # gpu machines: gpu
+
+# 3. set the two tokens (fail-closed without them)
+export MORTRED_API_TOKEN="$(openssl rand -hex 24)"          # management
+export MORTRED_GATEWAY_AUTH_TOKEN="$(openssl rand -hex 24)" # inference
+
+# 4. start (builds locally; first build ~10-25 min)
+docker compose --profile cpu up -d      # GPU machines: --profile gpu
+```
+
+The gpu track needs the NVIDIA Container Toolkit (`docker run --gpus all` works = installed).
+
+### 5.2 Verify
+
+```bash
+curl -fs http://localhost:8787/api/v1/health        # supervisor health
+curl -fs http://localhost:8080/healthz               # gateway health (public)
+curl -fs http://localhost:8080/metrics | head -5     # gateway metrics
+
+curl -fs -H "Authorization: Bearer $MORTRED_API_TOKEN" \
+    http://localhost:8787/api/v1/catalog | python3 -m json.tool | head -20
+```
+
+**Expected**: `/api/v1/health` returns OK; the catalog lists exactly the profile's
+models (cpu: the four `*_cpu` entries - mobilenetv2 / resnet50 / yolov8 / hrnet).
+
+### 5.3 Day-2 operations
+
+| Operation | Command |
+|---|---|
+| Logs | `docker compose --profile cpu logs -f mortred-cpu` |
+| Restart | `docker compose --profile cpu restart` |
+| Stop | `docker compose --profile cpu down` |
+| Upgrade image | `docker compose --profile cpu pull && docker compose --profile cpu up -d` |
+| Shell into container | `docker exec -it mortred-cpu bash` |
+| GPU first-start engine build | env `MORTRED_AUTO_BUILD_ENGINES=true` (§10.3) |
+
+### 5.4 Prebuilt images (no local build)
+
+```bash
+docker pull ghcr.io/maybeshewill-cv/mortred_model_server:v0.1.0-cpu
+docker run -d --name mortred \
+  -p 8787:8787 -p 8080:8080 \
+  -v "$PWD/weights:/opt/mortred/weights" \
+  -e MORTRED_API_TOKEN=... -e MORTRED_GATEWAY_AUTH_TOKEN=... \
+  ghcr.io/maybeshewill-cv/mortred_model_server:v0.1.0-cpu
+```
+
+---
+
+## 6. Entry 3: Tarball + systemd
+
+For bare-metal production: no Docker dependency, native systemd, self-healing restarts.
+
+### 6.1 Download and verify
+
+From [Releases](https://github.com/MaybeSheWill-CV/mortred_model_server/releases)
+(example: v0.1.0 / cpu):
+
+```bash
+VER=0.1.0
+curl -fLO https://github.com/MaybeShewill-CV/mortred_model_server/releases/download/v$VER/mortred_model_server-$VER-cpu-linux-x64.tar.gz
+curl -fLO https://github.com/MaybeShewill-CV/mortred_model_server/releases/download/v$VER/mortred_model_server-$VER-cpu-linux-x64.tar.gz.sha256
+sha256sum -c mortred_model_server-$VER-cpu-linux-x64.tar.gz.sha256   # must print OK
+```
+
+> Tarball contents: `opt/mortred/` (installed tree) + `deploy/mortred-supervisor.service`
+> + `install.sh` + a `PROFILE` marker. Weights are NOT bundled (tens of GB) -
+> fetch them per §9 after installing.
+
+### 6.2 Install (root)
+
+```bash
+tar -xzf mortred_model_server-$VER-cpu-linux-x64.tar.gz
+cd mortred_model_server-$VER-cpu-linux-x64
+sudo ./install.sh
+```
+
+**What install.sh does, step by step** (idempotent, safe to re-run):
+
+| Step | Content |
+|---|---|
+| 1 | apt runtime deps (glog / OpenCV / openssl; gpu adds TensorRT/cuDNN runtime) |
+| 2 | install tree to `/opt/mortred`; create the `mortred` system user |
+| 3 | install + enable the systemd unit (cpu profile injects `MORTRED_PROFILE=cpu`) |
+| 4 | generate `/etc/mortred/supervisor.env` (mode 600) and print next steps |
+
+### 6.3 Tokens and weights
+
+```bash
+sudoedit /etc/mortred/supervisor.env
+#   MORTRED_API_TOKEN=<output of openssl rand -hex 24>
+#   MORTRED_GATEWAY_AUTH_TOKEN=<another random value>
+
+cd /opt/mortred
+sudo -u mortred python3 scripts/fetch_weights.py --profile cpu
+```
+
+### 6.4 Start and verify
+
+```bash
+sudo systemctl start mortred-supervisor
+sudo systemctl status mortred-supervisor --no-pager    # active (running)
+curl -fs http://127.0.0.1:8787/api/v1/health
+```
+
+Unit highlights: `Restart=always`, `TimeoutStopSec=120` (ordered shutdown -
+models first, gateway last), `EnvironmentFile=/etc/mortred/supervisor.env` (600).
+
+---
+
+## 7. Building from Source
+
+For contributors and custom builds.
+
+### 7.1 Dependencies (version matrix + sha256 pinned + idempotent stamps)
+
+```bash
+./scripts/install_deps.sh --check          # inspect current 3rd_party
+./scripts/install_deps.sh --all            # gpu line (CUDA 11 default; --cuda-version 12)
+./scripts/install_deps.sh --cpu --all      # cpu line: MNN-CPU + ORT-CPU, no NVIDIA/TRT
+sudo ./scripts/install_deps.sh --nvidia    # gpu line CUDA/TRT/cuDNN (root; nothing else needs it)
+```
+
+Offline: `--offline DIR` uses a pre-downloaded package dir. ORT tarballs are
+sha256-verified fail-closed (a missing hash refuses the install).
+
+### 7.2 Build (presets carry the profile)
+
+```bash
+cmake --preset full && cmake --build --preset full            # gpu full
+cmake --preset full-cpu && cmake --build --preset full-cpu    # cpu full
+cmake --preset tests-only && cmake --build --preset tests-only && ctest --preset tests-only
+```
+
+| Preset | Purpose |
+|---|---|
+| `tests-only` / `tests-only-werror` | unit tests (vcpkg deps, no engines) |
+| `tests-only-tsan` / `tests-only-asan` | sanitizer gates (§16) |
+| `full` / `full-werror` | gpu full |
+| `full-cpu` | cpu full (no CUDA/TRT) |
+
+### 7.3 Pack a tarball yourself
+
+```bash
+./scripts/make_release_tarball.sh cpu 0.1.0 build    # -> dist/*.tar.gz + .sha256
+```
+
+---
+
+## 8. The Profile System
+
+**One switch, four layers** - profiles are not two products but two resource
+tiers of one product:
+
+| Layer | Switch | cpu effect | gpu effect |
+|---|---|---|---|
+| Build | `MORTRED_BUILD_PROFILE` | TRT compiled out; factory errors clearly for `type="tensorrt"` | full build |
+| Deps | `install_deps.sh --cpu` | MNN built `MNN_CUDA=OFF`; **cpu** ORT tarball; NVIDIA deb skipped | + CUDA/TRT/cuDNN |
+| Catalog | server TOML `profile` field + runtime `MORTRED_PROFILE` | only `profile="cpu"`/`"any"` entries; **absent field = gpu**, so the cpu catalog is always explicitly curated | everything |
+| Weights | `fetch_weights.py --profile` | only files tagged `profiles=["cpu","gpu"]` | full manifest |
+
+### 8.1 Runtime switching
+
+```bash
+export MORTRED_PROFILE=cpu     # read by both supervisor and gateway; default gpu
+```
+
+Filtering happens during catalog load, **before the duplicate checks** - cpu and
+gpu variants of one model may therefore reuse the same port (only one variant
+set is active at a time).
+
+### 8.2 Extending the cpu curated set (a CHANGELOG-level change)
+
+1. add `<model>_cpu_config.toml` under `conf/model/<task>/<model>/` (backend `mnn`/`onnx`, `device="cpu"`);
+2. add the matching server config with `profile="cpu"`;
+3. add the weight path to `CPU_WEIGHTS` in `scripts/gen_weights_manifest.py`;
+4. regenerate the manifest;
+5. add a cpu smoke verification for the model; record it in CHANGELOG.
+
+> The curated set is deliberately **frozen per release**: extending it is a
+> release decision (performance + acceptance ownership), not a config tweak.
+
+---
+
+## 9. Weights Management
+
+### 9.1 Mechanism
+
+- Manifest: `conf/weights_manifest.json` - per file `path / size / sha256 / hf_path / profiles`;
+- Downloads: Hugging Face, resumable, **skipped when present with matching sha256**;
+- Verification: `--check` verifies without downloading.
+
+### 9.2 Commands
+
+```bash
+python3 scripts/fetch_weights.py --profile cpu     # curated subset (~1 GB)
+python3 scripts/fetch_weights.py --profile gpu     # full set (tens of GB)
+python3 scripts/fetch_weights.py --only yolov8     # paths containing yolov8
+python3 scripts/fetch_weights.py --check           # verify local integrity
+python3 scripts/fetch_weights.py --dry-run         # print what would happen
+```
+
+### 9.3 Disk planning
+
+| Profile | First download | Reserve |
+|---|---|---|
+| cpu | ~1 GB | 5 GB |
+| gpu | tens of GB (model-dependent) | 60 GB+ |
+
+Partial gpu install? Pull in batches with `--only <keyword>` and confirm with
+`verify_deployment.sh --full`.
+
+### 9.4 Offline environments
+
+Fetch `weights/` on a networked machine → copy to the target → run
+`fetch_weights.py --check`. Dependencies work the same way (`--offline DIR`).
+
+---
+
+## 10. TensorRT Engines (GPU only)
+
+### 10.1 Why conversion is needed
+
+A TRT engine is bound to **GPU architecture + TRT version**: a prebuilt engine
+usually fails on another machine. The `.onnx` files in the weight set are the
+source; every GPU machine converts its own `.engine`.
+
+### 10.2 Converting
+
+```bash
+./scripts/convert_trt_engines.sh --list    # manifest (which engines are missing)
+./scripts/convert_trt_engines.sh           # convert missing only (FP16 + batch profiles)
+./scripts/convert_trt_engines.sh --force   # rebuild everything
+```
+
+Requires `trtexec`: `sudo ./scripts/install_deps.sh --nvidia` installs it into
+`3rd_party/bin/`; with multiple TRT installs use `--trtexec /path/to/trtexec`.
+
+### 10.3 First-start auto-conversion in containers (optional)
+
+```bash
+docker compose --profile gpu up -d -e MORTRED_AUTO_BUILD_ENGINES=true
+# or: docker run -e MORTRED_AUTO_BUILD_ENGINES=true ...
+```
+
+Conversion runs before the supervisor autostarts; it takes minutes and is
+**off by default** (an explicit choice). `mortredctl doctor` warns about
+missing engines without failing.
+
+---
+
+## 11. Authentication & Security
+
+### 11.1 The two tokens
+
+| Token | Protects | Where |
+|---|---|---|
+| `MORTRED_API_TOKEN` | supervisor mgmt API + web console | `/etc/mortred/supervisor.env` (tarball) / container env |
+| `MORTRED_GATEWAY_AUTH_TOKEN` | gateway inference entry | same |
+
+```bash
+openssl rand -hex 24    # generate (one independent value per token)
+```
+
+**Fail-closed semantics**: a non-loopback listener without its token **refuses
+to start** and prints why. Never deploy with a hole.
+
+### 11.2 Multi-tenant API keys (gateway layer)
+
+Beyond the single static token, the gateway supports per-key management
+(hashed at rest, scopes, rate limits, hot reload):
+
+```toml
+# conf/api_keys.toml
+[keys.client-a]
+hash = "sha256(...)"          # echo -n "your-secret-key" | sha256sum
+scope = "inference"
+rate_limit_qps = 100
+enabled = true
+```
+
+```bash
+curl -X POST -H "Authorization: Bearer $MORTRED_API_TOKEN" \
+     http://localhost:8787/api/v1/keys/reload      # hot reload, no restart
+```
+
+See [api-keys.md](api-keys.md) for the full guide incl. zero-downtime rotation.
+
+### 11.3 Pre-launch security checklist
+
+- [ ] both tokens are ≥32-char random values, distinct from each other
+- [ ] `/etc/mortred/supervisor.env` is mode 600, owned by mortred
+- [ ] 8080/8787 exposed only where needed; keep 8787 on an internal network
+- [ ] `conf/api_keys.toml` (if used) mode 600, never committed or baked into images
+- [ ] TLS terminated at your reverse proxy (Mortred itself is plain HTTP)
+- [ ] no model-server ports in the firewall allowlist (they are loopback-only anyway)
+
+---
+
+## 12. Upgrades & Rollback
+
+### 12.1 mortredctl upgrade (in place, recommended)
+
+```bash
+mortredctl upgrade              # latest release, keeps the running profile
+mortredctl upgrade v0.2.0       # a specific version
+```
+
+Flow: download the profile's tarball → verify sha256 → **back up conf/ to
+`conf.backup-<timestamp>`** → install over `/opt/mortred` (weights untouched) →
+restart → run `doctor` automatically.
+
+### 12.2 Rollback
+
+```bash
+cd /opt/mortred
+sudo cp -a conf.backup-<timestamp> conf          # restore config
+# reinstall the old tarball (or switch the docker tag back), then:
+mortredctl doctor
+```
+
+### 12.3 Version policy
+
+- In-place upgrades are supported between **adjacent minor versions**;
+- Larger jumps: export configs → fresh-install the target → migrate manually
+  (`scripts/migrate_model_config.py` helps);
+- Config compatibility breaks are recorded per version in [CHANGELOG.md](../CHANGELOG.md).
+
+---
+
+## 13. Monitoring
+
+Out-of-the-box Prometheus endpoints:
+
+| Endpoint | Content |
+|---|---|
+| `GET :8080/metrics` | gateway: HTTP counts/latency, inference latency, queue wait, worker availability |
+| `GET :8787/api/v1/metrics` | supervisor: process states, restart counters |
+
+A local monitoring stack ships in the repo (Prometheus + Grafana + alert rules):
+
+```bash
+docker compose -f deploy/docker-compose.monitoring.yml up -d
+# Grafana: http://localhost:3000, import deploy/grafana-dashboard.json
+# Alert rules: deploy/alert-rules.yml (includes overload-rejection alerting)
+```
+
+---
+
+## 14. Troubleshooting
+
+**Run this first - it localizes most problems directly**:
+
+```bash
+mortredctl doctor          # or: verify_deployment.sh --live
+```
+
+### 14.1 Symptom quick-reference
+
+| Symptom | Most likely cause | Fix |
+|---|---|---|
+| refuses to start, log says so | non-loopback listener without token | set both tokens (§11.1) |
+| `401` with `WWW-Authenticate` | wrong/missing token | check `Authorization: Bearer ...` |
+| empty catalog | `MORTRED_PROFILE` mismatch | check the env var; cpu needs the `*_cpu` configs |
+| model server crash-loops | missing weights / missing engine / bad config | `mortredctl status`, `mortredctl logs <id>` |
+| weight download 404/timeout | HF unreachable | offline flow (§9.4) or a mirror |
+| sha256 mismatch | corrupted download / stale manifest | delete the file and refetch; regenerate the manifest |
+| `429` responses | queue full or key rate-limited | tune `max_queue_depth` / `rate_limit_qps`; check `/metrics` |
+| gpu model init: "tensorrt backend is not compiled" | cpu build given a trt config | use the gpu build/image, or a cpu config for that model |
+| container has zero engines | not converted, auto-build off | §10; or `MORTRED_AUTO_BUILD_ENGINES=true` |
+
+### 14.2 Log locations
+
+| Track | Command |
+|---|---|
+| Docker | `docker compose --profile <p> logs -f` |
+| systemd | `journalctl -u mortred-supervisor -f` |
+| one model server | `mortredctl logs <server-id> --limit 200` |
+
+### 14.3 Deep dives
+
+<details>
+<summary>Why does the supervisor bind model servers to loopback?</summary>
+
+Security-boundary design: external traffic can only reach models through the
+gateway (auth/rate-limit/audit as a single choke point); supervisor↔model uses
+an internal token as a second factor. Even a accidentally exposed 9xxx port
+cannot serve inference without it.
+</details>
+
+<details>
+<summary>A model stopped working after an upgrade - now what?</summary>
+
+1. `mortredctl logs <id>` for the model-server error;
+2. diff the model's config against `conf.backup-<timestamp>`;
+3. check CHANGELOG for a config-incompatibility note on that version;
+4. still stuck → roll back with the config backup + the old tarball (§12.2).
+</details>
+
+---
+
+## 15. FAQ
+
+<details>
+<summary>Will the cpu profile support more models over time?</summary>
+
+Yes, version by version via the formal process in §8.2 - but it stays a curated
+set: every addition carries CPU-performance and acceptance ownership. See
+CHANGELOG for the extension history.
+</details>
+
+<details>
+<summary>Can I run cpu and gpu side by side?</summary>
+
+One runtime profile per machine (`MORTRED_PROFILE`). To serve both load classes,
+deploy two instances with distinct ports.
+</details>
+
+<details>
+<summary>Any functional difference between the Docker and tarball tracks?</summary>
+
+None. Same binaries, same configs, same acceptance script. Choose by ops habit.
+</details>
+
+<details>
+<summary>Must weights live in /opt/mortred/weights?</summary>
+
+Model configs resolve paths relative to the install tree. The tarball track
+defaults to `/opt/mortred/weights`; the Docker track mounts into that container
+path - the host-side location is up to you.
+</details>
+
+<details>
+<summary>No python3 - how do I fetch weights?</summary>
+
+Fetch on any machine with python, copy the whole `weights/` directory over, and
+run `fetch_weights.py --check` on the target (verification also needs python3;
+in a fully python-less environment, verify before copying).
+</details>
+
+---
+
+## 16. Acceptance Gates
+
+| Gate | Command | Coverage |
+|---|---|---|
+| Static | `./scripts/verify_deployment.sh --basic` | script syntax / manifests / compose YAML / dependency inventory |
+| Full | `./scripts/verify_deployment.sh --full` | + local weight sha256 + 3rd_party completeness |
+| Live | `./scripts/verify_deployment.sh --live` | + gateway probes (public healthz, authed inference) |
+| One-shot | `mortredctl doctor` | live wrapper |
+
+**CI side**: every change runs the cpu-profile full build + full unit suite on a
+GPU-less runner - the conditional-compilation path cannot silently rot; the
+`sanitizers` job keeps the TSAN/ASan gates running.
+
+---
+
+*Found a discrepancy between this document and actual behavior? That is a bug -
+please open an issue.*

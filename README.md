@@ -121,6 +121,10 @@ Unit tests only (no engines needed; vcpkg or system packages):
 cmake --preset tests-only && cmake --build --preset tests-only && ctest --preset tests-only
 ```
 
+> The complete operations manual - architecture diagrams, per-track walkthroughs,
+> security checklist, upgrades, troubleshooting - lives in
+> [docs/deployment.md](docs/deployment.md) / [中文版](docs/deployment.zh-cn.md).
+
 
 # `Benchmark`
 
