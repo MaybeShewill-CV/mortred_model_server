@@ -50,6 +50,7 @@ set(TEST_LIST
     openapi_consistency_test
     config_schema_test
     async_job_unittest
+    async_job_stress_test
     restart_policy_unittest
     catalog_unittest
     control_config_unittest
@@ -107,6 +108,8 @@ foreach(src ${TEST_LIST})
         set(EXTRA_LIBS pthread)
     elseif(${src} STREQUAL "async_job_unittest")
         set(EXTRA_LIBS pthread)
+    elseif(${src} STREQUAL "async_job_stress_test")
+        set(EXTRA_LIBS pthread)
     elseif(${src} STREQUAL "supervisor_unittest")
         set(EXTRA_LIBS control pthread)
     elseif(${src} STREQUAL "catalog_unittest")
@@ -139,6 +142,10 @@ foreach(src ${TEST_LIST})
     endif()
     add_test(NAME ${src} COMMAND $<TARGET_FILE:${src}> WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
     add_dependencies(check ${src})
+    if((${src} STREQUAL "async_job_unittest") OR (${src} STREQUAL "async_job_stress_test"))
+        # the sanitizer CI gate runs exactly these under -fsanitize=thread
+        set_tests_properties(${src} PROPERTIES LABELS "sanitizer")
+    endif()
 endforeach()
 
 # e2e helper binaries: supervision tests need the fake model server; the

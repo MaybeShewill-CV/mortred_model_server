@@ -766,6 +766,38 @@ TEST(server_e2e_contract, async_long_poll_wait_returns_done) {
     EXPECT_STREQ(wait_doc["state"].GetString(), "done");
 }
 
+TEST(server_e2e_contract, async_queue_full_returns_429) {
+    // max_queue=1 with a 2s model: two CONCURRENT submissions race for one
+    // admission slot - the CAS must admit exactly one (202) and reject the
+    // other (429 + error body). Concurrent submission is required because the
+    // 202 reply is only flushed after the job's go task completes (Workflow
+    // server-series semantics, unchanged from the previous implementation),
+    // so a serial second submit would always observe a free queue.
+    ServerHandle handle =
+        start_server("async_enabled=true\nfake_delay_ms=2000\nasync_max_queue=1\n");
+    HttpResp r1, r2;
+    std::thread t1([&]() {
+        r1 = send_request(handle.port, "POST", "/jobs",
+                          "{\"img_data\":\"aGVsbG8=\"}", k_json_auth_headers);
+    });
+    std::thread t2([&]() {
+        r2 = send_request(handle.port, "POST", "/jobs",
+                          "{\"img_data\":\"aGVsbG8=\"}", k_json_auth_headers);
+    });
+    t1.join();
+    t2.join();
+    const int accepted = (r1.status == 202) + (r2.status == 202);
+    const int rejected = (r1.status == 429) + (r2.status == 429);
+    EXPECT_EQ(accepted, 1) << "r1=" << r1.status << " body=" << r1.body
+                           << " r2=" << r2.status << " body=" << r2.body;
+    EXPECT_EQ(rejected, 1) << "r1=" << r1.status << " body=" << r1.body
+                           << " r2=" << r2.status << " body=" << r2.body;
+    const std::string rejected_body = r1.status == 429 ? r1.body : r2.body;
+    auto doc = parse_body(rejected_body);
+    ASSERT_FALSE(doc.HasParseError()) << "body=" << rejected_body;
+    EXPECT_TRUE(doc.HasMember("error")) << "body=" << rejected_body;
+}
+
 TEST(server_e2e_contract, batch_item_failure_isolated) {
     // good + bad + good in one batch: the bad item reports its own error,
     // its batch mates must still return their correct results

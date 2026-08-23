@@ -55,6 +55,7 @@
 #include "server/openapi_doc.h"
 #include "server/rate_limiter.h"
 #include "server/backpressure.h"
+#include "server/async_job_table.h"
 #include "server/server_config_schema.h"
 
 namespace jinq {
@@ -66,7 +67,7 @@ using jinq::common::k_default_request_size_limit_mb;
 
 /***
  * Parse and validate the worker count.
- * Missing (value_or falls back to 0), zero or negative are config errors — an
+ * Missing (value_or falls back to 0), zero or negative are config errors ??an
  * empty worker queue would hang do_work's unbounded wait_dequeue forever, so
  * return -1 and let the caller refuse to start.
  */
@@ -108,14 +109,14 @@ public:
     /***
      * drain in-flight go tasks before members are destroyed: wait until every
      * worker is back in the queue (a running do_work holds exactly one worker,
-     * and after returning it touches only its task-owned ctx — a member of the
+     * and after returning it touches only its task-owned ctx ??a member of the
      * go closure, kept alive by the framework's task lifetime). The wait is
-     * deliberately unbounded — a hung model keeps its worker forever and the
+     * deliberately unbounded ??a hung model keeps its worker forever and the
      * destructor blocks; that is handled by the outer process manager (e.g.
      * mortred-supervisor's SIGINT -> SIGKILL fallback), not here. The drain only runs
      * when init succeeded: the worker watermark is committed at the end of a
      * successful init, so a partially-filled queue from a failed init would
-     * otherwise spin forever — on failure the queue destructor releases the
+     * otherwise spin forever ??on failure the queue destructor releases the
      * remaining workers itself. Residual note: a go task popped by the
      * executor but preempted before its first queue access is not observable
      * through the queue; this microsecond-level window is mitigated by
@@ -132,7 +133,7 @@ public:
         // _m_worker_nums workers: on init failure the queue may hold a
         // partial set (the watermark is committed only after the queue is
         // fully filled), and the queue destructor releases those workers
-        // itself — draining here would spin forever
+        // itself ??draining here would spin forever
         if (!_m_successfully_initialized) {
             return;
         }
@@ -205,15 +206,14 @@ protected:
     int _m_model_run_timeout = 500; // ms
 
     // ===== async job management (P0-2: long-task async) =====
-    enum class AsyncJobState { PENDING = 0, RUNNING = 1, DONE = 2, FAILED = 3, TIMEOUT = 4 };
-    struct AsyncJob;  // forward declaration: defined after task_request/go_result
+
 
     // stuck-worker detection: each failed full-timeout queue wait proves the
     // queue was empty for a whole timeout, but concurrent waits OVERLAP in
     // time when requests queue up, so the failure count alone does not prove
     // duration (a slow-but-healthy worker can rack up K failures in ~1x
     // timeout). Therefore the alarm needs both: K consecutive failures AND a
-    // streak spanning >= K x timeout from the first failure — only then has
+    // streak spanning >= K x timeout from the first failure ??only then has
     // the checked-out worker been gone at least that long. A successful
     // dequeue resets both.
     enum class StuckWorkerAction { LOG, EXIT };
@@ -246,14 +246,10 @@ protected:
     // async job configuration
     bool _m_async_enabled = false;
     int _m_async_timeout = 300000;  // ms, 0 = unlimited
-    int _m_async_max_queue = 16;
-    int _m_async_job_ttl = 300000;  // ms
-    int _m_async_max_completed = 100;
-    // async job table (in-memory, lost on restart)
-    std::mutex _m_async_mu;
-    std::unordered_map<std::string, std::shared_ptr<AsyncJob>> _m_async_jobs;
-    std::deque<std::string> _m_async_lru;  // oldest first
-    int _m_async_queue_depth = 0;
+    // async job ledger: admission, state machine, retention, wait/notify
+    // (in-memory, lost on restart; see docs/async-job-table.md)
+    using AsyncTable = AsyncJobTable<MODEL_OUTPUT>;
+    AsyncTable _m_async_table;
 
 protected:
     /***
@@ -329,19 +325,16 @@ protected:
 
 protected:
     // inference result: a member of the go task's closure (go_task_functor::ctx),
-    // so the framework's task lifetime owns it on every path — normal completion,
+    // so the framework's task lifetime owns it on every path ??normal completion,
     // timeout with the routine still running detached (the timed ref(4) scheme
     // keeps the task alive until the routine returns, WFTaskFactory.inl), cancel
     // while running (the executor keeps popped tasks alive), cancel before
     // dispatch (the task is destroyed together with its members). Written only
     // by do_work; read by the success branch of do_work_cb via task->user_data.
-    struct go_result {
-        StatusCode model_run_status = StatusCode::OK;
-        std::string task_finished_ts;
-        double worker_run_time_consuming = 0; // ms
-        double find_worker_time_consuming = 0; // ms
-        MODEL_OUTPUT model_output;
-    };
+    // hoisted to namespace scope (async_job_table.h) so the async ledger and
+    // the server share ONE definition of the request/result pair
+    using go_result = jinq::server::go_result<MODEL_OUTPUT>;
+    using task_request = jinq::server::task_request;
 
     // request metadata: bound by value into the go task's callback closure
     // (another task member, freed with the task). Written once by serve_process
@@ -358,12 +351,7 @@ protected:
      * Task request: parse_task_request parses the base64 image content and the
      * caller trace id.
      */
-    struct task_request {
-        std::string task_id;
-        bool is_valid = false;
-        StatusCode parse_status = StatusCode::OK;
-        std::string payload;
-    };
+
 
     /***
      * One queued request in the batch path. The entry OWNS its request copy
@@ -380,25 +368,10 @@ protected:
         std::condition_variable cv;
     };
 
-    /***
-     * One async job: owns its request copy and result storage. The condition
-     * variable wakes /jobs/{id}/wait long-pollers on state transitions.
-     */
-    struct AsyncJob {
-        std::string id;
-        task_request req;
-        go_result result;
-        AsyncJobState state = AsyncJobState::PENDING;
-        int64_t submitted_at_ms = 0;
-        int64_t completed_at_ms = 0;
-        std::string error;
-        std::mutex wait_mu;
-        std::condition_variable wait_cv;
-    };
 
     // the go routine carrier: the three members live inside the task object
     // (the factory binds this functor into the go closure), so no manual
-    // release exists anywhere — task destruction frees all per-request state
+    // release exists anywhere ??task destruction frees all per-request state
     // on every path, including cancel before dispatch.
     struct go_task_functor {
         BaseAiServerImpl* self;
@@ -457,97 +430,10 @@ protected:
         return false;
     }
 
-    /*** generate a unique async job id */
-    static std::string generate_async_job_id() {
-        const auto now = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-        static std::atomic<uint64_t> seq{0};
-        char buf[48] = {0};
-        std::snprintf(buf, sizeof(buf), "job_%016llx_%06u",
-                      static_cast<unsigned long long>(now),
-                      seq.fetch_add(1));
-        return std::string(buf);
-    }
-
-    /*** insert a job into the table, evicting expired/LRU entries as needed */
-    void async_store_job(const std::shared_ptr<AsyncJob>& job) {
-        std::lock_guard<std::mutex> lock(_m_async_mu);
-        _m_async_jobs[job->id] = job;
-        _m_async_lru.push_back(job->id);
-        async_evict_locked();
-    }
-
-    /*** lookup a job; nullptr if not found */
-    std::shared_ptr<AsyncJob> async_find_job(const std::string& id) {
-        std::lock_guard<std::mutex> lock(_m_async_mu);
-        const auto it = _m_async_jobs.find(id);
-        return it == _m_async_jobs.end() ? nullptr : it->second;
-    }
-
-    /*** evict expired and LRU-overflow completed jobs (caller holds mutex) */
-    void async_evict_locked() {
-        const int64_t now = monotonic_ms();
-        // TTL: remove completed jobs past their retention window
-        for (auto it = _m_async_jobs.begin(); it != _m_async_jobs.end();) {
-            const auto& job = it->second;
-            const bool terminal = job->state >= AsyncJobState::DONE;
-            if (terminal && job->completed_at_ms > 0 &&
-                now - job->completed_at_ms > _m_async_job_ttl) {
-                it = _m_async_jobs.erase(it);
-            } else {
-                ++it;
-            }
-        }
-        // LRU: remove oldest completed jobs beyond max_completed
-        int completed_count = 0;
-        for (const auto& [id, job] : _m_async_jobs) {
-            if (job->state >= AsyncJobState::DONE) {
-                ++completed_count;
-            }
-        }
-        while (completed_count > _m_async_max_completed && !_m_async_lru.empty()) {
-            const std::string& oldest_id = _m_async_lru.front();
-            const auto it = _m_async_jobs.find(oldest_id);
-            if (it != _m_async_jobs.end() && it->second->state >= AsyncJobState::DONE) {
-                _m_async_jobs.erase(it);
-                --completed_count;
-            }
-            _m_async_lru.pop_front();
-        }
-        // also prune LRU deque entries that no longer exist in the map
-        _m_async_lru.erase(
-            std::remove_if(_m_async_lru.begin(), _m_async_lru.end(),
-                           [this](const std::string& id) {
-                               return _m_async_jobs.find(id) == _m_async_jobs.end();
-                           }),
-            _m_async_lru.end());
-    }
-
-    /*** count non-terminal jobs (PENDING + RUNNING) */
-    int async_active_count() {
-        std::lock_guard<std::mutex> lock(_m_async_mu);
-        int count = 0;
-        for (const auto& [id, job] : _m_async_jobs) {
-            if (job->state == AsyncJobState::PENDING || job->state == AsyncJobState::RUNNING) {
-                ++count;
-            }
-        }
-        return count;
-    }
-
-    /*** notify all waiters that a job's state changed */
-    void async_notify_state_change(const std::shared_ptr<AsyncJob>& job) {
-        std::lock_guard<std::mutex> lock(job->wait_mu);
-        job->wait_cv.notify_all();
-    }
-
-    /*** run an async job: dequeue worker, run model, store result, notify */
-    void async_run_job(const std::shared_ptr<AsyncJob>& job) {
-        {
-            std::lock_guard<std::mutex> lock(_m_async_mu);
-            job->state = AsyncJobState::RUNNING;
-        }
+    /*** run an async job: dequeue worker, run model, record terminal state */
+    void async_run_job(const std::string& job_id) {
+        _m_async_table.transition_running(job_id);
         _m_metrics.inc_async_jobs("running");
-        async_notify_state_change(job);
 
         // dequeue a worker (shared pool with sync requests)
         WORKER worker;
@@ -559,47 +445,46 @@ protected:
             _m_working_queue.wait_dequeue(worker);
         }
         if (!got_worker) {
-            {
-                std::lock_guard<std::mutex> lock(_m_async_mu);
-                job->state = AsyncJobState::TIMEOUT;
-                job->error = "worker wait timeout";
-                job->completed_at_ms = monotonic_ms();
-                --_m_async_queue_depth;
-            }
+            _m_async_table.timeout(job_id, "worker wait timeout");
             _m_metrics.inc_async_jobs("timeout");
-            _m_metrics.set_async_queue_depth(static_cast<size_t>(_m_async_queue_depth));
-            async_notify_state_change(job);
+            _m_metrics.set_async_queue_depth(
+                static_cast<size_t>(std::max(0, _m_async_table.queue_depth())));
+            return;
+        }
+
+        auto req = _m_async_table.take_request(job_id);
+        if (!req.has_value()) {
+            // unreachable in practice: the job is non-terminal here and only
+            // terminal jobs are ever evicted; kept as a defensive net
+            _m_working_queue.enqueue(std::move(worker));
+            _m_async_table.fail(job_id, "job request missing");
+            _m_metrics.inc_async_jobs("failed");
             return;
         }
 
         // run the model (same path as do_work)
         const auto run_start = Timestamp::now();
         models::io_define::common_io::base64_input model_input;
-        model_input.input_image_content = std::move(job->req.payload);
-        const auto status = worker->run(model_input, job->result.model_output);
+        model_input.input_image_content = std::move(req->payload);
+        go_result result;
+        const auto status = worker->run(model_input, result.model_output);
         const auto run_end = Timestamp::now();
         _m_working_queue.enqueue(std::move(worker));
 
-        {
-            std::lock_guard<std::mutex> lock(_m_async_mu);
-            job->result.model_run_status = status;
-            job->result.task_finished_ts = run_end.to_format_str();
-            job->result.worker_run_time_consuming = (run_end - run_start) * 1000.0;
-            if (status == StatusCode::OK) {
-                job->state = AsyncJobState::DONE;
-            } else {
-                job->state = AsyncJobState::FAILED;
-                job->error = jinq::common::status_code_to_str(status);
-            }
-            job->completed_at_ms = monotonic_ms();
-            --_m_async_queue_depth;
+        const double run_ms = (run_end - run_start) * 1000.0;
+        result.model_run_status = status;
+        result.task_finished_ts = run_end.to_format_str();
+        result.worker_run_time_consuming = run_ms;
+        if (status == StatusCode::OK) {
+            _m_async_table.finish(job_id, std::move(result));
+            _m_metrics.inc_async_jobs("done");
+        } else {
+            _m_async_table.fail(job_id, jinq::common::status_code_to_str(status));
+            _m_metrics.inc_async_jobs("failed");
         }
-        _m_metrics.inc_async_jobs(status == StatusCode::OK ? "done" : "failed");
-        _m_metrics.observe_async_job_duration_ms(job->result.worker_run_time_consuming);
-        _m_metrics.set_async_queue_depth(_m_async_queue_depth > 0
-                                             ? static_cast<size_t>(_m_async_queue_depth)
-                                             : 0);
-        async_notify_state_change(job);
+        _m_metrics.observe_async_job_duration_ms(run_ms);
+        _m_metrics.set_async_queue_depth(
+            static_cast<size_t>(std::max(0, _m_async_table.queue_depth())));
     }
 
     /***
@@ -643,11 +528,12 @@ protected:
 
     /*** POST /jobs: parse request, create job, schedule, return 202 */
     void handle_async_submit(WFHttpTask* task) {
-        // queue depth check
-        if (_m_async_queue_depth >= _m_async_max_queue) {
+        // cheap early rejection (the authoritative check is the CAS in the table)
+        if (_m_async_table.queue_depth() >= _m_async_table.config().max_queue) {
             _m_metrics.inc_http_requests("POST", "429");
             reply_async_error(task, 429, "async queue full (max " +
-                                             std::to_string(_m_async_max_queue) + ")");
+                                             std::to_string(_m_async_table.config().max_queue) +
+                                             ")");
             return;
         }
 
@@ -656,40 +542,40 @@ protected:
             task_req.task_id = generate_req_id();
         }
 
-        auto job = std::make_shared<AsyncJob>();
-        job->id = generate_async_job_id();
-        job->req = task_req;
-        job->submitted_at_ms = monotonic_ms();
-
-        {
-            std::lock_guard<std::mutex> lock(_m_async_mu);
-            ++_m_async_queue_depth;
+        const auto submitted = _m_async_table.submit(std::move(task_req));
+        if (submitted.status == AsyncTable::SubmitStatus::QUEUE_FULL) {
+            _m_metrics.inc_http_requests("POST", "429");
+            reply_async_error(task, 429, "async queue full (max " +
+                                             std::to_string(_m_async_table.config().max_queue) +
+                                             ")");
+            return;
         }
         _m_metrics.inc_async_jobs("submitted");
-        _m_metrics.set_async_queue_depth(static_cast<size_t>(_m_async_queue_depth));
-        async_store_job(job);
+        _m_metrics.set_async_queue_depth(
+            static_cast<size_t>(std::max(0, _m_async_table.queue_depth())));
 
+        const std::string job_id = submitted.job_id;
         // schedule the async execution via a WFGoTask
         auto* series = series_of(task);
         auto* go_task = WFTaskFactory::create_go_task(
-            "async_job", [this, job]() { async_run_job(job); });
+            "async_job", [this, job_id]() { async_run_job(job_id); });
         series->push_back(go_task);
 
         // reply 202 immediately (the go task runs after the HTTP response is sent)
         auto* resp = task->get_resp();
         resp->set_status_code("202");
         resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
-        resp->add_header_pair("Location", ("/jobs/" + job->id).c_str());
+        resp->add_header_pair("Location", ("/jobs/" + job_id).c_str());
         rapidjson::Document d;
         d.SetObject();
         auto& a = d.GetAllocator();
-        d.AddMember("job_id", rapidjson::Value(job->id.c_str(), job->id.size(), a), a);
+        d.AddMember("job_id", rapidjson::Value(job_id.c_str(), job_id.size(), a), a);
         d.AddMember("state", "pending", a);
-        d.AddMember("poll_url", rapidjson::Value(("/jobs/" + job->id).c_str(),
-                                                 ("/jobs/" + job->id).size(), a), a);
+        d.AddMember("poll_url", rapidjson::Value(("/jobs/" + job_id).c_str(),
+                                                 ("/jobs/" + job_id).size(), a), a);
         d.AddMember("result_url",
-                    rapidjson::Value(("/jobs/" + job->id + "/result").c_str(),
-                                     ("/jobs/" + job->id + "/result").size(), a), a);
+                    rapidjson::Value(("/jobs/" + job_id + "/result").c_str(),
+                                     ("/jobs/" + job_id + "/result").size(), a), a);
         rapidjson::StringBuffer buf;
         rapidjson::Writer<rapidjson::StringBuffer> w(buf);
         d.Accept(w);
@@ -698,23 +584,22 @@ protected:
 
     /*** GET /jobs/{id}: return job status */
     void handle_async_status(WFHttpTask* task, const std::string& id) {
-        const auto job = async_find_job(id);
-        if (job == nullptr) {
+        auto snap = _m_async_table.snapshot(id);
+        if (!snap.has_value()) {
             reply_async_error(task, 404, "job not found: " + id);
             return;
         }
-        const int64_t now = monotonic_ms();
-        const int64_t elapsed = now - job->submitted_at_ms;
+        const int64_t elapsed = monotonic_ms() - snap->submitted_at_ms;
 
         rapidjson::Document d;
         d.SetObject();
         auto& a = d.GetAllocator();
         d.AddMember("job_id", rapidjson::Value(id.c_str(), id.size(), a), a);
-        d.AddMember("state",
-                    rapidjson::Value(async_state_str(job->state), a), a);
+        d.AddMember("state", rapidjson::Value(async_state_str(snap->state), a), a);
         d.AddMember("elapsed_ms", static_cast<int64_t>(elapsed), a);
-        if (!job->error.empty()) {
-            d.AddMember("error", rapidjson::Value(job->error.c_str(), job->error.size(), a), a);
+        if (!snap->error.empty()) {
+            d.AddMember("error",
+                        rapidjson::Value(snap->error.c_str(), snap->error.size(), a), a);
         }
         rapidjson::StringBuffer buf;
         rapidjson::Writer<rapidjson::StringBuffer> w(buf);
@@ -727,8 +612,8 @@ protected:
 
     /*** GET /jobs/{id}/wait?timeout=N: long-poll for state change */
     void handle_async_wait(WFHttpTask* task, const std::string& id, const std::string& uri) {
-        const auto job = async_find_job(id);
-        if (job == nullptr) {
+        auto initial = _m_async_table.snapshot(id);
+        if (!initial.has_value()) {
             reply_async_error(task, 404, "job not found: " + id);
             return;
         }
@@ -741,46 +626,32 @@ protected:
             if (timeout_ms > 300000) timeout_ms = 300000;  // cap at 5 min
         }
 
-        // record the state at entry; we wait until it changes or terminal
-        const auto initial_state = job->state;
-
-        // schedule a go task that polls for state change
+        // schedule a go task that blocks on the job's condition variable; the
+        // wait itself lives inside the table, so the CV handoff is correct
         auto* series = series_of(task);
         auto* go = WFTaskFactory::create_go_task(
-            "async_wait", [this, task, job, initial_state, timeout_ms]() {
-                const auto deadline =
-                    std::chrono::steady_clock::now() +
-                    std::chrono::milliseconds(timeout_ms);
-                while (true) {
-                    if (job->state != initial_state ||
-                        job->state >= AsyncJobState::DONE) {
-                        break;
-                    }
-                    if (std::chrono::steady_clock::now() >= deadline) {
-                        break;
-                    }
-                    // wait on the job's condition variable (500ms cap per wait)
-                    std::unique_lock<std::mutex> lock(job->wait_mu);
-                    job->wait_cv.wait_for(lock, std::chrono::milliseconds(500), [&job]() {
-                        return job->state >= AsyncJobState::DONE;
-                    });
-                }
-                // respond with the current state (called after go task finishes,
-                // so we can write to the response)
+            "async_wait",
+            [this, task, id, initial_snap = std::move(*initial), timeout_ms]() {
+                // wait() re-looks-up by id: a non-terminal job is never
+                // evicted; if a terminal one was evicted in between, the
+                // initial snapshot already carries the terminal state
+                const auto snap =
+                    _m_async_table.wait(id, initial_snap.state, timeout_ms)
+                        .value_or(initial_snap);
                 auto* resp = task->get_resp();
                 resp->set_status_code("200");
                 resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
                 rapidjson::Document d;
                 d.SetObject();
                 auto& a = d.GetAllocator();
-                d.AddMember("job_id", rapidjson::Value(job->id.c_str(), job->id.size(), a), a);
+                d.AddMember("job_id", rapidjson::Value(id.c_str(), id.size(), a), a);
                 d.AddMember("state",
-                            rapidjson::Value(async_state_str(job->state), a), a);
+                            rapidjson::Value(async_state_str(snap.state), a), a);
                 d.AddMember("elapsed_ms",
-                            static_cast<int64_t>(monotonic_ms() - job->submitted_at_ms), a);
-                if (!job->error.empty()) {
+                            static_cast<int64_t>(monotonic_ms() - snap.submitted_at_ms), a);
+                if (!snap.error.empty()) {
                     d.AddMember("error",
-                                rapidjson::Value(job->error.c_str(), job->error.size(), a), a);
+                                rapidjson::Value(snap.error.c_str(), snap.error.size(), a), a);
                 }
                 rapidjson::StringBuffer buf;
                 rapidjson::Writer<rapidjson::StringBuffer> w(buf);
@@ -792,36 +663,24 @@ protected:
 
     /*** GET /jobs/{id}/result: return result if DONE, 409 otherwise */
     void handle_async_result(WFHttpTask* task, const std::string& id) {
-        const auto job = async_find_job(id);
-        if (job == nullptr) {
+        auto outcome = _m_async_table.take_result(id);
+        if (outcome.status == AsyncTable::ResultStatus::NOT_FOUND) {
             reply_async_error(task, 404, "job not found: " + id);
             return;
         }
-        if (job->state != AsyncJobState::DONE) {
+        if (outcome.status != AsyncTable::ResultStatus::READY) {
             reply_async_error(task, 409,
                               "job not finished (state: " +
-                                  std::string(async_state_str(job->state)) + ")");
+                                  std::string(async_state_str(outcome.state)) + ")");
             return;
         }
         // return the standard inference response envelope
         rapidjson::Document data;
-        if (job->result.model_run_status == StatusCode::OK) {
-            fill_response_data(data.GetAllocator(), data, job->result.model_run_status,
-                               job->result.model_output);
+        if (outcome.value.model_run_status == StatusCode::OK) {
+            fill_response_data(data.GetAllocator(), data, outcome.value.model_run_status,
+                               outcome.value.model_output);
         }
-        reply_json(task, job->req.task_id, job->result.model_run_status, std::move(data));
-    }
-
-    /*** helper: state enum to string */
-    static const char* async_state_str(AsyncJobState state) {
-        switch (state) {
-            case AsyncJobState::PENDING: return "pending";
-            case AsyncJobState::RUNNING: return "running";
-            case AsyncJobState::DONE: return "done";
-            case AsyncJobState::FAILED: return "failed";
-            case AsyncJobState::TIMEOUT: return "timeout";
-            default: return "unknown";
-        }
+        reply_json(task, outcome.task_id, outcome.value.model_run_status, std::move(data));
     }
 
     /*** helper: reply a simple error JSON */
@@ -1021,7 +880,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         _m_metrics.inc_received_jobs();
         // init series work: all per-request state rides inside the go task
         // object (functor members + callback closure members), so the
-        // framework's task lifetime frees it on every path — no manual
+        // framework's task lifetime frees it on every path ??no manual
         // release exists anywhere, including cancel before dispatch.
         auto* series = series_of(task);
         request_meta meta;
@@ -1049,7 +908,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         // completion and cancel() (workflow native semantics; dismiss() is
         // never used on this path). On cancel, do_work_cb does not run, so
         // accounting must live here or it would drift. No resource release is
-        // needed here — per-request state dies with the task object itself.
+        // needed here ??per-request state dies with the task object itself.
         series->set_callback([this](const SeriesWork*) {
             _m_finished_jobs++;
             _m_metrics.inc_finished_jobs();
@@ -1084,7 +943,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     // the result is a member of the go task's closure: the framework keeps the
     // task alive until this routine returns even when detached (timeout) or
     // when the series is cancelled mid-run, so writing it is always safe, and
-    // its destruction is handled by the task — nothing to release here
+    // its destruction is handled by the task ??nothing to release here
     // batch path (opt-in): collect concurrent requests per model and run them
     // as one batch; the single-request path below stays verbatim otherwise
     if (_m_max_batch_size > 1) {
@@ -1392,9 +1251,9 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(
     WFGoTask* task,
     const BaseAiServerImpl::request_meta& meta,
     protocol::HttpResponse* resp) {
-    // this callback runs inside done(), i.e. while the go task object — and
+    // this callback runs inside done(), i.e. while the go task object ??and
     // therefore the meta bound into this closure and the result reachable via
-    // task->user_data — is still alive (WFTask.h done(): callback, then delete)
+    // task->user_data ??is still alive (WFTask.h done(): callback, then delete)
     auto state = task->get_state();
 
     StatusCode status;
@@ -1406,7 +1265,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(
 
     if (state != WFT_STATE_SUCCESS) {
         // timeout: do_work may still be running detached (or may not have
-        // started — user_data may be NULL), so read the closure-carried
+        // started ??user_data may be NULL), so read the closure-carried
         // metadata only; the routine never writes it, hence no race
         status = StatusCode::MODEL_RUN_TIMEOUT;
         task_id = meta.is_task_req_valid ? meta.task_id : "";
@@ -1523,7 +1382,7 @@ StatusCode BaseAiServerImpl<WORKER, MODEL_OUTPUT>::parse_common_server_config(
         _m_request_size_limit = static_cast<size_t>(limit);
     }
     // per-request model timeout: a missing key keeps the 500 ms default; a
-    // non-positive value disables the timeout — allowed, but warned, since a
+    // non-positive value disables the timeout ??allowed, but warned, since a
     // hung model then holds its worker forever, subsequent requests block
     // indefinitely and clients may never receive a response
     _m_model_run_timeout = static_cast<int>(server_section["model_run_timeout"].value_or<int64_t>(500));
@@ -1569,16 +1428,18 @@ StatusCode BaseAiServerImpl<WORKER, MODEL_OUTPUT>::parse_common_server_config(
     _m_async_enabled = server_section["async_enabled"].value_or<bool>(false);
     _m_async_timeout =
         static_cast<int>(server_section["async_timeout"].value_or<int64_t>(300000));
-    _m_async_max_queue =
+    typename AsyncTable::Config async_cfg;
+    async_cfg.max_queue =
         static_cast<int>(server_section["async_max_queue"].value_or<int64_t>(16));
-    _m_async_job_ttl =
+    async_cfg.job_ttl_ms =
         static_cast<int>(server_section["async_job_ttl"].value_or<int64_t>(300000));
-    _m_async_max_completed =
+    async_cfg.max_completed =
         static_cast<int>(server_section["async_max_completed"].value_or<int64_t>(100));
+    _m_async_table.configure(async_cfg);
     if (_m_async_enabled) {
         LOG(INFO) << "async jobs enabled: timeout=" << _m_async_timeout
-                  << "ms, max_queue=" << _m_async_max_queue
-                  << ", job_ttl=" << _m_async_job_ttl << "ms";
+                  << "ms, max_queue=" << async_cfg.max_queue
+                  << ", job_ttl=" << async_cfg.job_ttl_ms << "ms";
     }
     if (_m_max_batch_size > 1) {
         LOG(INFO) << "dynamic batching enabled: max_batch_size=" << _m_max_batch_size

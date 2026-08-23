@@ -1,6 +1,6 @@
-# HTTP API Contract
+﻿# HTTP API Contract
 
-| [English](api-contract.md) | [中文](api-contract.zh-cn.md) |
+| [English](api-contract.md) | [涓枃](api-contract.zh-cn.md) |
 |---|---|
 
 ## Topology note: mortred-gateway
@@ -148,3 +148,19 @@ item.
 Per-task `data` schemas (classification, detection, face, OCR, segmentation, matting,
 enhancement, depth, feature point) are defined in `docs/openapi.json`
 `components.schemas` and implemented by `src/server/response_serializers.h`.
+
+## Async jobs
+
+Long-running inference can be submitted asynchronously when the server enables
+`async_enabled`:
+
+| Endpoint | Success | Errors |
+|---|---|---|
+| `POST /jobs` | `202` with `job_id`, `state`, `poll_url`, `result_url` | `429` when the admission queue is full |
+| `GET /jobs/{id}` | `200` with `state` (`pending`/`running`/`done`/`failed`/`timeout`) | `404` unknown id |
+| `GET /jobs/{id}/wait?timeout=N` | `200` after a state change or terminal state | `404` unknown id |
+| `GET /jobs/{id}/result` | `200` standard envelope (repeatable) | `404` unknown id, `409` not finished |
+
+The job ledger is in-memory (lost on restart). The component design, concurrency
+contract and verification gates are documented in
+[async-job-table.md](async-job-table.md).

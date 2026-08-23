@@ -1,4 +1,4 @@
-# HTTP API 契约
+﻿# HTTP API 契约
 
 | [English](api-contract.md) | [中文](api-contract.zh-cn.md) |
 |---|---|
@@ -154,3 +154,16 @@ worker 数量估算排水时间，钳制在 1-60 秒）。网关将两者原样�
 （分类、检测、人脸、OCR、分割、抠图、增强、深度、特征点）定义于
 `docs/openapi.json` 的 `components.schemas`，由
 `src/server/response_serializers.h` 实现。
+## 异步任务
+
+服务端开启 `async_enabled` 后，长耗时推理可异步提交：
+
+| 端点 | 成功 | 错误 |
+|---|---|---|
+| `POST /jobs` | `202`，返回 `job_id`、`state`、`poll_url`、`result_url` | 准入队列满时 `429` |
+| `GET /jobs/{id}` | `200`，返回 `state`（`pending`/`running`/`done`/`failed`/`timeout`） | 未知 id `404` |
+| `GET /jobs/{id}/wait?timeout=N` | 状态变化或终态后 `200` | 未知 id `404` |
+| `GET /jobs/{id}/result` | `200` 标准响应封装（可重复读取） | 未知 id `404`，未完成 `409` |
+
+任务账本保存在内存中（重启即失）。组件设计、并发契约与验证门禁见
+[async-job-table.zh-cn.md](async-job-table.zh-cn.md)。

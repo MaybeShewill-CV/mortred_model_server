@@ -31,6 +31,34 @@
       }
     },
     {
+      "name": "tests-only-tsan",
+      "displayName": "Tests Only with ThreadSanitizer",
+      "description": "Concurrency gate: build the sanitizer-labeled async tests with -fsanitize=thread. Run with: ctest --preset tests-only-tsan -L sanitizer",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/tests-only-tsan",
+      "cacheVariables": {
+        "MORTRED_BUILD_FULL": "OFF",
+        "MORTRED_ENABLE_WERROR": "OFF",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_FLAGS": "-fsanitize=thread -fno-omit-frame-pointer",
+        "CMAKE_CXX_FLAGS": "-fsanitize=thread -fno-omit-frame-pointer"
+      }
+    },
+    {
+      "name": "tests-only-asan",
+      "displayName": "Tests Only with AddressSanitizer + UBSan",
+      "description": "Memory gate: build the tests-only suite with -fsanitize=address,undefined. Run with: ctest --preset tests-only-asan",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/tests-only-asan",
+      "cacheVariables": {
+        "MORTRED_BUILD_FULL": "OFF",
+        "MORTRED_ENABLE_WERROR": "OFF",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+        "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer"
+      }
+    },
+    {
       "name": "full",
       "displayName": "Full Build",
       "description": "Build all models, servers, tools and web console. Requires CUDA + vendored engines.",
@@ -67,6 +95,16 @@
       "jobs": 8
     },
     {
+      "name": "tests-only-tsan",
+      "configurePreset": "tests-only-tsan",
+      "jobs": 8
+    },
+    {
+      "name": "tests-only-asan",
+      "configurePreset": "tests-only-asan",
+      "jobs": 8
+    },
+    {
       "name": "full",
       "configurePreset": "full",
       "jobs": 8
@@ -83,6 +121,23 @@
     {
       "name": "tests-only-werror",
       "configurePreset": "tests-only-werror",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "tests-only-tsan",
+      "configurePreset": "tests-only-tsan",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "labels": ["sanitizer"]
+      }
+    },
+    {
+      "name": "tests-only-asan",
+      "configurePreset": "tests-only-asan",
       "output": {
         "outputOnFailure": true
       }

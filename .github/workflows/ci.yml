@@ -82,7 +82,7 @@ jobs:
           fi
 
       # Cache the vcpkg repo, installed dependency artifacts, and ccache;
-      # the key includes the vcpkg version, compiler, and vcpkg.json content — any change invalidates it.
+      # the key includes the vcpkg version, compiler, and vcpkg.json content ??any change invalidates it.
       # gcc and quality-gates share the same key to avoid rebuilding the same dependency set.
       - name: Cache vcpkg and ccache
         id: cache-deps
@@ -285,6 +285,105 @@ jobs:
           CHECK_ALLOW_GENERATED=1 ./scripts/check_repo_clean.sh
           python3 -m py_compile scripts/server/test_server.py scripts/server/locust_performance.py
           python3 scripts/server/test_server.py --list
+
+  # ---------------------------------------------------------------------------
+  # Job B2: sanitizers - permanent regression gate for the async job ledger.
+  # TSAN runs the sanitizer-labeled async tests (data-race gate); ASan+UBSan
+  # runs the full tests-only suite (memory gate). TSAN scope is deliberately
+  # limited to the async tests: unrelated modules may still carry historical
+  # races, and widening the label is a separate follow-up.
+  # ---------------------------------------------------------------------------
+  sanitizers:
+    name: sanitizers (tsan + asan/ubsan)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    needs: tests
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ccache jq
+
+      - name: Cache vcpkg and ccache
+        id: cache-deps
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ env.VCPKG_ROOT }}
+            ${{ env.VCPKG_INSTALLED_DIR }}
+            ~/.cache/ccache
+          key: vcpkg-${{ env.VCPKG_TAG }}-gcc-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ env.VCPKG_TAG }}-gcc-
+
+      - name: Checkout vcpkg (pinned release tag)
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
+          git -C "$VCPKG_ROOT" checkout --detach "$VCPKG_TAG"
+
+      - name: Bootstrap vcpkg and prepare pinned manifest
+        run: |
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
+          baseline="$(git -C "$VCPKG_ROOT" rev-parse HEAD)"
+          mkdir -p "$VCPKG_MANIFEST_DIR"
+          jq --arg baseline "$baseline" '.builtin-baseline = $baseline' vcpkg.json > "$VCPKG_MANIFEST_DIR/vcpkg.json"
+          echo "Pinned vcpkg builtin-baseline to: $baseline"
+
+      - name: Configure and run TSAN gate (async tests)
+        run: |
+          cmake -B build-tsan \
+            -DMORTRED_BUILD_FULL=OFF \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+            -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+            -DMORTRED_BIN_OUTPUT_DIR=${{ github.workspace }}/build-tsan/bin \
+            -DMORTRED_LIB_OUTPUT_DIR=${{ github.workspace }}/build-tsan/lib \
+            -DVCPKG_MANIFEST_DIR=$VCPKG_MANIFEST_DIR \
+            -DVCPKG_INSTALLED_DIR=$VCPKG_INSTALLED_DIR \
+            -DVCPKG_MANIFEST_MODE=ON \
+            -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          LD_LIBRARY_PATH="${{ github.workspace }}/build-tsan/lib" \
+            cmake --build build-tsan --target async_job_unittest async_job_stress_test -j"$(nproc)"
+          # detect_deadlocks / report_mutex_bugs are disabled: this GCC's TSAN
+          # cannot model condition_variable::wait_for (false "double lock" and
+          # lock-order-inversion on legally CV-guarded mutexes). Data-race
+          # detection - the actual gate - stays fully enabled.
+          LD_LIBRARY_PATH="${{ github.workspace }}/build-tsan/lib" \
+            TSAN_OPTIONS="detect_deadlocks=0:report_mutex_bugs=0" \
+            ctest --test-dir build-tsan -L sanitizer --output-on-failure
+
+      - name: Configure and run ASan/UBSan gate (full tests-only suite)
+        run: |
+          cmake -B build-asan \
+            -DMORTRED_BUILD_FULL=OFF \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DMORTRED_BIN_OUTPUT_DIR=${{ github.workspace }}/build-asan/bin \
+            -DMORTRED_LIB_OUTPUT_DIR=${{ github.workspace }}/build-asan/lib \
+            -DVCPKG_MANIFEST_DIR=$VCPKG_MANIFEST_DIR \
+            -DVCPKG_INSTALLED_DIR=$VCPKG_INSTALLED_DIR \
+            -DVCPKG_MANIFEST_MODE=ON \
+            -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          LD_LIBRARY_PATH="${{ github.workspace }}/build-asan/lib" CTEST_OUTPUT_ON_FAILURE=1 \
+            cmake --build build-asan --target check -j"$(nproc)"
+
+      - name: Upload sanitizer logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sanitizer-logs
+          path: |
+            build-tsan/Testing/Temporary/LastTest.log
+            build-asan/Testing/Temporary/LastTest.log
+          if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
   # Job C: clang-tidy (informational, non-blocking; produces a report artifact)

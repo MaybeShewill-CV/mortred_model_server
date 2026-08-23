@@ -1,4 +1,4 @@
-# Repository Layout
+﻿# Repository Layout
 
 This document defines the canonical repository layout and the mapping between source files,
 generated executables, configuration files, and documentation.
@@ -36,7 +36,7 @@ src/
 ├── common/                  # shared utility library: base64, cv_utils, auth, parser...
 ├── factory/                 # model/server type-erased factory and registration headers
 ├── models/                  # model inference implementations
-└── server/                  # reusable HTTP server framework (BaseAiServerImpl)
+└── server/                  # reusable HTTP server framework (BaseAiServerImpl, AsyncJobTable)
 ```
 
 ## Executable to source mapping
