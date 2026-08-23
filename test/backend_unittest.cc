@@ -340,7 +340,16 @@ TEST(TrtSession, InitAndRunYolov8) {
     std::vector<NamedTensor> inputs;
     NamedTensor input;
     input.name = input_info.name;
-    input.tensor = Tensor::make<float>(input_info.shape);
+    // Tensor::make requires a concrete shape: the yolov8 engine carries a
+    // dynamic batch axis (-1), resolve dynamic dims to the smallest valid
+    // concrete value (batch 1, inside the profile range)
+    auto concrete_shape = input_info.shape;
+    for (auto& dim : concrete_shape) {
+        if (dim <= 0) {
+            dim = 1;
+        }
+    }
+    input.tensor = Tensor::make<float>(concrete_shape);
     inputs.push_back(std::move(input));
 
     std::vector<NamedTensor> outputs;
@@ -359,7 +368,7 @@ TEST(TrtSession, InitAndRunYolov8) {
 
     // dtype mismatch must be rejected
     auto bad_dtype = inputs;
-    bad_dtype.front().tensor = Tensor::make<int32_t>(input_info.shape);
+    bad_dtype.front().tensor = Tensor::make<int32_t>(concrete_shape);
     EXPECT_EQ(session->run(bad_dtype, outputs), StatusCode::MODEL_RUN_SESSION_FAILED);
 }
 
@@ -402,7 +411,15 @@ TEST(MultiBackend, CoexistInOneProcess) {
             std::vector<NamedTensor> trt_inputs;
             NamedTensor trt_tensor;
             trt_tensor.name = trt_input.name;
-            trt_tensor.tensor = Tensor::make<float>(trt_input.shape);
+            // the yolov8 engine has a dynamic batch axis: resolve -1 dims
+            // to a concrete batch-1 shape before building the host tensor
+            auto trt_shape = trt_input.shape;
+            for (auto& dim : trt_shape) {
+                if (dim <= 0) {
+                    dim = 1;
+                }
+            }
+            trt_tensor.tensor = Tensor::make<float>(trt_shape);
             trt_inputs.push_back(std::move(trt_tensor));
             EXPECT_EQ(trt_session->run(trt_inputs, outputs), StatusCode::OK);
         } else {
