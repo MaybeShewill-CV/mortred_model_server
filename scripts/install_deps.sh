@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 # install_deps.sh - one-shot build/install of all Mortred third-party deps into 3rd_party/{include,libs}
 #
 # Goal: replace the "manually compile third-party libs + hand-copy into 3rd_party" flow. Defaults to this repo's
@@ -8,6 +8,8 @@
 # Usage:
 #   ./scripts/install_deps.sh --check            # verify 3rd_party completeness and print versions
 #   ./scripts/install_deps.sh --all              # install everything (default)
+#   ./scripts/install_deps.sh --cpu --all        # cpu profile: MNN without CUDA, ORT cpu tarball,
+#                                                # no NVIDIA/TRT stack at all (GPU-less machines)
 #   ./scripts/install_deps.sh --workflow         # build and install only workflow
 #   ./scripts/install_deps.sh --mnn              # build and install only MNN
 #   ./scripts/install_deps.sh --onnxruntime      # download and install only onnxruntime
@@ -46,6 +48,22 @@ else
 fi
 WORKFLOW_TAG="${WORKFLOW_TAG:-v0.10.9}"
 ONNXRUNTIME_VER="${ONNXRUNTIME_VER:-1.18.0}"
+# deployment profile: gpu (default, full CUDA/TRT stack) | cpu (MNN-CPU +
+# ORT-CPU, no NVIDIA). Drives MNN build flags, the ORT tarball flavor and the
+# --check expectations; stamps are profile-specific so trees never mix.
+DEP_PROFILE="${DEP_PROFILE:-gpu}"
+if [ "$DEP_PROFILE" = "cpu" ]; then
+    MNN_CUDA_FLAGS=""
+    MNN_STAMP="mnn-cpu"
+    MNN_BUILD_DIR_NAME="build-mortred-cpu"
+    ORT_FLAVOR=""      # cpu tarball: onnxruntime-linux-x64-<ver>.tgz (no -gpu suffix)
+    ORT_STAMP="onnxruntime-cpu"
+else
+    MNN_STAMP="mnn"
+    MNN_BUILD_DIR_NAME="build-mortred"
+    ORT_FLAVOR="-gpu"
+    ORT_STAMP="onnxruntime"
+fi
 ONNXRUNTIME_SHA256="${ONNXRUNTIME_SHA256:-}"
 # Pinned sha256 table for the official onnxruntime tarballs (version -> hash). Verification priority:
 #   1) env var ONNXRUNTIME_SHA256 (highest; for offline/CI use)
@@ -160,8 +178,8 @@ install_workflow() {
 
 # ============ MNN (built from source, pinned tag, CUDA backend) ============
 install_mnn() {
-    if stamp mnn; then info "MNN: already installed"; return; fi
-    announce "build MNN ${MNN_TAG} (cuda=${CUDA_VERSION})"
+    if stamp "$MNN_STAMP"; then info "MNN (${DEP_PROFILE}): already installed"; return; fi
+    announce "build MNN ${MNN_TAG} (profile=${DEP_PROFILE})"
     require_cmd git "git"
     require_cmd cmake "cmake"
     local src="$BUILD_DIR/mnn-src"
@@ -169,7 +187,7 @@ install_mnn() {
     if [ ! -d "$src/.git" ]; then
         git clone --depth 1 --branch "$MNN_TAG" https://github.com/alibaba/MNN.git "$src"
     fi
-    local build="$src/build-mortred"
+    local build="$src/$MNN_BUILD_DIR_NAME"
     cmake -S "$src" -B "$build" -DCMAKE_BUILD_TYPE=Release \
         -DMNN_BUILD_TRAIN=OFF -DMNN_BUILD_DEMO=OFF -DMNN_BUILD_TOOLS=OFF \
         -DMNN_BUILD_CONVERTER=OFF -DMNN_BUILD_TEST=OFF -DMNN_BUILD_BENCHMARK=OFF \
@@ -178,15 +196,15 @@ install_mnn() {
     mkdir -p "$INCLUDE_DIR/MNN"
     cp -rn "$src/include/MNN"/* "$INCLUDE_DIR/MNN"/ 2>/dev/null || true
     copy_libs "$build/libMNN*.so*" "$LIB_DIR" "MNN libs"
-    mark mnn
+    mark "$MNN_STAMP"
 }
 
 # ============ onnxruntime (official release tarball + sha256) ============
 install_onnxruntime() {
-    if stamp onnxruntime; then info "onnxruntime: already installed"; return; fi
-    announce "install onnxruntime ${ONNXRUNTIME_VER}"
+    if stamp "$ORT_STAMP"; then info "onnxruntime (${DEP_PROFILE}): already installed"; return; fi
+    announce "install onnxruntime ${ONNXRUNTIME_VER} (${DEP_PROFILE})"
     require_cmd curl "curl"
-    local tgz="onnxruntime-linux-x64-gpu-${ONNXRUNTIME_VER}.tgz"
+    local tgz="onnxruntime-linux-x64${ORT_FLAVOR}-${ONNXRUNTIME_VER}.tgz"
     local dst="$BUILD_DIR/onnxruntime-pkg"
     mkdir -p "$dst"
     local pkg_path="$dst/$tgz"
@@ -212,15 +230,15 @@ install_onnxruntime() {
     [ -n "$expect_sha" ] || fail "cannot get sha256 for onnxruntime ${ONNXRUNTIME_VER}: set ONNXRUNTIME_SHA256 or fill the ONNXRUNTIME_SHA256S table (to get it: curl -fsSL -o /tmp/ort.tgz https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VER}/${tgz} && sha256sum /tmp/ort.tgz)"
     echo "$expect_sha  $pkg_path" | sha256sum -c - || fail "onnxruntime sha256 mismatch"
     tar -xzf "$pkg_path" -C "$dst"
-    local src="$dst/onnxruntime-linux-x64-gpu-${ONNXRUNTIME_VER}"
+    local src="$dst/onnxruntime-linux-x64${ORT_FLAVOR}-${ONNXRUNTIME_VER}"
     mkdir -p "$INCLUDE_DIR/onnxruntime"
     cp -rn "$src/include/onnxruntime"/* "$INCLUDE_DIR/onnxruntime"/ 2>/dev/null || true
     copy_libs "$src/lib/libonnxruntime*.so*" "$LIB_DIR" "onnxruntime libs"
 
     # Record: tgz checksum + installed lib hashes for --check re-verification (anti-tamper/corruption)
-    echo "$expect_sha  $pkg_path" > "$STAMP_DIR/onnxruntime.sha256"
-    (cd "$LIB_DIR" && find . -maxdepth 1 -name 'libonnxruntime.so*' -type f -print0 | sort -z | xargs -0 -r sha256sum > "$STAMP_DIR/onnxruntime.libs.sha256")
-    mark onnxruntime
+    echo "$expect_sha  $pkg_path" > "$STAMP_DIR/${ORT_STAMP}.sha256"
+    (cd "$LIB_DIR" && find . -maxdepth 1 -name 'libonnxruntime.so*' -type f -print0 | sort -z | xargs -0 -r sha256sum > "$STAMP_DIR/${ORT_STAMP}.libs.sha256")
+    mark "$ORT_STAMP"
 }
 
 # ============ CUDA / TensorRT / cuDNN (NVIDIA apt, needs root) ============
@@ -280,9 +298,13 @@ install_nvidia() {
 check() {
     local rc=0
     local -a problems=()
-    echo "== Mortred 3rd_party integrity check =="
+    echo "== Mortred 3rd_party integrity check (profile: $DEP_PROFILE) =="
     echo "  ROOT         : $ROOT"
-    echo "  target version line: CUDA $CUDA_VERSION / TRT $TRT_VER / cuDNN $CUDNN_VER / MNN $MNN_TAG / workflow $WORKFLOW_TAG / onnxruntime $ONNXRUNTIME_VER"
+    if [ "$DEP_PROFILE" = "cpu" ]; then
+        echo "  target version line: MNN $MNN_TAG (CPU) / workflow $WORKFLOW_TAG / onnxruntime $ONNXRUNTIME_VER (CPU)"
+    else
+        echo "  target version line: CUDA $CUDA_VERSION / TRT $TRT_VER / cuDNN $CUDNN_VER / MNN $MNN_TAG / workflow $WORKFLOW_TAG / onnxruntime $ONNXRUNTIME_VER"
+    fi
     echo ""
 
     # 1) toolchain
@@ -294,19 +316,24 @@ check() {
             problems+=("tool $c")
         fi
     done
-    if command -v nvcc >/dev/null 2>&1; then
-        echo "  [ok] nvcc: $(nvcc --version | grep -oP 'release \K[0-9.]+' | head -n1)"
-    elif [ -x /usr/local/cuda/bin/nvcc ]; then
-        echo "  [ok] nvcc: $(/usr/local/cuda/bin/nvcc --version | grep -oP 'release \K[0-9.]+' | head -n1) (/usr/local/cuda)"
+    if [ "$DEP_PROFILE" = "cpu" ]; then
+        echo "  [--] nvcc: not required (cpu profile)"
+        echo "  [--] trtexec: not required (cpu profile)"
     else
-        echo "  [!!] nvcc MISSING (full build needs the CUDA toolchain)"
-        problems+=("nvcc")
-    fi
-    if [ -x "$ROOT/3rd_party/bin/trtexec" ] || command -v trtexec >/dev/null 2>&1; then
-        echo "  [ok] tool: trtexec"
-    else
-        echo "  [!!] tool: trtexec MISSING (run sudo ./scripts/install_deps.sh --nvidia or install the system TensorRT package)"
-        problems+=("trtexec")
+        if command -v nvcc >/dev/null 2>&1; then
+            echo "  [ok] nvcc: $(nvcc --version | grep -oP 'release \K[0-9.]+' | head -n1)"
+        elif [ -x /usr/local/cuda/bin/nvcc ]; then
+            echo "  [ok] nvcc: $(/usr/local/cuda/bin/nvcc --version | grep -oP 'release \K[0-9.]+' | head -n1) (/usr/local/cuda)"
+        else
+            echo "  [!!] nvcc MISSING (full build needs the CUDA toolchain)"
+            problems+=("nvcc")
+        fi
+        if [ -x "$ROOT/3rd_party/bin/trtexec" ] || command -v trtexec >/dev/null 2>&1; then
+            echo "  [ok] tool: trtexec"
+        else
+            echo "  [!!] tool: trtexec MISSING (run sudo ./scripts/install_deps.sh --nvidia or install the system TensorRT package)"
+            problems+=("trtexec")
+        fi
     fi
 
     # 2) vendored headers
@@ -314,7 +341,6 @@ check() {
         "MNN/MNNForwardType.h:MNN"
         "workflow/CommRequest.h:workflow"
         "onnxruntime/onnxruntime_cxx_api.h:onnxruntime"
-        "$TRT_INCLUDE_DIR/NvInfer.h:TensorRT"
         "rapidjson/document.h:rapidjson"
         "toml/toml.hpp:toml11"
         "stb_image/stb_image.h:stb_image"
@@ -322,6 +348,9 @@ check() {
         "fmt/format.h:fmt"
         "indicators/indicators.hpp:indicators"
     )
+    if [ "$DEP_PROFILE" != "cpu" ]; then
+        headers+=("$TRT_INCLUDE_DIR/NvInfer.h:TensorRT")
+    fi
     local entry hdr label
     for entry in "${headers[@]}"; do
         hdr="${entry%%:*}"; label="${entry##*:}"
@@ -336,17 +365,21 @@ check() {
     # 3) vendored dynamic libs
     local -a libs=(
         "libMNN.so:MNN"
-        "libMNN_Cuda_Main.so:MNN CUDA"
         "libworkflow.so:workflow"
         "libonnxruntime.so:onnxruntime"
-        "libnvinfer.so:TensorRT"
-        "libnvonnxparser.so:TensorRT parser"
-        "libcudart.so:CUDA runtime"
-        "libcudnn.so:cuDNN"
         "libfmt.so:fmt"
-        "libOpenCL.so:OpenCL"
         "libssl.so:openssl"
     )
+    if [ "$DEP_PROFILE" != "cpu" ]; then
+        libs+=(
+            "libMNN_Cuda_Main.so:MNN CUDA"
+            "libnvinfer.so:TensorRT"
+            "libnvonnxparser.so:TensorRT parser"
+            "libcudart.so:CUDA runtime"
+            "libcudnn.so:cuDNN"
+            "libOpenCL.so:OpenCL"
+        )
+    fi
     local lib name found
     for entry in "${libs[@]}"; do
         lib="${entry%%:*}"; name="${entry##*:}"
@@ -363,8 +396,8 @@ check() {
     done
 
     # 4) onnxruntime artifact hash re-check (anti-tamper/corruption; recorded at install time)
-    if [ -f "$STAMP_DIR/onnxruntime.libs.sha256" ]; then
-        if (cd "$LIB_DIR" && sha256sum -c "$STAMP_DIR/onnxruntime.libs.sha256" >/dev/null 2>&1); then
+    if [ -f "$STAMP_DIR/${ORT_STAMP}.libs.sha256" ]; then
+        if (cd "$LIB_DIR" && sha256sum -c "$STAMP_DIR/${ORT_STAMP}.libs.sha256" >/dev/null 2>&1); then
             echo "  [ok] onnxruntime lib hash (stamp re-check)"
         else
             echo "  [!!] onnxruntime lib hash MISMATCH (libs tampered/corrupted; please reinstall onnxruntime)"
@@ -401,6 +434,7 @@ while [ $# -gt 0 ]; do
         --onnxruntime) MODE="onnxruntime"; shift ;;
         --nvidia) MODE="nvidia"; shift ;;
         --cuda-version) CUDA_VERSION="$2"; shift 2 ;;
+        --cpu) DEP_PROFILE="cpu"; MNN_CUDA_FLAGS=""; MNN_STAMP="mnn-cpu"; MNN_BUILD_DIR_NAME="build-mortred-cpu"; ORT_FLAVOR=""; ORT_STAMP="onnxruntime-cpu"; shift ;;
         --offline) OFFLINE_DIR="$2"; shift 2 ;;
         -h|--help) usage ;;
         *) fail "unknown argument: $1 (see --help)" ;;
@@ -435,8 +469,10 @@ case "$MODE" in
         install_workflow
         install_onnxruntime
         install_mnn
-        # nvidia needs root; run it separately (so --all doesn't error out without root)
-        if [ "$(id -u)" -eq 0 ]; then
+        if [ "$DEP_PROFILE" = "cpu" ]; then
+            info "cpu profile: nvidia/TensorRT stack skipped entirely"
+        elif [ "$(id -u)" -eq 0 ]; then
+            # nvidia needs root; run it separately (so --all doesn't error out without root)
             install_nvidia
         else
             info "skipping nvidia (needs root): sudo ./scripts/install_deps.sh --nvidia"

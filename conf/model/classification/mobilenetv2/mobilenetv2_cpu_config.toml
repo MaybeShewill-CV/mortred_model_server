@@ -1,0 +1,15 @@
+﻿# CPU profile variant of mobilenetv2_config.toml: identical MNN model,
+# CPU schedule. Selected by the *_cpu server config (profile="cpu").
+[MOBILENETV2]
+[MOBILENETV2.backend]
+type = "mnn"
+model_file_path = "../weights/classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn"
+device = "cpu"
+threads = 4
+input_layout = "nhwc"
+precision_mode = 0
+power_mode = 0
+
+[MOBILENETV2.params]
+model_input_image_size = [224, 224]
+class_name_file = "../conf/model/classification/imagenet_classes.txt"

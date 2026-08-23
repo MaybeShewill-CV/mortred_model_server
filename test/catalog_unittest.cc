@@ -1,4 +1,4 @@
-/************************************************
+﻿/************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
 * File: catalog_unittest.cc
@@ -114,6 +114,56 @@ TEST_F(CatalogTest, invalid_uri_is_fatal) {
     EXPECT_FALSE(catalog.init(root_.string(), &err));
 }
 
+TEST_F(CatalogTest, profile_cpu_filters_gpu_entries) {
+    // same exe + port in two files: only one variant set is active per run,
+    // so the duplicates never collide (filter runs before dedup checks)
+    write_server("fake_gpu.toml", kValidServer);
+    write_server("fake_cpu.toml",
+                 "[FAKE_CPU_SERVER]\n"
+                 "profile=\"cpu\"\n"
+                 "port=39001\n"  // same port as the gpu variant: OK
+                 "host=\"localhost\"\n"
+                 "server_uri=\"/mortred_ai_server_v1/obj_detection/fake_cpu\"\n"
+                 "server_exe=\"fake_cpu_model_server.out\"\n");
+    std::string err;
+
+    Catalog gpu;
+    ASSERT_TRUE(gpu.init(root_.string(), &err, "gpu")) << err;
+    EXPECT_EQ(gpu.entries().size(), 1u);
+    EXPECT_EQ(gpu.entries()[0].profile, "gpu");  // absent field defaults to gpu
+    EXPECT_EQ(gpu.find("fake_cpu_model_server"), nullptr);
+
+    Catalog cpu;
+    ASSERT_TRUE(cpu.init(root_.string(), &err, "cpu")) << err;
+    EXPECT_EQ(cpu.entries().size(), 1u);
+    ASSERT_NE(cpu.find("fake_cpu_model_server"), nullptr);
+    EXPECT_EQ(cpu.find("fake_cpu_model_server")->profile, "cpu");
+    EXPECT_EQ(cpu.find("fake_model_server"), nullptr);
+}
+
+TEST_F(CatalogTest, profile_any_appears_in_both) {
+    write_server("any.toml",
+                 "[ANY_SERVER]\n"
+                 "profile=\"any\"\n"
+                 "port=39002\n"
+                 "server_uri=\"/mortred_ai_server_v1/obj_detection/any\"\n"
+                 "server_exe=\"any_model_server.out\"\n");
+    std::string err;
+    Catalog gpu;
+    ASSERT_TRUE(gpu.init(root_.string(), &err, "gpu")) << err;
+    EXPECT_NE(gpu.find("any_model_server"), nullptr);
+    Catalog cpu;
+    ASSERT_TRUE(cpu.init(root_.string(), &err, "cpu")) << err;
+    EXPECT_NE(cpu.find("any_model_server"), nullptr);
+}
+
+TEST_F(CatalogTest, profile_unknown_falls_back_to_gpu) {
+    write_server("fake.toml", kValidServer);
+    std::string err;
+    Catalog weird;
+    ASSERT_TRUE(weird.init(root_.string(), &err, "tpu")) << err;  // treated as gpu
+    EXPECT_EQ(weird.entries().size(), 1u);
+}
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

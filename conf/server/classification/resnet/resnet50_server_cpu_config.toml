@@ -1,0 +1,20 @@
+﻿[RESNET_CLASSIFICATION_SERVER]
+# deployment profile filter: this entry only appears when MORTRED_PROFILE=cpu
+profile="cpu"
+port=9003
+host="localhost"
+max_connections=500
+peer_resp_timeout=15
+request_size_limit=64
+compute_threads=-1
+handler_threads=50
+worker_nums=1
+model_run_timeout=500
+max_queue_depth=32
+max_batch_size=8
+max_batch_delay_ms=5
+server_uri="/mortred_ai_server_v1/classification/resnet"
+server_exe="resnet_classification_server.out"
+
+[RESNET]
+model_config_file_path="../conf/model/classification/resnet/resnet50_cpu_config.toml"

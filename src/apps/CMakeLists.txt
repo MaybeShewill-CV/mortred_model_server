@@ -1,4 +1,4 @@
-# build apps
+﻿# build apps
 
 # benchmark / server app assembly is identical; share one function (previously two verbatim copies)
 function(add_mortred_app src)
@@ -85,7 +85,7 @@ if(MORTRED_WORKFLOW_AVAILABLE)
         ${PROJECT_ROOT_DIR}/src/control/gateway/gateway_app.cpp)
     target_include_directories(mortred-gateway.out PRIVATE ${PROJECT_ROOT_DIR}/src)
     target_include_directories(mortred-gateway.out SYSTEM PRIVATE ${PROJECT_ROOT_DIR}/3rd_party/include)
-    target_link_libraries(mortred-gateway.out PRIVATE control vendored::workflow Threads::Threads)
+    target_link_libraries(mortred-gateway.out PRIVATE control vendored::workflow vendored::crypto Threads::Threads)
 
     add_executable(mortred-supervisor.out
         ${CMAKE_CURRENT_LIST_DIR}/control/supervisor.cpp

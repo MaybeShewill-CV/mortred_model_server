@@ -41,175 +41,86 @@ All models and detectors can be downloaded from my [Hugging Face Page](https://h
 
 # `Quick Start`
 
-Before proceeding further with this document, make sure you have the following prerequisites
-
-**1.** Make sure you have **CUDA&GPU&Driver** rightly installed. You may refer to [this](https://developer.nvidia.com/cuda-toolkit) to install them
-
-**2.** Make sure you have **MNN** installed. For install instruction you may find some help [here](https://www.yuque.com/mnn/en/build_linux). MNN-2.7.0 release version was recommended.
-
-**3.** Make sure you have **WORKFLOW** installed. For install instruction you may find some help [here](https://github.com/sogou/workflow)
-
-**4.** Make sure you have **OPENCV** installed. For install instruction you may find some help [here](https://docs.opencv.org/4.x/d7/d9f/tutorial_linux_install.html)
-
-**5.** Make sure your **GCC** tookit support cpp-17
-
-**6.** Segment-Anything needs **ONNXRUNTIME** and **TensorRT** library. You may refer to [this](https://onnxruntime.ai/) to install onnxruntime>=1.16.0 and [this](https://developer.nvidia.com/tensorrt) to install TensorRT-8.6.1.6
-
-After all prerequisites are settled down you may start to build the mortred ai server frame work.
-
-### Setup :fire::fire::fire:
-
-> Linux is the only supported build/run platform. Two build paths are provided:
+> Linux is the only supported platform. Two deployment profiles exist and one
+> switch drives everything (build, dependencies, model catalog, weight subset):
 >
-> - **Path A (tests-only)**: builds the `common` library and unit tests only, for
->   CI and quick verification. Dependencies come from vcpkg (recommended) or system
->   apt packages.
-> - **Path B (full build)**: builds all models, servers and tools. Requires the
->   vendored engines under `3rd_party` (MNN / WORKFLOW / ONNXRUNTIME / TensorRT /
->   and a CUDA toolkit.
+> | | `gpu` (default) | `cpu` |
+> |---|---|---|
+> | backends | MNN-CUDA / ORT-CUDA / TensorRT | MNN-CPU / ORT-CPU |
+> | hardware | NVIDIA GPU + CUDA 11/12 | any x64 machine |
+> | models | full zoo | curated set (mobilenetv2, resnet50, yolov8, hrnet) |
+>
+> Three entries, one core (`mortredctl`): pick whichever fits; they all end at
+> the same `mortredctl doctor` acceptance gate.
 
-#### Path A: tests-only
-
-Option A1 - vcpkg (recommended, reproducible):
-
-```bash
-# 1. Install vcpkg (or reuse an existing checkout)
-git clone https://github.com/microsoft/vcpkg.git /path/to/vcpkg
-/path/to/vcpkg/bootstrap-vcpkg.sh -disableMetrics
-
-# 2. Configure (vcpkg installs opencv/glog/eigen3/gtest from vcpkg.json automatically)
-cd $PROJECT_ROOT_DIR
-cmake -B build -DMORTRED_BUILD_FULL=OFF \
-      -DCMAKE_TOOLCHAIN_FILE=/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake
-
-# 3. Build and run the unit tests
-cmake --build build --target check -j10
-ctest --test-dir build --output-on-failure
-```
-
-`builtin-baseline` is intentionally not hard-coded in `vcpkg.json`; if your vcpkg
-instance requires an explicit baseline, run
-`vcpkg x-update-baseline --add-initial-baseline` once and reconfigure. CI pins the
-baseline to a fixed vcpkg release tag (`VCPKG_TAG` in `.github/workflows/ci.yml`)
-in a workspace-external manifest copy, so CI builds are reproducible without
-touching this file. For fully reproducible local builds, commit the result of the
-`x-update-baseline` command above.
-
-Option A2 - system packages (Ubuntu 22.04):
+### Entry 1: one-line bootstrap (fastest)
 
 ```bash
-sudo apt-get install -y build-essential cmake \
-  libopencv-dev libgoogle-glog-dev libeigen3-dev libgtest-dev
-# Ubuntu's libgtest-dev ships sources only; build it once:
-cd /usr/src/googletest && sudo cmake . && sudo make -j$(nproc) && sudo make install
-
-cd $PROJECT_ROOT_DIR
-cmake -B build -DMORTRED_BUILD_FULL=OFF
-cmake --build build --target check -j10
-ctest --test-dir build --output-on-failure
+curl -fsSL https://raw.githubusercontent.com/MaybeSheewill-CV/mortred_model_server/main/scripts/bootstrap.sh | bash
 ```
 
-#### Path B: full build
+Detects your hardware (NVIDIA GPU → `gpu`, otherwise `cpu`), then delegates to
+the docker track (if docker is present) or downloads the latest release
+tarball and runs its installer.
+
+### Entry 2: docker compose
 
 ```bash
-# 1. Verify / fill in the vendored 3rd-party dependencies
-#    (MNN / WORKFLOW / ONNXRUNTIME / TensorRT + CUDA).
-#    If something is missing, set the corresponding *_ROOT_DIR env vars and re-run.
-./scripts/setup_full_deps.sh
-
-# 2. Configure and build
-mkdir build && cd build
-cmake ..            # optionally add -DCMAKE_TOOLCHAIN_FILE=... to also use vcpkg
-make -j10
+git clone https://github.com/MaybeSheewill-CV/mortred_model_server.git
+cd mortred_model_server
+python3 scripts/fetch_weights.py --profile cpu        # or: gpu
+MORTRED_API_TOKEN=<mgmt-token> MORTRED_GATEWAY_AUTH_TOKEN=<infer-token> \
+    docker compose --profile cpu up -d                # or: --profile gpu
+curl -fs http://localhost:8787/api/v1/health
 ```
 
-By default executables go to `$PROJECT_ROOT_DIR/_bin` and shared libraries to
-`$PROJECT_ROOT_DIR/_lib`; both are configurable with
-`-DMORTRED_BIN_OUTPUT_DIR=...` and `-DMORTRED_LIB_OUTPUT_DIR=...`.
+### Entry 3: release tarball + systemd (bare metal)
 
-Additional CMake options:
-
-| Option | Default | Description |
-| --- | --- | --- |
-| `MORTRED_BUILD_FULL` | `ON` | Build all models/servers/apps (needs CUDA + vendored engines). Set `OFF` for tests-only. |
-| `MORTRED_ENABLE_WERROR` | `OFF` | Treat compiler warnings as errors (`-Wall -Wextra -Werror`), used by the CI quality gate. |
-| `MORTRED_BIN_OUTPUT_DIR` | `$PROJECT_ROOT_DIR/_bin` | Executable output directory. |
-| `MORTRED_LIB_OUTPUT_DIR` | `$PROJECT_ROOT_DIR/_lib` | Shared library output directory. |
-
-Predefined CMake presets are available in `CMakePresets.json`:
+Download `mortred_model_server-<version>-<profile>-linux-x64.tar.gz` from
+[Releases](https://github.com/MaybeSheewill-CV/mortred_model_server/releases),
+verify its `.sha256`, then:
 
 ```bash
-cmake --preset tests-only
-cmake --build --preset tests-only
-ctest --preset tests-only
+tar -xzf mortred_model_server-*-linux-x64.tar.gz && cd mortred_model_server-*-linux-x64
+sudo ./install.sh                                  # runtime deps + /opt/mortred + systemd
+sudoedit /etc/mortred/supervisor.env               # set both tokens
+cd /opt/mortred && python3 scripts/fetch_weights.py --profile cpu
+sudo systemctl start mortred-supervisor
 ```
 
-See [docs/repository-layout.md](docs/repository-layout.md) for the canonical source/config/executable mapping and repository hygiene policy.
-
-**Step 3:** Download Pre-Built Models :tea::tea::tea:
-
-Download pre-built models with the built-in script (Hugging Face source, no manual download):
+### First-hour core: mortredctl
 
 ```bash
-cd $PROJECT_ROOT_DIR
-python3 scripts/fetch_weights.py            # download all weights into weights/
-python3 scripts/fetch_weights.py --check    # verify integrity (sha256)
+mortredctl init [--profile cpu|gpu]   # detect hw, fetch weight subset, verify
+mortredctl doctor                     # live acceptance (healthz + auth probes)
+mortredctl status | catalog           # runtime introspection
 ```
 
-If your GPU/TRT version differs from the prebuilt engines, regenerate
-hardware-adapted TensorRT engines first (see [Deployment](#deployment)):
+GPU note: TensorRT engines are per-machine artifacts; convert missing ones
+with `scripts/convert_trt_engines.sh`, or start the container with
+`-e MORTRED_AUTO_BUILD_ENGINES=true` to convert before autostart.
+
+### Building from source
 
 ```bash
-cd $PROJECT_ROOT_DIR
-./scripts/convert_trt_engines.sh --list     # show the engine manifest
-./scripts/convert_trt_engines.sh            # convert missing engines for this machine
+# dependencies (version matrix + sha256 pinned + idempotent stamps)
+./scripts/install_deps.sh --all              # gpu line (CUDA 11 default)
+./scripts/install_deps.sh --cpu --all        # cpu line (no NVIDIA/TRT at all)
+
+# configure + build (presets carry the profile)
+cmake --preset full && cmake --build --preset full            # gpu
+cmake --preset full-cpu && cmake --build --preset full-cpu    # cpu
+
+# verify
+./scripts/verify_deployment.sh --basic
 ```
 
-The weights directory structure should look like
-
-<p align="left">
-  <img src='./resources/images/weights_folder_structure.png' alt='weights_folder_architecture'>
-</p>
-
-**Step 4:** Test MobileNetv2 Benchmark Tool
-
-The benchmark and server apps will be built in \$PROJECT_ROOT_DIR/_bin and libs will be built in \$PROJECT_ROOT_DIR/_lib.
-Benchmark the mobilenetv2 classification model
+Unit tests only (no engines needed; vcpkg or system packages):
 
 ```bash
-cd $PROJECT_ROOT_DIR/_bin
-./mobilenetv2_benchmark.out ../conf/model/classification/mobilenetv2/mobilenetv2_config.toml
+cmake --preset tests-only && cmake --build --preset tests-only && ctest --preset tests-only
 ```
 
-You should see the mobilenetv2 model benchmark profile as follows:
-
-<p align="left">
-  <img src='./resources/images/mobilenetv2_demo_benchmark.png' alt='mobilenetv2_demo_benchmark'>
-</p>
-
-**Step 5:** Run MobileNetV2 Server Locally
-
-The detailed description about web server configuration will be found at [Web Server Configuration](#web-server-configuration). Now start serving the model
-
-```bash
-cd $PROJECT_ROOT_DIR/_bin
-./mobilenetv2_classification_server.out ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.toml
-```
-
-Model service will start at the `port` configured in the server config (`conf/server/classification/mobilenetv2/mobilenetv2_server_config.toml`, default `9002`, `worker_nums=1`). A demo python client was supplied to test the service
-
-```bash
-cd $PROJECT_ROOT_DIR/scripts
-export PYTHONPATH=$PWD:$PYTHONPATH
-python server/test_server.py --server mobilenetv2 --mode single
-```
-
-The client will repeatly post [demo images](./demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG) 1000 times. Server output should be like
-![mobilenetv2_server_exam_output](./resources/images/exam_server_output.png)
-Client output should be like
-![mobilenetv2_client_exam_output](./resources/images/exam_client_output.png)
-
-For more server demo you may find them in [Tutorials](#tutorials) :point_down::point_down::point_down:
 
 # `Benchmark`
 

@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   push:
@@ -385,6 +385,74 @@ jobs:
             build-asan/Testing/Temporary/LastTest.log
           if-no-files-found: ignore
 
+  # ---------------------------------------------------------------------------
+  # Job B3: cpu-profile build gate - the ONLY continuous compile coverage for
+  # the cpu deployment profile (TRT compiled out). Runs on a GPU-less runner:
+  # install_deps.sh --cpu builds MNN-CPU/ORT-CPU/workflow into 3rd_party
+  # (cached), then a full MORTRED_BUILD_PROFILE=cpu build + test run.
+  # Without this job the conditional-compilation path silently rots.
+  # ---------------------------------------------------------------------------
+  cpu-profile:
+    name: cpu profile (full build, no GPU)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    needs: tests
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake git curl jq \
+            libssl-dev libgoogle-glog-dev libeigen3-dev libopencv-dev libgtest-dev
+
+      - name: Cache cpu-profile 3rd_party
+        id: cache-3rdparty
+        uses: actions/cache@v6
+        with:
+          path: |
+            3rd_party
+            .deps-build
+          key: cpu-profile-3rdparty-${{ hashFiles('scripts/install_deps.sh') }}
+          restore-keys: |
+            cpu-profile-3rdparty-
+
+      - name: Build cpu dependency set (MNN-CPU / ORT-CPU / workflow)
+        if: steps.cache-3rdparty.outputs.cache-hit != 'true'
+        run: |
+          ./scripts/install_deps.sh --cpu --all
+          ./scripts/install_deps.sh --cpu --check
+
+      - name: Verify cpu dependency set (cache hit path)
+        if: steps.cache-3rdparty.outputs.cache-hit == 'true'
+        run: ./scripts/install_deps.sh --cpu --check
+
+      - name: Configure (full build, cpu profile)
+        run: >
+          cmake -B build-cpu
+          -DMORTRED_BUILD_FULL=ON
+          -DMORTRED_BUILD_PROFILE=cpu
+          -DMORTRED_INSTALL=ON
+          -DCMAKE_BUILD_TYPE=Release
+          -DMORTRED_BIN_OUTPUT_DIR=${{ github.workspace }}/build-cpu/bin
+          -DMORTRED_LIB_OUTPUT_DIR=${{ github.workspace }}/build-cpu/lib
+
+      - name: Build and run tests (cpu profile)
+        run: |
+          LD_LIBRARY_PATH="${{ github.workspace }}/build-cpu/lib" CTEST_OUTPUT_ON_FAILURE=1 \
+            cmake --build build-cpu --target check -j"$(nproc)"
+
+      - name: Deployment acceptance (cpu, static)
+        run: ./scripts/verify_deployment.sh --basic
+
+      - name: Upload cpu-profile ctest log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cpu-profile-ctest-log
+          path: build-cpu/Testing/Temporary/LastTest.log
+          if-no-files-found: ignore
   # ---------------------------------------------------------------------------
   # Job C: clang-tidy (informational, non-blocking; produces a report artifact)
   # Runs only on manual full-matrix to avoid a clang dependency build on every PR

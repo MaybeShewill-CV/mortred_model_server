@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15)
+﻿cmake_minimum_required(VERSION 3.15)
 
 project(mm_ai_server_test LANGUAGES C CXX)
 
@@ -75,10 +75,14 @@ else()
 endif()
 
 if(MORTRED_BUILD_FULL)
-    list(APPEND TEST_LIST model_golden_test)
-    list(APPEND TEST_LIST model_lifecycle_unittest)
-    list(APPEND TEST_LIST backend_unittest)
     list(APPEND TEST_LIST gateway_e2e_test)
+    # GPU-model tests exercise TRT sessions and link vendored::mnn_cuda; the
+    # cpu profile compiles TRT out, so they exist in the gpu profile only
+    if(NOT MORTRED_BUILD_PROFILE STREQUAL "cpu")
+        list(APPEND TEST_LIST model_golden_test)
+        list(APPEND TEST_LIST model_lifecycle_unittest)
+        list(APPEND TEST_LIST backend_unittest)
+    endif()
 endif()
 
 # deterministic model-server stand-in used by supervision/gateway e2e tests

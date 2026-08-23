@@ -29,5 +29,17 @@ if [ -z "${MORTRED_GATEWAY_AUTH_TOKEN:-}" ] && [ "${MORTRED_GATEWAY_HOST}" != "1
     echo "[entrypoint] WARNING: non-loopback gateway without MORTRED_GATEWAY_AUTH_TOKEN; it will refuse to start (fail-closed)" >&2
 fi
 
+# Optional gpu convenience: convert MISSING TRT engines before the supervisor
+# autostarts (conversion is minutes-long and hardware-specific, so it is an
+# explicit opt-in). No-op in the cpu profile (no engines there).
+if [ "${MORTRED_AUTO_BUILD_ENGINES:-false}" = "true" ] \
+        && [ "${MORTRED_PROFILE:-gpu}" = "gpu" ] \
+        && [ -x /opt/mortred/scripts/convert_trt_engines.sh ]; then
+    echo "[entrypoint] MORTRED_AUTO_BUILD_ENGINES=true: converting missing TRT engines"
+    /opt/mortred/scripts/convert_trt_engines.sh || {
+        echo "[entrypoint] WARNING: engine conversion failed; TRT models will not start" >&2
+    }
+fi
+
 echo "[entrypoint] starting mortred-supervisor on ${MORTRED_API_HOST}:${MORTRED_API_PORT} (gateway ${MORTRED_GATEWAY_HOST}:${MORTRED_GATEWAY_PORT})"
 exec /opt/mortred/bin/mortred-supervisor.out

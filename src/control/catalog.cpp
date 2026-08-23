@@ -1,4 +1,4 @@
-/************************************************
+﻿/************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
 * File: catalog.cpp
@@ -51,8 +51,11 @@ const ServerEntry* Catalog::find_by_uri(const std::string& uri) const {
     return nullptr;
 }
 
-bool Catalog::init(const std::string& project_root, std::string* err) {
+bool Catalog::init(const std::string& project_root, std::string* err,
+                   const std::string& profile) {
     _entries.clear();
+    const std::string runtime_profile =
+        (profile == "cpu") ? "cpu" : "gpu";  // unknown values fall back to gpu
     const std::string conf_dir = project_root + "/conf/server";
 
     std::error_code ec;
@@ -93,6 +96,13 @@ bool Catalog::init(const std::string& project_root, std::string* err) {
 
         ServerEntry e;
         e.config = cfg_path;
+        // profile filter happens BEFORE any duplicate checks: cpu/gpu variants
+        // of the same model (same exe/port) may coexist as separate files but
+        // only one variant set is active per catalog run
+        e.profile = kv->count("profile") != 0 ? kv->at("profile") : "gpu";
+        if (e.profile != "any" && e.profile != runtime_profile) {
+            continue;
+        }
         e.host = kv->count("host") != 0 ? kv->at("host") : "localhost";
         e.port = kv->count("port") != 0 ? mini_toml::to_int(kv->at("port"), 0) : 0;
         e.uri = kv->count("server_uri") != 0 ? kv->at("server_uri") : "";

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 gen_weights_manifest.py - generate/update conf/weights_manifest.json (weight
@@ -28,6 +28,17 @@ ROOT = Path(__file__).resolve().parents[1]
 WEIGHTS_DIR = ROOT / "weights"
 OUT = ROOT / "conf" / "weights_manifest.json"
 HF_API = "https://huggingface.co/api/models/MaybeShewill-CV/mortred_model_server"
+
+# Curated cpu-profile weight set (the cpu deployment profile serves exactly
+# these models; matches the *_cpu_config.toml variants under conf/). Extend
+# this list when adding a model to the cpu catalog - it drives both the
+# manifest "profiles" tag and fetch_weights.py --profile cpu.
+CPU_WEIGHTS = {
+    "weights/classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn",
+    "weights/classification/resnet/resnet-50.mnn",
+    "weights/object_detection/yolov8/yolov8s.onnx",
+    "weights/scene_segmentation/hrnet/hrnetw48_ccd.onnx",
+}
 
 
 def sha256_of(path: Path, chunk: int = 1024 * 1024) -> str:
@@ -98,6 +109,9 @@ def main() -> int:
             "sha256": sha,
             "hf_path": hf_path,
             "on_hf": (hf_files is None) or (hf_path in hf_files),
+            # deployment profiles this weight belongs to; curated cpu set is
+            # both, everything else is gpu-only (drives fetch --profile)
+            "profiles": ["cpu", "gpu"] if rel in CPU_WEIGHTS else ["gpu"],
         }
         files.append(entry)
         print(f"  {rel}  {size}  {sha[:12]}…  hf={'Y' if entry['on_hf'] else 'N'}")

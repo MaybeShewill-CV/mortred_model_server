@@ -1,0 +1,147 @@
+name: release
+
+# Tag-driven release pipeline: vX.Y.Z builds and publishes
+#   - ghcr images: vX.Y.Z-cpu / vX.Y.Z-gpu (+ latest-cpu / latest-gpu)
+#   - tarballs:   mortred_model_server-X.Y.Z-{cpu,gpu}-linux-x64.tar.gz(+sha256)
+#   - a GitHub Release with the two tarballs attached
+# The tarball/artifact versions are asserted to equal the git tag.
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'version to build (e.g. v0.1.0; must match CHANGELOG)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  cpu-tarball:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake git curl jq \
+            libssl-dev libgoogle-glog-dev libeigen3-dev libopencv-dev libgtest-dev
+
+      - name: Cache cpu-profile 3rd_party
+        id: cache-3rdparty
+        uses: actions/cache@v6
+        with:
+          path: |
+            3rd_party
+            .deps-build
+          key: release-cpu-3rdparty-${{ hashFiles('scripts/install_deps.sh') }}
+          restore-keys: release-cpu-3rdparty-
+
+      - name: Build cpu dependency set
+        if: steps.cache-3rdparty.outputs.cache-hit != 'true'
+        run: ./scripts/install_deps.sh --cpu --all
+
+      - name: Build (cpu profile) + pack tarball
+        run: |
+          VERSION="${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"
+          cmake -B build -DMORTRED_BUILD_FULL=ON -DMORTRED_BUILD_PROFILE=cpu \
+            -DMORTRED_INSTALL=ON -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j"$(nproc)"
+          ./scripts/make_release_tarball.sh cpu "${VERSION#v}" build
+          echo "VERSION=${VERSION#v}" >> "$GITHUB_ENV"
+          echo "TGZ_VERSION=${VERSION}" >> "$GITHUB_ENV"
+
+      - name: Assert version consistency
+        run: |
+          [ "v$VERSION" = "$TGZ_VERSION" ] || { echo "version mismatch: v$VERSION vs $TGZ_VERSION"; exit 1; }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tarball-cpu
+          path: dist/*.tar.gz*
+          if-no-files-found: error
+
+  gpu-tarball:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build gpu tarball inside the full-build container
+        run: |
+          VERSION="${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"
+          # the gpu dependency matrix (CUDA/TRT apt) is exactly what the
+          # Dockerfile deps stage automates; build there and copy the tree out
+          docker build --target build -t mortred-gpu-build .
+          docker create --name extract mortred-gpu-build
+          docker cp extract:/opt/mortred /tmp/opt-mortred
+          docker rm extract
+          mkdir -p dist
+          VERSION_NUM="${VERSION#v}"
+          STAGING=dist/staging-gpu
+          mkdir -p "$STAGING"
+          cp -a /tmp/opt-mortred "$STAGING/opt/"
+          mkdir -p "$STAGING/deploy"
+          cp deploy/mortred-supervisor.service "$STAGING/deploy/"
+          cp scripts/tarball_install.sh "$STAGING/install.sh"
+          chmod +x "$STAGING/install.sh"
+          printf 'gpu\n' > "$STAGING/opt/mortred/PROFILE"
+          tar -C "$STAGING" -czf "dist/mortred_model_server-$VERSION_NUM-gpu-linux-x64.tar.gz" .
+          sha256sum "dist/mortred_model_server-$VERSION_NUM-gpu-linux-x64.tar.gz" > "dist/mortred_model_server-$VERSION_NUM-gpu-linux-x64.tar.gz.sha256"
+          rm -rf "$STAGING"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tarball-gpu
+          path: dist/*.tar.gz*
+          if-no-files-found: error
+
+  images:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    needs: [cpu-tarball]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push cpu image
+        run: |
+          VERSION="${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"
+          IMAGE="$REGISTRY/${{ github.repository }}"
+          docker build --target mortred-cpu -t "$IMAGE:$VERSION-cpu" -t "$IMAGE:latest-cpu" .
+          docker push "$IMAGE:$VERSION-cpu"
+          docker push "$IMAGE:latest-cpu"
+
+  github-release:
+    runs-on: ubuntu-22.04
+    needs: [cpu-tarball, gpu-tarball]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"
+          TAG_BODY="$(awk -v ver="${VERSION#v}" '/^## /{if (found) exit; found=($0=="## ["ver"]")} found' CHANGELOG.md)"
+          gh release create "$VERSION" dist/*.tar.gz* --title "$VERSION" --notes "${TAG_BODY:-See CHANGELOG.md}"

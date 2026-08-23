@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 fetch_weights.py - automatically download/verify model weights from Hugging Face.
@@ -109,6 +109,8 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="only verify existing files, no download")
     parser.add_argument("--dry-run", action="store_true", help="only print what would be downloaded")
     parser.add_argument("--only", type=str, default="", help="only process files whose path contains this substring")
+    parser.add_argument("--profile", type=str, default="", choices=["", "cpu", "gpu"],
+                        help="only process files whose manifest profiles tag contains this value")
     parser.add_argument("--manifest", type=str, default=str(DEFAULT_MANIFEST))
     args = parser.parse_args()
 
@@ -122,6 +124,9 @@ def main() -> int:
         sys.exit("[ERROR] manifest has no files")
 
     selected = [f for f in files if not args.only or args.only.lower() in f["path"].lower()]
+    if args.profile:
+        # legacy manifests without a profiles tag are treated as gpu-only
+        selected = [f for f in selected if args.profile in f.get("profiles", ["gpu"])]
     ok, missing, nohf, failed = 0, [], [], []
 
     for item in selected:

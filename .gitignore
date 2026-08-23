@@ -64,3 +64,5 @@ cmake-build-release/
 logs/
 generated_configs/
 logs/mortred-supervisor.pid
+dist/
+src/common/mortred_version.h

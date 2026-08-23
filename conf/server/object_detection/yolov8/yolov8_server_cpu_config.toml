@@ -1,0 +1,20 @@
+﻿[YOLOV8_DETECTION_SERVER]
+# deployment profile filter: this entry only appears when MORTRED_PROFILE=cpu
+profile="cpu"
+port=9056
+host="localhost"
+max_connections=500
+peer_resp_timeout=15
+request_size_limit=64
+compute_threads=-1
+handler_threads=50
+worker_nums=1
+model_run_timeout=2000
+max_queue_depth=32
+# CPU inference is slower: single-request runs, no dynamic batching
+max_batch_delay_ms=5
+server_uri="/mortred_ai_server_v1/obj_detection/yolov8"
+server_exe="yolov8_detection_server.out"
+
+[YOLOV8]
+model_config_file_path="../conf/model/object_detection/yolov8/yolov8_cpu_config.toml"

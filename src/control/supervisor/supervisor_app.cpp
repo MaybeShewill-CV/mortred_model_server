@@ -1,4 +1,4 @@
-/************************************************
+﻿/************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
 * File: main.cpp (mortred-supervisor)
@@ -1150,8 +1150,12 @@ int run_supervisor() {
     }
 
     std::string catalog_err;
-    if (!g_catalog.init(g_root, &catalog_err)) {
-        std::fprintf(stderr, "mortred-supervisor: catalog init failed: %s\n",
+    const char* profile_env = std::getenv("MORTRED_PROFILE");
+    const std::string runtime_profile =
+        (profile_env != nullptr && std::string(profile_env) == "cpu") ? "cpu" : "gpu";
+    if (!g_catalog.init(g_root, &catalog_err, runtime_profile)) {
+        std::fprintf(stderr, "mortred-supervisor: catalog init failed (profile=%s): %s\n",
+                     runtime_profile.c_str(),
                      catalog_err.c_str());
         return 1;
     }

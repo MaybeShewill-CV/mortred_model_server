@@ -296,8 +296,12 @@ int run_gateway(int argc, char** argv) {
     }
 
     std::string catalog_err;
-    if (!g_catalog.init(root, &catalog_err)) {
-        std::fprintf(stderr, "mortred-gateway: catalog init failed: %s\n", catalog_err.c_str());
+    const char* profile_env = std::getenv("MORTRED_PROFILE");
+    const std::string runtime_profile =
+        (profile_env != nullptr && std::string(profile_env) == "cpu") ? "cpu" : "gpu";
+    if (!g_catalog.init(root, &catalog_err, runtime_profile)) {
+        std::fprintf(stderr, "mortred-gateway: catalog init failed (profile=%s): %s\n",
+                     runtime_profile.c_str(), catalog_err.c_str());
         return 1;
     }
     g_metrics.set_model("gateway");

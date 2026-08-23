@@ -1,4 +1,4 @@
-/************************************************
+﻿/************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
 * File: catalog.h
@@ -27,6 +27,8 @@ struct ServerEntry {
     int port = 0;
     std::string uri;       // server_uri, the gateway routing key
     std::string type;      // "image" or "chat"
+    std::string profile = "gpu";  // cpu | gpu | any (absent field = gpu: the
+                                   // cpu catalog is explicitly curated)
 };
 
 /***
@@ -41,7 +43,16 @@ class Catalog {
      * @param project_root project root directory (contains conf/server)
      * @param err filled with the first fatal problem when returning false
      */
-    bool init(const std::string& project_root, std::string* err = nullptr);
+    /***
+     * @param project_root project root directory (contains conf/server)
+     * @param err filled with the first fatal problem when returning false
+     * @param profile runtime deployment profile ("cpu" | "gpu", default gpu);
+     *        entries whose profile field is not this value and not "any" are
+     *        filtered out BEFORE the duplicate-id/port/uri checks, so cpu and
+     *        gpu variants of the same model may reuse the same port
+     */
+    bool init(const std::string& project_root, std::string* err = nullptr,
+              const std::string& profile = "gpu");
 
     const std::vector<ServerEntry>& entries() const {
         return _entries;

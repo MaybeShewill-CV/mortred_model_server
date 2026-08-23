@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(mortred_model_server LANGUAGES C CXX)
+project(mortred_model_server VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -10,6 +10,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(PROJECT_ROOT_DIR ${CMAKE_CURRENT_LIST_DIR})
+
+# version header consumed by mortredctl/supervisor --version; single source of
+# truth = project(VERSION), which equals the git tag of the release pipeline
+configure_file(${PROJECT_ROOT_DIR}/src/common/mortred_version.h.in
+               ${PROJECT_ROOT_DIR}/src/common/mortred_version.h @ONLY)
 
 # Build type: default to Release only when unspecified; never override a user's Debug/RelWithDebInfo choice
 if(NOT CMAKE_BUILD_TYPE)
@@ -35,6 +40,12 @@ mortred_probe_workflow()
 
 # CI / unit-test mode: skip CUDA/MNN/TRT-dependent models and servers; build only common + tests
 option(MORTRED_BUILD_FULL "Build full project (models/server/apps, requires CUDA/MNN/TRT)" ON)
+# Deployment profile: gpu = full CUDA/TensorRT stack (default, unchanged);
+# cpu = MNN-CPU + ORT-CPU backends only, no TensorRT (the trt backend is
+# compiled out; trt-configured models fail init with a clear error). Single
+# source of truth for the deployment story - see docs/deployment.md.
+set(MORTRED_BUILD_PROFILE "gpu" CACHE STRING "Deployment profile: gpu | cpu")
+set_property(CACHE MORTRED_BUILD_PROFILE PROPERTY STRINGS gpu cpu)
 option(MORTRED_INSTALL "Create the tree-style install target (bin/lib tree)" OFF)
 
 # CI quality gate: treat compiler warnings as errors (enabled in tests-only builds)
@@ -68,15 +79,23 @@ add_subdirectory(src/common)
 add_subdirectory(src/control)
 
 if(MORTRED_BUILD_FULL)
-    find_package(CUDAToolkit REQUIRED)
-    # CUDA inference stack (MNN-TRT backend / onnxruntime / TensorRT): exact versions, fail if missing
+    # exact versions, fail if missing; the cpu profile drops the CUDA/TRT set
     mortred_import_shared(mnn            libMNN.so)
-    mortred_import_shared(mnn_cuda       libMNN_Cuda_Main.so)
     mortred_import_shared(fmt            libfmt.so.9)
     mortred_import_shared(onnxruntime    libonnxruntime.so.1.18.0)
-    mortred_import_shared(nvinfer        libnvinfer.so.8)
-    mortred_import_shared(nvinfer_plugin libnvinfer_plugin.so.8)
-    mortred_import_shared(nvonnxparser   libnvonnxparser.so.8)
+    # the gateway calls ApiKeyManager::authenticate (SHA-256); pin the vendored
+    # crypto so link-time and runtime (LD_LIBRARY_PATH install tree) agree
+    mortred_import_shared(crypto         libcrypto.so.1.1)
+    if(MORTRED_BUILD_PROFILE STREQUAL "cpu")
+        message(STATUS "Build profile: cpu (MNN-CPU + ORT-CPU, TensorRT compiled out)")
+    else()
+        message(STATUS "Build profile: gpu (full CUDA/TensorRT stack)")
+        find_package(CUDAToolkit REQUIRED)
+        mortred_import_shared(mnn_cuda       libMNN_Cuda_Main.so)
+        mortred_import_shared(nvinfer        libnvinfer.so.8)
+        mortred_import_shared(nvinfer_plugin libnvinfer_plugin.so.8)
+        mortred_import_shared(nvonnxparser   libnvonnxparser.so.8)
+    endif()
     add_subdirectory(src/models)
     add_subdirectory(src/factory)
     add_subdirectory(src/server)

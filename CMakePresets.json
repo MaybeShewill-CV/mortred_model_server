@@ -1,4 +1,4 @@
-{
+﻿{
   "version": 3,
   "cmakeMinimumRequired": {
     "major": 3,
@@ -59,6 +59,19 @@
       }
     },
     {
+      "name": "full-cpu",
+      "displayName": "Full Build (cpu profile)",
+      "description": "Full model/server/apps build with MNN-CPU + ORT-CPU backends; TensorRT compiled out. No CUDA required.",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/full-cpu",
+      "cacheVariables": {
+        "MORTRED_BUILD_FULL": "ON",
+        "MORTRED_BUILD_PROFILE": "cpu",
+        "MORTRED_ENABLE_WERROR": "OFF",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
       "name": "full",
       "displayName": "Full Build",
       "description": "Build all models, servers, tools and web console. Requires CUDA + vendored engines.",
@@ -107,6 +120,11 @@
     {
       "name": "full",
       "configurePreset": "full",
+      "jobs": 8
+    },
+    {
+      "name": "full-cpu",
+      "configurePreset": "full-cpu",
       "jobs": 8
     }
   ],

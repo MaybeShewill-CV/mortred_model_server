@@ -1,14 +1,19 @@
-# Mortred Model Server - example container orchestration
+﻿# Mortred Model Server - container orchestration for BOTH deployment profiles.
 #
-# Usage:
-#   docker compose build
-#   APP_AUTH_TOKEN=your-token docker compose up -d
-#   Weights dir mount: default ./weights, override with WEIGHTS_DIR
+# GPU profile (default, full CUDA/TensorRT stack):
+#   docker compose --profile gpu up -d
+# CPU profile (no NVIDIA GPU required):
+#   docker compose --profile cpu up -d
+# Both: APP_AUTH_TOKEN + MORTRED_GATEWAY_AUTH_TOKEN must be set; weights dir
+# mount defaults to ./weights, override with WEIGHTS_DIR.
 #
 # Two external ports only: supervisor (management) 8787 + gateway (inference) 8080.
 services:
   mortred:
-    build: .
+    profiles: ["gpu"]
+    build:
+      context: .
+      target: ""           # default target = gpu runtime
     image: mortred_model_server:latest
     container_name: mortred
     environment:
@@ -33,4 +38,29 @@ services:
       timeout: 5s
       retries: 3
       start_period: 60s
+    restart: unless-stopped
+
+  mortred-cpu:
+    profiles: ["cpu"]
+    build:
+      context: .
+      target: mortred-cpu
+    image: mortred_model_server:cpu
+    container_name: mortred-cpu
+    environment:
+      MORTRED_API_TOKEN: "${MORTRED_API_TOKEN:?set MORTRED_API_TOKEN to protect the supervisor API}"
+      MORTRED_GATEWAY_AUTH_TOKEN: "${MORTRED_GATEWAY_AUTH_TOKEN:?set MORTRED_GATEWAY_AUTH_TOKEN to protect inference}"
+      MORTRED_PROFILE: "cpu"
+      MORTRED_AUTOSTART: "true"
+    ports:
+      - "8787:8787"
+      - "8080:8080"
+    volumes:
+      - "${WEIGHTS_DIR:-./weights}:/opt/mortred/weights"
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8787/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped

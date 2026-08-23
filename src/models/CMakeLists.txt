@@ -1,4 +1,4 @@
-# build models libs
+﻿# build models libs
 
 set(MODELS_LIB_SRC
     ${CMAKE_CURRENT_LIST_DIR}/base_model.h
@@ -11,8 +11,6 @@ set(MODELS_LIB_SRC
     ${CMAKE_CURRENT_LIST_DIR}/backend/session.cpp
     ${CMAKE_CURRENT_LIST_DIR}/backend/session.h
     ${CMAKE_CURRENT_LIST_DIR}/backend/tensor.h
-    ${CMAKE_CURRENT_LIST_DIR}/backend/trt_session.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/backend/trt_session.h
     ${CMAKE_CURRENT_LIST_DIR}/cv_image_input.h
     ${CMAKE_CURRENT_LIST_DIR}/model_io_define.h
     ${CMAKE_CURRENT_LIST_DIR}/clip/simple_tokenizer.cpp
@@ -38,32 +36,62 @@ target_include_directories(
     models SYSTEM PUBLIC
     ${PROJECT_ROOT_DIR}/3rd_party/include
 )
-# TensorRT header dir switches with version (TensorRT-8.6.1.6 / TensorRT-10.x); new code always
-# uses version-less official paths such as #include "NvInfer.h"
-file(GLOB MORTRED_TRT_INCLUDE_DIRS "${PROJECT_ROOT_DIR}/3rd_party/include/TensorRT-*")
-list(SORT MORTRED_TRT_INCLUDE_DIRS)
-list(GET MORTRED_TRT_INCLUDE_DIRS 0 MORTRED_TRT_INCLUDE_DIR)
-if(NOT MORTRED_TRT_INCLUDE_DIR)
-    message(FATAL_ERROR "no vendored TensorRT include dir found under 3rd_party/include/TensorRT-*")
+if(MORTRED_BUILD_PROFILE STREQUAL "cpu")
+    # cpu profile: the TensorRT session is compiled out entirely; the backend
+    # factory (session.cpp) returns a clear init error for trt configs. TRT
+    # headers/libs are absent in a cpu dependency tree, so they must not be
+    # referenced here at all.
+    # NOTE: the cpu branch deliberately does NOT define MORTRED_HAS_TRT, so
+    # `#ifdef MORTRED_HAS_TRT` in session.cpp is false; defining it to 0 would
+    # make #ifdef true (classic trap).
+    target_link_libraries(
+        models
+        PUBLIC
+        common
+        vendored::mnn
+        vendored::workflow
+        vendored::fmt
+        vendored::onnxruntime
+        ${OpenCV_LIBS}
+        glog::glog
+    )
+else()
+    # TensorRT header dir switches with version (TensorRT-8.6.1.6 / TensorRT-10.x); new code always
+    # uses version-less official paths such as #include "NvInfer.h"
+    file(GLOB MORTRED_TRT_INCLUDE_DIRS "${PROJECT_ROOT_DIR}/3rd_party/include/TensorRT-*")
+    list(SORT MORTRED_TRT_INCLUDE_DIRS)
+    list(GET MORTRED_TRT_INCLUDE_DIRS 0 MORTRED_TRT_INCLUDE_DIR)
+    if(NOT MORTRED_TRT_INCLUDE_DIR)
+        message(FATAL_ERROR "no vendored TensorRT include dir found under 3rd_party/include/TensorRT-*")
+    endif()
+    message(STATUS "vendored tensorrt headers: ${MORTRED_TRT_INCLUDE_DIR}")
+    target_include_directories(models SYSTEM PUBLIC ${MORTRED_TRT_INCLUDE_DIR})
+    target_compile_definitions(models PUBLIC MORTRED_HAS_TRT=1)
+    # the gpu profile compiles the TensorRT session into the models lib (the
+    # cpu profile above leaves it out entirely)
+    target_sources(
+        models
+        PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/backend/trt_session.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/backend/trt_session.h
+    )
+    target_link_libraries(
+        models
+        PUBLIC
+        common
+        vendored::mnn
+        vendored::mnn_cuda
+        vendored::workflow
+        vendored::fmt
+        vendored::onnxruntime
+        vendored::nvinfer
+        vendored::nvinfer_plugin
+        vendored::nvonnxparser
+        CUDA::cudart
+        ${OpenCV_LIBS}
+        glog::glog
+    )
 endif()
-message(STATUS "vendored tensorrt headers: ${MORTRED_TRT_INCLUDE_DIR}")
-target_include_directories(models SYSTEM PUBLIC ${MORTRED_TRT_INCLUDE_DIR})
-target_link_libraries(
-    models
-    PUBLIC
-    common
-    vendored::mnn
-    vendored::mnn_cuda
-    vendored::workflow
-    vendored::fmt
-    vendored::onnxruntime
-    vendored::nvinfer
-    vendored::nvinfer_plugin
-    vendored::nvonnxparser
-    CUDA::cudart
-    ${OpenCV_LIBS}
-    glog::glog
-)
 # Deprecation suppression applies only to targets needing old OpenCV APIs (replaces the old global suppression)
 target_compile_options(models PRIVATE -Wno-deprecated-declarations)
 set_target_properties(models PROPERTIES LINKER_LANGUAGE CXX)

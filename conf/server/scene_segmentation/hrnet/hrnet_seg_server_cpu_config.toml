@@ -1,0 +1,20 @@
+﻿[HRNET_SEGMENTATION_SERVER]
+# deployment profile filter: this entry only appears when MORTRED_PROFILE=cpu
+profile="cpu"
+port=9071
+host="localhost"
+max_connections=500
+peer_resp_timeout=15
+request_size_limit=64
+compute_threads=-1
+handler_threads=50
+worker_nums=1
+model_run_timeout=2000
+max_queue_depth=32
+# CPU inference is slower: single-request runs, no dynamic batching
+max_batch_delay_ms=5
+server_uri="/mortred_ai_server_v1/scene_segmentation/hrnet"
+server_exe="hrnet_segmentation_server.out"
+
+[HRNET]
+model_config_file_path="../conf/model/scene_segmentation/hrnet/hrnetw48_ccd_fv_segmentation_cpu_cfg.toml"

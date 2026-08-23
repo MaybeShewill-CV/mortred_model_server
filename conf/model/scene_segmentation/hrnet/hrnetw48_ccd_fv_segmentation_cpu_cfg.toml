@@ -1,0 +1,7 @@
+﻿# CPU profile variant of hrnetw48_ccd_fv_segmentation_cfg.toml: ONNX Runtime
+# CPU provider instead of the TRT engine.
+[HRNET_SEGMENTATION]
+[HRNET_SEGMENTATION.backend]
+type = "onnx"
+model_file_path = "../weights/scene_segmentation/hrnet/hrnetw48_ccd.onnx"
+device = "cpu"
