@@ -246,8 +246,11 @@ install_onnxruntime() {
     else
         # GitHub publishes sha256 for each release asset (assets[].digest); official channel + TLS
         require_cmd jq "jq"
+        # `// empty`: GitHub leaves digest null on older release assets; without
+        # it jq -r prints the STRING "null", which then confuses sha256sum with
+        # "no properly formatted checksum lines" instead of failing cleanly
         expect_sha="$(curl -fsSL "https://api.github.com/repos/microsoft/onnxruntime/releases/tags/v${ONNXRUNTIME_VER}" \
-            | jq -r --arg name "$tgz" '.assets[] | select(.name == $name) | .digest' \
+            | jq -r --arg name "$tgz" '.assets[] | select(.name == $name) | .digest // empty' \
             | sed 's/^sha256://' || true)"
     fi
     [ -n "$expect_sha" ] || fail "cannot get sha256 for onnxruntime ${ONNXRUNTIME_VER}: set ONNXRUNTIME_SHA256 or fill the ONNXRUNTIME_SHA256S table (to get it: curl -fsSL -o /tmp/ort.tgz https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VER}/${tgz} && sha256sum /tmp/ort.tgz)"

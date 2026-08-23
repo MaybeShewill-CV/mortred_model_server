@@ -74,7 +74,7 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ccache jq
+          sudo apt-get install -y --no-install-recommends ccache jq autoconf autoconf-archive automake libtool
           if [ "${{ matrix.compiler }}" = "clang" ]; then
             sudo apt-get install -y --no-install-recommends clang
             echo "CC=clang" >> "$GITHUB_ENV"
@@ -167,7 +167,7 @@ jobs:
       - name: Install tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ccache clang-format jq
+          sudo apt-get install -y --no-install-recommends ccache clang-format jq autoconf autoconf-archive automake libtool
 
       - name: Cache vcpkg and ccache
         id: cache-deps
@@ -304,7 +304,7 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ccache jq
+          sudo apt-get install -y --no-install-recommends ccache jq autoconf autoconf-archive automake libtool
 
       - name: Cache vcpkg and ccache
         id: cache-deps
@@ -470,7 +470,7 @@ jobs:
       - name: Install tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clang clang-tidy clang-tools jq
+          sudo apt-get install -y --no-install-recommends clang clang-tidy clang-tools jq autoconf autoconf-archive automake libtool
 
       - name: Cache vcpkg
         id: cache-deps
