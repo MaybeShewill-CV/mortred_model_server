@@ -19,7 +19,7 @@ FROM nvidia/cuda:11.8.0-devel-ubuntu20.04 AS deps
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential git cmake curl ca-certificates jq \
-        libssl-dev libgoogle-glog-dev libeigen3-dev \
+        libssl-dev libgoogle-glog-dev libeigen3-dev ocl-icd-opencl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src

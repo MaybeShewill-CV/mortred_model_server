@@ -176,6 +176,23 @@ install_workflow() {
     mark workflow
 }
 
+# ============ system runtime libs that must live in the vendored tree ============
+# libssl/libcrypto: workflow links against them and mortred-gateway's API-key
+# SHA-256 path links libcrypto explicitly (vendored::crypto). libOpenCL: MNN's
+# OpenCL schedule backend dlopens it (gpu profile). Fresh containers have no
+# legacy hand-copied files, so --all installs them like any other dependency
+# and --check keeps demanding them (install/check contract stays in sync).
+install_system_runtime_libs() {
+    if stamp runtime-libs; then info "runtime libs: already installed"; return; fi
+    announce "install system runtime libs (ssl/crypto$( [ "$DEP_PROFILE" != "cpu" ] && echo /OpenCL ))"
+    local sys=/usr/lib/x86_64-linux-gnu
+    copy_libs "$sys/libssl.so*"    "$LIB_DIR" "libssl runtime"
+    copy_libs "$sys/libcrypto.so*" "$LIB_DIR" "libcrypto runtime"
+    if [ "$DEP_PROFILE" != "cpu" ]; then
+        copy_libs "$sys/libOpenCL.so*" "$LIB_DIR" "OpenCL runtime"
+    fi
+    mark runtime-libs
+}
 # ============ MNN (built from source, pinned tag, CUDA backend) ============
 install_mnn() {
     if stamp "$MNN_STAMP"; then info "MNN (${DEP_PROFILE}): already installed"; return; fi
@@ -469,6 +486,7 @@ case "$MODE" in
         install_workflow
         install_onnxruntime
         install_mnn
+        install_system_runtime_libs
         if [ "$DEP_PROFILE" = "cpu" ]; then
             info "cpu profile: nvidia/TensorRT stack skipped entirely"
         elif [ "$(id -u)" -eq 0 ]; then
