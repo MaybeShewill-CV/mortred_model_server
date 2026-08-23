@@ -1,4 +1,4 @@
-/************************************************
+﻿/************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
 * File: api_key_manager.h
@@ -13,6 +13,7 @@
 #include <chrono>
 #include <fstream>
 #include <cstdio>
+#include <memory>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -35,19 +36,28 @@ struct ApiKey {
     std::string scope = "inference";  // inference | admin | all
     int rate_limit_qps = 0;        // 0 = unlimited
     bool enabled = true;
-    // runtime counters (not persisted)
-    std::atomic<uint64_t> total_requests{0};
-    std::atomic<uint64_t> total_rejected{0};
-    // rate limiter state (simplified fixed window)
-    std::mutex rate_mu;
-    int64_t rate_window_start = 0;
-    int rate_window_count = 0;
+    // runtime state (not persisted). mutable on purpose: authenticate()
+    // hands out const keys (shared_ptr<const ApiKey>) that must still count
+    // and rate-limit; everything mutable here is internal synchronization
+    // state, never identity/config
+    mutable std::atomic<uint64_t> total_requests{0};
+    mutable std::atomic<uint64_t> total_rejected{0};
+    mutable std::mutex rate_mu;
+    mutable int64_t rate_window_start = 0;
+    mutable int rate_window_count = 0;
 };
 
 /***
  * Manages API keys from conf/api_keys.toml. Keys are stored as SHA-256
  * hashes (never plaintext); the config file is hot-reloadable via
  * reload(). Thread-safe.
+ *
+ * Concurrency contract (P0-2): reload()/load() may replace the whole key
+ * set at any time, so authenticate() returns a shared_ptr granting the
+ * CALLER ownership for as long as it reads the key (name/scope/counters).
+ * Callers must never store the raw pointer beyond the shared_ptr's
+ * lifetime - the old raw-pointer return was a use-after-free under
+ * concurrent reload.
  */
 class ApiKeyManager {
   public:
@@ -67,13 +77,16 @@ class ApiKeyManager {
 
     /***
      * Authenticate a request: extract Bearer token, hash it, look up.
-     * @return nullptr if not found/disabled; the ApiKey if authorized.
-     * Also enforces per-key rate limiting.
+     * @return empty shared_ptr if not found/disabled/rate-limited; otherwise
+     * a const key the caller OWNS for the duration of its use - safe across
+     * concurrent reload(), which replaces the internal key set.
+     * Also enforces per-key rate limiting before returning.
      */
-    const ApiKey* authenticate(const std::string& authorization_header);
+    std::shared_ptr<const ApiKey> authenticate(const std::string& authorization_header);
 
-    /*** check scope */
-    static bool has_scope(const ApiKey* key, const std::string& required);
+    /*** check scope (key ownership is held by the shared_ptr) */
+    static bool has_scope(const std::shared_ptr<const ApiKey>& key,
+                          const std::string& required);
 
     /*** list all keys (name, scope, enabled - never the hash) */
     struct KeyInfo {
@@ -96,7 +109,7 @@ class ApiKeyManager {
     std::string config_path_;
     std::unordered_map<std::string, std::shared_ptr<ApiKey>> keys_;  // hash -> key
 
-    bool allow_rate_limit(ApiKey* key);
+    bool allow_rate_limit(const ApiKey* key);
 };
 
 inline bool ApiKeyManager::load(const std::string& path) {
@@ -141,7 +154,8 @@ inline bool ApiKeyManager::reload() {
     return load(config_path_);
 }
 
-inline const ApiKey* ApiKeyManager::authenticate(const std::string& authorization_header) {
+inline std::shared_ptr<const ApiKey> ApiKeyManager::authenticate(
+    const std::string& authorization_header) {
     // extract Bearer token
     const std::string prefix = "bearer ";
     std::string lower;
@@ -162,9 +176,10 @@ inline const ApiKey* ApiKeyManager::authenticate(const std::string& authorizatio
         return nullptr;
     }
 
-    // hash and look up
+    // hash and look up; the map holds shared_ptr so the returned key stays
+    // alive through the caller's reads even if reload() swaps the set now
     const std::string hash = sha256_hex(token);
-    std::shared_ptr<ApiKey> key;
+    std::shared_ptr<const ApiKey> key;
     {
         std::lock_guard<std::mutex> lock(mu_);
         const auto it = keys_.find(hash);
@@ -174,23 +189,24 @@ inline const ApiKey* ApiKeyManager::authenticate(const std::string& authorizatio
         key = it->second;
     }
 
-    // rate limit
+    // rate limit (the local shared_ptr keeps the key alive here)
     key->total_requests.fetch_add(1);
     if (!allow_rate_limit(key.get())) {
         key->total_rejected.fetch_add(1);
         return nullptr;
     }
-    return key.get();
+    return key;
 }
 
-inline bool ApiKeyManager::has_scope(const ApiKey* key, const std::string& required) {
+inline bool ApiKeyManager::has_scope(const std::shared_ptr<const ApiKey>& key,
+                                     const std::string& required) {
     if (key == nullptr) {
         return false;
     }
     return key->scope == "all" || key->scope == required;
 }
 
-inline bool ApiKeyManager::allow_rate_limit(ApiKey* key) {
+inline bool ApiKeyManager::allow_rate_limit(const ApiKey* key) {
     if (key->rate_limit_qps <= 0) {
         return true;
     }

@@ -1,4 +1,4 @@
-# API Key 管理指南
+﻿# API Key 管理指南
 
 | [English](api-keys.md) | [中文](api-keys.zh-cn.md) |
 |---|---|
@@ -391,3 +391,16 @@ curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:8787/api/v
 - 被禁用的 key 立即拒绝
 - 限流为每 key 固定窗口（1 秒）
 - 所有鉴权在网关层完成；模型服务器仅绑定环回地址
+
+## 并发与热加载
+
+`ApiKeyManager::authenticate()` 返回 `shared_ptr<const ApiKey>`：调用方在
+读取 key（name/scope/计数器）期间持有所有权，因此并发的 `reload()` 整体
+替换 key 集合也不会使结果悬垂。调用方不得把裸指针保留到 shared_ptr 生命
+期之外。`ApiKey` 上的运行时计数与限流状态是 `mutable` 的内部同步状态——
+const key 仍会计数与限流，但其身份/配置永不变化。
+
+该契约由 `test/api_key_manager_unittest.cc` 强制执行：压力测试让
+authenticate() 与持续 reload 循环并发，并携带 `sanitizer` ctest label（CI
+的 TSAN 门禁）。同一测试对旧的裸指针实现运行会在 ASan 下以
+heap-use-after-free 崩溃。

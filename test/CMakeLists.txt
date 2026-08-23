@@ -63,6 +63,17 @@ if(MORTRED_WORKFLOW_AVAILABLE)
     list(APPEND TEST_LIST server_e2e_contract_test)
 endif()
 
+# ApiKeyManager::authenticate needs OpenSSL SHA-256; the header is otherwise
+# dependency-free, so the test is registered only when OpenSSL is linkable
+# (preinstalled on the CI runners / dev boxes; skipped otherwise, like the
+# workflow gate above).
+find_package(OpenSSL QUIET)
+if(OpenSSL_FOUND)
+    list(APPEND TEST_LIST api_key_manager_unittest)
+else()
+    message(STATUS "OpenSSL not found: api_key_manager_unittest skipped")
+endif()
+
 if(MORTRED_BUILD_FULL)
     list(APPEND TEST_LIST model_golden_test)
     list(APPEND TEST_LIST model_lifecycle_unittest)
@@ -108,6 +119,8 @@ foreach(src ${TEST_LIST})
         set(EXTRA_LIBS pthread)
     elseif(${src} STREQUAL "async_job_unittest")
         set(EXTRA_LIBS pthread)
+    elseif(${src} STREQUAL "api_key_manager_unittest")
+        set(EXTRA_LIBS OpenSSL::Crypto pthread)
     elseif(${src} STREQUAL "async_job_stress_test")
         set(EXTRA_LIBS pthread)
     elseif(${src} STREQUAL "supervisor_unittest")
@@ -142,7 +155,8 @@ foreach(src ${TEST_LIST})
     endif()
     add_test(NAME ${src} COMMAND $<TARGET_FILE:${src}> WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
     add_dependencies(check ${src})
-    if((${src} STREQUAL "async_job_unittest") OR (${src} STREQUAL "async_job_stress_test"))
+    if((${src} STREQUAL "async_job_unittest") OR (${src} STREQUAL "async_job_stress_test") OR
+       (${src} STREQUAL "api_key_manager_unittest"))
         # the sanitizer CI gate runs exactly these under -fsanitize=thread
         set_tests_properties(${src} PROPERTIES LABELS "sanitizer")
     endif()

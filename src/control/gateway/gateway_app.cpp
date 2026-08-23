@@ -1,4 +1,4 @@
-/************************************************
+﻿/************************************************
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
 * File: main.cpp (mortred-gateway)
@@ -216,7 +216,9 @@ void process(WFHttpTask* task) {
 
     // try multi-key auth first (P0-4)
     if (g_api_keys.key_count() > 0) {
-        const auto* key = g_api_keys.authenticate(auth_header);
+        // shared_ptr ownership: safe across a concurrent reload() that swaps
+        // the whole key set (P0-2)
+        const auto key = g_api_keys.authenticate(auth_header);
         if (key != nullptr && mortred::control::ApiKeyManager::has_scope(key, "inference")) {
             authorized = true;
             key_name = key->name;

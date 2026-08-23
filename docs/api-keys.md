@@ -1,4 +1,4 @@
-# API Key Management Guide
+﻿# API Key Management Guide
 
 | [English](api-keys.md) | [中文](api-keys.zh-cn.md) |
 |---|---|
@@ -393,3 +393,17 @@ curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:8787/api/v
 - Disabled keys are rejected immediately
 - Rate limiting is per-key fixed-window (1 second)
 - All authentication happens at the gateway; model servers are loopback-only behind the internal token
+
+## Concurrency and Hot Reload
+
+`ApiKeyManager::authenticate()` returns a `shared_ptr<const ApiKey>`: the caller
+owns the key for as long as it reads it (name/scope/counters), so a concurrent
+`reload()` swapping the whole key set can never dangle the result. Callers must
+not keep the raw pointer beyond the shared_ptr's lifetime. Runtime counters and
+rate-limiter state on `ApiKey` are `mutable` internal synchronization state - a
+const key still counts and rate-limits, but its identity/config never changes.
+
+This contract is enforced by `test/api_key_manager_unittest.cc`: a stress test
+drives authenticate() against a continuous reload loop and carries the
+`sanitizer` ctest label (TSAN gate in CI). The same test against the previous
+raw-pointer implementation crashes with a heap-use-after-free under ASan.
