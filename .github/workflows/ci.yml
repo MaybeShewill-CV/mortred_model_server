@@ -642,7 +642,10 @@ jobs:
         run: |
           set -euo pipefail
           bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
-          ./actionlint -color .github/workflows/
+          # actionlint takes workflow PATHS or globs, not a bare directory
+          # (v1.7 errors "is a directory"); no-arg mode auto-discovers
+          # .github/workflows/*.{yml,yaml} from the repo root
+          ./actionlint -color
 
   # ---------------------------------------------------------------------------
   # Job E: full-build -Werror gate (Docker carrier, reuses install_deps.sh for fully automated deps)
