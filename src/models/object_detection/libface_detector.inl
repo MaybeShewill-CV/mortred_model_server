@@ -206,7 +206,8 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTe
         decode_result.push_back(std::move(face_box));
     }
 
-    auto nms_result = jinq::common::CvUtils::nms_bboxes(decode_result, _m_nms_threshold);
+    auto nms_result = jinq::common::CvUtils::nms_boxes_per_class(
+        decode_result, _m_score_threshold, _m_nms_threshold);
     if (nms_result.size() > _m_keep_topk) {
         nms_result.resize(_m_keep_topk);
     }

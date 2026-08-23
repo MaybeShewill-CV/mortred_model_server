@@ -154,7 +154,8 @@ StatusCode NanoDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTenso
         }
     }
 
-    DetectionOutput nms_result = CvUtils::nms_bboxes(result, _m_nms_threshold);
+    DetectionOutput nms_result =
+        CvUtils::nms_boxes_per_class(result, _m_score_threshold, _m_nms_threshold);
     if (nms_result.size() > static_cast<size_t>(_m_keep_topk)) {
         nms_result.resize(static_cast<size_t>(_m_keep_topk));
     }

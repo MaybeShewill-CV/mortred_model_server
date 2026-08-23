@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdint>
 #include <cstring>
 #include <map>
 #include <string>
@@ -306,40 +307,49 @@ static inline float calc_iou(const T& box1, const T& box2) {
     return calc_iou(box1.bbox, box2.bbox);
 }
 
-// per-class NMS: boxes are expected to expose bbox/score/class_id
-template<class T>
-static inline std::vector<T> nms_bboxes(const std::vector<T>& bboxes, double nms_threshold) {
+// unified per-class NMS for the yolo/nano detectors, backed by
+// cv::dnn::NMSBoxes: candidates are grouped by class first, so boxes of
+// different classes never suppress each other (the reference yolo
+// semantics). Detections must expose bbox/score/class_id; the result is
+// ordered by ascending class id and descending score inside a class.
+template<typename T>
+static inline std::vector<T> nms_boxes_per_class(const std::vector<T>& detections,
+                                                 double score_threshold,
+                                                 double nms_threshold) {
     std::vector<T> result;
-
-    if (bboxes.empty()) {
+    if (detections.empty()) {
         return result;
     }
 
-    std::map<int, std::vector<T> > bboxes_split;
-
-    for (const auto& bbox : bboxes) {
-        bboxes_split[bbox.class_id].push_back(bbox);
+    // cv::dnn::NMSBoxes is class agnostic, so candidates are split per class
+    // first and every call only compares boxes of the same class
+    std::map<int32_t, std::vector<size_t> > class_to_indices;
+    for (size_t idx = 0; idx < detections.size(); ++idx) {
+        class_to_indices[detections[idx].class_id].push_back(idx);
     }
 
-    for (auto& iter : bboxes_split) {
-        auto& candidates = iter.second;
-        std::sort(candidates.begin(), candidates.end(), [](const T& a, const T& b) {
-            return a.score > b.score;
-        });
-        std::vector<bool> suppressed(candidates.size(), false);
-        for (size_t i = 0; i < candidates.size(); ++i) {
-            if (suppressed[i]) {
-                continue;
-            }
-            result.push_back(candidates[i]);
-            for (size_t j = i + 1; j < candidates.size(); ++j) {
-                if (!suppressed[j] && calc_iou(candidates[i], candidates[j]) > nms_threshold) {
-                    suppressed[j] = true;
-                }
-            }
+    const auto score_thresh = static_cast<float>(score_threshold);
+    const auto nms_thresh = static_cast<float>(nms_threshold);
+    for (const auto& class_item : class_to_indices) {
+        const auto& candidate_indices = class_item.second;
+        std::vector<cv::Rect2d> class_boxes;
+        std::vector<float> class_scores;
+        class_boxes.reserve(candidate_indices.size());
+        class_scores.reserve(candidate_indices.size());
+        for (const size_t idx : candidate_indices) {
+            // Rect2f -> Rect2d is lossless and cv::dnn::NMSBoxes has a
+            // Rect2d overload (no integer truncation)
+            class_boxes.push_back(detections[idx].bbox);
+            class_scores.push_back(detections[idx].score);
+        }
+
+        std::vector<int> kept_indices;
+        cv::dnn::NMSBoxes(class_boxes, class_scores, score_thresh, nms_thresh, kept_indices);
+        // kept_indices are ordered by descending score
+        for (const int kept : kept_indices) {
+            result.push_back(detections[candidate_indices[static_cast<size_t>(kept)]]);
         }
     }
-
     return result;
 }
 

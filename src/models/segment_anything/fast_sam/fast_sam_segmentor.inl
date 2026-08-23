@@ -184,7 +184,7 @@ StatusCode FastSamSegmentor<INPUT, OUTPUT>::postprocess(const std::vector<NamedT
             threshed_preds.push_back(b);
         }
     }
-    auto nms_result = CvUtils::nms_bboxes(threshed_preds, _m_iou_thresh);
+    auto nms_result = CvUtils::nms_boxes_per_class(threshed_preds, _m_conf_thresh, _m_iou_thresh);
 
     // mask protos: [1,C,mh,mw] chw -> mat (mh*mw, C)
     const auto c = protos.shape[1];

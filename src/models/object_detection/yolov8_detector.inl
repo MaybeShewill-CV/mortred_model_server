@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <cstring>
 
-#include <opencv2/dnn.hpp>
 #include "glog/logging.h"
 
 #include "common/cv_utils.h"
@@ -125,54 +124,53 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
     const auto row_size = tensor.shape[1];
     const auto proposal_counts = tensor.shape[2];
 
-    std::vector<cv::Rect2d> bboxes;
-    std::vector<float> scores;
-    std::vector<int> cls_ids;
+    // collect class-filtered candidates in the network (host) coordinate
+    // space; NMS runs before mapping the kept boxes back to the input image
+    DetectionOutput candidates;
     for (int64_t i = 0; i < proposal_counts; ++i) {
         const float cx = out_data[0 * proposal_counts + i];
         const float cy = out_data[1 * proposal_counts + i];
         const float w = out_data[2 * proposal_counts + i];
         const float h = out_data[3 * proposal_counts + i];
 
-        std::vector<float> tmp_scores;
+        float cls_score = 0.0f;
+        int cls_id = -1;
         // class scores occupy rows 4..row_size-1 (all of them, the last 4
         // classes must not be dropped)
         for (int64_t j = 4; j < row_size; ++j) {
-            tmp_scores.push_back(out_data[j * proposal_counts + i]);
+            const float score = out_data[j * proposal_counts + i];
+            if (score > cls_score) {
+                cls_score = score;
+                cls_id = static_cast<int>(j - 4);
+            }
         }
-        const auto max_score = std::max_element(tmp_scores.begin(), tmp_scores.end());
-        if (*max_score < _m_score_threshold) {
+        if (cls_score < _m_score_threshold) {
             continue;
         }
-        const float cls_score = *max_score;
-        const int cls_id = static_cast<int>(std::distance(tmp_scores.begin(), max_score));
-        const float x = cx - w / 2.0f;
-        const float y = cy - h / 2.0f;
 
-        bboxes.emplace_back(x, y, w, h);
-        scores.push_back(cls_score);
-        cls_ids.push_back(cls_id);
+        jinq::models::io_define::object_detection::bbox candidate;
+        candidate.bbox = cv::Rect2f(cx - w / 2.0f, cy - h / 2.0f, w, h);
+        candidate.score = cls_score;
+        candidate.class_id = cls_id;
+        candidates.push_back(candidate);
     }
 
-    std::vector<int> indices;
-    cv::dnn::NMSBoxes(bboxes, scores, _m_score_threshold, _m_nms_threshold, indices);
-    if (indices.size() >= static_cast<size_t>(_m_keep_topk)) {
-        indices.resize(static_cast<size_t>(_m_keep_topk));
+    // shared per-class cv::dnn::NMSBoxes suppression used by all detectors
+    DetectionOutput nms_result =
+        jinq::common::CvUtils::nms_boxes_per_class(candidates, _m_score_threshold, _m_nms_threshold);
+    if (nms_result.size() > static_cast<size_t>(_m_keep_topk)) {
+        nms_result.resize(static_cast<size_t>(_m_keep_topk));
     }
 
-    DetectionOutput decode_result;
-    for (const auto& idx : indices) {
-        const float score = scores[idx];
-        const int cls_id = cls_ids[idx];
-        const auto converted = transform_bboxes(bboxes[idx]);
-        jinq::models::io_define::object_detection::bbox tmp_bbox{converted, score, cls_id, {}};
-        const auto name_iter = _m_class_id2names.find(cls_id);
+    // rescale kept boxes from the network space to the original image size
+    for (auto& bbox : nms_result) {
+        bbox.bbox = transform_bboxes(cv::Rect2d(bbox.bbox));
+        const auto name_iter = _m_class_id2names.find(bbox.class_id);
         if (name_iter != _m_class_id2names.end()) {
-            tmp_bbox.category = name_iter->second;
+            bbox.category = name_iter->second;
         }
-        decode_result.push_back(tmp_bbox);
     }
-    output = std::move(decode_result);
+    output = std::move(nms_result);
     return StatusCode::OK;
 }
 

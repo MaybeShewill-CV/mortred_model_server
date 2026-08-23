@@ -48,7 +48,7 @@ TEST(cv_utils, calc_iou) {
                 36.0 / 164.0, 1e-5);
 }
 
-TEST(cv_utils, nms_bboxes) {
+TEST(cv_utils, nms_boxes_per_class) {
     bbox low;
     low.bbox = cv::Rect2f(0, 0, 10, 10);
     low.score = 0.5f;
@@ -59,27 +59,28 @@ TEST(cv_utils, nms_bboxes) {
     high.score = 0.9f;
     high.class_id = 0;
 
-    bbox far;
-    far.bbox = cv::Rect2f(100, 100, 5, 5);
-    far.score = 0.8f;
-    far.class_id = 1;
+    // heavily overlaps `high` but belongs to another class: per-class NMS
+    // must keep it, a class agnostic NMS would drop it
+    bbox other_class;
+    other_class.bbox = cv::Rect2f(1, 1, 10, 10);
+    other_class.score = 0.8f;
+    other_class.class_id = 1;
 
-    std::vector<bbox> boxes = {low, high, far};
-    auto result = CvUtils::nms_bboxes(boxes, 0.5);
+    // below the score threshold: dropped before suppression
+    bbox weak;
+    weak.bbox = cv::Rect2f(100, 100, 5, 5);
+    weak.score = 0.2f;
+    weak.class_id = 2;
+
+    std::vector<bbox> boxes = {low, high, other_class, weak};
+    auto result = CvUtils::nms_boxes_per_class(boxes, 0.4, 0.5);
 
     ASSERT_EQ(result.size(), 2u);
-    bool has_high = false;
-    bool has_far = false;
-    for (const auto& box : result) {
-        if (box.class_id == 0) {
-            EXPECT_FLOAT_EQ(box.score, 0.9f);
-            has_high = true;
-        } else if (box.class_id == 1) {
-            has_far = true;
-        }
-    }
-    EXPECT_TRUE(has_high);
-    EXPECT_TRUE(has_far);
+    // class ascending, score descending inside a class
+    EXPECT_EQ(result[0].class_id, 0);
+    EXPECT_FLOAT_EQ(result[0].score, 0.9f);
+    EXPECT_EQ(result[1].class_id, 1);
+    EXPECT_FLOAT_EQ(result[1].score, 0.8f);
 }
 
 TEST(cv_utils, convert_chw_hwc_round_trip) {
