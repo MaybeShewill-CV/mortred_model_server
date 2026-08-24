@@ -36,6 +36,7 @@ ARG EXTRA_CMAKE_FLAGS=""
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential cmake git libssl-dev \
         libgoogle-glog-dev libeigen3-dev libopencv-dev libgtest-dev \
     && rm -rf /var/lib/apt/lists/*
 
@@ -119,6 +120,7 @@ FROM ubuntu:22.04 AS build-cpu
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential cmake git libssl-dev \
         libgoogle-glog-dev libeigen3-dev libopencv-dev libgtest-dev \
     && rm -rf /var/lib/apt/lists/*
 
