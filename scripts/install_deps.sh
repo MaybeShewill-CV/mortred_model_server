@@ -106,9 +106,12 @@ copy_tree() { # src_dir dst_dir label
 }
 copy_libs() { # src_glob dst_dir label
     local found=0
+    # dst dir may not exist yet in fresh trees/containers (3rd_party/libs is
+    # gitignored, so `COPY . /src/` never ships it) - cp would silently fail
+    mkdir -p "$2"
     for f in $1; do
         [ -e "$f" ] || continue
-        cp -n "$f" "$2"/ 2>/dev/null || true
+        cp -n "$f" "$2"/ || fail "copy_libs: failed to copy $f into $2 ($3)"
         found=1
     done
     [ "$found" -eq 1 ] || fail "copy_libs: no files matched $1 ($3)"
