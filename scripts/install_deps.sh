@@ -142,6 +142,15 @@ install_header_only() {
         src="$src/$archive_subdir"
     fi
     [ -d "$src" ] || fail "$name: archive subdir '$archive_subdir' missing"
+    # Some release tarballs nest the headers one level deeper
+    # (include/<proj>/... pattern): if $src holds no files directly, descend
+    # into its single subdirectory so the headers land where --check expects
+    # them (rapidjson/indicators both use include/<proj>/...).
+    if [ -z "$(find "$src" -maxdepth 1 -type f -print -quit)" ]; then
+        local inner
+        inner="$(find "$src" -mindepth 1 -maxdepth 1 -type d | head -n1)"
+        [ -n "$inner" ] && src="$inner"
+    fi
     mkdir -p "$INCLUDE_DIR/$dst_subdir"
     cp -rn "$src"/* "$INCLUDE_DIR/$dst_subdir"/ 2>/dev/null || true
     mark "$stamp_name"
@@ -221,6 +230,13 @@ install_mnn() {
         -DMNN_BUILD_CONVERTER=OFF -DMNN_BUILD_TEST=OFF -DMNN_BUILD_BENCHMARK=OFF \
         $MNN_CUDA_FLAGS
     cmake --build "$build" -j"$JOBS"
+    # MNN 2.7.0 registers the CUDA backend as a separate loadable lib
+    # (libMNN_Cuda_Main.so, built by source/backend/cuda). Ensure it is built
+    # even if the default target set skipped it; fail loudly if it can't be.
+    if [ "$DEP_PROFILE" != "cpu" ]; then
+        cmake --build "$build" --target MNN_Cuda_Main -j"$JOBS" \
+            || fail "MNN CUDA backend build failed (target MNN_Cuda_Main)"
+    fi
     mkdir -p "$INCLUDE_DIR/MNN"
     cp -rn "$src/include/MNN"/* "$INCLUDE_DIR/MNN"/ 2>/dev/null || true
     copy_libs "$build/libMNN*.so*" "$LIB_DIR" "MNN libs"
@@ -263,7 +279,10 @@ install_onnxruntime() {
     tar -xzf "$pkg_path" -C "$dst"
     local src="$dst/onnxruntime-linux-x64${ORT_FLAVOR}-${ONNXRUNTIME_VER}"
     mkdir -p "$INCLUDE_DIR/onnxruntime"
-    cp -rn "$src/include/onnxruntime"/* "$INCLUDE_DIR/onnxruntime"/ 2>/dev/null || true
+    # 1.18.0 tarballs ship a FLAT include/ dir (include/onnxruntime_cxx_api.h,
+    # no include/onnxruntime/ subdir); copy the flat headers where --check
+    # expects them (onnxruntime/onnxruntime_cxx_api.h)
+    cp -rn "$src"/include/* "$INCLUDE_DIR/onnxruntime"/ 2>/dev/null || true
     copy_libs "$src/lib/libonnxruntime*.so*" "$LIB_DIR" "onnxruntime libs"
 
     # Record: tgz checksum + installed lib hashes for --check re-verification (anti-tamper/corruption)
@@ -324,7 +343,9 @@ install_nvidia() {
             info "nvcc already present, skipping cuda-toolkit"
         fi
         # TRT 10.3.0.26 + cuDNN 9 (9.10.2.21 = highest version in BOTH the focal
-        # and jammy repos). libnvinfer-bin carries /usr/src/tensorrt/bin/trtexec.
+        # and jammy repos). libnvinfer-bin is NOT installed (its libnvparsers10
+        # 10.3.0.26 build is absent from the repos) - trtexec is extracted from
+        # its deb below. libnvparsers10 is skipped for the same reason.
         local -a DEBS=(
             libcudnn9-cuda-12_9.10.2.21-1_amd64.deb
             libcudnn9-dev-cuda-12_9.10.2.21-1_amd64.deb
@@ -336,7 +357,6 @@ install_nvidia() {
             libnvinfer-dev_10.3.0.26-1+cuda12.5_amd64.deb
             libnvinfer-plugin-dev_10.3.0.26-1+cuda12.5_amd64.deb
             libnvonnxparsers-dev_10.3.0.26-1+cuda12.5_amd64.deb
-            libnvinfer-bin_10.3.0.26-1+cuda12.5_amd64.deb
         )
     else
         if ! command -v nvcc >/dev/null 2>&1 && [ ! -x /usr/local/cuda/bin/nvcc ]; then
@@ -345,36 +365,58 @@ install_nvidia() {
             info "nvcc already present, skipping cuda-toolkit"
         fi
         # TRT 8.6.1.6 + cuDNN 8 (cuda11.8 builds) - matches the vendored tree.
-        # libnvinfer-bin carries /usr/src/tensorrt/bin/trtexec.
+        # libnvinfer-bin is NOT installed (its closure - lean/vc-plugin/dispatch/
+        # nvparsers - is incomplete in the repos and apt -f would "fix" it by
+        # installing TRT 10); trtexec is extracted from its deb below.
+        # libnvparsers8 is kept for trtexec's caffe-parser dependency.
         local -a DEBS=(
             libcudnn8_8.9.7.29-1+cuda11.8_amd64.deb
             libcudnn8-dev_8.9.7.29-1+cuda11.8_amd64.deb
             libnvinfer8_8.6.1.6-1+cuda11.8_amd64.deb
             libnvinfer-plugin8_8.6.1.6-1+cuda11.8_amd64.deb
             libnvonnxparsers8_8.6.1.6-1+cuda11.8_amd64.deb
+            libnvparsers8_8.6.1.6-1+cuda11.8_amd64.deb
             libnvinfer-headers-dev_8.6.1.6-1+cuda11.8_amd64.deb
             libnvinfer-headers-plugin-dev_8.6.1.6-1+cuda11.8_amd64.deb
             libnvinfer-dev_8.6.1.6-1+cuda11.8_amd64.deb
             libnvinfer-plugin-dev_8.6.1.6-1+cuda11.8_amd64.deb
             libnvonnxparsers-dev_8.6.1.6-1+cuda11.8_amd64.deb
-            libnvinfer-bin_8.6.1.6-1+cuda11.8_amd64.deb
         )
     fi
     for d in "${DEBS[@]}"; do fetch_deb "$d"; done
     # dpkg unpacks/installs the set; it may exit non-zero when a system dep
     # (e.g. protobuf) is missing - the -f pass below pulls it and configures.
     dpkg -i "${DEBS[@]/#/$deb_dir/}" >/dev/null || true
-    # pull any remaining system deps (e.g. protobuf) from the OS repos
+    # pull any remaining system deps (e.g. protobuf) from the OS repos; with the
+    # full exact-version set already installed -f has nothing to upgrade
     apt-get install -f -y --no-install-recommends
-    # trtexec: the official TensorRT CLI (shipped by the libnvinfer-bin deb at /usr/src/tensorrt/bin/trtexec);
-    # copied into 3rd_party/bin for scripts/convert_trt_engines.sh (it ships in bin/ with the install tree)
-    if [ -x /usr/src/tensorrt/bin/trtexec ]; then
-        mkdir -p "$ROOT/3rd_party/bin"
-        cp -n /usr/src/tensorrt/bin/trtexec "$ROOT/3rd_party/bin/trtexec"
-        info "trtexec: copied into 3rd_party/bin"
+    # fail loudly if anything got upgraded away from the pinned versions
+    local expect_pkg expect_ver
+    if [ "$CUDA_VERSION" = "12" ]; then
+        expect_pkg=libnvinfer10; expect_ver=10.3.0.26-1+cuda12.5
     else
-        info "trtexec: not found in /usr/src/tensorrt/bin (before converting, make sure the tensorrt package is installed)"
+        expect_pkg=libnvinfer8; expect_ver=8.6.1.6-1+cuda11.8
     fi
+    [ "$(dpkg-query -W -f='${Version}' "$expect_pkg" 2>/dev/null)" = "$expect_ver" ] \
+        || fail "TensorRT version mismatch: expected $expect_ver for $expect_pkg"
+    # trtexec: the official TensorRT CLI lives in the libnvinfer-bin deb, whose
+    # package closure (lean/vc-plugin/dispatch/nvparsers) is incomplete in the
+    # repos - so extract the binary without installing the package
+    local bin_deb trt_bin_dir
+    if [ "$CUDA_VERSION" = "12" ]; then
+        bin_deb="libnvinfer-bin_10.3.0.26-1+cuda12.5_amd64.deb"
+    else
+        bin_deb="libnvinfer-bin_8.6.1.6-1+cuda11.8_amd64.deb"
+    fi
+    fetch_deb "$bin_deb"
+    trt_bin_dir="$deb_dir/bin-extract"
+    rm -rf "$trt_bin_dir"
+    dpkg-deb -x "$deb_dir/$bin_deb" "$trt_bin_dir"
+    mkdir -p "$ROOT/3rd_party/bin"
+    cp -n "$trt_bin_dir/usr/src/tensorrt/bin/trtexec" "$ROOT/3rd_party/bin/trtexec" \
+        || fail "trtexec extraction failed"
+    chmod +x "$ROOT/3rd_party/bin/trtexec"
+    info "trtexec: copied into 3rd_party/bin"
     # Copy into 3rd_party (headers + libs)
     local trt_inc=/usr/include/x86_64-linux-gnu
     mkdir -p "$INCLUDE_DIR/$TRT_INCLUDE_DIR"
@@ -551,7 +593,7 @@ case "$MODE" in
         install_header_only rapidjson \
             "https://github.com/Tencent/rapidjson/archive/refs/tags/v1.1.0.tar.gz" "include" "rapidjson" "rapidjson"
         install_header_only toml11 \
-            "https://github.com/ToruNiina/toml11/archive/refs/tags/v3.7.1.tar.gz" "toml" "toml" "toml11"
+            "https://github.com/ToruNiina/toml11/archive/refs/tags/v3.7.1.tar.gz" "" "toml" "toml11"
         install_header_only stb_image \
             "https://github.com/nothings/stb/archive/2c980bb59875b0d32144a71867fbdebb2f77cd20.tar.gz" "" "stb_image" "stb_image"
         install_header_only indicators \
