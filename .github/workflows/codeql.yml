@@ -60,8 +60,13 @@ jobs:
         name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libopencv-dev libgoogle-glog-dev libeigen3-dev
-          cd /usr/src/googletest && sudo cmake . && sudo make -j"$(nproc)" && sudo make install
+          # Runner images preinstall libunwind-<ver>-dev (LLVM toolchain), which
+          # Breaks libunwind-dev; libgoogle-glog-dev needs libunwind-dev (see
+          # ci.yml tests job / Launchpad #1989124/#1991919). Remove it first.
+          sudo apt-get remove -y 'libunwind-*-dev' || true
+          # apt libgtest-dev ships prebuilt libs + GTestConfig on jammy; the old
+          # build-from-/usr/src/googletest flow is unnecessary
+          sudo apt-get install -y --no-install-recommends libopencv-dev libgoogle-glog-dev libeigen3-dev libgtest-dev libssl-dev
 
       - if: matrix.mode == 'pr'
         name: Configure (tests-only)

@@ -336,6 +336,9 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
+          # see tests job: preinstalled libunwind-<ver>-dev conflicts with the
+          # libunwind-dev that libgoogle-glog-dev depends on
+          sudo apt-get remove -y 'libunwind-*-dev' || true
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake git curl jq \
             libssl-dev libgoogle-glog-dev libeigen3-dev libopencv-dev libgtest-dev
