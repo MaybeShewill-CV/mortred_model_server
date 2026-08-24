@@ -281,6 +281,9 @@ jobs:
           restore-keys: |
             ccache-gcc-
 
+      - name: Build vendored workflow (model_factory_unittest links it)
+        run: ./scripts/install_deps.sh --workflow
+
       - name: Configure and run TSAN gate (async tests)
         run: |
           cmake -B build-tsan \

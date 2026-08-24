@@ -109,7 +109,13 @@ foreach(src ${TEST_LIST})
     elseif(${src} STREQUAL "worker_nums_unittest")
         set(EXTRA_LIBS glog::glog)
     elseif(${src} STREQUAL "model_factory_unittest")
+        # instantiates BaseAiServer (WFServer subclass): its vtable pulls
+        # WFServerBase typeinfo from libworkflow, needed once sanitizer flags
+        # make the compiler emit it; link the vendored lib when available
         set(EXTRA_LIBS glog::glog)
+        if(MORTRED_WORKFLOW_AVAILABLE)
+            list(APPEND EXTRA_LIBS vendored::workflow)
+        endif()
     elseif(${src} STREQUAL "model_golden_test")
         set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn vendored::mnn_cuda)
     elseif(${src} STREQUAL "model_lifecycle_unittest")
