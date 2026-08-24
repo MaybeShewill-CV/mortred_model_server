@@ -37,7 +37,7 @@ ARG EXTRA_CMAKE_FLAGS=""
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential git libssl-dev ca-certificates curl \
-        libgoogle-glog-dev libeigen3-dev libopencv-dev libgtest-dev \
+        libeigen3-dev libopencv-dev \
     # focal's apt cmake is 3.16.3 but the project requires >= 3.18; install
     # the official binary tarball (build-cpu on jammy already ships 3.22)
     && curl -fsSL https://cmake.org/files/v3.25/cmake-3.25.3-linux-x86_64.tar.gz -o /tmp/cmake.tgz \
@@ -45,6 +45,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && ln -sf /opt/cmake-3.25.3-linux-x86_64/bin/cmake /usr/local/bin/cmake \
     && ln -sf /opt/cmake-3.25.3-linux-x86_64/bin/ctest /usr/local/bin/ctest \
     && rm -f /tmp/cmake.tgz \
+    # focal's apt glog (0.5.0) ships no CMake config and libgtest-dev is
+    # sources-only, so find_package(glog/GTest) fails; build both from source
+    # at focal's own versions (glog 0.5.0 keeps the libglog.so.0 soname that
+    # the runtime stage's libgoogle-glog0v5 provides)
+    && git clone --depth 1 --branch v0.5.0 https://github.com/google/glog.git /tmp/glog \
+    && cmake -S /tmp/glog -B /tmp/glog/build -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=ON -DBUILD_TESTING=OFF -DGFLAGS=OFF -DCMAKE_INSTALL_PREFIX=/usr \
+    && cmake --build /tmp/glog/build -j"$(nproc)" && cmake --install /tmp/glog/build \
+    && git clone --depth 1 --branch release-1.10.0 https://github.com/google/googletest.git /tmp/gtest \
+    && cmake -S /tmp/gtest -B /tmp/gtest/build -DCMAKE_BUILD_TYPE=Release \
+        -DINSTALL_GTEST=ON -DBUILD_GMOCK=OFF -DCMAKE_INSTALL_PREFIX=/usr \
+    && cmake --build /tmp/gtest/build -j"$(nproc)" && cmake --install /tmp/gtest/build \
+    && rm -rf /tmp/glog /tmp/gtest \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
