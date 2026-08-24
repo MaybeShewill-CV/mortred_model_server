@@ -36,8 +36,15 @@ ARG EXTRA_CMAKE_FLAGS=""
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        build-essential cmake git libssl-dev \
+        build-essential git libssl-dev ca-certificates curl \
         libgoogle-glog-dev libeigen3-dev libopencv-dev libgtest-dev \
+    # focal's apt cmake is 3.16.3 but the project requires >= 3.18; install
+    # the official binary tarball (build-cpu on jammy already ships 3.22)
+    && curl -fsSL https://cmake.org/files/v3.25/cmake-3.25.3-linux-x86_64.tar.gz -o /tmp/cmake.tgz \
+    && tar -xzf /tmp/cmake.tgz -C /opt \
+    && ln -sf /opt/cmake-3.25.3-linux-x86_64/bin/cmake /usr/local/bin/cmake \
+    && ln -sf /opt/cmake-3.25.3-linux-x86_64/bin/ctest /usr/local/bin/ctest \
+    && rm -f /tmp/cmake.tgz \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
