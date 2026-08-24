@@ -68,19 +68,21 @@ else
     ORT_STAMP="onnxruntime"
 fi
 ONNXRUNTIME_SHA256="${ONNXRUNTIME_SHA256:-}"
-# Pinned sha256 table for the official onnxruntime tarballs (version -> hash). Verification priority:
+# Pinned sha256 table for the official onnxruntime tarballs (asset filename -> hash). Verification priority:
 #   1) env var ONNXRUNTIME_SHA256 (highest; for offline/CI use)
 #   2) this table (for offline/air-gapped environments)
 #   3) official release API asset digest (automatic when online; GitHub publishes sha256 per release asset)
 #   none available -> refuse to install (never silently skip verification).
+# NOTE: GitHub leaves `digest: null` on release assets of older tags (v1.18.0 and earlier), so the API
+# fallback cannot verify those versions - keep every pinned version's gpu AND cpu flavor hashes in the
+# table below (the cpu profile downloads the non-gpu tarball).
 # To obtain a hash (run once with network access, verify against the official release assets, then fill this table for offline installs):
 #   curl -fsSL -o /tmp/ort.tgz https://github.com/microsoft/onnxruntime/releases/download/v1.18.0/onnxruntime-linux-x64-gpu-1.18.0.tgz
 #   sha256sum /tmp/ort.tgz
-# Example (replace <64-hex> with the output of the command above):
-# declare -A ONNXRUNTIME_SHA256S=(
-#     ["1.18.0"]="<64-hex>"
-# )
-declare -A ONNXRUNTIME_SHA256S=()
+declare -A ONNXRUNTIME_SHA256S=(
+    ["onnxruntime-linux-x64-gpu-1.18.0.tgz"]="e49980108c0b9dd718c14fa2e6ba3cd90b9ff8e9bde8ebac0a2f1aacdc0603ca"
+    ["onnxruntime-linux-x64-1.18.0.tgz"]="fa4d11b3fa1b2bf1c3b2efa8f958634bc34edc95e351ac2a0408c6ad5c5504f0"
+)
 OFFLINE_DIR=""
 JOBS="$(nproc 2>/dev/null || echo 4)"
 
@@ -241,8 +243,8 @@ install_onnxruntime() {
     local expect_sha=""
     if [ -n "$ONNXRUNTIME_SHA256" ]; then
         expect_sha="$ONNXRUNTIME_SHA256"
-    elif [ -n "${ONNXRUNTIME_SHA256S[$ONNXRUNTIME_VER]:-}" ]; then
-        expect_sha="${ONNXRUNTIME_SHA256S[$ONNXRUNTIME_VER]}"
+    elif [ -n "${ONNXRUNTIME_SHA256S[$tgz]:-}" ]; then
+        expect_sha="${ONNXRUNTIME_SHA256S[$tgz]}"
     else
         # GitHub publishes sha256 for each release asset (assets[].digest); official channel + TLS
         require_cmd jq "jq"
