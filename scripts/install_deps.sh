@@ -361,7 +361,9 @@ install_nvidia() {
         )
     fi
     for d in "${DEBS[@]}"; do fetch_deb "$d"; done
-    dpkg -i "${DEBS[@]/#/$deb_dir/}" >/dev/null
+    # dpkg unpacks/installs the set; it may exit non-zero when a system dep
+    # (e.g. protobuf) is missing - the -f pass below pulls it and configures.
+    dpkg -i "${DEBS[@]/#/$deb_dir/}" >/dev/null || true
     # pull any remaining system deps (e.g. protobuf) from the OS repos
     apt-get install -f -y --no-install-recommends
     # trtexec: the official TensorRT CLI (shipped by the libnvinfer-bin deb at /usr/src/tensorrt/bin/trtexec);
