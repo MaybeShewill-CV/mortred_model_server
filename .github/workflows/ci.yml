@@ -285,7 +285,7 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           LD_LIBRARY_PATH="${{ github.workspace }}/build-tsan/lib" \
-            cmake --build build-tsan --target async_job_unittest async_job_stress_test -j"$(nproc)"
+            cmake --build build-tsan --target async_job_unittest async_job_stress_test api_key_manager_unittest -j"$(nproc)"
           # detect_deadlocks / report_mutex_bugs are disabled: this GCC's TSAN
           # cannot model condition_variable::wait_for (false "double lock" and
           # lock-order-inversion on legally CV-guarded mutexes). Data-race

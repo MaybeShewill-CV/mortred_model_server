@@ -24,6 +24,7 @@
 #include <deque>
 #include <mutex>
 #include <optional>
+#include <random>
 #include <set>
 #include <string>
 #include <thread>
@@ -171,12 +172,15 @@ TEST(async_job_stress, concurrent_lifecycle_preserves_invariants) {
     std::vector<std::thread> pollers;
     for (int t = 0; t < 3; ++t) {
         pollers.emplace_back([&]() {
+            // per-thread PRNG: rand() is not thread-safe (TSAN flags its
+            // global state as a data race and exits 66 on the report)
+            std::mt19937 rng{static_cast<unsigned>(std::hash<std::thread::id>{}(std::this_thread::get_id()))};
             while (std::chrono::steady_clock::now() < poll_deadline) {
                 std::string id;
                 {
                     std::lock_guard<std::mutex> lock(ids_mu);
                     if (!all_ids.empty()) {
-                        id = all_ids[static_cast<size_t>(rand()) % all_ids.size()];
+                        id = all_ids[static_cast<size_t>(rng()) % all_ids.size()];
                     }
                 }
                 if (id.empty()) {
@@ -202,12 +206,13 @@ TEST(async_job_stress, concurrent_lifecycle_preserves_invariants) {
     std::vector<std::thread> waiters;
     for (int t = 0; t < 2; ++t) {
         waiters.emplace_back([&]() {
+            std::mt19937 rng{static_cast<unsigned>(std::hash<std::thread::id>{}(std::this_thread::get_id())) + 1};
             while (std::chrono::steady_clock::now() < poll_deadline) {
                 std::string id;
                 {
                     std::lock_guard<std::mutex> lock(ids_mu);
                     if (!all_ids.empty()) {
-                        id = all_ids[static_cast<size_t>(rand()) % all_ids.size()];
+                        id = all_ids[static_cast<size_t>(rng()) % all_ids.size()];
                     }
                 }
                 if (id.empty()) {

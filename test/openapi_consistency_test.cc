@@ -4,7 +4,7 @@
  *
  * Verifies docs/openapi.json matches repository reality:
  * - a valid OpenAPI 3.0 document;
- * - every conf/server/*.toml server_uri appears in paths;
+ * - every conf/server/<name>.toml server_uri appears in paths;
  * - model paths declare Bearer auth while health endpoints stay public;
  * - response components exist for all contract status codes.
  * Run from the repository root (see test/CMakeLists.txt WORKING_DIRECTORY).
