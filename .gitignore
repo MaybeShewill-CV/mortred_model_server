@@ -49,6 +49,9 @@ build-ci/
 build-werror/
 build-gate/
 build-tidy/
+build-tsan/
+build-asan/
+build-cpu/
 .deps-build/
 Testing/
 cmake-build-debug/

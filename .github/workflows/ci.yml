@@ -64,6 +64,11 @@ jobs:
       - name: Install build tools and test deps
         run: |
           sudo apt-get update
+          # Runner images preinstall libunwind-<ver>-dev (LLVM toolchain), which
+          # Breaks libunwind-dev; libgoogle-glog-dev needs libunwind-dev, so apt
+          # reports it as not installable (Launchpad #1989124/#1991919).
+          # Remove the conflicting packages first; no-op exit is fine when absent.
+          sudo apt-get remove -y 'libunwind-*-dev' || true
           sudo apt-get install -y --no-install-recommends ccache jq autoconf autoconf-archive automake libtool \
             libopencv-dev libgoogle-glog-dev libeigen3-dev libgtest-dev libssl-dev
           if [ "${{ matrix.compiler }}" = "clang" ]; then
@@ -133,6 +138,9 @@ jobs:
       - name: Install tools and test deps
         run: |
           sudo apt-get update
+          # see tests job: preinstalled libunwind-<ver>-dev conflicts with the
+          # libunwind-dev that libgoogle-glog-dev depends on
+          sudo apt-get remove -y 'libunwind-*-dev' || true
           sudo apt-get install -y --no-install-recommends ccache clang-format jq autoconf autoconf-archive automake libtool \
             libopencv-dev libgoogle-glog-dev libeigen3-dev libgtest-dev libssl-dev
 
@@ -250,6 +258,9 @@ jobs:
       - name: Install build tools and test deps
         run: |
           sudo apt-get update
+          # see tests job: preinstalled libunwind-<ver>-dev conflicts with the
+          # libunwind-dev that libgoogle-glog-dev depends on
+          sudo apt-get remove -y 'libunwind-*-dev' || true
           sudo apt-get install -y --no-install-recommends ccache jq autoconf autoconf-archive automake libtool \
             libopencv-dev libgoogle-glog-dev libeigen3-dev libgtest-dev libssl-dev
 
@@ -392,6 +403,9 @@ jobs:
       - name: Install tools and test deps
         run: |
           sudo apt-get update
+          # see tests job: preinstalled libunwind-<ver>-dev conflicts with the
+          # libunwind-dev that libgoogle-glog-dev depends on
+          sudo apt-get remove -y 'libunwind-*-dev' || true
           sudo apt-get install -y --no-install-recommends clang clang-tidy clang-tools jq autoconf autoconf-archive automake libtool \
             libopencv-dev libgoogle-glog-dev libeigen3-dev libgtest-dev libssl-dev
 
