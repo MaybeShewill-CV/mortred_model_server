@@ -70,8 +70,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-keyring_1.1-1_all.deb -o /tmp/cuda-keyring.deb \
     && dpkg -i /tmp/cuda-keyring.deb && rm /tmp/cuda-keyring.deb \
     && apt-get update \
+    # exact pins matching the deps stage: bare names would pull TRT 11 and a
+    # cuDNN 8 cuda12.2 build (apt picks the higher +cuda12.2 revision), which
+    # cannot load against the CUDA 11.8 runtime; note libnvonnxparsers8 (with 's')
     && apt-get install -y --no-install-recommends \
-        libnvinfer8 libnvinfer-plugin8 libnvonnxparser8 libcudnn8 \
+        libnvinfer8=8.6.1.6-1+cuda11.8 \
+        libnvinfer-plugin8=8.6.1.6-1+cuda11.8 \
+        libnvonnxparsers8=8.6.1.6-1+cuda11.8 \
+        libcudnn8=8.9.7.29-1+cuda11.8 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /opt/mortred /opt/mortred

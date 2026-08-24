@@ -115,7 +115,7 @@ cmake --preset full-cpu && cmake --build --preset full-cpu    # cpu
 ./scripts/verify_deployment.sh --basic
 ```
 
-Unit tests only (no engines needed; vcpkg or system packages):
+Unit tests only (no engines needed; system packages or vcpkg):
 
 ```bash
 cmake --preset tests-only && cmake --build --preset tests-only && ctest --preset tests-only

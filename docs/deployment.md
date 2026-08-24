@@ -329,7 +329,7 @@ cmake --preset tests-only && cmake --build --preset tests-only && ctest --preset
 
 | Preset | Purpose |
 |---|---|
-| `tests-only` / `tests-only-werror` | unit tests (vcpkg deps, no engines) |
+| `tests-only` / `tests-only-werror` | unit tests (apt deps, no engines) |
 | `tests-only-tsan` / `tests-only-asan` | sanitizer gates (§16) |
 | `full` / `full-werror` | gpu full |
 | `full-cpu` | cpu full (no CUDA/TRT) |

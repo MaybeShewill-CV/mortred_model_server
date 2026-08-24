@@ -60,12 +60,25 @@
 
 > Linux 是唯一受支持的构建/运行平台。构建分为两条路径：
 >
-> - **路径 A（tests-only）**：只构建 `common` 库与单元测试，适合 CI 与快速验证。依赖来源为 vcpkg（推荐）或系统 apt 包。
+> - **路径 A（tests-only）**：只构建 `common` 库与单元测试，适合 CI 与快速验证。依赖来源为系统 apt 包（推荐）或 vcpkg。
 > - **路径 B（full build）**：构建全部模型、服务与工具，需要 `3rd_party` 下的 vendored 引擎（MNN / WORKFLOW / ONNXRUNTIME / TensorRT）以及 CUDA 工具链。
 
 #### 路径 A：tests-only
 
-方案 A1 - vcpkg（推荐，可复现）：
+方案 A1 - 系统包（推荐，与 CI 一致）：
+
+```bash
+sudo apt-get install -y build-essential cmake \
+  libopencv-dev libgoogle-glog-dev libeigen3-dev libgtest-dev libssl-dev
+# Ubuntu 22.04 的 libgtest-dev 自带预编译库与 CMake 配置，可直接 find_package(GTest)
+
+cd $PROJECT_ROOT_DIR
+cmake -B build -DMORTRED_BUILD_FULL=OFF
+cmake --build build --target check -j10
+ctest --test-dir build --output-on-failure
+```
+
+方案 A2 - vcpkg（可选；仅本地开发用，CI 不使用）：
 
 ```bash
 # 1. 安装 vcpkg（或复用已有实例）
@@ -83,21 +96,7 @@ ctest --test-dir build --output-on-failure
 ```
 
 `vcpkg.json` 中故意不写死 `builtin-baseline`；若你的 vcpkg 实例要求显式 baseline，执行一次
-`vcpkg x-update-baseline --add-initial-baseline` 后重新配置即可（CI 会自动把 baseline 固定到指定的 vcpkg 版本）。
-
-方案 A2 - 系统包（Ubuntu 22.04）：
-
-```bash
-sudo apt-get install -y build-essential cmake \
-  libopencv-dev libgoogle-glog-dev libeigen3-dev libgtest-dev
-# Ubuntu 的 libgtest-dev 只提供源码，需要手动编译安装一次：
-cd /usr/src/googletest && sudo cmake . && sudo make -j$(nproc) && sudo make install
-
-cd $PROJECT_ROOT_DIR
-cmake -B build -DMORTRED_BUILD_FULL=OFF
-cmake --build build --target check -j10
-ctest --test-dir build --output-on-failure
-```
+`vcpkg x-update-baseline --add-initial-baseline` 后重新配置即可。
 
 #### 路径 B：full build
 

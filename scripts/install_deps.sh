@@ -278,10 +278,31 @@ install_nvidia() {
     announce "install CUDA ${CUDA_VERSION} / TensorRT ${TRT_VER} / cuDNN ${CUDNN_VER} (needs root)"
     [ "$(id -u)" -eq 0 ] || fail "nvidia install requires root: run 'sudo ./scripts/install_deps.sh --nvidia'"
     require_cmd apt-get "apt"
-    # NVIDIA apt repo (Ubuntu 20.04/22.04)
-    curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb -o /tmp/cuda-keyring.deb
-    dpkg -i /tmp/cuda-keyring.deb
+    # NVIDIA apt repo: nvidia/cuda base images already configure it; bare machines
+    # need the matching keyring. Pick the keyring by OS release - hardcoding one
+    # distro (e.g. the jammy keyring on a focal image) mixes repos whose package
+    # builds can mismatch the local CUDA.
+    if ! grep -rqs 'developer.download.nvidia.com' /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null; then
+        local os_id os_ver repo_dir
+        os_id="$(. /etc/os-release && echo "$ID")"
+        os_ver="$(. /etc/os-release && echo "$VERSION_ID")"
+        case "$os_id-$os_ver" in
+            ubuntu-20.04) repo_dir=ubuntu2004 ;;
+            ubuntu-22.04) repo_dir=ubuntu2204 ;;
+            *) fail "unsupported OS for the NVIDIA apt repo: $os_id $os_ver" ;;
+        esac
+        curl -fsSL "https://developer.download.nvidia.com/compute/cuda/repos/${repo_dir}/x86_64/cuda-keyring_1.1-1_all.deb" -o /tmp/cuda-keyring.deb
+        dpkg -i /tmp/cuda-keyring.deb
+    else
+        info "NVIDIA apt repo already configured; skipping keyring install"
+    fi
     apt-get update
+    # Exact version pins: the repo keeps TRT 8/10/11 and multiple cuDNN builds side
+    # by side, so bare names resolve to the newest line (TRT 11 / cuDNN 9) or to a
+    # cuDNN 8 build for the wrong CUDA (8.9.7.29 exists as +cuda11.8 AND +cuda12.2;
+    # apt picks the higher +cuda12.2 revision) - both ABI-incompatible with this
+    # tree. Note the onnx parser package is libnvonnxparsers-dev (with an 's').
+    # Versions verified against the repo Packages.gz indexes (2004/2204).
     if [ "$CUDA_VERSION" = "12" ]; then
         # devel images/machines with CUDA already installed skip the toolkit; only install TRT/cuDNN (avoid package conflicts)
         if ! command -v nvcc >/dev/null 2>&1 && [ ! -x /usr/local/cuda/bin/nvcc ]; then
@@ -292,17 +313,24 @@ install_nvidia() {
         # TRT 10 / cuDNN 9 dev packages (-dev needed to copy headers and libs into 3rd_party);
         # the tensorrt meta-package provides /usr/src/tensorrt/bin/trtexec (external engine conversion CLI)
         apt-get install -y --no-install-recommends \
-            libnvinfer-dev libnvinfer-plugin-dev libnvonnxparser-dev \
-            libcudnn9-dev-cuda-12 tensorrt
+            libnvinfer-dev=10.3.0.26-1+cuda12.5 \
+            libnvinfer-plugin-dev=10.3.0.26-1+cuda12.5 \
+            libnvonnxparsers-dev=10.3.0.26-1+cuda12.5 \
+            libcudnn9-dev-cuda-12=9.13.1.26-1 \
+            tensorrt=10.3.0.26-1+cuda12.5
     else
         if ! command -v nvcc >/dev/null 2>&1 && [ ! -x /usr/local/cuda/bin/nvcc ]; then
             apt-get install -y --no-install-recommends cuda-toolkit-11-8
         else
             info "nvcc already present, skipping cuda-toolkit"
         fi
+        # TRT 8.6.1.6 / cuDNN 8 (cuda11.8 builds) - matches the vendored tree
         apt-get install -y --no-install-recommends \
-            libnvinfer-dev libnvinfer-plugin-dev libnvonnxparser-dev \
-            libcudnn8-dev-cuda-11 tensorrt
+            libnvinfer-dev=8.6.1.6-1+cuda11.8 \
+            libnvinfer-plugin-dev=8.6.1.6-1+cuda11.8 \
+            libnvonnxparsers-dev=8.6.1.6-1+cuda11.8 \
+            libcudnn8-dev=8.9.7.29-1+cuda11.8 \
+            tensorrt=8.6.1.6-1+cuda11.8
     fi
     # trtexec: the official TensorRT CLI (provided by the tensorrt meta-package at /usr/src/tensorrt/bin/trtexec);
     # copied into 3rd_party/bin for scripts/convert_trt_engines.sh (it ships in bin/ with the install tree)

@@ -322,7 +322,7 @@ cmake --preset tests-only && cmake --build --preset tests-only && ctest --preset
 
 | Preset | 用途 |
 |---|---|
-| `tests-only` / `tests-only-werror` | 单测（vcpkg 依赖，无引擎） |
+| `tests-only` / `tests-only-werror` | 单测（apt 依赖，无引擎） |
 | `tests-only-tsan` / `tests-only-asan` | sanitizer 门禁（见 §16） |
 | `full` / `full-werror` | gpu 全量 |
 | `full-cpu` | cpu 全量（无 CUDA/TRT） |

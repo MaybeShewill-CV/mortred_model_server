@@ -39,23 +39,13 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Single source of truth for the vcpkg version; update only here when upgrading
-  VCPKG_TAG: 2026.07.29
-  # Clone vcpkg outside the workspace (parent of github.workspace) so the repo worktree stays clean after builds.
-  # Note: runner context is unavailable in workflow-level env (step-level only); only the github context works here
-  VCPKG_ROOT: ${{ github.workspace }}/../vcpkg
-  # Manifest copy with a pinned builtin-baseline (leaves the repo vcpkg.json untouched)
-  VCPKG_MANIFEST_DIR: ${{ github.workspace }}/../vcpkg-manifest
-  # Dependency install dir also lives outside the workspace
-  VCPKG_INSTALLED_DIR: ${{ github.workspace }}/../vcpkg-installed
-  VCPKG_TARGET_TRIPLET: x64-linux
   # CI overrides the default _bin/_lib; collect artifacts in the build dir to avoid polluting the repo root
   MORTRED_CI_BIN_DIR: ${{ github.workspace }}/build-ci/bin
   MORTRED_CI_LIB_DIR: ${{ github.workspace }}/build-ci/lib
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Job A: test matrix (gcc / clang, tests-only, vcpkg deps + ccache cache)
+  # Job A: test matrix (gcc / clang, tests-only, apt deps + ccache cache)
   # ---------------------------------------------------------------------------
   tests:
     name: tests (${{ matrix.compiler }})
@@ -71,60 +61,36 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install build tools
+      - name: Install build tools and test deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ccache jq autoconf autoconf-archive automake libtool
+          sudo apt-get install -y --no-install-recommends ccache jq autoconf autoconf-archive automake libtool \
+            libopencv-dev libgoogle-glog-dev libeigen3-dev libgtest-dev libssl-dev
           if [ "${{ matrix.compiler }}" = "clang" ]; then
             sudo apt-get install -y --no-install-recommends clang
             echo "CC=clang" >> "$GITHUB_ENV"
             echo "CXX=clang++" >> "$GITHUB_ENV"
           fi
 
-      # Cache the vcpkg repo, installed dependency artifacts, and ccache;
-      # the key includes the vcpkg version, compiler, and vcpkg.json content ??any change invalidates it.
+      # ccache only: tests-only deps (opencv/glog/eigen3/gtest) come straight
+      # from apt - the Linux-only project no longer needs vcpkg for them, which
+      # removes the recurring clone/bootstrap/port-build flakiness in CI.
       # gcc and quality-gates share the same key to avoid rebuilding the same dependency set.
-      - name: Cache vcpkg and ccache
+      - name: Cache ccache
         id: cache-deps
         uses: actions/cache@v6
         with:
-          path: |
-            ${{ env.VCPKG_ROOT }}
-            ${{ env.VCPKG_INSTALLED_DIR }}
-            ~/.cache/ccache
-          key: vcpkg-${{ env.VCPKG_TAG }}-${{ matrix.compiler }}-${{ hashFiles('vcpkg.json') }}
+          path: ~/.cache/ccache
+          key: ccache-${{ matrix.compiler }}-${{ hashFiles('CMakeLists.txt', 'cmake/**', 'src/**', 'test/**') }}
           restore-keys: |
-            vcpkg-${{ env.VCPKG_TAG }}-${{ matrix.compiler }}-
+            ccache-${{ matrix.compiler }}-
 
-      # vcpkg doesn't support shallow clones, so checkout a pinned release tag (full clone).
-      - name: Checkout vcpkg (pinned release tag)
-        if: steps.cache-deps.outputs.cache-hit != 'true'
-        run: |
-          git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
-          git -C "$VCPKG_ROOT" checkout --detach "$VCPKG_TAG"
-
-      # Prepare a manifest copy with a pinned builtin-baseline outside the workspace,
-      # leaving the repo vcpkg.json untouched: CI builds stay reproducible and the worktree stays clean.
-      # For reproducible local builds, run once on a networked machine:
-      # `vcpkg x-update-baseline --add-initial-baseline` and commit the result.
-      - name: Bootstrap vcpkg and prepare pinned manifest
-        run: |
-          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
-          baseline="$(git -C "$VCPKG_ROOT" rev-parse HEAD)"
-          mkdir -p "$VCPKG_MANIFEST_DIR"
-          jq --arg baseline "$baseline" '.["builtin-baseline"] = $baseline' vcpkg.json > "$VCPKG_MANIFEST_DIR/vcpkg.json"
-          echo "Pinned vcpkg builtin-baseline to: $baseline"
-
-      - name: Configure (vcpkg toolchain, tests-only)
+      - name: Configure (tests-only, apt deps)
         run: >
           cmake -B build-ci
           -DMORTRED_BUILD_FULL=OFF
           -DMORTRED_BIN_OUTPUT_DIR="$MORTRED_CI_BIN_DIR"
           -DMORTRED_LIB_OUTPUT_DIR="$MORTRED_CI_LIB_DIR"
-          -DVCPKG_MANIFEST_DIR="$VCPKG_MANIFEST_DIR"
-          -DVCPKG_INSTALLED_DIR="$VCPKG_INSTALLED_DIR"
-          -DVCPKG_MANIFEST_MODE=ON
-          -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
@@ -164,36 +130,20 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install tools
+      - name: Install tools and test deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ccache clang-format jq autoconf autoconf-archive automake libtool
+          sudo apt-get install -y --no-install-recommends ccache clang-format jq autoconf autoconf-archive automake libtool \
+            libopencv-dev libgoogle-glog-dev libeigen3-dev libgtest-dev libssl-dev
 
-      - name: Cache vcpkg and ccache
+      - name: Cache ccache
         id: cache-deps
         uses: actions/cache@v6
         with:
-          path: |
-            ${{ env.VCPKG_ROOT }}
-            ${{ env.VCPKG_INSTALLED_DIR }}
-            ~/.cache/ccache
-          key: vcpkg-${{ env.VCPKG_TAG }}-gcc-${{ hashFiles('vcpkg.json') }}
+          path: ~/.cache/ccache
+          key: ccache-gcc-${{ hashFiles('CMakeLists.txt', 'cmake/**', 'src/**', 'test/**') }}
           restore-keys: |
-            vcpkg-${{ env.VCPKG_TAG }}-gcc-
-
-      - name: Checkout vcpkg (pinned release tag)
-        if: steps.cache-deps.outputs.cache-hit != 'true'
-        run: |
-          git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
-          git -C "$VCPKG_ROOT" checkout --detach "$VCPKG_TAG"
-
-      - name: Bootstrap vcpkg and prepare pinned manifest
-        run: |
-          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
-          baseline="$(git -C "$VCPKG_ROOT" rev-parse HEAD)"
-          mkdir -p "$VCPKG_MANIFEST_DIR"
-          jq --arg baseline "$baseline" '.["builtin-baseline"] = $baseline' vcpkg.json > "$VCPKG_MANIFEST_DIR/vcpkg.json"
-          echo "Pinned vcpkg builtin-baseline to: $baseline"
+            ccache-gcc-
 
       - name: Configure (tests-only, warnings as errors)
         run: >
@@ -202,10 +152,6 @@ jobs:
           -DMORTRED_ENABLE_WERROR=ON
           -DMORTRED_BIN_OUTPUT_DIR=${{ github.workspace }}/build-gate/bin
           -DMORTRED_LIB_OUTPUT_DIR=${{ github.workspace }}/build-gate/lib
-          -DVCPKG_MANIFEST_DIR="$VCPKG_MANIFEST_DIR"
-          -DVCPKG_INSTALLED_DIR="$VCPKG_INSTALLED_DIR"
-          -DVCPKG_MANIFEST_MODE=ON
-          -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
@@ -301,36 +247,20 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install build tools
+      - name: Install build tools and test deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ccache jq autoconf autoconf-archive automake libtool
+          sudo apt-get install -y --no-install-recommends ccache jq autoconf autoconf-archive automake libtool \
+            libopencv-dev libgoogle-glog-dev libeigen3-dev libgtest-dev libssl-dev
 
-      - name: Cache vcpkg and ccache
+      - name: Cache ccache
         id: cache-deps
         uses: actions/cache@v6
         with:
-          path: |
-            ${{ env.VCPKG_ROOT }}
-            ${{ env.VCPKG_INSTALLED_DIR }}
-            ~/.cache/ccache
-          key: vcpkg-${{ env.VCPKG_TAG }}-gcc-${{ hashFiles('vcpkg.json') }}
+          path: ~/.cache/ccache
+          key: ccache-gcc-${{ hashFiles('CMakeLists.txt', 'cmake/**', 'src/**', 'test/**') }}
           restore-keys: |
-            vcpkg-${{ env.VCPKG_TAG }}-gcc-
-
-      - name: Checkout vcpkg (pinned release tag)
-        if: steps.cache-deps.outputs.cache-hit != 'true'
-        run: |
-          git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
-          git -C "$VCPKG_ROOT" checkout --detach "$VCPKG_TAG"
-
-      - name: Bootstrap vcpkg and prepare pinned manifest
-        run: |
-          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
-          baseline="$(git -C "$VCPKG_ROOT" rev-parse HEAD)"
-          mkdir -p "$VCPKG_MANIFEST_DIR"
-          jq --arg baseline "$baseline" '.["builtin-baseline"] = $baseline' vcpkg.json > "$VCPKG_MANIFEST_DIR/vcpkg.json"
-          echo "Pinned vcpkg builtin-baseline to: $baseline"
+            ccache-gcc-
 
       - name: Configure and run TSAN gate (async tests)
         run: |
@@ -341,10 +271,6 @@ jobs:
             -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
             -DMORTRED_BIN_OUTPUT_DIR=${{ github.workspace }}/build-tsan/bin \
             -DMORTRED_LIB_OUTPUT_DIR=${{ github.workspace }}/build-tsan/lib \
-            -DVCPKG_MANIFEST_DIR="$VCPKG_MANIFEST_DIR" \
-            -DVCPKG_INSTALLED_DIR="$VCPKG_INSTALLED_DIR" \
-            -DVCPKG_MANIFEST_MODE=ON \
-            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           LD_LIBRARY_PATH="${{ github.workspace }}/build-tsan/lib" \
@@ -366,10 +292,6 @@ jobs:
             -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
             -DMORTRED_BIN_OUTPUT_DIR=${{ github.workspace }}/build-asan/bin \
             -DMORTRED_LIB_OUTPUT_DIR=${{ github.workspace }}/build-asan/lib \
-            -DVCPKG_MANIFEST_DIR="$VCPKG_MANIFEST_DIR" \
-            -DVCPKG_INSTALLED_DIR="$VCPKG_INSTALLED_DIR" \
-            -DVCPKG_MANIFEST_MODE=ON \
-            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           LD_LIBRARY_PATH="${{ github.workspace }}/build-asan/lib" CTEST_OUTPUT_ON_FAILURE=1 \
@@ -467,36 +389,20 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install tools
+      - name: Install tools and test deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clang clang-tidy clang-tools jq autoconf autoconf-archive automake libtool
+          sudo apt-get install -y --no-install-recommends clang clang-tidy clang-tools jq autoconf autoconf-archive automake libtool \
+            libopencv-dev libgoogle-glog-dev libeigen3-dev libgtest-dev libssl-dev
 
-      - name: Cache vcpkg
+      - name: Cache ccache
         id: cache-deps
         uses: actions/cache@v6
         with:
-          path: |
-            ${{ env.VCPKG_ROOT }}
-            ${{ env.VCPKG_INSTALLED_DIR }}
-            ~/.cache/ccache
-          key: vcpkg-${{ env.VCPKG_TAG }}-clang-${{ hashFiles('vcpkg.json') }}
+          path: ~/.cache/ccache
+          key: ccache-clang-${{ hashFiles('CMakeLists.txt', 'cmake/**', 'src/**', 'test/**') }}
           restore-keys: |
-            vcpkg-${{ env.VCPKG_TAG }}-clang-
-
-      - name: Checkout vcpkg (pinned release tag)
-        if: steps.cache-deps.outputs.cache-hit != 'true'
-        run: |
-          git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
-          git -C "$VCPKG_ROOT" checkout --detach "$VCPKG_TAG"
-
-      - name: Bootstrap vcpkg and prepare pinned manifest
-        run: |
-          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
-          baseline="$(git -C "$VCPKG_ROOT" rev-parse HEAD)"
-          mkdir -p "$VCPKG_MANIFEST_DIR"
-          jq --arg baseline "$baseline" '.["builtin-baseline"] = $baseline' vcpkg.json > "$VCPKG_MANIFEST_DIR/vcpkg.json"
-          echo "Pinned vcpkg builtin-baseline to: $baseline"
+            ccache-clang-
 
       - name: Configure (tests-only, export compile commands)
         run: >
@@ -504,13 +410,9 @@ jobs:
           -DMORTRED_BUILD_FULL=OFF
           -DMORTRED_BIN_OUTPUT_DIR=${{ github.workspace }}/build-tidy/bin
           -DMORTRED_LIB_OUTPUT_DIR=${{ github.workspace }}/build-tidy/lib
-          -DVCPKG_MANIFEST_DIR="$VCPKG_MANIFEST_DIR"
-          -DVCPKG_INSTALLED_DIR="$VCPKG_INSTALLED_DIR"
-          -DVCPKG_MANIFEST_MODE=ON
           -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           -DCMAKE_C_COMPILER=clang
           -DCMAKE_CXX_COMPILER=clang++
-          -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build all test targets
         run: |
