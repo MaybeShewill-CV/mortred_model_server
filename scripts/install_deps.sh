@@ -119,11 +119,15 @@ copy_libs() { # src_glob dst_dir label
 }
 
 # ============ header-only small libs (fetched from upstream when missing, versions pinned) ============
-# install_header_only <name> <url> <archive_subdir> <dst_subdir> <stamp_name>
+# install_header_only <name> <url> <archive_subdir> <dst_subdir> <stamp_name> [amalgamate_header]
 # archive_subdir is the header dir inside the tarball relative to its top (empty=top level); dst_subdir is the
 # target dir under 3rd_party/include (must match the vendored layout, e.g. toml/stb_image/stl_container).
+# When amalgamate_header is set, the individual headers are concatenated into that single header (upstream
+# indicators never shipped its amalgamated indicators.hpp; the pieces carry their own include guards and the
+# internal #include "x.hpp" lines resolve against the copied sibling files).
 install_header_only() {
     local name="$1" url="$2" archive_subdir="$3" dst_subdir="$4" stamp_name="$5"
+    local amalgamate="${6:-}"
     if stamp "$stamp_name"; then
         info "$name: already installed (stamp)"
         return
@@ -153,6 +157,13 @@ install_header_only() {
     fi
     mkdir -p "$INCLUDE_DIR/$dst_subdir"
     cp -rn "$src"/* "$INCLUDE_DIR/$dst_subdir"/ 2>/dev/null || true
+    [ -n "$(ls -A "$INCLUDE_DIR/$dst_subdir" 2>/dev/null)" ] \
+        || fail "$name: no headers copied (src=$src)"
+    if [ -n "$amalgamate" ]; then
+        cat "$src"/*.hpp > "$INCLUDE_DIR/$dst_subdir/$amalgamate" 2>/dev/null \
+            || fail "$name: amalgamation of $amalgamate failed"
+        info "$name: amalgamated $amalgamate"
+    fi
     mark "$stamp_name"
 }
 
@@ -236,6 +247,14 @@ install_mnn() {
     if [ "$DEP_PROFILE" != "cpu" ]; then
         cmake --build "$build" --target MNN_Cuda_Main -j"$JOBS" \
             || fail "MNN CUDA backend build failed (target MNN_Cuda_Main)"
+        # cuda_add_library puts the backend lib in the cuda SUBDIR's binary
+        # dir ($build/source/backend/cuda), not $build root - the copy_libs
+        # glob below only sees the root, so locate and copy it explicitly
+        local mnn_cuda
+        mnn_cuda="$(find "$build" -name 'libMNN_Cuda_Main.so*' -type f | head -n1)"
+        [ -n "$mnn_cuda" ] || fail "libMNN_Cuda_Main.so not found under $build"
+        cp -n "$mnn_cuda" "$LIB_DIR"/
+        info "MNN CUDA lib: copied into $LIB_DIR"
     fi
     mkdir -p "$INCLUDE_DIR/MNN"
     cp -rn "$src/include/MNN"/* "$INCLUDE_DIR/MNN"/ 2>/dev/null || true
@@ -597,7 +616,7 @@ case "$MODE" in
         install_header_only stb_image \
             "https://github.com/nothings/stb/archive/2c980bb59875b0d32144a71867fbdebb2f77cd20.tar.gz" "" "stb_image" "stb_image"
         install_header_only indicators \
-            "https://github.com/p-ranav/indicators/archive/refs/tags/v2.3.tar.gz" "include" "indicators" "indicators"
+            "https://github.com/p-ranav/indicators/archive/refs/tags/v2.3.tar.gz" "include" "indicators" "indicators" "indicators.hpp"
         install_header_only moodycamel \
             "https://github.com/cameron314/concurrentqueue/archive/refs/tags/v1.0.4.tar.gz" "" "stl_container" "moodycamel"
         install_fmt

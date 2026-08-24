@@ -16,7 +16,6 @@
 #include "common/status_code.h"
 #include "factory/base_factory.h"
 #include "models/base_model.h"
-#include "server/abstract_server.h"
 
 using jinq::common::StatusCode;
 

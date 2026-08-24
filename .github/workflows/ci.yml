@@ -224,7 +224,15 @@ jobs:
               return 0
             fi
             echo "checking: $file"
-            clang-format --dry-run --Werror --lines="$ranges" "$file"
+            # clang-format accepts ONE range per --lines occurrence (the docs'
+            # "comma separated" claim is wrong for every release); pass each
+            # range as its own flag or it errors "invalid <start>:<end> pair"
+            local -a range_args=() range_item
+            IFS=',' read -r -a range_item <<< "$ranges"
+            for r in "${range_item[@]}"; do
+              range_args+=(--lines="$r")
+            done
+            clang-format --dry-run --Werror "${range_args[@]}" "$file"
           }
 
           for file in $changed; do
