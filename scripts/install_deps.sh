@@ -297,12 +297,25 @@ install_nvidia() {
         info "NVIDIA apt repo already configured; skipping keyring install"
     fi
     apt-get update
-    # Exact version pins: the repo keeps TRT 8/10/11 and multiple cuDNN builds side
-    # by side, so bare names resolve to the newest line (TRT 11 / cuDNN 9) or to a
-    # cuDNN 8 build for the wrong CUDA (8.9.7.29 exists as +cuda11.8 AND +cuda12.2;
-    # apt picks the higher +cuda12.2 revision) - both ABI-incompatible with this
-    # tree. Note the onnx parser package is libnvonnxparsers-dev (with an 's').
-    # Versions verified against the repo Packages.gz indexes (2004/2204).
+    # Deterministic install: download the EXACT versioned .debs and dpkg -i them.
+    # apt's resolver cannot be trusted here - libnvinfer8 depends on UNVERSIONED
+    # libcudnn8, so apt resolves it to the newest cuDNN 8 (the cuda12.2 build)
+    # and then fails the exact-version deps of the dev packages ('held broken
+    # packages'), even with every package pinned. Direct .deb install leaves no
+    # freedom to wander into +cuda12.x variants. All versions below verified
+    # against the repo Packages.gz indexes; the focal and jammy repos both
+    # carry them.
+    local repo_dir2 nv_repo deb_dir d
+    repo_dir2="$(grep -rhoE 'repos/ubuntu[0-9]+/x86_64' /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null | head -n1 | sed 's#repos/##; s#/x86_64##')"
+    [ -n "$repo_dir2" ] || repo_dir2=ubuntu2004
+    nv_repo="https://developer.download.nvidia.com/compute/cuda/repos/${repo_dir2}/x86_64"
+    deb_dir="$BUILD_DIR/nvidia-debs"
+    mkdir -p "$deb_dir"
+    fetch_deb() { # <deb filename>
+        local d="$1"
+        [ -f "$deb_dir/$d" ] || curl -fSL "$nv_repo/$d" -o "$deb_dir/$d"
+        dpkg-deb --info "$deb_dir/$d" >/dev/null 2>&1 || fail "bad NVIDIA deb: $d"
+    }
     if [ "$CUDA_VERSION" = "12" ]; then
         # devel images/machines with CUDA already installed skip the toolkit; only install TRT/cuDNN (avoid package conflicts)
         if ! command -v nvcc >/dev/null 2>&1 && [ ! -x /usr/local/cuda/bin/nvcc ]; then
@@ -310,46 +323,48 @@ install_nvidia() {
         else
             info "nvcc already present, skipping cuda-toolkit"
         fi
-        # TRT 10 / cuDNN 9 dev packages (-dev needed to copy headers and libs into 3rd_party);
-        # the tensorrt meta-package provides /usr/src/tensorrt/bin/trtexec (external engine conversion CLI).
-        # Pin the runtime libs too (libnvinfer10's unversioned libcudnn9 dep would
-        # otherwise resolve to the newest cuDNN 9 and break the exact dev deps);
-        # cuDNN 9.10.2.21 is the highest version present in BOTH the focal and jammy repos.
-        apt-get install -y --no-install-recommends \
-            libcudnn9-cuda-12=9.10.2.21-1 \
-            libcudnn9-dev-cuda-12=9.10.2.21-1 \
-            libnvinfer10=10.3.0.26-1+cuda12.5 \
-            libnvinfer-plugin10=10.3.0.26-1+cuda12.5 \
-            libnvonnxparsers10=10.3.0.26-1+cuda12.5 \
-            libnvinfer-dev=10.3.0.26-1+cuda12.5 \
-            libnvinfer-plugin-dev=10.3.0.26-1+cuda12.5 \
-            libnvonnxparsers-dev=10.3.0.26-1+cuda12.5 \
-            tensorrt=10.3.0.26-1+cuda12.5
+        # TRT 10.3.0.26 + cuDNN 9 (9.10.2.21 = highest version in BOTH the focal
+        # and jammy repos). libnvinfer-bin carries /usr/src/tensorrt/bin/trtexec.
+        local -a DEBS=(
+            libcudnn9-cuda-12_9.10.2.21-1_amd64.deb
+            libcudnn9-dev-cuda-12_9.10.2.21-1_amd64.deb
+            libnvinfer10_10.3.0.26-1+cuda12.5_amd64.deb
+            libnvinfer-plugin10_10.3.0.26-1+cuda12.5_amd64.deb
+            libnvonnxparsers10_10.3.0.26-1+cuda12.5_amd64.deb
+            libnvinfer-headers-dev_10.3.0.26-1+cuda12.5_amd64.deb
+            libnvinfer-headers-plugin-dev_10.3.0.26-1+cuda12.5_amd64.deb
+            libnvinfer-dev_10.3.0.26-1+cuda12.5_amd64.deb
+            libnvinfer-plugin-dev_10.3.0.26-1+cuda12.5_amd64.deb
+            libnvonnxparsers-dev_10.3.0.26-1+cuda12.5_amd64.deb
+            libnvinfer-bin_10.3.0.26-1+cuda12.5_amd64.deb
+        )
     else
         if ! command -v nvcc >/dev/null 2>&1 && [ ! -x /usr/local/cuda/bin/nvcc ]; then
             apt-get install -y --no-install-recommends cuda-toolkit-11-8
         else
             info "nvcc already present, skipping cuda-toolkit"
         fi
-        # TRT 8.6.1.6 / cuDNN 8 (cuda11.8 builds) - matches the vendored tree.
-        # Pin the RUNTIME libs too: libnvinfer8 depends on UNVERSIONED libcudnn8,
-        # so apt resolves it to the newest cuDNN 8 (the cuda12.2 build) and then
-        # fails the exact-version deps of the dev packages ('held broken
-        # packages'). The image holds libcublas/libnccl dev packages
-        # (cuda-images#88); unhold them so the cuda11.8 virtual providers resolve.
-        apt-mark unhold libcublas-dev-11-8 libnccl-dev 2>/dev/null || true
-        apt-get install -y --no-install-recommends \
-            libcudnn8=8.9.7.29-1+cuda11.8 \
-            libcudnn8-dev=8.9.7.29-1+cuda11.8 \
-            libnvinfer8=8.6.1.6-1+cuda11.8 \
-            libnvinfer-plugin8=8.6.1.6-1+cuda11.8 \
-            libnvonnxparsers8=8.6.1.6-1+cuda11.8 \
-            libnvinfer-dev=8.6.1.6-1+cuda11.8 \
-            libnvinfer-plugin-dev=8.6.1.6-1+cuda11.8 \
-            libnvonnxparsers-dev=8.6.1.6-1+cuda11.8 \
-            tensorrt=8.6.1.6-1+cuda11.8
+        # TRT 8.6.1.6 + cuDNN 8 (cuda11.8 builds) - matches the vendored tree.
+        # libnvinfer-bin carries /usr/src/tensorrt/bin/trtexec.
+        local -a DEBS=(
+            libcudnn8_8.9.7.29-1+cuda11.8_amd64.deb
+            libcudnn8-dev_8.9.7.29-1+cuda11.8_amd64.deb
+            libnvinfer8_8.6.1.6-1+cuda11.8_amd64.deb
+            libnvinfer-plugin8_8.6.1.6-1+cuda11.8_amd64.deb
+            libnvonnxparsers8_8.6.1.6-1+cuda11.8_amd64.deb
+            libnvinfer-headers-dev_8.6.1.6-1+cuda11.8_amd64.deb
+            libnvinfer-headers-plugin-dev_8.6.1.6-1+cuda11.8_amd64.deb
+            libnvinfer-dev_8.6.1.6-1+cuda11.8_amd64.deb
+            libnvinfer-plugin-dev_8.6.1.6-1+cuda11.8_amd64.deb
+            libnvonnxparsers-dev_8.6.1.6-1+cuda11.8_amd64.deb
+            libnvinfer-bin_8.6.1.6-1+cuda11.8_amd64.deb
+        )
     fi
-    # trtexec: the official TensorRT CLI (provided by the tensorrt meta-package at /usr/src/tensorrt/bin/trtexec);
+    for d in "${DEBS[@]}"; do fetch_deb "$d"; done
+    dpkg -i "${DEBS[@]/#/$deb_dir/}" >/dev/null
+    # pull any remaining system deps (e.g. protobuf) from the OS repos
+    apt-get install -f -y --no-install-recommends
+    # trtexec: the official TensorRT CLI (shipped by the libnvinfer-bin deb at /usr/src/tensorrt/bin/trtexec);
     # copied into 3rd_party/bin for scripts/convert_trt_engines.sh (it ships in bin/ with the install tree)
     if [ -x /usr/src/tensorrt/bin/trtexec ]; then
         mkdir -p "$ROOT/3rd_party/bin"
