@@ -122,29 +122,23 @@ jobs:
           echo "home=$CODEQL_HOME" >> "$GITHUB_OUTPUT"
 
       - if: matrix.mode == 'full'
-        name: Create CodeQL database (full compile tracing, in container)
+        name: Create and analyze CodeQL database (full compile tracing, in container)
         run: |
           set -euo pipefail
+          # One docker run: create and analyze MUST share the same container.
+          # codeql database create writes /src/codeql-db into the container's
+          # writable layer, which a second `docker run` would not see (the old
+          # two-step flow failed analyze with "Database root /src/codeql-db does
+          # not exist"). SARIF goes out via the /out mount.
           # Note: don't mount the workspace at /src — that would shadow /src/build and /src/3rd_party
           # built during the image's docker build stage (both gitignored, absent from the workspace),
-          # leaving cmake --build /src/build with nothing to build. DB stays in the container; SARIF goes out via /out mount.
+          # leaving cmake --build /src/build with nothing to build.
           docker run --rm \
             -v "${{ steps.codeql-home.outputs.home }}":/opt/codeql:ro \
             -v "${{ github.workspace }}":/out \
             -w /src \
             mortred-full:ci \
-            bash -c 'export PATH=/opt/codeql/codeql:$PATH; rm -rf /src/codeql-db; codeql database create /src/codeql-db --language=cpp --source-root=/src --command="cmake --build /src/build --clean-first -j4"'
-
-      - if: matrix.mode == 'full'
-        name: Analyze (in container) and normalize SARIF paths
-        run: |
-          set -euo pipefail
-          docker run --rm \
-            -v "${{ steps.codeql-home.outputs.home }}":/opt/codeql:ro \
-            -v "${{ github.workspace }}":/out \
-            -w /src \
-            mortred-full:ci \
-            bash -c 'export PATH=/opt/codeql/codeql:$PATH; codeql database analyze /src/codeql-db --format=sarif-latest --output=/out/codeql-results.sarif cpp-queries:codeql-suites/cpp-security-and-quality.qls'
+            bash -c 'export PATH=/opt/codeql/codeql:$PATH; rm -rf /src/codeql-db; codeql database create /src/codeql-db --language=cpp --source-root=/src --command="cmake --build /src/build --clean-first -j4" && codeql database analyze /src/codeql-db --format=sarif-latest --output=/out/codeql-results.sarif cpp-queries:codeql-suites/cpp-security-and-quality.qls'
           # SARIF contains container-absolute paths /src/src/...; normalize to repo-relative src/... so GitHub can link files.
           # The container writes /out/codeql-results.sarif as root; chown it back to the runner user for rewriting.
           sudo chown "$USER" codeql-results.sarif
