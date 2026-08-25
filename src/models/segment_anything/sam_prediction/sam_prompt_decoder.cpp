@@ -167,8 +167,9 @@ class SamPromptDecoder::Impl {
 
     static bool fill_input(
         std::vector<NamedTensor>& inputs, const std::string& name,
-        const TensorInfo& /*info*/, const std::vector<float>& values,
+        const TensorInfo& info, const std::vector<float>& values,
         const std::vector<int64_t>& shape) {
+        (void)info;  // shape carries the tensor layout; info kept for call-site symmetry
         NamedTensor named;
         named.name = name;
         named.tensor = Tensor::make<float>(shape);

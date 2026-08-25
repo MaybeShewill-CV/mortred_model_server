@@ -622,6 +622,16 @@ case "$MODE" in
         mkdir -p "$INCLUDE_DIR/toml"
         [ -f "$INCLUDE_DIR/toml/toml.hpp" ] || \
             curl -fsSL "https://raw.githubusercontent.com/marzer/tomlplusplus/v3.4.0/toml.hpp" -o "$INCLUDE_DIR/toml/toml.hpp"
+        # Pin TOML_EXCEPTIONS=0 (the project-wide exceptions-free contract,
+        # matching the tracked 3rd_party/include/toml/toml.hpp): upstream ships
+        # exceptions enabled by default, so toml::parse_file returns toml::table
+        # and the parse_result-based callers (benchmark_runner.h,
+        # generic_cv_server.h, ...) fail to compile.
+        if ! grep -q "^#ifndef TOML_EXCEPTIONS" "$INCLUDE_DIR/toml/toml.hpp"; then
+            { printf '#ifndef TOML_EXCEPTIONS\n#define TOML_EXCEPTIONS 0\n#endif\n\n'; \
+              cat "$INCLUDE_DIR/toml/toml.hpp"; } > "$INCLUDE_DIR/toml/toml.hpp.tmp" \
+                && mv "$INCLUDE_DIR/toml/toml.hpp.tmp" "$INCLUDE_DIR/toml/toml.hpp"
+        fi
         mark tomlpp
         install_header_only stb_image \
             "https://github.com/nothings/stb/archive/2c980bb59875b0d32144a71867fbdebb2f77cd20.tar.gz" "" "stb_image" "stb_image"
