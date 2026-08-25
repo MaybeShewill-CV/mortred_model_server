@@ -167,16 +167,18 @@ install_header_only() {
     mark "$stamp_name"
 }
 
-# ============ fmt (built from source; 9.1.1 matches the tracked 3rd_party fmt headers) ============
+# ============ fmt (built from source; 9.1.0 is the closest upstream tag to the
+# tracked 3rd_party fmt headers - upstream never released a 9.1.1, so cloning
+# it fails; 9.1.0 keeps the libfmt.so.9 soname vendored::fmt imports) ============
 install_fmt() {
     if stamp fmt; then info "fmt: already installed"; return; fi
-    announce "build fmt 9.1.1"
+    announce "build fmt 9.1.0"
     require_cmd git "git"
     require_cmd cmake "cmake"
     local src="$BUILD_DIR/fmt-src"
     mkdir -p "$src"
     if [ ! -d "$src/.git" ]; then
-        git clone --depth 1 --branch 9.1.1 https://github.com/fmtlib/fmt.git "$src"
+        git clone --depth 1 --branch 9.1.0 https://github.com/fmtlib/fmt.git "$src"
     fi
     # BUILD_SHARED_LIBS=ON: fmt defaults to a static lib, but the vendored tree
     # and vendored::fmt expect libfmt.so.9 - fresh containers proved the default
