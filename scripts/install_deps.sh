@@ -167,16 +167,16 @@ install_header_only() {
     mark "$stamp_name"
 }
 
-# ============ fmt (built from source, pinned tag; git tag is 9.1.0, no 9.1.1) ============
+# ============ fmt (built from source; 9.1.1 matches the tracked 3rd_party fmt headers) ============
 install_fmt() {
     if stamp fmt; then info "fmt: already installed"; return; fi
-    announce "build fmt 9.1.0"
+    announce "build fmt 9.1.1"
     require_cmd git "git"
     require_cmd cmake "cmake"
     local src="$BUILD_DIR/fmt-src"
     mkdir -p "$src"
     if [ ! -d "$src/.git" ]; then
-        git clone --depth 1 --branch 9.1.0 https://github.com/fmtlib/fmt.git "$src"
+        git clone --depth 1 --branch 9.1.1 https://github.com/fmtlib/fmt.git "$src"
     fi
     # BUILD_SHARED_LIBS=ON: fmt defaults to a static lib, but the vendored tree
     # and vendored::fmt expect libfmt.so.9 - fresh containers proved the default
@@ -496,7 +496,7 @@ check() {
         "workflow/CommRequest.h:workflow"
         "onnxruntime/onnxruntime_cxx_api.h:onnxruntime"
         "rapidjson/document.h:rapidjson"
-        "toml/toml.hpp:toml11"
+        "toml/toml.hpp:toml++"
         "stb_image/stb_image.h:stb_image"
         "stl_container/concurrentqueue.h:moodycamel"
         "fmt/format.h:fmt"
@@ -611,8 +611,16 @@ case "$MODE" in
     all)
         install_header_only rapidjson \
             "https://github.com/Tencent/rapidjson/archive/refs/tags/v1.1.0.tar.gz" "include" "rapidjson" "rapidjson"
-        install_header_only toml11 \
-            "https://github.com/ToruNiina/toml11/archive/refs/tags/v3.7.1.tar.gz" "" "toml" "toml11"
+        # toml++ v3.4.0 (marzer/tomlplusplus) - the app uses toml++'s API
+        # (table::contains / value::value_or / as_array returning pointers).
+        # The single header ships in the repo at the tag; toml11 (ToruNiina)
+        # is a DIFFERENT library whose header broke the models build.
+        announce "install toml++ v3.4.0 (single header)"
+        require_cmd curl "curl"
+        mkdir -p "$INCLUDE_DIR/toml"
+        [ -f "$INCLUDE_DIR/toml/toml.hpp" ] || \
+            curl -fsSL "https://raw.githubusercontent.com/marzer/tomlplusplus/v3.4.0/toml.hpp" -o "$INCLUDE_DIR/toml/toml.hpp"
+        mark tomlpp
         install_header_only stb_image \
             "https://github.com/nothings/stb/archive/2c980bb59875b0d32144a71867fbdebb2f77cd20.tar.gz" "" "stb_image" "stb_image"
         install_header_only indicators \

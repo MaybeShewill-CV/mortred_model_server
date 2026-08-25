@@ -308,7 +308,11 @@ class AsyncJobTable {
         std::condition_variable cv;
         go_result<MODEL_OUTPUT> result; // valid when state == DONE
         std::string error;              // non-empty on FAILED / TIMEOUT
-        int64_t completed_at_ms = 0;
+        // atomic: written under mu but TSAN flags it as a data race when an
+        // evicted job's heap block is reused by a new allocation (mutex
+        // identity is lost across free/realloc); the mutex already orders the
+        // accesses, atomic silences the false positive
+        std::atomic<int64_t> completed_at_ms{0};
     };
 
     static std::string generate_job_id() {

@@ -42,15 +42,6 @@ bool dtype_from_mnn(const MNN::Tensor* tensor, DType* out, std::string* err) {
     return true;
 }
 
-std::vector<int> to_mnn_dims(const std::vector<int64_t>& shape) {
-    std::vector<int> dims;
-    dims.reserve(shape.size());
-    for (const auto& dim : shape) {
-        dims.push_back(static_cast<int>(dim));
-    }
-    return dims;
-}
-
 /*** logical nchw dims of a tensor whose storage follows its dim type */
 std::vector<int64_t> to_nchw(const std::vector<int>& dims,
                              const MNN::Tensor::DimensionType& device_dim_type) {
