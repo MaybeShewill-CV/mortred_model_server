@@ -108,7 +108,7 @@ add_subdirectory(test EXCLUDE_FROM_ALL)
 
 # Install target (enabled with MORTRED_INSTALL=ON): tree-style install of bin/lib.
 # Runtime entry (Docker/systemd) sets LD_LIBRARY_PATH=/opt/mortred/lib explicitly;
-# do not rely on the build's RUNPATH, which may contain absolute source/build-machine paths.
+# do not rely on the build's RUNPATH, which may contain absolute source/build-machine paths
 # The Docker build stage depends on this target.
 if(MORTRED_INSTALL)
     install(DIRECTORY ${MORTRED_BIN_OUTPUT_DIR}/ DESTINATION bin
