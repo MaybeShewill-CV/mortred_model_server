@@ -661,3 +661,127 @@ jobs:
             EXTRA_CMAKE_FLAGS=-DMORTRED_ENABLE_WERROR=ON
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------------------------
+  # Job H: GPU golden smoke gate (PR). Runs a curated 6-model subset of the
+  # golden regression on the self-hosted GPU runner, so numerical drift in the
+  # inference stack (preprocess / NMS / decode) turns PRs red instead of
+  # silently GTEST_SKIP-ing until a human notices. No CMake/C++ changes are
+  # needed: the gpu profile already builds model_golden_test when
+  # MORTRED_BUILD_FULL=ON and weights come from the runner's persistent cache.
+  # See docs/ci-golden-regression.md for runner setup and cache layout.
+  # ---------------------------------------------------------------------------
+  gpu-pr-gate:
+    name: gpu golden smoke (PR gate)
+    runs-on: [self-hosted, X64, gpu]
+    timeout-minutes: 30
+    if: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Link persistent weight/engine caches into workspace
+        run: |
+          set -euo pipefail
+          CACHE=/opt/mortred-cache
+          if [ ! -d "$CACHE/weights" ]; then
+            echo "::error::runner cache missing: $CACHE/weights (see docs/ci-golden-regression.md)" >&2
+            exit 1
+          fi
+          # weights is a symlink into the persistent cache, so engines built
+          # by convert_trt_engines.sh land straight back into the cache and
+          # stay warm across runs.
+          ln -sfn "$CACHE/weights" "${{ github.workspace }}/weights"
+
+      # Build only what the golden binary needs (models lib + test), not the whole zoo.
+      - name: Configure gpu profile (full build)
+        run: >
+          cmake -B build-gpu
+          -DMORTRED_BUILD_FULL=ON
+          -DCMAKE_BUILD_TYPE=Release
+          -DMORTRED_BIN_OUTPUT_DIR="$PWD/build-gpu/bin"
+          -DMORTRED_LIB_OUTPUT_DIR="$PWD/build-gpu/lib"
+
+      - name: Build model_golden_test target
+        run: cmake --build build-gpu --target model_golden_test -j"$(nproc)"
+
+      # Rebuild only missing/stale engines; existing fresh ones are skipped.
+      # (--only does single-substring matching, so one invocation per model;
+      # a no-match exits non-zero, which is the desired strictness here.)
+      - name: Refresh engines for smoke subset (skip-if-fresh)
+        run: |
+          for m in yolov5 nanodet centerface dbnet mobilenetv2 fastsam; do
+            bash scripts/convert_trt_engines.sh --only "$m"
+          done
+
+      # Run the smoke subset directly via gtest filter (6 cross-family cases):
+      #   3 detectors exercise distinct preprocess/NMS/decode paths
+      #   dbnet = OCR json contract, mobilenetv2 = classification scores+tolerance,
+      #   fastsam = segmentation fingerprint png.
+      # Warm cache target: <= 15 min wall clock including build.
+      - name: Run golden smoke subset
+        run: |
+          LD_LIBRARY_PATH="$PWD/build-gpu/lib:$PWD/_lib:$PWD/3rd_party/libs" \
+          ./build-gpu/bin/model_golden_test \
+            --gtest_filter='model_golden.yolov5_detection:model_golden.nanodet_detection:model_golden.centerface_detection:model_golden.dbnet_text_detection:model_golden.mobilenetv2_classification:model_golden.fastsam_segmentation'
+
+      - name: Upload ctest/golden log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gpu-golden-smoke-log-${{ github.event.pull_request.number }}
+          path: |
+            build-gpu/Testing/Temporary/LastTest.log
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Job I: GPU full regression (nightly / manual). Runs the ENTIRE golden zoo
+  # (24 cases) plus lifecycle/backend/e2e suites against real TRT/MNN-CUDA
+  # sessions. This is the catch-all that the 6-model smoke cannot reach:
+  # generation models, CLIP embeddings, SuperPoint+LightGlue matching,
+  # enhancement fingerprints, etc.
+  # ---------------------------------------------------------------------------
+  gpu-nightly-full:
+    name: gpu full regression (nightly)
+    runs-on: [self-hosted, X64, gpu]
+    timeout-minutes: 120
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Link persistent weight/engine caches into workspace
+        run: |
+          set -euo pipefail
+          CACHE=/opt/mortred-cache
+          if [ ! -d "$CACHE/weights" ]; then
+            echo "::error::runner cache missing: $CACHE/weights (see docs/ci-golden-regression.md)" >&2
+            exit 1
+          fi
+          ln -sfn "$CACHE/weights" "${{ github.workspace }}/weights"
+
+      - name: Configure gpu profile (full build)
+        run: >
+          cmake -B build-gpu
+          -DMORTRED_BUILD_FULL=ON
+          -DCMAKE_BUILD_TYPE=Release
+          -DMORTRED_BIN_OUTPUT_DIR="$PWD/build-gpu/bin"
+          -DMORTRED_LIB_OUTPUT_DIR="$PWD/build-gpu/lib"
+
+      - name: Build check target (all tests + libs)
+        run: cmake --build build-gpu --target check -j"$(nproc)"
+
+      - name: Run full golden zoo + lifecycle + backend + gateway e2e
+        run: |
+          export LD_LIBRARY_PATH="$PWD/build-gpu/lib:$PWD/3rd_party/libs"
+          ./build-gpu/bin/model_golden_test
+          ctest --test-dir build-gpu \
+            -R '^model_lifecycle_unittest$|^backend_unittest$|^gateway_e2e_test$' \
+            --output-on-failure
+
+      - name: Upload full regression log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gpu-full-regression-log-${{ github.run_number }}
+          path: |
+            build-gpu/Testing/Temporary/LastTest.log
+          if-no-files-found: ignore
