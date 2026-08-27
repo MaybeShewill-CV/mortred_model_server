@@ -587,7 +587,7 @@ jobs:
     # Always runs on push to main; skipped on PRs by default (image dep layers are heavy to build), manual full-matrix can trigger
     if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.full-matrix == 'true') }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -616,7 +616,7 @@ jobs:
     timeout-minutes: 120
     if: ${{ github.event_name == 'pull_request' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -645,7 +645,7 @@ jobs:
     timeout-minutes: 120
     if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -677,7 +677,7 @@ jobs:
     timeout-minutes: 30
     if: ${{ github.event_name == 'pull_request' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Link persistent weight/engine caches into workspace
         run: |
@@ -746,7 +746,7 @@ jobs:
     timeout-minutes: 120
     if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Link persistent weight/engine caches into workspace
         run: |
