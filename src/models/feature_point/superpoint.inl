@@ -215,8 +215,8 @@ void SuperPoint<INPUT, OUTPUT>::decode_fp_descriptor(const NamedTensor &desc, Fe
 }
 
 template <typename INPUT, typename OUTPUT>
-StatusCode SuperPoint<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs, const jinq::models::InferenceContext &context,
-                                                  OUTPUT &output) {
+StatusCode SuperPoint<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
+                                                  const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
     const auto *semi = find_output(outputs, "output_1");
     const auto *desc = find_output(outputs, "output_2");
     if (semi == nullptr || desc == nullptr) {

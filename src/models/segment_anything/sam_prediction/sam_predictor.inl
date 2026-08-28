@@ -177,7 +177,7 @@ template <typename INPUT, typename OUTPUT> StatusCode SamPredictor<INPUT, OUTPUT
 
 template <typename INPUT, typename OUTPUT>
 StatusCode SamPredictor<INPUT, OUTPUT>::postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                                                    const jinq::models::InferenceContext & /*context*/, OUTPUT &output) {
+                                                    const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
     (void)outputs;
     (void)output;
     LOG(ERROR) << "sam predictor is a multi-session model and must run through run_sessions";

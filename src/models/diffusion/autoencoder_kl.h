@@ -31,10 +31,10 @@ template <typename INPUT, typename OUTPUT> class AutoEncoderKL : public jinq::mo
     AutoEncoderKL &operator=(const AutoEncoderKL &transformer) = delete;
 
   private:
-    jinq::models::PreparedInput prepare_inputs(const INPUT &input) override;
+    jinq::models::backend::PreparedInput prepare_inputs(const INPUT &input) override;
 
     StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::InferenceContext & /*context*/, OUTPUT &output) override;
+                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 };
 
 } // namespace diffusion

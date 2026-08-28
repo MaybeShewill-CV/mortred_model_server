@@ -47,7 +47,7 @@ template <typename INPUT, typename OUTPUT> class SamAutoMaskGenerator : public j
     StatusCode run_sessions(const INPUT &input, OUTPUT &output) override;
 
     StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::InferenceContext & /*context*/, OUTPUT &output) override;
+                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     std::unique_ptr<SamVitEncoder> _m_encoder;
     std::unique_ptr<SamAmgDecoder> _m_decoder;

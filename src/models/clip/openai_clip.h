@@ -56,7 +56,7 @@ template <typename INPUT, typename OUTPUT> class OpenAiClip : public jinq::model
     StatusCode run_sessions(const INPUT &input, OUTPUT &output) override;
 
     StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::InferenceContext & /*context*/, OUTPUT &output) override;
+                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     StatusCode encode_text(const std::string &input_text, std::vector<float> &text_embeddings) const;
 

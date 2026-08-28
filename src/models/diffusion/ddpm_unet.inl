@@ -21,7 +21,8 @@ using UnetOutput = jinq::models::io_define::diffusion::std_ddpm_unet_output;
 using jinq::common::StatusCode;
 using jinq::models::backend::NamedTensor;
 
-template <typename INPUT, typename OUTPUT> jinq::models::PreparedInput DDPMUNet<INPUT, OUTPUT>::prepare_inputs(const INPUT &input) {
+template <typename INPUT, typename OUTPUT>
+jinq::models::backend::PreparedInput DDPMUNet<INPUT, OUTPUT>::prepare_inputs(const INPUT &input) {
     const auto &input_infos = this->session().inputs();
     const auto xt_info = std::find_if(input_infos.begin(), input_infos.end(),
                                       [](const jinq::models::backend::TensorInfo &info) { return info.name == "xt"; });
@@ -36,7 +37,7 @@ template <typename INPUT, typename OUTPUT> jinq::models::PreparedInput DDPMUNet<
         return {};
     }
 
-    jinq::models::PreparedInput prepared;
+    jinq::models::backend::PreparedInput prepared;
     std::vector<NamedTensor> inputs;
     NamedTensor xt;
     xt.name = "xt";
@@ -68,8 +69,8 @@ template <typename INPUT, typename OUTPUT> jinq::models::PreparedInput DDPMUNet<
 }
 
 template <typename INPUT, typename OUTPUT>
-StatusCode DDPMUNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs, const jinq::models::InferenceContext & /*context*/,
-                                                OUTPUT &output) {
+StatusCode DDPMUNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
+                                                const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "ddpm unet output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;

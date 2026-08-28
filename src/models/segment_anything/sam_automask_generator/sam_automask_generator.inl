@@ -109,7 +109,7 @@ StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::run_sessions(const INPUT &input,
 
 template <typename INPUT, typename OUTPUT>
 StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                                                            const jinq::models::InferenceContext & /*context*/, OUTPUT &output) {
+                                                            const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
     (void)outputs;
     (void)output;
     LOG(ERROR) << "sam amg is a multi-session model and must run through run_sessions";

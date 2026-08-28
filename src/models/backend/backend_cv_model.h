@@ -29,6 +29,7 @@
 
 namespace jinq {
 namespace models {
+namespace backend {
 using jinq::common::StatusCode;
 
 namespace detail {
@@ -522,6 +523,11 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
     bool _m_successfully_initialized = false;
 };
 
+} // namespace backend
+// BackendCvModel has lived under jinq::models since the unified backend was
+// introduced. Keep that public spelling as an alias while the implementation
+// is consistently colocated with the backend runtime namespace.
+using backend::BackendCvModel;
 } // namespace models
 } // namespace jinq
 

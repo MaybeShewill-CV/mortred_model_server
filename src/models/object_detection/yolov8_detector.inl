@@ -78,7 +78,8 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> YoloV8Detect
 }
 
 template <typename INPUT, typename OUTPUT>
-cv::Rect2f YoloV8Detector<INPUT, OUTPUT>::transform_bboxes(const cv::Rect2d &bbox, const jinq::models::InferenceContext &context) const {
+cv::Rect2f YoloV8Detector<INPUT, OUTPUT>::transform_bboxes(const cv::Rect2d &bbox,
+                                                           const jinq::models::backend::InferenceContext &context) const {
     const auto w_scale = static_cast<float>(context.source_size.width) / static_cast<float>(_m_input_size_host.width);
     const auto h_scale = static_cast<float>(context.source_size.height) / static_cast<float>(_m_input_size_host.height);
     cv::Rect2f result;
@@ -91,7 +92,7 @@ cv::Rect2f YoloV8Detector<INPUT, OUTPUT>::transform_bboxes(const cv::Rect2d &bbo
 
 template <typename INPUT, typename OUTPUT>
 StatusCode YoloV8Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                      const jinq::models::InferenceContext &context, OUTPUT &output) {
+                                                      const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "yolov8 output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;

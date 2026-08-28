@@ -37,11 +37,11 @@ template <typename INPUT, typename OUTPUT> class YoloV8Detector : public jinq::m
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
     StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::InferenceContext & /*context*/, OUTPUT &output) override;
+                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     StatusCode on_init(const toml::table &params) override;
 
-    cv::Rect2f transform_bboxes(const cv::Rect2d &bbox, const jinq::models::InferenceContext &context) const;
+    cv::Rect2f transform_bboxes(const cv::Rect2d &bbox, const jinq::models::backend::InferenceContext &context) const;
 
     DetectionParams _m_detection_params;
     // host input node size (network space)

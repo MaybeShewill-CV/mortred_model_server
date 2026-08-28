@@ -69,8 +69,8 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> ModNetMattin
 }
 
 template <typename INPUT, typename OUTPUT>
-StatusCode ModNetMatting<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs, const jinq::models::InferenceContext &context,
-                                                     OUTPUT &output) {
+StatusCode ModNetMatting<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
+                                                     const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "modnet output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;

@@ -54,7 +54,7 @@ template <typename INPUT, typename OUTPUT> class SamPredictor : public jinq::mod
     StatusCode run_sessions(const INPUT &input, OUTPUT &output) override;
 
     StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::InferenceContext & /*context*/, OUTPUT &output) override;
+                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     std::vector<cv::Rect2f> transform_bboxes(const std::vector<cv::Rect> &bboxes, int target_size) const;
 

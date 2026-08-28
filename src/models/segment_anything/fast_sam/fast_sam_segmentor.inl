@@ -130,7 +130,7 @@ template <typename INPUT, typename OUTPUT> cv::Mat FastSamSegmentor<INPUT, OUTPU
 
 template <typename INPUT, typename OUTPUT>
 StatusCode FastSamSegmentor<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                        const jinq::models::InferenceContext & /*context*/, OUTPUT &output) {
+                                                        const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
     const auto *output0 = find_output(outputs, "output0");
     const auto *output1 = find_output(outputs, "output1");
     if (output0 == nullptr || output1 == nullptr) {

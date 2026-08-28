@@ -72,7 +72,7 @@ std::vector<NamedTensor> HRNetSegmentation<INPUT, OUTPUT>::preprocess(const cv::
 
 template <typename INPUT, typename OUTPUT>
 StatusCode HRNetSegmentation<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                         const jinq::models::InferenceContext &context, OUTPUT &output) {
+                                                         const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "hrnet output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;

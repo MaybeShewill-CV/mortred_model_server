@@ -93,8 +93,8 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> DenseNet<INP
 }
 
 template <typename INPUT, typename OUTPUT>
-StatusCode DenseNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs, const jinq::models::InferenceContext & /*context*/,
-                                                OUTPUT &output) {
+StatusCode DenseNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
+                                                const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "classification model output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;

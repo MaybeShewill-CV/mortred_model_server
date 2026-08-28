@@ -111,7 +111,7 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> LibFaceDetec
 
 template <typename INPUT, typename OUTPUT>
 StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                       const jinq::models::InferenceContext &context, OUTPUT &output) {
+                                                       const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
     const auto *loc = jinq::models::backend::find_output(outputs, "loc");
     const auto *conf = jinq::models::backend::find_output(outputs, "conf");
     if (loc == nullptr || conf == nullptr) {

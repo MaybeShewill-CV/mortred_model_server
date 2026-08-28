@@ -12,6 +12,7 @@
 
 namespace jinq {
 namespace models {
+namespace backend {
 
 /*** request-scoped geometry carried from preprocessing to postprocessing */
 struct InferenceContext {
@@ -34,6 +35,7 @@ struct PreparedInput {
     }
 };
 
+} // namespace backend
 } // namespace models
 } // namespace jinq
 

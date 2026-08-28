@@ -76,8 +76,8 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> DepthAnythin
 }
 
 template <typename INPUT, typename OUTPUT>
-StatusCode DepthAnything<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs, const jinq::models::InferenceContext &context,
-                                                     OUTPUT &output) {
+StatusCode DepthAnything<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
+                                                     const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "depth anything output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;

@@ -24,13 +24,14 @@ using VaeOutput = jinq::models::io_define::diffusion::std_vae_decode_output;
 using jinq::common::StatusCode;
 using jinq::models::backend::NamedTensor;
 
-template <typename INPUT, typename OUTPUT> jinq::models::PreparedInput AutoEncoderKL<INPUT, OUTPUT>::prepare_inputs(const INPUT &input) {
+template <typename INPUT, typename OUTPUT>
+jinq::models::backend::PreparedInput AutoEncoderKL<INPUT, OUTPUT>::prepare_inputs(const INPUT &input) {
     const auto &input_info = this->session().inputs().front();
     if (input_info.dynamic) {
         LOG(ERROR) << "vae decoder input must be static, got " << input_info.to_string();
         return {};
     }
-    jinq::models::PreparedInput prepared;
+    jinq::models::backend::PreparedInput prepared;
     std::vector<NamedTensor> inputs;
     NamedTensor named;
     named.name = input_info.name;
@@ -48,7 +49,7 @@ template <typename INPUT, typename OUTPUT> jinq::models::PreparedInput AutoEncod
 
 template <typename INPUT, typename OUTPUT>
 StatusCode AutoEncoderKL<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                     const jinq::models::InferenceContext & /*context*/, OUTPUT &output) {
+                                                     const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "vae decoder output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;

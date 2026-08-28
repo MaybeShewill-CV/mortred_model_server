@@ -69,8 +69,8 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> PPHumanSeg<I
 }
 
 template <typename INPUT, typename OUTPUT>
-StatusCode PPHumanSeg<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs, const jinq::models::InferenceContext &context,
-                                                  OUTPUT &output) {
+StatusCode PPHumanSeg<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
+                                                  const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "pphumanseg output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;

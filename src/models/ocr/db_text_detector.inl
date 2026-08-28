@@ -104,7 +104,7 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> DBTextDetect
 
 template <typename INPUT, typename OUTPUT>
 StatusCode DBTextDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                      const jinq::models::InferenceContext &context, OUTPUT &output) {
+                                                      const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
     const auto output_iter =
         std::find_if(outputs.begin(), outputs.end(), [this](const NamedTensor &item) { return item.name == _m_output_name; });
     if (output_iter == outputs.end()) {
@@ -139,7 +139,8 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
 
 template <typename INPUT, typename OUTPUT>
 StatusCode DBTextDetector<INPUT, OUTPUT>::get_boxes_from_bitmap(const cv::Mat &seg_prob_mat, const cv::Mat &seg_score_mat,
-                                                                const jinq::models::InferenceContext &context, OUTPUT &output) const {
+                                                                const jinq::models::backend::InferenceContext &context,
+                                                                OUTPUT &output) const {
     TextRegions result;
     const auto host_width = static_cast<float>(_m_input_size_host.width);
     const auto host_height = static_cast<float>(_m_input_size_host.height);

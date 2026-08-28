@@ -57,7 +57,8 @@ bool write_integer_scalar(NamedTensor &named, const TensorInfo &info, int64_t va
 
 } // namespace
 
-template <typename INPUT, typename OUTPUT> jinq::models::PreparedInput ClsCondDDPMUNet<INPUT, OUTPUT>::prepare_inputs(const INPUT &input) {
+template <typename INPUT, typename OUTPUT>
+jinq::models::backend::PreparedInput ClsCondDDPMUNet<INPUT, OUTPUT>::prepare_inputs(const INPUT &input) {
     const auto &input_infos = this->session().inputs();
     const auto *xt_info = find_info(input_infos, "xt");
     const auto *t_info = find_info(input_infos, "t");
@@ -71,7 +72,7 @@ template <typename INPUT, typename OUTPUT> jinq::models::PreparedInput ClsCondDD
         return {};
     }
 
-    jinq::models::PreparedInput prepared;
+    jinq::models::backend::PreparedInput prepared;
     std::vector<NamedTensor> inputs;
     NamedTensor xt;
     xt.name = "xt";
@@ -104,7 +105,7 @@ template <typename INPUT, typename OUTPUT> jinq::models::PreparedInput ClsCondDD
 
 template <typename INPUT, typename OUTPUT>
 StatusCode ClsCondDDPMUNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                       const jinq::models::InferenceContext & /*context*/, OUTPUT &output) {
+                                                       const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "cls cond ddpm unet output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;

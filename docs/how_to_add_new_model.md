@@ -44,7 +44,7 @@ class MyModel : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
     // named output tensors -> task output
     jinq::common::StatusCode postprocess(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,
-        const jinq::models::InferenceContext& context,
+        const jinq::models::backend::InferenceContext& context,
         OUTPUT& output) override;
 
     // optional: read model specific keys from [MY_MODEL.params]

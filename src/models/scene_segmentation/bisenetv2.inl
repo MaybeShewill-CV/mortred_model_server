@@ -67,8 +67,8 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> BiseNetV2<IN
 }
 
 template <typename INPUT, typename OUTPUT>
-StatusCode BiseNetV2<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs, const jinq::models::InferenceContext &context,
-                                                 OUTPUT &output) {
+StatusCode BiseNetV2<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
+                                                 const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "bisenetv2 output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;

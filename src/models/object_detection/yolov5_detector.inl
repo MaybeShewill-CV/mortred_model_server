@@ -81,7 +81,7 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> YoloV5Detect
 
 template <typename INPUT, typename OUTPUT>
 StatusCode YoloV5Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                      const jinq::models::InferenceContext &context, OUTPUT &output) {
+                                                      const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
     const auto *output_tensor = jinq::models::backend::find_output(outputs, "output");
     if (output_tensor == nullptr) {
         LOG(ERROR) << "yolov5 output tensor 'output' is missing";

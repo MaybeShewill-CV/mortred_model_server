@@ -31,10 +31,10 @@ template <typename INPUT, typename OUTPUT> class DDPMUNet : public jinq::models:
     DDPMUNet &operator=(const DDPMUNet &transformer) = delete;
 
   private:
-    jinq::models::PreparedInput prepare_inputs(const INPUT &input) override;
+    jinq::models::backend::PreparedInput prepare_inputs(const INPUT &input) override;
 
     StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::InferenceContext & /*context*/, OUTPUT &output) override;
+                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     // concrete xt input shape parsed from the session io ([N,C,H,W])
     std::vector<int64_t> _m_xt_shape;

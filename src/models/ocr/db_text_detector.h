@@ -35,12 +35,12 @@ template <typename INPUT, typename OUTPUT> class DBTextDetector : public jinq::m
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
     StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::InferenceContext & /*context*/, OUTPUT &output) override;
+                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     StatusCode on_init(const toml::table &params) override;
 
     StatusCode get_boxes_from_bitmap(const cv::Mat &seg_prob_mat, const cv::Mat &seg_score_mat,
-                                     const jinq::models::InferenceContext &context, OUTPUT &output) const;
+                                     const jinq::models::backend::InferenceContext &context, OUTPUT &output) const;
 
     // score thresh
     double _m_score_threshold = 0.4;

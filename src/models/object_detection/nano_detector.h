@@ -44,12 +44,12 @@ template <typename INPUT, typename OUTPUT> class NanoDetector : public jinq::mod
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
     StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::InferenceContext & /*context*/, OUTPUT &output) override;
+                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     StatusCode on_init(const toml::table &params) override;
 
     std::vector<float> refine_bbox_coords(const float *preds, int x, int y, int stride,
-                                          const jinq::models::InferenceContext &context) const;
+                                          const jinq::models::backend::InferenceContext &context) const;
 
     void generate_grid_center_priors();
 

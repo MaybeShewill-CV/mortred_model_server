@@ -124,8 +124,8 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> Metric3D<INP
 }
 
 template <typename INPUT, typename OUTPUT>
-StatusCode Metric3D<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs, const jinq::models::InferenceContext &context,
-                                                OUTPUT &output) {
+StatusCode Metric3D<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
+                                                const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
     const auto *depth_tensor = find_output(outputs, "prediction");
     const auto *confidence_tensor = find_output(outputs, "confidence");
     if (depth_tensor == nullptr || confidence_tensor == nullptr) {

@@ -75,7 +75,7 @@ std::vector<NamedTensor> CenterFaceDetector<INPUT, OUTPUT>::preprocess(const cv:
 
 template <typename INPUT, typename OUTPUT>
 StatusCode CenterFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                          const jinq::models::InferenceContext &context, OUTPUT &output) {
+                                                          const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
     const auto *heatmap = jinq::models::backend::find_output(outputs, "537");
     const auto *scale = jinq::models::backend::find_output(outputs, "538");
     const auto *offset = jinq::models::backend::find_output(outputs, "539");

@@ -73,8 +73,8 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> PPMatting<IN
 }
 
 template <typename INPUT, typename OUTPUT>
-StatusCode PPMatting<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs, const jinq::models::InferenceContext &context,
-                                                 OUTPUT &output) {
+StatusCode PPMatting<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
+                                                 const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "ppmatting output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;

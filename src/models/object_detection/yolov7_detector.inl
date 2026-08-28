@@ -79,7 +79,7 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> YoloV7Detect
 
 template <typename INPUT, typename OUTPUT>
 StatusCode YoloV7Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                      const jinq::models::InferenceContext &context, OUTPUT &output) {
+                                                      const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
     // yolov7.mnn exports three raw output heads [1, 3, H, W, 85]:
     //   "output" -> 80x80 (stride 8), "518" -> 40x40 (stride 16),
     //   "532" -> 20x20 (stride 32)

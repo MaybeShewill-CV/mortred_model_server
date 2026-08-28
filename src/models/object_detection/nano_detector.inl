@@ -82,8 +82,8 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> NanoDetector
 }
 
 template <typename INPUT, typename OUTPUT>
-StatusCode NanoDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs, const jinq::models::InferenceContext &context,
-                                                    OUTPUT &output) {
+StatusCode NanoDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
+                                                    const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
     const auto *output_tensor = jinq::models::backend::find_output(outputs, "output");
     if (output_tensor == nullptr) {
         LOG(ERROR) << "nanodet output tensor 'output' is missing";
@@ -145,7 +145,7 @@ StatusCode NanoDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTenso
 
 template <typename INPUT, typename OUTPUT>
 std::vector<float> NanoDetector<INPUT, OUTPUT>::refine_bbox_coords(const float *preds, int x, int y, int stride,
-                                                                   const jinq::models::InferenceContext &context) const {
+                                                                   const jinq::models::backend::InferenceContext &context) const {
     const auto ct_x = static_cast<float>(x * stride);
     const auto ct_y = static_cast<float>(y * stride);
     std::vector<float> dis_pred;

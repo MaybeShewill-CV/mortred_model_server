@@ -178,7 +178,7 @@ StatusCode ResNet<INPUT, OUTPUT>::run_batch(const std::vector<INPUT> &in, std::v
         const size_t idx = valid_items[pos];
         std::vector<backend::NamedTensor> item_outputs;
         item_outputs.push_back({outputs.front().name, items[idx]});
-        const auto post_status = postprocess(item_outputs, jinq::models::InferenceContext{}, out[idx]);
+        const auto post_status = postprocess(item_outputs, jinq::models::backend::InferenceContext{}, out[idx]);
         item_status[idx] = post_status;
         if (post_status != StatusCode::OK) {
             aggregate = post_status;
@@ -188,8 +188,8 @@ StatusCode ResNet<INPUT, OUTPUT>::run_batch(const std::vector<INPUT> &in, std::v
 }
 
 template <typename INPUT, typename OUTPUT>
-StatusCode ResNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs, const jinq::models::InferenceContext & /*context*/,
-                                              OUTPUT &output) {
+StatusCode ResNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
+                                              const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "classification model output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;

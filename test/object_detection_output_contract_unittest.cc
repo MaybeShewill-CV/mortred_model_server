@@ -48,8 +48,8 @@ std::vector<float> one_candidate_yolov8(float class_score) {
     return values;
 }
 
-jinq::models::InferenceContext test_context() {
-    jinq::models::InferenceContext context;
+jinq::models::backend::InferenceContext test_context() {
+    jinq::models::backend::InferenceContext context;
     context.source_size = cv::Size(20, 20);
     context.network_size = cv::Size(10, 10);
     return context;

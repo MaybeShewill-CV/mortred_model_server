@@ -138,8 +138,8 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> EnlightenGan
 }
 
 template <typename INPUT, typename OUTPUT>
-StatusCode EnlightenGan<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs, const jinq::models::InferenceContext &context,
-                                                    OUTPUT &output) {
+StatusCode EnlightenGan<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
+                                                    const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "enlighten gan output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
