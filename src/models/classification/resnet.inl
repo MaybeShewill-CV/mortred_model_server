@@ -11,8 +11,8 @@
 #include <cstring>
 #include <fstream>
 
-#include <opencv2/opencv.hpp>
 #include "glog/logging.h"
+#include <opencv2/opencv.hpp>
 
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
@@ -25,19 +25,17 @@ using jinq::common::StatusCode;
 using ClassificationOutput = jinq::models::io_define::classification::std_classification_output;
 using jinq::models::backend::NamedTensor;
 
-template<typename INPUT, typename OUTPUT>
-StatusCode ResNet<INPUT, OUTPUT>::on_init(const toml::table& params) {
-    const auto& input_info = this->session().inputs().front();
+template <typename INPUT, typename OUTPUT> StatusCode ResNet<INPUT, OUTPUT>::on_init(const toml::table &params) {
+    const auto &input_info = this->session().inputs().front();
     if (input_info.shape.size() != 4 || input_info.shape[3] != 3) {
-        LOG(ERROR) << "unexpected classification input shape: " << input_info.to_string()
-                   << ", expected [N,H,W,3] (nhwc)";
+        LOG(ERROR) << "unexpected classification input shape: " << input_info.to_string() << ", expected [N,H,W,3] (nhwc)";
         return StatusCode::MODEL_INIT_FAILED;
     }
     _m_input_tensor_size.height = static_cast<int>(input_info.shape[1]);
     _m_input_tensor_size.width = static_cast<int>(input_info.shape[2]);
 
     if (params.contains("model_input_image_size")) {
-        const toml::array* size = params["model_input_image_size"].as_array();
+        const toml::array *size = params["model_input_image_size"].as_array();
         if (size == nullptr || size->size() != 2) {
             LOG(ERROR) << "params key 'model_input_image_size' must be [height, width]";
             return StatusCode::MODEL_INIT_FAILED;
@@ -67,8 +65,7 @@ StatusCode ResNet<INPUT, OUTPUT>::on_init(const toml::table& params) {
     return StatusCode::OK;
 }
 
-template<typename INPUT, typename OUTPUT>
-cv::Mat ResNet<INPUT, OUTPUT>::preprocess_mat(const cv::Mat& input_image) {
+template <typename INPUT, typename OUTPUT> cv::Mat ResNet<INPUT, OUTPUT>::preprocess_mat(const cv::Mat &input_image) {
     // resize -> center crop -> rgb -> per channel normalize (f32 nhwc)
     cv::Mat tmp;
     cv::resize(input_image, tmp, cv::Size(256, 256));
@@ -83,18 +80,15 @@ cv::Mat ResNet<INPUT, OUTPUT>::preprocess_mat(const cv::Mat& input_image) {
     return tmp;
 }
 
-template<typename INPUT, typename OUTPUT>
-std::vector<NamedTensor> ResNet<INPUT, OUTPUT>::preprocess(const cv::Mat& input_image) {
+template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> ResNet<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
     const cv::Mat tmp = preprocess_mat(input_image);
     std::vector<NamedTensor> inputs;
     NamedTensor named;
     named.name = this->session().inputs().front().name;
-    named.tensor = jinq::models::backend::Tensor::make<float>(
-        {1, _m_input_tensor_size.height, _m_input_tensor_size.width, 3});
+    named.tensor = jinq::models::backend::Tensor::make<float>({1, _m_input_tensor_size.height, _m_input_tensor_size.width, 3});
     const auto bytes = tmp.total() * tmp.elemSize();
     if (bytes != named.tensor.byte_size()) {
-        LOG(ERROR) << "preprocessed image byte size " << bytes << " mismatches tensor byte size "
-                   << named.tensor.byte_size();
+        LOG(ERROR) << "preprocessed image byte size " << bytes << " mismatches tensor byte size " << named.tensor.byte_size();
         return {};
     }
     std::memcpy(named.tensor.buffer.data(), tmp.data, bytes);
@@ -102,10 +96,8 @@ std::vector<NamedTensor> ResNet<INPUT, OUTPUT>::preprocess(const cv::Mat& input_
     return inputs;
 }
 
-template<typename INPUT, typename OUTPUT>
-StatusCode ResNet<INPUT, OUTPUT>::run_batch(const std::vector<INPUT>& in,
-                                            std::vector<OUTPUT>& out,
-                                            std::vector<StatusCode>& item_status) {
+template <typename INPUT, typename OUTPUT>
+StatusCode ResNet<INPUT, OUTPUT>::run_batch(const std::vector<INPUT> &in, std::vector<OUTPUT> &out, std::vector<StatusCode> &item_status) {
     out.clear();
     item_status.assign(in.size(), StatusCode::OK);
     if (in.empty()) {
@@ -126,10 +118,12 @@ StatusCode ResNet<INPUT, OUTPUT>::run_batch(const std::vector<INPUT>& in,
     mats.reserve(in.size());
     valid_items.reserve(in.size());
     for (size_t idx = 0; idx < in.size(); ++idx) {
-        const cv::Mat image = jinq::models::cv_input::load_image(in[idx]);
+        StatusCode image_status = StatusCode::OK;
+        std::string image_error;
+        const cv::Mat image = this->load_model_image(in[idx], &image_status, &image_error);
         if (image.empty()) {
-            LOG(ERROR) << "batch item " << idx << ": image is empty";
-            item_status[idx] = StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+            LOG(ERROR) << "batch item " << idx << ": " << (image_error.empty() ? "image is empty" : image_error);
+            item_status[idx] = image_status == StatusCode::OK ? StatusCode::MODEL_EMPTY_INPUT_IMAGE : image_status;
             continue;
         }
         mats.push_back(preprocess_mat(image));
@@ -170,8 +164,7 @@ StatusCode ResNet<INPUT, OUTPUT>::run_batch(const std::vector<INPUT>& in,
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
 
-    const auto items = this->split_batch_output(outputs.front().tensor,
-                                                static_cast<int64_t>(in.size()));
+    const auto items = this->split_batch_output(outputs.front().tensor, static_cast<int64_t>(in.size()));
     if (items.size() != in.size()) {
         out.assign(in.size(), OUTPUT{});
         for (size_t idx : valid_items) {
@@ -185,7 +178,7 @@ StatusCode ResNet<INPUT, OUTPUT>::run_batch(const std::vector<INPUT>& in,
         const size_t idx = valid_items[pos];
         std::vector<backend::NamedTensor> item_outputs;
         item_outputs.push_back({outputs.front().name, items[idx]});
-        const auto post_status = postprocess(item_outputs, out[idx]);
+        const auto post_status = postprocess(item_outputs, jinq::models::backend::InferenceContext{}, out[idx]);
         item_status[idx] = post_status;
         if (post_status != StatusCode::OK) {
             aggregate = post_status;
@@ -194,15 +187,15 @@ StatusCode ResNet<INPUT, OUTPUT>::run_batch(const std::vector<INPUT>& in,
     return aggregate;
 }
 
-template<typename INPUT, typename OUTPUT>
-StatusCode ResNet<INPUT, OUTPUT>::postprocess(
-    const std::vector<NamedTensor>& outputs, OUTPUT& output) {
+template <typename INPUT, typename OUTPUT>
+StatusCode ResNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
+                                              const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "classification model output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto& tensor = outputs.front().tensor;
-    const auto* scores = tensor.data<float>();
+    const auto &tensor = outputs.front().tensor;
+    const auto *scores = tensor.data<float>();
     const auto score_count = tensor.element_count();
     if (score_count <= 0) {
         LOG(ERROR) << "classification model output tensor is empty";
@@ -227,10 +220,8 @@ StatusCode ResNet<INPUT, OUTPUT>::postprocess(
 
 /************* Export Function Sets *************/
 
-template<typename INPUT, typename OUTPUT>
-ResNet<INPUT, OUTPUT>::ResNet()
-    : jinq::models::BackendCvModel<INPUT, OUTPUT>("RESNET") {}
+template <typename INPUT, typename OUTPUT> ResNet<INPUT, OUTPUT>::ResNet() : jinq::models::BackendCvModel<INPUT, OUTPUT>("RESNET") {}
 
-}
-}
-}
+} // namespace classification
+} // namespace models
+} // namespace jinq

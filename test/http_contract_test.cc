@@ -12,14 +12,12 @@
 #include "common/status_code.h"
 #include "server/http_status.h"
 
-using jinq::common::StatusCode;
 using jinq::common::build_response_body;
 using jinq::common::HttpResponse;
+using jinq::common::StatusCode;
 using jinq::server::http_status_of;
 
-TEST(http_contract, success_maps_to_200) {
-    EXPECT_EQ(http_status_of(StatusCode::OK), 200);
-}
+TEST(http_contract, success_maps_to_200) { EXPECT_EQ(http_status_of(StatusCode::OK), 200); }
 
 TEST(http_contract, client_errors_map_to_4xx) {
     EXPECT_EQ(http_status_of(StatusCode::JSON_DECODE_ERROR), 400);
@@ -35,6 +33,7 @@ TEST(http_contract, client_errors_map_to_4xx) {
 
 TEST(http_contract, server_errors_map_to_5xx) {
     EXPECT_EQ(http_status_of(StatusCode::MODEL_INIT_FAILED), 500);
+    EXPECT_EQ(http_status_of(StatusCode::MODEL_OUTPUT_CONTRACT_FAILED), 500);
     EXPECT_EQ(http_status_of(StatusCode::MODEL_RUN_TIMEOUT), 504);
 }
 
@@ -50,7 +49,7 @@ TEST(http_contract, response_body_contains_envelope) {
     EXPECT_NE(body.find("\"data\":null"), std::string::npos);
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

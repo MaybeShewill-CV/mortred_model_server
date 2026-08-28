@@ -595,6 +595,10 @@ def migrate_section(
         params[key] = value
 
     key_moves = build_key_moves(source_table, params)
+    if "input_node_size" in params:
+        legacy_size = params.pop("input_node_size")
+        params.setdefault("model_input_image_size", legacy_size)
+        key_moves.append("input_node_size -> params.model_input_image_size")
     return SectionMigration(
         section=section,
         old_backend=old_backend,
@@ -1237,6 +1241,9 @@ def run_selftest() -> int:
         for key, value in original["YOLOV8_TRT"].items()
         if key != "model_file_path"
     }
+    expected_yolo_params["model_input_image_size"] = expected_yolo_params.pop(
+        "input_node_size"
+    )
     assert_equal(
         result.migrated["YOLOV8"]["backend"],
         {

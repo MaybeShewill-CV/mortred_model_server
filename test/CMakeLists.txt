@@ -35,6 +35,8 @@ set(TEST_LIST
     auth_token_unittest
     time_stamp_unittest
     cv_utils_unittest
+    detection_params_unittest
+    tensor_contract_unittest
     model_factory_unittest
     byte_tracker_unittest
     simple_tokenizer_unittest
@@ -76,6 +78,7 @@ endif()
 
 if(MORTRED_BUILD_FULL)
     list(APPEND TEST_LIST gateway_e2e_test)
+    list(APPEND TEST_LIST object_detection_output_contract_unittest)
     # GPU-model tests exercise TRT sessions and link vendored::mnn_cuda; the
     # cpu profile compiles TRT out, so they exist in the gpu profile only
     if(NOT MORTRED_BUILD_PROFILE STREQUAL "cpu")
@@ -104,6 +107,10 @@ foreach(src ${TEST_LIST})
         set(EXTRA_COMPILE_OPTIONS -Wno-unused-parameter)
     elseif(${src} STREQUAL "cv_utils_unittest")
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
+    elseif(${src} STREQUAL "tensor_contract_unittest")
+        set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
+    elseif(${src} STREQUAL "detection_params_unittest")
+        set(EXTRA_LIBS glog::glog)
     elseif(${src} STREQUAL "cv_image_input_unittest")
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "worker_nums_unittest")
@@ -120,6 +127,8 @@ foreach(src ${TEST_LIST})
         set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn vendored::mnn_cuda)
     elseif(${src} STREQUAL "model_lifecycle_unittest")
         set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn vendored::mnn_cuda)
+    elseif(${src} STREQUAL "object_detection_output_contract_unittest")
+        set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn)
     elseif(${src} STREQUAL "backend_unittest")
         set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn vendored::mnn_cuda)
     elseif(${src} STREQUAL "simple_tokenizer_unittest")

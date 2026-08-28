@@ -11,8 +11,8 @@
 #include <cmath>
 #include <cstring>
 
-#include <opencv2/opencv.hpp>
 #include "glog/logging.h"
+#include <opencv2/opencv.hpp>
 
 #include "common/cv_utils.h"
 
@@ -21,40 +21,34 @@ namespace models {
 namespace feature_point {
 
 using FeatureOutput = jinq::models::io_define::feature_point::std_feature_point_output;
-using jinq::models::backend::NamedTensor;
 using jinq::common::StatusCode;
+using jinq::models::backend::NamedTensor;
 
-template<typename INPUT, typename OUTPUT>
-StatusCode SuperPoint<INPUT, OUTPUT>::on_init(const toml::table& params) {
+template <typename INPUT, typename OUTPUT> StatusCode SuperPoint<INPUT, OUTPUT>::on_init(const toml::table &params) {
     if (params.contains("model_score_threshold")) {
         _m_score_threshold = params["model_score_threshold"].value_or<double>(0.0);
     }
     if (params.contains("model_nms_threshold")) {
         _m_nms_threshold = params["model_nms_threshold"].value_or<double>(0.0);
     }
-    const auto& input_info = this->session().inputs().front();
+    const auto &input_info = this->session().inputs().front();
     // dynamic batch (shape[0] == -1) is fine: spatial dims must be concrete
-    if (input_info.shape.size() != 4 || input_info.shape[1] != 1 ||
-        input_info.shape[2] <= 0 || input_info.shape[3] <= 0) {
-        LOG(ERROR) << "unexpected superpoint input shape: " << input_info.to_string()
-                   << ", expected static [N,1,H,W] (nchw)";
+    if (input_info.shape.size() != 4 || input_info.shape[1] != 1 || input_info.shape[2] <= 0 || input_info.shape[3] <= 0) {
+        LOG(ERROR) << "unexpected superpoint input shape: " << input_info.to_string() << ", expected static [N,1,H,W] (nchw)";
         return StatusCode::MODEL_INIT_FAILED;
     }
     _m_input_size_host.height = static_cast<int>(input_info.shape[2]);
     _m_input_size_host.width = static_cast<int>(input_info.shape[3]);
-    if (_m_input_size_host.height % _m_cell_size != 0 ||
-        _m_input_size_host.width % _m_cell_size != 0) {
-        LOG(ERROR) << "superpoint input size " << _m_input_size_host
-                   << " must be a multiple of the cell size " << _m_cell_size;
+    if (_m_input_size_host.height % _m_cell_size != 0 || _m_input_size_host.width % _m_cell_size != 0) {
+        LOG(ERROR) << "superpoint input size " << _m_input_size_host << " must be a multiple of the cell size " << _m_cell_size;
         return StatusCode::MODEL_INIT_FAILED;
     }
     return StatusCode::OK;
 }
 
-template<typename INPUT, typename OUTPUT>
-const NamedTensor* SuperPoint<INPUT, OUTPUT>::find_output(
-    const std::vector<NamedTensor>& outputs, const std::string& name) const {
-    for (const auto& item : outputs) {
+template <typename INPUT, typename OUTPUT>
+const NamedTensor *SuperPoint<INPUT, OUTPUT>::find_output(const std::vector<NamedTensor> &outputs, const std::string &name) const {
+    for (const auto &item : outputs) {
         if (item.name == name) {
             return &item;
         }
@@ -62,10 +56,8 @@ const NamedTensor* SuperPoint<INPUT, OUTPUT>::find_output(
     return nullptr;
 }
 
-template<typename INPUT, typename OUTPUT>
-std::vector<NamedTensor> SuperPoint<INPUT, OUTPUT>::preprocess(const cv::Mat& input_image) {
+template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> SuperPoint<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
     // resize -> gray -> [0,1] (f32 nchw)
-    _m_input_size_user = input_image.size();
     cv::Mat tmp;
     if (input_image.size() != _m_input_size_host) {
         cv::resize(input_image, tmp, _m_input_size_host);
@@ -82,8 +74,7 @@ std::vector<NamedTensor> SuperPoint<INPUT, OUTPUT>::preprocess(const cv::Mat& in
     std::vector<NamedTensor> inputs;
     NamedTensor named;
     named.name = this->session().inputs().front().name;
-    named.tensor = jinq::models::backend::Tensor::make<float>(
-        {1, 1, _m_input_size_host.height, _m_input_size_host.width});
+    named.tensor = jinq::models::backend::Tensor::make<float>({1, 1, _m_input_size_host.height, _m_input_size_host.width});
     if (chw_data.size() * sizeof(float) != named.tensor.byte_size()) {
         LOG(ERROR) << "preprocessed chw data mismatches the input tensor";
         return {};
@@ -93,10 +84,9 @@ std::vector<NamedTensor> SuperPoint<INPUT, OUTPUT>::preprocess(const cv::Mat& in
     return inputs;
 }
 
-template<typename INPUT, typename OUTPUT>
-void SuperPoint<INPUT, OUTPUT>::decode_fp_location_and_score(
-    const NamedTensor& semi, FeatureOutput& key_points) const {
-    const auto* host_data = semi.tensor.template data<float>();
+template <typename INPUT, typename OUTPUT>
+void SuperPoint<INPUT, OUTPUT>::decode_fp_location_and_score(const NamedTensor &semi, FeatureOutput &key_points) const {
+    const auto *host_data = semi.tensor.template data<float>();
     const int dense_map_row = _m_input_size_host.height / _m_cell_size;
     const int dense_map_col = _m_input_size_host.width / _m_cell_size;
     const int dense_map_channels = 65;
@@ -106,25 +96,23 @@ void SuperPoint<INPUT, OUTPUT>::decode_fp_location_and_score(
     for (auto row = 0; row < dense_map_row; ++row) {
         for (auto col = 0; col < dense_map_col; ++col) {
             for (auto channel = 0; channel < dense_map_channels; ++channel) {
-                const auto to_index =
-                    row * dense_map_col * dense_map_channels + col * dense_map_channels + channel;
+                const auto to_index = row * dense_map_col * dense_map_channels + col * dense_map_channels + channel;
                 const auto from_index = channel * dense_map_row * dense_map_col + row * dense_map_col + col;
                 semi_tdata_reshape[to_index] = host_data[from_index];
             }
         }
     }
-    cv::Mat dense(dense_map_row, dense_map_col, CV_32FC(dense_map_channels),
-                  semi_tdata_reshape.data());
+    cv::Mat dense(dense_map_row, dense_map_col, CV_32FC(dense_map_channels), semi_tdata_reshape.data());
 
     // softmax over the 65 channels, drop the dustbin channel
     std::vector<cv::Mat> dense_split;
     cv::split(dense, dense_split);
     cv::Mat dense_channel_sum = cv::Mat::zeros(dense_map_row, dense_map_col, CV_32FC1);
-    for (auto& split : dense_split) {
+    for (auto &split : dense_split) {
         cv::exp(split, split);
         dense_channel_sum += split;
     }
-    for (auto& split : dense_split) {
+    for (auto &split : dense_split) {
         cv::divide(split, dense_channel_sum, split);
     }
     cv::Mat dense_softmax;
@@ -136,14 +124,12 @@ void SuperPoint<INPUT, OUTPUT>::decode_fp_location_and_score(
             for (int row_ext_index = 0; row_ext_index < _m_cell_size; ++row_ext_index) {
                 for (int col_ext_index = 0; col_ext_index < _m_cell_size; ++col_ext_index) {
                     const int score_idx = row_ext_index * _m_cell_size + col_ext_index;
-                    const float score =
-                        dense_softmax.at<cv::Vec<float, dense_map_channels - 1>>(row, col)[score_idx];
+                    const float score = dense_softmax.at<cv::Vec<float, dense_map_channels - 1>>(row, col)[score_idx];
                     const int interest_pt_x = col * _m_cell_size + col_ext_index;
                     const int interest_pt_y = row * _m_cell_size + row_ext_index;
                     if (score >= _m_score_threshold) {
                         jinq::models::io_define::feature_point::fp key_pt;
-                        key_pt.location = cv::Point2f(static_cast<float>(interest_pt_x),
-                                                       static_cast<float>(interest_pt_y));
+                        key_pt.location = cv::Point2f(static_cast<float>(interest_pt_x), static_cast<float>(interest_pt_y));
                         key_pt.score = score;
                         key_points.push_back(key_pt);
                     }
@@ -154,8 +140,7 @@ void SuperPoint<INPUT, OUTPUT>::decode_fp_location_and_score(
 
     // nms interest points
     std::sort(key_points.begin(), key_points.end(),
-              [](const jinq::models::io_define::feature_point::fp& pt1,
-                 const jinq::models::io_define::feature_point::fp& pt2) {
+              [](const jinq::models::io_define::feature_point::fp &pt1, const jinq::models::io_define::feature_point::fp &pt2) {
                   return pt1.score >= pt2.score;
               });
     auto iter = key_points.begin();
@@ -175,10 +160,9 @@ void SuperPoint<INPUT, OUTPUT>::decode_fp_location_and_score(
     }
 }
 
-template<typename INPUT, typename OUTPUT>
-void SuperPoint<INPUT, OUTPUT>::decode_fp_descriptor(
-    const NamedTensor& desc, FeatureOutput& key_points) const {
-    const auto* host_data = desc.tensor.template data<float>();
+template <typename INPUT, typename OUTPUT>
+void SuperPoint<INPUT, OUTPUT>::decode_fp_descriptor(const NamedTensor &desc, FeatureOutput &key_points) const {
+    const auto *host_data = desc.tensor.template data<float>();
     const int desc_map_row = _m_input_size_host.height / _m_cell_size;
     const int desc_map_col = _m_input_size_host.width / _m_cell_size;
     const int desc_map_channels = 256;
@@ -188,19 +172,16 @@ void SuperPoint<INPUT, OUTPUT>::decode_fp_descriptor(
     for (auto row = 0; row < desc_map_row; ++row) {
         for (auto col = 0; col < desc_map_col; ++col) {
             for (auto channel = 0; channel < desc_map_channels; ++channel) {
-                const auto from_index =
-                    channel * desc_map_row * desc_map_col + row * desc_map_col + col;
-                const auto to_index =
-                    row * desc_map_col * desc_map_channels + col * desc_map_channels + channel;
+                const auto from_index = channel * desc_map_row * desc_map_col + row * desc_map_col + col;
+                const auto to_index = row * desc_map_col * desc_map_channels + col * desc_map_channels + channel;
                 desc_tdata_reshape[to_index] = host_data[from_index];
             }
         }
     }
-    cv::Mat desc_map(desc_map_row, desc_map_col, CV_32FC(desc_map_channels),
-                     desc_tdata_reshape.data());
+    cv::Mat desc_map(desc_map_row, desc_map_col, CV_32FC(desc_map_channels), desc_tdata_reshape.data());
 
     // bilinear grid sample the descriptor at each keypoint
-    for (auto& key_pt : key_points) {
+    for (auto &key_pt : key_points) {
         const float x = static_cast<float>(key_pt.location.x) / static_cast<float>(_m_cell_size);
         const float y = static_cast<float>(key_pt.location.y) / static_cast<float>(_m_cell_size);
         const float x1 = std::floor(x);
@@ -233,11 +214,11 @@ void SuperPoint<INPUT, OUTPUT>::decode_fp_descriptor(
     }
 }
 
-template<typename INPUT, typename OUTPUT>
-StatusCode SuperPoint<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>& outputs,
-                                                  OUTPUT& output) {
-    const auto* semi = find_output(outputs, "output_1");
-    const auto* desc = find_output(outputs, "output_2");
+template <typename INPUT, typename OUTPUT>
+StatusCode SuperPoint<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
+                                                  const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
+    const auto *semi = find_output(outputs, "output_1");
+    const auto *desc = find_output(outputs, "output_2");
     if (semi == nullptr || desc == nullptr) {
         LOG(ERROR) << "superpoint outputs 'output_1'/'output_2' missing";
         return StatusCode::MODEL_EMPTY_OUTPUT;
@@ -248,11 +229,9 @@ StatusCode SuperPoint<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>
     decode_fp_descriptor(*desc, internal_out);
 
     // rescale feature point locations into the user image space
-    const float h_scale =
-        static_cast<float>(_m_input_size_user.height) / static_cast<float>(_m_input_size_host.height);
-    const float w_scale =
-        static_cast<float>(_m_input_size_user.width) / static_cast<float>(_m_input_size_host.width);
-    for (auto& pt : internal_out) {
+    const float h_scale = static_cast<float>(context.source_size.height) / static_cast<float>(_m_input_size_host.height);
+    const float w_scale = static_cast<float>(context.source_size.width) / static_cast<float>(_m_input_size_host.width);
+    for (auto &pt : internal_out) {
         pt.location.x *= w_scale;
         pt.location.y *= h_scale;
     }
@@ -262,10 +241,9 @@ StatusCode SuperPoint<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>
 
 /************* Export Function Sets *************/
 
-template<typename INPUT, typename OUTPUT>
-SuperPoint<INPUT, OUTPUT>::SuperPoint()
-    : jinq::models::BackendCvModel<INPUT, OUTPUT>("SUPERPOINT") {}
+template <typename INPUT, typename OUTPUT>
+SuperPoint<INPUT, OUTPUT>::SuperPoint() : jinq::models::BackendCvModel<INPUT, OUTPUT>("SUPERPOINT") {}
 
-}
-}
-}
+} // namespace feature_point
+} // namespace models
+} // namespace jinq

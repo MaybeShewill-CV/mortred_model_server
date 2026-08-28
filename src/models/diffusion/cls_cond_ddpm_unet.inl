@@ -18,14 +18,14 @@ namespace diffusion {
 
 using ClsCondUnetInput = jinq::models::io_define::diffusion::std_cls_cond_ddpm_unet_input;
 using ClsCondUnetOutput = jinq::models::io_define::diffusion::std_cls_cond_ddpm_unet_output;
+using jinq::common::StatusCode;
 using jinq::models::backend::NamedTensor;
 using jinq::models::backend::TensorInfo;
-using jinq::common::StatusCode;
 
 namespace {
 
-const TensorInfo* find_info(const std::vector<TensorInfo>& infos, const std::string& name) {
-    for (const auto& info : infos) {
+const TensorInfo *find_info(const std::vector<TensorInfo> &infos, const std::string &name) {
+    for (const auto &info : infos) {
         if (info.name == name) {
             return &info;
         }
@@ -33,19 +33,19 @@ const TensorInfo* find_info(const std::vector<TensorInfo>& infos, const std::str
     return nullptr;
 }
 
-bool make_integer_scalar(NamedTensor& named, const TensorInfo& info, int64_t value) {
+bool make_integer_scalar(NamedTensor &named, const TensorInfo &info, int64_t value) {
     named.tensor = jinq::models::backend::Tensor::make<int64_t>(info.shape);
     named.tensor.data<int64_t>()[0] = value;
     return true;
 }
 
-bool make_integer_scalar(NamedTensor& named, const TensorInfo& info, int32_t value) {
+bool make_integer_scalar(NamedTensor &named, const TensorInfo &info, int32_t value) {
     named.tensor = jinq::models::backend::Tensor::make<int32_t>(info.shape);
     named.tensor.data<int32_t>()[0] = value;
     return true;
 }
 
-bool write_integer_scalar(NamedTensor& named, const TensorInfo& info, int64_t value) {
+bool write_integer_scalar(NamedTensor &named, const TensorInfo &info, int64_t value) {
     if (info.dtype == jinq::models::backend::DType::I64) {
         return make_integer_scalar(named, info, static_cast<int64_t>(value));
     }
@@ -55,14 +55,14 @@ bool write_integer_scalar(NamedTensor& named, const TensorInfo& info, int64_t va
     return false;
 }
 
-}  // namespace
+} // namespace
 
 template <typename INPUT, typename OUTPUT>
-std::vector<NamedTensor> ClsCondDDPMUNet<INPUT, OUTPUT>::make_inputs(const INPUT& input) {
-    const auto& input_infos = this->session().inputs();
-    const auto* xt_info = find_info(input_infos, "xt");
-    const auto* t_info = find_info(input_infos, "t");
-    const auto* cls_info = find_info(input_infos, "cls_id");
+jinq::models::backend::PreparedInput ClsCondDDPMUNet<INPUT, OUTPUT>::prepare_inputs(const INPUT &input) {
+    const auto &input_infos = this->session().inputs();
+    const auto *xt_info = find_info(input_infos, "xt");
+    const auto *t_info = find_info(input_infos, "t");
+    const auto *cls_info = find_info(input_infos, "cls_id");
     if (xt_info == nullptr || t_info == nullptr || cls_info == nullptr) {
         LOG(ERROR) << "cls cond ddpm unet session does not expose the 'xt'/'t'/'cls_id' inputs";
         return {};
@@ -72,13 +72,13 @@ std::vector<NamedTensor> ClsCondDDPMUNet<INPUT, OUTPUT>::make_inputs(const INPUT
         return {};
     }
 
+    jinq::models::backend::PreparedInput prepared;
     std::vector<NamedTensor> inputs;
     NamedTensor xt;
     xt.name = "xt";
     xt.tensor = jinq::models::backend::Tensor::make<float>(xt_info->shape);
     if (input.xt.size() * sizeof(float) != xt.tensor.byte_size()) {
-        LOG(ERROR) << "xt element count " << input.xt.size() << " mismatches session input "
-                   << xt_info->to_string();
+        LOG(ERROR) << "xt element count " << input.xt.size() << " mismatches session input " << xt_info->to_string();
         return {};
     }
     std::memcpy(xt.tensor.buffer.data(), input.xt.data(), xt.tensor.byte_size());
@@ -99,18 +99,19 @@ std::vector<NamedTensor> ClsCondDDPMUNet<INPUT, OUTPUT>::make_inputs(const INPUT
         return {};
     }
     inputs.push_back(std::move(cls_id));
-    return inputs;
+    prepared.inputs = std::move(inputs);
+    return prepared;
 }
 
 template <typename INPUT, typename OUTPUT>
-StatusCode ClsCondDDPMUNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>& outputs,
-                                                       OUTPUT& output) {
+StatusCode ClsCondDDPMUNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
+                                                       const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "cls cond ddpm unet output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto& tensor = outputs.front().tensor;
-    const auto* data = tensor.data<float>();
+    const auto &tensor = outputs.front().tensor;
+    const auto *data = tensor.data<float>();
     ClsCondUnetOutput internal_out;
     internal_out.predict_noise.resize(static_cast<size_t>(tensor.element_count()));
     std::memcpy(internal_out.predict_noise.data(), data, tensor.byte_size());
@@ -121,8 +122,7 @@ StatusCode ClsCondDDPMUNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTe
 /************* Export Function Sets *************/
 
 template <typename INPUT, typename OUTPUT>
-ClsCondDDPMUNet<INPUT, OUTPUT>::ClsCondDDPMUNet()
-    : jinq::models::BackendCvModel<INPUT, OUTPUT>("DDPM_UNET") {}
+ClsCondDDPMUNet<INPUT, OUTPUT>::ClsCondDDPMUNet() : jinq::models::BackendCvModel<INPUT, OUTPUT>("DDPM_UNET") {}
 
 } // namespace diffusion
 } // namespace models

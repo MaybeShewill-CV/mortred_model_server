@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: yolov7_detector.h
-* Date: 22-7-17
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: yolov7_detector.h
+ * Date: 22-7-17
+ ************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_YOLOV7_DETECTOR_H
 #define MORTRED_MODEL_SERVER_YOLOV7_DETECTOR_H
@@ -17,55 +17,40 @@
 
 #include "models/backend/backend_cv_model.h"
 #include "models/backend/tensor.h"
+#include "models/backend/tensor_contract.h"
 #include "models/model_io_define.h"
+#include "models/object_detection/detection_params.h"
 
 namespace jinq {
 namespace models {
 namespace object_detection {
 using jinq::common::StatusCode;
 
-template<typename INPUT, typename OUTPUT>
-class YoloV7Detector : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class YoloV7Detector : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   public:
     YoloV7Detector();
     ~YoloV7Detector() override = default;
 
-    YoloV7Detector(const YoloV7Detector& transformer) = delete;
-    YoloV7Detector& operator=(const YoloV7Detector& transformer) = delete;
+    YoloV7Detector(const YoloV7Detector &transformer) = delete;
+    YoloV7Detector &operator=(const YoloV7Detector &transformer) = delete;
 
-  private:
-    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
+  protected:
+    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
-    StatusCode postprocess(
-        const std::vector<jinq::models::backend::NamedTensor>& outputs,
-        OUTPUT& output) override;
+    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
+                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
-    StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table &params) override;
 
-    const jinq::models::backend::NamedTensor* find_output(
-        const std::vector<jinq::models::backend::NamedTensor>& outputs,
-        const std::string& name) const;
-
-    // score thresh
-    double _m_score_threshold = 0.4;
-    // nms thresh
-    double _m_nms_threshold = 0.35;
-    // top_k keep thresh
-    long _m_keep_topk = 250;
-    // class nums
-    int _m_class_nums = 80;
-    // class id to names
-    std::map<int, std::string> _m_class_id2names;
-    // input image size
-    cv::Size _m_input_size_user = cv::Size();
+    DetectionParams _m_detection_params;
     // input node size
     cv::Size _m_input_size_host = cv::Size();
 };
 
-}
-}
-}
+} // namespace object_detection
+} // namespace models
+} // namespace jinq
 
 #include "yolov7_detector.inl"
 
-#endif //MORTRED_MODEL_SERVER_YOLOV7_DETECTOR_H
+#endif // MORTRED_MODEL_SERVER_YOLOV7_DETECTOR_H

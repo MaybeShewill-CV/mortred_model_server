@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: real_esrgan.h
-* Date: 22-9-29
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: real_esrgan.h
+ * Date: 22-9-29
+ ************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_REALESRGAN_H
 #define MORTRED_MODEL_SERVER_REALESRGAN_H
@@ -21,23 +21,21 @@ namespace models {
 namespace enhancement {
 using jinq::common::StatusCode;
 
-template <typename INPUT, typename OUTPUT>
-class RealEsrGan : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class RealEsrGan : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   public:
     RealEsrGan();
     ~RealEsrGan() override = default;
 
-    RealEsrGan(const RealEsrGan& transformer) = delete;
-    RealEsrGan& operator=(const RealEsrGan& transformer) = delete;
+    RealEsrGan(const RealEsrGan &transformer) = delete;
+    RealEsrGan &operator=(const RealEsrGan &transformer) = delete;
 
   private:
-    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
+    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
-    StatusCode postprocess(
-        const std::vector<jinq::models::backend::NamedTensor>& outputs,
-        OUTPUT& output) override;
+    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
+                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
-    StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table &params) override;
 
     cv::Size _m_input_size_host;
 };

@@ -6,11 +6,12 @@ The base class implements the full lifecycle:
 
 ```text
 init:      parse [SECTION.backend] -> create InferenceSession -> on_init([SECTION.params])
-run_impl:  make_inputs -> preprocess -> session.run -> postprocess
+run_impl:  prepare_inputs -> session.run -> postprocess(context)
 ```
 
 A standard single-image model only implements **preprocess** (cv::Mat to named
-tensors) and **postprocess** (named tensors to task output). Backend plumbing
+tensors) and **postprocess** (named tensors plus request geometry to task
+output). Backend plumbing
 (MNN / ONNX Runtime / TensorRT session management, dtype & shape validation,
 dynamic shape handling, host/device copies) lives in
 [`src/models/backend/`](../src/models/backend/) and is never repeated per model.
@@ -19,7 +20,7 @@ dynamic shape handling, host/device copies) lives in
 
 Input types live in [model_io_define.h](../src/models/model_io_define.h).
 `mat_input`, `file_input` and `base64_input` are loadable images and work with
-the default `make_inputs` path. Task default outputs (`std_*_output`) are the
+the default `prepare_inputs` path. Task default outputs (`std_*_output`) are the
 recommended choice.
 
 ## Step 2: Write the model class
@@ -28,7 +29,7 @@ Reference implementations (read these first):
 
 - [mobilenetv2.h](../src/models/classification/mobilenetv2.h) / [.inl](../src/models/classification/mobilenetv2.inl) — MNN single image classification
 - [yolov8_detector.h](../src/models/object_detection/yolov8_detector.h) / [.inl](../src/models/object_detection/yolov8_detector.inl) — TensorRT detection with decode + NMS
-- [ddpm_unet.h](../src/models/diffusion/ddpm_unet.h) / [.inl](../src/models/diffusion/ddpm_unet.inl) — ONNX Runtime with non-image inputs (`make_inputs` override)
+- [ddpm_unet.h](../src/models/diffusion/ddpm_unet.h) / [.inl](../src/models/diffusion/ddpm_unet.inl) — ONNX Runtime with non-image inputs (`prepare_inputs` override)
 
 ```cpp
 template<typename INPUT, typename OUTPUT>
@@ -43,6 +44,7 @@ class MyModel : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
     // named output tensors -> task output
     jinq::common::StatusCode postprocess(
         const std::vector<jinq::models::backend::NamedTensor>& outputs,
+        const jinq::models::backend::InferenceContext& context,
         OUTPUT& output) override;
 
     // optional: read model specific keys from [MY_MODEL.params]
@@ -61,9 +63,12 @@ Notes:
   TENSORFLOW-style exports with `input_layout = "nhwc"`, nchw for
   TensorRT / ONNX models).
 - Multi-output models pick tensors by `name` (see `find_output` in
-  [centerface_detector.inl](../src/models/object_detection/centerface_detector.inl)).
+  [tensor_contract.h](../src/models/backend/tensor_contract.h)).
 - Non-image inputs (token ids, latent vectors, image pairs) override
-  `make_inputs` instead of `preprocess`.
+  `prepare_inputs` instead of `preprocess`.
+- Request-scoped data (source image size, network size, crop geometry) must be
+  carried in `InferenceContext`; never store it in a model member because one
+  worker may be processing a dynamic batch.
 - Multi-engine models (encoder + decoder) configure `<key>_backend` sub-tables,
   build extra sessions with `make_session("<key>_backend")` and orchestrate
   them in the `run_sessions` override.

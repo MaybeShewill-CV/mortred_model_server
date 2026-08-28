@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: lightglue.h
-* Date: 23-11-3
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: lightglue.h
+ * Date: 23-11-3
+ ************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_LIGHTGLUE_H
 #define MORTRED_MODEL_SERVER_LIGHTGLUE_H
@@ -24,14 +24,13 @@ namespace models {
 namespace feature_point {
 using jinq::common::StatusCode;
 
-template<typename INPUT, typename OUTPUT>
-class LightGlue : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class LightGlue : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   public:
     LightGlue();
     ~LightGlue() override = default;
 
-    LightGlue(const LightGlue& transformer) = delete;
-    LightGlue& operator=(const LightGlue& transformer) = delete;
+    LightGlue(const LightGlue &transformer) = delete;
+    LightGlue &operator=(const LightGlue &transformer) = delete;
 
   private:
     struct FeaturePoints {
@@ -40,33 +39,27 @@ class LightGlue : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
         std::vector<float> descriptors;
     };
 
-    StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table &params) override;
 
-    StatusCode run_sessions(const INPUT& input, OUTPUT& output) override;
+    StatusCode run_sessions(const INPUT &input, OUTPUT &output) override;
 
-    StatusCode postprocess(
-        const std::vector<jinq::models::backend::NamedTensor>& outputs,
-        OUTPUT& output) override;
+    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
+                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
-    cv::Mat preprocess_image(const cv::Mat& input_image) const;
+    cv::Mat preprocess_image(const cv::Mat &input_image) const;
 
-    StatusCode extract_feature_points(
-        const cv::Mat& input_image, FeaturePoints& feature_points) const;
+    StatusCode extract_feature_points(const cv::Mat &input_image, FeaturePoints &feature_points) const;
 
-    StatusCode match_feature_points(
-        const FeaturePoints& src_features,
-        const FeaturePoints& dst_features,
-        jinq::models::io_define::feature_point::std_feature_point_match_output& matches) const;
+    StatusCode match_feature_points(const FeaturePoints &src_features, const FeaturePoints &dst_features,
+                                    jinq::models::io_define::feature_point::std_feature_point_match_output &matches) const;
 
-    const jinq::models::backend::NamedTensor* find_output(
-        const std::vector<jinq::models::backend::NamedTensor>& outputs,
-        const std::string& name) const;
+    const jinq::models::backend::NamedTensor *find_output(const std::vector<jinq::models::backend::NamedTensor> &outputs,
+                                                          const std::string &name) const;
 
-    static const jinq::models::backend::TensorInfo* find_info(
-        const jinq::models::backend::InferenceSession& session, const std::string& name);
+    static const jinq::models::backend::TensorInfo *find_info(const jinq::models::backend::InferenceSession &session,
+                                                              const std::string &name);
 
-    static StatusCode validate_io(
-        const jinq::models::backend::InferenceSession& session);
+    static StatusCode validate_io(const jinq::models::backend::InferenceSession &session);
 
     std::unique_ptr<jinq::models::backend::InferenceSession> _m_extractor;
     std::unique_ptr<jinq::models::backend::InferenceSession> _m_matcher;

@@ -20,6 +20,9 @@ output_names = ["output0"]     # optional, filters aux output nodes
 [YOLOV8.params]                # model specific keys, consumed by on_init
 model_score_threshold = 0.25
 model_nms_threshold = 0.5
+model_input_image_size = [640, 640]   # [height, width]; must match fixed model inputs
+max_image_pixels = 16777216           # decoded-pixel safety limit
+max_image_side = 8192
 class_names = ['person', 'bicycle']
 ```
 
@@ -35,6 +38,8 @@ class_names = ['person', 'bicycle']
 | `input_layout` | backend (mnn) | host tensor byte order: `nhwc` for TF-style exports, `nchw` for CHW exports, `auto` follows the model file |
 | `precision_mode` / `power_mode` | backend (mnn) | `MNN::BackendConfig` modes |
 | `input_names` / `output_names` | backend | io name override/filter, useful for models exposing auxiliary outputs |
+| `max_image_pixels` / `max_image_side` | image model params | decoded input safety limits; defaults are 16777216 and 8192 |
+| `model_input_image_size` | fixed-image model params | `[height, width]`; must match the session input H/W |
 | everything else | params | model specific (thresholds, class names, sizes); key names are unchanged from the historical configs |
 
 Multi-engine models (SAM encoder + decoder, lightglue extractor + matcher) use

@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: mobilenetv2.h
-* Date: 22-6-13
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: mobilenetv2.h
+ * Date: 22-6-13
+ ************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_MOBILENETV2_H
 #define MORTRED_MODEL_SERVER_MOBILENETV2_H
@@ -23,34 +23,30 @@ namespace models {
 namespace classification {
 using jinq::common::StatusCode;
 
-template<typename INPUT, typename OUTPUT>
-class MobileNetv2 : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class MobileNetv2 : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   public:
     MobileNetv2();
     ~MobileNetv2() override = default;
 
-    MobileNetv2(const MobileNetv2& transformer) = delete;
-    MobileNetv2& operator=(const MobileNetv2& transformer) = delete;
+    MobileNetv2(const MobileNetv2 &transformer) = delete;
+    MobileNetv2 &operator=(const MobileNetv2 &transformer) = delete;
 
     /***
      * single [N,H,W,3] session run for N requests (MNN supports dynamic N);
      * per-item failures are isolated (see BaseAiModel::run_batch contract)
      */
-    StatusCode run_batch(const std::vector<INPUT>& in,
-                         std::vector<OUTPUT>& out,
-                         std::vector<StatusCode>& item_status) override;
+    StatusCode run_batch(const std::vector<INPUT> &in, std::vector<OUTPUT> &out, std::vector<StatusCode> &item_status) override;
 
   private:
     // image -> normalized CV_32FC3 HWC mat of _m_input_tensor_size (batch share)
-    cv::Mat preprocess_mat(const cv::Mat& image);
+    cv::Mat preprocess_mat(const cv::Mat &image);
 
-    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
+    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
-    StatusCode postprocess(
-        const std::vector<jinq::models::backend::NamedTensor>& outputs,
-        OUTPUT& output) override;
+    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
+                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
-    StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table &params) override;
 
     // class id to names
     std::unordered_map<uint16_t, std::string> _m_class_id2names;
@@ -58,10 +54,10 @@ class MobileNetv2 : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
     cv::Size _m_input_tensor_size = cv::Size(224, 224);
 };
 
-}
-}
-}
+} // namespace classification
+} // namespace models
+} // namespace jinq
 
 #include "mobilenetv2.inl"
 
-#endif //MORTRED_MODEL_SERVER_MOBILENETV2_H
+#endif // MORTRED_MODEL_SERVER_MOBILENETV2_H

@@ -9,8 +9,8 @@
 
 #include <cstring>
 
-#include <opencv2/opencv.hpp>
 #include "glog/logging.h"
+#include <opencv2/opencv.hpp>
 
 #include "common/cv_utils.h"
 
@@ -19,22 +19,19 @@ namespace models {
 namespace mono_depth_estimation {
 
 using MdeOutput = jinq::models::io_define::mono_depth_estimation::std_mde_output;
-using jinq::models::backend::NamedTensor;
 using jinq::common::StatusCode;
+using jinq::models::backend::NamedTensor;
 
-template<typename INPUT, typename OUTPUT>
-StatusCode DepthAnything<INPUT, OUTPUT>::on_init(const toml::table& params) {
+template <typename INPUT, typename OUTPUT> StatusCode DepthAnything<INPUT, OUTPUT>::on_init(const toml::table &params) {
     // focal_length / intrinsic are accepted for config parity with the metric
     // models; the relative-depth head does not consume them
     (void)params;
-    const auto& input_info = this->session().inputs().front();
+    const auto &input_info = this->session().inputs().front();
     // dynamic batch (shape[0] == -1) is fine: only the spatial dims must be
     // concrete for preprocessing; a batch-profile engine reports input_info.dynamic
     // because dim0 is -1, but dims 1..3 are always concrete
-    if (input_info.shape.size() != 4 || input_info.shape[1] != 3 ||
-        input_info.shape[2] <= 0 || input_info.shape[3] <= 0) {
-        LOG(ERROR) << "unexpected depth anything input shape: " << input_info.to_string()
-                   << ", expected static [N,3,H,W] (nchw)";
+    if (input_info.shape.size() != 4 || input_info.shape[1] != 3 || input_info.shape[2] <= 0 || input_info.shape[3] <= 0) {
+        LOG(ERROR) << "unexpected depth anything input shape: " << input_info.to_string() << ", expected static [N,3,H,W] (nchw)";
         return StatusCode::MODEL_INIT_FAILED;
     }
     _m_input_size_host.height = static_cast<int>(input_info.shape[2]);
@@ -42,14 +39,11 @@ StatusCode DepthAnything<INPUT, OUTPUT>::on_init(const toml::table& params) {
     return StatusCode::OK;
 }
 
-template<typename INPUT, typename OUTPUT>
-std::vector<NamedTensor> DepthAnything<INPUT, OUTPUT>::preprocess(const cv::Mat& input_image) {
+template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> DepthAnything<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
     // keep-ratio rescale, right/bottom zero pad, imagenet normalize (f32 nchw)
-    _m_input_size_user = input_image.size();
     int rescale_w = 0;
     int rescale_h = 0;
-    const float aspect_ratio =
-        static_cast<float>(input_image.cols) / static_cast<float>(input_image.rows);
+    const float aspect_ratio = static_cast<float>(input_image.cols) / static_cast<float>(input_image.rows);
     if (aspect_ratio >= 1) {
         rescale_w = _m_input_size_host.width;
         rescale_h = static_cast<int>(_m_input_size_host.height / aspect_ratio);
@@ -59,8 +53,7 @@ std::vector<NamedTensor> DepthAnything<INPUT, OUTPUT>::preprocess(const cv::Mat&
     }
 
     cv::Mat resized_image;
-    cv::resize(input_image, resized_image, cv::Size(rescale_w, rescale_h), 0.0, 0.0,
-               cv::INTER_LINEAR);
+    cv::resize(input_image, resized_image, cv::Size(rescale_w, rescale_h), 0.0, 0.0, cv::INTER_LINEAR);
     cv::Mat out = cv::Mat::zeros(_m_input_size_host, CV_8UC3);
     resized_image.copyTo(out(cv::Rect(0, 0, resized_image.cols, resized_image.rows)));
     out.convertTo(out, CV_32FC3);
@@ -72,8 +65,7 @@ std::vector<NamedTensor> DepthAnything<INPUT, OUTPUT>::preprocess(const cv::Mat&
     std::vector<NamedTensor> inputs;
     NamedTensor named;
     named.name = this->session().inputs().front().name;
-    named.tensor = jinq::models::backend::Tensor::make<float>(
-        {1, 3, _m_input_size_host.height, _m_input_size_host.width});
+    named.tensor = jinq::models::backend::Tensor::make<float>({1, 3, _m_input_size_host.height, _m_input_size_host.width});
     if (chw_data.size() * sizeof(float) != named.tensor.byte_size()) {
         LOG(ERROR) << "preprocessed chw data mismatches the input tensor";
         return {};
@@ -83,33 +75,32 @@ std::vector<NamedTensor> DepthAnything<INPUT, OUTPUT>::preprocess(const cv::Mat&
     return inputs;
 }
 
-template<typename INPUT, typename OUTPUT>
-StatusCode DepthAnything<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>& outputs,
-                                                     OUTPUT& output) {
+template <typename INPUT, typename OUTPUT>
+StatusCode DepthAnything<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
+                                                     const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "depth anything output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto& tensor = outputs.front().tensor;
-    const auto* depth_data = tensor.template data<float>();
+    const auto &tensor = outputs.front().tensor;
+    const auto *depth_data = tensor.template data<float>();
     if (tensor.element_count() < static_cast<int64_t>(_m_input_size_host.area())) {
-        LOG(ERROR) << "depth map smaller than the input map: "
-                   << jinq::models::backend::shape_to_string(tensor.shape);
+        LOG(ERROR) << "depth map smaller than the input map: " << jinq::models::backend::shape_to_string(tensor.shape);
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    cv::Mat depth_map(_m_input_size_host, CV_32FC1, const_cast<float*>(depth_data));
+    cv::Mat depth_map(_m_input_size_host, CV_32FC1, const_cast<float *>(depth_data));
 
     // undo the keep-ratio padding by cropping the valid region
     int crop_w = 0;
     int crop_h = 0;
-    if (_m_input_size_user.width > _m_input_size_user.height) {
+    if (context.source_size.width > context.source_size.height) {
         crop_w = _m_input_size_host.width;
-        crop_h = _m_input_size_host.height * _m_input_size_user.height / _m_input_size_user.width;
+        crop_h = _m_input_size_host.height * context.source_size.height / context.source_size.width;
     } else {
-        crop_w = _m_input_size_host.width * _m_input_size_user.width / _m_input_size_user.height;
+        crop_w = _m_input_size_host.width * context.source_size.width / context.source_size.height;
         crop_h = _m_input_size_host.height;
     }
-    cv::resize(depth_map(cv::Rect(0, 0, crop_w, crop_h)), depth_map, _m_input_size_user);
+    cv::resize(depth_map(cv::Rect(0, 0, crop_w, crop_h)), depth_map, context.source_size);
 
     MdeOutput internal_out;
     internal_out.depth_map = depth_map.clone();
@@ -120,10 +111,9 @@ StatusCode DepthAnything<INPUT, OUTPUT>::postprocess(const std::vector<NamedTens
 
 /************* Export Function Sets *************/
 
-template<typename INPUT, typename OUTPUT>
-DepthAnything<INPUT, OUTPUT>::DepthAnything()
-    : jinq::models::BackendCvModel<INPUT, OUTPUT>("DEPTH_ANYTHING") {}
+template <typename INPUT, typename OUTPUT>
+DepthAnything<INPUT, OUTPUT>::DepthAnything() : jinq::models::BackendCvModel<INPUT, OUTPUT>("DEPTH_ANYTHING") {}
 
-}
-}
-}
+} // namespace mono_depth_estimation
+} // namespace models
+} // namespace jinq

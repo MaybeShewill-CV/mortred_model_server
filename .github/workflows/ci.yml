@@ -722,7 +722,7 @@ jobs:
         run: |
           LD_LIBRARY_PATH="$PWD/build-gpu/lib:$PWD/_lib:$PWD/3rd_party/libs" \
           ./build-gpu/bin/model_golden_test \
-            --gtest_filter='model_golden.yolov5_detection:model_golden.nanodet_detection:model_golden.centerface_detection:model_golden.dbnet_text_detection:model_golden.mobilenetv2_classification:model_golden.fastsam_segmentation'
+            --gtest_filter='model_golden.yolov5_detection:model_golden.yolov8_detection:model_golden.yolov8_mixed_size_batch_matches_single_runs:model_golden.nanodet_detection:model_golden.centerface_detection:model_golden.dbnet_text_detection:model_golden.mobilenetv2_classification:model_golden.fastsam_segmentation'
 
       - name: Upload ctest/golden log
         if: always()

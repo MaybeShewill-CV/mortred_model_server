@@ -46,12 +46,14 @@ from ONNX before PR traffic resumes.
 
 ## PR smoke subset (Job H)
 
-Six cross-family cases chosen so that one red fingerprint catches ~80% of
+Eight cross-family cases chosen so that one red fingerprint catches ~80% of
 regressions while staying inside a 15-minute budget on warm cache:
 
 | Case | Family | Output contract exercised |
 |---|---|---|
 | `yolov5_detection` | object detection | json boxes |
+| `yolov8_detection` | object detection | TensorRT decode + coordinate mapping |
+| `yolov8_mixed_size_batch_matches_single_runs` | dynamic batching | mixed-size request isolation |
 | `nanodet_detection` | object detection | anchor-free decode path |
 | `centerface_detection` | face detection | landmark output contract |
 | `dbnet_text_detection` | OCR | json text boxes |

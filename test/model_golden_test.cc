@@ -18,14 +18,14 @@
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
-#include <functional>
 #include <fstream>
+#include <functional>
 #include <sstream>
 #include <string>
 #include <vector>
 
-#include <gtest/gtest.h>
 #include <glog/logging.h>
+#include <gtest/gtest.h>
 #include <opencv2/opencv.hpp>
 #include <rapidjson/document.h>
 #include <rapidjson/prettywriter.h>
@@ -46,9 +46,9 @@
 #include "factory/scene_segmentation_task.h"
 #include "models/model_io_define.h"
 
+using jinq::common::CvUtils;
 using jinq::common::FilePathUtil;
 using jinq::common::StatusCode;
-using jinq::common::CvUtils;
 using jinq::models::io_define::classification::std_classification_output;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::enhancement::std_enhancement_output;
@@ -71,18 +71,16 @@ constexpr double k_keypoint_match_dist = 3.0;
 constexpr double k_embedding_cos_thresh = 0.999;
 
 bool update_golden_mode() {
-    const char* env = std::getenv("MORTRED_UPDATE_GOLDEN");
+    const char *env = std::getenv("MORTRED_UPDATE_GOLDEN");
     return env != nullptr && std::string(env) == "1";
 }
 
-std::string golden_path(const std::string& name, const std::string& ext) {
-    return "test/golden/" + name + ext;
-}
+std::string golden_path(const std::string &name, const std::string &ext) { return "test/golden/" + name + ext; }
 
 /*** ????? conf ???????????? cpu ?? */
-void fix_toml_paths(toml::node& value) {
-    if (auto* tbl = value.as_table()) {
-        for (auto& item : *tbl) {
+void fix_toml_paths(toml::node &value) {
+    if (auto *tbl = value.as_table()) {
+        for (auto &item : *tbl) {
             if (item.second.is_string()) {
                 std::string s = item.second.value_or<std::string>("");
                 if (s.rfind("../", 0) == 0) {
@@ -92,19 +90,19 @@ void fix_toml_paths(toml::node& value) {
                 fix_toml_paths(item.second);
             }
         }
-    } else if (auto* arr = value.as_array()) {
-        for (auto& item : *arr) {
+    } else if (auto *arr = value.as_array()) {
+        for (auto &item : *arr) {
             fix_toml_paths(item);
         }
     }
 }
 
-void force_cpu_backend(toml::node& value) {
-    if (auto* tbl = value.as_table()) {
-        for (auto& item : *tbl) {
+void force_cpu_backend(toml::node &value) {
+    if (auto *tbl = value.as_table()) {
+        for (auto &item : *tbl) {
             // new schema: device inside [SECTION.backend]; old schema: compute_backend
             if (item.first == "backend" && item.second.is_table()) {
-                auto& backend_table = item.second.ref<toml::table>();
+                auto &backend_table = item.second.ref<toml::table>();
                 if (backend_table.contains("device")) {
                     backend_table["device"].ref<std::string>() = std::string("cpu");
                 }
@@ -114,18 +112,17 @@ void force_cpu_backend(toml::node& value) {
                 force_cpu_backend(item.second);
             }
         }
-    } else if (auto* arr = value.as_array()) {
-        for (auto& item : *arr) {
+    } else if (auto *arr = value.as_array()) {
+        for (auto &item : *arr) {
             force_cpu_backend(item);
         }
     }
 }
 
-toml::table load_model_cfg(const std::string& conf_rel_path) {
+toml::table load_model_cfg(const std::string &conf_rel_path) {
     auto cfg_parsed = toml::parse_file(conf_rel_path);
     if (!cfg_parsed) {
-        LOG(ERROR) << "parse model config file failed: " << conf_rel_path << ", error: "
-                   << std::string(cfg_parsed.error().description());
+        LOG(ERROR) << "parse model config file failed: " << conf_rel_path << ", error: " << std::string(cfg_parsed.error().description());
         return toml::table{};
     }
     auto cfg = std::move(cfg_parsed).table();
@@ -134,19 +131,17 @@ toml::table load_model_cfg(const std::string& conf_rel_path) {
     return cfg;
 }
 
-cv::Mat read_input_image(const std::string& path) {
-    return cv::imread(path, cv::IMREAD_COLOR);
-}
+cv::Mat read_input_image(const std::string &path) { return cv::imread(path, cv::IMREAD_COLOR); }
 
 /*** ?? JSON ?? */
-std::string serialize_json(const rapidjson::Document& doc) {
+std::string serialize_json(const rapidjson::Document &doc) {
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
     doc.Accept(writer);
     return buffer.GetString();
 }
 
-rapidjson::Document load_golden_json(const std::string& name) {
+rapidjson::Document load_golden_json(const std::string &name) {
     rapidjson::Document doc;
     std::ifstream in(golden_path(name, ".json"));
     if (in.is_open()) {
@@ -157,7 +152,7 @@ rapidjson::Document load_golden_json(const std::string& name) {
     return doc;
 }
 
-void write_golden_text(const std::string& name, const std::string& ext, const std::string& content) {
+void write_golden_text(const std::string &name, const std::string &ext, const std::string &content) {
     std::string path = golden_path(name, ext);
     std::filesystem::create_directories(std::filesystem::path(path).parent_path());
     std::ofstream out(path);
@@ -165,7 +160,7 @@ void write_golden_text(const std::string& name, const std::string& ext, const st
 }
 
 /*** ????????? Mat -> 64x64 CV_8UC3???????? */
-cv::Mat make_fingerprint(const cv::Mat& src) {
+cv::Mat make_fingerprint(const cv::Mat &src) {
     cv::Mat normalized;
     if (src.type() == CV_32SC1) {
         double mn = 0.0, mx = 0.0;
@@ -187,13 +182,13 @@ cv::Mat make_fingerprint(const cv::Mat& src) {
     return resized;
 }
 
-void save_golden_fingerprint(const std::string& name, const cv::Mat& mat) {
+void save_golden_fingerprint(const std::string &name, const cv::Mat &mat) {
     std::string path = golden_path(name, ".png");
     std::filesystem::create_directories(std::filesystem::path(path).parent_path());
     cv::imwrite(path, make_fingerprint(mat));
 }
 
-void expect_fingerprint(const std::string& name, const cv::Mat& mat) {
+void expect_fingerprint(const std::string &name, const cv::Mat &mat) {
     std::string path = golden_path(name, ".png");
     if (update_golden_mode()) {
         save_golden_fingerprint(name, mat);
@@ -209,15 +204,16 @@ void expect_fingerprint(const std::string& name, const cv::Mat& mat) {
     EXPECT_LE(mean, k_fingerprint_diff) << "fingerprint drift for " << name << ", mean abs diff = " << mean;
 }
 
-void expect_scores(const std::string& name, const std_classification_output& output) {
+void expect_scores(const std::string &name, const std_classification_output &output) {
     rapidjson::Document golden = load_golden_json(name);
     if (update_golden_mode()) {
         rapidjson::Document doc;
         doc.SetObject();
-        rapidjson::Document::AllocatorType& a = doc.GetAllocator();
+        rapidjson::Document::AllocatorType &a = doc.GetAllocator();
         doc.AddMember("class_id", output.class_id, a);
         rapidjson::Value scores(rapidjson::kArrayType);
-        for (float s : output.scores) scores.PushBack(s, a);
+        for (float s : output.scores)
+            scores.PushBack(s, a);
         doc.AddMember("scores", scores, a);
         write_golden_text(name, ".json", serialize_json(doc));
         GTEST_SKIP() << "golden updated: " << name;
@@ -227,23 +223,20 @@ void expect_scores(const std::string& name, const std_classification_output& out
     EXPECT_EQ(output.class_id, golden["class_id"].GetInt());
     ASSERT_EQ(output.scores.size(), golden["scores"].GetArray().Size());
     size_t idx = 0;
-    for (const auto& s : golden["scores"].GetArray()) {
+    for (const auto &s : golden["scores"].GetArray()) {
         EXPECT_NEAR(output.scores[idx], s.GetFloat(), k_score_tol) << "score mismatch at " << idx;
         ++idx;
     }
 }
 
-const std::vector<cv::Point2f>& get_landmarks(const face_bbox& box) {
-    return box.landmarks;
-}
+const std::vector<cv::Point2f> &get_landmarks(const face_bbox &box) { return box.landmarks; }
 
-const std::vector<cv::Point2f>& get_landmarks(const bbox&) {
+const std::vector<cv::Point2f> &get_landmarks(const bbox &) {
     static const std::vector<cv::Point2f> k_empty;
     return k_empty;
 }
 
-template <typename BoxT>
-rapidjson::Value serialize_box(const BoxT& box, rapidjson::Document::AllocatorType& a) {
+template <typename BoxT> rapidjson::Value serialize_box(const BoxT &box, rapidjson::Document::AllocatorType &a) {
     rapidjson::Value obj(rapidjson::kObjectType);
     obj.AddMember("x", box.bbox.x, a);
     obj.AddMember("y", box.bbox.y, a);
@@ -254,19 +247,18 @@ rapidjson::Value serialize_box(const BoxT& box, rapidjson::Document::AllocatorTy
     return obj;
 }
 
-template <typename BoxT>
-void expect_boxes(const std::string& name, const std::vector<BoxT>& boxes, bool has_landmarks) {
+template <typename BoxT> void expect_boxes(const std::string &name, const std::vector<BoxT> &boxes, bool has_landmarks) {
     rapidjson::Document golden = load_golden_json(name);
     if (update_golden_mode()) {
         rapidjson::Document doc;
         doc.SetObject();
-        rapidjson::Document::AllocatorType& a = doc.GetAllocator();
+        rapidjson::Document::AllocatorType &a = doc.GetAllocator();
         rapidjson::Value arr(rapidjson::kArrayType);
-        for (const auto& box : boxes) {
+        for (const auto &box : boxes) {
             rapidjson::Value obj = serialize_box(box, a);
             if (has_landmarks) {
                 rapidjson::Value pts(rapidjson::kArrayType);
-                for (const auto& p : get_landmarks(box)) {
+                for (const auto &p : get_landmarks(box)) {
                     rapidjson::Value pt(rapidjson::kArrayType);
                     pt.PushBack(p.x, a);
                     pt.PushBack(p.y, a);
@@ -283,16 +275,17 @@ void expect_boxes(const std::string& name, const std::vector<BoxT>& boxes, bool 
     ASSERT_TRUE(golden.IsObject() && golden.HasMember("boxes") && golden["boxes"].IsArray())
         << "golden missing, run with MORTRED_UPDATE_GOLDEN=1: " << name;
 
-    const auto& golden_boxes = golden["boxes"].GetArray();
+    const auto &golden_boxes = golden["boxes"].GetArray();
     ASSERT_EQ(boxes.size(), golden_boxes.Size()) << "detection count changed for " << name;
 
     std::vector<bool> matched(golden_boxes.Size(), false);
-    for (const auto& box : boxes) {
+    for (const auto &box : boxes) {
         int best = -1;
         float best_iou = 0.0f;
         for (rapidjson::SizeType i = 0; i < golden_boxes.Size(); ++i) {
-            if (matched[i]) continue;
-            const auto& g = golden_boxes[i];
+            if (matched[i])
+                continue;
+            const auto &g = golden_boxes[i];
             cv::Rect2f gbox(g["x"].GetFloat(), g["y"].GetFloat(), g["w"].GetFloat(), g["h"].GetFloat());
             float iou = CvUtils::calc_iou(box.bbox, gbox);
             if (iou > best_iou) {
@@ -302,13 +295,13 @@ void expect_boxes(const std::string& name, const std::vector<BoxT>& boxes, bool 
         }
         ASSERT_GE(best, 0) << "unmatched detection for " << name;
         EXPECT_GE(best_iou, k_box_iou_thresh) << "low IoU for " << name;
-        const auto& g = golden_boxes[best];
+        const auto &g = golden_boxes[best];
         EXPECT_NEAR(box.score, g["score"].GetFloat(), k_det_score_tol);
         EXPECT_EQ(box.class_id, g["class_id"].GetInt());
         if (has_landmarks && g.HasMember("landmarks")) {
             ASSERT_EQ(get_landmarks(box).size(), g["landmarks"].GetArray().Size());
             rapidjson::SizeType li = 0;
-            for (const auto& lp : g["landmarks"].GetArray()) {
+            for (const auto &lp : g["landmarks"].GetArray()) {
                 cv::Point2f gp(lp[0].GetFloat(), lp[1].GetFloat());
                 EXPECT_LE(cv::norm(get_landmarks(box)[li] - gp), k_keypoint_match_dist);
                 ++li;
@@ -318,14 +311,24 @@ void expect_boxes(const std::string& name, const std::vector<BoxT>& boxes, bool 
     }
 }
 
-void expect_text_regions(const std::string& name, const std_text_regions_output& regions) {
+template <typename BoxT>
+void expect_equivalent_detections(const std::string &name, const std::vector<BoxT> &expected, const std::vector<BoxT> &actual) {
+    ASSERT_EQ(expected.size(), actual.size()) << name;
+    for (size_t idx = 0; idx < expected.size(); ++idx) {
+        EXPECT_EQ(expected[idx].class_id, actual[idx].class_id) << name << " item " << idx;
+        EXPECT_NEAR(expected[idx].score, actual[idx].score, 1e-3) << name << " item " << idx;
+        EXPECT_GE(CvUtils::calc_iou(expected[idx].bbox, actual[idx].bbox), 0.995f) << name << " item " << idx;
+    }
+}
+
+void expect_text_regions(const std::string &name, const std_text_regions_output &regions) {
     rapidjson::Document golden = load_golden_json(name);
     if (update_golden_mode()) {
         rapidjson::Document doc;
         doc.SetObject();
-        rapidjson::Document::AllocatorType& a = doc.GetAllocator();
+        rapidjson::Document::AllocatorType &a = doc.GetAllocator();
         rapidjson::Value arr(rapidjson::kArrayType);
-        for (const auto& region : regions) {
+        for (const auto &region : regions) {
             rapidjson::Value obj(rapidjson::kObjectType);
             obj.AddMember("x", region.bbox.x, a);
             obj.AddMember("y", region.bbox.y, a);
@@ -341,15 +344,16 @@ void expect_text_regions(const std::string& name, const std_text_regions_output&
     ASSERT_TRUE(golden.IsObject() && golden.HasMember("regions") && golden["regions"].IsArray())
         << "golden missing, run with MORTRED_UPDATE_GOLDEN=1: " << name;
 
-    const auto& golden_regions = golden["regions"].GetArray();
+    const auto &golden_regions = golden["regions"].GetArray();
     ASSERT_EQ(regions.size(), golden_regions.Size()) << "text region count changed for " << name;
     std::vector<bool> matched(golden_regions.Size(), false);
-    for (const auto& region : regions) {
+    for (const auto &region : regions) {
         int best = -1;
         float best_iou = 0.0f;
         for (rapidjson::SizeType i = 0; i < golden_regions.Size(); ++i) {
-            if (matched[i]) continue;
-            const auto& g = golden_regions[i];
+            if (matched[i])
+                continue;
+            const auto &g = golden_regions[i];
             cv::Rect2f gbox(g["x"].GetFloat(), g["y"].GetFloat(), g["w"].GetFloat(), g["h"].GetFloat());
             float iou = CvUtils::calc_iou(region.bbox, gbox);
             if (iou > best_iou) {
@@ -364,14 +368,14 @@ void expect_text_regions(const std::string& name, const std_text_regions_output&
     }
 }
 
-void expect_keypoints(const std::string& name, const std_feature_point_output& points) {
+void expect_keypoints(const std::string &name, const std_feature_point_output &points) {
     rapidjson::Document golden = load_golden_json(name);
     if (update_golden_mode()) {
         rapidjson::Document doc;
         doc.SetObject();
-        rapidjson::Document::AllocatorType& a = doc.GetAllocator();
+        rapidjson::Document::AllocatorType &a = doc.GetAllocator();
         rapidjson::Value arr(rapidjson::kArrayType);
-        for (const auto& p : points) {
+        for (const auto &p : points) {
             rapidjson::Value pt(rapidjson::kArrayType);
             pt.PushBack(p.location.x, a);
             pt.PushBack(p.location.y, a);
@@ -384,29 +388,30 @@ void expect_keypoints(const std::string& name, const std_feature_point_output& p
     ASSERT_TRUE(golden.IsObject() && golden.HasMember("points") && golden["points"].IsArray())
         << "golden missing, run with MORTRED_UPDATE_GOLDEN=1: " << name;
 
-    const auto& golden_pts = golden["points"].GetArray();
+    const auto &golden_pts = golden["points"].GetArray();
     ASSERT_EQ(points.size(), golden_pts.Size()) << "keypoint count changed for " << name;
     int matched = 0;
-    for (const auto& gp : golden_pts) {
+    for (const auto &gp : golden_pts) {
         cv::Point2f target(gp[0].GetFloat(), gp[1].GetFloat());
         double min_dist = 1e9;
-        for (const auto& p : points) {
+        for (const auto &p : points) {
             min_dist = std::min(min_dist, static_cast<double>(cv::norm(p.location - target)));
         }
-        if (min_dist <= k_keypoint_match_dist) ++matched;
+        if (min_dist <= k_keypoint_match_dist)
+            ++matched;
     }
-    EXPECT_GE(static_cast<double>(matched) / points.size(), 0.9)
-        << "keypoint match ratio low for " << name;
+    EXPECT_GE(static_cast<double>(matched) / points.size(), 0.9) << "keypoint match ratio low for " << name;
 }
 
-void expect_embeddings(const std::string& name, const std::vector<float>& embeddings) {
+void expect_embeddings(const std::string &name, const std::vector<float> &embeddings) {
     rapidjson::Document golden = load_golden_json(name);
     if (update_golden_mode()) {
         rapidjson::Document doc;
         doc.SetObject();
-        rapidjson::Document::AllocatorType& a = doc.GetAllocator();
+        rapidjson::Document::AllocatorType &a = doc.GetAllocator();
         rapidjson::Value arr(rapidjson::kArrayType);
-        for (float e : embeddings) arr.PushBack(e, a);
+        for (float e : embeddings)
+            arr.PushBack(e, a);
         doc.AddMember("embeddings", arr, a);
         write_golden_text(name, ".json", serialize_json(doc));
         GTEST_SKIP() << "golden updated: " << name;
@@ -414,11 +419,11 @@ void expect_embeddings(const std::string& name, const std::vector<float>& embedd
     ASSERT_TRUE(golden.IsObject() && golden.HasMember("embeddings") && golden["embeddings"].IsArray())
         << "golden missing, run with MORTRED_UPDATE_GOLDEN=1: " << name;
 
-    const auto& arr = golden["embeddings"].GetArray();
+    const auto &arr = golden["embeddings"].GetArray();
     ASSERT_EQ(embeddings.size(), arr.Size());
     double dot = 0.0, norm_a = 0.0, norm_b = 0.0;
     rapidjson::SizeType i = 0;
-    for (const auto& e : arr) {
+    for (const auto &e : arr) {
         dot += embeddings[i] * e.GetFloat();
         norm_a += embeddings[i] * embeddings[i];
         norm_b += e.GetFloat() * e.GetFloat();
@@ -428,32 +433,32 @@ void expect_embeddings(const std::string& name, const std::vector<float>& embedd
     EXPECT_GE(cosine, k_embedding_cos_thresh) << "embedding cosine similarity low for " << name;
 }
 
-bool weights_available(const std::string& conf_rel_path) {
+bool weights_available(const std::string &conf_rel_path) {
     auto cfg_parsed = toml::parse_file(conf_rel_path);
     if (!cfg_parsed) {
-        LOG(ERROR) << "parse model config file failed: " << conf_rel_path << ", error: "
-                   << std::string(cfg_parsed.error().description());
+        LOG(ERROR) << "parse model config file failed: " << conf_rel_path << ", error: " << std::string(cfg_parsed.error().description());
         return false;
     }
     auto cfg = std::move(cfg_parsed).table();
     fix_toml_paths(cfg);
     std::vector<std::string> paths;
-    std::function<void(const toml::node&)> collect = [&](const toml::node& v) {
-        if (const auto* tbl = v.as_table()) {
-            for (const auto& item : *tbl) {
-                if (item.second.is_string() &&
-                    (item.first == "model_file_path" || item.first == "vocab_file_path")) {
+    std::function<void(const toml::node &)> collect = [&](const toml::node &v) {
+        if (const auto *tbl = v.as_table()) {
+            for (const auto &item : *tbl) {
+                if (item.second.is_string() && (item.first == "model_file_path" || item.first == "vocab_file_path")) {
                     paths.push_back(item.second.value_or<std::string>(""));
                 }
                 collect(item.second);
             }
-        } else if (const auto* arr = v.as_array()) {
-            for (const auto& item : *arr) collect(item);
+        } else if (const auto *arr = v.as_array()) {
+            for (const auto &item : *arr)
+                collect(item);
         }
     };
     collect(cfg);
-    for (const auto& p : paths) {
-        if (!FilePathUtil::is_file_exist(p)) return false;
+    for (const auto &p : paths) {
+        if (!FilePathUtil::is_file_exist(p))
+            return false;
     }
     return true;
 }
@@ -464,10 +469,10 @@ bool weights_available(const std::string& conf_rel_path) {
 
 TEST(model_golden, mobilenetv2_classification) {
     std::string conf = "conf/model/classification/mobilenetv2/mobilenetv2_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::classification::create_mobilenetv2_classifier<
-        mat_input, std_classification_output>("mobilenetv2_golden");
+    auto model = jinq::factory::classification::create_mobilenetv2_classifier<mat_input, std_classification_output>("mobilenetv2_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG");
@@ -482,10 +487,10 @@ TEST(model_golden, mobilenetv2_batch_matches_single) {
     // batch=N must be numerically equivalent to N single runs (the batched
     // [N,H,W,3] session run is the whole point of the batching upgrade)
     std::string conf = "conf/model/classification/mobilenetv2/mobilenetv2_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::classification::create_mobilenetv2_classifier<
-        mat_input, std_classification_output>("mobilenetv2_golden");
+    auto model = jinq::factory::classification::create_mobilenetv2_classifier<mat_input, std_classification_output>("mobilenetv2_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG");
@@ -503,18 +508,17 @@ TEST(model_golden, mobilenetv2_batch_matches_single) {
         EXPECT_EQ(batch_outputs[idx].class_id, single.class_id) << "item " << idx;
         ASSERT_EQ(batch_outputs[idx].scores.size(), single.scores.size());
         for (size_t k = 0; k < single.scores.size(); ++k) {
-            EXPECT_NEAR(batch_outputs[idx].scores[k], single.scores[k], k_score_tol)
-                << "item " << idx << " score " << k;
+            EXPECT_NEAR(batch_outputs[idx].scores[k], single.scores[k], k_score_tol) << "item " << idx << " score " << k;
         }
     }
 }
 
 TEST(model_golden, resnet50_classification) {
     std::string conf = "conf/model/classification/resnet/resnet50_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::classification::create_resnet_classifier<
-        mat_input, std_classification_output>("resnet50_golden");
+    auto model = jinq::factory::classification::create_resnet_classifier<mat_input, std_classification_output>("resnet50_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG");
@@ -529,14 +533,13 @@ TEST(model_golden, densenet_batch_matches_single) {
     // generic smart-batch path (BackendCvModel::run_batch): packed [N,...]
     // run must be numerically equivalent to N single runs
     std::string conf = "conf/model/classification/densenet/densenet121_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::classification::create_densenet_classifier<
-        mat_input, std_classification_output>("densenet_golden");
+    auto model = jinq::factory::classification::create_densenet_classifier<mat_input, std_classification_output>("densenet_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
-    cv::Mat image =
-        read_input_image("demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG");
+    cv::Mat image = read_input_image("demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG");
     ASSERT_FALSE(image.empty());
 
     std_classification_output single;
@@ -555,10 +558,10 @@ TEST(model_golden, densenet_batch_matches_single) {
 
 TEST(model_golden, densenet121_classification) {
     std::string conf = "conf/model/classification/densenet/densenet121_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::classification::create_densenet_classifier<
-        mat_input, std_classification_output>("densenet121_golden");
+    auto model = jinq::factory::classification::create_densenet_classifier<mat_input, std_classification_output>("densenet121_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG");
@@ -571,10 +574,10 @@ TEST(model_golden, densenet121_classification) {
 
 TEST(model_golden, dinov2_classification) {
     std::string conf = "conf/model/classification/dinov2/dinov2_vitb14_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::classification::create_dinov2_classifier<
-        mat_input, std_classification_output>("dinov2_golden");
+    auto model = jinq::factory::classification::create_dinov2_classifier<mat_input, std_classification_output>("dinov2_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG");
@@ -589,10 +592,10 @@ TEST(model_golden, dinov2_classification) {
 
 TEST(model_golden, nanodet_detection) {
     std::string conf = "conf/model/object_detection/nano_det/nanodet_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::object_detection::create_nanodet_detector<
-        mat_input, std_object_detection_output>("nanodet_golden");
+    auto model = jinq::factory::object_detection::create_nanodet_detector<mat_input, std_object_detection_output>("nanodet_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/object_detection/bus.jpg");
@@ -605,10 +608,10 @@ TEST(model_golden, nanodet_detection) {
 
 TEST(model_golden, yolov5_detection) {
     std::string conf = "conf/model/object_detection/yolov5/yolov5_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::object_detection::create_yolov5_detector<
-        mat_input, std_object_detection_output>("yolov5_golden");
+    auto model = jinq::factory::object_detection::create_yolov5_detector<mat_input, std_object_detection_output>("yolov5_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/object_detection/bus.jpg");
@@ -621,10 +624,10 @@ TEST(model_golden, yolov5_detection) {
 
 TEST(model_golden, yolov6_detection) {
     std::string conf = "conf/model/object_detection/yolov6/yolov6_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::object_detection::create_yolov6_detector<
-        mat_input, std_object_detection_output>("yolov6_golden");
+    auto model = jinq::factory::object_detection::create_yolov6_detector<mat_input, std_object_detection_output>("yolov6_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/object_detection/bus.jpg");
@@ -637,10 +640,10 @@ TEST(model_golden, yolov6_detection) {
 
 TEST(model_golden, yolov7_detection) {
     std::string conf = "conf/model/object_detection/yolov7/yolov7_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::object_detection::create_yolov7_detector<
-        mat_input, std_object_detection_output>("yolov7_golden");
+    auto model = jinq::factory::object_detection::create_yolov7_detector<mat_input, std_object_detection_output>("yolov7_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/object_detection/bus.jpg");
@@ -651,12 +654,67 @@ TEST(model_golden, yolov7_detection) {
     expect_boxes("yolov7_detection", output, false);
 }
 
+TEST(model_golden, yolov8_detection) {
+    std::string conf = "conf/model/object_detection/yolov8/yolov8_config.toml";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
+    const std::string golden_file = golden_path("yolov8_detection", ".json");
+    if (!update_golden_mode() && !std::filesystem::exists(golden_file)) {
+        GTEST_SKIP() << "yolov8 golden not generated yet: " << golden_file;
+    }
+    auto cfg = load_model_cfg(conf);
+    auto model = jinq::factory::object_detection::create_yolov8_detector<mat_input, std_object_detection_output>("yolov8_golden");
+    ASSERT_NE(model, nullptr);
+    ASSERT_EQ(model->init(cfg), StatusCode::OK);
+    cv::Mat image = read_input_image("demo_data/model_test_input/object_detection/bus.jpg");
+    ASSERT_FALSE(image.empty());
+    mat_input input{image};
+    std_object_detection_output output;
+    ASSERT_EQ(model->run(input, output), StatusCode::OK);
+    expect_boxes("yolov8_detection", output, false);
+}
+
+TEST(model_golden, yolov8_mixed_size_batch_matches_single_runs) {
+    std::string conf = "conf/model/object_detection/yolov8/yolov8_config.toml";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
+    auto cfg = load_model_cfg(conf);
+    auto model = jinq::factory::object_detection::create_yolov8_detector<mat_input, std_object_detection_output>("yolov8_batch");
+    ASSERT_NE(model, nullptr);
+    ASSERT_EQ(model->init(cfg), StatusCode::OK);
+
+    cv::Mat first = read_input_image("demo_data/model_test_input/object_detection/bus.jpg");
+    cv::Mat second = read_input_image("demo_data/model_test_input/object_detection/horses.jpg");
+    ASSERT_FALSE(first.empty());
+    ASSERT_FALSE(second.empty());
+    cv::resize(first, first, cv::Size(1032, 640));
+    cv::resize(second, second, cv::Size(768, 512));
+
+    std::vector<mat_input> inputs{mat_input{first}, mat_input{second}};
+    std::vector<std_object_detection_output> singles;
+    for (const auto &input : inputs) {
+        std_object_detection_output output;
+        ASSERT_EQ(model->run(input, output), StatusCode::OK);
+        singles.push_back(std::move(output));
+    }
+
+    std::vector<std_object_detection_output> batch_outputs;
+    std::vector<StatusCode> item_status;
+    ASSERT_EQ(model->run_batch(inputs, batch_outputs, item_status), StatusCode::OK);
+    ASSERT_EQ(item_status.size(), inputs.size());
+    ASSERT_EQ(batch_outputs.size(), inputs.size());
+    EXPECT_EQ(item_status[0], StatusCode::OK);
+    EXPECT_EQ(item_status[1], StatusCode::OK);
+    expect_equivalent_detections("yolov8 batch item 0", singles[0], batch_outputs[0]);
+    expect_equivalent_detections("yolov8 batch item 1", singles[1], batch_outputs[1]);
+}
+
 TEST(model_golden, centerface_detection) {
     std::string conf = "conf/model/object_detection/centerface/centerface_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::object_detection::create_centerface_detector<
-        mat_input, std_face_detection_output>("centerface_golden");
+    auto model = jinq::factory::object_detection::create_centerface_detector<mat_input, std_face_detection_output>("centerface_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/object_detection/face_w_mask.jpg");
@@ -669,10 +727,10 @@ TEST(model_golden, centerface_detection) {
 
 TEST(model_golden, libface_detection) {
     std::string conf = "conf/model/object_detection/libfacedetection/640x480_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::object_detection::create_libface_detector<
-        mat_input, std_face_detection_output>("libface_golden");
+    auto model = jinq::factory::object_detection::create_libface_detector<mat_input, std_face_detection_output>("libface_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/object_detection/face_wo_mask.jpg");
@@ -687,10 +745,11 @@ TEST(model_golden, libface_detection) {
 
 TEST(model_golden, bisenetv2_segmentation) {
     std::string conf = "conf/model/scene_segmentation/bisenetv2/bisenetv2_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::scene_segmentation::create_bisenetv2_segmentor<
-        mat_input, std_scene_segmentation_output>("bisenetv2_golden");
+    auto model =
+        jinq::factory::scene_segmentation::create_bisenetv2_segmentor<mat_input, std_scene_segmentation_output>("bisenetv2_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/scene_segmentation/cityscapes_test.png");
@@ -703,10 +762,10 @@ TEST(model_golden, bisenetv2_segmentation) {
 
 TEST(model_golden, pphuman_segmentation) {
     std::string conf = "conf/model/scene_segmentation/pphuman/pphuman_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::scene_segmentation::create_pphuman_segmentor<
-        mat_input, std_scene_segmentation_output>("pphuman_golden");
+    auto model = jinq::factory::scene_segmentation::create_pphuman_segmentor<mat_input, std_scene_segmentation_output>("pphuman_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/scene_segmentation/human_image.jpg");
@@ -721,10 +780,10 @@ TEST(model_golden, pphuman_segmentation) {
 
 TEST(model_golden, dbnet_text_detection) {
     std::string conf = "conf/model/ocr/db_text_detector/dbnet_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::ocr::create_dbtext_detector<
-        mat_input, std_text_regions_output>("dbnet_golden");
+    auto model = jinq::factory::ocr::create_dbtext_detector<mat_input, std_text_regions_output>("dbnet_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/ocr/railway_ticket.png");
@@ -739,10 +798,10 @@ TEST(model_golden, dbnet_text_detection) {
 
 TEST(model_golden, modnet_matting) {
     std::string conf = "conf/model/matting/modnet/modnet_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::matting::create_modnet_segmentor<
-        mat_input, std_matting_output>("modnet_golden");
+    auto model = jinq::factory::matting::create_modnet_segmentor<mat_input, std_matting_output>("modnet_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/matting/matting_test.jpg");
@@ -755,10 +814,10 @@ TEST(model_golden, modnet_matting) {
 
 TEST(model_golden, ppmatting_matting) {
     std::string conf = "conf/model/matting/ppmatting/ppmatting_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::matting::create_ppmatting_segmentor<
-        mat_input, std_matting_output>("ppmatting_golden");
+    auto model = jinq::factory::matting::create_ppmatting_segmentor<mat_input, std_matting_output>("ppmatting_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/matting/matting_test.jpg");
@@ -773,10 +832,10 @@ TEST(model_golden, ppmatting_matting) {
 
 TEST(model_golden, enlightengan_enhancement) {
     std::string conf = "conf/model/enhancement/enlighten_gan/enlightengan.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::enhancement::create_enlightengan_enhancementor<
-        mat_input, std_enhancement_output>("enlightengan_golden");
+    auto model = jinq::factory::enhancement::create_enlightengan_enhancementor<mat_input, std_enhancement_output>("enlightengan_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/enhancement/low_light/lol_test_1.png");
@@ -789,10 +848,10 @@ TEST(model_golden, enlightengan_enhancement) {
 
 TEST(model_golden, attentivegan_enhancement) {
     std::string conf = "conf/model/enhancement/attentive_gan_derain/attentive_gan_derain_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::enhancement::create_attentivegan_enhancementor<
-        mat_input, std_enhancement_output>("attentivegan_golden");
+    auto model = jinq::factory::enhancement::create_attentivegan_enhancementor<mat_input, std_enhancement_output>("attentivegan_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/enhancement/derain/test_1.png");
@@ -805,10 +864,10 @@ TEST(model_golden, attentivegan_enhancement) {
 
 TEST(model_golden, realesrgan_enhancement) {
     std::string conf = "conf/model/enhancement/real_esrgan/real_esrgan.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::enhancement::create_realesrgan_enhancementor<
-        mat_input, std_enhancement_output>("realesrgan_golden");
+    auto model = jinq::factory::enhancement::create_realesrgan_enhancementor<mat_input, std_enhancement_output>("realesrgan_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/enhancement/real_esr/wolf_gray.jpg");
@@ -823,10 +882,10 @@ TEST(model_golden, realesrgan_enhancement) {
 
 TEST(model_golden, superpoint_feature_point) {
     std::string conf = "conf/model/feature_point/superpoint/superpoint_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::feature_point::create_superpoint_extractor<
-        mat_input, std_feature_point_output>("superpoint_golden");
+    auto model = jinq::factory::feature_point::create_superpoint_extractor<mat_input, std_feature_point_output>("superpoint_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/feature_point/test.png");
@@ -841,10 +900,10 @@ TEST(model_golden, superpoint_feature_point) {
 
 TEST(model_golden, fastsam_segmentation) {
     std::string conf = "conf/model/segment_anything/fast_sam_s_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::segment_anything::create_fast_sam_segmentor<
-        mat_input, cv::Mat>("fastsam_golden");
+    auto model = jinq::factory::segment_anything::create_fast_sam_segmentor<mat_input, cv::Mat>("fastsam_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/sam/truck.jpg");
@@ -857,11 +916,12 @@ TEST(model_golden, fastsam_segmentation) {
 
 TEST(model_golden, sam_prompt_prediction) {
     std::string conf = "conf/model/segment_anything/mobile_sam_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::segment_anything::create_sam_predictor<
-        jinq::models::io_define::segment_anything::sam_prompt_input,
-        jinq::models::io_define::segment_anything::std_sam_prompt_output>("sam_golden");
+    auto model = jinq::factory::segment_anything::create_sam_predictor<jinq::models::io_define::segment_anything::sam_prompt_input,
+                                                                       jinq::models::io_define::segment_anything::std_sam_prompt_output>(
+        "sam_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/sam/truck.jpg");
@@ -877,11 +937,12 @@ TEST(model_golden, sam_prompt_prediction) {
 
 TEST(model_golden, sam_automask_generation) {
     std::string conf = "conf/model/segment_anything/mobile_sam_amg_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::segment_anything::create_sam_auto_mask_generator<
-        mat_input, jinq::models::io_define::segment_anything::sam_amg_output>(
-            "sam_amg_golden");
+    auto model = jinq::factory::segment_anything::create_sam_auto_mask_generator<mat_input,
+                                                                                 jinq::models::io_define::segment_anything::sam_amg_output>(
+        "sam_amg_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/sam/truck.jpg");
@@ -897,11 +958,12 @@ TEST(model_golden, sam_automask_generation) {
 
 TEST(model_golden, openai_clip_embedding) {
     std::string conf = "conf/model/openai_clip/vit_b_32_config.toml";
-    if (!weights_available(conf)) GTEST_SKIP() << "weights not available";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::clip::create_openai_clip<
-        jinq::models::io_define::clip::clip_input,
-        jinq::models::io_define::clip::clip_output>("openai_clip_golden");
+    auto model =
+        jinq::factory::clip::create_openai_clip<jinq::models::io_define::clip::clip_input, jinq::models::io_define::clip::clip_output>(
+            "openai_clip_golden");
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     jinq::models::io_define::clip::clip_input text_input;

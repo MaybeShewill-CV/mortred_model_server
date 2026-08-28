@@ -26,7 +26,7 @@ using jinq::models::io_define::enhancement::std_enhancement_output;
 
 namespace {
 
-bool copy_mat_to_buffer(const cv::Mat& image, std::vector<uint8_t>& buffer) {
+bool copy_mat_to_buffer(const cv::Mat &image, std::vector<uint8_t> &buffer) {
     const auto bytes = image.total() * image.elemSize();
     if (bytes != buffer.size()) {
         return false;
@@ -34,7 +34,7 @@ bool copy_mat_to_buffer(const cv::Mat& image, std::vector<uint8_t>& buffer) {
     if (image.isContinuous()) {
         std::memcpy(buffer.data(), image.data, bytes);
     } else {
-        uint8_t* dst = buffer.data();
+        uint8_t *dst = buffer.data();
         for (int row = 0; row < image.rows; ++row) {
             const auto row_bytes = static_cast<size_t>(image.cols) * image.elemSize();
             std::memcpy(dst, image.ptr(row), row_bytes);
@@ -46,18 +46,17 @@ bool copy_mat_to_buffer(const cv::Mat& image, std::vector<uint8_t>& buffer) {
 
 } // namespace
 
-template <typename INPUT, typename OUTPUT>
-StatusCode EnlightenGan<INPUT, OUTPUT>::on_init(const toml::table& params) {
+template <typename INPUT, typename OUTPUT> StatusCode EnlightenGan<INPUT, OUTPUT>::on_init(const toml::table &params) {
     (void)params;
-    const auto& inputs = this->session().inputs();
+    const auto &inputs = this->session().inputs();
     if (inputs.size() != 2 || this->session().outputs().size() != 1) {
         LOG(ERROR) << "unexpected enlighten gan io count, expected input_src/input_gray and output";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    const auto* input_src_info = &inputs.front();
-    const auto* input_gray_info = &inputs.back();
+    const auto *input_src_info = &inputs.front();
+    const auto *input_gray_info = &inputs.back();
     if (input_src_info->name != "input_src" || input_gray_info->name != "input_gray") {
-        for (const auto& info : inputs) {
+        for (const auto &info : inputs) {
             if (info.name == "input_src") {
                 input_src_info = &info;
             } else if (info.name == "input_gray") {
@@ -65,9 +64,8 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::on_init(const toml::table& params) {
             }
         }
     }
-    if (input_src_info->name != "input_src" || input_gray_info->name != "input_gray" ||
-            input_src_info->shape.size() != 4 || input_src_info->shape[1] != 3 ||
-            input_gray_info->shape.size() != 4 || input_gray_info->shape[1] != 1) {
+    if (input_src_info->name != "input_src" || input_gray_info->name != "input_gray" || input_src_info->shape.size() != 4 ||
+        input_src_info->shape[1] != 3 || input_gray_info->shape.size() != 4 || input_gray_info->shape[1] != 1) {
         LOG(ERROR) << "unexpected enlighten gan input io, expected input_src [N,3,H,W] and "
                    << "input_gray [N,1,H,W]";
         return StatusCode::MODEL_INIT_FAILED;
@@ -78,15 +76,11 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::on_init(const toml::table& params) {
     return StatusCode::OK;
 }
 
-template <typename INPUT, typename OUTPUT>
-std::vector<NamedTensor> EnlightenGan<INPUT, OUTPUT>::preprocess(const cv::Mat& input_image) {
-    if (input_image.size().height < 10 || input_image.size().width < 10 ||
-            (input_image.channels() != 3 && input_image.channels() != 4)) {
-        LOG(ERROR) << "invalid enlighten gan image size or channels: "
-                   << input_image.size() << ", channels=" << input_image.channels();
+template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> EnlightenGan<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
+    if (input_image.size().height < 10 || input_image.size().width < 10 || (input_image.channels() != 3 && input_image.channels() != 4)) {
+        LOG(ERROR) << "invalid enlighten gan image size or channels: " << input_image.size() << ", channels=" << input_image.channels();
         return {};
     }
-    _m_input_size_user = input_image.size();
     _m_input_alpha.release();
     if (input_image.channels() == 4) {
         std::vector<cv::Mat> input_image_split;
@@ -95,10 +89,8 @@ std::vector<NamedTensor> EnlightenGan<INPUT, OUTPUT>::preprocess(const cv::Mat& 
     }
 
     if (input_image.size() != _m_input_size_host) {
-        _m_input_size_host.height = static_cast<int>(
-            std::ceil(input_image.size().height / 16) * 16);
-        _m_input_size_host.width = static_cast<int>(
-            std::ceil(input_image.size().width / 16) * 16);
+        _m_input_size_host.height = static_cast<int>(std::ceil(input_image.size().height / 16) * 16);
+        _m_input_size_host.width = static_cast<int>(std::ceil(input_image.size().width / 16) * 16);
     }
 
     cv::Mat output_src;
@@ -120,27 +112,22 @@ std::vector<NamedTensor> EnlightenGan<INPUT, OUTPUT>::preprocess(const cv::Mat& 
 
     std::vector<cv::Mat> src_split;
     cv::split(output_src, src_split);
-    cv::Mat output_gray = 1.0 - (0.299 * (src_split[0] + 1.0) +
-                                  0.587 * (src_split[1] + 1.0) +
-                                  0.114 * (src_split[2] + 1.0)) * 0.5;
+    cv::Mat output_gray = 1.0 - (0.299 * (src_split[0] + 1.0) + 0.587 * (src_split[1] + 1.0) + 0.114 * (src_split[2] + 1.0)) * 0.5;
 
     std::vector<NamedTensor> tensors;
     NamedTensor input_src;
     input_src.name = "input_src";
-    input_src.tensor = jinq::models::backend::Tensor::make<float>(
-        {1, 3, _m_input_size_host.height, _m_input_size_host.width});
+    input_src.tensor = jinq::models::backend::Tensor::make<float>({1, 3, _m_input_size_host.height, _m_input_size_host.width});
     const auto input_src_chw_data = CvUtils::convert_to_chw_vec(output_src);
     if (input_src_chw_data.size() * sizeof(float) != input_src.tensor.byte_size()) {
         LOG(ERROR) << "preprocessed enlighten gan src tensor size mismatch";
         return {};
     }
-    std::memcpy(input_src.tensor.buffer.data(), input_src_chw_data.data(),
-                input_src.tensor.byte_size());
+    std::memcpy(input_src.tensor.buffer.data(), input_src_chw_data.data(), input_src.tensor.byte_size());
 
     NamedTensor input_gray;
     input_gray.name = "input_gray";
-    input_gray.tensor = jinq::models::backend::Tensor::make<float>(
-        {1, 1, _m_input_size_host.height, _m_input_size_host.width});
+    input_gray.tensor = jinq::models::backend::Tensor::make<float>({1, 1, _m_input_size_host.height, _m_input_size_host.width});
     if (!copy_mat_to_buffer(output_gray, input_gray.tensor.buffer)) {
         LOG(ERROR) << "preprocessed enlighten gan gray tensor size mismatch";
         return {};
@@ -151,29 +138,25 @@ std::vector<NamedTensor> EnlightenGan<INPUT, OUTPUT>::preprocess(const cv::Mat& 
 }
 
 template <typename INPUT, typename OUTPUT>
-StatusCode EnlightenGan<INPUT, OUTPUT>::postprocess(
-    const std::vector<NamedTensor>& outputs, OUTPUT& output) {
+StatusCode EnlightenGan<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
+                                                    const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "enlighten gan output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto& tensor = outputs.front().tensor;
-    if (tensor.shape.size() != 4 || tensor.shape[0] != 1 || tensor.shape[1] != 3 ||
-            tensor.shape[2] != _m_input_size_host.height ||
-            tensor.shape[3] != _m_input_size_host.width) {
-        LOG(ERROR) << "unexpected enlighten gan output shape: "
-                   << jinq::models::backend::shape_to_string(tensor.shape);
+    const auto &tensor = outputs.front().tensor;
+    if (tensor.shape.size() != 4 || tensor.shape[0] != 1 || tensor.shape[1] != 3 || tensor.shape[2] != _m_input_size_host.height ||
+        tensor.shape[3] != _m_input_size_host.width) {
+        LOG(ERROR) << "unexpected enlighten gan output shape: " << jinq::models::backend::shape_to_string(tensor.shape);
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto* host_data = tensor.template data<float>();
+    const auto *host_data = tensor.template data<float>();
     std::vector<uchar> output_img_data(static_cast<size_t>(tensor.element_count()));
     for (auto row = 0; row < _m_input_size_host.height; ++row) {
         for (auto col = 0; col < _m_input_size_host.width; ++col) {
             for (auto c = 0; c < 3; ++c) {
                 const auto hwc_idx = row * _m_input_size_host.width * 3 + col * 3 + c;
-                const auto chw_idx =
-                    c * _m_input_size_host.height * _m_input_size_host.width +
-                    row * _m_input_size_host.width + col;
+                const auto chw_idx = c * _m_input_size_host.height * _m_input_size_host.width + row * _m_input_size_host.width + col;
                 auto pix_val_f = (host_data[chw_idx] + 1.0) * 255.0 / 2.0;
                 if (pix_val_f < 0.0) {
                     pix_val_f = 0.0;
@@ -189,9 +172,8 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::postprocess(
     std_enhancement_output internal_out;
     cv::Mat result_image(_m_input_size_host, CV_8UC3, output_img_data.data());
     cv::cvtColor(result_image, internal_out.enhancement_result, cv::COLOR_RGB2BGR);
-    if (internal_out.enhancement_result.size() != _m_input_size_user) {
-        cv::resize(internal_out.enhancement_result, internal_out.enhancement_result,
-                   _m_input_size_user);
+    if (internal_out.enhancement_result.size() != context.source_size) {
+        cv::resize(internal_out.enhancement_result, internal_out.enhancement_result, context.source_size);
     }
     if (!_m_input_alpha.empty()) {
         std::vector<cv::Mat> output_image_split;
@@ -205,8 +187,7 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::postprocess(
 }
 
 template <typename INPUT, typename OUTPUT>
-EnlightenGan<INPUT, OUTPUT>::EnlightenGan()
-    : jinq::models::BackendCvModel<INPUT, OUTPUT>("ENLIGHTENGAN") {}
+EnlightenGan<INPUT, OUTPUT>::EnlightenGan() : jinq::models::BackendCvModel<INPUT, OUTPUT>("ENLIGHTENGAN") {}
 
 } // namespace enhancement
 } // namespace models

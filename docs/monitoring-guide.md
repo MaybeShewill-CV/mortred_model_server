@@ -113,6 +113,7 @@ histogram_quantile(0.95, sum(rate(mortred_http_request_duration_ms_bucket[5m])) 
 | `mortred_queue_wait_duration_ms` | histogram | Worker wait time |
 | `mortred_inference_success_total` | counter | Successful inferences |
 | `mortred_inference_failure_total` | counter | Failed inferences |
+| `mortred_model_output_contract_failures_total` | counter | Model output dtype/shape/buffer contract failures |
 | `mortred_workers_busy` | gauge | Busy workers |
 | `mortred_workers_available` | gauge | Idle workers |
 | `mortred_queue_depth` | gauge | Current queue depth |
