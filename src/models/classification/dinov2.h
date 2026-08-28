@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: dinov2.h
-* Date: 23-6-12
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: dinov2.h
+ * Date: 23-6-12
+ ************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_DINOV2_H
 #define MORTRED_MODEL_SERVER_DINOV2_H
@@ -23,23 +23,21 @@ namespace models {
 namespace classification {
 using jinq::common::StatusCode;
 
-template<typename INPUT, typename OUTPUT>
-class Dinov2 : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class Dinov2 : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   public:
     Dinov2();
     ~Dinov2() override = default;
 
-    Dinov2(const Dinov2& transformer) = delete;
-    Dinov2& operator=(const Dinov2& transformer) = delete;
+    Dinov2(const Dinov2 &transformer) = delete;
+    Dinov2 &operator=(const Dinov2 &transformer) = delete;
 
   private:
-    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
+    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
-    StatusCode postprocess(
-        const std::vector<jinq::models::backend::NamedTensor>& outputs,
-        OUTPUT& output) override;
+    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
+                           const jinq::models::InferenceContext & /*context*/, OUTPUT &output) override;
 
-    StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table &params) override;
 
     // class id to names
     std::unordered_map<uint16_t, std::string> _m_class_id2names;
@@ -47,10 +45,10 @@ class Dinov2 : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
     cv::Size _m_input_tensor_size = cv::Size(224, 224);
 };
 
-}
-}
-}
+} // namespace classification
+} // namespace models
+} // namespace jinq
 
 #include "dinov2.inl"
 
-#endif //MORTRED_MODEL_SERVER_DINOV2_H
+#endif // MORTRED_MODEL_SERVER_DINOV2_H

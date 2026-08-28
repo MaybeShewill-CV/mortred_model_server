@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: superpoint.h
-* Date: 22-6-15
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: superpoint.h
+ * Date: 22-6-15
+ ************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_SUPERPOINT_H
 #define MORTRED_MODEL_SERVER_SUPERPOINT_H
@@ -19,35 +19,30 @@ namespace models {
 namespace feature_point {
 using jinq::common::StatusCode;
 
-template<typename INPUT, typename OUTPUT>
-class SuperPoint : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class SuperPoint : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   public:
     SuperPoint();
     ~SuperPoint() override = default;
 
-    SuperPoint(const SuperPoint& transformer) = delete;
-    SuperPoint& operator=(const SuperPoint& transformer) = delete;
+    SuperPoint(const SuperPoint &transformer) = delete;
+    SuperPoint &operator=(const SuperPoint &transformer) = delete;
 
   private:
-    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
+    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
-    StatusCode postprocess(
-        const std::vector<jinq::models::backend::NamedTensor>& outputs,
-        OUTPUT& output) override;
+    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
+                           const jinq::models::InferenceContext & /*context*/, OUTPUT &output) override;
 
-    StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table &params) override;
 
-    const jinq::models::backend::NamedTensor* find_output(
-        const std::vector<jinq::models::backend::NamedTensor>& outputs,
-        const std::string& name) const;
+    const jinq::models::backend::NamedTensor *find_output(const std::vector<jinq::models::backend::NamedTensor> &outputs,
+                                                          const std::string &name) const;
 
-    void decode_fp_location_and_score(
-        const jinq::models::backend::NamedTensor& semi,
-        jinq::models::io_define::feature_point::std_feature_point_output& key_points) const;
+    void decode_fp_location_and_score(const jinq::models::backend::NamedTensor &semi,
+                                      jinq::models::io_define::feature_point::std_feature_point_output &key_points) const;
 
-    void decode_fp_descriptor(
-        const jinq::models::backend::NamedTensor& desc,
-        jinq::models::io_define::feature_point::std_feature_point_output& key_points) const;
+    void decode_fp_descriptor(const jinq::models::backend::NamedTensor &desc,
+                              jinq::models::io_define::feature_point::std_feature_point_output &key_points) const;
 
     // score thresh
     double _m_score_threshold = 0.015;
@@ -55,16 +50,14 @@ class SuperPoint : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
     double _m_nms_threshold = 4.0;
     // dense map cell size
     int _m_cell_size = 8;
-    // user image size of the current run
-    cv::Size _m_input_size_user = cv::Size();
     // network input node size
     cv::Size _m_input_size_host = cv::Size();
 };
 
-}
-}
-}
+} // namespace feature_point
+} // namespace models
+} // namespace jinq
 
 #include "superpoint.inl"
 
-#endif //MORTRED_MODEL_SERVER_SUPERPOINT_H
+#endif // MORTRED_MODEL_SERVER_SUPERPOINT_H

@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: ddpm_unet.h
-* Date: 24-4-23
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: ddpm_unet.h
+ * Date: 24-4-23
+ ************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_DDPMUNET_H
 #define MORTRED_MODEL_SERVER_DDPMUNET_H
@@ -22,21 +22,19 @@ namespace models {
 namespace diffusion {
 using jinq::common::StatusCode;
 
-template <typename INPUT, typename OUTPUT>
-class DDPMUNet : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class DDPMUNet : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   public:
     DDPMUNet();
     ~DDPMUNet() override = default;
 
-    DDPMUNet(const DDPMUNet& transformer) = delete;
-    DDPMUNet& operator=(const DDPMUNet& transformer) = delete;
+    DDPMUNet(const DDPMUNet &transformer) = delete;
+    DDPMUNet &operator=(const DDPMUNet &transformer) = delete;
 
   private:
-    std::vector<jinq::models::backend::NamedTensor> make_inputs(const INPUT& input) override;
+    jinq::models::PreparedInput prepare_inputs(const INPUT &input) override;
 
-    StatusCode postprocess(
-        const std::vector<jinq::models::backend::NamedTensor>& outputs,
-        OUTPUT& output) override;
+    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
+                           const jinq::models::InferenceContext & /*context*/, OUTPUT &output) override;
 
     // concrete xt input shape parsed from the session io ([N,C,H,W])
     std::vector<int64_t> _m_xt_shape;
@@ -48,4 +46,4 @@ class DDPMUNet : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
 
 #include "ddpm_unet.inl"
 
-#endif //MORTRED_MODEL_SERVER_DDPMUNET_H
+#endif // MORTRED_MODEL_SERVER_DDPMUNET_H

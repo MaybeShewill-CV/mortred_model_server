@@ -79,6 +79,7 @@ On error:
 | 63 | Not found | 404 |
 | 65 | Service not ready | 503 |
 | 4 | Model run timeout | 504 |
+| 6 | Model output contract failed | 500 |
 | 401 | Unauthorized | 401 |
 | 429 | Rate limited | 429 |
 | 429 | Queue full (`max_queue_depth` exceeded; carries `Retry-After`) | 429 |

@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: cls_cond_ddpm_unet.h
-* Date: 26-8-17
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: cls_cond_ddpm_unet.h
+ * Date: 26-8-17
+ ************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_CLS_COND_DDPM_UNET_H
 #define MORTRED_MODEL_SERVER_CLS_COND_DDPM_UNET_H
@@ -22,21 +22,19 @@ namespace models {
 namespace diffusion {
 using jinq::common::StatusCode;
 
-template <typename INPUT, typename OUTPUT>
-class ClsCondDDPMUNet : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class ClsCondDDPMUNet : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   public:
     ClsCondDDPMUNet();
     ~ClsCondDDPMUNet() override = default;
 
-    ClsCondDDPMUNet(const ClsCondDDPMUNet& transformer) = delete;
-    ClsCondDDPMUNet& operator=(const ClsCondDDPMUNet& transformer) = delete;
+    ClsCondDDPMUNet(const ClsCondDDPMUNet &transformer) = delete;
+    ClsCondDDPMUNet &operator=(const ClsCondDDPMUNet &transformer) = delete;
 
   private:
-    std::vector<jinq::models::backend::NamedTensor> make_inputs(const INPUT& input) override;
+    jinq::models::PreparedInput prepare_inputs(const INPUT &input) override;
 
-    StatusCode postprocess(
-        const std::vector<jinq::models::backend::NamedTensor>& outputs,
-        OUTPUT& output) override;
+    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
+                           const jinq::models::InferenceContext & /*context*/, OUTPUT &output) override;
 };
 
 } // namespace diffusion
@@ -45,4 +43,4 @@ class ClsCondDDPMUNet : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
 
 #include "cls_cond_ddpm_unet.inl"
 
-#endif //MORTRED_MODEL_SERVER_CLS_COND_DDPM_UNET_H
+#endif // MORTRED_MODEL_SERVER_CLS_COND_DDPM_UNET_H

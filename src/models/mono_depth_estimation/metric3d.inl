@@ -10,8 +10,8 @@
 #include <algorithm>
 #include <cstring>
 
-#include <opencv2/opencv.hpp>
 #include "glog/logging.h"
+#include <opencv2/opencv.hpp>
 
 #include "common/cv_utils.h"
 
@@ -20,31 +20,27 @@ namespace models {
 namespace mono_depth_estimation {
 
 using MdeOutput = jinq::models::io_define::mono_depth_estimation::std_mde_output;
-using jinq::models::backend::NamedTensor;
 using jinq::common::StatusCode;
+using jinq::models::backend::NamedTensor;
 
-template<typename INPUT, typename OUTPUT>
-StatusCode Metric3D<INPUT, OUTPUT>::on_init(const toml::table& params) {
+template <typename INPUT, typename OUTPUT> StatusCode Metric3D<INPUT, OUTPUT>::on_init(const toml::table &params) {
     if (params.contains("focal_length")) {
         _m_focal_length = static_cast<float>(params["focal_length"].value_or<double>(0.0));
     }
     if (params.contains("intrinsic")) {
-        const toml::array* intrinsic = params["intrinsic"].as_array();
+        const toml::array *intrinsic = params["intrinsic"].as_array();
         if (intrinsic != nullptr && intrinsic->size() == 4) {
             for (size_t idx = 0; idx < 4; ++idx) {
-                _m_intrinsic_params[idx] =
-                    static_cast<float>((*intrinsic)[idx].value_or<double>(0.0));
+                _m_intrinsic_params[idx] = static_cast<float>((*intrinsic)[idx].value_or<double>(0.0));
             }
         }
     }
-    const auto& input_info = this->session().inputs().front();
+    const auto &input_info = this->session().inputs().front();
     // dynamic batch (shape[0] == -1) is fine: only the spatial dims must be
     // concrete for preprocessing; a batch-profile engine reports input_info.dynamic
     // because dim0 is -1, but dims 1..3 are always concrete
-    if (input_info.shape.size() != 4 || input_info.shape[1] != 3 ||
-        input_info.shape[2] <= 0 || input_info.shape[3] <= 0) {
-        LOG(ERROR) << "unexpected metric3d input shape: " << input_info.to_string()
-                   << ", expected static [N,3,H,W] (nchw)";
+    if (input_info.shape.size() != 4 || input_info.shape[1] != 3 || input_info.shape[2] <= 0 || input_info.shape[3] <= 0) {
+        LOG(ERROR) << "unexpected metric3d input shape: " << input_info.to_string() << ", expected static [N,3,H,W] (nchw)";
         return StatusCode::MODEL_INIT_FAILED;
     }
     _m_input_size_host.height = static_cast<int>(input_info.shape[2]);
@@ -52,10 +48,9 @@ StatusCode Metric3D<INPUT, OUTPUT>::on_init(const toml::table& params) {
     return StatusCode::OK;
 }
 
-template<typename INPUT, typename OUTPUT>
-const NamedTensor* Metric3D<INPUT, OUTPUT>::find_output(
-    const std::vector<NamedTensor>& outputs, const std::string& name) const {
-    for (const auto& item : outputs) {
+template <typename INPUT, typename OUTPUT>
+const NamedTensor *Metric3D<INPUT, OUTPUT>::find_output(const std::vector<NamedTensor> &outputs, const std::string &name) const {
+    for (const auto &item : outputs) {
         if (item.name == name) {
             return &item;
         }
@@ -63,14 +58,12 @@ const NamedTensor* Metric3D<INPUT, OUTPUT>::find_output(
     return nullptr;
 }
 
-template<typename INPUT, typename OUTPUT>
-void Metric3D<INPUT, OUTPUT>::calculate_pad_info(int& pad_h, int& pad_w) const {
-    const auto src_w = _m_input_size_user.width;
-    const auto src_h = _m_input_size_user.height;
-    const auto resize_ratio_h =
-        static_cast<float>(_m_input_size_host.height) / static_cast<float>(src_h);
-    const auto resize_ratio_w =
-        static_cast<float>(_m_input_size_host.width) / static_cast<float>(src_w);
+template <typename INPUT, typename OUTPUT>
+void Metric3D<INPUT, OUTPUT>::calculate_pad_info(int &pad_h, int &pad_w, const cv::Size &source_size) const {
+    const auto src_w = source_size.width;
+    const auto src_h = source_size.height;
+    const auto resize_ratio_h = static_cast<float>(_m_input_size_host.height) / static_cast<float>(src_h);
+    const auto resize_ratio_w = static_cast<float>(_m_input_size_host.width) / static_cast<float>(src_w);
     const auto to_scale_ratio = std::min(resize_ratio_h, resize_ratio_w);
     const auto reshape_h = static_cast<int>(to_scale_ratio * static_cast<float>(src_h));
     const auto reshape_w = static_cast<int>(to_scale_ratio * static_cast<float>(src_w));
@@ -78,37 +71,30 @@ void Metric3D<INPUT, OUTPUT>::calculate_pad_info(int& pad_h, int& pad_w) const {
     pad_w = std::max(_m_input_size_host.width - reshape_w, 0);
 }
 
-template<typename INPUT, typename OUTPUT>
-float Metric3D<INPUT, OUTPUT>::calculate_label_scale_factor() const {
+template <typename INPUT, typename OUTPUT> float Metric3D<INPUT, OUTPUT>::calculate_label_scale_factor(const cv::Size &source_size) const {
     const auto ori_focal = (_m_intrinsic_params[0] + _m_intrinsic_params[1]) / 2.0f;
     const auto canonical_focal = _m_focal_length;
-    const auto src_w = _m_input_size_user.width;
-    const auto src_h = _m_input_size_user.height;
-    const auto resize_ratio_h =
-        static_cast<float>(_m_input_size_host.height) / static_cast<float>(src_h);
-    const auto resize_ratio_w =
-        static_cast<float>(_m_input_size_host.width) / static_cast<float>(src_w);
+    const auto src_w = source_size.width;
+    const auto src_h = source_size.height;
+    const auto resize_ratio_h = static_cast<float>(_m_input_size_host.height) / static_cast<float>(src_h);
+    const auto resize_ratio_w = static_cast<float>(_m_input_size_host.width) / static_cast<float>(src_w);
     const auto to_scale_ratio = std::min(resize_ratio_h, resize_ratio_w);
     const auto resize_label_scale_factor = 1.0f / to_scale_ratio;
     const auto cano_label_scale_ratio = canonical_focal / ori_focal;
     return cano_label_scale_ratio * resize_label_scale_factor;
 }
 
-template<typename INPUT, typename OUTPUT>
-std::vector<NamedTensor> Metric3D<INPUT, OUTPUT>::preprocess(const cv::Mat& input_image) {
+template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> Metric3D<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
     // bgr -> rgb -> keep-ratio resize -> center pad -> mean/std (f32 nchw)
-    _m_input_size_user = input_image.size();
     cv::Mat tmp;
     cv::cvtColor(input_image, tmp, cv::COLOR_BGR2RGB);
     if (tmp.type() != CV_32FC3) {
         tmp.convertTo(tmp, CV_32FC3);
     }
-    const auto src_w = _m_input_size_user.width;
-    const auto src_h = _m_input_size_user.height;
-    const auto resize_ratio_h =
-        static_cast<float>(_m_input_size_host.height) / static_cast<float>(src_h);
-    const auto resize_ratio_w =
-        static_cast<float>(_m_input_size_host.width) / static_cast<float>(src_w);
+    const auto src_w = input_image.cols;
+    const auto src_h = input_image.rows;
+    const auto resize_ratio_h = static_cast<float>(_m_input_size_host.height) / static_cast<float>(src_h);
+    const auto resize_ratio_w = static_cast<float>(_m_input_size_host.width) / static_cast<float>(src_w);
     const auto to_scale_ratio = std::min(resize_ratio_h, resize_ratio_w);
     const auto reshape_h = static_cast<int>(to_scale_ratio * static_cast<float>(src_h));
     const auto reshape_w = static_cast<int>(to_scale_ratio * static_cast<float>(src_w));
@@ -118,8 +104,8 @@ std::vector<NamedTensor> Metric3D<INPUT, OUTPUT>::preprocess(const cv::Mat& inpu
     const auto pad_w_half = pad_w / 2;
 
     cv::resize(tmp, tmp, cv::Size(reshape_w, reshape_h));
-    cv::copyMakeBorder(tmp, tmp, pad_h_half, pad_h - pad_h_half, pad_w_half, pad_w - pad_w_half,
-                       cv::BORDER_CONSTANT, cv::Scalar(123.675, 116.28, 103.53));
+    cv::copyMakeBorder(tmp, tmp, pad_h_half, pad_h - pad_h_half, pad_w_half, pad_w - pad_w_half, cv::BORDER_CONSTANT,
+                       cv::Scalar(123.675, 116.28, 103.53));
     cv::subtract(tmp, cv::Scalar(123.675, 116.28, 103.53), tmp);
     cv::divide(tmp, cv::Scalar(58.395, 57.12, 57.375), tmp);
 
@@ -127,8 +113,7 @@ std::vector<NamedTensor> Metric3D<INPUT, OUTPUT>::preprocess(const cv::Mat& inpu
     std::vector<NamedTensor> inputs;
     NamedTensor named;
     named.name = this->session().inputs().front().name;
-    named.tensor = jinq::models::backend::Tensor::make<float>(
-        {1, 3, _m_input_size_host.height, _m_input_size_host.width});
+    named.tensor = jinq::models::backend::Tensor::make<float>({1, 3, _m_input_size_host.height, _m_input_size_host.width});
     if (chw_data.size() * sizeof(float) != named.tensor.byte_size()) {
         LOG(ERROR) << "preprocessed chw data mismatches the input tensor";
         return {};
@@ -138,21 +123,19 @@ std::vector<NamedTensor> Metric3D<INPUT, OUTPUT>::preprocess(const cv::Mat& inpu
     return inputs;
 }
 
-template<typename INPUT, typename OUTPUT>
-StatusCode Metric3D<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>& outputs,
-                                                OUTPUT& output) {
-    const auto* depth_tensor = find_output(outputs, "prediction");
-    const auto* confidence_tensor = find_output(outputs, "confidence");
+template <typename INPUT, typename OUTPUT>
+StatusCode Metric3D<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs, const jinq::models::InferenceContext &context,
+                                                OUTPUT &output) {
+    const auto *depth_tensor = find_output(outputs, "prediction");
+    const auto *confidence_tensor = find_output(outputs, "confidence");
     if (depth_tensor == nullptr || confidence_tensor == nullptr) {
         LOG(ERROR) << "metric3d outputs 'prediction'/'confidence' missing";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto* depth_data = depth_tensor->tensor.template data<float>();
-    const auto* conf_data = confidence_tensor->tensor.template data<float>();
-    if (depth_tensor->tensor.element_count() <
-            static_cast<int64_t>(_m_input_size_host.area()) ||
-        confidence_tensor->tensor.element_count() <
-            static_cast<int64_t>(_m_input_size_host.area())) {
+    const auto *depth_data = depth_tensor->tensor.template data<float>();
+    const auto *conf_data = confidence_tensor->tensor.template data<float>();
+    if (depth_tensor->tensor.element_count() < static_cast<int64_t>(_m_input_size_host.area()) ||
+        confidence_tensor->tensor.element_count() < static_cast<int64_t>(_m_input_size_host.area())) {
         LOG(ERROR) << "metric3d maps smaller than the input map";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
@@ -160,8 +143,8 @@ StatusCode Metric3D<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>& 
     cv::Mat depth_map = cv::Mat::zeros(_m_input_size_host, CV_32FC1);
     cv::Mat confidence_map = cv::Mat::zeros(_m_input_size_host, CV_32FC1);
     for (auto row = 0; row < _m_input_size_host.height; ++row) {
-        auto* depth_row = depth_map.ptr<float>(row);
-        auto* conf_row = confidence_map.ptr<float>(row);
+        auto *depth_row = depth_map.ptr<float>(row);
+        auto *conf_row = confidence_map.ptr<float>(row);
         for (auto col = 0; col < _m_input_size_host.width; ++col) {
             const auto idx = row * _m_input_size_host.width + col;
             depth_row[col] = depth_data[idx] < 0 ? 0 : depth_data[idx];
@@ -172,14 +155,14 @@ StatusCode Metric3D<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>& 
     // crop the center padding, rescale and undo the canonical focal scaling
     int pad_h = 0;
     int pad_w = 0;
-    calculate_pad_info(pad_h, pad_w);
+    calculate_pad_info(pad_h, pad_w, context.source_size);
     auto crop_roi = cv::Rect(pad_w / 2, pad_h / 2, depth_map.cols - pad_w, depth_map.rows - pad_h);
     crop_roi = crop_roi & cv::Rect(0, 0, depth_map.cols, depth_map.rows);
     depth_map(crop_roi).copyTo(depth_map);
     confidence_map(crop_roi).copyTo(confidence_map);
-    cv::resize(depth_map, depth_map, _m_input_size_user);
-    cv::resize(confidence_map, confidence_map, _m_input_size_user);
-    cv::divide(depth_map, calculate_label_scale_factor(), depth_map);
+    cv::resize(depth_map, depth_map, context.source_size);
+    cv::resize(confidence_map, confidence_map, context.source_size);
+    cv::divide(depth_map, calculate_label_scale_factor(context.source_size), depth_map);
 
     MdeOutput internal_out;
     internal_out.depth_map = depth_map.clone();
@@ -191,10 +174,8 @@ StatusCode Metric3D<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>& 
 
 /************* Export Function Sets *************/
 
-template<typename INPUT, typename OUTPUT>
-Metric3D<INPUT, OUTPUT>::Metric3D()
-    : jinq::models::BackendCvModel<INPUT, OUTPUT>("METRIC3D") {}
+template <typename INPUT, typename OUTPUT> Metric3D<INPUT, OUTPUT>::Metric3D() : jinq::models::BackendCvModel<INPUT, OUTPUT>("METRIC3D") {}
 
-}
-}
-}
+} // namespace mono_depth_estimation
+} // namespace models
+} // namespace jinq

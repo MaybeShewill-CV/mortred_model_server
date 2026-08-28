@@ -25,18 +25,16 @@ using jinq::models::backend::Tensor;
 using TextRegion = jinq::models::io_define::ocr::text_region;
 using TextRegions = jinq::models::io_define::ocr::std_text_regions_output;
 
-template<typename INPUT, typename OUTPUT>
-StatusCode DBTextDetector<INPUT, OUTPUT>::on_init(const toml::table& params) {
-    const auto& inputs = this->session().inputs();
-    const auto& outputs = this->session().outputs();
+template <typename INPUT, typename OUTPUT> StatusCode DBTextDetector<INPUT, OUTPUT>::on_init(const toml::table &params) {
+    const auto &inputs = this->session().inputs();
+    const auto &outputs = this->session().outputs();
     if (inputs.empty() || outputs.empty()) {
         LOG(ERROR) << "db text model exposes no io tensors";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    const auto& input_info = inputs.front();
+    const auto &input_info = inputs.front();
     if (input_info.shape.size() != 4 || input_info.shape[1] != 3) {
-        LOG(ERROR) << "unexpected db text input shape: " << input_info.to_string()
-                   << ", expected [N,3,H,W] (nchw)";
+        LOG(ERROR) << "unexpected db text input shape: " << input_info.to_string() << ", expected [N,3,H,W] (nchw)";
         return StatusCode::MODEL_INIT_FAILED;
     }
     _m_input_name = input_info.name;
@@ -47,10 +45,7 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::on_init(const toml::table& params) {
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    const auto output_iter = std::find_if(
-        outputs.begin(), outputs.end(), [](const auto& item) {
-            return item.name == "sigmoid_0.tmp_0";
-        });
+    const auto output_iter = std::find_if(outputs.begin(), outputs.end(), [](const auto &item) { return item.name == "sigmoid_0.tmp_0"; });
     if (output_iter == outputs.end()) {
         LOG(ERROR) << "db text output tensor 'sigmoid_0.tmp_0' is missing";
         return StatusCode::MODEL_INIT_FAILED;
@@ -58,16 +53,18 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::on_init(const toml::table& params) {
     _m_output_name = output_iter->name;
 
     if (params.contains("model_input_image_size")) {
-        const toml::array* size = params["model_input_image_size"].as_array();
+        const toml::array *size = params["model_input_image_size"].as_array();
         if (size == nullptr || size->size() != 2) {
             LOG(ERROR) << "params key 'model_input_image_size' must be [height, width]";
             return StatusCode::MODEL_INIT_FAILED;
         }
-        _m_input_size_user.height = static_cast<int>((*size)[0].value_or<int64_t>(0));
-        _m_input_size_user.width = static_cast<int>((*size)[1].value_or<int64_t>(0));
-    } else {
-        _m_input_size_user.width = 640;
-        _m_input_size_user.height = 640;
+        const int height = static_cast<int>((*size)[0].value_or<int64_t>(0));
+        const int width = static_cast<int>((*size)[1].value_or<int64_t>(0));
+        if (height <= 0 || width <= 0 || cv::Size(width, height) != _m_input_size_host) {
+            LOG(ERROR) << "params key 'model_input_image_size' must be positive and match "
+                          "the model input size";
+            return StatusCode::MODEL_INIT_FAILED;
+        }
     }
     if (params.contains("model_score_threshold")) {
         _m_score_threshold = params["model_score_threshold"].value_or<double>(0.0);
@@ -80,10 +77,7 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::on_init(const toml::table& params) {
     return StatusCode::OK;
 }
 
-template<typename INPUT, typename OUTPUT>
-std::vector<NamedTensor> DBTextDetector<INPUT, OUTPUT>::preprocess(const cv::Mat& input_image) {
-    _m_input_size_user = input_image.size();
-
+template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> DBTextDetector<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
     // resize image
     cv::Mat tmp;
     cv::resize(input_image, tmp, _m_input_size_host);
@@ -99,34 +93,30 @@ std::vector<NamedTensor> DBTextDetector<INPUT, OUTPUT>::preprocess(const cv::Mat
     const auto input_chw_image_data = CvUtils::convert_to_chw_vec(tmp);
     NamedTensor named;
     named.name = _m_input_name;
-    named.tensor = Tensor::make<float>(
-        {1, 3, _m_input_size_host.height, _m_input_size_host.width});
+    named.tensor = Tensor::make<float>({1, 3, _m_input_size_host.height, _m_input_size_host.width});
     if (input_chw_image_data.size() * sizeof(float) != named.tensor.byte_size()) {
         LOG(ERROR) << "preprocessed db text image size mismatches input tensor";
         return {};
     }
-    std::memcpy(named.tensor.buffer.data(), input_chw_image_data.data(),
-                named.tensor.byte_size());
+    std::memcpy(named.tensor.buffer.data(), input_chw_image_data.data(), named.tensor.byte_size());
     return {std::move(named)};
 }
 
-template<typename INPUT, typename OUTPUT>
-StatusCode DBTextDetector<INPUT, OUTPUT>::postprocess(
-    const std::vector<NamedTensor>& outputs, OUTPUT& output) {
-    const auto output_iter = std::find_if(
-        outputs.begin(), outputs.end(),
-        [this](const NamedTensor& item) { return item.name == _m_output_name; });
+template <typename INPUT, typename OUTPUT>
+StatusCode DBTextDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
+                                                      const jinq::models::InferenceContext &context, OUTPUT &output) {
+    const auto output_iter =
+        std::find_if(outputs.begin(), outputs.end(), [this](const NamedTensor &item) { return item.name == _m_output_name; });
     if (output_iter == outputs.end()) {
         LOG(ERROR) << "db text inference result tensor is missing";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto& tensor = output_iter->tensor;
-    if (tensor.dtype != jinq::models::backend::DType::F32 ||
-        tensor.element_count() <= 0) {
+    const auto &tensor = output_iter->tensor;
+    if (tensor.dtype != jinq::models::backend::DType::F32 || tensor.element_count() <= 0) {
         LOG(ERROR) << "invalid db text inference result tensor";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto* output_data = tensor.template data<float>();
+    const auto *output_data = tensor.template data<float>();
     const auto ele_size = tensor.element_count();
 
     // construct segmentation prob and score maps. The score values below the
@@ -144,25 +134,24 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::postprocess(
     cv::Mat seg_prob_mat(_m_input_size_host, CV_8UC1, seg_mat_vec.data());
     cv::Mat seg_score_mat(_m_input_size_host, CV_32FC1, score_data.data());
 
-    return get_boxes_from_bitmap(seg_prob_mat, seg_score_mat, output);
+    return get_boxes_from_bitmap(seg_prob_mat, seg_score_mat, context, output);
 }
 
-template<typename INPUT, typename OUTPUT>
-StatusCode DBTextDetector<INPUT, OUTPUT>::get_boxes_from_bitmap(
-    const cv::Mat& seg_prob_mat, const cv::Mat& seg_score_mat, OUTPUT& output) const {
+template <typename INPUT, typename OUTPUT>
+StatusCode DBTextDetector<INPUT, OUTPUT>::get_boxes_from_bitmap(const cv::Mat &seg_prob_mat, const cv::Mat &seg_score_mat,
+                                                                const jinq::models::InferenceContext &context, OUTPUT &output) const {
     TextRegions result;
     const auto host_width = static_cast<float>(_m_input_size_host.width);
     const auto host_height = static_cast<float>(_m_input_size_host.height);
-    const auto user_width = static_cast<float>(_m_input_size_user.width);
-    const auto user_height = static_cast<float>(_m_input_size_user.height);
+    const auto user_width = static_cast<float>(context.source_size.width);
+    const auto user_height = static_cast<float>(context.source_size.height);
 
     // contours analysis
     std::vector<std::vector<cv::Point>> contours;
     std::vector<cv::Vec4i> hierarchy;
-    cv::findContours(seg_prob_mat, contours, hierarchy, cv::RETR_LIST,
-                     cv::CHAIN_APPROX_SIMPLE);
+    cv::findContours(seg_prob_mat, contours, hierarchy, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
 
-    for (const auto& contour : contours) {
+    for (const auto &contour : contours) {
         const cv::RotatedRect r_bbox = cv::minAreaRect(contour);
         cv::Rect2f r_bounding_box = r_bbox.boundingRect2f();
         cv::Point2f r_vertices[4];
@@ -175,15 +164,14 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::get_boxes_from_bitmap(
         }
 
         // calculate rotated bbox score
-        const auto valid_roi = r_bounding_box &
-                               cv::Rect2f(0, 0, seg_score_mat.cols, seg_score_mat.rows);
+        const auto valid_roi = r_bounding_box & cv::Rect2f(0, 0, seg_score_mat.cols, seg_score_mat.rows);
         const float score = static_cast<float>(cv::mean(seg_score_mat(valid_roi))[0]);
         if (score < _m_score_threshold) {
             continue;
         }
 
         // rescale bbox coords to origin user image size
-        for (auto& pt : r_vertices) {
+        for (auto &pt : r_vertices) {
             pt.x = pt.x * user_width / host_width;
             pt.y = pt.y * user_height / host_height;
         }
@@ -208,10 +196,9 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::get_boxes_from_bitmap(
 
 /************* Export Function Sets *************/
 
-template<typename INPUT, typename OUTPUT>
-DBTextDetector<INPUT, OUTPUT>::DBTextDetector()
-    : jinq::models::BackendCvModel<INPUT, OUTPUT>("DB_TEXT") {}
+template <typename INPUT, typename OUTPUT>
+DBTextDetector<INPUT, OUTPUT>::DBTextDetector() : jinq::models::BackendCvModel<INPUT, OUTPUT>("DB_TEXT") {}
 
-}
-}
-}
+} // namespace ocr
+} // namespace models
+} // namespace jinq

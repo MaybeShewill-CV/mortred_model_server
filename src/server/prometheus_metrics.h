@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: prometheus_metrics.h
-* Date: 26-8-18
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: prometheus_metrics.h
+ * Date: 26-8-18
+ ************************************************/
 
 // Minimal thread-safe Prometheus metrics collector for model servers.
 
@@ -22,7 +22,7 @@ namespace jinq {
 namespace server {
 
 class PrometheusMetrics {
-public:
+  public:
     PrometheusMetrics() {
         http_duration_buckets_ = {5, 10, 25, 50, 100, 250, 500, 1000, 2000, 5000, 10000};
         queue_wait_buckets_ = {1, 5, 10, 25, 50, 100, 250, 500};
@@ -31,24 +31,28 @@ public:
         batch_wait_buckets_ = {1, 2, 5, 10, 25, 50, 100, 250, 500};
     }
 
-    void set_model(const std::string& model) {
+    void set_model(const std::string &model) {
         std::lock_guard<std::mutex> lock(mutex_);
         model_ = model;
     }
 
-    void inc_http_requests(const std::string& method, const std::string& status) {
+    void inc_http_requests(const std::string &method, const std::string &status) {
         std::lock_guard<std::mutex> lock(mutex_);
         http_requests_[method + "|" + status]++;
     }
 
-    void observe_http_duration_ms(const std::string& method, const std::string& status, double ms) {
+    void observe_http_duration_ms(const std::string &method, const std::string &status, double ms) {
         std::lock_guard<std::mutex> lock(mutex_);
         observe_histogram_locked(http_duration_, http_duration_buckets_, method + "|" + status, ms);
     }
 
-    void inc_inference_requests(const std::string& status) {
+    void inc_inference_requests(const std::string &status) {
         std::lock_guard<std::mutex> lock(mutex_);
         inference_requests_[status]++;
+        // StatusCode::MODEL_OUTPUT_CONTRACT_FAILED has stable wire code 6.
+        if (status == "6") {
+            model_output_contract_failures_++;
+        }
     }
 
     void inc_inference_success() {
@@ -66,7 +70,7 @@ public:
         queue_rejected_++;
     }
 
-    void inc_async_jobs(const std::string& state) {
+    void inc_async_jobs(const std::string &state) {
         std::lock_guard<std::mutex> lock(mutex_);
         async_jobs_[state]++;
     }
@@ -144,12 +148,11 @@ public:
 
         ss << "# HELP mortred_http_requests_total Total HTTP requests\n";
         ss << "# TYPE mortred_http_requests_total counter\n";
-        for (const auto& kv : http_requests_) {
-            const auto& method = kv.first.substr(0, kv.first.find('|'));
-            const auto& status = kv.first.substr(kv.first.find('|') + 1);
-            ss << "mortred_http_requests_total{model=\"" << model_
-               << "\",method=\"" << method
-               << "\",status=\"" << status << "\"} " << kv.second << "\n";
+        for (const auto &kv : http_requests_) {
+            const auto &method = kv.first.substr(0, kv.first.find('|'));
+            const auto &status = kv.first.substr(kv.first.find('|') + 1);
+            ss << "mortred_http_requests_total{model=\"" << model_ << "\",method=\"" << method << "\",status=\"" << status << "\"} "
+               << kv.second << "\n";
         }
 
         ss << "# HELP mortred_http_request_duration_ms HTTP request duration\n";
@@ -158,9 +161,8 @@ public:
 
         ss << "# HELP mortred_inference_requests_total Inference requests\n";
         ss << "# TYPE mortred_inference_requests_total counter\n";
-        for (const auto& kv : inference_requests_) {
-            ss << "mortred_inference_requests_total{model=\"" << model_
-               << "\",status=\"" << kv.first << "\"} " << kv.second << "\n";
+        for (const auto &kv : inference_requests_) {
+            ss << "mortred_inference_requests_total{model=\"" << model_ << "\",status=\"" << kv.first << "\"} " << kv.second << "\n";
         }
 
         ss << "# HELP mortred_inference_success_total Successful inference requests\n";
@@ -171,15 +173,18 @@ public:
         ss << "# TYPE mortred_inference_failure_total counter\n";
         ss << "mortred_inference_failure_total{model=\"" << model_ << "\"} " << inference_failure_ << "\n";
 
+        ss << "# HELP mortred_model_output_contract_failures_total Model output contract failures\n";
+        ss << "# TYPE mortred_model_output_contract_failures_total counter\n";
+        ss << "mortred_model_output_contract_failures_total{model=\"" << model_ << "\"} " << model_output_contract_failures_ << "\n";
+
         ss << "# HELP mortred_queue_rejected_total Requests rejected by the queue depth limit\n";
         ss << "# TYPE mortred_queue_rejected_total counter\n";
         ss << "mortred_queue_rejected_total{model=\"" << model_ << "\"} " << queue_rejected_ << "\n";
 
         ss << "# HELP mortred_async_jobs_total Async jobs by state\n";
         ss << "# TYPE mortred_async_jobs_total counter\n";
-        for (const auto& kv : async_jobs_) {
-            ss << "mortred_async_jobs_total{model=\"" << model_
-               << "\",state=\"" << kv.first << "\"} " << kv.second << "\n";
+        for (const auto &kv : async_jobs_) {
+            ss << "mortred_async_jobs_total{model=\"" << model_ << "\",state=\"" << kv.first << "\"} " << kv.second << "\n";
         }
 
         ss << "# HELP mortred_async_queue_depth Current async job queue depth\n";
@@ -188,8 +193,7 @@ public:
 
         ss << "# HELP mortred_async_job_duration_ms Async job duration\n";
         ss << "# TYPE mortred_async_job_duration_ms histogram\n";
-        render_histogram_locked(ss, "mortred_async_job_duration_ms", async_duration_,
-                                inference_duration_buckets_);
+        render_histogram_locked(ss, "mortred_async_job_duration_ms", async_duration_, inference_duration_buckets_);
 
         ss << "# HELP mortred_queue_wait_duration_ms Worker queue wait duration\n";
         ss << "# TYPE mortred_queue_wait_duration_ms histogram\n";
@@ -239,19 +243,16 @@ public:
         ready_ = ready;
     }
 
-private:
+  private:
     struct Histogram {
         std::map<std::string, std::vector<uint64_t>> buckets;
         std::map<std::string, double> sum;
         std::map<std::string, uint64_t> count;
     };
 
-    static void observe_histogram_locked(
-        Histogram& hist,
-        const std::vector<double>& bucket_limits,
-        const std::string& label,
-        double value) {
-        auto& buckets = hist.buckets[label];
+    static void observe_histogram_locked(Histogram &hist, const std::vector<double> &bucket_limits, const std::string &label,
+                                         double value) {
+        auto &buckets = hist.buckets[label];
         if (buckets.empty()) {
             buckets.resize(bucket_limits.size(), 0);
         }
@@ -264,12 +265,9 @@ private:
         hist.count[label]++;
     }
 
-    void render_histogram_locked(
-        std::ostringstream& ss,
-        const std::string& metric_name,
-        const Histogram& hist,
-        const std::vector<double>& bucket_limits) const {
-        for (const auto& kv : hist.buckets) {
+    void render_histogram_locked(std::ostringstream &ss, const std::string &metric_name, const Histogram &hist,
+                                 const std::vector<double> &bucket_limits) const {
+        for (const auto &kv : hist.buckets) {
             const std::string label = kv.first.empty() ? "" : kv.first;
             const std::string label_suffix = label.empty() ? "" : "_" + label;
             for (size_t i = 0; i < kv.second.size(); ++i) {
@@ -305,6 +303,7 @@ private:
     std::map<std::string, uint64_t> inference_requests_;
     uint64_t inference_success_ = 0;
     uint64_t inference_failure_ = 0;
+    uint64_t model_output_contract_failures_ = 0;
     Histogram inference_duration_;
     std::vector<double> inference_duration_buckets_;
     Histogram queue_wait_;
@@ -327,7 +326,7 @@ private:
     bool ready_ = false;
 };
 
-}  // namespace server
-}  // namespace jinq
+} // namespace server
+} // namespace jinq
 
-#endif  // MORTRED_SERVER_PROMETHEUS_METRICS_H
+#endif // MORTRED_SERVER_PROMETHEUS_METRICS_H

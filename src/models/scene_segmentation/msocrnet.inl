@@ -9,8 +9,8 @@
 
 #include <cstring>
 
-#include <opencv2/opencv.hpp>
 #include "glog/logging.h"
+#include <opencv2/opencv.hpp>
 
 #include "common/cv_utils.h"
 
@@ -18,14 +18,12 @@ namespace jinq {
 namespace models {
 namespace scene_segmentation {
 
-using SegmentationOutput =
-    jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
-using jinq::models::backend::NamedTensor;
+using SegmentationOutput = jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
 using jinq::common::StatusCode;
+using jinq::models::backend::NamedTensor;
 
-template<typename INPUT, typename OUTPUT>
-StatusCode MsOcrNet<INPUT, OUTPUT>::on_init(const toml::table& params) {
-    const auto& input_info = this->session().inputs().front();
+template <typename INPUT, typename OUTPUT> StatusCode MsOcrNet<INPUT, OUTPUT>::on_init(const toml::table &params) {
+    const auto &input_info = this->session().inputs().front();
     if (input_info.shape.size() != 4) {
         LOG(ERROR) << "unexpected msocrnet input shape: " << input_info.to_string();
         return StatusCode::MODEL_INIT_FAILED;
@@ -44,7 +42,7 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::on_init(const toml::table& params) {
     }
 
     if (_m_input_size_host.area() <= 0 && params.contains("model_input_image_size")) {
-        const toml::array* size = params["model_input_image_size"].as_array();
+        const toml::array *size = params["model_input_image_size"].as_array();
         if (size != nullptr && size->size() == 2) {
             _m_input_size_host.height = static_cast<int>((*size)[0].value_or<int64_t>(0));
             _m_input_size_host.width = static_cast<int>((*size)[1].value_or<int64_t>(0));
@@ -58,10 +56,8 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::on_init(const toml::table& params) {
     return StatusCode::OK;
 }
 
-template<typename INPUT, typename OUTPUT>
-std::vector<NamedTensor> MsOcrNet<INPUT, OUTPUT>::preprocess(const cv::Mat& input_image) {
+template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> MsOcrNet<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
     // bgr -> rgb -> resize -> [0,1] -> (x-0.5)/0.5
-    _m_input_size_user = input_image.size();
     cv::Mat tmp;
     cv::cvtColor(input_image, tmp, cv::COLOR_BGR2RGB);
     if (tmp.size() != _m_input_size_host) {
@@ -78,8 +74,7 @@ std::vector<NamedTensor> MsOcrNet<INPUT, OUTPUT>::preprocess(const cv::Mat& inpu
     NamedTensor named;
     named.name = this->session().inputs().front().name;
     if (_m_input_is_nhwc) {
-        named.tensor = jinq::models::backend::Tensor::make<float>(
-            {1, _m_input_size_host.height, _m_input_size_host.width, 3});
+        named.tensor = jinq::models::backend::Tensor::make<float>({1, _m_input_size_host.height, _m_input_size_host.width, 3});
         const auto bytes = tmp.total() * tmp.elemSize();
         if (bytes != named.tensor.byte_size()) {
             LOG(ERROR) << "preprocessed image bytes mismatch tensor size";
@@ -88,8 +83,7 @@ std::vector<NamedTensor> MsOcrNet<INPUT, OUTPUT>::preprocess(const cv::Mat& inpu
         std::memcpy(named.tensor.buffer.data(), tmp.data, bytes);
     } else {
         const auto chw_data = jinq::common::CvUtils::convert_to_chw_vec(tmp);
-        named.tensor = jinq::models::backend::Tensor::make<float>(
-            {1, 3, _m_input_size_host.height, _m_input_size_host.width});
+        named.tensor = jinq::models::backend::Tensor::make<float>({1, 3, _m_input_size_host.height, _m_input_size_host.width});
         if (chw_data.size() * sizeof(float) != named.tensor.byte_size()) {
             LOG(ERROR) << "preprocessed chw data mismatches tensor size";
             return {};
@@ -100,23 +94,21 @@ std::vector<NamedTensor> MsOcrNet<INPUT, OUTPUT>::preprocess(const cv::Mat& inpu
     return inputs;
 }
 
-template<typename INPUT, typename OUTPUT>
-StatusCode MsOcrNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>& outputs,
-                                                OUTPUT& output) {
+template <typename INPUT, typename OUTPUT>
+StatusCode MsOcrNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs, const jinq::models::InferenceContext &context,
+                                                OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "msocrnet output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto& tensor = outputs.front().tensor;
-    if (tensor.dtype != jinq::models::backend::DType::I32 &&
-        tensor.dtype != jinq::models::backend::DType::I64) {
+    const auto &tensor = outputs.front().tensor;
+    if (tensor.dtype != jinq::models::backend::DType::I32 && tensor.dtype != jinq::models::backend::DType::I64) {
         LOG(ERROR) << "msocrnet argmax output dtype must be i32/i64, got " << tensor.dtype;
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
     // argmax mask layout: [1,H,W] (onnx) or [1,H,W,1] (mnn)
     if (tensor.shape.size() < 3) {
-        LOG(ERROR) << "unexpected msocrnet output shape: "
-                   << jinq::models::backend::shape_to_string(tensor.shape);
+        LOG(ERROR) << "unexpected msocrnet output shape: " << jinq::models::backend::shape_to_string(tensor.shape);
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
     const auto height = tensor.shape[1];
@@ -129,18 +121,18 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>& 
 
     cv::Mat seg_mask(_m_input_size_host, CV_32SC1, cv::Scalar(0));
     if (tensor.dtype == jinq::models::backend::DType::I32) {
-        const auto* data = tensor.template data<int32_t>();
+        const auto *data = tensor.template data<int32_t>();
         for (int64_t idx = 0; idx < element_count; ++idx) {
             seg_mask.at<int32_t>(static_cast<int>(idx)) = data[idx];
         }
     } else {
-        const auto* data = tensor.template data<int64_t>();
+        const auto *data = tensor.template data<int64_t>();
         for (int64_t idx = 0; idx < element_count; ++idx) {
             seg_mask.at<int32_t>(static_cast<int>(idx)) = static_cast<int32_t>(data[idx]);
         }
     }
     cv::Mat resized_mask;
-    cv::resize(seg_mask, resized_mask, _m_input_size_user, 0.0, 0.0, cv::INTER_NEAREST);
+    cv::resize(seg_mask, resized_mask, context.source_size, 0.0, 0.0, cv::INTER_NEAREST);
 
     SegmentationOutput internal_out;
     internal_out.segmentation_result = resized_mask.clone();
@@ -150,10 +142,8 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>& 
 
 /************* Export Function Sets *************/
 
-template<typename INPUT, typename OUTPUT>
-MsOcrNet<INPUT, OUTPUT>::MsOcrNet()
-    : jinq::models::BackendCvModel<INPUT, OUTPUT>("MSOCRNET") {}
+template <typename INPUT, typename OUTPUT> MsOcrNet<INPUT, OUTPUT>::MsOcrNet() : jinq::models::BackendCvModel<INPUT, OUTPUT>("MSOCRNET") {}
 
-}
-}
-}
+} // namespace scene_segmentation
+} // namespace models
+} // namespace jinq

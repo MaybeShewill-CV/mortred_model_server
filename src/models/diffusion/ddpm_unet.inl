@@ -18,35 +18,31 @@ namespace diffusion {
 
 using UnetInput = jinq::models::io_define::diffusion::std_ddpm_unet_input;
 using UnetOutput = jinq::models::io_define::diffusion::std_ddpm_unet_output;
-using jinq::models::backend::NamedTensor;
 using jinq::common::StatusCode;
+using jinq::models::backend::NamedTensor;
 
-template <typename INPUT, typename OUTPUT>
-std::vector<NamedTensor> DDPMUNet<INPUT, OUTPUT>::make_inputs(const INPUT& input) {
-    const auto& input_infos = this->session().inputs();
-    const auto xt_info = std::find_if(
-        input_infos.begin(), input_infos.end(),
-        [](const jinq::models::backend::TensorInfo& info) { return info.name == "xt"; });
-    const auto t_info = std::find_if(
-        input_infos.begin(), input_infos.end(),
-        [](const jinq::models::backend::TensorInfo& info) { return info.name == "t"; });
+template <typename INPUT, typename OUTPUT> jinq::models::PreparedInput DDPMUNet<INPUT, OUTPUT>::prepare_inputs(const INPUT &input) {
+    const auto &input_infos = this->session().inputs();
+    const auto xt_info = std::find_if(input_infos.begin(), input_infos.end(),
+                                      [](const jinq::models::backend::TensorInfo &info) { return info.name == "xt"; });
+    const auto t_info = std::find_if(input_infos.begin(), input_infos.end(),
+                                     [](const jinq::models::backend::TensorInfo &info) { return info.name == "t"; });
     if (xt_info == input_infos.end() || t_info == input_infos.end()) {
         LOG(ERROR) << "ddpm unet session does not expose the 'xt'/'t' inputs";
         return {};
     }
     if (xt_info->dynamic || t_info->dynamic) {
-        LOG(ERROR) << "ddpm unet inputs must be static, got " << xt_info->to_string() << " / "
-                   << t_info->to_string();
+        LOG(ERROR) << "ddpm unet inputs must be static, got " << xt_info->to_string() << " / " << t_info->to_string();
         return {};
     }
 
+    jinq::models::PreparedInput prepared;
     std::vector<NamedTensor> inputs;
     NamedTensor xt;
     xt.name = "xt";
     xt.tensor = jinq::models::backend::Tensor::make<float>(xt_info->shape);
     if (input.xt.size() * sizeof(float) != xt.tensor.byte_size()) {
-        LOG(ERROR) << "ddpm unet xt element count " << input.xt.size()
-                   << " mismatches session input " << xt_info->to_string();
+        LOG(ERROR) << "ddpm unet xt element count " << input.xt.size() << " mismatches session input " << xt_info->to_string();
         return {};
     }
     std::memcpy(xt.tensor.buffer.data(), input.xt.data(), xt.tensor.byte_size());
@@ -67,18 +63,19 @@ std::vector<NamedTensor> DDPMUNet<INPUT, OUTPUT>::make_inputs(const INPUT& input
         return {};
     }
     inputs.push_back(std::move(timestep));
-    return inputs;
+    prepared.inputs = std::move(inputs);
+    return prepared;
 }
 
 template <typename INPUT, typename OUTPUT>
-StatusCode DDPMUNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>& outputs,
-                                                OUTPUT& output) {
+StatusCode DDPMUNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs, const jinq::models::InferenceContext & /*context*/,
+                                                OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "ddpm unet output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto& tensor = outputs.front().tensor;
-    const auto* data = tensor.data<float>();
+    const auto &tensor = outputs.front().tensor;
+    const auto *data = tensor.data<float>();
     UnetOutput internal_out;
     internal_out.predict_noise.resize(static_cast<size_t>(tensor.element_count()));
     std::memcpy(internal_out.predict_noise.data(), data, tensor.byte_size());
@@ -88,10 +85,8 @@ StatusCode DDPMUNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>& 
 
 /************* Export Function Sets *************/
 
-template <typename INPUT, typename OUTPUT>
-DDPMUNet<INPUT, OUTPUT>::DDPMUNet()
-    : jinq::models::BackendCvModel<INPUT, OUTPUT>("DDPM_UNET") {}
+template <typename INPUT, typename OUTPUT> DDPMUNet<INPUT, OUTPUT>::DDPMUNet() : jinq::models::BackendCvModel<INPUT, OUTPUT>("DDPM_UNET") {}
 
 } // namespace diffusion
 } // namespace models
-}
+} // namespace jinq

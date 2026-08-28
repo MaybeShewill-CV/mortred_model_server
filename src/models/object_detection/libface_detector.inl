@@ -11,8 +11,8 @@
 #include <cmath>
 #include <cstring>
 
-#include <opencv2/opencv.hpp>
 #include "glog/logging.h"
+#include <opencv2/opencv.hpp>
 
 #include "common/cv_utils.h"
 
@@ -22,66 +22,52 @@ namespace object_detection {
 
 using FaceBBox = jinq::models::io_define::object_detection::face_bbox;
 using FaceOutput = jinq::models::io_define::object_detection::std_face_detection_output;
-using jinq::models::backend::NamedTensor;
 using jinq::common::StatusCode;
+using jinq::models::backend::NamedTensor;
 
-template<typename INPUT, typename OUTPUT>
-StatusCode LibFaceDetector<INPUT, OUTPUT>::on_init(const toml::table& params) {
-    if (params.contains("model_score_threshold")) {
-        _m_score_threshold = params["model_score_threshold"].value_or<double>(0.0);
-    }
-    _m_score_threshold = std::max(_m_score_threshold, 0.5);
-    if (params.contains("model_nms_threshold")) {
-        _m_nms_threshold = params["model_nms_threshold"].value_or<double>(0.0);
-    }
-    if (params.contains("model_keep_top_k")) {
-        _m_keep_topk = static_cast<size_t>(params["model_keep_top_k"].value_or<int64_t>(0));
+template <typename INPUT, typename OUTPUT> StatusCode LibFaceDetector<INPUT, OUTPUT>::on_init(const toml::table &params) {
+    _m_detection_params.score_threshold = 0.6f;
+    _m_detection_params.nms_threshold = 0.3f;
+    _m_detection_params.keep_top_k = 250;
+    std::string param_error;
+    if (!_m_detection_params.parse(params, &_m_detection_params, &param_error)) {
+        LOG(ERROR) << "invalid libface detection params: " << param_error;
+        return StatusCode::MODEL_INIT_FAILED;
     }
 
-    const auto& input_info = this->session().inputs().front();
+    const auto &input_info = this->session().inputs().front();
     if (input_info.shape.size() != 4 || input_info.shape[1] != 3) {
-        LOG(ERROR) << "unexpected libface input shape: " << input_info.to_string()
-                   << ", expected [N,3,H,W] (nchw)";
+        LOG(ERROR) << "unexpected libface input shape: " << input_info.to_string() << ", expected [N,3,H,W] (nchw)";
         return StatusCode::MODEL_INIT_FAILED;
     }
     _m_input_size_host.height = static_cast<int>(input_info.shape[2]);
     _m_input_size_host.width = static_cast<int>(input_info.shape[3]);
+    cv::Size configured_size;
+    if (!parse_model_input_size(params, &configured_size, &param_error) ||
+        (params.contains("model_input_image_size") && configured_size != _m_input_size_host)) {
+        LOG(ERROR) << "invalid libface input size: " << (param_error.empty() ? "configured size mismatches model input" : param_error);
+        return StatusCode::MODEL_INIT_FAILED;
+    }
     return StatusCode::OK;
 }
 
-template<typename INPUT, typename OUTPUT>
-const NamedTensor* LibFaceDetector<INPUT, OUTPUT>::find_output(
-    const std::vector<NamedTensor>& outputs, const std::string& name) const {
-    for (const auto& item : outputs) {
-        if (item.name == name) {
-            return &item;
-        }
-    }
-    return nullptr;
-}
-
-template<typename INPUT, typename OUTPUT>
-auto LibFaceDetector<INPUT, OUTPUT>::generate_prior_anchors() const
-    -> std::vector<FaceAnchor> {
-    const std::vector<std::vector<double>> min_sizes = {
-        {10., 16., 24.}, {32., 48.}, {64., 96.}, {128., 192., 256.}};
+template <typename INPUT, typename OUTPUT> auto LibFaceDetector<INPUT, OUTPUT>::generate_prior_anchors() const -> std::vector<FaceAnchor> {
+    const std::vector<std::vector<double>> min_sizes = {{10., 16., 24.}, {32., 48.}, {64., 96.}, {128., 192., 256.}};
     const std::vector<double> steps = {8., 16., 32., 64.};
 
     const auto in_h = _m_input_size_host.height;
     const auto in_w = _m_input_size_host.width;
-    const std::vector<int> feature_map_2th = {
-        static_cast<int>((in_h + 1) / 2 / 2), static_cast<int>((in_w + 1) / 2 / 2)};
+    const std::vector<int> feature_map_2th = {static_cast<int>((in_h + 1) / 2 / 2), static_cast<int>((in_w + 1) / 2 / 2)};
     const std::vector<int> feature_map_3th = {feature_map_2th[0] / 2, feature_map_2th[1] / 2};
     const std::vector<int> feature_map_4th = {feature_map_3th[0] / 2, feature_map_3th[1] / 2};
     const std::vector<int> feature_map_5th = {feature_map_4th[0] / 2, feature_map_4th[1] / 2};
     const std::vector<int> feature_map_6th = {feature_map_5th[0] / 2, feature_map_5th[1] / 2};
-    const std::vector<std::vector<int>> feature_maps = {
-        feature_map_3th, feature_map_4th, feature_map_5th, feature_map_6th};
+    const std::vector<std::vector<int>> feature_maps = {feature_map_3th, feature_map_4th, feature_map_5th, feature_map_6th};
 
     std::vector<FaceAnchor> anchors;
     for (size_t k = 0; k < feature_maps.size(); ++k) {
-        const auto& feature_map = feature_maps[k];
-        const auto& feature_min_sizes = min_sizes[k];
+        const auto &feature_map = feature_maps[k];
+        const auto &feature_min_sizes = min_sizes[k];
         for (int i = 0; i < feature_map[0]; ++i) {
             for (int j = 0; j < feature_map[1]; ++j) {
                 for (const auto min_size : feature_min_sizes) {
@@ -98,9 +84,7 @@ auto LibFaceDetector<INPUT, OUTPUT>::generate_prior_anchors() const
     return anchors;
 }
 
-template<typename INPUT, typename OUTPUT>
-std::vector<NamedTensor> LibFaceDetector<INPUT, OUTPUT>::preprocess(const cv::Mat& input_image) {
-    _m_input_size_user = input_image.size();
+template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> LibFaceDetector<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
     cv::Mat tmp;
     if (input_image.size() != _m_input_size_host) {
         cv::resize(input_image, tmp, _m_input_size_host);
@@ -115,8 +99,7 @@ std::vector<NamedTensor> LibFaceDetector<INPUT, OUTPUT>::preprocess(const cv::Ma
     std::vector<NamedTensor> inputs;
     NamedTensor named;
     named.name = this->session().inputs().front().name;
-    named.tensor = jinq::models::backend::Tensor::make<float>(
-        {1, 3, _m_input_size_host.height, _m_input_size_host.width});
+    named.tensor = jinq::models::backend::Tensor::make<float>({1, 3, _m_input_size_host.height, _m_input_size_host.width});
     if (chw_data.size() * sizeof(float) != named.tensor.byte_size()) {
         LOG(ERROR) << "preprocessed libface image mismatches the input tensor";
         return {};
@@ -126,33 +109,33 @@ std::vector<NamedTensor> LibFaceDetector<INPUT, OUTPUT>::preprocess(const cv::Ma
     return inputs;
 }
 
-template<typename INPUT, typename OUTPUT>
-StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>& outputs,
-                                                        OUTPUT& output) {
-    const auto* loc = find_output(outputs, "loc");
-    const auto* conf = find_output(outputs, "conf");
+template <typename INPUT, typename OUTPUT>
+StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
+                                                       const jinq::models::InferenceContext &context, OUTPUT &output) {
+    const auto *loc = jinq::models::backend::find_output(outputs, "loc");
+    const auto *conf = jinq::models::backend::find_output(outputs, "conf");
     if (loc == nullptr || conf == nullptr) {
         LOG(ERROR) << "libface outputs loc/conf missing";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    if (loc->tensor.dtype != jinq::models::backend::DType::F32 ||
-        conf->tensor.dtype != jinq::models::backend::DType::F32) {
-        LOG(ERROR) << "libface outputs must be f32 tensors";
-        return StatusCode::MODEL_EMPTY_OUTPUT;
-    }
-    if (loc->tensor.shape.size() != 3 || conf->tensor.shape.size() != 3 ||
-        loc->tensor.shape[0] != 1 || conf->tensor.shape[0] != 1 ||
-        loc->tensor.shape[1] != conf->tensor.shape[1] || loc->tensor.shape[2] != 14 ||
-        conf->tensor.shape[2] != 2) {
-        LOG(ERROR) << "unexpected libface output shapes: loc="
-                   << jinq::models::backend::shape_to_string(loc->tensor.shape) << ", conf="
-                   << jinq::models::backend::shape_to_string(conf->tensor.shape);
-        return StatusCode::MODEL_EMPTY_OUTPUT;
+    std::string contract_error;
+    if (!jinq::models::backend::validate_output_tensor(*loc, {jinq::models::backend::DType::F32, 3, {1, -1, 14}}, &contract_error) ||
+        !jinq::models::backend::validate_output_tensor(*conf, {jinq::models::backend::DType::F32, 3, {1, loc->tensor.shape[1], 2}},
+                                                       &contract_error)) {
+        LOG(ERROR) << "libface output contract failed: " << contract_error;
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
 
     const auto anchor_count = static_cast<size_t>(loc->tensor.shape[1]);
-    const auto* loc_data = loc->tensor.template data<float>();
-    const auto* conf_data = conf->tensor.template data<float>();
+    const float *loc_data = nullptr;
+    const float *conf_data = nullptr;
+    if (!jinq::models::backend::get_f32_data(loc->tensor, &loc_data, &contract_error) ||
+        !jinq::models::backend::get_f32_data(conf->tensor, &conf_data, &contract_error) ||
+        !jinq::models::backend::require_finite_f32(loc_data, loc->tensor.element_count(), loc->name, &contract_error) ||
+        !jinq::models::backend::require_finite_f32(conf_data, conf->tensor.element_count(), conf->name, &contract_error)) {
+        LOG(ERROR) << "libface output contract failed: " << contract_error;
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+    }
 
     // MNN rank-3 host output is row-major [N, anchors, channels].  A real
     // 640x480-weight probe found 37 threshold hits with this interleaved view
@@ -161,16 +144,15 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTe
 
     const auto priors = generate_prior_anchors();
     if (priors.size() != anchor_count) {
-        LOG(ERROR) << "libface anchor count " << priors.size()
-                   << " mismatches output anchor count " << anchor_count;
+        LOG(ERROR) << "libface anchor count " << priors.size() << " mismatches output anchor count " << anchor_count;
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
 
     std::vector<FaceBBox> decode_result;
     for (size_t bbox_index = 0; bbox_index < anchor_count; ++bbox_index) {
-        const auto& prior = priors[bbox_index];
+        const auto &prior = priors[bbox_index];
         const auto raw_conf = conf_data[bbox_index * 2 + 1];
-        if (raw_conf <= _m_score_threshold) {
+        if (raw_conf <= _m_detection_params.score_threshold) {
             continue;
         }
 
@@ -189,39 +171,33 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTe
 
         FaceBBox face_box;
         face_box.score = raw_conf;
-        face_box.bbox = cv::Rect2f(
-            static_cast<float>(pred_bbox_x), static_cast<float>(pred_bbox_y),
-            static_cast<float>(pred_bbox_w), static_cast<float>(pred_bbox_h));
+        face_box.bbox = cv::Rect2f(static_cast<float>(pred_bbox_x), static_cast<float>(pred_bbox_y), static_cast<float>(pred_bbox_w),
+                                   static_cast<float>(pred_bbox_h));
         for (size_t landmark_index = 4; landmark_index < 14; landmark_index += 2) {
             const auto raw_landmark_x = loc_data[bbox_index * 14 + landmark_index];
             const auto raw_landmark_y = loc_data[bbox_index * 14 + landmark_index + 1];
-            const auto pred_landmark_x =
-                (prior.cx + raw_landmark_x * 0.1 * prior.s_kx) * _m_input_size_host.width;
-            const auto pred_landmark_y =
-                (prior.cy + raw_landmark_y * 0.1 * prior.s_ky) * _m_input_size_host.height;
-            face_box.landmarks.emplace_back(
-                static_cast<float>(pred_landmark_x), static_cast<float>(pred_landmark_y));
+            const auto pred_landmark_x = (prior.cx + raw_landmark_x * 0.1 * prior.s_kx) * _m_input_size_host.width;
+            const auto pred_landmark_y = (prior.cy + raw_landmark_y * 0.1 * prior.s_ky) * _m_input_size_host.height;
+            face_box.landmarks.emplace_back(static_cast<float>(pred_landmark_x), static_cast<float>(pred_landmark_y));
         }
         face_box.class_id = 0;
         decode_result.push_back(std::move(face_box));
     }
 
-    auto nms_result = jinq::common::CvUtils::nms_boxes_per_class(
-        decode_result, _m_score_threshold, _m_nms_threshold);
-    if (nms_result.size() > _m_keep_topk) {
-        nms_result.resize(_m_keep_topk);
+    auto nms_result =
+        jinq::common::CvUtils::nms_boxes_per_class(decode_result, _m_detection_params.score_threshold, _m_detection_params.nms_threshold);
+    if (nms_result.size() > static_cast<size_t>(_m_detection_params.keep_top_k)) {
+        nms_result.resize(static_cast<size_t>(_m_detection_params.keep_top_k));
     }
 
-    const auto width_scale =
-        _m_input_size_user.width / static_cast<float>(_m_input_size_host.width);
-    const auto height_scale =
-        _m_input_size_user.height / static_cast<float>(_m_input_size_host.height);
-    for (auto& face_box : nms_result) {
+    const auto width_scale = static_cast<float>(context.source_size.width) / static_cast<float>(_m_input_size_host.width);
+    const auto height_scale = static_cast<float>(context.source_size.height) / static_cast<float>(_m_input_size_host.height);
+    for (auto &face_box : nms_result) {
         face_box.bbox.x *= width_scale;
         face_box.bbox.y *= height_scale;
         face_box.bbox.width *= width_scale;
         face_box.bbox.height *= height_scale;
-        for (auto& landmark : face_box.landmarks) {
+        for (auto &landmark : face_box.landmarks) {
             landmark.x *= width_scale;
             landmark.y *= height_scale;
         }
@@ -230,7 +206,7 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTe
 
     FaceOutput faces;
     faces.reserve(nms_result.size());
-    for (const auto& face_box : nms_result) {
+    for (const auto &face_box : nms_result) {
         faces.push_back(face_box);
     }
     output = std::move(faces);
@@ -239,9 +215,8 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTe
 
 /************* Export Function Sets *************/
 
-template<typename INPUT, typename OUTPUT>
-LibFaceDetector<INPUT, OUTPUT>::LibFaceDetector()
-    : jinq::models::BackendCvModel<INPUT, OUTPUT>("LIBFACE") {}
+template <typename INPUT, typename OUTPUT>
+LibFaceDetector<INPUT, OUTPUT>::LibFaceDetector() : jinq::models::BackendCvModel<INPUT, OUTPUT>("LIBFACE") {}
 
 } // namespace object_detection
 } // namespace models

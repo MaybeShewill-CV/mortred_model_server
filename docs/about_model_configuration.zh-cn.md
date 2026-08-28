@@ -20,6 +20,9 @@ output_names = ["output0"]     # 可选，可过滤辅助输出
 [YOLOV8.params]
 model_score_threshold = 0.25
 model_nms_threshold = 0.5
+model_input_image_size = [640, 640]   # [height, width]???????????? session ????
+max_image_pixels = 16777216           # ??????????
+max_image_side = 8192
 class_names = ["person", "bicycle"]
 ```
 
@@ -35,6 +38,8 @@ class_names = ["person", "bicycle"]
 | `input_layout` | `backend` | MNN host 张量布局：`nhwc`、`nchw` 或按模型自动识别 |
 | `precision_mode` / `power_mode` | `backend` | MNN `BackendConfig` 配置 |
 | `input_names` / `output_names` | `backend` | I/O 名称覆盖或过滤 |
+| `max_image_pixels` / `max_image_side` | ???? `params` | ???????????? 16777216 / 8192 |
+| `model_input_image_size` | ???????? `params` | `[height, width]`???? session ?? H/W ?? |
 | 其他字段 | `params` | 模型特有参数；名称和历史配置保持一致 |
 
 ## 多引擎模型

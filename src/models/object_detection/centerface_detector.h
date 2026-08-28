@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: centerface_detector.h
-* Date: 23-10-18
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: centerface_detector.h
+ * Date: 23-10-18
+ ************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_CENTERFACE_DETECTOR_H
 #define MORTRED_MODEL_SERVER_CENTERFACE_DETECTOR_H
@@ -15,51 +15,38 @@
 
 #include "models/backend/backend_cv_model.h"
 #include "models/backend/tensor.h"
+#include "models/backend/tensor_contract.h"
 #include "models/model_io_define.h"
+#include "models/object_detection/detection_params.h"
 
 namespace jinq {
 namespace models {
 namespace object_detection {
 using jinq::common::StatusCode;
 
-template<typename INPUT, typename OUTPUT>
-class CenterFaceDetector : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class CenterFaceDetector : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   public:
     CenterFaceDetector();
     ~CenterFaceDetector() override = default;
 
-    CenterFaceDetector(const CenterFaceDetector& transformer) = delete;
-    CenterFaceDetector& operator=(const CenterFaceDetector& transformer) = delete;
+    CenterFaceDetector(const CenterFaceDetector &transformer) = delete;
+    CenterFaceDetector &operator=(const CenterFaceDetector &transformer) = delete;
 
-  private:
-    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
+  protected:
+    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
-    StatusCode postprocess(
-        const std::vector<jinq::models::backend::NamedTensor>& outputs,
-        OUTPUT& output) override;
+    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
+                           const jinq::models::InferenceContext & /*context*/, OUTPUT &output) override;
 
-    StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table &params) override;
 
-    const jinq::models::backend::NamedTensor* find_output(
-        const std::vector<jinq::models::backend::NamedTensor>& outputs,
-        const std::string& name) const;
-
-    // score thresh
-    double _m_score_threshold = 0.6;
-    // nms thresh
-    double _m_nms_threshold = 0.3;
-    // top_k keep
-    size_t _m_keep_topk = 250;
-    // input image size
-    cv::Size _m_input_size_user = cv::Size();
-    // input node size
-    cv::Size _m_input_size_host = cv::Size();
+    DetectionParams _m_detection_params;
 };
 
-}
-}
-}
+} // namespace object_detection
+} // namespace models
+} // namespace jinq
 
 #include "centerface_detector.inl"
 
-#endif //MORTRED_MODEL_SERVER_CENTERFACE_DETECTOR_H
+#endif // MORTRED_MODEL_SERVER_CENTERFACE_DETECTOR_H

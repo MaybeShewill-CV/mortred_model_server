@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: hrnet_segmentation.h
-* Date: 23-11-17
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: hrnet_segmentation.h
+ * Date: 23-11-17
+ ************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_HRNET_SEGMENTATION_H
 #define MORTRED_MODEL_SERVER_HRNET_SEGMENTATION_H
@@ -19,34 +19,30 @@ namespace models {
 namespace scene_segmentation {
 using jinq::common::StatusCode;
 
-template<typename INPUT, typename OUTPUT>
-class HRNetSegmentation : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class HRNetSegmentation : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
   public:
     HRNetSegmentation();
     ~HRNetSegmentation() override = default;
 
-    HRNetSegmentation(const HRNetSegmentation& transformer) = delete;
-    HRNetSegmentation& operator=(const HRNetSegmentation& transformer) = delete;
+    HRNetSegmentation(const HRNetSegmentation &transformer) = delete;
+    HRNetSegmentation &operator=(const HRNetSegmentation &transformer) = delete;
 
   private:
-    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat& image) override;
+    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
-    StatusCode postprocess(
-        const std::vector<jinq::models::backend::NamedTensor>& outputs,
-        OUTPUT& output) override;
+    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
+                           const jinq::models::InferenceContext & /*context*/, OUTPUT &output) override;
 
-    StatusCode on_init(const toml::table& params) override;
+    StatusCode on_init(const toml::table &params) override;
 
-    // user image size of the current run
-    cv::Size _m_input_size_user = cv::Size();
     // network input node size
     cv::Size _m_input_size_host = cv::Size();
 };
 
-}
-}
-}
+} // namespace scene_segmentation
+} // namespace models
+} // namespace jinq
 
 #include "hrnet_segmentation.inl"
 
-#endif //MORTRED_MODEL_SERVER_HRNET_SEGMENTATION_H
+#endif // MORTRED_MODEL_SERVER_HRNET_SEGMENTATION_H
