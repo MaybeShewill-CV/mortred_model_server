@@ -15,6 +15,8 @@
 #include "common/base64.h"
 #include "models/cv_image_input.h"
 
+using jinq::common::StatusCode;
+using jinq::models::cv_input::ImageInputLimits;
 using jinq::models::cv_input::load_image;
 using jinq::models::io_define::common_io::base64_input;
 using jinq::models::io_define::common_io::file_input;
