@@ -91,7 +91,7 @@ TEST(DetectionParams, ParsesAndValidatesInputSize) {
     ASSERT_TRUE(parse_model_input_size(params, &size, &error)) << error;
     EXPECT_EQ(size, cv::Size(640, 480));
 
-    for (const std::string &value :
+    for (const std::string value :
          {"model_input_image_size = [0, 640]", "model_input_image_size = [640]", "model_input_image_size = \"bad\""}) {
         params = parse_toml(value);
         EXPECT_FALSE(parse_model_input_size(params, &size, &error)) << value;
