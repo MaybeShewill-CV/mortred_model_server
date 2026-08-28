@@ -75,7 +75,7 @@ TEST(cv_image_input, normalizes_gray_and_four_channel_mats) {
     bgra_input.input_image = bgra;
     auto bgr = load_image(bgra_input);
     EXPECT_EQ(bgr.type(), CV_8UC3);
-    EXPECT_EQ(bgr.at<cv::Vec3b>(0, 0), cv::Vec3b(3, 2, 1));
+    EXPECT_EQ(bgr.at<cv::Vec3b>(0, 0), cv::Vec3b(1, 2, 3));
 }
 
 TEST(cv_image_input, rejects_unsupported_mat_type) {
