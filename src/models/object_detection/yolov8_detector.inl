@@ -80,8 +80,8 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> YoloV8Detect
 template <typename INPUT, typename OUTPUT>
 cv::Rect2f YoloV8Detector<INPUT, OUTPUT>::transform_bboxes(const cv::Rect2d &bbox,
                                                            const jinq::models::backend::InferenceContext &context) const {
-    const auto w_scale = static_cast<float>(context.source_size.width) / static_cast<float>(_m_input_size_host.width);
-    const auto h_scale = static_cast<float>(context.source_size.height) / static_cast<float>(_m_input_size_host.height);
+    const auto w_scale = static_cast<float>(context.source_size.width) / static_cast<float>(context.network_size.width);
+    const auto h_scale = static_cast<float>(context.source_size.height) / static_cast<float>(context.network_size.height);
     cv::Rect2f result;
     result.x = static_cast<float>(bbox.x * w_scale);
     result.y = static_cast<float>(bbox.y * h_scale);
