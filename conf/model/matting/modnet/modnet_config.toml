@@ -10,3 +10,8 @@ input_names = ["img"]
 output_names = ["sigmoid_2.tmp_0"]
 precision_mode = 0
 power_mode = 0
+
+[MODNET_MATTING.params]
+# Portrait matting commonly receives full-size phone photos; the golden input
+# is 3744x5616 (21.0 MP), above the repository-wide 16 MP DoS default.
+max_image_pixels = 25165824

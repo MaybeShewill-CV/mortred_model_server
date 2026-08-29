@@ -7,3 +7,7 @@ threads = 4
 input_layout = "nchw"
 precision_mode = 0
 power_mode = 0
+
+[PP_MATTING.params]
+# Keep the same input policy as MODNet for full-size portrait photographs.
+max_image_pixels = 25165824
