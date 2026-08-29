@@ -625,18 +625,33 @@ jobs:
 
       # Exactly the same carrier as full-werror: dependency layers reused via gha cache, full -Werror compile
       - name: Build full project with warnings as errors
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: build
-          push: false
-          load: false
-          build-args: |
-            EXTRA_CMAKE_FLAGS=-DMORTRED_ENABLE_WERROR=ON
-          cache-from: type=gha
-          # Full gates intentionally do not export the multi-GB dependency layer:
-          # GHA cache uploads can exceed the storage SAS expiry and turn a
-          # successful compile red.
+        id: full_build
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          docker buildx build \
+            --target build \
+            --build-arg EXTRA_CMAKE_FLAGS=-DMORTRED_ENABLE_WERROR=ON \
+            --cache-from type=gha \
+            --progress=plain \
+            . 2>&1 | tee "${RUNNER_TEMP}/full-build-pr.log"
+      # Full gates intentionally do not export the multi-GB dependency layer:
+      # GHA cache uploads can exceed the storage SAS expiry and turn a
+      # successful compile red.
+
+      # build-push-action collapses BuildKit output into one generic
+      # annotation. Run buildx directly and surface the compiler's own error
+      # lines as check-run annotations so a PR failure is actionable without
+      # repository-admin log access.
+      - name: Surface build errors
+        if: steps.full_build.outcome == 'failure'
+        run: |
+          set -euo pipefail
+          LOG="${RUNNER_TEMP}/full-build-pr.log"
+          grep -E 'error:|FAILED:|Exit Code:|failed to solve' "$LOG" | tail -n 10 | while IFS= read -r line; do
+            printf '::error::%s\n' "$line"
+          done
+          exit 1
 
   # ---------------------------------------------------------------------------
   # Job G: daily full gate (schedule / manual): runs a full -Werror build + unit tests + e2e
