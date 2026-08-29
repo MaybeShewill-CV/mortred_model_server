@@ -74,6 +74,14 @@ Notes:
 - Request-scoped data (source image size, network size, crop geometry) must be
   carried in `InferenceContext`; never store it in a model member because one
   worker may be processing a dynamic batch.
+- Dense image outputs (masks, alpha, depth and enhanced images) are resized to
+  `context.source_size` only after the source geometry has been validated.
+  Coordinate-producing models use the shared request-geometry helpers instead
+  of dividing by an input-size member.
+- Validate backend outputs through
+  [`f32_output.h`](../src/models/backend/f32_output.h) before decoding. A
+  malformed tensor must return `MODEL_OUTPUT_CONTRACT_FAILED`, not produce a
+  partially decoded task result.
 - Multi-engine models (encoder + decoder) configure `<key>_backend` sub-tables,
   build extra sessions with `make_session("<key>_backend")` and orchestrate
   them in the `run_sessions` override.
