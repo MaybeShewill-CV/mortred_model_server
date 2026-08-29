@@ -64,6 +64,11 @@ Notes:
   TensorRT / ONNX models).
 - Multi-output models pick tensors by `name` (see `find_output` in
   [tensor_contract.h](../src/models/backend/tensor_contract.h)).
+- Object detection models reuse
+  [`detector_common.h`](../src/models/object_detection/detector_common.h) for
+  request-geometry scaling, named f32 output validation, NMS/top-k/category
+  finalization, and NCHW packing. Keep model-specific decode logic in the
+  detector instead of moving it behind another base class.
 - Non-image inputs (token ids, latent vectors, image pairs) override
   `prepare_inputs` instead of `preprocess`.
 - Request-scoped data (source image size, network size, crop geometry) must be

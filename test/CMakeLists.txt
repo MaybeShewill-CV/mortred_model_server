@@ -36,6 +36,7 @@ set(TEST_LIST
     time_stamp_unittest
     cv_utils_unittest
     detection_params_unittest
+    detector_common_unittest
     tensor_contract_unittest
     model_factory_unittest
     byte_tracker_unittest
@@ -111,6 +112,8 @@ foreach(src ${TEST_LIST})
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "detection_params_unittest")
         set(EXTRA_LIBS glog::glog)
+    elseif(${src} STREQUAL "detector_common_unittest")
+        set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "cv_image_input_unittest")
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "worker_nums_unittest")
