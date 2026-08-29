@@ -19,10 +19,12 @@
 #include "models/backend/tensor_contract.h"
 #include "models/model_io_define.h"
 #include "models/object_detection/detection_params.h"
+#include "models/object_detection/detector_common.h"
 
 namespace jinq {
 namespace models {
 namespace object_detection {
+
 using jinq::common::StatusCode;
 
 template <typename INPUT, typename OUTPUT> class NanoDetector : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
@@ -49,7 +51,8 @@ template <typename INPUT, typename OUTPUT> class NanoDetector : public jinq::mod
     StatusCode on_init(const toml::table &params) override;
 
     std::vector<float> refine_bbox_coords(const float *preds, int x, int y, int stride,
-                                          const jinq::models::backend::InferenceContext &context) const;
+                                          const jinq::models::backend::InferenceContext &context,
+                                          const DetectionGeometryScale &geometry_scale) const;
 
     void generate_grid_center_priors();
 

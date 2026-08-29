@@ -41,8 +41,6 @@ template <typename INPUT, typename OUTPUT> class YoloV8Detector : public jinq::m
 
     StatusCode on_init(const toml::table &params) override;
 
-    cv::Rect2f transform_bboxes(const cv::Rect2d &bbox, const jinq::models::backend::InferenceContext &context) const;
-
     DetectionParams _m_detection_params;
     // host input node size (network space)
     cv::Size _m_input_size_host = cv::Size();

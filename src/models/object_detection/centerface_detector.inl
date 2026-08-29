@@ -9,12 +9,11 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 
 #include "glog/logging.h"
 #include <opencv2/opencv.hpp>
 
-#include "common/cv_utils.h"
+#include "models/object_detection/detector_common.h"
 
 namespace jinq {
 namespace models {
@@ -59,16 +58,11 @@ std::vector<NamedTensor> CenterFaceDetector<INPUT, OUTPUT>::preprocess(const cv:
         tmp.convertTo(tmp, CV_32FC3);
     }
 
-    const auto chw_data = jinq::common::CvUtils::convert_to_chw_vec(tmp);
     std::vector<NamedTensor> inputs;
     NamedTensor named;
-    named.name = this->session().inputs().front().name;
-    named.tensor = jinq::models::backend::Tensor::make<float>({1, 3, height_resized, width_resized});
-    if (chw_data.size() * sizeof(float) != named.tensor.byte_size()) {
-        LOG(ERROR) << "preprocessed chw data mismatches the input tensor";
+    if (!make_nchw_input(this->session().inputs().front().name, tmp, &named)) {
         return {};
     }
-    std::memcpy(named.tensor.buffer.data(), chw_data.data(), named.tensor.byte_size());
     inputs.push_back(std::move(named));
     return inputs;
 }
@@ -83,6 +77,13 @@ StatusCode CenterFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<Name
     if (heatmap == nullptr || scale == nullptr || offset == nullptr || landmark == nullptr) {
         LOG(ERROR) << "centerface outputs 537/538/539/540 missing";
         return StatusCode::MODEL_EMPTY_OUTPUT;
+    }
+
+    DetectionGeometryScale geometry_scale;
+    std::string geometry_error;
+    if (!make_detection_geometry_scale(context, &geometry_scale, &geometry_error)) {
+        LOG(ERROR) << "centerface " << geometry_error;
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
 
     // heatmap layout: [1,1,H,W] over the /4 feature map
@@ -155,24 +156,14 @@ StatusCode CenterFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<Name
     }
 
     // refine bbox coords back into the user image space
-    const auto width_scale = static_cast<float>(context.source_size.width) / static_cast<float>(context.network_size.width);
-    const auto height_scale = static_cast<float>(context.source_size.height) / static_cast<float>(context.network_size.height);
     for (auto &face_box : decode_result) {
-        face_box.bbox.x *= width_scale;
-        face_box.bbox.y *= height_scale;
-        face_box.bbox.width *= width_scale;
-        face_box.bbox.height *= height_scale;
+        face_box.bbox = scale_detection_bbox(face_box.bbox, geometry_scale);
         for (auto &point : face_box.landmarks) {
-            point.x *= width_scale;
-            point.y *= height_scale;
+            point = scale_detection_point(point, geometry_scale);
         }
     }
 
-    auto nms_result =
-        jinq::common::CvUtils::nms_boxes_per_class(decode_result, _m_detection_params.score_threshold, _m_detection_params.nms_threshold);
-    if (nms_result.size() > static_cast<size_t>(_m_detection_params.keep_top_k)) {
-        nms_result.resize(static_cast<size_t>(_m_detection_params.keep_top_k));
-    }
+    auto nms_result = finalize_detections(std::move(decode_result), _m_detection_params);
     for (auto &bbox : nms_result) {
         bbox.category = "face";
     }

@@ -9,19 +9,16 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 #include <iterator>
 
 #include "glog/logging.h"
-
-#include "common/cv_utils.h"
+#include "models/object_detection/detector_common.h"
 
 namespace jinq {
 namespace models {
 namespace object_detection {
 
 using DetectionOutput = jinq::models::io_define::object_detection::std_object_detection_output;
-using jinq::common::CvUtils;
 using jinq::common::StatusCode;
 using jinq::models::backend::NamedTensor;
 
@@ -69,41 +66,31 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> NanoDetector
     cv::subtract(tmp, cv::Scalar(0.406, 0.456, 0.485), tmp);
     cv::divide(tmp, cv::Scalar(0.225, 0.224, 0.229), tmp);
 
-    const auto input_chw_image_data = CvUtils::convert_to_chw_vec(tmp);
     NamedTensor named;
-    named.name = this->session().inputs().front().name;
-    named.tensor = jinq::models::backend::Tensor::make<float>({1, 3, _m_input_size_host.height, _m_input_size_host.width});
-    if (input_chw_image_data.size() * sizeof(float) != named.tensor.byte_size()) {
-        LOG(ERROR) << "preprocessed chw data size mismatches the input tensor";
+    if (!make_nchw_input(this->session().inputs().front().name, tmp, &named)) {
         return {};
     }
-    std::memcpy(named.tensor.buffer.data(), input_chw_image_data.data(), named.tensor.byte_size());
     return {std::move(named)};
 }
 
 template <typename INPUT, typename OUTPUT>
 StatusCode NanoDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
                                                     const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
-    const auto *output_tensor = jinq::models::backend::find_output(outputs, "output");
-    if (output_tensor == nullptr) {
-        LOG(ERROR) << "nanodet output tensor 'output' is missing";
-        return StatusCode::MODEL_EMPTY_OUTPUT;
-    }
-    const auto &tensor = output_tensor->tensor;
     const int num_points = static_cast<int>(_m_center_priors.size());
     const int num_channels = _m_detection_params.class_nums + (_m_reg_max + 1) * 4;
-    std::string contract_error;
-    if (!jinq::models::backend::validate_output_tensor(
-            *output_tensor, {jinq::models::backend::DType::F32, 3, {1, num_points, num_channels}}, &contract_error)) {
-        LOG(ERROR) << "nanodet output contract failed: " << contract_error;
-        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+    F32OutputView output_view;
+    const auto output_status = validated_f32_output(
+        outputs, "output", {jinq::models::backend::DType::F32, 3, {1, num_points, num_channels}}, "nanodet", &output_view);
+    if (output_status != StatusCode::OK) {
+        return output_status;
     }
-    const float *tensor_preds_host = nullptr;
-    if (!jinq::models::backend::get_f32_data(tensor, &tensor_preds_host, &contract_error) ||
-        !jinq::models::backend::require_finite_f32(tensor_preds_host, static_cast<size_t>(tensor.element_count()), output_tensor->name,
-                                                   &contract_error)) {
-        LOG(ERROR) << "nanodet output contract failed: " << contract_error;
-        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+    const float *tensor_preds_host = output_view.data;
+
+    DetectionGeometryScale geometry_scale;
+    std::string geometry_error;
+    if (!make_detection_geometry_scale(context, &geometry_scale, &geometry_error)) {
+        LOG(ERROR) << "nanodet " << geometry_error;
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
 
     DetectionOutput result;
@@ -120,7 +107,7 @@ StatusCode NanoDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTenso
 
         if (score > _m_detection_params.score_threshold) {
             const float *bbox_pred = tensor_preds_host + idx * num_channels + _m_detection_params.class_nums;
-            const auto obj_box_coords = refine_bbox_coords(bbox_pred, ct_x, ct_y, stride, context);
+            const auto obj_box_coords = refine_bbox_coords(bbox_pred, ct_x, ct_y, stride, context, geometry_scale);
             jinq::models::io_define::object_detection::bbox obj_box;
             obj_box.score = score;
             obj_box.class_id = cur_label;
@@ -129,23 +116,15 @@ StatusCode NanoDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTenso
         }
     }
 
-    DetectionOutput nms_result =
-        CvUtils::nms_boxes_per_class(result, _m_detection_params.score_threshold, _m_detection_params.nms_threshold);
-    if (nms_result.size() > static_cast<size_t>(_m_detection_params.keep_top_k)) {
-        nms_result.resize(static_cast<size_t>(_m_detection_params.keep_top_k));
-    }
-    for (auto &bbox : nms_result) {
-        if (bbox.class_id >= 0 && bbox.class_id < static_cast<int>(_m_detection_params.class_names.size())) {
-            bbox.category = _m_detection_params.class_names[static_cast<size_t>(bbox.class_id)];
-        }
-    }
+    DetectionOutput nms_result = finalize_detections(std::move(result), _m_detection_params);
     output = std::move(nms_result);
     return StatusCode::OK;
 }
 
 template <typename INPUT, typename OUTPUT>
 std::vector<float> NanoDetector<INPUT, OUTPUT>::refine_bbox_coords(const float *preds, int x, int y, int stride,
-                                                                   const jinq::models::backend::InferenceContext &context) const {
+                                                                   const jinq::models::backend::InferenceContext &context,
+                                                                   const DetectionGeometryScale &geometry_scale) const {
     const auto ct_x = static_cast<float>(x * stride);
     const auto ct_y = static_cast<float>(y * stride);
     std::vector<float> dis_pred;
@@ -164,17 +143,12 @@ std::vector<float> NanoDetector<INPUT, OUTPUT>::refine_bbox_coords(const float *
         dis_pred[i] = dis;
     }
 
-    float xmin = std::max(ct_x - dis_pred[0], .0f);
-    float ymin = std::max(ct_y - dis_pred[1], .0f);
-    float xmax = std::min(ct_x + dis_pred[2], static_cast<float>(_m_input_size_host.width));
-    float ymax = std::min(ct_y + dis_pred[3], static_cast<float>(_m_input_size_host.height));
-
-    xmin *= static_cast<float>(context.source_size.width) / static_cast<float>(_m_input_size_host.width);
-    ymin *= static_cast<float>(context.source_size.height) / static_cast<float>(_m_input_size_host.height);
-    xmax *= static_cast<float>(context.source_size.width) / static_cast<float>(_m_input_size_host.width);
-    ymax *= static_cast<float>(context.source_size.height) / static_cast<float>(_m_input_size_host.height);
-
-    return {xmin, ymin, xmax - xmin, ymax - ymin};
+    const auto bbox = scale_detection_bbox(
+        {std::max(ct_x - dis_pred[0], 0.0f), std::max(ct_y - dis_pred[1], 0.0f),
+         std::min(ct_x + dis_pred[2], static_cast<float>(context.network_size.width)) - std::max(ct_x - dis_pred[0], 0.0f),
+         std::min(ct_y + dis_pred[3], static_cast<float>(context.network_size.height)) - std::max(ct_y - dis_pred[1], 0.0f)},
+        geometry_scale);
+    return {bbox.x, bbox.y, bbox.width, bbox.height};
 }
 
 template <typename INPUT, typename OUTPUT> void NanoDetector<INPUT, OUTPUT>::generate_grid_center_priors() {

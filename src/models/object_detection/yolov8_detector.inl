@@ -8,11 +8,9 @@
 #include "yolov8_detector.h"
 
 #include <algorithm>
-#include <cstring>
 
 #include "glog/logging.h"
-
-#include "common/cv_utils.h"
+#include "models/object_detection/detector_common.h"
 
 namespace jinq {
 namespace models {
@@ -63,54 +61,26 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> YoloV8Detect
     }
     tmp /= 255.0;
 
-    const auto chw_data = jinq::common::CvUtils::convert_to_chw_vec(tmp);
     std::vector<NamedTensor> inputs;
     NamedTensor named;
-    named.name = this->session().inputs().front().name;
-    named.tensor = jinq::models::backend::Tensor::make<float>({1, 3, _m_input_size_host.height, _m_input_size_host.width});
-    if (chw_data.size() * sizeof(float) != named.tensor.byte_size()) {
-        LOG(ERROR) << "preprocessed chw data size mismatches the input tensor";
+    if (!make_nchw_input(this->session().inputs().front().name, tmp, &named)) {
         return {};
     }
-    std::memcpy(named.tensor.buffer.data(), chw_data.data(), named.tensor.byte_size());
     inputs.push_back(std::move(named));
     return inputs;
 }
 
 template <typename INPUT, typename OUTPUT>
-cv::Rect2f YoloV8Detector<INPUT, OUTPUT>::transform_bboxes(const cv::Rect2d &bbox,
-                                                           const jinq::models::backend::InferenceContext &context) const {
-    const auto w_scale = static_cast<float>(context.source_size.width) / static_cast<float>(context.network_size.width);
-    const auto h_scale = static_cast<float>(context.source_size.height) / static_cast<float>(context.network_size.height);
-    cv::Rect2f result;
-    result.x = static_cast<float>(bbox.x * w_scale);
-    result.y = static_cast<float>(bbox.y * h_scale);
-    result.width = static_cast<float>(bbox.width * w_scale);
-    result.height = static_cast<float>(bbox.height * h_scale);
-    return result;
-}
-
-template <typename INPUT, typename OUTPUT>
 StatusCode YoloV8Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
                                                       const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
-    if (outputs.empty()) {
-        LOG(ERROR) << "yolov8 output tensor is empty";
-        return StatusCode::MODEL_EMPTY_OUTPUT;
+    F32OutputView output_view;
+    const auto output_status = validated_f32_output(
+        outputs, "output0", {jinq::models::backend::DType::F32, 3, {1, _m_detection_params.class_nums + 4, -1}}, "yolov8", &output_view);
+    if (output_status != StatusCode::OK) {
+        return output_status;
     }
-    const auto &tensor = outputs.front().tensor;
-    std::string contract_error;
-    if (!jinq::models::backend::validate_output_tensor(
-            outputs.front(), {jinq::models::backend::DType::F32, 3, {1, _m_detection_params.class_nums + 4, -1}}, &contract_error)) {
-        LOG(ERROR) << "yolov8 output contract failed: " << contract_error;
-        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
-    }
-    const float *out_data = nullptr;
-    if (!jinq::models::backend::get_f32_data(tensor, &out_data, &contract_error) ||
-        !jinq::models::backend::require_finite_f32(out_data, static_cast<size_t>(tensor.element_count()), outputs.front().name,
-                                                   &contract_error)) {
-        LOG(ERROR) << "yolov8 output contract failed: " << contract_error;
-        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
-    }
+    const auto &tensor = *output_view.tensor;
+    const float *out_data = output_view.data;
     const auto row_size = tensor.shape[1];
     const auto proposal_counts = tensor.shape[2];
 
@@ -145,19 +115,17 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
         candidates.push_back(candidate);
     }
 
-    // shared per-class cv::dnn::NMSBoxes suppression used by all detectors
-    DetectionOutput nms_result =
-        jinq::common::CvUtils::nms_boxes_per_class(candidates, _m_detection_params.score_threshold, _m_detection_params.nms_threshold);
-    if (nms_result.size() > static_cast<size_t>(_m_detection_params.keep_top_k)) {
-        nms_result.resize(static_cast<size_t>(_m_detection_params.keep_top_k));
+    DetectionGeometryScale geometry_scale;
+    std::string geometry_error;
+    if (!make_detection_geometry_scale(context, &geometry_scale, &geometry_error)) {
+        LOG(ERROR) << "yolov8 " << geometry_error;
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
+    DetectionOutput nms_result = finalize_detections(std::move(candidates), _m_detection_params);
 
     // rescale kept boxes from the network space to the original image size
     for (auto &bbox : nms_result) {
-        bbox.bbox = transform_bboxes(cv::Rect2d(bbox.bbox), context);
-        if (bbox.class_id >= 0 && bbox.class_id < static_cast<int>(_m_detection_params.class_names.size())) {
-            bbox.category = _m_detection_params.class_names[static_cast<size_t>(bbox.class_id)];
-        }
+        bbox.bbox = scale_detection_bbox(bbox.bbox, geometry_scale);
     }
     output = std::move(nms_result);
     return StatusCode::OK;

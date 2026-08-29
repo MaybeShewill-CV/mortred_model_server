@@ -7,21 +7,18 @@
 
 #include "yolov6_detector.h"
 
-#include <algorithm>
 #include <cmath>
-#include <cstring>
 #include <limits>
+#include <utility>
 
 #include "glog/logging.h"
-
-#include "common/cv_utils.h"
+#include "models/object_detection/detector_common.h"
 
 namespace jinq {
 namespace models {
 namespace object_detection {
 
 using DetectionOutput = jinq::models::io_define::object_detection::std_object_detection_output;
-using jinq::common::CvUtils;
 using jinq::common::StatusCode;
 using jinq::models::backend::NamedTensor;
 
@@ -66,42 +63,33 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> YoloV6Detect
     }
     tmp /= 255.0;
 
-    const auto input_chw_image_data = CvUtils::convert_to_chw_vec(tmp);
     NamedTensor named;
-    named.name = this->session().inputs().front().name;
-    named.tensor = jinq::models::backend::Tensor::make<float>({1, 3, _m_input_size_host.height, _m_input_size_host.width});
-    if (input_chw_image_data.size() * sizeof(float) != named.tensor.byte_size()) {
-        LOG(ERROR) << "preprocessed chw data size mismatches the input tensor";
+    if (!make_nchw_input(this->session().inputs().front().name, tmp, &named)) {
         return {};
     }
-    std::memcpy(named.tensor.buffer.data(), input_chw_image_data.data(), named.tensor.byte_size());
     return {std::move(named)};
 }
 
 template <typename INPUT, typename OUTPUT>
 StatusCode YoloV6Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
                                                       const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
-    const auto *output_tensor = jinq::models::backend::find_output(outputs, "outputs");
-    if (output_tensor == nullptr) {
-        LOG(ERROR) << "yolov6 output tensor 'outputs' is missing";
-        return StatusCode::MODEL_EMPTY_OUTPUT;
+    F32OutputView output_view;
+    const auto output_status = validated_f32_output(
+        outputs, "outputs", {jinq::models::backend::DType::F32, 3, {1, -1, _m_detection_params.class_nums + 5}}, "yolov6", &output_view);
+    if (output_status != StatusCode::OK) {
+        return output_status;
     }
-    const auto &tensor = output_tensor->tensor;
-    std::string contract_error;
-    if (!jinq::models::backend::validate_output_tensor(
-            *output_tensor, {jinq::models::backend::DType::F32, 3, {1, -1, _m_detection_params.class_nums + 5}}, &contract_error)) {
-        LOG(ERROR) << "yolov6 output contract failed: " << contract_error;
-        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
-    }
-    const float *output_tensordata = nullptr;
-    if (!jinq::models::backend::get_f32_data(tensor, &output_tensordata, &contract_error) ||
-        !jinq::models::backend::require_finite_f32(output_tensordata, static_cast<size_t>(tensor.element_count()), output_tensor->name,
-                                                   &contract_error)) {
-        LOG(ERROR) << "yolov6 output contract failed: " << contract_error;
-        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
-    }
+    const auto &tensor = *output_view.tensor;
+    const float *output_tensordata = output_view.data;
     const auto batch_nums = tensor.shape[0];
     const auto raw_pred_bbox_nums = tensor.shape[1];
+
+    DetectionGeometryScale geometry_scale;
+    std::string geometry_error;
+    if (!make_detection_geometry_scale(context, &geometry_scale, &geometry_error)) {
+        LOG(ERROR) << "yolov6 " << geometry_error;
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
 
     std::vector<std::vector<float>> raw_output;
     raw_output.resize(raw_pred_bbox_nums);
@@ -142,23 +130,12 @@ StatusCode YoloV6Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
                 continue;
             }
 
-            // rescale boxes from img_size to im0 size
-            std::vector<float> coords = {raw_bbox_info[0] - raw_bbox_info[2] / 2.0f, raw_bbox_info[1] - raw_bbox_info[3] / 2.0f,
-                                         raw_bbox_info[0] + raw_bbox_info[2] / 2.0f, raw_bbox_info[1] + raw_bbox_info[3] / 2.0f};
-            const auto w_scale = static_cast<float>(context.source_size.width) / static_cast<float>(_m_input_size_host.width);
-            const auto h_scale = static_cast<float>(context.source_size.height) / static_cast<float>(_m_input_size_host.height);
-            coords[0] *= w_scale;
-            coords[1] *= h_scale;
-            coords[2] *= w_scale;
-            coords[3] *= h_scale;
-
             jinq::models::io_define::object_detection::bbox tmp_bbox;
             tmp_bbox.class_id = class_id;
             tmp_bbox.score = bbox_score;
-            tmp_bbox.bbox.x = coords[0];
-            tmp_bbox.bbox.y = coords[1];
-            tmp_bbox.bbox.width = coords[2] - coords[0];
-            tmp_bbox.bbox.height = coords[3] - coords[1];
+            tmp_bbox.bbox = scale_detection_bbox({raw_bbox_info[0] - raw_bbox_info[2] / 2.0f, raw_bbox_info[1] - raw_bbox_info[3] / 2.0f,
+                                                  raw_bbox_info[2], raw_bbox_info[3]},
+                                                 geometry_scale);
             if (tmp_bbox.bbox.area() < _m_detection_params.min_box_area_px) {
                 continue;
             }
@@ -166,16 +143,7 @@ StatusCode YoloV6Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
         }
     }
 
-    DetectionOutput nms_result =
-        CvUtils::nms_boxes_per_class(decode_result, _m_detection_params.score_threshold, _m_detection_params.nms_threshold);
-    if (nms_result.size() > static_cast<size_t>(_m_detection_params.keep_top_k)) {
-        nms_result.resize(static_cast<size_t>(_m_detection_params.keep_top_k));
-    }
-    for (auto &bbox : nms_result) {
-        if (bbox.class_id >= 0 && bbox.class_id < static_cast<int>(_m_detection_params.class_names.size())) {
-            bbox.category = _m_detection_params.class_names[static_cast<size_t>(bbox.class_id)];
-        }
-    }
+    DetectionOutput nms_result = finalize_detections(std::move(decode_result), _m_detection_params);
     output = std::move(nms_result);
     return StatusCode::OK;
 }

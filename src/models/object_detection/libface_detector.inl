@@ -9,12 +9,11 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 
 #include "glog/logging.h"
 #include <opencv2/opencv.hpp>
 
-#include "common/cv_utils.h"
+#include "models/object_detection/detector_common.h"
 
 namespace jinq {
 namespace models {
@@ -95,16 +94,11 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> LibFaceDetec
         tmp.convertTo(tmp, CV_32FC3);
     }
 
-    const auto chw_data = jinq::common::CvUtils::convert_to_chw_vec(tmp);
     std::vector<NamedTensor> inputs;
     NamedTensor named;
-    named.name = this->session().inputs().front().name;
-    named.tensor = jinq::models::backend::Tensor::make<float>({1, 3, _m_input_size_host.height, _m_input_size_host.width});
-    if (chw_data.size() * sizeof(float) != named.tensor.byte_size()) {
-        LOG(ERROR) << "preprocessed libface image mismatches the input tensor";
+    if (!make_nchw_input(this->session().inputs().front().name, tmp, &named)) {
         return {};
     }
-    std::memcpy(named.tensor.buffer.data(), chw_data.data(), named.tensor.byte_size());
     inputs.push_back(std::move(named));
     return inputs;
 }
@@ -148,6 +142,13 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTe
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
 
+    DetectionGeometryScale geometry_scale;
+    std::string geometry_error;
+    if (!make_detection_geometry_scale(context, &geometry_scale, &geometry_error)) {
+        LOG(ERROR) << "libface " << geometry_error;
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
+
     std::vector<FaceBBox> decode_result;
     for (size_t bbox_index = 0; bbox_index < anchor_count; ++bbox_index) {
         const auto &prior = priors[bbox_index];
@@ -164,10 +165,10 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTe
         auto pred_bbox_y = prior.cy + raw_bbox_y * 0.1 * prior.s_ky;
         auto pred_bbox_w = prior.s_kx * std::exp(raw_bbox_w * 0.2);
         auto pred_bbox_h = prior.s_ky * std::exp(raw_bbox_h * 0.2);
-        pred_bbox_x = (pred_bbox_x - pred_bbox_w / 2.0) * _m_input_size_host.width;
-        pred_bbox_y = (pred_bbox_y - pred_bbox_h / 2.0) * _m_input_size_host.height;
-        pred_bbox_w *= _m_input_size_host.width;
-        pred_bbox_h *= _m_input_size_host.height;
+        pred_bbox_x = (pred_bbox_x - pred_bbox_w / 2.0) * context.network_size.width;
+        pred_bbox_y = (pred_bbox_y - pred_bbox_h / 2.0) * context.network_size.height;
+        pred_bbox_w *= context.network_size.width;
+        pred_bbox_h *= context.network_size.height;
 
         FaceBBox face_box;
         face_box.score = raw_conf;
@@ -176,30 +177,19 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTe
         for (size_t landmark_index = 4; landmark_index < 14; landmark_index += 2) {
             const auto raw_landmark_x = loc_data[bbox_index * 14 + landmark_index];
             const auto raw_landmark_y = loc_data[bbox_index * 14 + landmark_index + 1];
-            const auto pred_landmark_x = (prior.cx + raw_landmark_x * 0.1 * prior.s_kx) * _m_input_size_host.width;
-            const auto pred_landmark_y = (prior.cy + raw_landmark_y * 0.1 * prior.s_ky) * _m_input_size_host.height;
+            const auto pred_landmark_x = (prior.cx + raw_landmark_x * 0.1 * prior.s_kx) * context.network_size.width;
+            const auto pred_landmark_y = (prior.cy + raw_landmark_y * 0.1 * prior.s_ky) * context.network_size.height;
             face_box.landmarks.emplace_back(static_cast<float>(pred_landmark_x), static_cast<float>(pred_landmark_y));
         }
         face_box.class_id = 0;
         decode_result.push_back(std::move(face_box));
     }
 
-    auto nms_result =
-        jinq::common::CvUtils::nms_boxes_per_class(decode_result, _m_detection_params.score_threshold, _m_detection_params.nms_threshold);
-    if (nms_result.size() > static_cast<size_t>(_m_detection_params.keep_top_k)) {
-        nms_result.resize(static_cast<size_t>(_m_detection_params.keep_top_k));
-    }
-
-    const auto width_scale = static_cast<float>(context.source_size.width) / static_cast<float>(_m_input_size_host.width);
-    const auto height_scale = static_cast<float>(context.source_size.height) / static_cast<float>(_m_input_size_host.height);
+    auto nms_result = finalize_detections(std::move(decode_result), _m_detection_params);
     for (auto &face_box : nms_result) {
-        face_box.bbox.x *= width_scale;
-        face_box.bbox.y *= height_scale;
-        face_box.bbox.width *= width_scale;
-        face_box.bbox.height *= height_scale;
+        face_box.bbox = scale_detection_bbox(face_box.bbox, geometry_scale);
         for (auto &landmark : face_box.landmarks) {
-            landmark.x *= width_scale;
-            landmark.y *= height_scale;
+            landmark = scale_detection_point(landmark, geometry_scale);
         }
         face_box.category = "face";
     }

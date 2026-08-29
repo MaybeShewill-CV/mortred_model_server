@@ -9,18 +9,15 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 
 #include "glog/logging.h"
-
-#include "common/cv_utils.h"
+#include "models/object_detection/detector_common.h"
 
 namespace jinq {
 namespace models {
 namespace object_detection {
 
 using DetectionOutput = jinq::models::io_define::object_detection::std_object_detection_output;
-using jinq::common::CvUtils;
 using jinq::common::StatusCode;
 using jinq::models::backend::NamedTensor;
 
@@ -65,15 +62,10 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> YoloV7Detect
     }
     tmp /= 255.0;
 
-    const auto input_chw_image_data = CvUtils::convert_to_chw_vec(tmp);
     NamedTensor named;
-    named.name = this->session().inputs().front().name;
-    named.tensor = jinq::models::backend::Tensor::make<float>({1, 3, _m_input_size_host.height, _m_input_size_host.width});
-    if (input_chw_image_data.size() * sizeof(float) != named.tensor.byte_size()) {
-        LOG(ERROR) << "preprocessed chw data size mismatches the input tensor";
+    if (!make_nchw_input(this->session().inputs().front().name, tmp, &named)) {
         return {};
     }
-    std::memcpy(named.tensor.buffer.data(), input_chw_image_data.data(), named.tensor.byte_size());
     return {std::move(named)};
 }
 
@@ -98,6 +90,13 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
         {{36, 75}, {76, 55}, {72, 146}},
         {{142, 110}, {192, 243}, {459, 401}},
     };
+
+    DetectionGeometryScale geometry_scale;
+    std::string geometry_error;
+    if (!make_detection_geometry_scale(context, &geometry_scale, &geometry_error)) {
+        LOG(ERROR) << "yolov7 " << geometry_error;
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
 
     DetectionOutput decode_result;
     const auto contract_attrs = _m_detection_params.class_nums + 5;
@@ -167,26 +166,11 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
         }
     }
 
-    // rescale boxes from 640-space to the original image size
-    const auto w_scale = static_cast<float>(context.source_size.width) / static_cast<float>(_m_input_size_host.width);
-    const auto h_scale = static_cast<float>(context.source_size.height) / static_cast<float>(_m_input_size_host.height);
     for (auto &bbox : decode_result) {
-        bbox.bbox.x *= w_scale;
-        bbox.bbox.y *= h_scale;
-        bbox.bbox.width *= w_scale;
-        bbox.bbox.height *= h_scale;
+        bbox.bbox = scale_detection_bbox(bbox.bbox, geometry_scale);
     }
 
-    DetectionOutput nms_result =
-        CvUtils::nms_boxes_per_class(decode_result, _m_detection_params.score_threshold, _m_detection_params.nms_threshold);
-    if (nms_result.size() > static_cast<size_t>(_m_detection_params.keep_top_k)) {
-        nms_result.resize(static_cast<size_t>(_m_detection_params.keep_top_k));
-    }
-    for (auto &bbox : nms_result) {
-        if (bbox.class_id >= 0 && bbox.class_id < static_cast<int>(_m_detection_params.class_names.size())) {
-            bbox.category = _m_detection_params.class_names[static_cast<size_t>(bbox.class_id)];
-        }
-    }
+    DetectionOutput nms_result = finalize_detections(std::move(decode_result), _m_detection_params);
     output = std::move(nms_result);
     return StatusCode::OK;
 }
