@@ -8,6 +8,8 @@ set(MODELS_LIB_SRC
     ${CMAKE_CURRENT_LIST_DIR}/backend/inference_context.h
     ${CMAKE_CURRENT_LIST_DIR}/backend/mnn_session.cpp
     ${CMAKE_CURRENT_LIST_DIR}/backend/mnn_session.h
+    ${CMAKE_CURRENT_LIST_DIR}/backend/model_runtime.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/backend/model_runtime.h
     ${CMAKE_CURRENT_LIST_DIR}/backend/ort_session.cpp
     ${CMAKE_CURRENT_LIST_DIR}/backend/ort_session.h
     ${CMAKE_CURRENT_LIST_DIR}/backend/session.cpp

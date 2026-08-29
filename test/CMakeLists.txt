@@ -37,6 +37,7 @@ set(TEST_LIST
     cv_utils_unittest
     detection_params_unittest
     detector_common_unittest
+    model_runtime_unittest
     tensor_contract_unittest
     model_factory_unittest
     byte_tracker_unittest
@@ -114,6 +115,9 @@ foreach(src ${TEST_LIST})
     elseif(${src} STREQUAL "detection_params_unittest")
         set(EXTRA_LIBS glog::glog)
     elseif(${src} STREQUAL "detector_common_unittest")
+        set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
+    elseif(${src} STREQUAL "model_runtime_unittest")
+        set(EXTRA_SRCS ${PROJECT_ROOT_DIR}/src/models/backend/model_runtime.cpp)
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "cv_image_input_unittest")
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})

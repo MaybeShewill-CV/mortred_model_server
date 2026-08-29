@@ -14,6 +14,7 @@
 #include "glog/logging.h"
 
 #include "models/backend/f32_output.h"
+#include "models/backend/model_runtime.h"
 #include <opencv2/opencv.hpp>
 
 #include "common/cv_utils.h"
@@ -28,13 +29,14 @@ using ClassificationOutput = jinq::models::io_define::classification::std_classi
 using jinq::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode MobileNetv2<INPUT, OUTPUT>::on_init(const toml::table &params) {
-    const auto &input_info = this->session().inputs().front();
-    if (input_info.shape.size() != 4 || input_info.shape[3] != 3) {
-        LOG(ERROR) << "unexpected classification input shape: " << input_info.to_string() << ", expected [N,H,W,3] (nhwc)";
+    const auto input_info =
+        jinq::models::backend::SessionIoValidator(this->session()).input().f32().rank(4).nhwc().channels(3).static_shape().validate();
+    if (!input_info.ok()) {
+        LOG(ERROR) << "unexpected mobilenetv2 input shape: " << input_info.error << ", expected static [N,H,W,3] (nhwc)";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    _m_input_tensor_size.height = static_cast<int>(input_info.shape[1]);
-    _m_input_tensor_size.width = static_cast<int>(input_info.shape[2]);
+    _m_input_tensor_size.height = static_cast<int>(input_info.value.shape[1]);
+    _m_input_tensor_size.width = static_cast<int>(input_info.value.shape[2]);
 
     if (params.contains("model_input_image_size")) {
         const toml::array *size = params["model_input_image_size"].as_array();
@@ -69,33 +71,29 @@ template <typename INPUT, typename OUTPUT> StatusCode MobileNetv2<INPUT, OUTPUT>
 
 template <typename INPUT, typename OUTPUT> cv::Mat MobileNetv2<INPUT, OUTPUT>::preprocess_mat(const cv::Mat &input_image) {
     // resize -> center crop -> rgb -> per channel normalize (f32 nhwc)
-    cv::Mat tmp;
-    cv::resize(input_image, tmp, cv::Size(256, 256));
-    const auto dw = static_cast<int>(std::floor((256 - _m_input_tensor_size.width) / 2));
-    const auto dh = static_cast<int>(std::floor((256 - _m_input_tensor_size.height) / 2));
-    tmp = tmp(cv::Rect(dw, dh, _m_input_tensor_size.width, _m_input_tensor_size.height));
-
-    cv::cvtColor(tmp, tmp, cv::COLOR_BGR2RGB);
-    tmp.convertTo(tmp, CV_32FC3);
-    cv::subtract(tmp, cv::Scalar(123.68f, 116.78f, 103.94f), tmp);
-    cv::divide(tmp, cv::Scalar(58.395f, 57.12f, 57.375f), tmp);
-    return tmp;
+    auto result = jinq::models::backend::ImagePipeline(input_image)
+                      .resize({256, 256})
+                      .center_crop(_m_input_tensor_size)
+                      .bgr_to_rgb()
+                      .to_float()
+                      .subtract({123.68f, 116.78f, 103.94f})
+                      .divide({58.395f, 57.12f, 57.375f})
+                      .mat();
+    if (!result.ok()) {
+        LOG(ERROR) << result.error;
+        return {};
+    }
+    return std::move(result.value);
 }
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> MobileNetv2<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
     const cv::Mat tmp = preprocess_mat(input_image);
-    std::vector<NamedTensor> inputs;
-    NamedTensor named;
-    named.name = this->session().inputs().front().name;
-    named.tensor = jinq::models::backend::Tensor::make<float>({1, _m_input_tensor_size.height, _m_input_tensor_size.width, 3});
-    const auto bytes = tmp.total() * tmp.elemSize();
-    if (bytes != named.tensor.byte_size()) {
-        LOG(ERROR) << "preprocessed image byte size " << bytes << " mismatches tensor byte size " << named.tensor.byte_size();
+    auto result = jinq::models::backend::ImagePipeline(tmp).nhwc(this->session().inputs().front().name);
+    if (!result.ok()) {
+        LOG(ERROR) << result.error;
         return {};
     }
-    std::memcpy(named.tensor.buffer.data(), tmp.data, bytes);
-    inputs.push_back(std::move(named));
-    return inputs;
+    return {std::move(result.value)};
 }
 
 template <typename INPUT, typename OUTPUT>
@@ -198,17 +196,16 @@ StatusCode MobileNetv2<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
     const auto output_rank = outputs.front().tensor.shape.size();
-    jinq::models::backend::TensorContract output_contract;
-    output_contract.dtype = jinq::models::backend::DType::F32;
-    output_contract.rank = output_rank == 1 ? 1 : 2;
-    output_contract.shape = output_rank == 1 ? std::vector<int64_t>{-1} : std::vector<int64_t>{1, -1};
-    jinq::models::backend::F32OutputView output_view;
-    const auto output_status = jinq::models::backend::validated_f32_first_output(outputs, output_contract, "classification", &output_view);
-    if (output_status != StatusCode::OK) {
-        return output_status;
+    auto output_view = jinq::models::backend::OutputReader(outputs, outputs.front().name)
+                           .f32()
+                           .shape(output_rank == 1 ? std::vector<int64_t>{-1} : std::vector<int64_t>{1, -1})
+                           .finite()
+                           .read();
+    if (!output_view.ok()) {
+        return output_view.status;
     }
-    const auto &tensor = *output_view.tensor;
-    const auto *scores = output_view.data;
+    const auto &tensor = *output_view.value.tensor;
+    const auto *scores = output_view.value.data;
     const auto score_count = tensor.element_count();
 
     ClassificationOutput internal_out;
