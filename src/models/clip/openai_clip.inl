@@ -17,6 +17,7 @@
 #include "glog/logging.h"
 
 #include "common/cv_utils.h"
+#include "models/backend/f32_output.h"
 #include "models/cv_image_input.h"
 
 namespace jinq {
@@ -209,14 +210,13 @@ StatusCode OpenAiClip<INPUT, OUTPUT>::encode_image(const cv::Mat &input_image, s
     if (run_status != StatusCode::OK) {
         return run_status;
     }
-    const auto *output = find_output(outputs, "output");
-    if (output == nullptr || output->tensor.dtype != jinq::models::backend::DType::F32 || output->tensor.element_count() <= 0) {
-        LOG(ERROR) << "openai clip visual encoder output is invalid";
-        return StatusCode::MODEL_EMPTY_OUTPUT;
+    jinq::models::backend::F32OutputView output_view;
+    const auto output_status = jinq::models::backend::validated_f32_named_output(
+        outputs, "output", {jinq::models::backend::DType::F32, 2, {1, -1}}, "openai clip visual encoder", &output_view);
+    if (output_status != StatusCode::OK) {
+        return output_status;
     }
-
-    const auto *data = output->tensor.template data<float>();
-    image_embeddings.assign(data, data + output->tensor.element_count());
+    image_embeddings.assign(output_view.data, output_view.data + output_view.tensor->element_count());
     return StatusCode::OK;
 }
 
@@ -247,14 +247,13 @@ StatusCode OpenAiClip<INPUT, OUTPUT>::encode_text(const std::string &input_text,
     if (run_status != StatusCode::OK) {
         return run_status;
     }
-    const auto *output = find_output(outputs, "output");
-    if (output == nullptr || output->tensor.dtype != jinq::models::backend::DType::F32 || output->tensor.element_count() <= 0) {
-        LOG(ERROR) << "openai clip text encoder output is invalid";
-        return StatusCode::MODEL_EMPTY_OUTPUT;
+    jinq::models::backend::F32OutputView output_view;
+    const auto output_status = jinq::models::backend::validated_f32_named_output(
+        outputs, "output", {jinq::models::backend::DType::F32, 2, {1, -1}}, "openai clip text encoder", &output_view);
+    if (output_status != StatusCode::OK) {
+        return output_status;
     }
-
-    const auto *data = output->tensor.template data<float>();
-    text_embeddings.assign(data, data + output->tensor.element_count());
+    text_embeddings.assign(output_view.data, output_view.data + output_view.tensor->element_count());
     return StatusCode::OK;
 }
 

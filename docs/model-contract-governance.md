@@ -23,6 +23,8 @@ This policy is applied to object detection, scene segmentation, OCR, matting,
 enhancement, SuperPoint, DepthAnything, Metric3D and FastSAM. Multi-session
 models which currently process requests synchronously were audited with the
 same rule; their request geometry remains local to one `run_sessions` call.
+Latent-space diffusion models and CLIP encoders have no source-image geometry,
+but their f32 outputs use the same output-contract boundary.
 
 ## Output contracts
 

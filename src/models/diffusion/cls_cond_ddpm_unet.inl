@@ -12,6 +12,8 @@
 
 #include "glog/logging.h"
 
+#include "models/backend/f32_output.h"
+
 namespace jinq {
 namespace models {
 namespace diffusion {
@@ -110,11 +112,14 @@ StatusCode ClsCondDDPMUNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTe
         LOG(ERROR) << "cls cond ddpm unet output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto &tensor = outputs.front().tensor;
-    const auto *data = tensor.data<float>();
+    jinq::models::backend::F32OutputView output_view;
+    const auto output_status = jinq::models::backend::validated_f32_first_output(
+        outputs, {jinq::models::backend::DType::F32, 4, {1, -1, -1, -1}}, "cls cond ddpm unet", &output_view);
+    if (output_status != StatusCode::OK) {
+        return output_status;
+    }
     ClsCondUnetOutput internal_out;
-    internal_out.predict_noise.resize(static_cast<size_t>(tensor.element_count()));
-    std::memcpy(internal_out.predict_noise.data(), data, tensor.byte_size());
+    internal_out.predict_noise.assign(output_view.data, output_view.data + output_view.tensor->element_count());
     output = std::move(internal_out);
     return StatusCode::OK;
 }

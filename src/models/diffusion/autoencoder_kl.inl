@@ -15,6 +15,8 @@
 
 #include "common/cv_utils.h"
 
+#include "models/backend/f32_output.h"
+
 namespace jinq {
 namespace models {
 namespace diffusion {
@@ -54,12 +56,14 @@ StatusCode AutoEncoderKL<INPUT, OUTPUT>::postprocess(const std::vector<NamedTens
         LOG(ERROR) << "vae decoder output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto &tensor = outputs.front().tensor;
-    if (tensor.shape.size() != 4) {
-        LOG(ERROR) << "unexpected vae decoder output shape: " << jinq::models::backend::shape_to_string(tensor.shape);
-        return StatusCode::MODEL_EMPTY_OUTPUT;
+    jinq::models::backend::F32OutputView output_view;
+    const auto output_status = jinq::models::backend::validated_f32_first_output(
+        outputs, {jinq::models::backend::DType::F32, 4, {1, -1, -1, -1}}, "vae decoder", &output_view);
+    if (output_status != StatusCode::OK) {
+        return output_status;
     }
-    const auto *data = tensor.data<float>();
+    const auto &tensor = *output_view.tensor;
+    const auto *data = output_view.data;
     const auto channels = tensor.shape[1];
     const auto height = tensor.shape[2];
     const auto width = tensor.shape[3];
