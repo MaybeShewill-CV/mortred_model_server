@@ -12,6 +12,9 @@
 #include "glog/logging.h"
 #include <opencv2/opencv.hpp>
 
+#include "models/backend/request_geometry.h"
+#include "models/backend/tensor_contract.h"
+
 #include "common/cv_utils.h"
 
 namespace jinq {
@@ -77,14 +80,31 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::postprocess(const std::vector<Named
         LOG(ERROR) << "hrnet output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
+    const auto source_status = jinq::models::backend::validated_source_size(context, "hrnet");
+    if (source_status != StatusCode::OK) {
+        return source_status;
+    }
     const auto &tensor = outputs.front().tensor;
+    std::string contract_error;
+    if (tensor.shape.size() != 2 && tensor.shape.size() != 3) {
+        LOG(ERROR) << "hrnet output rank is " << tensor.shape.size() << ", expected [H,W] or [1,H,W]";
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+    }
+    jinq::models::backend::TensorContract output_contract;
+    output_contract.dtype = jinq::models::backend::DType::I32;
+    output_contract.rank = tensor.shape.size();
+    output_contract.shape.assign(output_contract.rank, -1);
+    if (!jinq::models::backend::validate_output_tensor(outputs.front(), output_contract, &contract_error)) {
+        LOG(ERROR) << "hrnet output contract failed: " << contract_error;
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+    }
     const auto *mask_data = tensor.template data<int32_t>();
-    if (tensor.element_count() < static_cast<int64_t>(_m_input_size_host.area())) {
+    if (tensor.element_count() < static_cast<int64_t>(context.network_size.area())) {
         LOG(ERROR) << "hrnet mask smaller than the input map: " << jinq::models::backend::shape_to_string(tensor.shape);
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
 
-    cv::Mat result_image(_m_input_size_host, CV_32SC1, const_cast<int32_t *>(reinterpret_cast<const int32_t *>(mask_data)));
+    cv::Mat result_image(context.network_size, CV_32SC1, const_cast<int32_t *>(reinterpret_cast<const int32_t *>(mask_data)));
     cv::Mat resized;
     cv::resize(result_image, resized, context.source_size, 0.0, 0.0, cv::INTER_NEAREST);
     SegmentationOutput internal_out;

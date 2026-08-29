@@ -12,6 +12,8 @@
 #include <fstream>
 
 #include "glog/logging.h"
+
+#include "models/backend/f32_output.h"
 #include <opencv2/opencv.hpp>
 
 #include "common/cv_utils.h"
@@ -86,13 +88,19 @@ StatusCode Dinov2<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &ou
         LOG(ERROR) << "classification model output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto &tensor = outputs.front().tensor;
-    const auto *scores = tensor.data<float>();
-    const auto score_count = tensor.element_count();
-    if (score_count <= 0) {
-        LOG(ERROR) << "classification model output tensor is empty";
-        return StatusCode::MODEL_EMPTY_OUTPUT;
+    const auto output_rank = outputs.front().tensor.shape.size();
+    jinq::models::backend::TensorContract output_contract;
+    output_contract.dtype = jinq::models::backend::DType::F32;
+    output_contract.rank = output_rank == 1 ? 1 : 2;
+    output_contract.shape = output_rank == 1 ? std::vector<int64_t>{-1} : std::vector<int64_t>{1, -1};
+    jinq::models::backend::F32OutputView output_view;
+    const auto output_status = jinq::models::backend::validated_f32_first_output(outputs, output_contract, "classification", &output_view);
+    if (output_status != StatusCode::OK) {
+        return output_status;
     }
+    const auto &tensor = *output_view.tensor;
+    const auto *scores = output_view.data;
+    const auto score_count = tensor.element_count();
 
     ClassificationOutput internal_out;
     internal_out.scores.reserve(static_cast<size_t>(score_count));

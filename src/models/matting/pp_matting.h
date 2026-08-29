@@ -29,7 +29,7 @@ template <typename INPUT, typename OUTPUT> class PPMatting : public jinq::models
     PPMatting(const PPMatting &transformer) = delete;
     PPMatting &operator=(const PPMatting &transformer) = delete;
 
-  private:
+  protected:
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
     StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,

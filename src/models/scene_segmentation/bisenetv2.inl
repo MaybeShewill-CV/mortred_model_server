@@ -13,6 +13,9 @@
 #include "glog/logging.h"
 #include <opencv2/opencv.hpp>
 
+#include "models/backend/f32_output.h"
+#include "models/backend/request_geometry.h"
+
 namespace jinq {
 namespace models {
 namespace scene_segmentation {
@@ -73,20 +76,23 @@ StatusCode BiseNetV2<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> 
         LOG(ERROR) << "bisenetv2 output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto &tensor = outputs.front().tensor;
-    if (tensor.shape.empty()) {
-        LOG(ERROR) << "bisenetv2 unexpected output shape";
-        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    const auto source_status = jinq::models::backend::validated_source_size(context, "bisenetv2");
+    if (source_status != StatusCode::OK) {
+        return source_status;
     }
-    const auto *host_data = tensor.template data<float>();
+    jinq::models::backend::F32OutputView output_view;
+    const auto output_status = jinq::models::backend::validated_f32_first_output(
+        outputs, {jinq::models::backend::DType::F32, 3, {context.network_size.height, context.network_size.width, -1}}, "bisenetv2",
+        &output_view);
+    if (output_status != StatusCode::OK) {
+        return output_status;
+    }
+    const auto &tensor = *output_view.tensor;
+    const auto *host_data = output_view.data;
     const auto cls_nums = tensor.shape.back();
-    if (cls_nums <= 0 || tensor.element_count() < static_cast<int64_t>(_m_input_size_host.area()) * cls_nums) {
-        LOG(ERROR) << "bisenetv2 unexpected output shape: " << jinq::models::backend::shape_to_string(tensor.shape);
-        return StatusCode::MODEL_RUN_SESSION_FAILED;
-    }
 
     // model output is float [H, W, cls_nums], compute argmax per pixel
-    cv::Mat result_image(_m_input_size_host, CV_32SC1, cv::Scalar(0));
+    cv::Mat result_image(context.network_size, CV_32SC1, cv::Scalar(0));
     for (auto row = 0; row < result_image.rows; ++row) {
         for (auto col = 0; col < result_image.cols; ++col) {
             const float *logit = host_data + (row * result_image.cols + col) * cls_nums;

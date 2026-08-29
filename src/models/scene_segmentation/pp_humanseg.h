@@ -29,7 +29,7 @@ template <typename INPUT, typename OUTPUT> class PPHumanSeg : public jinq::model
     PPHumanSeg(const PPHumanSeg &transformer) = delete;
     PPHumanSeg &operator=(const PPHumanSeg &transformer) = delete;
 
-  private:
+  protected:
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
     StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,

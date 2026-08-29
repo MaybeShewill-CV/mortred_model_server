@@ -15,6 +15,8 @@
 #include <opencv2/opencv.hpp>
 
 #include "common/cv_utils.h"
+#include "models/backend/f32_output.h"
+#include "models/backend/request_geometry.h"
 
 namespace jinq {
 namespace models {
@@ -223,17 +225,32 @@ StatusCode SuperPoint<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>
         LOG(ERROR) << "superpoint outputs 'output_1'/'output_2' missing";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
+    jinq::models::backend::GeometryScale geometry_scale;
+    std::string geometry_error;
+    if (!jinq::models::backend::make_geometry_scale(context, &geometry_scale, &geometry_error)) {
+        LOG(ERROR) << "superpoint " << geometry_error;
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
+    const auto grid_height = context.network_size.height / _m_cell_size;
+    const auto grid_width = context.network_size.width / _m_cell_size;
+    auto semi_status = jinq::models::backend::validated_f32_named_output(
+        outputs, "output_1", {jinq::models::backend::DType::F32, 4, {1, 65, grid_height, grid_width}}, "superpoint");
+    if (semi_status != StatusCode::OK) {
+        return semi_status;
+    }
+    const auto desc_status = jinq::models::backend::validated_f32_named_output(
+        outputs, "output_2", {jinq::models::backend::DType::F32, 4, {1, 256, grid_height, grid_width}}, "superpoint");
+    if (desc_status != StatusCode::OK) {
+        return desc_status;
+    }
 
     FeatureOutput internal_out;
     decode_fp_location_and_score(*semi, internal_out);
     decode_fp_descriptor(*desc, internal_out);
 
     // rescale feature point locations into the user image space
-    const float h_scale = static_cast<float>(context.source_size.height) / static_cast<float>(_m_input_size_host.height);
-    const float w_scale = static_cast<float>(context.source_size.width) / static_cast<float>(_m_input_size_host.width);
     for (auto &pt : internal_out) {
-        pt.location.x *= w_scale;
-        pt.location.y *= h_scale;
+        pt.location = jinq::models::backend::scale_point(pt.location, geometry_scale);
     }
     output = std::move(internal_out);
     return StatusCode::OK;

@@ -14,6 +14,9 @@
 
 #include "glog/logging.h"
 
+#include "models/backend/f32_output.h"
+#include "models/backend/request_geometry.h"
+
 namespace jinq {
 namespace models {
 namespace enhancement {
@@ -76,25 +79,40 @@ StatusCode AttentiveGanDerain<INPUT, OUTPUT>::postprocess(const std::vector<Name
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
     const auto &tensor = outputs.front().tensor;
+    const auto source_status = jinq::models::backend::validated_source_size(context, "attentive gan");
+    if (source_status != StatusCode::OK) {
+        return source_status;
+    }
+    const auto output_rank = tensor.shape.size();
+    jinq::models::backend::TensorContract output_contract;
+    output_contract.dtype = jinq::models::backend::DType::F32;
+    output_contract.rank = output_rank == 3 ? 3 : 4;
+    output_contract.shape = output_rank == 3 ? std::vector<int64_t>{-1, -1, 3} : std::vector<int64_t>{1, -1, -1, 3};
+    jinq::models::backend::F32OutputView output_view;
+    const auto output_status = jinq::models::backend::validated_f32_first_output(outputs, output_contract, "attentive gan", &output_view);
+    if (output_status != StatusCode::OK) {
+        return output_status;
+    }
     // the exported mnn output is plain hwc ([H,W,3] or [1,H,W,3])
     if ((tensor.shape.size() != 3 || tensor.shape[2] != 3) && (tensor.shape.size() != 4 || tensor.shape[3] != 3)) {
         LOG(ERROR) << "unexpected attentive gan output shape: " << jinq::models::backend::shape_to_string(tensor.shape);
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
+    cv::Size output_size;
     if (tensor.shape.size() == 3) {
-        _m_input_size_host.height = static_cast<int>(tensor.shape[0]);
-        _m_input_size_host.width = static_cast<int>(tensor.shape[1]);
+        output_size.height = static_cast<int>(tensor.shape[0]);
+        output_size.width = static_cast<int>(tensor.shape[1]);
     } else {
-        _m_input_size_host.height = static_cast<int>(tensor.shape[1]);
-        _m_input_size_host.width = static_cast<int>(tensor.shape[2]);
+        output_size.height = static_cast<int>(tensor.shape[1]);
+        output_size.width = static_cast<int>(tensor.shape[2]);
     }
-    if (_m_input_size_host.area() <= 0 || tensor.element_count() != 3 * _m_input_size_host.area()) {
+    if (output_size.area() <= 0 || tensor.element_count() != 3 * output_size.area()) {
         LOG(ERROR) << "invalid attentive gan output shape: " << jinq::models::backend::shape_to_string(tensor.shape);
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
 
-    const auto *host_data = tensor.template data<float>();
-    cv::Mat output_feats(_m_input_size_host, CV_32FC3, const_cast<float *>(host_data));
+    const auto *host_data = output_view.data;
+    cv::Mat output_feats(output_size, CV_32FC3, const_cast<float *>(host_data));
     std::vector<cv::Mat> output_feats_split;
     cv::split(output_feats, output_feats_split);
     const auto b_max_value = *std::max_element(output_feats_split[0].begin<float>(), output_feats_split[0].end<float>());
@@ -104,7 +122,7 @@ StatusCode AttentiveGanDerain<INPUT, OUTPUT>::postprocess(const std::vector<Name
     const auto r_max_value = *std::max_element(output_feats_split[2].begin<float>(), output_feats_split[2].end<float>());
     const auto r_min_value = *std::min_element(output_feats_split[2].begin<float>(), output_feats_split[2].end<float>());
 
-    cv::Mat output_image(_m_input_size_host, CV_8UC3);
+    cv::Mat output_image(output_size, CV_8UC3);
     for (auto row = 0; row < output_image.size().height; ++row) {
         for (auto col = 0; col < output_image.size().width; ++col) {
             const float b_feats_val = output_feats.at<cv::Vec3f>(row, col)[0];

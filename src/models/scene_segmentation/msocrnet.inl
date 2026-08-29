@@ -13,6 +13,8 @@
 #include <opencv2/opencv.hpp>
 
 #include "common/cv_utils.h"
+#include "models/backend/request_geometry.h"
+#include "models/backend/tensor_contract.h"
 
 namespace jinq {
 namespace models {
@@ -101,25 +103,43 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &
         LOG(ERROR) << "msocrnet output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
+    const auto source_status = jinq::models::backend::validated_source_size(context, "msocrnet");
+    if (source_status != StatusCode::OK) {
+        return source_status;
+    }
     const auto &tensor = outputs.front().tensor;
+    std::string contract_error;
     if (tensor.dtype != jinq::models::backend::DType::I32 && tensor.dtype != jinq::models::backend::DType::I64) {
         LOG(ERROR) << "msocrnet argmax output dtype must be i32/i64, got " << tensor.dtype;
-        return StatusCode::MODEL_EMPTY_OUTPUT;
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
     // argmax mask layout: [1,H,W] (onnx) or [1,H,W,1] (mnn)
-    if (tensor.shape.size() < 3) {
-        LOG(ERROR) << "unexpected msocrnet output shape: " << jinq::models::backend::shape_to_string(tensor.shape);
-        return StatusCode::MODEL_EMPTY_OUTPUT;
+    jinq::models::backend::TensorContract mask_contract;
+    mask_contract.dtype = jinq::models::backend::DType::I32;
+    mask_contract.rank = tensor.shape.size() == 3 ? 3 : 4;
+    mask_contract.shape = mask_contract.rank == 3 ? std::vector<int64_t>{1, context.network_size.height, context.network_size.width}
+                                                  : std::vector<int64_t>{1, context.network_size.height, context.network_size.width, 1};
+    if (!jinq::models::backend::validate_output_tensor(outputs.front(), mask_contract, &contract_error)) {
+        // The exact dtype is checked again below for the i64 fallback.
+        mask_contract.dtype = jinq::models::backend::DType::I64;
+        if (!jinq::models::backend::validate_output_tensor(outputs.front(), mask_contract, &contract_error)) {
+            LOG(ERROR) << "msocrnet output contract failed: " << contract_error;
+            return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+        }
     }
-    const auto height = tensor.shape[1];
-    const auto width = tensor.shape[2];
+    if (tensor.shape.size() != 3 && tensor.shape.size() != 4) {
+        LOG(ERROR) << "unexpected msocrnet output shape: " << jinq::models::backend::shape_to_string(tensor.shape);
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+    }
+    const auto height = context.network_size.height;
+    const auto width = context.network_size.width;
     const auto element_count = height * width;
     if (element_count <= 0) {
         LOG(ERROR) << "msocrnet output mask is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
 
-    cv::Mat seg_mask(_m_input_size_host, CV_32SC1, cv::Scalar(0));
+    cv::Mat seg_mask(context.network_size, CV_32SC1, cv::Scalar(0));
     if (tensor.dtype == jinq::models::backend::DType::I32) {
         const auto *data = tensor.template data<int32_t>();
         for (int64_t idx = 0; idx < element_count; ++idx) {

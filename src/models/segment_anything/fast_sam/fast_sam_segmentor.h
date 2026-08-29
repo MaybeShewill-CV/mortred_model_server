@@ -46,14 +46,12 @@ template <typename INPUT, typename OUTPUT> class FastSamSegmentor : public jinq:
     const jinq::models::backend::NamedTensor *find_output(const std::vector<jinq::models::backend::NamedTensor> &outputs,
                                                           const std::string &name) const;
 
-    cv::Mat upscale_mask_image(const cv::Mat &mask) const;
+    cv::Mat upscale_mask_image(const cv::Mat &mask, const cv::Size &source_size) const;
 
     // score thresh
     double _m_conf_thresh = 0.25;
     // nms iou threshold
     double _m_iou_thresh = 0.9;
-    // user image size of the current run
-    cv::Size _m_input_image_size = cv::Size();
     // network input node size
     cv::Size _m_input_tensor_size = cv::Size();
     // mask proto map size

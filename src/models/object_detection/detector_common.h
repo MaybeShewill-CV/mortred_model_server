@@ -9,7 +9,9 @@
 
 #include "common/cv_utils.h"
 #include "common/status_code.h"
+#include "models/backend/f32_output.h"
 #include "models/backend/inference_context.h"
+#include "models/backend/request_geometry.h"
 #include "models/backend/tensor_contract.h"
 #include "models/object_detection/detection_params.h"
 
@@ -24,75 +26,27 @@ using jinq::common::StatusCode;
  * Keep validation separate from multiplication so callers can reject malformed
  * contexts once instead of producing NaN/Inf boxes deep inside a decoder.
  */
-struct DetectionGeometryScale {
-    float width = 0.0f;
-    float height = 0.0f;
-};
+using backend::GeometryScale;
+using DetectionGeometryScale = GeometryScale;
 
 inline bool make_detection_geometry_scale(const backend::InferenceContext &context, DetectionGeometryScale *scale, std::string *error) {
-    if (scale == nullptr) {
-        if (error != nullptr) {
-            *error = "detection geometry scale output pointer is null";
-        }
-        return false;
-    }
-    if (context.source_size.width <= 0 || context.source_size.height <= 0 || context.network_size.width <= 0 ||
-        context.network_size.height <= 0) {
-        if (error != nullptr) {
-            *error = "invalid request geometry: source=" + std::to_string(context.source_size.width) + "x" +
-                     std::to_string(context.source_size.height) + ", network=" + std::to_string(context.network_size.width) + "x" +
-                     std::to_string(context.network_size.height);
-        }
-        return false;
-    }
-    scale->width = static_cast<float>(context.source_size.width) / static_cast<float>(context.network_size.width);
-    scale->height = static_cast<float>(context.source_size.height) / static_cast<float>(context.network_size.height);
-    return true;
+    return backend::make_geometry_scale(context, scale, error);
 }
 
 inline cv::Rect2f scale_detection_bbox(const cv::Rect2f &bbox, const DetectionGeometryScale &scale) {
-    return {bbox.x * scale.width, bbox.y * scale.height, bbox.width * scale.width, bbox.height * scale.height};
+    return backend::scale_bbox(bbox, scale);
 }
 
 inline cv::Point2f scale_detection_point(const cv::Point2f &point, const DetectionGeometryScale &scale) {
-    return {point.x * scale.width, point.y * scale.height};
+    return backend::scale_point(point, scale);
 }
 
-/***
- * A named f32 output which passed its shape/buffer/finite-value contract.
- * The tensor remains owned by the caller's output vector.
- */
-struct F32OutputView {
-    const backend::Tensor *tensor = nullptr;
-    const float *data = nullptr;
-};
+using backend::F32OutputView;
 
 inline StatusCode validated_f32_output(const std::vector<backend::NamedTensor> &outputs, const std::string &name,
                                        const backend::TensorContract &contract, const std::string &log_prefix,
                                        F32OutputView *view = nullptr) {
-    const auto *named = backend::find_output(outputs, name);
-    if (named == nullptr) {
-        LOG(ERROR) << log_prefix << " output tensor '" << name << "' is missing";
-        return StatusCode::MODEL_EMPTY_OUTPUT;
-    }
-
-    std::string error;
-    if (!backend::validate_output_tensor(*named, contract, &error)) {
-        LOG(ERROR) << log_prefix << " output contract failed: " << error;
-        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
-    }
-
-    const float *data = nullptr;
-    if (!backend::get_f32_data(named->tensor, &data, &error) ||
-        !backend::require_finite_f32(data, static_cast<size_t>(named->tensor.element_count()), named->name, &error)) {
-        LOG(ERROR) << log_prefix << " output contract failed: " << error;
-        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
-    }
-    if (view != nullptr) {
-        view->tensor = &named->tensor;
-        view->data = data;
-    }
-    return StatusCode::OK;
+    return backend::validated_f32_named_output(outputs, name, contract, log_prefix, view);
 }
 
 /***

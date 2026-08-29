@@ -57,10 +57,10 @@ inline cv::Size network_size_of(const std::vector<backend::NamedTensor> &inputs)
     if (shape.size() != 4) {
         return {};
     }
-    if (shape[1] == 3) {
+    if (shape[1] == 1 || shape[1] == 3) {
         return {static_cast<int>(shape[3]), static_cast<int>(shape[2])};
     }
-    if (shape[3] == 3) {
+    if (shape[3] == 1 || shape[3] == 3) {
         return {static_cast<int>(shape[2]), static_cast<int>(shape[1])};
     }
     return {};

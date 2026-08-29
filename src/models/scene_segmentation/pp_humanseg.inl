@@ -14,6 +14,8 @@
 #include <opencv2/opencv.hpp>
 
 #include "common/cv_utils.h"
+#include "models/backend/f32_output.h"
+#include "models/backend/request_geometry.h"
 
 namespace jinq {
 namespace models {
@@ -75,30 +77,33 @@ StatusCode PPHumanSeg<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>
         LOG(ERROR) << "pphumanseg output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto &tensor = outputs.front().tensor;
-    if (tensor.shape.size() < 3) {
-        LOG(ERROR) << "unexpected pphumanseg output shape: " << jinq::models::backend::shape_to_string(tensor.shape);
-        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    const auto source_status = jinq::models::backend::validated_source_size(context, "pphumanseg");
+    if (source_status != StatusCode::OK) {
+        return source_status;
     }
-    const auto channels = tensor.shape[tensor.shape.size() - 3];
-    if (channels != 2) {
-        LOG(ERROR) << "unexpected pphumanseg output channel count: " << jinq::models::backend::shape_to_string(tensor.shape);
-        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    jinq::models::backend::F32OutputView output_view;
+    const auto output_status = jinq::models::backend::validated_f32_first_output(
+        outputs, {jinq::models::backend::DType::F32, 4, {1, 2, context.network_size.height, context.network_size.width}}, "pphumanseg",
+        &output_view);
+    if (output_status != StatusCode::OK) {
+        return output_status;
     }
+    const auto &tensor = *output_view.tensor;
+    const auto *host_data = output_view.data;
+    const auto channels = tensor.shape[1];
 
-    const auto *host_data = tensor.template data<float>();
-    const auto plane_size = static_cast<int64_t>(_m_input_size_host.area());
+    const auto plane_size = static_cast<int64_t>(context.network_size.area());
     std::vector<float> hwc_host_data(static_cast<size_t>(plane_size * channels));
-    for (auto row = 0; row < _m_input_size_host.height; ++row) {
-        for (auto col = 0; col < _m_input_size_host.width; ++col) {
+    for (auto row = 0; row < context.network_size.height; ++row) {
+        for (auto col = 0; col < context.network_size.width; ++col) {
             for (auto channel = 0; channel < channels; ++channel) {
-                hwc_host_data[static_cast<size_t>(row * _m_input_size_host.width * channels + col * channels + channel)] =
-                    host_data[static_cast<size_t>(channel * plane_size + row * _m_input_size_host.width + col)];
+                hwc_host_data[static_cast<size_t>(row * context.network_size.width * channels + col * channels + channel)] =
+                    host_data[static_cast<size_t>(channel * plane_size + row * context.network_size.width + col)];
             }
         }
     }
 
-    cv::Mat logits(_m_input_size_host, CV_32FC2, hwc_host_data.data());
+    cv::Mat logits(context.network_size, CV_32FC2, hwc_host_data.data());
     cv::resize(logits, logits, context.source_size, 0.0, 0.0, cv::INTER_LINEAR);
     cv::Mat result_image(context.source_size, CV_32SC1, cv::Scalar(0));
     for (auto row = 0; row < logits.rows; ++row) {

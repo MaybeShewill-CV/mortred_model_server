@@ -29,7 +29,7 @@ template <typename INPUT, typename OUTPUT> class BiseNetV2 : public jinq::models
     BiseNetV2(const BiseNetV2 &transformer) = delete;
     BiseNetV2 &operator=(const BiseNetV2 &transformer) = delete;
 
-  private:
+  protected:
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
     StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,

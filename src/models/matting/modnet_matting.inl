@@ -14,6 +14,8 @@
 #include <opencv2/opencv.hpp>
 
 #include "common/cv_utils.h"
+#include "models/backend/f32_output.h"
+#include "models/backend/request_geometry.h"
 
 namespace jinq {
 namespace models {
@@ -75,14 +77,20 @@ StatusCode ModNetMatting<INPUT, OUTPUT>::postprocess(const std::vector<NamedTens
         LOG(ERROR) << "modnet output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto &tensor = outputs.front().tensor;
-    const auto *host_data = tensor.template data<float>();
-    if (tensor.element_count() < static_cast<int64_t>(_m_input_size_host.area())) {
-        LOG(ERROR) << "unexpected modnet output shape: " << jinq::models::backend::shape_to_string(tensor.shape);
-        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    const auto source_status = jinq::models::backend::validated_source_size(context, "modnet");
+    if (source_status != StatusCode::OK) {
+        return source_status;
     }
+    jinq::models::backend::F32OutputView output_view;
+    const auto output_status = jinq::models::backend::validated_f32_first_output(
+        outputs, {jinq::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width}}, "modnet",
+        &output_view);
+    if (output_status != StatusCode::OK) {
+        return output_status;
+    }
+    const auto *host_data = output_view.data;
 
-    cv::Mat result_image(_m_input_size_host, CV_32FC1, const_cast<float *>(host_data));
+    cv::Mat result_image(context.network_size, CV_32FC1, const_cast<float *>(host_data));
     cv::resize(result_image, result_image, context.source_size, 0.0, 0.0, cv::INTER_LINEAR);
     result_image *= 255.0;
     result_image.convertTo(result_image, CV_8UC1);

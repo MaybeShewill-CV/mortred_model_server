@@ -15,6 +15,9 @@
 #include "common/cv_utils.h"
 #include "glog/logging.h"
 
+#include "models/backend/f32_output.h"
+#include "models/backend/request_geometry.h"
+
 namespace jinq {
 namespace models {
 namespace enhancement {
@@ -145,12 +148,23 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::postprocess(const std::vector<NamedTenso
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
     const auto &tensor = outputs.front().tensor;
+    const auto source_status = jinq::models::backend::validated_source_size(context, "enlighten gan");
+    if (source_status != StatusCode::OK) {
+        return source_status;
+    }
+    jinq::models::backend::F32OutputView output_view;
+    const auto output_status = jinq::models::backend::validated_f32_first_output(
+        outputs, {jinq::models::backend::DType::F32, 4, {1, 3, context.network_size.height, context.network_size.width}}, "enlighten gan",
+        &output_view);
+    if (output_status != StatusCode::OK) {
+        return output_status;
+    }
     if (tensor.shape.size() != 4 || tensor.shape[0] != 1 || tensor.shape[1] != 3 || tensor.shape[2] != _m_input_size_host.height ||
         tensor.shape[3] != _m_input_size_host.width) {
         LOG(ERROR) << "unexpected enlighten gan output shape: " << jinq::models::backend::shape_to_string(tensor.shape);
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto *host_data = tensor.template data<float>();
+    const auto *host_data = output_view.data;
     std::vector<uchar> output_img_data(static_cast<size_t>(tensor.element_count()));
     for (auto row = 0; row < _m_input_size_host.height; ++row) {
         for (auto col = 0; col < _m_input_size_host.width; ++col) {

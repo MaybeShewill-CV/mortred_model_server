@@ -13,6 +13,8 @@
 
 #include "glog/logging.h"
 
+#include "models/backend/f32_output.h"
+
 namespace jinq {
 namespace models {
 namespace enhancement {
@@ -84,6 +86,12 @@ StatusCode RealEsrGan<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
     const auto &tensor = outputs.front().tensor;
+    jinq::models::backend::F32OutputView output_view;
+    const auto output_status = jinq::models::backend::validated_f32_first_output(
+        outputs, {jinq::models::backend::DType::F32, 4, {1, 3, -1, -1}}, "real esrgan", &output_view);
+    if (output_status != StatusCode::OK) {
+        return output_status;
+    }
     // the exported mnn output is nchw ([1,3,H,W]); the old TENSORFLOW host
     // wrapper reordered it to hwc, do the same here
     if (tensor.shape.size() != 4 || tensor.shape[0] != 1 || tensor.shape[1] != 3) {
@@ -97,7 +105,7 @@ StatusCode RealEsrGan<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
 
-    const auto *host_data = tensor.template data<float>();
+    const auto *host_data = output_view.data;
     std::vector<uchar> output_img_data(static_cast<size_t>(tensor.element_count()));
     for (int64_t index = 0; index < tensor.element_count(); ++index) {
         auto pix_val_f = host_data[index] * 255.0;

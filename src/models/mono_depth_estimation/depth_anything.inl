@@ -13,6 +13,8 @@
 #include <opencv2/opencv.hpp>
 
 #include "common/cv_utils.h"
+#include "models/backend/f32_output.h"
+#include "models/backend/request_geometry.h"
 
 namespace jinq {
 namespace models {
@@ -83,22 +85,29 @@ StatusCode DepthAnything<INPUT, OUTPUT>::postprocess(const std::vector<NamedTens
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
     const auto &tensor = outputs.front().tensor;
-    const auto *depth_data = tensor.template data<float>();
-    if (tensor.element_count() < static_cast<int64_t>(_m_input_size_host.area())) {
-        LOG(ERROR) << "depth map smaller than the input map: " << jinq::models::backend::shape_to_string(tensor.shape);
-        return StatusCode::MODEL_EMPTY_OUTPUT;
+    const auto source_status = jinq::models::backend::validated_source_size(context, "depth anything");
+    if (source_status != StatusCode::OK) {
+        return source_status;
     }
-    cv::Mat depth_map(_m_input_size_host, CV_32FC1, const_cast<float *>(depth_data));
+    jinq::models::backend::F32OutputView output_view;
+    const auto output_status = jinq::models::backend::validated_f32_first_output(
+        outputs, {jinq::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width}}, "depth anything",
+        &output_view);
+    if (output_status != StatusCode::OK) {
+        return output_status;
+    }
+    const auto *depth_data = output_view.data;
+    cv::Mat depth_map(context.network_size, CV_32FC1, const_cast<float *>(depth_data));
 
     // undo the keep-ratio padding by cropping the valid region
     int crop_w = 0;
     int crop_h = 0;
     if (context.source_size.width > context.source_size.height) {
-        crop_w = _m_input_size_host.width;
-        crop_h = _m_input_size_host.height * context.source_size.height / context.source_size.width;
+        crop_w = context.network_size.width;
+        crop_h = context.network_size.height * context.source_size.height / context.source_size.width;
     } else {
-        crop_w = _m_input_size_host.width * context.source_size.width / context.source_size.height;
-        crop_h = _m_input_size_host.height;
+        crop_w = context.network_size.width * context.source_size.width / context.source_size.height;
+        crop_h = context.network_size.height;
     }
     cv::resize(depth_map(cv::Rect(0, 0, crop_w, crop_h)), depth_map, context.source_size);
 

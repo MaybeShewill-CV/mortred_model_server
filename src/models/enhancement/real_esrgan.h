@@ -29,7 +29,7 @@ template <typename INPUT, typename OUTPUT> class RealEsrGan : public jinq::model
     RealEsrGan(const RealEsrGan &transformer) = delete;
     RealEsrGan &operator=(const RealEsrGan &transformer) = delete;
 
-  private:
+  protected:
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
     StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,

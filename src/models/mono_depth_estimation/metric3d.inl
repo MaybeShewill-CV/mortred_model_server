@@ -14,6 +14,8 @@
 #include <opencv2/opencv.hpp>
 
 #include "common/cv_utils.h"
+#include "models/backend/f32_output.h"
+#include "models/backend/request_geometry.h"
 
 namespace jinq {
 namespace models {
@@ -132,21 +134,34 @@ StatusCode Metric3D<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &
         LOG(ERROR) << "metric3d outputs 'prediction'/'confidence' missing";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto *depth_data = depth_tensor->tensor.template data<float>();
-    const auto *conf_data = confidence_tensor->tensor.template data<float>();
-    if (depth_tensor->tensor.element_count() < static_cast<int64_t>(_m_input_size_host.area()) ||
-        confidence_tensor->tensor.element_count() < static_cast<int64_t>(_m_input_size_host.area())) {
-        LOG(ERROR) << "metric3d maps smaller than the input map";
-        return StatusCode::MODEL_EMPTY_OUTPUT;
+    const auto source_status = jinq::models::backend::validated_source_size(context, "metric3d");
+    if (source_status != StatusCode::OK) {
+        return source_status;
     }
+    jinq::models::backend::F32OutputView depth_view;
+    const auto depth_status = jinq::models::backend::validated_f32_named_output(
+        outputs, "prediction", {jinq::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width}},
+        "metric3d", &depth_view);
+    if (depth_status != StatusCode::OK) {
+        return depth_status;
+    }
+    jinq::models::backend::F32OutputView confidence_view;
+    const auto confidence_status = jinq::models::backend::validated_f32_named_output(
+        outputs, "confidence", {jinq::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width}},
+        "metric3d", &confidence_view);
+    if (confidence_status != StatusCode::OK) {
+        return confidence_status;
+    }
+    const auto *depth_data = depth_view.data;
+    const auto *conf_data = confidence_view.data;
 
-    cv::Mat depth_map = cv::Mat::zeros(_m_input_size_host, CV_32FC1);
-    cv::Mat confidence_map = cv::Mat::zeros(_m_input_size_host, CV_32FC1);
-    for (auto row = 0; row < _m_input_size_host.height; ++row) {
+    cv::Mat depth_map = cv::Mat::zeros(context.network_size, CV_32FC1);
+    cv::Mat confidence_map = cv::Mat::zeros(context.network_size, CV_32FC1);
+    for (auto row = 0; row < context.network_size.height; ++row) {
         auto *depth_row = depth_map.ptr<float>(row);
         auto *conf_row = confidence_map.ptr<float>(row);
-        for (auto col = 0; col < _m_input_size_host.width; ++col) {
-            const auto idx = row * _m_input_size_host.width + col;
+        for (auto col = 0; col < context.network_size.width; ++col) {
+            const auto idx = row * context.network_size.width + col;
             depth_row[col] = depth_data[idx] < 0 ? 0 : depth_data[idx];
             conf_row[col] = conf_data[idx];
         }

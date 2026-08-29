@@ -14,6 +14,8 @@
 #include <opencv2/opencv.hpp>
 
 #include "common/cv_utils.h"
+#include "models/backend/f32_output.h"
+#include "models/backend/request_geometry.h"
 
 namespace jinq {
 namespace models {
@@ -80,13 +82,13 @@ const NamedTensor *FastSamSegmentor<INPUT, OUTPUT>::find_output(const std::vecto
 template <typename INPUT, typename OUTPUT>
 std::vector<NamedTensor> FastSamSegmentor<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
     // rgb -> long-side scale -> right/bottom zero pad -> [0,1] (f32 nchw)
-    _m_input_image_size = input_image.size();
+    const cv::Size source_size = input_image.size();
     const auto input_node_h = _m_input_tensor_size.height;
     const auto input_node_w = _m_input_tensor_size.width;
-    const auto long_side = std::max(_m_input_image_size.width, _m_input_image_size.height);
+    const auto long_side = std::max(source_size.width, source_size.height);
     const float scale = static_cast<float>(input_node_h) / static_cast<float>(long_side);
-    const cv::Size target_size(static_cast<int>(scale * static_cast<float>(_m_input_image_size.width)),
-                               static_cast<int>(scale * static_cast<float>(_m_input_image_size.height)));
+    const cv::Size target_size(static_cast<int>(scale * static_cast<float>(source_size.width)),
+                               static_cast<int>(scale * static_cast<float>(source_size.height)));
 
     cv::Mat result;
     cv::cvtColor(input_image, result, cv::COLOR_BGR2RGB);
@@ -111,40 +113,53 @@ std::vector<NamedTensor> FastSamSegmentor<INPUT, OUTPUT>::preprocess(const cv::M
     return inputs;
 }
 
-template <typename INPUT, typename OUTPUT> cv::Mat FastSamSegmentor<INPUT, OUTPUT>::upscale_mask_image(const cv::Mat &mask) const {
+template <typename INPUT, typename OUTPUT>
+cv::Mat FastSamSegmentor<INPUT, OUTPUT>::upscale_mask_image(const cv::Mat &mask, const cv::Size &source_size) const {
     const auto input_node_h = _m_preds_mask_size.height;
     const auto input_node_w = _m_preds_mask_size.width;
-    const auto long_side = std::max(_m_input_image_size.width, _m_input_image_size.height);
+    const auto long_side = std::max(source_size.width, source_size.height);
     const float scale = static_cast<float>(input_node_h) / static_cast<float>(long_side);
-    const cv::Size target_size(static_cast<int>(scale * static_cast<float>(_m_input_image_size.width)),
-                               static_cast<int>(scale * static_cast<float>(_m_input_image_size.height)));
+    const cv::Size target_size(static_cast<int>(scale * static_cast<float>(source_size.width)),
+                               static_cast<int>(scale * static_cast<float>(source_size.height)));
     const auto pad_h = input_node_h - target_size.height;
     const auto pad_w = input_node_w - target_size.width;
 
     cv::Mat result_mask;
     const cv::Rect src_mask_roi = cv::Rect(0, 0, mask.cols - pad_w, mask.rows - pad_h) & cv::Rect(0, 0, mask.cols, mask.rows);
     mask(src_mask_roi).copyTo(result_mask);
-    cv::resize(result_mask, result_mask, _m_input_image_size, 0.0, 0.0, cv::INTER_LINEAR);
+    cv::resize(result_mask, result_mask, source_size, 0.0, 0.0, cv::INTER_LINEAR);
     return result_mask;
 }
 
 template <typename INPUT, typename OUTPUT>
 StatusCode FastSamSegmentor<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                        const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
+                                                        const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
     const auto *output0 = find_output(outputs, "output0");
     const auto *output1 = find_output(outputs, "output1");
     if (output0 == nullptr || output1 == nullptr) {
         LOG(ERROR) << "fastsam outputs 'output0'/'output1' missing";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto &preds = output0->tensor;
-    const auto &protos = output1->tensor;
-    if (preds.shape.size() != 3 || protos.shape.size() != 4) {
-        LOG(ERROR) << "unexpected fastsam output shapes: " << jinq::models::backend::shape_to_string(preds.shape) << " / "
-                   << jinq::models::backend::shape_to_string(protos.shape);
-        return StatusCode::MODEL_EMPTY_OUTPUT;
+    const auto source_status = jinq::models::backend::validated_source_size(context, "fastsam");
+    if (source_status != StatusCode::OK) {
+        return source_status;
     }
-    const auto *preds_data = preds.template data<float>();
+    jinq::models::backend::F32OutputView preds_view;
+    const auto preds_status = jinq::models::backend::validated_f32_named_output(
+        outputs, "output0", {jinq::models::backend::DType::F32, 3, {1, -1, -1}}, "fastsam", &preds_view);
+    if (preds_status != StatusCode::OK) {
+        return preds_status;
+    }
+    jinq::models::backend::F32OutputView protos_view;
+    const auto protos_status = jinq::models::backend::validated_f32_named_output(
+        outputs, "output1", {jinq::models::backend::DType::F32, 4, {1, -1, _m_preds_mask_size.height, _m_preds_mask_size.width}}, "fastsam",
+        &protos_view);
+    if (protos_status != StatusCode::OK) {
+        return protos_status;
+    }
+    const auto &preds = *preds_view.tensor;
+    const auto &protos = *protos_view.tensor;
+    const auto *preds_data = preds_view.data;
     const auto bbox_info_len = preds.shape[1];
     const auto bbox_nums = preds.shape[2];
 
@@ -179,7 +194,7 @@ StatusCode FastSamSegmentor<INPUT, OUTPUT>::postprocess(const std::vector<NamedT
     const auto c = protos.shape[1];
     const auto mh = _m_preds_mask_size.height;
     const auto mw = _m_preds_mask_size.width;
-    const auto *protos_data = protos.template data<float>();
+    const auto *protos_data = protos_view.data;
     std::vector<float> protos_vec(protos_data, protos_data + protos.element_count());
     auto mask_proto_hwc = CvUtils::convert_to_hwc_vec(protos_vec, 1, static_cast<int>(c), mh * mw);
     // rows = c proto channels, cols = mh*mw mask positions
@@ -210,7 +225,7 @@ StatusCode FastSamSegmentor<INPUT, OUTPUT>::postprocess(const std::vector<NamedT
             }
         }
 
-        auto upscaled = upscale_mask_image(sigmoid_output);
+        auto upscaled = upscale_mask_image(sigmoid_output, context.source_size);
         cv::Mat mask = cv::Mat::zeros(upscaled.size(), CV_8UC1);
         for (auto row = 0; row < upscaled.rows; ++row) {
             auto *row_data = mask.ptr(row);
@@ -226,7 +241,7 @@ StatusCode FastSamSegmentor<INPUT, OUTPUT>::postprocess(const std::vector<NamedT
     // reorder by area and paint the everything mask with object ids
     auto comp_area = [](const cv::Mat &a, const cv::Mat &b) -> bool { return cv::countNonZero(a) >= cv::countNonZero(b); };
     std::sort(predicted_masks.begin(), predicted_masks.end(), comp_area);
-    cv::Mat everything_mask = cv::Mat::zeros(_m_input_image_size, CV_32SC1);
+    cv::Mat everything_mask = cv::Mat::zeros(context.source_size, CV_32SC1);
     for (size_t idx = 0; idx < predicted_masks.size(); ++idx) {
         everything_mask.setTo(static_cast<int>(idx + 1), predicted_masks[idx]);
     }

@@ -13,6 +13,8 @@
 #include "glog/logging.h"
 
 #include "common/cv_utils.h"
+#include "models/backend/f32_output.h"
+#include "models/backend/request_geometry.h"
 
 namespace jinq {
 namespace models {
@@ -111,13 +113,21 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
         LOG(ERROR) << "db text inference result tensor is missing";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto &tensor = output_iter->tensor;
-    if (tensor.dtype != jinq::models::backend::DType::F32 || tensor.element_count() <= 0) {
-        LOG(ERROR) << "invalid db text inference result tensor";
-        return StatusCode::MODEL_EMPTY_OUTPUT;
+    jinq::models::backend::GeometryScale geometry_scale;
+    std::string geometry_error;
+    if (!jinq::models::backend::make_geometry_scale(context, &geometry_scale, &geometry_error)) {
+        LOG(ERROR) << "db text " << geometry_error;
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
-    const auto *output_data = tensor.template data<float>();
-    const auto ele_size = tensor.element_count();
+    jinq::models::backend::F32OutputView output_view;
+    const auto output_status = jinq::models::backend::validated_f32_named_output(
+        outputs, _m_output_name, {jinq::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width}},
+        "db text", &output_view);
+    if (output_status != StatusCode::OK) {
+        return output_status;
+    }
+    const auto *output_data = output_view.data;
+    const auto ele_size = output_view.tensor->element_count();
 
     // construct segmentation prob and score maps. The score values below the
     // threshold are zeroed before contours are decoded, exactly as before.
@@ -131,21 +141,17 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
             score_data[index] = 0.0f;
         }
     }
-    cv::Mat seg_prob_mat(_m_input_size_host, CV_8UC1, seg_mat_vec.data());
-    cv::Mat seg_score_mat(_m_input_size_host, CV_32FC1, score_data.data());
+    cv::Mat seg_prob_mat(context.network_size, CV_8UC1, seg_mat_vec.data());
+    cv::Mat seg_score_mat(context.network_size, CV_32FC1, score_data.data());
 
-    return get_boxes_from_bitmap(seg_prob_mat, seg_score_mat, context, output);
+    return get_boxes_from_bitmap(seg_prob_mat, seg_score_mat, geometry_scale, output);
 }
 
 template <typename INPUT, typename OUTPUT>
 StatusCode DBTextDetector<INPUT, OUTPUT>::get_boxes_from_bitmap(const cv::Mat &seg_prob_mat, const cv::Mat &seg_score_mat,
-                                                                const jinq::models::backend::InferenceContext &context,
+                                                                const jinq::models::backend::GeometryScale &geometry_scale,
                                                                 OUTPUT &output) const {
     TextRegions result;
-    const auto host_width = static_cast<float>(_m_input_size_host.width);
-    const auto host_height = static_cast<float>(_m_input_size_host.height);
-    const auto user_width = static_cast<float>(context.source_size.width);
-    const auto user_height = static_cast<float>(context.source_size.height);
 
     // contours analysis
     std::vector<std::vector<cv::Point>> contours;
@@ -173,13 +179,9 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::get_boxes_from_bitmap(const cv::Mat &s
 
         // rescale bbox coords to origin user image size
         for (auto &pt : r_vertices) {
-            pt.x = pt.x * user_width / host_width;
-            pt.y = pt.y * user_height / host_height;
+            pt = jinq::models::backend::scale_point(pt, geometry_scale);
         }
-        r_bounding_box.x = r_bounding_box.x * user_width / host_width;
-        r_bounding_box.y = r_bounding_box.y * user_height / host_height;
-        r_bounding_box.width = r_bounding_box.width * user_width / host_width;
-        r_bounding_box.height = r_bounding_box.height * user_height / host_height;
+        r_bounding_box = jinq::models::backend::scale_bbox(r_bounding_box, geometry_scale);
 
         TextRegion region;
         region.bbox = r_bounding_box;

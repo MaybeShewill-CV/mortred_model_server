@@ -37,7 +37,7 @@ template <typename INPUT, typename OUTPUT> class MobileNetv2 : public jinq::mode
      */
     StatusCode run_batch(const std::vector<INPUT> &in, std::vector<OUTPUT> &out, std::vector<StatusCode> &item_status) override;
 
-  private:
+  protected:
     // image -> normalized CV_32FC3 HWC mat of _m_input_tensor_size (batch share)
     cv::Mat preprocess_mat(const cv::Mat &image);
 
