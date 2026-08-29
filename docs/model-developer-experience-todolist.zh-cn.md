@@ -23,7 +23,7 @@
 - [x] 固化 P4 总体方案文档
 - [x] 创建专用开发分支 `refactor/models-p4-developer-experience`
 - [x] Phase 0 完成前确认 main 基线 CI 状态
-  - 备注：`main @ 7a68279` 的 tests / quality / sanitizers / CPU profile 已通过；full Werror Docker 与 CodeQL full 当前失败，需在 P4 分支开发过程中优先修复或复核。
+  - 备注：`main @ 7a68279` 的 tests / quality / sanitizers / CPU profile 已通过；full Werror Docker 与 CodeQL full 的阻塞已定位为 GCC 9 下 `DepthAnything::postprocess` 的 unused-variable，并已在本分支移除。
 
 ## Phase 0：基线与度量
 

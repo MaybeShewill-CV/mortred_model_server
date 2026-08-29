@@ -84,7 +84,6 @@ StatusCode DepthAnything<INPUT, OUTPUT>::postprocess(const std::vector<NamedTens
         LOG(ERROR) << "depth anything output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto &tensor = outputs.front().tensor;
     const auto source_status = jinq::models::backend::validated_source_size(context, "depth anything");
     if (source_status != StatusCode::OK) {
         return source_status;
