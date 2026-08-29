@@ -15,6 +15,7 @@
 #include <opencv2/opencv.hpp>
 
 #include "models/backend/backend_cv_model.h"
+#include "models/backend/request_geometry.h"
 #include "models/backend/tensor.h"
 #include "models/model_io_define.h"
 
