@@ -603,7 +603,9 @@ jobs:
           build-args: |
             EXTRA_CMAKE_FLAGS=-DMORTRED_ENABLE_WERROR=ON
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # The vendored dependency layer is several GB. Exporting it to the GHA
+          # cache can outlive Azure's 1-hour SAS URL and fail after a successful
+          # compile, so full gates only import an existing cache.
 
   # ---------------------------------------------------------------------------
   # Job F: PR full-compile gate (Docker carrier + gha cache; triggered only by C++/build-related PRs).
@@ -632,7 +634,9 @@ jobs:
           build-args: |
             EXTRA_CMAKE_FLAGS=-DMORTRED_ENABLE_WERROR=ON
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Full gates intentionally do not export the multi-GB dependency layer:
+          # GHA cache uploads can exceed the storage SAS expiry and turn a
+          # successful compile red.
 
   # ---------------------------------------------------------------------------
   # Job G: daily full gate (schedule / manual): runs a full -Werror build + unit tests + e2e
@@ -660,7 +664,9 @@ jobs:
           build-args: |
             EXTRA_CMAKE_FLAGS=-DMORTRED_ENABLE_WERROR=ON
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Full gates intentionally do not export the multi-GB dependency layer:
+          # GHA cache uploads can exceed the storage SAS expiry and turn a
+          # successful compile red.
 
   # ---------------------------------------------------------------------------
   # Job H: GPU golden smoke gate (PR). Runs a curated 6-model subset of the

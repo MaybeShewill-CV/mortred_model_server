@@ -108,7 +108,8 @@ jobs:
           load: true
           tags: mortred-full:ci
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Full builds only import the GHA cache. Exporting the multi-GB
+          # dependency layer can exceed Azure Storage's 1-hour SAS URL validity.
 
       # Locate the codeql bundle root in toolcache (contains the codeql/ CLI and ql/ query packs)
       - if: matrix.mode == 'full'
