@@ -1,6 +1,7 @@
 # P4：Modern Model Developer Experience 改造计划
 
-> 状态：已评审方案，尚未实施  
+> 状态：实施中
+> 执行清单：[model-developer-experience-todolist.zh-cn.md](model-developer-experience-todolist.zh-cn.md)
 > 基线：`main @ 5648960 refactor(models): validate latent and clip outputs`  
 > 建议分支：`refactor/models-p4-developer-experience`
 
