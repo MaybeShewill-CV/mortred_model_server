@@ -294,15 +294,15 @@
 
 ## Phase 8：文档与引导
 
-- [ ] 更新 `docs/how_to_add_new_model.md`
-- [ ] 更新 `docs/how_to_add_new_model.zh-cn.md`
-- [ ] 更新 `docs/model-contract-governance.md`
-- [ ] 新增 10 分钟接入最小分类模型教程
-- [ ] 新增 10 分钟接入 detection 模型教程
-- [ ] 新增 output contract 编写指南
-- [ ] 新增 golden 编写指南
-- [ ] 新增 shape / dtype 排查指南
-- [ ] 更新 README 双语入口
+- [x] 更新 `docs/how_to_add_new_model.md`
+- [x] 更新 `docs/how_to_add_new_model.zh-cn.md`
+- [x] 更新 `docs/model-contract-governance.md`
+- [x] 新增 10 分钟接入最小分类模型教程
+- [x] 新增 10 分钟接入 detection 模型教程
+- [x] 新增 output contract 编写指南
+- [x] 新增 golden 编写指南
+- [x] 新增 shape / dtype 排查指南
+- [x] 更新 README 双语入口
 
 
 > Phase 8 落地说明：
@@ -313,7 +313,9 @@
 >   OutputReader / SessionIoValidator）与 MultiSessionModel 的引用。
 > - README 中英文都加入开发者指南入口。
 > - 指南末尾明确记录当前状态与三个 golden 覆盖缺口（depth / lightglue / LDM）。
-> - 两项刻意未勾选：旧版中文教程与 governance 文档，理由已标注。
+> - 中文教程已按现行 API 重写（旧版描述的五层转换结构已不存在）；
+>   governance 文档补充 OutputReader、POSTPROCESS_CONTRACT_TEST、golden 宏与
+>   零漂移守卫的引用，并新增 Session IO 校验一节。
 
 ## 总验收
 
