@@ -253,6 +253,20 @@
 - [ ] CLIP 试点
 - [ ] diffusion sampler / VAE 试点
 
+
+> Phase 7 进度说明（步骤 1-3 完成）：
+> - 新增 `src/models/backend/multi_session_model.h`：`IoSpec` / `SessionSpec` /
+>   `MultiSessionModel<Derived, INPUT, OUTPUT>`，负责多引擎的创建、IO 校验与
+>   失败统一清理；**刻意不做执行编排**，运行顺序与结果合并仍是模型自己的逻辑。
+> - `create_session()` 是虚函数，测试可以注入 fake session，不需要真实模型文件。
+> - `test/multi_session_model_unittest.cc` 4 个用例：正常创建 / IO 不匹配清空 /
+>   引擎缺失清空 / 未声明名字返回 nullptr。
+> - **CLIP 试点完成**：`OpenAiClip` 改继承 `MultiSessionModel`，删掉两个手写
+>   `validate_*_io`、两个 session 成员指针和手写 create/reset 序列；CLIP golden
+>   通过且零漂移。
+> - 剩余：lightglue、SAM prompt、LDM、SAM AMG（AMG 的 8 个 decoder 需要先确认
+>   是"多 session"还是"批量单 session"，不适合就明确保留手写）。
+
 ## Phase 8：文档与引导
 
 - [ ] 更新 `docs/how_to_add_new_model.md`
