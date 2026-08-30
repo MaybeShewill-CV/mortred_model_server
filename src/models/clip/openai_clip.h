@@ -62,8 +62,6 @@ template <typename INPUT, typename OUTPUT> class OpenAiClip : public jinq::model
 
     StatusCode encode_image(const cv::Mat &input_image, std::vector<float> &image_embeddings) const;
 
-    cv::Mat preprocess_image(const cv::Mat &input_image) const;
-
     void tokenize(const std::string &input_text, std::vector<int32_t> &token_ids) const;
 
     const jinq::models::backend::NamedTensor *find_output(const std::vector<jinq::models::backend::NamedTensor> &outputs,

@@ -213,7 +213,7 @@
 - [x] feature point
 - [x] depth
 - [x] FastSAM
-- [ ] CLIP
+- [x] CLIP
 - [ ] diffusion
 
 ### 每个模型族验收
