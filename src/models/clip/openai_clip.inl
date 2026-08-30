@@ -37,6 +37,15 @@ constexpr float k_clip_logit_cap = 80.0f;
 
 } // namespace
 
+template <typename INPUT, typename OUTPUT> std::vector<jinq::models::backend::SessionSpec> OpenAiClip<INPUT, OUTPUT>::sessions() {
+    return {
+        {"visual", "visual_backend", jinq::models::backend::IoSpec::input("input").f32().rank(4).nchw().channels(3).static_shape(),
+         jinq::models::backend::IoSpec::output("output").f32().rank(2).static_shape()},
+        {"text", "text_backend", jinq::models::backend::IoSpec::input("input").i32().rank(2).static_shape(),
+         jinq::models::backend::IoSpec::output("output").f32().rank(2).static_shape()},
+    };
+}
+
 template <typename INPUT, typename OUTPUT> StatusCode OpenAiClip<INPUT, OUTPUT>::on_init(const toml::table &params) {
     _m_context_length = static_cast<int>(params["context_length"].value_or<int64_t>(77));
     _m_truncate_context = params["truncate_context"].value_or<bool>(true);
@@ -51,32 +60,15 @@ template <typename INPUT, typename OUTPUT> StatusCode OpenAiClip<INPUT, OUTPUT>:
         return tokenizer_status;
     }
 
-    _m_visual_encoder = this->make_session("visual_backend");
-    _m_text_encoder = this->make_session("text_backend");
-    if (_m_visual_encoder == nullptr || _m_text_encoder == nullptr) {
-        _m_visual_encoder.reset();
-        _m_text_encoder.reset();
-        return StatusCode::MODEL_INIT_FAILED;
+    const auto session_status = this->init_sessions();
+    if (session_status != StatusCode::OK) {
+        return session_status;
     }
-
-    auto status = validate_visual_io(*_m_visual_encoder);
-    if (status != StatusCode::OK) {
-        _m_visual_encoder.reset();
-        _m_text_encoder.reset();
-        return status;
-    }
-    status = validate_text_io(*_m_text_encoder);
-    if (status != StatusCode::OK) {
-        _m_visual_encoder.reset();
-        _m_text_encoder.reset();
-        return status;
-    }
-
-    const auto *text_input = find_info(*_m_text_encoder, "input");
+    auto *const text_encoder = this->session("text");
+    const auto *text_input = find_info(*text_encoder, "input");
     if (text_input == nullptr || jinq::models::backend::shape_volume(text_input->shape) != static_cast<int64_t>(_m_context_length)) {
         LOG(ERROR) << "openai clip context length " << _m_context_length << " mismatches text encoder input";
-        _m_visual_encoder.reset();
-        _m_text_encoder.reset();
+        this->reset_sessions();
         return StatusCode::MODEL_INIT_FAILED;
     }
 
@@ -97,40 +89,6 @@ const TensorInfo *OpenAiClip<INPUT, OUTPUT>::find_info(const InferenceSession &s
         return &*output_iter;
     }
     return nullptr;
-}
-
-template <typename INPUT, typename OUTPUT> StatusCode OpenAiClip<INPUT, OUTPUT>::validate_visual_io(const InferenceSession &session) {
-    const auto input =
-        jinq::models::backend::SessionIoValidator(session).input("input").f32().rank(4).nchw().channels(3).static_shape().validate();
-    if (!input.ok()) {
-        LOG(ERROR) << "invalid openai clip visual encoder input: " << input.error;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    const auto output = jinq::models::backend::SessionIoValidator(session).output("output").f32().rank(2).static_shape().validate();
-    if (!output.ok()) {
-        LOG(ERROR) << "invalid openai clip visual encoder output: " << output.error;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    return StatusCode::OK;
-}
-
-template <typename INPUT, typename OUTPUT> StatusCode OpenAiClip<INPUT, OUTPUT>::validate_text_io(const InferenceSession &session) {
-    const auto input = jinq::models::backend::SessionIoValidator(session)
-                           .input("input")
-                           .dtype(jinq::models::backend::DType::I32)
-                           .rank(2)
-                           .static_shape()
-                           .validate();
-    if (!input.ok()) {
-        LOG(ERROR) << "invalid openai clip text encoder input: " << input.error;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    const auto output = jinq::models::backend::SessionIoValidator(session).output("output").f32().rank(2).static_shape().validate();
-    if (!output.ok()) {
-        LOG(ERROR) << "invalid openai clip text encoder output: " << output.error;
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-    return StatusCode::OK;
 }
 
 template <typename INPUT, typename OUTPUT>
@@ -180,7 +138,7 @@ void OpenAiClip<INPUT, OUTPUT>::tokenize(const std::string &input_text, std::vec
 template <typename INPUT, typename OUTPUT>
 StatusCode OpenAiClip<INPUT, OUTPUT>::encode_image(const cv::Mat &input_image, std::vector<float> &image_embeddings) const {
     image_embeddings.clear();
-    const auto &input_info = _m_visual_encoder->inputs().front();
+    const auto &input_info = this->session("visual")->inputs().front();
 
     // bgr -> rgb -> resize -> [0,1] -> clip mean/std, f32 nchw
     auto input = jinq::models::backend::ImagePipeline(input_image)
@@ -199,7 +157,7 @@ StatusCode OpenAiClip<INPUT, OUTPUT>::encode_image(const cv::Mat &input_image, s
     std::vector<NamedTensor> inputs;
     inputs.push_back(std::move(input.value));
     std::vector<NamedTensor> outputs;
-    const auto run_status = _m_visual_encoder->run(inputs, outputs);
+    const auto run_status = this->session("visual")->run(inputs, outputs);
     if (run_status != StatusCode::OK) {
         return run_status;
     }
@@ -222,7 +180,7 @@ StatusCode OpenAiClip<INPUT, OUTPUT>::encode_text(const std::string &input_text,
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
 
-    const auto &input_info = _m_text_encoder->inputs().front();
+    const auto &input_info = this->session("text")->inputs().front();
     NamedTensor named;
     named.name = input_info.name;
     named.tensor = Tensor::make<int32_t>(input_info.shape);
@@ -235,7 +193,7 @@ StatusCode OpenAiClip<INPUT, OUTPUT>::encode_text(const std::string &input_text,
     std::vector<NamedTensor> inputs;
     inputs.push_back(std::move(named));
     std::vector<NamedTensor> outputs;
-    const auto run_status = _m_text_encoder->run(inputs, outputs);
+    const auto run_status = this->session("text")->run(inputs, outputs);
     if (run_status != StatusCode::OK) {
         return run_status;
     }
@@ -250,7 +208,7 @@ StatusCode OpenAiClip<INPUT, OUTPUT>::encode_text(const std::string &input_text,
 
 template <typename INPUT, typename OUTPUT>
 StatusCode OpenAiClip<INPUT, OUTPUT>::get_visual_embedding(const cv::Mat &input_image, std::vector<float> &image_embeddings) {
-    if (_m_visual_encoder == nullptr) {
+    if (this->session("visual") == nullptr) {
         return StatusCode::MODEL_INIT_FAILED;
     }
     return encode_image(input_image, image_embeddings);
@@ -258,7 +216,7 @@ StatusCode OpenAiClip<INPUT, OUTPUT>::get_visual_embedding(const cv::Mat &input_
 
 template <typename INPUT, typename OUTPUT>
 StatusCode OpenAiClip<INPUT, OUTPUT>::get_textual_embedding(const std::string &input_text, std::vector<float> &text_embeddings) {
-    if (_m_text_encoder == nullptr) {
+    if (this->session("text") == nullptr) {
         return StatusCode::MODEL_INIT_FAILED;
     }
     return encode_text(input_text, text_embeddings);
@@ -414,7 +372,8 @@ StatusCode OpenAiClip<INPUT, OUTPUT>::postprocess(const std::vector<jinq::models
 }
 
 template <typename INPUT, typename OUTPUT>
-OpenAiClip<INPUT, OUTPUT>::OpenAiClip() : jinq::models::BackendCvModel<INPUT, OUTPUT>("OPENAI_CLIP") {}
+OpenAiClip<INPUT, OUTPUT>::OpenAiClip()
+    : jinq::models::backend::MultiSessionModel<OpenAiClip<INPUT, OUTPUT>, INPUT, OUTPUT>("OPENAI_CLIP") {}
 
 } // namespace clip
 } // namespace models

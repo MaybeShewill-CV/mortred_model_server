@@ -8,6 +8,7 @@
 #ifndef MORTRED_MODEL_SERVER_OPENAICLIP_H
 #define MORTRED_MODEL_SERVER_OPENAICLIP_H
 
+#include <array>
 #include <memory>
 #include <string>
 #include <vector>
@@ -16,6 +17,7 @@
 #include <opencv2/opencv.hpp>
 
 #include "models/backend/backend_cv_model.h"
+#include "models/backend/multi_session_model.h"
 #include "models/backend/session.h"
 #include "models/backend/tensor.h"
 #include "models/clip/simple_tokenizer.h"
@@ -30,7 +32,11 @@ using jinq::common::StatusCode;
  * OpenAI CLIP multi-engine model. The visual and text encoders are unified
  * inference sessions, while the BPE tokenizer is model-local preprocessing.
  */
-template <typename INPUT, typename OUTPUT> class OpenAiClip : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT>
+class OpenAiClip : public jinq::models::backend::MultiSessionModel<OpenAiClip<INPUT, OUTPUT>, INPUT, OUTPUT> {
+    using Base = jinq::models::backend::MultiSessionModel<OpenAiClip<INPUT, OUTPUT>, INPUT, OUTPUT>;
+    friend Base;
+
   public:
     OpenAiClip();
     ~OpenAiClip() override = default;
@@ -51,6 +57,10 @@ template <typename INPUT, typename OUTPUT> class OpenAiClip : public jinq::model
     using ClipOutput = jinq::models::io_define::clip::clip_output;
     using ClipTaskType = jinq::models::io_define::clip::ClipTaskType;
 
+    // the two engines this model needs; MultiSessionModel creates, validates
+    // and owns them, this class only drives them
+    static std::vector<jinq::models::backend::SessionSpec> sessions();
+
     StatusCode on_init(const toml::table &params) override;
 
     StatusCode run_sessions(const INPUT &input, OUTPUT &output) override;
@@ -70,16 +80,10 @@ template <typename INPUT, typename OUTPUT> class OpenAiClip : public jinq::model
     static const jinq::models::backend::TensorInfo *find_info(const jinq::models::backend::InferenceSession &session,
                                                               const std::string &name);
 
-    static StatusCode validate_visual_io(const jinq::models::backend::InferenceSession &session);
-
-    static StatusCode validate_text_io(const jinq::models::backend::InferenceSession &session);
-
     static bool normalize_embedding(std::vector<float> &embedding);
 
     static bool embeddings_compatible(const std::vector<float> &lhs, const std::vector<float> &rhs);
 
-    std::unique_ptr<jinq::models::backend::InferenceSession> _m_visual_encoder;
-    std::unique_ptr<jinq::models::backend::InferenceSession> _m_text_encoder;
     SimpleTokenizer _m_tokenizer;
     int _m_context_length = 77;
     bool _m_truncate_context = true;
