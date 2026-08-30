@@ -210,9 +210,9 @@
 - [x] enhancement
 - [x] OCR
 - [x] object detection
-- [ ] feature point
+- [x] feature point
 - [x] depth
-- [ ] FastSAM
+- [x] FastSAM
 - [ ] CLIP
 - [ ] diffusion
 
