@@ -7,15 +7,14 @@
 
 #include "superpoint.h"
 
+#include "glog/logging.h"
 #include <algorithm>
 #include <cmath>
-#include <cstring>
-
-#include "glog/logging.h"
 #include <opencv2/opencv.hpp>
 
 #include "common/cv_utils.h"
 #include "models/backend/f32_output.h"
+#include "models/backend/model_runtime.h"
 #include "models/backend/request_geometry.h"
 
 namespace jinq {
@@ -60,30 +59,17 @@ const NamedTensor *SuperPoint<INPUT, OUTPUT>::find_output(const std::vector<Name
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> SuperPoint<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
     // resize -> gray -> [0,1] (f32 nchw)
-    cv::Mat tmp;
-    if (input_image.size() != _m_input_size_host) {
-        cv::resize(input_image, tmp, _m_input_size_host);
-    } else {
-        tmp = input_image;
-    }
-    cv::cvtColor(tmp, tmp, cv::COLOR_BGR2GRAY);
-    if (tmp.type() != CV_32FC1) {
-        tmp.convertTo(tmp, CV_32FC1);
-    }
-    tmp /= 255.0;
-
-    const auto chw_data = jinq::common::CvUtils::convert_to_chw_vec(tmp);
-    std::vector<NamedTensor> inputs;
-    NamedTensor named;
-    named.name = this->session().inputs().front().name;
-    named.tensor = jinq::models::backend::Tensor::make<float>({1, 1, _m_input_size_host.height, _m_input_size_host.width});
-    if (chw_data.size() * sizeof(float) != named.tensor.byte_size()) {
-        LOG(ERROR) << "preprocessed chw data mismatches the input tensor";
+    auto result = jinq::models::backend::ImagePipeline(input_image)
+                      .resize(_m_input_size_host)
+                      .bgr_to_gray()
+                      .to_float()
+                      .scale(1.0f / 255.0f)
+                      .nchw(this->session().inputs().front().name);
+    if (!result.ok()) {
+        LOG(ERROR) << result.error;
         return {};
     }
-    std::memcpy(named.tensor.buffer.data(), chw_data.data(), named.tensor.byte_size());
-    inputs.push_back(std::move(named));
-    return inputs;
+    return {std::move(result.value)};
 }
 
 template <typename INPUT, typename OUTPUT>

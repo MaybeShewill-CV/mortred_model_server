@@ -7,14 +7,13 @@
 
 #include "fast_sam_segmentor.h"
 
-#include <algorithm>
-#include <cstring>
-
 #include "glog/logging.h"
+#include <algorithm>
 #include <opencv2/opencv.hpp>
 
 #include "common/cv_utils.h"
 #include "models/backend/f32_output.h"
+#include "models/backend/model_runtime.h"
 #include "models/backend/request_geometry.h"
 
 namespace jinq {
@@ -99,18 +98,14 @@ std::vector<NamedTensor> FastSamSegmentor<INPUT, OUTPUT>::preprocess(const cv::M
     const auto pad_w = input_node_w - target_size.width;
     cv::copyMakeBorder(result, result, 0, pad_h, 0, pad_w, cv::BORDER_CONSTANT, 0.0);
 
-    const auto chw_data = CvUtils::convert_to_chw_vec(result);
-    std::vector<NamedTensor> inputs;
-    NamedTensor named;
-    named.name = this->session().inputs().front().name;
-    named.tensor = jinq::models::backend::Tensor::make<float>({1, 3, input_node_h, input_node_w});
-    if (chw_data.size() * sizeof(float) != named.tensor.byte_size()) {
-        LOG(ERROR) << "preprocessed chw data mismatches the input tensor";
+    // the keep-ratio geometry above stays hand-written (ImagePipeline has no
+    // padding step); only the packing goes through the toolkit
+    auto packed = jinq::models::backend::ImagePipeline(result).nchw(this->session().inputs().front().name);
+    if (!packed.ok()) {
+        LOG(ERROR) << packed.error;
         return {};
     }
-    std::memcpy(named.tensor.buffer.data(), chw_data.data(), named.tensor.byte_size());
-    inputs.push_back(std::move(named));
-    return inputs;
+    return {std::move(packed.value)};
 }
 
 template <typename INPUT, typename OUTPUT>
