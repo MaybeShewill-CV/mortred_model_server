@@ -80,6 +80,12 @@ class MyModel : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
 Notes:
 
 - The constructor passes the config section name (`"MY_MODEL"`).
+- Prefer the [runtime toolkit](../src/models/backend/model_runtime.h) over
+  hand-writing these steps. `ImagePipeline` covers resize / crop / colour
+  conversion / normalisation and packs to NCHW or NHWC in one call;
+  `OutputReader` replaces hand-built output contracts;
+  `SessionIoValidator` replaces hand-written session shape walks. Every
+  migrated model under [src/models/](../src/models) is an example.
 - `session().inputs()` / `session().outputs()` expose
   `TensorInfo{name, dtype, shape, dynamic}`; derive the network input size from
   it instead of hardcoding.
@@ -110,6 +116,11 @@ Notes:
 - Multi-engine models (encoder + decoder) configure `<key>_backend` sub-tables,
   build extra sessions with `make_session("<key>_backend")` and orchestrate
   them in the `run_sessions` override.
+- If the engines are a fixed set of distinct sessions addressed by name,
+  inherit [`MultiSessionModel`](../src/models/backend/multi_session_model.h)
+  and declare them through `sessions()` instead of hand-writing the
+  create / validate / reset sequence. It deliberately does **not**
+  orchestrate the runs.
 
 ## Step 3: Write the config
 
@@ -186,6 +197,14 @@ or server section is duplicated across tasks.
 cmake --preset full && cmake --build --preset full
 scripts/run_tests.sh build/full -R model_golden_test --output-on-failure
 ```
+
+Register it with one macro from
+[model_golden_registry.h](../test/model_golden_registry.h) - see the
+[developer guide](model-developer-guide.md) for the full list and the
+two-command baseline workflow. Prove a refactor changed nothing with
+[golden_drift_check.py](../scripts/golden_drift_check.py), and cover the
+rejection matrix with
+[POSTPROCESS_CONTRACT_TEST](../test/model_contract_test_util.h).
 
 Add a golden case with real weights to
 [test/model_golden_test.cc](../test/model_golden_test.cc) (tolerances are per
