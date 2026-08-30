@@ -92,6 +92,27 @@ TEST(ImagePipeline, ProducesNhwcAndSupportsMeanStd) {
     }
 }
 
+TEST(ImagePipeline, ConvertsBgraToRgbAndRejectsOtherChannelCounts) {
+    // BGRA(1,2,3,255) -> RGB(3,2,1); the alpha plane is dropped
+    const cv::Mat source(2, 2, CV_8UC4, cv::Scalar(1, 2, 3, 255));
+    auto result = ImagePipeline(source).bgra_to_rgb().to_float().nhwc("input");
+    ASSERT_TRUE(result.ok()) << result.error;
+    EXPECT_EQ(result.value.tensor.shape, std::vector<int64_t>({1, 2, 2, 3}));
+
+    const auto *data = reinterpret_cast<const float *>(result.value.tensor.buffer.data());
+    for (size_t idx = 0; idx < 4; ++idx) {
+        EXPECT_FLOAT_EQ(data[idx * 3 + 0], 3.0f);
+        EXPECT_FLOAT_EQ(data[idx * 3 + 1], 2.0f);
+        EXPECT_FLOAT_EQ(data[idx * 3 + 2], 1.0f);
+    }
+
+    // a 3-channel image must not silently pass through bgra_to_rgb
+    const cv::Mat bgr(2, 2, CV_8UC3, cv::Scalar(1, 2, 3));
+    const auto bad_channels = ImagePipeline(bgr).bgra_to_rgb().nhwc("input");
+    ASSERT_FALSE(bad_channels.ok());
+    EXPECT_EQ(bad_channels.status, StatusCode::MODEL_EMPTY_INPUT_IMAGE);
+}
+
 TEST(ImagePipeline, SupportsCenterCropAndRejectsInvalidOperations) {
     const cv::Mat source(4, 4, CV_8UC3, cv::Scalar(1, 2, 3));
     auto cropped = ImagePipeline(source).center_crop({2, 2}).to_float().nchw("images");

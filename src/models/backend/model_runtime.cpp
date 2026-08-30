@@ -48,6 +48,20 @@ ImagePipeline &ImagePipeline::bgr_to_rgb() {
     return *this;
 }
 
+ImagePipeline &ImagePipeline::bgra_to_rgb() {
+    if (status_ != StatusCode::OK) {
+        return *this;
+    }
+    if (image_.channels() != 4) {
+        set_error(status_, error_, invalid_image("bgra_to_rgb", "expected a 4-channel image"));
+        return *this;
+    }
+    cv::Mat converted;
+    cv::cvtColor(image_, converted, cv::COLOR_BGRA2RGB);
+    image_ = std::move(converted);
+    return *this;
+}
+
 ImagePipeline &ImagePipeline::rgb_to_bgr() {
     if (status_ != StatusCode::OK) {
         return *this;
