@@ -15,6 +15,7 @@
 
 #include "common/cv_utils.h"
 #include "models/backend/f32_output.h"
+#include "models/backend/model_runtime.h"
 #include "models/backend/request_geometry.h"
 
 namespace jinq {
@@ -27,15 +28,16 @@ using jinq::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode ModNetMatting<INPUT, OUTPUT>::on_init(const toml::table &params) {
     (void)params;
-    const auto &input_info = this->session().inputs().front();
-    if (input_info.shape.size() != 4 || input_info.shape[1] != 3) {
-        LOG(ERROR) << "unexpected modnet input shape: " << input_info.to_string() << ", expected [N,3,H,W] (nchw)";
+    const auto input_info =
+        jinq::models::backend::SessionIoValidator(this->session()).input().f32().rank(4).nchw().channels(3).static_shape().validate();
+    if (!input_info.ok()) {
+        LOG(ERROR) << "unexpected modnet input shape: " << input_info.error << ", expected static [N,3,H,W] (nchw)";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    _m_input_size_host.height = static_cast<int>(input_info.shape[2]);
-    _m_input_size_host.width = static_cast<int>(input_info.shape[3]);
+    _m_input_size_host.height = static_cast<int>(input_info.value.shape[2]);
+    _m_input_size_host.width = static_cast<int>(input_info.value.shape[3]);
     if (_m_input_size_host.area() <= 0) {
-        LOG(ERROR) << "invalid modnet input tensor size: " << input_info.to_string();
+        LOG(ERROR) << "invalid modnet input tensor size: " << input_info.error;
         return StatusCode::MODEL_INIT_FAILED;
     }
     return StatusCode::OK;
@@ -43,31 +45,19 @@ template <typename INPUT, typename OUTPUT> StatusCode ModNetMatting<INPUT, OUTPU
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> ModNetMatting<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
 
-    cv::Mat tmp;
-    cv::cvtColor(input_image, tmp, cv::COLOR_BGR2RGB);
-    if (tmp.size() != _m_input_size_host) {
-        cv::resize(tmp, tmp, _m_input_size_host);
-    }
-    if (tmp.type() != CV_32FC3) {
-        tmp.convertTo(tmp, CV_32FC3);
-    }
-    tmp /= 255.0;
-    cv::subtract(tmp, cv::Scalar(0.5, 0.5, 0.5), tmp);
-    cv::divide(tmp, cv::Scalar(0.5, 0.5, 0.5), tmp);
-
-    const auto chw_data = jinq::common::CvUtils::convert_to_chw_vec(tmp);
-    NamedTensor named;
-    named.name = this->session().inputs().front().name;
-    named.tensor = jinq::models::backend::Tensor::make<float>({1, 3, _m_input_size_host.height, _m_input_size_host.width});
-    if (chw_data.size() * sizeof(float) != named.tensor.byte_size()) {
-        LOG(ERROR) << "preprocessed chw data size mismatches input tensor size";
+    auto result = jinq::models::backend::ImagePipeline(input_image)
+                      .bgr_to_rgb()
+                      .resize(_m_input_size_host)
+                      .to_float()
+                      .scale(1.0f / 255.0f)
+                      .subtract({0.5f, 0.5f, 0.5f})
+                      .divide({0.5f, 0.5f, 0.5f})
+                      .nchw(this->session().inputs().front().name);
+    if (!result.ok()) {
+        LOG(ERROR) << result.error;
         return {};
     }
-    std::memcpy(named.tensor.buffer.data(), chw_data.data(), named.tensor.byte_size());
-
-    std::vector<NamedTensor> inputs;
-    inputs.push_back(std::move(named));
-    return inputs;
+    return {std::move(result.value)};
 }
 
 template <typename INPUT, typename OUTPUT>
