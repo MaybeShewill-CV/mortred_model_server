@@ -1,0 +1,234 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Mortred Model Server 整体架构",
+    "subtitle": "外部入口、控制面、环回推理面与模型运行时",
+    "locale": "zh-CN",
+    "visual_preset": "signal-flow",
+    "quality_profile": "showcase",
+    "viewBox": [1560, 749],
+    "repository": {
+      "url": "https://github.com/MaybeShewill-CV/mortred_model_server.git",
+      "revision": "c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e"
+    },
+    "legend": {
+      "mode": "auto"
+    }
+  },
+  "layout": {
+    "mode": "grid",
+    "origin": [0, 0],
+    "cellW": 210,
+    "cellH": 150,
+    "gapX": 70,
+    "gapY": 120
+  },
+  "components": [
+    {
+      "id": "clients",
+      "type": "external",
+      "label": "推理客户端 HTTP/JSON",
+      "pos": [20, 110],
+      "size": [130, 70],
+      "sources": [
+        { "path": "docs/api-contract.md" }
+      ]
+    },
+    {
+      "id": "ingress",
+      "type": "external",
+      "label": "TLS 反向代理",
+      "pos": [180, 110],
+      "size": [130, 70],
+      "sources": [
+        { "path": "docs/deployment.md" }
+      ]
+    },
+    {
+      "id": "gateway",
+      "type": "backend",
+      "label": "mortred-gateway :8080",
+      "pos": [360, 110],
+      "size": [180, 80],
+      "sources": [
+        { "path": "src/control/gateway/gateway_app.cpp" },
+        { "path": "src/control/catalog.h" }
+      ]
+    },
+    {
+      "id": "model_servers",
+      "type": "backend",
+      "label": "模型服务池 loopback",
+      "pos": [640, 110],
+      "size": [180, 86],
+      "sources": [
+        { "path": "src/server/generic_cv_server.h" },
+        { "path": "src/server/base_server_impl.h" },
+        { "path": "src/apps/common/model_server_main.h" }
+      ]
+    },
+    {
+      "id": "inference",
+      "type": "backend",
+      "label": "推理流水线",
+      "pos": [880, 110],
+      "size": [180, 86],
+      "sources": [
+        { "path": "src/models/base_model.h" },
+        { "path": "src/factory/base_factory.h" },
+        { "path": "src/server/response_serializers.h" }
+      ]
+    },
+    {
+      "id": "runtimes",
+      "type": "cloud",
+      "label": "MNN / ORT / TensorRT",
+      "pos": [880, 350],
+      "size": [180, 86],
+      "sources": [
+        { "path": "CMakeLists.txt" },
+        { "path": "docs/deployment.md" }
+      ]
+    },
+    {
+      "id": "artifacts",
+      "type": "database",
+      "label": "权重 / ONNX / engines",
+      "pos": [880, 575],
+      "size": [180, 86],
+      "sources": [
+        { "path": "scripts/fetch_weights.py" },
+        { "path": "scripts/convert_trt_engines.sh" }
+      ]
+    },
+    {
+      "id": "supervisor",
+      "type": "backend",
+      "label": "mortred-supervisor :8787",
+      "pos": [330, 350],
+      "size": [180, 86],
+      "sources": [
+        { "path": "src/control/supervisor/supervisor_app.cpp" },
+        { "path": "src/control/control_config.h" }
+      ]
+    },
+    {
+      "id": "cli",
+      "type": "frontend",
+      "label": "mortredctl",
+      "pos": [150, 350],
+      "size": [150, 70],
+      "sources": [
+        { "path": "src/control/cli/cli_app.cpp" },
+        { "path": "scripts/mortredctl_doctor.sh" }
+      ]
+    },
+    {
+      "id": "catalog",
+      "type": "database",
+      "label": "Catalog 与配置",
+      "pos": [360, 575],
+      "size": [180, 70],
+      "sources": [
+        { "path": "src/control/catalog.h" },
+        { "path": "src/control/api_key_manager.h" },
+        { "path": "conf/mortred.toml" }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "security-group",
+      "label": "对外入口",
+      "wraps": ["ingress", "gateway"],
+      "pad": 14
+    },
+    {
+      "kind": "security-group",
+      "label": "环回模型沙箱",
+      "wraps": ["model_servers", "inference", "runtimes", "artifacts"],
+      "pad": 14
+    },
+    {
+      "kind": "region",
+      "label": "控制面",
+      "wraps": ["cli", "supervisor", "catalog"],
+      "pad": 14
+    }
+  ],
+  "connections": [
+    {
+      "id": "client-to-ingress",
+      "from": "clients",
+      "to": "ingress",
+      "label": "HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ingress-to-gateway",
+      "from": "ingress",
+      "to": "gateway",
+      "label": "转发"
+    },
+    {
+      "id": "gateway-to-models",
+      "from": "gateway",
+      "to": "model_servers",
+      "label": "loopback 路由"
+    },
+    {
+      "id": "models-to-inference",
+      "from": "model_servers",
+      "to": "inference",
+      "label": "调用"
+    },
+    {
+      "id": "inference-to-runtimes",
+      "from": "inference",
+      "to": "runtimes",
+      "label": "执行",
+      "labelDy": 24
+    },
+    {
+      "id": "runtimes-to-artifacts",
+      "from": "runtimes",
+      "to": "artifacts",
+      "label": "加载",
+      "labelDy": 24
+    },
+    {
+      "id": "supervisor-to-catalog",
+      "from": "supervisor",
+      "to": "catalog",
+      "label": "读取配置 / 密钥",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 70
+    },
+    {
+      "id": "cli-to-supervisor",
+      "from": "cli",
+      "to": "supervisor",
+      "label": "REST",
+      "labelDy": -29
+    },
+    {
+      "id": "supervisor-to-gateway",
+      "from": "supervisor",
+      "to": "gateway",
+      "label": "启动 / 探活 / 重启",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "supervisor-to-models",
+      "from": "supervisor",
+      "to": "model_servers",
+      "label": "托管模型池",
+      "fromSide": "top",
+      "toSide": "bottom"
+    }
+  ]
+}
