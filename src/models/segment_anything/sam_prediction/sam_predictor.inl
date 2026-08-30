@@ -22,27 +22,34 @@ using jinq::common::StatusCode;
 using SamInput = jinq::models::io_define::segment_anything::sam_prompt_input;
 using SamOutput = jinq::models::io_define::segment_anything::std_sam_prompt_output;
 
+template <typename INPUT, typename OUTPUT> std::vector<jinq::models::backend::SessionSpec> SamPredictor<INPUT, OUTPUT>::sessions() {
+    return {
+        // both engines validate their own IO: the encoder names its tensors
+        // per backend (input_image/image_embeddings on TRT, others on MNN) and
+        // the decoder exposes an optional input (orig_im_size) plus
+        // alternative outputs (masks / low_res_masks)
+        {"encoder", "encoder_backend", {}, {}},
+        {"decoder", "decoder_backend", {}, {}},
+    };
+}
+
 template <typename INPUT, typename OUTPUT> StatusCode SamPredictor<INPUT, OUTPUT>::on_init(const toml::table &params) {
     (void)params;
-    _m_encoder = std::make_unique<SamVitEncoder>(this->make_session("encoder_backend"));
-    _m_decoder = std::make_unique<SamPromptDecoder>(this->make_session("decoder_backend"));
-    if (_m_encoder == nullptr || _m_decoder == nullptr) {
-        _m_encoder.reset();
-        _m_decoder.reset();
-        return StatusCode::MODEL_INIT_FAILED;
+    const auto session_status = this->init_sessions();
+    if (session_status != StatusCode::OK) {
+        return session_status;
     }
+
+    _m_encoder = std::make_unique<SamVitEncoder>(this->session("encoder"));
+    _m_decoder = std::make_unique<SamPromptDecoder>(this->session("decoder"));
 
     auto status = _m_encoder->init();
     if (status != StatusCode::OK) {
-        _m_encoder.reset();
-        _m_decoder.reset();
         return status;
     }
     const auto shape = _m_encoder->get_encoder_input_shape();
     if (shape.size() != 4) {
         LOG(ERROR) << "invalid sam encoder input shape";
-        _m_encoder.reset();
-        _m_decoder.reset();
         return StatusCode::MODEL_INIT_FAILED;
     }
     _m_encoder_input_size.height = shape[2];
@@ -50,8 +57,6 @@ template <typename INPUT, typename OUTPUT> StatusCode SamPredictor<INPUT, OUTPUT
 
     status = _m_decoder->init();
     if (status != StatusCode::OK) {
-        _m_encoder.reset();
-        _m_decoder.reset();
         return status;
     }
     _m_decoder->set_encoder_input_size(_m_encoder_input_size);
@@ -185,7 +190,8 @@ StatusCode SamPredictor<INPUT, OUTPUT>::postprocess(const std::vector<jinq::mode
 }
 
 template <typename INPUT, typename OUTPUT>
-SamPredictor<INPUT, OUTPUT>::SamPredictor() : jinq::models::BackendCvModel<INPUT, OUTPUT>("SAM_PREDICTOR") {}
+SamPredictor<INPUT, OUTPUT>::SamPredictor()
+    : jinq::models::backend::MultiSessionModel<SamPredictor<INPUT, OUTPUT>, INPUT, OUTPUT>("SAM_PREDICTOR") {}
 
 template <typename INPUT, typename OUTPUT> SamPredictor<INPUT, OUTPUT>::~SamPredictor() = default;
 

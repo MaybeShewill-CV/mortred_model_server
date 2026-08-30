@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: sam_vit_encoder.h
-* Date: 23-6-7
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: sam_vit_encoder.h
+ * Date: 23-6-7
+ ************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_SAM_VIT_ENCODER_H
 #define MORTRED_MODEL_SERVER_SAM_VIT_ENCODER_H
@@ -11,8 +11,8 @@
 #include <memory>
 #include <vector>
 
-#include <opencv2/opencv.hpp>
 #include "toml/toml.hpp"
+#include <opencv2/opencv.hpp>
 
 #include "common/status_code.h"
 #include "models/backend/session.h"
@@ -24,20 +24,20 @@ using jinq::common::StatusCode;
 
 /***
  * SAM ViT image encoder backed by the unified inference-session layer.
+ * The session is owned by the enclosing model (MultiSessionModel); this class
+ * only drives it and never frees it.
  */
 class SamVitEncoder {
   public:
-    explicit SamVitEncoder(
-        std::unique_ptr<jinq::models::backend::InferenceSession> session);
+    explicit SamVitEncoder(jinq::models::backend::InferenceSession *session);
     ~SamVitEncoder();
 
-    SamVitEncoder(const SamVitEncoder&) = delete;
-    SamVitEncoder& operator=(const SamVitEncoder&) = delete;
+    SamVitEncoder(const SamVitEncoder &) = delete;
+    SamVitEncoder &operator=(const SamVitEncoder &) = delete;
 
     StatusCode init();
 
-    StatusCode encode(
-        const cv::Mat& input_image, std::vector<float>& image_embeddings);
+    StatusCode encode(const cv::Mat &input_image, std::vector<float> &image_embeddings);
 
     std::vector<int> get_encoder_input_shape() const;
 

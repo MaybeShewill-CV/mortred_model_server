@@ -1,9 +1,9 @@
 /************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: sam_prompt_decoder.h
-* Date: 23-6-7
-************************************************/
+ * Copyright MaybeShewill-CV. All Rights Reserved.
+ * Author: MaybeShewill-CV
+ * File: sam_prompt_decoder.h
+ * Date: 23-6-7
+ ************************************************/
 
 #ifndef MORTRED_MODEL_SERVER_SAM_PROMPT_DECODER_H
 #define MORTRED_MODEL_SERVER_SAM_PROMPT_DECODER_H
@@ -11,8 +11,8 @@
 #include <memory>
 #include <vector>
 
-#include <opencv2/opencv.hpp>
 #include "toml/toml.hpp"
+#include <opencv2/opencv.hpp>
 
 #include "common/status_code.h"
 #include "models/backend/session.h"
@@ -29,28 +29,23 @@ using jinq::common::StatusCode;
  */
 class SamPromptDecoder {
   public:
-    explicit SamPromptDecoder(
-        std::unique_ptr<jinq::models::backend::InferenceSession> session);
+    explicit SamPromptDecoder(jinq::models::backend::InferenceSession *session);
     ~SamPromptDecoder();
 
-    SamPromptDecoder(const SamPromptDecoder&) = delete;
-    SamPromptDecoder& operator=(const SamPromptDecoder&) = delete;
+    SamPromptDecoder(const SamPromptDecoder &) = delete;
+    SamPromptDecoder &operator=(const SamPromptDecoder &) = delete;
 
     StatusCode init();
 
-    void set_ori_image_size(const cv::Size& ori_image_size);
+    void set_ori_image_size(const cv::Size &ori_image_size);
 
-    void set_encoder_input_size(const cv::Size& input_node_size);
+    void set_encoder_input_size(const cv::Size &input_node_size);
 
-    StatusCode decode(
-        const std::vector<float>& image_embeddings,
-        const std::vector<cv::Rect2f>& bboxes,
-        std::vector<cv::Mat>& predicted_masks);
+    StatusCode decode(const std::vector<float> &image_embeddings, const std::vector<cv::Rect2f> &bboxes,
+                      std::vector<cv::Mat> &predicted_masks);
 
-    StatusCode decode(
-        const std::vector<float>& image_embeddings,
-        const std::vector<std::vector<cv::Point2f>>& points,
-        std::vector<cv::Mat>& predicted_masks);
+    StatusCode decode(const std::vector<float> &image_embeddings, const std::vector<std::vector<cv::Point2f>> &points,
+                      std::vector<cv::Mat> &predicted_masks);
 
     bool is_successfully_initialized() const;
 

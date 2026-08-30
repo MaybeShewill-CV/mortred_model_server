@@ -27,8 +27,7 @@ using jinq::models::backend::Tensor;
 
 class SamVitEncoder::Impl {
   public:
-    explicit Impl(std::unique_ptr<InferenceSession> session)
-        : _m_session(std::move(session)) {}
+    explicit Impl(InferenceSession *session) : _m_session(session) {}
 
     ~Impl() = default;
 
@@ -42,14 +41,11 @@ class SamVitEncoder::Impl {
             return StatusCode::MODEL_INIT_FAILED;
         }
 
-        const auto& input = _m_session->inputs().front();
-        const auto& output = _m_session->outputs().front();
-        if (input.dtype != jinq::models::backend::DType::F32 ||
-            output.dtype != jinq::models::backend::DType::F32 ||
-            input.shape.size() != 4 || input.shape[1] != 3 ||
-            output.shape.size() != 4 || input.dynamic || output.dynamic) {
-            LOG(ERROR) << "invalid sam encoder io: " << input.to_string() << " / "
-                       << output.to_string();
+        const auto &input = _m_session->inputs().front();
+        const auto &output = _m_session->outputs().front();
+        if (input.dtype != jinq::models::backend::DType::F32 || output.dtype != jinq::models::backend::DType::F32 ||
+            input.shape.size() != 4 || input.shape[1] != 3 || output.shape.size() != 4 || input.dynamic || output.dynamic) {
+            LOG(ERROR) << "invalid sam encoder io: " << input.to_string() << " / " << output.to_string();
             return StatusCode::MODEL_INIT_FAILED;
         }
 
@@ -63,7 +59,7 @@ class SamVitEncoder::Impl {
         return StatusCode::OK;
     }
 
-    StatusCode encode(const cv::Mat& input_image, std::vector<float>& image_embeddings) {
+    StatusCode encode(const cv::Mat &input_image, std::vector<float> &image_embeddings) {
         if (!_m_successfully_initialized) {
             return StatusCode::MODEL_INIT_FAILED;
         }
@@ -89,28 +85,23 @@ class SamVitEncoder::Impl {
         if (run_status != StatusCode::OK) {
             return run_status;
         }
-        if (outputs.empty() ||
-            outputs.front().tensor.dtype != jinq::models::backend::DType::F32 ||
+        if (outputs.empty() || outputs.front().tensor.dtype != jinq::models::backend::DType::F32 ||
             outputs.front().tensor.element_count() <= 0) {
             LOG(ERROR) << "sam encoder output is invalid";
             return StatusCode::MODEL_EMPTY_OUTPUT;
         }
 
-        const auto* data = outputs.front().tensor.template data<float>();
+        const auto *data = outputs.front().tensor.template data<float>();
         image_embeddings.assign(data, data + outputs.front().tensor.element_count());
         return StatusCode::OK;
     }
 
-    std::vector<int> get_encoder_input_shape() const {
-        return _m_input_shape;
-    }
+    std::vector<int> get_encoder_input_shape() const { return _m_input_shape; }
 
-    bool is_successfully_initialized() const {
-        return _m_successfully_initialized;
-    }
+    bool is_successfully_initialized() const { return _m_successfully_initialized; }
 
   private:
-    cv::Mat preprocess_image(const cv::Mat& input_image) const {
+    cv::Mat preprocess_image(const cv::Mat &input_image) const {
         if (input_image.empty() || input_image.channels() != 3) {
             LOG(ERROR) << "sam encoder input must be a non-empty 3-channel image";
             return {};
@@ -119,8 +110,7 @@ class SamVitEncoder::Impl {
         const auto input_height = static_cast<float>(input_image.rows);
         const auto input_width = static_cast<float>(input_image.cols);
         const auto long_side = std::max(input_image.rows, input_image.cols);
-        const auto scale = static_cast<float>(_m_input_size_host.height) /
-                           static_cast<float>(long_side);
+        const auto scale = static_cast<float>(_m_input_size_host.height) / static_cast<float>(long_side);
         const auto target_width = static_cast<int>(std::round(scale * input_width));
         const auto target_height = static_cast<int>(std::round(scale * input_height));
         if (target_width <= 0 || target_height <= 0) {
@@ -133,39 +123,30 @@ class SamVitEncoder::Impl {
         result.convertTo(result, CV_32FC3);
         cv::subtract(result, cv::Scalar(123.675, 116.28, 103.53), result);
         cv::divide(result, cv::Scalar(58.395, 57.12, 57.375), result);
-        cv::copyMakeBorder(
-            result, result, 0, _m_input_size_host.height - target_height, 0,
-            _m_input_size_host.width - target_width, cv::BORDER_CONSTANT, 0.0);
+        cv::copyMakeBorder(result, result, 0, _m_input_size_host.height - target_height, 0, _m_input_size_host.width - target_width,
+                           cv::BORDER_CONSTANT, 0.0);
         return result;
     }
 
-    std::unique_ptr<InferenceSession> _m_session;
+    InferenceSession *_m_session = nullptr;
     std::vector<int> _m_input_shape;
     cv::Size _m_input_size_host;
     bool _m_successfully_initialized = false;
 };
 
-SamVitEncoder::SamVitEncoder(std::unique_ptr<backend::InferenceSession> session)
-    : _m_pimpl(std::make_unique<Impl>(std::move(session))) {}
+SamVitEncoder::SamVitEncoder(backend::InferenceSession *session) : _m_pimpl(std::make_unique<Impl>(session)) {}
 
 SamVitEncoder::~SamVitEncoder() = default;
 
-StatusCode SamVitEncoder::init() {
-    return _m_pimpl->init();
-}
+StatusCode SamVitEncoder::init() { return _m_pimpl->init(); }
 
-StatusCode SamVitEncoder::encode(
-    const cv::Mat& input_image, std::vector<float>& image_embeddings) {
+StatusCode SamVitEncoder::encode(const cv::Mat &input_image, std::vector<float> &image_embeddings) {
     return _m_pimpl->encode(input_image, image_embeddings);
 }
 
-std::vector<int> SamVitEncoder::get_encoder_input_shape() const {
-    return _m_pimpl->get_encoder_input_shape();
-}
+std::vector<int> SamVitEncoder::get_encoder_input_shape() const { return _m_pimpl->get_encoder_input_shape(); }
 
-bool SamVitEncoder::is_successfully_initialized() const {
-    return _m_pimpl->is_successfully_initialized();
-}
+bool SamVitEncoder::is_successfully_initialized() const { return _m_pimpl->is_successfully_initialized(); }
 
 } // namespace segment_anything
 } // namespace models

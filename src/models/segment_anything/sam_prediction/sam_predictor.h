@@ -15,6 +15,7 @@
 #include <opencv2/opencv.hpp>
 
 #include "models/backend/backend_cv_model.h"
+#include "models/backend/multi_session_model.h"
 #include "models/backend/session.h"
 #include "models/backend/tensor.h"
 #include "models/model_io_define.h"
@@ -30,7 +31,11 @@ class SamVitEncoder;
 /***
  * SAM prompt segmentation model with independent encoder and decoder sessions.
  */
-template <typename INPUT, typename OUTPUT> class SamPredictor : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT>
+class SamPredictor : public jinq::models::backend::MultiSessionModel<SamPredictor<INPUT, OUTPUT>, INPUT, OUTPUT> {
+    using Base = jinq::models::backend::MultiSessionModel<SamPredictor<INPUT, OUTPUT>, INPUT, OUTPUT>;
+    friend Base;
+
   public:
     SamPredictor();
     ~SamPredictor() override;
@@ -48,6 +53,12 @@ template <typename INPUT, typename OUTPUT> class SamPredictor : public jinq::mod
   private:
     using SamInput = jinq::models::io_define::segment_anything::sam_prompt_input;
     using SamOutput = jinq::models::io_define::segment_anything::std_sam_prompt_output;
+
+    // The encoder has a fixed input/output pair, so its contract lives here.
+    // The decoder exposes optional inputs (orig_im_size) and alternative
+    // outputs (masks or low_res_masks), which a fixed IoSpec cannot express,
+    // so its spec is left empty and SamPromptDecoder validates its own IO.
+    static std::vector<jinq::models::backend::SessionSpec> sessions();
 
     StatusCode on_init(const toml::table &params) override;
 
