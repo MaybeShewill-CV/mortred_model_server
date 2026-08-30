@@ -31,10 +31,12 @@ template <typename INPUT, typename OUTPUT> StatusCode SamAutoMaskGenerator<INPUT
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    _m_encoder = std::make_unique<SamVitEncoder>(this->make_session("encoder_backend"));
+    _m_encoder_session = this->make_session("encoder_backend");
+    _m_encoder = std::make_unique<SamVitEncoder>(_m_encoder_session.get());
     auto status = _m_encoder->init();
     if (status != StatusCode::OK) {
         _m_encoder.reset();
+        _m_encoder_session.reset();
         _m_decoder.reset();
         return status;
     }
@@ -42,6 +44,7 @@ template <typename INPUT, typename OUTPUT> StatusCode SamAutoMaskGenerator<INPUT
     if (input_shape.size() != 4) {
         LOG(ERROR) << "invalid sam amg encoder input shape";
         _m_encoder.reset();
+        _m_encoder_session.reset();
         _m_decoder.reset();
         return StatusCode::MODEL_INIT_FAILED;
     }
@@ -52,6 +55,7 @@ template <typename INPUT, typename OUTPUT> StatusCode SamAutoMaskGenerator<INPUT
     status = _m_decoder->init(this->model_section());
     if (status != StatusCode::OK) {
         _m_encoder.reset();
+        _m_encoder_session.reset();
         _m_decoder.reset();
         return status;
     }

@@ -15,6 +15,7 @@
 #include <opencv2/opencv.hpp>
 
 #include "models/backend/backend_cv_model.h"
+#include "models/backend/multi_session_model.h"
 #include "models/backend/session.h"
 #include "models/backend/tensor.h"
 #include "models/model_io_define.h"
@@ -49,6 +50,8 @@ template <typename INPUT, typename OUTPUT> class SamAutoMaskGenerator : public j
     StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
                            const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
+    // the encoder session is owned here: SamVitEncoder only drives it
+    std::unique_ptr<jinq::models::backend::InferenceSession> _m_encoder_session;
     std::unique_ptr<SamVitEncoder> _m_encoder;
     std::unique_ptr<SamAmgDecoder> _m_decoder;
     cv::Size _m_encoder_input_size;
