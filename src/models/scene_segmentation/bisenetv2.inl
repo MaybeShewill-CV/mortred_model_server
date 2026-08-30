@@ -14,6 +14,7 @@
 #include <opencv2/opencv.hpp>
 
 #include "models/backend/f32_output.h"
+#include "models/backend/model_runtime.h"
 #include "models/backend/request_geometry.h"
 
 namespace jinq {
@@ -26,15 +27,16 @@ using jinq::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode BiseNetV2<INPUT, OUTPUT>::on_init(const toml::table &params) {
     (void)params;
-    const auto &input_info = this->session().inputs().front();
-    if (input_info.shape.size() != 4 || input_info.shape[3] != 3) {
-        LOG(ERROR) << "unexpected bisenetv2 input shape: " << input_info.to_string() << ", expected [N,H,W,3] (nhwc)";
+    const auto input_info =
+        jinq::models::backend::SessionIoValidator(this->session()).input().f32().rank(4).nhwc().channels(3).static_shape().validate();
+    if (!input_info.ok()) {
+        LOG(ERROR) << "unexpected bisenetv2 input shape: " << input_info.error << ", expected static [N,H,W,3] (nhwc)";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    _m_input_size_host.height = static_cast<int>(input_info.shape[1]);
-    _m_input_size_host.width = static_cast<int>(input_info.shape[2]);
+    _m_input_size_host.height = static_cast<int>(input_info.value.shape[1]);
+    _m_input_size_host.width = static_cast<int>(input_info.value.shape[2]);
     if (_m_input_size_host.area() <= 0) {
-        LOG(ERROR) << "invalid bisenetv2 input tensor size: " << input_info.to_string();
+        LOG(ERROR) << "invalid bisenetv2 input tensor size: " << input_info.error;
         return StatusCode::MODEL_INIT_FAILED;
     }
     return StatusCode::OK;

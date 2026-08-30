@@ -15,6 +15,7 @@
 
 #include "common/cv_utils.h"
 #include "models/backend/f32_output.h"
+#include "models/backend/model_runtime.h"
 #include "models/backend/request_geometry.h"
 
 namespace jinq {
@@ -111,18 +112,14 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> Metric3D<INP
     cv::subtract(tmp, cv::Scalar(123.675, 116.28, 103.53), tmp);
     cv::divide(tmp, cv::Scalar(58.395, 57.12, 57.375), tmp);
 
-    const auto chw_data = jinq::common::CvUtils::convert_to_chw_vec(tmp);
-    std::vector<NamedTensor> inputs;
-    NamedTensor named;
-    named.name = this->session().inputs().front().name;
-    named.tensor = jinq::models::backend::Tensor::make<float>({1, 3, _m_input_size_host.height, _m_input_size_host.width});
-    if (chw_data.size() * sizeof(float) != named.tensor.byte_size()) {
-        LOG(ERROR) << "preprocessed chw data mismatches the input tensor";
+    // geometry (keep-ratio resize + pad) stays hand-written: ImagePipeline
+    // has no padding step; only the packing goes through the toolkit
+    auto result = jinq::models::backend::ImagePipeline(tmp).nchw(this->session().inputs().front().name);
+    if (!result.ok()) {
+        LOG(ERROR) << result.error;
         return {};
     }
-    std::memcpy(named.tensor.buffer.data(), chw_data.data(), named.tensor.byte_size());
-    inputs.push_back(std::move(named));
-    return inputs;
+    return {std::move(result.value)};
 }
 
 template <typename INPUT, typename OUTPUT>

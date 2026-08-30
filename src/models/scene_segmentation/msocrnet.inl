@@ -60,40 +60,20 @@ template <typename INPUT, typename OUTPUT> StatusCode MsOcrNet<INPUT, OUTPUT>::o
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> MsOcrNet<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
     // bgr -> rgb -> resize -> [0,1] -> (x-0.5)/0.5
-    cv::Mat tmp;
-    cv::cvtColor(input_image, tmp, cv::COLOR_BGR2RGB);
-    if (tmp.size() != _m_input_size_host) {
-        cv::resize(tmp, tmp, _m_input_size_host);
+    auto pipeline = jinq::models::backend::ImagePipeline(input_image)
+                        .bgr_to_rgb()
+                        .resize(_m_input_size_host)
+                        .to_float()
+                        .scale(1.0f / 255.0f)
+                        .subtract({0.5f, 0.5f, 0.5f})
+                        .divide({0.5f, 0.5f, 0.5f});
+    const std::string input_name = this->session().inputs().front().name;
+    auto result = _m_input_is_nhwc ? pipeline.nhwc(input_name) : pipeline.nchw(input_name);
+    if (!result.ok()) {
+        LOG(ERROR) << result.error;
+        return {};
     }
-    if (tmp.type() != CV_32FC3) {
-        tmp.convertTo(tmp, CV_32FC3);
-    }
-    tmp /= 255.0;
-    cv::subtract(tmp, cv::Scalar(0.5, 0.5, 0.5), tmp);
-    cv::divide(tmp, cv::Scalar(0.5, 0.5, 0.5), tmp);
-
-    std::vector<NamedTensor> inputs;
-    NamedTensor named;
-    named.name = this->session().inputs().front().name;
-    if (_m_input_is_nhwc) {
-        named.tensor = jinq::models::backend::Tensor::make<float>({1, _m_input_size_host.height, _m_input_size_host.width, 3});
-        const auto bytes = tmp.total() * tmp.elemSize();
-        if (bytes != named.tensor.byte_size()) {
-            LOG(ERROR) << "preprocessed image bytes mismatch tensor size";
-            return {};
-        }
-        std::memcpy(named.tensor.buffer.data(), tmp.data, bytes);
-    } else {
-        const auto chw_data = jinq::common::CvUtils::convert_to_chw_vec(tmp);
-        named.tensor = jinq::models::backend::Tensor::make<float>({1, 3, _m_input_size_host.height, _m_input_size_host.width});
-        if (chw_data.size() * sizeof(float) != named.tensor.byte_size()) {
-            LOG(ERROR) << "preprocessed chw data mismatches tensor size";
-            return {};
-        }
-        std::memcpy(named.tensor.buffer.data(), chw_data.data(), named.tensor.byte_size());
-    }
-    inputs.push_back(std::move(named));
-    return inputs;
+    return {std::move(result.value)};
 }
 
 template <typename INPUT, typename OUTPUT>
