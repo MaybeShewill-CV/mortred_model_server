@@ -84,6 +84,8 @@ if(MORTRED_BUILD_FULL)
     list(APPEND TEST_LIST model_output_contract_unittest)
     # scaffold canary: proves scripts/new_model.py templates still compile
     list(APPEND TEST_LIST rtdetr_detector_output_contract_unittest)
+    # multi-session base class needs the real session factory (models lib)
+    list(APPEND TEST_LIST multi_session_model_unittest)
     list(APPEND TEST_LIST model_catalog_unittest)
     # GPU-model tests exercise TRT sessions and link vendored::mnn_cuda; the
     # cpu profile compiles TRT out, so they exist in the gpu profile only
@@ -143,6 +145,8 @@ foreach(src ${TEST_LIST})
     elseif(${src} STREQUAL "model_output_contract_unittest")
         set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn)
     elseif(${src} STREQUAL "rtdetr_detector_output_contract_unittest")
+        set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn)
+    elseif(${src} STREQUAL "multi_session_model_unittest")
         set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn)
     elseif(${src} STREQUAL "model_catalog_unittest")
         # factory links models + server transitively; opencv/mnn are needed by
