@@ -14,6 +14,7 @@
 #include "glog/logging.h"
 
 #include "models/backend/f32_output.h"
+#include "models/backend/model_runtime.h"
 #include <opencv2/opencv.hpp>
 
 #include "common/cv_utils.h"
@@ -28,13 +29,14 @@ using ClassificationOutput = jinq::models::io_define::classification::std_classi
 using jinq::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode DenseNet<INPUT, OUTPUT>::on_init(const toml::table &params) {
-    const auto &input_info = this->session().inputs().front();
-    if (input_info.shape.size() != 4 || input_info.shape[3] != 3) {
-        LOG(ERROR) << "unexpected classification input shape: " << input_info.to_string() << ", expected [N,H,W,3] (nhwc)";
+    const auto input_info =
+        jinq::models::backend::SessionIoValidator(this->session()).input().f32().rank(4).nhwc().channels(3).static_shape().validate();
+    if (!input_info.ok()) {
+        LOG(ERROR) << "unexpected classification input shape: " << input_info.error << ", expected static [N,H,W,3] (nhwc)";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    _m_input_tensor_size.height = static_cast<int>(input_info.shape[1]);
-    _m_input_tensor_size.width = static_cast<int>(input_info.shape[2]);
+    _m_input_tensor_size.height = static_cast<int>(input_info.value.shape[1]);
+    _m_input_tensor_size.width = static_cast<int>(input_info.value.shape[2]);
 
     if (params.contains("model_input_image_size")) {
         const toml::array *size = params["model_input_image_size"].as_array();
@@ -102,17 +104,16 @@ StatusCode DenseNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
     const auto output_rank = outputs.front().tensor.shape.size();
-    jinq::models::backend::TensorContract output_contract;
-    output_contract.dtype = jinq::models::backend::DType::F32;
-    output_contract.rank = output_rank == 1 ? 1 : 2;
-    output_contract.shape = output_rank == 1 ? std::vector<int64_t>{-1} : std::vector<int64_t>{1, -1};
-    jinq::models::backend::F32OutputView output_view;
-    const auto output_status = jinq::models::backend::validated_f32_first_output(outputs, output_contract, "classification", &output_view);
-    if (output_status != StatusCode::OK) {
-        return output_status;
+    auto output_view = jinq::models::backend::OutputReader(outputs, outputs.front().name)
+                           .f32()
+                           .shape(output_rank == 1 ? std::vector<int64_t>{-1} : std::vector<int64_t>{1, -1})
+                           .finite()
+                           .read();
+    if (!output_view.ok()) {
+        return output_view.status;
     }
-    const auto &tensor = *output_view.tensor;
-    const auto *scores = output_view.data;
+    const auto &tensor = *output_view.value.tensor;
+    const auto *scores = output_view.value.data;
     const auto score_count = tensor.element_count();
 
     ClassificationOutput internal_out;
