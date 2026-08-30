@@ -82,6 +82,7 @@ if(MORTRED_BUILD_FULL)
     list(APPEND TEST_LIST gateway_e2e_test)
     list(APPEND TEST_LIST object_detection_output_contract_unittest)
     list(APPEND TEST_LIST model_output_contract_unittest)
+    list(APPEND TEST_LIST model_catalog_unittest)
     # GPU-model tests exercise TRT sessions and link vendored::mnn_cuda; the
     # cpu profile compiles TRT out, so they exist in the gpu profile only
     if(NOT MORTRED_BUILD_PROFILE STREQUAL "cpu")
@@ -139,6 +140,10 @@ foreach(src ${TEST_LIST})
         set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn)
     elseif(${src} STREQUAL "model_output_contract_unittest")
         set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn)
+    elseif(${src} STREQUAL "model_catalog_unittest")
+        # factory links models + server transitively; opencv/mnn are needed by
+        # the model headers pulled in through the task catalogs
+        set(EXTRA_LIBS factory glog::glog ${OpenCV_LIBS} vendored::mnn)
     elseif(${src} STREQUAL "backend_unittest")
         set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn vendored::mnn_cuda)
     elseif(${src} STREQUAL "simple_tokenizer_unittest")
