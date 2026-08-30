@@ -15,6 +15,7 @@
 #include <opencv2/opencv.hpp>
 
 #include "common/cv_utils.h"
+#include "models/backend/model_runtime.h"
 
 namespace jinq {
 namespace models {
@@ -26,6 +27,15 @@ using jinq::models::backend::InferenceSession;
 using jinq::models::backend::NamedTensor;
 using jinq::models::backend::Tensor;
 using jinq::models::backend::TensorInfo;
+
+template <typename INPUT, typename OUTPUT> std::vector<jinq::models::backend::SessionSpec> LightGlue<INPUT, OUTPUT>::sessions() {
+    return {
+        {"extractor", "extractor_backend", jinq::models::backend::IoSpec::input("image").f32().rank(4),
+         jinq::models::backend::IoSpec::output("keypoints").i32().rank(3)},
+        {"matcher", "matcher_backend", jinq::models::backend::IoSpec::input("kpts0").f32().rank(3),
+         jinq::models::backend::IoSpec::output("matches0").i32().rank(2)},
+    };
+}
 
 template <typename INPUT, typename OUTPUT> StatusCode LightGlue<INPUT, OUTPUT>::on_init(const toml::table &params) {
     if (params.contains("extract_score_thresh")) {
@@ -42,78 +52,9 @@ template <typename INPUT, typename OUTPUT> StatusCode LightGlue<INPUT, OUTPUT>::
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    _m_extractor = this->make_session("extractor_backend");
-    _m_matcher = this->make_session("matcher_backend");
-    if (_m_extractor == nullptr || _m_matcher == nullptr) {
-        _m_extractor.reset();
-        _m_matcher.reset();
-        return StatusCode::MODEL_INIT_FAILED;
-    }
-
-    auto status = validate_io(*_m_extractor);
-    if (status != StatusCode::OK) {
-        _m_extractor.reset();
-        _m_matcher.reset();
-        return status;
-    }
-    status = validate_io(*_m_matcher);
-    if (status != StatusCode::OK) {
-        _m_extractor.reset();
-        _m_matcher.reset();
-        return status;
-    }
-    return StatusCode::OK;
-}
-
-template <typename INPUT, typename OUTPUT>
-const TensorInfo *LightGlue<INPUT, OUTPUT>::find_info(const InferenceSession &session, const std::string &name) {
-    const auto search_input = [&name](const TensorInfo &info) { return info.name == name; };
-    const auto input_iter = std::find_if(session.inputs().begin(), session.inputs().end(), search_input);
-    if (input_iter != session.inputs().end()) {
-        return &*input_iter;
-    }
-    const auto search_output = [&name](const TensorInfo &info) { return info.name == name; };
-    const auto output_iter = std::find_if(session.outputs().begin(), session.outputs().end(), search_output);
-    if (output_iter != session.outputs().end()) {
-        return &*output_iter;
-    }
-    return nullptr;
-}
-
-template <typename INPUT, typename OUTPUT> StatusCode LightGlue<INPUT, OUTPUT>::validate_io(const InferenceSession &session) {
-    struct ExpectedIo {
-        const char *name;
-        bool is_input;
-        jinq::models::backend::DType dtype;
-        size_t rank;
-    };
-
-    const bool is_extractor = find_info(session, "image") != nullptr;
-    const std::vector<ExpectedIo> expected =
-        is_extractor
-            ? std::vector<ExpectedIo>{{"image", true, jinq::models::backend::DType::F32, 4},
-                                      {"keypoints", false, jinq::models::backend::DType::I32, 3},
-                                      {"scores", false, jinq::models::backend::DType::F32, 2},
-                                      {"descriptors", false, jinq::models::backend::DType::F32, 3}}
-            : std::vector<ExpectedIo>{
-                  {"kpts0", true, jinq::models::backend::DType::F32, 3},     {"kpts1", true, jinq::models::backend::DType::F32, 3},
-                  {"desc0", true, jinq::models::backend::DType::F32, 3},     {"desc1", true, jinq::models::backend::DType::F32, 3},
-                  {"matches0", false, jinq::models::backend::DType::I32, 2}, {"mscores0", false, jinq::models::backend::DType::F32, 1}};
-
-    for (const auto &item : expected) {
-        const auto *info = find_info(session, item.name);
-        if (info == nullptr) {
-            LOG(ERROR) << "lightglue session io tensor missing: " << item.name;
-            return StatusCode::MODEL_INIT_FAILED;
-        }
-        const bool correct_side = item.is_input ? std::any_of(session.inputs().begin(), session.inputs().end(),
-                                                              [&item](const TensorInfo &value) { return value.name == item.name; })
-                                                : std::any_of(session.outputs().begin(), session.outputs().end(),
-                                                              [&item](const TensorInfo &value) { return value.name == item.name; });
-        if (!correct_side || info->dtype != item.dtype || info->shape.size() != item.rank) {
-            LOG(ERROR) << "unexpected lightglue session io: " << info->to_string();
-            return StatusCode::MODEL_INIT_FAILED;
-        }
+    const auto session_status = this->init_sessions();
+    if (session_status != StatusCode::OK) {
+        return session_status;
     }
     return StatusCode::OK;
 }
@@ -173,7 +114,7 @@ StatusCode LightGlue<INPUT, OUTPUT>::extract_feature_points(const cv::Mat &input
     std::vector<NamedTensor> inputs;
     inputs.push_back(std::move(image));
     std::vector<NamedTensor> outputs;
-    const auto run_status = _m_extractor->run(inputs, outputs);
+    const auto run_status = this->session("extractor")->run(inputs, outputs);
     if (run_status != StatusCode::OK) {
         return run_status;
     }
@@ -264,7 +205,7 @@ StatusCode LightGlue<INPUT, OUTPUT>::match_feature_points(const FeaturePoints &s
     inputs.push_back(std::move(desc1));
 
     std::vector<NamedTensor> outputs;
-    const auto run_status = _m_matcher->run(inputs, outputs);
+    const auto run_status = this->session("matcher")->run(inputs, outputs);
     if (run_status != StatusCode::OK) {
         return run_status;
     }
@@ -376,7 +317,7 @@ StatusCode LightGlue<INPUT, OUTPUT>::postprocess(const std::vector<jinq::models:
 /************* Export Function Sets *************/
 
 template <typename INPUT, typename OUTPUT>
-LightGlue<INPUT, OUTPUT>::LightGlue() : jinq::models::BackendCvModel<INPUT, OUTPUT>("LIGHTGLUE") {}
+LightGlue<INPUT, OUTPUT>::LightGlue() : jinq::models::backend::MultiSessionModel<LightGlue<INPUT, OUTPUT>, INPUT, OUTPUT>("LIGHTGLUE") {}
 
 } // namespace feature_point
 } // namespace models

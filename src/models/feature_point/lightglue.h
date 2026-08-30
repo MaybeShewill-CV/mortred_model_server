@@ -8,6 +8,7 @@
 #ifndef MORTRED_MODEL_SERVER_LIGHTGLUE_H
 #define MORTRED_MODEL_SERVER_LIGHTGLUE_H
 
+#include <array>
 #include <memory>
 #include <string>
 #include <vector>
@@ -15,6 +16,7 @@
 #include "toml/toml.hpp"
 
 #include "models/backend/backend_cv_model.h"
+#include "models/backend/multi_session_model.h"
 #include "models/backend/session.h"
 #include "models/backend/tensor.h"
 #include "models/model_io_define.h"
@@ -24,7 +26,11 @@ namespace models {
 namespace feature_point {
 using jinq::common::StatusCode;
 
-template <typename INPUT, typename OUTPUT> class LightGlue : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT>
+class LightGlue : public jinq::models::backend::MultiSessionModel<LightGlue<INPUT, OUTPUT>, INPUT, OUTPUT> {
+    using Base = jinq::models::backend::MultiSessionModel<LightGlue<INPUT, OUTPUT>, INPUT, OUTPUT>;
+    friend Base;
+
   public:
     LightGlue();
     ~LightGlue() override = default;
@@ -56,13 +62,8 @@ template <typename INPUT, typename OUTPUT> class LightGlue : public jinq::models
     const jinq::models::backend::NamedTensor *find_output(const std::vector<jinq::models::backend::NamedTensor> &outputs,
                                                           const std::string &name) const;
 
-    static const jinq::models::backend::TensorInfo *find_info(const jinq::models::backend::InferenceSession &session,
-                                                              const std::string &name);
+    static std::vector<jinq::models::backend::SessionSpec> sessions();
 
-    static StatusCode validate_io(const jinq::models::backend::InferenceSession &session);
-
-    std::unique_ptr<jinq::models::backend::InferenceSession> _m_extractor;
-    std::unique_ptr<jinq::models::backend::InferenceSession> _m_matcher;
     float _m_extract_score_threshold = 0.0f;
     float _m_match_score_threshold = 0.0f;
     float _m_long_side_length = 512.0f;
