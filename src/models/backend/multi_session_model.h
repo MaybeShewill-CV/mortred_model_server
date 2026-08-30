@@ -117,6 +117,12 @@ struct SessionSpec {
 
 /*** applies an IoSpec through SessionIoValidator ***/
 inline RuntimeStatus check_io(const InferenceSession &session, const IoSpec &spec, bool is_output, const std::string &owner) {
+    // an empty name means "create the engine but let the model validate its
+    // IO": used when the contract is genuinely model-specific (optional or
+    // alternative tensors) rather than a fixed input/output pair
+    if (spec.name.empty()) {
+        return {StatusCode::OK, {}};
+    }
     auto validator = is_output ? SessionIoValidator(session).output(spec.name) : SessionIoValidator(session).input(spec.name);
     validator.dtype(spec.dtype);
     if (spec.expected_rank != 0) {
