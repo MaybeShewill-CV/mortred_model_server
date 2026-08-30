@@ -22,6 +22,11 @@ supervisor/gateway catalog cannot silently miss or invent a server.
 10. Every engine referenced by conf/model [*_TRT] sections is declared in
     conf/trt_engines.json, so the engine-regeneration script can never miss a
     config-required engine.
+11. templates/model/tasks.json stays in sync with the real sources, so the
+    scaffolder can never drift away from the C++ catalogs (catalog header,
+    response filler, io namespace, output type, model directory).
+12. src/models/**/*.inl uses exactly one TODO marker, TODO(new_model), so a
+    scaffold is always greppable and half-finished models are easy to audit.
 
 Exit code 0 means consistent; non-zero means the repository needs attention.
 """
@@ -429,6 +434,69 @@ def check_ci_no_python3_runs_sh() -> list[str]:
     return errors
 
 
+def check_scaffolder_task_metadata() -> list[str]:
+    """Every field templates/model/tasks.json claims must exist in the real
+    sources. This is the seam between the Python scaffolder and the C++
+    catalogs: if either side is renamed, this check fails before a developer
+    generates a model against stale metadata."""
+    errors: list[str] = []
+    manifest = ROOT / "templates" / "model" / "tasks.json"
+    if not manifest.exists():
+        return errors
+    try:
+        tasks = json.loads(manifest.read_text(encoding="utf-8")).get("tasks", {})
+    except (json.JSONDecodeError, OSError) as exc:
+        return [f"templates/model/tasks.json is not valid JSON: {exc}"]
+
+    io_define = (ROOT / "src" / "models" / "model_io_define.h").read_text(encoding="utf-8")
+    serializers = (ROOT / "src" / "server" / "response_serializers.h").read_text(encoding="utf-8")
+
+    for task, spec in sorted(tasks.items()):
+        where = f"tasks.json[{task}]"
+        if not (ROOT / "src" / "models" / spec["model_dir"]).is_dir():
+            errors.append(f"{where}: model_dir src/models/{spec['model_dir']} does not exist")
+        if not re.search(rf"namespace\s+{re.escape(spec['io_namespace'])}\s*\{{", io_define):
+            errors.append(f"{where}: io_namespace {spec['io_namespace']} is not in model_io_define.h")
+        # output types appear either as `struct clip_output {` or as a
+        # `using std_*_output = ...` alias, so an identifier match is enough
+        if not re.search(rf"\b{re.escape(spec['output_type'])}\b", io_define):
+            errors.append(f"{where}: output_type {spec['output_type']} is not declared in model_io_define.h")
+
+        catalog = ROOT / "src" / spec["catalog_header"]
+        if not catalog.exists():
+            errors.append(f"{where}: catalog_header {spec['catalog_header']} does not exist")
+        else:
+            catalog_text = catalog.read_text(encoding="utf-8")
+            if f"{spec['catalog_function']}()" not in catalog_text:
+                errors.append(
+                    f"{where}: catalog_function {spec['catalog_function']}() "
+                    f"is not defined in {spec['catalog_header']}"
+                )
+
+        filler = spec.get("response_filler")
+        if filler and f"void {filler}(" not in serializers:
+            errors.append(f"{where}: response_filler {filler} is not defined in response_serializers.h")
+        if not filler and spec.get("server_section_suffix"):
+            errors.append(f"{where}: model-only task must not declare server_section_suffix")
+
+    return errors
+
+
+def check_model_todo_markers() -> list[str]:
+    """src/models/**.inl must use the single canonical scaffold marker. Other
+    spellings (TODO:, FIXME) are banned so `grep -rn 'TODO(new_model)'` is a
+    complete list of half-finished models."""
+    errors: list[str] = []
+    for path in sorted((ROOT / "src" / "models").rglob("*.inl")):
+        for i, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+            if "TODO" not in line and "FIXME" not in line and "XXX" not in line:
+                continue
+            if "TODO(new_model)" in line:
+                continue
+            errors.append(f"{path.relative_to(ROOT)}:{i}: use TODO(new_model), not: {line.strip()}")
+    return errors
+
+
 def main() -> int:
     args = parse_args()
     errors: list[str] = []
@@ -443,6 +511,8 @@ def main() -> int:
     errors.extend(check_factory_register_type_banned())
     errors.extend(check_security_scan())
     errors.extend(check_ci_no_python3_runs_sh())
+    errors.extend(check_scaffolder_task_metadata())
+    errors.extend(check_model_todo_markers())
     errors.extend(check_demo_client_health())
     if args.check_stale_binaries:
         errors.extend(check_stale_binaries())
