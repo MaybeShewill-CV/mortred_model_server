@@ -86,6 +86,7 @@ def build_values(task: str, spec: dict, name: str, class_name: str, backend: str
         "GUARD": upper_snake(file_base),
         "MODEL_DIR": spec["model_dir"],
         "IO_NAMESPACE": spec["io_namespace"],
+        "IO_HEADER": spec["io_header"],
         "OUTPUT_TYPE": spec["output_type"],
         "CATALOG_HEADER": spec["catalog_header"],
         "BACKEND": backend,

@@ -4,7 +4,8 @@
 
 #include "models/backend/inference_context.h"
 #include "models/backend/tensor.h"
-#include "models/model_io_define.h"
+#include "models/io/common_input.h"
+#include "models/io/object_detection.h"
 #include "models/object_detection/rtdetr_detector.h"
 
 using jinq::common::StatusCode;

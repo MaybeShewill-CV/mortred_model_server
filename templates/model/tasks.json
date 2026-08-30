@@ -13,7 +13,8 @@
       "catalog_header": "factory/classification_task.h",
       "catalog_function": "catalog",
       "server_section_suffix": "_CLASSIFICATION_SERVER",
-      "default_backend": "mnn"
+      "default_backend": "mnn",
+      "io_header": "models/io/classification.h"
     },
     "object_detection": {
       "model_dir": "object_detection",
@@ -23,7 +24,8 @@
       "catalog_header": "factory/obj_detection_task.h",
       "catalog_function": "catalog",
       "server_section_suffix": "_DETECTION_SERVER",
-      "default_backend": "tensorrt"
+      "default_backend": "tensorrt",
+      "io_header": "models/io/object_detection.h"
     },
     "scene_segmentation": {
       "model_dir": "scene_segmentation",
@@ -33,7 +35,8 @@
       "catalog_header": "factory/scene_segmentation_task.h",
       "catalog_function": "catalog",
       "server_section_suffix": "_SERVER",
-      "default_backend": "mnn"
+      "default_backend": "mnn",
+      "io_header": "models/io/scene_segmentation.h"
     },
     "ocr": {
       "model_dir": "ocr",
@@ -43,7 +46,8 @@
       "catalog_header": "factory/ocr_task.h",
       "catalog_function": "catalog",
       "server_section_suffix": "_SERVER",
-      "default_backend": "mnn"
+      "default_backend": "mnn",
+      "io_header": "models/io/ocr.h"
     },
     "matting": {
       "model_dir": "matting",
@@ -53,7 +57,8 @@
       "catalog_header": "factory/matting_task.h",
       "catalog_function": "catalog",
       "server_section_suffix": "_SERVER",
-      "default_backend": "mnn"
+      "default_backend": "mnn",
+      "io_header": "models/io/matting.h"
     },
     "enhancement": {
       "model_dir": "enhancement",
@@ -63,7 +68,8 @@
       "catalog_header": "factory/enhancement_task.h",
       "catalog_function": "catalog",
       "server_section_suffix": "_SERVER",
-      "default_backend": "mnn"
+      "default_backend": "mnn",
+      "io_header": "models/io/enhancement.h"
     },
     "feature_point": {
       "model_dir": "feature_point",
@@ -73,7 +79,8 @@
       "catalog_header": "factory/feature_point_task.h",
       "catalog_function": "catalog",
       "server_section_suffix": "_FP_SERVER",
-      "default_backend": "mnn"
+      "default_backend": "mnn",
+      "io_header": "models/io/feature_point.h"
     },
     "mono_depth_estimation": {
       "model_dir": "mono_depth_estimation",
@@ -83,7 +90,8 @@
       "catalog_header": "factory/mono_depth_estimate_task.h",
       "catalog_function": "catalog",
       "server_section_suffix": "_ESTIMATION_SERVER",
-      "default_backend": "mnn"
+      "default_backend": "mnn",
+      "io_header": "models/io/mono_depth_estimation.h"
     },
     "clip": {
       "model_dir": "clip",
@@ -91,7 +99,8 @@
       "output_type": "clip_output",
       "catalog_header": "factory/clip_task.h",
       "catalog_function": "catalog",
-      "default_backend": "mnn"
+      "default_backend": "mnn",
+      "io_header": "models/io/clip.h"
     },
     "segment_anything": {
       "model_dir": "segment_anything",
@@ -101,7 +110,8 @@
       "catalog_header": "factory/sam_task.h",
       "catalog_function": "amg_catalog",
       "server_section_suffix": "_SERVER",
-      "default_backend": "tensorrt"
+      "default_backend": "tensorrt",
+      "io_header": "models/io/segment_anything.h"
     }
   }
 }

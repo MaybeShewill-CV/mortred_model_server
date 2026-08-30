@@ -4,7 +4,8 @@
 
 #include "models/backend/inference_context.h"
 #include "models/backend/tensor.h"
-#include "models/model_io_define.h"
+#include "models/io/common_input.h"
+#include "{{IO_HEADER}}"
 #include "models/{{MODEL_DIR}}/{{FILE_BASE}}.h"
 
 using jinq::common::StatusCode;

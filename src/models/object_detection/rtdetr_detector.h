@@ -15,7 +15,7 @@
 #include "models/backend/backend_cv_model.h"
 #include "models/backend/inference_context.h"
 #include "models/backend/tensor.h"
-#include "models/model_io_define.h"
+#include "models/io/object_detection.h"
 
 namespace jinq {
 namespace models {
