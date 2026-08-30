@@ -1,220 +1,215 @@
 # 如何添加新的DL模型
 
-下面是一个简要说明来介绍如何在该框架中增加一个新的DL模型. 所有DL模型都继承自 [jinq::models::BaseAiModel<INPUT, OUTPUT>](../src/models/base_model.h). `INPUT` and `OUTPUT` 是用户来定义的，这样设计的目的是为了将用户输入、用户输出和模型的核心运算尽量隔离开来避免耦合. 整个模型的运行主要分为三部分. 第一步是将用户自定义的输入转换成该算法模型内部定义的输入，通常是一个Opencv的Mat对象. 第二步进行模型的inference运算. 最终将该算法模型内部定义的输出转换成用户自定义的输出. 下面将介绍如何增加一个新的 `DenseNet` 图像分类新模型作为示例
+> 本页是 [how_to_add_new_model.md](how_to_add_new_model.md) 的中文版，
+> 讲解统一后端层的结构与生命周期。按任务一步步操作的中文指南见
+> [model-developer-guide.md](model-developer-guide.md)（英文，路径导向）。
+>
+> 当前实现基于 `BackendCvModel`。旧版文档描述的
+> "自定义输入 → 模型内部输入 → session → 模型内部输出 → 自定义输出"
+> 五层转换已经不存在，本页已按现行 API 重写。
 
-## Step 1: 定义自己的模型输入数据结构 :cowboy_hat_face:
+## Step 0：用脚手架生成样板（推荐）
 
-For example your model's input data type is a base64 encoded image. You may add the new input data in [model_io_define.h](../src/models/model_io_define.h)
+```bash
+# 查看支持的任务
+python scripts/new_model.py --list-tasks
 
-例如你的模型输入是一个base64编码过的图像文件. 那么你将这种自定义模型输入写入 [model_io_define.h](../src/models/model_io_define.h)
+# 预览将要生成的文件，不落盘
+python scripts/new_model.py --task classification \
+    --name efficientnet --class EfficientNet \
+    --backend mnn --dry-run
+
+# 实际生成
+python scripts/new_model.py --task classification \
+    --name efficientnet --class EfficientNet \
+    --backend mnn
+```
+
+会生成 5 个文件：
+
+| 文件 | 需要你填的内容 |
+|---|---|
+| `src/models/classification/<file>.h` | 类骨架，已继承 `BackendCvModel` |
+| `src/models/classification/<file>.inl` | `preprocess` / `postprocess` / `on_init` 三个钩子 |
+| `conf/model/classification/<name>/<name>_config.toml` | `[SECTION]` + `.backend` + `.params` |
+| `test/<file>_output_contract_unittest.cc` | 输出契约测试 |
+| `docs/models/classification/<name>.md` | 文档骨架 |
+
+此时模型**可以直接编译**，所有钩子返回 `MODEL_NOT_IMPLEMENTED`，
+半成品不会被误当成能跑的模型启动。
+`src/models/object_detection/rtdetr_detector.*` 是一个已入库的生成样例，
+同时充当模板可编译性的哨兵。
+
+脚手架还会打印两段它**刻意不自动应用**的片段：catalog 条目和测试目标注册。
+
+## Step 1：选择 IO 类型
+
+IO 类型在 [src/models/io/](../src/models/io) 下，每个任务一个头文件。
+`common_input.h` 存放共享输入（`mat_input` / `file_input` / `base64_input` /
+`pair_mat_input`），各任务头文件存放自己的 `std_*_output`。
+
+只 include 你需要的那个任务头。旧的
+[model_io_define.h](../src/models/model_io_define.h) 仍然可用，
+但它是一个会把所有任务都拉进来的兼容聚合头。
+
+可加载的图像输入走默认的 `prepare_inputs` 路径；
+任务默认输出（`std_*_output`）是推荐选择。
+
+## Step 2：实现模型类
+
+先读这几个参考实现：
+
+- [mobilenetv2](../src/models/classification/mobilenetv2.inl) —— MNN 单图分类
+- [yolov8_detector](../src/models/object_detection/yolov8_detector.inl) —— TensorRT 检测（decode + NMS）
+- [ddpm_unet](../src/models/diffusion/ddpm_unet.inl) —— ONNX Runtime 非图像输入（重写 `prepare_inputs`）
 
 ```cpp
-namespace io_define {
-namespace common_io {
-    struct base64_input {
-        std::string input_image_content;
+template <typename INPUT, typename OUTPUT>
+class MyModel : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+  public:
+    MyModel() : jinq::models::BackendCvModel<INPUT, OUTPUT>("MY_MODEL") {}
+
+  private:
+    // 图像 -> 命名输入张量（图像模型必须实现）
+    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
+
+    // 命名输出张量 + 请求几何 -> 任务输出
+    jinq::common::StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
+                                         const jinq::models::backend::InferenceContext &context,
+                                         OUTPUT &output) override;
+
+    // 可选：读取 [MY_MODEL.params] 中的模型专属键
+    jinq::common::StatusCode on_init(const toml::table &params) override;
+};
+```
+
+要点：
+
+- 构造函数传入配置 section 名（`"MY_MODEL"`）。
+- **优先用 [runtime toolkit](../src/models/backend/model_runtime.h)**，不要手写这些步骤：
+  - `ImagePipeline`：resize / 裁剪 / 颜色转换 / 归一化，一次调用打包成 NCHW 或 NHWC
+  - `OutputReader`：替代手搭的输出契约
+  - `SessionIoValidator`：替代手写的 session shape 检查
+  - `ParamReader`：带范围诊断的 TOML 参数读取
+
+  [src/models/](../src/models) 下每个已迁移的模型都是例子。
+- `session().inputs()` / `session().outputs()` 暴露
+  `TensorInfo{name, dtype, shape, dynamic}`；从它推导网络输入尺寸，不要写死。
+- 用 `backend::Tensor::make<float>(shape)` 产生张量；shape 必须具体，
+  并与模型文件期望的布局一致（MNN TENSORFLOW 导出配 `input_layout = "nhwc"`，
+  TensorRT / ONNX 是 nchw）。
+- 多输出模型按 `name` 取张量（见
+  [tensor_contract.h](../src/models/backend/tensor_contract.h) 的 `find_output`）。
+- 目标检测模型复用
+  [detector_common.h](../src/models/object_detection/detector_common.h)：
+  请求几何缩放、命名 f32 输出校验、NMS / top-k / 类别填充、NCHW 打包。
+  模型专属的 decode 逻辑留在检测器里，不要挪到又一个基类后面。
+- 非图像输入（token id、latent 向量、图像对）重写 `prepare_inputs`，
+  不重写 `preprocess`。
+- 请求作用域的数据（源图尺寸、网络尺寸、裁剪几何）必须放在
+  `InferenceContext` 里；**绝不**存成模型成员，
+  因为一个 worker 可能正在处理动态 batch。
+- 稠密图像输出（mask、alpha、深度、增强图）只有在源几何校验通过之后
+  才 resize 到 `context.source_size`。
+  产生坐标的模型用共享的 request-geometry helper，不要除以输入尺寸成员。
+- 通过 [f32_output.h](../src/models/backend/f32_output.h) 校验后端输出后再 decode。
+  畸形张量必须返回 `MODEL_OUTPUT_CONTRACT_FAILED`，
+  而不是产出一个解了一半的任务结果。
+- 多引擎模型（encoder + decoder）配置 `<key>_backend` 子表，
+  用 `make_session("<key>_backend")` 创建额外 session，
+  并在 `run_sessions` 重写里编排它们。
+- 如果引擎是**固定数量、各自独立、按名字索引**的一组 session，
+  改继承 [MultiSessionModel](../src/models/backend/multi_session_model.h)，
+  用 `sessions()` 声明，而不是手写 create / validate / reset 序列。
+  它**刻意不做**运行编排。
+
+## Step 3：写配置
+
+```toml
+[MY_MODEL]
+[MY_MODEL.backend]
+type = "mnn"                # mnn | onnx | tensorrt
+model_file_path = "../weights/my_model/model.mnn"
+device = "cuda"             # cpu | cuda
+threads = 4
+input_layout = "nhwc"       # 仅 mnn: auto | nhwc | nchw
+
+[MY_MODEL.params]
+score_threshold = 0.25
+```
+
+完整键参考见 [about_model_configuration.md](about_model_configuration.md)。
+旧的 `BACKEND_DICT` / `XXX_TRT` / `XXX_ONNX` / `XXX_MNN` 三段式配置已经移除；
+用 [scripts/migrate_model_config.py](../scripts/migrate_model_config.py) 迁移
+（先 `--dry-run`，CI 里用 `--check`）。
+
+## Step 4：在任务 catalog 里注册
+
+每个任务在 `src/factory/<task>_task.h` 里有一个显式 catalog。
+新增一个被服务的模型现在是一行加一个 creator——
+没有手写的 server 注册 lambda，也没有复制的 `CvServerSpec` 块：
+
+```cpp
+// src/factory/my_task.h
+template <typename INPUT, typename OUTPUT>
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_my_model(const std::string &name) {
+    (void)name;
+    return std::make_unique<MyModel<INPUT, OUTPUT>>();
+}
+
+using Output = jinq::models::io_define::my_task::std_my_task_output;
+using Entry = jinq::factory::cv_catalog::CvModelEntry<Output>;
+
+inline const std::vector<Entry> &catalog() {
+    static const std::vector<Entry> entries = {
+        Entry{"MY_MODEL", "My model display name", "MY_MODEL_SERVER",
+              &create_my_model<jinq::server::Base64Input, Output>,
+              &jinq::server::response::fill_my_task},
     };
-} // namespace common_io
-```
-
-## Step 2: 定义自己的模型输出数据结构 :monkey_face:
-
-对于新手来说一般使用内置默认的输出结构就可以了. 不同种类模型的输入可以在文件 [model_io_define.h](../src/models/model_io_define.h) 中找到. 那些被命名为 `std****output` 的就代表这默认输出格式.
-
-例如图像分类模型的输出被定义为
-
-```cpp
-namespace classification {
-    struct cls_output {
-        int class_id;
-        std::vector<float> scores;
-    };
-    using std_classification_output = cls_output;
-} 
-```
-
-class_id 等于scores中最大值的索引号
-
-图像目标检测的默认输出定义为
-
-```cpp
-namespace object_detection {
-    struct bbox {
-        cv::Rect2f bbox;
-        float score;
-        int32_t class_id;
-    };
-    using std_object_detection_output = std::vector<bbox>;
+    return entries;
 }
 ```
 
-目标检测框 `bbox` 由位置 `bbox`, 类别 `cls_id` 和置信度 `score` 组成. 整个模型的输出则是一些列这种目标检测框
+剩下的交给 `factory::cv_catalog::create_server(catalog(), "MY_MODEL", server_name)`：
+它在 `ServerFactory<BaseAiServer>` 里注册 creator，
+并构建通用的 `CvModelServer<Output>`。
 
-## Step 3: 实现从用户自定义输入到模型内部默认输入的转换方法 :dog:
+刻意存在两种形态：
 
-通常情况下模型的默认输入都是一个OpenCV格式的Mat对象，这个可以在代码 [densenet.inl#L33-L35](../src/models/classification/densenet.inl) 查看到. 用户需要自己实现转换方法来实现用户自定义输入到模型默认输入的转换
+- [factory/cv_catalog.h](../src/factory/cv_catalog.h) ——
+  挂在通用 CV server 上的模型（`CvModelEntry<OUTPUT>` 携带 worker creator 和
+  response filler）
+- [factory/model_catalog.h](../src/factory/model_catalog.h) ——
+  只被 benchmark 和流水线直接消费、还没有 HTTP 面的模型族
+  （CLIP、SAM predictor、FastSAM）
 
+一个任务有多个输出契约时，**按契约拆成多个 typed catalog**，
+不要合并成一个类型擦除的列表——
+见 [obj_detection_task.h](../src/factory/obj_detection_task.h) 里的
+`catalog()` 与 `face_catalog()`。
 
-例如你使用base64编码的图像作为模型输入，那么你需要实现类似 [densenet.inl#L73-L94](../src/models/classification/densenet.inl) 的转换函数来实现用户输入到模型默认输入的转换
-![base64_transform_code](../resources/images/eg_transform_base64_to_mat.png)
+`test/model_catalog_unittest.cc` 会在 catalog 行引用了不存在的 TOML section
+或 `model_config_file_path`，或 model / server section 跨任务重复时报错。
 
-## Step 4: 实现模型默认输出到用户自定义输出的转换 :pig_nose:
+## Step 5：验证
 
-如果你使用的是默认的输出格式那么你的转换函数会退化为一个简单的赋值函数 [densenet.inl#L96-L110](../src/models/classification/densenet.inl)
-![output_transform_code](../resources/images/eg_transform_output.png)
-
-当然你可以自定义输出格式。
-
-## Step 5: 实现 `init` 接口函数 :mouse:
-
-Usually model's init function is used to setup model's interpreter, session, tensor resource and determinate the computing backend. You may checkout [densenet.inl#L199-L343](../src/models/classification/densenet.inl) for details. Init funciton's structure is
-
-通常模型的 `init` 接口使用来初始化模型的解释器、tensor资源、选择计算后端等. 你可以通过查看 [densenet.inl#L199-L343](../src/models/classification/densenet.inl) 来获取更细节的信息. 主要的代码结构如下
-
-```cpp
-/***
-*
-* @param config
-* @return
-*/
-template<typename INPUT, typename OUTPUT>
-StatusCode DenseNet<INPUT, OUTPUT>::Impl::init(const decltype(toml::parse(""))& config) {
-    // do init task
-    ...
-    return StatusCode::OK;
-}
+```bash
+cmake --preset full && cmake --build --preset full
+scripts/run_tests.sh build/full -R model_golden_test --output-on-failure
 ```
 
-## Step 6: 实现 `run` 接口函数 :elephant:
+用 [model_golden_registry.h](../test/model_golden_registry.h) 里的一个宏
+注册 golden 用例（完整列表和两命令基线流程见
+[开发者指南](model-developer-guide.md)）。
+用 [golden_drift_check.py](../scripts/golden_drift_check.py)
+证明重构没有改变任何数值，
+用 [POSTPROCESS_CONTRACT_TEST](../test/model_contract_test_util.h)
+覆盖七项拒绝矩阵。
 
-This interface function is responsible for the main model inference process. Three major modules of this process are first transfor input second run model's session finally transfor output. The main code for densenet model is
-
-这个接口函数负责所有模型的inference过程. 三个主要的过程如上所述依次是：1.转换用户自定义输入 2.模型前向传播 3.转换用户自定义模型输出。`densenet` 模型的 `run` 函数接口实现如下：
-
-```cpp
-/***
- *
- * @tparam INPUT
- * @tparam OUTPUT
- * @param in
- * @param out
- * @return
- */
-template<typename INPUT, typename OUTPUT>
-StatusCode DenseNet<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
-
-    // first transform external input into internal input
-    auto internal_in = densenet_impl::transform_input(in);
-    if (!internal_in.input_image.data || internal_in.input_image.empty()) {
-        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
-    }
-
-    // second run session
-    auto preprocessed_image = preprocess_image(internal_in.input_image);
-    MNN::Tensor input_tensor_user(_m_input_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
-    auto input_tensor_data = input_tensor_user.host<float>();
-    auto input_tensor_size = input_tensor_user.size();
-    ::memcpy(input_tensor_data, preprocessed_image.data, input_tensor_size);
-    _m_input_tensor->copyFromHostTensor(&input_tensor_user);
-    _m_net->runSession(_m_session);
-    MNN::Tensor output_tensor_user(_m_output_tensor, MNN::Tensor::DimensionType::TENSORFLOW);
-    _m_output_tensor->copyToHostTensor(&output_tensor_user);
-    auto* host_data = output_tensor_user.host<float>();
-
-    // finally transform output
-    densenet_impl::internal_output internal_out;
-    for (auto index = 0; index < output_tensor_user.elementSize(); ++index) {
-        internal_out.scores.push_back(host_data[index]);
-    }
-    auto max_score = std::max_element(host_data, host_data + output_tensor_user.elementSize());
-    auto cls_id = static_cast<int>(std::distance(host_data, max_score));
-    internal_out.class_id = cls_id;
-    out = densenet_impl::transform_output<OUTPUT>(internal_out);
-
-    return StatusCode::OK;
-}
-```
-
-## Step 7: 工厂类中加入模型创建接口函数 :factory:
-
-任务工厂是用来创建模型和服务器对象的. 你可以查看 [classification_task.h](../src/factory/classification_task.h) 获取细节信息。工厂是类型擦除的注册表（`jinq::factory::ModelFactory`）：`register_type<CONCRETE>(name)` 把创建器闭包存入工厂（工厂持有其所有权、线程安全、同名注册覆盖），`create(name)` 按名创建实例。
-
-```cpp
-/***
- * create densenet image classification
- * @tparam INPUT
- * @tparam OUTPUT
- * @param classifier_name
- * @return
- */
-template<typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_densenet_classifier(
-    const std::string& classifier_name) {
-    auto& model_factory = ModelFactory<BaseAiModel<INPUT, OUTPUT> >::get_instance();
-    model_factory.register_type<DenseNet<INPUT, OUTPUT> >(classifier_name);
-    return model_factory.create(classifier_name);
-}
-```
-
-## Step 8: 写一个Benchmark工具 :airplane:
-
-到第七步为止你已经在框架中新增了一个 `densenet` 图像分类模型. 那么现在可以做一个简单的基准测试工具来验证一下上面的工作. 完整的代码可以在 [densenet_benchmark.cpp](../src/apps/model_benchmark/classification/densenet_benchmark.cpp) 中看到
-
-```cpp
-int main(int argc, char** argv) {
-
-    // construct model input
-    std::string input_image_path = "../demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG";
-    cv::Mat input_image = cv::imread(input_image_path, cv::IMREAD_COLOR);
-    struct mat_input model_input {
-            input_image
-    };
-    std_classification_output model_output{};
-
-    // construct detector
-    std::string cfg_file_path = argv[1];
-    LOG(INFO) << "config file path: " << cfg_file_path;
-    auto cfg = toml::parse(cfg_file_path);
-    auto classifier = create_densenet_classifier<mat_input, std_classification_output>("densenet");
-    classifier->init(cfg);
-    if (!classifier->is_successfully_initialized()) {
-        LOG(INFO) << "densenet classifier init failed";
-        return -1;
-    }
-
-    // run benchmark
-    int loop_times = 1000;
-    LOG(INFO) << "input test image size: " << input_image.size();
-    LOG(INFO) << "classifier run loop times: " << loop_times;
-    LOG(INFO) << "start densenet benchmark at: " << Timestamp::now().to_format_str();
-    auto ts = Timestamp::now();
-    for (int i = 0; i < loop_times; ++i) {
-        classifier->run(model_input, model_output);
-    }
-
-    auto cost_time = Timestamp::now() - ts;
-    LOG(INFO) << "benchmark ends at: " << Timestamp::now().to_format_str();
-    LOG(INFO) << "cost time: " << cost_time << "s, fps: " << loop_times / cost_time;
-
-    LOG(INFO) << "classify id: " << model_output.class_id;
-    auto max_score = std::max_element(model_output.scores.begin(), model_output.scores.end());
-    LOG(INFO) << "max classify socre: " << *max_score;
-    LOG(INFO) << "max classify id: " << static_cast<int>(std::distance(model_output.scores.begin(), max_score));
-
-    return 1;
-}
-```
-
-如无错误 :smile: 你应该可以得到一个如下所示的结果
-
-`densenet benchmark 结果`
-![densenet_bench_mark](../resources/images/densenet_model_benchmark_result.png)
-
-祝你好运 !!! :trophy::trophy::trophy:
+容差按任务定：检测用 score / box-IoU，稠密输出用指纹 diff。
 
 ## 参考
 
-完整的 `densenet` 模型代码和基准测试工具代码可查看
-
-* [DenseNet Model Implement](../src/models/classification/densenet.inl)
-* [DenseNet Model BenchMark App](../src/apps/model_benchmark/classification/densenet_benchmark.cpp)
+- [模型开发者指南](model-developer-guide.md) —— 六条任务路径、helper 边界、调试
+- [模型契约治理](model-contract-governance.md) —— 评审清单
+- [P4 改造计划](model-developer-experience-p4.zh-cn.md) —— 本次重构的设计与各阶段记录
