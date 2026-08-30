@@ -11,6 +11,7 @@
 #include <cmath>
 
 #include "glog/logging.h"
+#include "models/backend/model_runtime.h"
 #include "models/object_detection/detector_common.h"
 
 namespace jinq {
@@ -53,20 +54,18 @@ template <typename INPUT, typename OUTPUT> StatusCode YoloV7Detector<INPUT, OUTP
 }
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> YoloV7Detector<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
-    // resize -> bgr2rgb -> [0,1] normalize, emitted as f32 nchw
-    cv::Mat tmp;
-    cv::resize(input_image, tmp, _m_input_size_host);
-    cv::cvtColor(tmp, tmp, cv::COLOR_BGR2RGB);
-    if (tmp.type() != CV_32FC3) {
-        tmp.convertTo(tmp, CV_32FC3);
-    }
-    tmp /= 255.0;
-
-    NamedTensor named;
-    if (!make_nchw_input(this->session().inputs().front().name, tmp, &named)) {
+    // resize / colour / normalize, emitted as f32 nchw
+    auto result = jinq::models::backend::ImagePipeline(input_image)
+                      .resize(_m_input_size_host)
+                      .bgr_to_rgb()
+                      .to_float()
+                      .scale(1.0f / 255.0f)
+                      .nchw(this->session().inputs().front().name);
+    if (!result.ok()) {
+        LOG(ERROR) << result.error;
         return {};
     }
-    return {std::move(named)};
+    return {std::move(result.value)};
 }
 
 template <typename INPUT, typename OUTPUT>

@@ -13,6 +13,7 @@
 #include "glog/logging.h"
 #include <opencv2/opencv.hpp>
 
+#include "models/backend/model_runtime.h"
 #include "models/object_detection/detector_common.h"
 
 namespace jinq {
@@ -84,23 +85,14 @@ template <typename INPUT, typename OUTPUT> auto LibFaceDetector<INPUT, OUTPUT>::
 }
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> LibFaceDetector<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
-    cv::Mat tmp;
-    if (input_image.size() != _m_input_size_host) {
-        cv::resize(input_image, tmp, _m_input_size_host);
-    } else {
-        input_image.copyTo(tmp);
-    }
-    if (tmp.type() != CV_32FC3) {
-        tmp.convertTo(tmp, CV_32FC3);
-    }
-
-    std::vector<NamedTensor> inputs;
-    NamedTensor named;
-    if (!make_nchw_input(this->session().inputs().front().name, tmp, &named)) {
+    // resize / colour / normalize, emitted as f32 nchw
+    auto result =
+        jinq::models::backend::ImagePipeline(input_image).resize(_m_input_size_host).to_float().nchw(this->session().inputs().front().name);
+    if (!result.ok()) {
+        LOG(ERROR) << result.error;
         return {};
     }
-    inputs.push_back(std::move(named));
-    return inputs;
+    return {std::move(result.value)};
 }
 
 template <typename INPUT, typename OUTPUT>

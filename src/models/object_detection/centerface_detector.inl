@@ -13,6 +13,7 @@
 #include "glog/logging.h"
 #include <opencv2/opencv.hpp>
 
+#include "models/backend/model_runtime.h"
 #include "models/object_detection/detector_common.h"
 
 namespace jinq {
@@ -49,22 +50,19 @@ template <typename INPUT, typename OUTPUT> StatusCode CenterFaceDetector<INPUT, 
 template <typename INPUT, typename OUTPUT>
 std::vector<NamedTensor> CenterFaceDetector<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
     // bgr -> rgb, dynamic resize to a multiple of 32 (the session resizes itself)
-    cv::Mat tmp;
-    cv::cvtColor(input_image, tmp, cv::COLOR_BGR2RGB);
     const auto width_resized = static_cast<int>(std::ceil(static_cast<float>(input_image.cols) / 32.0f) * 32);
     const auto height_resized = static_cast<int>(std::ceil(static_cast<float>(input_image.rows) / 32.0f) * 32);
-    cv::resize(tmp, tmp, cv::Size(width_resized, height_resized));
-    if (tmp.type() != CV_32FC3) {
-        tmp.convertTo(tmp, CV_32FC3);
-    }
 
-    std::vector<NamedTensor> inputs;
-    NamedTensor named;
-    if (!make_nchw_input(this->session().inputs().front().name, tmp, &named)) {
+    auto result = jinq::models::backend::ImagePipeline(input_image)
+                      .bgr_to_rgb()
+                      .resize(cv::Size(width_resized, height_resized))
+                      .to_float()
+                      .nchw(this->session().inputs().front().name);
+    if (!result.ok()) {
+        LOG(ERROR) << result.error;
         return {};
     }
-    inputs.push_back(std::move(named));
-    return inputs;
+    return {std::move(result.value)};
 }
 
 template <typename INPUT, typename OUTPUT>

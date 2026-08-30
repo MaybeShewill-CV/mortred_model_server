@@ -12,6 +12,7 @@
 #include <iterator>
 
 #include "glog/logging.h"
+#include "models/backend/model_runtime.h"
 #include "models/object_detection/detector_common.h"
 
 namespace jinq {
@@ -56,21 +57,19 @@ template <typename INPUT, typename OUTPUT> StatusCode NanoDetector<INPUT, OUTPUT
 }
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> NanoDetector<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
-    // resize -> normalize, emitted as f32 nchw
-    cv::Mat tmp;
-    cv::resize(input_image, tmp, _m_input_size_host);
-    if (tmp.type() != CV_32FC3) {
-        tmp.convertTo(tmp, CV_32FC3);
-    }
-    cv::divide(tmp, cv::Scalar(255.0f, 255.0f, 255.0f), tmp);
-    cv::subtract(tmp, cv::Scalar(0.406, 0.456, 0.485), tmp);
-    cv::divide(tmp, cv::Scalar(0.225, 0.224, 0.229), tmp);
-
-    NamedTensor named;
-    if (!make_nchw_input(this->session().inputs().front().name, tmp, &named)) {
+    // resize / colour / normalize, emitted as f32 nchw
+    auto result = jinq::models::backend::ImagePipeline(input_image)
+                      .resize(_m_input_size_host)
+                      .to_float()
+                      .scale(1.0f / 255.0f)
+                      .subtract({0.406f, 0.456f, 0.485f})
+                      .divide({0.225f, 0.224f, 0.229f})
+                      .nchw(this->session().inputs().front().name);
+    if (!result.ok()) {
+        LOG(ERROR) << result.error;
         return {};
     }
-    return {std::move(named)};
+    return {std::move(result.value)};
 }
 
 template <typename INPUT, typename OUTPUT>
