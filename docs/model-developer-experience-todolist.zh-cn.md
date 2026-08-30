@@ -13,7 +13,7 @@
 | Phase 2 Model Catalog | 已完成 |
 | Phase 3 Scaffolder | 已完成 |
 | Phase 4 IO 拆分 | 已完成 |
-| Phase 5 测试注册化 | 未开始 |
+| Phase 5 测试注册化 | 已完成 |
 | Phase 6 模型族迁移 | 未开始 |
 | Phase 7 多 Session 模板 | 未开始 |
 | Phase 8 文档与引导 | 未开始 |
@@ -171,19 +171,34 @@
 
 ## Phase 5：测试注册化
 
-- [ ] 新增 `test/model_contract_test_util.h`
-- [ ] contract test 自动生成 missing output 用例
-- [ ] 自动生成 wrong dtype 用例
-- [ ] 自动生成 wrong rank 用例
-- [ ] 自动生成 wrong shape 用例
-- [ ] 自动生成 short buffer 用例
-- [ ] 自动生成 NaN / Inf 用例
-- [ ] 新增 `test/model_golden_registry.h`
-- [ ] golden case 注册化
-- [ ] weights 缺失 skip 逻辑统一
-- [ ] golden 容差策略统一
-- [ ] 保持现有 golden 用例名称不变
-- [ ] 保持现有 golden 数据不变
+- [x] 新增 `test/model_contract_test_util.h`
+- [x] contract test 自动生成 missing output 用例
+- [x] 自动生成 wrong dtype 用例
+- [x] 自动生成 wrong rank 用例
+- [x] 自动生成 wrong shape 用例
+- [x] 自动生成 short buffer 用例
+- [x] 自动生成 NaN / Inf 用例
+- [x] 新增 `test/model_golden_registry.h`
+- [x] golden case 注册化
+- [x] weights 缺失 skip 逻辑统一
+- [x] golden 容差策略统一
+- [x] 保持现有 golden 用例名称不变
+- [x] 保持现有 golden 数据不变
+
+
+> Phase 5 落地说明：
+> - `test/model_golden_registry.h` 承载原有的全部 helper（权重检查 / 配置归一化 / 指纹 / 比对），
+>   并提供 9 个按输出类型区分的 `GOLDEN_*_CASE` 宏，不做类型擦除。
+> - `test/model_contract_test_util.h` 的 `POSTPROCESS_CONTRACT_TEST` 一行生成 7 个独立的
+>   TEST（missing / wrong dtype / wrong rank / wrong shape / short buffer / NaN / Inf），
+>   每个都能单独 `--gtest_filter`。
+> - 21 个标准 golden 用例改为宏注册；6 个特殊用例（3 个 batch 一致性、SAM prompt/AMG、CLIP 双塔）
+>   刻意保持手写，不为了统一而统一。
+> - **零漂移硬校验**：迁移前后 27 个用例名与声明顺序完全一致，25 个 golden 基线文件 sha256
+>   完全一致，golden 27/27 通过。
+> - 脚手架 contract 模板从手写断言改为一行宏，canary 重新生成后 7/7 通过。
+> - 一个刻意的范围缩减：宏不校验"输出未被部分污染"，因为这需要 OUTPUT 支持 operator==；
+>   该语义留在各模型手写的 contract 测试里。
 
 ## Phase 6：模型族迁移
 

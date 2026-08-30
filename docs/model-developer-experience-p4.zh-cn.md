@@ -582,6 +582,38 @@ GOLDEN_CLASSIFICATION_CASE(
 - 结果比较；
 - 失败输出。
 
+**Phase 5 落地结果（as-built）**
+
+```text
+test/model_contract_test_util.h    # POSTPROCESS_CONTRACT_TEST：一行生成 7 个负向 TEST
+test/model_golden_registry.h       # GOLDEN_*_CASE：9 个按输出类型区分的注册宏 + 全部 helper
+test/model_golden_test.cc          # 906 行 -> 304 行
+```
+
+与原方案的差异：
+
+- **golden 宏按输出类型分 9 个**（classification / object detection / face detection /
+  scene segmentation / matting / enhancement / text region / keypoint / raw mat），
+  不做类型擦除。creator 与 OUTPUT 分开传，避免模板逗号被预处理器当成参数分隔符。
+- **6 个特殊用例保持手写**：3 个 batch 一致性、SAM prompt / AMG、CLIP 双塔。
+  这些用例的真值就在它们的特殊流程里，套宏只会把它们藏起来。
+- **contract 宏只覆盖拒绝矩阵**。模型特有语义（geometry 映射、batch 拆分、解码值）
+  留在手写测试里；"输出未被部分污染"也留在手写测试里，因为它需要 OUTPUT 支持
+  operator==，为它造一个 trait 属于过度设计。
+- **脚手架 contract 模板改为一行宏**，canary 重新生成后 7/7 通过。
+
+**零漂移硬校验（迁移前后）**
+
+| 指标 | 结果 |
+|---|---|
+| 用例数 | 27 → 27 |
+| 用例名 | 完全一致 |
+| 声明顺序 | 完全一致 |
+| golden 基线文件 | 25 → 25，sha256 全部一致 |
+| golden 测试结果 | 27/27 PASSED |
+| contract canary | 7/7 PASSED |
+| `model_golden_test.cc` 行数 | 906 → 304（-66%） |
+
 **Phase 5 验收**
 
 - 现有 golden 用例名称不变；
