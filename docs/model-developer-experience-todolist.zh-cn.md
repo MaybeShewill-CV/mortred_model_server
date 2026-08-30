@@ -206,12 +206,12 @@
 
 - [x] classification
 - [x] matting
-- [ ] scene segmentation
+- [x] scene segmentation
 - [x] enhancement
 - [x] OCR
 - [ ] object detection
 - [ ] feature point
-- [ ] depth
+- [x] depth
 - [ ] FastSAM
 - [ ] CLIP
 - [ ] diffusion
