@@ -204,11 +204,11 @@
 
 ### 顺序清单
 
-- [ ] classification
-- [ ] matting
+- [x] classification
+- [x] matting
 - [ ] scene segmentation
-- [ ] enhancement
-- [ ] OCR
+- [x] enhancement
+- [x] OCR
 - [ ] object detection
 - [ ] feature point
 - [ ] depth
@@ -224,6 +224,21 @@
 - [ ] 使用 `SessionIoValidator` 替换 session shape 检查
 - [ ] 相关 contract tests 通过
 - [ ] 相关 GPU golden 不漂移
+
+
+> Phase 6 进度说明（截至 enhancement 批次）：
+> - **已完成 4 / 11 个模型族**：classification（4 个模型，含 mobilenetv2 试点）、
+>   matting（2）、enhancement（2/3，enlightengan 刻意保留手写）、OCR（1）。
+> - 手写 `std::memcpy` 从 30 降到 17；`ImagePipeline` 使用从 3 升到 14。
+> - 每个族都用 `scripts/golden_drift_check.py` 证明 27 个用例名与 25 个 golden
+>   基线哈希零漂移。
+> - **enlightengan 推迟**：双张量输出（input_src NCHW 3 通道 + input_gray NCHW 1 通道，
+>   自定义 luma 公式）、16 对齐、alpha 提取——需要真正的 toolkit 扩展，不是模式替换。
+> - **enhancement 前置条件分支**先行合入：`ImagePipeline::bgra_to_rgb()` +
+>   realesrgan golden 改用彩色输入（原灰度图对通道顺序回归不敏感，负向验证证明
+>   去掉转换后旧输入 PASSED、新输入 FAILED）。
+> - **剩余**：scene segmentation、object detection、feature point、depth、FastSAM、
+>   CLIP；diffusion 已建议移出本 phase 单独评估。
 
 ## Phase 7：多 Session 模板
 
