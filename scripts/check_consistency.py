@@ -27,6 +27,9 @@ supervisor/gateway catalog cannot silently miss or invent a server.
     response filler, io namespace, output type, model directory).
 12. src/models/**/*.inl uses exactly one TODO marker, TODO(new_model), so a
     scaffold is always greppable and half-finished models are easy to audit.
+13. src/models/model_io_define.h stays a pure aggregate of src/models/io/*.h,
+    and the IO headers include opencv2/core.hpp instead of the opencv.hpp
+    umbrella header.
 
 Exit code 0 means consistent; non-zero means the repository needs attention.
 """
@@ -448,19 +451,24 @@ def check_scaffolder_task_metadata() -> list[str]:
     except (json.JSONDecodeError, OSError) as exc:
         return [f"templates/model/tasks.json is not valid JSON: {exc}"]
 
-    io_define = (ROOT / "src" / "models" / "model_io_define.h").read_text(encoding="utf-8")
     serializers = (ROOT / "src" / "server" / "response_serializers.h").read_text(encoding="utf-8")
 
     for task, spec in sorted(tasks.items()):
         where = f"tasks.json[{task}]"
         if not (ROOT / "src" / "models" / spec["model_dir"]).is_dir():
             errors.append(f"{where}: model_dir src/models/{spec['model_dir']} does not exist")
-        if not re.search(rf"namespace\s+{re.escape(spec['io_namespace'])}\s*\{{", io_define):
-            errors.append(f"{where}: io_namespace {spec['io_namespace']} is not in model_io_define.h")
-        # output types appear either as `struct clip_output {` or as a
-        # `using std_*_output = ...` alias, so an identifier match is enough
-        if not re.search(rf"\b{re.escape(spec['output_type'])}\b", io_define):
-            errors.append(f"{where}: output_type {spec['output_type']} is not declared in model_io_define.h")
+        io_header_path = spec.get("io_header")
+        io_header = ROOT / "src" / io_header_path if io_header_path else None
+        if io_header is None or not io_header.is_file():
+            errors.append(f"{where}: io_header is missing or does not exist")
+        else:
+            io_text = io_header.read_text(encoding="utf-8")
+            if not re.search(rf"namespace\s+{re.escape(spec['io_namespace'])}\s*\{{", io_text):
+                errors.append(f"{where}: io_namespace {spec['io_namespace']} is not in {io_header_path}")
+            # output types appear either as `struct clip_output {` or as a
+            # `using std_*_output = ...` alias, so an identifier match is enough
+            if not re.search(rf"\b{re.escape(spec['output_type'])}\b", io_text):
+                errors.append(f"{where}: output_type {spec['output_type']} is not declared in {io_header_path}")
 
         catalog = ROOT / "src" / spec["catalog_header"]
         if not catalog.exists():
@@ -497,6 +505,35 @@ def check_model_todo_markers() -> list[str]:
     return errors
 
 
+def check_model_io_split() -> list[str]:
+    """Guard the src/models/io/ split:
+    - model_io_define.h stays a pure aggregate (includes only, no types), so
+      nobody quietly adds code back to the compatibility header;
+    - IO headers must not pull the whole OpenCV umbrella header: they only need
+      Mat / Rect / Point / Size, all of which live in opencv2/core.hpp."""
+    errors: list[str] = []
+    aggregate = ROOT / "src" / "models" / "model_io_define.h"
+    if aggregate.exists():
+        for i, line in enumerate(aggregate.read_text(encoding="utf-8").splitlines(), 1):
+            stripped = line.strip()
+            if not stripped or stripped.startswith(("*", "/", "#")):
+                continue
+            errors.append(
+                f"src/models/model_io_define.h:{i}: aggregate must only include models/io/*.h, got: {stripped}"
+            )
+
+    io_dir = ROOT / "src" / "models" / "io"
+    if not io_dir.is_dir():
+        return errors + ["src/models/io is missing"]
+    for header in sorted(io_dir.glob("*.h")):
+        for i, line in enumerate(header.read_text(encoding="utf-8").splitlines(), 1):
+            if "opencv2/opencv.hpp" in line:
+                errors.append(
+                    f"{header.relative_to(ROOT)}:{i}: IO headers must include opencv2/core.hpp, not opencv.hpp"
+                )
+    return errors
+
+
 def main() -> int:
     args = parse_args()
     errors: list[str] = []
@@ -513,6 +550,7 @@ def main() -> int:
     errors.extend(check_ci_no_python3_runs_sh())
     errors.extend(check_scaffolder_task_metadata())
     errors.extend(check_model_todo_markers())
+    errors.extend(check_model_io_split())
     errors.extend(check_demo_client_health())
     if args.check_stale_binaries:
         errors.extend(check_stale_binaries())
