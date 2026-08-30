@@ -7,13 +7,12 @@
 
 #include "real_esrgan.h"
 
-#include <cstring>
-
 #include <opencv2/opencv.hpp>
 
 #include "glog/logging.h"
 
 #include "models/backend/f32_output.h"
+#include "models/backend/model_runtime.h"
 
 namespace jinq {
 namespace models {
@@ -43,39 +42,20 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> RealEsrGan<I
         return {};
     }
 
-    cv::Mat output_src;
-    input_image.copyTo(output_src);
-    if (output_src.channels() == 4) {
-        cv::cvtColor(output_src, output_src, cv::COLOR_BGRA2RGB);
+    // BGRA/BGR -> RGB -> f32 -> [0,1]; no resize: the network runs at the
+    // request resolution, so the tensor shape follows the source image
+    auto pipeline = jinq::models::backend::ImagePipeline(input_image);
+    if (input_image.channels() == 4) {
+        pipeline.bgra_to_rgb();
     } else {
-        cv::cvtColor(output_src, output_src, cv::COLOR_BGR2RGB);
+        pipeline.bgr_to_rgb();
     }
-    if (output_src.type() != CV_32FC3) {
-        output_src.convertTo(output_src, CV_32FC3);
-    }
-    output_src /= 255.0;
-
-    std::vector<NamedTensor> tensors;
-    NamedTensor named;
-    named.name = this->session().inputs().front().name;
-    named.tensor = jinq::models::backend::Tensor::make<float>({1, output_src.rows, output_src.cols, 3});
-    const auto bytes = output_src.total() * output_src.elemSize();
-    if (bytes != named.tensor.byte_size()) {
-        LOG(ERROR) << "preprocessed real esrgan image byte size mismatches tensor";
+    auto result = pipeline.to_float().scale(1.0f / 255.0f).nhwc(this->session().inputs().front().name);
+    if (!result.ok()) {
+        LOG(ERROR) << result.error;
         return {};
     }
-    if (output_src.isContinuous()) {
-        std::memcpy(named.tensor.buffer.data(), output_src.data, bytes);
-    } else {
-        uint8_t *dst = named.tensor.buffer.data();
-        for (int row = 0; row < output_src.rows; ++row) {
-            const auto row_bytes = static_cast<size_t>(output_src.cols) * output_src.elemSize();
-            std::memcpy(dst, output_src.ptr(row), row_bytes);
-            dst += row_bytes;
-        }
-    }
-    tensors.push_back(std::move(named));
-    return tensors;
+    return {std::move(result.value)};
 }
 
 template <typename INPUT, typename OUTPUT>

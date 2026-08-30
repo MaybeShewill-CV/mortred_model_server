@@ -8,13 +8,12 @@
 #include "attentive_gan_derain_net.h"
 
 #include <algorithm>
-#include <cstring>
-
 #include <opencv2/opencv.hpp>
 
 #include "glog/logging.h"
 
 #include "models/backend/f32_output.h"
+#include "models/backend/model_runtime.h"
 #include "models/backend/request_geometry.h"
 
 namespace jinq {
@@ -45,30 +44,18 @@ template <typename INPUT, typename OUTPUT> StatusCode AttentiveGanDerain<INPUT, 
 template <typename INPUT, typename OUTPUT>
 std::vector<NamedTensor> AttentiveGanDerain<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
 
-    cv::Mat tmp;
-    if (input_image.size() != _m_input_size_host) {
-        cv::resize(input_image, tmp, _m_input_size_host);
-    } else {
-        tmp = input_image;
-    }
-    if (tmp.type() != CV_32FC3) {
-        tmp.convertTo(tmp, CV_32FC3);
-    }
-    tmp /= 127.5;
-    cv::subtract(tmp, cv::Scalar(1.0, 1.0, 1.0), tmp);
-
-    std::vector<NamedTensor> tensors;
-    NamedTensor named;
-    named.name = this->session().inputs().front().name;
-    named.tensor = jinq::models::backend::Tensor::make<float>({1, _m_input_size_host.height, _m_input_size_host.width, 3});
-    const auto bytes = tmp.total() * tmp.elemSize();
-    if (bytes != named.tensor.byte_size()) {
-        LOG(ERROR) << "preprocessed attentive gan image byte size mismatches tensor";
+    // resize -> f32 -> x/127.5 - 1; stays in BGR order, the network expects it
+    auto result = jinq::models::backend::ImagePipeline(input_image)
+                      .resize(_m_input_size_host)
+                      .to_float()
+                      .scale(1.0f / 127.5f)
+                      .subtract({1.0f, 1.0f, 1.0f})
+                      .nhwc(this->session().inputs().front().name);
+    if (!result.ok()) {
+        LOG(ERROR) << result.error;
         return {};
     }
-    std::memcpy(named.tensor.buffer.data(), tmp.data, bytes);
-    tensors.push_back(std::move(named));
-    return tensors;
+    return {std::move(result.value)};
 }
 
 template <typename INPUT, typename OUTPUT>
