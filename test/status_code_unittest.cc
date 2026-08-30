@@ -25,6 +25,7 @@ TEST(status_code, wire_values_are_stable) {
     EXPECT_EQ(to_underlying(StatusCode::MODEL_INIT_FAILED), 1);
     EXPECT_EQ(to_underlying(StatusCode::MODEL_RUN_TIMEOUT), 4);
     EXPECT_EQ(to_underlying(StatusCode::MODEL_OUTPUT_CONTRACT_FAILED), 6);
+    EXPECT_EQ(to_underlying(StatusCode::MODEL_NOT_IMPLEMENTED), 7);
     EXPECT_EQ(to_underlying(StatusCode::SERVER_INIT_FAILED), 11);
     EXPECT_EQ(to_underlying(StatusCode::JSON_DECODE_ERROR), 50);
     EXPECT_EQ(to_underlying(StatusCode::TRT_CONVERT_ONNX_MODEL_FAILED), 92);
