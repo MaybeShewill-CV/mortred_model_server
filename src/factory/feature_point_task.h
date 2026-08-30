@@ -1,63 +1,49 @@
-/************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: feature_point_task.h
-* Date: 22-6-15
-************************************************/
-
 #ifndef MORTRED_MODEL_SERVER_FEATURE_POINT_TASK_H
 #define MORTRED_MODEL_SERVER_FEATURE_POINT_TASK_H
 
 #include <memory>
 #include <string>
+#include <vector>
 
-#include "factory/base_factory.h"
-#include "models/base_model.h"
+#include "factory/cv_catalog.h"
 #include "models/feature_point/superpoint.h"
-#include "server/abstract_server.h"
-#include "server/generic_cv_server.h"
-#include "server/response_serializers.h"
 
 namespace jinq {
 namespace factory {
+namespace feature_point {
 
 using jinq::models::BaseAiModel;
-using jinq::server::BaseAiServer;
-
-namespace feature_point {
 
 using jinq::models::feature_point::SuperPoint;
 
-// create superpoint feature point extractor model
-template<typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_superpoint_extractor(const std::string& extractor_name) {
-    // Direct construction: no global registry writes (no side effects or mutex
-    // overhead); avoids re-registering on every create. name kept for compatibility.
-    (void)extractor_name;
-    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new SuperPoint<INPUT, OUTPUT>());
+template <typename INPUT, typename OUTPUT>
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_superpoint_extractor(const std::string &model_name) {
+    (void)model_name;
+    return std::make_unique<SuperPoint<INPUT, OUTPUT>>();
 }
 
-// create superpoint feature point server
-inline std::unique_ptr<BaseAiServer> create_superpoint_fp_server(const std::string& server_name) {
-    auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
-        using Output = jinq::models::io_define::feature_point::std_feature_point_output;
-        jinq::server::CvServerSpec<Output> spec;
-        spec.server_section = "SUPERPOINT_FP_SERVER";
-        spec.model_section = "SUPERPOINT";
-        spec.display_name = "Superpoint feature point detection";
-        spec.make_worker = [](const std::string& name) {
-            return create_superpoint_extractor<jinq::server::Base64Input, Output>(name);
-        };
-        spec.fill_response = &jinq::server::response::fill_feature_points;
-        return std::unique_ptr<BaseAiServer>(
-            new jinq::server::CvModelServer<Output>(std::move(spec)));
-    });
-    return server_factory.create(server_name);
+using Output = jinq::models::io_define::feature_point::std_feature_point_output;
+using jinq::server::Base64Input;
+using Entry = jinq::factory::cv_catalog::CvModelEntry<Output>;
+
+inline const std::vector<Entry> &catalog() {
+    static const std::vector<Entry> entries = {
+        Entry{"SUPERPOINT", "Superpoint feature point detection", "SUPERPOINT_FP_SERVER", &create_superpoint_extractor<Base64Input, Output>,
+              &jinq::server::response::fill_feature_points},
+    };
+    return entries;
 }
 
-}  // namespace feature_point
-}  // namespace factory
-}  // namespace jinq
+inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::string &model_section, const std::string &server_name) {
+    return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
+}
 
-#endif //MORTRED_MODEL_SERVER_FEATURE_POINT_TASK_H
+inline std::unique_ptr<jinq::server::BaseAiServer> create_superpoint_fp_server(const std::string &server_name) {
+    return create_server("SUPERPOINT", server_name);
+}
+
+} // namespace feature_point
+} // namespace factory
+} // namespace jinq
+
+#endif

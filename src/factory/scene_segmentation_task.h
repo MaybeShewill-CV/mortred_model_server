@@ -1,134 +1,85 @@
-/************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: scene_segmentation_task.h
-* Date: 22-6-9
-************************************************/
-
 #ifndef MORTRED_MODEL_SERVER_SCENE_SEGMENTATION_TASK_H
 #define MORTRED_MODEL_SERVER_SCENE_SEGMENTATION_TASK_H
 
 #include <memory>
 #include <string>
+#include <vector>
 
-#include "factory/base_factory.h"
-#include "models/base_model.h"
+#include "factory/cv_catalog.h"
 #include "models/scene_segmentation/bisenetv2.h"
 #include "models/scene_segmentation/hrnet_segmentation.h"
 #include "models/scene_segmentation/msocrnet.h"
 #include "models/scene_segmentation/pp_humanseg.h"
-#include "server/abstract_server.h"
-#include "server/generic_cv_server.h"
-#include "server/response_serializers.h"
 
 namespace jinq {
 namespace factory {
+namespace scene_segmentation {
 
 using jinq::models::BaseAiModel;
-using jinq::server::BaseAiServer;
-
-namespace scene_segmentation {
 
 using jinq::models::scene_segmentation::BiseNetV2;
 using jinq::models::scene_segmentation::HRNetSegmentation;
 using jinq::models::scene_segmentation::MsOcrNet;
 using jinq::models::scene_segmentation::PPHumanSeg;
 
-// create bisenetv2 scene segmentation model
-template<typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_bisenetv2_segmentor(const std::string& segmentor_name) {
-    // Direct construction: no global registry writes (no side effects or mutex
-    // overhead); avoids re-registering on every create. name kept for compatibility.
-    (void)segmentor_name;
-    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new BiseNetV2<INPUT, OUTPUT>());
+template <typename INPUT, typename OUTPUT>
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_bisenetv2_segmentor(const std::string &model_name) {
+    (void)model_name;
+    return std::make_unique<BiseNetV2<INPUT, OUTPUT>>();
 }
 
-// create pp human segmentation model
-template<typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_pphuman_segmentor(const std::string& segmentor_name) {
-    // Direct construction: no global registry writes (no side effects or mutex
-    // overhead); avoids re-registering on every create. name kept for compatibility.
-    (void)segmentor_name;
-    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new PPHumanSeg<INPUT, OUTPUT>());
+template <typename INPUT, typename OUTPUT>
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_pphuman_segmentor(const std::string &model_name) {
+    (void)model_name;
+    return std::make_unique<PPHumanSeg<INPUT, OUTPUT>>();
 }
 
-// create msocrnet scene segmentation model
-template<typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_msocrnet_segmentor(const std::string& segmentor_name) {
-    // Direct construction: no global registry writes (no side effects or mutex
-    // overhead); avoids re-registering on every create. name kept for compatibility.
-    (void)segmentor_name;
-    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new MsOcrNet<INPUT, OUTPUT>());
+template <typename INPUT, typename OUTPUT>
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_msocrnet_segmentor(const std::string &model_name) {
+    (void)model_name;
+    return std::make_unique<MsOcrNet<INPUT, OUTPUT>>();
 }
 
-// create hrnet scene segmentation model
-template<typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_hrnet_segmentor(const std::string& segmentor_name) {
-    // Direct construction: no global registry writes (no side effects or mutex
-    // overhead); avoids re-registering on every create. name kept for compatibility.
-    (void)segmentor_name;
-    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new HRNetSegmentation<INPUT, OUTPUT>());
+template <typename INPUT, typename OUTPUT>
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_hrnet_segmentor(const std::string &model_name) {
+    (void)model_name;
+    return std::make_unique<HRNetSegmentation<INPUT, OUTPUT>>();
 }
 
-// create bisenetv2 scene segmentation server
-inline std::unique_ptr<BaseAiServer> create_bisenetv2_server(const std::string& server_name) {
-    auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
-        using Output = jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
-        jinq::server::CvServerSpec<Output> spec;
-        spec.server_section = "BISENETV2_SERVER";
-        spec.model_section = "BISENETV2";
-        spec.display_name = "bisenetv2 segmentation";
-        spec.make_worker = [](const std::string& name) {
-            return create_bisenetv2_segmentor<jinq::server::Base64Input, Output>(name);
-        };
-        spec.fill_response = &jinq::server::response::fill_scene_segmentation;
-        return std::unique_ptr<BaseAiServer>(
-            new jinq::server::CvModelServer<Output>(std::move(spec)));
-    });
-    return server_factory.create(server_name);
+using Output = jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
+using jinq::server::Base64Input;
+using Entry = jinq::factory::cv_catalog::CvModelEntry<Output>;
+
+inline const std::vector<Entry> &catalog() {
+    static const std::vector<Entry> entries = {
+        Entry{"BISENETV2", "bisenetv2 segmentation", "BISENETV2_SERVER", &create_bisenetv2_segmentor<Base64Input, Output>,
+              &jinq::server::response::fill_scene_segmentation},
+        Entry{"PPHUMAN_SEG", "pphuman segmentation", "PPHUMAN_SEG_SERVER", &create_pphuman_segmentor<Base64Input, Output>,
+              &jinq::server::response::fill_scene_segmentation},
+        Entry{"HRNET", "hrnet segmentation", "HRNET_SERVER", &create_hrnet_segmentor<Base64Input, Output>,
+              &jinq::server::response::fill_scene_segmentation},
+    };
+    return entries;
 }
 
-// create pphuman segmentation server
-inline std::unique_ptr<BaseAiServer> create_pphuman_seg_server(const std::string& server_name) {
-    auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
-        using Output = jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
-        jinq::server::CvServerSpec<Output> spec;
-        spec.server_section = "PPHUMAN_SEG_SERVER";
-        spec.model_section = "PPHUMAN_SEG";
-        spec.display_name = "pphuman segmentation";
-        spec.make_worker = [](const std::string& name) {
-            return create_pphuman_segmentor<jinq::server::Base64Input, Output>(name);
-        };
-        spec.fill_response = &jinq::server::response::fill_scene_segmentation;
-        return std::unique_ptr<BaseAiServer>(
-            new jinq::server::CvModelServer<Output>(std::move(spec)));
-    });
-    return server_factory.create(server_name);
+inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::string &model_section, const std::string &server_name) {
+    return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
 }
 
-// create hrnet scene segmentation server
-inline std::unique_ptr<BaseAiServer> create_hrnet_server(const std::string& server_name) {
-    auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
-        using Output = jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
-        jinq::server::CvServerSpec<Output> spec;
-        spec.server_section = "HRNET_SERVER";
-        spec.model_section = "HRNET";
-        spec.display_name = "hrnet segmentation";
-        spec.make_worker = [](const std::string& name) {
-            return create_hrnet_segmentor<jinq::server::Base64Input, Output>(name);
-        };
-        spec.fill_response = &jinq::server::response::fill_scene_segmentation;
-        return std::unique_ptr<BaseAiServer>(
-            new jinq::server::CvModelServer<Output>(std::move(spec)));
-    });
-    return server_factory.create(server_name);
+inline std::unique_ptr<jinq::server::BaseAiServer> create_bisenetv2_server(const std::string &server_name) {
+    return create_server("BISENETV2", server_name);
 }
 
-}  // namespace scene_segmentation
-}  // namespace factory
-}  // namespace jinq
+inline std::unique_ptr<jinq::server::BaseAiServer> create_pphuman_seg_server(const std::string &server_name) {
+    return create_server("PPHUMAN_SEG", server_name);
+}
 
-#endif //MORTRED_MODEL_SERVER_SCENE_SEGMENTATION_TASK_H
+inline std::unique_ptr<jinq::server::BaseAiServer> create_hrnet_server(const std::string &server_name) {
+    return create_server("HRNET", server_name);
+}
+
+} // namespace scene_segmentation
+} // namespace factory
+} // namespace jinq
+
+#endif

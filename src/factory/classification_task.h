@@ -1,134 +1,85 @@
-/************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: classification_task.h
-* Date: 22-6-14
-************************************************/
-
 #ifndef MORTRED_MODEL_SERVER_CLASSIFICATION_TASK_H
 #define MORTRED_MODEL_SERVER_CLASSIFICATION_TASK_H
 
 #include <memory>
 #include <string>
+#include <vector>
 
-#include "factory/base_factory.h"
-#include "models/base_model.h"
+#include "factory/cv_catalog.h"
 #include "models/classification/densenet.h"
 #include "models/classification/dinov2.h"
 #include "models/classification/mobilenetv2.h"
 #include "models/classification/resnet.h"
-#include "server/abstract_server.h"
-#include "server/generic_cv_server.h"
-#include "server/response_serializers.h"
 
 namespace jinq {
 namespace factory {
+namespace classification {
 
 using jinq::models::BaseAiModel;
-using jinq::server::BaseAiServer;
-
-namespace classification {
 
 using jinq::models::classification::DenseNet;
 using jinq::models::classification::Dinov2;
 using jinq::models::classification::MobileNetv2;
 using jinq::models::classification::ResNet;
 
-// create mobilenetv2 classification model
-template<typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_mobilenetv2_classifier(const std::string& classifier_name) {
-    // Direct construction: no global registry writes (no side effects or mutex
-    // overhead); avoids re-registering on every create. name kept for compatibility.
-    (void)classifier_name;
-    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new MobileNetv2<INPUT, OUTPUT>());
+template <typename INPUT, typename OUTPUT>
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_mobilenetv2_classifier(const std::string &model_name) {
+    (void)model_name;
+    return std::make_unique<MobileNetv2<INPUT, OUTPUT>>();
 }
 
-// create mobilenetv2 classification server
-inline std::unique_ptr<BaseAiServer> create_mobilenetv2_cls_server(const std::string& server_name) {
-    auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
-        using Output = jinq::models::io_define::classification::std_classification_output;
-        jinq::server::CvServerSpec<Output> spec;
-        spec.server_section = "MOBILENETV2_CLASSIFICATION_SERVER";
-        spec.model_section = "MOBILENETV2";
-        spec.display_name = "Mobilenetv2 classification";
-        spec.make_worker = [](const std::string& name) {
-            return create_mobilenetv2_classifier<jinq::server::Base64Input, Output>(name);
-        };
-        spec.fill_response = &jinq::server::response::fill_classification;
-        return std::unique_ptr<BaseAiServer>(
-            new jinq::server::CvModelServer<Output>(std::move(spec)));
-    });
-    return server_factory.create(server_name);
+template <typename INPUT, typename OUTPUT>
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_resnet_classifier(const std::string &model_name) {
+    (void)model_name;
+    return std::make_unique<ResNet<INPUT, OUTPUT>>();
 }
 
-// create resnet classification model
-template<typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_resnet_classifier(const std::string& classifier_name) {
-    // Direct construction: no global registry writes (no side effects or mutex
-    // overhead); avoids re-registering on every create. name kept for compatibility.
-    (void)classifier_name;
-    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new ResNet<INPUT, OUTPUT>());
+template <typename INPUT, typename OUTPUT>
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_densenet_classifier(const std::string &model_name) {
+    (void)model_name;
+    return std::make_unique<DenseNet<INPUT, OUTPUT>>();
 }
 
-// create resnet classification server
-inline std::unique_ptr<BaseAiServer> create_resnet_cls_server(const std::string& server_name) {
-    auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
-        using Output = jinq::models::io_define::classification::std_classification_output;
-        jinq::server::CvServerSpec<Output> spec;
-        spec.server_section = "RESNET_CLASSIFICATION_SERVER";
-        spec.model_section = "RESNET";
-        spec.display_name = "Resnet classification";
-        spec.make_worker = [](const std::string& name) {
-            return create_resnet_classifier<jinq::server::Base64Input, Output>(name);
-        };
-        spec.fill_response = &jinq::server::response::fill_classification;
-        return std::unique_ptr<BaseAiServer>(
-            new jinq::server::CvModelServer<Output>(std::move(spec)));
-    });
-    return server_factory.create(server_name);
+template <typename INPUT, typename OUTPUT>
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_dinov2_classifier(const std::string &model_name) {
+    (void)model_name;
+    return std::make_unique<Dinov2<INPUT, OUTPUT>>();
 }
 
-// create densenet classification model
-template<typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_densenet_classifier(const std::string& classifier_name) {
-    // Direct construction: no global registry writes (no side effects or mutex
-    // overhead); avoids re-registering on every create. name kept for compatibility.
-    (void)classifier_name;
-    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new DenseNet<INPUT, OUTPUT>());
+using Output = jinq::models::io_define::classification::std_classification_output;
+using jinq::server::Base64Input;
+using Entry = jinq::factory::cv_catalog::CvModelEntry<Output>;
+
+inline const std::vector<Entry> &catalog() {
+    static const std::vector<Entry> entries = {
+        Entry{"MOBILENETV2", "Mobilenetv2 classification", "MOBILENETV2_CLASSIFICATION_SERVER",
+              &create_mobilenetv2_classifier<Base64Input, Output>, &jinq::server::response::fill_classification},
+        Entry{"RESNET", "Resnet classification", "RESNET_CLASSIFICATION_SERVER", &create_resnet_classifier<Base64Input, Output>,
+              &jinq::server::response::fill_classification},
+        Entry{"DENSENET", "densenet classification", "DENSENET_CLASSIFICATION_SERVER", &create_densenet_classifier<Base64Input, Output>,
+              &jinq::server::response::fill_classification},
+    };
+    return entries;
 }
 
-// create densenet classification server
-inline std::unique_ptr<BaseAiServer> create_densenet_cls_server(const std::string& server_name) {
-    auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
-        using Output = jinq::models::io_define::classification::std_classification_output;
-        jinq::server::CvServerSpec<Output> spec;
-        spec.server_section = "DENSENET_CLASSIFICATION_SERVER";
-        spec.model_section = "DENSENET";
-        spec.display_name = "densenet classification";
-        spec.make_worker = [](const std::string& name) {
-            return create_densenet_classifier<jinq::server::Base64Input, Output>(name);
-        };
-        spec.fill_response = &jinq::server::response::fill_classification;
-        return std::unique_ptr<BaseAiServer>(
-            new jinq::server::CvModelServer<Output>(std::move(spec)));
-    });
-    return server_factory.create(server_name);
+inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::string &model_section, const std::string &server_name) {
+    return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
 }
 
-// create dinov2 classification model
-template<typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_dinov2_classifier(const std::string& classifier_name) {
-    // Direct construction: no global registry writes (no side effects or mutex
-    // overhead); avoids re-registering on every create. name kept for compatibility.
-    (void)classifier_name;
-    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new Dinov2<INPUT, OUTPUT>());
+inline std::unique_ptr<jinq::server::BaseAiServer> create_mobilenetv2_cls_server(const std::string &server_name) {
+    return create_server("MOBILENETV2", server_name);
 }
 
-}  // namespace classification
-}  // namespace factory
-}  // namespace jinq
+inline std::unique_ptr<jinq::server::BaseAiServer> create_resnet_cls_server(const std::string &server_name) {
+    return create_server("RESNET", server_name);
+}
 
-#endif //MORTRED_MODEL_SERVER_CLASSIFICATION_TASK_H
+inline std::unique_ptr<jinq::server::BaseAiServer> create_densenet_cls_server(const std::string &server_name) {
+    return create_server("DENSENET", server_name);
+}
+
+} // namespace classification
+} // namespace factory
+} // namespace jinq
+
+#endif

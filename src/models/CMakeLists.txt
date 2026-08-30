@@ -17,6 +17,7 @@ set(MODELS_LIB_SRC
     ${CMAKE_CURRENT_LIST_DIR}/backend/request_geometry.h
     ${CMAKE_CURRENT_LIST_DIR}/backend/tensor.h
     ${CMAKE_CURRENT_LIST_DIR}/backend/tensor_contract.h
+    ${CMAKE_CURRENT_LIST_DIR}/catalog/model_entry.h
     ${CMAKE_CURRENT_LIST_DIR}/cv_image_input.h
     ${CMAKE_CURRENT_LIST_DIR}/model_io_define.h
     ${CMAKE_CURRENT_LIST_DIR}/clip/simple_tokenizer.cpp

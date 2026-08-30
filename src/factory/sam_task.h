@@ -1,62 +1,87 @@
-/************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: sam_task.h
-* Date: 22-6-14
-************************************************/
-
 #ifndef MORTRED_MODEL_SERVER_SAM_TASK_H
 #define MORTRED_MODEL_SERVER_SAM_TASK_H
 
 #include <memory>
 #include <string>
+#include <vector>
 
-#include "factory/base_factory.h"
+#include "factory/cv_catalog.h"
+#include "factory/model_catalog.h"
 #include "models/base_model.h"
+#include "models/model_io_define.h"
 #include "models/segment_anything/fast_sam/fast_sam_segmentor.h"
 #include "models/segment_anything/sam_automask_generator/sam_automask_generator.h"
 #include "models/segment_anything/sam_prediction/sam_predictor.h"
 
 namespace jinq {
 namespace factory {
+namespace segment_anything {
 
 using jinq::models::BaseAiModel;
-
-namespace segment_anything {
 
 using jinq::models::segment_anything::FastSamSegmentor;
 using jinq::models::segment_anything::SamAutoMaskGenerator;
 using jinq::models::segment_anything::SamPredictor;
 
-// create sam prompt predictor model
-template<typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_sam_predictor(const std::string& model_name) {
-    // Direct construction: no global registry writes (no side effects or mutex
-    // overhead); avoids re-registering on every create. name kept for compatibility.
+template <typename INPUT, typename OUTPUT> std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_sam_predictor(const std::string &model_name) {
     (void)model_name;
-    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new SamPredictor<INPUT, OUTPUT>());
+    return std::make_unique<SamPredictor<INPUT, OUTPUT>>();
 }
 
-// create sam auto mask generator model
-template<typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_sam_auto_mask_generator(const std::string& model_name) {
-    // Direct construction: no global registry writes (no side effects or mutex
-    // overhead); avoids re-registering on every create. name kept for compatibility.
+template <typename INPUT, typename OUTPUT>
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_sam_auto_mask_generator(const std::string &model_name) {
     (void)model_name;
-    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new SamAutoMaskGenerator<INPUT, OUTPUT>());
+    return std::make_unique<SamAutoMaskGenerator<INPUT, OUTPUT>>();
 }
 
-// create fast sam segmentation model
-template<typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_fast_sam_segmentor(const std::string& model_name) {
-    // Direct construction: no global registry writes (no side effects or mutex
-    // overhead); avoids re-registering on every create. name kept for compatibility.
+template <typename INPUT, typename OUTPUT>
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_fast_sam_segmentor(const std::string &model_name) {
     (void)model_name;
-    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new FastSamSegmentor<INPUT, OUTPUT>());
+    return std::make_unique<FastSamSegmentor<INPUT, OUTPUT>>();
 }
 
-}  // namespace segment_anything
-}  // namespace factory
-}  // namespace jinq
+// SAM families have distinct IO contracts: the prompt predictor and fast-sam
+// are consumed directly by benchmarks, while the auto mask generator is served
+// over HTTP. Each family therefore keeps its own typed catalog.
+using MatInput = jinq::models::io_define::common_io::mat_input;
+using PromptInput = jinq::models::io_define::segment_anything::sam_prompt_input;
+using PromptOutput = jinq::models::io_define::segment_anything::std_sam_prompt_output;
+using FastSamOutput = jinq::models::io_define::segment_anything::std_fast_sam_output;
+using AmgOutput = jinq::models::io_define::segment_anything::std_sam_amg_output;
+using jinq::server::Base64Input;
 
-#endif //MORTRED_MODEL_SERVER_SAM_TASK_H
+using PredictorEntry = jinq::factory::model_catalog::ModelCatalogEntry<PromptInput, PromptOutput>;
+using FastSamEntry = jinq::factory::model_catalog::ModelCatalogEntry<MatInput, FastSamOutput>;
+using AmgEntry = jinq::factory::cv_catalog::CvModelEntry<AmgOutput>;
+
+inline const std::vector<PredictorEntry> &predictor_catalog() {
+    static const std::vector<PredictorEntry> entries = {
+        PredictorEntry{"SAM_PREDICTOR", "SAM promptable segmentation", &create_sam_predictor<PromptInput, PromptOutput>},
+    };
+    return entries;
+}
+
+inline const std::vector<FastSamEntry> &fast_sam_catalog() {
+    static const std::vector<FastSamEntry> entries = {
+        FastSamEntry{"FAST_SAM", "FastSAM everything segmentation", &create_fast_sam_segmentor<MatInput, FastSamOutput>},
+    };
+    return entries;
+}
+
+inline const std::vector<AmgEntry> &amg_catalog() {
+    static const std::vector<AmgEntry> entries = {
+        AmgEntry{"SAM_AMG", "SAM automatic mask generator", "SAM_AMG_SERVER", &create_sam_auto_mask_generator<Base64Input, AmgOutput>,
+                 &jinq::server::response::fill_sam_amg},
+    };
+    return entries;
+}
+
+inline std::unique_ptr<jinq::server::BaseAiServer> create_amg_server(const std::string &server_name) {
+    return jinq::factory::cv_catalog::create_server(amg_catalog(), "SAM_AMG", server_name);
+}
+
+} // namespace segment_anything
+} // namespace factory
+} // namespace jinq
+
+#endif

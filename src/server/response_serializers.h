@@ -53,6 +53,14 @@ inline rapidjson::Value make_string(AllocatorType& allocator, const std::string&
     return rapidjson::Value(value.c_str(), value.size(), allocator);
 }
 
+/*** Raw base64 image payload: image (already encoded by the model) ***/
+inline void fill_base64_image(AllocatorType &allocator,
+                              rapidjson::Document &data,
+                              const jinq::models::io_define::common_io::base64_input &out) {
+    data.SetObject();
+    data.AddMember("image", make_string(allocator, out.input_image_content), allocator);
+}
+
 /*** Classification: class_id / category / scores ***/
 inline void fill_classification(AllocatorType& allocator,
                                 rapidjson::Document& data,
@@ -190,6 +198,32 @@ inline void fill_feature_points(AllocatorType& allocator,
             descriptor.PushBack(v, allocator);
         }
         item.AddMember("descriptor", descriptor, allocator);
+        data.PushBack(item, allocator);
+    }
+}
+
+/*** SAM automatic masks: segmentation png + area / bbox / iou / stability ***/
+inline void fill_sam_amg(AllocatorType &allocator,
+                         rapidjson::Document &data,
+                         const jinq::models::io_define::segment_anything::std_sam_amg_output &out) {
+    const auto count = out.segmentations.size();
+    data.SetArray();
+    for (size_t index = 0; index < count; ++index) {
+        rapidjson::Value item(rapidjson::kObjectType);
+        item.AddMember("segmentation",
+                       make_string(allocator, encode_image(out.segmentations[index], ".png")),
+                       allocator);
+        item.AddMember("area", index < out.areas.size() ? out.areas[index] : 0, allocator);
+        if (index < out.bboxes.size()) {
+            item.AddMember("bbox", make_bbox(allocator, out.bboxes[index]), allocator);
+        }
+        item.AddMember("predicted_iou",
+                       index < out.preds_ious.size() ? out.preds_ious[index] : 0.0f,
+                       allocator);
+        item.AddMember("stability_score",
+                       index < out.preds_stability_scores.size() ? out.preds_stability_scores[index] : 0.0f,
+                       allocator);
+        item.AddMember("detail_infos", rapidjson::Value(rapidjson::kObjectType), allocator);
         data.PushBack(item, allocator);
     }
 }

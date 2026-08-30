@@ -1,63 +1,48 @@
-/************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: ocr_task.h
-* Date: 22-6-8
-************************************************/
-
 #ifndef MORTRED_MODEL_SERVER_OCR_TASK_H
 #define MORTRED_MODEL_SERVER_OCR_TASK_H
 
 #include <memory>
 #include <string>
+#include <vector>
 
-#include "factory/base_factory.h"
-#include "models/base_model.h"
+#include "factory/cv_catalog.h"
 #include "models/ocr/db_text_detector.h"
-#include "server/abstract_server.h"
-#include "server/generic_cv_server.h"
-#include "server/response_serializers.h"
 
 namespace jinq {
 namespace factory {
+namespace ocr {
 
 using jinq::models::BaseAiModel;
-using jinq::server::BaseAiServer;
-
-namespace ocr {
 
 using jinq::models::ocr::DBTextDetector;
 
-// create db text detector model
-template<typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_dbtext_detector(const std::string& detector_name) {
-    // Direct construction: no global registry writes (no side effects or mutex
-    // overhead); avoids re-registering on every create. name kept for compatibility.
-    (void)detector_name;
-    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new DBTextDetector<INPUT, OUTPUT>());
+template <typename INPUT, typename OUTPUT>
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_dbtext_detector(const std::string &model_name) {
+    (void)model_name;
+    return std::make_unique<DBTextDetector<INPUT, OUTPUT>>();
 }
 
-// create dbnet text region detection server
-inline std::unique_ptr<BaseAiServer> create_dbtext_detection_server(const std::string& server_name) {
-    auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
-        using Output = jinq::models::io_define::ocr::std_text_regions_output;
-        jinq::server::CvServerSpec<Output> spec;
-        spec.server_section = "DBNET_SERVER";
-        spec.model_section = "DBNET";
-        spec.display_name = "dbnet";
-        spec.make_worker = [](const std::string& name) {
-            return create_dbtext_detector<jinq::server::Base64Input, Output>(name);
-        };
-        spec.fill_response = &jinq::server::response::fill_text_regions;
-        return std::unique_ptr<BaseAiServer>(
-            new jinq::server::CvModelServer<Output>(std::move(spec)));
-    });
-    return server_factory.create(server_name);
+using Output = jinq::models::io_define::ocr::std_text_regions_output;
+using jinq::server::Base64Input;
+using Entry = jinq::factory::cv_catalog::CvModelEntry<Output>;
+
+inline const std::vector<Entry> &catalog() {
+    static const std::vector<Entry> entries = {
+        Entry{"DBNET", "dbnet", "DBNET_SERVER", &create_dbtext_detector<Base64Input, Output>, &jinq::server::response::fill_text_regions},
+    };
+    return entries;
 }
 
-}  // namespace ocr
-}  // namespace factory
-}  // namespace jinq
+inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::string &model_section, const std::string &server_name) {
+    return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
+}
 
-#endif //MORTRED_MODEL_SERVER_OCR_TASK_H
+inline std::unique_ptr<jinq::server::BaseAiServer> create_dbtext_detection_server(const std::string &server_name) {
+    return create_server("DBNET", server_name);
+}
+
+} // namespace ocr
+} // namespace factory
+} // namespace jinq
+
+#endif

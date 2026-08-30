@@ -1,123 +1,77 @@
-/************************************************
-* Copyright MaybeShewill-CV. All Rights Reserved.
-* Author: MaybeShewill-CV
-* File: enhancement_task.h
-* Date: 22-6-13
-************************************************/
-
 #ifndef MORTRED_MODEL_SERVER_ENHANCEMENT_TASK_H
 #define MORTRED_MODEL_SERVER_ENHANCEMENT_TASK_H
 
 #include <memory>
 #include <string>
+#include <vector>
 
-#include "factory/base_factory.h"
-#include "models/base_model.h"
+#include "factory/cv_catalog.h"
 #include "models/enhancement/attentive_gan_derain_net.h"
 #include "models/enhancement/enlightengan.h"
 #include "models/enhancement/real_esrgan.h"
-#include "server/abstract_server.h"
-#include "server/generic_cv_server.h"
-#include "server/response_serializers.h"
 
 namespace jinq {
 namespace factory {
+namespace enhancement {
 
 using jinq::models::BaseAiModel;
-using jinq::server::BaseAiServer;
-
-namespace enhancement {
 
 using jinq::models::enhancement::AttentiveGanDerain;
 using jinq::models::enhancement::EnlightenGan;
 using jinq::models::enhancement::RealEsrGan;
 
-// create enlighten-gan low light enhancement model
-template<typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_enlightengan_enhancementor(const std::string& enhancementor_name) {
-    // Direct construction: no global registry writes (no side effects or mutex
-    // overhead); avoids re-registering on every create. name kept for compatibility.
-    (void)enhancementor_name;
-    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new EnlightenGan<INPUT, OUTPUT>());
+template <typename INPUT, typename OUTPUT>
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_enlightengan_enhancementor(const std::string &model_name) {
+    (void)model_name;
+    return std::make_unique<EnlightenGan<INPUT, OUTPUT>>();
 }
 
-// create enlighten gan enhancement server
-inline std::unique_ptr<BaseAiServer> create_enlightengan_server(const std::string& server_name) {
-    auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
-        using Output = jinq::models::io_define::enhancement::std_enhancement_output;
-        jinq::server::CvServerSpec<Output> spec;
-        spec.server_section = "ENLIGHTEN_GAN_SERVER";
-        spec.model_section = "ENLIGHTEN_GAN";
-        spec.display_name = "enlighten gan";
-        spec.make_worker = [](const std::string& name) {
-            return create_enlightengan_enhancementor<jinq::server::Base64Input, Output>(name);
-        };
-        spec.fill_response = &jinq::server::response::fill_enhancement;
-        return std::unique_ptr<BaseAiServer>(
-            new jinq::server::CvModelServer<Output>(std::move(spec)));
-    });
-    return server_factory.create(server_name);
+template <typename INPUT, typename OUTPUT>
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_attentivegan_enhancementor(const std::string &model_name) {
+    (void)model_name;
+    return std::make_unique<AttentiveGanDerain<INPUT, OUTPUT>>();
 }
 
-// create attentive gan derain model
-template<typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_attentivegan_enhancementor(const std::string& enhancementor_name) {
-    // Direct construction: no global registry writes (no side effects or mutex
-    // overhead); avoids re-registering on every create. name kept for compatibility.
-    (void)enhancementor_name;
-    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new AttentiveGanDerain<INPUT, OUTPUT>());
+template <typename INPUT, typename OUTPUT>
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_realesrgan_enhancementor(const std::string &model_name) {
+    (void)model_name;
+    return std::make_unique<RealEsrGan<INPUT, OUTPUT>>();
 }
 
-// create attentive gan derain server
-inline std::unique_ptr<BaseAiServer> create_attentivegan_derain_server(const std::string& server_name) {
-    auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
-        using Output = jinq::models::io_define::enhancement::std_enhancement_output;
-        jinq::server::CvServerSpec<Output> spec;
-        spec.server_section = "ATTENTIVE_GAN_DERAIN_SERVER";
-        spec.model_section = "ATTENTIVE_GAN_DERAIN";
-        spec.display_name = "attentive gan derain";
-        spec.make_worker = [](const std::string& name) {
-            return create_attentivegan_enhancementor<jinq::server::Base64Input, Output>(name);
-        };
-        spec.fill_response = &jinq::server::response::fill_enhancement;
-        return std::unique_ptr<BaseAiServer>(
-            new jinq::server::CvModelServer<Output>(std::move(spec)));
-    });
-    return server_factory.create(server_name);
+using Output = jinq::models::io_define::enhancement::std_enhancement_output;
+using jinq::server::Base64Input;
+using Entry = jinq::factory::cv_catalog::CvModelEntry<Output>;
+
+inline const std::vector<Entry> &catalog() {
+    static const std::vector<Entry> entries = {
+        Entry{"ENLIGHTEN_GAN", "enlighten gan", "ENLIGHTEN_GAN_SERVER", &create_enlightengan_enhancementor<Base64Input, Output>,
+              &jinq::server::response::fill_enhancement},
+        Entry{"ATTENTIVE_GAN_DERAIN", "attentive gan derain", "ATTENTIVE_GAN_DERAIN_SERVER",
+              &create_attentivegan_enhancementor<Base64Input, Output>, &jinq::server::response::fill_enhancement},
+        Entry{"REAL_ESRGAN", "real esr-gan", "REAL_ESRGAN_SERVER", &create_realesrgan_enhancementor<Base64Input, Output>,
+              &jinq::server::response::fill_enhancement},
+    };
+    return entries;
 }
 
-// create real esrgan super resolution model
-template<typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT> > create_realesrgan_enhancementor(const std::string& enhancementor_name) {
-    // Direct construction: no global registry writes (no side effects or mutex
-    // overhead); avoids re-registering on every create. name kept for compatibility.
-    (void)enhancementor_name;
-    return std::unique_ptr<BaseAiModel<INPUT, OUTPUT> >(new RealEsrGan<INPUT, OUTPUT>());
+inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::string &model_section, const std::string &server_name) {
+    return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
 }
 
-// create real esrgan super resolution server
-inline std::unique_ptr<BaseAiServer> create_realesrgan_server(const std::string& server_name) {
-    auto& server_factory = ServerFactory<BaseAiServer>::get_instance();
-    server_factory.register_creator(server_name, []() -> std::unique_ptr<BaseAiServer> {
-        using Output = jinq::models::io_define::enhancement::std_enhancement_output;
-        jinq::server::CvServerSpec<Output> spec;
-        spec.server_section = "REAL_ESRGAN_SERVER";
-        spec.model_section = "REAL_ESRGAN";
-        spec.display_name = "real esr-gan";
-        spec.make_worker = [](const std::string& name) {
-            return create_realesrgan_enhancementor<jinq::server::Base64Input, Output>(name);
-        };
-        spec.fill_response = &jinq::server::response::fill_enhancement;
-        return std::unique_ptr<BaseAiServer>(
-            new jinq::server::CvModelServer<Output>(std::move(spec)));
-    });
-    return server_factory.create(server_name);
+inline std::unique_ptr<jinq::server::BaseAiServer> create_enlightengan_server(const std::string &server_name) {
+    return create_server("ENLIGHTEN_GAN", server_name);
 }
 
-}  // namespace enhancement
-}  // namespace factory
-}  // namespace jinq
+inline std::unique_ptr<jinq::server::BaseAiServer> create_attentivegan_derain_server(const std::string &server_name) {
+    return create_server("ATTENTIVE_GAN_DERAIN", server_name);
+}
 
-#endif //MORTRED_MODEL_SERVER_ENHANCEMENT_TASK_H
+inline std::unique_ptr<jinq::server::BaseAiServer> create_realesrgan_server(const std::string &server_name) {
+    return create_server("REAL_ESRGAN", server_name);
+}
+
+} // namespace enhancement
+} // namespace factory
+} // namespace jinq
+
+#endif
