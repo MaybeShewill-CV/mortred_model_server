@@ -10,7 +10,7 @@
 |---|---|
 | Phase 0 基线与度量 | 已完成 |
 | Phase 1 Runtime Toolkit | 已完成 |
-| Phase 2 Model Catalog | 未开始 |
+| Phase 2 Model Catalog | 已完成 |
 | Phase 3 Scaffolder | 未开始 |
 | Phase 4 IO 拆分 | 未开始 |
 | Phase 5 测试注册化 | 未开始 |
@@ -77,25 +77,38 @@
 
 ## Phase 2：Model Catalog
 
-- [ ] 设计任务内 `ModelEntry`
-- [ ] 新增 `src/models/catalog/model_entry.h`
-- [ ] 建立 classification catalog
-- [ ] 建立 object detection catalog
-- [ ] 建立 scene segmentation catalog
-- [ ] 建立 OCR catalog
-- [ ] 建立 matting catalog
-- [ ] 建立 enhancement catalog
-- [ ] 建立 feature point catalog
-- [ ] 建立 depth catalog
-- [ ] 建立 SAM catalog
-- [ ] 建立 CLIP catalog
-- [ ] 建立 diffusion catalog
-- [ ] factory 从 catalog 创建模型
-- [ ] server spec 从 catalog 驱动
-- [ ] 新增 `test/model_catalog_unittest.cc`
-- [ ] 校验 section 唯一性
-- [ ] 校验配置文件存在
-- [ ] 校证 catalog 覆盖现有 factory 暴露模型
+- [x] 设计任务内 `ModelEntry`
+- [x] 新增 `src/models/catalog/model_entry.h`
+- [x] 建立 classification catalog
+- [x] 建立 object detection catalog
+- [x] 建立 scene segmentation catalog
+- [x] 建立 OCR catalog
+- [x] 建立 matting catalog
+- [x] 建立 enhancement catalog
+- [x] 建立 feature point catalog
+- [x] 建立 depth catalog
+- [x] 建立 SAM catalog
+- [x] 建立 CLIP catalog
+- [x] 建立 diffusion catalog
+- [x] factory 从 catalog 创建模型
+- [x] server spec 从 catalog 驱动
+- [x] 新增 `test/model_catalog_unittest.cc`
+- [x] 校验 section 唯一性
+- [x] 校验配置文件存在
+- [x] 校证 catalog 覆盖现有 factory 暴露模型
+
+
+> Phase 2 落地说明：
+> - 所有任务目录都是显式的任务内 `catalog()` 函数，没有全局静态注册副作用。
+> - `models::catalog::ModelEntry` 是最小模型身份（model section + display name），
+>   `ServedModelEntry` 额外携带 server section；`factory::cv_catalog::CvModelEntry<OUTPUT>`
+>   再补上 worker creator 与 response filler。
+> - 没有通用 CV server 的模型族（CLIP、SAM predictor、FastSAM）使用
+>   `factory::model_catalog::ModelCatalogEntry`，不强行造出 server section。
+> - object detection 与 face detection 输出契约不同，拆成两个 typed catalog。
+> - diffusion 4 个 sampler 通过同一个 base64 adapter 挂到通用 server，共用一个 catalog。
+> - `test/model_catalog_unittest.cc` 校验字段完整性、全局唯一性、TOML section 与
+>   model_config_file_path 存在性，并真实构造 `CvModelServer<OUTPUT>`。
 
 ## Phase 3：Scaffolder
 

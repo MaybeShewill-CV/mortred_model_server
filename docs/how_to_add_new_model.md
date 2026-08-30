@@ -107,11 +107,53 @@ three-section configs are gone; use
 [`scripts/migrate_model_config.py`](../scripts/migrate_model_config.py) to
 migrate them (`--dry-run` first, `--check` in CI).
 
-## Step 4: Register in the factory
+## Step 4: Register in the task catalog
 
-Add a `create_my_model` function in the task factory and a server spec if the
-model should be served over HTTP. The `BaseAiModel` contract is unchanged, so
-apps and servers need no backend knowledge.
+Every task owns an explicit catalog in `src/factory/<task>_task.h`. Adding a
+served model is now one row plus its creator - no hand-written server
+registration lambda, no copied `CvServerSpec` block:
+
+```cpp
+// src/factory/my_task.h
+template <typename INPUT, typename OUTPUT>
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_my_model(const std::string& name) {
+    (void)name;
+    return std::make_unique<MyModel<INPUT, OUTPUT>>();
+}
+
+using Output = jinq::models::io_define::my_task::std_my_task_output;
+using Entry = jinq::factory::cv_catalog::CvModelEntry<Output>;
+
+inline const std::vector<Entry>& catalog() {
+    static const std::vector<Entry> entries = {
+        Entry{"MY_MODEL", "My model display name", "MY_MODEL_SERVER",
+              &create_my_model<jinq::server::Base64Input, Output>,
+              &jinq::server::response::fill_my_task},
+    };
+    return entries;
+}
+```
+
+`factory::cv_catalog::create_server(catalog(), "MY_MODEL", server_name)` does
+the rest: it registers the creator in `ServerFactory<BaseAiServer>` and builds
+the generic `CvModelServer<Output>`.
+
+Two shapes exist on purpose:
+
+- [`factory/cv_catalog.h`](../src/factory/cv_catalog.h) - models mounted on the
+  generic CV server (`CvModelEntry<OUTPUT>` carries the worker creator and the
+  response filler).
+- [`factory/model_catalog.h`](../src/factory/model_catalog.h) - model families
+  consumed directly by benchmarks and pipelines, which have no HTTP surface yet
+  (CLIP, SAM predictor, FastSAM).
+
+If a task has more than one output contract, split it into one typed catalog
+per contract instead of type-erasing the list - see `catalog()` and
+`face_catalog()` in [`obj_detection_task.h`](../src/factory/obj_detection_task.h).
+
+`test/model_catalog_unittest.cc` fails the build when a catalog row references a
+TOML section or `model_config_file_path` that does not exist, or when the model
+or server section is duplicated across tasks.
 
 ## Step 5: Verify
 

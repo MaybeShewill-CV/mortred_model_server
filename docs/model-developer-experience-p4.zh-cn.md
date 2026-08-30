@@ -346,6 +346,28 @@ test/model_catalog_unittest.cc
 - creator 可创建对象；
 - catalog 覆盖现有 factory 暴露模型。
 
+**Phase 2 落地结果（as-built）**
+
+实际实现比原方案更克制，避免为单一形态造抽象：
+
+```text
+src/models/catalog/model_entry.h     # ModelEntry / ServedModelEntry + 校验函数
+src/factory/cv_catalog.h             # CvModelEntry<OUTPUT> + create_server
+src/factory/model_catalog.h          # ModelCatalogEntry<INPUT, OUTPUT> + create_model
+src/factory/<task>_task.h            # 每个任务自己的 catalog()，全部 header-only
+```
+
+- catalog 是任务内的 `inline catalog()` 函数，不拆成独立 `.cpp`，也没有全局静态注册。
+- `ModelEntry` 只保留 `model_section + display_name`；`ServedModelEntry` 再加
+  `server_section`；`CvModelEntry<OUTPUT>` 再加 worker creator 与 response filler。
+  没有引入 `task` 字符串、`ModelCreator` 类型擦除或 `ResponseSerializerKind` 枚举。
+- 没有 HTTP 面的模型族（CLIP、SAM predictor、FastSAM）用 `ModelCatalogEntry`，
+  不强行补 server section。
+- object detection / face detection 输出契约不同，拆成 `catalog()` 与 `face_catalog()`。
+- diffusion 4 个 sampler 共用 base64 adapter，统一挂到通用 CV server。
+- `test/model_catalog_unittest.cc` 额外校验 server TOML 中的
+  `model_config_file_path` 指向的文件真实存在，并实际构造 `CvModelServer<OUTPUT>`。
+
 **Phase 2 验收**
 
 - 新增普通模型只需一个 catalog entry；
