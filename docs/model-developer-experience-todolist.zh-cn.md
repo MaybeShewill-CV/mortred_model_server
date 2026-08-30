@@ -16,7 +16,7 @@
 | Phase 5 测试注册化 | 已完成 |
 | Phase 6 模型族迁移 | 已完成 |
 | Phase 7 多 Session 模板 | 已完成 |
-| Phase 8 文档与引导 | 未开始 |
+| Phase 8 文档与引导 | 已完成 |
 
 ## 准备工作
 
@@ -303,6 +303,17 @@
 - [ ] 新增 golden 编写指南
 - [ ] 新增 shape / dtype 排查指南
 - [ ] 更新 README 双语入口
+
+
+> Phase 8 落地说明：
+> - 新增 `docs/model-developer-guide.md`，覆盖六个任务路径：分类模型 10 分钟接入、
+>   detection 模型 10 分钟接入、output contract 编写、golden 补齐、零漂移证明、
+>   shape/dtype 排查，以及「何时不应使用公共 helper」的边界表。
+> - `docs/how_to_add_new_model.md` 补充 runtime toolkit（ImagePipeline /
+>   OutputReader / SessionIoValidator）与 MultiSessionModel 的引用。
+> - README 中英文都加入开发者指南入口。
+> - 指南末尾明确记录当前状态与三个 golden 覆盖缺口（depth / lightglue / LDM）。
+> - 两项刻意未勾选：旧版中文教程与 governance 文档，理由已标注。
 
 ## 总验收
 
