@@ -87,6 +87,8 @@ and must not be relied upon.
 
 ## Naming conventions
 
+- Model IO contracts live in `src/models/io/`, one header per task; `src/models/model_io_define.h` is a compatibility aggregate kept as a pure
+  include list. New code should include the task header it needs.
 - The canonical diffusion model directory is `src/models/diffusion/`. The historical
   misspelled directory name (diffussion) has been removed; all code should use
   `src/models/diffusion/`.

@@ -12,7 +12,7 @@
 | Phase 1 Runtime Toolkit | 已完成 |
 | Phase 2 Model Catalog | 已完成 |
 | Phase 3 Scaffolder | 已完成 |
-| Phase 4 IO 拆分 | 未开始 |
+| Phase 4 IO 拆分 | 已完成 |
 | Phase 5 测试注册化 | 未开始 |
 | Phase 6 模型族迁移 | 未开始 |
 | Phase 7 多 Session 模板 | 未开始 |
@@ -140,20 +140,34 @@
 
 ## Phase 4：IO 拆分
 
-- [ ] 拆分 common input
-- [ ] 拆分 classification IO
-- [ ] 拆分 object detection / face detection IO
-- [ ] 拆分 scene segmentation IO
-- [ ] 拆分 OCR IO
-- [ ] 拆分 matting IO
-- [ ] 拆分 enhancement IO
-- [ ] 拆分 feature point IO
-- [ ] 拆分 depth IO
-- [ ] 拆分 CLIP IO
-- [ ] 拆分 SAM IO
-- [ ] 拆分 diffusion IO
-- [ ] 保留 `model_io_define.h` 兼容聚合头
-- [ ] 验证编译依赖与编译时间变化
+- [x] 拆分 common input
+- [x] 拆分 classification IO
+- [x] 拆分 object detection / face detection IO
+- [x] 拆分 scene segmentation IO
+- [x] 拆分 OCR IO
+- [x] 拆分 matting IO
+- [x] 拆分 enhancement IO
+- [x] 拆分 feature point IO
+- [x] 拆分 depth IO
+- [x] 拆分 CLIP IO
+- [x] 拆分 SAM IO
+- [x] 拆分 diffusion IO
+- [x] 保留 `model_io_define.h` 兼容聚合头
+- [x] 验证编译依赖与编译时间变化
+
+
+> Phase 4 落地说明：
+> - 文件后缀跟随仓库习惯用 `.h`，不是原方案里的 `.hpp`。
+> - **最大收益来自 `opencv2/opencv.hpp` → `opencv2/core.hpp`**，而不是拆目录本身：
+>   IO 头的预处理行数 132,034 → 93,223（-29.5%），头文件 333 → 270（-19%），
+>   只 include IO 头的叶子 TU 编译 2.23s → 1.25s（-44%，3 次取中位）。
+> - `models` 库目标本身没有可测变化（18.6s → 19.2s，噪声范围内）：它的 .cpp
+>   本来就拉 MNN/TRT 等更重的依赖。收益体现在只依赖 IO 类型的 TU 上。
+> - 拆目录的即时价值是**所有权隔离**：改一个任务的 IO 类型不再需要动 254 行的
+>   单体头；长期价值要等调用方逐步迁离聚合头后才会体现在增量编译上。
+> - 聚合头 `model_io_define.h` 保留且 guard 不变，59 个调用方零改动；
+>   `check_consistency.py` 禁止向聚合头回填类型定义，也禁止 IO 头使用 opencv.hpp。
+> - 顺手修正了原文件里 `matting` namespace 错误的闭合注释（写成 scene_segmentation）。
 
 ## Phase 5：测试注册化
 

@@ -475,6 +475,52 @@ src/models/io/diffusion.hpp
 
 保留兼容聚合头 `model_io_define.h`。
 
+**Phase 4 落地结果（as-built）**
+
+```text
+src/models/io/
+├── common_input.h          # mat_input / file_input / base64_input / pair_mat_input
+├── classification.h
+├── object_detection.h      # bbox + face_bbox（对应 catalog 与 face_catalog 两个输出契约）
+├── scene_segmentation.h
+├── ocr.h
+├── matting.h
+├── enhancement.h
+├── feature_point.h
+├── mono_depth_estimation.h
+├── clip.h
+├── segment_anything.h
+└── diffusion.h
+
+src/models/model_io_define.h   # 纯聚合：12 行 #include，guard 不变
+```
+
+与原方案的差异：
+
+- **文件后缀用 `.h`**，跟随 `src/models` 现有习惯，不用 `.hpp`。
+- **先做收益最大的一步并独立测量**：把 `opencv2/opencv.hpp` 收窄为
+  `opencv2/core.hpp`。IO 类型只需要 `Mat / Rect / Rect2f / Point2f / Size`，全部在 core。
+- **拆分是纯文本搬移**，namespace 路径、类型名、字段一概不变；
+  顺手修正 matting namespace 错误的闭合注释。
+- **不迁移 59 个调用方**：聚合头继续工作，新代码（含脚手架）直接用任务级 IO 头。
+- **防漂移**：`check_consistency.py` 第 13 条规则要求聚合头只允许
+  `#include "models/io/*.h"`（禁止回填类型），IO 头禁止使用 opencv.hpp。
+- `templates/model/tasks.json` 新增 `io_header` 字段，脚手架生成的新模型
+  直接 include 自己的任务 IO 头。
+
+**实测数据（WSL / GCC 11 / -O2）**
+
+| 指标 | 改造前 | 改造后 | 变化 |
+|---|---:|---:|---:|
+| 只 include IO 头的 TU：头文件数 | 333 | 270 | -19% |
+| 只 include IO 头的 TU：预处理行数 | 132,034 | 93,223 | **-29.5%** |
+| 只 include IO 头的 TU：编译耗时（3 次中位） | 2.23 s | 1.25 s | **-44%** |
+| `models` 库目标 clean build | 18.6 s | 19.2 s | 噪声范围内 |
+
+结论：`models` 库自身无可测变化（它的 .cpp 本来就拉 MNN/TRT 等更重的依赖），
+收益集中在**只依赖 IO 类型的叶子 TU** 上；拆目录的即时价值是所有权隔离，
+增量编译收益要等调用方逐步迁离聚合头之后才会出现。
+
 **Phase 4 验收**
 
 - 旧 include 路径不变；

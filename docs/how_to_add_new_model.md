@@ -39,10 +39,14 @@ dynamic shape handling, host/device copies) lives in
 
 ## Step 1: Pick the IO types
 
-Input types live in [model_io_define.h](../src/models/model_io_define.h).
-`mat_input`, `file_input` and `base64_input` are loadable images and work with
-the default `prepare_inputs` path. Task default outputs (`std_*_output`) are the
-recommended choice.
+IO types live in [src/models/io/](../src/models/io), one header per task.
+`common_input.h` holds the shared inputs (`mat_input`, `file_input`,
+`base64_input`, `pair_mat_input`) and each task header holds its own
+`std_*_output`. Include only the task header you need - the old
+[model_io_define.h](../src/models/model_io_define.h) still works but is a
+compatibility aggregate that pulls in every task. The loadable image inputs
+work with the default `prepare_inputs` path; task default outputs
+(`std_*_output`) are the recommended choice.
 
 ## Step 2: Write the model class
 
