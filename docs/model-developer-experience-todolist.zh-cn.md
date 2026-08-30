@@ -267,6 +267,31 @@
 > - 剩余：lightglue、SAM prompt、LDM、SAM AMG（AMG 的 8 个 decoder 需要先确认
 >   是"多 session"还是"批量单 session"，不适合就明确保留手写）。
 
+
+> **Phase 7 收尾结论（LDM 评估后）**：
+>
+> LDM **不迁移**，理由是结构性的，不是实现细节：
+>
+> 1. `LDMSampler` 继承 `BaseAiModel` 而非 `BackendCvModel`，而
+>    `MultiSessionModel` 派生自 `BackendCvModel`；迁移要先改基类。
+> 2. session 不是通过自身 section 的 `<key>_backend` 子表创建，而是从
+>    **两个外部 TOML 文件**（`latent_diffusion_cfg` / `vae_decoder_cfg`）加载。
+> 3. **决定性障碍**：DDIM 和 DDPM 是共享同一个 `shared_ptr<LatentDenoiseModel>`
+>    的两个调度器——一个 session 被两条编排路径共用，与「每个命名引擎一个
+>    session」正好相反。
+> 4. 子模型（`DDPMUNet` / `AutoEncoderKL`）本身已是完整的 `BackendCvModel`，
+>    各自通过自己的 `[DDPM_UNET].backend` / `[AUTOENCODER_KL].backend` 持有 session。
+>
+> LDM 是「多个独立模型的组合」，不是「一个多引擎模型」。强行套模板需要改基类、
+> 重构配置加载、并破坏共享 UNet 的设计。且 LDM 没有 golden 用例，无零漂移兜底。
+>
+> **Phase 7 最终状态**：
+> - ✅ CLIP、lightglue、SamPredictor 迁移到 `MultiSessionModel`
+> - ⛔ SamAutoMaskGenerator（session 池 + Workflow 并发）、LDM（共享 UNet 的模型组合）
+>   明确保留，理由均已记录
+> - 两个「保留」案例说明 `MultiSessionModel` 的边界是清晰的：它解决的是
+>   **固定数量、各自独立、按名索引**的多引擎生命周期，不是并发池也不是模型组合
+
 ## Phase 8：文档与引导
 
 - [ ] 更新 `docs/how_to_add_new_model.md`
