@@ -209,7 +209,7 @@
 - [x] scene segmentation
 - [x] enhancement
 - [x] OCR
-- [ ] object detection
+- [x] object detection
 - [ ] feature point
 - [x] depth
 - [ ] FastSAM
