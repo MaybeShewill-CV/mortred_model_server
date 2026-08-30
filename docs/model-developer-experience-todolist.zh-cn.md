@@ -11,7 +11,7 @@
 | Phase 0 基线与度量 | 已完成 |
 | Phase 1 Runtime Toolkit | 已完成 |
 | Phase 2 Model Catalog | 已完成 |
-| Phase 3 Scaffolder | 未开始 |
+| Phase 3 Scaffolder | 已完成 |
 | Phase 4 IO 拆分 | 未开始 |
 | Phase 5 测试注册化 | 未开始 |
 | Phase 6 模型族迁移 | 未开始 |
@@ -112,19 +112,31 @@
 
 ## Phase 3：Scaffolder
 
-- [ ] 新增 `scripts/new_model.py`
-- [ ] 新增模型头文件模板
-- [ ] 新增模型实现模板
-- [ ] 新增 TOML 配置模板
-- [ ] 新增 output contract test 模板
-- [ ] 新增模型文档模板
-- [ ] 支持 `--dry-run`
-- [ ] 支持 `--force`
-- [ ] 支持 `--list-tasks`
-- [ ] 生成 catalog entry 提示
-- [ ] 生成 golden 占位提示
-- [ ] 脚手架自测
-- [ ] 生成后 tests-only 编译验证
+- [x] 新增 `scripts/new_model.py`
+- [x] 新增模型头文件模板
+- [x] 新增模型实现模板
+- [x] 新增 TOML 配置模板
+- [x] 新增 output contract test 模板
+- [x] 新增模型文档模板
+- [x] 支持 `--dry-run`
+- [x] 支持 `--force`
+- [x] 支持 `--list-tasks`
+- [x] 生成 catalog entry 提示
+- [x] 生成 golden 占位提示
+- [x] 脚手架自测
+- [x] 生成后 tests-only 编译验证
+
+
+> Phase 3 落地说明：
+> - CLI 精简为 `--task/--name/--class/--backend/--dry-run/--force/--list-tasks/--check`，
+>   去掉了原方案里的 `--family` 与 `--input`：输出契约来自 tasks.json，输入在 server 层固定。
+> - 防漂移检查放在 `scripts/check_consistency.py` 而不是 C++ 测试里：它本质是对源码文本的
+>   一致性校验，归 repo consistency checker 管，比在 gtest 里做字符串匹配更合适。
+> - 脚手架绝不改共享文件（catalog / test CMake / golden test），只打印要粘贴的片段，
+>   避免 `--force` 生成出人意料的 diff。
+> - `src/models/object_detection/rtdetr_detector.*` 是留存的生成样例，同时充当
+>   模板可编译性的长期哨兵；它不在任何 catalog 里，因此不可能被误启动。
+> - 新增 `MODEL_NOT_IMPLEMENTED`（wire code 7）让未实现的模型显式失败而不是伪装成契约错误。
 
 ## Phase 4：IO 拆分
 

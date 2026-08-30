@@ -414,6 +414,35 @@ python scripts/new_model.py \
 9. 模型文档骨架；
 10. 验证命令。
 
+**Phase 3 落地结果（as-built）**
+
+```text
+scripts/new_model.py                    # CLI + 模板渲染 + 自测
+templates/model/model_header.h.in
+templates/model/model_impl.inl.in
+templates/model/model_config.toml.in
+templates/model/output_contract_unittest.cc.in
+templates/model/model_readme.md.in
+templates/model/tasks.json              # 任务元数据表
+```
+
+与原方案的差异：
+
+- **CLI 更小**：`--task --name --class --backend --dry-run --force --list-tasks --check`。
+  删掉 `--family`（与 `--name` 重复）和 `--input`（server 层固定 `base64_input`），
+  `--output` 由 tasks.json 按任务给出。
+- **模板按输出契约而非模型族区分**，只有一套模板 + 一张任务表，不会随模型数量增长。
+- **tasks.json 防漂移检查放在 `check_consistency.py`**（第 11/12 条规则）而不是 gtest：
+  这是对源码文本的一致性校验，语义上属于 repo consistency checker。
+  校验 model_dir / io_namespace / output_type / catalog_header / catalog_function /
+  response_filler 全部真实存在，且 model-only 任务不得声明 server_section_suffix。
+- **脚手架不改共享文件**，只打印 catalog entry、test target 注册和 golden 占位三段片段。
+  `--force` 也只覆盖脚手架自己生成的五个文件。
+- **新增 `MODEL_NOT_IMPLEMENTED`（wire code 7）**：未实现的钩子显式失败，
+  生成的 contract test 断言它，因此脚手架从生成那一刻起就是绿色且可编译的。
+- **`rtdetr_detector` 作为留存样例**：`--check` 验证渲染行为，
+  `rtdetr_detector_output_contract_unittest` 验证生成的 C++ 真的能编译并实例化。
+
 **Phase 3 验收**
 
 - 生成后的 tests-only 编译可通过；
