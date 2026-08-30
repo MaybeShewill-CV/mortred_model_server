@@ -1,0 +1,107 @@
+{
+  "_comment": [
+    "Task metadata used by scripts/new_model.py. Every field is cross-checked",
+    "against the real sources by scripts/check_consistency.py so the scaffolder",
+    "cannot drift away from the C++ catalogs in src/factory/*_task.h."
+  ],
+  "tasks": {
+    "classification": {
+      "model_dir": "classification",
+      "io_namespace": "classification",
+      "output_type": "std_classification_output",
+      "response_filler": "fill_classification",
+      "catalog_header": "factory/classification_task.h",
+      "catalog_function": "catalog",
+      "server_section_suffix": "_CLASSIFICATION_SERVER",
+      "default_backend": "mnn"
+    },
+    "object_detection": {
+      "model_dir": "object_detection",
+      "io_namespace": "object_detection",
+      "output_type": "std_object_detection_output",
+      "response_filler": "fill_object_detection",
+      "catalog_header": "factory/obj_detection_task.h",
+      "catalog_function": "catalog",
+      "server_section_suffix": "_DETECTION_SERVER",
+      "default_backend": "tensorrt"
+    },
+    "scene_segmentation": {
+      "model_dir": "scene_segmentation",
+      "io_namespace": "scene_segmentation",
+      "output_type": "std_scene_segmentation_output",
+      "response_filler": "fill_scene_segmentation",
+      "catalog_header": "factory/scene_segmentation_task.h",
+      "catalog_function": "catalog",
+      "server_section_suffix": "_SERVER",
+      "default_backend": "mnn"
+    },
+    "ocr": {
+      "model_dir": "ocr",
+      "io_namespace": "ocr",
+      "output_type": "std_text_regions_output",
+      "response_filler": "fill_text_regions",
+      "catalog_header": "factory/ocr_task.h",
+      "catalog_function": "catalog",
+      "server_section_suffix": "_SERVER",
+      "default_backend": "mnn"
+    },
+    "matting": {
+      "model_dir": "matting",
+      "io_namespace": "matting",
+      "output_type": "std_matting_output",
+      "response_filler": "fill_matting",
+      "catalog_header": "factory/matting_task.h",
+      "catalog_function": "catalog",
+      "server_section_suffix": "_SERVER",
+      "default_backend": "mnn"
+    },
+    "enhancement": {
+      "model_dir": "enhancement",
+      "io_namespace": "enhancement",
+      "output_type": "std_enhancement_output",
+      "response_filler": "fill_enhancement",
+      "catalog_header": "factory/enhancement_task.h",
+      "catalog_function": "catalog",
+      "server_section_suffix": "_SERVER",
+      "default_backend": "mnn"
+    },
+    "feature_point": {
+      "model_dir": "feature_point",
+      "io_namespace": "feature_point",
+      "output_type": "std_feature_point_output",
+      "response_filler": "fill_feature_points",
+      "catalog_header": "factory/feature_point_task.h",
+      "catalog_function": "catalog",
+      "server_section_suffix": "_FP_SERVER",
+      "default_backend": "mnn"
+    },
+    "mono_depth_estimation": {
+      "model_dir": "mono_depth_estimation",
+      "io_namespace": "mono_depth_estimation",
+      "output_type": "std_mde_output",
+      "response_filler": "fill_depth_estimation",
+      "catalog_header": "factory/mono_depth_estimate_task.h",
+      "catalog_function": "catalog",
+      "server_section_suffix": "_ESTIMATION_SERVER",
+      "default_backend": "mnn"
+    },
+    "clip": {
+      "model_dir": "clip",
+      "io_namespace": "clip",
+      "output_type": "clip_output",
+      "catalog_header": "factory/clip_task.h",
+      "catalog_function": "catalog",
+      "default_backend": "mnn"
+    },
+    "segment_anything": {
+      "model_dir": "segment_anything",
+      "io_namespace": "segment_anything",
+      "output_type": "std_sam_amg_output",
+      "response_filler": "fill_sam_amg",
+      "catalog_header": "factory/sam_task.h",
+      "catalog_function": "amg_catalog",
+      "server_section_suffix": "_SERVER",
+      "default_backend": "tensorrt"
+    }
+  }
+}

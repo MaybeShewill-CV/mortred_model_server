@@ -1,5 +1,26 @@
 # How To Add New Model (Unified Backend Layer)
 
+## Step 0: Scaffold the boring parts (recommended)
+
+```bash
+python scripts/new_model.py --list-tasks
+python scripts/new_model.py --task object_detection --name rtdetr \
+    --class RtdetrDetector --backend tensorrt --dry-run
+python scripts/new_model.py --task object_detection --name rtdetr \
+    --class RtdetrDetector --backend tensorrt
+```
+
+This generates the header, the `.inl`, the TOML config, an output contract
+test and a README, and prints the registration snippets it deliberately does
+not apply for you (catalog entry, test target, golden case). The scaffold
+compiles immediately; every unimplemented hook returns
+`MODEL_NOT_IMPLEMENTED`, so a half-finished model can never be served by
+accident. `src/models/object_detection/rtdetr_detector.*` is a checked-in
+example of exactly this output and doubles as the canary that keeps the
+templates compilable.
+
+The rest of this document explains what the scaffold leaves for you to write.
+
 All CV models now inherit from
 [`jinq::models::BackendCvModel<INPUT, OUTPUT>`](../src/models/backend/backend_cv_model.h).
 The base class implements the full lifecycle:

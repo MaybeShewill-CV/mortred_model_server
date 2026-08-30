@@ -1,0 +1,11 @@
+[{{SECTION}}]
+
+[{{SECTION}}.backend]
+type = "{{BACKEND}}"
+model_file_path = "../weights/{{MODEL_DIR}}/{{NAME}}/{{NAME}}.{{WEIGHT_EXT}}"
+device = "{{DEVICE}}"
+{{BACKEND_EXTRA}}
+[{{SECTION}}.params]
+# TODO(new_model): declare the model specific keys here and read them in
+# {{CLASS_NAME}}::on_init(). Unknown keys can be rejected with
+# ParamReader::allow_only_keys().

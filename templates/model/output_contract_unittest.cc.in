@@ -1,0 +1,45 @@
+#include <gtest/gtest.h>
+
+#include <vector>
+
+#include "models/backend/inference_context.h"
+#include "models/backend/tensor.h"
+#include "models/model_io_define.h"
+#include "models/{{MODEL_DIR}}/{{FILE_BASE}}.h"
+
+using jinq::common::StatusCode;
+using jinq::models::backend::InferenceContext;
+using jinq::models::backend::NamedTensor;
+using jinq::models::io_define::common_io::mat_input;
+using jinq::models::io_define::{{IO_NAMESPACE}}::{{OUTPUT_TYPE}};
+using jinq::models::{{IO_NAMESPACE}}::{{CLASS_NAME}};
+
+namespace {
+
+// test-only subclass exposing the protected postprocess hook
+class Test{{CLASS_NAME}} : public {{CLASS_NAME}}<mat_input, {{OUTPUT_TYPE}}> {
+  public:
+    using {{CLASS_NAME}}<mat_input, {{OUTPUT_TYPE}}>::postprocess;
+};
+
+InferenceContext test_context() {
+    InferenceContext context;
+    context.source_size = cv::Size(20, 20);
+    context.network_size = cv::Size(10, 10);
+    return context;
+}
+
+} // namespace
+
+// the scaffold must fail loudly while the model is unimplemented; flip the
+// expectation once a real decoder exists and assert decoded values instead
+TEST({{CLASS_NAME}}OutputContract, UnimplementedPostprocessFailsExplicitly) {
+    Test{{CLASS_NAME}} model;
+
+    const std::vector<NamedTensor> outputs;
+    {{OUTPUT_TYPE}} result;
+    EXPECT_EQ(model.postprocess(outputs, test_context(), result), StatusCode::MODEL_NOT_IMPLEMENTED);
+}
+
+// TODO(new_model): replace the test above with a real output fixture and assert
+// the decoded values. Reference: test/object_detection_output_contract_unittest.cc

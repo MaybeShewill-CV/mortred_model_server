@@ -13,6 +13,7 @@ generated executables, configuration files, and documentation.
 | `demo_data/` | Small sample images used by tutorials/benchmarks | Yes |
 | `test/` | Unit tests and golden test data | Yes |
 | `scripts/` | Build/dependency/test helper scripts | Yes |
+| `templates/` | Source templates consumed by `scripts/new_model.py` | Yes |
 | `resources/` | README images and static assets | Yes |
 | `3rd_party/` | Vendored third-party headers/libs, populated by `scripts/setup_full_deps.sh` | No (generated/fetched) |
 | `_bin/` | CMake executable output directory | No (ignored) |
