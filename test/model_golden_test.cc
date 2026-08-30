@@ -203,7 +203,9 @@ GOLDEN_ENHANCEMENT_CASE(attentivegan_enhancement, "conf/model/enhancement/attent
                         jinq::factory::enhancement::create_attentivegan_enhancementor, std_enhancement_output);
 
 GOLDEN_ENHANCEMENT_CASE(realesrgan_enhancement, "conf/model/enhancement/real_esrgan/real_esrgan.toml",
-                        "demo_data/model_test_input/enhancement/real_esr/wolf_gray.jpg",
+                        // colour input: a grayscale image cannot detect a BGR/RGB
+                        // channel-order regression, because R == G == B there
+                        "demo_data/model_test_input/enhancement/real_esr/test.JPG",
                         jinq::factory::enhancement::create_realesrgan_enhancementor, std_enhancement_output);
 
 GOLDEN_KEYPOINT_CASE(superpoint_feature_point, "conf/model/feature_point/superpoint/superpoint_config.toml",
