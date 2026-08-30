@@ -62,6 +62,20 @@ ImagePipeline &ImagePipeline::bgra_to_rgb() {
     return *this;
 }
 
+ImagePipeline &ImagePipeline::bgr_to_gray() {
+    if (status_ != StatusCode::OK) {
+        return *this;
+    }
+    if (image_.channels() != 3) {
+        set_error(status_, error_, invalid_image("bgr_to_gray", "expected a 3-channel image"));
+        return *this;
+    }
+    cv::Mat converted;
+    cv::cvtColor(image_, converted, cv::COLOR_BGR2GRAY);
+    image_ = std::move(converted);
+    return *this;
+}
+
 ImagePipeline &ImagePipeline::rgb_to_bgr() {
     if (status_ != StatusCode::OK) {
         return *this;

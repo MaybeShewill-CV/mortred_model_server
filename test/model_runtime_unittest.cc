@@ -113,6 +113,24 @@ TEST(ImagePipeline, ConvertsBgraToRgbAndRejectsOtherChannelCounts) {
     EXPECT_EQ(bad_channels.status, StatusCode::MODEL_EMPTY_INPUT_IMAGE);
 }
 
+TEST(ImagePipeline, ConvertsBgrToGray) {
+    // BT.601 luma of BGR(1,2,3) is 1.815, which cv::COLOR_BGR2GRAY rounds to 2
+    // because the source is 8-bit
+    const cv::Mat source(2, 2, CV_8UC3, cv::Scalar(1, 2, 3));
+    auto result = ImagePipeline(source).bgr_to_gray().to_float().nchw("input");
+    ASSERT_TRUE(result.ok()) << result.error;
+    EXPECT_EQ(result.value.tensor.shape, std::vector<int64_t>({1, 1, 2, 2}));
+
+    const auto *data = reinterpret_cast<const float *>(result.value.tensor.buffer.data());
+    for (int idx = 0; idx < 4; ++idx) {
+        EXPECT_FLOAT_EQ(data[idx], 2.0f);
+    }
+
+    const cv::Mat gray(2, 2, CV_8UC1);
+    const auto bad_channels = ImagePipeline(gray).bgr_to_gray().nchw("input");
+    ASSERT_FALSE(bad_channels.ok());
+}
+
 TEST(ImagePipeline, SupportsCenterCropAndRejectsInvalidOperations) {
     const cv::Mat source(4, 4, CV_8UC3, cv::Scalar(1, 2, 3));
     auto cropped = ImagePipeline(source).center_crop({2, 2}).to_float().nchw("images");

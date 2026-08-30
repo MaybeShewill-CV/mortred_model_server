@@ -51,6 +51,7 @@ class ImagePipeline {
     ImagePipeline &bgr_to_rgb();
     ImagePipeline &rgb_to_bgr();
     ImagePipeline &bgra_to_rgb();
+    ImagePipeline &bgr_to_gray();
     ImagePipeline &resize(const cv::Size &size);
     ImagePipeline &center_crop(const cv::Size &size);
     ImagePipeline &to_float();
