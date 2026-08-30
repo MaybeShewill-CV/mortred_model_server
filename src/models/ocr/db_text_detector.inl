@@ -14,6 +14,7 @@
 
 #include "common/cv_utils.h"
 #include "models/backend/f32_output.h"
+#include "models/backend/model_runtime.h"
 #include "models/backend/request_geometry.h"
 
 namespace jinq {
@@ -80,28 +81,18 @@ template <typename INPUT, typename OUTPUT> StatusCode DBTextDetector<INPUT, OUTP
 }
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> DBTextDetector<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
-    // resize image
-    cv::Mat tmp;
-    cv::resize(input_image, tmp, _m_input_size_host);
-
-    // normalize
-    if (tmp.type() != CV_32FC3) {
-        tmp.convertTo(tmp, CV_32FC3);
-    }
-    tmp /= 255.0;
-    cv::subtract(tmp, cv::Scalar(0.485, 0.456, 0.406), tmp);
-    cv::divide(tmp, cv::Scalar(0.229, 0.224, 0.225), tmp);
-
-    const auto input_chw_image_data = CvUtils::convert_to_chw_vec(tmp);
-    NamedTensor named;
-    named.name = _m_input_name;
-    named.tensor = Tensor::make<float>({1, 3, _m_input_size_host.height, _m_input_size_host.width});
-    if (input_chw_image_data.size() * sizeof(float) != named.tensor.byte_size()) {
-        LOG(ERROR) << "preprocessed db text image size mismatches input tensor";
+    auto result = jinq::models::backend::ImagePipeline(input_image)
+                      .resize(_m_input_size_host)
+                      .to_float()
+                      .scale(1.0f / 255.0f)
+                      .subtract({0.485f, 0.456f, 0.406f})
+                      .divide({0.229f, 0.224f, 0.225f})
+                      .nchw(_m_input_name);
+    if (!result.ok()) {
+        LOG(ERROR) << result.error;
         return {};
     }
-    std::memcpy(named.tensor.buffer.data(), input_chw_image_data.data(), named.tensor.byte_size());
-    return {std::move(named)};
+    return {std::move(result.value)};
 }
 
 template <typename INPUT, typename OUTPUT>

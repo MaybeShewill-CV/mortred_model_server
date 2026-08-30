@@ -1,17 +1,13 @@
-#!/ usr / bin / env python3
-""
-    "Golden zero-drift guard.
+#!/usr/bin/env python3
+"""Golden zero-drift guard.
 
-    Records the golden case names and the sha256 of every baseline file under test /
-    golden /
-    , and verifies them later.A green test suite only proves the model still works; identical hashes prove the numbers did not change by a
-single bit.
+A green test suite only proves the model still works; identical sha256 hashes
+prove the numbers did not change by a single bit. This script records the
+golden case names and the hash of every baseline file under test/golden/, and
+verifies them later, so a migration can prove it changed nothing.
 
     python scripts/golden_drift_check.py --record   # write the baseline
     python scripts/golden_drift_check.py --check    # verify against it
-
-The baseline file is meant to be committed next to a migration so the check
-can be replayed in CI or by a reviewer.
 """
 
 from __future__ import annotations
@@ -35,7 +31,12 @@ def collect() -> dict:
     for path in sorted((TEST / "golden").iterdir()):
         if path.is_file():
             golden[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
-    return {"case_count": len(names), "case_names": names, "golden_count": len(golden), "golden_sha256": golden}
+    return {
+        "case_count": len(names),
+        "case_names": names,
+        "golden_count": len(golden),
+        "golden_sha256": golden,
+    }
 
 
 def main() -> int:
