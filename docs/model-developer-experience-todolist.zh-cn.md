@@ -14,8 +14,8 @@
 | Phase 3 Scaffolder | 已完成 |
 | Phase 4 IO 拆分 | 已完成 |
 | Phase 5 测试注册化 | 已完成 |
-| Phase 6 模型族迁移 | 未开始 |
-| Phase 7 多 Session 模板 | 未开始 |
+| Phase 6 模型族迁移 | 已完成 |
+| Phase 7 多 Session 模板 | 已完成 |
 | Phase 8 文档与引导 | 未开始 |
 
 ## 准备工作
