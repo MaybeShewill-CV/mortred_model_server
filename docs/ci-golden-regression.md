@@ -23,6 +23,7 @@ maintainer-owned runner.
 | OS | Ubuntu 22.04 LTS |
 | NVIDIA driver | >= 535.x |
 | CUDA / TensorRT | 11.8 / 8.6.1 - must match the versions vendored under `3rd_party/` |
+| System packages | OpenCV, glog, Eigen3, GTest, CMake, curl, tar, jq |
 | Runner labels | `self-hosted`, `X64`, `gpu` |
 | Concurrency | Register exactly one runner process per machine; jobs then serialize naturally instead of fighting over one GPU |
 
@@ -32,11 +33,14 @@ Both jobs expect the caches at `/opt/mortred-cache/` (create once per runner):
 
 ```
 /opt/mortred-cache/
-`-- weights/                 # Full runtime asset tree mirroring the gitignored
+|-- weights/                 # Full runtime asset tree mirroring the gitignored
                              # weights/ layout: ONNX sources AND the TRT engines
                              # matching this runner's GPU/TRT pair, e.g.
                              #   object_detection/yolov5/yolov5s.engine
                              #   classification/mobilenetv2/mobilenetv2.engine
+`-- 3rd_party/              # The output of scripts/install_deps.sh --all,
+                             # linked into the checkout after actions/checkout
+                             # cleans ignored directories.
 ```
 
 CI symlinks `weights` into this cache. Engines are GPU-architecture- and

@@ -708,10 +708,17 @@ jobs:
             echo "::error::runner cache missing: $CACHE/weights (see docs/ci-golden-regression.md)" >&2
             exit 1
           fi
+          if [ ! -d "$CACHE/3rd_party/include" ] || [ ! -d "$CACHE/3rd_party/libs" ]; then
+            echo "::error::runner cache missing: $CACHE/3rd_party (run scripts/install_deps.sh once)" >&2
+            exit 1
+          fi
           # weights is a symlink into the persistent cache, so engines built
           # by convert_trt_engines.sh land straight back into the cache and
           # stay warm across runs.
           ln -sfn "$CACHE/weights" "${{ github.workspace }}/weights"
+          # actions/checkout cleans ignored directories, so the vendored
+          # engine libraries must also live outside the repository workspace.
+          ln -sfn "$CACHE/3rd_party" "${{ github.workspace }}/3rd_party"
 
       # Build only what the golden binary needs (models lib + test), not the whole zoo.
       - name: Configure gpu profile (full build)
@@ -777,7 +784,12 @@ jobs:
             echo "::error::runner cache missing: $CACHE/weights (see docs/ci-golden-regression.md)" >&2
             exit 1
           fi
+          if [ ! -d "$CACHE/3rd_party/include" ] || [ ! -d "$CACHE/3rd_party/libs" ]; then
+            echo "::error::runner cache missing: $CACHE/3rd_party (run scripts/install_deps.sh once)" >&2
+            exit 1
+          fi
           ln -sfn "$CACHE/weights" "${{ github.workspace }}/weights"
+          ln -sfn "$CACHE/3rd_party" "${{ github.workspace }}/3rd_party"
 
       - name: Configure gpu profile (full build)
         run: >
