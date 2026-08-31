@@ -30,6 +30,7 @@ set(TEST_LIST
     base64_unittest
     file_path_util_unittest
     json_request_parser_unittest
+    request_envelope_unittest
     blocking_worker_queue_unittest
     status_code_unittest
     auth_token_unittest
