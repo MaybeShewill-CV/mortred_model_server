@@ -4,7 +4,7 @@
     "title": "Mortred Model Server API",
     "version": "1.0.0",
     "description": "Unified HTTP API for Mortred model servers. Model endpoints require `Authorization: Bearer <token>` when auth_token is configured. Request envelope: {req_id, images[], params, options}; response envelope: {status, status_str, task_id, model, results[], server_time_ms, partial}. The legacy img_data field was removed: it answers 422 with a migration hint.",
-    "x-contract-hash": "8b2fd36580f81f2f01bd922622e44371bb8be610cd0bd09166b63dad605f272d"
+    "x-contract-hash": "da2d5d5f06a55a1b3a79873306db8d4beb8bffd228a2cea2370f1f56dc7d4b6b"
   },
   "paths": {
     "/healthz": {
@@ -3986,12 +3986,30 @@
             "$ref": "#/components/schemas/OutputOptions"
           },
           "params": {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": false,
-            "description": "This model declares no request-level parameters"
+            "$ref": "#/components/schemas/Params_DBNET_SERVER"
           }
         }
+      },
+      "Params_DBNET_SERVER": {
+        "type": "object",
+        "properties": {
+          "score_threshold": {
+            "type": "number",
+            "format": "float",
+            "description": "text region confidence threshold",
+            "minimum": 0.1,
+            "maximum": 0.9
+          },
+          "top_k": {
+            "type": "integer",
+            "format": "int32",
+            "description": "keep at most k text regions",
+            "minimum": 1.0,
+            "maximum": 10000.0
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request-level parameter overrides (strict: unknown keys -> 422)"
       },
       "Request_DDIM_SERVER": {
         "type": "object",
@@ -4079,12 +4097,23 @@
             "$ref": "#/components/schemas/OutputOptions"
           },
           "params": {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": false,
-            "description": "This model declares no request-level parameters"
+            "$ref": "#/components/schemas/Params_DENSENET_CLASSIFICATION_SERVER"
           }
         }
+      },
+      "Params_DENSENET_CLASSIFICATION_SERVER": {
+        "type": "object",
+        "properties": {
+          "top_k": {
+            "type": "integer",
+            "format": "int32",
+            "description": "keep the k highest scores, descending",
+            "minimum": 1.0,
+            "maximum": 1000.0
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request-level parameter overrides (strict: unknown keys -> 422)"
       },
       "Request_DEPTH_ANYTHING_ESTIMATION_SERVER": {
         "type": "object",
@@ -4352,12 +4381,23 @@
             "$ref": "#/components/schemas/OutputOptions"
           },
           "params": {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": false,
-            "description": "This model declares no request-level parameters"
+            "$ref": "#/components/schemas/Params_MOBILENETV2_CLASSIFICATION_SERVER"
           }
         }
+      },
+      "Params_MOBILENETV2_CLASSIFICATION_SERVER": {
+        "type": "object",
+        "properties": {
+          "top_k": {
+            "type": "integer",
+            "format": "int32",
+            "description": "keep the k highest scores, descending",
+            "minimum": 1.0,
+            "maximum": 1000.0
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request-level parameter overrides (strict: unknown keys -> 422)"
       },
       "Request_MODNET_SERVER": {
         "type": "object",
@@ -4563,12 +4603,23 @@
             "$ref": "#/components/schemas/OutputOptions"
           },
           "params": {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": false,
-            "description": "This model declares no request-level parameters"
+            "$ref": "#/components/schemas/Params_RESNET_CLASSIFICATION_SERVER"
           }
         }
+      },
+      "Params_RESNET_CLASSIFICATION_SERVER": {
+        "type": "object",
+        "properties": {
+          "top_k": {
+            "type": "integer",
+            "format": "int32",
+            "description": "keep the k highest scores, descending",
+            "minimum": 1.0,
+            "maximum": 1000.0
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request-level parameter overrides (strict: unknown keys -> 422)"
       },
       "Request_SAM_AMG_SERVER": {
         "type": "object",
@@ -4625,12 +4676,30 @@
             "$ref": "#/components/schemas/OutputOptions"
           },
           "params": {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": false,
-            "description": "This model declares no request-level parameters"
+            "$ref": "#/components/schemas/Params_SUPERPOINT_FP_SERVER"
           }
         }
+      },
+      "Params_SUPERPOINT_FP_SERVER": {
+        "type": "object",
+        "properties": {
+          "score_threshold": {
+            "type": "number",
+            "format": "float",
+            "description": "interest point confidence threshold",
+            "minimum": 0.001,
+            "maximum": 1.0
+          },
+          "nms_radius": {
+            "type": "integer",
+            "format": "int32",
+            "description": "NMS suppression radius in pixels",
+            "minimum": 1.0,
+            "maximum": 50.0
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request-level parameter overrides (strict: unknown keys -> 422)"
       },
       "Request_YOLOV5_DETECTION_SERVER": {
         "type": "object",
