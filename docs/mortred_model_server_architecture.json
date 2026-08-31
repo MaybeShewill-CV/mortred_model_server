@@ -1,0 +1,249 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Mortred Model Server 项目架构",
+    "subtitle": "C++17 · Sogou Workflow HTTP · MNN / ONNX Runtime / TensorRT 多后端 CV 推理服务平台",
+    "locale": "zh-CN",
+    "output": "mortred_model_server_architecture.html",
+    "visual_preset": "blueprint",
+    "animation": "none",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/MaybeShewill-CV/mortred_model_server",
+      "revision": "9778a8a0642c0d11a57e5aa828ab7cc28bcd869e"
+    },
+    "views": [
+      {
+        "id": "data-plane",
+        "label": "数据面主链路",
+        "focus": ["clients", "gateway", "model_servers", "server_core", "exec", "models", "session", "engines"],
+        "note": "一条 base64 图片请求从网关到推理引擎的完整路径"
+      },
+      {
+        "id": "async-path",
+        "label": "长任务异步作业",
+        "focus": ["clients", "gateway", "model_servers", "server_core", "async_jobs", "exec"],
+        "note": "扩散模型 / SAM AMG 的 202 提交-轮询-取结果闭环"
+      },
+      {
+        "id": "control-plane",
+        "label": "控制面进程树",
+        "focus": ["supervisor", "gateway", "model_servers"],
+        "note": "supervisor 拉起并监督 gateway 与全部模型服务进程"
+      },
+      {
+        "id": "model-extension",
+        "label": "新增一个模型",
+        "focus": ["factory", "model_servers", "models", "session"],
+        "note": "任务目录登记 + BackendCvModel 三钩子 + 后端配置即接入"
+      }
+    ],
+    "viewBox": [1330, 880]
+  },
+  "components": [
+    {
+      "id": "clients",
+      "type": "external",
+      "label": "推理客户端",
+      "sublabel": "base64 JSON · CLI",
+      "pos": [30, 330],
+      "size": [150, 72],
+      "tag": "外部",
+      "sources": [
+        { "path": "src/common/json_request_parser.h", "label": "img_data/req_id 契约" },
+        { "path": "src/control/cli/cli_app.cpp", "label": "mortredctl" }
+      ]
+    },
+    {
+      "id": "gateway",
+      "type": "security",
+      "label": "mortred-gateway",
+      "sublabel": "数据面统一入口 :8080",
+      "pos": [240, 330],
+      "size": [200, 80],
+      "tag": "反向代理",
+      "sources": [
+        { "path": "src/control/gateway/gateway_app.cpp", "label": "URI 路由 + 上游转发" },
+        { "path": "src/control/api_key_manager.h", "label": "多租户 API Key" }
+      ]
+    },
+    {
+      "id": "supervisor",
+      "type": "backend",
+      "label": "mortred-supervisor",
+      "sublabel": "控制面 REST + Web UI",
+      "pos": [240, 560],
+      "size": [200, 84],
+      "tag": "进程管理 :8787",
+      "sources": [
+        { "path": "src/control/supervisor.h", "label": "fork/exec + 重启策略" },
+        { "path": "src/control/supervisor/supervisor_app.cpp", "label": "/api/v1 编排" }
+      ]
+    },
+    {
+      "id": "model_servers",
+      "type": "backend",
+      "label": "模型服务进程 ×27",
+      "sublabel": "每模型一个 loopback 进程",
+      "pos": [500, 330],
+      "size": [210, 84],
+      "tag": "CvModelServer<OUT>",
+      "sources": [
+        { "path": "src/server/generic_cv_server.h", "label": "注册表驱动通用服务" },
+        { "path": "src/apps/server/object_detection/yolov8_detection_server.cpp", "label": "薄 main 实例" }
+      ]
+    },
+    {
+      "id": "factory",
+      "type": "backend",
+      "label": "任务目录 + 双工厂",
+      "sublabel": "16 类 CV 任务类型化目录",
+      "pos": [500, 100],
+      "size": [210, 76],
+      "tag": "cv_catalog",
+      "sources": [
+        { "path": "src/factory/cv_catalog.h", "label": "CvModelEntry→工厂" },
+        { "path": "src/factory/base_factory.h", "label": "类型擦除工厂" }
+      ]
+    },
+    {
+      "id": "server_core",
+      "type": "backend",
+      "label": "BaseAiServerImpl 内核",
+      "sublabel": "鉴权·限流·背压·超时·指标",
+      "pos": [770, 330],
+      "size": [215, 90],
+      "tag": "同步推理管线",
+      "sources": [
+        { "path": "src/server/base_server_impl.h", "label": "serve_process 状态机" },
+        { "path": "src/server/prometheus_metrics.h", "label": "/metrics" }
+      ]
+    },
+    {
+      "id": "async_jobs",
+      "type": "messagebus",
+      "label": "异步作业 /jobs",
+      "sublabel": "作业台账 + 状态机",
+      "pos": [770, 560],
+      "size": [215, 90],
+      "tag": "长任务",
+      "sources": [
+        { "path": "src/server/async_job_table.h", "label": "TTL + LRU 台账" },
+        { "path": "src/factory/diffusion_model_adapter.h", "label": "扩散模型适配" }
+      ]
+    },
+    {
+      "id": "exec",
+      "type": "backend",
+      "label": "Worker 池 + 批处理",
+      "sublabel": "BlockingQueue + 动态批",
+      "pos": [1050, 120],
+      "size": [210, 82],
+      "tag": "执行调度",
+      "sources": [
+        { "path": "src/server/base_server_impl.h", "line": 1037, "label": "run_via_batch" },
+        { "path": "src/models/backend/backend_cv_model.h", "label": "run_image_batch" }
+      ]
+    },
+    {
+      "id": "models",
+      "type": "backend",
+      "label": "BackendCvModel 模型层",
+      "sublabel": "preprocess/postprocess 钩子",
+      "pos": [1050, 300],
+      "size": [215, 90],
+      "tag": "BaseAiModel<IN,OUT>",
+      "sources": [
+        { "path": "src/models/base_model.h", "label": "NVI 生命周期守卫" },
+        { "path": "src/models/object_detection/yolov8_detector.h", "label": "模型族示例" }
+      ]
+    },
+    {
+      "id": "session",
+      "type": "backend",
+      "label": "InferenceSession",
+      "sublabel": "NamedTensor · 动态 shape",
+      "pos": [1050, 560],
+      "size": [210, 82],
+      "tag": "后端无关抽象",
+      "sources": [
+        { "path": "src/models/backend/session.cpp", "label": "create() 分发" },
+        { "path": "src/models/backend/tensor.h", "label": "Tensor/DType" }
+      ]
+    },
+    {
+      "id": "engines",
+      "type": "cloud",
+      "label": "推理引擎",
+      "sublabel": "MNN · ORT · TensorRT",
+      "pos": [1050, 730],
+      "size": [210, 86],
+      "tag": "cpu / gpu profile",
+      "sources": [
+        { "path": "src/models/backend/mnn_session.h", "label": "MNN 会话" },
+        { "path": "src/models/backend/trt_session.h", "label": "TRT enqueueV3" }
+      ]
+    }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "mortred-supervisor 管理的进程树", "wraps": ["supervisor", "gateway", "model_servers"], "pad": 22 },
+    { "kind": "security-group", "label": "外部鉴权入口 :8080", "wraps": ["gateway"], "pad": 14 },
+    { "kind": "security-group", "label": "loopback + 内部 token", "wraps": ["model_servers"], "pad": 14 },
+    { "kind": "region", "label": "模型服务运行时", "wraps": ["server_core", "async_jobs"], "pad": 18 },
+    { "kind": "region", "label": "推理执行链", "wraps": ["exec", "models", "session", "engines"], "pad": 18 }
+  ],
+  "connections": [
+    { "from": "clients", "to": "gateway", "label": "POST /mortred_ai_server_v1/…", "variant": "emphasis", "labelDy": -104 },
+    { "from": "clients", "to": "supervisor", "label": "/api/v1 管理", "variant": "dashed", "fromSide": "bottom", "toSide": "left", "labelAt": [140, 490] },
+    { "from": "gateway", "to": "model_servers", "label": "按 server_uri 转发", "variant": "security", "labelDy": -104 },
+    { "from": "supervisor", "to": "gateway", "label": "spawn · 重启", "variant": "dashed", "fromSide": "top", "toSide": "bottom", "labelAt": [352, 485] },
+    { "from": "supervisor", "to": "model_servers", "label": "spawn · /ready 探测", "variant": "dashed", "fromSide": "right", "toSide": "bottom", "labelAt": [625, 500] },
+    { "from": "model_servers", "to": "server_core", "label": "serve_process 回调", "labelDy": -104 },
+    { "from": "server_core", "to": "async_jobs", "label": "202 提交 · 轮询/长等/取果", "fromSide": "bottom", "toSide": "top", "labelAt": [890, 490] },
+    { "from": "factory", "to": "model_servers", "label": "init 时创建 server+worker", "variant": "dashed", "fromSide": "bottom", "toSide": "top", "labelAt": [625, 250] },
+    { "from": "server_core", "to": "exec", "label": "WFGoTask 取 worker", "fromSide": "right", "toSide": "left", "labelAt": [1015, 250] },
+    { "from": "exec", "to": "models", "label": "run / run_batch", "fromSide": "bottom", "toSide": "top", "labelAt": [1175, 250] },
+    { "from": "models", "to": "session", "label": "NamedTensor 输入", "fromSide": "bottom", "toSide": "top", "labelAt": [1175, 475] },
+    { "from": "session", "to": "engines", "label": "mnn | onnx | tensorrt", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "labelAt": [1175, 686] }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "分层与解耦",
+      "items": [
+        "控制面(supervisor/gateway) 与数据面(模型服务) 分离，模型服务只绑 loopback",
+        "HTTP 层完全不知道后端类型：CvServerSpec 只提供 worker 工厂 + 响应填充器",
+        "推理引擎被 InferenceSession 抹平，新增后端不动任何模型代码"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "一条同步请求的生命周期",
+      "items": [
+        "限流 → Bearer 鉴权 → Content-Type/413 → JSON 解析 → 队列深度 429 背压",
+        "WFGoTask 携带全部逐请求状态，从 BlockingQueue 领一个 worker",
+        "worker.run(base64) → 解码/预处理 → 引擎推理 → 后处理映射回原图坐标",
+        "run_time EWMA 驱动 Retry-After，模型卡死可交给 supervisor 重启"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "吞吐与长任务",
+      "items": [
+        "max_batch_size>1 时收集并发请求打包成 [N,…] 单次引擎调用，失败项彼此隔离",
+        "引擎拒绝批形状时透明回退逐条执行，静态 batch-1 引擎同样可用",
+        "扩散/SAM AMG 走 /jobs：202+Location → status/wait → result(409/结果)"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "配置与工程化",
+      "items": [
+        "conf/server 与 conf/model 双层 TOML 是唯一行为来源：[SERVER] + [MODEL.backend]/[MODEL.params]",
+        "weights_manifest 清单驱动权重拉取与 sha256 校验，TRT engine 离线构建",
+        "gpu/cpu 双构建 profile，cpu 完全编译掉 TensorRT；27 服务 + 34 基准可执行文件同源生成"
+      ]
+    }
+  ]
+}

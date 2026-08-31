@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "visual-check",
+  "status": "fail",
+  "visualReview": "pending",
+  "artifact": {
+    "path": "G:\\Codex\\mortred_model_server\\mortred_model_server_architecture.html",
+    "sha256": "5e86081581677bdb04ccc74a72c17c0efd0937054afc4fe013278ec261e93daa",
+    "bytes": 743631
+  },
+  "state": {
+    "detail": "read",
+    "motion": "still"
+  },
+  "chrome": {
+    "status": "available",
+    "executable": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+  },
+  "diagnostics": [
+    {
+      "code": "viewer/visual-check-runtime",
+      "severity": "error",
+      "message": "visual-check could not complete its Chrome inspection.",
+      "subject": {
+        "artifact": "G:\\Codex\\mortred_model_server\\mortred_model_server_architecture.html"
+      },
+      "evidence": {
+        "reason": "Chrome DevTools process exit failed: Chrome closed with exit code 2147483651\nChrome process: exit code 2147483651.\nChrome stderr:\n[22540:17844:0831/111326.382:ERROR:components\\os_crypt\\async\\browser\\os_crypt_win.cc:63] Failed to encrypt: 系统找不到指定的文件。 (0x2)\r\n[22540:10144:0831/111326.413:ERROR:chrome\\installer\\util\\google_update_settings_win.cc:270] Failed opening key Software\\Google\\Update\\ClientStateMedium\\{8A69D345-D564-463c-AFF1-A69D9E530F96} to set usagestats; result: 5\r\n[22540:17844:0831/111326.547:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1035] GPU process exited unexpectedly: exit_code=-1073741790\r\n[22540:18608:0831/111326.570:ERROR:services\\device\\public\\cpp\\geolocation\\system_geolocation_source_win.cc:259] Failed to get location access status: 参数错误。 (0x80070057)\r\n[22540:17844:0831/111326.603:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1035] GPU process exited unexpectedly: exit_code=-1073741790\r\n[22540:17844:0831/111326.622:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1035] GPU process exited unexpectedly: exit_code=-1073741790\r\n[22540:17844:0831/111326.661:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1035] GPU process exited unexpectedly: exit_code=-1073741790\r\n[22540:17844:0831/111326.669:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1035] GPU process exited unexpectedly: exit_code=-1073741790\r\n[22540:27240:0831/111326.670:ERROR:components\\password_manager\\core\\browser\\password_store\\login_database_async_helper.cc:99] Encryption is not available.\r\n[22540:25676:0831/111326.671:ERROR:components\\password_manager\\core\\browser\\password_store\\login_database_async_helper.cc:99] Encryption is not available.\r\n[22540:17844:0831/111326.679:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1035] GPU process exited unexpectedly: exit_code=-1073741790\r\n[22540:17844:0831/111326.679:FATAL:content\\browser\\gpu\\gpu_data_manager_impl_private.cc:417] GPU process isn't usable. Goodbye.\r\n[22540:25676:0831/111326.679:ERROR:components\\viz\\host\\persistent_cache_sandboxed_file_factory.cc:153] Failed to open persistent cache files in directory \"G:\\Codex\\mortred_model_server\\.archify_tmp\\tmp\\archify-visual-check-profile-ZNr6zl\\GPUPersistentCache\\DawnGraphiteCache\\4D7II35C5RCKCVUN22WTIUQM2H5TLXKK\", error: 0: 另一个程序正在使用此文件，进程无法访问。 (0x20)"
+      },
+      "supportedFixes": [
+        "resolve the reported Chrome inspection error, then rerun visual-check"
+      ]
+    }
+  ],
+  "containment": {
+    "status": "fail",
+    "viewports": []
+  },
+  "readability": {
+    "status": "fail",
+    "minimumProjectedNodeTextPx": 6,
+    "viewports": []
+  },
+  "viewerChrome": {
+    "status": "fail",
+    "viewports": []
+  },
+  "captures": {
+    "status": "fail",
+    "screenshots": [],
+    "contactSheet": null
+  },
+  "sidecars": {
+    "receipt": "mortred_model_server_architecture.visual-check.json",
+    "contactSheet": "mortred_model_server_architecture.visual-check.html"
+  },
+  "error": "Chrome DevTools process exit failed: Chrome closed with exit code 2147483651\nChrome process: exit code 2147483651.\nChrome stderr:\n[22540:17844:0831/111326.382:ERROR:components\\os_crypt\\async\\browser\\os_crypt_win.cc:63] Failed to encrypt: 系统找不到指定的文件。 (0x2)\r\n[22540:10144:0831/111326.413:ERROR:chrome\\installer\\util\\google_update_settings_win.cc:270] Failed opening key Software\\Google\\Update\\ClientStateMedium\\{8A69D345-D564-463c-AFF1-A69D9E530F96} to set usagestats; result: 5\r\n[22540:17844:0831/111326.547:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1035] GPU process exited unexpectedly: exit_code=-1073741790\r\n[22540:18608:0831/111326.570:ERROR:services\\device\\public\\cpp\\geolocation\\system_geolocation_source_win.cc:259] Failed to get location access status: 参数错误。 (0x80070057)\r\n[22540:17844:0831/111326.603:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1035] GPU process exited unexpectedly: exit_code=-1073741790\r\n[22540:17844:0831/111326.622:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1035] GPU process exited unexpectedly: exit_code=-1073741790\r\n[22540:17844:0831/111326.661:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1035] GPU process exited unexpectedly: exit_code=-1073741790\r\n[22540:17844:0831/111326.669:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1035] GPU process exited unexpectedly: exit_code=-1073741790\r\n[22540:27240:0831/111326.670:ERROR:components\\password_manager\\core\\browser\\password_store\\login_database_async_helper.cc:99] Encryption is not available.\r\n[22540:25676:0831/111326.671:ERROR:components\\password_manager\\core\\browser\\password_store\\login_database_async_helper.cc:99] Encryption is not available.\r\n[22540:17844:0831/111326.679:ERROR:content\\browser\\gpu\\gpu_process_host.cc:1035] GPU process exited unexpectedly: exit_code=-1073741790\r\n[22540:17844:0831/111326.679:FATAL:content\\browser\\gpu\\gpu_data_manager_impl_private.cc:417] GPU process isn't usable. Goodbye.\r\n[22540:25676:0831/111326.679:ERROR:components\\viz\\host\\persistent_cache_sandboxed_file_factory.cc:153] Failed to open persistent cache files in directory \"G:\\Codex\\mortred_model_server\\.archify_tmp\\tmp\\archify-visual-check-profile-ZNr6zl\\GPUPersistentCache\\DawnGraphiteCache\\4D7II35C5RCKCVUN22WTIUQM2H5TLXKK\", error: 0: 另一个程序正在使用此文件，进程无法访问。 (0x20)"
+}

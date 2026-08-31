@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="dark" data-preset="signal-flow">
+<html lang="zh-CN" data-theme="dark" data-preset="blueprint">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="generator" content="archify 2.16.0">
-  <title>Mortred Model Server 整体架构</title>
+  <title>Mortred Model Server 项目架构</title>
   <script>
     // Resolve the theme before first paint so light-preference users don't
     // see a dark flash. The toolbar script below re-applies with UI state.
@@ -4955,13 +4955,13 @@
            data-preset-badge-blueprint="蓝图 / 修订 01"
            data-preset-badge-editorial="编辑风格 / 现场笔记">
         <div class="pulse-dot"></div>
-        <h1>Mortred Model Server 整体架构</h1>
+        <h1>Mortred Model Server 项目架构</h1>
       </div>
-      <p class="subtitle">外部入口、控制面、环回推理面与模型运行时</p>
+      <p class="subtitle">C++17 · Sogou Workflow HTTP · MNN / ONNX Runtime / TensorRT 多后端 CV 推理服务平台</p>
     </div>
 
-    <script id="archify-guided-views-data" type="application/json">[]</script>
-    <script id="archify-source-evidence-data" type="application/json">{"schemaVersion":1,"verified":true,"repository":{"url":"https://github.com/MaybeShewill-CV/mortred_model_server","revision":"c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e","shortRevision":"c1e72ab"},"referenceCount":21,"nodes":{"clients":[{"path":"docs/api-contract.md","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e/docs/api-contract.md"}],"ingress":[{"path":"docs/deployment.md","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e/docs/deployment.md"}],"gateway":[{"path":"src/control/gateway/gateway_app.cpp","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e/src/control/gateway/gateway_app.cpp"},{"path":"src/control/catalog.h","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e/src/control/catalog.h"}],"model_servers":[{"path":"src/server/generic_cv_server.h","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e/src/server/generic_cv_server.h"},{"path":"src/server/base_server_impl.h","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e/src/server/base_server_impl.h"},{"path":"src/apps/common/model_server_main.h","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e/src/apps/common/model_server_main.h"}],"inference":[{"path":"src/models/base_model.h","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e/src/models/base_model.h"},{"path":"src/factory/base_factory.h","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e/src/factory/base_factory.h"},{"path":"src/server/response_serializers.h","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e/src/server/response_serializers.h"}],"runtimes":[{"path":"CMakeLists.txt","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e/CMakeLists.txt"},{"path":"docs/deployment.md","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e/docs/deployment.md"}],"artifacts":[{"path":"scripts/fetch_weights.py","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e/scripts/fetch_weights.py"},{"path":"scripts/convert_trt_engines.sh","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e/scripts/convert_trt_engines.sh"}],"supervisor":[{"path":"src/control/supervisor/supervisor_app.cpp","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e/src/control/supervisor/supervisor_app.cpp"},{"path":"src/control/control_config.h","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e/src/control/control_config.h"}],"cli":[{"path":"src/control/cli/cli_app.cpp","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e/src/control/cli/cli_app.cpp"},{"path":"scripts/mortredctl_doctor.sh","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e/scripts/mortredctl_doctor.sh"}],"catalog":[{"path":"src/control/catalog.h","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e/src/control/catalog.h"},{"path":"src/control/api_key_manager.h","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e/src/control/api_key_manager.h"},{"path":"conf/mortred.toml","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/c1e72ab47a0e2a927dcbfa54d7e5d7f35c5b974e/conf/mortred.toml"}]}}</script>
+    <script id="archify-guided-views-data" type="application/json">[{"id":"data-plane","label":"数据面主链路","focus":["clients","gateway","model_servers","server_core","exec","models","session","engines"],"note":"一条 base64 图片请求从网关到推理引擎的完整路径"},{"id":"async-path","label":"长任务异步作业","focus":["clients","gateway","model_servers","server_core","async_jobs","exec"],"note":"扩散模型 / SAM AMG 的 202 提交-轮询-取结果闭环"},{"id":"control-plane","label":"控制面进程树","focus":["supervisor","gateway","model_servers"],"note":"supervisor 拉起并监督 gateway 与全部模型服务进程"},{"id":"model-extension","label":"新增一个模型","focus":["factory","model_servers","models","session"],"note":"任务目录登记 + BackendCvModel 三钩子 + 后端配置即接入"}]</script>
+    <script id="archify-source-evidence-data" type="application/json">{"schemaVersion":1,"verified":true,"repository":{"url":"https://github.com/MaybeShewill-CV/mortred_model_server","revision":"9778a8a0642c0d11a57e5aa828ab7cc28bcd869e","shortRevision":"9778a8a"},"referenceCount":22,"nodes":{"clients":[{"path":"src/common/json_request_parser.h","label":"img_data/req_id 契约","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/9778a8a0642c0d11a57e5aa828ab7cc28bcd869e/src/common/json_request_parser.h"},{"path":"src/control/cli/cli_app.cpp","label":"mortredctl","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/9778a8a0642c0d11a57e5aa828ab7cc28bcd869e/src/control/cli/cli_app.cpp"}],"gateway":[{"path":"src/control/gateway/gateway_app.cpp","label":"URI 路由 + 上游转发","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/9778a8a0642c0d11a57e5aa828ab7cc28bcd869e/src/control/gateway/gateway_app.cpp"},{"path":"src/control/api_key_manager.h","label":"多租户 API Key","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/9778a8a0642c0d11a57e5aa828ab7cc28bcd869e/src/control/api_key_manager.h"}],"supervisor":[{"path":"src/control/supervisor.h","label":"fork/exec + 重启策略","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/9778a8a0642c0d11a57e5aa828ab7cc28bcd869e/src/control/supervisor.h"},{"path":"src/control/supervisor/supervisor_app.cpp","label":"/api/v1 编排","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/9778a8a0642c0d11a57e5aa828ab7cc28bcd869e/src/control/supervisor/supervisor_app.cpp"}],"model_servers":[{"path":"src/server/generic_cv_server.h","label":"注册表驱动通用服务","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/9778a8a0642c0d11a57e5aa828ab7cc28bcd869e/src/server/generic_cv_server.h"},{"path":"src/apps/server/object_detection/yolov8_detection_server.cpp","label":"薄 main 实例","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/9778a8a0642c0d11a57e5aa828ab7cc28bcd869e/src/apps/server/object_detection/yolov8_detection_server.cpp"}],"factory":[{"path":"src/factory/cv_catalog.h","label":"CvModelEntry→工厂","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/9778a8a0642c0d11a57e5aa828ab7cc28bcd869e/src/factory/cv_catalog.h"},{"path":"src/factory/base_factory.h","label":"类型擦除工厂","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/9778a8a0642c0d11a57e5aa828ab7cc28bcd869e/src/factory/base_factory.h"}],"server_core":[{"path":"src/server/base_server_impl.h","label":"serve_process 状态机","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/9778a8a0642c0d11a57e5aa828ab7cc28bcd869e/src/server/base_server_impl.h"},{"path":"src/server/prometheus_metrics.h","label":"/metrics","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/9778a8a0642c0d11a57e5aa828ab7cc28bcd869e/src/server/prometheus_metrics.h"}],"async_jobs":[{"path":"src/server/async_job_table.h","label":"TTL + LRU 台账","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/9778a8a0642c0d11a57e5aa828ab7cc28bcd869e/src/server/async_job_table.h"},{"path":"src/factory/diffusion_model_adapter.h","label":"扩散模型适配","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/9778a8a0642c0d11a57e5aa828ab7cc28bcd869e/src/factory/diffusion_model_adapter.h"}],"exec":[{"path":"src/server/base_server_impl.h","line":1037,"label":"run_via_batch","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/9778a8a0642c0d11a57e5aa828ab7cc28bcd869e/src/server/base_server_impl.h#L1037"},{"path":"src/models/backend/backend_cv_model.h","label":"run_image_batch","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/9778a8a0642c0d11a57e5aa828ab7cc28bcd869e/src/models/backend/backend_cv_model.h"}],"models":[{"path":"src/models/base_model.h","label":"NVI 生命周期守卫","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/9778a8a0642c0d11a57e5aa828ab7cc28bcd869e/src/models/base_model.h"},{"path":"src/models/object_detection/yolov8_detector.h","label":"模型族示例","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/9778a8a0642c0d11a57e5aa828ab7cc28bcd869e/src/models/object_detection/yolov8_detector.h"}],"session":[{"path":"src/models/backend/session.cpp","label":"create() 分发","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/9778a8a0642c0d11a57e5aa828ab7cc28bcd869e/src/models/backend/session.cpp"},{"path":"src/models/backend/tensor.h","label":"Tensor/DType","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/9778a8a0642c0d11a57e5aa828ab7cc28bcd869e/src/models/backend/tensor.h"}],"engines":[{"path":"src/models/backend/mnn_session.h","label":"MNN 会话","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/9778a8a0642c0d11a57e5aa828ab7cc28bcd869e/src/models/backend/mnn_session.h"},{"path":"src/models/backend/trt_session.h","label":"TRT enqueueV3","href":"https://github.com/MaybeShewill-CV/mortred_model_server/blob/9778a8a0642c0d11a57e5aa828ab7cc28bcd869e/src/models/backend/trt_session.h"}]}}</script>
     <script id="archify-i18n-data" type="application/json">{"locale":"zh-CN","messages":{"viewer.kind.frontend":"前端","viewer.kind.backend":"后端","viewer.kind.database":"数据库","viewer.kind.cloud":"云服务","viewer.kind.security":"安全","viewer.kind.messagebus":"消息总线","viewer.kind.external":"外部系统","viewer.kind.neutral":"中性","viewer.kind.node":"节点","viewer.kind.start":"开始","viewer.kind.active":"活动","viewer.kind.waiting":"等待","viewer.kind.decision":"决策","viewer.kind.success":"成功","viewer.kind.failure":"失败","viewer.toolbar.actions":"图表操作","viewer.theme.toggle.title":"切换主题（T）","viewer.theme.toggle":"切换颜色主题","viewer.theme.dark":"深色","viewer.theme.light":"浅色","viewer.preset.choose.title":"选择视觉风格（S 循环切换）","viewer.preset.choose":"选择视觉风格","viewer.preset.style":"风格","viewer.preset.menu":"视觉风格","viewer.preset.identity":"视觉表达","viewer.preset.cycles":"S 循环切换","viewer.preset.classic":"经典","viewer.preset.classic.short":"经典","viewer.preset.classic.hint":"稳定的技术默认风格","viewer.preset.flow":"信号流","viewer.preset.flow.short":"流动","viewer.preset.flow.hint":"突出动态流向","viewer.preset.blueprint":"蓝图","viewer.preset.blueprint.hint":"工程评审","viewer.preset.editorial":"编辑风格","viewer.preset.editorial.hint":"适合发布与上线说明","viewer.preset.badge.signalFlow":"信号流","viewer.preset.badge.blueprint":"蓝图 / 修订 01","viewer.preset.badge.editorial":"编辑风格 / 现场笔记","viewer.preset.badge.editorialPlate":"ARCHIFY / 图版 04","viewer.preset.current":"当前视觉风格：{style}。选择视觉风格","viewer.motion.live":"动态","viewer.motion.still":"静态","viewer.motion.pause":"暂停动效","viewer.motion.resume":"恢复动效","viewer.motion.reduced":"已根据减少动态效果偏好暂停动效","viewer.motion.hidden":"页面不可见时已暂停动效","viewer.motion.yielding":"暂停动效；当前让位于{owner}","viewer.motion.yielding.title":"动态预览已启用 · 正在让位于{owner}","viewer.owner.story":"引导故事","viewer.owner.chapter":"当前章节","viewer.owner.chapterPreview":"章节差异预览","viewer.owner.handoff":"章节交接","viewer.owner.route":"路径探测","viewer.owner.lens":"语义透镜","viewer.owner.relationship":"关系预览","viewer.owner.intent":"意图追踪","viewer.owner.focus":"语义聚焦","viewer.owner.legend":"图例预览","viewer.owner.reader":"读者交互","viewer.present.enter":"进入演示模式","viewer.present.enter.title":"演示模式（F）","viewer.present.exit":"退出演示模式","viewer.present.exit.title":"退出演示模式（F 或 Escape）","viewer.present.present":"演示","viewer.present.exit.label":"退出","viewer.export.button":"导出","viewer.export.button.title":"导出图表（E）","viewer.export.diagram":"导出图表","viewer.export.menu":"导出","viewer.export.subtitle":"便携、整洁的输出","viewer.export.share":"分享","viewer.export.shareCard":"分享卡片","viewer.export.routeShareCard":"路径分享卡片","viewer.export.reachShareCard":"可达范围分享卡片","viewer.export.copyShareCard":"复制分享卡片","viewer.export.copyDiagram":"复制图表","viewer.export.clipboardPng":"复制 PNG 到剪贴板","viewer.export.raster":"位图","viewer.export.image":"图像","viewer.export.lossless":"无损图像","viewer.export.compact":"紧凑图像","viewer.export.modern":"现代图像格式","viewer.export.vectorMotion":"矢量与动效","viewer.export.vectorMotion.heading":"矢量与动效","viewer.export.editable":"可编辑矢量图","viewer.export.motion6s":"6 秒动效","viewer.export.unsupported":"当前浏览器不支持","viewer.export.clipboardUnsupported":"当前浏览器不支持写入图片剪贴板","viewer.export.clipboardUnsupported.period":"当前浏览器不支持写入图片剪贴板。","viewer.export.clipboardUnsupported.short":"此浏览器不支持写入图片剪贴板。","viewer.export.motionUnavailable":"当前浏览器无法录制动效","viewer.export.webmUnavailable":"当前浏览器不支持 WebM","viewer.export.failed":"导出失败：{message}","viewer.export.unknownVariant":"未知的分享卡片类型：{variant}","viewer.export.routeRequired":"请先追踪路径，再导出路径分享卡片","viewer.export.reachRequired":"请先追踪编写可达范围，再导出可达范围分享卡片","viewer.export.unknown":"未知错误","viewer.export.routeFailed":"路径分享卡片导出失败：{message}","viewer.export.reachFailed":"可达范围分享卡片导出失败：{message}","viewer.export.copyFailed":"复制失败：{message}","viewer.export.copiedPng":"已将 PNG 复制到剪贴板","viewer.export.copiedShare":"已复制分享卡片","viewer.export.downloadedShare":"已下载分享卡片","viewer.export.downloadedRoute":"已下载路径分享卡片","viewer.export.downloadedReach":"已下载可达范围分享卡片","viewer.export.downloadedWebm":"已下载 WebM","viewer.export.recording":"正在录制 6 秒动效…","viewer.export.card.routeSummary.one":"路径：{source} → {target} · {count} 个有向跳转","viewer.export.card.routeSummary.other":"路径：{source} → {target} · {count} 个有向跳转","viewer.export.card.reachSummary":"从{origin}开始的编写{direction} · {nodes} · {links} · 最深 {hops}","viewer.export.card.node.one":"{count} 个节点","viewer.export.card.node.other":"{count} 个节点","viewer.export.card.link.one":"{count} 条连接","viewer.export.card.link.other":"{count} 条连接","viewer.export.card.hop.one":"{count} 跳","viewer.export.card.hop.other":"{count} 跳","viewer.export.card.routeBadge":"ARCHIFY · 路径 · {hops}","viewer.export.card.reachBadge":"ARCHIFY · {direction}可达范围","viewer.export.card.defaultBadge":"ARCHIFY · {preset} · {theme}","viewer.export.direction.upstream":"上游","viewer.export.direction.downstream":"下游","viewer.export.error.canvasUnavailable":"无法为{label}使用画布","viewer.export.error.contextUnavailable":"无法为{label}创建二维画布上下文","viewer.export.error.toBlobUnavailable":"{label}无法使用 canvas.toBlob","viewer.export.error.toBlobNull":"{label}的 canvas.toBlob 未返回数据","viewer.export.error.variantsCombined":"无法同时组合多种分享卡片类型","viewer.export.error.viewerState":"分享卡片导出无法移除临时 Viewer 状态","viewer.export.error.routeState":"路径卡片导出无法安全保留已解析路径","viewer.export.error.reachState":"可达范围卡片导出无法安全保留编写的可达范围","viewer.export.error.webmRequirements":"WebM 动效导出需要追踪动画及浏览器 MediaRecorder 支持","viewer.export.error.mediaRecorder":"MediaRecorder 录制失败","viewer.export.error.emptyWebm":"MediaRecorder 生成了空的 WebM","viewer.export.error.webmBackground":"无法为 WebM 导出加载 SVG 背景","viewer.guided.region":"图表引导视图","viewer.guided.previous":"上一个引导视图","viewer.guided.previous.title":"上一个引导视图（[）","viewer.guided.next":"下一个引导视图","viewer.guided.next.title":"下一个引导视图（]）","viewer.guided.views":"引导视图","viewer.guided.explore":"探索此系统","viewer.guided.intro":"沿精选路径逐步查看，而不改变源图表。","viewer.guided.trail":"故事轨迹","viewer.guided.beat":"节点","viewer.guided.nextBeat":"下一步","viewer.guided.play":"播放引导故事","viewer.guided.play.title":"播放引导故事（P）","viewer.guided.pause":"暂停引导故事","viewer.guided.pause.title":"暂停引导故事（P）","viewer.guided.replay":"重播引导故事","viewer.guided.replay.title":"重播引导故事（P）","viewer.guided.playStory":"播放故事","viewer.guided.pauseStory":"暂停","viewer.guided.replayStory":"重播故事","viewer.guided.motionUnavailable":"静态模式下无法播放故事","viewer.guided.enableMotion":"切换为动态模式以播放引导故事","viewer.guided.selectBeatLink":"选择故事节点以复制其精确链接","viewer.guided.copyMoment":"复制此刻","viewer.guided.momentCopied":"已复制时刻链接","viewer.guided.momentCopyFailed":"无法复制故事时刻链接","viewer.guided.copied":"已复制","viewer.guided.copyFailed":"复制失败","viewer.guided.showAll":"显示全部","viewer.guided.showAll.aria":"显示完整图表","viewer.guided.chapters":"故事章节","viewer.guided.storyTrail":"{label}的故事轨迹：{count} 个节点","viewer.guided.chapter.open":"打开第 {index}/{total} 章：{label}，{count} 个停靠点","viewer.guided.chapter.current":"当前第 {index}/{total} 章：{label}，{count} 个停靠点","viewer.guided.chapter.selectedNodes":"已选择 {count} 个节点","viewer.guided.chapter.stops":"{count} 个停靠点","viewer.guided.chapter.stop.one":"{count} 个停靠点","viewer.guided.chapter.stop.other":"{count} 个停靠点","viewer.guided.chapter.current.title":"{label} — 当前章节，{count} 个停靠点","viewer.guided.chapter.delta.expanded":"{stay} 个保留，{enter} 个进入，{leave} 个离开","viewer.guided.chapter.delta.aria":"打开第 {index}/{total} 章：{label}。章节聚焦差异：{delta}","viewer.guided.chapter.delta.title":"{label} — 章节聚焦 {delta}","viewer.guided.handoff":"{from} → {to} · 经由{label}","viewer.guided.share.chapter":"章节 {index} / {total}","viewer.guided.share.initial":"章节 01 / 01","viewer.guided.share.default":"引导章节","viewer.guided.state.ready":"就绪","viewer.guided.state.playing":"播放中","viewer.guided.state.settled":"已完成","viewer.guided.state.paused":"已暂停","viewer.guided.state.pinned":"已固定","viewer.guided.state.still":"静态","viewer.guided.share.step":"步骤 {index} / {total} · {label}","viewer.guided.share.staticMoment":"{step} · 静态时刻","viewer.guided.share.complete":"{count} 个步骤已完成 · {note}","viewer.guided.share.settled":"路径已稳定，可供阅读。","viewer.guided.share.staticPath":"{count} 个步骤 · 静态路径","viewer.guided.share.ready":"{count} 个步骤 · 就绪","viewer.guided.share.aria":"{state}，第 {index}/{total} 章：{label}。{beat}。{route}","viewer.guided.beat.start":"节点 {index} / {total} · {label} · 起点","viewer.guided.beat.forward":"节点 {index} / {total} · {from} → {to}","viewer.guided.beat.reverse":"节点 {index} / {total} · {from} → {to} · 反向编写连接","viewer.guided.beat.multiple":"节点 {index} / {total} · {from} ⇄ {to} · {count} 条编写连接","viewer.guided.beat.group":"节点 {index} / {total} · {from} · {to} · 分组 · 无直接连接","viewer.guided.beat.aria.prefix":"故事节点 {index}/{total}：{label}。","viewer.guided.beat.aria.start":"起点。","viewer.guided.beat.aria.forward":"从{from}经一条正向编写关系到达。","viewer.guided.beat.aria.reverse":"从{from}出发；编写关系实际由{to}指向{from}。","viewer.guided.beat.aria.multiple":"从{from}经 {count} 条编写关系到达；不使用任意动效。","viewer.guided.beat.aria.group":"与{from}分组展示，没有直接编写关系。","viewer.guided.caption.start":"起点","viewer.guided.caption.grouped":"分组过渡 · 无直接编写连接","viewer.guided.caption.more":" +另外 {count} 条","viewer.guided.caption.reverse":"反向编写关系","viewer.guided.caption.relationships":"{count} 条编写关系","viewer.guided.caption.relationship":"编写关系","viewer.guided.caption.direction":"编写方向：{from} → {to}","viewer.guided.caption.starting":"编写起点","viewer.guided.beatLink":"复制当前故事时刻链接：第 {index}/{total} 个节点：{label}","viewer.guided.noStory":"此图表没有编写引导故事。","viewer.guide.eyebrow":"图表指南","viewer.guide.close":"关闭图表指南","viewer.guide.inspecting":"正在检查已编译语义","viewer.guide.actions":"图表探索操作","viewer.guide.find":"查找任意节点","viewer.guide.find.hint":"搜索标签、职责、类型和稳定 ID。","viewer.guide.route":"追踪路径","viewer.guide.route.aria":"追踪有向路径","viewer.guide.route.hint":"查看两个语义节点如何按编写方向连接。","viewer.guide.map":"查看完整系统","viewer.guide.map.hint":"打开带实时视口和稳定节点的语义雷达。","viewer.guide.lens":"比较语义类型","viewer.guide.lens.hint":"统计角色、显示流量并比较直接编写的连接。","viewer.guide.story":"播放引导故事","viewer.guide.story.hint":"浏览已编写的章节和真实关系。","viewer.guide.present":"进入演示模式","viewer.guide.present.hint":"让实时图表占满视口，同时不改变导出。","viewer.guide.shortcuts":"其他键盘快捷键","viewer.guide.shortcut.export":"导出","viewer.guide.shortcut.theme":"主题","viewer.guide.shortcut.style":"风格","viewer.guide.shortcut.reset":"重置","viewer.guide.shortcut.zoomIn":"放大","viewer.guide.shortcut.zoomOut":"缩小","viewer.guide.shortcut.close":"关闭","viewer.guide.facts":"{nodes} · {relationships} · {views}","viewer.guide.fact.node.one":"{count} 个语义节点","viewer.guide.fact.node.other":"{count} 个语义节点","viewer.guide.fact.relationship.one":"{count} 条关系","viewer.guide.fact.relationship.other":"{count} 条关系","viewer.guide.fact.view.one":"{count} 个引导视图","viewer.guide.fact.view.other":"{count} 个引导视图","viewer.guide.story.available.one":"浏览 {count} 个已编写章节及其真实关系。","viewer.guide.story.available.other":"浏览 {count} 个已编写章节及其真实关系。","viewer.guide.story.unavailable":"此图表没有编写引导故事。","viewer.guide.open":"打开图表指南","viewer.guide.noStory":"此图表没有编写引导故事。","viewer.finder.title":"查找节点","viewer.finder.close":"关闭节点查找器","viewer.finder.placeholder":"搜索标签或 ID","viewer.finder.search":"搜索图表节点","viewer.finder.results":"图表节点","viewer.finder.empty":"没有匹配的节点","viewer.finder.result.focus":"聚焦{label}","viewer.finder.result.routeStart":"选择{label}作为路径起点","viewer.finder.result.routeTarget":"选择{label}作为路径终点，{links}","viewer.finder.status.empty":"没有匹配的节点","viewer.finder.status.count.one":"{count} 个匹配节点","viewer.finder.status.count.other":"{count} 个匹配节点","viewer.finder.noun.nodes":"个节点","viewer.finder.link.one":"{count} 条连接","viewer.finder.link.other":"{count} 条连接","viewer.finder.result.focus.one":"聚焦{label}，{count} 条相关连接","viewer.finder.result.focus.other":"聚焦{label}，{count} 条相关连接","viewer.finder.status.filtered":"{visible}/{available} {noun}","viewer.finder.status.all":"{available} {noun}","viewer.passport.eyebrow":"语义护照","viewer.passport.metadata":"节点元数据","viewer.passport.evidence":"已验证的源代码证据","viewer.passport.verified":"已验证来源","viewer.passport.reach":"编写可达范围","viewer.passport.reach.trace":"追踪编写的可达性","viewer.passport.upstream":"上游","viewer.passport.downstream":"下游","viewer.passport.upstream.trace":"追踪上游编写可达性","viewer.passport.downstream.trace":"追踪下游编写可达性","viewer.passport.close":"关闭语义护照","viewer.passport.copy":"复制链接","viewer.passport.copy.focus":"复制聚焦节点的链接","viewer.passport.relations":"关系","viewer.passport.relations.show":"显示关联关系","viewer.passport.relations.hide":"隐藏关联关系","viewer.passport.relations.list":"关联关系","viewer.passport.copyRelation":"复制关系","viewer.passport.copyNode":"复制节点","viewer.passport.copyPinned":"复制固定关系的链接","viewer.passport.copySource":"复制来源节点的链接","viewer.passport.copy.focused.success":"已复制聚焦节点链接","viewer.passport.copy.pinned.success":"已复制固定关系链接","viewer.passport.copy.focused.failed":"无法复制聚焦节点链接","viewer.passport.copy.pinned.failed":"无法复制固定关系链接","viewer.passport.relationship.none":"没有关联关系","viewer.passport.relationship.count.one":"{count} 条关系","viewer.passport.relationship.count.other":"{count} 条关系","viewer.passport.relationship.show.one":"显示 {count} 条关联关系","viewer.passport.relationship.show.other":"显示 {count} 条关联关系","viewer.passport.relationship.summary":"{out} 条出向 · {in} 条入向{loops}","viewer.passport.relationship.loops":" · {count} 条自环","viewer.passport.relationship.explorer":"直接关系浏览器","viewer.passport.relationship.help":"使用方向键浏览关系。按 Enter 或空格键固定详情；按 Escape 清除。","viewer.passport.relationship.loopsBack":"回环","viewer.passport.relationship.connectsTo":"连接到","viewer.passport.relationship.connectsFrom":"连接自","viewer.passport.relationship.pinned":"已固定关系 · {from} → {to} · {label}","viewer.passport.relationship.inspect":"检查第 {index}/{total} 条关系：{from} 到 {to}，{label}。按 Enter 查看详情。","viewer.passport.relationship.group.out":"出向","viewer.passport.relationship.group.in":"入向","viewer.passport.relationship.group.loop":"自环","viewer.passport.relationship.row":"{group}：{relationship}，{neighbor}","viewer.passport.relationship.direction.out":"出 →","viewer.passport.relationship.direction.in":"← 入","viewer.passport.relationship.direction.loop":"自环","viewer.passport.sourceCount.one":"{count} 个已验证来源引用","viewer.passport.sourceCount.other":"{count} 个已验证来源引用","viewer.passport.sourceMarker":"来源","viewer.passport.beacon.one":"{count} 个已验证来源；聚焦此节点以检查","viewer.passport.beacon.other":"{count} 个已验证来源；聚焦此节点以检查","viewer.passport.repository.open":"打开已验证的仓库修订版本 {revision}","viewer.passport.source.open":"打开修订版本 {revision} 中已验证的来源 {path}","viewer.passport.source.openLink":"打开 ↗","viewer.passport.reach.upstream.one":"追踪 {count} 个上游编写节点","viewer.passport.reach.upstream.other":"追踪 {count} 个上游编写节点","viewer.passport.reach.downstream.one":"追踪 {count} 个下游编写节点","viewer.passport.reach.downstream.other":"追踪 {count} 个下游编写节点","viewer.passport.reach.noUpstream":"没有上游编写节点","viewer.passport.reach.noDownstream":"没有下游编写节点","viewer.passport.reach.status":"{direction} · {nodes} 个节点 · {links} 条连接 · 最深 {hops} 跳","viewer.route.eyebrow":"路径探测","viewer.route.start":"选择起点节点","viewer.route.start.find":"查找起点","viewer.route.start.find.aria":"查找路径起点","viewer.route.copy":"复制链接","viewer.route.copy.aria":"复制已追踪路径的链接","viewer.route.clear":"清除","viewer.route.clear.aria":"清除路径探测","viewer.route.traced":"已追踪路径","viewer.route.pickTwo":"在图表中选择两个语义节点","viewer.route.pickOne":"在图表中选择一个语义节点","viewer.route.controls":"路径旅程控制","viewer.route.previous":"上一个路径位置","viewer.route.play":"播放路径旅程","viewer.route.pause":"暂停路径旅程","viewer.route.replay":"重播路径旅程","viewer.route.next":"下一个路径位置","viewer.route.journey":"旅程","viewer.route.pause.label":"暂停","viewer.route.replay.label":"重播","viewer.route.overview":"总览","viewer.route.overview.aria":"显示完整路径总览","viewer.route.instructions":"先选择来源，再选择目标；方向很重要。","viewer.route.destination":"选择从{label}出发的目标","viewer.route.destination.find":"查找目标","viewer.route.destination.find.aria":"查找可达的路径目标","viewer.route.differentDestination":"选择其他目标","viewer.route.distinct":"一条路径需要两个不同的语义节点。","viewer.route.unreachable":"没有通往{label}的有向路径","viewer.route.unreachable.detail":"从{source}无法到达{target}。请选择高亮的目标。","viewer.route.start.instructions":"选择来源。下一步只会显示有向可达的目标。","viewer.route.copy.success":"已复制路径链接","viewer.route.copy.failed":"无法复制路径链接","viewer.route.position":"路径位置 {index}/{total}：{label}","viewer.route.step":"第 {index}/{total} 步 · {phase} · {label}","viewer.route.motionRequired":"自动旅程需要动态模式","viewer.route.trigger.clear":"清除已追踪路径","viewer.route.overview.status":"{nodes} · {hops} · 最短编写路径","viewer.route.overview.node.one":"{count} 个节点","viewer.route.overview.node.other":"{count} 个节点","viewer.route.overview.hop.one":"{count} 个有向跳转","viewer.route.overview.hop.other":"{count} 个有向跳转","viewer.route.phase.playing":"播放中","viewer.route.phase.complete":"已完成","viewer.route.phase.inspecting":"检查中","viewer.route.destination.count.one":"有 {count} 个有向目标可用。请选择高亮节点。","viewer.route.destination.count.other":"有 {count} 个有向目标可用。请选择高亮节点。","viewer.route.noOutgoing":"此处没有可用的出向路径。请清除后选择其他来源。","viewer.route.result.title":"{source} 到 {target}","viewer.route.finder.source.title":"选择路径起点","viewer.route.finder.source.placeholder":"搜索路径来源","viewer.route.finder.source.empty":"没有匹配的路径来源","viewer.route.finder.source.results":"可作为路径起点的节点","viewer.route.finder.source.noun":"个路径来源","viewer.route.finder.source.badge":"起点","viewer.route.finder.target.title":"从{label}出发的目标","viewer.route.finder.target.placeholder":"搜索可达目标","viewer.route.finder.target.empty":"没有匹配的可达目标","viewer.route.finder.target.results":"可达路径目标","viewer.route.finder.target.noun":"个可达目标","viewer.route.hop.one":"{count} 跳","viewer.route.hop.other":"{count} 跳","viewer.lens.eyebrow":"语义透镜","viewer.lens.title":"比较系统角色","viewer.lens.close":"关闭语义透镜","viewer.lens.instruction":"最多选择两种语义类型。选择一种可显示其真实流量；选择两种只比较直接编写的关系。","viewer.lens.kinds":"语义类型","viewer.lens.choose":"选择一种类型以检查其节点和相连关系。","viewer.lens.copy":"复制语义透镜链接","viewer.lens.clear":"清除语义透镜","viewer.lens.open":"打开语义透镜","viewer.lens.openActive":"打开当前语义透镜","viewer.lens.legend":"语义图例","viewer.lens.legend.inspect.one":"检查{label}，{count} 个节点","viewer.lens.legend.inspect.other":"检查{label}，{count} 个节点","viewer.lens.kind.count.one":"{label}，{count} 个节点","viewer.lens.kind.count.other":"{label}，{count} 个节点","viewer.lens.compare.one":"{first} → {second}：{forward} · {second} → {first}：{reverse} · 共 {count} 条直接关系","viewer.lens.compare.other":"{first} → {second}：{forward} · {second} → {first}：{reverse} · 共 {count} 条直接关系","viewer.lens.single":"{nodes} · {relationships} · 已连接节点保持可见","viewer.lens.node.one":"{count} 个{label}节点","viewer.lens.node.other":"{count} 个{label}节点","viewer.lens.relationship.one":"{count} 条相连关系","viewer.lens.relationship.other":"{count} 条相连关系","viewer.radar.title":"语义雷达","viewer.radar.building":"正在构建总览","viewer.radar.openFull":"打开完整语义雷达","viewer.radar.open":"打开雷达","viewer.radar.close":"关闭语义雷达","viewer.radar.surface":"图表总览。点击节点进行聚焦，或使用方向键平移。","viewer.radar.click":"点击节点","viewer.radar.drag":"拖动平移","viewer.radar.space":"语义雷达需要更多地图可见空间。","viewer.radar.nodes":"语义图表雷达节点","viewer.radar.focus":"从语义雷达聚焦{label}","viewer.radar.status":"{count} 个节点 · {viewport}","viewer.radar.fullMap":"{count} 个节点 · 完整地图","viewer.radar.compacted":"已收紧雷达，避免遮挡语义护照或地图控件。","viewer.radar.cancelWaiting":"取消等待更多地图空间的语义雷达","viewer.radar.needsSpace":"语义雷达需要更多可见地图空间","viewer.radar.viewport.full":"完整地图","viewer.radar.viewport.width":"宽度 {percent}%","viewer.radar.viewport.scale":"视口 {percent}%","viewer.nav.controls":"图表视图控制","viewer.nav.route":"追踪有向路径","viewer.nav.route.title":"追踪路径（R）","viewer.nav.route.short":"路径","viewer.nav.radar":"打开语义雷达","viewer.nav.radar.title":"语义雷达（M）","viewer.nav.radar.short":"地图","viewer.nav.lens":"打开语义透镜","viewer.nav.lens.title":"语义透镜（L）","viewer.nav.lens.short":"透镜","viewer.nav.find":"查找节点","viewer.nav.find.title":"查找节点（/）","viewer.nav.guide":"打开图表指南","viewer.nav.guide.title":"图表指南（?）","viewer.nav.zoomOut":"缩小","viewer.nav.zoomOut.title":"缩小（-）","viewer.nav.reset":"重置图表视图","viewer.nav.reset.title":"重置视图（0）","viewer.nav.read":"阅读","viewer.nav.zoomIn":"放大","viewer.nav.zoomIn.title":"放大（+）","viewer.nav.camera":"{hint}。重置图表视图","viewer.nav.camera.title":"{semantic}{hint} · 重置视图（0）","viewer.nav.camera.semantic":"语义相机已启用 · ","viewer.nav.level.map":"概览","viewer.nav.level.read":"阅读","viewer.nav.level.full":"完整","viewer.nav.level.auto":"自动","viewer.nav.detail.map":"放大以显示关系标签和节点上下文","viewer.nav.detail.read":"再次放大以显示标签和注释","viewer.nav.detail.full":"完整图表详情","viewer.intent.summary":"{label}。{out} 条出向，{in} 条入向{loops}。共 {total} 条连接。按 Enter 查看详情。","viewer.intent.loops":"，{count} 条自环","viewer.common.copied":"已复制","viewer.common.copyFailed":"复制失败","viewer.common.copyLink":"复制链接","viewer.common.clear":"清除","viewer.common.close":"关闭"}}</script>
     <div class="guided-views no-print" id="guided-views" hidden aria-label="图表引导视图">
       <button id="guided-view-prev" type="button" aria-label="上一个引导视图" title="上一个引导视图（[）">&#8592;</button>
@@ -5005,9 +5005,9 @@
     <!-- Main Diagram -->
     <div class="diagram-container" data-detail-level="read"
          data-preset-badge-editorial-plate="ARCHIFY / 图版 04">
-      <svg viewBox="0 0 1560 749" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="signal-flow" data-quality-profile="showcase">
-        <title id="archify-diagram-title">Mortred Model Server 整体架构</title>
-        <desc id="archify-diagram-description">外部入口、控制面、环回推理面与模型运行时</desc>
+      <svg viewBox="0 0 1330 880" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="blueprint" data-quality-profile="showcase">
+        <title id="archify-diagram-title">Mortred Model Server 项目架构</title>
+        <desc id="archify-diagram-description">C++17 · Sogou Workflow HTTP · MNN / ONNX Runtime / TensorRT 多后端 CV 推理服务平台</desc>
         <!-- Definitions -->
         <defs>
           <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
@@ -5031,214 +5031,246 @@
         <rect width="100%" height="100%" fill="url(#grid)" />
 
         <!-- Boundaries (behind everything) -->
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="security-group" data-composition-frame-id="0" data-composition-frame-label="对外入口" x="166" y="84" width="388" height="126" rx="8" class="c-security-group" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="mortred-supervisor 管理的进程树" x="218" y="288" width="514" height="376" rx="12" class="c-region" stroke-width="1"/>
 
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="security-group" data-composition-frame-id="1" data-composition-frame-label="环回模型沙箱" x="626" y="84" width="448" height="597" rx="8" class="c-security-group" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="security-group" data-composition-frame-id="1" data-composition-frame-label="外部鉴权入口 :8080" x="226" y="306" width="228" height="124" rx="8" class="c-security-group" stroke-width="1"/>
 
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="2" data-composition-frame-label="控制面" x="136" y="324" width="418" height="341" rx="12" class="c-region" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="security-group" data-composition-frame-id="2" data-composition-frame-label="loopback + 内部 token" x="486" y="306" width="238" height="128" rx="8" class="c-security-group" stroke-width="1"/>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="3" data-composition-frame-label="模型服务运行时" x="752" y="306" width="251" height="364" rx="12" class="c-region" stroke-width="1"/>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="4" data-composition-frame-label="推理执行链" x="1032" y="96" width="251" height="740" rx="12" class="c-region" stroke-width="1"/>
 
         <!-- Connection paths (before components for correct z-order) -->
-        <path data-edge-from="clients" data-edge-to="ingress" data-edge-label="HTTPS" data-edge-key="0" data-edge-id="client-to-ingress" data-composition-points="150,145;180,145" d="M 150 145 L 180 145" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="ingress" data-edge-to="gateway" data-edge-label="转发" data-edge-key="1" data-edge-id="ingress-to-gateway" data-composition-points="310,145;360,145" d="M 310 145 L 360 145" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="gateway" data-edge-to="model_servers" data-edge-label="loopback 路由" data-edge-key="2" data-edge-id="gateway-to-models" data-composition-points="540,150;640,150" d="M 540 150 L 640 150" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="model_servers" data-edge-to="inference" data-edge-label="调用" data-edge-key="3" data-edge-id="models-to-inference" data-composition-points="820,153;880,153" d="M 820 153 L 880 153" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="inference" data-edge-to="runtimes" data-edge-label="执行" data-edge-key="4" data-edge-id="inference-to-runtimes" data-composition-points="970,196;970,350" d="M 970 196 L 970 350" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="runtimes" data-edge-to="artifacts" data-edge-label="加载" data-edge-key="5" data-edge-id="runtimes-to-artifacts" data-composition-points="970,436;970,575" d="M 970 436 L 970 575" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="supervisor" data-edge-to="catalog" data-edge-label="读取配置 / 密钥" data-edge-key="6" data-edge-id="supervisor-to-catalog" data-composition-points="420,436;420,505.5;450,505.5;450,575" d="M 420 436 L 420 497.5 Q 420 505.5 428 505.5 L 442 505.5 Q 450 505.5 450 513.5 L 450 575" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
-        <path data-edge-from="cli" data-edge-to="supervisor" data-edge-label="REST" data-edge-key="7" data-edge-id="cli-to-supervisor" data-composition-points="300,385;330,385" d="M 300 385 L 330 385" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="supervisor" data-edge-to="gateway" data-edge-label="启动 / 探活 / 重启" data-edge-key="8" data-edge-id="supervisor-to-gateway" data-composition-points="413,350;413,270;450,270;450,190" d="M 413 350 L 413 278 Q 413 270 421 270 L 442 270 Q 450 270 450 262 L 450 190" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="supervisor" data-edge-to="model_servers" data-edge-label="托管模型池" data-edge-key="9" data-edge-id="supervisor-to-models" data-composition-points="427,350;427,273;730,273;730,196" d="M 427 350 L 427 281 Q 427 273 435 273 L 722 273 Q 730 273 730 265 L 730 196" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="clients" data-edge-to="gateway" data-edge-label="POST /mortred_ai_server_v1/…" data-edge-key="0" data-composition-points="180,366;240,366" d="M 180 366 L 240 366" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="clients" data-edge-to="supervisor" data-edge-label="/api/v1 管理" data-edge-key="1" data-composition-points="105,402;105,426;216,426;216,602;240,602" d="M 105 402 L 105 418 Q 105 426 113 426 L 208 426 Q 216 426 216 434 L 216 594 Q 216 602 224 602 L 240 602" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="gateway" data-edge-to="model_servers" data-edge-label="按 server_uri 转发" data-edge-key="2" data-composition-points="440,370;500,370" d="M 440 370 L 500 370" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
+        <path data-edge-from="supervisor" data-edge-to="gateway" data-edge-label="spawn · 重启" data-edge-key="3" data-composition-points="340,560;340,410" d="M 340 560 L 340 410" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="supervisor" data-edge-to="model_servers" data-edge-label="spawn · /ready 探测" data-edge-key="4" data-composition-points="440,602;605,602;605,414" d="M 440 602 L 597 602 Q 605 602 605 594 L 605 414" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="model_servers" data-edge-to="server_core" data-edge-label="serve_process 回调" data-edge-key="5" data-composition-points="710,372;770,372" d="M 710 372 L 770 372" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="server_core" data-edge-to="async_jobs" data-edge-label="202 提交 · 轮询/长等/取果" data-edge-key="6" data-composition-points="877.5,420;877.5,560" d="M 877.5 420 L 877.5 560" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="factory" data-edge-to="model_servers" data-edge-label="init 时创建 server+worker" data-edge-key="7" data-composition-points="605,176;605,330" d="M 605 176 L 605 330" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="server_core" data-edge-to="exec" data-edge-label="WFGoTask 取 worker" data-edge-key="8" data-composition-points="985,375;1017.5,375;1017.5,161;1050,161" d="M 985 375 L 1009.5 375 Q 1017.5 375 1017.5 367 L 1017.5 169 Q 1017.5 161 1025.5 161 L 1050 161" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="exec" data-edge-to="models" data-edge-label="run / run_batch" data-edge-key="9" data-composition-points="1155,202;1155,226;1173.5,226;1173.5,276;1157.5,276;1157.5,300" d="M 1155 202 L 1155 218 Q 1155 226 1163 226 L 1165.5 226 Q 1173.5 226 1173.5 234 L 1173.5 268 Q 1173.5 276 1165.5 276 L 1165.5 276 Q 1157.5 276 1157.5 284 L 1157.5 300" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="models" data-edge-to="session" data-edge-label="NamedTensor 输入" data-edge-key="10" data-composition-points="1157.5,390;1157.5,414;1173.5,414;1173.5,536;1155,536;1155,560" d="M 1157.5 390 L 1157.5 406 Q 1157.5 414 1165.5 414 L 1165.5 414 Q 1173.5 414 1173.5 422 L 1173.5 528 Q 1173.5 536 1165.5 536 L 1163 536 Q 1155 536 1155 544 L 1155 560" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="session" data-edge-to="engines" data-edge-label="mnn | onnx | tensorrt" data-edge-key="11" data-composition-points="1155,642;1155,730" d="M 1155 642 L 1155 730" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
 
         <!-- Components -->
-        <g id="node-clients" data-node-id="clients" data-node-label="推理客户端 HTTP/JSON" tabindex="0" role="button" aria-label="聚焦推理客户端 HTTP/JSON，架构组件" aria-pressed="false" data-node-kind="external" data-node-context="架构组件">
-          <title>推理客户端 HTTP/JSON · 架构组件</title>
-          <rect x="20" y="110" width="130" height="70" rx="6" class="c-mask"/>
-          <rect x="20" y="110" width="130" height="70" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(26 116) scale(0.6875)">
+        <g id="node-clients" data-node-id="clients" data-node-label="推理客户端" tabindex="0" role="button" aria-label="聚焦推理客户端，base64 JSON · CLI, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="base64 JSON · CLI" data-node-tag="外部" data-node-context="架构组件">
+          <title>推理客户端 · base64 JSON · CLI · 架构组件 · 外部</title>
+          <rect x="30" y="330" width="150" height="72" rx="6" class="c-mask"/>
+          <rect x="30" y="330" width="150" height="72" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(36 336) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-node-label="" x="85" y="149" class="t-primary" font-size="10.1" font-weight="600" text-anchor="middle">推理客户端 HTTP/JSON</text>
+          <text data-node-label="" data-detail-anchor="" x="105" y="364" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">推理客户端</text>
+        <text data-detail="context" x="105" y="380" class="t-muted" font-size="9" text-anchor="middle">base64 JSON · CLI</text>
+        <text data-detail="fine" x="105" y="394" class="t-external" font-size="7" text-anchor="middle">外部</text>
         </g>
 
-        <g id="node-ingress" data-node-id="ingress" data-node-label="TLS 反向代理" tabindex="0" role="button" aria-label="聚焦TLS 反向代理，对外入口" aria-pressed="false" data-node-kind="external" data-node-context="对外入口">
-          <title>TLS 反向代理 · 对外入口</title>
-          <rect x="180" y="110" width="130" height="70" rx="6" class="c-mask"/>
-          <rect x="180" y="110" width="130" height="70" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(186 116) scale(0.6875)">
-            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
-            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+        <g id="node-gateway" data-node-id="gateway" data-node-label="mortred-gateway" tabindex="0" role="button" aria-label="聚焦mortred-gateway，数据面统一入口 :8080, mortred-supervisor 管理的进程树 › 外部鉴权入口 :8080" aria-pressed="false" data-node-kind="security" data-node-sublabel="数据面统一入口 :8080" data-node-tag="反向代理" data-node-context="mortred-supervisor 管理的进程树 › 外部鉴权入口 :8080">
+          <title>mortred-gateway · 数据面统一入口 :8080 · mortred-supervisor 管理的进程树 › 外部鉴权入口 :8080 · 反向代理</title>
+          <rect x="240" y="330" width="200" height="80" rx="6" class="c-mask"/>
+          <rect x="240" y="330" width="200" height="80" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(246 336) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
           </g>
-          <text data-node-label="" x="245" y="149" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">TLS 反向代理</text>
+          <text data-node-label="" data-detail-anchor="" x="340" y="368" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">mortred-gateway</text>
+        <text data-detail="context" x="340" y="384" class="t-muted" font-size="9" text-anchor="middle">数据面统一入口 :8080</text>
+        <text data-detail="fine" x="340" y="402" class="t-security" font-size="7" text-anchor="middle">反向代理</text>
         </g>
 
-        <g id="node-gateway" data-node-id="gateway" data-node-label="mortred-gateway :8080" tabindex="0" role="button" aria-label="聚焦mortred-gateway :8080，对外入口" aria-pressed="false" data-node-kind="backend" data-node-context="对外入口">
-          <title>mortred-gateway :8080 · 对外入口</title>
-          <rect x="360" y="110" width="180" height="80" rx="6" class="c-mask"/>
-          <rect x="360" y="110" width="180" height="80" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(366 116) scale(0.6875)">
+        <g id="node-supervisor" data-node-id="supervisor" data-node-label="mortred-supervisor" tabindex="0" role="button" aria-label="聚焦mortred-supervisor，控制面 REST + Web UI, mortred-supervisor 管理的进程树" aria-pressed="false" data-node-kind="backend" data-node-sublabel="控制面 REST + Web UI" data-node-tag="进程管理 :8787" data-node-context="mortred-supervisor 管理的进程树">
+          <title>mortred-supervisor · 控制面 REST + Web UI · mortred-supervisor 管理的进程树 · 进程管理 :8787</title>
+          <rect x="240" y="560" width="200" height="84" rx="6" class="c-mask"/>
+          <rect x="240" y="560" width="200" height="84" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(246 566) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" x="450" y="154" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">mortred-gateway :8080</text>
+          <text data-node-label="" data-detail-anchor="" x="340" y="600" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">mortred-supervisor</text>
+        <text data-detail="context" x="340" y="616" class="t-muted" font-size="9" text-anchor="middle">控制面 REST + Web UI</text>
+        <text data-detail="fine" x="340" y="636" class="t-backend" font-size="7" text-anchor="middle">进程管理 :8787</text>
         </g>
 
-        <g id="node-model_servers" data-node-id="model_servers" data-node-label="模型服务池 loopback" tabindex="0" role="button" aria-label="聚焦模型服务池 loopback，环回模型沙箱" aria-pressed="false" data-node-kind="backend" data-node-context="环回模型沙箱">
-          <title>模型服务池 loopback · 环回模型沙箱</title>
-          <rect x="640" y="110" width="180" height="86" rx="6" class="c-mask"/>
-          <rect x="640" y="110" width="180" height="86" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(646 116) scale(0.6875)">
+        <g id="node-model_servers" data-node-id="model_servers" data-node-label="模型服务进程 ×27" tabindex="0" role="button" aria-label="聚焦模型服务进程 ×27，每模型一个 loopback 进程, mortred-supervisor 管理的进程树 › loopback + 内部 token" aria-pressed="false" data-node-kind="backend" data-node-sublabel="每模型一个 loopback 进程" data-node-tag="CvModelServer&lt;OUT&gt;" data-node-context="mortred-supervisor 管理的进程树 › loopback + 内部 token">
+          <title>模型服务进程 ×27 · 每模型一个 loopback 进程 · mortred-supervisor 管理的进程树 › loopback + 内部 token · CvModelServer&lt;OUT&gt;</title>
+          <rect x="500" y="330" width="210" height="84" rx="6" class="c-mask"/>
+          <rect x="500" y="330" width="210" height="84" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(506 336) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" x="730" y="157" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">模型服务池 loopback</text>
+          <text data-node-label="" data-detail-anchor="" x="605" y="370" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">模型服务进程 ×27</text>
+        <text data-detail="context" x="605" y="386" class="t-muted" font-size="9" text-anchor="middle">每模型一个 loopback 进程</text>
+        <text data-detail="fine" x="605" y="406" class="t-backend" font-size="7" text-anchor="middle">CvModelServer&lt;OUT&gt;</text>
         </g>
 
-        <g id="node-inference" data-node-id="inference" data-node-label="推理流水线" tabindex="0" role="button" aria-label="聚焦推理流水线，环回模型沙箱" aria-pressed="false" data-node-kind="backend" data-node-context="环回模型沙箱">
-          <title>推理流水线 · 环回模型沙箱</title>
-          <rect x="880" y="110" width="180" height="86" rx="6" class="c-mask"/>
-          <rect x="880" y="110" width="180" height="86" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(886 116) scale(0.6875)">
+        <g id="node-factory" data-node-id="factory" data-node-label="任务目录 + 双工厂" tabindex="0" role="button" aria-label="聚焦任务目录 + 双工厂，16 类 CV 任务类型化目录, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="16 类 CV 任务类型化目录" data-node-tag="cv_catalog" data-node-context="架构组件">
+          <title>任务目录 + 双工厂 · 16 类 CV 任务类型化目录 · 架构组件 · cv_catalog</title>
+          <rect x="500" y="100" width="210" height="76" rx="6" class="c-mask"/>
+          <rect x="500" y="100" width="210" height="76" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(506 106) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" x="970" y="157" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">推理流水线</text>
+          <text data-node-label="" data-detail-anchor="" x="605" y="136" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">任务目录 + 双工厂</text>
+        <text data-detail="context" x="605" y="152" class="t-muted" font-size="9" text-anchor="middle">16 类 CV 任务类型化目录</text>
+        <text data-detail="fine" x="605" y="168" class="t-backend" font-size="7" text-anchor="middle">cv_catalog</text>
         </g>
 
-        <g id="node-runtimes" data-node-id="runtimes" data-node-label="MNN / ORT / TensorRT" tabindex="0" role="button" aria-label="聚焦MNN / ORT / TensorRT，环回模型沙箱" aria-pressed="false" data-node-kind="cloud" data-node-context="环回模型沙箱">
-          <title>MNN / ORT / TensorRT · 环回模型沙箱</title>
-          <rect x="880" y="350" width="180" height="86" rx="6" class="c-mask"/>
-          <rect x="880" y="350" width="180" height="86" rx="6" class="c-cloud" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(886 356) scale(0.6875)">
+        <g id="node-server_core" data-node-id="server_core" data-node-label="BaseAiServerImpl 内核" tabindex="0" role="button" aria-label="聚焦BaseAiServerImpl 内核，鉴权·限流·背压·超时·指标, 模型服务运行时" aria-pressed="false" data-node-kind="backend" data-node-sublabel="鉴权·限流·背压·超时·指标" data-node-tag="同步推理管线" data-node-context="模型服务运行时">
+          <title>BaseAiServerImpl 内核 · 鉴权·限流·背压·超时·指标 · 模型服务运行时 · 同步推理管线</title>
+          <rect x="770" y="330" width="215" height="90" rx="6" class="c-mask"/>
+          <rect x="770" y="330" width="215" height="90" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(776 336) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="877.5" y="373" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">BaseAiServerImpl 内核</text>
+        <text data-detail="context" x="877.5" y="389" class="t-muted" font-size="9" text-anchor="middle">鉴权·限流·背压·超时·指标</text>
+        <text data-detail="fine" x="877.5" y="412" class="t-backend" font-size="7" text-anchor="middle">同步推理管线</text>
+        </g>
+
+        <g id="node-async_jobs" data-node-id="async_jobs" data-node-label="异步作业 /jobs" tabindex="0" role="button" aria-label="聚焦异步作业 /jobs，作业台账 + 状态机, 模型服务运行时" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="作业台账 + 状态机" data-node-tag="长任务" data-node-context="模型服务运行时">
+          <title>异步作业 /jobs · 作业台账 + 状态机 · 模型服务运行时 · 长任务</title>
+          <rect x="770" y="560" width="215" height="90" rx="6" class="c-mask"/>
+          <rect x="770" y="560" width="215" height="90" rx="6" class="c-messagebus" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(776 566) scale(0.6875)">
+            <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
+            <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
+            <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
+            <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="877.5" y="603" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">异步作业 /jobs</text>
+        <text data-detail="context" x="877.5" y="619" class="t-muted" font-size="9" text-anchor="middle">作业台账 + 状态机</text>
+        <text data-detail="fine" x="877.5" y="642" class="t-messagebus" font-size="7" text-anchor="middle">长任务</text>
+        </g>
+
+        <g id="node-exec" data-node-id="exec" data-node-label="Worker 池 + 批处理" tabindex="0" role="button" aria-label="聚焦Worker 池 + 批处理，BlockingQueue + 动态批, 推理执行链" aria-pressed="false" data-node-kind="backend" data-node-sublabel="BlockingQueue + 动态批" data-node-tag="执行调度" data-node-context="推理执行链">
+          <title>Worker 池 + 批处理 · BlockingQueue + 动态批 · 推理执行链 · 执行调度</title>
+          <rect x="1050" y="120" width="210" height="82" rx="6" class="c-mask"/>
+          <rect x="1050" y="120" width="210" height="82" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(1056 126) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="1155" y="159" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Worker 池 + 批处理</text>
+        <text data-detail="context" x="1155" y="175" class="t-muted" font-size="9" text-anchor="middle">BlockingQueue + 动态批</text>
+        <text data-detail="fine" x="1155" y="194" class="t-backend" font-size="7" text-anchor="middle">执行调度</text>
+        </g>
+
+        <g id="node-models" data-node-id="models" data-node-label="BackendCvModel 模型层" tabindex="0" role="button" aria-label="聚焦BackendCvModel 模型层，preprocess/postprocess 钩子, 推理执行链" aria-pressed="false" data-node-kind="backend" data-node-sublabel="preprocess/postprocess 钩子" data-node-tag="BaseAiModel&lt;IN,OUT&gt;" data-node-context="推理执行链">
+          <title>BackendCvModel 模型层 · preprocess/postprocess 钩子 · 推理执行链 · BaseAiModel&lt;IN,OUT&gt;</title>
+          <rect x="1050" y="300" width="215" height="90" rx="6" class="c-mask"/>
+          <rect x="1050" y="300" width="215" height="90" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(1056 306) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="1157.5" y="343" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">BackendCvModel 模型层</text>
+        <text data-detail="context" x="1157.5" y="359" class="t-muted" font-size="9" text-anchor="middle">preprocess/postprocess 钩子</text>
+        <text data-detail="fine" x="1157.5" y="382" class="t-backend" font-size="7" text-anchor="middle">BaseAiModel&lt;IN,OUT&gt;</text>
+        </g>
+
+        <g id="node-session" data-node-id="session" data-node-label="InferenceSession" tabindex="0" role="button" aria-label="聚焦InferenceSession，NamedTensor · 动态 shape, 推理执行链" aria-pressed="false" data-node-kind="backend" data-node-sublabel="NamedTensor · 动态 shape" data-node-tag="后端无关抽象" data-node-context="推理执行链">
+          <title>InferenceSession · NamedTensor · 动态 shape · 推理执行链 · 后端无关抽象</title>
+          <rect x="1050" y="560" width="210" height="82" rx="6" class="c-mask"/>
+          <rect x="1050" y="560" width="210" height="82" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(1056 566) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="1155" y="599" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">InferenceSession</text>
+        <text data-detail="context" x="1155" y="615" class="t-muted" font-size="9" text-anchor="middle">NamedTensor · 动态 shape</text>
+        <text data-detail="fine" x="1155" y="634" class="t-backend" font-size="7" text-anchor="middle">后端无关抽象</text>
+        </g>
+
+        <g id="node-engines" data-node-id="engines" data-node-label="推理引擎" tabindex="0" role="button" aria-label="聚焦推理引擎，MNN · ORT · TensorRT, 推理执行链" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="MNN · ORT · TensorRT" data-node-tag="cpu / gpu profile" data-node-context="推理执行链">
+          <title>推理引擎 · MNN · ORT · TensorRT · 推理执行链 · cpu / gpu profile</title>
+          <rect x="1050" y="730" width="210" height="86" rx="6" class="c-mask"/>
+          <rect x="1050" y="730" width="210" height="86" rx="6" class="c-cloud" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(1056 736) scale(0.6875)">
             <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
           </g>
-          <text data-node-label="" x="970" y="397" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">MNN / ORT / TensorRT</text>
-        </g>
-
-        <g id="node-artifacts" data-node-id="artifacts" data-node-label="权重 / ONNX / engines" tabindex="0" role="button" aria-label="聚焦权重 / ONNX / engines，环回模型沙箱" aria-pressed="false" data-node-kind="database" data-node-context="环回模型沙箱">
-          <title>权重 / ONNX / engines · 环回模型沙箱</title>
-          <rect x="880" y="575" width="180" height="86" rx="6" class="c-mask"/>
-          <rect x="880" y="575" width="180" height="86" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(886 581) scale(0.6875)">
-            <ellipse cx="8" cy="4" rx="5" ry="2"/>
-            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
-          </g>
-          <text data-node-label="" x="970" y="622" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">权重 / ONNX / engines</text>
-        </g>
-
-        <g id="node-supervisor" data-node-id="supervisor" data-node-label="mortred-supervisor :8787" tabindex="0" role="button" aria-label="聚焦mortred-supervisor :8787，控制面" aria-pressed="false" data-node-kind="backend" data-node-context="控制面">
-          <title>mortred-supervisor :8787 · 控制面</title>
-          <rect x="330" y="350" width="180" height="86" rx="6" class="c-mask"/>
-          <rect x="330" y="350" width="180" height="86" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(336 356) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-node-label="" x="420" y="397" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">mortred-supervisor :8787</text>
-        </g>
-
-        <g id="node-cli" data-node-id="cli" data-node-label="mortredctl" tabindex="0" role="button" aria-label="聚焦mortredctl，控制面" aria-pressed="false" data-node-kind="frontend" data-node-context="控制面">
-          <title>mortredctl · 控制面</title>
-          <rect x="150" y="350" width="150" height="70" rx="6" class="c-mask"/>
-          <rect x="150" y="350" width="150" height="70" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(156 356) scale(0.6875)">
-            <rect x="2" y="3" width="12" height="10" rx="2"/>
-            <path d="M2 6.5h12"/>
-            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
-            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
-          </g>
-          <text data-node-label="" x="225" y="389" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">mortredctl</text>
-        </g>
-
-        <g id="node-catalog" data-node-id="catalog" data-node-label="Catalog 与配置" tabindex="0" role="button" aria-label="聚焦Catalog 与配置，控制面" aria-pressed="false" data-node-kind="database" data-node-context="控制面">
-          <title>Catalog 与配置 · 控制面</title>
-          <rect x="360" y="575" width="180" height="70" rx="6" class="c-mask"/>
-          <rect x="360" y="575" width="180" height="70" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(366 581) scale(0.6875)">
-            <ellipse cx="8" cy="4" rx="5" ry="2"/>
-            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
-          </g>
-          <text data-node-label="" x="450" y="614" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Catalog 与配置</text>
+          <text data-node-label="" data-detail-anchor="" x="1155" y="771" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">推理引擎</text>
+        <text data-detail="context" x="1155" y="787" class="t-muted" font-size="9" text-anchor="middle">MNN · ORT · TensorRT</text>
+        <text data-detail="fine" x="1155" y="808" class="t-cloud" font-size="7" text-anchor="middle">cpu / gpu profile</text>
         </g>
 
         <!-- Connection labels -->
-        <g data-detail="context" data-edge-from="clients" data-edge-to="ingress" data-edge-label="HTTPS" data-edge-key="0" data-edge-id="client-to-ingress">
-          <rect x="148" y="125" width="34" height="14" rx="3" class="c-mask"/>
-          <text x="165" y="135" class="t-backend" font-size="8" text-anchor="middle">HTTPS</text>
+        <g data-detail="context" data-edge-from="clients" data-edge-to="gateway" data-edge-label="POST /mortred_ai_server_v1/…" data-edge-key="0">
+          <rect x="137.8" y="242" width="144.4" height="14" rx="3" class="c-mask"/>
+          <text x="210" y="252" class="t-backend" font-size="8" text-anchor="middle">POST /mortred_ai_server_v1/…</text>
         </g>
-        <g data-detail="context" data-edge-from="ingress" data-edge-to="gateway" data-edge-label="转发" data-edge-key="1" data-edge-id="ingress-to-gateway">
-          <rect x="320" y="125" width="30" height="14" rx="3" class="c-mask"/>
-          <text x="335" y="135" class="t-muted" font-size="8" text-anchor="middle">转发</text>
+        <g data-detail="context" data-edge-from="clients" data-edge-to="supervisor" data-edge-label="/api/v1 管理" data-edge-key="1">
+          <rect x="106.2" y="480" width="67.6" height="14" rx="3" class="c-mask"/>
+          <text x="140" y="490" class="t-messagebus" font-size="8" text-anchor="middle">/api/v1 管理</text>
         </g>
-        <g data-detail="context" data-edge-from="gateway" data-edge-to="model_servers" data-edge-label="loopback 路由" data-edge-key="2" data-edge-id="gateway-to-models">
-          <rect x="553.8" y="130" width="72.4" height="14" rx="3" class="c-mask"/>
-          <text x="590" y="140" class="t-muted" font-size="8" text-anchor="middle">loopback 路由</text>
+        <g data-detail="context" data-edge-from="gateway" data-edge-to="model_servers" data-edge-label="按 server_uri 转发" data-edge-key="2">
+          <rect x="421.8" y="246" width="96.39999999999999" height="14" rx="3" class="c-mask"/>
+          <text x="470" y="256" class="t-security" font-size="8" text-anchor="middle">按 server_uri 转发</text>
         </g>
-        <g data-detail="context" data-edge-from="model_servers" data-edge-to="inference" data-edge-label="调用" data-edge-key="3" data-edge-id="models-to-inference">
-          <rect x="835" y="133" width="30" height="14" rx="3" class="c-mask"/>
-          <text x="850" y="143" class="t-muted" font-size="8" text-anchor="middle">调用</text>
+        <g data-detail="context" data-edge-from="supervisor" data-edge-to="gateway" data-edge-label="spawn · 重启" data-edge-key="3">
+          <rect x="318.2" y="475" width="67.6" height="14" rx="3" class="c-mask"/>
+          <text x="352" y="485" class="t-messagebus" font-size="8" text-anchor="middle">spawn · 重启</text>
         </g>
-        <g data-detail="context" data-edge-from="inference" data-edge-to="runtimes" data-edge-label="执行" data-edge-key="4" data-edge-id="inference-to-runtimes">
-          <rect x="955" y="200" width="30" height="14" rx="3" class="c-mask"/>
-          <text x="970" y="210" class="t-muted" font-size="8" text-anchor="middle">执行</text>
+        <g data-detail="context" data-edge-from="supervisor" data-edge-to="model_servers" data-edge-label="spawn · /ready 探测" data-edge-key="4">
+          <rect x="574.4" y="490" width="101.2" height="14" rx="3" class="c-mask"/>
+          <text x="625" y="500" class="t-messagebus" font-size="8" text-anchor="middle">spawn · /ready 探测</text>
         </g>
-        <g data-detail="context" data-edge-from="runtimes" data-edge-to="artifacts" data-edge-label="加载" data-edge-key="5" data-edge-id="runtimes-to-artifacts">
-          <rect x="955" y="440" width="30" height="14" rx="3" class="c-mask"/>
-          <text x="970" y="450" class="t-muted" font-size="8" text-anchor="middle">加载</text>
+        <g data-detail="context" data-edge-from="model_servers" data-edge-to="server_core" data-edge-label="serve_process 回调" data-edge-key="5">
+          <rect x="691.8" y="248" width="96.39999999999999" height="14" rx="3" class="c-mask"/>
+          <text x="740" y="258" class="t-muted" font-size="8" text-anchor="middle">serve_process 回调</text>
         </g>
-        <g data-detail="context" data-edge-from="supervisor" data-edge-to="catalog" data-edge-label="读取配置 / 密钥" data-edge-key="6" data-edge-id="supervisor-to-catalog">
-          <rect x="394" y="555.5" width="82" height="14" rx="3" class="c-mask"/>
-          <text x="435" y="565.5" class="t-messagebus" font-size="8" text-anchor="middle">读取配置 / 密钥</text>
+        <g data-detail="context" data-edge-from="server_core" data-edge-to="async_jobs" data-edge-label="202 提交 · 轮询/长等/取果" data-edge-key="6">
+          <rect x="825" y="480" width="130" height="14" rx="3" class="c-mask"/>
+          <text x="890" y="490" class="t-muted" font-size="8" text-anchor="middle">202 提交 · 轮询/长等/取果</text>
         </g>
-        <g data-detail="context" data-edge-from="cli" data-edge-to="supervisor" data-edge-label="REST" data-edge-key="7" data-edge-id="cli-to-supervisor">
-          <rect x="300" y="336" width="30" height="14" rx="3" class="c-mask"/>
-          <text x="315" y="346" class="t-muted" font-size="8" text-anchor="middle">REST</text>
+        <g data-detail="context" data-edge-from="factory" data-edge-to="model_servers" data-edge-label="init 时创建 server+worker" data-edge-key="7">
+          <rect x="560" y="240" width="130" height="14" rx="3" class="c-mask"/>
+          <text x="625" y="250" class="t-messagebus" font-size="8" text-anchor="middle">init 时创建 server+worker</text>
         </g>
-        <g data-detail="context" data-edge-from="supervisor" data-edge-to="gateway" data-edge-label="启动 / 探活 / 重启" data-edge-key="8" data-edge-id="supervisor-to-gateway">
-          <rect x="383.3" y="250" width="96.39999999999999" height="14" rx="3" class="c-mask"/>
-          <text x="431.5" y="260" class="t-muted" font-size="8" text-anchor="middle">启动 / 探活 / 重启</text>
+        <g data-detail="context" data-edge-from="server_core" data-edge-to="exec" data-edge-label="WFGoTask 取 worker" data-edge-key="8">
+          <rect x="966.8" y="240" width="96.39999999999999" height="14" rx="3" class="c-mask"/>
+          <text x="1015" y="250" class="t-muted" font-size="8" text-anchor="middle">WFGoTask 取 worker</text>
         </g>
-        <g data-detail="context" data-edge-from="supervisor" data-edge-to="model_servers" data-edge-label="托管模型池" data-edge-key="9" data-edge-id="supervisor-to-models">
-          <rect x="549.5" y="253" width="58" height="14" rx="3" class="c-mask"/>
-          <text x="578.5" y="263" class="t-muted" font-size="8" text-anchor="middle">托管模型池</text>
+        <g data-detail="context" data-edge-from="exec" data-edge-to="models" data-edge-label="run / run_batch" data-edge-key="9">
+          <rect x="1134" y="240" width="82" height="14" rx="3" class="c-mask"/>
+          <text x="1175" y="250" class="t-muted" font-size="8" text-anchor="middle">run / run_batch</text>
+        </g>
+        <g data-detail="context" data-edge-from="models" data-edge-to="session" data-edge-label="NamedTensor 输入" data-edge-key="10">
+          <rect x="1131.6" y="465" width="86.8" height="14" rx="3" class="c-mask"/>
+          <text x="1175" y="475" class="t-muted" font-size="8" text-anchor="middle">NamedTensor 输入</text>
+        </g>
+        <g data-detail="context" data-edge-from="session" data-edge-to="engines" data-edge-label="mnn | onnx | tensorrt" data-edge-key="11">
+          <rect x="1119.6" y="676" width="110.8" height="14" rx="3" class="c-mask"/>
+          <text x="1175" y="686" class="t-backend" font-size="8" text-anchor="middle">mnn | onnx | tensorrt</text>
         </g>
 
         <!-- Boundary labels (foreground masks keep routes out of titles) -->
-        <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="security-group" data-composition-frame-label="对外入口">
-          <rect data-graph-role="structural-frame-label-mask" x="170" y="88" width="58.30968221935483" height="18" rx="3" class="c-mask"/>
-          <text data-boundary-label="" x="174" y="102.06451712903225" class="t-security" font-size="10.064517129032257" font-weight="600">对外入口</text>
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="region" data-composition-frame-label="mortred-supervisor 管理的进程树">
+          <rect data-graph-role="structural-frame-label-mask" x="222" y="292" width="177.4" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="226" y="305" class="t-cloud" font-size="9" font-weight="600">mortred-supervisor 管理的进程树</text>
         </g>
 
-        <g data-graph-role="structural-frame-label" data-composition-frame-id="1" data-composition-frame-kind="security-group" data-composition-frame-label="环回模型沙箱">
-          <rect data-graph-role="structural-frame-label-mask" x="630" y="88" width="82.46452332903225" height="18" rx="3" class="c-mask"/>
-          <text data-boundary-label="" x="634" y="102.06451712903225" class="t-security" font-size="10.064517129032257" font-weight="600">环回模型沙箱</text>
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="1" data-composition-frame-kind="security-group" data-composition-frame-label="外部鉴权入口 :8080">
+          <rect data-graph-role="structural-frame-label-mask" x="230" y="310" width="107.2" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="234" y="323" class="t-security" font-size="9" font-weight="600">外部鉴权入口 :8080</text>
         </g>
 
-        <g data-graph-role="structural-frame-label" data-composition-frame-id="2" data-composition-frame-kind="region" data-composition-frame-label="控制面">
-          <rect data-graph-role="structural-frame-label-mask" x="140" y="328" width="46.23226166451612" height="18" rx="3" class="c-mask"/>
-          <text data-boundary-label="" x="144" y="342.06451712903225" class="t-cloud" font-size="10.064517129032257" font-weight="600">控制面</text>
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="2" data-composition-frame-kind="security-group" data-composition-frame-label="loopback + 内部 token">
+          <rect data-graph-role="structural-frame-label-mask" x="490" y="310" width="123.39999999999999" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="494" y="323" class="t-security" font-size="9" font-weight="600">loopback + 内部 token</text>
+        </g>
+
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="3" data-composition-frame-kind="region" data-composition-frame-label="模型服务运行时">
+          <rect data-graph-role="structural-frame-label-mask" x="756" y="310" width="85.6" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="760" y="323" class="t-cloud" font-size="9" font-weight="600">模型服务运行时</text>
+        </g>
+
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="4" data-composition-frame-kind="region" data-composition-frame-label="推理执行链">
+          <rect data-graph-role="structural-frame-label-mask" x="1036" y="100" width="64" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="1040" y="113" class="t-cloud" font-size="9" font-weight="600">推理执行链</text>
         </g>
 
         <!-- Legend -->
-        <g data-legend="" data-legend-bridge="">
-          <text x="40" y="713" class="t-primary" font-size="12" font-weight="650">图例</text>
-          <g data-legend-semantic-kind="frontend" data-legend-kind="frontend" data-legend-label="前端" data-legend-x="40" data-legend-baseline="733" data-legend-width="63">
-            <rect x="40" y="724" width="16" height="10" rx="2.5" class="c-frontend" stroke-width="1"/>
-            <text x="62" y="733" class="t-muted" font-size="10" font-weight="500">前端</text>
-          </g>
-          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="后端" data-legend-x="125" data-legend-baseline="733" data-legend-width="63">
-            <rect x="125" y="724" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
-            <text x="147" y="733" class="t-muted" font-size="10" font-weight="500">后端</text>
-          </g>
-          <g data-legend-semantic-kind="database" data-legend-kind="database" data-legend-label="数据库" data-legend-x="210" data-legend-baseline="733" data-legend-width="73">
-            <rect x="210" y="724" width="16" height="10" rx="2.5" class="c-database" stroke-width="1"/>
-            <text x="232" y="733" class="t-muted" font-size="10" font-weight="500">数据库</text>
-          </g>
-          <g data-legend-semantic-kind="cloud" data-legend-kind="cloud" data-legend-label="云服务" data-legend-x="305" data-legend-baseline="733" data-legend-width="73">
-            <rect x="305" y="724" width="16" height="10" rx="2.5" class="c-cloud" stroke-width="1"/>
-            <text x="327" y="733" class="t-muted" font-size="10" font-weight="500">云服务</text>
-          </g>
-          <g data-legend-semantic-kind="external" data-legend-kind="external" data-legend-label="外部系统" data-legend-x="400" data-legend-baseline="733" data-legend-width="83">
-            <rect x="400" y="724" width="16" height="10" rx="2.5" class="c-external" stroke-width="1"/>
-            <text x="422" y="733" class="t-muted" font-size="10" font-weight="500">外部系统</text>
-          </g>
-        </g>
+
       </svg>
       <p class="intent-trace-status no-print" id="intent-trace-status" role="status" aria-live="polite" aria-atomic="true"></p>
       <div class="share-chapter-cue no-print" id="share-chapter-cue" hidden role="status" aria-live="polite">
@@ -5425,7 +5457,54 @@
 
     <!-- Info Cards -->
     <div class="cards">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot cyan"></div>
+          <h3>分层与解耦</h3>
+        </div>
+        <ul>
+          <li>&bull; 控制面(supervisor/gateway) 与数据面(模型服务) 分离，模型服务只绑 loopback</li>
+          <li>&bull; HTTP 层完全不知道后端类型：CvServerSpec 只提供 worker 工厂 + 响应填充器</li>
+          <li>&bull; 推理引擎被 InferenceSession 抹平，新增后端不动任何模型代码</li>
+        </ul>
+      </div>
 
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot emerald"></div>
+          <h3>一条同步请求的生命周期</h3>
+        </div>
+        <ul>
+          <li>&bull; 限流 → Bearer 鉴权 → Content-Type/413 → JSON 解析 → 队列深度 429 背压</li>
+          <li>&bull; WFGoTask 携带全部逐请求状态，从 BlockingQueue 领一个 worker</li>
+          <li>&bull; worker.run(base64) → 解码/预处理 → 引擎推理 → 后处理映射回原图坐标</li>
+          <li>&bull; run_time EWMA 驱动 Retry-After，模型卡死可交给 supervisor 重启</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot amber"></div>
+          <h3>吞吐与长任务</h3>
+        </div>
+        <ul>
+          <li>&bull; max_batch_size&gt;1 时收集并发请求打包成 [N,…] 单次引擎调用，失败项彼此隔离</li>
+          <li>&bull; 引擎拒绝批形状时透明回退逐条执行，静态 batch-1 引擎同样可用</li>
+          <li>&bull; 扩散/SAM AMG 走 /jobs：202+Location → status/wait → result(409/结果)</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot rose"></div>
+          <h3>配置与工程化</h3>
+        </div>
+        <ul>
+          <li>&bull; conf/server 与 conf/model 双层 TOML 是唯一行为来源：[SERVER] + [MODEL.backend]/[MODEL.params]</li>
+          <li>&bull; weights_manifest 清单驱动权重拉取与 sha256 校验，TRT engine 离线构建</li>
+          <li>&bull; gpu/cpu 双构建 profile，cpu 完全编译掉 TensorRT；27 服务 + 34 基准可执行文件同源生成</li>
+        </ul>
+      </div>
     </div>
 
   </div>
