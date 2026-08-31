@@ -157,14 +157,21 @@
 
 ## M5 契约出口：代码生成，消灭漂移（2 天）
 
-- [ ] **M5.1** 新增 `scripts/contract_dump.cc` + CMake target `contract_dump`：
+- [x] **M5.1** 新增 `scripts/contract_dump.cc` + CMake target `contract_dump`：
       实例化各任务目录，输出 `{task, model, params, options, io}` JSON
       （先例：`scripts/trt_engine_inspect.cc`）
-- [ ] **M5.2** `scripts/gen_openapi.py` 消费 dump 产物；重新生成 `src/server/openapi_doc.h`
-- [ ] **M5.3** 新增 `scripts/check_contract_sync.py` + 接入 CI
+- [x] **M5.2** `scripts/gen_openapi.py` 消费 dump 产物；重新生成 `src/server/openapi_doc.h`
+      ✅ 重写为统一信封文档：UnifiedResponse/ResponseItem/ResponseError/OutputOptions、
+      逐模型 Request_<SECTION>（含 Params_<SECTION> 严格 schema）、422 ValidationError、
+      info.x-contract-hash（dump 规范哈希，任何 spec 变更必然改变文档）。
+- [x] **M5.3** 新增 `scripts/check_contract_sync.py` + 接入 CI
       （`.github/workflows/ci.yml`）：再生成结果必须 == 仓库内 spec
-- [ ] **M5.4** `scripts/server/test_server.py`、smoke 脚本、`README`/`README.zh-cn`、
+      ✅ 门禁验证过负测试：篡改 dump → 三连报错（dump/openapi.json/openapi_doc.h）exit 1；
+      cpu-profile job 新增 contract sync gate step。
+- [x] **M5.4** `scripts/server/test_server.py`、smoke 脚本、`README`/`README.zh-cn`、
       `CHANGELOG.md` 更新到统一契约示例
+      ✅ test_server.py / locust / smoke_diffusion_async.sh / test_async_jobs.sh 全部切
+      images[] 信封；CHANGELOG 记录 breaking 变更与迁移语义；README 无 img_data 残留。
 
 **M5 验收**：OpenAPI 与 C++ 声明零漂移（CI 强制）；`contract_dump` 输出即文档源。
 
