@@ -120,12 +120,20 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
     const auto *output_data = output_view.data;
     const auto ele_size = output_view.tensor->element_count();
 
+    // request-level overrides (config TOML stays the default source)
+    float score_threshold = static_cast<float>(_m_score_threshold);
+    int keep_topk = static_cast<int>(_m_keep_topk);
+    if (context.params != nullptr) {
+        score_threshold = context.params->get_f32("score_threshold", score_threshold);
+        keep_topk = context.params->get_i32("top_k", keep_topk);
+    }
+
     // construct segmentation prob and score maps. The score values below the
     // threshold are zeroed before contours are decoded, exactly as before.
     std::vector<float> score_data(output_data, output_data + ele_size);
     std::vector<uchar> seg_mat_vec(ele_size);
     for (int index = 0; index < ele_size; ++index) {
-        if (score_data[index] >= _m_score_threshold) {
+        if (score_data[index] >= score_threshold) {
             seg_mat_vec[index] = static_cast<uchar>(score_data[index] * 255.0);
         } else {
             seg_mat_vec[index] = static_cast<uchar>(0);
@@ -135,13 +143,13 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
     cv::Mat seg_prob_mat(context.network_size, CV_8UC1, seg_mat_vec.data());
     cv::Mat seg_score_mat(context.network_size, CV_32FC1, score_data.data());
 
-    return get_boxes_from_bitmap(seg_prob_mat, seg_score_mat, geometry_scale, output);
+    return get_boxes_from_bitmap(seg_prob_mat, seg_score_mat, geometry_scale, score_threshold, keep_topk, output);
 }
 
 template <typename INPUT, typename OUTPUT>
 StatusCode DBTextDetector<INPUT, OUTPUT>::get_boxes_from_bitmap(const cv::Mat &seg_prob_mat, const cv::Mat &seg_score_mat,
                                                                 const jinq::models::backend::GeometryScale &geometry_scale,
-                                                                OUTPUT &output) const {
+                                                                float score_threshold, int keep_topk, OUTPUT &output) const {
     TextRegions result;
 
     // contours analysis
@@ -164,7 +172,7 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::get_boxes_from_bitmap(const cv::Mat &s
         // calculate rotated bbox score
         const auto valid_roi = r_bounding_box & cv::Rect2f(0, 0, seg_score_mat.cols, seg_score_mat.rows);
         const float score = static_cast<float>(cv::mean(seg_score_mat(valid_roi))[0]);
-        if (score < _m_score_threshold) {
+        if (score < score_threshold) {
             continue;
         }
 
@@ -181,8 +189,8 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::get_boxes_from_bitmap(const cv::Mat &s
         result.push_back(region);
     }
 
-    if (result.size() > static_cast<size_t>(_m_keep_topk)) {
-        result.resize(static_cast<size_t>(_m_keep_topk));
+    if (result.size() > static_cast<size_t>(keep_topk)) {
+        result.resize(static_cast<size_t>(keep_topk));
     }
     output = std::move(result);
     return StatusCode::OK;

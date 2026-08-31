@@ -73,7 +73,8 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> SuperPoint<I
 }
 
 template <typename INPUT, typename OUTPUT>
-void SuperPoint<INPUT, OUTPUT>::decode_fp_location_and_score(const NamedTensor &semi, FeatureOutput &key_points) const {
+void SuperPoint<INPUT, OUTPUT>::decode_fp_location_and_score(const NamedTensor &semi, double score_threshold,
+                                                             double nms_radius, FeatureOutput &key_points) const {
     const auto *host_data = semi.tensor.template data<float>();
     const int dense_map_row = _m_input_size_host.height / _m_cell_size;
     const int dense_map_col = _m_input_size_host.width / _m_cell_size;
@@ -115,7 +116,7 @@ void SuperPoint<INPUT, OUTPUT>::decode_fp_location_and_score(const NamedTensor &
                     const float score = dense_softmax.at<cv::Vec<float, dense_map_channels - 1>>(row, col)[score_idx];
                     const int interest_pt_x = col * _m_cell_size + col_ext_index;
                     const int interest_pt_y = row * _m_cell_size + row_ext_index;
-                    if (score >= _m_score_threshold) {
+                    if (score >= score_threshold) {
                         jinq::models::io_define::feature_point::fp key_pt;
                         key_pt.location = cv::Point2f(static_cast<float>(interest_pt_x), static_cast<float>(interest_pt_y));
                         key_pt.score = score;
@@ -138,7 +139,7 @@ void SuperPoint<INPUT, OUTPUT>::decode_fp_location_and_score(const NamedTensor &
             const auto diff_x = iter->location.x - comp->location.x;
             const auto diff_y = iter->location.y - comp->location.y;
             const auto distance = std::sqrt(std::pow(diff_x, 2) + std::pow(diff_y, 2));
-            if (distance <= _m_nms_threshold) {
+            if (distance <= nms_radius) {
                 comp = key_points.erase(comp);
             } else {
                 ++comp;
@@ -230,8 +231,17 @@ StatusCode SuperPoint<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>
         return desc_status;
     }
 
+    // request-level overrides (config TOML stays the default source); the
+    // nms value is a pixel radius, deliberately named nms_radius in the spec
+    double score_threshold = _m_score_threshold;
+    double nms_radius = _m_nms_threshold;
+    if (context.params != nullptr) {
+        score_threshold = context.params->get_f32("score_threshold", static_cast<float>(score_threshold));
+        nms_radius = context.params->get_i32("nms_radius", static_cast<int>(nms_radius));
+    }
+
     FeatureOutput internal_out;
-    decode_fp_location_and_score(*semi, internal_out);
+    decode_fp_location_and_score(*semi, score_threshold, nms_radius, internal_out);
     decode_fp_descriptor(*desc, internal_out);
 
     // rescale feature point locations into the user image space
