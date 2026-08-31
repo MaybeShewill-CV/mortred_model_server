@@ -94,15 +94,15 @@
 
 ## M3 装配层：worker 输入类型切换 + 工厂挂参数模式（3–4 天）
 
-- [ ] **M3.1** `src/server/generic_cv_server.h`：
+- [x] **M3.1** `src/server/generic_cv_server.h`：
       - `Base64Input` 别名更名 `ImageInput` = `io_define::common_io::image_input`
       - `CvServerSpec` 增加 `std::vector<ParamSpec> param_specs`（默认空 = 该模型不接受请求参数）
       - `CvResponseFiller` 签名追加 `const OutputOptions&`
-- [ ] **M3.2** `src/server/response_serializers.h`：全部 `fill_*` 机械追加 options 参数
+- [x] **M3.2** `src/server/response_serializers.h`：全部 `fill_*` 机械追加 options 参数
       （多数现阶段忽略；图像输出类任务读取 `encoding/include_image`）
-- [ ] **M3.3** `src/factory/*_task.h`（15 个任务文件）：输入别名切换（机械）；
+- [x] **M3.3** `src/factory/*_task.h`（15 个任务文件）：输入别名切换（机械）；
       `obj_detection_task.h` 逐 entry 挂 `param_specs`（score_threshold/nms_threshold/top_k）
-- [ ] **M3.4** `src/models/object_detection/detector_common.h` + `detection_params.h`：
+- [x] **M3.4** `src/models/object_detection/detector_common.h` + `detection_params.h`：
       后处理从 `InferenceContext.params` 读取覆盖值，缺省回落 TOML 配置值
       （yolov5/6/7/8/nanodet/centerface/libface 共用同一路径，一处改动覆盖全族）
 - [ ] **M3.5** `src/server/async_job_table.h`：`task_request` 改形
