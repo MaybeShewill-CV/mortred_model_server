@@ -377,7 +377,8 @@ StatusCode ClsCondDDIMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT&
     } else {
         xt = std::vector<float>(xt_data, xt_data + sample_size.area() * sample_channels);
     }
-    auto mid_sample_results = p_sample(xt, total_steps, sample_steps, eta, save_all_mid_results);
+    auto cls_id = transformed_input.cls_id;
+    auto mid_sample_results = p_sample(xt, total_steps, sample_steps, cls_id, eta, save_all_mid_results);
 
     // transform sampled results into cv::Mat
     cls_cond_ddim_sampler_impl::internal_output internal_out;

@@ -9,6 +9,7 @@
 #include "common/cv_utils.h"
 #include "common/status_code.h"
 #include "models/base_model.h"
+#include "models/backend/param_spec.h"
 #include "models/model_io_define.h"
 
 namespace jinq {
@@ -19,11 +20,12 @@ using ImageInput = jinq::models::io_define::common_io::image_input;
 using Base64Output = jinq::models::io_define::common_io::base64_input;
 
 /***
- * Wraps any diffusion sampler into the base64_input contract. The inner
- * sampler's INPUT is constructed from the TOML config at init time; the base64
- * payload from the HTTP request is accepted but ignored (the server framework
- * requires it to be non-empty). The first generated image is encoded back to
- * base64 PNG as the response.
+ * Wraps any diffusion sampler into the unified image_input contract. The
+ * inner sampler's INPUT is a template assembled from the TOML config at init
+ * time; each request copies the template and overlays the whitelisted knobs
+ * from the request params (timesteps / steps / eta / cls_id - family
+ * dependent). The base64 payload itself is still ignored (generative model);
+ * the first generated image is encoded back to base64 PNG as the response.
  */
 template <typename SAMPLER, typename SAMPLER_INPUT, typename SAMPLER_OUTPUT>
 class DiffusionModelAdapter : public jinq::models::BaseAiModel<ImageInput, Base64Output> {
@@ -37,9 +39,14 @@ class DiffusionModelAdapter : public jinq::models::BaseAiModel<ImageInput, Base6
 
   protected:
     jinq::common::StatusCode run_impl(const ImageInput &in, Base64Output &out) override {
-        (void)in; // diffusion parameters come from config, not from the payload
+        // copy the config template and overlay request-level knobs: the
+        // worker stays reusable across concurrent requests
+        SAMPLER_INPUT request_input = _m_input;
+        if (in.params != nullptr) {
+            apply_request_overrides(*in.params, &request_input);
+        }
         SAMPLER_OUTPUT sampler_output;
-        const auto status = _m_sampler->run(_m_input, sampler_output);
+        const auto status = _m_sampler->run(request_input, sampler_output);
         if (status != jinq::common::StatusCode::OK) {
             return status;
         }
@@ -57,7 +64,28 @@ class DiffusionModelAdapter : public jinq::models::BaseAiModel<ImageInput, Base6
 
     SAMPLER_INPUT &mutable_input() { return _m_input; }
 
+    /*** test seam: inspect the fake sampler without engines */
+    SAMPLER &sampler() { return *_m_sampler; }
+
   private:
+    /*** request-overridable knobs per sampler family; the config template
+     * value is the fallback for every key (the same resolution rule as the
+     * detection/classification families) */
+    void apply_request_overrides(const jinq::models::backend::ParamSet &params, SAMPLER_INPUT *input) const {
+        if constexpr (std::is_same_v<SAMPLER_INPUT, jinq::models::io_define::diffusion::std_ddpm_input>) {
+            input->timestep = params.get_i32("timesteps", input->timestep);
+        } else if constexpr (std::is_same_v<SAMPLER_INPUT, jinq::models::io_define::diffusion::std_ddim_input>) {
+            input->sample_steps = params.get_i32("sample_steps", input->sample_steps);
+            input->eta = params.get_f32("eta", input->eta);
+        } else if constexpr (std::is_same_v<SAMPLER_INPUT, jinq::models::io_define::diffusion::std_cls_cond_ddim_input>) {
+            input->sample_steps = params.get_i32("sample_steps", input->sample_steps);
+            input->eta = params.get_f32("eta", input->eta);
+            input->cls_id = params.get_i32("cls_id", input->cls_id);
+        } else if constexpr (std::is_same_v<SAMPLER_INPUT, jinq::models::io_define::diffusion::std_ldm_input>) {
+            input->step_size = params.get_i32("step_size", input->step_size);
+        }
+    }
+
     // extract the first image from the various sampler output contracts
     const cv::Mat &first_image(const SAMPLER_OUTPUT &output) const {
         if constexpr (std::is_same_v<SAMPLER_OUTPUT, jinq::models::io_define::diffusion::std_ddpm_output>) {
