@@ -39,6 +39,7 @@ set(TEST_LIST
     detector_common_unittest
     model_runtime_unittest
     tensor_contract_unittest
+    param_spec_unittest
     model_factory_unittest
     byte_tracker_unittest
     simple_tokenizer_unittest

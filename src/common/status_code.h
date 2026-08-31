@@ -33,6 +33,9 @@ namespace common {
     X(NOT_FOUND, 63, "not found")                                                                                                          \
     X(INTERNAL_ERROR, 64, "internal server error")                                                                                         \
     X(NOT_READY, 65, "service not ready")                                                                                                  \
+    X(INVALID_REQUEST_PARAMETER, 66, "invalid request parameter")                                                                          \
+    X(REQUEST_ITEM_LIMIT, 67, "too many items in one request")                                                                             \
+    X(DEADLINE_EXCEEDED_PARTIAL, 68, "deadline exceeded, partial results")                                                                 \
     X(UNAUTHORIZED, 401, "unauthorized")                                                                                                   \
     X(RATE_LIMITED, 429, "too many requests")                                                                                              \
     X(TOKENIZE_UNKNOWN_TOKEN, 80, "unknown token")                                                                                         \

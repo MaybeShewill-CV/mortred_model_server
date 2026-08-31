@@ -17,6 +17,14 @@
 
 namespace jinq {
 namespace models {
+namespace backend {
+
+// forward declaration: image_input carries a request-scoped parameter view;
+// the request owns the ParamSet, the input only borrows it for one run
+class ParamSet;
+
+} // namespace backend
+
 namespace io_define {
 namespace common_io {
 
@@ -37,6 +45,25 @@ struct base64_input {
 struct pair_mat_input {
     cv::Mat src_input_image;
     cv::Mat dst_input_image;
+};
+
+/*** transport-agnostic image payload: how the bytes arrive. base64_text is
+ * the JSON-envelope encoding; raw_bytes is the binary-body encoding (body
+ * bytes go straight to imdecode, no base64 inflation). The request owns the
+ * buffer, the model only reads it. */
+struct byte_source {
+    enum class origin_kind { base64_text, raw_bytes };
+
+    origin_kind origin = origin_kind::base64_text;
+    std::string data;
+};
+
+/*** unified request-scoped image input: one image plus the request-level
+ * parameter view. params is nullptr on the legacy single-image path, so a
+ * model reading it falls back to its config defaults unchanged. */
+struct image_input {
+    byte_source image;
+    const backend::ParamSet *params = nullptr;
 };
 
 } // namespace common_io

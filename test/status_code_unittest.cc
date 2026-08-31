@@ -29,12 +29,17 @@ TEST(status_code, wire_values_are_stable) {
     EXPECT_EQ(to_underlying(StatusCode::SERVER_INIT_FAILED), 11);
     EXPECT_EQ(to_underlying(StatusCode::JSON_DECODE_ERROR), 50);
     EXPECT_EQ(to_underlying(StatusCode::TRT_CONVERT_ONNX_MODEL_FAILED), 92);
+    EXPECT_EQ(to_underlying(StatusCode::INVALID_REQUEST_PARAMETER), 66);
+    EXPECT_EQ(to_underlying(StatusCode::REQUEST_ITEM_LIMIT), 67);
+    EXPECT_EQ(to_underlying(StatusCode::DEADLINE_EXCEEDED_PARTIAL), 68);
 }
 
 TEST(status_code, sample_messages) {
     EXPECT_EQ(status_code_to_str(StatusCode::OK), "OK");
     EXPECT_EQ(status_code_to_str(StatusCode::MODEL_RUN_TIMEOUT), "model run timeout");
     EXPECT_EQ(status_code_to_str(StatusCode::TRT_CONVERT_ONNX_MODEL_FAILED), "convert onnx model to trt failed");
+    EXPECT_EQ(status_code_to_str(StatusCode::INVALID_REQUEST_PARAMETER), "invalid request parameter");
+    EXPECT_EQ(status_code_to_str(StatusCode::DEADLINE_EXCEEDED_PARTIAL), "deadline exceeded, partial results");
 }
 
 int main(int argc, char **argv) {
