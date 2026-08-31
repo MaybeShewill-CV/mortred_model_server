@@ -7,6 +7,28 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- **Unified request/response contract (breaking)**: model endpoints now speak
+  the single envelope `{"req_id", "images": [<base64>...], "params", "options"}`
+  and answer with `{status, status_str, task_id, model, results[], server_time_ms,
+  partial}`. `results[]` is index-aligned with `images[]` and every item carries
+  its own status (per-item failure isolation, deadline partials). The legacy
+  `img_data` field was removed and answers `422` with a JSON-pointer migration
+  hint; unknown fields/params are rejected strictly (`422` + `errors[]`).
+- Request-level parameters for the detection family: `score_threshold`,
+  `nms_threshold`, `top_k` (validated per model, TOML config stays the default).
+- Backpressure, `Retry-After` and queue depth accounting are now per image
+  item (`max_request_items`, default 16); one deadline spans queue wait,
+  worker wait and inference.
+- Gateway forwards the client `Content-Type`/`Accept` verbatim (binary body
+  encoding groundwork).
+
+### Added
+- Contract generation chain: `contract_dump` (C++ catalogs as the single
+  source) -> `docs/contract_dump.json` -> `gen_openapi.py` -> OpenAPI +
+  embedded `/openapi.json`; `scripts/check_contract_sync.py` gates the chain
+  in CI (any spec change without regeneration fails the build).
+
 ## [0.1.0] - 2026-08-23
 
 ### Added

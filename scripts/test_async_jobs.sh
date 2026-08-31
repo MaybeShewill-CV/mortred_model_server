@@ -51,7 +51,7 @@ BASE="http://127.0.0.1:$PORT"
 echo "--- A1: submit returns 202 + job_id ---"
 SUBMIT_RESP=$(curl -s -w '\n%{http_code}' -X POST "$BASE/jobs" \
     -H "Content-Type: application/json" \
-    -d '{"img_data":"aGVsbG8="}')
+-d '{"images":["aGVsbG8="]}')
 SUBMIT_CODE=$(echo "$SUBMIT_RESP" | tail -1)
 SUBMIT_BODY=$(echo "$SUBMIT_RESP" | head -n -1)
 check "A1: HTTP 202" "202" "$SUBMIT_CODE"
@@ -76,7 +76,7 @@ check "A3: result has code 0" '"code":0' "$(echo "$RESULT_RESP" | head -n -1)"
 
 # A4: not-finished result -> 409 (submit a new one and immediately get result)
 echo "--- A4: incomplete result -> 409 ---"
-NEW_SUBMIT=$(curl -s -X POST "$BASE/jobs" -H "Content-Type: application/json" -d '{"img_data":"aGVsbG8="}')
+  NEW_SUBMIT=$(curl -s -X POST "$BASE/jobs" -H "Content-Type: application/json" -d '{"images":["aGVsbG8="]}')
 NEW_ID=$(echo "$NEW_SUBMIT" | grep -o '"job_id":"[^"]*"' | cut -d'"' -f4)
 EARLY_RESULT=$(curl -s -w '\n%{http_code}' "$BASE/jobs/$NEW_ID/result")
 EARLY_CODE=$(echo "$EARLY_RESULT" | tail -1)

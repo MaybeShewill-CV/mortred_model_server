@@ -120,10 +120,64 @@ TEST(openapi_consistency, contract_status_codes_are_covered) {
     const auto& responses = doc["components"]["responses"];
     const std::vector<const char*> required = {
         "BadRequest", "Unauthorized", "NotFound", "MethodNotAllowed", "PayloadTooLarge",
-        "UnsupportedMediaType", "RateLimited", "InternalError", "NotReady", "GatewayTimeout"};
+        "UnsupportedMediaType", "ValidationError", "RateLimited", "InternalError", "NotReady",
+        "GatewayTimeout"};
     for (const char* name : required) {
         EXPECT_TRUE(responses.HasMember(name)) << "missing response component: " << name;
     }
+}
+
+TEST(openapi_consistency, unified_envelope_schemas_are_declared) {
+    rapidjson::Document doc;
+    doc.Parse(read_file("docs/openapi.json").c_str());
+    ASSERT_FALSE(doc.HasParseError());
+    const auto& schemas = doc["components"]["schemas"];
+
+    ASSERT_TRUE(schemas.HasMember("UnifiedResponse"));
+    const auto& envelope = schemas["UnifiedResponse"];
+    ASSERT_TRUE(envelope["properties"].HasMember("status"));
+    ASSERT_TRUE(envelope["properties"].HasMember("task_id"));
+    ASSERT_TRUE(envelope["properties"].HasMember("results"));
+    ASSERT_TRUE(envelope["properties"].HasMember("partial"));
+    ASSERT_TRUE(envelope["properties"].HasMember("errors"));
+
+    ASSERT_TRUE(schemas.HasMember("ResponseItem"));
+    ASSERT_TRUE(schemas.HasMember("ResponseError"));
+    ASSERT_TRUE(schemas.HasMember("OutputOptions"));
+    // the legacy request shape must not survive in the generated document
+    EXPECT_FALSE(schemas.HasMember("ImgRequest"));
+}
+
+TEST(openapi_consistency, every_model_request_requires_images_and_is_strict) {
+    rapidjson::Document doc;
+    doc.Parse(read_file("docs/openapi.json").c_str());
+    ASSERT_FALSE(doc.HasParseError());
+    const auto& schemas = doc["components"]["schemas"];
+    int checked = 0;
+    for (auto it = schemas.MemberBegin(); it != schemas.MemberEnd(); ++it) {
+        const std::string name = it->name.GetString();
+        if (name.rfind("Request_", 0) != 0) {
+            continue;
+        }
+        const auto& schema = it->value;
+        ASSERT_TRUE(schema.HasMember("required"));
+        const auto& required = schema["required"];
+        ASSERT_TRUE(required.IsArray());
+        bool has_images = false;
+        for (const auto& entry : required.GetArray()) {
+            if (std::string(entry.GetString()) == "images") {
+                has_images = true;
+            }
+        }
+        EXPECT_TRUE(has_images) << "model request schema must require images[]: " << name;
+        // strict envelope: unknown keys are rejected with 422, so additionalProperties
+        // must be false on every generated request schema
+        ASSERT_TRUE(schema.HasMember("additionalProperties"));
+        EXPECT_FALSE(schema["additionalProperties"].GetBool())
+            << "request schema must reject unknown fields: " << name;
+        checked++;
+    }
+    EXPECT_GT(checked, 0) << "no generated model request schemas found";
 }
 
 TEST(openapi_consistency, legacy_endpoints_are_marked_deprecated) {
