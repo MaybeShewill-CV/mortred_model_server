@@ -227,6 +227,11 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
     virtual PreparedInput prepare_inputs(const INPUT &input) {
         PreparedInput prepared;
         if constexpr (detail::is_image_input<INPUT>::value) {
+            if constexpr (std::is_same<INPUT, io_define::common_io::image_input>::value) {
+                // the request-scoped parameter view travels with the input;
+                // nullptr keeps postprocess on its config defaults
+                prepared.context.params = input.params;
+            }
             const cv::Mat image = cv_input::load_image(input, _m_image_limits, &prepared.status, &prepared.error);
             if (image.empty()) {
                 if (prepared.status == StatusCode::OK) {
