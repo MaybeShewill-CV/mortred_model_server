@@ -72,19 +72,19 @@
 
 ## M2 解析层：新解析器就位，未接线（2 天）
 
-- [ ] **M2.1** 新增 `src/server/output_options.h`：`OutputOptions`
+- [x] **M2.1** 新增 `src/server/output_options.h`：`OutputOptions`
       `{encoding: png|jpeg|webp, include_image, max_results, echo_params}`，
       严格已知键校验 + 各任务无关的默认值
-- [ ] **M2.2** 新增 `src/server/request_envelope.h`：
+- [x] **M2.2** 新增 `src/server/request_envelope.h`：
       `parse_request(body, ParamSchema, OutputSchema) → ParsedRequest{req_id, items[], params, options}`
       或结构化错误 `{code, pointer, message, migration}`：
       - 未知键严格拒绝；`img_data` 识别 → 66 + `migration: "img_data → images[0]"`
       - `images` 必须为非空字符串数组（元素将来允许 string|object，纯附加）
       - rapidjson，沿用 never-throw 纪律；`req_id` 透传
-- [ ] **M2.3** 新增 `test/request_envelope_unittest.cc`（替代/吸收
+- [x] **M2.3** 新增 `test/request_envelope_unittest.cc`（替代/吸收
       `json_request_parser_unittest.cc`）：合法单图/多图、未知参数、越界、类型错、
       枚举错、`img_data`、空数组、畸形 JSON、超长字符串、params 条数上限
-- [ ] **M2.4** `src/common/http_response.h`：新增 v2 响应信封结构
+- [x] **M2.4** `src/common/http_response.h`：新增 v2 响应信封结构
       `{status, status_str, task_id, model{name,version}, results[], server_time_ms, partial}`
       （仅新增结构，不改 `build_response_body` 行为）
 
