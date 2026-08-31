@@ -8,6 +8,7 @@
 #include <opencv2/core.hpp>
 
 #include "common/status_code.h"
+#include "models/backend/param_spec.h"
 #include "models/backend/tensor.h"
 
 namespace jinq {
@@ -18,6 +19,13 @@ namespace backend {
 struct InferenceContext {
     cv::Size source_size;
     cv::Size network_size;
+
+    /***
+     * request-scoped parameter view travelling from prepare_inputs to
+     * postprocess. nullptr on the legacy single-image path, so every
+     * get_f32(key, config_default) call stays on its config default.
+     */
+    const ParamSet *params = nullptr;
 };
 
 /*** all data produced by preprocessing for exactly one inference request */
