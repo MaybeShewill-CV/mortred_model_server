@@ -5,6 +5,7 @@
 #include <limits>
 #include <string>
 #include <vector>
+#include "models/backend/param_spec.h"
 
 #include "models/backend/tensor.h"
 #include "models/model_io_define.h"
@@ -98,4 +99,54 @@ TEST(ObjectDetectionOutputContract, YoloV8RejectsMalformedOutput) {
 
     auto nan_output = output_tensor(DType::F32, {1, 84, 1}, one_candidate_yolov8(std::numeric_limits<float>::quiet_NaN()));
     check({nan_output});
+}
+
+TEST(ObjectDetectionOutputContract, RequestParamThresholdSweepIsMonotone) {
+    // three candidates with distinct scores: 0.2 / 0.5 / 0.9
+    // [1, 84, N] is channel-major: candidate n of channel c lives at c*N+n.
+    // Each candidate gets a DISJOINT bbox so per-class NMS cannot merge them
+    // (identical boxes would suppress down to the single best score).
+    std::vector<float> flat(84 * 3, 0.0f);
+    const std::vector<float> scores = {0.2f, 0.5f, 0.9f};
+    for (size_t n = 0; n < scores.size(); ++n) {
+        const auto candidate = one_candidate_yolov8(scores[n]);
+        for (size_t c = 0; c < candidate.size(); ++c) {
+            flat[c * scores.size() + n] = candidate[c];
+        }
+        // channel 0..3 = x, y, w, h: shift each candidate on the x axis
+        flat[0 * scores.size() + n] = 10.0f + static_cast<float>(n) * 30.0f;
+    }
+    const auto tensor = output_tensor(DType::F32, {1, 84, 3}, flat);
+
+    TestYoloV8Detector detector;
+    detector._m_detection_params.score_threshold = 0.0f;
+    detector._m_detection_params.nms_threshold = 0.9f;
+    detector._m_detection_params.keep_top_k = 100;
+
+    auto run_with_threshold = [&detector, &tensor](float request_threshold) {
+        std_object_detection_output out;
+        auto context = test_context();
+        jinq::models::backend::ParamSet params;
+        params.set_f32("score_threshold", request_threshold);
+        context.params = &params;
+        const auto status = detector.postprocess({tensor}, context, out);
+        EXPECT_EQ(status, jinq::common::StatusCode::OK);
+        return out.size();
+    };
+
+    // property-based sweep: a stricter threshold can never return MORE boxes
+    EXPECT_EQ(run_with_threshold(0.0f), 3u);
+    EXPECT_EQ(run_with_threshold(0.4f), 2u);
+    EXPECT_EQ(run_with_threshold(0.6f), 1u);
+    EXPECT_EQ(run_with_threshold(0.95f), 0u);
+
+    // legacy path (nullptr params) keeps the pure config behavior
+    {
+        std_object_detection_output out;
+        auto context = test_context();
+        context.params = nullptr;
+        detector._m_detection_params.score_threshold = 0.6f;
+        EXPECT_EQ(detector.postprocess({tensor}, context, out), jinq::common::StatusCode::OK);
+        EXPECT_EQ(out.size(), 1u);
+    }
 }
