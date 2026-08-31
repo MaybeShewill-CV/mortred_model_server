@@ -57,6 +57,7 @@
 #include "server/rate_limiter.h"
 #include "server/backpressure.h"
 #include "server/async_job_table.h"
+#include "server/request_envelope.h"
 #include "server/server_config_schema.h"
 
 namespace jinq {
@@ -122,6 +123,24 @@ inline INPUT make_model_input_from_payload(std::string payload) {
     } else {
         static_assert(sizeof(INPUT) == 0,
                       "unsupported worker input type: BaseAiServerImpl feeds base64 payloads only");
+    }
+    return input;
+}
+
+/*** builds the worker's own input type from one decoded envelope item: the
+ * unified image_input carries the request-scoped param view; legacy test
+ * workers keep the plain base64 contract. */
+template <typename INPUT>
+inline INPUT make_model_input(models::io_define::common_io::byte_source item,
+                              const models::backend::ParamSet* params) {
+    INPUT input;
+    if constexpr (std::is_same<INPUT, models::io_define::common_io::image_input>::value) {
+        input.image = std::move(item);
+        input.params = params;
+    } else if constexpr (std::is_same<INPUT, models::io_define::common_io::base64_input>::value) {
+        input.input_image_content = std::move(item.data);
+    } else {
+        static_assert(sizeof(INPUT) == 0, "unsupported worker input type for envelope items");
     }
     return input;
 }
@@ -265,6 +284,10 @@ protected:
     // (max_batch_size == 1 never touches _m_batch_queue / _m_batch_thread)
     int _m_max_batch_size = 1;
     int _m_max_batch_delay_ms = 5;
+
+    // unified envelope admission bound: one request may carry at most this
+    // many images (backpressure and Retry-After account per item)
+    size_t _m_max_request_items = 16;
     moodycamel::BlockingConcurrentQueue<std::shared_ptr<batch_entry>> _m_batch_queue;
     std::atomic<bool> _m_batch_running{false};
     std::thread _m_batch_thread;
@@ -274,6 +297,13 @@ protected:
     // async job ledger: admission, state machine, retention, wait/notify
     // (in-memory, lost on restart; see docs/async-job-table.md)
     using AsyncTable = AsyncJobTable<MODEL_OUTPUT>;
+
+    // request-overridable parameter schema of the served model (empty = the
+    // model accepts no per-request params; the envelope validator rejects any)
+    std::vector<jinq::models::backend::ParamSpec> _m_param_specs;
+    // model identity echoed in the unified response (version lands with the
+    // contract-dump milestone)
+    std::string _m_model_name;
     AsyncTable _m_async_table;
 
 protected:
@@ -341,6 +371,31 @@ protected:
         resp->append_output_body(body.data(), body.size());
     }
 
+    /*** unified-envelope response exit (model endpoints + async results) */
+    static void reply_unified_json(protocol::HttpResponse* resp,
+                                   const jinq::common::UnifiedResponse& unified) {
+        resp->set_status_code(std::to_string(http_status_of(
+                                  static_cast<StatusCode>(unified.status))).c_str());
+        resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
+        resp->add_header_pair("X-Request-ID", unified.task_id.c_str());
+        resp->add_header_pair("Cache-Control", "no-store");
+
+        const auto body = jinq::common::build_unified_response_body(unified);
+        resp->append_output_body(body.data(), body.size());
+    }
+
+    /*** builds a rejection envelope: status wire + pointer-located errors */
+    static jinq::common::UnifiedResponse unified_rejection(
+        const std::string& task_id, StatusCode status,
+        std::vector<jinq::common::ResponseError> errors) {
+        jinq::common::UnifiedResponse unified;
+        unified.task_id = task_id;
+        unified.status = jinq::common::to_underlying(status);
+        unified.status_str = jinq::common::status_code_to_str(status);
+        unified.errors = std::move(errors);
+        return unified;
+    }
+
     static void reply_json(WFHttpTask* task,
                            const std::string& req_id,
                            StatusCode status,
@@ -372,25 +427,32 @@ protected:
         bool is_task_req_valid = false;
     };
 
-    /***
-     * Task request: parse_task_request parses the base64 image content and the
-     * caller trace id.
-     */
+    struct request_state;
 
-
-    /***
-     * One queued request in the batch path. The entry OWNS its request copy
-     * and result storage: the requesting go task may time out and disappear
-     * while the entry is still queued, and the runner keeps a shared_ptr, so
-     * the last owner frees the entry - no use-after-free is possible on any
-     * interleaving of (requester timeout) vs (batch completion).
-     */
+    /*** One whole multi-item request handed to the batch collector. The
+     * state OWNS the request and the per-item result slots; every queued
+     * batch_entry holds a shared_ptr to it, so the requesting go task may
+     * time out and disappear while items are still queued or running - the
+     * last owner frees the state, no use-after-free on any interleaving. */
     struct batch_entry {
+        size_t item_index = 0;  // index into owner->req.items
+        std::shared_ptr<struct request_state> owner;
+    };
+
+    /*** Per-request aggregation across batch entries: outputs/status are
+     * index-aligned with req.items; the runner writes one slot per completed
+     * entry under mu and notifies when the last slot lands. */
+    struct request_state {
         task_request req;
-        go_result result;
-        bool done = false;
         std::mutex mu;
         std::condition_variable cv;
+        size_t completed = 0;
+        bool done = false;  // every item reached a terminal status
+        std::vector<MODEL_OUTPUT> outputs;
+        std::vector<StatusCode> item_status;
+        // last batch run/wait timings (reported by the requester)
+        double worker_run_time_consuming = 0;
+        double find_worker_time_consuming = 0;
     };
 
 
@@ -419,16 +481,9 @@ protected:
      * @param req
      * @return
      */
-    task_request parse_task_request(const protocol::HttpRequest* req) {
+    jinq::server::ParsedRequest parse_model_request(const protocol::HttpRequest* req) {
         std::string req_body = protocol::HttpUtil::decode_chunked_body(req);
-        auto parsed = jinq::common::parse_json_request(req_body);
-
-        task_request result;
-        result.task_id = parsed.task_id;
-        result.is_valid = parsed.is_valid;
-        result.parse_status = parsed.parse_status;
-        result.payload = parsed.image_content;
-        return result;
+        return parse_request_envelope(req_body, _m_param_specs);
     }
 
     /***
@@ -441,8 +496,8 @@ protected:
     virtual void fill_response_data(
         rapidjson::Document::AllocatorType& allocator,
         rapidjson::Document& data,
-        const StatusCode& status,
-        const MODEL_OUTPUT& model_output) = 0;
+        const MODEL_OUTPUT& model_output,
+        const jinq::server::OutputOptions& options) = 0;
 
     /***
      * Custom extension endpoint hook: called when the URI is not
@@ -487,25 +542,23 @@ protected:
             return;
         }
 
-        // run the model (same path as do_work); the envelope reshape (M4)
-        // replaces this payload string with items + params
+        // run every item of the job with one worker checkout (same item
+        // semantics as the synchronous path, deadline included)
         const auto run_start = Timestamp::now();
-        using ModelInput = typename WORKER::element_type::input_type;
-        ModelInput model_input = detail::make_model_input_from_payload<ModelInput>(std::move(req->payload));
         go_result result;
-        const auto status = worker->run(model_input, result.model_output);
+        run_items(worker, *req, &result);
         const auto run_end = Timestamp::now();
         _m_working_queue.enqueue(std::move(worker));
 
         const double run_ms = (run_end - run_start) * 1000.0;
-        result.model_run_status = status;
         result.task_finished_ts = run_end.to_format_str();
         result.worker_run_time_consuming = run_ms;
-        if (status == StatusCode::OK) {
+        if (result.model_run_status == StatusCode::OK ||
+            result.model_run_status == StatusCode::DEADLINE_EXCEEDED_PARTIAL) {
             _m_async_table.finish(job_id, std::move(result));
             _m_metrics.inc_async_jobs("done");
         } else {
-            _m_async_table.fail(job_id, jinq::common::status_code_to_str(status));
+            _m_async_table.fail(job_id, jinq::common::status_code_to_str(result.model_run_status));
             _m_metrics.inc_async_jobs("failed");
         }
         _m_metrics.observe_async_job_duration_ms(run_ms);
@@ -563,9 +616,41 @@ protected:
             return;
         }
 
-        auto task_req = parse_task_request(task->get_req());
-        if (task_req.task_id.empty()) {
-            task_req.task_id = generate_req_id();
+        // strict envelope parse: violations reject with 422 before admission
+        auto parsed = parse_model_request(task->get_req());
+        const std::string task_id = parsed.req_id.empty() ? generate_req_id() : parsed.req_id;
+        if (!parsed.is_valid) {
+            std::vector<jinq::common::ResponseError> errors;
+            errors.reserve(parsed.violations.size());
+            for (const auto& violation : parsed.violations) {
+                errors.push_back({violation.pointer, violation.message});
+            }
+            _m_metrics.inc_http_requests("POST", "422");
+            reply_unified_json(task->get_resp(),
+                               unified_rejection(task_id, parsed.status, std::move(errors)));
+            return;
+        }
+        if (parsed.items.size() > _m_max_request_items) {
+            std::vector<jinq::common::ResponseError> limit_error;
+            limit_error.push_back({"/images", "too many items in one request (max " +
+                                                    std::to_string(_m_max_request_items) + ")"});
+            _m_metrics.inc_http_requests("POST", "413");
+            reply_unified_json(task->get_resp(),
+                               unified_rejection(task_id, StatusCode::REQUEST_ITEM_LIMIT,
+                                                 std::move(limit_error)));
+            return;
+        }
+
+        task_request task_req;
+        task_req.task_id = task_id;
+        task_req.is_valid = true;
+        task_req.parse_status = StatusCode::OK;
+        task_req.items = std::move(parsed.items);
+        task_req.params = std::move(parsed.params);
+        task_req.options = parsed.options;
+        if (_m_async_timeout > 0) {
+            task_req.deadline =
+                std::chrono::steady_clock::now() + std::chrono::milliseconds(_m_async_timeout);
         }
 
         const auto submitted = _m_async_table.submit(std::move(task_req));
@@ -700,13 +785,29 @@ protected:
                                   std::string(async_state_str(outcome.state)) + ")");
             return;
         }
-        // return the standard inference response envelope
-        rapidjson::Document data;
-        if (outcome.value.model_run_status == StatusCode::OK) {
-            fill_response_data(data.GetAllocator(), data, outcome.value.model_run_status,
-                               outcome.value.model_output);
+        // return the unified response envelope (same shape as the sync path)
+        jinq::common::UnifiedResponse unified;
+        unified.task_id = outcome.task_id;
+        unified.model_name = _m_model_name;
+        unified.status = jinq::common::to_underlying(outcome.value.model_run_status);
+        unified.status_str = jinq::common::status_code_to_str(outcome.value.model_run_status);
+        unified.partial = outcome.value.partial;
+        unified.server_time_ms = outcome.value.worker_run_time_consuming +
+                                 outcome.value.find_worker_time_consuming;
+        unified.results.reserve(outcome.value.item_status.size());
+        for (size_t idx = 0; idx < outcome.value.item_status.size(); ++idx) {
+            const StatusCode item_status = outcome.value.item_status[idx];
+            jinq::common::ResponseItem item;
+            item.status = jinq::common::to_underlying(item_status);
+            if (item_status == StatusCode::OK) {
+                rapidjson::Document data;
+                fill_response_data(data.GetAllocator(), data, outcome.value.item_outputs[idx],
+                                   outcome.value.options);
+                item.data = std::move(data);
+            }
+            unified.results.push_back(std::move(item));
         }
-        reply_json(task, outcome.task_id, outcome.value.model_run_status, std::move(data));
+        reply_unified_json(task->get_resp(), unified);
     }
 
     /*** helper: reply a simple error JSON */
@@ -734,18 +835,25 @@ protected:
     /*** enqueue into the batch queue and wait for the runner's completion */
     void run_via_batch(task_request* req, go_result* result);
 
+    /*** run every item of a request with one worker checkout (deadline-aware);
+     * shared by the synchronous single path and the async runner */
+    void run_items(WORKER& worker, const task_request& req, go_result* result);
+
+    /*** derive the aggregate status + partial flag from item statuses */
+    static void aggregate_item_statuses(go_result* result);
+
     /*** dedicated collector thread (max_batch_size > 1 only) */
     void batch_loop();
 
     /*** acquire one worker, run run_batch, distribute results to entries */
     void process_batch(std::vector<std::shared_ptr<batch_entry>>& batch);
 
-    /*** publish one entry's result and wake its waiter */
-    void complete_batch_entry(const std::shared_ptr<batch_entry>& entry,
-                              StatusCode status,
-                              MODEL_OUTPUT&& output,
-                              double run_ms,
-                              double wait_ms);
+    /*** publish one item's result and wake its requester when the last lands */
+    void complete_batch_item(const std::shared_ptr<batch_entry>& entry,
+                             StatusCode status,
+                             MODEL_OUTPUT&& output,
+                             double run_ms,
+                             double wait_ms);
 
     /*** lock-free EWMA of the worker run time (Retry-After arithmetic) */
     void update_run_time_ewma(int64_t run_ms);
@@ -882,15 +990,46 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
                 return;
             }
         }
-        auto task_req = parse_task_request(req);
-        if (task_req.task_id.empty()) {
-            task_req.task_id = generate_req_id();
+
+        // strict unified-envelope parse: violations carry JSON pointers and
+        // are rejected with 422 before any per-request state is created
+        auto parsed = parse_model_request(req);
+        const std::string task_id = parsed.req_id.empty() ? generate_req_id() : parsed.req_id;
+        auto reply_reject = [&](StatusCode status,
+                                std::vector<jinq::common::ResponseError> errors) {
+            _m_metrics.inc_http_requests(request_method, std::to_string(http_status_of(status)));
+            _m_metrics.inc_inference_requests(std::to_string(jinq::common::to_underlying(status)));
+            _m_metrics.inc_inference_failure();
+            reply_unified_json(task->get_resp(),
+                               unified_rejection(task_id, status, std::move(errors)));
+        };
+        if (!parsed.is_valid) {
+            std::vector<jinq::common::ResponseError> errors;
+            errors.reserve(parsed.violations.size());
+            for (const auto& violation : parsed.violations) {
+                errors.push_back({violation.pointer, violation.message});
+            }
+            reply_reject(parsed.status, std::move(errors));
+            return;
         }
+        // admission: one request may carry at most max_request_items images
+        if (parsed.items.size() > _m_max_request_items) {
+            std::vector<jinq::common::ResponseError> limit_error;
+            limit_error.push_back({"/images", "too many items in one request (max " +
+                                                    std::to_string(_m_max_request_items) + ")"});
+            reply_reject(StatusCode::REQUEST_ITEM_LIMIT,
+                         std::move(limit_error));
+            return;
+        }
+        const size_t n_items = parsed.items.size();
+
         // overload protection: reject before any per-request state is created
-        // when the waiting queue is full. The Retry-After hint estimates the
-        // drain time from queue depth, run-time EWMA and the worker count.
+        // when the waiting queue is full. Backpressure accounts per ITEM so a
+        // 16-image request cannot quietly eat the whole batch collector; the
+        // Retry-After hint estimates the drain time from queue depth,
+        // run-time EWMA and the worker count.
         if (_m_max_queue_depth > 0 &&
-            _m_waiting_jobs.load() >= static_cast<size_t>(_m_max_queue_depth)) {
+            _m_waiting_jobs.load() + n_items > static_cast<size_t>(_m_max_queue_depth)) {
             _m_metrics.inc_queue_rejected();
             _m_metrics.inc_http_requests(request_method, "429");
             const int retry_after = compute_retry_after_seconds(
@@ -901,9 +1040,23 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
             reply_json(task, "", StatusCode::RATE_LIMITED, std::move(data));
             return;
         }
-        _m_waiting_jobs++;
-        _m_received_jobs++;
-        _m_metrics.inc_received_jobs();
+
+        task_request task_req;
+        task_req.task_id = task_id;
+        task_req.is_valid = true;
+        task_req.parse_status = StatusCode::OK;
+        task_req.items = std::move(parsed.items);
+        task_req.params = std::move(parsed.params);
+        task_req.options = parsed.options;
+        // absolute budget: queue wait + worker wait + run all share it
+        if (_m_model_run_timeout > 0) {
+            task_req.deadline =
+                std::chrono::steady_clock::now() + std::chrono::milliseconds(_m_model_run_timeout);
+        }
+
+        _m_waiting_jobs += n_items;
+        _m_received_jobs += n_items;
+        _m_metrics.inc_received_jobs(n_items);
         // init series work: all per-request state rides inside the go task
         // object (functor members + callback closure members), so the
         // framework's task lifetime frees it on every path ??no manual
@@ -935,10 +1088,10 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         // never used on this path). On cancel, do_work_cb does not run, so
         // accounting must live here or it would drift. No resource release is
         // needed here ??per-request state dies with the task object itself.
-        series->set_callback([this](const SeriesWork*) {
-            _m_finished_jobs++;
-            _m_metrics.inc_finished_jobs();
-            _m_waiting_jobs--;
+        series->set_callback([this, n_items](const SeriesWork*) {
+            _m_finished_jobs += n_items;
+            _m_metrics.inc_finished_jobs(n_items);
+            _m_waiting_jobs -= n_items;
         });
         return;
     }
@@ -968,51 +1121,62 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     BaseAiServerImpl::go_result* result) {
     // the result is a member of the go task's closure: the framework keeps the
     // task alive until this routine returns even when detached (timeout) or
-    // when the series is cancelled mid-run, so writing it is always safe, and
-    // its destruction is handled by the task ??nothing to release here
-    // batch path (opt-in): collect concurrent requests per model and run them
-    // as one batch; the single-request path below stays verbatim otherwise
+    // when the series is cancelled mid-run, so writing it is always safe
+    //
+    // batch path (opt-in): every item of this request becomes one entry of
+    // the shared collector; the single path below checks out one worker for
+    // the whole item set
     if (_m_max_batch_size > 1) {
         run_via_batch(req, result);
         return;
     }
     WORKER worker;
-    auto find_worker_start_ts = Timestamp::now();
+    const auto find_worker_start_ts = Timestamp::now();
 
-    if (_m_model_run_timeout > 0) {
-        // bounded wait: waiting for a worker counts toward the model timeout budget (backpressure)
-        if (!_m_working_queue.wait_dequeue_timed(
-                worker, std::chrono::milliseconds(_m_model_run_timeout))) {
-            result->model_run_status = StatusCode::MODEL_RUN_TIMEOUT;
-            result->task_finished_ts = Timestamp::now().to_format_str();
-            // span-based stuck judgment: K consecutive failures are necessary
-            // but not sufficient (overlapping waits make the count alone lie);
-            // require the streak to span >= K x timeout so a slow-but-healthy
-            // worker under queue pressure cannot trip the alarm
-            int consecutive = _m_consecutive_wait_timeouts.fetch_add(1) + 1;
-            if (consecutive == 1) {
-                _m_first_wait_timeout_ms.store(monotonic_ms());
-            }
-            int64_t first = _m_first_wait_timeout_ms.load();
-            int64_t span_ms = first > 0 ? monotonic_ms() - first : 0;
-            int64_t threshold_ms = static_cast<int64_t>(_m_stuck_worker_threshold_times) *
-                                   _m_model_run_timeout;
-            if (consecutive >= _m_stuck_worker_threshold_times && span_ms >= threshold_ms) {
-                if (_m_stuck_worker_action == StuckWorkerAction::EXIT) {
-                    LOG(FATAL) << "worker wait timed out " << consecutive
-                               << " times in a row with an empty queue, spanning "
-                               << span_ms << " ms (>= " << threshold_ms
-                               << " ms): worker stuck, exiting for supervisor restart";
-                } else if (consecutive == _m_stuck_worker_threshold_times) {
-                    LOG(ERROR) << "worker stuck: " << consecutive
-                               << " consecutive full-timeout waits spanning " << span_ms << " ms";
-                }
-            }
-            return;
+    // deadline-aware acquisition: waiting for a worker spends the REMAINING
+    // budget (queue wait + worker wait + inference share one deadline)
+    const bool has_deadline = req->deadline != std::chrono::steady_clock::time_point::max();
+    bool got_worker = true;
+    if (has_deadline) {
+        auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                             req->deadline - std::chrono::steady_clock::now()).count();
+        if (remaining < 0) {
+            remaining = 0;
         }
+        got_worker = _m_working_queue.wait_dequeue_timed(
+            worker, std::chrono::milliseconds(remaining));
     } else {
-        // model_run_timeout <= 0 means no timeout: use an unbounded blocking wait
         _m_working_queue.wait_dequeue(worker);
+    }
+    if (!got_worker) {
+        result->model_run_status = StatusCode::MODEL_RUN_TIMEOUT;
+        result->task_finished_ts = Timestamp::now().to_format_str();
+        result->item_status.assign(req->item_count(), StatusCode::MODEL_RUN_TIMEOUT);
+        result->item_outputs.assign(req->item_count(), MODEL_OUTPUT{});
+        // span-based stuck judgment: K consecutive failures are necessary but
+        // not sufficient (overlapping waits make the count alone lie); require
+        // the streak to span >= K x timeout so a slow-but-healthy worker under
+        // queue pressure cannot trip the alarm
+        const int consecutive = _m_consecutive_wait_timeouts.fetch_add(1) + 1;
+        if (consecutive == 1) {
+            _m_first_wait_timeout_ms.store(monotonic_ms());
+        }
+        const int64_t first = _m_first_wait_timeout_ms.load();
+        const int64_t span_ms = first > 0 ? monotonic_ms() - first : 0;
+        const int64_t threshold_ms =
+            static_cast<int64_t>(_m_stuck_worker_threshold_times) * _m_model_run_timeout;
+        if (consecutive >= _m_stuck_worker_threshold_times && span_ms >= threshold_ms) {
+            if (_m_stuck_worker_action == StuckWorkerAction::EXIT) {
+                LOG(FATAL) << "worker wait timed out " << consecutive
+                           << " times in a row with an empty queue, spanning " << span_ms
+                           << " ms (>= " << threshold_ms
+                           << " ms): worker stuck, exiting for supervisor restart";
+            } else if (consecutive == _m_stuck_worker_threshold_times) {
+                LOG(ERROR) << "worker stuck: " << consecutive
+                           << " consecutive full-timeout waits spanning " << span_ms << " ms";
+            }
+        }
+        return;
     }
     // a successful dequeue means a worker is back: reset the stuck streak
     _m_consecutive_wait_timeouts.store(0);
@@ -1023,78 +1187,133 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     // local timestamps are for duration stats only; metadata like task_id and
     // task_received_ts is written by serve_process into the closure-carried
     // request_meta, which this routine never touches
-    auto task_receive_ts = Timestamp::now();
-
-    // construct model input: base64 image content from the request payload
-    // (the M4 envelope reshape carries items/params directly)
-    using ModelInput = typename WORKER::element_type::input_type;
-    ModelInput model_input{};
-    StatusCode status = StatusCode::OK;
-    if (req->is_valid) {
-        model_input = detail::make_model_input_from_payload<ModelInput>(req->payload);
-        status = worker->run(model_input, result->model_output);
-        if (status != StatusCode::OK) {
-            LOG(ERROR) << "worker run failed";
-        }
-    } else {
-        status = req->parse_status;
-    }
-    result->model_run_status = status;
+    const auto task_receive_ts = Timestamp::now();
+    run_items(worker, *req, result);
 
     // restore worker queue: the last member touch of this routine; afterwards
     // only the task-owned result is written, so the destructor's queue drain
     // stays sound
     _m_working_queue.enqueue(std::move(worker));
 
-    auto task_finish_ts = Timestamp::now();
+    const auto task_finish_ts = Timestamp::now();
     result->task_finished_ts = task_finish_ts.to_format_str();
-    // compute before observing: the old order observed the pre-assignment 0,
-    // so the histogram always recorded 0 (review leftover #1)
     result->worker_run_time_consuming = (task_finish_ts - task_receive_ts) * 1000;
     _m_metrics.observe_inference_duration_ms(result->worker_run_time_consuming);
     update_run_time_ewma(static_cast<int64_t>(result->worker_run_time_consuming));
 }
 
+template<typename WORKER, typename MODEL_OUTPUT>
+void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::run_items(
+    WORKER& worker, const BaseAiServerImpl::task_request& req,
+    BaseAiServerImpl::go_result* result) {
+    using ModelInput = typename WORKER::element_type::input_type;
+    const size_t n_items = req.item_count();
+    result->options = req.options;
+    result->item_status.assign(n_items, StatusCode::OK);
+    result->item_outputs.assign(n_items, MODEL_OUTPUT{});
+
+    for (size_t idx = 0; idx < n_items; ++idx) {
+        if (req.deadline != std::chrono::steady_clock::time_point::max() &&
+            std::chrono::steady_clock::now() >= req.deadline) {
+            // budget exhausted mid-request: every remaining item reports a
+            // timeout; completed items are still returned to the client
+            for (size_t rest = idx; rest < n_items; ++rest) {
+                result->item_status[rest] = StatusCode::MODEL_RUN_TIMEOUT;
+            }
+            break;
+        }
+        ModelInput input = detail::make_model_input<ModelInput>(req.items[idx], req.params.get());
+        const StatusCode status = worker->run(input, result->item_outputs[idx]);
+        result->item_status[idx] = status;
+    }
+    aggregate_item_statuses(result);
+    if (result->model_run_status != StatusCode::OK) {
+        LOG(ERROR) << "worker run failed with status "
+                   << jinq::common::to_underlying(result->model_run_status);
+    }
+}
+
+template<typename WORKER, typename MODEL_OUTPUT>
+void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::aggregate_item_statuses(
+    BaseAiServerImpl::go_result* result) {
+    size_t ok_count = 0;
+    StatusCode first_error = StatusCode::OK;
+    bool any_timeout = false;
+    for (const StatusCode status : result->item_status) {
+        if (status == StatusCode::OK) {
+            ++ok_count;
+        } else {
+            if (first_error == StatusCode::OK) {
+                first_error = status;
+            }
+            if (status == StatusCode::MODEL_RUN_TIMEOUT) {
+                any_timeout = true;
+            }
+        }
+    }
+    if (first_error == StatusCode::OK) {
+        result->model_run_status = StatusCode::OK;
+        result->partial = false;
+        return;
+    }
+    if (any_timeout && ok_count > 0) {
+        // deadline hit mid-request: completed items are returned alongside
+        result->model_run_status = StatusCode::DEADLINE_EXCEEDED_PARTIAL;
+        result->partial = true;
+        return;
+    }
+    result->model_run_status = first_error;
+    result->partial = false;
+}
+
 /***
- * Batch-side counterpart of do_work: hand the request to the collector and
- * sleep on the entry. Timeout semantics mirror the single path: the waiter
- * wakes with MODEL_RUN_TIMEOUT within model_run_timeout; the runner keeps its
- * own shared_ptr, so a timed-out entry is discarded safely afterwards.
- */
+* Batch-side counterpart of do_work: hand the request to the collector and
+* sleep on the entry. Timeout semantics mirror the single path: the waiter
+* wakes with MODEL_RUN_TIMEOUT within model_run_timeout; the runner keeps its
+* own shared_ptr, so a timed-out entry is discarded safely afterwards.
+*/
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::run_via_batch(
     BaseAiServerImpl::task_request* req,
     BaseAiServerImpl::go_result* result) {
-    auto entry = std::make_shared<batch_entry>();
-    // move (not copy) the payload into the entry: after enqueue the requester
-    // never reads req again, and the heap buffer simply changes owner - one
-    // payload buffer per request instead of two
-    entry->req = std::move(*req);
-    const std::shared_ptr<batch_entry> kept = entry;
-    _m_batch_queue.enqueue(std::move(entry));
+    // one shared state per request; every item becomes one queue entry, so
+    // items of different requests interleave inside the engine batch
+    auto state = std::make_shared<request_state>();
+    state->req = std::move(*req);
+    const size_t n_items = state->req.item_count();
+    state->outputs.assign(n_items, MODEL_OUTPUT{});
+    // unfinished items keep the timeout default: the aggregate derives the
+    // DEADLINE_EXCEEDED_PARTIAL / MODEL_RUN_TIMEOUT semantics from it
+    state->item_status.assign(n_items, StatusCode::MODEL_RUN_TIMEOUT);
+    for (size_t idx = 0; idx < n_items; ++idx) {
+        _m_batch_queue.enqueue(std::make_shared<batch_entry>(batch_entry{idx, state}));
+    }
 
     const auto wait_start = Timestamp::now();
-    std::unique_lock<std::mutex> lock(kept->mu);
+    std::unique_lock<std::mutex> lock(state->mu);
     bool done = true;
-    if (_m_model_run_timeout > 0) {
-        done = kept->cv.wait_for(lock, std::chrono::milliseconds(_m_model_run_timeout),
-                                 [&kept]() { return kept->done; });
+    if (state->req.deadline != std::chrono::steady_clock::time_point::max()) {
+        done = state->cv.wait_until(lock, state->req.deadline,
+                                    [&state]() { return state->done; });
     } else {
-        kept->cv.wait(lock, [&kept]() { return kept->done; });
+        state->cv.wait(lock, [&state]() { return state->done; });
     }
     const double wait_ms = (Timestamp::now() - wait_start) * 1000;
-    if (!done) {
-        result->model_run_status = StatusCode::MODEL_RUN_TIMEOUT;
-        result->task_finished_ts = Timestamp::now().to_format_str();
-        result->find_worker_time_consuming = wait_ms;
-        result->worker_run_time_consuming = 0;
-        return;
+    result->options = state->req.options;
+    result->find_worker_time_consuming = wait_ms;
+    result->worker_run_time_consuming = state->worker_run_time_consuming;
+    result->task_finished_ts = Timestamp::now().to_format_str();
+    if (done) {
+        // every item reached a terminal status: no runner writes remain
+        result->item_outputs = std::move(state->outputs);
+        result->item_status = std::move(state->item_status);
+    } else {
+        // deadline: the runner may still be writing, so copy under the lock;
+        // late completions land in the abandoned state and are dropped
+        result->item_outputs = state->outputs;
+        result->item_status = state->item_status;
     }
-    result->model_run_status = kept->result.model_run_status;
-    result->model_output = std::move(kept->result.model_output);
-    result->task_finished_ts = std::move(kept->result.task_finished_ts);
-    result->worker_run_time_consuming = kept->result.worker_run_time_consuming;
-    result->find_worker_time_consuming = kept->result.find_worker_time_consuming;
+    aggregate_item_statuses(result);
 }
 
 /***
@@ -1134,30 +1353,20 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::batch_loop() {
             batch.push_back(std::move(extra));
         }
         _m_metrics.observe_batch_size(static_cast<double>(batch.size()));
+        _m_metrics.observe_batch_window_wait_ms(0);
         process_batch(batch);
     }
     // shutdown: fail everything still queued so waiters wake immediately
     std::shared_ptr<batch_entry> pending;
     while (_m_batch_queue.try_dequeue(pending)) {
-        complete_batch_entry(pending, StatusCode::MODEL_RUN_TIMEOUT, MODEL_OUTPUT{}, 0, 0);
+        complete_batch_item(pending, StatusCode::MODEL_RUN_TIMEOUT, MODEL_OUTPUT{}, 0, 0);
     }
 }
 
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::process_batch(
     std::vector<std::shared_ptr<batch_entry>>& batch) {
-    // invalid requests never reach a worker: fail them individually with the
-    // parse status they would have seen on the single path
-    std::vector<std::shared_ptr<batch_entry>> valid;
-    valid.reserve(batch.size());
-    for (const auto& entry : batch) {
-        if (entry->req.is_valid) {
-            valid.push_back(entry);
-        } else {
-            complete_batch_entry(entry, entry->req.parse_status, MODEL_OUTPUT{}, 0, 0);
-        }
-    }
-    if (valid.empty()) {
+    if (batch.empty()) {
         return;
     }
 
@@ -1189,12 +1398,11 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::process_batch(
                            << "ms: worker stuck, exiting for supervisor restart";
             } else if (consecutive == _m_stuck_worker_threshold_times) {
                 LOG(ERROR) << "worker stuck (batch path): " << consecutive
-                           << " full-timeout waits spanning " << span_ms << " ms";
+                           << " full-timeout waits spanning " << span_ms << "ms";
             }
         }
-        for (const auto& entry : valid) {
-            complete_batch_entry(entry, StatusCode::MODEL_RUN_TIMEOUT, MODEL_OUTPUT{}, 0,
-                                 wait_ms);
+        for (const auto& entry : batch) {
+            complete_batch_item(entry, StatusCode::MODEL_RUN_TIMEOUT, MODEL_OUTPUT{}, 0, wait_ms);
         }
         return;
     }
@@ -1204,11 +1412,13 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::process_batch(
 
     using ModelInput = typename WORKER::element_type::input_type;
     std::vector<ModelInput> inputs;
-    inputs.reserve(valid.size());
-    for (const auto& entry : valid) {
-        // second and last ownership transfer of the payload (entry -> inputs);
-        // nothing reads entry->req.payload after this point
-        inputs.push_back(detail::make_model_input_from_payload<ModelInput>(std::move(entry->req.payload)));
+    inputs.reserve(batch.size());
+    for (const auto& entry : batch) {
+        const auto& owner = entry->owner;
+        // an item whose request deadline already passed still runs: the
+        // requester has woken, late results land in the abandoned state
+        inputs.push_back(detail::make_model_input<ModelInput>(
+            std::move(owner->req.items[entry->item_index]), owner->req.params.get()));
     }
     std::vector<MODEL_OUTPUT> outputs;
     std::vector<StatusCode> item_status;
@@ -1219,39 +1429,45 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::process_batch(
     _m_metrics.observe_inference_duration_ms(run_ms);
     _m_working_queue.enqueue(std::move(worker));
 
-    for (size_t idx = 0; idx < valid.size(); ++idx) {
+    for (size_t idx = 0; idx < batch.size(); ++idx) {
         // per-item status isolation: a failing item reports its own error,
         // its batch mates keep their results; a size mismatch can only come
         // from a broken run_batch override - fall back to the aggregate
         const StatusCode entry_status = idx < item_status.size() ? item_status[idx] : status;
         if (entry_status == StatusCode::OK && idx < outputs.size()) {
-            complete_batch_entry(valid[idx], entry_status, std::move(outputs[idx]), run_ms,
-                                 wait_ms);
+            complete_batch_item(batch[idx], entry_status, std::move(outputs[idx]), run_ms, wait_ms);
         } else {
-            complete_batch_entry(valid[idx], entry_status, MODEL_OUTPUT{}, run_ms, wait_ms);
+            complete_batch_item(batch[idx], entry_status, MODEL_OUTPUT{}, run_ms, wait_ms);
         }
     }
 }
 
 template<typename WORKER, typename MODEL_OUTPUT>
-void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::complete_batch_entry(
+void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::complete_batch_item(
     const std::shared_ptr<batch_entry>& entry,
     StatusCode status,
     MODEL_OUTPUT&& output,
     double run_ms,
     double wait_ms) {
-    {
-        std::lock_guard<std::mutex> lock(entry->mu);
-        entry->result.model_run_status = status;
-        entry->result.model_output = std::move(output);
-        entry->result.task_finished_ts = Timestamp::now().to_format_str();
-        entry->result.worker_run_time_consuming = run_ms;
-        entry->result.find_worker_time_consuming = wait_ms;
-        entry->done = true;
+    const auto& owner = entry->owner;
+    std::lock_guard<std::mutex> lock(owner->mu);
+    if (owner->done) {
+        // shutdown raced the runner or the requester already timed out with
+        // every slot terminal: nothing left to publish
+        return;
     }
-    entry->cv.notify_all();
+    owner->outputs[entry->item_index] = std::move(output);
+    owner->item_status[entry->item_index] = status;
+    owner->worker_run_time_consuming = run_ms;
+    owner->find_worker_time_consuming = wait_ms;
+    if (++owner->completed >= owner->req.item_count()) {
+        owner->done = true;
+        // notify inside the critical section: a lost wakeup is impossible
+        owner->cv.notify_all();
+    }
 }
 
+/*** lock-free EWMA of the worker run time (Retry-After arithmetic) */
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::update_run_time_ewma(int64_t run_ms) {
     int64_t observed = _m_run_time_ewma_ms.load(std::memory_order_relaxed);
@@ -1272,86 +1488,83 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::update_run_time_ewma(int64_t run_ms
  * @tparam MODEL_INPUT
  * @tparam MODEL_OUTPUT
  * @param task
+ * @param meta
+ * @param resp
  */
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(
     WFGoTask* task,
     const BaseAiServerImpl::request_meta& meta,
     protocol::HttpResponse* resp) {
-    // this callback runs inside done(), i.e. while the go task object ??and
+    // this callback runs inside done(), i.e. while the go task object - and
     // therefore the meta bound into this closure and the result reachable via
-    // task->user_data ??is still alive (WFTask.h done(): callback, then delete)
+    // task->user_data - is still alive (WFTask.h done(): callback, then delete)
     auto state = task->get_state();
 
     StatusCode status;
-    std::string task_id;
-    rapidjson::Document data;
-    std::string task_finished_ts;
     double worker_run_time_consuming = 0;
     double find_worker_time_consuming = 0;
+    jinq::common::UnifiedResponse unified;
+    unified.model_name = _m_model_name;
+    size_t ok_items = 0;
 
     if (state != WFT_STATE_SUCCESS) {
         // timeout: do_work may still be running detached (or may not have
-        // started ??user_data may be NULL), so read the closure-carried
-        // metadata only; the routine never writes it, hence no race
+        // started - user_data may be NULL), so read the closure-carried
+        // metadata only; per-item statuses are unknown at this point and the
+        // response carries an empty results array
         status = StatusCode::MODEL_RUN_TIMEOUT;
-        task_id = meta.is_task_req_valid ? meta.task_id : "";
+        unified.task_id = meta.task_id;
     } else {
         // success: the routine has returned (routine -> handle -> done ->
         // callback, workflow guarantees happens-before) and published its ctx
         // address at entry, so every field is safe to read
         auto* result = static_cast<go_result*>(task->user_data);
         status = result->model_run_status;
-        task_id = meta.is_task_req_valid ? meta.task_id : "";
-        // contract: fill data only on success, keep data:null on error
-        if (status == StatusCode::OK) {
-            fill_response_data(data.GetAllocator(), data, status, result->model_output);
+        unified.task_id = meta.task_id;
+        unified.partial = result->partial;
+        unified.server_time_ms =
+            result->worker_run_time_consuming + result->find_worker_time_consuming;
+        unified.results.reserve(result->item_status.size());
+        for (size_t idx = 0; idx < result->item_status.size(); ++idx) {
+            const StatusCode item_status = result->item_status[idx];
+            if (item_status == StatusCode::OK) {
+                ++ok_items;
+            }
+            jinq::common::ResponseItem item;
+            item.status = jinq::common::to_underlying(item_status);
+            if (item_status == StatusCode::OK) {
+                rapidjson::Document data;
+                fill_response_data(data.GetAllocator(), data, result->item_outputs[idx],
+                                   result->options);
+                item.data = std::move(data);
+            }
+            unified.results.push_back(std::move(item));
         }
-        task_finished_ts = result->task_finished_ts;
         worker_run_time_consuming = result->worker_run_time_consuming;
         find_worker_time_consuming = result->find_worker_time_consuming;
     }
-    reply_json(resp, task_id, status, std::move(data));
+    unified.status = jinq::common::to_underlying(status);
+    unified.status_str = jinq::common::status_code_to_str(status);
+    reply_unified_json(resp, unified);
 
     _m_metrics.inc_http_requests("POST", std::to_string(http_status_of(status)));
     _m_metrics.observe_http_duration_ms("POST", std::to_string(http_status_of(status)),
                                         worker_run_time_consuming + find_worker_time_consuming);
-    _m_metrics.inc_inference_requests(std::to_string(jinq::common::to_underlying(status)));
-    if (status == StatusCode::OK) {
-        _m_metrics.inc_inference_success();
-    } else {
-        _m_metrics.inc_inference_failure();
+    // inference counters are per ITEM: a 16-image request reports 16 samples
+    for (const auto& item : unified.results) {
+        _m_metrics.inc_inference_requests(std::to_string(item.status));
     }
+    _m_metrics.inc_inference_success(ok_items);
+    _m_metrics.inc_inference_failure(unified.results.size() - ok_items);
     _m_metrics.set_workers_available(_m_working_queue.size_approx());
     _m_metrics.set_workers_busy(_m_worker_nums > _m_working_queue.size_approx()
                                     ? _m_worker_nums - _m_working_queue.size_approx()
                                     : 0);
     _m_metrics.set_queue_depth(_m_waiting_jobs.load());
     _m_metrics.set_waiting_jobs(_m_waiting_jobs.load());
-
-    if (state != WFT_STATE_SUCCESS) {
-        LOG(ERROR) << "task: " << task_id << " model run timeout";
-    }
-
-    // output log info (jobs accounting is done in the series callback)
-    LOG(INFO) << "req_id=" << task_id
-              << " model=" << _m_server_uri
-              << " status=" << jinq::common::to_underlying(status)
-              << " received_at=" << meta.task_received_ts
-              << " finished_at=" << task_finished_ts
-              << " queue_wait_ms=" << find_worker_time_consuming
-              << " run_ms=" << worker_run_time_consuming
-              << " received_jobs=" << _m_received_jobs.load()
-              << " finished_jobs=" << _m_finished_jobs.load()
-               << " waiting_jobs=" << _m_waiting_jobs.load()
-               << " available_workers=" << _m_working_queue.size_approx();
 }
 
-/***
- *
- * @param server_section
- * @return
- */
 template<typename WORKER, typename MODEL_OUTPUT>
 StatusCode BaseAiServerImpl<WORKER, MODEL_OUTPUT>::parse_server_security_config(
     const toml::table& server_section) {
@@ -1447,6 +1660,14 @@ StatusCode BaseAiServerImpl<WORKER, MODEL_OUTPUT>::parse_common_server_config(
     if (_m_max_batch_delay_ms < 0) {
         LOG(WARNING) << "max_batch_delay_ms < 0: using the 5ms default";
         _m_max_batch_delay_ms = 5;
+    }
+    // unified-envelope admission: backpressure, Retry-After and queue depth
+    // all account per ITEM, so one request may carry at most this many images
+    _m_max_request_items = static_cast<size_t>(
+        server_section["max_request_items"].value_or<int64_t>(16));
+    if (_m_max_request_items < 1) {
+        LOG(WARNING) << "max_request_items < 1: using the 16 default";
+        _m_max_request_items = 16;
     }
     // seed the run-time EWMA with the configured budget until real samples
     // arrive, so Retry-After is a plausible hint from the very first reject

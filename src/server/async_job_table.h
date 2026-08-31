@@ -35,6 +35,7 @@
 #define MORTRED_MODEL_SERVER_ASYNC_JOB_TABLE_H
 
 #include <algorithm>
+#include <chrono>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -49,6 +50,9 @@
 #include <utility>
 
 #include "common/status_code.h"
+#include "models/backend/param_spec.h"
+#include "models/io/common_input.h"
+#include "server/output_options.h"
 
 namespace jinq {
 namespace server {
@@ -88,7 +92,15 @@ struct task_request {
     std::string task_id;
     bool is_valid = false;
     StatusCode parse_status = StatusCode::OK;
-    std::string payload;
+    // unified envelope payload (Contract v1): one entry per images[] item
+    std::vector<jinq::models::io_define::common_io::byte_source> items;
+    std::shared_ptr<jinq::models::backend::ParamSet> params;  // nullptr = no overrides
+    jinq::server::OutputOptions options;
+    // absolute budget; time_point::max() = unlimited (model_run_timeout <= 0)
+    std::chrono::steady_clock::time_point deadline =
+        std::chrono::steady_clock::time_point::max();
+
+    size_t item_count() const { return items.size(); }
 };
 
 /***
@@ -101,7 +113,11 @@ struct go_result {
     std::string task_finished_ts;
     double worker_run_time_consuming = 0; // ms
     double find_worker_time_consuming = 0; // ms
-    MODEL_OUTPUT model_output;
+    bool partial = false;  // deadline hit mid-request: some items returned
+    jinq::server::OutputOptions options;  // echo path: response assembly
+    // index-aligned with the request's images[] (empty on request-level errors)
+    std::vector<MODEL_OUTPUT> item_outputs;
+    std::vector<StatusCode> item_status;
 };
 
 template <typename MODEL_OUTPUT>
@@ -225,7 +241,10 @@ class AsyncJobTable {
         out.task_id = job->req.task_id;
         out.is_valid = job->req.is_valid;
         out.parse_status = job->req.parse_status;
-        out.payload = std::move(job->req.payload);
+        out.items = std::move(job->req.items);
+        out.params = std::move(job->req.params);
+        out.options = job->req.options;
+        out.deadline = job->req.deadline;
         return out;
     }
 
