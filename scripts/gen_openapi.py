@@ -276,9 +276,43 @@ def model_path_for(section: str, uri: str, entry: dict | None) -> dict:
             "requestBody": {
                 "required": True,
                 "content": {
-                    "application/json": {"schema": {"$ref": "#/components/schemas/Request_%s" % section}}
+                    "application/json": {"schema": {"$ref": "#/components/schemas/Request_%s" % section}},
+                    # the same envelope in raw form: the body IS images[0],
+                    # params/options ride the X-Mortred-* headers
+                    "image/png": {
+                        "schema": {"type": "string", "format": "binary"},
+                    },
+                    "image/jpeg": {
+                        "schema": {"type": "string", "format": "binary"},
+                    },
+                    "application/octet-stream": {
+                        "schema": {"type": "string", "format": "binary"},
+                    },
                 },
             },
+            "parameters": [
+                {
+                    "name": "X-Request-ID",
+                    "in": "header",
+                    "required": False,
+                    "schema": {"type": "string"},
+                    "description": "Trace id (raw encoding only; JSON uses req_id)",
+                },
+                {
+                    "name": "X-Mortred-Params",
+                    "in": "header",
+                    "required": False,
+                    "schema": {"type": "string"},
+                    "description": 'Compact JSON object, e.g. {"score_threshold":0.35}',
+                },
+                {
+                    "name": "X-Mortred-Options",
+                    "in": "header",
+                    "required": False,
+                    "schema": {"type": "string"},
+                    "description": 'Compact JSON object, e.g. {"encoding":"jpeg"}',
+                },
+            ],
             "responses": {
                 "200": {
                     "description": (

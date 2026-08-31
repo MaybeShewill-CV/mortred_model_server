@@ -143,9 +143,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_ATTENTIVE_GAN_DERAIN_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -233,9 +280,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_BISENETV2_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -323,9 +417,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_CENTER_FACE_DETECTION_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -413,9 +554,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_CLS_COND_DDIM_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -503,9 +691,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_DBNET_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -593,9 +828,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_DDIM_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -683,9 +965,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_DDPM_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -773,9 +1102,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_DENSENET_CLASSIFICATION_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -863,9 +1239,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_DEPTH_ANYTHING_ESTIMATION_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -953,9 +1376,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_ENLIGHTEN_GAN_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -1043,9 +1513,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_HRNET_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -1133,9 +1650,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_LDM_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -1223,9 +1787,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_LIBFACE_DETECTION_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -1313,9 +1924,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_METRIC3D_ESTIMATION_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -1403,9 +2061,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_MOBILENETV2_CLASSIFICATION_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -1493,9 +2198,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_MODNET_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -1583,9 +2335,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_NANODET_DETECTION_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -1673,9 +2472,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_PPHUMAN_SEG_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -1763,9 +2609,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_PP_MATTING_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -1853,9 +2746,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_REAL_ESRGAN_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -1943,9 +2883,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_RESNET_CLASSIFICATION_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -2033,9 +3020,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_SAM_AMG_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -2123,9 +3157,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_SUPERPOINT_FP_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -2213,9 +3294,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_YOLOV5_DETECTION_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -2303,9 +3431,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_YOLOV6_DETECTION_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -2393,9 +3568,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_YOLOV7_DETECTION_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
@@ -2483,9 +3705,56 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
               "schema": {
                 "$ref": "#/components/schemas/Request_YOLOV8_DETECTION_SERVER"
               }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
