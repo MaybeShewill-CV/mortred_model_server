@@ -54,7 +54,7 @@ class ClientBehavior(locust.TaskSet):
             m2.update(task_id.encode())
             task_id = m2.hexdigest()
             post_data = {
-                'img_data': base64_data.decode(),
+                'images': [base64_data.decode()],
                 'req_id': task_id,
             }
 

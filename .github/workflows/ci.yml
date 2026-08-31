@@ -390,6 +390,13 @@ jobs:
           LD_LIBRARY_PATH="${{ github.workspace }}/build-cpu/lib" CTEST_OUTPUT_ON_FAILURE=1 \
             cmake --build build-cpu --target check -j"$(nproc)"
 
+      - name: Contract sync gate (C++ catalogs -> dump -> OpenAPI)
+        run: |
+          set -euo pipefail
+          cmake --build build-cpu --target contract_dump -j"$(nproc)"
+          LD_LIBRARY_PATH="${{ github.workspace }}/build-cpu/lib" \
+            python3 scripts/check_contract_sync.py --dump-bin build-cpu/bin/contract_dump
+
       - name: Deployment acceptance (cpu, static)
         run: ./scripts/verify_deployment.sh --basic
 

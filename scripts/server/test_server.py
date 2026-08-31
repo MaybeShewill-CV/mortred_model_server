@@ -162,7 +162,8 @@ def build_payload(image_path: Path) -> dict:
     task_id = str(image_path) + str(time.time())
     task_id = hashlib.md5(task_id.encode()).hexdigest()
     return {
-        "img_data": base64.b64encode(image_data).decode(),
+        # unified envelope: images[] is always an array, results[] aligns by index
+        "images": [base64.b64encode(image_data).decode()],
         "req_id": task_id,
     }
 

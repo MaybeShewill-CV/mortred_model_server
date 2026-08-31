@@ -50,7 +50,7 @@ echo "[smoke] server ready"
 echo "[smoke] submitting async job..."
 SUBMIT=$(curl -s -w '\n%{http_code}' -X POST "http://127.0.0.1:$PORT/jobs" \
     -H "Content-Type: application/json" \
-    -d "{\"img_data\":\"aGVsbG8=\",\"req_id\":\"smoke-test\",\"timestep\":$TIMESTEP}")
+-d "{\"images\":[\"aGVsbG8=\"],\"req_id\":\"smoke-test\",\"timestep\":$TIMESTEP}")
 SUBMIT_CODE=$(echo "$SUBMIT" | tail -1)
 SUBMIT_BODY=$(echo "$SUBMIT" | head -n -1)
 

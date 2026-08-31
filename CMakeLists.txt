@@ -100,6 +100,13 @@ if(MORTRED_BUILD_FULL)
     add_subdirectory(src/factory)
     add_subdirectory(src/server)
     add_subdirectory(src/apps)
+
+    # contract generation chain: C++ catalogs -> docs/contract_dump.json ->
+    # gen_openapi.py -> openapi.json + openapi_doc.h (scripts/check_contract_sync.py)
+    add_executable(contract_dump ${PROJECT_ROOT_DIR}/scripts/contract_dump.cc)
+    target_include_directories(contract_dump PRIVATE ${PROJECT_ROOT_DIR}/src)
+    target_include_directories(contract_dump SYSTEM PRIVATE ${PROJECT_ROOT_DIR}/3rd_party/include)
+    target_link_libraries(contract_dump PRIVATE factory common)
 endif()
 
 # add unittest
