@@ -38,20 +38,20 @@
 
 ## M1 类型层：模型侧新增，零行为变化（2–3 天）
 
-- [ ] **M1.1** `src/models/io/common_input.h`：新增类型
+- [x] **M1.1** `src/models/io/common_input.h`：新增类型
       ```cpp
       struct byte_source { enum class kind { base64_text, raw_bytes }; kind origin; std::string data; };
       struct image_input { byte_source image; const jinq::models::backend::ParamSet* params = nullptr; };
       ```
       （`ParamSet` 前向声明，避免包含环）
-- [ ] **M1.2** 新增 `src/models/backend/param_spec.h`：
+- [x] **M1.2** 新增 `src/models/backend/param_spec.h`：
       - `ParamSpec` 流式构建器：`f32/i32/boolean/string`、`range/values/desc/request_overridable`
         （风格对齐既有 `SessionSpec`/`IoSpec`）
       - `ParamValue`（variant）与 `ParamSet`：≤16 项扁平 kv 存储（非 map，无逐请求节点分配），
         `get_f32/get_i32/get_bool/get_str(key, default)`、`contains/keys`
       - `validate(请求 kv) → vector<{pointer, message}>`：未知键 / 类型 / 越界 / 枚举 / 不可覆盖键
       - 新增 `test/param_spec_unittest.cc`（表驱动全覆盖）+ 挂入 `src/models/CMakeLists.txt`、`test/CMakeLists.txt`
-- [ ] **M1.3** `src/common/status_code.h`：X-macro 追加
+- [x] **M1.3** `src/common/status_code.h`：X-macro 追加
       `INVALID_REQUEST_PARAMETER=66`、`REQUEST_ITEM_LIMIT=67`、`DEADLINE_EXCEEDED_PARTIAL=68`；
       `src/server/http_status.h` 补映射（66→422，67→413，68→200+partial）；
       `test/status_code_unittest.cc` 补断言
