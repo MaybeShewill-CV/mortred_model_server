@@ -4,7 +4,7 @@
     "title": "Mortred Model Server API",
     "version": "1.0.0",
     "description": "Unified HTTP API for Mortred model servers. Model endpoints require `Authorization: Bearer <token>` when auth_token is configured. Request envelope: {req_id, images[], params, options}; response envelope: {status, status_str, task_id, model, results[], server_time_ms, partial}. The legacy img_data field was removed: it answers 422 with a migration hint.",
-    "x-contract-hash": "da2d5d5f06a55a1b3a79873306db8d4beb8bffd228a2cea2370f1f56dc7d4b6b"
+    "x-contract-hash": "aebf09a6abe3a3918f4442b56353370e01d2a107557ca0a07191206379282564"
   },
   "paths": {
     "/healthz": {
@@ -4645,12 +4645,51 @@
             "$ref": "#/components/schemas/OutputOptions"
           },
           "params": {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": false,
-            "description": "This model declares no request-level parameters"
+            "$ref": "#/components/schemas/Params_SAM_AMG_SERVER"
           }
         }
+      },
+      "Params_SAM_AMG_SERVER": {
+        "type": "object",
+        "properties": {
+          "points_per_side": {
+            "type": "integer",
+            "format": "int32",
+            "description": "prompt point grid density (n x n points)",
+            "minimum": 1.0,
+            "maximum": 64.0
+          },
+          "pred_iou_thresh": {
+            "type": "number",
+            "format": "float",
+            "description": "mask quality filter",
+            "minimum": 0.0,
+            "maximum": 1.0
+          },
+          "stability_score_thresh": {
+            "type": "number",
+            "format": "float",
+            "description": "mask stability filter",
+            "minimum": 0.0,
+            "maximum": 1.0
+          },
+          "box_nms_thresh": {
+            "type": "number",
+            "format": "float",
+            "description": "mask NMS IoU threshold",
+            "minimum": 0.0,
+            "maximum": 1.0
+          },
+          "min_mask_region_area": {
+            "type": "integer",
+            "format": "int32",
+            "description": "drop masks smaller than this many pixels",
+            "minimum": 0.0,
+            "maximum": 100000.0
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request-level parameter overrides (strict: unknown keys -> 422)"
       },
       "Request_SUPERPOINT_FP_SERVER": {
         "type": "object",

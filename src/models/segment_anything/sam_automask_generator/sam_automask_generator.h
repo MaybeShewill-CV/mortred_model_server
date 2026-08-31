@@ -40,9 +40,10 @@ template <typename INPUT, typename OUTPUT> class SamAutoMaskGenerator : public j
     SamAutoMaskGenerator(const SamAutoMaskGenerator &) = delete;
     SamAutoMaskGenerator &operator=(const SamAutoMaskGenerator &) = delete;
 
-    StatusCode generate(const cv::Mat &input_image, jinq::models::io_define::segment_anything::sam_amg_output &amg_output);
+    StatusCode generate(const cv::Mat &input_image, jinq::models::io_define::segment_anything::sam_amg_output &amg_output,
+                        const jinq::models::backend::ParamSet *request_params = nullptr);
 
-  private:
+  protected:
     StatusCode on_init(const toml::table &params) override;
 
     StatusCode run_sessions(const INPUT &input, OUTPUT &output) override;

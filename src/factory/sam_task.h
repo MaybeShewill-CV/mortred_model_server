@@ -54,6 +54,20 @@ using PredictorEntry = jinq::factory::model_catalog::ModelCatalogEntry<PromptInp
 using FastSamEntry = jinq::factory::model_catalog::ModelCatalogEntry<MatInput, FastSamOutput>;
 using AmgEntry = jinq::factory::cv_catalog::CvModelEntry<AmgOutput>;
 
+/*** request-overridable SAM AMG parameters. NOTE: points_per_side changes
+ * the compute time drastically (it is the prompt grid density) - requests on
+ * async long tasks should account for the longer deadline */
+inline const std::vector<jinq::models::backend::ParamSpec> &sam_amg_param_specs() {
+    static const std::vector<jinq::models::backend::ParamSpec> specs = {
+        jinq::models::backend::ParamSpec::i32("points_per_side").range(1, 64).desc("prompt point grid density (n x n points)"),
+        jinq::models::backend::ParamSpec::f32("pred_iou_thresh").range(0.0, 1.0).desc("mask quality filter"),
+        jinq::models::backend::ParamSpec::f32("stability_score_thresh").range(0.0, 1.0).desc("mask stability filter"),
+        jinq::models::backend::ParamSpec::f32("box_nms_thresh").range(0.0, 1.0).desc("mask NMS IoU threshold"),
+        jinq::models::backend::ParamSpec::i32("min_mask_region_area").range(0, 100000).desc("drop masks smaller than this many pixels"),
+    };
+    return specs;
+}
+
 inline const std::vector<PredictorEntry> &predictor_catalog() {
     static const std::vector<PredictorEntry> entries = {
         PredictorEntry{"SAM_PREDICTOR", "SAM promptable segmentation", &create_sam_predictor<PromptInput, PromptOutput>},
@@ -71,7 +85,7 @@ inline const std::vector<FastSamEntry> &fast_sam_catalog() {
 inline const std::vector<AmgEntry> &amg_catalog() {
     static const std::vector<AmgEntry> entries = {
         AmgEntry{"SAM_AMG", "SAM automatic mask generator", "SAM_AMG_SERVER", &create_sam_auto_mask_generator<ImageInput, AmgOutput>,
-                 &jinq::server::response::fill_sam_amg, {}},
+                 &jinq::server::response::fill_sam_amg, sam_amg_param_specs()},
     };
     return entries;
 }

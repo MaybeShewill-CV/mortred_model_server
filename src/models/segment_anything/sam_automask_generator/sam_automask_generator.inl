@@ -64,7 +64,8 @@ template <typename INPUT, typename OUTPUT> StatusCode SamAutoMaskGenerator<INPUT
 }
 
 template <typename INPUT, typename OUTPUT>
-StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::generate(const cv::Mat &input_image, AmgOutput &amg_output) {
+StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::generate(const cv::Mat &input_image, AmgOutput &amg_output,
+                                                         const jinq::models::backend::ParamSet *request_params) {
     if (_m_encoder == nullptr || _m_decoder == nullptr) {
         return StatusCode::MODEL_INIT_FAILED;
     }
@@ -77,9 +78,23 @@ StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::generate(const cv::Mat &input_im
     if (status != StatusCode::OK) {
         return status;
     }
+    // request-level overrides (config TOML stays the default source)
+    int points_per_side = _m_points_per_side;
+    float pred_iou_thresh = _m_pred_iou_thresh;
+    float stability_score_thresh = _m_stability_score_thresh;
+    float box_nms_thresh = _m_box_nms_thresh;
+    int min_mask_region_area = _m_min_mask_region_area;
+    if (request_params != nullptr) {
+        points_per_side = request_params->get_i32("points_per_side", points_per_side);
+        pred_iou_thresh = request_params->get_f32("pred_iou_thresh", pred_iou_thresh);
+        stability_score_thresh = request_params->get_f32("stability_score_thresh", stability_score_thresh);
+        box_nms_thresh = request_params->get_f32("box_nms_thresh", box_nms_thresh);
+        min_mask_region_area = request_params->get_i32("min_mask_region_area", min_mask_region_area);
+    }
+
     _m_decoder->set_ori_image_size(input_image.size());
-    return _m_decoder->decode_everything(image_embeddings, amg_output, _m_points_per_side, _m_pred_iou_thresh, _m_stability_score_thresh,
-                                         _m_box_nms_thresh, _m_min_mask_region_area);
+    return _m_decoder->decode_everything(image_embeddings, amg_output, points_per_side, pred_iou_thresh, stability_score_thresh,
+                                         box_nms_thresh, min_mask_region_area);
 }
 
 template <typename INPUT, typename OUTPUT>
@@ -89,7 +104,8 @@ StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::run_sessions(const INPUT &input,
         image = input;
     } else if constexpr (std::is_same_v<INPUT, jinq::models::io_define::common_io::mat_input> ||
                          std::is_same_v<INPUT, jinq::models::io_define::common_io::file_input> ||
-                         std::is_same_v<INPUT, jinq::models::io_define::common_io::base64_input>) {
+                         std::is_same_v<INPUT, jinq::models::io_define::common_io::base64_input> ||
+                         std::is_same_v<INPUT, jinq::models::io_define::common_io::image_input>) {
         StatusCode image_status = StatusCode::OK;
         std::string image_error;
         image = this->load_model_image(input, &image_status, &image_error);
@@ -102,8 +118,15 @@ StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::run_sessions(const INPUT &input,
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
 
+    // the served image_input carries the request-scoped param view; legacy
+    // input types keep pure config behavior (nullptr)
+    const jinq::models::backend::ParamSet *request_params = nullptr;
+    if constexpr (std::is_same_v<INPUT, jinq::models::io_define::common_io::image_input>) {
+        request_params = input.params;
+    }
+
     AmgOutput internal_output{};
-    const auto status = generate(image, internal_output);
+    const auto status = generate(image, internal_output, request_params);
     if (status != StatusCode::OK) {
         return status;
     }
