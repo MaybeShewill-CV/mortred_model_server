@@ -41,6 +41,12 @@ class PrometheusMetrics {
         http_requests_[method + "|" + status]++;
     }
 
+    /*** request encoding split (json | raw): two fixed label values only */
+    void inc_request_encoding(const std::string &encoding) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        request_encoding_[encoding]++;
+    }
+
     void observe_http_duration_ms(const std::string &method, const std::string &status, double ms) {
         std::lock_guard<std::mutex> lock(mutex_);
         observe_histogram_locked(http_duration_, http_duration_buckets_, method + "|" + status, ms);
@@ -153,6 +159,13 @@ class PrometheusMetrics {
             const auto &status = kv.first.substr(kv.first.find('|') + 1);
             ss << "mortred_http_requests_total{model=\"" << model_ << "\",method=\"" << method << "\",status=\"" << status << "\"} "
                << kv.second << "\n";
+        }
+
+        ss << "# HELP mortred_requests_by_encoding_total Model requests by envelope encoding\n";
+        ss << "# TYPE mortred_requests_by_encoding_total counter\n";
+        for (const auto &kv : request_encoding_) {
+            ss << "mortred_requests_by_encoding_total{model=\"" << model_ << "\",encoding=\"" << kv.first
+               << "\"} " << kv.second << "\n";
         }
 
         ss << "# HELP mortred_http_request_duration_ms HTTP request duration\n";
@@ -297,6 +310,7 @@ class PrometheusMetrics {
     std::string model_;
 
     std::map<std::string, uint64_t> http_requests_;
+    std::map<std::string, uint64_t> request_encoding_;
     Histogram http_duration_;
     std::vector<double> http_duration_buckets_;
 

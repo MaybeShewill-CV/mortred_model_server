@@ -532,6 +532,92 @@ TEST(server_e2e_contract, request_item_limit_returns_413) {
     EXPECT_STREQ(doc["errors"][0]["pointer"].GetString(), "/images");
 }
 
+TEST(server_e2e_contract, raw_body_encoding_returns_the_same_envelope) {
+    ServerHandle handle = start_server();
+    const std::string payload(23, 'r');
+    auto resp = send_request(handle.port, "POST", "/test/model", payload,
+                             {{"Content-Type", "image/png"},
+                              {"Authorization", "Bearer test-secret"},
+                              {"X-Request-ID", "raw-1"}});
+    ASSERT_EQ(resp.status, 200);
+    EXPECT_EQ(resp.headers["x-request-id"], "raw-1");
+    auto doc = parse_body(resp.body);
+    EXPECT_EQ(doc["task_id"].GetString(), std::string("raw-1"));
+    ASSERT_EQ(doc["results"].Size(), 1u);
+    EXPECT_EQ(doc["results"][0]["status"].GetInt(), 0);
+    EXPECT_EQ(doc["results"][0]["data"]["value"].GetInt(), 23);
+
+    // octet-stream is accepted too; the type is informational
+    auto octet = send_request(handle.port, "POST", "/test/model", payload,
+                              {{"Content-Type", "application/octet-stream"},
+                               {"Authorization", "Bearer test-secret"}});
+    EXPECT_EQ(octet.status, 200);
+}
+
+TEST(server_e2e_contract, raw_and_json_encodings_produce_identical_results) {
+    ServerHandle handle = start_server();
+    const std::string payload(31, 'x');
+    const std::string b64 = "eHh4";  // "xxx" - content only matters by length here
+    (void)b64;
+
+    auto raw = send_request(handle.port, "POST", "/test/model", payload,
+                            {{"Content-Type", "image/jpeg"},
+                             {"Authorization", "Bearer test-secret"},
+                             {"X-Request-ID", "same"}});
+    auto json = send_request(handle.port, "POST", "/test/model",
+                             "{\"images\":[\"" + std::string(31, 'x') + "\"],\"req_id\":\"same\"}",
+                             k_json_auth_headers);
+    ASSERT_EQ(raw.status, 200);
+    ASSERT_EQ(json.status, 200);
+
+    auto raw_doc = parse_body(raw.body);
+    auto json_doc = parse_body(json.body);
+    // encoding must not change semantics: same task echo, same item results
+    EXPECT_EQ(raw_doc["task_id"].GetString(), std::string("same"));
+    ASSERT_EQ(raw_doc["results"].Size(), json_doc["results"].Size());
+    EXPECT_EQ(raw_doc["results"][0]["status"].GetInt(), json_doc["results"][0]["status"].GetInt());
+    EXPECT_EQ(raw_doc["results"][0]["data"]["value"].GetInt(),
+              json_doc["results"][0]["data"]["value"].GetInt());
+    EXPECT_EQ(raw_doc["partial"].GetBool(), json_doc["partial"].GetBool());
+}
+
+TEST(server_e2e_contract, raw_headers_reject_with_the_same_422_semantics) {
+    ServerHandle handle = start_server();
+    const std::string payload(8, 'y');
+
+    // this test server declares no params: the header param is unknown
+    auto unknown = send_request(handle.port, "POST", "/test/model", payload,
+                                {{"Content-Type", "image/png"},
+                                 {"Authorization", "Bearer test-secret"},
+                                 {"X-Mortred-Params", R"({"score_threshold":0.5})"}});
+    ASSERT_EQ(unknown.status, 422);
+    auto doc = parse_body(unknown.body);
+    ASSERT_EQ(doc["errors"].Size(), 1u);
+    EXPECT_STREQ(doc["errors"][0]["pointer"].GetString(), "/params/score_threshold");
+
+    auto malformed = send_request(handle.port, "POST", "/test/model", payload,
+                                  {{"Content-Type", "image/png"},
+                                   {"Authorization", "Bearer test-secret"},
+                                   {"X-Mortred-Params", "not-json"}});
+    ASSERT_EQ(malformed.status, 422);
+    auto bad_doc = parse_body(malformed.body);
+    EXPECT_STREQ(bad_doc["errors"][0]["pointer"].GetString(), "/params");
+
+    // empty raw body -> 400 with /body pointer
+    auto empty = send_request(handle.port, "POST", "/test/model", "",
+                              {{"Content-Type", "image/png"},
+                               {"Authorization", "Bearer test-secret"}});
+    EXPECT_EQ(empty.status, 400);
+    auto empty_doc = parse_body(empty.body);
+    EXPECT_STREQ(empty_doc["errors"][0]["pointer"].GetString(), "/body");
+
+    // unsupported types keep the 415
+    auto bad_type = send_request(handle.port, "POST", "/test/model", payload,
+                                 {{"Content-Type", "video/mp4"},
+                                  {"Authorization", "Bearer test-secret"}});
+    EXPECT_EQ(bad_type.status, 415);
+}
+
 TEST(server_e2e_contract, missing_token_returns_401_with_www_authenticate) {
     ServerHandle handle = start_server();
     auto resp = send_request(handle.port, "POST", "/test/model",
