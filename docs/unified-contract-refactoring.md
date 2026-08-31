@@ -158,7 +158,7 @@ InferenceSession（MNN / ONNX Runtime / TensorRT 统一 NamedTensor 契约）
 
 两种编码走**同一个** ParamSpec 校验器，错误 pointer/message 完全一致。类型仅作提示，实际格式由解码器嗅探。
 
-### 3.5 请求级参数（当前已声明：13 个模型）
+### 3.5 请求级参数（当前已声明：17 个模型 / 全部 27 个模型均有显式决策）
 
 | 任务族 | 参数 |
 |---|---|
@@ -167,8 +167,12 @@ InferenceSession（MNN / ONNX Runtime / TensorRT 统一 NamedTensor 契约）
 | ocr / DBNET | `score_threshold` f32 [0.1,0.9]、`top_k` i32 [1,10000] |
 | feature_point / SuperPoint | `score_threshold` f32 [0.001,1]、`nms_radius` i32 [1,50]（像素半径，非 IoU，故意异名） |
 | SAM AMG | `points_per_side` i32 [1,64]、`pred_iou_thresh`、`stability_score_thresh`、`box_nms_thresh` f32 [0,1]、`min_mask_region_area` i32 [0,100000] |
+| diffusion / DDPM | `timesteps` i32 [1,1000]（采样步数，越多越慢质量越高） |
+| diffusion / DDIM | `sample_steps` i32 [1,1000]、`eta` f32 [0,1]（0=确定性 ODE，1=完全随机） |
+| diffusion / CLS_COND_DDIM | 同 DDIM + `cls_id` i32 [0,9999]（条件类别，模型相关） |
+| diffusion / LDM | `step_size` i32 [1,1000]（隐空间采样步数） |
 
-解析优先级（唯一且确定）：**请求 `params` > `[MODEL.params]` TOML > 代码默认值**。环境变量永不进入推理语义。scene_segmentation/matting/enhancement/depth 四族（10 模型）声明为"无请求参数"（稠密逐像素输出无逐请求阈值语义，空声明是正确终态）；diffusion（4 模型）因适配器忽略请求体而延后（见 §7）。
+解析优先级（唯一且确定）：**请求 `params` > `[MODEL.params]` TOML > 代码默认值**。环境变量永不进入推理语义。scene_segmentation/matting/enhancement/depth 四族（10 模型）声明为"无请求参数"——稠密逐像素输出无逐请求阈值语义，**空声明是正确终态而非欠账**。至此 27 个受服务模型全部有显式契约决策（17 声明参数 + 10 文档化空声明）。
 
 ---
 
@@ -390,7 +394,7 @@ GET  /jobs/{id}/result → 统一响应信封（未完成 409）
 |---|---|---|
 | multipart 多图二进制 | 未做 | raw 恒单图；有需求时按附加演进加入 |
 | 每图独立参数 | 明确不做 | 参数矩阵爆炸，无真实场景支撑 |
-| diffusion 请求参数 | 延后 | 适配器目前忽略请求体（参数全在 TOML 构造的采样输入里）；需"每请求组装 sampler input"的适配器改造，单独立项 |
+| diffusion 参数端到端验证 | 接线层已验证 | fake-sampler 单测证明参数进入采样输入；真实引擎的生成效果验证待 GPU 基准活动搭车。注意步数类参数显著改变时长，异步调用方应据此设置 deadline |
 | URL/object_ref 输入源 | 类型层预留 | 解析器不接受；待 SSRF/egress 策略层 |
 | `model.version` | 恒空串 | 待版本指纹（权重/引擎/配置 hash）里程碑 |
 | TLS / 每 Key 限流 / 用量计量 | 不在本次范围 | SME P0 清单 #6 |
