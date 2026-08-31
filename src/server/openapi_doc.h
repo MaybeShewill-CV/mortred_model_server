@@ -25,7 +25,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
     "title": "Mortred Model Server API",
     "version": "1.0.0",
     "description": "Unified HTTP API for Mortred model servers. Model endpoints require `Authorization: Bearer <token>` when auth_token is configured. Request envelope: {req_id, images[], params, options}; response envelope: {status, status_str, task_id, model, results[], server_time_ms, partial}. The legacy img_data field was removed: it answers 422 with a migration hint.",
-    "x-contract-hash": "aebf09a6abe3a3918f4442b56353370e01d2a107557ca0a07191206379282564"
+    "x-contract-hash": "8a02ce10bce3932d07173fadf0a5fb16e99d8f0f70d12cc5befe5c752e5b3a5b"
   },
   "paths": {
     "/healthz": {
@@ -3976,12 +3976,37 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "$ref": "#/components/schemas/OutputOptions"
           },
           "params": {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": false,
-            "description": "This model declares no request-level parameters"
+            "$ref": "#/components/schemas/Params_CLS_COND_DDIM_SERVER"
           }
         }
+      },
+      "Params_CLS_COND_DDIM_SERVER": {
+        "type": "object",
+        "properties": {
+          "sample_steps": {
+            "type": "integer",
+            "format": "int32",
+            "description": "DDIM sampling steps (fewer = faster)",
+            "minimum": 1.0,
+            "maximum": 1000.0
+          },
+          "eta": {
+            "type": "number",
+            "format": "float",
+            "description": "stochasticity (0 = deterministic ODE, 1 = full stochastic)",
+            "minimum": 0.0,
+            "maximum": 1.0
+          },
+          "cls_id": {
+            "type": "integer",
+            "format": "int32",
+            "description": "conditioning class id (model dependent)",
+            "minimum": 0.0,
+            "maximum": 9999.0
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request-level parameter overrides (strict: unknown keys -> 422)"
       },
       "Request_DBNET_SERVER": {
         "type": "object",
@@ -4056,12 +4081,30 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "$ref": "#/components/schemas/OutputOptions"
           },
           "params": {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": false,
-            "description": "This model declares no request-level parameters"
+            "$ref": "#/components/schemas/Params_DDIM_SERVER"
           }
         }
+      },
+      "Params_DDIM_SERVER": {
+        "type": "object",
+        "properties": {
+          "sample_steps": {
+            "type": "integer",
+            "format": "int32",
+            "description": "DDIM sampling steps (fewer = faster)",
+            "minimum": 1.0,
+            "maximum": 1000.0
+          },
+          "eta": {
+            "type": "number",
+            "format": "float",
+            "description": "stochasticity (0 = deterministic ODE, 1 = full stochastic)",
+            "minimum": 0.0,
+            "maximum": 1.0
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request-level parameter overrides (strict: unknown keys -> 422)"
       },
       "Request_DDPM_SERVER": {
         "type": "object",
@@ -4087,12 +4130,23 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "$ref": "#/components/schemas/OutputOptions"
           },
           "params": {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": false,
-            "description": "This model declares no request-level parameters"
+            "$ref": "#/components/schemas/Params_DDPM_SERVER"
           }
         }
+      },
+      "Params_DDPM_SERVER": {
+        "type": "object",
+        "properties": {
+          "timesteps": {
+            "type": "integer",
+            "format": "int32",
+            "description": "sampling timesteps (more = slower, higher quality)",
+            "minimum": 1.0,
+            "maximum": 1000.0
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request-level parameter overrides (strict: unknown keys -> 422)"
       },
       "Request_DENSENET_CLASSIFICATION_SERVER": {
         "type": "object",
@@ -4284,12 +4338,23 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "$ref": "#/components/schemas/OutputOptions"
           },
           "params": {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": false,
-            "description": "This model declares no request-level parameters"
+            "$ref": "#/components/schemas/Params_LDM_SERVER"
           }
         }
+      },
+      "Params_LDM_SERVER": {
+        "type": "object",
+        "properties": {
+          "step_size": {
+            "type": "integer",
+            "format": "int32",
+            "description": "latent sampler steps (fewer = faster)",
+            "minimum": 1.0,
+            "maximum": 1000.0
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request-level parameter overrides (strict: unknown keys -> 422)"
       },
       "Request_LIBFACE_DETECTION_SERVER": {
         "type": "object",

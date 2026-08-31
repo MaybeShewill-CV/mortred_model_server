@@ -31,6 +31,7 @@ set(TEST_LIST
     file_path_util_unittest
     json_request_parser_unittest
     request_envelope_unittest
+    diffusion_param_unittest
     blocking_worker_queue_unittest
     status_code_unittest
     auth_token_unittest
@@ -140,6 +141,8 @@ foreach(src ${TEST_LIST})
         if(MORTRED_WORKFLOW_AVAILABLE)
             list(APPEND EXTRA_LIBS vendored::workflow)
         endif()
+    elseif(${src} STREQUAL "diffusion_param_unittest")
+        set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "model_golden_test")
         set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn vendored::mnn_cuda)
     elseif(${src} STREQUAL "model_lifecycle_unittest")
