@@ -174,7 +174,17 @@ void forward_to_model(WFHttpTask* task, const mortred::control::ServerEntry& ent
         });
     client->get_req()->set_method("POST");
     client->get_req()->append_output_body(body.data(), body.size());
-    client->get_req()->add_header_pair("Content-Type", "application/json; charset=utf-8");
+    // forward the client's encoding choice verbatim: the unified contract is
+    // encoding-agnostic (JSON envelope today, raw image/* bodies in M6) and
+    // the model server rejects what it does not support with a precise 415
+    const std::string client_content_type = header_value(task->get_req(), "content-type");
+    client->get_req()->add_header_pair(
+        "Content-Type",
+        client_content_type.empty() ? "application/json; charset=utf-8" : client_content_type.c_str());
+    const std::string client_accept = header_value(task->get_req(), "accept");
+    if (!client_accept.empty()) {
+        client->get_req()->add_header_pair("Accept", client_accept.c_str());
+    }
     if (!internal_token.empty()) {
         const std::string auth = "Bearer " + internal_token;
         client->get_req()->add_header_pair("Authorization", auth.c_str());
