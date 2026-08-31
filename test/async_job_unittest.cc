@@ -23,6 +23,7 @@
 #include <thread>
 #include <vector>
 
+#include "models/io/common_input.h"
 #include "server/async_job_table.h"
 
 namespace {
@@ -45,7 +46,7 @@ task_request make_req(const std::string& id, const std::string& payload) {
     req.task_id = id;
     req.is_valid = true;
     req.parse_status = StatusCode::OK;
-    req.payload = payload;
+    req.items.push_back({jinq::models::io_define::common_io::byte_source::origin_kind::base64_text, payload});
     return req;
 }
 
@@ -53,7 +54,9 @@ Result make_result(int value) {
     Result result;
     result.model_run_status = StatusCode::OK;
     result.worker_run_time_consuming = 1.5;
-    result.model_output.value = value;
+    result.item_status.assign(1, StatusCode::OK);
+    result.item_outputs.resize(1);
+    result.item_outputs[0].value = value;
     return result;
 }
 
@@ -215,7 +218,7 @@ TEST(async_job_table, result_readable_only_when_done_and_repeatable) {
     for (int i = 0; i < 3; ++i) {
         const auto got = table.take_result(out.job_id);
         ASSERT_EQ(got.status, Table::ResultStatus::READY);
-        EXPECT_EQ(got.value.model_output.value, 42);
+        EXPECT_EQ(got.value.item_outputs[0].value, 42);
         EXPECT_EQ(got.value.model_run_status, StatusCode::OK);
         EXPECT_DOUBLE_EQ(got.value.worker_run_time_consuming, 1.5);
         EXPECT_EQ(got.task_id, "req-1");  // request-id echo survives the payload move
@@ -251,11 +254,11 @@ TEST(async_job_table, take_request_moves_payload_once_and_keeps_task_id) {
     const auto first = table.take_request(out.job_id);
     ASSERT_TRUE(first.has_value());
     EXPECT_EQ(first->task_id, "req-9");
-    EXPECT_EQ(first->payload, "payload-data");
+    EXPECT_EQ(first->items[0].data, "payload-data");
     const auto second = table.take_request(out.job_id);
     ASSERT_TRUE(second.has_value());
     EXPECT_EQ(second->task_id, "req-9");
-    EXPECT_TRUE(second->payload.empty());  // moved out once
+    EXPECT_TRUE(second->items.empty());  // moved out once
     ASSERT_TRUE(table.finish(out.job_id, make_result(1)));
     const auto got = table.take_result(out.job_id);
     ASSERT_EQ(got.status, Table::ResultStatus::READY);
@@ -277,7 +280,7 @@ TEST(async_job_table, terminal_transitions_are_exactly_once) {
     EXPECT_EQ(snap->state, AsyncJobState::DONE);
     const auto got = table.take_result(out.job_id);
     ASSERT_EQ(got.status, Table::ResultStatus::READY);
-    EXPECT_EQ(got.value.model_output.value, 1);  // first result wins
+    EXPECT_EQ(got.value.item_outputs[0].value, 1);  // first result wins
     EXPECT_EQ(table.queue_depth(), 0);           // decremented exactly once
 }
 

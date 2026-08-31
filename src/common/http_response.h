@@ -57,6 +57,13 @@ struct ResponseItem {
     rapidjson::Document data;
 };
 
+/*** One machine-locatable error (JSON pointer + message), used by the
+ * unified envelope for strict validation rejections. */
+struct ResponseError {
+    std::string pointer;
+    std::string message;
+};
+
 /*** Unified response envelope (request-side counterpart:
  * server/request_envelope.h). Rendered by BaseAiServerImpl from M4 on;
  * the structure lives here so schema tests can pin it before wiring.
@@ -75,6 +82,8 @@ struct UnifiedResponse {
     std::vector<ResponseItem> results;
     double server_time_ms = 0.0;
     bool partial = false;
+    // non-empty on 422-class rejections: pointer + message per violation
+    std::vector<ResponseError> errors;
 };
 
 inline std::string build_unified_response_body(const UnifiedResponse& resp) {
@@ -114,6 +123,19 @@ inline std::string build_unified_response_body(const UnifiedResponse& resp) {
     writer.Double(resp.server_time_ms);
     writer.Key("partial");
     writer.Bool(resp.partial);
+    if (!resp.errors.empty()) {
+        writer.Key("errors");
+        writer.StartArray();
+        for (const auto& error : resp.errors) {
+            writer.StartObject();
+            writer.Key("pointer");
+            writer.String(error.pointer.c_str());
+            writer.Key("message");
+            writer.String(error.message.c_str());
+            writer.EndObject();
+        }
+        writer.EndArray();
+    }
     writer.EndObject();
 
     return buf.GetString();

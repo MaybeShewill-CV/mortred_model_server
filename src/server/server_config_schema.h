@@ -84,7 +84,7 @@ inline const std::vector<std::string>& server_optional_int_keys() {
         "compute_threads", "handler_threads", "model_run_timeout",
         "rate_limit_qps", "stuck_worker_threshold_times", "max_queue_depth",
         "max_batch_size", "max_batch_delay_ms", "async_timeout", "async_max_queue",
-        "async_job_ttl", "async_max_completed"};
+        "async_job_ttl", "async_max_completed", "max_request_items"};
     return k;
 }
 

@@ -98,17 +98,14 @@ class CvModelServer final : public BaseAiServer {
       public:
         explicit Impl(const CvServerSpec<MODEL_OUTPUT>& spec) : _m_spec(spec) {}
 
-        StatusCode init(const toml::table& config) override;
+    StatusCode init(const toml::table& config) override;
 
-        void fill_response_data(rapidjson::Document::AllocatorType& allocator,
-                                rapidjson::Document& data,
-                                const StatusCode& status,
-                                const MODEL_OUTPUT& model_output) override {
-            (void)status;  // contract: only called on the success path
-            // request options ride on task_request from the M4 reshape;
-            // until then every response uses the task-agnostic defaults
-            _m_spec.fill_response(allocator, data, model_output, OutputOptions{});
-        }
+    void fill_response_data(rapidjson::Document::AllocatorType& allocator,
+                            rapidjson::Document& data,
+                            const MODEL_OUTPUT& model_output,
+                            const OutputOptions& options) override {
+        _m_spec.fill_response(allocator, data, model_output, options);
+    }
 
       private:
         const CvServerSpec<MODEL_OUTPUT>& _m_spec;
@@ -134,6 +131,10 @@ StatusCode CvModelServer<MODEL_OUTPUT>::Impl::init(const toml::table& config) {
     if (common_status != StatusCode::OK) {
         return common_status;
     }
+    // the model's request-overridable parameter schema rides on the spec;
+    // the envelope validator rejects any key outside this declaration
+    this->_m_param_specs = _m_spec.param_specs;
+    this->_m_model_name = _m_spec.model_section;
     auto worker_nums = parse_worker_nums(server_section);
     if (worker_nums <= 0) {
         this->_m_successfully_initialized = false;

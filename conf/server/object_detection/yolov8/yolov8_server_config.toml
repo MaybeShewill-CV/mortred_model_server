@@ -23,6 +23,8 @@ worker_nums=1
 model_run_timeout=1000
 # max queued requests before the server answers 429 (overload protection)
 max_queue_depth=32
+# max images per request (queue depth / Retry-After account per image)
+# max_request_items=16
 # dynamic batching pilot: packed [N,3,640,640] runs against the batch profile
 # engine (conf/trt_profiles/yolov8s.json, opt=8 anchors the server batch size)
 max_batch_size=8

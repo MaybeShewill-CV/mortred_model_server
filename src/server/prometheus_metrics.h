@@ -55,14 +55,14 @@ class PrometheusMetrics {
         }
     }
 
-    void inc_inference_success() {
+    void inc_inference_success(size_t n = 1) {
         std::lock_guard<std::mutex> lock(mutex_);
-        inference_success_++;
+        inference_success_ += n;
     }
 
-    void inc_inference_failure() {
+    void inc_inference_failure(size_t n = 1) {
         std::lock_guard<std::mutex> lock(mutex_);
-        inference_failure_++;
+        inference_failure_ += n;
     }
 
     void inc_queue_rejected() {
@@ -125,14 +125,14 @@ class PrometheusMetrics {
         waiting_jobs_ = n;
     }
 
-    void inc_received_jobs() {
+    void inc_received_jobs(size_t n = 1) {
         std::lock_guard<std::mutex> lock(mutex_);
-        received_jobs_++;
+        received_jobs_ += n;
     }
 
-    void inc_finished_jobs() {
+    void inc_finished_jobs(size_t n = 1) {
         std::lock_guard<std::mutex> lock(mutex_);
-        finished_jobs_++;
+        finished_jobs_ += n;
     }
 
     std::string render() const {

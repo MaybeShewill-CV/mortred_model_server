@@ -105,10 +105,10 @@
 - [x] **M3.4** `src/models/object_detection/detector_common.h` + `detection_params.h`：
       后处理从 `InferenceContext.params` 读取覆盖值，缺省回落 TOML 配置值
       （yolov5/6/7/8/nanodet/centerface/libface 共用同一路径，一处改动覆盖全族）
-- [ ] **M3.5** `src/server/async_job_table.h`：`task_request` 改形
+- [x] **M3.5** `src/server/async_job_table.h`：`task_request` 改形
       `{task_id, is_valid, parse_status, items[], params(shared_ptr), options, deadline(steady_clock)}`
       ⚠️ **必须与 M4.1 同一提交窗口**（`serve_process` 同步切到新解析器）
-- [ ] **M3.6** CMake：新文件挂入 models/server 目标与测试目标
+- [x] **M3.6** CMake：新文件挂入 models/server 目标与测试目标
 
 **M3 验收**：与 M4.1 合并窗口后 `check` 全绿。
 
@@ -116,34 +116,34 @@
 
 ## M4 内核翻转：契约切换点（4–5 天，原子提交系列）
 
-- [ ] **M4.1** `src/server/base_server_impl.h`：
+- [x] **M4.1** `src/server/base_server_impl.h`：
       - `parse_task_request` → `parse_request`（信封解析 + 严格校验）
       - `img_data` → 422 + migration；未知键 → 422 + pointer
       - `max_request_items`（默认 16，`[SERVER]` 可覆写）→ `REQUEST_ITEM_LIMIT`
       - **背压按 item 计数**：`_m_waiting_jobs`/EWMA/`Retry-After` 全部以 item 为单位
       - **deadline 传播**：`deadline = steady_now + model_run_timeout`，存入 `task_request`
-- [ ] **M4.2** `do_work` 单请求路径：一次 worker 领取跑完该请求全部 items，
+- [x] **M4.2** `do_work` 单请求路径：一次 worker 领取跑完该请求全部 items，
       逐项检查剩余预算，逐项产出结果，用完归还 worker
-- [ ] **M4.3** 批路径：每 item 一个 `batch_entry` + 请求级完成闩
+- [x] **M4.3** 批路径：每 item 一个 `batch_entry` + 请求级完成闩
       （`shared_ptr<atomic<int>>`，请求方超时消失不 UAF）；
       收集窗口取 `min(剩余 deadline, max_batch_delay_ms)`
-- [ ] **M4.4** 响应组装：`results[]` 与 `images[]` 下标对齐、每项独立 status、
+- [x] **M4.4** 响应组装：`results[]` 与 `images[]` 下标对齐、每项独立 status、
       顶层聚合 status + `partial` 标志；`reply_json`/`build_response_body` 切新信封
       （`req_id` 进 `task_id` 出，命名延续）
-- [ ] **M4.5** 异步端点：`/jobs` 存 items 形态 `task_request`；`async_run_job` 复用
+- [x] **M4.5** 异步端点：`/jobs` 存 items 形态 `task_request`；`async_run_job` 复用
       与同步相同的 run-items 核心；`/result` 返回统一信封
-- [ ] **M4.6** `src/control/gateway/gateway_app.cpp`：**修复 Content-Type 写死 bug**，
+- [x] **M4.6** `src/control/gateway/gateway_app.cpp`：**修复 Content-Type 写死 bug**，
       原样透传客户端 `Content-Type` 与 `Accept`（内部 token 注入逻辑不变）
-- [ ] **M4.7** metrics：received/finished 按 item 计数；encoding label 预留（现恒 `"json"`）；
+- [x] **M4.7** metrics：received/finished 按 item 计数；encoding label 预留（现恒 `"json"`）；
       参数值**永不**进 label（约定写入代码注释）
-- [ ] **M4.8** 测试重写为统一契约：
+- [x] **M4.8** 测试重写为统一契约：
       `http_contract_test.cc`、`server_e2e_contract_test.cc`、`gateway_e2e_test.cc`、
       `response_schema_test.cc`、`openapi_consistency_test.cc`、`model_output_contract_unittest.cc`、
       `fake_model_server.cc`、`backpressure_unittest.cc`（item 计数语义）、
       `async_job_unittest.cc`/`async_job_stress_test.cc`、`request_size_limit_unittest.cc`
-- [ ] **M4.9** `conf/server/**`：`max_request_items` 写入 1–2 个示例文件并注释默认值
+- [x] **M4.9** `conf/server/**`：`max_request_items` 写入 1–2 个示例文件并注释默认值
       （代码有默认，避免 27 文件机械改动）
-- [ ] **M4.10** golden 参数扫描：同图不同 `score_threshold` 断言
+- [x] **M4.10** golden 参数扫描：同图不同 `score_threshold` 断言
       `count(0.9) ≤ count(0.35)` 单调 + 固定阈值框集哈希稳定（对引擎噪声免疫）
 
 **M4 验收**：
