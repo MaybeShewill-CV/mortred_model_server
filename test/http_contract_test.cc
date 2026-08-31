@@ -58,6 +58,38 @@ TEST(http_contract, response_body_contains_envelope) {
     EXPECT_NE(body.find("\"data\":null"), std::string::npos);
 }
 
+TEST(http_contract, unified_response_body_contains_envelope) {
+    jinq::common::UnifiedResponse resp;
+    resp.task_id = "trace-1";
+    resp.status = 0;
+    resp.status_str = "OK";
+    resp.model_name = "yolov8";
+    resp.model_version = "sha256:abc";
+    resp.server_time_ms = 41.25;
+    resp.partial = false;
+
+    jinq::common::ResponseItem ok_item;
+    ok_item.status = 0;
+    ok_item.data.SetObject();
+    ok_item.data.AddMember("boxes", 3, ok_item.data.GetAllocator());
+    resp.results.push_back(std::move(ok_item));
+
+    jinq::common::ResponseItem failed_item;
+    failed_item.status = jinq::common::to_underlying(StatusCode::MODEL_EMPTY_INPUT_IMAGE);
+    resp.results.push_back(std::move(failed_item));
+
+    const auto body = jinq::common::build_unified_response_body(resp);
+    EXPECT_NE(body.find("\"status\":0"), std::string::npos);
+    EXPECT_NE(body.find("\"status_str\":\"OK\""), std::string::npos);
+    EXPECT_NE(body.find("\"task_id\":\"trace-1\""), std::string::npos);
+    EXPECT_NE(body.find("\"model\":{\"name\":\"yolov8\",\"version\":\"sha256:abc\"}"), std::string::npos);
+    EXPECT_NE(body.find("\"server_time_ms\":41.25"), std::string::npos);
+    EXPECT_NE(body.find("\"partial\":false"), std::string::npos);
+    // per-item results align with images[]: status + data payload, null data allowed
+    EXPECT_NE(body.find("\"results\":[{\"status\":0,\"data\":{\"boxes\":3}},"), std::string::npos);
+    EXPECT_NE(body.find("{\"status\":3,\"data\":null}]"), std::string::npos);
+}
+
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
