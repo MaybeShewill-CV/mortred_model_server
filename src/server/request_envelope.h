@@ -217,6 +217,99 @@ inline ParsedRequest parse_request_envelope(const std::string &body, const std::
     return request;
 }
 
+namespace detail {
+
+/*** applies the X-Mortred-Params / X-Mortred-Options header values to a raw
+ * request. The header value IS the params/options object (compact JSON), so
+ * the very same validators and pointer namespaces apply: a raw request and
+ * its JSON twin produce byte-identical 422 bodies. */
+inline void apply_raw_headers(const std::string &params_header,
+                              const std::string &options_header,
+                              const std::vector<ParamSpec> &specs,
+                              ParsedRequest &request) {
+    if (!params_header.empty()) {
+        rapidjson::Document header;
+        header.Parse(params_header.data(), params_header.size());
+        if (header.HasParseError() || !header.IsObject()) {
+            request.violations.push_back(
+                {"/params", "X-Mortred-Params must be a compact JSON object"});
+        } else {
+            std::vector<std::pair<std::string, ParamValue>> candidates;
+            for (auto member = header.MemberBegin(); member != header.MemberEnd(); ++member) {
+                const std::string key(member->name.GetString(), member->name.GetStringLength());
+                ParamValue value;
+                if (!param_value_of(member->value, &value)) {
+                    request.violations.push_back(
+                        {"/params/" + key, "parameter value must be a scalar (number, boolean or string)"});
+                    continue;
+                }
+                candidates.emplace_back(key, std::move(value));
+            }
+            ParamSet validated;
+            const auto violations = jinq::models::backend::validate_params(specs, candidates, &validated);
+            for (const auto &violation : violations) {
+                request.violations.push_back(
+                    {violation.pointer == "/" ? "/params" : "/params" + violation.pointer, violation.message});
+            }
+            if (violations.empty()) {
+                request.params = std::make_shared<ParamSet>(std::move(validated));
+            }
+        }
+    }
+    if (!options_header.empty()) {
+        rapidjson::Document header;
+        header.Parse(options_header.data(), options_header.size());
+        if (header.HasParseError() || !header.IsObject()) {
+            request.violations.push_back(
+                {"/options", "X-Mortred-Options must be a compact JSON object"});
+        } else {
+            OutputOptions parsed;
+            const auto violations = parse_output_options(header, &parsed);
+            for (const auto &violation : violations) {
+                request.violations.push_back({"/options" + violation.pointer, violation.message});
+            }
+            if (violations.empty()) {
+                request.options = parsed;
+            }
+        }
+    }
+}
+
+} // namespace detail
+
+/*** Raw-body encoding of the SAME envelope: Content-Type image-anything (or
+ * application/octet-stream) carries exactly one image as the request body
+ * (images[0]); params/options ride the X-Mortred-Params / X-Mortred-Options
+ * headers as compact JSON; the optional trace id rides X-Request-ID.
+ *
+ * Violation pointers keep the /params/<key> and /options/<key> namespaces,
+ * so error bodies are identical to the JSON encoding for the same mistake. */
+inline ParsedRequest parse_raw_request(const std::string &body,
+                                       const std::string &req_id_header,
+                                       const std::string &params_header,
+                                       const std::string &options_header,
+                                       const std::vector<ParamSpec> &specs) {
+    ParsedRequest request;
+    request.req_id = req_id_header;
+
+    if (body.empty()) {
+        request.status = StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+        request.violations.push_back({"/body", "raw request body is empty (expected image bytes)"});
+        return request;
+    }
+
+    byte_source item;
+    item.origin = byte_source::origin_kind::raw_bytes;
+    item.data = body;
+    request.items.push_back(std::move(item));
+
+    detail::apply_raw_headers(params_header, options_header, specs, request);
+
+    request.is_valid = request.violations.empty();
+    request.status = request.is_valid ? StatusCode::OK : StatusCode::INVALID_REQUEST_PARAMETER;
+    return request;
+}
+
 } // namespace server
 } // namespace jinq
 

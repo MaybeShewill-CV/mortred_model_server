@@ -14,6 +14,7 @@
 
 using jinq::models::backend::ParamSpec;
 using jinq::models::io_define::common_io::byte_source;
+using jinq::server::parse_raw_request;
 using jinq::server::OutputOptions;
 using jinq::server::parse_request_envelope;
 using jinq::common::StatusCode;
@@ -231,6 +232,73 @@ TEST(request_envelope, options_partial_override_keeps_defaults) {
     EXPECT_STREQ(request.options.encoding_extension(), ".webp");
     EXPECT_TRUE(request.options.include_image);
     EXPECT_EQ(request.options.max_results, 0);
+}
+
+TEST(request_envelope, raw_body_builds_single_raw_item) {
+    const auto request = parse_raw_request("\x89PNG-data", "trace-7", "", "", sample_specs());
+    EXPECT_TRUE(request.is_valid);
+    EXPECT_EQ(request.status, StatusCode::OK);
+    EXPECT_EQ(request.req_id, "trace-7");
+    ASSERT_EQ(request.items.size(), 1u);
+    EXPECT_EQ(request.items[0].origin, byte_source::origin_kind::raw_bytes);
+    EXPECT_EQ(request.items[0].data, std::string("\x89PNG-data"));
+    EXPECT_EQ(request.params, nullptr);
+    EXPECT_EQ(request.options.encoding, OutputOptions::ImageEncoding::PNG);
+}
+
+TEST(request_envelope, raw_empty_body_rejects_with_pointer) {
+    const auto request = parse_raw_request("", "", "", "", sample_specs());
+    EXPECT_FALSE(request.is_valid);
+    EXPECT_EQ(request.status, StatusCode::MODEL_EMPTY_INPUT_IMAGE);
+    ASSERT_EQ(request.violations.size(), 1u);
+    EXPECT_EQ(request.violations[0].pointer, "/body");
+}
+
+TEST(request_envelope, raw_params_header_uses_the_same_validator_and_pointers) {
+    // valid override
+    auto request = parse_raw_request("img", "t", R"({"score_threshold":0.4})", "", sample_specs());
+    EXPECT_TRUE(request.is_valid);
+    ASSERT_NE(request.params, nullptr);
+    EXPECT_FLOAT_EQ(request.params->get_f32("score_threshold", 0.0f), 0.4f);
+
+    // unknown key: same pointer namespace as the JSON encoding
+    request = parse_raw_request("img", "t", R"({"nope":1})", "", sample_specs());
+    EXPECT_FALSE(request.is_valid);
+    ASSERT_EQ(request.violations.size(), 1u);
+    EXPECT_EQ(request.violations[0].pointer, "/params/nope");
+    EXPECT_NE(request.violations[0].message.find("unknown parameter"), std::string::npos);
+
+    // range violation is byte-identical semantics to the JSON path
+    const auto json_twin =
+        parse_request_envelope(R"({"images":["aGk="],"params":{"score_threshold":2.0}})", sample_specs());
+    request = parse_raw_request("img", "t", R"({"score_threshold":2.0})", "", sample_specs());
+    ASSERT_EQ(json_twin.violations.size(), request.violations.size());
+    ASSERT_EQ(request.violations.size(), 1u);
+    EXPECT_EQ(json_twin.violations[0].pointer, request.violations[0].pointer);
+    EXPECT_EQ(json_twin.violations[0].message, request.violations[0].message);
+
+    // malformed header value
+    request = parse_raw_request("img", "t", "not-json", "", sample_specs());
+    EXPECT_FALSE(request.is_valid);
+    EXPECT_EQ(request.violations[0].pointer, "/params");
+    EXPECT_NE(request.violations[0].message.find("X-Mortred-Params"), std::string::npos);
+}
+
+TEST(request_envelope, raw_options_header_parsers_like_the_json_path) {
+    auto request = parse_raw_request("img", "", "", R"({"encoding":"jpeg","max_results":5})",
+                                     sample_specs());
+    EXPECT_TRUE(request.is_valid);
+    EXPECT_EQ(request.options.encoding, OutputOptions::ImageEncoding::JPEG);
+    EXPECT_EQ(request.options.max_results, 5);
+
+    request = parse_raw_request("img", "", "", R"({"encoding":"bmp"})", sample_specs());
+    EXPECT_FALSE(request.is_valid);
+    ASSERT_EQ(request.violations.size(), 1u);
+    EXPECT_EQ(request.violations[0].pointer, "/options/encoding");
+
+    request = parse_raw_request("img", "", "", "nope", sample_specs());
+    EXPECT_FALSE(request.is_valid);
+    EXPECT_EQ(request.violations[0].pointer, "/options");
 }
 
 int main(int argc, char **argv) {
