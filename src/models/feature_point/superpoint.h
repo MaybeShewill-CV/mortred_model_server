@@ -39,6 +39,7 @@ template <typename INPUT, typename OUTPUT> class SuperPoint : public jinq::model
                                                           const std::string &name) const;
 
     void decode_fp_location_and_score(const jinq::models::backend::NamedTensor &semi,
+                                      double score_threshold, double nms_radius,
                                       jinq::models::io_define::feature_point::std_feature_point_output &key_points) const;
 
     void decode_fp_descriptor(const jinq::models::backend::NamedTensor &desc,

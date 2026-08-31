@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "models/backend/f32_output.h"
+#include "models/backend/param_spec.h"
 #include "models/backend/request_geometry.h"
 #include "models/classification/mobilenetv2.h"
 #include "models/enhancement/real_esrgan.h"
@@ -66,6 +67,49 @@ template <typename MODEL> class CallableOcrFields : public MODEL {
 };
 
 } // namespace
+
+TEST(ModelOutputContract, ClassificationTopKKeepsHighestScoresDescending) {
+    CallablePostprocess<jinq::models::classification::MobileNetv2<jinq::models::io_define::common_io::mat_input,
+                                                                 jinq::models::io_define::classification::std_classification_output>>
+        model;
+    using ClsOutput = jinq::models::io_define::classification::std_classification_output;
+
+    // scores: [0.1, 0.7, 0.2, 0.6, 0.3] -> top 2 = {0.7, 0.6}, argmax = 1
+    auto scores = f32_tensor("scores", {1, 5}, 0.1f);
+    auto *values = scores.tensor.data<float>();
+    values[1] = 0.7f;
+    values[2] = 0.2f;
+    values[3] = 0.6f;
+    values[4] = 0.3f;
+
+    const InferenceContext request;
+
+    // legacy path: full class-index ordered array
+    ClsOutput full;
+    ASSERT_EQ(model.postprocess({scores}, request, full), StatusCode::OK);
+    ASSERT_EQ(full.scores.size(), 5u);
+    EXPECT_EQ(full.class_id, 1);
+
+    // top_k = 2: two highest scores, descending
+    jinq::models::backend::ParamSet params;
+    params.set_i32("top_k", 2);
+    auto with_top_k = request;
+    with_top_k.params = &params;
+    ClsOutput top;
+    ASSERT_EQ(model.postprocess({scores}, with_top_k, top), StatusCode::OK);
+    ASSERT_EQ(top.scores.size(), 2u);
+    EXPECT_FLOAT_EQ(top.scores[0], 0.7f);
+    EXPECT_FLOAT_EQ(top.scores[1], 0.6f);
+    EXPECT_EQ(top.class_id, 1);  // argmax unchanged by truncation
+
+    // top_k larger than the class count keeps everything
+    params = jinq::models::backend::ParamSet();
+    params.set_i32("top_k", 100);
+    with_top_k.params = &params;
+    ClsOutput all;
+    ASSERT_EQ(model.postprocess({scores}, with_top_k, all), StatusCode::OK);
+    EXPECT_EQ(all.scores.size(), 5u);
+}
 
 TEST(RequestGeometry, BuildsNonUniformScaleAndRejectsInvalidContext) {
     const auto request = context(cv::Size(20, 30), cv::Size(10, 5));
@@ -243,4 +287,44 @@ TEST(ModelOutputContract, EnhancementValidatesSuperResolutionOutput) {
 
     image.tensor.shape = {1, 4, 4, 6};
     EXPECT_EQ(model.postprocess({image}, request, result), StatusCode::MODEL_OUTPUT_CONTRACT_FAILED);
+}
+
+TEST(ModelOutputContract, OcrScoreThresholdSweepIsMonotone) {
+    CallableOcrFields<jinq::models::ocr::DBTextDetector<jinq::models::io_define::common_io::mat_input,
+                                                         jinq::models::io_define::ocr::std_text_regions_output>>
+        model;
+    model._m_output_name = "sigmoid_0.tmp_0";
+    using OcrOutput = jinq::models::io_define::ocr::std_text_regions_output;
+
+    // 8x8 prob map: a 4x4 bright block (0.9) on a dark background (0.05);
+    // network 8x8 == source 8x8 so the geometry scale is 1:1
+    const auto request = context(cv::Size(8, 8), cv::Size(8, 8));
+    auto prob = f32_tensor("sigmoid_0.tmp_0", {1, 1, 8, 8}, 0.05f);
+    auto *values = prob.tensor.data<float>();
+    for (int row = 2; row < 6; ++row) {
+        for (int col = 2; col < 6; ++col) {
+            values[row * 8 + col] = 0.9f;
+        }
+    }
+
+    auto run_with_threshold = [&model, &prob, &request](float request_threshold) {
+        OcrOutput out;
+        auto ctx = request;
+        jinq::models::backend::ParamSet params;
+        params.set_f32("score_threshold", request_threshold);
+        ctx.params = &params;
+        const auto status = model.postprocess({prob}, ctx, out);
+        EXPECT_EQ(status, StatusCode::OK) << "threshold=" << request_threshold;
+        return out.size();
+    };
+
+    // the block survives a permissive threshold and vanishes under a strict one
+    EXPECT_EQ(run_with_threshold(0.1f), 1u);
+    EXPECT_EQ(run_with_threshold(0.95f), 0u);
+
+    // legacy path: the config default (0.4 from DetectionParams-style init)
+    // keeps the block because its mean score is well above 0.4
+    OcrOutput legacy;
+    EXPECT_EQ(model.postprocess({prob}, request, legacy), StatusCode::OK);
+    EXPECT_EQ(legacy.size(), 1u);
 }

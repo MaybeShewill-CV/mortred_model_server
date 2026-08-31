@@ -50,14 +50,25 @@ using Output = jinq::models::io_define::classification::std_classification_outpu
 using jinq::server::ImageInput;
 using Entry = jinq::factory::cv_catalog::CvModelEntry<Output>;
 
+/*** request-overridable classification parameters: top_k keeps the k highest
+ * scores (descending) and shrinks the response payload; the full class-index
+ * ordered array is the legacy/default behavior */
+inline const std::vector<jinq::models::backend::ParamSpec> &classification_param_specs() {
+    static const std::vector<jinq::models::backend::ParamSpec> specs = {
+        jinq::models::backend::ParamSpec::i32("top_k").range(1, 1000).desc("keep the k highest scores, descending"),
+    };
+    return specs;
+}
+
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
         Entry{"MOBILENETV2", "Mobilenetv2 classification", "MOBILENETV2_CLASSIFICATION_SERVER",
-              &create_mobilenetv2_classifier<ImageInput, Output>, &jinq::server::response::fill_classification, {}},
+              &create_mobilenetv2_classifier<ImageInput, Output>, &jinq::server::response::fill_classification,
+              classification_param_specs()},
         Entry{"RESNET", "Resnet classification", "RESNET_CLASSIFICATION_SERVER", &create_resnet_classifier<ImageInput, Output>,
-              &jinq::server::response::fill_classification, {}},
+              &jinq::server::response::fill_classification, classification_param_specs()},
         Entry{"DENSENET", "densenet classification", "DENSENET_CLASSIFICATION_SERVER", &create_densenet_classifier<ImageInput, Output>,
-              &jinq::server::response::fill_classification, {}},
+              &jinq::server::response::fill_classification, classification_param_specs()},
     };
     return entries;
 }

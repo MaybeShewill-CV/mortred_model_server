@@ -98,7 +98,7 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> DenseNet<INP
 
 template <typename INPUT, typename OUTPUT>
 StatusCode DenseNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
+                                                const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "classification model output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
@@ -127,6 +127,30 @@ StatusCode DenseNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &
     const auto name_iter = _m_class_id2names.find(static_cast<uint16_t>(cls_id));
     if (name_iter != _m_class_id2names.end()) {
         internal_out.category = name_iter->second;
+    }
+    // request-level top_k: keep the k highest scores (descending) to shrink
+    // the payload; the full class-index ordered array is the default
+    int keep = static_cast<int>(score_count);
+    if (context.params != nullptr) {
+        keep = context.params->get_i32("top_k", keep);
+    }
+    if (keep < static_cast<int>(score_count)) {
+        std::vector<int> order(static_cast<size_t>(score_count));
+        for (int idx = 0; idx < static_cast<int>(score_count); ++idx) {
+            order[static_cast<size_t>(idx)] = idx;
+        }
+        std::partial_sort(order.begin(), order.begin() + keep, order.end(),
+                          [&internal_out](int lhs, int rhs) {
+                              return internal_out.scores[static_cast<size_t>(lhs)] >
+                                     internal_out.scores[static_cast<size_t>(rhs)];
+                          });
+        order.resize(static_cast<size_t>(keep));
+        std::vector<float> top_scores;
+        top_scores.reserve(order.size());
+        for (const int idx : order) {
+            top_scores.push_back(internal_out.scores[static_cast<size_t>(idx)]);
+        }
+        internal_out.scores = std::move(top_scores);
     }
     output = std::move(internal_out);
     return StatusCode::OK;
