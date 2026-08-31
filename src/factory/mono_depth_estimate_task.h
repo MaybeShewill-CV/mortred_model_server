@@ -31,15 +31,15 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_depth_anything_estimator(cons
 }
 
 using Output = jinq::models::io_define::mono_depth_estimation::std_mde_output;
-using jinq::server::Base64Input;
+using jinq::server::ImageInput;
 using Entry = jinq::factory::cv_catalog::CvModelEntry<Output>;
 
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
-        Entry{"METRIC3D", "metric3d estimation", "METRIC3D_ESTIMATION_SERVER", &create_metric3d_estimator<Base64Input, Output>,
-              &jinq::server::response::fill_depth_estimation},
+        Entry{"METRIC3D", "metric3d estimation", "METRIC3D_ESTIMATION_SERVER", &create_metric3d_estimator<ImageInput, Output>,
+              &jinq::server::response::fill_depth_estimation, {}},
         Entry{"DEPTH_ANYTHING", "depth anything estimation", "DEPTH_ANYTHING_ESTIMATION_SERVER",
-              &create_depth_anything_estimator<Base64Input, Output>, &jinq::server::response::fill_depth_estimation},
+              &create_depth_anything_estimator<ImageInput, Output>, &jinq::server::response::fill_depth_estimation, {}},
     };
     return entries;
 }

@@ -22,6 +22,7 @@
 #include <unordered_map>
 #include <utility>
 #include <thread>
+#include <type_traits>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -102,6 +103,30 @@ inline std::string generate_req_id() {
     std::snprintf(buf, sizeof(buf), "%016llx", static_cast<unsigned long long>(unique));
     return std::string(buf);
 }
+
+namespace detail {
+
+/*** builds the worker's own input type from a base64 payload string. The
+ * unified image_input carries a base64 byte_source plus an empty param view
+ * (request params arrive with the M4 task_request reshape); legacy test
+ * workers keep the plain base64_input contract. */
+template <typename INPUT>
+inline INPUT make_model_input_from_payload(std::string payload) {
+    INPUT input;
+    if constexpr (std::is_same<INPUT, models::io_define::common_io::image_input>::value) {
+        input.image.origin = models::io_define::common_io::byte_source::origin_kind::base64_text;
+        input.image.data = std::move(payload);
+        input.params = nullptr;
+    } else if constexpr (std::is_same<INPUT, models::io_define::common_io::base64_input>::value) {
+        input.input_image_content = std::move(payload);
+    } else {
+        static_assert(sizeof(INPUT) == 0,
+                      "unsupported worker input type: BaseAiServerImpl feeds base64 payloads only");
+    }
+    return input;
+}
+
+} // namespace detail
 
 template<typename WORKER, typename MODEL_OUTPUT>
 class BaseAiServerImpl {
@@ -462,10 +487,11 @@ protected:
             return;
         }
 
-        // run the model (same path as do_work)
+        // run the model (same path as do_work); the envelope reshape (M4)
+        // replaces this payload string with items + params
         const auto run_start = Timestamp::now();
-        models::io_define::common_io::base64_input model_input;
-        model_input.input_image_content = std::move(req->payload);
+        using ModelInput = typename WORKER::element_type::input_type;
+        ModelInput model_input = detail::make_model_input_from_payload<ModelInput>(std::move(req->payload));
         go_result result;
         const auto status = worker->run(model_input, result.model_output);
         const auto run_end = Timestamp::now();
@@ -1000,10 +1026,12 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     auto task_receive_ts = Timestamp::now();
 
     // construct model input: base64 image content from the request payload
-    models::io_define::common_io::base64_input model_input;
+    // (the M4 envelope reshape carries items/params directly)
+    using ModelInput = typename WORKER::element_type::input_type;
+    ModelInput model_input{};
     StatusCode status = StatusCode::OK;
     if (req->is_valid) {
-        model_input.input_image_content = req->payload;
+        model_input = detail::make_model_input_from_payload<ModelInput>(req->payload);
         status = worker->run(model_input, result->model_output);
         if (status != StatusCode::OK) {
             LOG(ERROR) << "worker run failed";
@@ -1174,14 +1202,13 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::process_batch(
     _m_first_wait_timeout_ms.store(0);
     _m_metrics.observe_queue_wait_ms(wait_ms);
 
-    std::vector<models::io_define::common_io::base64_input> inputs;
+    using ModelInput = typename WORKER::element_type::input_type;
+    std::vector<ModelInput> inputs;
     inputs.reserve(valid.size());
     for (const auto& entry : valid) {
-        models::io_define::common_io::base64_input input;
         // second and last ownership transfer of the payload (entry -> inputs);
         // nothing reads entry->req.payload after this point
-        input.input_image_content = std::move(entry->req.payload);
-        inputs.push_back(std::move(input));
+        inputs.push_back(detail::make_model_input_from_payload<ModelInput>(std::move(entry->req.payload)));
     }
     std::vector<MODEL_OUTPUT> outputs;
     std::vector<StatusCode> item_status;

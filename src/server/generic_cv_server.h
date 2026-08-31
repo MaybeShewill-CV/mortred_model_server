@@ -24,17 +24,23 @@
 #include "common/status_code.h"
 #include "models/base_model.h"
 #include "models/model_io_define.h"
+#include "models/backend/param_spec.h"
 #include "server/abstract_server.h"
 #include "server/base_server_impl.h"
+#include "server/output_options.h"
 
 namespace jinq {
 namespace server {
 using jinq::common::StatusCode;
 
-using Base64Input = jinq::models::io_define::common_io::base64_input;
+// unified served input: one transport-agnostic image plus the request
+// parameter view (see io/common_input.h). v1 requests arrive as base64
+// text inside the envelope; raw-bytes encoding plugs in without touching
+// the worker contract.
+using ImageInput = jinq::models::io_define::common_io::image_input;
 
 template<typename MODEL_OUTPUT>
-using CvWorkerPtr = std::unique_ptr<jinq::models::BaseAiModel<Base64Input, MODEL_OUTPUT>>;
+using CvWorkerPtr = std::unique_ptr<jinq::models::BaseAiModel<ImageInput, MODEL_OUTPUT>>;
 
 template<typename MODEL_OUTPUT>
 using CvWorkerFactory = std::function<CvWorkerPtr<MODEL_OUTPUT>(const std::string&)>;
@@ -42,7 +48,8 @@ using CvWorkerFactory = std::function<CvWorkerPtr<MODEL_OUTPUT>(const std::strin
 template<typename MODEL_OUTPUT>
 using CvResponseFiller = void (*)(rapidjson::Document::AllocatorType&,
                                   rapidjson::Document&,
-                                  const MODEL_OUTPUT&);
+                                  const MODEL_OUTPUT&,
+                                  const OutputOptions&);
 
 /***
  * Per-model server registration entry. This is the whole per-model footprint
@@ -55,6 +62,9 @@ struct CvServerSpec {
     std::string display_name;          // e.g. "Yolov8 object detection"
     CvWorkerFactory<MODEL_OUTPUT> make_worker;
     CvResponseFiller<MODEL_OUTPUT> fill_response;
+    // request-overridable parameter schema; empty = the model accepts no
+    // per-request params and the envelope validator rejects any
+    std::vector<jinq::models::backend::ParamSpec> param_specs;
 };
 
 template<typename MODEL_OUTPUT>
@@ -95,7 +105,9 @@ class CvModelServer final : public BaseAiServer {
                                 const StatusCode& status,
                                 const MODEL_OUTPUT& model_output) override {
             (void)status;  // contract: only called on the success path
-            _m_spec.fill_response(allocator, data, model_output);
+            // request options ride on task_request from the M4 reshape;
+            // until then every response uses the task-agnostic defaults
+            _m_spec.fill_response(allocator, data, model_output, OutputOptions{});
         }
 
       private:

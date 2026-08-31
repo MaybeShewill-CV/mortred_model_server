@@ -48,7 +48,7 @@ using PromptInput = jinq::models::io_define::segment_anything::sam_prompt_input;
 using PromptOutput = jinq::models::io_define::segment_anything::std_sam_prompt_output;
 using FastSamOutput = jinq::models::io_define::segment_anything::std_fast_sam_output;
 using AmgOutput = jinq::models::io_define::segment_anything::std_sam_amg_output;
-using jinq::server::Base64Input;
+using jinq::server::ImageInput;
 
 using PredictorEntry = jinq::factory::model_catalog::ModelCatalogEntry<PromptInput, PromptOutput>;
 using FastSamEntry = jinq::factory::model_catalog::ModelCatalogEntry<MatInput, FastSamOutput>;
@@ -70,8 +70,8 @@ inline const std::vector<FastSamEntry> &fast_sam_catalog() {
 
 inline const std::vector<AmgEntry> &amg_catalog() {
     static const std::vector<AmgEntry> entries = {
-        AmgEntry{"SAM_AMG", "SAM automatic mask generator", "SAM_AMG_SERVER", &create_sam_auto_mask_generator<Base64Input, AmgOutput>,
-                 &jinq::server::response::fill_sam_amg},
+        AmgEntry{"SAM_AMG", "SAM automatic mask generator", "SAM_AMG_SERVER", &create_sam_auto_mask_generator<ImageInput, AmgOutput>,
+                 &jinq::server::response::fill_sam_amg, {}},
     };
     return entries;
 }
