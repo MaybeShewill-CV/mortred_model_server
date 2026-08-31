@@ -31,6 +31,15 @@ TEST(http_contract, client_errors_map_to_4xx) {
     EXPECT_EQ(http_status_of(StatusCode::RATE_LIMITED), 429);
 }
 
+TEST(http_contract, unified_contract_codes_map_to_http) {
+    // strict envelope validation rejects with 422 + JSON pointer
+    EXPECT_EQ(http_status_of(StatusCode::INVALID_REQUEST_PARAMETER), 422);
+    // item-count overflow is a payload-size class error
+    EXPECT_EQ(http_status_of(StatusCode::REQUEST_ITEM_LIMIT), 413);
+    // completed items are still returned when the deadline expires mid-request
+    EXPECT_EQ(http_status_of(StatusCode::DEADLINE_EXCEEDED_PARTIAL), 200);
+}
+
 TEST(http_contract, server_errors_map_to_5xx) {
     EXPECT_EQ(http_status_of(StatusCode::MODEL_INIT_FAILED), 500);
     EXPECT_EQ(http_status_of(StatusCode::MODEL_OUTPUT_CONTRACT_FAILED), 500);

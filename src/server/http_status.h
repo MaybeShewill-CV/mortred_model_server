@@ -37,6 +37,16 @@ inline int http_status_of(StatusCode code) {
     case StatusCode::RATE_LIMITED:
         return 429;
 
+    case StatusCode::INVALID_REQUEST_PARAMETER:
+        return 422;
+
+    case StatusCode::REQUEST_ITEM_LIMIT:
+        return 413;
+
+    case StatusCode::DEADLINE_EXCEEDED_PARTIAL:
+        // completed items are still returned when the deadline expires mid-request
+        return 200;
+
     case StatusCode::METHOD_NOT_ALLOWED:
         return 405;
 
