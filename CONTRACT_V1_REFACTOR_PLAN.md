@@ -55,14 +55,14 @@
       `INVALID_REQUEST_PARAMETER=66`、`REQUEST_ITEM_LIMIT=67`、`DEADLINE_EXCEEDED_PARTIAL=68`；
       `src/server/http_status.h` 补映射（66→422，67→413，68→200+partial）；
       `test/status_code_unittest.cc` 补断言
-- [ ] **M1.4** `src/models/cv_image_input.h`：新增 `load_image(const image_input&, limits, status, error)`
+- [x] **M1.4** `src/models/cv_image_input.h`：新增 `load_image(const image_input&, limits, status, error)`
       - `base64_text` 分支复用现有 base64 解码逻辑（不动）
       - `raw_bytes` 分支：字节直接 `imdecode`（零 base64 解码；P0-4 接缝现在就位）
       - `ImageInputLimits`（max_pixels/max_side）对两种 origin 同样强制
       - `test/cv_image_input_unittest.cc` 补两种 origin + 超限用例
-- [ ] **M1.5** `src/models/backend/inference_context.h`：`InferenceContext` 增加
+- [x] **M1.5** `src/models/backend/inference_context.h`：`InferenceContext` 增加
       `const ParamSet* params = nullptr`
-- [ ] **M1.6** `src/models/backend/backend_cv_model.h`：`prepare_inputs` 默认实现对
+- [x] **M1.6** `src/models/backend/backend_cv_model.h`：`prepare_inputs` 默认实现对
       `image_input` 输入填充 `prepared.context.params = input.params`；
       `preprocess/postprocess` 钩子签名不变；自定义输入模型（CLIP/SAM/LightGlue/扩散）不受影响
 
