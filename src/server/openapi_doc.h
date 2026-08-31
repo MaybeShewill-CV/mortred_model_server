@@ -2,13 +2,13 @@
 * Copyright MaybeShewill-CV. All Rights Reserved.
 * Author: MaybeShewill-CV
 * File: openapi_doc.h
-* Date: 26-8-19
+* Date: 26-8-31
 ************************************************/
 
 // GENERATED FILE: do not edit by hand. Regenerate with:
+//   cmake --build <full-build-dir> --target contract_dump
+//   <full-build-dir>/bin/contract_dump > docs/contract_dump.json
 //   python scripts/gen_openapi.py
-// The content must stay byte-identical to docs/openapi.json
-// (enforced by scripts/check_consistency.py).
 
 #ifndef MORTRED_SERVER_OPENAPI_DOC_H
 #define MORTRED_SERVER_OPENAPI_DOC_H
@@ -24,7 +24,8 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
   "info": {
     "title": "Mortred Model Server API",
     "version": "1.0.0",
-    "description": "Unified HTTP API for Mortred model servers. All model endpoints require `Authorization: Bearer <token>` when the server is configured with auth_token. Response envelope: {req_id, code, msg, data}; non-OK responses carry data:null."
+    "description": "Unified HTTP API for Mortred model servers. Model endpoints require `Authorization: Bearer <token>` when auth_token is configured. Request envelope: {req_id, images[], params, options}; response envelope: {status, status_str, task_id, model, results[], server_time_ms, partial}. The legacy img_data field was removed: it answers 422 with a migration hint.",
+    "x-contract-hash": "8b2fd36580f81f2f01bd922622e44371bb8be610cd0bd09166b63dad605f272d"
   },
   "paths": {
     "/healthz": {
@@ -35,14 +36,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Envelope"
-                }
-              }
-            }
+            "description": "OK"
           }
         }
       }
@@ -55,17 +49,10 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Ready",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Envelope"
-                }
-              }
-            }
+            "description": "Ready"
           },
           "503": {
-            "$ref": "#/components/responses/NotReady"
+            "description": "Not ready"
           }
         }
       }
@@ -138,520 +125,9 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         }
       }
     },
-    "/mortred_ai_server_v1/classification/densenet": {
-      "post": {
-        "summary": "classification inference",
-        "tags": [
-          "classification"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/ClassificationResult"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
-    "/mortred_ai_server_v1/classification/mobilenetv2": {
-      "post": {
-        "summary": "classification inference",
-        "tags": [
-          "classification"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/ClassificationResult"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
-    "/mortred_ai_server_v1/classification/resnet": {
-      "post": {
-        "summary": "classification inference",
-        "tags": [
-          "classification"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/ClassificationResult"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
-    "/mortred_ai_server_v1/diffusion/cls_cond_ddim": {
-      "post": {
-        "summary": "diffusion inference",
-        "tags": [
-          "diffusion"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/EnvelopeData"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
-    "/mortred_ai_server_v1/diffusion/ddim": {
-      "post": {
-        "summary": "diffusion inference",
-        "tags": [
-          "diffusion"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/EnvelopeData"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
-    "/mortred_ai_server_v1/diffusion/ddpm": {
-      "post": {
-        "summary": "diffusion inference",
-        "tags": [
-          "diffusion"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/EnvelopeData"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
-    "/mortred_ai_server_v1/diffusion/ldm": {
-      "post": {
-        "summary": "diffusion inference",
-        "tags": [
-          "diffusion"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/EnvelopeData"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
     "/mortred_ai_server_v1/enhancement/attentive_gan_derain": {
       "post": {
-        "summary": "enhancement inference",
+        "summary": "attentive gan derain",
         "tags": [
           "enhancement"
         ],
@@ -665,25 +141,39 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
+                "$ref": "#/components/schemas/Request_ATTENTIVE_GAN_DERAIN_SERVER"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Success",
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
             "content": {
               "application/json": {
                 "schema": {
                   "allOf": [
                     {
-                      "$ref": "#/components/schemas/Envelope"
+                      "$ref": "#/components/schemas/UnifiedResponse"
                     },
                     {
                       "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/EnhancementResult"
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/EnhancementResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
                         }
                       }
                     }
@@ -710,1173 +200,8 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
           },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
-    "/mortred_ai_server_v1/enhancement/enlighten_gan": {
-      "post": {
-        "summary": "enhancement inference",
-        "tags": [
-          "enhancement"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/EnhancementResult"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
-    "/mortred_ai_server_v1/enhancement/real_esrgan": {
-      "post": {
-        "summary": "enhancement inference",
-        "tags": [
-          "enhancement"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/EnhancementResult"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
-    "/mortred_ai_server_v1/feature_point/superpoint": {
-      "post": {
-        "summary": "feature_point inference",
-        "tags": [
-          "feature_point"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/FeaturePointResult"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
-    "/mortred_ai_server_v1/matting/modnet": {
-      "post": {
-        "summary": "matting inference",
-        "tags": [
-          "matting"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/MattingResult"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
-    "/mortred_ai_server_v1/matting/pp_matting": {
-      "post": {
-        "summary": "matting inference",
-        "tags": [
-          "matting"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/MattingResult"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
-    "/mortred_ai_server_v1/mono_depth_estimation/depth_anything": {
-      "post": {
-        "summary": "mono_depth_estimation inference",
-        "tags": [
-          "mono_depth_estimation"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/DepthResult"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
-    "/mortred_ai_server_v1/mono_depth_estimation/metric3d": {
-      "post": {
-        "summary": "mono_depth_estimation inference",
-        "tags": [
-          "mono_depth_estimation"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/DepthResult"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
-    "/mortred_ai_server_v1/obj_detection/center_face": {
-      "post": {
-        "summary": "object_detection inference",
-        "tags": [
-          "object_detection"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/DetectionResult"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
-    "/mortred_ai_server_v1/obj_detection/libface": {
-      "post": {
-        "summary": "object_detection inference",
-        "tags": [
-          "object_detection"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/DetectionResult"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
-    "/mortred_ai_server_v1/obj_detection/nanodet": {
-      "post": {
-        "summary": "object_detection inference",
-        "tags": [
-          "object_detection"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/DetectionResult"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
-    "/mortred_ai_server_v1/obj_detection/yolov5": {
-      "post": {
-        "summary": "object_detection inference",
-        "tags": [
-          "object_detection"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/DetectionResult"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
-    "/mortred_ai_server_v1/obj_detection/yolov6": {
-      "post": {
-        "summary": "object_detection inference",
-        "tags": [
-          "object_detection"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/DetectionResult"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
-    "/mortred_ai_server_v1/obj_detection/yolov7": {
-      "post": {
-        "summary": "object_detection inference",
-        "tags": [
-          "object_detection"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/DetectionResult"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
-    "/mortred_ai_server_v1/obj_detection/yolov8": {
-      "post": {
-        "summary": "object_detection inference",
-        "tags": [
-          "object_detection"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/DetectionResult"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
-    "/mortred_ai_server_v1/ocr/dbtext": {
-      "post": {
-        "summary": "ocr inference",
-        "tags": [
-          "ocr"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/TextRegionResult"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          },
-          "504": {
-            "$ref": "#/components/responses/GatewayTimeout"
-          }
-        }
-      }
-    },
-    "/mortred_ai_server_v1/sam/amg": {
-      "post": {
-        "summary": "segment_anything inference",
-        "tags": [
-          "segment_anything"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Envelope"
-                    },
-                    {
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/EnvelopeData"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "413": {
-            "$ref": "#/components/responses/PayloadTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
@@ -1892,7 +217,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
     },
     "/mortred_ai_server_v1/scene_segmentation/bisenetv2": {
       "post": {
-        "summary": "scene_segmentation inference",
+        "summary": "bisenetv2 segmentation",
         "tags": [
           "scene_segmentation"
         ],
@@ -1906,25 +231,39 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
+                "$ref": "#/components/schemas/Request_BISENETV2_SERVER"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Success",
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
             "content": {
               "application/json": {
                 "schema": {
                   "allOf": [
                     {
-                      "$ref": "#/components/schemas/Envelope"
+                      "$ref": "#/components/schemas/UnifiedResponse"
                     },
                     {
                       "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/SegmentationResult"
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/SegmentationResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
                         }
                       }
                     }
@@ -1950,6 +289,729 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/obj_detection/center_face": {
+      "post": {
+        "summary": "center face detection",
+        "tags": [
+          "face_detection"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_CENTER_FACE_DETECTION_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/FaceResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/diffusion/cls_cond_ddim": {
+      "post": {
+        "summary": "class conditional DDIM sampler",
+        "tags": [
+          "diffusion"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_CLS_COND_DDIM_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/ImageResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/ocr/dbtext": {
+      "post": {
+        "summary": "dbnet",
+        "tags": [
+          "ocr"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_DBNET_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/TextRegionResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/diffusion/ddim": {
+      "post": {
+        "summary": "DDIM diffusion sampler",
+        "tags": [
+          "diffusion"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_DDIM_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/ImageResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/diffusion/ddpm": {
+      "post": {
+        "summary": "DDPM diffusion sampler",
+        "tags": [
+          "diffusion"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_DDPM_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/ImageResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/classification/densenet": {
+      "post": {
+        "summary": "densenet classification",
+        "tags": [
+          "classification"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_DENSENET_CLASSIFICATION_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/ClassificationResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/mono_depth_estimation/depth_anything": {
+      "post": {
+        "summary": "depth anything estimation",
+        "tags": [
+          "mono_depth_estimation"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_DEPTH_ANYTHING_ESTIMATION_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/DepthResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/enhancement/enlighten_gan": {
+      "post": {
+        "summary": "enlighten gan",
+        "tags": [
+          "enhancement"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_ENLIGHTEN_GAN_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/EnhancementResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
@@ -1965,7 +1027,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
     },
     "/mortred_ai_server_v1/scene_segmentation/hrnet": {
       "post": {
-        "summary": "scene_segmentation inference",
+        "summary": "hrnet segmentation",
         "tags": [
           "scene_segmentation"
         ],
@@ -1979,25 +1041,39 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
+                "$ref": "#/components/schemas/Request_HRNET_SERVER"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Success",
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
             "content": {
               "application/json": {
                 "schema": {
                   "allOf": [
                     {
-                      "$ref": "#/components/schemas/Envelope"
+                      "$ref": "#/components/schemas/UnifiedResponse"
                     },
                     {
                       "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/SegmentationResult"
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/SegmentationResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
                         }
                       }
                     }
@@ -2023,6 +1099,549 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/diffusion/ldm": {
+      "post": {
+        "summary": "latent diffusion sampler",
+        "tags": [
+          "diffusion"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_LDM_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/ImageResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/obj_detection/libface": {
+      "post": {
+        "summary": "libface face detection",
+        "tags": [
+          "face_detection"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_LIBFACE_DETECTION_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/FaceResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/mono_depth_estimation/metric3d": {
+      "post": {
+        "summary": "metric3d estimation",
+        "tags": [
+          "mono_depth_estimation"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_METRIC3D_ESTIMATION_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/DepthResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/classification/mobilenetv2": {
+      "post": {
+        "summary": "Mobilenetv2 classification",
+        "tags": [
+          "classification"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_MOBILENETV2_CLASSIFICATION_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/ClassificationResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/matting/modnet": {
+      "post": {
+        "summary": "modnet",
+        "tags": [
+          "matting"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_MODNET_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/MattingResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/obj_detection/nanodet": {
+      "post": {
+        "summary": "nanodet object detection",
+        "tags": [
+          "object_detection"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_NANODET_DETECTION_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/DetectionResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
@@ -2038,7 +1657,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
     },
     "/mortred_ai_server_v1/scene_segmentation/pphuman_seg": {
       "post": {
-        "summary": "scene_segmentation inference",
+        "summary": "pphuman segmentation",
         "tags": [
           "scene_segmentation"
         ],
@@ -2052,25 +1671,39 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ImgRequest"
+                "$ref": "#/components/schemas/Request_PPHUMAN_SEG_SERVER"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Success",
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
             "content": {
               "application/json": {
                 "schema": {
                   "allOf": [
                     {
-                      "$ref": "#/components/schemas/Envelope"
+                      "$ref": "#/components/schemas/UnifiedResponse"
                     },
                     {
                       "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/SegmentationResult"
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/SegmentationResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
                         }
                       }
                     }
@@ -2096,6 +1729,819 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/matting/pp_matting": {
+      "post": {
+        "summary": "pp matting",
+        "tags": [
+          "matting"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_PP_MATTING_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/MattingResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/enhancement/real_esrgan": {
+      "post": {
+        "summary": "real esr-gan",
+        "tags": [
+          "enhancement"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_REAL_ESRGAN_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/EnhancementResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/classification/resnet": {
+      "post": {
+        "summary": "Resnet classification",
+        "tags": [
+          "classification"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_RESNET_CLASSIFICATION_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/ClassificationResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/sam/amg": {
+      "post": {
+        "summary": "SAM automatic mask generator",
+        "tags": [
+          "segment_anything_amg"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_SAM_AMG_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/SamAmgResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/feature_point/superpoint": {
+      "post": {
+        "summary": "Superpoint feature point detection",
+        "tags": [
+          "feature_point"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_SUPERPOINT_FP_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/FeaturePointResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/obj_detection/yolov5": {
+      "post": {
+        "summary": "Yolov5 object detection",
+        "tags": [
+          "object_detection"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_YOLOV5_DETECTION_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/DetectionResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/obj_detection/yolov6": {
+      "post": {
+        "summary": "Yolov6 object detection",
+        "tags": [
+          "object_detection"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_YOLOV6_DETECTION_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/DetectionResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/obj_detection/yolov7": {
+      "post": {
+        "summary": "Yolov7 object detection",
+        "tags": [
+          "object_detection"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_YOLOV7_DETECTION_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/DetectionResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/obj_detection/yolov8": {
+      "post": {
+        "summary": "Yolov8 object detection",
+        "tags": [
+          "object_detection"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_YOLOV8_DETECTION_SERVER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/DetectionResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
@@ -2119,50 +2565,1169 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
       }
     },
     "schemas": {
-      "Envelope": {
+      "Request_ATTENTIVE_GAN_DERAIN_SERVER": {
         "type": "object",
         "required": [
-          "req_id",
-          "code",
-          "msg",
-          "data"
+          "images"
         ],
+        "additionalProperties": false,
         "properties": {
           "req_id": {
             "type": "string",
-            "description": "Client-provided or server-generated trace id"
+            "description": "Optional trace id echoed as task_id"
           },
-          "code": {
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+            "description": "This model declares no request-level parameters"
+          }
+        }
+      },
+      "Request_BISENETV2_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+            "description": "This model declares no request-level parameters"
+          }
+        }
+      },
+      "Request_CENTER_FACE_DETECTION_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "$ref": "#/components/schemas/Params_CENTER_FACE_DETECTION_SERVER"
+          }
+        }
+      },
+      "Params_CENTER_FACE_DETECTION_SERVER": {
+        "type": "object",
+        "properties": {
+          "score_threshold": {
+            "type": "number",
+            "format": "float",
+            "description": "confidence threshold",
+            "minimum": 0.0,
+            "maximum": 1.0
+          },
+          "nms_threshold": {
+            "type": "number",
+            "format": "float",
+            "description": "per-class NMS IoU threshold",
+            "minimum": 0.1,
+            "maximum": 1.0
+          },
+          "top_k": {
             "type": "integer",
-            "description": "Business status code (see docs/api-contract.md)"
+            "format": "int32",
+            "description": "keep at most k detections",
+            "minimum": 1.0,
+            "maximum": 10000.0
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request-level parameter overrides (strict: unknown keys -> 422)"
+      },
+      "Request_CLS_COND_DDIM_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
           },
-          "msg": {
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+            "description": "This model declares no request-level parameters"
+          }
+        }
+      },
+      "Request_DBNET_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+            "description": "This model declares no request-level parameters"
+          }
+        }
+      },
+      "Request_DDIM_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+            "description": "This model declares no request-level parameters"
+          }
+        }
+      },
+      "Request_DDPM_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+            "description": "This model declares no request-level parameters"
+          }
+        }
+      },
+      "Request_DENSENET_CLASSIFICATION_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+            "description": "This model declares no request-level parameters"
+          }
+        }
+      },
+      "Request_DEPTH_ANYTHING_ESTIMATION_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+            "description": "This model declares no request-level parameters"
+          }
+        }
+      },
+      "Request_ENLIGHTEN_GAN_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+            "description": "This model declares no request-level parameters"
+          }
+        }
+      },
+      "Request_HRNET_SEGMENTATION_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+            "description": "This model declares no request-level parameters"
+          }
+        }
+      },
+      "Request_HRNET_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+            "description": "This model declares no request-level parameters"
+          }
+        }
+      },
+      "Request_LDM_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+            "description": "This model declares no request-level parameters"
+          }
+        }
+      },
+      "Request_LIBFACE_DETECTION_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "$ref": "#/components/schemas/Params_LIBFACE_DETECTION_SERVER"
+          }
+        }
+      },
+      "Params_LIBFACE_DETECTION_SERVER": {
+        "type": "object",
+        "properties": {
+          "score_threshold": {
+            "type": "number",
+            "format": "float",
+            "description": "confidence threshold",
+            "minimum": 0.0,
+            "maximum": 1.0
+          },
+          "nms_threshold": {
+            "type": "number",
+            "format": "float",
+            "description": "per-class NMS IoU threshold",
+            "minimum": 0.1,
+            "maximum": 1.0
+          },
+          "top_k": {
+            "type": "integer",
+            "format": "int32",
+            "description": "keep at most k detections",
+            "minimum": 1.0,
+            "maximum": 10000.0
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request-level parameter overrides (strict: unknown keys -> 422)"
+      },
+      "Request_METRIC3D_ESTIMATION_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+            "description": "This model declares no request-level parameters"
+          }
+        }
+      },
+      "Request_MOBILENETV2_CLASSIFICATION_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+            "description": "This model declares no request-level parameters"
+          }
+        }
+      },
+      "Request_MODNET_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+            "description": "This model declares no request-level parameters"
+          }
+        }
+      },
+      "Request_NANODET_DETECTION_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "$ref": "#/components/schemas/Params_NANODET_DETECTION_SERVER"
+          }
+        }
+      },
+      "Params_NANODET_DETECTION_SERVER": {
+        "type": "object",
+        "properties": {
+          "score_threshold": {
+            "type": "number",
+            "format": "float",
+            "description": "confidence threshold",
+            "minimum": 0.0,
+            "maximum": 1.0
+          },
+          "nms_threshold": {
+            "type": "number",
+            "format": "float",
+            "description": "per-class NMS IoU threshold",
+            "minimum": 0.1,
+            "maximum": 1.0
+          },
+          "top_k": {
+            "type": "integer",
+            "format": "int32",
+            "description": "keep at most k detections",
+            "minimum": 1.0,
+            "maximum": 10000.0
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request-level parameter overrides (strict: unknown keys -> 422)"
+      },
+      "Request_PPHUMAN_SEG_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+            "description": "This model declares no request-level parameters"
+          }
+        }
+      },
+      "Request_PP_MATTING_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+            "description": "This model declares no request-level parameters"
+          }
+        }
+      },
+      "Request_REAL_ESRGAN_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+            "description": "This model declares no request-level parameters"
+          }
+        }
+      },
+      "Request_RESNET_CLASSIFICATION_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+            "description": "This model declares no request-level parameters"
+          }
+        }
+      },
+      "Request_SAM_AMG_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+            "description": "This model declares no request-level parameters"
+          }
+        }
+      },
+      "Request_SUPERPOINT_FP_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+            "description": "This model declares no request-level parameters"
+          }
+        }
+      },
+      "Request_YOLOV5_DETECTION_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "$ref": "#/components/schemas/Params_YOLOV5_DETECTION_SERVER"
+          }
+        }
+      },
+      "Params_YOLOV5_DETECTION_SERVER": {
+        "type": "object",
+        "properties": {
+          "score_threshold": {
+            "type": "number",
+            "format": "float",
+            "description": "confidence threshold",
+            "minimum": 0.0,
+            "maximum": 1.0
+          },
+          "nms_threshold": {
+            "type": "number",
+            "format": "float",
+            "description": "per-class NMS IoU threshold",
+            "minimum": 0.1,
+            "maximum": 1.0
+          },
+          "top_k": {
+            "type": "integer",
+            "format": "int32",
+            "description": "keep at most k detections",
+            "minimum": 1.0,
+            "maximum": 10000.0
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request-level parameter overrides (strict: unknown keys -> 422)"
+      },
+      "Request_YOLOV6_DETECTION_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "$ref": "#/components/schemas/Params_YOLOV6_DETECTION_SERVER"
+          }
+        }
+      },
+      "Params_YOLOV6_DETECTION_SERVER": {
+        "type": "object",
+        "properties": {
+          "score_threshold": {
+            "type": "number",
+            "format": "float",
+            "description": "confidence threshold",
+            "minimum": 0.0,
+            "maximum": 1.0
+          },
+          "nms_threshold": {
+            "type": "number",
+            "format": "float",
+            "description": "per-class NMS IoU threshold",
+            "minimum": 0.1,
+            "maximum": 1.0
+          },
+          "top_k": {
+            "type": "integer",
+            "format": "int32",
+            "description": "keep at most k detections",
+            "minimum": 1.0,
+            "maximum": 10000.0
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request-level parameter overrides (strict: unknown keys -> 422)"
+      },
+      "Request_YOLOV7_DETECTION_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "$ref": "#/components/schemas/Params_YOLOV7_DETECTION_SERVER"
+          }
+        }
+      },
+      "Params_YOLOV7_DETECTION_SERVER": {
+        "type": "object",
+        "properties": {
+          "score_threshold": {
+            "type": "number",
+            "format": "float",
+            "description": "confidence threshold",
+            "minimum": 0.0,
+            "maximum": 1.0
+          },
+          "nms_threshold": {
+            "type": "number",
+            "format": "float",
+            "description": "per-class NMS IoU threshold",
+            "minimum": 0.1,
+            "maximum": 1.0
+          },
+          "top_k": {
+            "type": "integer",
+            "format": "int32",
+            "description": "keep at most k detections",
+            "minimum": 1.0,
+            "maximum": 10000.0
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request-level parameter overrides (strict: unknown keys -> 422)"
+      },
+      "Request_YOLOV8_DETECTION_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "$ref": "#/components/schemas/Params_YOLOV8_DETECTION_SERVER"
+          }
+        }
+      },
+      "Params_YOLOV8_DETECTION_SERVER": {
+        "type": "object",
+        "properties": {
+          "score_threshold": {
+            "type": "number",
+            "format": "float",
+            "description": "confidence threshold",
+            "minimum": 0.0,
+            "maximum": 1.0
+          },
+          "nms_threshold": {
+            "type": "number",
+            "format": "float",
+            "description": "per-class NMS IoU threshold",
+            "minimum": 0.1,
+            "maximum": 1.0
+          },
+          "top_k": {
+            "type": "integer",
+            "format": "int32",
+            "description": "keep at most k detections",
+            "minimum": 1.0,
+            "maximum": 10000.0
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request-level parameter overrides (strict: unknown keys -> 422)"
+      },
+      "UnifiedResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "status_str",
+          "task_id",
+          "results",
+          "partial"
+        ],
+        "properties": {
+          "status": {
+            "type": "integer",
+            "description": "Business status code (0 = OK)"
+          },
+          "status_str": {
             "type": "string"
+          },
+          "task_id": {
+            "type": "string",
+            "description": "req_id echo or server-generated id"
+          },
+          "model": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              }
+            }
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseItem"
+            },
+            "description": "Index-aligned with the request images[]"
+          },
+          "server_time_ms": {
+            "type": "number"
+          },
+          "partial": {
+            "type": "boolean",
+            "description": "true when the deadline hit mid-request"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseError"
+            },
+            "description": "Present on 422 rejections: pointer-located violations"
+          }
+        }
+      },
+      "ResponseItem": {
+        "type": "object",
+        "required": [
+          "status",
+          "data"
+        ],
+        "properties": {
+          "status": {
+            "type": "integer",
+            "description": "Per-item status; 0 = OK"
           },
           "data": {
             "nullable": true,
-            "description": "null on any non-OK response"
+            "description": "Task payload; null on item failure"
+          }
+        }
+      },
+      "ResponseError": {
+        "type": "object",
+        "required": [
+          "pointer",
+          "message"
+        ],
+        "properties": {
+          "pointer": {
+            "type": "string",
+            "description": "JSON pointer of the offending field"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "OutputOptions": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "encoding": {
+            "type": "string",
+            "enum": [
+              "png",
+              "jpeg",
+              "webp"
+            ],
+            "default": "png",
+            "description": "Image encoding of embedded outputs"
+          },
+          "include_image": {
+            "type": "boolean",
+            "default": true
+          },
+          "max_results": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "0 = unlimited"
+          },
+          "echo_params": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
       "EnvelopeData": {
         "nullable": true
-      },
-      "ImgRequest": {
-        "type": "object",
-        "required": [
-          "img_data"
-        ],
-        "properties": {
-          "img_data": {
-            "type": "string",
-            "description": "Base64 encoded image"
-          },
-          "req_id": {
-            "type": "string",
-            "description": "Optional request trace id"
-          }
-        }
       },
       "ClassificationResult": {
         "type": "object",
@@ -2319,11 +3884,11 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         "properties": {
           "image": {
             "type": "string",
-            "description": "Base64 PNG segmentation mask"
+            "description": "Base64 segmentation mask"
           },
           "colorized_mask": {
             "type": "string",
-            "description": "Base64 PNG colorized mask"
+            "description": "Base64 colorized mask"
           }
         }
       },
@@ -2335,7 +3900,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         "properties": {
           "image": {
             "type": "string",
-            "description": "Base64 PNG matting result"
+            "description": "Base64 matting result"
           }
         }
       },
@@ -2347,7 +3912,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         "properties": {
           "image": {
             "type": "string",
-            "description": "Base64 JPG enhanced image"
+            "description": "Base64 enhanced image"
           }
         }
       },
@@ -2359,7 +3924,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         "properties": {
           "image": {
             "type": "string",
-            "description": "Base64 PNG colorized depth map"
+            "description": "Base64 colorized depth map"
           }
         }
       },
@@ -2395,15 +3960,60 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         "items": {
           "$ref": "#/components/schemas/FeaturePointItem"
         }
+      },
+      "ImageResult": {
+        "type": "object",
+        "required": [
+          "image"
+        ],
+        "properties": {
+          "image": {
+            "type": "string",
+            "description": "Base64 generated image"
+          }
+        }
+      },
+      "SamAmgItem": {
+        "type": "object",
+        "required": [
+          "segmentation",
+          "area",
+          "predicted_iou",
+          "stability_score"
+        ],
+        "properties": {
+          "segmentation": {
+            "type": "string",
+            "description": "Base64 mask"
+          },
+          "area": {
+            "type": "integer"
+          },
+          "bbox": {
+            "$ref": "#/components/schemas/BBox"
+          },
+          "predicted_iou": {
+            "type": "number"
+          },
+          "stability_score": {
+            "type": "number"
+          }
+        }
+      },
+      "SamAmgResult": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/SamAmgItem"
+        }
       }
     },
     "responses": {
       "BadRequest": {
-        "description": "Malformed JSON or empty input",
+        "description": "Malformed JSON body",
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Envelope"
+              "$ref": "#/components/schemas/UnifiedResponse"
             }
           }
         }
@@ -2413,7 +4023,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Envelope"
+              "$ref": "#/components/schemas/UnifiedResponse"
             }
           }
         }
@@ -2423,7 +4033,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Envelope"
+              "$ref": "#/components/schemas/UnifiedResponse"
             }
           }
         }
@@ -2433,17 +4043,17 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Envelope"
+              "$ref": "#/components/schemas/UnifiedResponse"
             }
           }
         }
       },
       "PayloadTooLarge": {
-        "description": "Request body exceeds request_size_limit",
+        "description": "Body exceeds request_size_limit or images exceeds max_request_items",
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Envelope"
+              "$ref": "#/components/schemas/UnifiedResponse"
             }
           }
         }
@@ -2453,27 +4063,37 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Envelope"
+              "$ref": "#/components/schemas/UnifiedResponse"
+            }
+          }
+        }
+      },
+      "ValidationError": {
+        "description": "Strict envelope rejection: errors[] carries JSON pointers",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/UnifiedResponse"
             }
           }
         }
       },
       "RateLimited": {
-        "description": "Per-client-IP rate limit exceeded",
+        "description": "Per-item queue backpressure or per-client-IP rate limit",
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Envelope"
+              "$ref": "#/components/schemas/UnifiedResponse"
             }
           }
         }
       },
       "InternalError": {
-        "description": "Model or server error",
+        "description": "Model or server error (per-item failures keep their own results[].status)",
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Envelope"
+              "$ref": "#/components/schemas/UnifiedResponse"
             }
           }
         }
@@ -2483,7 +4103,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Envelope"
+              "$ref": "#/components/schemas/UnifiedResponse"
             }
           }
         }
@@ -2493,7 +4113,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Envelope"
+              "$ref": "#/components/schemas/UnifiedResponse"
             }
           }
         }
