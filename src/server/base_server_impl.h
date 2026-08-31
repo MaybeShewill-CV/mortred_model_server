@@ -342,6 +342,13 @@ protected:
     static bool is_json_content_type(const std::string& content_type);
 
     /***
+     * Whether Content-Type is the raw-body encoding of the unified envelope:
+     * any image type or application/octet-stream (the body IS images[0]).
+     * The actual format is sniffed by the decoder; the type is informational.
+     */
+    static bool is_raw_body_content_type(const std::string& content_type);
+
+    /***
      * Unified 401 / 429 responses.
      */
     static void reply_unauthorized(WFHttpTask* task);
@@ -969,13 +976,28 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         // parse request body
         auto* req = task->get_req();
         auto* resp = task->get_resp();
-        // 415: model endpoints require application/json (missing is also rejected)
-        if (!is_json_content_type(header_value_of(req, "content-type"))) {
+        // encoding dispatch: the SAME envelope in two byte forms - JSON body
+        // (application/json) or raw image body (image/* | octet-stream) with
+        // params/options in X-Mortred-* headers. Anything else is a 415.
+        const std::string content_type = header_value_of(req, "content-type");
+        std::string request_encoding = "json";
+        jinq::server::ParsedRequest parsed;
+        if (is_json_content_type(content_type)) {
+            parsed = parse_model_request(req);
+        } else if (is_raw_body_content_type(content_type)) {
+            request_encoding = "raw";
+            parsed = parse_raw_request(protocol::HttpUtil::decode_chunked_body(req),
+                                       header_value_of(req, "x-request-id"),
+                                       header_value_of(req, "x-mortred-params"),
+                                       header_value_of(req, "x-mortred-options"),
+                                       _m_param_specs);
+        } else {
             _m_metrics.inc_http_requests(request_method, "415");
             rapidjson::Document data;
             reply_json(task, "", StatusCode::UNSUPPORTED_MEDIA_TYPE, std::move(data));
             return;
         }
+        _m_metrics.inc_request_encoding(request_encoding);
         // 413: reject when the declared Content-Length exceeds the limit (chunked is capped by the workflow layer)
         const std::string content_length_str = header_value_of(req, "content-length");
         if (!content_length_str.empty()) {
@@ -993,7 +1015,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
 
         // strict unified-envelope parse: violations carry JSON pointers and
         // are rejected with 422 before any per-request state is created
-        auto parsed = parse_model_request(req);
         const std::string task_id = parsed.req_id.empty() ? generate_req_id() : parsed.req_id;
         auto reply_reject = [&](StatusCode status,
                                 std::vector<jinq::common::ResponseError> errors) {
@@ -1784,6 +1805,29 @@ bool BaseAiServerImpl<WORKER, MODEL_OUTPUT>::is_json_content_type(
         --e;
     }
     return ct.compare(b, e - b, "application/json") == 0;
+}
+
+template<typename WORKER, typename MODEL_OUTPUT>
+bool BaseAiServerImpl<WORKER, MODEL_OUTPUT>::is_raw_body_content_type(
+    const std::string& content_type) {
+    std::string ct = content_type;
+    std::transform(ct.begin(), ct.end(), ct.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    const auto semi = ct.find(';');
+    if (semi != std::string::npos) {
+        ct = ct.substr(0, semi);
+    }
+    size_t b = 0;
+    size_t e = ct.size();
+    while (b < e && std::isspace(static_cast<unsigned char>(ct[b]))) {
+        ++b;
+    }
+    while (e > b && std::isspace(static_cast<unsigned char>(ct[e - 1]))) {
+        --e;
+    }
+    ct = ct.substr(b, e - b);
+    return ct.rfind("image/", 0) == 0 || ct == "application/octet-stream";
 }
 
 /***

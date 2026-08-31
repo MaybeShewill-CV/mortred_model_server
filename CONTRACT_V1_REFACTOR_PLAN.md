@@ -179,16 +179,23 @@
 
 ## M6 raw 编码接入（P0-4，2–3 天，可与 M5 并行）
 
-- [ ] **M6.1** `serve_process` 编码三分支：`application/json` |
+- [x] **M6.1** `serve_process` 编码三分支：`application/json` |
       `image/*` 与 `application/octet-stream`（body 即 `images[0]`，raw `byte_source`）|
       其余 415 + 支持清单响应头
-- [ ] **M6.2** `X-Mortred-Params` / `X-Mortred-Options` 头解析（值为紧凑 JSON），
+- [x] **M6.2** `X-Mortred-Params` / `X-Mortred-Options` 头解析（值为紧凑 JSON），
       走**同一个** ParamSpec 校验器（422 语义与 JSON 路径逐字节一致）
-- [ ] **M6.3** 限额：raw 按原始字节计 `request_size_limit`（天然比 base64 宽 ~33%）；
+      ✅ parse_raw_request + apply_raw_headers；负测试钉死"同一错误两种编码
+      产生 pointer/message 完全一致的 422"。OpenAPI 同步声明 raw 媒体类型与头部参数。
+- [x] **M6.3** 限额：raw 按原始字节计 `request_size_limit`（天然比 base64 宽 ~33%）；
       `ImageInputLimits` 同样强制；chunked 由 workflow 层兜底
-- [ ] **M6.4** metrics encoding label 启用（`json | raw`，两取值）；e2e 断言：
+- [x] **M6.4** metrics encoding label 启用（`json | raw`，两取值）；e2e 断言：
       同一请求两种编码的 `results[]` **逐字节一致**
-- [ ] **M6.5** 基准交付：同模型同图 json/base64 vs raw 的 p50/p99/吞吐/内存峰值对比表
+      ✅ `mortred_requests_by_encoding_total{encoding="json|raw"}`；e2e 双编码语义等价
+      （同 task_id 回显、同逐项结果）+ raw 头部 422 语义 + 空 body / 415 边界。
+- [x] **M6.5** 基准交付：同模型同图 json/base64 vs raw 的 p50/p99/吞吐/内存峰值对比表
+      ✅ scripts/server/bench_encoding.py（纯标准库）+ 真实 yolov8/TRT 基准
+      （bus.jpg 476KB）：payload −25%，p50 26.4→23.7ms（−10%），吞吐 33.3→41.1 rps（+23%），
+      0 错误。结果入 docs/bench/encoding_benchmark.md。
 
 **M6 验收**：双编码语义等价有测试钉死；基准数据入库存档。
 
