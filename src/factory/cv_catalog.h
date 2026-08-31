@@ -8,6 +8,7 @@
 
 #include "factory/base_factory.h"
 #include "glog/logging.h"
+#include "models/backend/param_spec.h"
 #include "models/base_model.h"
 #include "models/catalog/model_entry.h"
 #include "server/generic_cv_server.h"
@@ -20,6 +21,7 @@ namespace cv_catalog {
 template <typename OUTPUT> struct CvModelEntry : public jinq::models::catalog::ServedModelEntry {
     jinq::server::CvWorkerFactory<OUTPUT> make_worker;
     jinq::server::CvResponseFiller<OUTPUT> fill_response = nullptr;
+    std::vector<jinq::models::backend::ParamSpec> param_specs;
 };
 
 template <typename OUTPUT>
@@ -39,6 +41,7 @@ std::unique_ptr<jinq::server::BaseAiServer> create_server(const CvModelEntry<OUT
         spec.display_name = entry.display_name;
         spec.make_worker = entry.make_worker;
         spec.fill_response = entry.fill_response;
+        spec.param_specs = entry.param_specs;
         return std::make_unique<jinq::server::CvModelServer<OUTPUT>>(std::move(spec));
     });
     return server_factory.create(server_name);

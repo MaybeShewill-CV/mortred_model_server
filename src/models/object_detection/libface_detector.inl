@@ -177,7 +177,7 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTe
         decode_result.push_back(std::move(face_box));
     }
 
-    auto nms_result = finalize_detections(std::move(decode_result), _m_detection_params);
+    auto nms_result = finalize_detections(std::move(decode_result), _m_detection_params, context);
     for (auto &face_box : nms_result) {
         face_box.bbox = scale_detection_bbox(face_box.bbox, geometry_scale);
         for (auto &landmark : face_box.landmarks) {

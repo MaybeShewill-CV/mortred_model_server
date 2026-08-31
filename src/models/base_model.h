@@ -23,6 +23,12 @@ using jinq::common::StatusCode;
 template<typename INPUT, typename OUTPUT>
 class BaseAiModel {
 public:
+    /*** the served input/output contracts; the generic server core asks the
+     * worker for its input type instead of hardcoding one (tests mount
+     * legacy base64 workers, catalogs mount the unified image_input) */
+    using input_type = INPUT;
+    using output_type = OUTPUT;
+
     /***
     *
     */

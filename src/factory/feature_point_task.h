@@ -23,13 +23,13 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_superpoint_extractor(const st
 }
 
 using Output = jinq::models::io_define::feature_point::std_feature_point_output;
-using jinq::server::Base64Input;
+using jinq::server::ImageInput;
 using Entry = jinq::factory::cv_catalog::CvModelEntry<Output>;
 
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
-        Entry{"SUPERPOINT", "Superpoint feature point detection", "SUPERPOINT_FP_SERVER", &create_superpoint_extractor<Base64Input, Output>,
-              &jinq::server::response::fill_feature_points},
+        Entry{"SUPERPOINT", "Superpoint feature point detection", "SUPERPOINT_FP_SERVER", &create_superpoint_extractor<ImageInput, Output>,
+              &jinq::server::response::fill_feature_points, {}},
     };
     return entries;
 }

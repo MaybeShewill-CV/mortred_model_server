@@ -44,13 +44,13 @@ template <typename INPUT, typename OUTPUT> std::unique_ptr<BaseAiModel<INPUT, OU
     return std::make_unique<LDMSampler<INPUT, OUTPUT>>();
 }
 
-using Base64Input = jinq::models::io_define::common_io::base64_input;
+using ImageInput = jinq::models::io_define::common_io::image_input;
 using Base64Output = jinq::models::io_define::common_io::base64_input;
 
 // every sampler is mounted on the server through the same base64 adapter, so
 // the whole task shares one output type and one catalog
 template <typename SAMPLER, typename SAMPLER_INPUT, typename SAMPLER_OUTPUT>
-std::unique_ptr<BaseAiModel<Base64Input, Base64Output>> make_server_worker(const std::string &worker_name) {
+std::unique_ptr<BaseAiModel<ImageInput, Base64Output>> make_server_worker(const std::string &worker_name) {
     (void)worker_name;
     return std::make_unique<DiffusionModelAdapter<SAMPLER, SAMPLER_INPUT, SAMPLER_OUTPUT>>();
 }
@@ -74,14 +74,14 @@ inline const std::vector<Entry> &catalog() {
 
     static const std::vector<Entry> entries = {
         Entry{"DDPM", "DDPM diffusion sampler", "DDPM_SERVER", &make_server_worker<DDPM, std_ddpm_input, std_ddpm_output>,
-              &jinq::server::response::fill_base64_image},
+              &jinq::server::response::fill_base64_image, {}},
         Entry{"DDIM", "DDIM diffusion sampler", "DDIM_SERVER", &make_server_worker<DDIM, std_ddim_input, std_ddim_output>,
-              &jinq::server::response::fill_base64_image},
+              &jinq::server::response::fill_base64_image, {}},
         Entry{"CLS_COND_DDIM", "class conditional DDIM sampler", "CLS_COND_DDIM_SERVER",
               &make_server_worker<ClsCondDDIM, std_cls_cond_ddim_input, std_cls_cond_ddim_output>,
-              &jinq::server::response::fill_base64_image},
+              &jinq::server::response::fill_base64_image, {}},
         Entry{"LDM", "latent diffusion sampler", "LDM_SERVER", &make_server_worker<LDM, std_ldm_input, std_ldm_output>,
-              &jinq::server::response::fill_base64_image},
+              &jinq::server::response::fill_base64_image, {}},
     };
     return entries;
 }

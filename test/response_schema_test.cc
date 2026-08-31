@@ -70,7 +70,7 @@ TEST(response_schema, classification_uses_numeric_class_id_and_scores) {
     out.scores = {0.1f, 0.8f, 0.1f};
 
     auto data = serialize([](AllocatorType& a, rapidjson::Document& d, const std_classification_output& o) {
-        fill_classification(a, d, o);
+        fill_classification(a, d, o, jinq::server::OutputOptions{});
     }, out);
 
     expect_only_members(data, {"class_id", "category", "scores"});
@@ -93,7 +93,7 @@ TEST(response_schema, detection_uses_class_id_bbox_and_numeric_score) {
     out.push_back(box);
 
     auto data = serialize([](AllocatorType& a, rapidjson::Document& d, const std_object_detection_output& o) {
-        fill_object_detection(a, d, o);
+        fill_object_detection(a, d, o, jinq::server::OutputOptions{});
     }, out);
 
     ASSERT_TRUE(data.IsArray());
@@ -122,7 +122,7 @@ TEST(response_schema, face_detection_uses_landmarks_plural) {
     out.push_back(box);
 
     auto data = serialize([](AllocatorType& a, rapidjson::Document& d, const std_face_detection_output& o) {
-        fill_face_detection(a, d, o);
+        fill_face_detection(a, d, o, jinq::server::OutputOptions{});
     }, out);
 
     ASSERT_TRUE(data.IsArray());
@@ -143,7 +143,7 @@ TEST(response_schema, ocr_uses_bbox_and_polygon) {
     out.push_back(region);
 
     auto data = serialize([](AllocatorType& a, rapidjson::Document& d, const std_text_regions_output& o) {
-        fill_text_regions(a, d, o);
+        fill_text_regions(a, d, o, jinq::server::OutputOptions{});
     }, out);
 
     ASSERT_TRUE(data.IsArray());
@@ -157,7 +157,7 @@ TEST(response_schema, image_outputs_use_image_key) {
     std_scene_segmentation_output seg;
     auto seg_data = serialize(
         [](AllocatorType& a, rapidjson::Document& d, const std_scene_segmentation_output& o) {
-            fill_scene_segmentation(a, d, o);
+            fill_scene_segmentation(a, d, o, jinq::server::OutputOptions{});
         },
         seg);
     expect_only_members(seg_data, {"image", "colorized_mask"});
@@ -169,7 +169,7 @@ TEST(response_schema, image_outputs_use_image_key) {
     std_matting_output matting;
     auto matting_data = serialize(
         [](AllocatorType& a, rapidjson::Document& d, const std_matting_output& o) {
-            fill_matting(a, d, o);
+            fill_matting(a, d, o, jinq::server::OutputOptions{});
         },
         matting);
     expect_only_members(matting_data, {"image"});
@@ -178,7 +178,7 @@ TEST(response_schema, image_outputs_use_image_key) {
     enhance.enhancement_result = make_small_image();
     auto enhance_data = serialize(
         [](AllocatorType& a, rapidjson::Document& d, const std_enhancement_output& o) {
-            fill_enhancement(a, d, o);
+            fill_enhancement(a, d, o, jinq::server::OutputOptions{});
         },
         enhance);
     expect_only_members(enhance_data, {"image"});
@@ -188,11 +188,36 @@ TEST(response_schema, image_outputs_use_image_key) {
     std_mde_output depth;
     auto depth_data = serialize(
         [](AllocatorType& a, rapidjson::Document& d, const std_mde_output& o) {
-            fill_depth_estimation(a, d, o);
+            fill_depth_estimation(a, d, o, jinq::server::OutputOptions{});
         },
         depth);
     expect_only_members(depth_data, {"image"});
     EXPECT_FALSE(depth_data.HasMember("estimate_result"));
+}
+
+TEST(response_schema, image_encoding_option_selects_format) {
+    std_enhancement_output out;
+    out.enhancement_result = make_small_image();
+
+    // default options: png magic (0x89 'P' 'N' 'G') -> base64 "iVBOR"
+    auto png_data = serialize(
+        [](AllocatorType& a, rapidjson::Document& d, const std_enhancement_output& o) {
+            jinq::server::OutputOptions options;
+            options.encoding = jinq::server::OutputOptions::ImageEncoding::PNG;
+            fill_enhancement(a, d, o, options);
+        },
+        out);
+    EXPECT_EQ(std::string(png_data["image"].GetString()).substr(0, 5), "iVBOR");
+
+    // jpeg option: JFIF/JPEG magic (0xFF 0xD8) -> base64 "/9j/"
+    auto jpeg_data = serialize(
+        [](AllocatorType& a, rapidjson::Document& d, const std_enhancement_output& o) {
+            jinq::server::OutputOptions options;
+            options.encoding = jinq::server::OutputOptions::ImageEncoding::JPEG;
+            fill_enhancement(a, d, o, options);
+        },
+        out);
+    EXPECT_EQ(std::string(jpeg_data["image"].GetString()).substr(0, 4), "/9j/");
 }
 
 TEST(response_schema, feature_points_use_location_and_descriptor) {
@@ -204,7 +229,7 @@ TEST(response_schema, feature_points_use_location_and_descriptor) {
     out.push_back(point);
 
     auto data = serialize([](AllocatorType& a, rapidjson::Document& d, const std_feature_point_output& o) {
-        fill_feature_points(a, d, o);
+        fill_feature_points(a, d, o, jinq::server::OutputOptions{});
     }, out);
 
     ASSERT_TRUE(data.IsArray());

@@ -15,7 +15,7 @@ namespace jinq {
 namespace factory {
 namespace diffusion {
 
-using Base64Input = jinq::models::io_define::common_io::base64_input;
+using ImageInput = jinq::models::io_define::common_io::image_input;
 using Base64Output = jinq::models::io_define::common_io::base64_input;
 
 /***
@@ -26,7 +26,7 @@ using Base64Output = jinq::models::io_define::common_io::base64_input;
  * base64 PNG as the response.
  */
 template <typename SAMPLER, typename SAMPLER_INPUT, typename SAMPLER_OUTPUT>
-class DiffusionModelAdapter : public jinq::models::BaseAiModel<Base64Input, Base64Output> {
+class DiffusionModelAdapter : public jinq::models::BaseAiModel<ImageInput, Base64Output> {
   public:
     jinq::common::StatusCode init(const toml::table &cfg) override {
         _m_sampler = std::make_unique<SAMPLER>();
@@ -36,7 +36,7 @@ class DiffusionModelAdapter : public jinq::models::BaseAiModel<Base64Input, Base
     }
 
   protected:
-    jinq::common::StatusCode run_impl(const Base64Input &in, Base64Output &out) override {
+    jinq::common::StatusCode run_impl(const ImageInput &in, Base64Output &out) override {
         (void)in; // diffusion parameters come from config, not from the payload
         SAMPLER_OUTPUT sampler_output;
         const auto status = _m_sampler->run(_m_input, sampler_output);

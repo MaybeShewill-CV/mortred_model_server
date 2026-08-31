@@ -161,7 +161,7 @@ StatusCode CenterFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<Name
         }
     }
 
-    auto nms_result = finalize_detections(std::move(decode_result), _m_detection_params);
+    auto nms_result = finalize_detections(std::move(decode_result), _m_detection_params, context);
     for (auto &bbox : nms_result) {
         bbox.category = "face";
     }

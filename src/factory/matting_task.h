@@ -31,14 +31,14 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_ppmatting_segmentor(const std
 }
 
 using Output = jinq::models::io_define::matting::std_matting_output;
-using jinq::server::Base64Input;
+using jinq::server::ImageInput;
 using Entry = jinq::factory::cv_catalog::CvModelEntry<Output>;
 
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
-        Entry{"PP_MATTING", "pp matting", "PP_MATTING_SERVER", &create_ppmatting_segmentor<Base64Input, Output>,
-              &jinq::server::response::fill_matting},
-        Entry{"MODNET", "modnet", "MODNET_SERVER", &create_modnet_segmentor<Base64Input, Output>, &jinq::server::response::fill_matting},
+        Entry{"PP_MATTING", "pp matting", "PP_MATTING_SERVER", &create_ppmatting_segmentor<ImageInput, Output>,
+              &jinq::server::response::fill_matting, {}},
+        Entry{"MODNET", "modnet", "MODNET_SERVER", &create_modnet_segmentor<ImageInput, Output>, &jinq::server::response::fill_matting, {}},
     };
     return entries;
 }

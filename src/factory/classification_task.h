@@ -47,17 +47,17 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_dinov2_classifier(const std::
 }
 
 using Output = jinq::models::io_define::classification::std_classification_output;
-using jinq::server::Base64Input;
+using jinq::server::ImageInput;
 using Entry = jinq::factory::cv_catalog::CvModelEntry<Output>;
 
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
         Entry{"MOBILENETV2", "Mobilenetv2 classification", "MOBILENETV2_CLASSIFICATION_SERVER",
-              &create_mobilenetv2_classifier<Base64Input, Output>, &jinq::server::response::fill_classification},
-        Entry{"RESNET", "Resnet classification", "RESNET_CLASSIFICATION_SERVER", &create_resnet_classifier<Base64Input, Output>,
-              &jinq::server::response::fill_classification},
-        Entry{"DENSENET", "densenet classification", "DENSENET_CLASSIFICATION_SERVER", &create_densenet_classifier<Base64Input, Output>,
-              &jinq::server::response::fill_classification},
+              &create_mobilenetv2_classifier<ImageInput, Output>, &jinq::server::response::fill_classification, {}},
+        Entry{"RESNET", "Resnet classification", "RESNET_CLASSIFICATION_SERVER", &create_resnet_classifier<ImageInput, Output>,
+              &jinq::server::response::fill_classification, {}},
+        Entry{"DENSENET", "densenet classification", "DENSENET_CLASSIFICATION_SERVER", &create_densenet_classifier<ImageInput, Output>,
+              &jinq::server::response::fill_classification, {}},
     };
     return entries;
 }

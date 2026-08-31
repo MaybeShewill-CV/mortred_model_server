@@ -118,7 +118,7 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
         LOG(ERROR) << "yolov8 " << geometry_error;
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
-    DetectionOutput nms_result = finalize_detections(std::move(candidates), _m_detection_params);
+    DetectionOutput nms_result = finalize_detections(std::move(candidates), _m_detection_params, context);
 
     // rescale kept boxes from the network space to the original image size
     for (auto &bbox : nms_result) {

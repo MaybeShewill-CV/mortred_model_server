@@ -23,12 +23,12 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_dbtext_detector(const std::st
 }
 
 using Output = jinq::models::io_define::ocr::std_text_regions_output;
-using jinq::server::Base64Input;
+using jinq::server::ImageInput;
 using Entry = jinq::factory::cv_catalog::CvModelEntry<Output>;
 
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
-        Entry{"DBNET", "dbnet", "DBNET_SERVER", &create_dbtext_detector<Base64Input, Output>, &jinq::server::response::fill_text_regions},
+        Entry{"DBNET", "dbnet", "DBNET_SERVER", &create_dbtext_detector<ImageInput, Output>, &jinq::server::response::fill_text_regions, {}},
     };
     return entries;
 }

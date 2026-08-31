@@ -115,7 +115,7 @@ StatusCode NanoDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTenso
         }
     }
 
-    DetectionOutput nms_result = finalize_detections(std::move(result), _m_detection_params);
+    DetectionOutput nms_result = finalize_detections(std::move(result), _m_detection_params, context);
     output = std::move(nms_result);
     return StatusCode::OK;
 }

@@ -142,7 +142,7 @@ StatusCode YoloV6Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
         }
     }
 
-    DetectionOutput nms_result = finalize_detections(std::move(decode_result), _m_detection_params);
+    DetectionOutput nms_result = finalize_detections(std::move(decode_result), _m_detection_params, context);
     output = std::move(nms_result);
     return StatusCode::OK;
 }
