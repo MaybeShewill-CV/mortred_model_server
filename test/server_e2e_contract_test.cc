@@ -127,9 +127,9 @@ public:
     protected:
         void fill_response_data(rapidjson::Document::AllocatorType& allocator,
                                 rapidjson::Document& data,
-                                const StatusCode& status,
-                                const TestOutput& model_output) override {
-            (void)status;
+                                const TestOutput& model_output,
+                                const jinq::server::OutputOptions& options) override {
+            (void)options;
             data.SetObject();
             data.AddMember("ok", true, allocator);
             data.AddMember("value", model_output.value, allocator);
@@ -399,7 +399,7 @@ rapidjson::Document parse_body(const std::string& body) {
 TEST(server_e2e_contract, success_returns_200_with_envelope_and_headers) {
     ServerHandle handle = start_server();
     const std::string body =
-        "{\"img_data\":\"aGVsbG8=\",\"req_id\":\"req-1\"}";
+        "{\"images\":[\"aGVsbG8=\"],\"req_id\":\"req-1\"}";
     auto resp = send_request(handle.port, "POST", "/test/model", body, k_json_auth_headers);
 
     EXPECT_EQ(resp.status, 200);
@@ -409,15 +409,21 @@ TEST(server_e2e_contract, success_returns_200_with_envelope_and_headers) {
 
     auto doc = parse_body(resp.body);
     ASSERT_FALSE(doc.HasParseError());
-    EXPECT_EQ(doc["code"].GetInt(), 0);
-    EXPECT_STREQ(doc["msg"].GetString(), "success");
-    EXPECT_STREQ(doc["req_id"].GetString(), "req-1");
-    ASSERT_TRUE(doc["data"].IsObject());
-    EXPECT_TRUE(doc["data"]["ok"].GetBool());
-    EXPECT_EQ(doc["data"]["value"].GetInt(), 8);
+    EXPECT_EQ(doc["status"].GetInt(), 0);
+    EXPECT_STREQ(doc["status_str"].GetString(), "OK");
+    EXPECT_STREQ(doc["task_id"].GetString(), "req-1");
+    ASSERT_TRUE(doc["model"].IsObject());
+    EXPECT_TRUE(doc["results"].IsArray());
+    ASSERT_EQ(doc["results"].Size(), 1u);
+    EXPECT_EQ(doc["results"][0]["status"].GetInt(), 0);
+    ASSERT_TRUE(doc["results"][0]["data"].IsObject());
+    EXPECT_TRUE(doc["results"][0]["data"]["ok"].GetBool());
+    EXPECT_EQ(doc["results"][0]["data"]["value"].GetInt(), 8);
+    EXPECT_FALSE(doc["partial"].GetBool());
+    EXPECT_TRUE(doc["server_time_ms"].IsNumber());
 }
 
-TEST(server_e2e_contract, bad_json_returns_400_with_null_data) {
+TEST(server_e2e_contract, bad_json_returns_400_with_pointer_error) {
     ServerHandle handle = start_server();
     auto resp = send_request(handle.port, "POST", "/test/model", "not-json",
                              k_json_auth_headers);
@@ -425,26 +431,111 @@ TEST(server_e2e_contract, bad_json_returns_400_with_null_data) {
     EXPECT_EQ(resp.status, 400);
     auto doc = parse_body(resp.body);
     ASSERT_FALSE(doc.HasParseError());
-    EXPECT_EQ(doc["code"].GetInt(), 50);
-    EXPECT_TRUE(doc["data"].IsNull());
+    EXPECT_EQ(doc["status"].GetInt(), 50);
+    ASSERT_TRUE(doc["errors"].IsArray());
+    ASSERT_GT(doc["errors"].Size(), 0u);
+    EXPECT_STREQ(doc["errors"][0]["pointer"].GetString(), "/");
+    EXPECT_TRUE(doc["results"].IsArray());
 }
 
-TEST(server_e2e_contract, empty_image_returns_400_with_null_data) {
+TEST(server_e2e_contract, legacy_img_data_returns_422_with_migration_hint) {
     ServerHandle handle = start_server();
     auto resp = send_request(handle.port, "POST", "/test/model",
-                             "{\"img_data\":\"\"}", k_json_auth_headers);
+                             "{\"img_data\":\"aGVsbG8=\"}", k_json_auth_headers);
 
-    EXPECT_EQ(resp.status, 400);
+    EXPECT_EQ(resp.status, 422);
     auto doc = parse_body(resp.body);
     ASSERT_FALSE(doc.HasParseError());
-    EXPECT_EQ(doc["code"].GetInt(), 3);
-    EXPECT_TRUE(doc["data"].IsNull());
+    EXPECT_EQ(doc["status"].GetInt(), 66);
+    ASSERT_EQ(doc["errors"].Size(), 1u);
+    EXPECT_STREQ(doc["errors"][0]["pointer"].GetString(), "/img_data");
+    EXPECT_NE(std::string(doc["errors"][0]["message"].GetString()).find("images"),
+              std::string::npos)
+        << "the rejection must point the legacy client at images[]";
+
+    // never succeeds, even alongside a valid envelope
+    auto both = send_request(handle.port, "POST", "/test/model",
+                             "{\"img_data\":\"aGVsbG8=\",\"images\":[\"aGVsbG8=\"]}",
+                             k_json_auth_headers);
+    EXPECT_EQ(both.status, 422);
+}
+
+TEST(server_e2e_contract, strict_envelope_rejects_unknown_fields_and_bad_params) {
+    ServerHandle handle = start_server();
+
+    auto unknown = send_request(handle.port, "POST", "/test/model",
+                                "{\"images\":[\"aGVsbG8=\"],\"foo\":1}", k_json_auth_headers);
+    EXPECT_EQ(unknown.status, 422);
+    auto unknown_doc = parse_body(unknown.body);
+    ASSERT_EQ(unknown_doc["errors"].Size(), 1u);
+    EXPECT_STREQ(unknown_doc["errors"][0]["pointer"].GetString(), "/foo");
+
+    // this server declares no param specs: any params key is unknown
+    auto params = send_request(
+        handle.port, "POST", "/test/model",
+        "{\"images\":[\"aGVsbG8=\"],\"params\":{\"score_threshold\":0.5}}", k_json_auth_headers);
+    EXPECT_EQ(params.status, 422);
+    auto params_doc = parse_body(params.body);
+    ASSERT_EQ(params_doc["errors"].Size(), 1u);
+    EXPECT_STREQ(params_doc["errors"][0]["pointer"].GetString(), "/params/score_threshold");
+}
+
+TEST(server_e2e_contract, multi_image_results_align_with_items) {
+    ServerHandle handle = start_server();
+    const std::string short_payload(8, 'a');
+    const std::string long_payload(21, 'b');
+    auto resp = send_request(
+        handle.port, "POST", "/test/model",
+        "{\"images\":[\"" + short_payload + "\",\"" + long_payload +
+            "\"],\"req_id\":\"multi\"}",
+        k_json_auth_headers);
+
+    ASSERT_EQ(resp.status, 200);
+    auto doc = parse_body(resp.body);
+    ASSERT_EQ(doc["results"].Size(), 2u);
+    EXPECT_EQ(doc["results"][0]["data"]["value"].GetInt(), 8);
+    EXPECT_EQ(doc["results"][1]["data"]["value"].GetInt(), 21);
+    EXPECT_EQ(doc["results"][0]["status"].GetInt(), 0);
+    EXPECT_EQ(doc["results"][1]["status"].GetInt(), 0);
+}
+
+TEST(server_e2e_contract, multi_image_failure_is_isolated_per_item) {
+    ServerHandle handle = start_server();
+    auto resp = send_request(
+        handle.port, "POST", "/test/model",
+        "{\"images\":[\"aaaaaaaa\",\"fail-me\",\"ccccccccccccccccccccccccccc\"],"
+        "\"req_id\":\"iso\"}",
+        k_json_auth_headers);
+
+    // one non-timeout item failure surfaces at the HTTP layer (aggregate =
+    // first error), while every item still reports its own status below
+    ASSERT_EQ(resp.status, 500);
+    auto doc = parse_body(resp.body);
+    EXPECT_EQ(doc["status"].GetInt(), 2);
+    ASSERT_EQ(doc["results"].Size(), 3u);
+    EXPECT_EQ(doc["results"][0]["status"].GetInt(), 0);
+    EXPECT_EQ(doc["results"][0]["data"]["value"].GetInt(), 8);
+    EXPECT_EQ(doc["results"][1]["status"].GetInt(), 2);
+    EXPECT_TRUE(doc["results"][1]["data"].IsNull());
+    EXPECT_EQ(doc["results"][2]["status"].GetInt(), 0);
+    EXPECT_EQ(doc["results"][2]["data"]["value"].GetInt(), 27);
+}
+
+TEST(server_e2e_contract, request_item_limit_returns_413) {
+    ServerHandle handle = start_server("max_request_items=2\n");
+    auto resp = send_request(handle.port, "POST", "/test/model",
+                             "{\"images\":[\"a\",\"b\",\"c\"]}", k_json_auth_headers);
+    EXPECT_EQ(resp.status, 413);
+    auto doc = parse_body(resp.body);
+    EXPECT_EQ(doc["status"].GetInt(), 67);
+    ASSERT_EQ(doc["errors"].Size(), 1u);
+    EXPECT_STREQ(doc["errors"][0]["pointer"].GetString(), "/images");
 }
 
 TEST(server_e2e_contract, missing_token_returns_401_with_www_authenticate) {
     ServerHandle handle = start_server();
     auto resp = send_request(handle.port, "POST", "/test/model",
-                             "{\"img_data\":\"aGVsbG8=\"}",
+                             "{\"images\":[\"aGVsbG8=\"]}",
                              {{"Content-Type", "application/json"}});
 
     EXPECT_EQ(resp.status, 401);
@@ -483,7 +574,7 @@ TEST(server_e2e_contract, unknown_path_returns_404) {
 TEST(server_e2e_contract, wrong_content_type_returns_415) {
     ServerHandle handle = start_server();
     auto resp = send_request(handle.port, "POST", "/test/model",
-                             "{\"img_data\":\"aGVsbG8=\"}",
+                             "{\"images\":[\"aGVsbG8=\"]}",
                              {{"Content-Type", "text/plain"},
                               {"Authorization", "Bearer test-secret"}});
 
@@ -496,7 +587,7 @@ TEST(server_e2e_contract, wrong_content_type_returns_415) {
 
 TEST(server_e2e_contract, rate_limited_returns_429) {
     ServerHandle handle = start_server("rate_limit_qps=1\n");
-    const std::string body = "{\"img_data\":\"aGVsbG8=\"}";
+    const std::string body = "{\"images\":[\"aGVsbG8=\"]}";
     auto first = send_request(handle.port, "POST", "/test/model", body, k_json_auth_headers);
     EXPECT_EQ(first.status, 200);
     auto second = send_request(handle.port, "POST", "/test/model", body, k_json_auth_headers);
@@ -511,25 +602,27 @@ TEST(server_e2e_contract, rate_limited_returns_429) {
 TEST(server_e2e_contract, model_timeout_returns_504) {
     ServerHandle handle = start_server("model_run_timeout=100\nfake_delay_ms=1000\n");
     auto resp = send_request(handle.port, "POST", "/test/model",
-                             "{\"img_data\":\"aGVsbG8=\"}", k_json_auth_headers);
+                             "{\"images\":[\"aGVsbG8=\"]}", k_json_auth_headers);
 
     EXPECT_EQ(resp.status, 504);
     auto doc = parse_body(resp.body);
     ASSERT_FALSE(doc.HasParseError());
-    EXPECT_EQ(doc["code"].GetInt(), 4);
-    EXPECT_TRUE(doc["data"].IsNull());
+    EXPECT_EQ(doc["status"].GetInt(), 4);
+    EXPECT_TRUE(doc["results"].IsArray());
 }
 
 TEST(server_e2e_contract, model_failure_returns_500_with_null_data) {
     ServerHandle handle = start_server("fake_fail_code=2\n");
     auto resp = send_request(handle.port, "POST", "/test/model",
-                             "{\"img_data\":\"aGVsbG8=\"}", k_json_auth_headers);
+                             "{\"images\":[\"aGVsbG8=\"]}", k_json_auth_headers);
 
     EXPECT_EQ(resp.status, 500);
     auto doc = parse_body(resp.body);
     ASSERT_FALSE(doc.HasParseError());
-    EXPECT_EQ(doc["code"].GetInt(), 2);
-    EXPECT_TRUE(doc["data"].IsNull());
+    EXPECT_EQ(doc["status"].GetInt(), 2);
+    ASSERT_EQ(doc["results"].Size(), 1u);
+    EXPECT_EQ(doc["results"][0]["status"].GetInt(), 2);
+    EXPECT_TRUE(doc["results"][0]["data"].IsNull());
 }
 
 TEST(server_e2e_contract, content_length_over_limit_returns_413) {
@@ -543,7 +636,7 @@ TEST(server_e2e_contract, content_length_over_limit_returns_413) {
 
 TEST(server_e2e_contract, metrics_inference_duration_sum_is_positive_after_request) {
     ServerHandle handle = start_server();
-    const std::string body = "{\"img_data\":\"aGVsbG8=\"}";
+    const std::string body = "{\"images\":[\"aGVsbG8=\"]}";
     auto resp = send_request(handle.port, "POST", "/test/model", body, k_json_auth_headers);
     ASSERT_EQ(resp.status, 200);
 
@@ -592,7 +685,7 @@ TEST(server_e2e_contract, queue_limit_returns_429_with_retry_after) {
     HttpResp resp_a;
     std::thread sender_a([&handle, &resp_a]() {
         resp_a = send_request(handle.port, "POST", "/test/model",
-                              "{\"img_data\":\"aGVsbG8=\",\"req_id\":\"a\"}",
+                              "{\"images\":[\"aGVsbG8=\"],\"req_id\":\"a\"}",
                               k_json_auth_headers);
     });
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -600,7 +693,7 @@ TEST(server_e2e_contract, queue_limit_returns_429_with_retry_after) {
     // request B arrives while the queue is full: fast-fail instead of queueing
     const auto resp_b =
         send_request(handle.port, "POST", "/test/model",
-                     "{\"img_data\":\"aGVsbG8=\",\"req_id\":\"b\"}", k_json_auth_headers);
+                     "{\"images\":[\"aGVsbG8=\"],\"req_id\":\"b\"}", k_json_auth_headers);
     sender_a.join();
 
     EXPECT_EQ(resp_a.status, 200);
@@ -627,7 +720,7 @@ TEST(server_e2e_contract, batch_collects_and_distributes_per_request_results) {
         // mixup in the batch distribution would be visible in the response
         const std::string payload(static_cast<size_t>(10 + i * 7), 'a');
         const std::string body =
-            "{\"img_data\":\"" + payload + "\",\"req_id\":\"batch-" + std::to_string(i) + "\"}";
+            "{\"images\":[\"" + payload + "\"],\"req_id\":\"batch-" + std::to_string(i) + "\"}";
         senders.emplace_back([&handle, &responses, i, body]() {
             responses[i] =
                 send_request(handle.port, "POST", "/test/model", body, k_json_auth_headers);
@@ -641,7 +734,7 @@ TEST(server_e2e_contract, batch_collects_and_distributes_per_request_results) {
         ASSERT_EQ(responses[i].status, 200) << "request " << i;
         const auto doc = parse_body(responses[i].body);
         ASSERT_FALSE(doc.HasParseError());
-        EXPECT_EQ(doc["data"]["value"].GetInt(), 10 + i * 7)
+        EXPECT_EQ(doc["results"][0]["data"]["value"].GetInt(), 10 + i * 7)
             << "request " << i << " received another entry's result";
     }
 
@@ -660,7 +753,7 @@ TEST(server_e2e_contract, batch_timeout_returns_504) {
     ServerHandle handle = start_server(
         "model_run_timeout=200\nfake_delay_ms=500\nmax_batch_size=4\nmax_batch_delay_ms=50\n");
     const auto resp = send_request(handle.port, "POST", "/test/model",
-                                   "{\"img_data\":\"aGVsbG8=\",\"req_id\":\"slow\"}",
+                                   "{\"images\":[\"aGVsbG8=\"],\"req_id\":\"slow\"}",
                                    k_json_auth_headers);
     EXPECT_EQ(resp.status, 504);
 }
@@ -671,7 +764,7 @@ TEST(server_e2e_contract, async_submit_returns_202_with_job_id) {
     ServerHandle handle = start_server("async_enabled=true\nfake_delay_ms=100\n");
     const auto resp =
         send_request(handle.port, "POST", "/jobs",
-                     "{\"img_data\":\"aGVsbG8=\",\"req_id\":\"async-1\"}", k_json_auth_headers);
+                     "{\"images\":[\"aGVsbG8=\"],\"req_id\":\"async-1\"}", k_json_auth_headers);
     EXPECT_EQ(resp.status, 202);
     auto doc = parse_body(resp.body);
     ASSERT_FALSE(doc.HasParseError());
@@ -685,7 +778,7 @@ TEST(server_e2e_contract, async_lifecycle_pending_to_done_to_result) {
     ServerHandle handle = start_server("async_enabled=true\nfake_delay_ms=200\n");
     const auto submit =
         send_request(handle.port, "POST", "/jobs",
-                     "{\"img_data\":\"aGVsbG8=\",\"req_id\":\"async-2\"}", k_json_auth_headers);
+                     "{\"images\":[\"aGVsbG8=\"],\"req_id\":\"async-2\"}", k_json_auth_headers);
     ASSERT_EQ(submit.status, 202);
     auto submit_doc = parse_body(submit.body);
     const std::string job_id = submit_doc["job_id"].GetString();
@@ -709,15 +802,16 @@ TEST(server_e2e_contract, async_lifecycle_pending_to_done_to_result) {
     EXPECT_EQ(result.status, 200);
     auto result_doc = parse_body(result.body);
     ASSERT_FALSE(result_doc.HasParseError());
-    EXPECT_EQ(result_doc["code"].GetInt(), 0);
-    EXPECT_EQ(result_doc["data"]["value"].GetInt(), 8);  // payload echo
+    EXPECT_EQ(result_doc["status"].GetInt(), 0);
+    ASSERT_EQ(result_doc["results"].Size(), 1u);
+    EXPECT_EQ(result_doc["results"][0]["data"]["value"].GetInt(), 8);  // payload echo
 }
 
 TEST(server_e2e_contract, async_incomplete_result_returns_409) {
     ServerHandle handle = start_server("async_enabled=true\nfake_delay_ms=5000\n");
     const auto submit =
         send_request(handle.port, "POST", "/jobs",
-                     "{\"img_data\":\"aGVsbG8=\"}", k_json_auth_headers);
+                     "{\"images\":[\"aGVsbG8=\"]}", k_json_auth_headers);
     ASSERT_EQ(submit.status, 202);
     auto doc = parse_body(submit.body);
     const std::string job_id = doc["job_id"].GetString();
@@ -745,7 +839,7 @@ TEST(server_e2e_contract, async_disabled_returns_404) {
     ServerHandle handle = start_server();
     const auto resp =
         send_request(handle.port, "POST", "/jobs",
-                     "{\"img_data\":\"aGVsbG8=\"}", k_json_auth_headers);
+                     "{\"images\":[\"aGVsbG8=\"]}", k_json_auth_headers);
     EXPECT_EQ(resp.status, 404);
 }
 
@@ -753,7 +847,7 @@ TEST(server_e2e_contract, async_long_poll_wait_returns_done) {
     ServerHandle handle = start_server("async_enabled=true\nfake_delay_ms=300\n");
     const auto submit =
         send_request(handle.port, "POST", "/jobs",
-                     "{\"img_data\":\"aGVsbG8=\"}", k_json_auth_headers);
+                     "{\"images\":[\"aGVsbG8=\"]}", k_json_auth_headers);
     ASSERT_EQ(submit.status, 202);
     auto doc = parse_body(submit.body);
     const std::string job_id = doc["job_id"].GetString();
@@ -778,11 +872,11 @@ TEST(server_e2e_contract, async_queue_full_returns_429) {
     HttpResp r1, r2;
     std::thread t1([&]() {
         r1 = send_request(handle.port, "POST", "/jobs",
-                          "{\"img_data\":\"aGVsbG8=\"}", k_json_auth_headers);
+                          "{\"images\":[\"aGVsbG8=\"]}", k_json_auth_headers);
     });
     std::thread t2([&]() {
         r2 = send_request(handle.port, "POST", "/jobs",
-                          "{\"img_data\":\"aGVsbG8=\"}", k_json_auth_headers);
+                          "{\"images\":[\"aGVsbG8=\"]}", k_json_auth_headers);
     });
     t1.join();
     t2.join();
@@ -810,35 +904,37 @@ TEST(server_e2e_contract, batch_item_failure_isolated) {
     const std::string payload_c(31, 'c');
     std::thread sender_a([&handle, &resp_a, &payload_a]() {
         resp_a = send_request(handle.port, "POST", "/test/model",
-                              "{\"img_data\":\"" + payload_a + "\",\"req_id\":\"a\"}",
+                              "{\"images\":[\"" + payload_a + "\"],\"req_id\":\"a\"}",
                               k_json_auth_headers);
     });
     std::thread sender_c([&handle, &resp_c, &payload_c]() {
         resp_c = send_request(handle.port, "POST", "/test/model",
-                              "{\"img_data\":\"" + payload_c + "\",\"req_id\":\"c\"}",
+                              "{\"images\":[\"" + payload_c + "\"],\"req_id\":\"c\"}",
                               k_json_auth_headers);
     });
     // the "fail-me" item rides in the same collection window
     const auto resp_b =
         send_request(handle.port, "POST", "/test/model",
-                     "{\"img_data\":\"fail-me\",\"req_id\":\"b\"}", k_json_auth_headers);
+                     "{\"images\":[\"fail-me\"],\"req_id\":\"b\"}", k_json_auth_headers);
     sender_a.join();
     sender_c.join();
 
     EXPECT_EQ(resp_b.status, 500);
     auto doc_b = parse_body(resp_b.body);
     ASSERT_FALSE(doc_b.HasParseError());
-    EXPECT_TRUE(doc_b["data"].IsNull()) << "failed items keep data:null";
+    ASSERT_EQ(doc_b["results"].Size(), 1u);
+    EXPECT_EQ(doc_b["results"][0]["status"].GetInt(), 2);
+    EXPECT_TRUE(doc_b["results"][0]["data"].IsNull()) << "failed items keep data:null";
 
     ASSERT_EQ(resp_a.status, 200) << "the failing item must not fail its batch mates";
     auto doc_a = parse_body(resp_a.body);
     ASSERT_FALSE(doc_a.HasParseError());
-    EXPECT_EQ(doc_a["data"]["value"].GetInt(), 17);
+    EXPECT_EQ(doc_a["results"][0]["data"]["value"].GetInt(), 17);
 
     ASSERT_EQ(resp_c.status, 200) << "the failing item must not fail its batch mates";
     auto doc_c = parse_body(resp_c.body);
     ASSERT_FALSE(doc_c.HasParseError());
-    EXPECT_EQ(doc_c["data"]["value"].GetInt(), 31);
+    EXPECT_EQ(doc_c["results"][0]["data"]["value"].GetInt(), 31);
 }
 
 int main(int argc, char** argv) {

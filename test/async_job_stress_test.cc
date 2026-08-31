@@ -30,6 +30,7 @@
 #include <thread>
 #include <vector>
 
+#include "models/io/common_input.h"
 #include "server/async_job_table.h"
 
 namespace {
@@ -52,7 +53,7 @@ task_request make_req(const std::string& id, const std::string& payload) {
     req.task_id = id;
     req.is_valid = true;
     req.parse_status = StatusCode::OK;
-    req.payload = payload;
+    req.items.push_back({jinq::models::io_define::common_io::byte_source::origin_kind::base64_text, payload});
     return req;
 }
 
@@ -60,7 +61,9 @@ Result make_result(int value) {
     Result result;
     result.model_run_status = StatusCode::OK;
     result.worker_run_time_consuming = 0.5;
-    result.model_output.value = value;
+    result.item_status.assign(1, StatusCode::OK);
+    result.item_outputs.resize(1);
+    result.item_outputs[0].value = value;
     return result;
 }
 
@@ -159,7 +162,7 @@ TEST(async_job_stress, concurrent_lifecycle_preserves_invariants) {
                     continue;
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                if (table.finish(*id, make_result(static_cast<int>(req->payload.size())))) {
+                if (table.finish(*id, make_result(static_cast<int>(req->items.size())))) {
                     finished.fetch_add(1);
                 } else {
                     double_terminal.fetch_add(1);
