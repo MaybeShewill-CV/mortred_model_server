@@ -282,6 +282,12 @@ inline std::vector<ParamViolation> validate_params(const std::vector<ParamSpec> 
                                                    const std::vector<std::pair<std::string, ParamValue>> &candidates,
                                                    ParamSet *out) {
     std::vector<ParamViolation> violations;
+
+    if (candidates.size() > ParamSet::k_max_params) {
+        violations.push_back({"/", "too many parameters (max " + std::to_string(ParamSet::k_max_params) + ")"});
+        return violations;
+    }
+
     std::vector<std::string> seen;
 
     for (const auto &candidate : candidates) {

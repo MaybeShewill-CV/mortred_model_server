@@ -211,6 +211,22 @@ TEST(validate_params, empty_candidates_is_valid) {
     EXPECT_TRUE(params.empty());
 }
 
+TEST(validate_params, candidate_count_over_capacity_is_rejected) {
+    std::vector<ParamSpec> specs;
+    std::vector<Candidate> candidates;
+    for (size_t idx = 0; idx <= ParamSet::k_max_params; ++idx) {
+        const std::string key = "p" + std::to_string(idx);
+        specs.push_back(ParamSpec::i32(key).range(0, 100));
+        candidates.emplace_back(key, ParamValue::of(static_cast<int64_t>(1)));
+    }
+    ParamSet params;
+    const auto violations = validate_params(specs, candidates, &params);
+    ASSERT_EQ(violations.size(), 1u);
+    EXPECT_EQ(violations[0].pointer, "/");
+    EXPECT_NE(violations[0].message.find("too many parameters"), std::string::npos);
+    EXPECT_TRUE(params.empty());
+}
+
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
