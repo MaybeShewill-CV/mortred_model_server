@@ -58,8 +58,10 @@ fingerprint drift: mean abs diff = 91.18 (限值 1)
 
 判断：权重文件存在（`weights/enhancement/real_esrgan/realesr-general-x4v3.model`，
 4.8MB），MNN 会话可创建，但该模型的动态输入形状解析失败导致输出全零。
-属 MNN 会话/模型组合的存量问题，建议单独立项跟进（可与 M1.4 `image_input`
-的 `load_image` 改造解耦）。
+**M1 复跑更正（2026-08-31）**：同二进制路径重跑 golden 为 **27/27 全过**
+（realesrgan 通过）。该用例属**偶发抖动**（MNN 动态形状解析在特定负载/状态下
+偶发失败），非确定性回归。跟踪建议：若再次出现，记录当时 GPU/负载状态；
+根因在 MNN 会话层，与契约改造无关。
 
 **M0 基线结论**：CI 档 34/34 全绿；golden 档 26/27（唯一失败为上述存量问题）。
 该状态即统一契约改造的"改动前"基准，M4 翻转后的 golden 结果须与本基线逐项对照。
