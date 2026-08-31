@@ -169,7 +169,7 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
         bbox.bbox = scale_detection_bbox(bbox.bbox, geometry_scale);
     }
 
-    DetectionOutput nms_result = finalize_detections(std::move(decode_result), _m_detection_params);
+    DetectionOutput nms_result = finalize_detections(std::move(decode_result), _m_detection_params, context);
     output = std::move(nms_result);
     return StatusCode::OK;
 }

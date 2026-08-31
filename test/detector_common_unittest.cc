@@ -123,6 +123,47 @@ TEST(DetectorCommon, FinalizeDetectionsAppliesNmsTopKAndCategories) {
     EXPECT_EQ(result[0].category, "person");
 }
 
+TEST(DetectorCommon, RequestParamsOverrideConfigDefaults) {
+    using jinq::models::io_define::object_detection::bbox;
+
+    DetectionParams params;
+    params.class_nums = 1;
+    params.class_names = {"person"};
+    params.score_threshold = 0.1f;
+    params.keep_top_k = 10;
+
+    std::vector<bbox> detections;
+    for (int idx = 0; idx < 3; ++idx) {
+        bbox detection;
+        detection.bbox = cv::Rect2f(idx * 20.0f, 0.0f, 10.0f, 10.0f);
+        detection.score = 0.2f + 0.2f * idx;  // 0.2 / 0.4 / 0.6
+        detection.class_id = 0;
+        detections.push_back(detection);
+    }
+
+    // legacy path: nullptr params keeps pure config behavior
+    auto context = test_context();
+    context.params = nullptr;
+    const auto legacy = jinq::models::object_detection::finalize_detections(detections, params, context);
+    EXPECT_EQ(legacy.size(), 3u);
+
+    // request override: score_threshold 0.5 keeps only the 0.6 box,
+    // top_k 1 would not change that; check threshold first
+    jinq::models::backend::ParamSet request_params;
+    request_params.set_f32("score_threshold", 0.5f);
+    context.params = &request_params;
+    const auto strict = jinq::models::object_detection::finalize_detections(detections, params, context);
+    ASSERT_EQ(strict.size(), 1u);
+    EXPECT_FLOAT_EQ(strict[0].score, 0.6f);
+
+    // top_k truncation also overrides the config default
+    request_params = jinq::models::backend::ParamSet();
+    request_params.set_f32("score_threshold", 0.1f);
+    request_params.set_i32("top_k", 2);
+    const auto truncated = jinq::models::object_detection::finalize_detections(detections, params, context);
+    EXPECT_EQ(truncated.size(), 2u);
+}
+
 TEST(DetectorCommon, PacksCV32FC3MatAsNchwF32Tensor) {
     cv::Mat image(2, 3, CV_32FC3, cv::Scalar(1.0f, 2.0f, 3.0f));
     NamedTensor input;

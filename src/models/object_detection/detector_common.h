@@ -67,6 +67,25 @@ template <typename T> inline std::vector<T> finalize_detections(std::vector<T> d
 }
 
 /***
+ * Request-aware tail: overlays per-request overrides (validated against the
+ * detection ParamSpec schema in the task catalog) on top of the config
+ * defaults, then runs the shared finalize path. nullptr params (legacy
+ * single-image path) keeps pure config behavior.
+ */
+template <typename T>
+inline std::vector<T> finalize_detections(std::vector<T> detections, const DetectionParams &params,
+                                          const backend::InferenceContext &context) {
+    if (context.params == nullptr) {
+        return finalize_detections(std::move(detections), params);
+    }
+    DetectionParams effective = params;
+    effective.score_threshold = context.params->get_f32("score_threshold", params.score_threshold);
+    effective.nms_threshold = context.params->get_f32("nms_threshold", params.nms_threshold);
+    effective.keep_top_k = context.params->get_i32("top_k", params.keep_top_k);
+    return finalize_detections(std::move(detections), effective);
+}
+
+/***
  * Pack a preprocessed CV_32FC3 HWC image into a [1,3,H,W] f32 tensor.
  * Resize/color conversion/normalization stay model-specific.
  */
