@@ -172,6 +172,51 @@ inline cv::Mat load_image(const io_define::common_io::base64_input &in, const Im
     return ret;
 }
 
+/***
+ * image_input -> cv::Mat: dispatches on the byte_source origin. base64 text
+ * reuses the base64_input path unchanged; raw bytes are fed straight to
+ * imdecode with no base64 inflation (binary body encoding).
+ */
+inline cv::Mat load_image(const io_define::common_io::image_input &in, const ImageInputLimits &limits, StatusCode *status,
+                          std::string *error) {
+    if (in.image.origin == io_define::common_io::byte_source::origin_kind::raw_bytes) {
+        if (in.image.data.empty()) {
+            if (error != nullptr) {
+                *error = "input image raw data is empty";
+            }
+            if (status != nullptr) {
+                *status = StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+            }
+            return {};
+        }
+        std::vector<unsigned char> bytes(in.image.data.begin(), in.image.data.end());
+        cv::Mat image = cv::imdecode(bytes, cv::IMREAD_COLOR);
+        if (image.empty()) {
+            if (error != nullptr) {
+                *error = "input image raw bytes are not a decodable image";
+            }
+            if (status != nullptr) {
+                *status = StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+            }
+            return {};
+        }
+        if (!image_within_limits(image, limits, error)) {
+            if (status != nullptr) {
+                *status = status_for_image_load(error == nullptr ? "" : *error);
+            }
+            return {};
+        }
+        cv::Mat ret = normalize_to_bgr8uc3(image, error);
+        if (ret.empty() && status != nullptr) {
+            *status = StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+        }
+        return ret;
+    }
+    io_define::common_io::base64_input base64;
+    base64.input_image_content = in.image.data;
+    return load_image(base64, limits, status, error);
+}
+
 inline cv::Mat load_image(const io_define::common_io::file_input &in) {
     return cv_input::load_image(in, ImageInputLimits{}, nullptr, nullptr);
 }
@@ -181,6 +226,10 @@ inline cv::Mat load_image(const io_define::common_io::mat_input &in) {
 }
 
 inline cv::Mat load_image(const io_define::common_io::base64_input &in) {
+    return cv_input::load_image(in, ImageInputLimits{}, nullptr, nullptr);
+}
+
+inline cv::Mat load_image(const io_define::common_io::image_input &in) {
     return cv_input::load_image(in, ImageInputLimits{}, nullptr, nullptr);
 }
 
