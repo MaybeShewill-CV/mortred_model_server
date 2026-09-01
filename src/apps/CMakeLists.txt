@@ -11,7 +11,6 @@ endfunction()
 
 # --- benchmark apps ---
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/classification/densenet_benchmark.cpp)
-add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/classification/dinov2_benchmark.cpp)
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/classification/mobilenetv2_benchmark.cpp)
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/classification/resnet_benchmark.cpp)
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/clip/openai_clip_benchmark.cpp)
@@ -22,6 +21,7 @@ add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/diffusion/ldm_sampler_
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/enhancement/attentivegan_benchmark.cpp)
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/enhancement/enlightengan_benchmark.cpp)
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/enhancement/real_esrgan_benchmark.cpp)
+add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/feature_embedding/dinov2_benchmark.cpp)
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/feature_point/lightglue_benchmark.cpp)
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/feature_point/superpoint_benchmark.cpp)
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/model_benchmark/matting/modnet_benchmark.cpp)
@@ -52,6 +52,7 @@ add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/server/classification/resnet_classific
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/server/enhancement/attentive_gan_derain_server.cpp)
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/server/enhancement/enlighten_gan_server.cpp)
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/server/enhancement/real_esrgan_server.cpp)
+add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/server/feature_embedding/dinov2_feature_embedding_server.cpp)
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/server/feature_point/superpoint_fp_det_server.cpp)
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/server/matting/modnet_server.cpp)
 add_mortred_app(${CMAKE_CURRENT_LIST_DIR}/server/matting/pp_matting_server.cpp)

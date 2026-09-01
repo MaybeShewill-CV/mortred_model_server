@@ -80,6 +80,21 @@ inline void fill_classification(AllocatorType& allocator,
     data.AddMember("scores", scores, allocator);
 }
 
+/*** Feature embedding: embedding vector plus its dimension ***/
+inline void fill_feature_embedding(AllocatorType& allocator,
+                                   rapidjson::Document& data,
+                                   const jinq::models::io_define::feature_embedding::std_feature_embedding_output& out,
+                                   const OutputOptions& options) {
+    (void)options;
+    data.SetObject();
+    data.AddMember("dim", static_cast<int64_t>(out.embedding.size()), allocator);
+    rapidjson::Value embedding(rapidjson::kArrayType);
+    for (float value : out.embedding) {
+        embedding.PushBack(value, allocator);
+    }
+    data.AddMember("embedding", embedding, allocator);
+}
+
 /*** Object detection: class_id / score / category / bbox / detail_infos ***/
 inline void fill_object_detection(AllocatorType& allocator,
                                   rapidjson::Document& data,

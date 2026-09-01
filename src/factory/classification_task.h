@@ -7,7 +7,6 @@
 
 #include "factory/cv_catalog.h"
 #include "models/classification/densenet.h"
-#include "models/classification/dinov2.h"
 #include "models/classification/mobilenetv2.h"
 #include "models/classification/resnet.h"
 
@@ -18,7 +17,6 @@ namespace classification {
 using jinq::models::BaseAiModel;
 
 using jinq::models::classification::DenseNet;
-using jinq::models::classification::Dinov2;
 using jinq::models::classification::MobileNetv2;
 using jinq::models::classification::ResNet;
 
@@ -38,12 +36,6 @@ template <typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_densenet_classifier(const std::string &model_name) {
     (void)model_name;
     return std::make_unique<DenseNet<INPUT, OUTPUT>>();
-}
-
-template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_dinov2_classifier(const std::string &model_name) {
-    (void)model_name;
-    return std::make_unique<Dinov2<INPUT, OUTPUT>>();
 }
 
 using Output = jinq::models::io_define::classification::std_classification_output;

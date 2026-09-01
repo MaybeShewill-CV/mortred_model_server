@@ -21,6 +21,7 @@
 #include "factory/classification_task.h"
 #include "factory/diffusion_task.h"
 #include "factory/enhancement_task.h"
+#include "factory/feature_embedding_task.h"
 #include "factory/feature_point_task.h"
 #include "factory/matting_task.h"
 #include "factory/mono_depth_estimate_task.h"
@@ -120,6 +121,7 @@ int main() {
     add_task(tasks, allocator, "matting", jinq::factory::matting::catalog());
     add_task(tasks, allocator, "enhancement", jinq::factory::enhancement::catalog());
     add_task(tasks, allocator, "feature_point", jinq::factory::feature_point::catalog());
+    add_task(tasks, allocator, "feature_embedding", jinq::factory::feature_embedding::catalog());
     add_task(tasks, allocator, "mono_depth_estimation", jinq::factory::mono_depth_estimation::catalog());
     add_task(tasks, allocator, "diffusion", jinq::factory::diffusion::catalog());
     add_task(tasks, allocator, "segment_anything_amg", jinq::factory::segment_anything::amg_catalog());

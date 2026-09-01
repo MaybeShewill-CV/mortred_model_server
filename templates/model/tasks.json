@@ -82,6 +82,17 @@
       "default_backend": "mnn",
       "io_header": "models/io/feature_point.h"
     },
+    "feature_embedding": {
+      "model_dir": "feature_embedding",
+      "io_namespace": "feature_embedding",
+      "output_type": "std_feature_embedding_output",
+      "response_filler": "fill_feature_embedding",
+      "catalog_header": "factory/feature_embedding_task.h",
+      "catalog_function": "catalog",
+      "server_section_suffix": "_FEATURE_EMBEDDING_SERVER",
+      "default_backend": "mnn",
+      "io_header": "models/io/feature_embedding.h"
+    },
     "mono_depth_estimation": {
       "model_dir": "mono_depth_estimation",
       "io_namespace": "mono_depth_estimation",

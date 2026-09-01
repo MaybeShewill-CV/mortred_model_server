@@ -8,6 +8,7 @@ set(FACTORY_LIB_SRC
     ${CMAKE_CURRENT_LIST_DIR}/diffusion_model_adapter.h
     ${CMAKE_CURRENT_LIST_DIR}/diffusion_task.h
     ${CMAKE_CURRENT_LIST_DIR}/enhancement_task.h
+    ${CMAKE_CURRENT_LIST_DIR}/feature_embedding_task.h
     ${CMAKE_CURRENT_LIST_DIR}/feature_point_task.h
     ${CMAKE_CURRENT_LIST_DIR}/matting_task.h
     ${CMAKE_CURRENT_LIST_DIR}/model_catalog.h

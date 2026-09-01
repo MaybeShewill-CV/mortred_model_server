@@ -7,7 +7,7 @@
 
 #include "dinov2.h"
 
-#include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <fstream>
 
@@ -22,17 +22,17 @@
 
 namespace jinq {
 namespace models {
-namespace classification {
+namespace feature_embedding {
 using jinq::common::StatusCode;
 
-using ClassificationOutput = jinq::models::io_define::classification::std_classification_output;
+using FeatureEmbeddingOutput = jinq::models::io_define::feature_embedding::std_feature_embedding_output;
 using jinq::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode Dinov2<INPUT, OUTPUT>::on_init(const toml::table &params) {
     const auto input_info =
         jinq::models::backend::SessionIoValidator(this->session()).input().f32().rank(4).nchw().channels(3).static_shape().validate();
     if (!input_info.ok()) {
-        LOG(ERROR) << "unexpected classification input shape: " << input_info.error << ", expected static [N,3,H,W] (nchw)";
+        LOG(ERROR) << "unexpected feature embedding input shape: " << input_info.error << ", expected static [N,3,H,W] (nchw)";
         return StatusCode::MODEL_INIT_FAILED;
     }
     _m_input_tensor_size.height = static_cast<int>(input_info.value.shape[2]);
@@ -41,21 +41,7 @@ template <typename INPUT, typename OUTPUT> StatusCode Dinov2<INPUT, OUTPUT>::on_
         LOG(ERROR) << "invalid dinov2 input shape: " << input_info.error;
         return StatusCode::MODEL_INIT_FAILED;
     }
-
-    if (params.contains("class_name_file")) {
-        const std::string file_path = params["class_name_file"].value_or<std::string>("");
-        if (!jinq::common::FilePathUtil::is_file_exist(file_path)) {
-            LOG(WARNING) << "class name file: " << file_path << " not exist";
-        } else {
-            std::ifstream file(file_path, std::ios::in);
-            std::string line;
-            uint16_t line_num = 0;
-            while (std::getline(file, line)) {
-                _m_class_id2names[line_num] = line;
-                ++line_num;
-            }
-        }
-    }
+    (void)params;
     return StatusCode::OK;
 }
 
@@ -78,9 +64,9 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> Dinov2<INPUT
 
 template <typename INPUT, typename OUTPUT>
 StatusCode Dinov2<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                              const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
+                                              const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
     if (outputs.empty()) {
-        LOG(ERROR) << "classification model output tensor is empty";
+        LOG(ERROR) << "feature embedding model output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
     const auto output_rank = outputs.front().tensor.shape.size();
@@ -93,23 +79,27 @@ StatusCode Dinov2<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &ou
         return output_view.status;
     }
     const auto &tensor = *output_view.value.tensor;
-    const auto *scores = output_view.value.data;
-    const auto score_count = tensor.element_count();
+    const auto *embedding_data = output_view.value.data;
+    const auto embedding_count = tensor.element_count();
 
-    ClassificationOutput internal_out;
-    internal_out.scores.reserve(static_cast<size_t>(score_count));
-    for (int64_t idx = 0; idx < score_count; ++idx) {
-        internal_out.scores.push_back(scores[idx]);
+    // the exported output node is the ViT [CLS] token embedding; the whole
+    // vector is returned as the feature embedding, no argmax / class mapping
+    FeatureEmbeddingOutput internal_out;
+    internal_out.embedding.assign(embedding_data, embedding_data + embedding_count);
+
+    if (context.params != nullptr && context.params->get_bool("normalize", false)) {
+        double norm_sq = 0.0;
+        for (const float value : internal_out.embedding) {
+            norm_sq += static_cast<double>(value) * static_cast<double>(value);
+        }
+        const double norm = std::sqrt(norm_sq);
+        if (norm > 1e-12) {
+            for (float &value : internal_out.embedding) {
+                value = static_cast<float>(static_cast<double>(value) / norm);
+            }
+        }
     }
-    // output node "cls_tokens" is the ViT [CLS] embedding; argmax matches the
-    // exported head and the existing golden expectations
-    const auto max_score = std::max_element(internal_out.scores.begin(), internal_out.scores.end());
-    const auto cls_id = static_cast<int>(std::distance(internal_out.scores.begin(), max_score));
-    internal_out.class_id = cls_id;
-    const auto name_iter = _m_class_id2names.find(static_cast<uint16_t>(cls_id));
-    if (name_iter != _m_class_id2names.end()) {
-        internal_out.category = name_iter->second;
-    }
+
     output = std::move(internal_out);
     return StatusCode::OK;
 }
@@ -118,6 +108,6 @@ StatusCode Dinov2<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &ou
 
 template <typename INPUT, typename OUTPUT> Dinov2<INPUT, OUTPUT>::Dinov2() : jinq::models::BackendCvModel<INPUT, OUTPUT>("DINOV2") {}
 
-} // namespace classification
+} // namespace feature_embedding
 } // namespace models
 } // namespace jinq

@@ -1,0 +1,35 @@
+[DINOV2_FEATURE_EMBEDDING_SERVER]
+# port
+port=9080
+# host
+host="localhost"
+# max connection
+max_connections=500
+# peer resp timeout seconds
+peer_resp_timeout=15
+# request size limit(MB)
+request_size_limit=64
+# bearer token for direct inference access (empty = disabled; required when host is non-loopback)
+# auth_token=""
+# max requests per second per client ip (0 = unlimited)
+# rate_limit_qps=0
+# compute threads nums
+compute_threads=-1
+# handler threads nums
+handler_threads=50
+# model worker nums
+worker_nums=1
+# milliseconds
+model_run_timeout=500
+# max queued requests before the server answers 429 (overload protection)
+max_queue_depth=32
+# dynamic batching: collect concurrent requests into one [N,3,H,W] run
+max_batch_size=8
+max_batch_delay_ms=5
+# server url
+server_uri="/mortred_ai_server_v1/feature_embedding/dinov2"
+# explicit server executable used by the web console catalog
+server_exe="dinov2_feature_embedding_server.out"
+
+[DINOV2]
+model_config_file_path="../conf/model/feature_embedding/dinov2/dinov2_vitb14_config.toml"

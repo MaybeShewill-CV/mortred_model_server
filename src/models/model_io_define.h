@@ -17,6 +17,7 @@
 #include "models/io/common_input.h"
 #include "models/io/diffusion.h"
 #include "models/io/enhancement.h"
+#include "models/io/feature_embedding.h"
 #include "models/io/feature_point.h"
 #include "models/io/matting.h"
 #include "models/io/mono_depth_estimation.h"
