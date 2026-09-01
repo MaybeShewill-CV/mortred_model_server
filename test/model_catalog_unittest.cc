@@ -13,6 +13,7 @@
 #include "factory/cv_catalog.h"
 #include "factory/diffusion_task.h"
 #include "factory/enhancement_task.h"
+#include "factory/feature_embedding_task.h"
 #include "factory/feature_point_task.h"
 #include "factory/matting_task.h"
 #include "factory/model_catalog.h"
@@ -87,6 +88,7 @@ class ModelCatalogTest : public ::testing::Test {
         register_entries("ocr", jinq::factory::ocr::catalog());
         register_entries("matting", jinq::factory::matting::catalog());
         register_entries("enhancement", jinq::factory::enhancement::catalog());
+        register_entries("feature_embedding", jinq::factory::feature_embedding::catalog());
         register_entries("feature_point", jinq::factory::feature_point::catalog());
         register_entries("mono_depth_estimation", jinq::factory::mono_depth_estimation::catalog());
         register_entries("diffusion", jinq::factory::diffusion::catalog());
@@ -157,6 +159,7 @@ TEST_F(ModelCatalogTest, CreateServerBuildsGenericCvServer) {
     check_create_server(jinq::factory::ocr::catalog(), "ocr");
     check_create_server(jinq::factory::matting::catalog(), "matting");
     check_create_server(jinq::factory::enhancement::catalog(), "enhancement");
+    check_create_server(jinq::factory::feature_embedding::catalog(), "feature_embedding");
     check_create_server(jinq::factory::feature_point::catalog(), "feature_point");
     check_create_server(jinq::factory::mono_depth_estimation::catalog(), "mono_depth_estimation");
     check_create_server(jinq::factory::diffusion::catalog(), "diffusion");
@@ -207,11 +210,33 @@ TEST_F(ModelCatalogTest, CatalogCoversEveryServedModel) {
     EXPECT_EQ(jinq::factory::ocr::catalog().size(), 1U);
     EXPECT_EQ(jinq::factory::matting::catalog().size(), 2U);
     EXPECT_EQ(jinq::factory::enhancement::catalog().size(), 3U);
+    EXPECT_EQ(jinq::factory::feature_embedding::catalog().size(), 1U);
     EXPECT_EQ(jinq::factory::feature_point::catalog().size(), 1U);
     EXPECT_EQ(jinq::factory::mono_depth_estimation::catalog().size(), 2U);
     EXPECT_EQ(jinq::factory::diffusion::catalog().size(), 4U);
     EXPECT_EQ(jinq::factory::segment_anything::amg_catalog().size(), 1U);
-    EXPECT_EQ(served_entries_.size(), 27U);
+    EXPECT_EQ(served_entries_.size(), 28U);
+}
+
+TEST_F(ModelCatalogTest, FeatureEmbeddingEntryDeclaresNormalizeParamSpec) {
+    const auto &entries = jinq::factory::feature_embedding::catalog();
+    ASSERT_EQ(entries.size(), 1U);
+    const auto &entry = entries.front();
+    EXPECT_EQ(entry.model_section, "DINOV2");
+    EXPECT_EQ(entry.server_section, "DINOV2_FEATURE_EMBEDDING_SERVER");
+
+    ASSERT_EQ(entry.param_specs.size(), 1U);
+    const auto &spec = entry.param_specs.front();
+    EXPECT_EQ(spec.key, "normalize");
+    EXPECT_EQ(spec.type, jinq::models::backend::ParamSpec::Type::BOOL);
+    EXPECT_TRUE(spec.request_overridable);
+
+    // the request validator round-trips the declared spec
+    jinq::models::backend::ParamSet accepted;
+    const auto violations = jinq::models::backend::validate_params(
+        entry.param_specs, {{"normalize", jinq::models::backend::ParamValue::of(true)}}, &accepted);
+    EXPECT_TRUE(violations.empty());
+    EXPECT_TRUE(accepted.get_bool("normalize", false));
 }
 
 TEST(ModelCatalog, UnknownSectionIsRejected) {

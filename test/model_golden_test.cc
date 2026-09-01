@@ -26,6 +26,7 @@
 #include "factory/classification_task.h"
 #include "factory/clip_task.h"
 #include "factory/enhancement_task.h"
+#include "factory/feature_embedding_task.h"
 #include "factory/feature_point_task.h"
 #include "factory/matting_task.h"
 #include "factory/obj_detection_task.h"
@@ -108,9 +109,9 @@ GOLDEN_CLASSIFICATION_CASE(densenet121_classification, "conf/model/classificatio
                            "demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG",
                            jinq::factory::classification::create_densenet_classifier, std_classification_output);
 
-GOLDEN_CLASSIFICATION_CASE(dinov2_classification, "conf/model/classification/dinov2/dinov2_vitb14_config.toml",
-                           "demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG",
-                           jinq::factory::classification::create_dinov2_classifier, std_classification_output);
+GOLDEN_FEATURE_EMBEDDING_CASE(dinov2_feature_embedding, "conf/model/feature_embedding/dinov2/dinov2_vitb14_config.toml",
+                              "demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG",
+                              jinq::factory::feature_embedding::create_dinov2_feature_extractor, std_feature_embedding_output);
 
 GOLDEN_OBJECT_DETECTION_CASE(nanodet_detection, "conf/model/object_detection/nano_det/nanodet_config.toml",
                              "demo_data/model_test_input/object_detection/bus.jpg",

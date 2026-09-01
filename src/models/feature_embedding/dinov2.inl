@@ -8,17 +8,12 @@
 #include "dinov2.h"
 
 #include <cmath>
-#include <cstring>
-#include <fstream>
 
 #include "glog/logging.h"
 
 #include "models/backend/f32_output.h"
 #include "models/backend/model_runtime.h"
 #include <opencv2/opencv.hpp>
-
-#include "common/cv_utils.h"
-#include "common/file_path_util.h"
 
 namespace jinq {
 namespace models {
