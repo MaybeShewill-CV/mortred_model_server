@@ -48,6 +48,7 @@
 #include "models/io/classification.h"
 #include "models/io/common_input.h"
 #include "models/io/enhancement.h"
+#include "models/io/feature_embedding.h"
 #include "models/io/feature_point.h"
 #include "models/io/matting.h"
 #include "models/io/object_detection.h"
@@ -65,6 +66,7 @@ using jinq::models::BaseAiModel;
 using jinq::models::io_define::classification::std_classification_output;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::enhancement::std_enhancement_output;
+using jinq::models::io_define::feature_embedding::std_feature_embedding_output;
 using jinq::models::io_define::feature_point::std_feature_point_output;
 using jinq::models::io_define::matting::std_matting_output;
 using jinq::models::io_define::object_detection::bbox;

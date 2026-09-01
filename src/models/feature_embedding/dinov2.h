@@ -37,7 +37,7 @@ template <typename INPUT, typename OUTPUT> class Dinov2 : public jinq::models::B
     Dinov2(const Dinov2 &transformer) = delete;
     Dinov2 &operator=(const Dinov2 &transformer) = delete;
 
-  private:
+  protected:
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
     StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
