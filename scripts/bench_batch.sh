@@ -44,7 +44,7 @@ done
 # benchmark name -> model config (relative to project root)
 declare -A MANIFEST=(
     [densenet_benchmark]="conf/model/classification/densenet/densenet121_config.toml"
-    [dinov2_benchmark]="conf/model/classification/dinov2/dinov2_vits14_config.toml"
+    [dinov2_benchmark]="conf/model/feature_embedding/dinov2/dinov2_vits14_config.toml"
     [mobilenetv2_benchmark]="conf/model/classification/mobilenetv2/mobilenetv2_config.toml"
     [resnet_benchmark]="conf/model/classification/resnet/resnet50_config.toml"
     [cls_cond_ddim_sampler_benchmark]="conf/model/diffusion/ddpm/cls_cond_ddim_netease-album-cover.toml"

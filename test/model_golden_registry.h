@@ -478,6 +478,10 @@ bool weights_available(const std::string &conf_rel_path) {
 
 inline void compare_classification(const std::string &name, const std_classification_output &out) { expect_scores(name, out); }
 
+inline void compare_feature_embedding(const std::string &name, const std_feature_embedding_output &out) {
+    expect_embeddings(name, out.embedding);
+}
+
 inline void compare_object_detection(const std::string &name, const std_object_detection_output &out) { expect_boxes(name, out, false); }
 
 inline void compare_face_detection(const std::string &name, const std_face_detection_output &out) { expect_boxes(name, out, true); }
@@ -542,6 +546,9 @@ void run_case(const char *name, const char *config, const char *image, GoldenCre
 
 #define GOLDEN_CLASSIFICATION_CASE(name, config, image, creator, output_type)                                                              \
     MORTRED_GOLDEN_CASE(name, config, image, creator, output_type, compare_classification)
+
+#define GOLDEN_FEATURE_EMBEDDING_CASE(name, config, image, creator, output_type)                                                           \
+    MORTRED_GOLDEN_CASE(name, config, image, creator, output_type, compare_feature_embedding)
 
 #define GOLDEN_OBJECT_DETECTION_CASE(name, config, image, creator, output_type)                                                            \
     MORTRED_GOLDEN_CASE(name, config, image, creator, output_type, compare_object_detection)
