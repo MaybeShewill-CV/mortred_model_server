@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Mortred 后端推理层 (src/models/backend) 类结构图",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/MaybeShewill-CV/mortred_model_server",
+      "revision": "fad5786633770290f403bfd21fae3adbc4a982e0"
+    },
+    "viewBox": [1240, 690]
+  },
+  "components": [
+    { "id": "base_model", "type": "external", "label": "BaseAiModel<IN, OUT>", "sublabel": "统一契约 · init / run / run_batch", "tag": "抽象基类", "sources": [{ "path": "src/models/base_model.h", "line": 24, "label": "外部契约" }], "pos": [50, 50], "size": [260, 85] },
+    { "id": "models_single", "type": "backend", "label": "单引擎模型 ×30+", "sublabel": "分类 · 检测 · 分割 · 增强 · 深度估计", "tag": "具体模型", "pos": [334, 50], "size": [260, 85] },
+    { "id": "cv_input", "type": "external", "label": "cv_input::load_image()", "sublabel": "io_define 输入 → cv::Mat · 限幅", "tag": "工具函数", "sources": [{ "path": "src/models/cv_image_input.h", "line": 101, "label": "图片加载" }], "pos": [618, 50], "size": [260, 85] },
+    { "id": "models_multi", "type": "backend", "label": "多引擎模型", "sublabel": "LightGlue · SamPredictor · OpenAiClip", "tag": "具体模型", "pos": [902, 50], "size": [298, 85] },
+    { "id": "backend_cv_model", "type": "backend", "label": "BackendCvModel<IN, OUT>", "sublabel": "模板基类：init → run → postprocess · 智能 batch", "tag": "模板基类", "sources": [{ "path": "src/models/backend/backend_cv_model.h", "line": 107, "label": "核心基类" }], "pos": [50, 175], "size": [260, 90] },
+    { "id": "tensor", "type": "backend", "label": "DType · Tensor · NamedTensor", "sublabel": "dtype 擦除宿主张量 · 自持 buffer", "tag": "结构体", "sources": [{ "path": "src/models/backend/tensor.h", "line": 124, "label": "张量结构" }], "pos": [334, 175], "size": [260, 90] },
+    { "id": "multi_session", "type": "backend", "label": "MultiSessionModel<D, IN, OUT>", "sublabel": "声明式多引擎生命周期 · sessions() → IoSpec", "tag": "模板基类", "sources": [{ "path": "src/models/backend/multi_session_model.h", "line": 156, "label": "多引擎基类" }], "pos": [618, 175], "size": [260, 90] },
+    { "id": "context", "type": "backend", "label": "PreparedInput · InferenceContext", "sublabel": "预处理产物 + 请求上下文 · GeometryScale", "tag": "结构体", "sources": [{ "path": "src/models/backend/inference_context.h", "line": 19, "label": "上下文" }], "pos": [902, 175], "size": [298, 90] },
+    { "id": "inference_session", "type": "backend", "label": "InferenceSession (abstract)", "sublabel": "inputs()/outputs()/run() · 工厂 create()", "tag": "抽象基类", "sources": [{ "path": "src/models/backend/session.h", "line": 49, "label": "会话抽象" }], "pos": [50, 295], "size": [260, 90] },
+    { "id": "backend_config", "type": "backend", "label": "BackendConfig", "sublabel": "[MODEL.backend] TOML · 三引擎可选", "tag": "结构体", "sources": [{ "path": "src/models/backend/backend_config.h", "line": 41, "label": "后端配置" }], "pos": [334, 295], "size": [260, 90] },
+    { "id": "tensor_info", "type": "backend", "label": "TensorInfo", "sublabel": "模型 IO 元信息 · 动态维度 (-1)", "tag": "结构体", "sources": [{ "path": "src/models/backend/session.h", "line": 28, "label": "IO 元信息" }], "pos": [618, 295], "size": [260, 90] },
+    { "id": "params", "type": "backend", "label": "ParamSpec · ParamValue · ParamSet", "sublabel": "请求参数 schema / 校验 / 读取", "tag": "结构体+类", "sources": [{ "path": "src/models/backend/param_spec.h", "line": 30, "label": "参数规范" }], "pos": [902, 295], "size": [298, 90] },
+    { "id": "mnn", "type": "backend", "label": "MnnSession", "sublabel": "MNN Interpreter · RAII · 实现 InferenceSession", "tag": "引擎实现", "sources": [{ "path": "src/models/backend/mnn_session.h", "line": 32, "label": "MNN 会话" }], "pos": [50, 430], "size": [260, 100] },
+    { "id": "ort", "type": "backend", "label": "OrtSession", "sublabel": "ONNX Runtime · CUDA EP · 实现 InferenceSession", "tag": "引擎实现", "sources": [{ "path": "src/models/backend/ort_session.h", "line": 30, "label": "ORT 会话" }], "pos": [334, 430], "size": [260, 100] },
+    { "id": "trt", "type": "backend", "label": "TrtSession", "sublabel": "TensorRT enqueueV3 · 实现 InferenceSession", "tag": "引擎实现", "sources": [{ "path": "src/models/backend/trt_session.h", "line": 44, "label": "TRT 会话" }], "pos": [618, 430], "size": [260, 100] },
+    { "id": "tools", "type": "backend", "label": "运行时工具 (model_runtime.h)", "sublabel": "ImagePipeline · OutputReader · ParamReader · SessionIoValidator", "tag": "工具类", "sources": [{ "path": "src/models/backend/model_runtime.h", "line": 47, "label": "运行时工具" }], "pos": [50, 565], "size": [540, 90] },
+    { "id": "contracts", "type": "backend", "label": "TensorContract · F32OutputView", "sublabel": "输出契约校验 · validate_output_tensor · validated_f32_*", "tag": "结构体", "sources": [{ "path": "src/models/backend/tensor_contract.h", "line": 17, "label": "输出契约" }], "pos": [618, 565], "size": [582, 90] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "外部契约 · 具体模型 (src/models)", "wraps": ["base_model", "models_single", "cv_input", "models_multi"], "pad": 18 },
+    { "kind": "region", "label": "模型编写基类 · 张量与上下文", "wraps": ["backend_cv_model", "tensor", "multi_session", "context"], "pad": 14 },
+    { "kind": "region", "label": "推理会话 · 配置 · IO 元信息", "wraps": ["inference_session", "backend_config", "tensor_info", "params"], "pad": 14 },
+    { "kind": "region", "label": "运行时工具 · 输出契约", "wraps": ["tools", "contracts"], "pad": 14 }
+  ],
+  "connections": [
+    { "id": "c-base-cvmodel", "from": "base_model", "to": "backend_cv_model", "label": "public 继承", "fromSide": "bottom", "toSide": "top", "labelDy": 26 },
+    { "id": "c-modelsmulti-multi", "from": "models_multi", "to": "multi_session", "label": "继承 · CRTP" },
+    { "id": "c-cvmodel-tensor", "from": "backend_cv_model", "to": "tensor", "label": "preprocess", "fromSide": "right", "toSide": "left", "labelAt": [322, 165] },
+    { "id": "c-cvmodel-session", "from": "backend_cv_model", "to": "inference_session", "variant": "emphasis", "fromSide": "bottom", "toSide": "top" },
+    { "id": "c-session-tensor", "from": "inference_session", "to": "tensor", "label": "run(NamedTensor…)", "fromSide": "top", "toSide": "bottom", "labelDy": 10 },
+    { "id": "c-session-config", "from": "inference_session", "to": "backend_config", "fromSide": "right", "toSide": "left" },
+    { "id": "c-session-mnn", "from": "inference_session", "to": "mnn", "label": "create() 分派", "fromSide": "bottom", "toSide": "top", "labelDy": 30 },
+    { "id": "c-context-params", "from": "context", "to": "params", "label": "params → const ParamSet*", "fromSide": "bottom", "toSide": "top", "labelDy": 34 }
+  ]
+}
