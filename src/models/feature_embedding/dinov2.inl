@@ -36,7 +36,24 @@ template <typename INPUT, typename OUTPUT> StatusCode Dinov2<INPUT, OUTPUT>::on_
         LOG(ERROR) << "invalid dinov2 input shape: " << input_info.error;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    (void)params;
+
+    // token-sequence capability: a rank-2 output ([1,D]) is a cls-only export;
+    // a rank-3 output ([1,T,D]) carries every token and unlocks "mean" pooling
+    const auto output_rank = this->session().outputs().front().shape.size();
+    _m_supports_mean = (output_rank == 3);
+
+    if (params.contains("pooling")) {
+        const auto value = params["pooling"].value_or<std::string>("");
+        if (value != "cls" && value != "mean") {
+            LOG(ERROR) << "params key 'pooling' must be 'cls' or 'mean', got '" << value << "'";
+            return StatusCode::MODEL_INIT_FAILED;
+        }
+        if (value == "mean" && !_m_supports_mean) {
+            LOG(ERROR) << "params key 'pooling = \"mean\"' requires an all-token export ([1,T,D]), got rank-" << output_rank;
+            return StatusCode::MODEL_INIT_FAILED;
+        }
+        _m_default_pooling = value;
+    }
     return StatusCode::OK;
 }
 
@@ -67,20 +84,48 @@ StatusCode Dinov2<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &ou
     const auto output_rank = outputs.front().tensor.shape.size();
     auto output_view = jinq::models::backend::OutputReader(outputs, outputs.front().name)
                            .f32()
-                           .shape(output_rank == 1 ? std::vector<int64_t>{-1} : std::vector<int64_t>{1, -1})
+                           .shape(output_rank == 1 ? std::vector<int64_t>{-1}
+                                   : output_rank == 3 ? std::vector<int64_t>{1, -1, -1}
+                                                      : std::vector<int64_t>{1, -1})
                            .finite()
                            .read();
     if (!output_view.ok()) {
         return output_view.status;
     }
     const auto &tensor = *output_view.value.tensor;
-    const auto *embedding_data = output_view.value.data;
-    const auto embedding_count = tensor.element_count();
+    const auto *token_data = output_view.value.data;
 
-    // the exported output node is the ViT [CLS] token embedding; the whole
-    // vector is returned as the feature embedding, no argmax / class mapping
+    // all-token export [1,T,D]: tokens are laid out row-major; a cls-only
+    // export [1,D] (or legacy rank-1 [D]) is a single token of length D
+    const int64_t dim = output_rank == 3 ? tensor.shape[2] : tensor.element_count();
+    const int64_t token_count = output_rank == 3 ? tensor.shape[1] : 1;
+    if (dim <= 0 || token_count <= 0) {
+        LOG(ERROR) << "invalid feature embedding output shape: " << jinq::models::backend::shape_to_string(tensor.shape);
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+    }
+
+    const std::string pooling = context.params != nullptr ? context.params->get_str("pooling", _m_default_pooling)
+                                                          : _m_default_pooling;
+
+    // the exported output is the ViT token sequence; the pooling strategy
+    // decides which part of it becomes the returned feature embedding
     FeatureEmbeddingOutput internal_out;
-    internal_out.embedding.assign(embedding_data, embedding_data + embedding_count);
+    if (pooling == "mean") {
+        if (!_m_supports_mean) {
+            LOG(ERROR) << "pooling=mean requires an all-token export ([1,T,D]), got rank-" << output_rank;
+            return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+        }
+        internal_out.embedding.reserve(static_cast<size_t>(dim));
+        for (int64_t d = 0; d < dim; ++d) {
+            double acc = 0.0;
+            for (int64_t t = 0; t < token_count; ++t) {
+                acc += static_cast<double>(token_data[t * dim + d]);
+            }
+            internal_out.embedding.push_back(static_cast<float>(acc / static_cast<double>(token_count)));
+        }
+    } else { // "cls": the [CLS] token is the first token of the sequence
+        internal_out.embedding.assign(token_data, token_data + dim);
+    }
 
     if (context.params != nullptr && context.params->get_bool("normalize", false)) {
         double norm_sq = 0.0;

@@ -9,3 +9,5 @@ precision_mode = 0
 power_mode = 0
 
 [DINOV2.params]
+pooling = "cls"
+# normalize = false

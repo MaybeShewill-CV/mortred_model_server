@@ -36,10 +36,18 @@ using Entry = jinq::factory::cv_catalog::CvModelEntry<Output>;
 
 /*** request-overridable feature embedding parameters. NOTE: normalize L2-
  * normalizes the returned embedding (unit hypersphere); it changes the vector
- * scale but never the ordering of cosine-similarity comparisons. */
+ * scale but never the ordering of cosine-similarity comparisons. pooling is a
+ * STRING enum: the current exports carry only the [CLS] token, so "cls" is the
+ * only accepted value today. The model side already understands all-token
+ * exports ([1,T,D]): once a re-export is deployed, adding "mean" to the enum
+ * below is the ONLY change needed - no model code edits. */
 inline const std::vector<jinq::models::backend::ParamSpec> &feature_embedding_param_specs() {
     static const std::vector<jinq::models::backend::ParamSpec> specs = {
         jinq::models::backend::ParamSpec::boolean("normalize").desc("L2-normalize the returned embedding"),
+        jinq::models::backend::ParamSpec::str("pooling")
+            .values({"cls"})
+            .desc("token pooling strategy: cls = [CLS] token (default); mean (all-token average) is enabled once an "
+                  "all-token export is deployed"),
     };
     return specs;
 }

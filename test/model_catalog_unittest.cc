@@ -218,25 +218,43 @@ TEST_F(ModelCatalogTest, CatalogCoversEveryServedModel) {
     EXPECT_EQ(served_entries_.size(), 28U);
 }
 
-TEST_F(ModelCatalogTest, FeatureEmbeddingEntryDeclaresNormalizeParamSpec) {
+TEST_F(ModelCatalogTest, FeatureEmbeddingEntryDeclaresParamSpecs) {
     const auto &entries = jinq::factory::feature_embedding::catalog();
     ASSERT_EQ(entries.size(), 1U);
     const auto &entry = entries.front();
     EXPECT_EQ(entry.model_section, "DINOV2");
     EXPECT_EQ(entry.server_section, "DINOV2_FEATURE_EMBEDDING_SERVER");
 
-    ASSERT_EQ(entry.param_specs.size(), 1U);
-    const auto &spec = entry.param_specs.front();
-    EXPECT_EQ(spec.key, "normalize");
-    EXPECT_EQ(spec.type, jinq::models::backend::ParamSpec::Type::BOOL);
-    EXPECT_TRUE(spec.request_overridable);
+    ASSERT_EQ(entry.param_specs.size(), 2U);
+    const auto &normalize = entry.param_specs[0];
+    EXPECT_EQ(normalize.key, "normalize");
+    EXPECT_EQ(normalize.type, jinq::models::backend::ParamSpec::Type::BOOL);
+    EXPECT_TRUE(normalize.request_overridable);
 
-    // the request validator round-trips the declared spec
+    const auto &pooling = entry.param_specs[1];
+    EXPECT_EQ(pooling.key, "pooling");
+    EXPECT_EQ(pooling.type, jinq::models::backend::ParamSpec::Type::STRING);
+    EXPECT_TRUE(pooling.request_overridable);
+    ASSERT_EQ(pooling.enum_values.size(), 1U);
+    EXPECT_EQ(pooling.enum_values[0], "cls");
+
+    // the request validator round-trips the declared specs
     jinq::models::backend::ParamSet accepted;
     const auto violations = jinq::models::backend::validate_params(
-        entry.param_specs, {{"normalize", jinq::models::backend::ParamValue::of(true)}}, &accepted);
+        entry.param_specs,
+        {{"normalize", jinq::models::backend::ParamValue::of(true)},
+         {"pooling", jinq::models::backend::ParamValue::of(std::string("cls"))}},
+        &accepted);
     EXPECT_TRUE(violations.empty());
     EXPECT_TRUE(accepted.get_bool("normalize", false));
+    EXPECT_EQ(accepted.get_str("pooling", ""), "cls");
+
+    // values outside the declared enum are rejected before they reach the model
+    jinq::models::backend::ParamSet rejected;
+    const auto enum_violations = jinq::models::backend::validate_params(
+        entry.param_specs, {{"pooling", jinq::models::backend::ParamValue::of(std::string("mean"))}}, &rejected);
+    ASSERT_EQ(enum_violations.size(), 1U);
+    EXPECT_NE(enum_violations[0].message.find("must be one of"), std::string::npos);
 }
 
 TEST(ModelCatalog, UnknownSectionIsRejected) {
