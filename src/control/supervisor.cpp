@@ -233,7 +233,15 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err) {
 
     int out_pipe[2];
     int err_pipe[2];
-    if (::pipe(out_pipe) != 0 || ::pipe(err_pipe) != 0) {
+    if (::pipe(out_pipe) != 0) {
+        if (err != nullptr) {
+            *err = "pipe() failed";
+        }
+        return false;
+    }
+    if (::pipe(err_pipe) != 0) {
+        ::close(out_pipe[0]);
+        ::close(out_pipe[1]);
         if (err != nullptr) {
             *err = "pipe() failed";
         }
@@ -259,6 +267,10 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err) {
 
     const pid_t pid = ::fork();
     if (pid < 0) {
+        ::close(out_pipe[0]);
+        ::close(out_pipe[1]);
+        ::close(err_pipe[0]);
+        ::close(err_pipe[1]);
         if (err != nullptr) {
             *err = "fork() failed";
         }
@@ -333,11 +345,14 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err) {
     child->error.clear();
     child->engine.note_started(monotonic_ms());
 
+    // the read ends of the log pipes are owned by the reader threads; the
+    // Child fields transfer them to handle_exit, which joins the threads and
+    // closes the fds after the readers observed EOF (see handle_exit)
+    child->out_fd = out_pipe[0];
+    child->err_fd = err_pipe[0];
     LogBuffer* buffer = child->log.get();
-    const int out_fd = out_pipe[0];
-    const int err_fd = err_pipe[0];
-    child->reader_out = std::thread([out_fd, buffer]() { read_pipe_loop(out_fd, buffer); });
-    child->reader_err = std::thread([err_fd, buffer]() { read_pipe_loop(err_fd, buffer); });
+    child->reader_out = std::thread([fd = child->out_fd, buffer]() { read_pipe_loop(fd, buffer); });
+    child->reader_err = std::thread([fd = child->err_fd, buffer]() { read_pipe_loop(fd, buffer); });
     return true;
 }
 

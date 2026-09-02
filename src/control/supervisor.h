@@ -111,6 +111,9 @@ class ProcessSupervisor {
         int64_t started_at_unix_ms = 0;
         int64_t backoff_due_ms = 0;   // monotonic ms deadline, 0 = none
         int64_t last_probe_ms = 0;
+        // read ends of the child's stdout/stderr pipes. Written by
+        // spawn_locked before the reader threads start, consumed (and closed)
+        // by handle_exit after joining them; -1 while no child is running.
         int out_fd = -1;
         int err_fd = -1;
         std::thread reader_out;

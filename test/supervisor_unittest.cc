@@ -11,6 +11,7 @@
 
 #include <gtest/gtest.h>
 
+#include <dirent.h>
 #include <unistd.h>
 #include <signal.h>
 
@@ -41,6 +42,19 @@ namespace {
 
 int free_test_port() {
     return 38000 + (::getpid() % 20000);
+}
+
+int count_open_fds() {
+    DIR* d = ::opendir("/proc/self/fd");
+    if (d == nullptr) {
+        return -1;
+    }
+    int count = 0;
+    while (::readdir(d) != nullptr) {
+        ++count;
+    }
+    ::closedir(d);
+    return count;
 }
 
 class SupervisorTest : public ::testing::Test {
@@ -220,6 +234,50 @@ TEST_F(SupervisorTest, restart_action_recovers_running_state) {
     ASSERT_TRUE(wait_for([&sup]() { return sup->status("fake_model_server").ready; }, 10000));
     ASSERT_TRUE(sup->restart_server("fake_model_server", &err)) << err;
     EXPECT_TRUE(wait_for([&sup]() { return sup->status("fake_model_server").ready; }, 10000));
+}
+
+TEST_F(SupervisorTest, restarts_do_not_leak_log_pipe_fds) {
+    // regression: the child log pipe read ends were never closed (the Child
+    // out_fd/err_fd fields were dead), leaking 2 fds per process lifetime.
+    // Both the expected (restart_server) and the unexpected (SIGKILL -> backoff)
+    // exit paths must keep the fd count flat.
+    auto sup = make_supervisor();
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    std::string err;
+    ASSERT_TRUE(sup->start_server("fake_model_server", &err)) << err;
+    ASSERT_TRUE(wait_for([&sup]() { return sup->status("fake_model_server").ready; }, 10000));
+
+    int prev = count_open_fds();
+    ASSERT_GT(prev, 0) << "cannot count /proc/self/fd";
+
+    for (int round = 0; round < 5; ++round) {
+        ASSERT_TRUE(sup->restart_server("fake_model_server", &err)) << err;
+        ASSERT_TRUE(wait_for([&sup]() {
+            const auto s = sup->status("fake_model_server");
+            return s.state == "running" && s.ready;
+        }, 15000)) << "restart round " << round << " did not recover";
+        // the old reader threads must observe EOF and be joined+closed before
+        // the count; 200ms is generous for a pipe EOF wakeup
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        const int fds = count_open_fds();
+        EXPECT_LE(fds, prev + 1) << "fd count grew after restart round " << round
+                                 << " (before " << prev << ", after " << fds << ")";
+        prev = fds;
+    }
+
+    const int pid = sup->status("fake_model_server").pid;
+    ASSERT_GT(pid, 0);
+    ::kill(pid, SIGKILL);
+    ASSERT_TRUE(wait_for([&sup]() {
+        const auto s = sup->status("fake_model_server");
+        return s.state == "running" && s.ready && s.restart_count >= 1;
+    }, 15000)) << "server did not recover after SIGKILL";
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    const int fds = count_open_fds();
+    EXPECT_LE(fds, prev + 1) << "fd count grew after unexpected exit (before " << prev
+                             << ", after " << fds << ")";
 }
 
 TEST_F(SupervisorTest, shutdown_is_ordered_and_complete) {
