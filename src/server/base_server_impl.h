@@ -578,11 +578,11 @@ protected:
      * GET /jobs/{id}/wait, GET /jobs/{id}/result
      */
     void handle_async_jobs(WFHttpTask* task) {
-        const std::string uri = task->get_req()->get_request_uri() == nullptr
-                                    ? ""
-                                    : task->get_req()->get_request_uri();
+        const char* raw_uri = task->get_req()->get_request_uri();
+        const char* raw_method = task->get_req()->get_method();
+        const std::string uri = raw_uri == nullptr ? "" : raw_uri;
+        const std::string method = raw_method == nullptr ? "" : raw_method;
         const std::string path = uri.substr(0, uri.find('?'));
-        const std::string method = task->get_req()->get_method();
 
         if (path == "/jobs" && method == "POST") {
             handle_async_submit(task);
@@ -886,15 +886,24 @@ protected:
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
     _m_metrics.set_model(_m_server_uri);
+    // workflow leaves method/uri null when the request line is malformed
+    // (parser->method / parser->uri stay unset); normalize once up front so
+    // every dispatch strcmp and metrics string below is null-safe
+    const char* request_uri = task->get_req()->get_request_uri();
+    const char* request_method = task->get_req()->get_method();
+    if (request_uri == nullptr) {
+        request_uri = "";
+    }
+    if (request_method == nullptr) {
+        request_method = "";
+    }
     // rate limit: all requests on the port (incl. health checks) count per client IP
     if (_m_rate_limit_qps > 0 && !_m_rate_limiter.allow(peer_ip_of(task))) {
-        _m_metrics.inc_http_requests(task->get_req()->get_method(), "429");
+        _m_metrics.inc_http_requests(request_method, "429");
         reply_rate_limited(task);
         return;
     }
     // auth: health/metadata endpoints stay public, others require a Bearer Token
-    const char* request_uri = task->get_req()->get_request_uri();
-    const char* request_method = task->get_req()->get_method();
     bool is_health_endpoint = strcmp(request_uri, "/welcome") == 0 ||
                               strcmp(request_uri, "/hello_world") == 0 ||
                               strcmp(request_uri, "/healthz") == 0 ||
@@ -965,7 +974,8 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
     }
     // model service
     else if (strcmp(request_uri, _m_server_uri.c_str()) == 0) {
-        const char* request_method = task->get_req()->get_method();
+        // request_method is the null-normalized value from the top of
+        // serve_process; do not re-read get_method() here (it can be null)
         if (strcmp(request_method, "POST") != 0) {
             _m_metrics.inc_http_requests(request_method, "405");
             task->get_resp()->add_header_pair("Allow", "POST");
