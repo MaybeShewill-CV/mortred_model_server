@@ -112,7 +112,9 @@ std::string uri_path(const char* uri) {
 }
 
 void forward_to_model(WFHttpTask* task, const mortred::control::ServerEntry& entry) {
-    const std::string method = task->get_req()->get_method();
+    // workflow leaves method null when the request line is malformed
+    const char* raw_method = task->get_req()->get_method();
+    const std::string method = raw_method == nullptr ? "" : raw_method;
     if (method != "POST") {
         g_metrics.inc_http_requests(method, "405");
         task->get_resp()->add_header_pair("Allow", "POST");
@@ -196,7 +198,10 @@ void forward_to_model(WFHttpTask* task, const mortred::control::ServerEntry& ent
 
 void process(WFHttpTask* task) {
     const std::string path = uri_path(task->get_req()->get_request_uri());
-    const std::string method = task->get_req()->get_method();
+    // workflow leaves method null when the request line is malformed; uri_path
+    // already folds a null uri into "", do the same for the method
+    const char* raw_method = task->get_req()->get_method();
+    const std::string method = raw_method == nullptr ? "" : raw_method;
 
     if (path == "/healthz") {
         task->get_resp()->set_status_code("200");
