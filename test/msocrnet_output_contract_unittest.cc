@@ -128,8 +128,9 @@ TEST(MsOcrNetOutputContract, RejectsMalformedOutputs) {
     auto rank2 = i32_mask({2, 2}, {0, 1, 2, 3});
     EXPECT_EQ(model.postprocess({rank2}, request, result), StatusCode::MODEL_OUTPUT_CONTRACT_FAILED);
 
-    // buffer shorter than the declared shape
-    auto short_buffer = i32_mask({1, 2, 2}, {0, 1, 2});
+    // buffer shorter than the declared shape (truncate a full-size buffer)
+    auto short_buffer = i32_mask({1, 2, 2}, {0, 1, 2, 3});
+    short_buffer.tensor.buffer.resize(3 * sizeof(int32_t));
     EXPECT_EQ(model.postprocess({short_buffer}, request, result), StatusCode::MODEL_OUTPUT_CONTRACT_FAILED);
 
     // invalid request geometry (no source size)
