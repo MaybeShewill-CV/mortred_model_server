@@ -28,7 +28,7 @@ template <typename INPUT, typename OUTPUT> class MsOcrNet : public jinq::models:
     MsOcrNet(const MsOcrNet &transformer) = delete;
     MsOcrNet &operator=(const MsOcrNet &transformer) = delete;
 
-  private:
+  protected:
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
     StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,

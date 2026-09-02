@@ -13,6 +13,7 @@
 #include <opencv2/opencv.hpp>
 
 #include "common/cv_utils.h"
+#include "models/backend/model_runtime.h"
 #include "models/backend/request_geometry.h"
 #include "models/backend/tensor_contract.h"
 
@@ -120,15 +121,18 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &
     }
 
     cv::Mat seg_mask(context.network_size, CV_32SC1, cv::Scalar(0));
+    // the freshly created matrix is continuous, so write linearly. A
+    // single-index Mat::at(i) on a [H,W] matrix means (i, 0): its offset is
+    // i * W, which walks off the heap for every i >= H - the previous loop
+    // corrupted the heap and produced a wrong mask at the same time.
+    auto *mask_data = seg_mask.ptr<int32_t>();
     if (tensor.dtype == jinq::models::backend::DType::I32) {
         const auto *data = tensor.template data<int32_t>();
-        for (int64_t idx = 0; idx < element_count; ++idx) {
-            seg_mask.at<int32_t>(static_cast<int>(idx)) = data[idx];
-        }
+        std::memcpy(mask_data, data, static_cast<size_t>(element_count) * sizeof(int32_t));
     } else {
         const auto *data = tensor.template data<int64_t>();
         for (int64_t idx = 0; idx < element_count; ++idx) {
-            seg_mask.at<int32_t>(static_cast<int>(idx)) = static_cast<int32_t>(data[idx]);
+            mask_data[idx] = static_cast<int32_t>(data[idx]);
         }
     }
     cv::Mat resized_mask;
