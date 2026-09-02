@@ -235,8 +235,12 @@ void process(WFHttpTask* task) {
         }
     }
 
-    // fallback to single static token (legacy compatibility)
-    if (!authorized &&
+    // fallback to single static token (legacy compatibility). The empty-token
+    // "auth disabled" semantics of is_bearer_authorized belongs ONLY to the
+    // nothing-configured case; once API keys are configured, an
+    // unauthenticated request must stay denied instead of falling through to
+    // the empty static token (fail-open).
+    if (!authorized && !g_auth_token.empty() &&
         jinq::common::is_bearer_authorized(auth_header, g_auth_token)) {
         authorized = true;
         key_name = "legacy";
@@ -296,13 +300,51 @@ int run_gateway(int argc, char** argv) {
         g_internal_token = env;
     }
 
-    // fail-closed: a non-loopback listener without an external token refuses to start
-    if (!jinq::common::is_loopback_host(g_cfg.gateway.host) && g_auth_token.empty()) {
+    // multi-key auth: load from conf/api_keys.toml if present (P0-4). The load
+    // outcome is part of the startup auth decision, so it runs BEFORE the
+    // fail-closed listener check below.
+    bool api_keys_loaded = false;
+    bool api_keys_parse_failed = false;
+    {
+        const std::string api_keys_path =
+            (std::filesystem::path(root) / "conf" / "api_keys.toml").string();
+        if (std::filesystem::exists(api_keys_path)) {
+            if (g_api_keys.load(api_keys_path)) {
+                api_keys_loaded = true;
+                std::fprintf(stderr, "mortred-gateway: loaded %zu API keys from %s\n",
+                             g_api_keys.key_count(), api_keys_path.c_str());
+            } else {
+                api_keys_parse_failed = true;
+                std::fprintf(stderr, "mortred-gateway: ERROR: failed to parse %s\n",
+                             api_keys_path.c_str());
+            }
+        }
+    }
+
+    // fail-closed startup: a non-loopback listener needs at least one external
+    // auth mechanism (static token or API keys). A present-but-broken
+    // api_keys.toml is also fatal when no static token can take over: an
+    // operator who configured keys wants authentication, and silently serving
+    // without it would be a fail-open security hole.
+    if (!jinq::common::is_loopback_host(g_cfg.gateway.host) &&
+        g_auth_token.empty() && !api_keys_loaded) {
         std::fprintf(stderr,
-                     "mortred-gateway: refusing to listen on non-loopback host %s without "
-                     "MORTRED_GATEWAY_AUTH_TOKEN\n",
+                     "mortred-gateway: refusing to listen on non-loopback host %s without any "
+                     "external auth (set MORTRED_GATEWAY_AUTH_TOKEN or provide a valid "
+                     "conf/api_keys.toml)\n",
                      g_cfg.gateway.host.c_str());
         return 1;
+    }
+    if (api_keys_parse_failed && g_auth_token.empty()) {
+        std::fprintf(stderr,
+                     "mortred-gateway: refusing to start: conf/api_keys.toml exists but failed to "
+                     "parse, and no MORTRED_GATEWAY_AUTH_TOKEN fallback is configured\n");
+        return 1;
+    }
+    if (api_keys_parse_failed) {
+        std::fprintf(stderr,
+                     "mortred-gateway: WARNING: conf/api_keys.toml failed to parse; continuing "
+                     "with static-token auth only\n");
     }
 
     std::string catalog_err;
@@ -316,24 +358,6 @@ int run_gateway(int argc, char** argv) {
     }
     g_metrics.set_model("gateway");
 
-    // multi-key auth: load from conf/api_keys.toml if present (P0-4)
-    // falls back to the single static token if the file doesn't exist
-    {
-        const std::string api_keys_path =
-            (std::filesystem::path(root) / "conf" / "api_keys.toml").string();
-        if (std::filesystem::exists(api_keys_path)) {
-            if (g_api_keys.load(api_keys_path)) {
-                std::fprintf(stderr, "mortred-gateway: loaded %zu API keys from %s\n",
-                             g_api_keys.key_count(), api_keys_path.c_str());
-            } else {
-                std::fprintf(stderr,
-                             "mortred-gateway: WARNING: failed to parse %s "
-                             "(falling back to static token)\n",
-                             api_keys_path.c_str());
-            }
-        }
-    }
-
     WFServerParams params = SERVER_PARAMS_DEFAULT;
     params.max_connections = g_cfg.gateway.max_connections;
     params.request_size_limit =
@@ -345,9 +369,13 @@ int run_gateway(int argc, char** argv) {
                      g_cfg.gateway.host.c_str(), g_cfg.gateway.port);
         return 1;
     }
-    std::fprintf(stderr, "mortred-gateway listening on http://%s:%d (routes: %zu)%s\n",
+    const char* auth_mode = g_api_keys.key_count() > 0
+                                ? "api-keys auth"
+                                : !g_auth_token.empty() ? "static-token auth"
+                                                        : "AUTH DISABLED (loopback only)";
+    std::fprintf(stderr, "mortred-gateway listening on http://%s:%d (routes: %zu) [%s]\n",
                  g_cfg.gateway.host.c_str(), g_cfg.gateway.port, g_catalog.entries().size(),
-                 g_auth_token.empty() ? " (auth disabled)" : " (auth enabled)");
+                 auth_mode);
 
     WFFacilities::WaitGroup wait_group(1);
     wait_group.wait();

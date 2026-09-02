@@ -129,6 +129,29 @@ print(resp.json())
 
 ## For Service Administrators
 
+## Authentication Modes
+
+The gateway supports two external auth mechanisms, checked in order:
+
+1. **API keys** (`conf/api_keys.toml`) — multi-tenant auth with scope and per-key rate limiting.
+2. **Static token** (`MORTRED_GATEWAY_AUTH_TOKEN`) — legacy single-token auth.
+
+The effective auth mode is decided at startup and printed in the listen log:
+
+| Mode | Condition | Behavior |
+|---|---|---|
+| `api-keys auth` | `conf/api_keys.toml` loaded successfully | Requests must match a key. The static-token fallback is **not** consulted when no static token is configured — an unauthenticated request gets `401`. |
+| `static-token auth` | no usable key file, token set | Legacy behavior: requests must match the token. |
+| `AUTH DISABLED` | neither configured | Only reachable on loopback listeners; non-loopback listeners refuse to start (fail-closed). |
+
+Fail-closed startup rules:
+
+- A **non-loopback** listener without any external auth (no token, no usable key file) refuses to start.
+- A **broken `conf/api_keys.toml`** (parse error) refuses to start when no static token is configured — an operator who configured keys wants authentication, and silently serving without it would be a fail-open security hole.
+- A broken key file **with** a static token configured starts, logs an ERROR, and authenticates with the static token only — the unparsed keys authenticate nothing.
+
+> ⚠️ Do **not** rely on an empty `MORTRED_GATEWAY_AUTH_TOKEN` as a "keys configured → still allow everything" escape hatch. The empty-token allow semantics only ever apply when **no** auth mechanism is configured at all (loopback development mode).
+
 ## Configuration
 
 API keys are defined in `conf/api_keys.toml`:
@@ -282,7 +305,7 @@ curl -H "Authorization: Bearer $MORTRED_API_TOKEN" \
 | New key doesn't work | Not reloaded after config change | `POST /api/v1/keys/reload` |
 | Key works but returns 429 | Rate limit reached | Increase `rate_limit_qps` in config |
 | Client lost their key | Only hash is stored | Generate a new key, disable the old one |
-| Gateway logs "failed to parse" | TOML syntax error | Check `hash = "..."` quoting |
+| Gateway logs "failed to parse" | TOML syntax error | Fix the file; without a static token the gateway refuses to start (fail-closed), with one it falls back to token-only auth |
 
 ---
 
@@ -338,7 +361,7 @@ enabled = false
 
 The gateway checks in order:
 1. API Key (multi-key): hash the Bearer token → lookup in conf/api_keys.toml → check scope → check rate limit
-2. Static token (legacy): compare with MORTRED_GATEWAY_AUTH_TOKEN
+2. Static token (legacy): compare with MORTRED_GATEWAY_AUTH_TOKEN — **only when a token is actually configured**; an empty token never authorizes a request when API keys are enabled
 
 If either succeeds, the request is authorized. The `X-Mortred-Key` response header identifies which key was used.
 
