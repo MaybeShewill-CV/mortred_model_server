@@ -5,6 +5,13 @@
 #
 # Hot reload: the gateway reloads this file when it receives SIGHUP
 # (or on restart). Removed keys take effect immediately for new requests.
+#
+# Auth semantics (fail-closed):
+#   - a valid key file alone is enough auth for any listener (loopback or not)
+#   - an empty MORTRED_GATEWAY_AUTH_TOKEN never authorizes requests once keys
+#     are configured - the static-token fallback only runs when a token exists
+#   - a parse error in THIS file refuses to start unless a static token is
+#     configured as fallback (which then authenticates everything)
 
 [keys.tenant-a]
 # hash of "my-secret-key-for-tenant-a"

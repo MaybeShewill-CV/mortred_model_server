@@ -186,7 +186,9 @@ foreach(src ${TEST_LIST})
     elseif(${src} STREQUAL "restart_policy_unittest")
         set(EXTRA_LIBS control pthread)
     elseif(${src} STREQUAL "gateway_e2e_test")
-        set(EXTRA_LIBS control pthread)
+        # the auth fixture hashes keys via ApiKeyManager::sha256_hex (OpenSSL
+        # SHA-256 inlined from the header), same link need as api_key_manager_unittest
+        set(EXTRA_LIBS control OpenSSL::Crypto pthread)
     elseif(${src} STREQUAL "response_schema_test")
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "openapi_consistency_test")

@@ -29,6 +29,7 @@
 #include <utility>
 #include <vector>
 
+#include "control/api_key_manager.h"
 #include "control/ready_probe.h"
 
 namespace fs = std::filesystem;
@@ -283,6 +284,184 @@ TEST_F(GatewayE2ETest, metrics_endpoint_renders) {
     const auto r = send_request(gateway_port_, "GET", "/metrics", "");
     EXPECT_EQ(r.status, 200);
     EXPECT_NE(r.body.find("mortred_http_requests_total"), std::string::npos);
+}
+
+// ---- auth-mode e2e coverage -----------------------------------------------
+// Regression suite for the gateway auth fail-open: the legacy static-token
+// fallback must never let an EMPTY token authorize requests when API keys are
+// the configured auth, and startup must be fail-closed for misconfigurations.
+
+namespace {
+
+const char kAuthRoute[] = "/mortred_ai_server_v1/test/fake";
+
+std::string keys_toml(const std::string& key, const std::string& name = "tenant-a") {
+    return "[keys." + name + "]\nhash = \"" +
+           mortred::control::ApiKeyManager::sha256_hex(key) +
+           "\"\nscope = \"inference\"\nenabled = true\n";
+}
+
+}  // namespace
+
+class GatewayAuthTest : public ::testing::Test {
+  protected:
+    void SetUp() override {
+        root_ = fs::temp_directory_path() / "mortred_gateway_auth_e2e";
+        std::error_code ec;
+        fs::remove_all(root_, ec);
+        fs::create_directories(root_ / "conf" / "server", ec);
+
+        // distinct port pool from GatewayE2ETest (38500 + pid % 10000): the
+        // same binary runs both fixtures, so use a fixed non-overlapping range
+        model_port_ = 49000 + seq_++ * 2;
+        gateway_port_ = model_port_ + 1;
+        std::ofstream out(root_ / "conf" / "server" / "fake.toml");
+        out << "[FAKE_SERVER]\n"
+            << "port=" << model_port_ << "\n"
+            << "server_uri=\"" << kAuthRoute << "\"\n"
+            << "server_exe=\"fake_model_server.out\"\n";
+        out.close();
+        std::ofstream mortred(root_ / "conf" / "mortred.toml");
+        mortred << "[gateway]\nport=" << gateway_port_ << "\n";
+        mortred.close();
+
+        fake_pid_ = spawn(env_or_default("MORTRED_FAKE_BIN", MORTRED_FAKE_BIN_DEFAULT),
+                          {"--port", std::to_string(model_port_), "--mode", "ready"}, {});
+    }
+
+    void TearDown() override {
+        stop(gateway_pid_);
+        stop(fake_pid_);
+        std::error_code ec;
+        fs::remove_all(root_, ec);
+    }
+
+    static std::string env_or_default(const char* name, const char* fallback) {
+        const char* v = std::getenv(name);
+        return v == nullptr ? std::string(fallback) : std::string(v);
+    }
+
+    /*** starts the gateway with the given auth configuration. Returns true
+     * only if the process stayed up and became healthy; a refused start
+     * (fail-closed) or a crash reports false and reaps the child. */
+    bool StartGateway(const std::string& host, const std::string& auth_token,
+                      const std::string& api_keys_content) {
+        if (!api_keys_content.empty()) {
+            std::ofstream keys(root_ / "conf" / "api_keys.toml");
+            keys << api_keys_content;
+            keys.close();
+        }
+        const std::string gateway_bin =
+            env_or_default("MORTRED_GATEWAY_BIN", MORTRED_GATEWAY_BIN_DEFAULT);
+        if (gateway_bin.empty()) {
+            ADD_FAILURE() << "no gateway binary available";
+            return false;
+        }
+        std::vector<std::pair<std::string, std::string>> env = {
+            {"MORTRED_PROJECT_ROOT", root_.string()},
+            {"MORTRED_GATEWAY_HOST", host},
+            {"MORTRED_GATEWAY_PORT", std::to_string(gateway_port_)},
+            {"MORTRED_INTERNAL_TOKEN", "int-token"},
+        };
+        if (!auth_token.empty()) {
+            env.emplace_back("MORTRED_GATEWAY_AUTH_TOKEN", auth_token);
+        }
+        gateway_pid_ = spawn(gateway_bin, {}, env);
+        for (int i = 0; i < 100; ++i) {
+            int status = 0;
+            const pid_t reaped = ::waitpid(gateway_pid_, &status, WNOHANG);
+            if (reaped == gateway_pid_) {
+                gateway_pid_ = -1;  // exited during startup: refused
+                return false;
+            }
+            if (mortred::control::endpoint_ready(gateway_port_, "/healthz", 500)) {
+                return true;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        return false;
+    }
+
+    fs::path root_;
+    int model_port_ = 0;
+    int gateway_port_ = 0;
+    pid_t fake_pid_ = -1;
+    pid_t gateway_pid_ = -1;
+    const std::string valid_key_ = "valid-api-key-0001";
+    static int seq_;
+};
+
+int GatewayAuthTest::seq_ = 0;
+
+TEST_F(GatewayAuthTest, KeysOnlyLoopbackRejectsAnonymousRequests) {
+    // regression for the fail-open: with api_keys configured and NO static
+    // token, an empty-token fallback must NOT authorize anonymous requests
+    ASSERT_TRUE(StartGateway("127.0.0.1", "", keys_toml(valid_key_)));
+
+    auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}");
+    EXPECT_EQ(r.status, 401) << "anonymous request must be denied with keys-only auth";
+
+    r = send_request(gateway_port_, "POST", kAuthRoute, "{}", "forged-token");
+    EXPECT_EQ(r.status, 401) << "forged token must be denied with keys-only auth";
+}
+
+TEST_F(GatewayAuthTest, KeysOnlyLoopbackAcceptsValidKey) {
+    ASSERT_TRUE(StartGateway("127.0.0.1", "", keys_toml(valid_key_)));
+    const auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}", valid_key_);
+    EXPECT_EQ(r.status, 200);
+}
+
+TEST_F(GatewayAuthTest, StaticTokenFallbackStillWorksWhenConfigured) {
+    // legacy compatibility preserved: with BOTH auth mechanisms configured, a
+    // request carrying the static token passes even when the key lookup fails
+    ASSERT_TRUE(StartGateway("127.0.0.1", "ext-token", keys_toml(valid_key_)));
+
+    auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}", "ext-token");
+    EXPECT_EQ(r.status, 200) << "static token fallback must survive with keys configured";
+
+    r = send_request(gateway_port_, "POST", kAuthRoute, "{}", valid_key_);
+    EXPECT_EQ(r.status, 200);
+
+    r = send_request(gateway_port_, "POST", kAuthRoute, "{}", "totally-wrong");
+    EXPECT_EQ(r.status, 401);
+}
+
+TEST_F(GatewayAuthTest, NonLoopbackKeysOnlyStartsAndEnforcesKeys) {
+    // a non-loopback listener with API keys (no static token) is a legitimate
+    // deployment: it must start, and keys must be enforced
+    ASSERT_TRUE(StartGateway("0.0.0.0", "", keys_toml(valid_key_)));
+
+    auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}");
+    EXPECT_EQ(r.status, 401);
+
+    r = send_request(gateway_port_, "POST", kAuthRoute, "{}", valid_key_);
+    EXPECT_EQ(r.status, 200);
+}
+
+TEST_F(GatewayAuthTest, NonLoopbackWithoutAnyAuthRefusesToStart) {
+    // fail-closed preserved: no auth mechanism at all on a public listener
+    EXPECT_FALSE(StartGateway("0.0.0.0", "", ""));
+}
+
+TEST_F(GatewayAuthTest, BrokenApiKeysWithoutTokenRefusesToStart) {
+    // an operator who configured keys wants authentication; a broken file
+    // must not silently downgrade to an unauthenticated listener
+    EXPECT_FALSE(StartGateway("127.0.0.1", "", "this is not [valid toml"));
+}
+
+TEST_F(GatewayAuthTest, BrokenApiKeysWithTokenFallsBackToStaticToken) {
+    // with a static token configured the gateway may start, but the parse
+    // failure must be loud and only the token must authenticate
+    ASSERT_TRUE(StartGateway("127.0.0.1", "ext-token", "this is not [valid toml"));
+
+    auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}");
+    EXPECT_EQ(r.status, 401);
+
+    r = send_request(gateway_port_, "POST", kAuthRoute, "{}", "ext-token");
+    EXPECT_EQ(r.status, 200);
+
+    r = send_request(gateway_port_, "POST", kAuthRoute, "{}", valid_key_);
+    EXPECT_EQ(r.status, 401) << "unparsed key file must not authenticate anything";
 }
 
 int main(int argc, char** argv) {
