@@ -74,6 +74,48 @@ TEST(model_golden, mobilenetv2_batch_matches_single) {
     }
 }
 
+TEST(model_golden, mobilenetv2_mixed_batch_isolates_failed_items) {
+    // regression for the hand-written run_batch double misalignment: it split
+    // the packed output by the TOTAL input count and indexed the pieces by the
+    // ORIGINAL slot, silently cross-wiring results whenever one item failed
+    // preprocessing (or failing the whole batch). The generic run_image_batch
+    // must keep the valid items aligned with their single-run results.
+    std::string conf = "conf/model/classification/mobilenetv2/mobilenetv2_config.toml";
+    if (!weights_available(conf))
+        GTEST_SKIP() << "weights not available";
+    auto cfg = load_model_cfg(conf);
+    auto model = jinq::factory::classification::create_mobilenetv2_classifier<mat_input, std_classification_output>("mobilenetv2_mixed");
+    ASSERT_NE(model, nullptr);
+    ASSERT_EQ(model->init(cfg), StatusCode::OK);
+    cv::Mat image = read_input_image("demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG");
+    ASSERT_FALSE(image.empty());
+
+    std_classification_output single;
+    ASSERT_EQ(model->run(mat_input{image}, single), StatusCode::OK);
+
+    // item 1 is an empty image: it must be isolated, its batch mates aligned
+    std::vector<mat_input> batch_inputs;
+    batch_inputs.push_back(mat_input{image});       // 0: valid
+    batch_inputs.push_back(mat_input{cv::Mat()});   // 1: empty -> isolated
+    batch_inputs.push_back(mat_input{image});       // 2: valid
+    batch_inputs.push_back(mat_input{image});       // 3: valid
+    std::vector<std_classification_output> batch_outputs;
+    std::vector<StatusCode> item_status;
+    ASSERT_EQ(model->run_batch(batch_inputs, batch_outputs, item_status), StatusCode::OK);
+    ASSERT_EQ(batch_outputs.size(), 4u);
+    ASSERT_EQ(item_status.size(), 4u);
+
+    EXPECT_EQ(item_status[1], StatusCode::MODEL_EMPTY_INPUT_IMAGE) << "failed item must be isolated";
+    for (const size_t idx : {0u, 2u, 3u}) {
+        EXPECT_EQ(item_status[idx], StatusCode::OK) << "item " << idx;
+        ASSERT_EQ(batch_outputs[idx].scores.size(), single.scores.size()) << "item " << idx;
+        EXPECT_EQ(batch_outputs[idx].class_id, single.class_id) << "item " << idx;
+        for (size_t k = 0; k < single.scores.size(); ++k) {
+            EXPECT_NEAR(batch_outputs[idx].scores[k], single.scores[k], k_score_tol) << "item " << idx << " score " << k;
+        }
+    }
+}
+
 GOLDEN_CLASSIFICATION_CASE(resnet50_classification, "conf/model/classification/resnet/resnet50_config.toml",
                            "demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG",
                            jinq::factory::classification::create_resnet_classifier, std_classification_output);

@@ -31,12 +31,6 @@ template <typename INPUT, typename OUTPUT> class MobileNetv2 : public jinq::mode
     MobileNetv2(const MobileNetv2 &transformer) = delete;
     MobileNetv2 &operator=(const MobileNetv2 &transformer) = delete;
 
-    /***
-     * single [N,H,W,3] session run for N requests (MNN supports dynamic N);
-     * per-item failures are isolated (see BaseAiModel::run_batch contract)
-     */
-    StatusCode run_batch(const std::vector<INPUT> &in, std::vector<OUTPUT> &out, std::vector<StatusCode> &item_status) override;
-
   protected:
     // image -> normalized CV_32FC3 HWC mat of _m_input_tensor_size (batch share)
     cv::Mat preprocess_mat(const cv::Mat &image);

@@ -31,13 +31,7 @@ template <typename INPUT, typename OUTPUT> class ResNet : public jinq::models::B
     ResNet(const ResNet &transformer) = delete;
     ResNet &operator=(const ResNet &transformer) = delete;
 
-    /***
-     * single [N,H,W,3] session run for N requests (MNN supports dynamic N);
-     * per-item failures are isolated (see BaseAiModel::run_batch contract)
-     */
-    StatusCode run_batch(const std::vector<INPUT> &in, std::vector<OUTPUT> &out, std::vector<StatusCode> &item_status) override;
-
-  private:
+  protected:
     // image -> normalized CV_32FC3 HWC mat of _m_input_tensor_size (batch share)
     cv::Mat preprocess_mat(const cv::Mat &image);
 
