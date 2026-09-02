@@ -27,7 +27,7 @@ template <typename INPUT, typename OUTPUT> class SuperPoint : public jinq::model
     SuperPoint(const SuperPoint &transformer) = delete;
     SuperPoint &operator=(const SuperPoint &transformer) = delete;
 
-  private:
+  protected:
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
     StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,

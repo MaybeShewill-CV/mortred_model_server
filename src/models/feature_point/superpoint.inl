@@ -173,10 +173,17 @@ void SuperPoint<INPUT, OUTPUT>::decode_fp_descriptor(const NamedTensor &desc, Fe
     for (auto &key_pt : key_points) {
         const float x = static_cast<float>(key_pt.location.x) / static_cast<float>(_m_cell_size);
         const float y = static_cast<float>(key_pt.location.y) / static_cast<float>(_m_cell_size);
-        const float x1 = std::floor(x);
-        const float x2 = std::ceil(x);
-        const float y1 = std::floor(y);
-        const float y2 = std::ceil(y);
+        // clamp the bilinear sample window into the descriptor grid: keypoints
+        // in the last cell row/column have ceil() == row/col count and would
+        // otherwise read one cell past the map (heap out-of-bounds read); the
+        // degenerate x1==x2 / y1==y2 branch below then degrades to nearest
+        // neighbour, which is the standard edge semantics
+        const int row_max = desc_map_row - 1;
+        const int col_max = desc_map_col - 1;
+        const auto x1 = std::min(std::max(static_cast<int>(std::floor(x)), 0), col_max);
+        const auto x2 = std::min(std::max(static_cast<int>(std::ceil(x)), 0), col_max);
+        const auto y1 = std::min(std::max(static_cast<int>(std::floor(y)), 0), row_max);
+        const auto y2 = std::min(std::max(static_cast<int>(std::ceil(y)), 0), row_max);
 
         const auto f_q11 = desc_map.at<cv::Vec<float, 256>>(static_cast<int>(y1), static_cast<int>(x1));
         const auto f_q21 = desc_map.at<cv::Vec<float, 256>>(static_cast<int>(y1), static_cast<int>(x2));
