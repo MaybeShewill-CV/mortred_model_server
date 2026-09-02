@@ -21,6 +21,15 @@ struct InferenceContext {
     cv::Size network_size;
 
     /***
+     * the exact cv::Mat that produced the input tensors (refcounted, no pixel
+     * copy). Postprocess passes that need source pixels (e.g. restoring an
+     * alpha channel) must read them from here instead of stashing per-request
+     * state in model members: one model instance serves many requests and the
+     * batch path interleaves pre/postprocess calls across items.
+     */
+    cv::Mat source_image;
+
+    /***
      * request-scoped parameter view travelling from prepare_inputs to
      * postprocess. nullptr on the legacy single-image path, so every
      * get_f32(key, config_default) call stays on its config default.

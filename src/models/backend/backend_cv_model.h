@@ -245,6 +245,7 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
             }
             prepared.context.source_size = image.size();
             prepared.context.network_size = detail::network_size_of(prepared.inputs);
+            prepared.context.source_image = image;
         } else {
             LOG(ERROR) << "input type does not carry a loadable image, override prepare_inputs";
             return PreparedInput::invalid(StatusCode::MODEL_EMPTY_INPUT_IMAGE,

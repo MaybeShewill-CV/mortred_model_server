@@ -29,7 +29,7 @@ template <typename INPUT, typename OUTPUT> class EnlightenGan : public jinq::mod
     EnlightenGan(const EnlightenGan &transformer) = delete;
     EnlightenGan &operator=(const EnlightenGan &transformer) = delete;
 
-  private:
+  protected:
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
     StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
@@ -37,8 +37,10 @@ template <typename INPUT, typename OUTPUT> class EnlightenGan : public jinq::mod
 
     StatusCode on_init(const toml::table &params) override;
 
+    /*** declared network input size (fixed-shape sessions); the per-request
+     * size is resolved in preprocess only when _m_input_dynamic is set */
     cv::Size _m_input_size_host;
-    cv::Mat _m_input_alpha;
+    bool _m_input_dynamic = false;
 };
 
 } // namespace enhancement
