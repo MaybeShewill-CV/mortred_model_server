@@ -205,8 +205,12 @@ TEST(Dinov2FeatureEmbedding, RejectsMalformedOutputs) {
     auto batch2 = f32_tensor("tokens", {2, 2});
     EXPECT_EQ(model.postprocess({batch2}, empty_context, result), StatusCode::MODEL_OUTPUT_CONTRACT_FAILED);
 
-    // all-token shape with an empty token axis
-    auto no_tokens = f32_tensor("tokens", {1, 0, 3});
+    // all-token shape with an empty token axis. Tensor::make() refuses a
+    // zero-volume shape, so the malformed tensor is assembled by hand.
+    NamedTensor no_tokens;
+    no_tokens.name = "tokens";
+    no_tokens.tensor.dtype = jinq::models::backend::DType::F32;
+    no_tokens.tensor.shape = {1, 0, 3};
     EXPECT_EQ(model.postprocess({no_tokens}, empty_context, result), StatusCode::MODEL_OUTPUT_CONTRACT_FAILED);
 
     // non-finite values

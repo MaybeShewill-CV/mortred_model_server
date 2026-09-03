@@ -85,6 +85,7 @@ class SupervisorTest : public ::testing::Test {
     }
 
     void TearDown() override {
+        ::unsetenv("MORTRED_ARGV_FILE");
         fs::remove_all(root_, ec_);
     }
 
@@ -286,6 +287,9 @@ TEST_F(SupervisorTest, spawn_passes_model_flag_for_unified_exe) {
                   root_ / "bin" / "mortred-model-server.out",
                   fs::copy_options::overwrite_existing, ec_);
     ASSERT_FALSE(ec_) << ec_.message();
+    // SetUp already registered fake.toml on port_; this case must be the only
+    // catalog entry so init does not fail on a duplicate port.
+    fs::remove(root_ / "conf" / "server" / "test" / "fake.toml");
 
     const auto argv_file = root_ / "spawn_argv.txt";
     ::setenv("MORTRED_ARGV_FILE", argv_file.c_str(), 1);
