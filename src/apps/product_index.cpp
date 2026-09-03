@@ -94,10 +94,9 @@ void project_http(std::vector<ProductEntry> *out, std::set<std::string> *seen, c
     }
 }
 
-template <typename INPUT, typename OUTPUT>
+template <typename INPUT, typename OUTPUT, typename Driver>
 void project_bench_only(std::vector<ProductEntry> *out, std::set<std::string> *seen, const char *family,
-                        const std::vector<ModelCatalogEntry<INPUT, OUTPUT>> &catalog,
-                        std::function<int(const ModelCatalogEntry<INPUT, OUTPUT> &, int, char **)> driver) {
+                        const std::vector<ModelCatalogEntry<INPUT, OUTPUT>> &catalog, Driver driver) {
     for (const auto &entry : catalog) {
         ProductEntry product;
         product.id = entry.model_section;

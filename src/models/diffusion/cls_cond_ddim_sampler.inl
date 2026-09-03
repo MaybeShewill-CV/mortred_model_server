@@ -74,7 +74,7 @@ transform_output(const cls_cond_ddim_sampler_impl::internal_output& internal_out
  * @param num
  * @return
  */
-std::vector<double> linspace(const double start, const double end, const int num) {
+inline std::vector<double> linspace(const double start, const double end, const int num) {
     std::vector<double> result(num);
     if (num == 1) {
         result[0] = start;
@@ -93,7 +93,7 @@ std::vector<double> linspace(const double start, const double end, const int num
  * @param vec_size
  * @return
  */
-std::vector<float> generate_random_norm_vector(const size_t vec_size, float mean=0.0, float stddev=1.0) {
+inline std::vector<float> generate_random_norm_vector(const size_t vec_size, float mean=0.0, float stddev=1.0) {
     std::random_device rd;
     std::default_random_engine gen(rd());
     std::normal_distribution<float> distribution(mean, stddev);
