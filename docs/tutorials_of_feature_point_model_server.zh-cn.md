@@ -7,11 +7,11 @@
 `图像特征点检测服务器代码段`
 ![strat_a_superpoint_server](../resources/images/start_a_superpoint_server.png)
 
-编译好的可执行文件存放在 `$PROJECT_ROOT/_bin/superpoint_fp_det_server.out`。运行
+统一入口在 `$PROJECT_ROOT/_bin/mortred-model-server.out`。运行
 
 ```bash
 cd $PROJECT_ROOT/_bin
-./superpoint_fp_det_server.out ../conf/server/feature_point/superpoint/superpoint_server_cfg.toml
+./mortred-model-server.out --model SUPERPOINT ../conf/server/feature_point/superpoint/superpoint_server_cfg.toml
 ```
 
 正常启动后，服务会运行在服务器配置（`conf/server/<task>/<model>/*.toml`）中 `port` 指定的端口，`worker_nums` 个模型实例会被创建并占用 GPU 资源。仓库自带配置默认 `worker_nums=1`，你可以按 GPU 显存情况适当调整。
@@ -28,9 +28,7 @@ python server/test_server.py --server superpoint --mode single
 
 ## 关于图像特征点检测服务器的特殊说明
 
-Most of the feature's model output is set of feature points. A single feature point consist of location and descriptor. To reduce the response's content size the server won't output the feature points' descriptor you may uncomment the code in [./src/server/feature_point/superpoint_fp_server.cpp#L170-L172](../src/server/feature_point/superpoint_fp_server.cpp) and recompile to make server output feature points' descriptor. Server's response is a json like
-
-图像特征点检测服务器的输出是一张图像上的一系列特征点. 图像特征点是由点的位置和对该点的一个特征描述子来构成的. 为了减少服务器response的长度模型情况下不输出特征点的特征向量只输出特征点的位置信息，你可以解注释 [./src/server/feature_point/superpoint_fp_server.cpp#L170-L172](../src/server/feature_point/superpoint_fp_server.cpp) 后重新编译来让服务器端输出特征点的特征向量. 服务器端回复的response json对象结构如下
+图像特征点检测服务器的输出是一张图像上的一系列特征点。图像特征点由位置和描述子构成。JSON 由 [`fill_feature_points`](../src/server/response_serializers.h) 生成，已经包含两者。服务器端回复的 response json 对象结构如下
 
 ```python
 resp = {

@@ -1,4 +1,5 @@
 [MOBILENETV2_CLASSIFICATION_SERVER]
+model="MOBILENETV2"
 # port
 port=9002
 # host
@@ -29,7 +30,7 @@ max_batch_delay_ms=5
 # server url
 server_uri="/mortred_ai_server_v1/classification/mobilenetv2"
 # explicit server executable used by the web console catalog
-server_exe="mobilenetv2_classification_server.out"
+server_exe="mortred-model-server.out"
 
 [MOBILENETV2]
 model_config_file_path="../conf/model/classification/mobilenetv2/mobilenetv2_config.toml"

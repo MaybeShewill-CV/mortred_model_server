@@ -7,11 +7,11 @@
 `图像分类服务器代码段`
 ![strat_a_mobilenetv2_server](../resources/images/start_a_mobilenetv2_server.png)
 
-编译好的可执行文件存放在 `$PROJECT_ROOT/_bin/mobilenetv2_classification_server.out`, 启动方式如下所示
+统一入口在 `$PROJECT_ROOT/_bin/mortred-model-server.out`，启动方式如下所示
 
 ```bash
 cd $PROJECT_ROOT/_bin
-./mobilenetv2_classification_server.out ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.toml
+./mortred-model-server.out --model MOBILENETV2 ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.toml
 ```
 
 正常启动后，服务会运行在服务器配置（`conf/server/<task>/<model>/*.toml`）中 `port` 指定的端口，`worker_nums` 个模型实例会被创建并占用 GPU 资源。仓库自带配置默认 `worker_nums=1`，你可以按 GPU 显存情况适当调整。

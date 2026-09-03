@@ -65,10 +65,6 @@ inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::stri
     return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
 }
 
-inline std::unique_ptr<jinq::server::BaseAiServer> create_dinov2_feature_embedding_server(const std::string &server_name) {
-    return create_server("DINOV2", server_name);
-}
-
 } // namespace feature_embedding
 } // namespace factory
 } // namespace jinq

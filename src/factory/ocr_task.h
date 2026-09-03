@@ -47,10 +47,6 @@ inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::stri
     return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
 }
 
-inline std::unique_ptr<jinq::server::BaseAiServer> create_dbtext_detection_server(const std::string &server_name) {
-    return create_server("DBNET", server_name);
-}
-
 } // namespace ocr
 } // namespace factory
 } // namespace jinq

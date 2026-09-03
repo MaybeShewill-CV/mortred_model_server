@@ -9,10 +9,11 @@ pretending to work, so a half-finished model can never be served by accident.
     python scripts/new_model.py --task object_detection --name rtdetr \\
         --class RtdetrDetector --dry-run
 
-The scaffolder never edits existing files. Registration lines that must go into
-shared files (task catalog, test/CMakeLists.txt, golden test) are printed as
-copy/paste snippets instead, so a generated model never produces a surprising
-diff in files the developer did not ask to touch.
+The scaffolder never edits existing files unless `--apply-catalog` is passed.
+That flag inserts the catalog `Entry{...}` into the matching `*_task.h`.
+Creator functions and test CMake registration are still printed as snippets.
+A new catalog row is enough for `mortred-model-server.out --model SECTION` and
+`mortred-model-benchmark.out --model SECTION`; no new ELF or CMake app target.
 
 Generated C++ is passed through clang-format when the tool is available, so the
 templates can stay readable instead of hand-tuning line breaks that only work
@@ -30,6 +31,9 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from repo_toml import load_toml
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = REPOSITORY_ROOT
@@ -94,6 +98,9 @@ def build_values(task: str, spec: dict, name: str, class_name: str, backend: str
         "WEIGHT_EXT": backend_spec["weight_ext"],
         "BACKEND_EXTRA": backend_spec["extra"],
         "DATE": __import__("datetime").date.today().isoformat(),
+        "SERVER_SECTION_SUFFIX": spec.get("server_section_suffix", ""),
+        "PORT": spec.get("_port", ""),
+        "SERVER_URI": spec.get("_uri", ""),
     }
 
 
@@ -102,13 +109,87 @@ def file_plan(values: dict) -> list[tuple[Path, str]]:
     name = values["NAME"]
     model_dir = values["MODEL_DIR"]
     file_base = values["FILE_BASE"]
-    return [
+    plan = [
         (REPO_ROOT / "src" / "models" / model_dir / f"{file_base}.h", "model_header.h.in"),
         (REPO_ROOT / "src" / "models" / model_dir / f"{file_base}.inl", "model_impl.inl.in"),
         (REPO_ROOT / "conf" / "model" / model_dir / name / f"{name}_config.toml", "model_config.toml.in"),
         (REPO_ROOT / "test" / f"{file_base}_output_contract_unittest.cc", "output_contract_unittest.cc.in"),
         (REPO_ROOT / "docs" / "models" / model_dir / f"{name}.md", "model_readme.md.in"),
     ]
+    if values.get("SERVER_SECTION_SUFFIX"):
+        plan.append(
+            (
+                REPO_ROOT / "conf" / "server" / values["TASK"] / name / f"{name}_server_config.toml",
+                "server_config.toml.in",
+            )
+        )
+    return plan
+
+
+def allocate_port_and_uri(task: str, name: str) -> tuple[int, str]:
+    ports: set[int] = set()
+    uris: set[str] = set()
+    conf_server = REPO_ROOT / "conf" / "server"
+    if conf_server.exists():
+        for cfg in conf_server.rglob("*.toml"):
+            try:
+                table = load_toml(cfg)
+            except (ValueError, OSError):
+                continue
+            for sec, kv in table.items():
+                if not str(sec).endswith("_SERVER") or not isinstance(kv, dict):
+                    continue
+                if "port" in kv:
+                    try:
+                        ports.add(int(kv["port"]))
+                    except (TypeError, ValueError):
+                        pass
+                if kv.get("server_uri"):
+                    uris.add(str(kv["server_uri"]))
+    port = 9100
+    while port in ports:
+        port += 1
+    uri = f"/mortred_ai_server_v1/{task}/{name}"
+    suffix = 2
+    while uri in uris:
+        uri = f"/mortred_ai_server_v1/{task}/{name}_{suffix}"
+        suffix += 1
+    return port, uri
+
+
+def catalog_entry_line(task: str, spec: dict, values: dict) -> str:
+    creator = "create_" + values["NAME"] + "_model"
+    section = values["SECTION"]
+    kind = "ObjectEntry" if task == "object_detection" else "Entry"
+    filler = spec.get("response_filler")
+    suffix = spec.get("server_section_suffix")
+    if not (filler and suffix):
+        return f'{kind}{{"{section}", "{values["CLASS_NAME"]}", &{creator}<Input, Output>}},'
+    return (
+        f'{kind}{{"{section}", "{values["CLASS_NAME"]}", "{section}{suffix}", '
+        f'&{creator}<ImageInput, Output>, &jinq::server::response::{filler}}},'
+    )
+
+
+def apply_catalog_entry(task: str, spec: dict, values: dict) -> None:
+    header = REPO_ROOT / "src" / spec["catalog_header"]
+    if not header.is_file():
+        raise ScaffoldError(f"catalog header missing: {header}")
+    text = header.read_text(encoding="utf-8")
+    fn = spec["catalog_function"]
+    start = text.find(f"{fn}()")
+    if start < 0:
+        raise ScaffoldError(f"{header}: {fn}() not found")
+    next_fn = text.find("\ninline ", start + 1)
+    block_end = next_fn if next_fn > 0 else text.find("\n} //", start)
+    if block_end < 0:
+        block_end = len(text)
+    block = text[start:block_end]
+    close = block.rfind("    };")
+    if close < 0:
+        raise ScaffoldError(f"{header}: could not find catalog entries closing")
+    entry = "        " + catalog_entry_line(task, spec, values) + "\n"
+    header.write_text(text[:start] + block[:close] + entry + block[close:] + text[block_end:], encoding="utf-8")
 
 
 def catalog_snippet(task: str, spec: dict, values: dict) -> str:
@@ -140,7 +221,7 @@ def catalog_snippet(task: str, spec: dict, values: dict) -> str:
     return (
         creator_block
         + "\nEntry{\"" + section + "\", \"" + model_class + "\", \"" + section + suffix + "\",\n"
-        "      &" + creator + "<Base64Input, Output>,\n"
+        "      &" + creator + "<ImageInput, Output>,\n"
         "      &jinq::server::response::" + filler + "},"
     )
 
@@ -166,9 +247,14 @@ def golden_snippet(values: dict) -> str:
     )
 
 
-def generate(task: str, name: str, class_name: str, backend: str, dry_run: bool, force: bool) -> int:
+def generate(task: str, name: str, class_name: str, backend: str, dry_run: bool, force: bool,
+             apply_catalog: bool = False) -> int:
     spec = load_tasks()[task]
     values = build_values(task, spec, name, class_name, backend)
+    if values.get("SERVER_SECTION_SUFFIX"):
+        port, uri = allocate_port_and_uri(task, name)
+        values["PORT"] = str(port)
+        values["SERVER_URI"] = uri
     plan = file_plan(values)
 
     conflicts = [path for path, _ in plan if path.exists()]
@@ -204,9 +290,15 @@ def generate(task: str, name: str, class_name: str, backend: str, dry_run: bool,
 
     print("\nmanual steps - the scaffolder intentionally does not edit shared files:\n")
     print("1) catalog entry\n" + catalog_snippet(task, spec, values) + "\n")
+    if apply_catalog and not dry_run:
+        apply_catalog_entry(task, spec, values)
+        print(f"   applied catalog Entry into src/{spec['catalog_header']}\n")
     print("2) test registration\n" + cmake_snippet(values) + "\n")
     print("3) golden case\n" + golden_snippet(values) + "\n")
     print(f"4) verify\n  cmake --build <build-dir> --target {values['FILE_BASE']}_output_contract_unittest")
+    print("\nAfter the catalog row exists, both unified entrypoints pick the model up:")
+    print(f"  mortred-model-server.out --model {values['SECTION']} conf/server/...")
+    print(f"  mortred-model-benchmark.out --model {values['SECTION']} conf/model/...")
     return 0
 
 
@@ -253,7 +345,7 @@ def self_test() -> int:
 
     def call(dry_run: bool, force: bool) -> None:
         with contextlib.redirect_stdout(io.StringIO()):
-            generate(task, "probe", "ProbeModel", backend, dry_run, force)
+            generate(task, "probe", "ProbeModel", backend, dry_run, force, apply_catalog=False)
 
     with tempfile.TemporaryDirectory() as tmp:
         original_root = REPO_ROOT
@@ -315,6 +407,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--backend", choices=sorted(BACKENDS), help="inference backend (default: task default)")
     parser.add_argument("--dry-run", action="store_true", help="print the file plan without writing anything")
     parser.add_argument("--force", action="store_true", help="overwrite files that already exist")
+    parser.add_argument("--apply-catalog", action="store_true",
+                        help="insert the catalog Entry into the matching *_task.h")
     parser.add_argument("--list-tasks", action="store_true", help="print the supported tasks and exit")
     parser.add_argument("--check", action="store_true", help="run the scaffolder self-test and exit")
     return parser.parse_args(argv)
@@ -346,7 +440,8 @@ def main(argv: list[str]) -> int:
         raise ScaffoldError(f"--name must be a lower_snake identifier, got '{args.name}'")
 
     backend = args.backend or tasks[args.task]["default_backend"]
-    return generate(args.task, args.name, args.class_name, backend, args.dry_run, args.force)
+    return generate(args.task, args.name, args.class_name, backend, args.dry_run, args.force,
+                    apply_catalog=args.apply_catalog)
 
 
 if __name__ == "__main__":

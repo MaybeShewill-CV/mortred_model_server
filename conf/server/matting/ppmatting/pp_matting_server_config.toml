@@ -1,4 +1,5 @@
 [PP_MATTING_SERVER]
+model="PP_MATTING"
 # port
 port=9031
 # host
@@ -26,7 +27,7 @@ max_queue_depth=32
 # server url
 server_uri="/mortred_ai_server_v1/matting/pp_matting"
 # explicit server executable used by the web console catalog
-server_exe="pp_matting_server.out"
+server_exe="mortred-model-server.out"
 
 [PP_MATTING]
 model_config_file_path="../conf/model/matting/ppmatting/ppmatting_config.toml"

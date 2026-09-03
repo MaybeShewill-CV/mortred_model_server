@@ -25,8 +25,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export LD_LIBRARY_PATH="$ROOT/_lib:$ROOT/3rd_party/libs:${LD_LIBRARY_PATH:-}"
 
 case "$MODEL" in
-    ddpm) CONFIG="conf/model/diffusion/ddpm/ddpm_celeba-hq.toml" ;;
-    ddim) CONFIG="conf/model/diffusion/ddpm/ddim_celeba-hq.toml" ;;
+    ddpm) CONFIG="conf/server/diffusion/ddpm/ddpm_server_config.toml"; MODEL_ID="DDPM" ;;
+    ddim) CONFIG="conf/server/diffusion/ddim/ddim_server_config.toml"; MODEL_ID="DDIM" ;;
     *) echo "unsupported model: $MODEL (use ddpm or ddim)"; exit 1 ;;
 esac
 
@@ -34,7 +34,7 @@ echo "[smoke] model=$MODEL timestep=$TIMESTEP port=$PORT"
 
 # start the model server with async enabled
 echo "[smoke] starting server..."
-"$ROOT/_bin/${MODEL}_server.out" "$ROOT/$CONFIG" &
+"$ROOT/_bin/mortred-model-server.out" --model "$MODEL_ID" "$ROOT/$CONFIG" &
 SERVER_PID=$!
 sleep 3
 

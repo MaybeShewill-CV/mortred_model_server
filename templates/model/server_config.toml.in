@@ -1,0 +1,17 @@
+[{{SECTION}}{{SERVER_SECTION_SUFFIX}}]
+model="{{SECTION}}"
+port={{PORT}}
+host="localhost"
+max_connections=500
+peer_resp_timeout=15
+request_size_limit=64
+compute_threads=-1
+handler_threads=50
+worker_nums=1
+model_run_timeout=1000
+max_queue_depth=32
+server_uri="{{SERVER_URI}}"
+server_exe="mortred-model-server.out"
+
+[{{SECTION}}]
+model_config_file_path="../conf/model/{{MODEL_DIR}}/{{NAME}}/{{NAME}}_config.toml"

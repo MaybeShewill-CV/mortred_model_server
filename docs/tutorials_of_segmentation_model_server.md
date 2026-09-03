@@ -7,11 +7,11 @@ It's very quick to start a scene segmentation server. Main code are showed below
 `Scene Segmentation Server Code Snappit`
 ![strat_a_bisenetv2_server](../resources/images/start_a_bisenetv2_server.png)
 
-The executable binary file was built in $PROJECT_ROOT/_bin/bisenetv2_segmentation_server.out Simply run
+The unified server binary is `$PROJECT_ROOT/_bin/mortred-model-server.out`. Simply run
 
 ```bash
 cd $PROJECT_ROOT/_bin
-./bisenetv2_segmentation_server.out ../conf/server/scene_segmentation/bisenetv2/bisenetv2_server_config.toml
+./mortred-model-server.out --model BISENETV2 ../conf/server/scene_segmentation/bisenetv2/bisenetv2_server_config.toml
 ```
 
 When the server starts successfully at the `port` configured in your server config (`conf/server/<task>/<model>/*.toml`), `worker_nums` workers will be spawned and occupy your GPU resources. The shipped configs default to `worker_nums=1`; you may enlarge it if you have enough GPU memory.

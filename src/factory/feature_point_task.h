@@ -6,7 +6,10 @@
 #include <vector>
 
 #include "factory/cv_catalog.h"
+#include "factory/model_catalog.h"
+#include "models/feature_point/lightglue.h"
 #include "models/feature_point/superpoint.h"
+#include "models/model_io_define.h"
 
 namespace jinq {
 namespace factory {
@@ -14,12 +17,19 @@ namespace feature_point {
 
 using jinq::models::BaseAiModel;
 
+using jinq::models::feature_point::LightGlue;
 using jinq::models::feature_point::SuperPoint;
 
 template <typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_superpoint_extractor(const std::string &model_name) {
     (void)model_name;
     return std::make_unique<SuperPoint<INPUT, OUTPUT>>();
+}
+
+template <typename INPUT, typename OUTPUT>
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_lightglue_matcher(const std::string &model_name) {
+    (void)model_name;
+    return std::make_unique<LightGlue<INPUT, OUTPUT>>();
 }
 
 using Output = jinq::models::io_define::feature_point::std_feature_point_output;
@@ -49,8 +59,15 @@ inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::stri
     return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
 }
 
-inline std::unique_ptr<jinq::server::BaseAiServer> create_superpoint_fp_server(const std::string &server_name) {
-    return create_server("SUPERPOINT", server_name);
+using MatchInput = jinq::models::io_define::common_io::pair_mat_input;
+using MatchOutput = jinq::models::io_define::feature_point::std_feature_point_match_output;
+using MatchEntry = jinq::factory::model_catalog::ModelCatalogEntry<MatchInput, MatchOutput>;
+
+inline const std::vector<MatchEntry> &match_catalog() {
+    static const std::vector<MatchEntry> entries = {
+        MatchEntry{"LIGHTGLUE", "LightGlue feature matcher", &create_lightglue_matcher<MatchInput, MatchOutput>},
+    };
+    return entries;
 }
 
 } // namespace feature_point

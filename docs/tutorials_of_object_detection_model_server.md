@@ -7,11 +7,11 @@ It's very quick to start a object detection server. Main code are showed below
 `Object Detection Server Code Snappit`
 ![strat_a_yolov5_server](../resources/images/start_a_yolov5_server.png)
 
-The executable binary file was built in $PROJECT_ROOT/_bin/yolov5_detection_server.out Simply run
+The unified server binary is `$PROJECT_ROOT/_bin/mortred-model-server.out`. Simply run
 
 ```bash
 cd $PROJECT_ROOT/_bin
-./yolov5_detection_server.out ../conf/server/object_detection/yolov5/yolov5_server_config.toml
+./mortred-model-server.out --model YOLOV5 ../conf/server/object_detection/yolov5/yolov5_server_config.toml
 ```
 
 When the server starts successfully at the `port` configured in your server config (`conf/server/<task>/<model>/*.toml`), `worker_nums` workers will be spawned and occupy your GPU resources. The shipped configs default to `worker_nums=1`; you may enlarge it if you have enough GPU memory.

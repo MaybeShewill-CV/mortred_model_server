@@ -14,6 +14,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <vector>
 
 #include "control/mini_toml.h"
 
@@ -108,10 +109,44 @@ bool Catalog::init(const std::string& project_root, std::string* err,
         e.uri = kv->count("server_uri") != 0 ? kv->at("server_uri") : "";
         e.exe = kv->count("server_exe") != 0 ? kv->at("server_exe") : "";
 
+        std::vector<std::string> model_tables;
+        for (const auto& [sec, table] : doc) {
+            (void)table;
+            if (sec.size() <= 7 || sec.compare(sec.size() - 7, 7, "_SERVER") != 0) {
+                model_tables.push_back(sec);
+            }
+        }
+        const std::string model_key = kv->count("model") != 0 ? kv->at("model") : "";
+        if (!model_key.empty()) {
+            bool matches_table = model_tables.empty();
+            for (const auto& table_name : model_tables) {
+                if (table_name == model_key) {
+                    matches_table = true;
+                    break;
+                }
+            }
+            if (!matches_table) {
+                if (err != nullptr) {
+                    *err = cfg_path + ": model=\"" + model_key +
+                           "\" must equal the non-_SERVER table name";
+                }
+                return false;
+            }
+            e.model = model_key;
+            e.id = model_key;
+        } else if (model_tables.size() == 1) {
+            e.model = model_tables[0];
+            e.id = e.model;
+        }
+
         if (e.exe.empty()) {
-            std::fprintf(stderr, "[catalog] %s: [%s] has no server_exe, skipped\n",
-                         cfg_path.c_str(), section.c_str());
-            continue;
+            if (!e.model.empty()) {
+                e.exe = kUnifiedServerExe;
+            } else {
+                std::fprintf(stderr, "[catalog] %s: [%s] has no server_exe, skipped\n",
+                             cfg_path.c_str(), section.c_str());
+                continue;
+            }
         }
         if (e.exe.size() <= 4 || e.exe.compare(e.exe.size() - 4, 4, ".out") != 0) {
             std::fprintf(stderr, "[catalog] %s: server_exe must end with .out: '%s'\n",
@@ -125,7 +160,9 @@ bool Catalog::init(const std::string& project_root, std::string* err,
             return false;
         }
 
-        e.id = e.exe.substr(0, e.exe.size() - 4);
+        if (e.id.empty()) {
+            e.id = e.exe.substr(0, e.exe.size() - 4);
+        }
         if (seen_ids.count(e.id) != 0) {
             if (err != nullptr) {
                 *err = "duplicate server id: " + e.id;

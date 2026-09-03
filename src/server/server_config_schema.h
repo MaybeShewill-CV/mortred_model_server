@@ -66,7 +66,7 @@ inline const std::vector<std::string>& server_required_int_keys() {
  */
 inline const std::vector<std::string>& server_optional_string_keys() {
     static const std::vector<std::string> k = {
-        "auth_token", "server_exe", "stuck_worker_action", "server_url"};
+        "auth_token", "server_exe", "stuck_worker_action", "server_url", "model", "profile"};
     return k;
 }
 

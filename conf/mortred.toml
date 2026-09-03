@@ -31,10 +31,10 @@ max_connections = 1000
 upstream_send_timeout_ms = 180000
 upstream_recv_timeout_ms = 180000
 
-# Per-server supervision overrides; <id> is the server_exe stem
-# (e.g. yolov8_detection_server). Absent keys fall back to the defaults above.
+# Per-server supervision overrides; <id> is the catalog model_section
+# (e.g. YOLOV8). Absent keys fall back to the defaults above.
 #
-# [servers.yolov8_detection_server]
+# [servers.YOLOV8]
 # enabled = true
 # autostart = true
 # restart_policy = "on-failure"   # on-failure | always | no

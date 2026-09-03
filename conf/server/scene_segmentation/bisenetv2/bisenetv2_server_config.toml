@@ -1,4 +1,5 @@
 [BISENETV2_SERVER]
+model="BISENETV2"
 # port
 port=9070
 # host
@@ -26,7 +27,7 @@ max_queue_depth=32
 # server url
 server_uri="/mortred_ai_server_v1/scene_segmentation/bisenetv2"
 # explicit server executable used by the web console catalog
-server_exe="bisenetv2_segmentation_server.out"
+server_exe="mortred-model-server.out"
 
 [BISENETV2]
 model_config_file_path="../conf/model/scene_segmentation/bisenetv2/bisenetv2_config.toml"

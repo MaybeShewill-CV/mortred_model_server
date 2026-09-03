@@ -20,6 +20,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <thread>
@@ -278,6 +279,51 @@ TEST_F(SupervisorTest, restarts_do_not_leak_log_pipe_fds) {
     const int fds = count_open_fds();
     EXPECT_LE(fds, prev + 1) << "fd count grew after unexpected exit (before " << prev
                              << ", after " << fds << ")";
+}
+
+TEST_F(SupervisorTest, spawn_passes_model_flag_for_unified_exe) {
+    fs::copy_file(root_ / "bin" / "fake_model_server.out",
+                  root_ / "bin" / "mortred-model-server.out",
+                  fs::copy_options::overwrite_existing, ec_);
+    ASSERT_FALSE(ec_) << ec_.message();
+
+    const auto argv_file = root_ / "spawn_argv.txt";
+    ::setenv("MORTRED_ARGV_FILE", argv_file.c_str(), 1);
+
+    {
+        std::ofstream out(root_ / "conf" / "server" / "test" / "yolov8.toml");
+        out << "[YOLOV8_DETECTION_SERVER]\n"
+            << "model=\"YOLOV8\"\n"
+            << "port=" << port_ << "\n"
+            << "host=\"localhost\"\n"
+            << "server_uri=\"/mortred_ai_server_v1/obj_detection/yolov8\"\n"
+            << "server_exe=\"mortred-model-server.out\"\n"
+            << "fake_port=" << port_ << "\n"
+            << "fake_mode=\"ready\"\n"
+            << "\n"
+            << "[YOLOV8]\n"
+            << "model_config_file_path=\"x.toml\"\n";
+    }
+    write_catalog();
+
+    auto sup = make_supervisor();
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    std::string err;
+    ASSERT_TRUE(sup->start_server("YOLOV8", &err)) << err;
+    ASSERT_TRUE(wait_for([&sup]() {
+        const auto s = sup->status("YOLOV8");
+        return s.state == "running" && s.ready;
+    }, 10000)) << "YOLOV8 child did not become ready";
+
+    std::ifstream in(argv_file);
+    ASSERT_TRUE(in.good());
+    std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    EXPECT_NE(content.find("--model\nYOLOV8\n"), std::string::npos) << content;
+    EXPECT_NE(content.find("yolov8.toml"), std::string::npos) << content;
+
+    ::unsetenv("MORTRED_ARGV_FILE");
 }
 
 TEST_F(SupervisorTest, shutdown_is_ordered_and_complete) {

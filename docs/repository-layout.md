@@ -28,12 +28,12 @@ generated executables, configuration files, and documentation.
 ```text
 src/
 ├── apps/
-│   ├── common/              # shared app entry points: model_server_main, benchmark_runner
-│   ├── model_benchmark/     # per-model benchmark executables
-│   ├── server/              # model server executables
-│   ├── supervisor/          # control-plane daemon (REST API + embedded UI)
-│   ├── gateway/             # data-plane reverse proxy
-│   └── cli/                 # mortredctl operations CLI
+│   ├── common/              # shared app helpers: model_server_main, benchmark_runner
+│   ├── benchmark/           # family benchmark drivers used by the unified bench CLI
+│   ├── control/             # thin mains for gateway / supervisor / mortredctl
+│   ├── product_index.*      # catalog projection for --model
+│   ├── model_server_main.cpp
+│   └── model_benchmark_main.cpp
 ├── common/                  # shared utility library: base64, cv_utils, auth, parser...
 ├── factory/                 # model/server type-erased factory and registration headers
 ├── models/                  # model inference implementations
@@ -50,36 +50,20 @@ and must not be relied upon.
 
 | Executable | Source | Server config directory |
 |---|---|---|
-| `mortred-supervisor` | `src/apps/control/supervisor.cpp` (impl: `src/control/`) | environment / conf/mortred.toml |
-| `resnet_classification_server.out` | `src/apps/server/classification/resnet_classification_server.cpp` | `conf/server/classification/resnet/` |
-| `mobilenetv2_classification_server.out` | `src/apps/server/classification/mobilenetv2_classification_server.cpp` | `conf/server/classification/mobilenetv2/` |
-| `densenet_classification_server.out` | `src/apps/server/classification/densenet_classification_server.cpp` | `conf/server/classification/densenet/` |
-| `yolov5_detection_server.out` | `src/apps/server/object_detection/yolov5_detection_server.cpp` | `conf/server/object_detection/yolov5/` |
-| `yolov6_detection_server.out` | `src/apps/server/object_detection/yolov6_detection_server.cpp` | `conf/server/object_detection/yolov6/` |
-| `yolov7_detection_server.out` | `src/apps/server/object_detection/yolov7_detection_server.cpp` | `conf/server/object_detection/yolov7/` |
-| `yolov8_detection_server.out` | `src/apps/server/object_detection/yolov8_detection_server.cpp` | `conf/server/object_detection/yolov8/` |
-| `nanodet_detection_server.out` | `src/apps/server/object_detection/nanodet_detection_server.cpp` | `conf/server/object_detection/nano_det/` |
-| `centerface_detection_server.out` | `src/apps/server/object_detection/centerface_detection_server.cpp` | `conf/server/object_detection/center_face_det/` |
-| `libface_detection_server.out` | `src/apps/server/object_detection/libface_detection_server.cpp` | `conf/server/object_detection/libface_det/` |
-| `bisenetv2_segmentation_server.out` | `src/apps/server/scene_segmentation/bisenetv2_segmentation_server.cpp` | `conf/server/scene_segmentation/` |
-| `hrnet_segmentation_server.out` | `src/apps/server/scene_segmentation/hrnet_segmentation_server.cpp` | `conf/server/scene_segmentation/` |
-| `pphuman_segmentation_server.out` | `src/apps/server/scene_segmentation/pphuman_segmentation_server.cpp` | `conf/server/scene_segmentation/` |
-| `modnet_server.out` | `src/apps/server/matting/modnet_server.cpp` | `conf/server/matting/` |
-| `pp_matting_server.out` | `src/apps/server/matting/pp_matting_server.cpp` | `conf/server/matting/` |
-| `attentive_gan_derain_server.out` | `src/apps/server/enhancement/attentive_gan_derain_server.cpp` | `conf/server/enhancement/` |
-| `enlighten_gan_server.out` | `src/apps/server/enhancement/enlighten_gan_server.cpp` | `conf/server/enhancement/` |
-| `real_esrgan_server.out` | `src/apps/server/enhancement/real_esrgan_server.cpp` | `conf/server/enhancement/` |
-| `superpoint_fp_det_server.out` | `src/apps/server/feature_point/superpoint_fp_det_server.cpp` | `conf/server/feature_point/` |
-| `depth_anything_estimation_server.out` | `src/apps/server/mono_depth_estimation/depth_anything_estimation_server.cpp` | `conf/server/mono_depth_estimation/` |
-| `metric3d_estimation_server.out` | `src/apps/server/mono_depth_estimation/metric3d_estimation_server.cpp` | `conf/server/mono_depth_estimation/` |
-| `dbnet_text_region_detect_server.out` | `src/apps/server/ocr/dbnet_text_region_detect_server.cpp` | `conf/server/ocr/` |
+| `mortred-supervisor.out` | `src/apps/control/supervisor.cpp` (impl: `src/control/`) | environment / conf/mortred.toml |
+| `mortred-gateway.out` | `src/apps/control/gateway.cpp` (impl: `src/control/`) | conf/mortred.toml |
+| `mortredctl.out` | `src/apps/control/mortredctl.cpp` (impl: `src/control/`) | — |
+| `mortred-model-server.out` | `src/apps/model_server_main.cpp` | `conf/server/<task>/<model>/` (`--model <ID>`) |
+
+Identity is the factory catalog `model_section` (`YOLOV8`, `MOBILENETV2`, …).
+`mortred-model-server.out --list` prints the HTTP-capable ids.
 
 ### Benchmark/tool executables
 
-| Executable group | Source |
+| Executable | Source |
 |---|---|
-| `*_benchmark.out` | `src/apps/model_benchmark/` |
-| `mortred-supervisor` / `mortred-gateway` / `mortredctl` | `src/apps/control/` (impl: `src/control/`) |
+| `mortred-model-benchmark.out` | `src/apps/model_benchmark_main.cpp` |
+| `mortred-supervisor.out` / `mortred-gateway.out` / `mortredctl.out` | `src/apps/control/` (impl: `src/control/`) |
 
 > ONNX→TensorRT 引擎转换不再内置自研转换器，统一由外部 `trtexec`（TensorRT 官方 CLI）
 > 执行，驱动脚本为 `scripts/convert_trt_engines.sh`；`trtexec` 由
@@ -106,8 +90,9 @@ conf/
 ```
 
 Every server config should reference a model config through `model_config_file_path`.
-Every server config should be discoverable from the matching server executable via the
-supervisor/gateway catalog (`Catalog` in `src/control/`).
+Every server config should declare `model = "<catalog id>"` and
+`server_exe = "mortred-model-server.out"` so the supervisor/gateway catalog
+(`Catalog` in `src/control/`) can spawn `mortred-model-server.out --model <id>`.
 
 ## Stale artifacts policy
 

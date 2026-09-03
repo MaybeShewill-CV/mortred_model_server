@@ -161,13 +161,13 @@ cd $PROJECT_ROOT_DIR
 
 **Step 4:** 测试 MobileNetv2 基准测试工具
 
-至此你已经完成的项目的编译工作，可以开始测试体验项目提供的预训练模型了。所有的模型基准测试工具都被编译产出在 `$PROJECT_ROOT_DIR/_bin` 文件夹中且都被命名为 `xxx_benchmark.out`
+至此你已经完成的项目的编译工作，可以开始测试体验项目提供的预训练模型了。统一基准测试入口是 `$PROJECT_ROOT_DIR/_bin/mortred-model-benchmark.out`，用 `--model` 选择 catalog 里的模型。
 
-现在你可以通过如下方式来愉快的进行 `mobilenetv2` 图像分类基准测试
+现在你可以通过如下方式来进行 `mobilenetv2` 图像分类基准测试
 
 ```bash
 cd $PROJECT_ROOT_DIR/_bin
-./mobilenetv2_benchmark.out ../conf/model/classification/mobilenetv2/mobilenetv2_config.toml
+./mortred-model-benchmark.out --model MOBILENETV2 ../conf/model/classification/mobilenetv2/mobilenetv2_config.toml
 ```
 
 如果没有任何错误的话（应该不会有:dog:），你可以看到如下的测试结果，包含使用的模型，模型预测耗时、fps等信息
@@ -182,7 +182,7 @@ cd $PROJECT_ROOT_DIR/_bin
 
 ```bash
 cd $PROJECT_ROOT_DIR/_bin
-./mobilenetv2_classification_server.out ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.toml
+./mortred-model-server.out --model MOBILENETV2 ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.toml
 ```
 
 按照默认的配置文件（`conf/server/classification/mobilenetv2/mobilenetv2_server_config.toml`），服务端口为`9002`，`worker_nums=1` 个模型 worker 等待被调用。项目中含有一个简单的python客户端来测试该服务，使用方法如下
