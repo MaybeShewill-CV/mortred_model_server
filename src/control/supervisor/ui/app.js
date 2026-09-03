@@ -315,7 +315,7 @@ async function sendBatch() {
     if (state.batchAbort.signal.aborted) break;
     const f = state.files[i];
     const reqId = uid();
-    const body = JSON.stringify({ server_id: s.id, req_id: reqId, img_data: f.base64 });
+    const body = JSON.stringify({ server_id: s.id, req_id: reqId, images: [f.base64] });
     const t0 = performance.now();
     let result;
     try {
@@ -396,10 +396,23 @@ function addResultCard(server, input, result, reqId, elapsed) {
   box.prepend(card);
 }
 
+function unifiedPayload(data) {
+  if (!data || typeof data !== "object") return null;
+  if (Array.isArray(data.results) && data.results.length) return data.results[0].data;
+  return null;
+}
+
+function topScore(payload) {
+  if (!payload) return 0;
+  if (typeof payload.scores === "number") return payload.scores;
+  if (Array.isArray(payload.scores) && payload.scores.length) return Number(payload.scores[0]) || 0;
+  return 0;
+}
+
 function visualize(server, input, result) {
   const wrap = document.createElement("div");
   const data = result.data;
-  const payload = data && typeof data === "object" ? data.data : null;
+  const payload = unifiedPayload(data);
 
   if (!result.ok || !data || typeof data !== "object") {
     wrap.textContent = "请求失败或响应非 JSON：";
@@ -409,6 +422,7 @@ function visualize(server, input, result) {
   const cat = server.category;
   const base = document.createElement("div");
   const imgUrl = input.url;
+  const score = topScore(payload);
 
   if (cat === "classification") {
     base.innerHTML = `
@@ -418,8 +432,8 @@ function visualize(server, input, result) {
           <div class="label">预测类别</div>
           <div style="font-size:18px">${escapeHtml(payload && payload.category || "-")}</div>
           <div class="label">class_id: ${payload ? payload.class_id : "-"}</div>
-          <div class="label">score: ${payload ? payload.scores : "-"}</div>
-          <div class="score-bar"><div class="score-bar-fill" style="width:${Math.round((payload && payload.scores || 0) * 100)}%"></div></div>
+          <div class="label">score: ${payload ? score : "-"}</div>
+          <div class="score-bar"><div class="score-bar-fill" style="width:${Math.round(score * 100)}%"></div></div>
         </div></figure>
       </div>`;
   } else if (cat === "object_detection") {
