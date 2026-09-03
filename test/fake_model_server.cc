@@ -112,6 +112,12 @@ void handle_client(int fd, const std::string& mode) {
 
 int main(int argc, char** argv) {
     ::signal(SIGPIPE, SIG_IGN);
+    if (const char* dump = std::getenv("MORTRED_ARGV_FILE"); dump != nullptr && *dump != '\0') {
+        std::ofstream out(dump);
+        for (int i = 0; i < argc; ++i) {
+            out << argv[i] << '\n';
+        }
+    }
     std::map<std::string, std::string> cfg;
     int port = 0;
     std::string mode = "ready";
@@ -128,6 +134,8 @@ int main(int argc, char** argv) {
             exit_after_ms = std::atoi(argv[++i]);
         } else if (arg == "--exit-code" && i + 1 < argc) {
             exit_code = std::atoi(argv[++i]);
+        } else if (arg == "--model" && i + 1 < argc) {
+            ++i;
         } else if (!arg.empty() && arg[0] != '-') {
             cfg = parse_config(arg);
         }

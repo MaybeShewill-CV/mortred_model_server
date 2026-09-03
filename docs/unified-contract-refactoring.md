@@ -226,7 +226,7 @@ float thr = context.params->get_f32("score_threshold", _m_detection_params.score
 1. 模型类继承 `BackendCvModel<INPUT, OUTPUT>`，实现 `preprocess` / `postprocess` / `on_init`（参数从 `context.params` 读，缺省回落 TOML）
 2. 任务目录登记 entry：`{model_section, display_name, server_section, make_worker, fill_response, param_specs}`
 3. `conf/model/<task>/<m>/*.toml`：`[MODEL.backend]`（mnn/onnx/tensorrt）+ `[MODEL.params]`（默认值）
-4. `conf/server/<task>/<m>/*.toml`：端口/线程/worker_nums/server_uri/server_exe
+4. `conf/server/<task>/<m>/*.toml`：`model="<ID>"`、`server_exe="mortred-model-server.out"`、端口/线程/worker_nums/server_uri
 5. 走 4.5 再生成契约产物，提交
 
 ### 4.5 契约生成链与维护流程（M5 核心）

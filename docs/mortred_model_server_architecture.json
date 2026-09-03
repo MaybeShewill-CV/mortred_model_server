@@ -91,7 +91,7 @@
       "tag": "CvModelServer<OUT>",
       "sources": [
         { "path": "src/server/generic_cv_server.h", "label": "注册表驱动通用服务" },
-        { "path": "src/apps/server/object_detection/yolov8_detection_server.cpp", "label": "薄 main 实例" }
+        { "path": "src/apps/model_server_main.cpp", "label": "unified --model main" }
       ]
     },
     {

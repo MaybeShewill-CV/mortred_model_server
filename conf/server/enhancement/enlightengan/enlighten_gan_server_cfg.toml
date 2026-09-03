@@ -1,4 +1,5 @@
 [ENLIGHTEN_GAN_SERVER]
+model="ENLIGHTEN_GAN"
 # port
 port=9011
 # host
@@ -26,7 +27,7 @@ max_queue_depth=32
 # server url
 server_uri="/mortred_ai_server_v1/enhancement/enlighten_gan"
 # explicit server executable used by the web console catalog
-server_exe="enlighten_gan_server.out"
+server_exe="mortred-model-server.out"
 
 [ENLIGHTEN_GAN]
 model_config_file_path="../conf/model/enhancement/enlighten_gan/enlightengan.toml"

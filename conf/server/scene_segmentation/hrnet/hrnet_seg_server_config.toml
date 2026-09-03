@@ -1,4 +1,5 @@
 [HRNET_SERVER]
+model="HRNET"
 # port
 port=9071
 # host
@@ -26,7 +27,7 @@ max_queue_depth=32
 # server url
 server_uri="/mortred_ai_server_v1/scene_segmentation/hrnet"
 # explicit server executable used by the web console catalog
-server_exe="hrnet_segmentation_server.out"
+server_exe="mortred-model-server.out"
 
 [HRNET]
 model_config_file_path="../conf/model/scene_segmentation/hrnet/hrnetw48_ccd_fv_segmentation_cfg.toml"

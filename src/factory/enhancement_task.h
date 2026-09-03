@@ -58,18 +58,6 @@ inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::stri
     return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
 }
 
-inline std::unique_ptr<jinq::server::BaseAiServer> create_enlightengan_server(const std::string &server_name) {
-    return create_server("ENLIGHTEN_GAN", server_name);
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_attentivegan_derain_server(const std::string &server_name) {
-    return create_server("ATTENTIVE_GAN_DERAIN", server_name);
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_realesrgan_server(const std::string &server_name) {
-    return create_server("REAL_ESRGAN", server_name);
-}
-
 } // namespace enhancement
 } // namespace factory
 } // namespace jinq

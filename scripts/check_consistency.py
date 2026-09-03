@@ -4,9 +4,10 @@
 Verifies a few high-signal invariants:
 
 1. Every source path referenced in docs/repository-layout.md exists.
-2. Every server executable in docs/repository-layout.md has a matching source file.
+2. `docs/repository-layout.md` paths exist (unified `mortred-model-server.out` /
+   `mortred-model-benchmark.out` plus the control-plane binaries).
 3. If _bin exists, stale binaries listed in the layout policy are reported.
-4. Every conf/server/*.toml file has at least one matching server source directory.
+4. Every conf/server category directory contains at least one TOML config.
 5. Every conf/server/*.toml `model_config_file_path` points to an existing
    `.toml` file (the repo migrated model configs from .ini to .toml).
 6. Every conf/server/*.toml `server_uri` is covered by docs/openapi.json paths.
@@ -17,8 +18,9 @@ Verifies a few high-signal invariants:
 8. Every conf/server/*.toml follows the canonical two-section layout
    (`model_config_file_path` lives in the [MODEL] subtable, not the server
    section).
-9. Bidirectional `server_exe` <-> src/apps/server coverage, so the web
-supervisor/gateway catalog cannot silently miss or invent a server.
+9. Every `*_SERVER` section declares `model=` matching the non-`_SERVER` table,
+   `server_exe` is `mortred-model-server.out`, and the `model` set matches the
+   HTTP subset of the C++ factory catalogs.
 10. Every engine referenced by conf/model [*_TRT] sections is declared in
     conf/trt_engines.json, so the engine-regeneration script can never miss a
     config-required engine.
@@ -96,29 +98,16 @@ def check_layout_references() -> list[str]:
 
 
 def check_server_source_mapping() -> list[str]:
+    """conf/server categories must contain TOML configs (the unified server
+    binary covers every HTTP catalog id; there are no per-model sources)."""
     errors: list[str] = []
-    server_dir = ROOT / "src" / "apps" / "server"
-    if not server_dir.exists():
-        errors.append("src/apps/server is missing")
-        return errors
-
-    # Every top-level task directory should have at least one .cpp file.
-    for child in sorted(server_dir.iterdir()):
-        if child.is_dir() and not list(child.glob("*.cpp")):
-            errors.append(f"server task directory has no .cpp files: {child.relative_to(ROOT)}")
-
-    # Every conf/server subdirectory should have a corresponding server source directory.
     conf_server = ROOT / "conf" / "server"
-    if conf_server.exists():
-        for child in sorted(conf_server.iterdir()):
-            if child.is_dir():
-                # conf/server/scene_segmentation -> src/apps/server/scene_segmentation
-                src_dir = server_dir / child.name
-                if not src_dir.exists() and not list(child.glob("*.ini")) and not list(child.glob("*.toml")):
-                    # Some conf dirs contain nested model dirs; only report if no config at all.
-                    errors.append(
-                        f"conf/server/{child.name} has no matching src/apps/server/{child.name}"
-                    )
+    if not conf_server.exists():
+        errors.append("conf/server is missing")
+        return errors
+    for child in sorted(conf_server.iterdir()):
+        if child.is_dir() and not list(child.rglob("*.toml")):
+            errors.append(f"conf/server/{child.name} has no TOML configs")
     return errors
 
 
@@ -302,19 +291,31 @@ def check_server_config_structure() -> list[str]:
     return errors
 
 
-def check_server_exe_mapping() -> list[str]:
-    """Bidirectional conf/server `server_exe` <-> src/apps/server coverage.
+_HTTP_ENTRY_RE = re.compile(
+    r'\{\s*"([A-Z][A-Z0-9_]*)"\s*,\s*"[^"]*"\s*,\s*"[A-Z][A-Z0-9_]*_SERVER"'
+)
+_UNIFIED_SERVER_EXE = "mortred-model-server.out"
 
-    Every server config must declare an existing server executable and every
-    server executable must be declared by exactly one config, so the web
-    supervisor/gateway catalog can never silently miss or invent a server.
-    """
+
+def parse_cpp_http_models() -> set[str]:
+    """HTTP catalog ids: CvModelEntry rows that carry a *_SERVER section."""
+    ids: set[str] = set()
+    factory = ROOT / "src" / "factory"
+    if not factory.exists():
+        return ids
+    for header in sorted(factory.glob("*_task.h")):
+        text = header.read_text(encoding="utf-8")
+        ids.update(_HTTP_ENTRY_RE.findall(text))
+    return ids
+
+
+def check_server_exe_mapping() -> list[str]:
+    """conf/server `model=` <-> C++ HTTP catalog, unified server_exe only."""
     errors: list[str] = []
-    server_src = ROOT / "src" / "apps" / "server"
     conf_server = ROOT / "conf" / "server"
-    if not server_src.exists() or not conf_server.exists():
+    if not conf_server.exists():
         return errors
-    exe_sources = {p.stem + ".out" for p in server_src.rglob("*.cpp")}
+    catalog_ids = parse_cpp_http_models()
     declared: set[str] = set()
     for cfg in sorted(conf_server.rglob("*.toml")):
         rel = cfg.relative_to(ROOT)
@@ -323,25 +324,34 @@ def check_server_exe_mapping() -> list[str]:
         except (ValueError, OSError):
             continue
         server_sections = [sec for sec in table if sec.endswith("_SERVER")]
+        model_sections = [sec for sec in table if not sec.endswith("_SERVER")]
         if len(server_sections) != 1:
             continue
         server_kv = table[server_sections[0]]
         if not isinstance(server_kv, dict):
             continue
-        exe = server_kv.get("server_exe")
-        if not exe:
-            errors.append(f"{rel}: missing server_exe in [{server_sections[0]}]")
+        model = server_kv.get("model")
+        if not model:
+            errors.append(f"{rel}: missing model in [{server_sections[0]}]")
             continue
-        declared.add(exe)
-        if exe not in exe_sources:
+        if len(model_sections) == 1 and model != model_sections[0]:
             errors.append(
-                f"{rel}: server_exe {exe} has no matching source under src/apps/server"
+                f"{rel}: model={model!r} must equal non-_SERVER table [{model_sections[0]}]"
             )
-    missing = sorted(exe_sources - declared)
-    if missing:
-        errors.append(
-            "server executables without a conf/server mapping: " + ", ".join(missing)
-        )
+        exe = server_kv.get("server_exe", _UNIFIED_SERVER_EXE)
+        if exe != _UNIFIED_SERVER_EXE:
+            errors.append(
+                f"{rel}: server_exe must be {_UNIFIED_SERVER_EXE}, got {exe}"
+            )
+        declared.add(model)
+        if catalog_ids and model not in catalog_ids:
+            errors.append(f"{rel}: model={model} is not an HTTP catalog id")
+    if catalog_ids:
+        missing = sorted(catalog_ids - declared)
+        if missing:
+            errors.append(
+                "HTTP catalog ids without a conf/server mapping: " + ", ".join(missing)
+            )
     return errors
 
 

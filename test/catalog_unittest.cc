@@ -157,6 +157,45 @@ TEST_F(CatalogTest, profile_any_appears_in_both) {
     EXPECT_NE(cpu.find("any_model_server"), nullptr);
 }
 
+TEST_F(CatalogTest, parses_model_identity_and_default_exe) {
+    write_server("yolov8.toml",
+                 "[YOLOV8_DETECTION_SERVER]\n"
+                 "model=\"YOLOV8\"\n"
+                 "port=39010\n"
+                 "host=\"localhost\"\n"
+                 "server_uri=\"/mortred_ai_server_v1/obj_detection/yolov8\"\n"
+                 "\n"
+                 "[YOLOV8]\n"
+                 "model_config_file_path=\"../conf/model/object_detection/yolov8/yolov8_config.toml\"\n");
+    Catalog catalog;
+    std::string err;
+    ASSERT_TRUE(catalog.init(root_.string(), &err)) << err;
+    ASSERT_EQ(catalog.entries().size(), 1u);
+    const auto* e = catalog.find("YOLOV8");
+    ASSERT_NE(e, nullptr);
+    EXPECT_EQ(e->model, "YOLOV8");
+    EXPECT_EQ(e->id, "YOLOV8");
+    EXPECT_EQ(e->exe, "mortred-model-server.out");
+    EXPECT_EQ(catalog.find("mortred-model-server"), nullptr);
+}
+
+TEST_F(CatalogTest, model_must_match_non_server_table) {
+    write_server("bad.toml",
+                 "[YOLOV8_DETECTION_SERVER]\n"
+                 "model=\"MOBILENETV2\"\n"
+                 "port=39011\n"
+                 "host=\"localhost\"\n"
+                 "server_uri=\"/bad\"\n"
+                 "server_exe=\"mortred-model-server.out\"\n"
+                 "\n"
+                 "[YOLOV8]\n"
+                 "model_config_file_path=\"x.toml\"\n");
+    Catalog catalog;
+    std::string err;
+    EXPECT_FALSE(catalog.init(root_.string(), &err));
+    EXPECT_NE(err.find("must equal the non-_SERVER table name"), std::string::npos) << err;
+}
+
 TEST_F(CatalogTest, profile_unknown_falls_back_to_gpu) {
     write_server("fake.toml", kValidServer);
     std::string err;

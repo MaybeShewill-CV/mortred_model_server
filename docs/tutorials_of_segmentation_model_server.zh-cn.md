@@ -7,11 +7,11 @@
 `图像分割服务器代码段`
 ![strat_a_bisenetv2_server](../resources/images/start_a_bisenetv2_server.png)
 
-编译好的可执行文件存放在 `$PROJECT_ROOT/_bin/bisenetv2_segmentation_server.out`。运行
+统一入口在 `$PROJECT_ROOT/_bin/mortred-model-server.out`。运行
 
 ```bash
 cd $PROJECT_ROOT/_bin
-./bisenetv2_segmentation_server.out ../conf/server/scene_segmentation/bisenetv2/bisenetv2_server_config.toml
+./mortred-model-server.out --model BISENETV2 ../conf/server/scene_segmentation/bisenetv2/bisenetv2_server_config.toml
 ```
 
 正常启动后，服务会运行在服务器配置（`conf/server/<task>/<model>/*.toml`）中 `port` 指定的端口，`worker_nums` 个模型实例会被创建并占用 GPU 资源。仓库自带配置默认 `worker_nums=1`，你可以按 GPU 显存情况适当调整。

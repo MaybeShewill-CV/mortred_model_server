@@ -18,12 +18,13 @@ namespace control {
  * One managed model server, derived from its conf/server TOML file.
  */
 struct ServerEntry {
-    std::string id;        // unique id (exe name without .out)
+    std::string id;        // unique id: catalog model_section, or exe stem for test fakes
     std::string name;      // display name (== id)
     std::string category;  // conf/server sub-directory (classification / ...)
     std::string exe;       // executable file name in the bin dir
     std::string config;    // absolute config path
     std::string host;      // declared host (supervisor always binds children loopback)
+    std::string model;     // catalog id; empty for legacy fake servers
     int port = 0;
     std::string uri;       // server_uri, the gateway routing key
     std::string type;      // "image" or "chat"
@@ -31,11 +32,15 @@ struct ServerEntry {
                                    // cpu catalog is explicitly curated)
 };
 
+inline constexpr const char* kUnifiedServerExe = "mortred-model-server.out";
+
 /***
  * Server registry built from conf/server TOML configs. Single source of
  * truth shared by the supervisor and the gateway: every [*_SERVER] section
- * must declare server_exe + port + server_uri. Load fails on duplicate ids,
- * duplicate ports or duplicate routing URIs.
+ * must declare port + server_uri. Product servers identify themselves with
+ * `model = "YOLOV8"` (id = model, default exe mortred-model-server.out).
+ * Test fakes omit `model` and keep an explicit server_exe; id is the exe stem.
+ * Load fails on duplicate ids, duplicate ports or duplicate routing URIs.
  */
 class Catalog {
   public:

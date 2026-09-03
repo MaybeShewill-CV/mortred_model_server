@@ -7,11 +7,11 @@ It's very quick to start a enhancement server. Main code are showed below
 `Enhancement Server Code Snappit`
 ![strat_a_derain_server](../resources/images/start_a_derain_server.png)
 
-The executable binary file was built in $PROJECT_ROOT/_bin/attentive_gan_derain_server.out Simply run
+The unified server binary is `$PROJECT_ROOT/_bin/mortred-model-server.out`. Simply run
 
 ```bash
 cd $PROJECT_ROOT/_bin
-./attentive_gan_derain_server.out ../conf/server/enhancement/attentive_gan_derain/attentive_gan_server_cfg.toml
+./mortred-model-server.out --model ATTENTIVE_GAN_DERAIN ../conf/server/enhancement/attentive_gan_derain/attentive_gan_server_cfg.toml
 ```
 
 When the server starts successfully at the `port` configured in your server config (`conf/server/<task>/<model>/*.toml`), `worker_nums` workers will be spawned and occupy your GPU resources. The shipped configs default to `worker_nums=1`; you may enlarge it if you have enough GPU memory.

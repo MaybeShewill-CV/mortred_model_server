@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "factory/cv_catalog.h"
+#include "factory/model_catalog.h"
 #include "models/scene_segmentation/bisenetv2.h"
 #include "models/scene_segmentation/hrnet_segmentation.h"
 #include "models/scene_segmentation/msocrnet.h"
@@ -66,16 +67,13 @@ inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::stri
     return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
 }
 
-inline std::unique_ptr<jinq::server::BaseAiServer> create_bisenetv2_server(const std::string &server_name) {
-    return create_server("BISENETV2", server_name);
-}
+using BenchEntry = jinq::factory::model_catalog::ModelCatalogEntry<ImageInput, Output>;
 
-inline std::unique_ptr<jinq::server::BaseAiServer> create_pphuman_seg_server(const std::string &server_name) {
-    return create_server("PPHUMAN_SEG", server_name);
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_hrnet_server(const std::string &server_name) {
-    return create_server("HRNET", server_name);
+inline const std::vector<BenchEntry> &bench_catalog() {
+    static const std::vector<BenchEntry> entries = {
+        BenchEntry{"MSOCRNET", "MsOcrNet scene segmentation", &create_msocrnet_segmentor<ImageInput, Output>},
+    };
+    return entries;
 }
 
 } // namespace scene_segmentation

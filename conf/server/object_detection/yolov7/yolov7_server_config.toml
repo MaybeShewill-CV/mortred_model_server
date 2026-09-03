@@ -1,4 +1,5 @@
 [YOLOV7_DETECTION_SERVER]
+model="YOLOV7"
 # port
 port=9055
 # host
@@ -26,7 +27,7 @@ max_queue_depth=32
 # server url
 server_uri="/mortred_ai_server_v1/obj_detection/yolov7"
 # explicit server executable used by the web console catalog
-server_exe="yolov7_detection_server.out"
+server_exe="mortred-model-server.out"
 
 [YOLOV7]
 model_config_file_path="../conf/model/object_detection/yolov7/yolov7_config.toml"

@@ -47,14 +47,6 @@ inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::stri
     return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
 }
 
-inline std::unique_ptr<jinq::server::BaseAiServer> create_pp_matting_server(const std::string &server_name) {
-    return create_server("PP_MATTING", server_name);
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_modnet_server(const std::string &server_name) {
-    return create_server("MODNET", server_name);
-}
-
 } // namespace matting
 } // namespace factory
 } // namespace jinq

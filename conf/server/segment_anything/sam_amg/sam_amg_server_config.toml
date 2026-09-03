@@ -1,4 +1,5 @@
 [SAM_AMG_SERVER]
+model="SAM_AMG"
 port=9074
 host="localhost"
 max_connections=100
@@ -8,7 +9,7 @@ compute_threads=-1
 handler_threads=10
 worker_nums=1
 server_uri="/mortred_ai_server_v1/sam/amg"
-server_exe="sam_amg_server.out"
+server_exe="mortred-model-server.out"
 async_enabled=true
 async_timeout=600000
 async_max_queue=8

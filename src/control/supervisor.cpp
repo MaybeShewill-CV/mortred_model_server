@@ -264,6 +264,7 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err) {
     const bool is_gateway = child->is_gateway;
     const std::string exe_name = child->is_gateway ? "mortred-gateway.out" : child->entry.exe;
     const std::string config_arg = child->is_gateway ? std::string() : child->entry.config;
+    const std::string model_arg = child->is_gateway ? std::string() : child->entry.model;
 
     const pid_t pid = ::fork();
     if (pid < 0) {
@@ -317,6 +318,10 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err) {
         }
         if (config_arg.empty()) {
             ::execl(exe_path.c_str(), exe_name.c_str(), static_cast<char*>(nullptr));
+        } else if (!model_arg.empty()) {
+            ::setenv("MORTRED_MODEL", model_arg.c_str(), 1);
+            ::execl(exe_path.c_str(), exe_name.c_str(), "--model", model_arg.c_str(),
+                    config_arg.c_str(), static_cast<char*>(nullptr));
         } else {
             ::execl(exe_path.c_str(), exe_name.c_str(), config_arg.c_str(),
                     static_cast<char*>(nullptr));

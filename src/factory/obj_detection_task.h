@@ -124,34 +124,6 @@ inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::stri
     return jinq::factory::cv_catalog::create_server(face_catalog(), model_section, server_name);
 }
 
-inline std::unique_ptr<jinq::server::BaseAiServer> create_yolov5_det_server(const std::string &server_name) {
-    return jinq::factory::cv_catalog::create_server(catalog(), "YOLOV5", server_name);
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_yolov6_det_server(const std::string &server_name) {
-    return jinq::factory::cv_catalog::create_server(catalog(), "YOLOV6", server_name);
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_nanodet_det_server(const std::string &server_name) {
-    return jinq::factory::cv_catalog::create_server(catalog(), "NANODET", server_name);
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_yolov7_det_server(const std::string &server_name) {
-    return jinq::factory::cv_catalog::create_server(catalog(), "YOLOV7", server_name);
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_yolov8_det_server(const std::string &server_name) {
-    return jinq::factory::cv_catalog::create_server(catalog(), "YOLOV8", server_name);
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_libface_det_server(const std::string &server_name) {
-    return jinq::factory::cv_catalog::create_server(face_catalog(), "LIBFACE", server_name);
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_centerface_det_server(const std::string &server_name) {
-    return jinq::factory::cv_catalog::create_server(face_catalog(), "CENTER_FACE", server_name);
-}
-
 } // namespace object_detection
 } // namespace factory
 } // namespace jinq

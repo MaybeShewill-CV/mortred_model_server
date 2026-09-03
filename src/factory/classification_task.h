@@ -69,18 +69,6 @@ inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::stri
     return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
 }
 
-inline std::unique_ptr<jinq::server::BaseAiServer> create_mobilenetv2_cls_server(const std::string &server_name) {
-    return create_server("MOBILENETV2", server_name);
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_resnet_cls_server(const std::string &server_name) {
-    return create_server("RESNET", server_name);
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_densenet_cls_server(const std::string &server_name) {
-    return create_server("DENSENET", server_name);
-}
-
 } // namespace classification
 } // namespace factory
 } // namespace jinq

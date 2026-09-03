@@ -48,14 +48,6 @@ inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::stri
     return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
 }
 
-inline std::unique_ptr<jinq::server::BaseAiServer> create_metric3d_estimation_server(const std::string &server_name) {
-    return create_server("METRIC3D", server_name);
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_depth_anything_estimation_server(const std::string &server_name) {
-    return create_server("DEPTH_ANYTHING", server_name);
-}
-
 } // namespace mono_depth_estimation
 } // namespace factory
 } // namespace jinq

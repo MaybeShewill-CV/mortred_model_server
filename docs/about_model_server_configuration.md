@@ -29,7 +29,7 @@ Use mobilenetv2's model server configuration for example
 
 For other web service configuration you may find help at [workflow_docs_about_global_configuration](https://github.com/sogou/workflow/blob/f7979e46f3b1f9c0052adb9e2ffa959730dcda6e/docs/en/about-config.md)
 
-And if you want to adjust some of those configuration params you may do it by modifying your server's `init` function. For example global configuration for mobilenetv2 classification server can be modified at [../src/server/classification/mobilenetv2_server.cpp#L197-L202](../src/server/classification/mobilenetv2_server.cpp)
+Tune listen/timeout/worker settings in the matching `conf/server/**/*.toml`. Workflow-level defaults are applied once in [src/server/base_server_impl.h](../src/server/base_server_impl.h) for every model served by `mortred-model-server.out --model <ID>`.
 
 `Init Workflow Global Configuration Code Snappit`
 ![benchmakr_code_snappit](../resources/images/workflow_global_config.png)

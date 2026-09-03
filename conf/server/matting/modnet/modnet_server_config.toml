@@ -1,4 +1,5 @@
 [MODNET_SERVER]
+model="MODNET"
 # port
 port=9030
 # host
@@ -26,7 +27,7 @@ max_queue_depth=32
 # server url
 server_uri="/mortred_ai_server_v1/matting/modnet"
 # explicit server executable used by the web console catalog
-server_exe="modnet_server.out"
+server_exe="mortred-model-server.out"
 
 [MODNET]
 model_config_file_path="../conf/model/matting/modnet/modnet_config.toml"

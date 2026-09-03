@@ -29,9 +29,7 @@
 
 其余一些有关网络服务的全局配置可以参考 [workflow_docs_about_global_configuration](https://github.com/sogou/workflow/blob/f7979e46f3b1f9c0052adb9e2ffa959730dcda6e/docs/about-config.md)
 
-And if you want to adjust some of those configuration params you may do it by modifying your server's `init` function. For example global configuration for mobilenetv2 classification server can be modified at [../src/server/classification/mobilenetv2_server.cpp#L197-L202](../src/server/classification/mobilenetv2_server.cpp)
-
-如果你想修改一些网络服务的全局参数，你可以在server的 `init` 初始化函数中进行修改. 例如 [../src/server/classification/mobilenetv2_server.cpp#L197-L202](../src/server/classification/mobilenetv2_server.cpp)
+Listen / timeout / worker 参数写在对应的 `conf/server/**/*.toml` 里。Workflow 级默认值在 [src/server/base_server_impl.h](../src/server/base_server_impl.h) 里统一设置，由 `mortred-model-server.out --model <ID>` 服务所有模型。
 
 `workflow全局配置参数代码段`
 ![benchmakr_code_snappit](../resources/images/workflow_global_config.png)

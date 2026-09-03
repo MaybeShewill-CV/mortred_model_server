@@ -90,8 +90,8 @@ inline const std::vector<AmgEntry> &amg_catalog() {
     return entries;
 }
 
-inline std::unique_ptr<jinq::server::BaseAiServer> create_amg_server(const std::string &server_name) {
-    return jinq::factory::cv_catalog::create_server(amg_catalog(), "SAM_AMG", server_name);
+inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::string &model_section, const std::string &server_name) {
+    return jinq::factory::cv_catalog::create_server(amg_catalog(), model_section, server_name);
 }
 
 } // namespace segment_anything

@@ -7,11 +7,11 @@ It's very quick to start a feature point server. Main code are showed below
 `Feature Point Server Code Snappit`
 ![strat_a_superpoint_server](../resources/images/start_a_superpoint_server.png)
 
-The executable binary file was built in $PROJECT_ROOT/_bin/superpoint_fp_det_server.out Simply run
+The unified server binary is `$PROJECT_ROOT/_bin/mortred-model-server.out`. Simply run
 
 ```bash
 cd $PROJECT_ROOT/_bin
-./superpoint_fp_det_server.out ../conf/server/feature_point/superpoint/superpoint_server_cfg.toml
+./mortred-model-server.out --model SUPERPOINT ../conf/server/feature_point/superpoint/superpoint_server_cfg.toml
 ```
 
 When the server starts successfully at the `port` configured in your server config (`conf/server/<task>/<model>/*.toml`), `worker_nums` workers will be spawned and occupy your GPU resources. The shipped configs default to `worker_nums=1`; you may enlarge it if you have enough GPU memory.
@@ -30,7 +30,7 @@ python server/test_server.py --server superpoint --mode single
 
 ## Unique Tips For Feature Point Model Python Client
 
-Most of the feature's model output is set of feature points. A single feature point consist of location and descriptor. To reduce the response's content size the server won't output the feature points' descriptor you may uncomment the code in [./src/server/feature_point/superpoint_fp_server.cpp#L170-L172](../src/server/feature_point/superpoint_fp_server.cpp) and recompile to make server output feature points' descriptor. Server's response is a json like
+Most of the feature's model output is a set of feature points. A single feature point consists of location and descriptor. The JSON payload is built by [`fill_feature_points`](../src/server/response_serializers.h) and already includes both. Server's response is a json like
 
 ```python
 resp = {

@@ -1,4 +1,5 @@
 [DINOV2_FEATURE_EMBEDDING_SERVER]
+model="DINOV2"
 # port
 port=9080
 # host
@@ -29,7 +30,7 @@ max_batch_delay_ms=5
 # server url
 server_uri="/mortred_ai_server_v1/feature_embedding/dinov2"
 # explicit server executable used by the web console catalog
-server_exe="dinov2_feature_embedding_server.out"
+server_exe="mortred-model-server.out"
 
 [DINOV2]
 model_config_file_path="../conf/model/feature_embedding/dinov2/dinov2_vitb14_config.toml"

@@ -124,22 +124,6 @@ inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::stri
     return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
 }
 
-inline std::unique_ptr<jinq::server::BaseAiServer> create_ddpm_server(const std::string &server_name) {
-    return create_server("DDPM", server_name);
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_ddim_server(const std::string &server_name) {
-    return create_server("DDIM", server_name);
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_cls_cond_ddim_server(const std::string &server_name) {
-    return create_server("CLS_COND_DDIM", server_name);
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_ldm_server(const std::string &server_name) {
-    return create_server("LDM", server_name);
-}
-
 } // namespace diffusion
 } // namespace factory
 } // namespace jinq

@@ -1,4 +1,5 @@
 [DDPM_SERVER]
+model="DDPM"
 port=9070
 host="localhost"
 max_connections=100
@@ -8,7 +9,7 @@ compute_threads=-1
 handler_threads=10
 worker_nums=1
 server_uri="/mortred_ai_server_v1/diffusion/ddpm"
-server_exe="ddpm_server.out"
+server_exe="mortred-model-server.out"
 # long-task async: DDPM sampling takes seconds to minutes
 async_enabled=true
 async_timeout=600000
