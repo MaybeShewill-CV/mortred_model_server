@@ -7,6 +7,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Supervisor Web UI, `/api/v1/infer`, `/api/v1/jobs` and pipelines now speak
+  the unified `images[]` / `results[].data` envelope. They previously still
+  sent the removed `img_data` field and read the legacy `{data: ...}`
+  response, so the built-in test proxy and pipelines could not succeed
+  against current model servers.
+
 ### Changed
 - **Unified request/response contract (breaking)**: model endpoints now speak
   the single envelope `{"req_id", "images": [<base64>...], "params", "options"}`

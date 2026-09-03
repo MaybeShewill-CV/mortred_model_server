@@ -236,7 +236,8 @@ int run_cli(int argc, char** argv) {
         }
         const std::string b64 = jinq::common::base64::encode(
             reinterpret_cast<const unsigned char*>(bytes.data()), bytes.size());
-        const std::string body = "{\"server_id\":\"" + id + "\",\"img_data\":\"" + b64 + "\"}";
+        const std::string body =
+            "{\"server_id\":\"" + id + "\",\"images\":[\"" + b64 + "\"]}";
         r = http_request(opt, "POST", "/api/v1/infer", body);
     } else {
         std::fprintf(stderr, "unknown command: %s\n", cmd.c_str());

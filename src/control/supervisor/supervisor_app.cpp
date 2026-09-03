@@ -47,6 +47,7 @@
 #include "common/request_size_limit.h"
 #include "control/catalog.h"
 #include "control/control_config.h"
+#include "control/management_envelope.h"
 #include "control/mini_toml.h"
 #include "control/supervisor.h"
 
@@ -403,14 +404,19 @@ void handle_metrics(WFHttpTask* task) {
 }
 
 void handle_infer(WFHttpTask* task) {
-    // management-plane test proxy: {server_id, img_data} -> model server.
-    // Production traffic goes through mortred-gateway, not this endpoint.
+    // management-plane test proxy: {server_id, images[], ...} -> model server
+    // unified envelope. Production traffic goes through mortred-gateway.
     const std::string body = protocol::HttpUtil::decode_chunked_body(task->get_req());
     rapidjson::Document doc;
     doc.Parse(body.c_str());
     if (doc.HasParseError() || !doc.IsObject() || !doc.HasMember("server_id") ||
         !doc["server_id"].IsString()) {
         reply_json(task, 400, json_error("body must contain string field server_id"));
+        return;
+    }
+    const auto envelope = mortred::control::copy_request_envelope(doc);
+    if (!envelope.ok) {
+        reply_json(task, envelope.http_status, json_error(envelope.message));
         return;
     }
     const std::string id = doc["server_id"].GetString();
@@ -459,7 +465,7 @@ void handle_infer(WFHttpTask* task) {
         const std::string auth = "Bearer " + internal_token;
         client->get_req()->add_header_pair("Authorization", auth.c_str());
     }
-    client->get_req()->append_output_body(body.data(), body.size());
+    client->get_req()->append_output_body(envelope.json.data(), envelope.json.size());
     client->set_send_timeout(-1);
     client->set_receive_timeout(g_cfg.gateway.upstream_recv_timeout_ms);
     series_of(task)->push_back(client);
@@ -569,17 +575,12 @@ void handle_jobs(WFHttpTask* task, const std::string& path, const std::string& f
             return;
         }
         const std::string model = doc["model"].GetString();
-        // strip the "model" field and forward the rest to the model server
-        doc.EraseMember("model");
-        rapidjson::StringBuffer buf;
-        rapidjson::Writer<rapidjson::StringBuffer> w(buf);
-        doc.Accept(w);
-        task->get_req()->append_output_body("");  // clear
-        // rebuild the request body without the model field
-        const std::string forward_body = buf.GetString();
-        auto* client_req_body = new std::string(forward_body);
-        proxy_to_model_jobs_with_body(task, model, "/jobs", "POST", *client_req_body);
-        delete client_req_body;
+        const auto envelope = mortred::control::copy_request_envelope(doc);
+        if (!envelope.ok) {
+            reply_json(task, envelope.http_status, json_error(envelope.message));
+            return;
+        }
+        proxy_to_model_jobs_with_body(task, model, "/jobs", "POST", envelope.json);
         return;
     }
 
@@ -773,21 +774,19 @@ void handle_pipelines(WFHttpTask* task) {
             reply_json(task, 400, json_error("each step must have 'model' string field"));
             return;
         }
-        std::string input_key = "img_data";
+        std::string input_key;
         if (step.HasMember("input") && step["input"].IsString()) {
             input_key = step["input"].GetString();
         }
         steps.emplace_back(step["model"].GetString(), input_key);
     }
 
-    // extract the initial input fields (everything except 'steps')
-    rapidjson::Document initial_input;
-    initial_input.CopyFrom(doc, initial_input.GetAllocator());
-    initial_input.EraseMember("steps");
-    rapidjson::StringBuffer buf;
-    rapidjson::Writer<rapidjson::StringBuffer> w(buf);
-    initial_input.Accept(w);
-    std::string current_input = buf.GetString();
+    const auto envelope = mortred::control::copy_request_envelope(doc);
+    if (!envelope.ok) {
+        reply_json(task, envelope.http_status, json_error(envelope.message));
+        return;
+    }
+    const std::string current_input = envelope.json;
 
     // register the pipeline job
     {
@@ -806,32 +805,15 @@ void handle_pipelines(WFHttpTask* task) {
                 job->current_step = step_idx + 1;
             }
 
-            // if input_key starts with "prev_output.", extract from previous result
-            if (input_key.rfind("prev_output.", 0) == 0) {
-                const std::string field = input_key.substr(12);
-                // parse the previous result and extract the field
-                rapidjson::Document prev;
-                prev.Parse(current_body.c_str());
-                if (!prev.HasParseError() && prev.IsObject() && prev.HasMember("data") &&
-                    prev["data"].IsObject() && prev["data"].HasMember(field.c_str())) {
-                    // rebuild the input with the extracted field as img_data
-                    rapidjson::Document next;
-                    next.SetObject();
-                    auto& a = next.GetAllocator();
-                    next.AddMember("img_data",
-                                   rapidjson::Value(prev["data"][field.c_str()], a), a);
-                    rapidjson::StringBuffer nb;
-                    rapidjson::Writer<rapidjson::StringBuffer> nw(nb);
-                    next.Accept(nw);
-                    current_body = nb.GetString();
-                } else {
-                    std::lock_guard<std::mutex> lock(g_pipeline_mu);
-                    job->state = "failed";
-                    job->error = "step " + std::to_string(step_idx + 1) +
-                                 ": cannot extract '" + field + "' from previous output";
-                    return;
-                }
+            const auto step_input =
+                mortred::control::apply_pipeline_step_input(current_body, input_key);
+            if (!step_input.ok) {
+                std::lock_guard<std::mutex> lock(g_pipeline_mu);
+                job->state = "failed";
+                job->error = "step " + std::to_string(step_idx + 1) + ": " + step_input.message;
+                return;
             }
+            current_body = step_input.json;
 
             bool ok = false;
             std::string err;
