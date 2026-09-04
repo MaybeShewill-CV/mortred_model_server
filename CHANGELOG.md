@@ -7,6 +7,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Gateway routes `POST /v1/models/{id}/infer` and `/v1/models/{id}/jobs*` to
+  the model's loopback port. Job `Location` / `poll_url` / `result_url` are
+  rewritten onto that prefix. The legacy `{server_uri}` POST path still works.
+
 ### Removed
 - Unused helpers left by catalog and envelope migrations: diffusion
   `create_*_sampler` factories, dead `CvUtils` overlay/base64/tensor-copy
@@ -31,8 +36,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 - Supervisor Web UI and `mortredctl infer` POST the data-plane envelope to
-  the gateway (`server_uri` on `:8080`) instead of `/api/v1/infer`. The
-  gateway accepts `MORTRED_API_TOKEN` and API keys with `admin` (or `all` /
+  the gateway (`/v1/models/{id}/infer` on `:8080`) instead of `/api/v1/infer`.
+  The gateway accepts `MORTRED_API_TOKEN` and API keys with `admin` (or `all` /
   `inference`) scope, and reflects CORS for the supervisor UI origin.
   `/api/v1/infer` on the supervisor is unchanged in this change.
   `common/response_envelope.h` (encode/decode + field names). Data-plane

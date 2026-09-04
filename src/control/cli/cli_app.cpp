@@ -266,19 +266,18 @@ int run_cli(int argc, char** argv) {
         }
         rapidjson::Document doc;
         doc.Parse(cat.body.c_str());
-        std::string uri;
+        bool found = false;
         if (!doc.HasParseError() && doc.IsObject() && doc.HasMember("servers") &&
             doc["servers"].IsArray()) {
             for (const auto& server : doc["servers"].GetArray()) {
                 if (server.IsObject() && server.HasMember("id") && server["id"].IsString() &&
-                    id == server["id"].GetString() && server.HasMember("uri") &&
-                    server["uri"].IsString()) {
-                    uri = server["uri"].GetString();
+                    id == server["id"].GetString()) {
+                    found = true;
                     break;
                 }
             }
         }
-        if (uri.empty()) {
+        if (!found) {
             std::fprintf(stderr, "unknown server id in catalog: %s\n", id.c_str());
             return 1;
         }
@@ -287,7 +286,7 @@ int run_cli(int argc, char** argv) {
         const std::string body = jinq::common::envelope::encode(envelope);
         Options gateway_opt = opt;
         gateway_opt.addr = opt.gateway_addr;
-        r = http_request(gateway_opt, "POST", uri, body);
+        r = http_request(gateway_opt, "POST", "/v1/models/" + id + "/infer", body);
     } else {
         std::fprintf(stderr, "unknown command: %s\n", cmd.c_str());
         usage();

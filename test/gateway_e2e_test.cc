@@ -169,7 +169,9 @@ class GatewayE2ETest : public ::testing::Test {
         model_port_ = 38500 + (::getpid() % 10000);
         gateway_port_ = model_port_ + 1;
         std::ofstream out(root_ / "conf" / "server" / "fake.toml");
-        out << "[FAKE_SERVER]\n"
+        out << "[FAKE]\n"
+            << "[FAKE_SERVER]\n"
+            << "model=\"FAKE\"\n"
             << "port=" << model_port_ << "\n"
             << "server_uri=\"/mortred_ai_server_v1/test/fake\"\n"
             << "server_exe=\"fake_model_server.out\"\n";
@@ -248,6 +250,83 @@ TEST_F(GatewayE2ETest, model_route_forwards_to_upstream) {
                                 "{\"images\":[\"aGk=\"]}", "ext-token");
     EXPECT_EQ(r.status, 200);
     EXPECT_NE(r.body.find("\"fake\":true"), std::string::npos) << r.body;
+}
+
+TEST_F(GatewayE2ETest, prefixed_infer_matches_legacy_uri) {
+    const auto r = send_request(gateway_port_, "POST", "/v1/models/FAKE/infer",
+                                "{\"images\":[\"aGk=\"]}", "ext-token");
+    EXPECT_EQ(r.status, 200);
+    EXPECT_NE(r.body.find("\"fake\":true"), std::string::npos) << r.body;
+    ASSERT_NE(r.headers.find("x-mortred-model"), r.headers.end()) << r.body;
+    EXPECT_EQ(r.headers.at("x-mortred-model"), "FAKE");
+}
+
+TEST_F(GatewayE2ETest, unknown_model_id_is_404) {
+    const auto r =
+        send_request(gateway_port_, "POST", "/v1/models/NOPE/infer", "{}", "ext-token");
+    EXPECT_EQ(r.status, 404);
+    EXPECT_NE(r.body.find("\"status\":63"), std::string::npos) << r.body;
+}
+
+TEST_F(GatewayE2ETest, prefixed_infer_get_is_405) {
+    const auto r = send_request(gateway_port_, "GET", "/v1/models/FAKE/infer", "", "ext-token");
+    EXPECT_EQ(r.status, 405);
+    ASSERT_NE(r.headers.find("allow"), r.headers.end()) << r.body;
+    EXPECT_EQ(r.headers.at("allow"), "POST");
+}
+
+TEST_F(GatewayE2ETest, legacy_uri_get_is_405) {
+    const auto r =
+        send_request(gateway_port_, "GET", "/mortred_ai_server_v1/test/fake", "", "ext-token");
+    EXPECT_EQ(r.status, 405);
+    ASSERT_NE(r.headers.find("allow"), r.headers.end()) << r.body;
+    EXPECT_EQ(r.headers.at("allow"), "POST");
+}
+
+TEST_F(GatewayE2ETest, jobs_submit_rewrites_location_and_urls) {
+    const auto r =
+        send_request(gateway_port_, "POST", "/v1/models/FAKE/jobs", "{}", "ext-token");
+    EXPECT_EQ(r.status, 202) << r.body;
+    ASSERT_NE(r.headers.find("location"), r.headers.end()) << r.body;
+    EXPECT_EQ(r.headers.at("location"), "/v1/models/FAKE/jobs/job_fake_1");
+    EXPECT_NE(r.body.find("\"poll_url\":\"/v1/models/FAKE/jobs/job_fake_1\""), std::string::npos)
+        << r.body;
+    EXPECT_NE(r.body.find("\"result_url\":\"/v1/models/FAKE/jobs/job_fake_1/result\""),
+              std::string::npos)
+        << r.body;
+    EXPECT_NE(r.body.find("\"upstream_path\":\"/jobs\""), std::string::npos) << r.body;
+}
+
+TEST_F(GatewayE2ETest, jobs_get_forwards_to_upstream_jobs) {
+    const auto r =
+        send_request(gateway_port_, "GET", "/v1/models/FAKE/jobs/job_fake_1", "", "ext-token");
+    EXPECT_EQ(r.status, 200) << r.body;
+    EXPECT_NE(r.body.find("\"upstream_path\":\"/jobs/job_fake_1\""), std::string::npos) << r.body;
+}
+
+TEST_F(GatewayE2ETest, jobs_wait_forwards_query) {
+    const auto r = send_request(gateway_port_, "GET",
+                                "/v1/models/FAKE/jobs/job_fake_1/wait?timeout=5", "", "ext-token");
+    EXPECT_EQ(r.status, 200) << r.body;
+    EXPECT_NE(r.body.find("\"upstream_path\":\"/jobs/job_fake_1/wait\""), std::string::npos)
+        << r.body;
+    EXPECT_NE(r.body.find("\"upstream_query\":\"timeout=5\""), std::string::npos) << r.body;
+}
+
+TEST_F(GatewayE2ETest, jobs_result_get) {
+    const auto r = send_request(gateway_port_, "GET", "/v1/models/FAKE/jobs/job_fake_1/result", "",
+                                "ext-token");
+    EXPECT_EQ(r.status, 200) << r.body;
+    EXPECT_NE(r.body.find("\"upstream_path\":\"/jobs/job_fake_1/result\""), std::string::npos)
+        << r.body;
+}
+
+TEST_F(GatewayE2ETest, jobs_post_on_job_id_is_405) {
+    const auto r =
+        send_request(gateway_port_, "POST", "/v1/models/FAKE/jobs/job_fake_1", "{}", "ext-token");
+    EXPECT_EQ(r.status, 405);
+    ASSERT_NE(r.headers.find("allow"), r.headers.end()) << r.body;
+    EXPECT_EQ(r.headers.at("allow"), "GET");
 }
 
 TEST_F(GatewayE2ETest, cors_preflight_allows_configured_origin) {
@@ -350,7 +429,9 @@ class GatewayAuthTest : public ::testing::Test {
         model_port_ = 49000 + seq_++ * 2;
         gateway_port_ = model_port_ + 1;
         std::ofstream out(root_ / "conf" / "server" / "fake.toml");
-        out << "[FAKE_SERVER]\n"
+        out << "[FAKE]\n"
+            << "[FAKE_SERVER]\n"
+            << "model=\"FAKE\"\n"
             << "port=" << model_port_ << "\n"
             << "server_uri=\"" << kAuthRoute << "\"\n"
             << "server_exe=\"fake_model_server.out\"\n";
