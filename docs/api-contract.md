@@ -16,13 +16,13 @@ loopback-only and must not be exposed; TLS must be terminated by a reverse
 proxy in front of the gateway.
 
 The supervisor (`:8787`) exposes the management REST API under `/api/v1/`
-(health/catalog/status/lifecycle/logs/metrics) and the embedded web UI;
+(health/catalog/status/lifecycle/logs/metrics/keys) and the embedded web UI;
 `mortredctl` is its CLI client. **Inference smoke tests** (the Web UI send
 button and `mortredctl infer`) POST the data-plane envelope to
 `POST /v1/models/{id}/infer` on the gateway, with the same Bearer token as
-the management API (`MORTRED_API_TOKEN`). The supervisor `/api/v1/infer`
-proxy remains for compatibility in this release but is no longer the UI/CLI
-path. Legacy `{server_uri}` on `:8080` is still accepted.
+the management API (`MORTRED_API_TOKEN`). The supervisor does not proxy
+inference, jobs, or pipelines; clients call the gateway. Legacy `{server_uri}`
+on `:8080` is still accepted.
 
 All model servers follow a unified HTTP JSON contract. The authoritative machine-readable
 description is `docs/openapi.json` (served by every model server at `GET /openapi.json`);

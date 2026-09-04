@@ -9,8 +9,8 @@
 // gateway/supervisor *_app.cpp (compiled into those executables), so it does
 // not pull Workflow into the workflow-free control shared library.
 //
-// Management APIs keep {ok, error}. Proxy-path local failures (gateway routing
-// / auth, supervisor infer/jobs/pipelines before upstream) use UnifiedResponse.
+// Management APIs keep {ok, error}. Gateway routing / auth local failures
+// use UnifiedResponse.
 
 #ifndef MORTRED_CONTROL_HTTP_REPLY_H
 #define MORTRED_CONTROL_HTTP_REPLY_H
