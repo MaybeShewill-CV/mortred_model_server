@@ -1,5 +1,7 @@
 # CPU profile variant of yolov8_config.toml: ONNX Runtime CPU provider
 # instead of the TRT engine (engines are hardware/TRT-version specific).
+# Golden / GPU smoke still use yolov8_config.toml (tensorrt). Hosted CPU
+# detection coverage is NanoDet MNN, not this file.
 [YOLOV8]
 [YOLOV8.backend]
 type = "onnx"

@@ -242,6 +242,7 @@
       "hf_path": "feature_point/superpoint/superpoint_120x160.mnn",
       "on_hf": true,
       "profiles": [
+        "cpu",
         "gpu"
       ]
     },
@@ -702,6 +703,7 @@
       "hf_path": "object_detection/nanodet/nanodet_plus_m_1x5.mnn",
       "on_hf": true,
       "profiles": [
+        "cpu",
         "gpu"
       ]
     },
@@ -903,6 +905,7 @@
       "hf_path": "ocr/db_text_detector/db_model_large.mnn",
       "on_hf": true,
       "profiles": [
+        "cpu",
         "gpu"
       ]
     },
@@ -1273,6 +1276,7 @@
       "hf_path": "scene_segmentation/bisenetv2/bisenetv2_cityscapes.mnn",
       "on_hf": true,
       "profiles": [
+        "cpu",
         "gpu"
       ]
     },

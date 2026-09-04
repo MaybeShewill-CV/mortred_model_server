@@ -1,0 +1,127 @@
+{
+  "hosted": {
+    "max_bytes": 157286400,
+    "min_families": 4,
+    "cases": [
+      {
+        "gtest": "model_golden.mobilenetv2_classification",
+        "family": "classification",
+        "catalog_id": "MOBILENETV2",
+        "config": "conf/model/classification/mobilenetv2/mobilenetv2_config.toml",
+        "weights": [
+          "weights/classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn"
+        ]
+      },
+      {
+        "gtest": "model_golden.nanodet_detection",
+        "family": "object_detection",
+        "catalog_id": "NANODET",
+        "config": "conf/model/object_detection/nano_det/nanodet_config.toml",
+        "weights": [
+          "weights/object_detection/nanodet/nanodet_plus_m_1x5.mnn"
+        ]
+      },
+      {
+        "gtest": "model_golden.dbnet_text_detection",
+        "family": "ocr",
+        "catalog_id": "DBNET",
+        "config": "conf/model/ocr/db_text_detector/dbnet_config.toml",
+        "weights": [
+          "weights/ocr/db_text_detector/db_model_large.mnn"
+        ]
+      },
+      {
+        "gtest": "model_golden.superpoint_feature_point",
+        "family": "feature_point",
+        "catalog_id": "SUPERPOINT",
+        "config": "conf/model/feature_point/superpoint/superpoint_config.toml",
+        "weights": [
+          "weights/feature_point/superpoint/superpoint_120x160.mnn"
+        ]
+      },
+      {
+        "gtest": "model_golden.bisenetv2_segmentation",
+        "family": "scene_segmentation",
+        "catalog_id": "BISENETV2",
+        "config": "conf/model/scene_segmentation/bisenetv2/bisenetv2_config.toml",
+        "weights": [
+          "weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.mnn"
+        ]
+      }
+    ]
+  },
+  "gpu_smoke": {
+    "cases": [
+      {
+        "gtest": "model_golden.yolov5_detection",
+        "family": "object_detection",
+        "catalog_id": "YOLOV5"
+      },
+      {
+        "gtest": "model_golden.yolov8_detection",
+        "family": "object_detection",
+        "catalog_id": "YOLOV8"
+      },
+      {
+        "gtest": "model_golden.yolov8_mixed_size_batch_matches_single_runs",
+        "family": "object_detection",
+        "catalog_id": "YOLOV8"
+      },
+      {
+        "gtest": "model_golden.nanodet_detection",
+        "family": "object_detection",
+        "catalog_id": "NANODET"
+      },
+      {
+        "gtest": "model_golden.centerface_detection",
+        "family": "face_detection",
+        "catalog_id": "CENTER_FACE"
+      },
+      {
+        "gtest": "model_golden.dbnet_text_detection",
+        "family": "ocr",
+        "catalog_id": "DBNET"
+      },
+      {
+        "gtest": "model_golden.mobilenetv2_classification",
+        "family": "classification",
+        "catalog_id": "MOBILENETV2"
+      },
+      {
+        "gtest": "model_golden.fastsam_segmentation",
+        "family": "sam",
+        "catalog_id": null
+      }
+    ]
+  },
+  "catalog_tiers": {
+    "MOBILENETV2": "hosted",
+    "NANODET": "hosted",
+    "DBNET": "hosted",
+    "SUPERPOINT": "hosted",
+    "BISENETV2": "hosted",
+    "YOLOV5": "gpu-smoke",
+    "YOLOV8": "gpu-smoke",
+    "CENTER_FACE": "gpu-smoke",
+    "RESNET": "nightly",
+    "DENSENET": "nightly",
+    "YOLOV6": "nightly",
+    "YOLOV7": "nightly",
+    "LIBFACE": "nightly",
+    "PPHUMAN_SEG": "nightly",
+    "HRNET": "nightly",
+    "PP_MATTING": "nightly",
+    "MODNET": "nightly",
+    "DINOV2": "nightly",
+    "ENLIGHTEN_GAN": "nightly",
+    "ATTENTIVE_GAN_DERAIN": "nightly",
+    "REAL_ESRGAN": "nightly",
+    "SAM_AMG": "nightly",
+    "METRIC3D": "nightly",
+    "DEPTH_ANYTHING": "nightly",
+    "DDPM": "nightly",
+    "DDIM": "nightly",
+    "CLS_COND_DDIM": "nightly",
+    "LDM": "nightly"
+  }
+}

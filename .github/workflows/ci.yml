@@ -336,9 +336,9 @@ jobs:
   # ---------------------------------------------------------------------------
   # Job B3: cpu-profile build gate - the ONLY continuous compile coverage for
   # the cpu deployment profile (TRT compiled out), AND the fork-visible
-  # inference liveness check: Hugging Face mobilenetv2.mnn (~14 MB) is fetched
-  # by sha256 and MNN CPU session + one golden must run (not skip). This job
-  # does not prove TensorRT, CUDA, or the rest of the model zoo.
+  # inference liveness check: sha256-locked HF MNN files from
+  # conf/ci_hosted_golden.json (classification, detection, OCR, keypoints,
+  # segmentation). Skip is fail. This job does not prove TensorRT or CUDA.
   # ---------------------------------------------------------------------------
   cpu-profile:
     name: cpu profile (full build, no GPU)
@@ -378,17 +378,23 @@ jobs:
         if: steps.cache-3rdparty.outputs.cache-hit == 'true'
         run: ./scripts/install_deps.sh --cpu --check
 
-      - name: Cache hosted MNN smoke weight
+      - name: Cache hosted CPU golden weights
         uses: actions/cache@v6
         with:
-          path: weights/classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn
-          key: cpu-mv2-${{ hashFiles('conf/weights_manifest.json') }}
+          path: weights
+          key: hosted-golden-${{ hashFiles('conf/ci_hosted_golden.json', 'conf/weights_manifest.json') }}
 
-      - name: Fetch mobilenetv2 MNN (sha256 locked, fail-closed)
+      - name: Fetch hosted CPU golden weights (sha256 locked, fail-closed)
         run: |
           set -euo pipefail
-          python3 scripts/fetch_weights.py --only classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn
-          python3 scripts/fetch_weights.py --check --only classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn
+          python3 scripts/check_hosted_golden.py
+          only_args=()
+          while IFS= read -r token; do
+            [ -n "$token" ] || continue
+            only_args+=(--only "$token")
+          done < <(python3 scripts/check_hosted_golden.py --print-only-substrings)
+          python3 scripts/fetch_weights.py "${only_args[@]}"
+          python3 scripts/fetch_weights.py --check "${only_args[@]}"
 
       - name: Configure (full build, cpu profile)
         run: >
@@ -405,20 +411,21 @@ jobs:
           LD_LIBRARY_PATH="${{ github.workspace }}/build-cpu/lib" CTEST_OUTPUT_ON_FAILURE=1 \
             cmake --build build-cpu --target check -j"$(nproc)"
 
-      - name: MNN CPU session + mobilenetv2 golden (fail-closed)
+      - name: MNN CPU session + hosted golden set (fail-closed)
         run: |
           set -euo pipefail
           export LD_LIBRARY_PATH="${{ github.workspace }}/build-cpu/lib:${{ github.workspace }}/3rd_party/libs"
           export MORTRED_CI_REQUIRE_WEIGHTS=1
           mkdir -p "${RUNNER_TEMP}/gtest"
+          HOSTED_FILTER="$(python3 scripts/check_hosted_golden.py --print-gtest-filter)"
           ./build-cpu/bin/backend_unittest \
             --gtest_filter='BackendTensor.*:BackendConfig.*:BackendSession.*:MnnSession.*' \
             --gtest_output=xml:"${RUNNER_TEMP}/gtest/backend-cpu.xml"
           python3 scripts/ci_assert_gtest_xml.py "${RUNNER_TEMP}/gtest/backend-cpu.xml"
           ./build-cpu/bin/model_golden_test \
-            --gtest_filter='model_golden.mobilenetv2_classification' \
-            --gtest_output=xml:"${RUNNER_TEMP}/gtest/golden-mv2.xml"
-          python3 scripts/ci_assert_gtest_xml.py "${RUNNER_TEMP}/gtest/golden-mv2.xml"
+            --gtest_filter="${HOSTED_FILTER}" \
+            --gtest_output=xml:"${RUNNER_TEMP}/gtest/golden-hosted.xml"
+          python3 scripts/ci_assert_gtest_xml.py "${RUNNER_TEMP}/gtest/golden-hosted.xml"
 
       - name: Contract sync gate (C++ catalogs -> dump -> OpenAPI)
         run: |
@@ -535,7 +542,8 @@ jobs:
           done
           python3 -m py_compile \
             scripts/fetch_weights.py scripts/gen_weights_manifest.py \
-            scripts/check_consistency.py scripts/gen_openapi.py scripts/repo_toml.py \
+            scripts/check_consistency.py scripts/check_hosted_golden.py \
+            scripts/gen_openapi.py scripts/repo_toml.py \
             scripts/ci_assert_gtest_xml.py
           python3 scripts/ci_assert_gtest_xml.py --self-test
 
@@ -547,7 +555,8 @@ jobs:
           for f in ['conf/trt_engines.json',
                     'conf/trt_profiles/lightglue_extractor.json',
                     'conf/trt_profiles/lightglue_matcher.json',
-                    'conf/weights_manifest.json']:
+                    'conf/weights_manifest.json',
+                    'conf/ci_hosted_golden.json']:
               json.load(open(f, encoding='utf-8-sig'))
               print(f'[ok] {f}')
           import yaml
@@ -861,7 +870,9 @@ jobs:
           ./build-gpu/bin/model_golden_test \
             --gtest_filter="${neg}" \
             --gtest_output=xml:"${RUNNER_TEMP}/gtest/gpu-rest.xml"
-          python3 scripts/ci_assert_gtest_xml.py "${RUNNER_TEMP}/gtest/gpu-rest.xml" --allow-skips
+          python3 scripts/ci_assert_gtest_xml.py "${RUNNER_TEMP}/gtest/gpu-rest.xml" \
+            --allow-skips \
+            --inventory-out "${RUNNER_TEMP}/gtest/gpu-rest-skips.json"
           ctest --test-dir build-gpu \
             -R '^model_lifecycle_unittest$|^backend_unittest$|^gateway_e2e_test$' \
             --output-on-failure
@@ -873,6 +884,8 @@ jobs:
           name: gpu-full-regression-log-${{ github.run_number }}
           path: |
             build-gpu/Testing/Temporary/LastTest.log
+            ${{ runner.temp }}/gtest/gpu-rest.xml
+            ${{ runner.temp }}/gtest/gpu-rest-skips.json
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
@@ -894,7 +907,7 @@ jobs:
           gpu='${{ needs.gpu-pr-gate.result }}'
           echo "cpu-profile=${cpu} gpu-pr-gate=${gpu}"
           if [ "${cpu}" != "success" ]; then
-            echo "::error::cpu-profile must succeed (fork and maintainer MNN CPU liveness)" >&2
+            echo "::error::cpu-profile must succeed (fork and maintainer hosted CPU goldens)" >&2
             exit 1
           fi
           if [ "${gpu}" = "success" ] || [ "${gpu}" = "skipped" ]; then

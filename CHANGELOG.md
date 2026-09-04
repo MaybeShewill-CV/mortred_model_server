@@ -8,10 +8,12 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
-- Hosted `cpu-profile` fetches sha256-locked `mobilenetv2.mnn` from Hugging Face
-  and fail-closes an MNN CPU session plus one golden (`MORTRED_CI_REQUIRE_WEIGHTS`,
-  `scripts/ci_assert_gtest_xml.py`). That is the fork-visible proof an engine
-  still runs; it is not TensorRT or the model zoo.
+- Hosted `cpu-profile` fail-closes a multi-family MNN CPU golden set from
+  `conf/ci_hosted_golden.json` (classification, NanoDet, DBNet, SuperPoint,
+  BiSeNetV2): sha256-locked HF fetch, `MORTRED_CI_REQUIRE_WEIGHTS`, XML
+  `skipped=0`. GPU smoke and TensorRT are still maintainer-only. Nightly
+  remaining goldens write a skip-inventory artifact. HTTP catalog ids must
+  declare a CI tier (`hosted` / `gpu-smoke` / `nightly`).
 - Caddy reverse-proxy example (`deploy/caddy/Caddyfile`) as the supported TLS
   front for loopback gateway/supervisor. `mortredctl doctor` prints warnings
   (never fails) for a non-loopback listen, a token shorter than 32 characters,

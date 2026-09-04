@@ -1,7 +1,8 @@
 # Inference CI: what each path is allowed to claim
 
 Weights are **not** in git. GitHub holds code, `conf/weights_manifest.json`
-(path + sha256), and `test/golden/` expectations. Bytes live on Hugging Face
+(path + sha256), `conf/ci_hosted_golden.json` (which goldens which path must
+run), and `test/golden/` expectations. Bytes live on Hugging Face
 (`MaybeShewill-CV/mortred_model_server`) and, for CUDA/TensorRT, on the
 maintainer GPU runner at `/opt/mortred-cache/weights`.
 
@@ -10,10 +11,10 @@ contribution path.” Use the table.
 
 | Path | Runner | Green means | Does **not** mean |
 |---|---|---|---|
-| Fork PR | GitHub `ubuntu-22.04` (`cpu-profile`) | cpu profile compiled; output contracts passed; **MNN CPU `run()` on mobilenetv2** (HF, sha256 locked, skipped=0) | TensorRT, CUDA, full zoo, 5 backends |
+| Fork PR | GitHub `ubuntu-22.04` (`cpu-profile`) | cpu profile compiled; output contracts passed; **MNN CPU goldens in `conf/ci_hosted_golden.json` hosted set** (sha256 locked, skipped=0): classification, detection, OCR, keypoints, segmentation | TensorRT, CUDA, YOLOv8 engine, full zoo, ORT-CUDA |
 | Same-repo PR / push `main`, **no** `MORTRED_HAS_GPU_RUNNER` | GitHub hosted only | Same as fork PR. GPU jobs are **skipped**, not queued | TensorRT / CUDA goldens ran |
 | Same-repo PR / push `main`, variable `true` | Hosted + self-hosted GPU | Fork claims **plus** 8 golden cases, skipped=0 | Nightly zoo or cross-backend allclose |
-| Schedule / `workflow_dispatch` + variable `true` | GPU runner (`gpu-nightly-full`) | Smoke-8 fail-closed; remaining goldens may skip **if** reported in the XML inventory | Bit-exact MNN/ONNX/TRT |
+| Schedule / `workflow_dispatch` + variable `true` | GPU runner (`gpu-nightly-full`) | Smoke-8 fail-closed; remaining goldens may skip **if** listed in the skip-inventory artifact | Bit-exact MNN/ONNX/TRT |
 
 The required GitHub check should be **`inference paths`** (job `inference-paths`),
 not `gpu golden smoke` by itself. GPU jobs skip when the repository variable
@@ -21,6 +22,12 @@ not `gpu golden smoke` by itself. GPU jobs skip when the repository variable
 fork PRs. The wrapper treats that skip as success only when `cpu-profile`
 succeeded. Do not set `inference paths` required while GPU jobs are still
 *queued* waiting for a missing runner.
+
+Changing `src/models/backend/trt_session.cpp` (or any TensorRT-only path) is
+**not** proven on a fork PR. Maintainer PRs need `MORTRED_HAS_GPU_RUNNER=true`
+so `gpu-pr-gate` runs. Hosted CPU goldens use `device=cpu` via
+`force_cpu_backend` and only `mnn`/`onnx` configs; `yolov8_config.toml`
+(`type=tensorrt`) stays on the GPU smoke list.
 
 ## Enable maintainer GPU jobs
 
@@ -35,14 +42,28 @@ an explicit flag:
 
 ## Hosted fork liveness (`cpu-profile`)
 
-1. Cache + `scripts/fetch_weights.py --only classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn`
-   (stdlib urllib if `requests` / `huggingface_hub` are absent).
-2. `--check` against the manifest sha256 (mismatch fails the job).
-3. `MORTRED_CI_REQUIRE_WEIGHTS=1` on `backend_unittest` (`MnnSession` + config
-   tests) and `model_golden.mobilenetv2_classification`.
-4. `scripts/ci_assert_gtest_xml.py` rejects zero tests or any skip.
+Source of truth: `conf/ci_hosted_golden.json`. `scripts/check_hosted_golden.py`
+(also invoked from `scripts/check_consistency.py`) rejects a set that is not
+on Hugging Face, not tagged `cpu`, or that points at a TensorRT engine.
+
+1. Cache `weights/` keyed by that JSON + `conf/weights_manifest.json`.
+2. `scripts/fetch_weights.py --only …` for each hosted weight (stdlib urllib
+   if `requests` / `huggingface_hub` are absent).
+3. `--check` against the manifest sha256 (mismatch fails the job).
+4. `MORTRED_CI_REQUIRE_WEIGHTS=1` on `backend_unittest` (`MnnSession` + config
+   tests) and the hosted gtest filter from `--print-gtest-filter`.
+5. `scripts/ci_assert_gtest_xml.py` rejects zero tests or any skip.
+
+The earlier `cmake --build --target check` step still allows skip-as-pass for
+the rest of the zoo (local-style). Only the explicit hosted step is
+fail-closed.
 
 Local developers without weights keep `GTEST_SKIP` (env unset).
+
+YOLOv8 HTTP serving still uses `conf/model/object_detection/yolov8/yolov8_config.toml`
+(TensorRT). Hosted detection coverage is **NanoDet MNN**, not that engine.
+`yolov8_cpu_config.toml` is the CPU deploy variant and is not the golden
+config.
 
 ## Maintainer GPU smoke (`gpu-pr-gate`)
 
@@ -52,7 +73,8 @@ Runs only when **all** of these hold:
 - `push` to `main`, or a `pull_request` whose **head repo is this repository**
   (not a fork).
 
-Eight cases (`MORTRED_GPU_SMOKE_FILTER` in `.github/workflows/ci.yml`):
+Eight cases (`gpu_smoke.cases` in `conf/ci_hosted_golden.json`, must match
+`MORTRED_GPU_SMOKE_FILTER` in `.github/workflows/ci.yml`):
 
 | Case | Family |
 |---|---|
@@ -80,11 +102,26 @@ follow-up, not this gate.
 Same `MORTRED_HAS_GPU_RUNNER=true` gate as the PR smoke (otherwise the
 schedule would queue for 120 minutes). Smoke-8 is fail-closed. The rest of
 the committed golden zoo runs with `--allow-skips` so an incomplete cache
-prints an inventory instead of a fake all-green. `model_lifecycle_unittest`,
-`backend_unittest`, and `gateway_e2e_test` still run via ctest.
+prints an inventory instead of a fake all-green. The skip list is written to
+`gpu-rest-skips.json` and uploaded with the nightly log artifact.
+`model_lifecycle_unittest`, `backend_unittest`, and `gateway_e2e_test` still
+run via ctest.
 
 Workflow `concurrency` includes `github.event_name` so a push to `main` does
 not cancel a running schedule.
+
+## Catalog CI tiers
+
+Every HTTP catalog id in `src/factory/*_task.h` must appear in
+`catalog_tiers` inside `conf/ci_hosted_golden.json`:
+
+| Tier | Meaning |
+|---|---|
+| `hosted` | Fail-closed on GitHub-hosted `cpu-profile` (fork-visible) |
+| `gpu-smoke` | Fail-closed on maintainer GPU PR gate; not claimed on forks |
+| `nightly` | Allowed to skip on PR; exercised on `gpu-nightly-full` when weights exist |
+
+Adding an HTTP model without a tier fails `python3 scripts/check_consistency.py`.
 
 ## Self-hosted runner layout
 
