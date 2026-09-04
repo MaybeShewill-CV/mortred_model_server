@@ -331,16 +331,15 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Job B3: cpu-profile build gate - the ONLY continuous compile coverage for
-  # the cpu deployment profile (TRT compiled out). Runs on a GPU-less runner:
-  # install_deps.sh --cpu builds MNN-CPU/ORT-CPU/workflow into 3rd_party
-  # (cached), then a full MORTRED_BUILD_PROFILE=cpu build + test run.
-  # Without this job the conditional-compilation path silently rots.
+  # the cpu deployment profile (TRT compiled out), AND the fork-visible
+  # inference liveness check: Hugging Face mobilenetv2.mnn (~14 MB) is fetched
+  # by sha256 and MNN CPU session + one golden must run (not skip). This job
+  # does not prove TensorRT, CUDA, or the rest of the model zoo.
   # ---------------------------------------------------------------------------
   cpu-profile:
     name: cpu profile (full build, no GPU)
     runs-on: ubuntu-22.04
     timeout-minutes: 90
-    needs: tests
     steps:
       - uses: actions/checkout@v7
 
@@ -375,6 +374,18 @@ jobs:
         if: steps.cache-3rdparty.outputs.cache-hit == 'true'
         run: ./scripts/install_deps.sh --cpu --check
 
+      - name: Cache hosted MNN smoke weight
+        uses: actions/cache@v6
+        with:
+          path: weights/classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn
+          key: cpu-mv2-${{ hashFiles('conf/weights_manifest.json') }}
+
+      - name: Fetch mobilenetv2 MNN (sha256 locked, fail-closed)
+        run: |
+          set -euo pipefail
+          python3 scripts/fetch_weights.py --only classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn
+          python3 scripts/fetch_weights.py --check --only classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn
+
       - name: Configure (full build, cpu profile)
         run: >
           cmake -B build-cpu
@@ -389,6 +400,21 @@ jobs:
         run: |
           LD_LIBRARY_PATH="${{ github.workspace }}/build-cpu/lib" CTEST_OUTPUT_ON_FAILURE=1 \
             cmake --build build-cpu --target check -j"$(nproc)"
+
+      - name: MNN CPU session + mobilenetv2 golden (fail-closed)
+        run: |
+          set -euo pipefail
+          export LD_LIBRARY_PATH="${{ github.workspace }}/build-cpu/lib:${{ github.workspace }}/3rd_party/libs"
+          export MORTRED_CI_REQUIRE_WEIGHTS=1
+          mkdir -p "${RUNNER_TEMP}/gtest"
+          ./build-cpu/bin/backend_unittest \
+            --gtest_filter='BackendTensor.*:BackendConfig.*:BackendSession.*:MnnSession.*' \
+            --gtest_output=xml:"${RUNNER_TEMP}/gtest/backend-cpu.xml"
+          python3 scripts/ci_assert_gtest_xml.py "${RUNNER_TEMP}/gtest/backend-cpu.xml"
+          ./build-cpu/bin/model_golden_test \
+            --gtest_filter='model_golden.mobilenetv2_classification' \
+            --gtest_output=xml:"${RUNNER_TEMP}/gtest/golden-mv2.xml"
+          python3 scripts/ci_assert_gtest_xml.py "${RUNNER_TEMP}/gtest/golden-mv2.xml"
 
       - name: Contract sync gate (C++ catalogs -> dump -> OpenAPI)
         run: |

@@ -193,7 +193,11 @@ TEST(BackendSession, UnknownBackendAndMissingFileFail) {
     err.clear();
     EXPECT_EQ(InferenceSession::create(make_config("tensorrt", "weights/not/exist.engine"), &err),
               nullptr);
+#ifdef MORTRED_HAS_TRT
     EXPECT_NE(err.find("not exist"), std::string::npos) << err;
+#else
+    EXPECT_NE(err.find("not compiled"), std::string::npos) << err;
+#endif
 }
 
 TEST(MnnSession, InitAndRunMobilenetv2) {
@@ -274,6 +278,7 @@ TEST(OrtSession, InitAndRunDdpmUnet) {
     EXPECT_EQ(session->run(bad_inputs, outputs), StatusCode::MODEL_RUN_SESSION_FAILED);
 }
 
+#ifdef MORTRED_HAS_TRT
 TEST(TrtSession, ResolvesLightglueDynamicOutputs) {
     if (!file_exists(kLightglueExtractor) || !file_exists(kFeatureImage)) {
         MORTRED_SKIP_OR_FAIL_WEIGHTS("lightglue weights or test image not available");
@@ -373,6 +378,7 @@ TEST(TrtSession, InitAndRunYolov8) {
     bad_dtype.front().tensor = Tensor::make<int32_t>(concrete_shape);
     EXPECT_EQ(session->run(bad_dtype, outputs), StatusCode::MODEL_RUN_SESSION_FAILED);
 }
+#endif  // MORTRED_HAS_TRT
 
 TEST(MultiBackend, CoexistInOneProcess) {
     if (!file_exists(kMnnModel) || !file_exists(kOnnxModel)) {
@@ -407,6 +413,7 @@ TEST(MultiBackend, CoexistInOneProcess) {
     EXPECT_EQ(ort_session->run(ort_inputs, outputs), StatusCode::OK);
 
     if (file_exists(kTrtModel)) {
+#ifdef MORTRED_HAS_TRT
         auto trt_session = InferenceSession::create(make_config("tensorrt", kTrtModel, "cuda"), &err);
         if (trt_session != nullptr) {
             const auto& trt_input = trt_session->inputs().front();
@@ -427,5 +434,6 @@ TEST(MultiBackend, CoexistInOneProcess) {
         } else {
             std::cout << "trt unavailable in coexistence test: " << err << std::endl;
         }
+#endif
     }
 }

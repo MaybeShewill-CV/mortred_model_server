@@ -11,6 +11,7 @@ skipping files that already exist with a matching sha256 (resumable).
 Usage (run from the repo root):
   python3 scripts/fetch_weights.py                    # download all missing weights
   python3 scripts/fetch_weights.py --only yolov8      # only files whose path contains yolov8
+  python3 scripts/fetch_weights.py --only a.mnn --only b.onnx   # repeatable --only (OR)
   python3 scripts/fetch_weights.py --check            # only verify existing files, no download
   python3 scripts/fetch_weights.py --dry-run          # print what would be downloaded
   python3 scripts/fetch_weights.py --manifest FILE    # custom manifest (default conf/weights_manifest.json)
@@ -65,7 +66,8 @@ def hf_path_of(item: dict) -> str:
 
 
 def download_file(url: str, dst: Path) -> None:
-    # prefer huggingface_hub (resumable/multithreaded), fall back to requests
+    # prefer huggingface_hub (resumable/multithreaded), then requests, then
+    # stdlib urllib so GitHub-hosted cpu-profile does not need pip.
     try:
         import huggingface_hub  # noqa: F401
         from huggingface_hub import hf_hub_download
@@ -82,14 +84,28 @@ def download_file(url: str, dst: Path) -> None:
         return
     except ImportError:
         pass
-    import requests
+    try:
+        import requests
 
-    with requests.get(url, stream=True, timeout=120) as r:
-        r.raise_for_status()
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        with open(dst, "wb") as f:
-            for chunk in r.iter_content(chunk_size=1024 * 1024):
-                f.write(chunk)
+        with requests.get(url, stream=True, timeout=120) as r:
+            r.raise_for_status()
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            with open(dst, "wb") as f:
+                for chunk in r.iter_content(chunk_size=1024 * 1024):
+                    f.write(chunk)
+        return
+    except ImportError:
+        pass
+    import urllib.request
+
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    request = urllib.request.Request(url, headers={"User-Agent": "mortred-fetch-weights"})
+    with urllib.request.urlopen(request, timeout=120) as response, open(dst, "wb") as out:
+        while True:
+            chunk = response.read(1024 * 1024)
+            if not chunk:
+                break
+            out.write(chunk)
 
 
 def is_safe_weights_rel(rel: str) -> bool:
@@ -108,7 +124,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="only verify existing files, no download")
     parser.add_argument("--dry-run", action="store_true", help="only print what would be downloaded")
-    parser.add_argument("--only", type=str, default="", help="only process files whose path contains this substring")
+    parser.add_argument(
+        "--only",
+        action="append",
+        default=[],
+        help="only process files whose path contains this substring (repeatable; OR)",
+    )
     parser.add_argument("--profile", type=str, default="", choices=["", "cpu", "gpu"],
                         help="only process files whose manifest profiles tag contains this value")
     parser.add_argument("--manifest", type=str, default=str(DEFAULT_MANIFEST))
@@ -123,10 +144,17 @@ def main() -> int:
     if not files:
         sys.exit("[ERROR] manifest has no files")
 
-    selected = [f for f in files if not args.only or args.only.lower() in f["path"].lower()]
+    only_filters = [item for item in args.only if item]
+    selected = [
+        item for item in files
+        if not only_filters or any(filt.lower() in item["path"].lower() for filt in only_filters)
+    ]
     if args.profile:
         # legacy manifests without a profiles tag are treated as gpu-only
         selected = [f for f in selected if args.profile in f.get("profiles", ["gpu"])]
+    if only_filters and not selected:
+        print("[ERROR] --only matched no files in the manifest", file=sys.stderr)
+        return 1
     ok, missing, nohf, failed = 0, [], [], []
 
     for item in selected:
