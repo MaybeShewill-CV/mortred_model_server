@@ -137,6 +137,10 @@ pid_t spawn(const std::string& exe, const std::vector<std::string>& args,
     if (pid != 0) {
         return pid;
     }
+    // ctest inherits the operator's shell; a leftover MORTRED_API_TOKEN from
+    // hand tests would otherwise make fail-closed cases start.
+    ::unsetenv("MORTRED_API_TOKEN");
+    ::unsetenv("MORTRED_GATEWAY_AUTH_TOKEN");
     for (const auto& kv : env) {
         ::setenv(kv.first.c_str(), kv.second.c_str(), 1);
     }

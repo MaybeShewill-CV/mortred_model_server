@@ -14,11 +14,11 @@
 不得对外暴露；对外服务必须由网关前置的反向代理终结 TLS。
 
 监督器（supervisor，`:8787`）在 `/api/v1/` 下提供管理 REST API
-（health/catalog/status/生命周期/日志/metrics）与内嵌 Web UI；
+（health/catalog/status/生命周期/日志/metrics/keys）与内嵌 Web UI；
 `mortredctl` 是它的命令行客户端。**推理冒烟**（控制台发送按钮和
 `mortredctl infer`）把数据面信封 POST 到网关的
 `/v1/models/{id}/infer`，Bearer 与管理 API 相同（`MORTRED_API_TOKEN`）。
-监督进程上的 `/api/v1/infer` 本版本仍保留，但不再是 UI/CLI 入口。`:8080`
+监督进程不再代理推理、jobs 或流水线；客户端打网关。`:8080`
 上的遗留 `{server_uri}` 仍然可用。
 
 所有模型服务器遵循统一的 HTTP JSON 契约。权威的机器可读描述是

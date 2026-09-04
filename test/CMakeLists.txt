@@ -31,7 +31,6 @@ set(TEST_LIST
     file_path_util_unittest
     request_envelope_unittest
     envelope_codec_unittest
-    pipeline_contract_unittest
     diffusion_param_unittest
     blocking_worker_queue_unittest
     status_code_unittest

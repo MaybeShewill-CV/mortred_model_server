@@ -13,6 +13,11 @@ All notable changes to this project are documented here. The format follows
   rewritten onto that prefix. The legacy `{server_uri}` POST path still works.
 
 ### Removed
+- Supervisor `/api/v1/infer`, `/api/v1/jobs*`, and `/api/v1/pipelines*`
+  (breaking). Inference and async jobs go through the gateway; there is no
+  server-side pipeline on the supervisor. Those paths now return the
+  management `{ok, error}` 404. Graceful restart still drains by reading the
+  model's `mortred_async_queue_depth` gauge.
 - Unused helpers left by catalog and envelope migrations: diffusion
   `create_*_sampler` factories, dead `CvUtils` overlay/base64/tensor-copy
   helpers, unused `std_clip_*` / `std_sam_prompt_input` aliases,
@@ -39,7 +44,6 @@ All notable changes to this project are documented here. The format follows
   the gateway (`/v1/models/{id}/infer` on `:8080`) instead of `/api/v1/infer`.
   The gateway accepts `MORTRED_API_TOKEN` and API keys with `admin` (or `all` /
   `inference`) scope, and reflects CORS for the supervisor UI origin.
-  `/api/v1/infer` on the supervisor is unchanged in this change.
   `common/response_envelope.h` (encode/decode + field names). Data-plane
   binding is `server/parsed_request.h`; in-process execution types moved from
   `async_job_table.h` to `server/inference_task.h`. Supervisor/CLI go through
