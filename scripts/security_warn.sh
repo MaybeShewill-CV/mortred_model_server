@@ -8,9 +8,22 @@ set -eu
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WARNED=0
 
+# Drop CR (Windows/WSL checkouts), surrounding quotes, and edge spaces.
+sanitize_scalar() {
+    local s
+    s="$(printf '%s' "${1:-}" | tr -d '\r')"
+    s="${s#"${s%%[![:space:]]*}"}"
+    s="${s%"${s##*[![:space:]]}"}"
+    s="${s#\"}"
+    s="${s%\"}"
+    s="${s#\'}"
+    s="${s%\'}"
+    printf '%s' "$s"
+}
+
 is_loopback_host() {
     local h c i dots rest
-    h="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')"
+    h="$(sanitize_scalar "${1:-}" | tr '[:upper:]' '[:lower:]')"
     case "$h" in
         localhost|::1|'[::1]') return 0 ;;
     esac
@@ -63,6 +76,7 @@ load_kv_file() {
                 val="${val#\"}"
                 val="${val%\'}"
                 val="${val#\'}"
+                val="$(sanitize_scalar "$val")"
                 if [ -z "${!key:-}" ]; then
                     export "$key=$val"
                 fi
@@ -75,6 +89,7 @@ toml_section_key() {
     local file="$1" section="$2" key="$3"
     [ -f "$file" ] || return 0
     awk -v sec="$section" -v want="$key" '
+        { gsub(/\r/, "") }
         /^[[:space:]]*#/ { next }
         /^\[/ {
             insec = ($0 ~ "^\\[" sec "\\]")
@@ -110,15 +125,17 @@ run_warnings() {
     load_kv_file "$ROOT/conf/supervisor.env"
 
     gw_host="${MORTRED_GATEWAY_HOST:-}"
-    if [ -z "$gw_host" ]; then
+    if [ -z "$(sanitize_scalar "$gw_host")" ]; then
         gw_host="$(toml_section_key "$toml" gateway host || true)"
     fi
+    gw_host="$(sanitize_scalar "$gw_host")"
     gw_host="${gw_host:-127.0.0.1}"
 
     api_host="${MORTRED_API_HOST:-}"
-    if [ -z "$api_host" ]; then
+    if [ -z "$(sanitize_scalar "$api_host")" ]; then
         api_host="$(toml_section_key "$toml" supervisor api_host || true)"
     fi
+    api_host="$(sanitize_scalar "$api_host")"
     api_host="${api_host:-127.0.0.1}"
 
     if ! is_loopback_host "$gw_host"; then
@@ -173,6 +190,7 @@ run_self_test() {
         fi
     }
     expect_loopback 127.0.0.1
+    expect_loopback "$(printf '127.0.0.1\r')"
     expect_loopback 127.0.0.2
     expect_loopback localhost
     expect_loopback ::1
@@ -229,6 +247,17 @@ run_self_test() {
         failed=$((failed + 1))
         echo "$out"
     }
+
+    crlf_toml="$(mktemp)"
+    printf '[gateway]\r\nhost = "127.0.0.1"\r\n[supervisor]\r\napi_host = "127.0.0.1"\r\n' >"$crlf_toml"
+    if [ "$(toml_section_key "$crlf_toml" gateway host)" = "127.0.0.1" ] \
+        && [ "$(toml_section_key "$crlf_toml" supervisor api_host)" = "127.0.0.1" ]; then
+        echo "  [ok]   CRLF toml host parse"
+    else
+        echo "  [FAIL] CRLF toml host parse"
+        failed=$((failed + 1))
+    fi
+    rm -f "$crlf_toml"
 
     if [ "$failed" -ne 0 ]; then
         echo "== security_warn self-test failed: $failed =="
