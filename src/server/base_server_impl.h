@@ -57,7 +57,7 @@
 #include "server/rate_limiter.h"
 #include "server/backpressure.h"
 #include "server/async_job_table.h"
-#include "server/request_envelope.h"
+#include "server/parsed_request.h"
 #include "server/server_config_schema.h"
 
 namespace jinq {
@@ -418,8 +418,7 @@ protected:
     // while running (the executor keeps popped tasks alive), cancel before
     // dispatch (the task is destroyed together with its members). Written only
     // by do_work; read by the success branch of do_work_cb via task->user_data.
-    // hoisted to namespace scope (async_job_table.h) so the async ledger and
-    // the server share ONE definition of the request/result pair
+    // execution types live in inference_task.h (shared with AsyncJobTable)
     using go_result = jinq::server::go_result<MODEL_OUTPUT>;
     using task_request = jinq::server::task_request;
 
@@ -650,8 +649,6 @@ protected:
 
         task_request task_req;
         task_req.task_id = task_id;
-        task_req.is_valid = true;
-        task_req.parse_status = StatusCode::OK;
         task_req.items = std::move(parsed.items);
         task_req.params = std::move(parsed.params);
         task_req.options = parsed.options;
@@ -1074,8 +1071,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
 
         task_request task_req;
         task_req.task_id = task_id;
-        task_req.is_valid = true;
-        task_req.parse_status = StatusCode::OK;
         task_req.items = std::move(parsed.items);
         task_req.params = std::move(parsed.params);
         task_req.options = parsed.options;
@@ -1095,7 +1090,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         auto* series = series_of(task);
         request_meta meta;
         meta.task_id = task_req.task_id;
-        meta.is_task_req_valid = task_req.is_valid;
+        meta.is_task_req_valid = true;
         meta.task_received_ts = Timestamp::now().to_format_str();
         go_task_functor functor{this, std::move(task_req), {}};
         // create the task with a null routine first, so the task pointer can

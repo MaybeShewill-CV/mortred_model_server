@@ -5,17 +5,20 @@
 * Date: 26-8-17
 ************************************************/
 
-// Unified HTTP JSON response envelope used by all model servers.
+// Process-level JSON body for non-inference HTTP exits (health, 401, 429,
+// 404, 415, ...): {req_id, code, msg, data}. The unified inference response
+// envelope is common/response_envelope.h (UnifiedResponse).
 
 #ifndef MORTRED_COMMON_HTTP_RESPONSE_H
 #define MORTRED_COMMON_HTTP_RESPONSE_H
 
 #include <string>
-#include <vector>
 
 #include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
+
+#include "common/response_envelope.h"
 
 namespace jinq {
 namespace common {
@@ -43,98 +46,6 @@ inline std::string build_response_body(const HttpResponse& resp) {
         writer.Null();
     } else {
         resp.data.Accept(writer);
-    }
-    writer.EndObject();
-
-    return buf.GetString();
-}
-
-/*** One per-item entry of the unified response envelope: the item's own
- * status plus its task payload (null when the item produced no payload,
- * e.g. a failed batch member). */
-struct ResponseItem {
-    int status = 0;  // StatusCode wire value, stable contract
-    rapidjson::Document data;
-};
-
-/*** One machine-locatable error (JSON pointer + message), used by the
- * unified envelope for strict validation rejections. */
-struct ResponseError {
-    std::string pointer;
-    std::string message;
-};
-
-/*** Unified response envelope (request-side counterpart:
- * server/request_envelope.h). Rendered by BaseAiServerImpl from M4 on;
- * the structure lives here so schema tests can pin it before wiring.
- *
- *   { "status": 0, "status_str": "OK", "task_id": "...",
- *     "model": {"name": "...", "version": "..."},
- *     "results": [{"status": 0, "data": ...}],
- *     "server_time_ms": 41.2, "partial": false }
- */
-struct UnifiedResponse {
-    std::string task_id;
-    int status = 0;
-    std::string status_str;
-    std::string model_name;
-    std::string model_version;
-    std::vector<ResponseItem> results;
-    double server_time_ms = 0.0;
-    bool partial = false;
-    // non-empty on 422-class rejections: pointer + message per violation
-    std::vector<ResponseError> errors;
-};
-
-inline std::string build_unified_response_body(const UnifiedResponse& resp) {
-    rapidjson::StringBuffer buf;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
-
-    writer.StartObject();
-    writer.Key("status");
-    writer.Int(resp.status);
-    writer.Key("status_str");
-    writer.String(resp.status_str.c_str());
-    writer.Key("task_id");
-    writer.String(resp.task_id.c_str());
-    writer.Key("model");
-    writer.StartObject();
-    writer.Key("name");
-    writer.String(resp.model_name.c_str());
-    writer.Key("version");
-    writer.String(resp.model_version.c_str());
-    writer.EndObject();
-    writer.Key("results");
-    writer.StartArray();
-    for (const auto& item : resp.results) {
-        writer.StartObject();
-        writer.Key("status");
-        writer.Int(item.status);
-        writer.Key("data");
-        if (item.data.IsNull()) {
-            writer.Null();
-        } else {
-            item.data.Accept(writer);
-        }
-        writer.EndObject();
-    }
-    writer.EndArray();
-    writer.Key("server_time_ms");
-    writer.Double(resp.server_time_ms);
-    writer.Key("partial");
-    writer.Bool(resp.partial);
-    if (!resp.errors.empty()) {
-        writer.Key("errors");
-        writer.StartArray();
-        for (const auto& error : resp.errors) {
-            writer.StartObject();
-            writer.Key("pointer");
-            writer.String(error.pointer.c_str());
-            writer.Key("message");
-            writer.String(error.message.c_str());
-            writer.EndObject();
-        }
-        writer.EndArray();
     }
     writer.EndObject();
 

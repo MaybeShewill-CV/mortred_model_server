@@ -24,7 +24,7 @@ using ParamViolation = jinq::models::backend::ParamViolation;
  *
  * Defaults are task-agnostic; task families refine them in M3 (detection
  * defaults to include_image=false, matting/segmentation to png, ...). The
- * struct is plain data so it can travel inside task_request by value.
+ * struct is plain data so it can travel inside InferenceTask by value.
  */
 struct OutputOptions {
     enum class ImageEncoding { PNG, JPEG, WEBP };

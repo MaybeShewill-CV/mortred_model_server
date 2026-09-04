@@ -5,14 +5,9 @@
  * Date: 26-9-4
  ************************************************/
 
-// Management-plane rewrite of the unified data-plane envelope. Supervisor
-// /api/v1/infer, /api/v1/jobs and /api/v1/pipelines must speak
-// {req_id, images[], params, options} / results[].data — never the removed
-// img_data field and never the legacy {data: ...} response shape.
-//
-// Header-only and workflow-free so the rewrite is unit-testable in every CI
-// configuration. The img_data migration text is byte-identical to
-// jinq::server::detail::k_img_data_migration (locked by pipeline_contract_unittest).
+// Management-plane wrapper around the unified data-plane envelope.
+// Infer/jobs/pipelines add server_id, model, steps; the payload is always
+// encode/decode from common/request_envelope.h and common/response_envelope.h.
 
 #ifndef MORTRED_CONTROL_MANAGEMENT_ENVELOPE_H
 #define MORTRED_CONTROL_MANAGEMENT_ENVELOPE_H
@@ -23,11 +18,28 @@
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
 
+#include "common/request_envelope.h"
+#include "common/response_envelope.h"
+#include "common/status_code.h"
+
 namespace mortred {
 namespace control {
 
-inline const char *k_img_data_migration =
-    "field 'img_data' was removed; use images: [\"<base64>\"] (migration: img_data -> images[0])";
+using jinq::common::StatusCode;
+using jinq::common::UnifiedResponse;
+using jinq::common::envelope::Request;
+using jinq::common::envelope::decode_request;
+using jinq::common::envelope::decode_response;
+using jinq::common::envelope::encode;
+using jinq::common::envelope::k_images;
+using jinq::common::envelope::k_img_data;
+using jinq::common::envelope::k_img_data_migration;
+using jinq::common::envelope::k_options;
+using jinq::common::envelope::k_params;
+using jinq::common::envelope::k_req_id;
+
+// Re-export so existing tests can lock the migration text through this header.
+// The string is defined only in common/request_envelope.h.
 
 struct EnvelopeRewrite {
     bool ok = false;
@@ -37,16 +49,42 @@ struct EnvelopeRewrite {
     std::string json;
 };
 
-inline std::string dump_json(const rapidjson::Value &value) {
-    rapidjson::StringBuffer buf;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
-    value.Accept(writer);
-    return buf.GetString();
+inline int http_status_of_decode(StatusCode status) {
+    return status == StatusCode::JSON_DECODE_ERROR ? 400 : 422;
 }
 
-/*** Copy only the unified request-envelope keys. Management-only fields
- * (server_id, model, steps, ...) are dropped. img_data is a hard 422 even
- * when images[] is also present — same fail-fast rule as the data plane. */
+inline rapidjson::Document project_request_object(const rapidjson::Value &doc) {
+    rapidjson::Document next;
+    next.SetObject();
+    auto &allocator = next.GetAllocator();
+    static const char *k_keys[] = {k_req_id, k_images, k_params, k_options};
+    for (const char *key : k_keys) {
+        if (doc.HasMember(key)) {
+            next.AddMember(rapidjson::Value(key, allocator), rapidjson::Value(doc[key], allocator),
+                           allocator);
+        }
+    }
+    return next;
+}
+
+inline EnvelopeRewrite from_decode(const jinq::common::envelope::DecodeResult<Request> &decoded) {
+    EnvelopeRewrite out;
+    if (!decoded.ok) {
+        out.http_status = http_status_of_decode(decoded.status);
+        if (!decoded.violations.empty()) {
+            out.pointer = decoded.violations[0].pointer;
+            out.message = decoded.violations[0].message;
+        }
+        return out;
+    }
+    out.ok = true;
+    out.http_status = 200;
+    out.json = encode(decoded.value);
+    return out;
+}
+
+/*** Drop management-only fields, then decode+encode the data-plane envelope.
+ * img_data is a hard 422 even when images[] is also present. */
 inline EnvelopeRewrite copy_request_envelope(const rapidjson::Value &doc) {
     EnvelopeRewrite out;
     if (!doc.IsObject()) {
@@ -54,74 +92,42 @@ inline EnvelopeRewrite copy_request_envelope(const rapidjson::Value &doc) {
         out.message = "request body must be a JSON object";
         return out;
     }
-    if (doc.HasMember("img_data")) {
+    if (doc.HasMember(k_img_data)) {
         out.http_status = 422;
         out.pointer = "/img_data";
         out.message = k_img_data_migration;
         return out;
     }
-
-    rapidjson::Document next;
-    next.SetObject();
-    auto &allocator = next.GetAllocator();
-    static const char *k_keys[] = {"req_id", "images", "params", "options"};
-    for (const char *key : k_keys) {
-        if (doc.HasMember(key)) {
-            next.AddMember(rapidjson::Value(key, allocator), rapidjson::Value(doc[key], allocator),
-                           allocator);
-        }
-    }
-    if (!next.HasMember("images")) {
-        out.pointer = "/images";
-        out.message = "required field 'images' is missing";
-        return out;
-    }
-
-    out.ok = true;
-    out.http_status = 200;
-    out.json = dump_json(next);
-    return out;
+    const auto stripped = project_request_object(doc);
+    return from_decode(decode_request(stripped));
 }
 
-/*** Build {images: [...]} from results[0].data[field] of a unified response.
- * The legacy {data: {field}} shape is refused so pipelines cannot silently
- * target the old envelope. */
 inline EnvelopeRewrite extract_prev_output_images(const std::string &prev_json,
                                                   const std::string &field) {
     EnvelopeRewrite out;
     const std::string missing = "cannot extract '" + field +
                                 "' from previous output; expected unified results[].data";
-    rapidjson::Document prev;
-    prev.Parse(prev_json.c_str());
-    if (prev.HasParseError() || !prev.IsObject()) {
-        out.message = missing;
-        return out;
-    }
-    if (!prev.HasMember("results") || !prev["results"].IsArray() || prev["results"].Empty()) {
+    const auto decoded = decode_response(prev_json);
+    if (!decoded.ok || decoded.value.results.empty()) {
         out.message = missing;
         return out;
     }
 
-    const rapidjson::Value &item = prev["results"][0];
-    if (!item.IsObject() || !item.HasMember("data") || item["data"].IsNull()) {
-        out.message = "cannot extract '" + field +
-                      "' from previous output; results[0].data is missing";
-        return out;
-    }
-    const rapidjson::Value &data = item["data"];
-    if (!data.IsObject() || !data.HasMember(field.c_str())) {
-        out.message = "cannot extract '" + field + "' from previous output";
+    auto &item = decoded.value.results[0];
+    if (item.data.IsNull() || !item.data.IsObject() || !item.data.HasMember(field.c_str())) {
+        if (item.data.IsNull() || !item.data.IsObject()) {
+            out.message = "cannot extract '" + field +
+                          "' from previous output; results[0].data is missing";
+        } else {
+            out.message = "cannot extract '" + field + "' from previous output";
+        }
         return out;
     }
 
-    const rapidjson::Value &value = data[field.c_str()];
-    rapidjson::Document next;
-    next.SetObject();
-    auto &allocator = next.GetAllocator();
-    rapidjson::Value images(rapidjson::kArrayType);
-
+    const rapidjson::Value &value = item.data[field.c_str()];
+    Request next;
     if (value.IsString() && value.GetStringLength() > 0) {
-        images.PushBack(rapidjson::Value(value, allocator), allocator);
+        next.images.emplace_back(value.GetString(), value.GetStringLength());
     } else if (value.IsArray() && !value.Empty()) {
         for (const auto &element : value.GetArray()) {
             if (!element.IsString() || element.GetStringLength() == 0) {
@@ -129,7 +135,7 @@ inline EnvelopeRewrite extract_prev_output_images(const std::string &prev_json,
                               "': expected a base64 string or array of strings";
                 return out;
             }
-            images.PushBack(rapidjson::Value(element, allocator), allocator);
+            next.images.emplace_back(element.GetString(), element.GetStringLength());
         }
     } else {
         out.message =
@@ -137,16 +143,12 @@ inline EnvelopeRewrite extract_prev_output_images(const std::string &prev_json,
         return out;
     }
 
-    next.AddMember("images", images, allocator);
     out.ok = true;
     out.http_status = 200;
-    out.json = dump_json(next);
+    out.json = encode(next);
     return out;
 }
 
-/*** Pipeline step input: "prev_output.<field>" extracts from the previous
- * unified response; any other key leaves the current body unchanged (the
- * first step is already a request envelope). */
 inline EnvelopeRewrite apply_pipeline_step_input(const std::string &current_body,
                                                  const std::string &input_key) {
     if (input_key.rfind("prev_output.", 0) == 0) {
@@ -157,6 +159,18 @@ inline EnvelopeRewrite apply_pipeline_step_input(const std::string &current_body
     out.http_status = 200;
     out.json = current_body;
     return out;
+}
+
+inline std::string encode_infer_proxy(const std::string &server_id, const Request &request) {
+    rapidjson::Document doc;
+    doc.Parse(encode(request).c_str());
+    auto &allocator = doc.GetAllocator();
+    doc.AddMember("server_id", rapidjson::Value(server_id.c_str(), server_id.size(), allocator),
+                  allocator);
+    rapidjson::StringBuffer buf;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
+    doc.Accept(writer);
+    return buf.GetString();
 }
 
 } // namespace control
