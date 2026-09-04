@@ -7,14 +7,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-### Fixed
-- Supervisor Web UI, `/api/v1/infer`, `/api/v1/jobs` and pipelines now speak
-  the unified `images[]` / `results[].data` envelope. They previously still
-  sent the removed `img_data` field and read the legacy `{data: ...}`
-  response, so the built-in test proxy and pipelines could not succeed
-  against current model servers.
-
 ### Changed
+- Envelope codec lives in `common/request_envelope.h` and
+  `common/response_envelope.h` (encode/decode + field names). Data-plane
+  binding is `server/parsed_request.h`; in-process execution types moved from
+  `async_job_table.h` to `server/inference_task.h`. Supervisor/CLI go through
+  the codec instead of hand-rolled JSON.
 - **Unified request/response contract (breaking)**: model endpoints now speak
   the single envelope `{"req_id", "images": [<base64>...], "params", "options"}`
   and answer with `{status, status_str, task_id, model, results[], server_time_ms,
@@ -29,6 +27,13 @@ All notable changes to this project are documented here. The format follows
   worker wait and inference.
 - Gateway forwards the client `Content-Type`/`Accept` verbatim (binary body
   encoding groundwork).
+
+### Fixed
+- Supervisor Web UI, `/api/v1/infer`, `/api/v1/jobs` and pipelines now speak
+  the unified `images[]` / `results[].data` envelope. They previously still
+  sent the removed `img_data` field and read the legacy `{data: ...}`
+  response, so the built-in test proxy and pipelines could not succeed
+  against current model servers.
 
 ### Added
 - Contract generation chain: `contract_dump` (C++ catalogs as the single

@@ -8,7 +8,8 @@ set(SERVER_LIB_SRC
     ${CMAKE_CURRENT_LIST_DIR}/output_options.h
     ${CMAKE_CURRENT_LIST_DIR}/prometheus_metrics.h
     ${CMAKE_CURRENT_LIST_DIR}/rate_limiter.h
-    ${CMAKE_CURRENT_LIST_DIR}/request_envelope.h
+    ${CMAKE_CURRENT_LIST_DIR}/inference_task.h
+    ${CMAKE_CURRENT_LIST_DIR}/parsed_request.h
     ${CMAKE_CURRENT_LIST_DIR}/response_serializers.h
 )
 add_library(server SHARED ${SERVER_LIB_SRC})

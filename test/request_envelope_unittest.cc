@@ -10,7 +10,7 @@
 #include <gtest/gtest.h>
 
 #include "models/backend/param_spec.h"
-#include "server/request_envelope.h"
+#include "server/parsed_request.h"
 
 using jinq::models::backend::ParamSpec;
 using jinq::models::io_define::common_io::byte_source;

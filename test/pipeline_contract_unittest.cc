@@ -15,7 +15,7 @@
 #include <gtest/gtest.h>
 
 #include "control/management_envelope.h"
-#include "server/request_envelope.h"
+#include "common/request_envelope.h"
 
 using mortred::control::apply_pipeline_step_input;
 using mortred::control::copy_request_envelope;
@@ -34,7 +34,7 @@ rapidjson::Document parse_object(const std::string &json) {
 } // namespace
 
 TEST(pipeline_contract, img_data_migration_text_matches_data_plane) {
-    EXPECT_STREQ(mortred::control::k_img_data_migration, jinq::server::detail::k_img_data_migration);
+    EXPECT_STREQ(mortred::control::k_img_data_migration, jinq::common::envelope::k_img_data_migration);
 }
 
 TEST(pipeline_contract, infer_proxy_strips_server_id_and_keeps_envelope) {
@@ -84,7 +84,7 @@ TEST(pipeline_contract, img_data_is_422_even_alongside_images) {
 TEST(pipeline_contract, missing_images_is_rejected) {
     const auto rewrite = copy_request_envelope(parse_object(R"({"server_id":"YOLOV8","req_id":"t"})"));
     EXPECT_FALSE(rewrite.ok);
-    EXPECT_EQ(rewrite.http_status, 400);
+    EXPECT_EQ(rewrite.http_status, 422);
     EXPECT_EQ(rewrite.pointer, "/images");
 }
 

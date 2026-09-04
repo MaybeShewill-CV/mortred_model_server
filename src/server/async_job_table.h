@@ -11,11 +11,8 @@
 // owns HTTP parsing, the worker pool shared by the sync and async paths, and
 // response serialization). AsyncJobTable is a subordinate component (has-a)
 // that owns ONLY the bookkeeping of async jobs: identity, admission, the
-// state machine, retention (TTL + LRU) and wait/notify. It has zero
-// dependencies on Workflow HTTP, the worker pool or metrics - which is what
-// makes it directly unit-testable. The previous inline implementation could
-// only be tested through a re-implementation, and that is exactly how the
-// data races survived.
+// state machine, retention (TTL + LRU) and wait/notify. InferenceTask /
+// InferenceResult live in inference_task.h (shared with the sync path).
 //
 // Concurrency contract (see docs/async-job-table.md):
 //   - job state: std::atomic<AsyncJobState>; terminal checks (eviction,
@@ -50,9 +47,7 @@
 #include <utility>
 
 #include "common/status_code.h"
-#include "models/backend/param_spec.h"
-#include "models/io/common_input.h"
-#include "server/output_options.h"
+#include "server/inference_task.h"
 
 namespace jinq {
 namespace server {
@@ -83,42 +78,6 @@ inline int64_t async_now_ms() {
                std::chrono::steady_clock::now().time_since_epoch())
         .count();
 }
-
-/***
- * Task request (hoisted from BaseAiServerImpl so the async ledger and the
- * server share ONE definition; the server aliases it in-class).
- */
-struct task_request {
-    std::string task_id;
-    bool is_valid = false;
-    StatusCode parse_status = StatusCode::OK;
-    // unified envelope payload (Contract v1): one entry per images[] item
-    std::vector<jinq::models::io_define::common_io::byte_source> items;
-    std::shared_ptr<jinq::models::backend::ParamSet> params;  // nullptr = no overrides
-    jinq::server::OutputOptions options;
-    // absolute budget; time_point::max() = unlimited (model_run_timeout <= 0)
-    std::chrono::steady_clock::time_point deadline =
-        std::chrono::steady_clock::time_point::max();
-
-    size_t item_count() const { return items.size(); }
-};
-
-/***
- * Inference result (hoisted from BaseAiServerImpl; templated on the model
- * output type, exactly the former nested struct).
- */
-template <typename MODEL_OUTPUT>
-struct go_result {
-    StatusCode model_run_status = StatusCode::OK;
-    std::string task_finished_ts;
-    double worker_run_time_consuming = 0; // ms
-    double find_worker_time_consuming = 0; // ms
-    bool partial = false;  // deadline hit mid-request: some items returned
-    jinq::server::OutputOptions options;  // echo path: response assembly
-    // index-aligned with the request's images[] (empty on request-level errors)
-    std::vector<MODEL_OUTPUT> item_outputs;
-    std::vector<StatusCode> item_status;
-};
 
 template <typename MODEL_OUTPUT>
 class AsyncJobTable {
@@ -237,10 +196,8 @@ class AsyncJobTable {
             return std::nullopt;
         }
         std::lock_guard<std::mutex> lock(job->mu);
-        task_request out;
+        InferenceTask out;
         out.task_id = job->req.task_id;
-        out.is_valid = job->req.is_valid;
-        out.parse_status = job->req.parse_status;
         out.items = std::move(job->req.items);
         out.params = std::move(job->req.params);
         out.options = job->req.options;

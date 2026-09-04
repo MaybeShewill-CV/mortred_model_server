@@ -25,6 +25,8 @@
 #include <workflow/Workflow.h>
 
 #include "common/base64.h"
+#include "common/request_envelope.h"
+#include "control/management_envelope.h"
 
 #include "control/cli/cli_app.h"
 
@@ -236,8 +238,9 @@ int run_cli(int argc, char** argv) {
         }
         const std::string b64 = jinq::common::base64::encode(
             reinterpret_cast<const unsigned char*>(bytes.data()), bytes.size());
-        const std::string body =
-            "{\"server_id\":\"" + id + "\",\"images\":[\"" + b64 + "\"]}";
+        jinq::common::envelope::Request envelope;
+        envelope.images.push_back(b64);
+        const std::string body = encode_infer_proxy(id, envelope);
         r = http_request(opt, "POST", "/api/v1/infer", body);
     } else {
         std::fprintf(stderr, "unknown command: %s\n", cmd.c_str());

@@ -51,8 +51,6 @@ using Result = jinq::server::go_result<TrivialOutput>;
 task_request make_req(const std::string& id, const std::string& payload) {
     task_request req;
     req.task_id = id;
-    req.is_valid = true;
-    req.parse_status = StatusCode::OK;
     req.items.push_back({jinq::models::io_define::common_io::byte_source::origin_kind::base64_text, payload});
     return req;
 }
