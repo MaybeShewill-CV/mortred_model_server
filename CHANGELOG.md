@@ -40,6 +40,12 @@ All notable changes to this project are documented here. The format follows
   now answer `404` with process-level `UnifiedResponse`.
 
 ### Changed
+- Example Docker Compose publishes gateway `:8080` and supervisor `:8787` on
+  `127.0.0.1` only. The monitoring stack binds Grafana/Prometheus to loopback,
+  requires `GRAFANA_ADMIN_PASSWORD`, and no longer enables Prometheus
+  `--web.enable-lifecycle`. Default Prometheus scrape is gateway `/metrics`
+  only; supervisor (Bearer) and model (loopback) jobs are commented with the
+  real auth and topology constraints.
 - Supervisor Web UI and `mortredctl infer` POST the data-plane envelope to
   the gateway (`/v1/models/{id}/infer` on `:8080`) instead of `/api/v1/infer`.
   The gateway accepts `MORTRED_API_TOKEN` and API keys with `admin` (or `all` /

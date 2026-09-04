@@ -25,20 +25,27 @@ Complete guide to the Mortred Model Server monitoring lifecycle: deployment, con
 │  ┌──────────┐   /metrics    │   Grafana    │               │
 │  │  Model   │ ───────────→ │  (:3000)     │               │
 │  │ Servers  │               │  Dashboards  │               │
-│  │(:9001-74)│               └──────────────┘               │
+│  │(loopback)│               └──────────────┘               │
 │  └──────────┘                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+Gateway `:8080/metrics` is the default scrape target (public). Supervisor
+`:8787/api/v1/metrics` needs the management Bearer token. Model `/metrics`
+is loopback-only — scrape it only when Prometheus shares that namespace;
+do not publish model ports.
 
 ## Quick Start
 
 ### Option 1: Docker Compose (Recommended)
 
 ```bash
+export GRAFANA_ADMIN_PASSWORD="$(openssl rand -hex 16)"
 docker compose -f deploy/docker-compose.monitoring.yml up -d
-# Grafana: http://localhost:3000 (admin/admin)
+# Grafana: http://localhost:3000  (user admin / $GRAFANA_ADMIN_PASSWORD)
+# Prometheus: http://localhost:9090  (loopback only)
 # Note: on Linux, replace "localhost" with "host.docker.internal"
-# in deploy/prometheus.yml targets.
+# in deploy/prometheus.yml gateway targets.
 ```
 
 ### Option 2: Bare Metal
@@ -60,11 +67,15 @@ prometheus --config.file=deploy/prometheus.yml --storage.tsdb.path=/tmp/prom-dat
 
 | Component | Port | Endpoint | Description |
 |---|---|---|---|
-| Gateway | :8080 | `/metrics` | Inference traffic entry point |
-| Supervisor | :8787 | `/api/v1/metrics` | Process management (requires token) |
-| Model servers | :9001-9074 | `/metrics` | One per running model |
+| Gateway | :8080 | `/metrics` | Inference entry (public) |
+| Supervisor | :8787 | `/api/v1/metrics` | Process management (requires Bearer `MORTRED_API_TOKEN`) |
+| Model servers | loopback :9001-9074 | `/metrics` | Same network namespace as Prometheus; do not publish these ports |
 
 ### Adding a New Model Scrape Target
+
+Only when Prometheus can reach the model's **loopback** port (host network
+or the same machine as systemd). Never `docker publish` model ports to
+scrape them.
 
 ```yaml
   - job_name: mortred-model-yolov5
@@ -281,7 +292,8 @@ Common causes: model not running / wrong port / Docker networking (use host.dock
 curl -s http://localhost:8080/metrics | head -5
 ```
 
-Common causes: process not running / wrong port / supervisor requires Bearer token
+Common causes: process not running / wrong port / supervisor requires Bearer token /
+Prometheus in Docker still pointing at `localhost` instead of `host.docker.internal`
 
 ### Alerts Not Firing
 
@@ -309,7 +321,7 @@ Ensure Prometheus URL is correct; test manually in Explore.
 curl -s http://localhost:8080/metrics | head -20
 curl -s http://localhost:8080/metrics | grep mortred_http_requests_total
 
-# Model server
+# Model server (from the host that runs the model; loopback only — do not -p these ports)
 curl -s http://localhost:9002/metrics | grep mortred_up
 curl -s http://localhost:9002/metrics | grep mortred_queue_depth
 curl -s http://localhost:9002/metrics | grep mortred_workers
@@ -358,8 +370,9 @@ prometheus --storage.tsdb.retention.time=30d  # retain 30 days
 ### Coverage Checklist
 
 - [ ] Gateway :8080 scraping OK
-- [ ] Supervisor :8787 scraping OK
-- [ ] Every running model has a scrape job
+- [ ] Supervisor :8787 scraping OK only if Bearer is configured in Prometheus
+- [ ] Model scrape jobs exist only where Prometheus shares loopback with the model
+- [ ] Grafana/Prometheus ports are loopback; Grafana password is not the image default
 - [ ] All 12 alert rules loaded
 - [ ] Grafana 13 panels showing data
 - [ ] At least one notification channel configured

@@ -1,11 +1,23 @@
 # Mortred Model Server - Prometheus scrape configuration
 #
-# Install:
+# Default job: gateway GET /metrics (public by design on :8080).
+#
+# Supervisor GET /api/v1/metrics requires Authorization: Bearer
+# <MORTRED_API_TOKEN>. Model /metrics is loopback-only — scrape those
+# targets only when Prometheus shares the model's network namespace
+# (host network, or the same machine as the systemd unit). Do not
+# publish model ports to make them scrapeable.
+#
+# Install (bare metal):
 #   sudo cp deploy/prometheus.yml /etc/prometheus/prometheus.yml
 #   sudo cp deploy/alert-rules.yml /etc/prometheus/alert-rules.yml
 #   sudo systemctl restart prometheus
 #
-# Or run standalone:
+# Docker Compose monitoring stack: replace localhost with
+# host.docker.internal in the gateway target (see extra_hosts in
+# deploy/docker-compose.monitoring.yml).
+#
+# Standalone:
 #   prometheus --config.file=deploy/prometheus.yml --storage.tsdb.path=/tmp/prom-data
 
 global:
@@ -26,32 +38,35 @@ scrape_configs:
       - targets: ['localhost:8080']
         labels: { component: gateway }
 
-  - job_name: mortred-supervisor
-    static_configs:
-      - targets: ['localhost:8787']
-        labels: { component: supervisor }
+  # Uncomment when Prometheus can reach :8787 and can read the management
+  # token. credentials_file must contain the raw token (no "Bearer " prefix).
+  # - job_name: mortred-supervisor
+  #   metrics_path: /api/v1/metrics
+  #   authorization:
+  #     type: Bearer
+  #     credentials_file: /etc/prometheus/mortred_api_token
+  #   static_configs:
+  #     - targets: ['localhost:8787']
+  #       labels: { component: supervisor }
 
-  - job_name: mortred-model-mobilenetv2
-    static_configs:
-      - targets: ['localhost:9002']
-        labels: { component: model, model: mobilenetv2 }
-
-  - job_name: mortred-model-yolov8
-    static_configs:
-      - targets: ['localhost:9056']
-        labels: { component: model, model: yolov8 }
-
-  - job_name: mortred-model-hrnet
-    static_configs:
-      - targets: ['localhost:9071']
-        labels: { component: model, model: hrnet }
-
-  - job_name: mortred-model-metric3d
-    static_configs:
-      - targets: ['localhost:9041']
-        labels: { component: model, model: metric3d }
-
-  - job_name: mortred-model-ddpm
-    static_configs:
-      - targets: ['localhost:9070']
-        labels: { component: model, model: ddpm }
+  # Same-namespace only. Never docker-publish these ports.
+  # - job_name: mortred-model-mobilenetv2
+  #   static_configs:
+  #     - targets: ['localhost:9002']
+  #       labels: { component: model, model: mobilenetv2 }
+  # - job_name: mortred-model-yolov8
+  #   static_configs:
+  #     - targets: ['localhost:9056']
+  #       labels: { component: model, model: yolov8 }
+  # - job_name: mortred-model-hrnet
+  #   static_configs:
+  #     - targets: ['localhost:9071']
+  #       labels: { component: model, model: hrnet }
+  # - job_name: mortred-model-metric3d
+  #   static_configs:
+  #     - targets: ['localhost:9041']
+  #       labels: { component: model, model: metric3d }
+  # - job_name: mortred-model-ddpm
+  #   static_configs:
+  #     - targets: ['localhost:9070']
+  #       labels: { component: model, model: ddpm }

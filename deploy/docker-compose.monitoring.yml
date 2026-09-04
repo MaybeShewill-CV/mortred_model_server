@@ -1,17 +1,20 @@
-# Monitoring stack for Mortred Model Server
+# Local observation stack for Mortred Model Server.
+# Not a production monitoring deployment: ports bind loopback only.
 #
-# Usage:
+#   export GRAFANA_ADMIN_PASSWORD="$(openssl rand -hex 16)"
 #   docker compose -f deploy/docker-compose.monitoring.yml up -d
-#
-# Access:
+#   Grafana:    http://localhost:3000
 #   Prometheus: http://localhost:9090
-#   Grafana:    http://localhost:3000 (admin/admin)
+#
+# Point deploy/prometheus.yml gateway targets at host.docker.internal:8080
+# when Mortred runs on the host or in another compose project (Linux needs
+# the extra_hosts mapping below).
 
 services:
   prometheus:
     image: prom/prometheus:v2.51.0
     container_name: mortred-prometheus
-    ports: ["9090:9090"]
+    ports: ["127.0.0.1:9090:9090"]
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
@@ -19,22 +22,19 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
-      - --web.enable-lifecycle
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # replace localhost targets in prometheus.yml with host.docker.internal
-    # when running Prometheus inside Docker on Linux
 
   grafana:
     image: grafana/grafana:10.4.0
     container_name: mortred-grafana
-    ports: ["3000:3000"]
+    ports: ["127.0.0.1:3000:3000"]
     volumes:
       - ./grafana-dashboard.json:/var/lib/grafana/dashboards/mortred.json:ro
       - grafana-data:/var/lib/grafana
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD}
       - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/mortred.json
     depends_on: [prometheus]
 

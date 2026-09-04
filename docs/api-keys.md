@@ -150,6 +150,9 @@ Fail-closed startup rules:
 - A **broken `conf/api_keys.toml`** (parse error) refuses to start when no static token is configured — an operator who configured keys wants authentication, and silently serving without it would be a fail-open security hole.
 - A broken key file **with** a static token configured starts, logs an ERROR, and authenticates with the static token only — the unparsed keys authenticate nothing.
 
+Fail-closed is a startup gate. It does not terminate TLS, hide gateway
+`GET /metrics`, or enforce token strength. Mortred itself is plain HTTP.
+
 > ⚠️ Do **not** rely on an empty `MORTRED_GATEWAY_AUTH_TOKEN` as a "keys configured → still allow everything" escape hatch. The empty-token allow semantics only ever apply when **no** auth mechanism is configured at all (loopback development mode).
 
 ## Configuration
