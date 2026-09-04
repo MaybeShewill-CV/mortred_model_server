@@ -70,15 +70,15 @@ flowchart LR
 | Only 2 external ports | gateway `8080` (inference), supervisor `8787` (management + web UI) |
 | Model servers bind loopback only | Nothing bypasses the gateway; supervisor injects an internal token |
 | The supervisor manages everything | Crashed model servers restart with backoff; crash-loop protection |
-| Fail-closed | Non-loopback listener without a token **refuses to start**. Not TLS, not `/metrics` privacy, not token strength |
+| Fail-closed | Non-loopback listener without inference/management auth **refuses to start**. Non-loopback gateway also requires a **distinct** `MORTRED_METRICS_TOKEN`. Not TLS (terminate at a reverse proxy). |
 
 **Ports at a glance**:
 
 | Port | Process | Purpose | Auth |
 |---|---|---|---|
-| `8080` | mortred-gateway | inference `/mortred_ai_server_v1/...`, `/healthz`, `/metrics` | Bearer on infer/jobs; `/healthz` public; `/metrics` public unless `MORTRED_METRICS_TOKEN` |
+| `8080` | mortred-gateway | inference `/mortred_ai_server_v1/...`, `/healthz`, `/metrics` | Bearer on infer/jobs; `/healthz` public; `/metrics` public on loopback unless `MORTRED_METRICS_TOKEN`; **required** (and distinct) on non-loopback |
 | `8787` | mortred-supervisor | mgmt API `/api/v1/*`, web console | Bearer token |
-| `9002+` | model servers | loopback only | internal token |
+| `9002+` | model servers | loopback only | internal token (including `GET /metrics` when that token is set) |
 
 ---
 
@@ -459,16 +459,19 @@ missing engines without failing.
 |---|---|---|
 | `MORTRED_API_TOKEN` | supervisor mgmt API + web console | `/etc/mortred/supervisor.env` (tarball) / container env |
 | `MORTRED_GATEWAY_AUTH_TOKEN` | gateway inference entry | same |
-| `MORTRED_METRICS_TOKEN` | optional; gateway `GET /metrics` scrape Bearer | same (unset = public `/metrics`) |
+| `MORTRED_METRICS_TOKEN` | gateway `GET /metrics` scrape Bearer | same (unset = public **only** on loopback; required and distinct on non-loopback) |
 
 ```bash
 openssl rand -hex 24    # generate (one independent value per token)
 ```
 
 **Fail-closed semantics**: a non-loopback listener without its token **refuses
-to start** and prints why. Never deploy with a hole. That gate only covers
-"some auth is configured". It does **not** terminate TLS, hide gateway
-`GET /metrics` unless `MORTRED_METRICS_TOKEN` is set, or reject a short token.
+to start** and prints why. A non-loopback gateway also refuses if
+`MORTRED_METRICS_TOKEN` is empty or matches the inference/management token.
+Never deploy with a hole. That gate does **not** terminate TLS (use a reverse
+proxy) or reject a short token at process start. `mortredctl doctor --strict`
+fails on those warnings (plaintext listen, short tokens, identical tokens).
+Default `doctor` still prints them without failing.
 Do not reuse the inference token as the scrape secret.
 
 ### 11.2 Multi-tenant API keys (gateway layer)
@@ -520,8 +523,9 @@ Local smoke without public DNS is the commented `:8443 { tls internal ... }`
 block in that file. Do not put TLS inside the gateway or supervisor process.
 
 `mortredctl doctor` warns when the effective listen is not loopback, when a
-token is shorter than 32 characters, or when the two tokens are identical.
-Those lines are warnings only — doctor does not fail for missing TLS.
+token is shorter than 32 characters, or when tokens are identical.
+Those lines are warnings only unless you pass `--strict` (then any warning
+fails doctor). Doctor does not implement TLS.
 
 ---
 
@@ -562,7 +566,7 @@ Out-of-the-box Prometheus endpoints:
 
 | Endpoint | Content |
 |---|---|
-| `GET :8080/metrics` | gateway: HTTP counts/latency, inference latency, queue wait, worker availability (public unless `MORTRED_METRICS_TOKEN`) |
+| `GET :8080/metrics` | gateway: HTTP counts/latency, inference latency, queue wait, worker availability (public on loopback unless `MORTRED_METRICS_TOKEN`; required off-loopback) |
 | `GET :8787/api/v1/metrics` | supervisor: process states, restart counters (Bearer `MORTRED_API_TOKEN`) |
 
 A **local** monitoring stack ships in the repo (Prometheus + Grafana + alert
@@ -678,7 +682,7 @@ in a fully python-less environment, verify before copying).
 | Static | `./scripts/verify_deployment.sh --basic` | script syntax / manifests / compose YAML / dependency inventory / `security_warn.sh --self-test` |
 | Full | `./scripts/verify_deployment.sh --full` | + local weight sha256 + 3rd_party completeness |
 | Live | `./scripts/verify_deployment.sh --live` | + gateway probes (public healthz, authed inference) |
-| One-shot | `mortredctl doctor` | live wrapper + security warnings (non-fatal) |
+| One-shot | `mortredctl doctor` | live wrapper + security warnings (non-fatal unless `--strict`) |
 
 **CI side**: every change runs the cpu-profile full build + full unit suite on a
 GPU-less runner - the conditional-compilation path cannot silently rot; the

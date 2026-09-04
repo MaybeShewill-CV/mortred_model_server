@@ -9,7 +9,7 @@
 #   5. install_deps.sh --check (3rd_party completeness; enforced only in --full mode)
 #   6. fetch_weights.py --check (local weights sha256; missing weights fail only in --full mode)
 #   7. live gateway probes (--live mode only: healthz public + inference requires token)
-#   8. security_warn.sh --self-test (warning helpers; never fail doctor itself)
+#   8. security_warn.sh --self-test (warning helpers; doctor --strict can fail)
 #
 # Usage:
 #   ./scripts/verify_deployment.sh            # --full: all checks must pass (target machine)

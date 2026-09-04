@@ -416,6 +416,11 @@ bool server_has_active_jobs(const std::string& server_id) {
             wg.done();
         });
     client->get_req()->set_method("GET");
+    std::string metrics_auth;
+    if (g_supervisor != nullptr && !g_supervisor->internal_token().empty()) {
+        metrics_auth = "Bearer " + g_supervisor->internal_token();
+        client->get_req()->add_header_pair("Authorization", metrics_auth.c_str());
+    }
     client->set_receive_timeout(2000);
     client->start();
     wg.wait();

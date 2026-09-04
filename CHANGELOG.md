@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `mortredctl doctor --strict`: fail the doctor when security warnings fire
+  (non-loopback plaintext HTTP, short tokens, identical tokens). Default
+  `doctor` still warns only.
 - Hosted `cpu-profile` fail-closes a multi-family MNN CPU golden set from
   `conf/ci_hosted_golden.json` (classification, NanoDet, DBNet, SuperPoint,
   BiSeNetV2): sha256-locked HF fetch, `MORTRED_CI_REQUIRE_WEIGHTS`, XML
@@ -16,11 +19,12 @@ All notable changes to this project are documented here. The format follows
   declare a CI tier (`hosted` / `gpu-smoke` / `nightly`).
 - Caddy reverse-proxy example (`deploy/caddy/Caddyfile`) as the supported TLS
   front for loopback gateway/supervisor. `mortredctl doctor` prints warnings
-  (never fails) for a non-loopback listen, a token shorter than 32 characters,
-  or identical management/inference tokens.
+  (never fails unless `--strict`) for a non-loopback listen, a token shorter
+  than 32 characters, or identical tokens.
 - Optional gateway scrape token `MORTRED_METRICS_TOKEN`. Unset keeps
-  `GET /metrics` public; when set, that path requires the scrape Bearer
-  (`/healthz` stays public). Do not reuse the inference token.
+  `GET /metrics` public **on loopback**. A non-loopback gateway refuses to
+  start without a distinct scrape Bearer. Managed model `/metrics` requires
+  the supervisor internal token when `MORTRED_AUTH_TOKEN` is set.
 - Gateway routes `POST /v1/models/{id}/infer` and `/v1/models/{id}/jobs*` to
   the model's loopback port. Job `Location` / `poll_url` / `result_url` are
   rewritten onto that prefix. The legacy `{server_uri}` POST path still works.

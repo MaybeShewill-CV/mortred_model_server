@@ -877,11 +877,15 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         reply_rate_limited(task);
         return;
     }
-    // auth: health/metadata endpoints stay public, others require a Bearer Token
+    // auth: health/metadata stay public. /metrics is public only when no
+    // auth_token is configured (loopback dev). Managed children get
+    // MORTRED_AUTH_TOKEN from the supervisor and then require that Bearer.
     bool is_health_endpoint = strcmp(request_uri, "/healthz") == 0 ||
                               strcmp(request_uri, "/ready") == 0 ||
-                              strcmp(request_uri, "/metrics") == 0 ||
                               strcmp(request_uri, "/openapi.json") == 0;
+    if (strcmp(request_uri, "/metrics") == 0 && _m_auth_token.empty()) {
+        is_health_endpoint = true;
+    }
     // async job endpoints (require auth like model endpoints)
     const bool is_async_endpoint = _m_async_enabled &&
                                    strncmp(request_uri, "/jobs", 5) == 0 &&

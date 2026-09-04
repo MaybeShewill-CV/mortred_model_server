@@ -66,15 +66,15 @@ flowchart LR
 | 只有 2 个对外端口 | 网关 `8080`（推理流量）、supervisor `8787`（管理 + Web 控制台） |
 | 模型进程仅绑 loopback | 外部无法绕过网关直连模型；supervisor 注入 internal token |
 | supervisor 管理一切 | 模型进程崩溃自动按退避策略重启；crash-loop 有保护 |
-| fail-closed | 非环回监听且未配置 token 时，**拒绝启动**而非带洞运行。不是 TLS、不是 `/metrics` 保密、也不是 token 强度检查 |
+| fail-closed | 非环回且无推理/管理鉴权时**拒绝启动**。非环回网关还必须有**互不相同的** `MORTRED_METRICS_TOKEN`。TLS 仍在反代上终结。 |
 
 **端口一览**：
 
 | 端口 | 进程 | 用途 | 鉴权 |
 |---|---|---|---|
-| `8080` | mortred-gateway | 推理入口 `/mortred_ai_server_v1/...`、`/healthz`、`/metrics` | infer/jobs 要 Bearer；`/healthz` 公开；`/metrics` 未设 `MORTRED_METRICS_TOKEN` 时公开 |
+| `8080` | mortred-gateway | 推理入口 `/mortred_ai_server_v1/...`、`/healthz`、`/metrics` | infer/jobs 要 Bearer；`/healthz` 公开；`/metrics` 环回上未设 token 时公开；**非环回必须**设独立 `MORTRED_METRICS_TOKEN` |
 | `8787` | mortred-supervisor | 管理 API `/api/v1/*`、Web 控制台 | Bearer token |
-| `9002+` | 各模型进程 | 仅 loopback | internal token |
+| `9002+` | 各模型进程 | 仅 loopback | internal token（含已注入时的 `GET /metrics`） |
 
 ---
 
@@ -443,15 +443,16 @@ docker compose --profile gpu up -d -e MORTRED_AUTO_BUILD_ENGINES=true
 |---|---|---|
 | `MORTRED_API_TOKEN` | supervisor 管理 API + Web 控制台 | `/etc/mortred/supervisor.env`（tarball）/ 容器环境变量 |
 | `MORTRED_GATEWAY_AUTH_TOKEN` | 网关推理入口 | 同上 |
-| `MORTRED_METRICS_TOKEN` | 可选；网关 `GET /metrics` scrape Bearer | 同上（不设则 `/metrics` 公开） |
+| `MORTRED_METRICS_TOKEN` | 网关 `GET /metrics` scrape Bearer | 同上（不设则仅环回上 `/metrics` 公开；非环回必填且不能与推理/管理 token 相同） |
 
 ```bash
 openssl rand -hex 24    # 生成方式（每个 token 各用一次）
 ```
 
 **fail-closed 语义**：监听地址非 `127.0.0.1` 且未配 token → 进程**拒绝启动**并打印原因。
-永远不要带洞上线。该门闩只覆盖「配了某种鉴权」；**不**终结 TLS、**不**默认隐藏
-网关 `GET /metrics`（除非设置 `MORTRED_METRICS_TOKEN`）、也**不**拒绝短 token。
+非环回网关在 `MORTRED_METRICS_TOKEN` 为空或与推理/管理 token 相同时同样拒绝启动。
+永远不要带洞上线。该门闩**不**终结 TLS（用反代）。进程启动**不**因 token 过短而失败；
+`mortredctl doctor --strict` 会把短 token / 明文监听等警告变成失败。默认 `doctor` 仍只警告。
 不要把推理 token 当作 scrape 密钥。
 
 ### 11.2 多租户 API Key（网关层）
@@ -501,8 +502,9 @@ caddy run --config deploy/caddy/Caddyfile
 没有公网 DNS 的本机冒烟用该文件里注释掉的 `:8443 { tls internal ... }`。
 不要在 gateway / supervisor 进程里做 TLS。
 
-`mortredctl doctor` 会在有效监听非环回、token 短于 32 字符、或两个 token
-相同时打印警告。只警告，不因缺少 TLS 而失败。
+`mortredctl doctor` 会在有效监听非环回、token 短于 32 字符、或 token 相同时
+打印警告。不加 `--strict` 时不因此失败；`--strict` 会把任何警告变成失败。
+doctor 不实现 TLS。
 
 ---
 
@@ -541,7 +543,7 @@ mortredctl doctor
 
 | 端点 | 内容 |
 |---|---|
-| `GET :8080/metrics` | 网关：HTTP 请求计数/时延、推理时延、队列等待、worker 可用性（未设 `MORTRED_METRICS_TOKEN` 时公开） |
+| `GET :8080/metrics` | 网关：HTTP 请求计数/时延、推理时延、队列等待、worker 可用性（环回上未设 token 时公开；非环回必须 scrape token） |
 | `GET :8787/api/v1/metrics` | supervisor：进程状态、重启计数（需要 Bearer `MORTRED_API_TOKEN`） |
 
 仓库自带一套**本机**监控栈（Prometheus + Grafana + 告警规则）。端口只绑环回；
@@ -651,7 +653,7 @@ python3；完全无 python 的环境请用有 python 的机器完成校验后再
 | 静态 | `./scripts/verify_deployment.sh --basic` | 脚本语法 / manifest / compose YAML / 依赖清单 / `security_warn.sh --self-test` |
 | 完整 | `./scripts/verify_deployment.sh --full` | + 本地权重 sha256 + 3rd_party 完整性 |
 | 实时 | `./scripts/verify_deployment.sh --live` | + 网关探活（healthz 公开 + 推理需鉴权） |
-| 一键 | `mortredctl doctor` | live 封装 + 安全警告（不失败） |
+| 一键 | `mortredctl doctor` | live 封装 + 安全警告（默认不失败；`--strict` 会失败） |
 
 **CI 侧**：每次变更在无 GPU runner 上跑 cpu-profile 全量构建 + 全部单测——条件编译路径不会悄然腐烂；
 `sanitizers` job 持续运行 TSAN/ASan 门禁。

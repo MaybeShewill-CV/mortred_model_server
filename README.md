@@ -93,6 +93,7 @@ sudo systemctl start mortred-supervisor
 ```bash
 mortredctl init [--profile cpu|gpu]   # detect hw, fetch weight subset, verify
 mortredctl doctor                     # live acceptance + non-fatal security warnings
+mortredctl doctor --strict            # same, but security warnings fail the gate
 mortredctl status | catalog           # runtime introspection
 ```
 
@@ -209,11 +210,13 @@ processes bind loopback only and are no longer exposed port by port. The
 compose and `docker run` examples bind 8080/8787 to `127.0.0.1` on the host.
 External exposure must terminate TLS at a reverse proxy; do not publish
 those ports on `0.0.0.0` without one (Bearer tokens would travel in the
-clear). Gateway `GET /metrics` is public unless `MORTRED_METRICS_TOKEN` is
-set. Fail-closed only refuses a non-loopback listener with no auth configured. A copy-paste Caddyfile is
+clear). Gateway `GET /metrics` is public on loopback unless `MORTRED_METRICS_TOKEN`
+is set; a non-loopback gateway refuses to start without a distinct scrape token.
+Fail-closed also refuses a non-loopback listener with no inference/management
+auth, and refuses a scrape token that matches those. A copy-paste Caddyfile is
 in [deploy/caddy/Caddyfile](deploy/caddy/Caddyfile). `mortredctl doctor`
-warns about non-loopback listeners and weak/identical tokens but does not
-fail for missing TLS.
+warns about non-loopback listeners and weak/identical tokens; `doctor --strict`
+fails on those warnings. TLS stays at the reverse proxy.
 
 ## TensorRT engine regeneration (hardware-adapted)
 

@@ -52,7 +52,7 @@ Catalog g_catalog;
 ControlConfig g_cfg;
 std::string g_auth_token;       // external bearer token ("" = loopback mode)
 std::string g_admin_token;      // MORTRED_API_TOKEN; UI / mortredctl smoke
-std::string g_metrics_token;    // optional scrape Bearer for GET /metrics
+std::string g_metrics_token;    // scrape Bearer; required on non-loopback, optional on loopback
 mortred::control::ApiKeyManager g_api_keys;  // multi-key auth (P0-4)
 std::string g_internal_token;   // shared with model servers via supervisor env
 std::vector<std::string> g_cors_origins;  // UI origins allowed to call infer
@@ -559,18 +559,20 @@ int run_gateway(int argc, char** argv) {
                      "mortred-gateway: WARNING: conf/api_keys.toml failed to parse; continuing "
                      "with static-token auth only\n");
     }
-    if (g_metrics_token.empty() && !jinq::common::is_loopback_host(g_cfg.gateway.host)) {
+    if (!jinq::common::is_loopback_host(g_cfg.gateway.host) && g_metrics_token.empty()) {
         std::fprintf(stderr,
-                     "mortred-gateway: WARNING: GET /metrics is public on non-loopback %s "
-                     "(set MORTRED_METRICS_TOKEN to require a scrape Bearer; do not reuse the "
-                     "inference token)\n",
+                     "mortred-gateway: refusing to listen on non-loopback host %s without "
+                     "MORTRED_METRICS_TOKEN (GET /metrics would be public; set a scrape Bearer "
+                     "distinct from the inference and management tokens)\n",
                      g_cfg.gateway.host.c_str());
+        return 1;
     }
     if (!g_metrics_token.empty() &&
         (g_metrics_token == g_auth_token || g_metrics_token == g_admin_token)) {
         std::fprintf(stderr,
-                     "mortred-gateway: WARNING: MORTRED_METRICS_TOKEN matches an inference or "
-                     "management token; Prometheus would then hold that privilege\n");
+                     "mortred-gateway: refusing to start: MORTRED_METRICS_TOKEN matches an "
+                     "inference or management token; Prometheus would then hold that privilege\n");
+        return 1;
     }
 
     std::string catalog_err;

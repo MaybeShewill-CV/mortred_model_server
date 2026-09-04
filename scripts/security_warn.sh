@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # security_warn.sh - plaintext-HTTP / token-quality warnings for `mortredctl doctor`.
-# Always exits 0 (except --self-test). Never refuses start; fail-closed is the
-# process gate. Does not print token values.
+# Default exit 0 (except --self-test). --strict exits 1 if any warning fired.
+# Fail-closed process start is separate. Does not print token values.
 
 set -eu
 
@@ -168,7 +168,7 @@ run_warnings() {
 
     metrics_tok="${MORTRED_METRICS_TOKEN:-}"
     if ! is_loopback_host "$gw_host" && [ -z "$metrics_tok" ]; then
-        warn "GET /metrics is public on a non-loopback gateway listen; set MORTRED_METRICS_TOKEN for a scrape Bearer (do not reuse the inference token)"
+        warn "GET /metrics would be public on a non-loopback gateway listen; the gateway refuses to start until MORTRED_METRICS_TOKEN is set (do not reuse the inference token)"
     fi
     if [ -n "$metrics_tok" ] && [ "${#metrics_tok}" -lt 32 ]; then
         warn "MORTRED_METRICS_TOKEN is shorter than 32 characters"
@@ -241,7 +241,7 @@ run_self_test() {
         echo "  [FAIL] missing identical-token warning"
         failed=$((failed + 1))
     }
-    echo "$out" | grep -q 'GET /metrics is public' || {
+    echo "$out" | grep -q 'GET /metrics would be public' || {
         echo "  [FAIL] missing public-metrics warning on non-loopback gateway"
         failed=$((failed + 1))
     }
@@ -267,6 +267,30 @@ run_self_test() {
         echo "$out"
     }
 
+    if SECURITY_WARN_SKIP_SS=1 \
+        MORTRED_GATEWAY_HOST=127.0.0.1 \
+        MORTRED_API_HOST=127.0.0.1 \
+        MORTRED_API_TOKEN="$(printf 'a%.0s' {1..32})" \
+        MORTRED_GATEWAY_AUTH_TOKEN="$(printf 'b%.0s' {1..32})" \
+        bash "$ROOT/scripts/security_warn.sh" --strict; then
+        echo "  [ok]   --strict exits 0 on loopback + distinct tokens"
+    else
+        echo "  [FAIL] --strict should pass on loopback + distinct 32-char tokens"
+        failed=$((failed + 1))
+    fi
+    if SECURITY_WARN_SKIP_SS=1 \
+        MORTRED_GATEWAY_HOST=0.0.0.0 \
+        MORTRED_API_HOST=127.0.0.1 \
+        MORTRED_API_TOKEN="$(printf 'a%.0s' {1..32})" \
+        MORTRED_GATEWAY_AUTH_TOKEN="$(printf 'b%.0s' {1..32})" \
+        MORTRED_METRICS_TOKEN="$(printf 'c%.0s' {1..32})" \
+        bash "$ROOT/scripts/security_warn.sh" --strict; then
+        echo "  [FAIL] --strict should fail on non-loopback gateway (plaintext HTTP warning)"
+        failed=$((failed + 1))
+    else
+        echo "  [ok]   --strict exits 1 on non-loopback gateway"
+    fi
+
     crlf_toml="$(mktemp)"
     printf '[gateway]\r\nhost = "127.0.0.1"\r\n[supervisor]\r\napi_host = "127.0.0.1"\r\n' >"$crlf_toml"
     if [ "$(toml_section_key "$crlf_toml" gateway host)" = "127.0.0.1" ] \
@@ -291,6 +315,19 @@ if [ "${1:-}" = "--self-test" ]; then
     exit $?
 fi
 
-echo "== security warnings (never fail doctor) =="
+STRICT=0
+if [ "${1:-}" = "--strict" ]; then
+    STRICT=1
+fi
+
+if [ "$STRICT" = 1 ]; then
+    echo "== security warnings (--strict: warnings fail doctor) =="
+else
+    echo "== security warnings (never fail doctor unless --strict) =="
+fi
 run_warnings
+if [ "$STRICT" = 1 ] && [ "$WARNED" -gt 0 ]; then
+    echo "[FAIL] $WARNED security warning(s); mortredctl doctor --strict"
+    exit 1
+fi
 exit 0
