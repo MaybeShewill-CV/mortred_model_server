@@ -52,9 +52,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 - GPU golden smoke is a maintainer gate (same-repo PR and push to main,
-  skipped=0). Fork PRs never run on the self-hosted GPU runner. Require the
-  `inference paths` check, not `gpu golden smoke` by name. See
-  `docs/ci-golden-regression.md`.
+  skipped=0). It runs only when repository variable `MORTRED_HAS_GPU_RUNNER=true`;
+  otherwise the job is skipped so CI does not wait for a missing runner. Smoke
+  engine refresh is `convert_trt_engines.sh --only yolov8` only. Fork PRs never
+  run on the self-hosted GPU runner. Require the `inference paths` check, not
+  `gpu golden smoke` by name. See `docs/ci-golden-regression.md`.
 - Example Docker Compose publishes gateway `:8080` and supervisor `:8787` on
   `127.0.0.1` only. The monitoring stack binds Grafana/Prometheus to loopback,
   requires `GRAFANA_ADMIN_PASSWORD`, and no longer enables Prometheus

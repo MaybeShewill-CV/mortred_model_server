@@ -724,17 +724,18 @@ jobs:
           # successful compile red.
 
   # ---------------------------------------------------------------------------
-  # Job H: maintainer GPU golden smoke. Same-repo PRs and pushes to main
-  # only — fork PRs never run on the self-hosted GPU runner. Eight cases,
-  # skipped=0 required (MORTRED_CI_REQUIRE_WEIGHTS). This is not "every model
-  # still works on every contribution path"; forks use cpu-profile + HF MNN.
-  # See docs/ci-golden-regression.md.
+  # Job H: maintainer GPU golden smoke. Opt-in: repository variable
+  # MORTRED_HAS_GPU_RUNNER=true (Actions → Variables). Unset skips this job so
+  # CI does not wait 30 min for a runner that was never registered. Also
+  # skipped on fork PRs. Eight cases, skipped=0 when it does run.
+  # GITHUB_TOKEN cannot list self-hosted runners, so this is an explicit flag
+  # rather than an API probe. See docs/ci-golden-regression.md.
   # ---------------------------------------------------------------------------
   gpu-pr-gate:
     name: gpu golden smoke (PR gate)
     runs-on: [self-hosted, X64, gpu]
     timeout-minutes: 30
-    if: ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
+    if: ${{ vars.MORTRED_HAS_GPU_RUNNER == 'true' && (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -770,14 +771,10 @@ jobs:
       - name: Build model_golden_test target
         run: cmake --build build-gpu --target model_golden_test -j"$(nproc)"
 
-      # Rebuild only missing/stale engines; existing fresh ones are skipped.
-      # (--only does single-substring matching, so one invocation per model;
-      # a no-match exits non-zero, which is the desired strictness here.)
-      - name: Refresh engines for smoke subset (skip-if-fresh)
-        run: |
-          for m in yolov5 yolov8 nanodet centerface dbnet mobilenetv2 fastsam; do
-            bash scripts/convert_trt_engines.sh --only "$m"
-          done
+      # Only engines listed in conf/trt_engines.json. Smoke MNN cases (yolov5,
+      # nanodet, …) are not in that manifest; --only those names exits 1.
+      - name: Refresh yolov8 engine (skip-if-fresh)
+        run: bash scripts/convert_trt_engines.sh --only yolov8
 
       - name: Run golden smoke subset (fail-closed)
         run: |
@@ -810,7 +807,7 @@ jobs:
     name: gpu full regression (nightly)
     runs-on: [self-hosted, X64, gpu]
     timeout-minutes: 120
-    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ vars.MORTRED_HAS_GPU_RUNNER == 'true' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -879,9 +876,9 @@ jobs:
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
-  # Wrapper so one required check exists on every PR, including forks where
-  # gpu-pr-gate is skipped. Require this job name ("inference paths") in the
-  # branch ruleset — do not require "gpu golden smoke" by itself.
+  # Wrapper so one required check exists on every PR, including forks and
+  # repos with no GPU runner (gpu-pr-gate skipped). Require "inference paths";
+  # do not require "gpu golden smoke" by itself.
   # ---------------------------------------------------------------------------
   inference-paths:
     name: inference paths
