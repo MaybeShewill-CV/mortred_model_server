@@ -35,13 +35,17 @@ permissions:
   actions: write
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 env:
   # CI overrides the default _bin/_lib; collect artifacts in the build dir to avoid polluting the repo root
   MORTRED_CI_BIN_DIR: ${{ github.workspace }}/build-ci/bin
   MORTRED_CI_LIB_DIR: ${{ github.workspace }}/build-ci/lib
+  # Maintainer GPU smoke (8 cases). Fail-closed; not a claim that the full zoo
+  # ran, and never scheduled on fork PRs (untrusted code on the GPU box).
+  MORTRED_GPU_SMOKE_FILTER: >-
+    model_golden.yolov5_detection:model_golden.yolov8_detection:model_golden.yolov8_mixed_size_batch_matches_single_runs:model_golden.nanodet_detection:model_golden.centerface_detection:model_golden.dbnet_text_detection:model_golden.mobilenetv2_classification:model_golden.fastsam_segmentation
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -718,19 +722,17 @@ jobs:
           # successful compile red.
 
   # ---------------------------------------------------------------------------
-  # Job H: GPU golden smoke gate (PR). Runs a curated 6-model subset of the
-  # golden regression on the self-hosted GPU runner, so numerical drift in the
-  # inference stack (preprocess / NMS / decode) turns PRs red instead of
-  # silently GTEST_SKIP-ing until a human notices. No CMake/C++ changes are
-  # needed: the gpu profile already builds model_golden_test when
-  # MORTRED_BUILD_FULL=ON and weights come from the runner's persistent cache.
-  # See docs/ci-golden-regression.md for runner setup and cache layout.
+  # Job H: maintainer GPU golden smoke. Same-repo PRs and pushes to main
+  # only — fork PRs never run on the self-hosted GPU runner. Eight cases,
+  # skipped=0 required (MORTRED_CI_REQUIRE_WEIGHTS). This is not "every model
+  # still works on every contribution path"; forks use cpu-profile + HF MNN.
+  # See docs/ci-golden-regression.md.
   # ---------------------------------------------------------------------------
   gpu-pr-gate:
     name: gpu golden smoke (PR gate)
     runs-on: [self-hosted, X64, gpu]
     timeout-minutes: 30
-    if: ${{ github.event_name == 'pull_request' }}
+    if: ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -771,26 +773,26 @@ jobs:
       # a no-match exits non-zero, which is the desired strictness here.)
       - name: Refresh engines for smoke subset (skip-if-fresh)
         run: |
-          for m in yolov5 nanodet centerface dbnet mobilenetv2 fastsam; do
+          for m in yolov5 yolov8 nanodet centerface dbnet mobilenetv2 fastsam; do
             bash scripts/convert_trt_engines.sh --only "$m"
           done
 
-      # Run the smoke subset directly via gtest filter (6 cross-family cases):
-      #   3 detectors exercise distinct preprocess/NMS/decode paths
-      #   dbnet = OCR json contract, mobilenetv2 = classification scores+tolerance,
-      #   fastsam = segmentation fingerprint png.
-      # Warm cache target: <= 15 min wall clock including build.
-      - name: Run golden smoke subset
+      - name: Run golden smoke subset (fail-closed)
         run: |
-          LD_LIBRARY_PATH="$PWD/build-gpu/lib:$PWD/_lib:$PWD/3rd_party/libs" \
+          set -euo pipefail
+          export LD_LIBRARY_PATH="$PWD/build-gpu/lib:$PWD/_lib:$PWD/3rd_party/libs"
+          export MORTRED_CI_REQUIRE_WEIGHTS=1
+          mkdir -p "${RUNNER_TEMP}/gtest"
           ./build-gpu/bin/model_golden_test \
-            --gtest_filter='model_golden.yolov5_detection:model_golden.yolov8_detection:model_golden.yolov8_mixed_size_batch_matches_single_runs:model_golden.nanodet_detection:model_golden.centerface_detection:model_golden.dbnet_text_detection:model_golden.mobilenetv2_classification:model_golden.fastsam_segmentation'
+            --gtest_filter="${MORTRED_GPU_SMOKE_FILTER}" \
+            --gtest_output=xml:"${RUNNER_TEMP}/gtest/gpu-smoke.xml"
+          python3 scripts/ci_assert_gtest_xml.py "${RUNNER_TEMP}/gtest/gpu-smoke.xml"
 
       - name: Upload ctest/golden log
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: gpu-golden-smoke-log-${{ github.event.pull_request.number }}
+          name: gpu-golden-smoke-log-${{ github.event.pull_request.number || github.run_id }}
           path: |
             build-gpu/Testing/Temporary/LastTest.log
           if-no-files-found: ignore
@@ -836,10 +838,31 @@ jobs:
       - name: Build check target (all tests + libs)
         run: cmake --build build-gpu --target check -j"$(nproc)"
 
-      - name: Run full golden zoo + lifecycle + backend + gateway e2e
+      - name: Run smoke-8 fail-closed, then remaining goldens (skips reported)
         run: |
+          set -euo pipefail
           export LD_LIBRARY_PATH="$PWD/build-gpu/lib:$PWD/3rd_party/libs"
-          ./build-gpu/bin/model_golden_test
+          mkdir -p "${RUNNER_TEMP}/gtest"
+          export MORTRED_CI_REQUIRE_WEIGHTS=1
+          ./build-gpu/bin/model_golden_test \
+            --gtest_filter="${MORTRED_GPU_SMOKE_FILTER}" \
+            --gtest_output=xml:"${RUNNER_TEMP}/gtest/gpu-smoke.xml"
+          python3 scripts/ci_assert_gtest_xml.py "${RUNNER_TEMP}/gtest/gpu-smoke.xml"
+          unset MORTRED_CI_REQUIRE_WEIGHTS
+          neg=""
+          IFS=':' read -ra parts <<< "${MORTRED_GPU_SMOKE_FILTER}"
+          for p in "${parts[@]}"; do
+            [ -n "$p" ] || continue
+            if [ -z "$neg" ]; then
+              neg="-${p}"
+            else
+              neg="${neg}:-${p}"
+            fi
+          done
+          ./build-gpu/bin/model_golden_test \
+            --gtest_filter="${neg}" \
+            --gtest_output=xml:"${RUNNER_TEMP}/gtest/gpu-rest.xml"
+          python3 scripts/ci_assert_gtest_xml.py "${RUNNER_TEMP}/gtest/gpu-rest.xml" --allow-skips
           ctest --test-dir build-gpu \
             -R '^model_lifecycle_unittest$|^backend_unittest$|^gateway_e2e_test$' \
             --output-on-failure
