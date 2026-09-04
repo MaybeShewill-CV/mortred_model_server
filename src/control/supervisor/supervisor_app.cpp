@@ -32,6 +32,7 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 #include <workflow/HttpMessage.h>
+#include <workflow/HttpUtil.h>
 #include <workflow/WFFacilities.h>
 #include <workflow/WFHttpServer.h>
 #include <workflow/WFTaskFactory.h>
