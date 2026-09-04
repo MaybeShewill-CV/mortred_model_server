@@ -312,8 +312,8 @@ async function sendBatch() {
     return;
   }
   const gatewayBase = gatewayBaseUrl();
-  if (!gatewayBase || !s.uri) {
-    showToast("无法解析网关地址或模型 URI", "error");
+  if (!gatewayBase || !s.id) {
+    showToast("无法解析网关地址或模型 id", "error");
     return;
   }
   if (!state.files.length) { alert("请先选择图片"); return; }
@@ -334,12 +334,14 @@ async function sendBatch() {
     const t0 = performance.now();
     let result;
     try {
-      const resp = await authorizedFetch(gatewayBase + s.uri, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body,
-        signal: state.batchAbort.signal,
-      });
+      const resp = await authorizedFetch(
+        gatewayBase + "/v1/models/" + encodeURIComponent(s.id) + "/infer",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+          signal: state.batchAbort.signal,
+        });
       const text = await resp.text();
       let parsed = text;
       try { parsed = JSON.parse(text); } catch (e) { /* keep raw text */ }

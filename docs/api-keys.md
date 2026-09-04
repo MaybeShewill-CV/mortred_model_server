@@ -64,18 +64,18 @@ curl -X POST http://localhost:8080/mortred_ai_server_v1/obj_detection/yolov8 \
 
 ```bash
 # 1. Submit
-curl -X POST http://localhost:8080/mortred_ai_server_v1/diffusion/ddpm/jobs \
+curl -X POST http://localhost:8080/v1/models/DDPM/jobs \
   -H "Authorization: Bearer $MORTRED_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"img_data": "...", "timestep": 100}'
 # Returns: {"job_id": "job_xxx", "state": "pending"}
 
 # 2. Poll
-curl http://localhost:8080/mortred_ai_server_v1/diffusion/ddpm/jobs/job_xxx \
+curl http://localhost:8080/v1/models/DDPM/jobs/job_xxx \
   -H "Authorization: Bearer $MORTRED_API_KEY"
 
 # 3. Get result
-curl http://localhost:8080/mortred_ai_server_v1/diffusion/ddpm/jobs/job_xxx/result \
+curl http://localhost:8080/v1/models/DDPM/jobs/job_xxx/result \
   -H "Authorization: Bearer $MORTRED_API_KEY"
 ```
 

@@ -5,21 +5,24 @@
 
 ## Topology note: mortred-gateway
 
-Production traffic goes through **mortred-gateway** (default `:8080`): each
-model `server_uri` is routed to its loopback model server. The gateway enforces
-the external Bearer token (`MORTRED_GATEWAY_AUTH_TOKEN`), maps a dead upstream
-to `503` and transport failures to `502`; all model-server status codes below
-pass through unchanged. `GET /healthz` and `GET /metrics` are public on the
-gateway. Model ports are loopback-only and must not be exposed; TLS must be
-terminated by a reverse proxy in front of the gateway.
+Production traffic goes through **mortred-gateway** (default `:8080`). The
+gateway looks up the catalog **id** first (`/v1/models/{id}/…`), then the
+legacy `server_uri`, and forwards to the model's loopback port. The gateway
+enforces the external Bearer token (`MORTRED_GATEWAY_AUTH_TOKEN` or
+`MORTRED_API_TOKEN`), maps a dead upstream to `503` and transport failures to
+`502`; all model-server status codes below pass through unchanged. `GET
+/healthz` and `GET /metrics` are public on the gateway. Model ports are
+loopback-only and must not be exposed; TLS must be terminated by a reverse
+proxy in front of the gateway.
 
 The supervisor (`:8787`) exposes the management REST API under `/api/v1/`
 (health/catalog/status/lifecycle/logs/metrics) and the embedded web UI;
 `mortredctl` is its CLI client. **Inference smoke tests** (the Web UI send
-button and `mortredctl infer`) POST the data-plane envelope to the gateway
-using the model's `server_uri`, with the same Bearer token as the management
-API (`MORTRED_API_TOKEN`). The supervisor `/api/v1/infer` proxy remains for
-compatibility in this release but is no longer the UI/CLI path.
+button and `mortredctl infer`) POST the data-plane envelope to
+`POST /v1/models/{id}/infer` on the gateway, with the same Bearer token as
+the management API (`MORTRED_API_TOKEN`). The supervisor `/api/v1/infer`
+proxy remains for compatibility in this release but is no longer the UI/CLI
+path. Legacy `{server_uri}` on `:8080` is still accepted.
 
 All model servers follow a unified HTTP JSON contract. The authoritative machine-readable
 description is `docs/openapi.json` (served by every model server at `GET /openapi.json`);
@@ -157,9 +160,25 @@ enhancement, depth, feature point) are defined in `docs/openapi.json`
 ## Async jobs
 
 Long-running inference can be submitted asynchronously when the server enables
-`async_enabled`:
+`async_enabled`. On the **model port** the paths are unchanged (`POST /jobs`,
+`GET /jobs/{id}`, …). Through the **gateway** the same handlers are reached
+with a catalog-id prefix; the gateway is stateless and rewrites `Location` /
+`poll_url` / `result_url` onto that prefix:
 
-| Endpoint | Success | Errors |
+| Gateway | Method | Upstream on the model port |
+|---|---|---|
+| `/v1/models/{id}/infer` | POST | `{server_uri}` |
+| `/v1/models/{id}/jobs` | POST | `/jobs` |
+| `/v1/models/{id}/jobs/{job}` | GET | `/jobs/{job}` |
+| `/v1/models/{id}/jobs/{job}/wait` | GET | `/jobs/{job}/wait` + query |
+| `/v1/models/{id}/jobs/{job}/result` | GET | `/jobs/{job}/result` |
+| `{server_uri}` | POST | `{server_uri}` (legacy) |
+
+`GET /v1/models/{id}/infer` and `GET {server_uri}` return `405`. Unknown `{id}`
+is the same 404 envelope as an unknown `server_uri`. If the model has
+`async_enabled` off, upstream `404` is passed through.
+
+| Endpoint (model port) | Success | Errors |
 |---|---|---|
 | `POST /jobs` | `202` with `job_id`, `state`, `poll_url`, `result_url` | `429` when the admission queue is full |
 | `GET /jobs/{id}` | `200` with `state` (`pending`/`running`/`done`/`failed`/`timeout`) | `404` unknown id |

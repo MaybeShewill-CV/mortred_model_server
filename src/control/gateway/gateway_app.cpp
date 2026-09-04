@@ -6,8 +6,9 @@
 ************************************************/
 
 // Data-plane reverse proxy: single external entry that routes each model
-// server_uri to its loopback model server. Stateless by design; the
-// supervisor owns its lifecycle (restart on exit, config reload = restart).
+// by catalog id (/v1/models/{id}/…) or by the legacy server_uri to its
+// loopback model server. Stateless by design; the supervisor owns its
+// lifecycle (restart on exit, config reload = restart).
 
 #include <unistd.h>
 
@@ -23,6 +24,9 @@
 #include <system_error>
 #include <vector>
 
+#include <rapidjson/document.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 #include <workflow/HttpMessage.h>
 #include <workflow/HttpUtil.h>
 #include <workflow/WFFacilities.h>
@@ -149,7 +153,7 @@ void maybe_add_cors(WFHttpTask* task) {
     }
     auto* resp = task->get_resp();
     resp->add_header_pair("Access-Control-Allow-Origin", origin.c_str());
-    resp->add_header_pair("Access-Control-Allow-Methods", "POST, OPTIONS");
+    resp->add_header_pair("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     resp->add_header_pair("Access-Control-Allow-Headers", "Authorization, Content-Type");
     resp->add_header_pair("Vary", "Origin");
 }
@@ -173,27 +177,119 @@ std::string uri_path(const char* uri) {
     return q == std::string::npos ? s : s.substr(0, q);
 }
 
-void forward_to_model(WFHttpTask* task, const mortred::control::ServerEntry& entry) {
-    // workflow leaves method null when the request line is malformed
-    const char* raw_method = task->get_req()->get_method();
-    const std::string method = raw_method == nullptr ? "" : raw_method;
-    if (method != "POST") {
-        g_metrics.inc_http_requests(method, "405");
-        task->get_resp()->add_header_pair("Allow", "POST");
-        reply_error(task, 405, "method not allowed");
-        return;
-    }
+std::string uri_query(const char* uri) {
+    const std::string s(uri == nullptr ? "" : uri);
+    const auto q = s.find('?');
+    return q == std::string::npos ? "" : s.substr(q);
+}
 
-    std::string body = protocol::HttpUtil::decode_chunked_body(task->get_req());
-    const std::string url = "http://127.0.0.1:" + std::to_string(entry.port) + entry.uri;
-    const std::string route = entry.id;
+std::string rewrite_jobs_public_url(const std::string& value, const std::string& id) {
+    if (value.rfind("/jobs", 0) == 0) {
+        return "/v1/models/" + id + value;
+    }
+    return value;
+}
+
+std::string rewrite_job_url_fields(const char* data, size_t size, const std::string& id) {
+    rapidjson::Document d;
+    d.Parse(data, size);
+    if (d.HasParseError() || !d.IsObject()) {
+        return std::string(data, size);
+    }
+    bool changed = false;
+    auto rewrite_field = [&](const char* key) {
+        if (!d.HasMember(key) || !d[key].IsString()) {
+            return;
+        }
+        const std::string v = d[key].GetString();
+        const std::string nv = rewrite_jobs_public_url(v, id);
+        if (nv != v) {
+            d[key].SetString(nv.c_str(), static_cast<rapidjson::SizeType>(nv.size()),
+                             d.GetAllocator());
+            changed = true;
+        }
+    };
+    rewrite_field("poll_url");
+    rewrite_field("result_url");
+    if (!changed) {
+        return std::string(data, size);
+    }
+    rapidjson::StringBuffer buf;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
+    d.Accept(writer);
+    return std::string(buf.GetString(), buf.GetSize());
+}
+
+struct ResolvedRoute {
+    const mortred::control::ServerEntry* entry = nullptr;
+    std::string upstream_path;
+    std::string allowed_method;
+    bool rewrite_job_urls = false;
+    bool append_query = false;
+};
+
+bool resolve_route(const std::string& path, ResolvedRoute* out) {
+    static const std::string kPrefix = "/v1/models/";
+    if (path.rfind(kPrefix, 0) == 0) {
+        const std::string rest = path.substr(kPrefix.size());
+        const auto slash = rest.find('/');
+        if (slash == std::string::npos || slash == 0) {
+            return false;
+        }
+        const std::string id = rest.substr(0, slash);
+        const std::string suffix = rest.substr(slash);
+        const auto* entry = g_catalog.find(id);
+        if (entry == nullptr) {
+            return false;
+        }
+        out->entry = entry;
+        if (suffix == "/infer") {
+            out->upstream_path = entry->uri;
+            out->allowed_method = "POST";
+            return true;
+        }
+        if (suffix == "/jobs") {
+            out->upstream_path = "/jobs";
+            out->allowed_method = "POST";
+            out->rewrite_job_urls = true;
+            return true;
+        }
+        if (suffix.rfind("/jobs/", 0) == 0) {
+            out->upstream_path = suffix;
+            out->allowed_method = "GET";
+            out->rewrite_job_urls = true;
+            out->append_query = true;
+            return true;
+        }
+        return false;
+    }
+    const auto* entry = g_catalog.find_by_uri(path);
+    if (entry == nullptr) {
+        return false;
+    }
+    out->entry = entry;
+    out->upstream_path = entry->uri;
+    out->allowed_method = "POST";
+    return true;
+}
+
+void forward_to_model(WFHttpTask* task, const ResolvedRoute& route, const std::string& method,
+                      const std::string& query) {
+    std::string body;
+    if (method == "POST") {
+        body = protocol::HttpUtil::decode_chunked_body(task->get_req());
+    }
+    const std::string url =
+        "http://127.0.0.1:" + std::to_string(route.entry->port) + route.upstream_path + query;
+    const std::string model_id = route.entry->id;
+    const bool rewrite_job_urls = route.rewrite_job_urls;
     const int send_timeout = g_cfg.gateway.upstream_send_timeout_ms;
     const int recv_timeout = g_cfg.gateway.upstream_recv_timeout_ms;
     const std::string internal_token = g_internal_token;
     const auto t0 = std::chrono::steady_clock::now();
 
     auto* client = WFTaskFactory::create_http_task(
-        url, 0, 0, [task, route, method, t0](WFHttpTask* t) {
+        url, 0, 0, [task, model_id, method, t0, rewrite_job_urls](WFHttpTask* t) {
             auto* resp = task->get_resp();
             if (t->get_state() != WFT_STATE_SUCCESS) {
                 const int code = t->get_error() == ECONNREFUSED ? 503 : 502;
@@ -217,8 +313,7 @@ void forward_to_model(WFHttpTask* task, const mortred::control::ServerEntry& ent
                     .count());
             resp->set_status_code(t->get_resp()->get_status_code());
             resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
-            resp->add_header_pair("X-Mortred-Model", route.c_str());
-            // forward upstream overload hints (429 + Retry-After) verbatim
+            resp->add_header_pair("X-Mortred-Model", model_id.c_str());
             protocol::HttpHeaderCursor cursor(t->get_resp());
             protocol::HttpMessageHeader header;
             while (cursor.next(&header)) {
@@ -229,22 +324,36 @@ void forward_to_model(WFHttpTask* task, const mortred::control::ServerEntry& ent
                     const std::string value(static_cast<const char*>(header.value),
                                             header.value_len);
                     resp->add_header_pair("Retry-After", value.c_str());
+                } else if (name == "location" && rewrite_job_urls) {
+                    const std::string value(static_cast<const char*>(header.value),
+                                            header.value_len);
+                    const std::string public_loc = rewrite_jobs_public_url(value, model_id);
+                    resp->add_header_pair("Location", public_loc.c_str());
                 }
             }
             const void* data = nullptr;
             size_t size = 0;
             t->get_resp()->get_parsed_body(&data, &size);
-            resp->append_output_body(data, size);
+            if (rewrite_job_urls && data != nullptr && size > 0) {
+                const std::string rewritten = rewrite_job_url_fields(
+                    static_cast<const char*>(data), size, model_id);
+                resp->append_output_body(rewritten.data(), rewritten.size());
+            } else {
+                resp->append_output_body(data, size);
+            }
         });
-    client->get_req()->set_method("POST");
-    client->get_req()->append_output_body(body.data(), body.size());
-    // forward the client's encoding choice verbatim: the unified contract is
-    // encoding-agnostic (JSON envelope today, raw image/* bodies in M6) and
-    // the model server rejects what it does not support with a precise 415
-    const std::string client_content_type = header_value(task->get_req(), "content-type");
-    client->get_req()->add_header_pair(
-        "Content-Type",
-        client_content_type.empty() ? "application/json; charset=utf-8" : client_content_type.c_str());
+    client->get_req()->set_method(method.c_str());
+    if (method == "POST") {
+        client->get_req()->append_output_body(body.data(), body.size());
+        // forward the client's encoding choice verbatim: the unified contract is
+        // encoding-agnostic (JSON envelope today, raw image/* bodies in M6) and
+        // the model server rejects what it does not support with a precise 415
+        const std::string client_content_type = header_value(task->get_req(), "content-type");
+        client->get_req()->add_header_pair(
+            "Content-Type",
+            client_content_type.empty() ? "application/json; charset=utf-8"
+                                        : client_content_type.c_str());
+    }
     const std::string client_accept = header_value(task->get_req(), "accept");
     if (!client_accept.empty()) {
         client->get_req()->add_header_pair("Accept", client_accept.c_str());
@@ -286,8 +395,8 @@ void process(WFHttpTask* task) {
         return;
     }
 
-    const auto* entry = g_catalog.find_by_uri(path);
-    if (entry == nullptr) {
+    ResolvedRoute route;
+    if (!resolve_route(path, &route)) {
         g_metrics.inc_http_requests(method, "404");
         reply_error(task, 404, "no model route for this path");
         return;
@@ -334,7 +443,14 @@ void process(WFHttpTask* task) {
     if (!key_name.empty()) {
         task->get_resp()->add_header_pair("X-Mortred-Key", key_name.c_str());
     }
-    forward_to_model(task, *entry);
+    if (method != route.allowed_method) {
+        g_metrics.inc_http_requests(method, "405");
+        task->get_resp()->add_header_pair("Allow", route.allowed_method.c_str());
+        reply_error(task, 405, "method not allowed");
+        return;
+    }
+    const std::string query = route.append_query ? uri_query(task->get_req()->get_request_uri()) : "";
+    forward_to_model(task, route, method, query);
 }
 
 }  // namespace

@@ -5,9 +5,10 @@
 
 ## 拓扑说明：mortred-gateway
 
-生产流量统一经由 **mortred-gateway**（默认 `:8080`）：网关按各模型的
-`server_uri` 将请求路由到仅监听环回地址的模型服务器。网关负责外部
-Bearer Token 鉴权（`MORTRED_GATEWAY_AUTH_TOKEN`），将上游不可达映射为
+生产流量统一经由 **mortred-gateway**（默认 `:8080`）。网关先按 catalog
+**id** 匹配 `/v1/models/{id}/…`，再按遗留 `server_uri` 精确匹配，转发到
+仅监听环回地址的模型服务器。网关负责外部 Bearer Token 鉴权
+（`MORTRED_GATEWAY_AUTH_TOKEN` 或 `MORTRED_API_TOKEN`），将上游不可达映射为
 `503`、传输失败映射为 `502`；下文所有模型服务器状态码均原样透传。网关的
 `GET /healthz` 与 `GET /metrics` 为公开端点。模型端口仅绑定环回地址、
 不得对外暴露；对外服务必须由网关前置的反向代理终结 TLS。
@@ -15,9 +16,10 @@ Bearer Token 鉴权（`MORTRED_GATEWAY_AUTH_TOKEN`），将上游不可达映射
 监督器（supervisor，`:8787`）在 `/api/v1/` 下提供管理 REST API
 （health/catalog/status/生命周期/日志/metrics）与内嵌 Web UI；
 `mortredctl` 是它的命令行客户端。**推理冒烟**（控制台发送按钮和
-`mortredctl infer`）把数据面信封 POST 到网关的模型 `server_uri`，Bearer
-与管理 API 相同（`MORTRED_API_TOKEN`）。监督进程上的 `/api/v1/infer`
-本版本仍保留，但不再是 UI/CLI 入口。
+`mortredctl infer`）把数据面信封 POST 到网关的
+`/v1/models/{id}/infer`，Bearer 与管理 API 相同（`MORTRED_API_TOKEN`）。
+监督进程上的 `/api/v1/infer` 本版本仍保留，但不再是 UI/CLI 入口。`:8080`
+上的遗留 `{server_uri}` 仍然可用。
 
 所有模型服务器遵循统一的 HTTP JSON 契约。权威的机器可读描述是
 `docs/openapi.json`（每个模型服务器在 `GET /openapi.json` 提供）；
@@ -160,9 +162,23 @@ worker 数量估算排水时间，钳制在 1-60 秒）。网关将两者原样�
 `src/server/response_serializers.h` 实现。
 ## 异步任务
 
-服务端开启 `async_enabled` 后，长耗时推理可异步提交：
+服务端开启 `async_enabled` 后，长耗时推理可异步提交。**模型端口**上的路径不变
+（`POST /jobs`、`GET /jobs/{id}` 等）。经 **网关** 时同一套处理带 catalog id
+前缀；网关无状态，并把 `Location` / `poll_url` / `result_url` 改写成该前缀：
 
-| 端点 | 成功 | 错误 |
+| 网关 | 方法 | 模型端口上游 |
+|---|---|---|
+| `/v1/models/{id}/infer` | POST | `{server_uri}` |
+| `/v1/models/{id}/jobs` | POST | `/jobs` |
+| `/v1/models/{id}/jobs/{job}` | GET | `/jobs/{job}` |
+| `/v1/models/{id}/jobs/{job}/wait` | GET | `/jobs/{job}/wait` + query |
+| `/v1/models/{id}/jobs/{job}/result` | GET | `/jobs/{job}/result` |
+| `{server_uri}` | POST | `{server_uri}`（遗留） |
+
+`GET /v1/models/{id}/infer` 与 `GET {server_uri}` 返回 `405`。未知 `{id}` 与未知
+`server_uri` 使用同一 404 信封。模型未开异步时，上游 `404` 原样透传。
+
+| 端点（模型端口） | 成功 | 错误 |
 |---|---|---|
 | `POST /jobs` | `202`，返回 `job_id`、`state`、`poll_url`、`result_url` | 准入队列满时 `429` |
 | `GET /jobs/{id}` | `200`，返回 `state`（`pending`/`running`/`done`/`failed`/`timeout`） | 未知 id `404` |

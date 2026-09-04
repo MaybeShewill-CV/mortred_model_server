@@ -80,24 +80,42 @@ void handle_client(int fd, const std::string& mode) {
     const size_t sp = req.find(' ');
     const size_t sp2 = req.find(' ', sp + 1);
     std::string path = sp2 == std::string::npos ? "/" : req.substr(sp + 1, sp2 - sp - 1);
+    std::string query;
     const auto q = path.find('?');
     if (q != std::string::npos) {
+        query = path.substr(q + 1);
         path = path.substr(0, q);
     }
 
     std::string status = "200 OK";
     std::string body = "{\"code\":0,\"msg\":\"success\",\"data\":{\"fake\":true}}";
-    if (path == "/ready" && mode == "never-ready") {
-        status = "503 Service Unavailable";
-        body = "{\"code\":65}";
-    } else if (method == "GET") {
-        body = "ok";
-    }
     std::string extra_headers;
     if (mode == "overloaded" && method == "POST") {
         status = "429 Too Many Requests";
         body = "{\"code\":429}";
         extra_headers = "Retry-After: 2\r\n";
+    } else if (path == "/jobs" && method == "POST") {
+        status = "202 Accepted";
+        body = "{\"job_id\":\"job_fake_1\",\"state\":\"pending\","
+               "\"poll_url\":\"/jobs/job_fake_1\","
+               "\"result_url\":\"/jobs/job_fake_1/result\","
+               "\"upstream_path\":\"/jobs\"}";
+        extra_headers = "Location: /jobs/job_fake_1\r\n";
+    } else if (path.rfind("/jobs/", 0) == 0 && method == "GET") {
+        const std::string qjson = query.empty() ? "" : ",\"upstream_query\":\"" + query + "\"";
+        if (path.size() >= 7 && path.compare(path.size() - 7, 7, "/result") == 0) {
+            body = "{\"code\":0,\"msg\":\"success\",\"data\":{\"fake\":true},"
+                   "\"upstream_path\":\"" +
+                   path + "\"" + qjson + "}";
+        } else {
+            body = "{\"job_id\":\"job_fake_1\",\"state\":\"done\",\"upstream_path\":\"" + path +
+                   "\"" + qjson + "}";
+        }
+    } else if (path == "/ready" && mode == "never-ready") {
+        status = "503 Service Unavailable";
+        body = "{\"code\":65}";
+    } else if (method == "GET") {
+        body = "ok";
     }
     const std::string resp = "HTTP/1.1 " + status + "\r\n" +
                              "Content-Type: application/json; charset=utf-8\r\n" +
