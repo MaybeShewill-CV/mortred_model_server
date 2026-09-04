@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Stdlib HTTP inference RPS client (`scripts/server/http_infer_rps.py`): keep-alive
+  workers, pre-encoded envelope, serving RPS + latency percentiles, optional `--qps`,
+  JSON report. `test_server.py --mode load` wraps catalog/gateway URLs. No locust
+  or requests.
 - `mortredctl doctor --strict`: fail the doctor when security warnings fire
   (non-loopback plaintext HTTP, short tokens, identical tokens). Default
   `doctor` still warns only.
@@ -30,6 +34,8 @@ All notable changes to this project are documented here. The format follows
   rewritten onto that prefix. The legacy `{server_uri}` POST path still works.
 
 ### Removed
+- Locust demo worker `scripts/server/locust_performance.py` (breaking for anyone
+  who invoked `--mode locust`). Use `--mode load` / `http_infer_rps.py`.
 - Supervisor `/api/v1/infer`, `/api/v1/jobs*`, and `/api/v1/pipelines*`
   (breaking). Inference and async jobs go through the gateway; there is no
   server-side pipeline on the supervisor. Those paths now return the

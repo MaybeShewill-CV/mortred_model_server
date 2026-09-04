@@ -249,8 +249,9 @@ jobs:
           python3 scripts/check_consistency.py
           python3 scripts/gen_openapi.py --check
           CHECK_ALLOW_GENERATED=1 ./scripts/check_repo_clean.sh
-          python3 -m py_compile scripts/server/test_server.py scripts/server/locust_performance.py
+          python3 -m py_compile scripts/server/test_server.py scripts/server/http_infer_rps.py
           python3 scripts/server/test_server.py --list
+          python3 scripts/server/http_infer_rps.py --self-test
 
   # ---------------------------------------------------------------------------
   # Job B2: sanitizers - permanent regression gate for the async job ledger.
