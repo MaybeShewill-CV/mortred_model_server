@@ -141,6 +141,7 @@ pid_t spawn(const std::string& exe, const std::vector<std::string>& args,
     // hand tests would otherwise make fail-closed cases start.
     ::unsetenv("MORTRED_API_TOKEN");
     ::unsetenv("MORTRED_GATEWAY_AUTH_TOKEN");
+    ::unsetenv("MORTRED_METRICS_TOKEN");
     for (const auto& kv : env) {
         ::setenv(kv.first.c_str(), kv.second.c_str(), 1);
     }
@@ -607,6 +608,40 @@ TEST_F(GatewayAuthTest, NonLoopbackWithOnlyApiTokenStarts) {
     EXPECT_EQ(r.status, 401);
     r = send_request(gateway_port_, "POST", kAuthRoute, "{}", "mgmt-token");
     EXPECT_EQ(r.status, 200);
+}
+
+TEST_F(GatewayAuthTest, MetricsTokenUnsetStaysPublic) {
+    ASSERT_TRUE(StartGateway("127.0.0.1", "ext-token", ""));
+    auto r = send_request(gateway_port_, "GET", "/metrics", "");
+    EXPECT_EQ(r.status, 200);
+    r = send_request(gateway_port_, "GET", "/healthz", "");
+    EXPECT_EQ(r.status, 200);
+}
+
+TEST_F(GatewayAuthTest, MetricsTokenRejectsAnonymousAndWrongBearer) {
+    ASSERT_TRUE(StartGateway("127.0.0.1", "ext-token", "",
+                             {{"MORTRED_METRICS_TOKEN", "scrape-token"}}));
+    auto r = send_request(gateway_port_, "GET", "/metrics", "");
+    EXPECT_EQ(r.status, 401);
+    ASSERT_NE(r.headers.find("www-authenticate"), r.headers.end());
+    r = send_request(gateway_port_, "GET", "/metrics", "", "wrong-scrape");
+    EXPECT_EQ(r.status, 401);
+    r = send_request(gateway_port_, "GET", "/metrics", "", "ext-token");
+    EXPECT_EQ(r.status, 401) << "inference token must not unlock metrics scrape";
+    r = send_request(gateway_port_, "GET", "/healthz", "");
+    EXPECT_EQ(r.status, 200);
+}
+
+TEST_F(GatewayAuthTest, MetricsTokenAcceptsScrapeBearer) {
+    ASSERT_TRUE(StartGateway("127.0.0.1", "ext-token", "",
+                             {{"MORTRED_METRICS_TOKEN", "scrape-token"}}));
+    auto r = send_request(gateway_port_, "GET", "/metrics", "", "scrape-token");
+    EXPECT_EQ(r.status, 200);
+    EXPECT_NE(r.body.find("mortred_http_requests_total"), std::string::npos);
+    r = send_request(gateway_port_, "POST", kAuthRoute, "{}", "ext-token");
+    EXPECT_EQ(r.status, 200);
+    r = send_request(gateway_port_, "POST", kAuthRoute, "{}", "scrape-token");
+    EXPECT_EQ(r.status, 401) << "metrics scrape token must not infer";
 }
 
 int main(int argc, char** argv) {

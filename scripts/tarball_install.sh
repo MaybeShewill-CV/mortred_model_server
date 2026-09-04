@@ -60,6 +60,8 @@ if [ ! -f /etc/mortred/supervisor.env ]; then
 # REQUIRED for non-loopback serving (fail-closed without them):
 # MORTRED_API_TOKEN=<management token>
 # MORTRED_GATEWAY_AUTH_TOKEN=<inference token>
+# optional scrape Bearer for gateway GET /metrics (do not reuse inference token):
+# MORTRED_METRICS_TOKEN=<metrics token>
 EOF
     chmod 600 /etc/mortred/supervisor.env
 fi

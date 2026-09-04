@@ -76,7 +76,7 @@ flowchart LR
 
 | Port | Process | Purpose | Auth |
 |---|---|---|---|
-| `8080` | mortred-gateway | inference `/mortred_ai_server_v1/...`, `/healthz`, `/metrics` | Bearer on infer/jobs; `/healthz` and `/metrics` public |
+| `8080` | mortred-gateway | inference `/mortred_ai_server_v1/...`, `/healthz`, `/metrics` | Bearer on infer/jobs; `/healthz` public; `/metrics` public unless `MORTRED_METRICS_TOKEN` |
 | `8787` | mortred-supervisor | mgmt API `/api/v1/*`, web console | Bearer token |
 | `9002+` | model servers | loopback only | internal token |
 
@@ -453,12 +453,13 @@ missing engines without failing.
 
 ## 11. Authentication & Security
 
-### 11.1 The two tokens
+### 11.1 Tokens
 
 | Token | Protects | Where |
 |---|---|---|
 | `MORTRED_API_TOKEN` | supervisor mgmt API + web console | `/etc/mortred/supervisor.env` (tarball) / container env |
 | `MORTRED_GATEWAY_AUTH_TOKEN` | gateway inference entry | same |
+| `MORTRED_METRICS_TOKEN` | optional; gateway `GET /metrics` scrape Bearer | same (unset = public `/metrics`) |
 
 ```bash
 openssl rand -hex 24    # generate (one independent value per token)
@@ -467,7 +468,8 @@ openssl rand -hex 24    # generate (one independent value per token)
 **Fail-closed semantics**: a non-loopback listener without its token **refuses
 to start** and prints why. Never deploy with a hole. That gate only covers
 "some auth is configured". It does **not** terminate TLS, hide gateway
-`GET /metrics`, or reject a short token.
+`GET /metrics` unless `MORTRED_METRICS_TOKEN` is set, or reject a short token.
+Do not reuse the inference token as the scrape secret.
 
 ### 11.2 Multi-tenant API keys (gateway layer)
 
@@ -501,6 +503,7 @@ See [api-keys.md](api-keys.md) for the full guide incl. zero-downtime rotation.
 - [ ] no model-server ports in the firewall allowlist (they are loopback-only anyway)
 - [ ] Grafana/Prometheus ports stay on loopback; Grafana password is not the image default
 - [ ] Prometheus does not scrape model ports that have been published off-loopback
+- [ ] if 8080 is reachable off-loopback, `MORTRED_METRICS_TOKEN` is set and distinct from the inference token
 
 ### 11.4 TLS reverse proxy (Caddy)
 
@@ -559,7 +562,7 @@ Out-of-the-box Prometheus endpoints:
 
 | Endpoint | Content |
 |---|---|
-| `GET :8080/metrics` | gateway: HTTP counts/latency, inference latency, queue wait, worker availability (public) |
+| `GET :8080/metrics` | gateway: HTTP counts/latency, inference latency, queue wait, worker availability (public unless `MORTRED_METRICS_TOKEN`) |
 | `GET :8787/api/v1/metrics` | supervisor: process states, restart counters (Bearer `MORTRED_API_TOKEN`) |
 
 A **local** monitoring stack ships in the repo (Prometheus + Grafana + alert

@@ -22,6 +22,7 @@ services:
     environment:
       MORTRED_API_TOKEN: "${MORTRED_API_TOKEN:?set MORTRED_API_TOKEN to protect the supervisor API}"
       MORTRED_GATEWAY_AUTH_TOKEN: "${MORTRED_GATEWAY_AUTH_TOKEN:?set MORTRED_GATEWAY_AUTH_TOKEN to protect inference}"
+      MORTRED_METRICS_TOKEN: "${MORTRED_METRICS_TOKEN:-}"
       MORTRED_AUTOSTART: "true"
     ports:
       - "127.0.0.1:8787:8787"
@@ -53,6 +54,7 @@ services:
     environment:
       MORTRED_API_TOKEN: "${MORTRED_API_TOKEN:?set MORTRED_API_TOKEN to protect the supervisor API}"
       MORTRED_GATEWAY_AUTH_TOKEN: "${MORTRED_GATEWAY_AUTH_TOKEN:?set MORTRED_GATEWAY_AUTH_TOKEN to protect inference}"
+      MORTRED_METRICS_TOKEN: "${MORTRED_METRICS_TOKEN:-}"
       MORTRED_PROFILE: "cpu"
       MORTRED_AUTOSTART: "true"
     ports:

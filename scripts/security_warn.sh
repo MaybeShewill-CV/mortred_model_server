@@ -69,7 +69,7 @@ load_kv_file() {
             export\ *) line="${line#export }" ;;
         esac
         case "$line" in
-            MORTRED_API_TOKEN=*|MORTRED_GATEWAY_AUTH_TOKEN=*|MORTRED_GATEWAY_HOST=*|MORTRED_API_HOST=*)
+            MORTRED_API_TOKEN=*|MORTRED_GATEWAY_AUTH_TOKEN=*|MORTRED_METRICS_TOKEN=*|MORTRED_GATEWAY_HOST=*|MORTRED_API_HOST=*)
                 key="${line%%=*}"
                 val="${line#*=}"
                 val="${val%\"}"
@@ -119,7 +119,7 @@ host_from_ss() {
 }
 
 run_warnings() {
-    local gw_host api_host api_tok gw_tok ss_host toml="$ROOT/conf/mortred.toml"
+    local gw_host api_host api_tok gw_tok metrics_tok ss_host toml="$ROOT/conf/mortred.toml"
 
     load_kv_file "/etc/mortred/supervisor.env"
     load_kv_file "$ROOT/conf/supervisor.env"
@@ -164,6 +164,20 @@ run_warnings() {
     fi
     if [ -n "$api_tok" ] && [ -n "$gw_tok" ] && [ "$api_tok" = "$gw_tok" ]; then
         warn "MORTRED_API_TOKEN and MORTRED_GATEWAY_AUTH_TOKEN are identical; use two independent values"
+    fi
+
+    metrics_tok="${MORTRED_METRICS_TOKEN:-}"
+    if ! is_loopback_host "$gw_host" && [ -z "$metrics_tok" ]; then
+        warn "GET /metrics is public on a non-loopback gateway listen; set MORTRED_METRICS_TOKEN for a scrape Bearer (do not reuse the inference token)"
+    fi
+    if [ -n "$metrics_tok" ] && [ "${#metrics_tok}" -lt 32 ]; then
+        warn "MORTRED_METRICS_TOKEN is shorter than 32 characters"
+    fi
+    if [ -n "$metrics_tok" ] && [ -n "$gw_tok" ] && [ "$metrics_tok" = "$gw_tok" ]; then
+        warn "MORTRED_METRICS_TOKEN matches MORTRED_GATEWAY_AUTH_TOKEN; Prometheus would then hold inference privilege"
+    fi
+    if [ -n "$metrics_tok" ] && [ -n "$api_tok" ] && [ "$metrics_tok" = "$api_tok" ]; then
+        warn "MORTRED_METRICS_TOKEN matches MORTRED_API_TOKEN; Prometheus would then hold management privilege"
     fi
 
     if [ "$WARNED" -eq 0 ]; then
@@ -227,6 +241,10 @@ run_self_test() {
         echo "  [FAIL] missing identical-token warning"
         failed=$((failed + 1))
     }
+    echo "$out" | grep -q 'GET /metrics is public' || {
+        echo "  [FAIL] missing public-metrics warning on non-loopback gateway"
+        failed=$((failed + 1))
+    }
     if echo "$out" | grep -q 'tokA'; then
         echo "  [FAIL] warning output leaked a token value"
         failed=$((failed + 1))
@@ -238,6 +256,7 @@ run_self_test() {
         SECURITY_WARN_SKIP_SS=1 \
         MORTRED_GATEWAY_HOST=127.0.0.1 \
         MORTRED_API_HOST=127.0.0.1 \
+        MORTRED_METRICS_TOKEN= \
         MORTRED_API_TOKEN="$(printf 'a%.0s' {1..32})" \
         MORTRED_GATEWAY_AUTH_TOKEN="$(printf 'b%.0s' {1..32})" \
         bash "$ROOT/scripts/security_warn.sh"

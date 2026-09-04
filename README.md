@@ -208,8 +208,8 @@ processes bind loopback only and are no longer exposed port by port. The
 compose and `docker run` examples bind 8080/8787 to `127.0.0.1` on the host.
 External exposure must terminate TLS at a reverse proxy; do not publish
 those ports on `0.0.0.0` without one (Bearer tokens would travel in the
-clear). Gateway `GET /metrics` is public; fail-closed only refuses a
-non-loopback listener with no auth configured. A copy-paste Caddyfile is
+clear). Gateway `GET /metrics` is public unless `MORTRED_METRICS_TOKEN` is
+set. Fail-closed only refuses a non-loopback listener with no auth configured. A copy-paste Caddyfile is
 in [deploy/caddy/Caddyfile](deploy/caddy/Caddyfile). `mortredctl doctor`
 warns about non-loopback listeners and weak/identical tokens but does not
 fail for missing TLS.

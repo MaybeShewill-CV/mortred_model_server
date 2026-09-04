@@ -72,7 +72,7 @@ flowchart LR
 
 | 端口 | 进程 | 用途 | 鉴权 |
 |---|---|---|---|
-| `8080` | mortred-gateway | 推理入口 `/mortred_ai_server_v1/...`、`/healthz`、`/metrics` | infer/jobs 要 Bearer；`/healthz` 与 `/metrics` 公开 |
+| `8080` | mortred-gateway | 推理入口 `/mortred_ai_server_v1/...`、`/healthz`、`/metrics` | infer/jobs 要 Bearer；`/healthz` 公开；`/metrics` 未设 `MORTRED_METRICS_TOKEN` 时公开 |
 | `8787` | mortred-supervisor | 管理 API `/api/v1/*`、Web 控制台 | Bearer token |
 | `9002+` | 各模型进程 | 仅 loopback | internal token |
 
@@ -437,20 +437,22 @@ docker compose --profile gpu up -d -e MORTRED_AUTO_BUILD_ENGINES=true
 
 ## 11. 认证与安全
 
-### 11.1 两层 token
+### 11.1 三层 token
 
 | token | 保护对象 | 配置位置 |
 |---|---|---|
 | `MORTRED_API_TOKEN` | supervisor 管理 API + Web 控制台 | `/etc/mortred/supervisor.env`（tarball）/ 容器环境变量 |
 | `MORTRED_GATEWAY_AUTH_TOKEN` | 网关推理入口 | 同上 |
+| `MORTRED_METRICS_TOKEN` | 可选；网关 `GET /metrics` scrape Bearer | 同上（不设则 `/metrics` 公开） |
 
 ```bash
-openssl rand -hex 24    # 生成方式（两个 token 各用一次）
+openssl rand -hex 24    # 生成方式（每个 token 各用一次）
 ```
 
 **fail-closed 语义**：监听地址非 `127.0.0.1` 且未配 token → 进程**拒绝启动**并打印原因。
-永远不要带洞上线。该门闩只覆盖「配了某种鉴权」；**不**终结 TLS、**不**隐藏
-网关 `GET /metrics`、也**不**拒绝短 token。
+永远不要带洞上线。该门闩只覆盖「配了某种鉴权」；**不**终结 TLS、**不**默认隐藏
+网关 `GET /metrics`（除非设置 `MORTRED_METRICS_TOKEN`）、也**不**拒绝短 token。
+不要把推理 token 当作 scrape 密钥。
 
 ### 11.2 多租户 API Key（网关层）
 
@@ -483,6 +485,7 @@ curl -X POST -H "Authorization: Bearer $MORTRED_API_TOKEN" \
 - [ ] 防火墙放行清单里没有模型进程端口（它们本就只绑 loopback）
 - [ ] Grafana / Prometheus 端口留在环回；Grafana 密码不是镜像默认值
 - [ ] Prometheus 不要去刮已经映射出环回的模型端口
+- [ ] 若 8080 能从环回以外访问，已设置独立的 `MORTRED_METRICS_TOKEN`
 
 ### 11.4 TLS 反代（Caddy）
 
@@ -538,7 +541,7 @@ mortredctl doctor
 
 | 端点 | 内容 |
 |---|---|
-| `GET :8080/metrics` | 网关：HTTP 请求计数/时延、推理时延、队列等待、worker 可用性（公开） |
+| `GET :8080/metrics` | 网关：HTTP 请求计数/时延、推理时延、队列等待、worker 可用性（未设 `MORTRED_METRICS_TOKEN` 时公开） |
 | `GET :8787/api/v1/metrics` | supervisor：进程状态、重启计数（需要 Bearer `MORTRED_API_TOKEN`） |
 
 仓库自带一套**本机**监控栈（Prometheus + Grafana + 告警规则）。端口只绑环回；

@@ -29,7 +29,7 @@
 └─────────────────────────────────────────────────────────────┘
 ```
 
-默认刮取目标是网关 `:8080/metrics`（公开）。监督器 `:8787/api/v1/metrics`
+默认刮取目标是网关 `:8080/metrics`（未设 `MORTRED_METRICS_TOKEN` 时公开）。监督器 `:8787/api/v1/metrics`
 需要管理 Bearer token。模型 `/metrics` 仅环回——只在 Prometheus 与模型
 处于同一网络命名空间时刮取，不要为了刮指标而映射模型端口。
 
@@ -65,7 +65,7 @@ prometheus --config.file=deploy/prometheus.yml --storage.tsdb.path=/tmp/prom-dat
 
 | 组件 | 端口 | 端点 | 说明 |
 |---|---|---|---|
-| 网关 | :8080 | `/metrics` | 推理入口（公开） |
+| 网关 | :8080 | `/metrics` | 推理入口（未设 `MORTRED_METRICS_TOKEN` 时公开） |
 | 监督器 | :8787 | `/api/v1/metrics` | 进程管理（需要 Bearer `MORTRED_API_TOKEN`） |
 | 模型服务器 | 环回 :9001-9074 | `/metrics` | 与 Prometheus 同一网络命名空间；不要映射这些端口 |
 
