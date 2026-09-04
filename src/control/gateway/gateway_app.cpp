@@ -570,8 +570,9 @@ int run_gateway(int argc, char** argv) {
     }
     const char* auth_mode = g_api_keys.key_count() > 0
                                 ? "api-keys auth"
-                                : !g_auth_token.empty() ? "static-token auth"
-                                                        : "AUTH DISABLED (loopback only)";
+                                : (!g_auth_token.empty() || !g_admin_token.empty())
+                                      ? "static-token auth"
+                                      : "AUTH DISABLED (loopback only)";
     std::fprintf(stderr, "mortred-gateway listening on http://%s:%d (routes: %zu) [%s]\n",
                  g_cfg.gateway.host.c_str(), g_cfg.gateway.port, g_catalog.entries().size(),
                  auth_mode);
