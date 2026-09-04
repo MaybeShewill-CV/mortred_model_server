@@ -499,7 +499,8 @@ jobs:
           set -euo pipefail
           for f in scripts/install_deps.sh scripts/convert_trt_engines.sh \
                    scripts/docker_entrypoint.sh scripts/check_repo_clean.sh \
-                   scripts/clean_artifacts.sh scripts/setup_full_deps.sh; do
+                   scripts/clean_artifacts.sh scripts/setup_full_deps.sh \
+                   scripts/mortredctl_doctor.sh scripts/security_warn.sh; do
             bash -n "$f"
           done
           python3 -m py_compile \

@@ -497,10 +497,28 @@ See [api-keys.md](api-keys.md) for the full guide incl. zero-downtime rotation.
 - [ ] 8080/8787 published on `127.0.0.1` unless a TLS reverse proxy sits in front
 - [ ] keep 8787 off the public internet even behind TLS
 - [ ] `conf/api_keys.toml` (if used) mode 600, never committed or baked into images
-- [ ] TLS terminated at your reverse proxy (Mortred itself is plain HTTP)
+- [ ] TLS terminated at your reverse proxy (Mortred itself is plain HTTP); see [§11.4](#114-tls-reverse-proxy-caddy)
 - [ ] no model-server ports in the firewall allowlist (they are loopback-only anyway)
 - [ ] Grafana/Prometheus ports stay on loopback; Grafana password is not the image default
 - [ ] Prometheus does not scrape model ports that have been published off-loopback
+
+### 11.4 TLS reverse proxy (Caddy)
+
+Mortred does not terminate TLS. Copy-paste path:
+
+```bash
+# keep 8080/8787 on 127.0.0.1 (compose default), then:
+# 1. replace infer.example.com in deploy/caddy/Caddyfile
+# 2. point DNS at this machine (80/443)
+caddy run --config deploy/caddy/Caddyfile
+```
+
+Local smoke without public DNS is the commented `:8443 { tls internal ... }`
+block in that file. Do not put TLS inside the gateway or supervisor process.
+
+`mortredctl doctor` warns when the effective listen is not loopback, when a
+token is shorter than 32 characters, or when the two tokens are identical.
+Those lines are warnings only — doctor does not fail for missing TLS.
 
 ---
 
@@ -654,10 +672,10 @@ in a fully python-less environment, verify before copying).
 
 | Gate | Command | Coverage |
 |---|---|---|
-| Static | `./scripts/verify_deployment.sh --basic` | script syntax / manifests / compose YAML / dependency inventory |
+| Static | `./scripts/verify_deployment.sh --basic` | script syntax / manifests / compose YAML / dependency inventory / `security_warn.sh --self-test` |
 | Full | `./scripts/verify_deployment.sh --full` | + local weight sha256 + 3rd_party completeness |
 | Live | `./scripts/verify_deployment.sh --live` | + gateway probes (public healthz, authed inference) |
-| One-shot | `mortredctl doctor` | live wrapper |
+| One-shot | `mortredctl doctor` | live wrapper + security warnings (non-fatal) |
 
 **CI side**: every change runs the cpu-profile full build + full unit suite on a
 GPU-less runner - the conditional-compilation path cannot silently rot; the

@@ -353,7 +353,9 @@ docker run --gpus all -p 127.0.0.1:8080:8080 -p 127.0.0.1:8787:8787 \
 逐端口暴露。compose 与 `docker run` 示例把 8080/8787 绑在宿主机
 `127.0.0.1` 上。对外暴露必须由反向代理终结 TLS；不要在没有反代时把
 这些端口发到 `0.0.0.0`（Bearer 会明文传输）。网关 `GET /metrics` 公开；
-fail-closed 只拒绝「非环回监听且未配置任何鉴权」。
+fail-closed 只拒绝「非环回监听且未配置任何鉴权」。反代样例见
+[deploy/caddy/Caddyfile](deploy/caddy/Caddyfile)。`mortredctl doctor`
+会对非环回监听和过短/相同的 token 告警，但不会因为没有 TLS 而失败。
 
 ## TensorRT 引擎重建（硬件适配）
 
