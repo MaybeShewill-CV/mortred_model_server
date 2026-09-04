@@ -11,11 +11,13 @@ legacy `server_uri`, and forwards to the model's loopback port. The gateway
 enforces the external Bearer token (`MORTRED_GATEWAY_AUTH_TOKEN` or
 `MORTRED_API_TOKEN`), maps a dead upstream to `503` and transport failures to
 `502`; all model-server status codes below pass through unchanged. `GET
-/healthz` and `GET /metrics` are public on the gateway. Model ports are
+/healthz` is public on the gateway. `GET /metrics` is public unless
+`MORTRED_METRICS_TOKEN` is set, in which case it requires that scrape Bearer
+(not the inference token). Model ports are
 loopback-only and must not be exposed. Mortred itself is plain HTTP; TLS
 must be terminated by a reverse proxy in front of the gateway. Fail-closed
 startup only refuses a non-loopback listener with no auth configured — it
-does not encrypt traffic, hide `/metrics`, or enforce token strength.
+does not encrypt traffic, hide `/metrics` by default, or enforce token strength.
 
 The supervisor (`:8787`) exposes the management REST API under `/api/v1/`
 (health/catalog/status/lifecycle/logs/metrics/keys) and the embedded web UI;
@@ -41,9 +43,11 @@ Authorization: Bearer <token>
 ```
 
 - Missing or invalid token: `401` + `WWW-Authenticate: Bearer realm="Mortred"`.
-- Health/metadata endpoints (`/healthz`, `/ready`, `/metrics`, `/openapi.json`) are public.
-  Supervisor `GET /api/v1/metrics` requires the management token; gateway
-  `GET /metrics` stays public in this release.
+- Health/metadata endpoints (`/healthz`, `/ready`, `/openapi.json`) are public.
+  Supervisor `GET /api/v1/metrics` requires the management token. Gateway
+  `GET /metrics` is public unless `MORTRED_METRICS_TOKEN` is set (then that
+  Bearer is required; `/healthz` stays public). Do not reuse the inference
+  token as the scrape secret.
 - When `auth_token` is empty, model endpoints are open, but the server refuses to listen
   on a non-loopback host (fail-closed). That gate is not TLS, not metrics
   privacy, and not a token-strength check.

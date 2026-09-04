@@ -10,10 +10,12 @@
 仅监听环回地址的模型服务器。网关负责外部 Bearer Token 鉴权
 （`MORTRED_GATEWAY_AUTH_TOKEN` 或 `MORTRED_API_TOKEN`），将上游不可达映射为
 `503`、传输失败映射为 `502`；下文所有模型服务器状态码均原样透传。网关的
-`GET /healthz` 与 `GET /metrics` 为公开端点。模型端口仅绑定环回地址、
+`GET /healthz` 为公开端点。`GET /metrics` 默认公开；若设置了
+`MORTRED_METRICS_TOKEN` 则需要该 scrape Bearer（不要复用推理 token）。
+模型端口仅绑定环回地址、
 不得对外暴露。Mortred 自身是明文 HTTP；对外服务必须由网关前置的反向
 代理终结 TLS。fail-closed 只拒绝「非环回监听且未配置任何鉴权」，
-不加密流量、不隐藏 `/metrics`、也不检查 token 强度。
+不加密流量、默认不隐藏 `/metrics`、也不检查 token 强度。
 
 监督器（supervisor，`:8787`）在 `/api/v1/` 下提供管理 REST API
 （health/catalog/status/生命周期/日志/metrics/keys）与内嵌 Web UI；
@@ -38,9 +40,10 @@ Authorization: Bearer <token>
 ```
 
 - 缺失或错误的 token：`401` + `WWW-Authenticate: Bearer realm="Mortred"`。
-- 健康/元数据端点（`/healthz`、`/ready`、`/metrics`、`/openapi.json`）公开。
-  监督器 `GET /api/v1/metrics` 需要管理 token；网关 `GET /metrics` 本版本
-  仍公开。
+- 健康/元数据端点（`/healthz`、`/ready`、`/openapi.json`）公开。
+  监督器 `GET /api/v1/metrics` 需要管理 token。网关 `GET /metrics` 默认公开；
+  设置 `MORTRED_METRICS_TOKEN` 后需要该 Bearer（`/healthz` 仍公开）。不要把
+  推理 token 当作 scrape 密钥。
 - `auth_token` 为空时模型端点开放访问，但服务器拒绝在非环回地址上监听
   （fail-closed，配置缺失即拒绝启动）。该门闩不是 TLS、不是指标保密、
   也不是 token 强度检查。
