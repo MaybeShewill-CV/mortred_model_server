@@ -236,7 +236,7 @@ TEST_F(GatewayE2ETest, model_route_requires_token) {
 
 TEST_F(GatewayE2ETest, model_route_forwards_to_upstream) {
     const auto r = send_request(gateway_port_, "POST", "/mortred_ai_server_v1/test/fake",
-                                "{\"img_data\":\"aGk=\"}", "ext-token");
+                                "{\"images\":[\"aGk=\"]}", "ext-token");
     EXPECT_EQ(r.status, 200);
     EXPECT_NE(r.body.find("\"fake\":true"), std::string::npos) << r.body;
 }

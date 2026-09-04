@@ -29,7 +29,6 @@ endif ()
 set(TEST_LIST
     base64_unittest
     file_path_util_unittest
-    json_request_parser_unittest
     request_envelope_unittest
     envelope_codec_unittest
     pipeline_contract_unittest

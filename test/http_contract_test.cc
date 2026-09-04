@@ -8,12 +8,10 @@
 
 #include <gtest/gtest.h>
 
-#include "common/http_response.h"
+#include "common/response_envelope.h"
 #include "common/status_code.h"
 #include "server/http_status.h"
 
-using jinq::common::build_response_body;
-using jinq::common::HttpResponse;
 using jinq::common::StatusCode;
 using jinq::server::http_status_of;
 
@@ -46,16 +44,19 @@ TEST(http_contract, server_errors_map_to_5xx) {
     EXPECT_EQ(http_status_of(StatusCode::MODEL_RUN_TIMEOUT), 504);
 }
 
-TEST(http_contract, response_body_contains_envelope) {
-    HttpResponse resp;
-    resp.req_id = "abc";
-    resp.code = 0;
-    resp.msg = "success";
-    auto body = build_response_body(resp);
-    EXPECT_NE(body.find("\"req_id\":\"abc\""), std::string::npos);
-    EXPECT_NE(body.find("\"code\":0"), std::string::npos);
-    EXPECT_NE(body.find("\"msg\":\"success\""), std::string::npos);
-    EXPECT_NE(body.find("\"data\":null"), std::string::npos);
+TEST(http_contract, process_level_status_uses_unified_envelope) {
+    jinq::common::UnifiedResponse resp;
+    resp.task_id = "abc";
+    resp.status = jinq::common::to_underlying(StatusCode::UNAUTHORIZED);
+    resp.status_str = jinq::common::status_code_to_str(StatusCode::UNAUTHORIZED);
+    const auto body = jinq::common::build_unified_response_body(resp);
+    EXPECT_NE(body.find("\"status\":401"), std::string::npos);
+    EXPECT_NE(body.find("\"status_str\":\"unauthorized\""), std::string::npos);
+    EXPECT_NE(body.find("\"task_id\":\"abc\""), std::string::npos);
+    EXPECT_NE(body.find("\"results\":[]"), std::string::npos);
+    EXPECT_EQ(body.find("\"code\""), std::string::npos);
+    EXPECT_EQ(body.find("\"msg\""), std::string::npos);
+    EXPECT_EQ(body.find("\"req_id\""), std::string::npos);
 }
 
 TEST(http_contract, unified_response_body_contains_envelope) {
