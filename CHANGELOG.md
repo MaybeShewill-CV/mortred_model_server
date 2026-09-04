@@ -30,7 +30,11 @@ All notable changes to this project are documented here. The format follows
   now answer `404` with process-level `UnifiedResponse`.
 
 ### Changed
-- Envelope codec lives in `common/request_envelope.h` and
+- Supervisor Web UI and `mortredctl infer` POST the data-plane envelope to
+  the gateway (`server_uri` on `:8080`) instead of `/api/v1/infer`. The
+  gateway accepts `MORTRED_API_TOKEN` and API keys with `admin` (or `all` /
+  `inference`) scope, and reflects CORS for the supervisor UI origin.
+  `/api/v1/infer` on the supervisor is unchanged in this change.
   `common/response_envelope.h` (encode/decode + field names). Data-plane
   binding is `server/parsed_request.h`; in-process execution types moved from
   `async_job_table.h` to `server/inference_task.h`. Supervisor/CLI go through

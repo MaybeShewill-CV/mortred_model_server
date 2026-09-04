@@ -77,8 +77,14 @@ async function api(path, options) {
   return { ok: resp.ok, status: resp.status, data };
 }
 
-function serverById(id) {
-  return state.servers.find((s) => s.id === id) || null;
+function gatewayBaseUrl() {
+  const g = state.gateway;
+  if (!g || !g.address) return "";
+  let host = g.address.host || "";
+  if (host === "0.0.0.0" || host === "::" || host === "[::]") {
+    host = window.location.hostname || "127.0.0.1";
+  }
+  return `http://${host}:${g.address.port}`;
 }
 
 function base64ToSrc(b64) {
@@ -301,6 +307,15 @@ async function sendBatch() {
   if (!s || s.type !== "image") return;
   if (s.state !== "running") { alert("请先启动该 server"); return; }
   if (!s.ready) { showToast(`${s.name} 尚未就绪（模型加载中），请稍候再试`, "error"); return; }
+  if (!state.gateway || state.gateway.state !== "running") {
+    showToast("网关未就绪，无法推理", "error");
+    return;
+  }
+  const gatewayBase = gatewayBaseUrl();
+  if (!gatewayBase || !s.uri) {
+    showToast("无法解析网关地址或模型 URI", "error");
+    return;
+  }
   if (!state.files.length) { alert("请先选择图片"); return; }
   if (state.batchAbort) { showToast("上一批仍在发送中，请稍候", "error"); return; }
 
@@ -315,11 +330,11 @@ async function sendBatch() {
     if (state.batchAbort.signal.aborted) break;
     const f = state.files[i];
     const reqId = uid();
-    const body = JSON.stringify({ server_id: s.id, req_id: reqId, images: [f.base64] });
+    const body = JSON.stringify({ req_id: reqId, images: [f.base64] });
     const t0 = performance.now();
     let result;
     try {
-      const resp = await authorizedFetch("/api/v1/infer", {
+      const resp = await authorizedFetch(gatewayBase + s.uri, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body,

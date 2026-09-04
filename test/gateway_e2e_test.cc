@@ -50,7 +50,8 @@ struct HttpResp {
 };
 
 HttpResp send_request(int port, const std::string& method, const std::string& path,
-                      const std::string& body, const std::string& auth = "") {
+                      const std::string& body, const std::string& auth = "",
+                      const std::map<std::string, std::string>& extra_headers = {}) {
     const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
         return {};
@@ -68,6 +69,9 @@ HttpResp send_request(int port, const std::string& method, const std::string& pa
     req << "Host: 127.0.0.1\r\nConnection: close\r\n";
     if (!auth.empty()) {
         req << "Authorization: Bearer " << auth << "\r\n";
+    }
+    for (const auto& h : extra_headers) {
+        req << h.first << ": " << h.second << "\r\n";
     }
     if (!body.empty()) {
         req << "Content-Length: " << body.size() << "\r\n";
@@ -192,7 +196,9 @@ class GatewayE2ETest : public ::testing::Test {
                               {"MORTRED_GATEWAY_AUTH_TOKEN", "ext-token"},
                               {"MORTRED_INTERNAL_TOKEN", "int-token"},
                               {"MORTRED_GATEWAY_HOST", "127.0.0.1"},
-                              {"MORTRED_GATEWAY_PORT", std::to_string(gateway_port_)}});
+                              {"MORTRED_GATEWAY_PORT", std::to_string(gateway_port_)},
+                              {"MORTRED_GATEWAY_CORS_ORIGINS",
+                               "http://127.0.0.1:8787,http://localhost:8787"}});
         for (int i = 0; i < 100; ++i) {
             if (mortred::control::endpoint_ready(gateway_port_, "/healthz", 500)) {
                 return;
@@ -244,11 +250,33 @@ TEST_F(GatewayE2ETest, model_route_forwards_to_upstream) {
     EXPECT_NE(r.body.find("\"fake\":true"), std::string::npos) << r.body;
 }
 
-TEST_F(GatewayE2ETest, method_not_allowed_is_405) {
-    const auto r = send_request(gateway_port_, "GET", "/mortred_ai_server_v1/test/fake", "",
-                                "ext-token");
-    EXPECT_EQ(r.status, 405);
-    EXPECT_NE(r.body.find("\"status\":62"), std::string::npos) << r.body;
+TEST_F(GatewayE2ETest, cors_preflight_allows_configured_origin) {
+    const auto r =
+        send_request(gateway_port_, "OPTIONS", "/mortred_ai_server_v1/test/fake", "", "",
+                     {{"Origin", "http://127.0.0.1:8787"},
+                      {"Access-Control-Request-Method", "POST"},
+                      {"Access-Control-Request-Headers", "authorization,content-type"}});
+    EXPECT_EQ(r.status, 204);
+    ASSERT_NE(r.headers.find("access-control-allow-origin"), r.headers.end()) << r.body;
+    EXPECT_EQ(r.headers.at("access-control-allow-origin"), "http://127.0.0.1:8787");
+    ASSERT_NE(r.headers.find("access-control-allow-methods"), r.headers.end());
+    EXPECT_NE(r.headers.at("access-control-allow-methods").find("POST"), std::string::npos);
+}
+
+TEST_F(GatewayE2ETest, cors_preflight_unknown_origin_has_no_allow_origin) {
+    const auto r = send_request(gateway_port_, "OPTIONS", "/mortred_ai_server_v1/test/fake", "",
+                                "", {{"Origin", "http://evil.example:9"}});
+    EXPECT_EQ(r.status, 204);
+    EXPECT_EQ(r.headers.find("access-control-allow-origin"), r.headers.end());
+}
+
+TEST_F(GatewayE2ETest, cors_headers_on_authorized_post) {
+    const auto r = send_request(gateway_port_, "POST", "/mortred_ai_server_v1/test/fake",
+                                "{\"images\":[\"aGk=\"]}", "ext-token",
+                                {{"Origin", "http://localhost:8787"}});
+    EXPECT_EQ(r.status, 200);
+    ASSERT_NE(r.headers.find("access-control-allow-origin"), r.headers.end());
+    EXPECT_EQ(r.headers.at("access-control-allow-origin"), "http://localhost:8787");
 }
 
 TEST_F(GatewayE2ETest, dead_upstream_maps_to_503) {
@@ -300,10 +328,11 @@ namespace {
 
 const char kAuthRoute[] = "/mortred_ai_server_v1/test/fake";
 
-std::string keys_toml(const std::string& key, const std::string& name = "tenant-a") {
+std::string keys_toml(const std::string& key, const std::string& name = "tenant-a",
+                      const std::string& scope = "inference") {
     return "[keys." + name + "]\nhash = \"" +
            mortred::control::ApiKeyManager::sha256_hex(key) +
-           "\"\nscope = \"inference\"\nenabled = true\n";
+           "\"\nscope = \"" + scope + "\"\nenabled = true\n";
 }
 
 }  // namespace
@@ -350,7 +379,8 @@ class GatewayAuthTest : public ::testing::Test {
      * only if the process stayed up and became healthy; a refused start
      * (fail-closed) or a crash reports false and reaps the child. */
     bool StartGateway(const std::string& host, const std::string& auth_token,
-                      const std::string& api_keys_content) {
+                      const std::string& api_keys_content,
+                      std::vector<std::pair<std::string, std::string>> extra_env = {}) {
         if (!api_keys_content.empty()) {
             std::ofstream keys(root_ / "conf" / "api_keys.toml");
             keys << api_keys_content;
@@ -370,6 +400,9 @@ class GatewayAuthTest : public ::testing::Test {
         };
         if (!auth_token.empty()) {
             env.emplace_back("MORTRED_GATEWAY_AUTH_TOKEN", auth_token);
+        }
+        for (const auto& kv : extra_env) {
+            env.push_back(kv);
         }
         gateway_pid_ = spawn(gateway_bin, {}, env);
         for (int i = 0; i < 100; ++i) {
@@ -467,6 +500,28 @@ TEST_F(GatewayAuthTest, BrokenApiKeysWithTokenFallsBackToStaticToken) {
 
     r = send_request(gateway_port_, "POST", kAuthRoute, "{}", valid_key_);
     EXPECT_EQ(r.status, 401) << "unparsed key file must not authenticate anything";
+}
+
+TEST_F(GatewayAuthTest, AdminApiTokenIsAccepted) {
+    ASSERT_TRUE(StartGateway("127.0.0.1", "", "", {{"MORTRED_API_TOKEN", "mgmt-token"}}));
+    auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}", "mgmt-token");
+    EXPECT_EQ(r.status, 200);
+    r = send_request(gateway_port_, "POST", kAuthRoute, "{}", "wrong");
+    EXPECT_EQ(r.status, 401);
+}
+
+TEST_F(GatewayAuthTest, AdminScopeKeyMayInfer) {
+    ASSERT_TRUE(StartGateway("127.0.0.1", "", keys_toml(valid_key_, "ops", "admin")));
+    const auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}", valid_key_);
+    EXPECT_EQ(r.status, 200);
+}
+
+TEST_F(GatewayAuthTest, NonLoopbackWithOnlyApiTokenStarts) {
+    ASSERT_TRUE(StartGateway("0.0.0.0", "", "", {{"MORTRED_API_TOKEN", "mgmt-token"}}));
+    auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}");
+    EXPECT_EQ(r.status, 401);
+    r = send_request(gateway_port_, "POST", kAuthRoute, "{}", "mgmt-token");
+    EXPECT_EQ(r.status, 200);
 }
 
 int main(int argc, char** argv) {

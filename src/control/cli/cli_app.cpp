@@ -5,8 +5,8 @@
 * Date: 26-8-22
 ************************************************/
 
-// Thin REST client for mortred-supervisor: status / catalog / lifecycle
-// actions / logs / inference smoke test. Machine-readable output (raw JSON).
+// Thin REST client: management commands talk to mortred-supervisor; infer
+// smoke tests post the data-plane envelope to mortred-gateway.
 
 #include <filesystem>
 #include <sys/wait.h>
@@ -26,14 +26,16 @@
 
 #include "common/base64.h"
 #include "common/request_envelope.h"
-#include "control/management_envelope.h"
+
+#include <rapidjson/document.h>
 
 #include "control/cli/cli_app.h"
 
 namespace {
 
 struct Options {
-    std::string addr;  // http://host:port
+    std::string addr;          // supervisor http://host:port
+    std::string gateway_addr;  // gateway http://host:port (infer only)
     std::string token;
 };
 
@@ -90,12 +92,13 @@ std::string read_file_bytes(const std::string& path) {
 
 void usage() {
     std::fprintf(stderr,
-                 "usage: mortredctl [--addr URL] [--token T] <command> [args]\n"
+                 "usage: mortredctl [--addr URL] [--gateway URL] [--token T] <command> [args]\n"
                  "  commands: status [id] | catalog | start <id> | stop <id> | restart <id>\n"
                  "            logs <id> [--offset N] [--limit N]\n"
                  "            infer <id> --image <path>\n"
                  "            init [--profile cpu|gpu] | doctor | upgrade [version]\n"
-                 "  env: MORTREDCTL_ADDR (default http://127.0.0.1:8787), MORTREDCTL_TOKEN\n");
+                 "  env: MORTREDCTL_ADDR (default http://127.0.0.1:8787), MORTREDCTL_TOKEN,\n"
+                 "       MORTREDCTL_GATEWAY_ADDR (default http://127.0.0.1:8080)\n");
 }
 
 }  // namespace
@@ -109,6 +112,14 @@ int run_cli(int argc, char** argv) {
         opt.addr = env;
     } else {
         opt.addr = "http://127.0.0.1:8787";
+    }
+    if (const char* env = std::getenv("MORTREDCTL_GATEWAY_ADDR"); env != nullptr && *env != '\0') {
+        opt.gateway_addr = env;
+    } else {
+        opt.gateway_addr = "http://127.0.0.1:8080";
+    }
+    if (!opt.gateway_addr.empty() && opt.gateway_addr.back() == '/') {
+        opt.gateway_addr.pop_back();
     }
     if (const char* env = std::getenv("MORTREDCTL_TOKEN"); env != nullptr && *env != '\0') {
         opt.token = env;
@@ -127,10 +138,17 @@ int run_cli(int argc, char** argv) {
         }
         return args[index++];
     };
-    while (index < args.size() && (args[index] == "--addr" || args[index] == "--token")) {
+    while (index < args.size() &&
+           (args[index] == "--addr" || args[index] == "--token" || args[index] == "--gateway")) {
         if (args[index] == "--addr") {
             ++index;
             opt.addr = next("--addr");
+        } else if (args[index] == "--gateway") {
+            ++index;
+            opt.gateway_addr = next("--gateway");
+            if (!opt.gateway_addr.empty() && opt.gateway_addr.back() == '/') {
+                opt.gateway_addr.pop_back();
+            }
         } else {
             ++index;
             opt.token = next("--token");
@@ -238,10 +256,38 @@ int run_cli(int argc, char** argv) {
         }
         const std::string b64 = jinq::common::base64::encode(
             reinterpret_cast<const unsigned char*>(bytes.data()), bytes.size());
+        const HttpResult cat = http_request(opt, "GET", "/api/v1/catalog", "");
+        if (cat.status < 200 || cat.status >= 300) {
+            std::fwrite(cat.body.data(), 1, cat.body.size(), stdout);
+            if (!cat.body.empty() && cat.body.back() != '\n') {
+                std::fputc('\n', stdout);
+            }
+            return 1;
+        }
+        rapidjson::Document doc;
+        doc.Parse(cat.body.c_str());
+        std::string uri;
+        if (!doc.HasParseError() && doc.IsObject() && doc.HasMember("servers") &&
+            doc["servers"].IsArray()) {
+            for (const auto& server : doc["servers"].GetArray()) {
+                if (server.IsObject() && server.HasMember("id") && server["id"].IsString() &&
+                    id == server["id"].GetString() && server.HasMember("uri") &&
+                    server["uri"].IsString()) {
+                    uri = server["uri"].GetString();
+                    break;
+                }
+            }
+        }
+        if (uri.empty()) {
+            std::fprintf(stderr, "unknown server id in catalog: %s\n", id.c_str());
+            return 1;
+        }
         jinq::common::envelope::Request envelope;
         envelope.images.push_back(b64);
-        const std::string body = encode_infer_proxy(id, envelope);
-        r = http_request(opt, "POST", "/api/v1/infer", body);
+        const std::string body = jinq::common::envelope::encode(envelope);
+        Options gateway_opt = opt;
+        gateway_opt.addr = opt.gateway_addr;
+        r = http_request(gateway_opt, "POST", uri, body);
     } else {
         std::fprintf(stderr, "unknown command: %s\n", cmd.c_str());
         usage();
