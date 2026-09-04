@@ -535,7 +535,9 @@ jobs:
           done
           python3 -m py_compile \
             scripts/fetch_weights.py scripts/gen_weights_manifest.py \
-            scripts/check_consistency.py scripts/gen_openapi.py scripts/repo_toml.py
+            scripts/check_consistency.py scripts/gen_openapi.py scripts/repo_toml.py \
+            scripts/ci_assert_gtest_xml.py
+          python3 scripts/ci_assert_gtest_xml.py --self-test
 
       - name: Validate manifests (JSON / YAML)
         run: |
@@ -875,3 +877,31 @@ jobs:
           path: |
             build-gpu/Testing/Temporary/LastTest.log
           if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Wrapper so one required check exists on every PR, including forks where
+  # gpu-pr-gate is skipped. Require this job name ("inference paths") in the
+  # branch ruleset — do not require "gpu golden smoke" by itself.
+  # ---------------------------------------------------------------------------
+  inference-paths:
+    name: inference paths
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    needs: [cpu-profile, gpu-pr-gate]
+    if: ${{ always() && (github.event_name == 'pull_request' || github.event_name == 'push') }}
+    steps:
+      - name: Evaluate hosted vs maintainer GPU results
+        run: |
+          set -euo pipefail
+          cpu='${{ needs.cpu-profile.result }}'
+          gpu='${{ needs.gpu-pr-gate.result }}'
+          echo "cpu-profile=${cpu} gpu-pr-gate=${gpu}"
+          if [ "${cpu}" != "success" ]; then
+            echo "::error::cpu-profile must succeed (fork and maintainer MNN CPU liveness)" >&2
+            exit 1
+          fi
+          if [ "${gpu}" = "success" ] || [ "${gpu}" = "skipped" ]; then
+            exit 0
+          fi
+          echo "::error::gpu-pr-gate ended as ${gpu} (maintainer GPU smoke)" >&2
+          exit 1

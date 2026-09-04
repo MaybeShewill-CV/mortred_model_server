@@ -134,6 +134,10 @@ if (!view.ok()) {
 
 ## Path 4: add a golden case
 
+A new golden does **not** automatically run on fork PRs. Hosted CI only
+fail-closes mobilenetv2 MNN CPU. The eight-case GPU smoke is a same-repo /
+`main` maintainer gate. See [ci-golden-regression.md](./ci-golden-regression.md).
+
 One line in [model_golden_test.cc](../test/model_golden_test.cc):
 
 ```cpp
