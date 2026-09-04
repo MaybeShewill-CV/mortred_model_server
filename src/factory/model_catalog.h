@@ -17,7 +17,7 @@ namespace model_catalog {
 
 /***
  * Catalog entry for model families that are consumed directly by benchmarks
- * and pipelines instead of being mounted on the generic CV server. Keeping it
+ * and in-process callers instead of being mounted on the generic CV server. Keeping it
  * separate from CvModelEntry avoids forcing a server section onto models that
  * have no HTTP surface yet.
  */

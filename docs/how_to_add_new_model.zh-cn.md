@@ -180,7 +180,7 @@ inline const std::vector<Entry> &catalog() {
   挂在通用 CV server 上的模型（`CvModelEntry<OUTPUT>` 携带 worker creator 和
   response filler）
 - [factory/model_catalog.h](../src/factory/model_catalog.h) ——
-  只被 benchmark 和流水线直接消费、还没有 HTTP 面的模型族
+  只被 benchmark 和进程内调用方直接消费、还没有 HTTP 面的模型族
   （CLIP、SAM predictor、FastSAM）
 
 一个任务有多个输出契约时，**按契约拆成多个 typed catalog**，

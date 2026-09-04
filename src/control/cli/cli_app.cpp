@@ -160,7 +160,7 @@ int run_cli(int argc, char** argv) {
     }
     const std::string cmd = next("command");
 
-    // local orchestration commands: thin dispatchers to the scripts/ core
+    // local ops commands: thin dispatchers to the scripts/ core
     // (single source of truth shared with bootstrap.sh and the docs)
     if (cmd == "init" || cmd == "doctor" || cmd == "upgrade") {
         const std::string root = []() {

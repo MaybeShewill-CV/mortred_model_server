@@ -22,7 +22,7 @@ template <typename INPUT, typename OUTPUT> std::unique_ptr<BaseAiModel<INPUT, OU
     return std::make_unique<OpenAiClip<INPUT, OUTPUT>>();
 }
 
-// CLIP is consumed directly by benchmarks and pipelines; it has no generic CV
+// CLIP is consumed directly by benchmarks and in-process callers; it has no generic CV
 // server surface yet, so its catalog entry carries only model identity.
 using ClipInput = jinq::models::io_define::clip::clip_input;
 using ClipOutput = jinq::models::io_define::clip::clip_output;

@@ -18,8 +18,8 @@
 `mortredctl` 是它的命令行客户端。**推理冒烟**（控制台发送按钮和
 `mortredctl infer`）把数据面信封 POST 到网关的
 `/v1/models/{id}/infer`，Bearer 与管理 API 相同（`MORTRED_API_TOKEN`）。
-监督进程不再代理推理、jobs 或流水线；客户端打网关。`:8080`
-上的遗留 `{server_uri}` 仍然可用。
+监督进程只做管理（catalog / 启停 / 日志 / keys / UI）。推理和异步 jobs
+走网关。`:8080` 上的遗留 `{server_uri}` 仍然可用。
 
 所有模型服务器遵循统一的 HTTP JSON 契约。权威的机器可读描述是
 `docs/openapi.json`（每个模型服务器在 `GET /openapi.json` 提供）；
