@@ -878,9 +878,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         return;
     }
     // auth: health/metadata endpoints stay public, others require a Bearer Token
-    bool is_health_endpoint = strcmp(request_uri, "/welcome") == 0 ||
-                              strcmp(request_uri, "/hello_world") == 0 ||
-                              strcmp(request_uri, "/healthz") == 0 ||
+    bool is_health_endpoint = strcmp(request_uri, "/healthz") == 0 ||
                               strcmp(request_uri, "/ready") == 0 ||
                               strcmp(request_uri, "/metrics") == 0 ||
                               strcmp(request_uri, "/openapi.json") == 0;
@@ -930,18 +928,8 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         resp->append_output_body(k_openapi_doc_json.data(), k_openapi_doc_json.size());
         return;
     }
-    // welcome message
-    if (strcmp(request_uri, "/welcome") == 0) {
-        task->get_resp()->append_output_body("<html>Welcome to jinq ai server</html>");
-        return;
-    }
-    // hello world message
-    else if (strcmp(request_uri, "/hello_world") == 0) {
-        task->get_resp()->append_output_body("<html>Hello World !!!</html>");
-        return;
-    }
     // model service
-    else if (strcmp(request_uri, _m_server_uri.c_str()) == 0) {
+    if (strcmp(request_uri, _m_server_uri.c_str()) == 0) {
         // request_method is the null-normalized value from the top of
         // serve_process; do not re-read get_method() here (it can be null)
         if (strcmp(request_method, "POST") != 0) {

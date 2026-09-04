@@ -102,8 +102,8 @@ Cache-Control: no-store
 | `/metrics` | GET | Prometheus metrics |
 | `/openapi.json` | GET | OpenAPI document (served from the embedded copy) |
 
-`/welcome` and `/hello_world` are legacy HTML endpoints kept for the web console health
-check; they are marked `deprecated` in the OpenAPI document.
+Unknown paths, including the removed `/welcome` and `/hello_world` HTML
+probes, answer `404` with process-level `UnifiedResponse`.
 
 ## Model inference request
 

@@ -94,10 +94,11 @@ std::string header_value(const protocol::HttpRequest* req, const std::string& na
 }
 
 using mortred::control::reply_json;
+using mortred::control::reply_unified_error;
 
 void reply_error(WFHttpTask* task, int http_status, const std::string& msg) {
     // fixed internal messages only: no client data is reflected into JSON
-    reply_json(task, http_status, "{\"error\":\"" + msg + "\"}");
+    reply_unified_error(task, http_status, msg);
 }
 
 std::string uri_path(const char* uri) {

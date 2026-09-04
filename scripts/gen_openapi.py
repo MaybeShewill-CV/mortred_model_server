@@ -471,22 +471,6 @@ def build_document() -> dict:
                 },
             }
         },
-        "/welcome": {
-            "get": {
-                "summary": "Legacy welcome page",
-                "deprecated": True,
-                "tags": ["legacy"],
-                "responses": {"200": {"description": "HTML page"}},
-            }
-        },
-        "/hello_world": {
-            "get": {
-                "summary": "Legacy health check (kept for web console)",
-                "deprecated": True,
-                "tags": ["legacy"],
-                "responses": {"200": {"description": "HTML page"}},
-            }
-        },
     }
     paths.update(model_paths)
 

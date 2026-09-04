@@ -26,6 +26,8 @@ All notable changes to this project are documented here. The format follows
   `scale_detection_point`, `validated_f32_output`).
 - `task_request` / `go_result` aliases for `InferenceTask` /
   `InferenceResult`.
+- Legacy HTML probes `/welcome` and `/hello_world` (breaking). Unknown paths
+  now answer `404` with process-level `UnifiedResponse`.
 
 ### Changed
 - Envelope codec lives in `common/request_envelope.h` and
@@ -37,6 +39,11 @@ All notable changes to this project are documented here. The format follows
   `/ready`, and 401/404/405/413/415/429 exits emit `{status, status_str,
   task_id, results:[]}` instead of `{req_id, code, msg, data}`. HTTP status
   codes and StatusCode wire integers are unchanged.
+- **Gateway / supervisor proxy local failures use UnifiedResponse (breaking)**:
+  gateway 401/404/405/502/503 and supervisor `/api/v1/infer` `/jobs*`
+  `/pipelines*` failures before upstream now emit `{status, status_str,
+  results:[], errors[]}`. HTTP status codes are unchanged. Management APIs
+  (`/servers*`, start/stop, logs, supervisor 401/405) still use `{ok, error}`.
 - **Unified request/response contract (breaking)**: model endpoints now speak
   the single envelope `{"req_id", "images": [<base64>...], "params", "options"}`
   and answer with `{status, status_str, task_id, model, results[], server_time_ms,

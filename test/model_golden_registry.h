@@ -506,7 +506,7 @@ inline void compare_raw_mat(const std::string &name, const cv::Mat &out) { expec
 
 /*** the seven shared steps every standard golden case performs ***/
 
-template <typename OUTPUT> using GoldenCreator = std::unique_ptr<BaseAiModel<mat_input, OUTPUT>> (*)(const std::string &);
+template <typename OUTPUT> using GoldenCreator = std::unique_ptr<BaseAiModel<mat_input, OUTPUT>> (*)();
 
 template <typename OUTPUT> using GoldenCompare = void (*)(const std::string &, const OUTPUT &);
 
@@ -517,7 +517,7 @@ void run_case(const char *name, const char *config, const char *image, GoldenCre
         GTEST_SKIP() << "weights not available";
     }
     auto cfg = load_model_cfg(conf);
-    auto model = creator(name);
+    auto model = creator();
     ASSERT_NE(model, nullptr) << name;
     ASSERT_EQ(model->init(cfg), StatusCode::OK) << name;
     const cv::Mat input_image = read_input_image(image);
