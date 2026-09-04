@@ -6,7 +6,8 @@
  * L1 tests of the unified inference session layer. Uses the real vendored
  * weights (no mocks): MNN mobilenetv2 (cpu), ONNX ddpm-unet (cpu) and the
  * TRT yolov8 engine (gpu, skipped when unavailable). GPU/cuda related cases
- * are skipped through GTEST_SKIP so the suite stays green on cpu-only CI.
+ * are skipped through GTEST_SKIP so the suite stays green on cpu-only CI
+ * unless MORTRED_CI_REQUIRE_WEIGHTS=1 (then missing weights/GPU FAIL).
  ************************************************/
 
 #include <gtest/gtest.h>
@@ -19,6 +20,7 @@
 #include <opencv2/opencv.hpp>
 #include <toml/toml.hpp>
 
+#include "ci_require_weights.h"
 #include "common/file_path_util.h"
 #include "common/status_code.h"
 #include "models/backend/backend_config.h"
@@ -196,7 +198,7 @@ TEST(BackendSession, UnknownBackendAndMissingFileFail) {
 
 TEST(MnnSession, InitAndRunMobilenetv2) {
     if (!file_exists(kMnnModel)) {
-        GTEST_SKIP() << "mnn weights not available";
+        MORTRED_SKIP_OR_FAIL_WEIGHTS("mnn weights not available");
     }
     std::string err;
     auto session = InferenceSession::create(make_config("mnn", kMnnModel), &err);
@@ -238,7 +240,7 @@ TEST(MnnSession, InitAndRunMobilenetv2) {
 
 TEST(OrtSession, InitAndRunDdpmUnet) {
     if (!file_exists(kOnnxModel)) {
-        GTEST_SKIP() << "onnx weights not available";
+        MORTRED_SKIP_OR_FAIL_WEIGHTS("onnx weights not available");
     }
     std::string err;
     auto session = InferenceSession::create(make_config("onnx", kOnnxModel), &err);
@@ -274,13 +276,13 @@ TEST(OrtSession, InitAndRunDdpmUnet) {
 
 TEST(TrtSession, ResolvesLightglueDynamicOutputs) {
     if (!file_exists(kLightglueExtractor) || !file_exists(kFeatureImage)) {
-        GTEST_SKIP() << "lightglue weights or test image not available";
+        MORTRED_SKIP_OR_FAIL_WEIGHTS("lightglue weights or test image not available");
     }
     std::string err;
     auto session =
         InferenceSession::create(make_config("tensorrt", kLightglueExtractor, "cuda"), &err);
     if (session == nullptr) {
-        GTEST_SKIP() << "tensorrt/gpu unavailable: " << err;
+        MORTRED_SKIP_OR_FAIL_WEIGHTS(std::string("tensorrt/gpu unavailable: ") + err);
     }
 
     const auto& image_info = find_info(session->inputs(), "image");
@@ -324,12 +326,12 @@ TEST(TrtSession, ResolvesLightglueDynamicOutputs) {
 
 TEST(TrtSession, InitAndRunYolov8) {
     if (!file_exists(kTrtModel)) {
-        GTEST_SKIP() << "tensorrt engine not available";
+        MORTRED_SKIP_OR_FAIL_WEIGHTS("tensorrt engine not available");
     }
     std::string err;
     auto session = InferenceSession::create(make_config("tensorrt", kTrtModel, "cuda"), &err);
     if (session == nullptr) {
-        GTEST_SKIP() << "tensorrt/gpu unavailable: " << err;
+        MORTRED_SKIP_OR_FAIL_WEIGHTS(std::string("tensorrt/gpu unavailable: ") + err);
     }
     ASSERT_GE(session->inputs().size(), 1u);
     ASSERT_GE(session->outputs().size(), 1u);
@@ -374,7 +376,7 @@ TEST(TrtSession, InitAndRunYolov8) {
 
 TEST(MultiBackend, CoexistInOneProcess) {
     if (!file_exists(kMnnModel) || !file_exists(kOnnxModel)) {
-        GTEST_SKIP() << "weights not available";
+        MORTRED_SKIP_OR_FAIL_WEIGHTS("weights not available");
     }
     std::string err;
     auto mnn_session = InferenceSession::create(make_config("mnn", kMnnModel), &err);

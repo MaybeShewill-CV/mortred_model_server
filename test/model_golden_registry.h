@@ -35,6 +35,8 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <opencv2/opencv.hpp>
+
+#include "ci_require_weights.h"
 #include <rapidjson/document.h>
 #include <rapidjson/prettywriter.h>
 #include <rapidjson/stringbuffer.h>
@@ -514,7 +516,7 @@ template <typename OUTPUT>
 void run_case(const char *name, const char *config, const char *image, GoldenCreator<OUTPUT> creator, GoldenCompare<OUTPUT> compare) {
     const std::string conf(config);
     if (!weights_available(conf)) {
-        GTEST_SKIP() << "weights not available";
+        MORTRED_SKIP_OR_FAIL_WEIGHTS("weights not available");
     }
     auto cfg = load_model_cfg(conf);
     auto model = creator();
