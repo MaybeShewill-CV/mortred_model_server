@@ -23,27 +23,6 @@ using jinq::models::diffusion::DDIMSampler;
 using jinq::models::diffusion::DDPMSampler;
 using jinq::models::diffusion::LDMSampler;
 
-template <typename INPUT, typename OUTPUT> std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_ddpm_sampler(const std::string &model_name) {
-    (void)model_name;
-    return std::make_unique<DDPMSampler<INPUT, OUTPUT>>();
-}
-
-template <typename INPUT, typename OUTPUT> std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_ddim_sampler(const std::string &model_name) {
-    (void)model_name;
-    return std::make_unique<DDIMSampler<INPUT, OUTPUT>>();
-}
-
-template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_cls_cond_ddim_sampler(const std::string &model_name) {
-    (void)model_name;
-    return std::make_unique<ClsCondDDIMSampler<INPUT, OUTPUT>>();
-}
-
-template <typename INPUT, typename OUTPUT> std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_ldm_sampler(const std::string &model_name) {
-    (void)model_name;
-    return std::make_unique<LDMSampler<INPUT, OUTPUT>>();
-}
-
 using ImageInput = jinq::models::io_define::common_io::image_input;
 using Base64Output = jinq::models::io_define::common_io::base64_input;
 

@@ -30,7 +30,6 @@ public:
      */
     explicit Timestamp(uint64_t micro_sec_since_epoch);
 
-    std::string to_str() const;
     std::string to_format_str() const;
     std::string to_format_str(const char* fmt) const;
     uint64_t micro_sec_since_epoch() const;
@@ -40,9 +39,6 @@ public:
     }
 
     static Timestamp now();
-    static Timestamp invalid() {
-        return Timestamp();
-    }
 
     static const int k_micro_sec_per_sec = 1000 * 1000;
 

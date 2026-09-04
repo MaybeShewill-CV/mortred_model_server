@@ -33,11 +33,6 @@ Timestamp Timestamp::now() {
         std::chrono::time_point_cast<std::chrono::microseconds>(clock::now()));
 }
 
-std::string Timestamp::to_str() const {
-    return std::to_string(_m_time_point.time_since_epoch().count() / k_micro_sec_per_sec)
-           + "." + std::to_string(_m_time_point.time_since_epoch().count() % k_micro_sec_per_sec);
-}
-
 std::string Timestamp::to_format_str() const {
     return to_format_str("%Y-%m-%d %X");
 }

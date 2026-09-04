@@ -72,5 +72,4 @@ You usually do NOT need to touch request serving. `BaseAiServerImpl` provides
 `serve_process` / `do_work` / `do_work_cb`: JSON request parsing (with 400/413/415/405
 contract errors), bearer auth, per-IP rate limiting, worker checkout from the blocking
 queue (timeout budgeted), model inference, response serialization through
-`fill_response`, Prometheus metrics and structured request logs. Override points exist
-(`handle_custom_endpoint`) only if you need extra endpoints.
+`fill_response`, Prometheus metrics and structured request logs.

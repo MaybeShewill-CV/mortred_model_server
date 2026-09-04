@@ -40,8 +40,6 @@ struct clip_output {
     std::vector<float> embeddings;
     std::vector<float> simi_scores;
 };
-using std_clip_input = clip_input;
-using std_clip_output = clip_output;
 
 } // namespace clip
 } // namespace io_define

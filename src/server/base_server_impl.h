@@ -378,7 +378,7 @@ protected:
         resp->add_header_pair("X-Request-ID", unified.task_id.c_str());
         resp->add_header_pair("Cache-Control", "no-store");
 
-        const auto body = jinq::common::build_unified_response_body(unified);
+        const auto body = jinq::common::envelope::encode(unified);
         resp->append_output_body(body.data(), body.size());
     }
 
@@ -492,17 +492,6 @@ protected:
         rapidjson::Document& data,
         const MODEL_OUTPUT& model_output,
         const jinq::server::OutputOptions& options) = 0;
-
-    /***
-     * Custom extension endpoint hook: called when the URI is not
-     * welcome/hello/model. Return true if handled, false to reply 404.
-     * @param task
-     * @return
-     */
-    virtual bool handle_custom_endpoint(WFHttpTask* task) {
-        (void)task;
-        return false;
-    }
 
     /*** run an async job: dequeue worker, run model, record terminal state */
     void async_run_job(const std::string& job_id) {
@@ -1101,9 +1090,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
     }
     // not found valid url
     else {
-        if (handle_custom_endpoint(task)) {
-            return;
-        }
         _m_metrics.inc_http_requests(request_method, "404");
         reply_status(task, StatusCode::NOT_FOUND);
         return;

@@ -85,11 +85,13 @@ public:
     }
 };
 
-using ModelFactory = jinq::factory::ModelFactory<FakeModelBase>;
+using ModelFactory = jinq::factory::TypeErasedFactory<FakeModelBase>;
 using ServerFactory = jinq::factory::ServerFactory<jinq::server::BaseAiServer>;
 
 TEST(model_factory, register_and_create_model) {
-    ModelFactory::get_instance().register_type<FakeModel>("fake_model");
+    ModelFactory::get_instance().register_creator("fake_model", []() -> std::unique_ptr<FakeModelBase> {
+        return std::unique_ptr<FakeModelBase>(new FakeModel());
+    });
 
     auto model = ModelFactory::get_instance().create("fake_model");
     ASSERT_NE(model, nullptr);
@@ -100,7 +102,9 @@ TEST(model_factory, register_and_create_model) {
 // closes (the old stack-local registrar left a dangling pointer here)
 TEST(model_factory, create_stays_valid_after_registration_scope_closes) {
     {
-        ModelFactory::get_instance().register_type<FakeModel>("scoped_model");
+        ModelFactory::get_instance().register_creator("scoped_model", []() -> std::unique_ptr<FakeModelBase> {
+            return std::unique_ptr<FakeModelBase>(new FakeModel());
+        });
         auto first = ModelFactory::get_instance().create("scoped_model");
         ASSERT_NE(first, nullptr);
     }
@@ -112,8 +116,12 @@ TEST(model_factory, create_stays_valid_after_registration_scope_closes) {
 
 TEST(model_factory, re_registering_same_name_replaces_creator) {
     auto& factory = ModelFactory::get_instance();
-    factory.register_type<FakeModel>("overwrite_me");
-    factory.register_type<FakeModel2>("overwrite_me");
+    factory.register_creator("overwrite_me", []() -> std::unique_ptr<FakeModelBase> {
+        return std::unique_ptr<FakeModelBase>(new FakeModel());
+    });
+    factory.register_creator("overwrite_me", []() -> std::unique_ptr<FakeModelBase> {
+        return std::unique_ptr<FakeModelBase>(new FakeModel2());
+    });
 
     auto model = factory.create("overwrite_me");
     ASSERT_NE(model, nullptr);
@@ -126,7 +134,9 @@ TEST(model_factory, create_unknown_name_returns_nullptr) {
 
 TEST(model_factory, empty_name_is_rejected) {
     auto& factory = ModelFactory::get_instance();
-    factory.register_type<FakeModel>("");
+    factory.register_creator("", []() -> std::unique_ptr<FakeModelBase> {
+        return std::unique_ptr<FakeModelBase>(new FakeModel());
+    });
     EXPECT_EQ(factory.create(""), nullptr);
 }
 
@@ -143,7 +153,9 @@ TEST(model_factory, concurrent_register_and_create) {
             auto& factory = ModelFactory::get_instance();
             for (int i = 0; i < k_iterations; ++i) {
                 const std::string name = "concurrent_" + std::to_string(t) + "_" + std::to_string(i);
-                factory.register_type<FakeModel>(name);
+                factory.register_creator(name, []() -> std::unique_ptr<FakeModelBase> {
+                    return std::unique_ptr<FakeModelBase>(new FakeModel());
+                });
                 auto model = factory.create(name);
                 if (model == nullptr || model->tag() != "FakeModel") {
                     ++failures;
@@ -171,7 +183,7 @@ TEST(model_factory, register_creator_builds_custom_closure) {
     EXPECT_EQ(model->tag(), "FakeModel2");
 }
 
-// creator closures follow the same overwrite-on-same-name semantics as register_type
+// creator closures follow the same overwrite-on-same-name semantics
 TEST(model_factory, register_creator_replaces_previous_registration) {
     auto& factory = ModelFactory::get_instance();
     factory.register_creator("closure_overwrite", []() -> std::unique_ptr<FakeModelBase> {
@@ -198,7 +210,9 @@ TEST(model_factory, register_creator_rejects_empty_name_and_null_closure) {
 }
 
 TEST(server_factory, register_and_create_server) {
-    ServerFactory::get_instance().register_type<FakeServer>("fake_server");
+    ServerFactory::get_instance().register_creator("fake_server", []() -> std::unique_ptr<jinq::server::BaseAiServer> {
+        return std::unique_ptr<jinq::server::BaseAiServer>(new FakeServer());
+    });
 
     auto server = ServerFactory::get_instance().create("fake_server");
     ASSERT_NE(server, nullptr);
@@ -207,7 +221,9 @@ TEST(server_factory, register_and_create_server) {
 
 TEST(server_factory, create_stays_valid_after_registration_scope_closes) {
     {
-        ServerFactory::get_instance().register_type<FakeServer>("scoped_server");
+        ServerFactory::get_instance().register_creator("scoped_server", []() -> std::unique_ptr<jinq::server::BaseAiServer> {
+            return std::unique_ptr<jinq::server::BaseAiServer>(new FakeServer());
+        });
         auto first = ServerFactory::get_instance().create("scoped_server");
         ASSERT_NE(first, nullptr);
     }
@@ -219,8 +235,12 @@ TEST(server_factory, create_stays_valid_after_registration_scope_closes) {
 
 TEST(server_factory, re_registering_same_name_replaces_creator) {
     auto& factory = ServerFactory::get_instance();
-    factory.register_type<FakeServer>("server_overwrite");
-    factory.register_type<FakeServer2>("server_overwrite");
+    factory.register_creator("server_overwrite", []() -> std::unique_ptr<jinq::server::BaseAiServer> {
+        return std::unique_ptr<jinq::server::BaseAiServer>(new FakeServer());
+    });
+    factory.register_creator("server_overwrite", []() -> std::unique_ptr<jinq::server::BaseAiServer> {
+        return std::unique_ptr<jinq::server::BaseAiServer>(new FakeServer2());
+    });
 
     auto server = factory.create("server_overwrite");
     ASSERT_NE(server, nullptr);

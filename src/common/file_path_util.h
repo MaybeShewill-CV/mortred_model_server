@@ -19,11 +19,6 @@ namespace common {
 // trailing slashes) are delegated to the standard library
 class FilePathUtil {
 public:
-    static bool is_dir_exist(const std::string& path) {
-        std::error_code ec;
-        return std::filesystem::is_directory(path, ec);
-    }
-
     static bool is_file_exist(const std::string& path) {
         std::error_code ec;
         return std::filesystem::is_regular_file(path, ec);

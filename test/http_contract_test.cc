@@ -49,7 +49,7 @@ TEST(http_contract, process_level_status_uses_unified_envelope) {
     resp.task_id = "abc";
     resp.status = jinq::common::to_underlying(StatusCode::UNAUTHORIZED);
     resp.status_str = jinq::common::status_code_to_str(StatusCode::UNAUTHORIZED);
-    const auto body = jinq::common::build_unified_response_body(resp);
+    const auto body = jinq::common::envelope::encode(resp);
     EXPECT_NE(body.find("\"status\":401"), std::string::npos);
     EXPECT_NE(body.find("\"status_str\":\"unauthorized\""), std::string::npos);
     EXPECT_NE(body.find("\"task_id\":\"abc\""), std::string::npos);
@@ -79,7 +79,7 @@ TEST(http_contract, unified_response_body_contains_envelope) {
     failed_item.status = jinq::common::to_underlying(StatusCode::MODEL_EMPTY_INPUT_IMAGE);
     resp.results.push_back(std::move(failed_item));
 
-    const auto body = jinq::common::build_unified_response_body(resp);
+    const auto body = jinq::common::envelope::encode(resp);
     EXPECT_NE(body.find("\"status\":0"), std::string::npos);
     EXPECT_NE(body.find("\"status_str\":\"OK\""), std::string::npos);
     EXPECT_NE(body.find("\"task_id\":\"trace-1\""), std::string::npos);
