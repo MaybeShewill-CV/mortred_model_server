@@ -101,8 +101,8 @@ Cache-Control: no-store
 | `/metrics` | GET | Prometheus 指标 |
 | `/openapi.json` | GET | OpenAPI 文档（内嵌副本） |
 
-`/welcome` 与 `/hello_world` 是为旧版控制台健康检查保留的遗留 HTML
-端点，在 OpenAPI 文档中标记为 `deprecated`。
+未知路径（含已删除的 `/welcome`、`/hello_world` HTML 探活）返回 `404` 与
+进程级 `UnifiedResponse`。
 
 ## 模型推理请求
 

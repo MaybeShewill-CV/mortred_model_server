@@ -89,7 +89,7 @@ TEST(openapi_consistency, model_paths_require_bearer_auth) {
     ASSERT_FALSE(doc.HasParseError());
     const auto& paths = doc["paths"];
     const std::set<std::string> public_paths = {
-        "/healthz", "/ready", "/metrics", "/openapi.json", "/welcome", "/hello_world"};
+        "/healthz", "/ready", "/metrics", "/openapi.json"};
     for (auto it = paths.MemberBegin(); it != paths.MemberEnd(); ++it) {
         const std::string path = it->name.GetString();
         if (public_paths.count(path) != 0) {
@@ -180,15 +180,13 @@ TEST(openapi_consistency, every_model_request_requires_images_and_is_strict) {
     EXPECT_GT(checked, 0) << "no generated model request schemas found";
 }
 
-TEST(openapi_consistency, legacy_endpoints_are_marked_deprecated) {
+TEST(openapi_consistency, legacy_html_health_endpoints_are_gone) {
     rapidjson::Document doc;
     doc.Parse(read_file("docs/openapi.json").c_str());
     ASSERT_FALSE(doc.HasParseError());
     const auto& paths = doc["paths"];
-    ASSERT_TRUE(paths.HasMember("/welcome"));
-    ASSERT_TRUE(paths.HasMember("/hello_world"));
-    EXPECT_TRUE(paths["/welcome"]["get"].HasMember("deprecated"));
-    EXPECT_TRUE(paths["/hello_world"]["get"].HasMember("deprecated"));
+    EXPECT_FALSE(paths.HasMember("/welcome"));
+    EXPECT_FALSE(paths.HasMember("/hello_world"));
 }
 
 int main(int argc, char** argv) {

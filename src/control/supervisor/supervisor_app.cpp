@@ -61,6 +61,7 @@ using mortred::control::ControlConfig;
 using mortred::control::ProcessSupervisor;
 using mortred::control::kGatewayId;
 using mortred::control::reply_json;
+using mortred::control::reply_unified_error;
 
 Catalog g_catalog;
 std::unique_ptr<ProcessSupervisor> g_supervisor;
@@ -213,6 +214,11 @@ std::string json_error(const std::string& msg) {
     rapidjson::Writer<rapidjson::StringBuffer> w(buf);
     d.Accept(w);
     return buf.GetString();
+}
+
+void reply_proxy_error(WFHttpTask* task, int http_status, const std::string& msg,
+                       const std::string& pointer = {}) {
+    reply_unified_error(task, http_status, msg, pointer);
 }
 
 std::string serialize(const rapidjson::Document& d) {
@@ -405,29 +411,28 @@ void handle_infer(WFHttpTask* task) {
     doc.Parse(body.c_str());
     if (doc.HasParseError() || !doc.IsObject() || !doc.HasMember("server_id") ||
         !doc["server_id"].IsString()) {
-        reply_json(task, 400, json_error("body must contain string field server_id"));
+        reply_proxy_error(task, 400, "body must contain string field server_id");
         return;
     }
     const auto envelope = mortred::control::copy_request_envelope(doc);
     if (!envelope.ok) {
-        reply_json(task, envelope.http_status, json_error(envelope.message));
+        reply_proxy_error(task, envelope.http_status, envelope.message, envelope.pointer);
         return;
     }
     const std::string id = doc["server_id"].GetString();
     const auto* entry = g_catalog.find(id);
     const bool is_gateway = id == kGatewayId;
     if (entry == nullptr && !is_gateway) {
-        reply_json(task, 404, json_error("unknown server id: " + id));
+        reply_proxy_error(task, 404, "unknown server id: " + id);
         return;
     }
     const auto s = g_supervisor->status(id);
     if (s.pid < 0) {
-        reply_json(task, 409, json_error("server not running: " + id));
+        reply_proxy_error(task, 409, "server not running: " + id);
         return;
     }
     if (!s.ready) {
-        reply_json(task, 409,
-                   json_error("server not ready yet (loading or unhealthy): " + id));
+        reply_proxy_error(task, 409, "server not ready yet (loading or unhealthy): " + id);
         return;
     }
     const std::string url = is_gateway
@@ -440,10 +445,7 @@ void handle_infer(WFHttpTask* task) {
             auto* resp = task->get_resp();
             if (t->get_state() != WFT_STATE_SUCCESS) {
                 const int code = t->get_error() == ECONNREFUSED ? 503 : 502;
-                resp->set_status_code(std::to_string(code).c_str());
-                resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
-                const std::string err = json_error("forward to model server failed");
-                resp->append_output_body(err.data(), err.size());
+                reply_proxy_error(task, code, "forward to model server failed");
                 return;
             }
             resp->set_status_code(t->get_resp()->get_status_code());
@@ -488,12 +490,12 @@ void proxy_to_model_jobs(WFHttpTask* task, const std::string& server_id,
                          const std::string& jobs_path_and_query) {
     const auto* entry = g_catalog.find(server_id);
     if (entry == nullptr) {
-        reply_json(task, 404, json_error("unknown server id: " + server_id));
+        reply_proxy_error(task, 404, "unknown server id: " + server_id);
         return;
     }
     const auto s = g_supervisor->status(server_id);
     if (s.pid < 0 || !s.ready) {
-        reply_json(task, 503, json_error("server not ready: " + server_id));
+        reply_proxy_error(task, 503, "server not ready: " + server_id);
         return;
     }
     const std::string url = "http://127.0.0.1:" + std::to_string(entry->port) + jobs_path_and_query;
@@ -505,10 +507,7 @@ void proxy_to_model_jobs(WFHttpTask* task, const std::string& server_id,
         url, 0, 300000, [task, server_id](WFHttpTask* t) {
             auto* resp = task->get_resp();
             if (t->get_state() != WFT_STATE_SUCCESS) {
-                resp->set_status_code("502");
-                resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
-                const std::string err = json_error("job proxy to '" + server_id + "' failed");
-                resp->append_output_body(err.data(), err.size());
+                reply_proxy_error(task, 502, "job proxy to '" + server_id + "' failed");
                 return;
             }
             resp->set_status_code(t->get_resp()->get_status_code());
@@ -565,13 +564,13 @@ void handle_jobs(WFHttpTask* task, const std::string& path, const std::string& f
         doc.Parse(body.c_str());
         if (doc.HasParseError() || !doc.IsObject() || !doc.HasMember("model") ||
             !doc["model"].IsString()) {
-            reply_json(task, 400, json_error("body must contain string field 'model'"));
+            reply_proxy_error(task, 400, "body must contain string field 'model'");
             return;
         }
         const std::string model = doc["model"].GetString();
         const auto envelope = mortred::control::copy_request_envelope(doc);
         if (!envelope.ok) {
-            reply_json(task, envelope.http_status, json_error(envelope.message));
+            reply_proxy_error(task, envelope.http_status, envelope.message, envelope.pointer);
             return;
         }
         proxy_to_model_jobs_with_body(task, model, "/jobs", "POST", envelope.json);
@@ -596,7 +595,7 @@ void handle_jobs(WFHttpTask* task, const std::string& path, const std::string& f
             }
         }
         if (server_id.empty()) {
-            reply_json(task, 404, json_error("job not found (unknown or expired): " + job_id));
+            reply_proxy_error(task, 404, "job not found (unknown or expired): " + job_id);
             return;
         }
 
@@ -613,7 +612,7 @@ void handle_jobs(WFHttpTask* task, const std::string& path, const std::string& f
         return;
     }
 
-    reply_json(task, 404, json_error("not found"));
+    reply_proxy_error(task, 404, "not found");
 }
 
 /*** proxy helper that takes an explicit body (for submit after stripping 'model') */
@@ -622,12 +621,12 @@ void proxy_to_model_jobs_with_body(WFHttpTask* task, const std::string& server_i
                                    const std::string& body) {
     const auto* entry = g_catalog.find(server_id);
     if (entry == nullptr) {
-        reply_json(task, 404, json_error("unknown model: " + server_id));
+        reply_proxy_error(task, 404, "unknown model: " + server_id);
         return;
     }
     const auto s = g_supervisor->status(server_id);
     if (s.pid < 0 || !s.ready) {
-        reply_json(task, 503, json_error("server not ready: " + server_id));
+        reply_proxy_error(task, 503, "server not ready: " + server_id);
         return;
     }
     const std::string url = "http://127.0.0.1:" + std::to_string(entry->port) + jobs_path;
@@ -637,10 +636,7 @@ void proxy_to_model_jobs_with_body(WFHttpTask* task, const std::string& server_i
         url, 0, 300000, [task, server_id](WFHttpTask* t) {
             auto* resp = task->get_resp();
             if (t->get_state() != WFT_STATE_SUCCESS) {
-                resp->set_status_code("502");
-                resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
-                const std::string err = json_error("job submit to '" + server_id + "' failed");
-                resp->append_output_body(err.data(), err.size());
+                reply_proxy_error(task, 502, "job submit to '" + server_id + "' failed");
                 return;
             }
             resp->set_status_code(t->get_resp()->get_status_code());
@@ -747,7 +743,7 @@ void handle_pipelines(WFHttpTask* task) {
     doc.Parse(body.c_str());
     if (doc.HasParseError() || !doc.IsObject() || !doc.HasMember("steps") ||
         !doc["steps"].IsArray() || doc["steps"].Empty()) {
-        reply_json(task, 400, json_error("body must contain non-empty 'steps' array"));
+        reply_proxy_error(task, 400, "body must contain non-empty 'steps' array");
         return;
     }
 
@@ -765,7 +761,7 @@ void handle_pipelines(WFHttpTask* task) {
     std::vector<std::pair<std::string, std::string>> steps;  // (model, input_key)
     for (const auto& step : doc["steps"].GetArray()) {
         if (!step.IsObject() || !step.HasMember("model") || !step["model"].IsString()) {
-            reply_json(task, 400, json_error("each step must have 'model' string field"));
+            reply_proxy_error(task, 400, "each step must have 'model' string field");
             return;
         }
         std::string input_key;
@@ -777,7 +773,7 @@ void handle_pipelines(WFHttpTask* task) {
 
     const auto envelope = mortred::control::copy_request_envelope(doc);
     if (!envelope.ok) {
-        reply_json(task, envelope.http_status, json_error(envelope.message));
+        reply_proxy_error(task, envelope.http_status, envelope.message, envelope.pointer);
         return;
     }
     const std::string current_input = envelope.json;
@@ -854,7 +850,7 @@ void handle_pipeline_status(WFHttpTask* task, const std::string& id) {
         }
     }
     if (job == nullptr) {
-        reply_json(task, 404, json_error("pipeline not found: " + id));
+        reply_proxy_error(task, 404, "pipeline not found: " + id);
         return;
     }
     auto* resp = task->get_resp();

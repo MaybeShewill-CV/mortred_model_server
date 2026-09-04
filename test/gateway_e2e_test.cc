@@ -226,12 +226,15 @@ TEST_F(GatewayE2ETest, healthz_is_public) {
 TEST_F(GatewayE2ETest, unknown_route_is_404) {
     const auto r = send_request(gateway_port_, "POST", "/no/such/route", "{}", "ext-token");
     EXPECT_EQ(r.status, 404);
+    EXPECT_NE(r.body.find("\"status\":63"), std::string::npos) << r.body;
+    EXPECT_NE(r.body.find("\"errors\""), std::string::npos) << r.body;
 }
 
 TEST_F(GatewayE2ETest, model_route_requires_token) {
     const auto r =
         send_request(gateway_port_, "POST", "/mortred_ai_server_v1/test/fake", "{}");
     EXPECT_EQ(r.status, 401);
+    EXPECT_NE(r.body.find("\"status\":401"), std::string::npos) << r.body;
 }
 
 TEST_F(GatewayE2ETest, model_route_forwards_to_upstream) {
@@ -245,6 +248,7 @@ TEST_F(GatewayE2ETest, method_not_allowed_is_405) {
     const auto r = send_request(gateway_port_, "GET", "/mortred_ai_server_v1/test/fake", "",
                                 "ext-token");
     EXPECT_EQ(r.status, 405);
+    EXPECT_NE(r.body.find("\"status\":62"), std::string::npos) << r.body;
 }
 
 TEST_F(GatewayE2ETest, dead_upstream_maps_to_503) {
@@ -254,6 +258,7 @@ TEST_F(GatewayE2ETest, dead_upstream_maps_to_503) {
     const auto r = send_request(gateway_port_, "POST", "/mortred_ai_server_v1/test/fake", "{}",
                                 "ext-token");
     EXPECT_EQ(r.status, 503);
+    EXPECT_NE(r.body.find("\"status\":65"), std::string::npos) << r.body;
 }
 
 TEST_F(GatewayE2ETest, upstream_overload_headers_pass_through) {

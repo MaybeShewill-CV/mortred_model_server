@@ -126,7 +126,7 @@ InferenceSession（MNN / ONNX Runtime / TensorRT 统一 NamedTensor 契约）
 - 任务载荷形状不变（分类 `{class_id,category,scores}`、检测 `[{class_id,score,category,bbox,detail_infos}]` 等，详见 `response_serializers.h` / OpenAPI）
 - `errors[]`（仅 422 出现）：`[{ "pointer": "/params/score_threshold", "message": "..." }]`
 
-> **注意**：`/healthz` `/ready` `/welcome` 等基础设施端点仍使用旧版运维信封 `{req_id, code, msg, data}`——统一契约只覆盖模型推理面。
+> **注意**：`/healthz` `/ready` 等基础设施端点使用进程级 `UnifiedResponse`（空 `results`）；统一契约覆盖模型推理面。管理面 `/api/v1/servers*` 等仍用 `{ok, error}`。
 
 ### 3.3 错误模型与 HTTP 语义
 

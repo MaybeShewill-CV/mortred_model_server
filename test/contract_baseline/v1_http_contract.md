@@ -71,7 +71,7 @@ GET  /jobs/{id}/result         → 200 标准 v1 信封（同 §2）｜409 {"err
 
 ## 6. 公开端点（免鉴权）
 
-`/healthz` `/ready` `/metrics` `/openapi.json` `/welcome` `/hello_world`
+`/healthz` `/ready` `/metrics` `/openapi.json`
 
 ## 7. 已知将在统一契约中移除/变更的 v1 行为（迁移对照）
 

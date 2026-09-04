@@ -97,34 +97,6 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         }
       }
     },
-    "/welcome": {
-      "get": {
-        "summary": "Legacy welcome page",
-        "deprecated": true,
-        "tags": [
-          "legacy"
-        ],
-        "responses": {
-          "200": {
-            "description": "HTML page"
-          }
-        }
-      }
-    },
-    "/hello_world": {
-      "get": {
-        "summary": "Legacy health check (kept for web console)",
-        "deprecated": true,
-        "tags": [
-          "legacy"
-        ],
-        "responses": {
-          "200": {
-            "description": "HTML page"
-          }
-        }
-      }
-    },
     "/mortred_ai_server_v1/enhancement/attentive_gan_derain": {
       "post": {
         "summary": "attentive gan derain",
