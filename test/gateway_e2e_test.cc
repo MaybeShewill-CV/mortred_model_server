@@ -257,7 +257,8 @@ TEST_F(GatewayE2ETest, prefixed_infer_matches_legacy_uri) {
                                 "{\"images\":[\"aGk=\"]}", "ext-token");
     EXPECT_EQ(r.status, 200);
     EXPECT_NE(r.body.find("\"fake\":true"), std::string::npos) << r.body;
-    EXPECT_EQ(r.headers["x-mortred-model"], "FAKE");
+    ASSERT_NE(r.headers.find("x-mortred-model"), r.headers.end()) << r.body;
+    EXPECT_EQ(r.headers.at("x-mortred-model"), "FAKE");
 }
 
 TEST_F(GatewayE2ETest, unknown_model_id_is_404) {
@@ -270,14 +271,16 @@ TEST_F(GatewayE2ETest, unknown_model_id_is_404) {
 TEST_F(GatewayE2ETest, prefixed_infer_get_is_405) {
     const auto r = send_request(gateway_port_, "GET", "/v1/models/FAKE/infer", "", "ext-token");
     EXPECT_EQ(r.status, 405);
-    EXPECT_EQ(r.headers["allow"], "POST");
+    ASSERT_NE(r.headers.find("allow"), r.headers.end()) << r.body;
+    EXPECT_EQ(r.headers.at("allow"), "POST");
 }
 
 TEST_F(GatewayE2ETest, legacy_uri_get_is_405) {
     const auto r =
         send_request(gateway_port_, "GET", "/mortred_ai_server_v1/test/fake", "", "ext-token");
     EXPECT_EQ(r.status, 405);
-    EXPECT_EQ(r.headers["allow"], "POST");
+    ASSERT_NE(r.headers.find("allow"), r.headers.end()) << r.body;
+    EXPECT_EQ(r.headers.at("allow"), "POST");
 }
 
 TEST_F(GatewayE2ETest, jobs_submit_rewrites_location_and_urls) {
@@ -322,7 +325,8 @@ TEST_F(GatewayE2ETest, jobs_post_on_job_id_is_405) {
     const auto r =
         send_request(gateway_port_, "POST", "/v1/models/FAKE/jobs/job_fake_1", "{}", "ext-token");
     EXPECT_EQ(r.status, 405);
-    EXPECT_EQ(r.headers["allow"], "GET");
+    ASSERT_NE(r.headers.find("allow"), r.headers.end()) << r.body;
+    EXPECT_EQ(r.headers.at("allow"), "GET");
 }
 
 TEST_F(GatewayE2ETest, cors_preflight_allows_configured_origin) {
