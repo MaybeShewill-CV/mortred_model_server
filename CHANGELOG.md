@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Hosted `cpu-profile` fetches sha256-locked `mobilenetv2.mnn` from Hugging Face
+  and fail-closes an MNN CPU session plus one golden (`MORTRED_CI_REQUIRE_WEIGHTS`,
+  `scripts/ci_assert_gtest_xml.py`). That is the fork-visible proof an engine
+  still runs; it is not TensorRT or the model zoo.
 - Caddy reverse-proxy example (`deploy/caddy/Caddyfile`) as the supported TLS
   front for loopback gateway/supervisor. `mortredctl doctor` prints warnings
   (never fails) for a non-loopback listen, a token shorter than 32 characters,
@@ -47,6 +51,10 @@ All notable changes to this project are documented here. The format follows
   now answer `404` with process-level `UnifiedResponse`.
 
 ### Changed
+- GPU golden smoke is a maintainer gate (same-repo PR and push to main,
+  skipped=0). Fork PRs never run on the self-hosted GPU runner. Require the
+  `inference paths` check, not `gpu golden smoke` by name. See
+  `docs/ci-golden-regression.md`.
 - Example Docker Compose publishes gateway `:8080` and supervisor `:8787` on
   `127.0.0.1` only. The monitoring stack binds Grafana/Prometheus to loopback,
   requires `GRAFANA_ADMIN_PASSWORD`, and no longer enables Prometheus

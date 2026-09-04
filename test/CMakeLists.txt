@@ -96,13 +96,13 @@ if(MORTRED_BUILD_FULL)
     # SAM AMG param wiring pulls the encoder/decoder dtors from the models lib
     list(APPEND TEST_LIST sam_amg_param_unittest)
     list(APPEND TEST_LIST model_catalog_unittest)
-    # GPU-model tests exercise TRT sessions and link vendored::mnn_cuda; the
-    # cpu profile compiles TRT out, so they exist in the gpu profile only
-    if(NOT MORTRED_BUILD_PROFILE STREQUAL "cpu")
-        list(APPEND TEST_LIST model_golden_test)
-        list(APPEND TEST_LIST model_lifecycle_unittest)
-        list(APPEND TEST_LIST backend_unittest)
-    endif()
+    # Session / lifecycle / golden need the models lib. They used to be
+    # gpu-profile-only because the test binaries linked vendored::mnn_cuda
+    # directly; models already PUBLIC-links that on gpu and omits it on cpu.
+    # TRT-only TEST()s are compiled out via MORTRED_HAS_TRT.
+    list(APPEND TEST_LIST model_golden_test)
+    list(APPEND TEST_LIST model_lifecycle_unittest)
+    list(APPEND TEST_LIST backend_unittest)
 endif()
 
 # deterministic model-server stand-in used by supervision/gateway e2e tests
@@ -148,9 +148,9 @@ foreach(src ${TEST_LIST})
     elseif(${src} STREQUAL "diffusion_param_unittest")
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "model_golden_test")
-        set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn vendored::mnn_cuda)
+        set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "model_lifecycle_unittest")
-        set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn vendored::mnn_cuda)
+        set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "object_detection_output_contract_unittest")
         set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn)
     elseif(${src} STREQUAL "model_output_contract_unittest")
@@ -174,7 +174,7 @@ foreach(src ${TEST_LIST})
         # the model headers pulled in through the task catalogs
         set(EXTRA_LIBS factory glog::glog ${OpenCV_LIBS} vendored::mnn)
     elseif(${src} STREQUAL "backend_unittest")
-        set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn vendored::mnn_cuda)
+        set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "simple_tokenizer_unittest")
         set(EXTRA_SRCS ${PROJECT_ROOT_DIR}/src/models/clip/simple_tokenizer.cpp)
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})

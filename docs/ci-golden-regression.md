@@ -1,104 +1,114 @@
-# GPU Golden Regression CI
+# Inference CI: what each path is allowed to claim
 
-This document explains the two self-hosted GPU jobs added in
-`.github/workflows/ci.yml` (`gpu-pr-gate`, `gpu-nightly-full`): what they run,
-what the runner needs on disk, and how to refresh the committed golden
-expectations when an intentional numerical change lands.
+Weights are **not** in git. GitHub holds code, `conf/weights_manifest.json`
+(path + sha256), and `test/golden/` expectations. Bytes live on Hugging Face
+(`MaybeShewill-CV/mortred_model_server`) and, for CUDA/TensorRT, on the
+maintainer GPU runner at `/opt/mortred-cache/weights`.
 
-## Why this exists
+A green check must not be read as “every model still works on every
+contribution path.” Use the table.
 
-The golden tests in `test/model_golden_test.cc` silently `GTEST_SKIP()` whenever
-weights/engines referenced by the model configs are missing. On GitHub's hosted
-runners there is no NVIDIA GPU, so before these jobs existed the entire golden
-zoo was skipped on every CI run - a numerical regression in preprocess / NMS /
-decode shipped undetected until a human noticed wrong output.
+| Path | Runner | Green means | Does **not** mean |
+|---|---|---|---|
+| Fork PR | GitHub `ubuntu-22.04` (`cpu-profile`) | cpu profile compiled; output contracts passed; **MNN CPU `run()` on mobilenetv2** (HF, sha256 locked, skipped=0) | TensorRT, CUDA, full zoo, 5 backends |
+| Same-repo PR | Hosted + self-hosted GPU | Fork claims **plus** 8 golden cases, skipped=0, weights from `/opt/mortred-cache` | Nightly zoo or cross-backend allclose |
+| Push to `main` (including a local `--no-ff` merge) | Hosted + GPU | Same as same-repo PR. GPU smoke **does** run here | That the Docker nightly on a CPU runner executed CUDA goldens |
+| Schedule / `workflow_dispatch` | GPU runner (`gpu-nightly-full`) | Smoke-8 fail-closed; remaining goldens may skip **if** reported in the XML inventory | Bit-exact MNN/ONNX/TRT |
 
-These jobs close that gap with real CUDA + TensorRT execution on a
-maintainer-owned runner.
+The required GitHub check should be **`inference paths`** (job `inference-paths`),
+not `gpu golden smoke` by itself. Fork PRs skip the GPU job on purpose
+(untrusted code must not run on the maintainer GPU box). The wrapper treats
+that skip as success only when `cpu-profile` succeeded.
 
-## Self-hosted runner requirements
+## Hosted fork liveness (`cpu-profile`)
+
+1. Cache + `scripts/fetch_weights.py --only classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn`
+   (stdlib urllib if `requests` / `huggingface_hub` are absent).
+2. `--check` against the manifest sha256 (mismatch fails the job).
+3. `MORTRED_CI_REQUIRE_WEIGHTS=1` on `backend_unittest` (`MnnSession` + config
+   tests) and `model_golden.mobilenetv2_classification`.
+4. `scripts/ci_assert_gtest_xml.py` rejects zero tests or any skip.
+
+Local developers without weights keep `GTEST_SKIP` (env unset).
+
+## Maintainer GPU smoke (`gpu-pr-gate`)
+
+Runs only when:
+
+- `push` to `main`, or
+- `pull_request` whose **head repo is this repository** (not a fork).
+
+Eight cases (`MORTRED_GPU_SMOKE_FILTER` in `.github/workflows/ci.yml`):
+
+| Case | Family |
+|---|---|
+| `yolov5_detection` | object detection |
+| `yolov8_detection` | TensorRT decode + geometry |
+| `yolov8_mixed_size_batch_matches_single_runs` | mixed-size batch |
+| `nanodet_detection` | anchor-free decode |
+| `centerface_detection` | landmarks |
+| `dbnet_text_detection` | OCR boxes |
+| `mobilenetv2_classification` | scores + `k_score_tol` |
+| `fastsam_segmentation` | fingerprint png |
+
+`convert_trt_engines.sh --only` includes **yolov8**. Missing cache or a skip
+fails the job (`MORTRED_CI_REQUIRE_WEIGHTS=1` + XML audit).
+
+Goldens still force `device=cpu` in the test harness (`force_cpu_backend`).
+MNN cases therefore run MNN-CPU even on the GPU box; `type=tensorrt` (YOLOv8)
+still uses CUDA. Changing that requires a golden refresh on the runner — a
+follow-up, not this gate.
+
+## Nightly (`gpu-nightly-full`)
+
+Smoke-8 is fail-closed. The rest of the committed golden zoo runs with
+`--allow-skips` so an incomplete cache prints an inventory instead of a fake
+all-green. `model_lifecycle_unittest`, `backend_unittest`, and
+`gateway_e2e_test` still run via ctest.
+
+Workflow `concurrency` includes `github.event_name` so a push to `main` does
+not cancel a running schedule.
+
+## Self-hosted runner layout
 
 | Item | Requirement |
 |---|---|
 | OS | Ubuntu 22.04 LTS |
 | NVIDIA driver | >= 535.x |
-| CUDA / TensorRT | 11.8 / 8.6.1 - must match the versions vendored under `3rd_party/` |
-| System packages | OpenCV, glog, Eigen3, GTest, CMake, curl, tar, jq |
-| Runner labels | `self-hosted`, `X64`, `gpu` |
-| Concurrency | Register exactly one runner process per machine; jobs then serialize naturally instead of fighting over one GPU |
-
-## Persistent cache layout
-
-Both jobs expect the caches at `/opt/mortred-cache/` (create once per runner):
+| CUDA / TensorRT | 11.8 / 8.6.1 — match `3rd_party/` |
+| Labels | `self-hosted`, `X64`, `gpu` |
+| Concurrency | One runner process per machine |
 
 ```
 /opt/mortred-cache/
-|-- weights/                 # Full runtime asset tree mirroring the gitignored
-                             # weights/ layout: ONNX sources AND the TRT engines
-                             # matching this runner's GPU/TRT pair, e.g.
-                             #   object_detection/yolov5/yolov5s.engine
-                             #   classification/mobilenetv2/mobilenetv2.engine
-`-- 3rd_party/              # The output of scripts/install_deps.sh --all,
-                             # linked into the checkout after actions/checkout
-                             # cleans ignored directories.
+|-- weights/      # HF blobs + this GPU/TRT pair's .engine files
+`-- 3rd_party/    # scripts/install_deps.sh --all
 ```
 
-CI symlinks `weights` into this cache. Engines are GPU-architecture- and
-TRT-version-specific: when either changes on the runner (new driver, TRT
-bump), wipe `weights/**/*.engine` and let one manual nightly run rebuild them
-from ONNX before PR traffic resumes.
+Jobs symlink those into the checkout. Engines are GPU- and TRT-version
+specific: after a driver/TRT bump, wipe `weights/**/*.engine` and rebuild
+from ONNX before PR traffic.
 
-## PR smoke subset (Job H)
-
-Eight cross-family cases chosen so that one red fingerprint catches ~80% of
-regressions while staying inside a 15-minute budget on warm cache:
-
-| Case | Family | Output contract exercised |
-|---|---|---|
-| `yolov5_detection` | object detection | json boxes |
-| `yolov8_detection` | object detection | TensorRT decode + coordinate mapping |
-| `yolov8_mixed_size_batch_matches_single_runs` | dynamic batching | mixed-size request isolation |
-| `nanodet_detection` | object detection | anchor-free decode path |
-| `centerface_detection` | face detection | landmark output contract |
-| `dbnet_text_detection` | OCR | json text boxes |
-| `mobilenetv2_classification` | classification | scores with `k_score_tol` |
-| `fastsam_segmentation` | segmentation | fingerprint png with `k_fingerprint_diff` |
-
-## Nightly full regression (Job I)
-
-Runs all 24 committed golden cases plus `model_lifecycle_unittest`,
-`backend_unittest` and `gateway_e2e_test`. Triggered by the daily schedule or
-manually via `workflow_dispatch`.
-
-## One-time baseline calibration
-
-Golden expected values only form a meaningful regression guard once they were
-generated on the same physical reference environment as the gate itself.
-After setting up a fresh runner:
-
-1. Let Job I run once via manual dispatch. If every case passes, the committed
-   goldens already match the runner - done.
-2. If cases fail with drift beyond tolerance, regenerate **on the runner**:
-
-   ```bash
-   MORTRED_UPDATE_GOLDEN=1 ./build-gpu/bin/model_golden_test
-   ```
-
-3. Commit the refreshed `test/golden/*` files in a dedicated data-only commit,
-   separate from any logic change, so review shows exactly which numbers moved.
-4. From then on the runner is the canonical reference point for "correct".
-
-## Refreshing goldens after an intentional change
-
-When a refactor legitimately shifts numbers (e.g. preprocessing change):
+Preflight before relying on fail-closed smoke:
 
 ```bash
-# on your GPU dev box or directly on the runner
-MORTRED_UPDATE_GOLDEN=1 ./build-full/bin/model_golden_test
-git add test/golden/
-git commit -m "golden: refresh after <change>"
+# on the runner, repo root with weights linked
+python3 scripts/fetch_weights.py --only yolov8
+bash scripts/convert_trt_engines.sh --only yolov8
+MORTRED_CI_REQUIRE_WEIGHTS=1 ./build-gpu/bin/model_golden_test \
+  --gtest_filter="$MORTRED_GPU_SMOKE_FILTER" \
+  --gtest_output=xml:/tmp/gpu-smoke.xml
+python3 scripts/ci_assert_gtest_xml.py /tmp/gpu-smoke.xml
 ```
 
-Update-mode runs `GTEST_SKIP` each case right after writing the new artifact,
-so one pass regenerates everything reachable and leaves genuinely broken models
-(crash/init failure) still failing loudly.
+## Refreshing goldens
+
+Generate on the **same** GPU runner that gates PRs:
+
+```bash
+MORTRED_UPDATE_GOLDEN=1 ./build-gpu/bin/model_golden_test
+git add test/golden/
+```
+
+Update-mode `GTEST_SKIP`s after writing artifacts (not a weight skip). Commit
+golden files separately from logic changes.

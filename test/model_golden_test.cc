@@ -16,6 +16,7 @@
  *
  * 行为约定与迁移前完全一致：
  *   - 权重缺失时 GTEST_SKIP（本地 / 无 GPU 环境可跑）；
+ *     CI 推理 job 设 MORTRED_CI_REQUIRE_WEIGHTS=1 时改为 FAIL；
  *   - MORTRED_UPDATE_GOLDEN=1 重新生成基线；
  *   - 配置里的 ../ 前缀被剥掉、backend 强制 cpu；
  *   - 用例名不变，--gtest_filter 行为不变。
@@ -49,7 +50,7 @@ TEST(model_golden, mobilenetv2_batch_matches_single) {
     // [N,H,W,3] session run is the whole point of the batching upgrade)
     std::string conf = "conf/model/classification/mobilenetv2/mobilenetv2_config.toml";
     if (!weights_available(conf))
-        GTEST_SKIP() << "weights not available";
+        MORTRED_SKIP_OR_FAIL_WEIGHTS("weights not available");
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::classification::create_mobilenetv2_classifier<mat_input, std_classification_output>();
     ASSERT_NE(model, nullptr);
@@ -82,7 +83,7 @@ TEST(model_golden, mobilenetv2_mixed_batch_isolates_failed_items) {
     // must keep the valid items aligned with their single-run results.
     std::string conf = "conf/model/classification/mobilenetv2/mobilenetv2_config.toml";
     if (!weights_available(conf))
-        GTEST_SKIP() << "weights not available";
+        MORTRED_SKIP_OR_FAIL_WEIGHTS("weights not available");
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::classification::create_mobilenetv2_classifier<mat_input, std_classification_output>();
     ASSERT_NE(model, nullptr);
@@ -125,7 +126,7 @@ TEST(model_golden, densenet_batch_matches_single) {
     // run must be numerically equivalent to N single runs
     std::string conf = "conf/model/classification/densenet/densenet121_config.toml";
     if (!weights_available(conf))
-        GTEST_SKIP() << "weights not available";
+        MORTRED_SKIP_OR_FAIL_WEIGHTS("weights not available");
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::classification::create_densenet_classifier<mat_input, std_classification_output>();
     ASSERT_NE(model, nullptr);
@@ -178,7 +179,7 @@ GOLDEN_OBJECT_DETECTION_CASE(yolov8_detection, "conf/model/object_detection/yolo
 TEST(model_golden, yolov8_mixed_size_batch_matches_single_runs) {
     std::string conf = "conf/model/object_detection/yolov8/yolov8_config.toml";
     if (!weights_available(conf))
-        GTEST_SKIP() << "weights not available";
+        MORTRED_SKIP_OR_FAIL_WEIGHTS("weights not available");
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::object_detection::create_yolov8_detector<mat_input, std_object_detection_output>();
     ASSERT_NE(model, nullptr);
@@ -261,7 +262,7 @@ GOLDEN_RAW_MAT_CASE(fastsam_segmentation, "conf/model/segment_anything/fast_sam_
 TEST(model_golden, sam_prompt_prediction) {
     std::string conf = "conf/model/segment_anything/mobile_sam_config.toml";
     if (!weights_available(conf))
-        GTEST_SKIP() << "weights not available";
+        MORTRED_SKIP_OR_FAIL_WEIGHTS("weights not available");
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::segment_anything::create_sam_predictor<jinq::models::io_define::segment_anything::sam_prompt_input,
                                                                        jinq::models::io_define::segment_anything::std_sam_prompt_output>();
@@ -281,7 +282,7 @@ TEST(model_golden, sam_prompt_prediction) {
 TEST(model_golden, sam_automask_generation) {
     std::string conf = "conf/model/segment_anything/mobile_sam_amg_config.toml";
     if (!weights_available(conf))
-        GTEST_SKIP() << "weights not available";
+        MORTRED_SKIP_OR_FAIL_WEIGHTS("weights not available");
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::segment_anything::create_sam_auto_mask_generator<mat_input,
                                                                                  jinq::models::io_define::segment_anything::sam_amg_output>();
@@ -299,7 +300,7 @@ TEST(model_golden, sam_automask_generation) {
 TEST(model_golden, openai_clip_embedding) {
     std::string conf = "conf/model/openai_clip/vit_b_32_config.toml";
     if (!weights_available(conf))
-        GTEST_SKIP() << "weights not available";
+        MORTRED_SKIP_OR_FAIL_WEIGHTS("weights not available");
     auto cfg = load_model_cfg(conf);
     auto model =
         jinq::factory::clip::create_openai_clip<jinq::models::io_define::clip::clip_input, jinq::models::io_define::clip::clip_output>();
