@@ -13,7 +13,7 @@
 using jinq::common::Timestamp;
 
 TEST(time_stamp, invalid_and_now) {
-    auto invalid = Timestamp::invalid();
+    Timestamp invalid;
     EXPECT_FALSE(invalid.valid());
 
     auto now = Timestamp::now();
@@ -38,9 +38,8 @@ TEST(time_stamp, epoch_constructor_and_comparison) {
     EXPECT_EQ(Timestamp(1000000), low);
 }
 
-TEST(time_stamp, to_str_and_format) {
+TEST(time_stamp, to_format_str) {
     Timestamp t(123456789); // 123 seconds + 456789 microseconds
-    EXPECT_EQ(t.to_str(), "123.456789");
 
     // formatted output: %Y-%m-%d is 10 chars and '-' separated
     auto date = t.to_format_str("%Y-%m-%d");

@@ -106,16 +106,6 @@ TEST(cv_utils, convert_chw_hwc_round_trip) {
     }
 }
 
-TEST(cv_utils, base64_cvmat_round_trip) {
-    cv::Mat input(16, 16, CV_8UC3, cv::Scalar(1, 2, 3));
-    auto encoded = CvUtils::encode_cvmat_into_base64_str(input);
-    EXPECT_FALSE(encoded.empty());
-
-    auto decoded = CvUtils::decode_base64_str_into_cvmat(encoded);
-    EXPECT_EQ(decoded.size(), input.size());
-    EXPECT_EQ(decoded.type(), input.type());
-}
-
 TEST(cv_utils, colorize_and_stack) {
     cv::Mat seg_mask(8, 8, CV_32SC1, cv::Scalar(0));
     seg_mask.row(0).setTo(1);

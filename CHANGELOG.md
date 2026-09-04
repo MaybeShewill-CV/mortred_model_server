@@ -8,6 +8,13 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Removed
+- Unused helpers left by catalog and envelope migrations: diffusion
+  `create_*_sampler` factories, dead `CvUtils` overlay/base64/tensor-copy
+  helpers, unused `std_clip_*` / `std_sam_prompt_input` aliases,
+  `build_unified_response_body`, `handle_custom_endpoint`,
+  `FilePathUtil::is_dir_exist`, `Timestamp::to_str` / `invalid`,
+  `detection_params_parse` (inlined into `DetectionParams::parse`),
+  `TypeErasedFactory::register_type` and the `ModelFactory` alias.
 - Dead `json_request_parser.h` (`parse_json_request` had no callers; it still
   accepted `img_data` and ignored unknown keys).
 - `http_response.h` (`{req_id, code, msg, data}` shim). Process-level JSON

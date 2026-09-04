@@ -66,5 +66,4 @@ mortred-model-benchmark.out --model DENSENET /path/to/densenet_config.toml [imag
 通常不需要触碰请求服务逻辑。`BaseAiServerImpl` 提供
 `serve_process` / `do_work` / `do_work_cb`：JSON 请求解析（含 400/413/415/405 契约错误）、
 Bearer 鉴权、按 IP 限流、阻塞队列取 worker（计入超时预算）、模型推理、经
-`fill_response` 的响应序列化、Prometheus 指标与结构化请求日志。仅当需要额外端点时
-才使用扩展点（`handle_custom_endpoint`）。
+`fill_response` 的响应序列化、Prometheus 指标与结构化请求日志。

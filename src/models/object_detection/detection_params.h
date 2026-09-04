@@ -26,10 +26,10 @@ struct DetectionParams {
     static bool parse(const toml::table &params, DetectionParams *out, std::string *error);
 };
 
-inline bool detection_params_parse(const toml::table &params, DetectionParams *out, std::string *error) {
+inline bool DetectionParams::parse(const toml::table &params, DetectionParams *out, std::string *error) {
     if (out == nullptr) {
         if (error != nullptr) {
-            *error = "_detection_params_parse: output pointer is null";
+            *error = "DetectionParams::parse: output pointer is null";
         }
         return false;
     }
@@ -129,10 +129,6 @@ inline bool detection_params_parse(const toml::table &params, DetectionParams *o
         }
     }
     return true;
-}
-
-inline bool DetectionParams::parse(const toml::table &params, DetectionParams *out, std::string *error) {
-    return detection_params_parse(params, out, error);
 }
 
 inline bool parse_model_input_size(const toml::table &params, cv::Size *out, std::string *error) {

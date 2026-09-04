@@ -17,14 +17,11 @@ TEST(file_path_util, exist_and_name) {
     std::string not_exist_file_path = "demo_data/model_test_input/ocr/not_exist_test.png";
 
     std::string exist_dir_path = "demo_data/model_test_input/ocr";
-    std::string not_exist_dir_path = "demo_data/model_test_input/ocr_not_exist";
 
     EXPECT_EQ(FilePathUtil::is_file_exist(exist_file_path), true);
     EXPECT_EQ(FilePathUtil::is_file_exist(not_exist_file_path), false);
     // a directory must not be reported as a regular file
     EXPECT_EQ(FilePathUtil::is_file_exist(exist_dir_path), false);
-    EXPECT_EQ(FilePathUtil::is_dir_exist(exist_dir_path), true);
-    EXPECT_EQ(FilePathUtil::is_dir_exist(not_exist_dir_path), false);
 
     EXPECT_STREQ(FilePathUtil::get_file_name(exist_file_path).c_str(), "railway_ticket.png");
 }

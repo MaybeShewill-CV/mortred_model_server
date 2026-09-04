@@ -213,10 +213,6 @@ inline DecodeResult<UnifiedResponse> decode_response(std::string_view body) {
 
 } // namespace envelope
 
-inline std::string build_unified_response_body(const UnifiedResponse &resp) {
-    return envelope::encode(resp);
-}
-
 } // namespace common
 } // namespace jinq
 

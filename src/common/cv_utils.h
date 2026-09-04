@@ -12,15 +12,12 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdint>
-#include <cstring>
 #include <map>
 #include <string>
 #include <vector>
 
 #include <opencv2/opencv.hpp>
 #include "glog/logging.h"
-
-#include "common/base64.h"
 
 namespace jinq {
 namespace common {
@@ -186,29 +183,6 @@ static inline void colorize_sam_everything_mask(const cv::Mat& everything_mask, 
     }
 }
 
-static inline void add_segmentation_mask(
-    const cv::Mat& input_image, const cv::Mat& segment_mask,
-    cv::Mat& output_image, int cls_nums) {
-    // prepare color map
-    auto color_map = generate_color_map(cls_nums);
-
-    if (output_image.empty()) {
-        output_image.create(input_image.size(), CV_8UC3);
-    }
-
-    if (input_image.size() != output_image.size()) {
-        LOG(ERROR) << "input image size mismatches output image size";
-        return;
-    }
-
-    // make colorized segmentation mask
-    cv::Mat colorized_mask;
-    colorize_segmentation_mask(segment_mask, colorized_mask, cls_nums);
-
-    // make add image
-    cv::addWeighted(input_image, 0.6, colorized_mask, 0.4, 0.0, output_image);
-}
-
 static inline void visualize_sam_output_masks(const cv::Mat& input_image, const std::vector<cv::Mat>& masks, cv::Mat& output_image) {
     // prepare color map
     auto color_map = generate_color_map(static_cast<int>(masks.size()) + 1);
@@ -353,29 +327,6 @@ static inline std::vector<T> nms_boxes_per_class(const std::vector<T>& detection
     return result;
 }
 
-// base64 -> cv::Mat; flags default to IMREAD_COLOR (legacy behavior), the model
-// input path passes IMREAD_UNCHANGED explicitly
-static inline cv::Mat decode_base64_str_into_cvmat(const std::string& input, int flags = cv::IMREAD_COLOR) {
-    cv::Mat ret;
-    auto decoded = base64::decode(input);
-    if (decoded.empty()) {
-        DLOG(WARNING) << "empty or invalid base64 image data";
-        return ret;
-    }
-    std::vector<uchar> image_vec_data(decoded.begin(), decoded.end());
-    cv::imdecode(image_vec_data, flags).copyTo(ret);
-    return ret;
-}
-
-static inline std::string encode_cvmat_into_base64_str(const cv::Mat& input) {
-    if (input.empty()) {
-        return "";
-    }
-    std::vector<uchar> imencode_buffer;
-    cv::imencode(".jpg", input, imencode_buffer);
-    return base64::encode(imencode_buffer.data(), imencode_buffer.size());
-}
-
 // HWC -> CHW float conversion; supports CV_32FC1 and CV_32FC3
 static inline std::vector<float> convert_to_chw_vec(const cv::Mat& input) {
     std::vector<float> data;
@@ -463,28 +414,6 @@ static inline cv::Mat stack_multiple_ddpm_images(const std::vector<cv::Mat>& mul
     }
 
     return big_image;
-}
-
-// copy only when source and tensor byte sizes match; returns false on mismatch
-static inline bool copy_image_to_tensor(void* dst, const cv::Mat& image, int dst_bytes) {
-    size_t src_bytes = image.total() * image.elemSize();
-    if (src_bytes != static_cast<size_t>(dst_bytes)) {
-        LOG(ERROR) << "image byte size " << src_bytes << " mismatches tensor byte size " << dst_bytes;
-        return false;
-    }
-    ::memcpy(dst, image.data, dst_bytes);
-    return true;
-}
-
-template<typename T>
-static inline bool copy_image_to_tensor(void* dst, const std::vector<T>& data, int dst_bytes) {
-    size_t src_bytes = data.size() * sizeof(T);
-    if (src_bytes != static_cast<size_t>(dst_bytes)) {
-        LOG(ERROR) << "data byte size " << src_bytes << " mismatches tensor byte size " << dst_bytes;
-        return false;
-    }
-    ::memcpy(dst, data.data(), dst_bytes);
-    return true;
 }
 
 };

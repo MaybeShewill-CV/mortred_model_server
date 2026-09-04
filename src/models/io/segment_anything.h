@@ -27,7 +27,6 @@ struct sam_prompt_input {
     std::vector<cv::Rect> bboxes;
     std::vector<std::vector<cv::Point2f>> prompt_points;
 };
-using std_sam_prompt_input = sam_prompt_input;
 using std_sam_prompt_output = std::vector<cv::Mat>;
 
 struct sam_amg_output {
