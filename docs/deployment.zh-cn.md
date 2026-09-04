@@ -66,13 +66,13 @@ flowchart LR
 | 只有 2 个对外端口 | 网关 `8080`（推理流量）、supervisor `8787`（管理 + Web 控制台） |
 | 模型进程仅绑 loopback | 外部无法绕过网关直连模型；supervisor 注入 internal token |
 | supervisor 管理一切 | 模型进程崩溃自动按退避策略重启；crash-loop 有保护 |
-| fail-closed | 非环回监听且未配置 token 时，**拒绝启动**而非带洞运行 |
+| fail-closed | 非环回监听且未配置 token 时，**拒绝启动**而非带洞运行。不是 TLS、不是 `/metrics` 保密、也不是 token 强度检查 |
 
 **端口一览**：
 
 | 端口 | 进程 | 用途 | 鉴权 |
 |---|---|---|---|
-| `8080` | mortred-gateway | 推理入口 `/mortred_ai_server_v1/...`、`/healthz`、`/metrics` | Bearer token（或 API key） |
+| `8080` | mortred-gateway | 推理入口 `/mortred_ai_server_v1/...`、`/healthz`、`/metrics` | infer/jobs 要 Bearer；`/healthz` 与 `/metrics` 公开 |
 | `8787` | mortred-supervisor | 管理 API `/api/v1/*`、Web 控制台 | Bearer token |
 | `9002+` | 各模型进程 | 仅 loopback | internal token |
 
@@ -137,7 +137,9 @@ flowchart TD
 ### 3.3 网络
 
 - **安装时**：需要访问 GitHub Releases / Hugging Face（权重）。离线环境见 §9.4。
-- **运行时**：仅监听本机端口；对外服务由你自己的反代/LB 决定。
+- **运行时**：compose / `docker run` 示例把 8080/8787 绑在宿主机 `127.0.0.1`。
+  局域网/公网暴露由你的反代决定（TLS 也在反代上终结）。没有反代就把这些
+  端口发到 `0.0.0.0`，Bearer 会明文传输。
 
 ---
 
@@ -194,6 +196,9 @@ export MORTRED_GATEWAY_AUTH_TOKEN="$(openssl rand -hex 24)" # 推理面
 docker compose --profile cpu up -d      # GPU 机器换成 --profile gpu
 ```
 
+compose 把 8080/8787 发布在宿主机 `127.0.0.1` 上。本机 `localhost` 客户端
+不受影响；其他机器要访问必须前面加 TLS 反代，或改写 port mapping。
+
 GPU 轨道需要 NVIDIA Container Toolkit（`docker run --gpus all` 可用即已装好）。
 
 ### 5.2 验证
@@ -229,7 +234,7 @@ curl -fs -H "Authorization: Bearer $MORTRED_API_TOKEN" \
 ```bash
 docker pull ghcr.io/maybeshewill-cv/mortred_model_server:v0.1.0-cpu
 docker run -d --name mortred \
-  -p 8787:8787 -p 8080:8080 \
+  -p 127.0.0.1:8787:8787 -p 127.0.0.1:8080:8080 \
   -v "$PWD/weights:/opt/mortred/weights" \
   -e MORTRED_API_TOKEN=... -e MORTRED_GATEWAY_AUTH_TOKEN=... \
   ghcr.io/maybeshewill-cv/mortred_model_server:v0.1.0-cpu
@@ -444,7 +449,8 @@ openssl rand -hex 24    # 生成方式（两个 token 各用一次）
 ```
 
 **fail-closed 语义**：监听地址非 `127.0.0.1` 且未配 token → 进程**拒绝启动**并打印原因。
-永远不要带洞上线。
+永远不要带洞上线。该门闩只覆盖「配了某种鉴权」；**不**终结 TLS、**不**隐藏
+网关 `GET /metrics`、也**不**拒绝短 token。
 
 ### 11.2 多租户 API Key（网关层）
 
@@ -470,10 +476,13 @@ curl -X POST -H "Authorization: Bearer $MORTRED_API_TOKEN" \
 
 - [ ] 两个 token 均为 ≥ 32 字符随机值，且互不相同
 - [ ] `/etc/mortred/supervisor.env` 权限 600、属主 mortred
-- [ ] 仅在需要的网卡上暴露 8080/8787；管理面 8787 尽量走内网/堡垒机
+- [ ] 8080/8787 发布在 `127.0.0.1`，除非前面已有 TLS 反代
+- [ ] 即使有 TLS，管理面 8787 也不要直接暴露到公网
 - [ ] `conf/api_keys.toml`（若使用）600 权限，不入库不入镜像
 - [ ] 反代上启用 TLS（Mortred 自身是 HTTP）
 - [ ] 防火墙放行清单里没有模型进程端口（它们本就只绑 loopback）
+- [ ] Grafana / Prometheus 端口留在环回；Grafana 密码不是镜像默认值
+- [ ] Prometheus 不要去刮已经映射出环回的模型端口
 
 ---
 
@@ -512,14 +521,17 @@ mortredctl doctor
 
 | 端点 | 内容 |
 |---|---|
-| `GET :8080/metrics` | 网关：HTTP 请求计数/时延、推理时延、队列等待、worker 可用性 |
-| `GET :8787/api/v1/metrics` | supervisor：进程状态、重启计数 |
+| `GET :8080/metrics` | 网关：HTTP 请求计数/时延、推理时延、队列等待、worker 可用性（公开） |
+| `GET :8787/api/v1/metrics` | supervisor：进程状态、重启计数（需要 Bearer `MORTRED_API_TOKEN`） |
 
-仓库自带一套本地监控栈（Prometheus + Grafana + 告警规则）：
+仓库自带一套**本机**监控栈（Prometheus + Grafana + 告警规则）。端口只绑环回；
+启动前必须设置 Grafana 密码。默认只刮网关 `/metrics`，详见
+[monitoring-guide.zh-cn.md](monitoring-guide.zh-cn.md)。
 
 ```bash
+export GRAFANA_ADMIN_PASSWORD="$(openssl rand -hex 16)"
 docker compose -f deploy/docker-compose.monitoring.yml up -d
-# Grafana: http://localhost:3000，导入 deploy/grafana-dashboard.json
+# Grafana: http://localhost:3000
 # 告警规则: deploy/alert-rules.yml（含过载拒绝率告警）
 ```
 

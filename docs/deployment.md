@@ -70,13 +70,13 @@ flowchart LR
 | Only 2 external ports | gateway `8080` (inference), supervisor `8787` (management + web UI) |
 | Model servers bind loopback only | Nothing bypasses the gateway; supervisor injects an internal token |
 | The supervisor manages everything | Crashed model servers restart with backoff; crash-loop protection |
-| Fail-closed | Non-loopback listener without a token **refuses to start** |
+| Fail-closed | Non-loopback listener without a token **refuses to start**. Not TLS, not `/metrics` privacy, not token strength |
 
 **Ports at a glance**:
 
 | Port | Process | Purpose | Auth |
 |---|---|---|---|
-| `8080` | mortred-gateway | inference `/mortred_ai_server_v1/...`, `/healthz`, `/metrics` | Bearer token (or API key) |
+| `8080` | mortred-gateway | inference `/mortred_ai_server_v1/...`, `/healthz`, `/metrics` | Bearer on infer/jobs; `/healthz` and `/metrics` public |
 | `8787` | mortred-supervisor | mgmt API `/api/v1/*`, web console | Bearer token |
 | `9002+` | model servers | loopback only | internal token |
 
@@ -143,7 +143,10 @@ and converge on `mortredctl doctor` - there are no divergent paths.
 ### 3.3 Network
 
 - **Install time**: access to GitHub Releases / Hugging Face (weights). Offline: §9.4.
-- **Runtime**: local listeners only; external exposure is your reverse proxy's decision.
+- **Runtime**: compose/`docker run` examples bind 8080/8787 to `127.0.0.1` on
+  the host. LAN/WAN exposure is your reverse proxy's decision (TLS belongs
+  there). Publishing those ports on `0.0.0.0` without a proxy sends Bearer
+  tokens in the clear.
 
 ---
 
@@ -202,6 +205,10 @@ export MORTRED_GATEWAY_AUTH_TOKEN="$(openssl rand -hex 24)" # inference
 docker compose --profile cpu up -d      # GPU machines: --profile gpu
 ```
 
+Compose publishes 8080/8787 on `127.0.0.1` of the host. `localhost` clients
+keep working; other machines cannot reach those ports until you put a TLS
+proxy in front or override the port mappings.
+
 The gpu track needs the NVIDIA Container Toolkit (`docker run --gpus all` works = installed).
 
 ### 5.2 Verify
@@ -234,7 +241,7 @@ models (cpu: the four `*_cpu` entries - mobilenetv2 / resnet50 / yolov8 / hrnet)
 ```bash
 docker pull ghcr.io/maybeshewill-cv/mortred_model_server:v0.1.0-cpu
 docker run -d --name mortred \
-  -p 8787:8787 -p 8080:8080 \
+  -p 127.0.0.1:8787:8787 -p 127.0.0.1:8080:8080 \
   -v "$PWD/weights:/opt/mortred/weights" \
   -e MORTRED_API_TOKEN=... -e MORTRED_GATEWAY_AUTH_TOKEN=... \
   ghcr.io/maybeshewill-cv/mortred_model_server:v0.1.0-cpu
@@ -458,7 +465,9 @@ openssl rand -hex 24    # generate (one independent value per token)
 ```
 
 **Fail-closed semantics**: a non-loopback listener without its token **refuses
-to start** and prints why. Never deploy with a hole.
+to start** and prints why. Never deploy with a hole. That gate only covers
+"some auth is configured". It does **not** terminate TLS, hide gateway
+`GET /metrics`, or reject a short token.
 
 ### 11.2 Multi-tenant API keys (gateway layer)
 
@@ -485,10 +494,13 @@ See [api-keys.md](api-keys.md) for the full guide incl. zero-downtime rotation.
 
 - [ ] both tokens are ≥32-char random values, distinct from each other
 - [ ] `/etc/mortred/supervisor.env` is mode 600, owned by mortred
-- [ ] 8080/8787 exposed only where needed; keep 8787 on an internal network
+- [ ] 8080/8787 published on `127.0.0.1` unless a TLS reverse proxy sits in front
+- [ ] keep 8787 off the public internet even behind TLS
 - [ ] `conf/api_keys.toml` (if used) mode 600, never committed or baked into images
 - [ ] TLS terminated at your reverse proxy (Mortred itself is plain HTTP)
 - [ ] no model-server ports in the firewall allowlist (they are loopback-only anyway)
+- [ ] Grafana/Prometheus ports stay on loopback; Grafana password is not the image default
+- [ ] Prometheus does not scrape model ports that have been published off-loopback
 
 ---
 
@@ -529,14 +541,17 @@ Out-of-the-box Prometheus endpoints:
 
 | Endpoint | Content |
 |---|---|
-| `GET :8080/metrics` | gateway: HTTP counts/latency, inference latency, queue wait, worker availability |
-| `GET :8787/api/v1/metrics` | supervisor: process states, restart counters |
+| `GET :8080/metrics` | gateway: HTTP counts/latency, inference latency, queue wait, worker availability (public) |
+| `GET :8787/api/v1/metrics` | supervisor: process states, restart counters (Bearer `MORTRED_API_TOKEN`) |
 
-A local monitoring stack ships in the repo (Prometheus + Grafana + alert rules):
+A **local** monitoring stack ships in the repo (Prometheus + Grafana + alert
+rules). Ports bind loopback; set a Grafana password before `up`. Default
+Prometheus scrape is gateway `/metrics` only — see [monitoring-guide.md](monitoring-guide.md).
 
 ```bash
+export GRAFANA_ADMIN_PASSWORD="$(openssl rand -hex 16)"
 docker compose -f deploy/docker-compose.monitoring.yml up -d
-# Grafana: http://localhost:3000, import deploy/grafana-dashboard.json
+# Grafana: http://localhost:3000
 # Alert rules: deploy/alert-rules.yml (includes overload-rejection alerting)
 ```
 

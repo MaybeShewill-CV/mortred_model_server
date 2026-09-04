@@ -24,19 +24,26 @@
 │                              ┌──────▼───────┐               │
 │  ┌──────────┐   /metrics    │   Grafana    │               │
 │  │ 模型服务器 │ ───────────→ │  (:3000)     │               │
-│  │(:9001-74)│               │  可视化面板   │               │
+│  │(仅环回)   │               │  可视化面板   │               │
 │  └──────────┘               └──────────────┘               │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+默认刮取目标是网关 `:8080/metrics`（公开）。监督器 `:8787/api/v1/metrics`
+需要管理 Bearer token。模型 `/metrics` 仅环回——只在 Prometheus 与模型
+处于同一网络命名空间时刮取，不要为了刮指标而映射模型端口。
 
 ## 快速开始
 
 ### 方式一：Docker Compose 一键部署（推荐）
 
 ```bash
+export GRAFANA_ADMIN_PASSWORD="$(openssl rand -hex 16)"
 docker compose -f deploy/docker-compose.monitoring.yml up -d
-# Grafana: http://localhost:3000 (admin/admin)
-# 注意：Linux 上需将 prometheus.yml 中 localhost 改为 host.docker.internal
+# Grafana: http://localhost:3000（用户 admin / $GRAFANA_ADMIN_PASSWORD）
+# Prometheus: http://localhost:9090（仅环回）
+# 注意：Linux 上需将 prometheus.yml 中网关 target 的 localhost
+# 改为 host.docker.internal
 ```
 
 ### 方式二：裸机部署
@@ -58,11 +65,14 @@ prometheus --config.file=deploy/prometheus.yml --storage.tsdb.path=/tmp/prom-dat
 
 | 组件 | 端口 | 端点 | 说明 |
 |---|---|---|---|
-| 网关 | :8080 | `/metrics` | 推理流量入口 |
-| 监督器 | :8787 | `/api/v1/metrics` | 进程管理（需 token） |
-| 模型服务器 | :9001-9074 | `/metrics` | 每个运行中的模型 |
+| 网关 | :8080 | `/metrics` | 推理入口（公开） |
+| 监督器 | :8787 | `/api/v1/metrics` | 进程管理（需要 Bearer `MORTRED_API_TOKEN`） |
+| 模型服务器 | 环回 :9001-9074 | `/metrics` | 与 Prometheus 同一网络命名空间；不要映射这些端口 |
 
 ### 添加新模型抓取
+
+仅当 Prometheus 能打到模型的**环回**端口时（host 网络，或与 systemd 同机）。
+永远不要为了刮指标而 `docker publish` 模型端口。
 
 ```yaml
   - job_name: mortred-model-yolov5
@@ -279,7 +289,8 @@ curl -s http://localhost:9090/api/v1/targets | \
 curl -s http://localhost:8080/metrics | head -5
 ```
 
-常见原因：进程未运行 / 端口不对 / supervisor 需要 Bearer token
+常见原因：进程未运行 / 端口不对 / supervisor 需要 Bearer token /
+Prometheus 在 Docker 里仍指向 `localhost` 而不是 `host.docker.internal`
 
 ### 告警不触发
 
@@ -307,7 +318,7 @@ curl -s http://localhost:3000/api/datasources | jq '.[] | {name, type, url}'
 curl -s http://localhost:8080/metrics | head -20
 curl -s http://localhost:8080/metrics | grep mortred_http_requests_total
 
-# 模型服务器
+# 模型服务器（在跑模型的那台机器上打环回；不要 -p 这些端口）
 curl -s http://localhost:9002/metrics | grep mortred_up
 curl -s http://localhost:9002/metrics | grep mortred_queue_depth
 curl -s http://localhost:9002/metrics | grep mortred_workers
@@ -356,8 +367,9 @@ prometheus --storage.tsdb.retention.time=30d  # 保留 30 天
 ### 覆盖度检查清单
 
 - [ ] Gateway :8080 抓取正常
-- [ ] Supervisor :8787 抓取正常
-- [ ] 每个运行中的模型有对应 job
+- [ ] Supervisor :8787 仅在 Prometheus 配了 Bearer 时抓取
+- [ ] 模型 scrape job 只出现在 Prometheus 与模型共享环回的地方
+- [ ] Grafana / Prometheus 端口在环回；Grafana 密码不是镜像默认值
 - [ ] 12 条告警规则全部加载
 - [ ] Grafana 13 面板有数据
 - [ ] 配置了至少一个通知渠道

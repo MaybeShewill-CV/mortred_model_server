@@ -192,7 +192,7 @@ a single script — no manual compilation or copying:
 
 ```bash
 docker build -t mortred_model_server .
-docker run --gpus all -p 8080:8080 -p 8787:8787 \
+docker run --gpus all -p 127.0.0.1:8080:8080 -p 127.0.0.1:8787:8787 \
   -v $PWD/weights:/opt/mortred/weights \
   -e MORTRED_GATEWAY_AUTH_TOKEN=your-inference-token \
   -e MORTRED_API_TOKEN=your-management-token \
@@ -204,8 +204,12 @@ The image builds all deps + the full project, runs the unit/e2e tests, and
 ships the control plane. In-container topology: `mortred-supervisor`
 (management :8787, embedded web UI + REST API) supervises `mortred-gateway`
 (data plane :8080, the single inference entry) and all model servers; model
-processes bind loopback only and are no longer exposed port by port. External
-exposure must terminate TLS at a reverse proxy.
+processes bind loopback only and are no longer exposed port by port. The
+compose and `docker run` examples bind 8080/8787 to `127.0.0.1` on the host.
+External exposure must terminate TLS at a reverse proxy; do not publish
+those ports on `0.0.0.0` without one (Bearer tokens would travel in the
+clear). Gateway `GET /metrics` is public; fail-closed only refuses a
+non-loopback listener with no auth configured.
 
 ## TensorRT engine regeneration (hardware-adapted)
 

@@ -391,6 +391,7 @@ curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:8787/api/v
 - 被禁用的 key 立即拒绝
 - 限流为每 key 固定窗口（1 秒）
 - 所有鉴权在网关层完成；模型服务器仅绑定环回地址
+- fail-closed 只保证非环回监听必须配鉴权；不终结 TLS，也不隐藏网关 `/metrics`
 
 ## 并发与热加载
 
