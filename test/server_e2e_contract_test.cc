@@ -394,6 +394,22 @@ rapidjson::Document parse_body(const std::string& body) {
     return doc;
 }
 
+void expect_process_envelope(const rapidjson::Document& doc, int status) {
+    EXPECT_TRUE(doc.HasMember("status"));
+    if (doc.HasMember("status") && doc["status"].IsInt()) {
+        EXPECT_EQ(doc["status"].GetInt(), status);
+    }
+    EXPECT_TRUE(doc.HasMember("status_str") && doc["status_str"].IsString());
+    EXPECT_TRUE(doc.HasMember("results") && doc["results"].IsArray());
+    if (doc.HasMember("results") && doc["results"].IsArray()) {
+        EXPECT_EQ(doc["results"].Size(), 0u);
+    }
+    EXPECT_FALSE(doc.HasMember("code"));
+    EXPECT_FALSE(doc.HasMember("msg"));
+    EXPECT_FALSE(doc.HasMember("data"));
+    EXPECT_FALSE(doc.HasMember("req_id"));
+}
+
 }  // namespace
 
 TEST(server_e2e_contract, success_returns_200_with_envelope_and_headers) {
@@ -628,8 +644,7 @@ TEST(server_e2e_contract, missing_token_returns_401_with_www_authenticate) {
     EXPECT_TRUE(resp.headers["www-authenticate"].find("Bearer") != std::string::npos);
     auto doc = parse_body(resp.body);
     ASSERT_FALSE(doc.HasParseError());
-    EXPECT_EQ(doc["code"].GetInt(), 401);
-    EXPECT_TRUE(doc["data"].IsNull());
+    expect_process_envelope(doc, 401);
 }
 
 TEST(server_e2e_contract, wrong_method_returns_405_with_allow_header) {
@@ -641,8 +656,7 @@ TEST(server_e2e_contract, wrong_method_returns_405_with_allow_header) {
     EXPECT_EQ(resp.headers["allow"], "POST");
     auto doc = parse_body(resp.body);
     ASSERT_FALSE(doc.HasParseError());
-    EXPECT_EQ(doc["code"].GetInt(), 62);
-    EXPECT_TRUE(doc["data"].IsNull());
+    expect_process_envelope(doc, 62);
 }
 
 TEST(server_e2e_contract, unknown_path_returns_404) {
@@ -653,8 +667,7 @@ TEST(server_e2e_contract, unknown_path_returns_404) {
     EXPECT_EQ(resp.status, 404);
     auto doc = parse_body(resp.body);
     ASSERT_FALSE(doc.HasParseError());
-    EXPECT_EQ(doc["code"].GetInt(), 63);
-    EXPECT_TRUE(doc["data"].IsNull());
+    expect_process_envelope(doc, 63);
 }
 
 TEST(server_e2e_contract, wrong_content_type_returns_415) {
@@ -667,8 +680,7 @@ TEST(server_e2e_contract, wrong_content_type_returns_415) {
     EXPECT_EQ(resp.status, 415);
     auto doc = parse_body(resp.body);
     ASSERT_FALSE(doc.HasParseError());
-    EXPECT_EQ(doc["code"].GetInt(), 60);
-    EXPECT_TRUE(doc["data"].IsNull());
+    expect_process_envelope(doc, 60);
 }
 
 TEST(server_e2e_contract, rate_limited_returns_429) {
@@ -681,8 +693,7 @@ TEST(server_e2e_contract, rate_limited_returns_429) {
     EXPECT_EQ(second.status, 429);
     auto doc = parse_body(second.body);
     ASSERT_FALSE(doc.HasParseError());
-    EXPECT_EQ(doc["code"].GetInt(), 429);
-    EXPECT_TRUE(doc["data"].IsNull());
+    expect_process_envelope(doc, 429);
 }
 
 TEST(server_e2e_contract, model_timeout_returns_504) {

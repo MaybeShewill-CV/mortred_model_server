@@ -43,9 +43,8 @@
 #include "common/auth_token.h"
 #include "common/base64.h"
 #include "common/cv_utils.h"
-#include "common/http_response.h"
-#include "common/json_request_parser.h"
 #include "common/request_size_limit.h"
+#include "common/response_envelope.h"
 #include "common/status_code.h"
 #include "common/time_stamp.h"
 #include "common/file_path_util.h"
@@ -351,34 +350,26 @@ protected:
     /***
      * Unified 401 / 429 responses.
      */
-    static void reply_unauthorized(WFHttpTask* task);
-    static void reply_rate_limited(WFHttpTask* task);
+    void reply_unauthorized(WFHttpTask* task);
+    void reply_rate_limited(WFHttpTask* task);
 
     /***
-     * Unified JSON response exit: sets HTTP status, Content-Type, X-Request-ID.
+     * Process-level UnifiedResponse: empty results, optional errors.
      */
-    static void reply_json(protocol::HttpResponse* resp,
-                           const std::string& req_id,
-                           StatusCode status,
-                           rapidjson::Document&& data) {
-        resp->set_status_code(std::to_string(http_status_of(status)).c_str());
-        resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
-        resp->add_header_pair("X-Request-ID", req_id.c_str());
-        resp->add_header_pair("Cache-Control", "no-store");
-
-        jinq::common::HttpResponse http_resp;
-        http_resp.req_id = req_id;
-        http_resp.code = jinq::common::to_underlying(status);
-        http_resp.msg = status == StatusCode::OK
-                            ? "success"
-                            : jinq::common::status_code_to_str(status);
-        http_resp.data = std::move(data);
-
-        auto body = jinq::common::build_response_body(http_resp);
-        resp->append_output_body(body.data(), body.size());
+    static jinq::common::UnifiedResponse status_envelope(
+        const std::string& task_id, StatusCode status,
+        std::vector<jinq::common::ResponseError> errors = {},
+        const std::string& model_name = {}) {
+        jinq::common::UnifiedResponse unified;
+        unified.task_id = task_id;
+        unified.status = jinq::common::to_underlying(status);
+        unified.status_str = jinq::common::status_code_to_str(status);
+        unified.model_name = model_name;
+        unified.errors = std::move(errors);
+        return unified;
     }
 
-    /*** unified-envelope response exit (model endpoints + async results) */
+    /*** unified-envelope response exit (model endpoints + process-level JSON) */
     static void reply_unified_json(protocol::HttpResponse* resp,
                                    const jinq::common::UnifiedResponse& unified) {
         resp->set_status_code(std::to_string(http_status_of(
@@ -391,23 +382,20 @@ protected:
         resp->append_output_body(body.data(), body.size());
     }
 
+    static void reply_unified_json(WFHttpTask* task,
+                                   const jinq::common::UnifiedResponse& unified) {
+        reply_unified_json(task->get_resp(), unified);
+    }
+
     /*** builds a rejection envelope: status wire + pointer-located errors */
     static jinq::common::UnifiedResponse unified_rejection(
         const std::string& task_id, StatusCode status,
         std::vector<jinq::common::ResponseError> errors) {
-        jinq::common::UnifiedResponse unified;
-        unified.task_id = task_id;
-        unified.status = jinq::common::to_underlying(status);
-        unified.status_str = jinq::common::status_code_to_str(status);
-        unified.errors = std::move(errors);
-        return unified;
+        return status_envelope(task_id, status, std::move(errors));
     }
 
-    static void reply_json(WFHttpTask* task,
-                           const std::string& req_id,
-                           StatusCode status,
-                           rapidjson::Document&& data) {
-        reply_json(task->get_resp(), req_id, status, std::move(data));
+    void reply_status(WFHttpTask* task, StatusCode status) {
+        reply_unified_json(task, status_envelope("", status, {}, _m_model_name));
     }
 
 protected:
@@ -927,19 +915,13 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
 
     // health / readiness endpoints
     if (strcmp(request_uri, "/healthz") == 0) {
-        rapidjson::Document data;
-        reply_json(task, "", StatusCode::OK, std::move(data));
+        reply_status(task, StatusCode::OK);
         return;
     }
     if (strcmp(request_uri, "/ready") == 0) {
         const bool ready = _m_successfully_initialized && _m_working_queue.size_approx() > 0;
         _m_metrics.set_ready(ready);
-        rapidjson::Document data;
-        if (ready) {
-            reply_json(task, "", StatusCode::OK, std::move(data));
-        } else {
-            reply_json(task, "", StatusCode::NOT_READY, std::move(data));
-        }
+        reply_status(task, ready ? StatusCode::OK : StatusCode::NOT_READY);
         return;
     }
 
@@ -976,8 +958,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         if (strcmp(request_method, "POST") != 0) {
             _m_metrics.inc_http_requests(request_method, "405");
             task->get_resp()->add_header_pair("Allow", "POST");
-            rapidjson::Document data;
-            reply_json(task, "", StatusCode::METHOD_NOT_ALLOWED, std::move(data));
+            reply_status(task, StatusCode::METHOD_NOT_ALLOWED);
             return;
         }
         // parse request body
@@ -1000,8 +981,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
                                        _m_param_specs);
         } else {
             _m_metrics.inc_http_requests(request_method, "415");
-            rapidjson::Document data;
-            reply_json(task, "", StatusCode::UNSUPPORTED_MEDIA_TYPE, std::move(data));
+            reply_status(task, StatusCode::UNSUPPORTED_MEDIA_TYPE);
             return;
         }
         _m_metrics.inc_request_encoding(request_encoding);
@@ -1014,8 +994,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
             if (end != content_length_str.c_str() && *end == '\0' &&
                 declared > _m_request_size_limit * 1024ULL * 1024ULL) {
                 _m_metrics.inc_http_requests(request_method, "413");
-                rapidjson::Document data;
-                reply_json(task, "", StatusCode::REQUEST_ENTITY_TOO_LARGE, std::move(data));
+                reply_status(task, StatusCode::REQUEST_ENTITY_TOO_LARGE);
                 return;
             }
         }
@@ -1064,8 +1043,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
                 _m_waiting_jobs.load(), _m_run_time_ewma_ms.load(), _m_worker_nums);
             task->get_resp()->add_header_pair("Retry-After",
                                               std::to_string(retry_after).c_str());
-            rapidjson::Document data;
-            reply_json(task, "", StatusCode::RATE_LIMITED, std::move(data));
+            reply_status(task, StatusCode::RATE_LIMITED);
             return;
         }
 
@@ -1126,9 +1104,8 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         if (handle_custom_endpoint(task)) {
             return;
         }
-        rapidjson::Document data;
         _m_metrics.inc_http_requests(request_method, "404");
-        reply_json(task, "", StatusCode::NOT_FOUND, std::move(data));
+        reply_status(task, StatusCode::NOT_FOUND);
         return;
     }
 }
@@ -1841,9 +1818,8 @@ bool BaseAiServerImpl<WORKER, MODEL_OUTPUT>::is_raw_body_content_type(
  */
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::reply_unauthorized(WFHttpTask* task) {
-    rapidjson::Document data;
     task->get_resp()->add_header_pair("WWW-Authenticate", "Bearer realm=\"Mortred\"");
-    reply_json(task, "", StatusCode::UNAUTHORIZED, std::move(data));
+    reply_unified_json(task, status_envelope("", StatusCode::UNAUTHORIZED, {}, _m_model_name));
 }
 
 /***
@@ -1852,8 +1828,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::reply_unauthorized(WFHttpTask* task
  */
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::reply_rate_limited(WFHttpTask* task) {
-    rapidjson::Document data;
-    reply_json(task, "", StatusCode::RATE_LIMITED, std::move(data));
+    reply_unified_json(task, status_envelope("", StatusCode::RATE_LIMITED, {}, _m_model_name));
 }
 }
 }

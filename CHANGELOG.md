@@ -7,12 +7,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Removed
+- Dead `json_request_parser.h` (`parse_json_request` had no callers; it still
+  accepted `img_data` and ignored unknown keys).
+- `http_response.h` (`{req_id, code, msg, data}` shim). Process-level JSON
+  now uses `UnifiedResponse` from `response_envelope.h`.
+
 ### Changed
 - Envelope codec lives in `common/request_envelope.h` and
   `common/response_envelope.h` (encode/decode + field names). Data-plane
   binding is `server/parsed_request.h`; in-process execution types moved from
   `async_job_table.h` to `server/inference_task.h`. Supervisor/CLI go through
   the codec instead of hand-rolled JSON.
+- **Process-level JSON is now UnifiedResponse (breaking)**: `/healthz`,
+  `/ready`, and 401/404/405/413/415/429 exits emit `{status, status_str,
+  task_id, results:[]}` instead of `{req_id, code, msg, data}`. HTTP status
+  codes and StatusCode wire integers are unchanged.
 - **Unified request/response contract (breaking)**: model endpoints now speak
   the single envelope `{"req_id", "images": [<base64>...], "params", "options"}`
   and answer with `{status, status_str, task_id, model, results[], server_time_ms,
