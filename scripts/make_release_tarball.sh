@@ -35,8 +35,9 @@ rm -rf "$STAGING"
 cmake --install "$BUILD_DIR" --prefix "$STAGING/opt/mortred"
 
 # systemd unit + installer, both outside the /opt/mortred prefix
-mkdir -p "$STAGING/deploy"
+mkdir -p "$STAGING/deploy/caddy"
 cp "$ROOT/deploy/mortred-supervisor.service" "$STAGING/deploy/"
+cp "$ROOT/deploy/caddy/Caddyfile" "$STAGING/deploy/caddy/"
 cp "$ROOT/scripts/tarball_install.sh" "$STAGING/install.sh"
 chmod +x "$STAGING/install.sh"
 

@@ -479,10 +479,27 @@ curl -X POST -H "Authorization: Bearer $MORTRED_API_TOKEN" \
 - [ ] 8080/8787 发布在 `127.0.0.1`，除非前面已有 TLS 反代
 - [ ] 即使有 TLS，管理面 8787 也不要直接暴露到公网
 - [ ] `conf/api_keys.toml`（若使用）600 权限，不入库不入镜像
-- [ ] 反代上启用 TLS（Mortred 自身是 HTTP）
+- [ ] 反代上启用 TLS（Mortred 自身是 HTTP）；见 [§11.4](#114-tls-反代caddy)
 - [ ] 防火墙放行清单里没有模型进程端口（它们本就只绑 loopback）
 - [ ] Grafana / Prometheus 端口留在环回；Grafana 密码不是镜像默认值
 - [ ] Prometheus 不要去刮已经映射出环回的模型端口
+
+### 11.4 TLS 反代（Caddy）
+
+Mortred 不终结 TLS。可复制路径：
+
+```bash
+# 8080/8787 留在 127.0.0.1（compose 默认），然后：
+# 1. 改 deploy/caddy/Caddyfile 里的 infer.example.com
+# 2. 把 DNS 指到这台机器（80/443）
+caddy run --config deploy/caddy/Caddyfile
+```
+
+没有公网 DNS 的本机冒烟用该文件里注释掉的 `:8443 { tls internal ... }`。
+不要在 gateway / supervisor 进程里做 TLS。
+
+`mortredctl doctor` 会在有效监听非环回、token 短于 32 字符、或两个 token
+相同时打印警告。只警告，不因缺少 TLS 而失败。
 
 ---
 
@@ -628,10 +645,10 @@ python3；完全无 python 的环境请用有 python 的机器完成校验后再
 
 | 门禁 | 命令 | 覆盖 |
 |---|---|---|
-| 静态 | `./scripts/verify_deployment.sh --basic` | 脚本语法 / manifest / compose YAML / 依赖清单 |
+| 静态 | `./scripts/verify_deployment.sh --basic` | 脚本语法 / manifest / compose YAML / 依赖清单 / `security_warn.sh --self-test` |
 | 完整 | `./scripts/verify_deployment.sh --full` | + 本地权重 sha256 + 3rd_party 完整性 |
 | 实时 | `./scripts/verify_deployment.sh --live` | + 网关探活（healthz 公开 + 推理需鉴权） |
-| 一键 | `mortredctl doctor` | live 的封装 |
+| 一键 | `mortredctl doctor` | live 封装 + 安全警告（不失败） |
 
 **CI 侧**：每次变更在无 GPU runner 上跑 cpu-profile 全量构建 + 全部单测——条件编译路径不会悄然腐烂；
 `sanitizers` job 持续运行 TSAN/ASan 门禁。

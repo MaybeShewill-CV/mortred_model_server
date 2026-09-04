@@ -9,6 +9,7 @@
 #   5. install_deps.sh --check (3rd_party completeness; enforced only in --full mode)
 #   6. fetch_weights.py --check (local weights sha256; missing weights fail only in --full mode)
 #   7. live gateway probes (--live mode only: healthz public + inference requires token)
+#   8. security_warn.sh --self-test (warning helpers; never fail doctor itself)
 #
 # Usage:
 #   ./scripts/verify_deployment.sh            # --full: all checks must pass (target machine)
@@ -70,7 +71,8 @@ echo "== Mortred deployment acceptance (mode=$MODE) =="
 for f in scripts/install_deps.sh scripts/convert_trt_engines.sh \
          scripts/docker_entrypoint.sh scripts/check_repo_clean.sh \
          scripts/clean_artifacts.sh scripts/setup_full_deps.sh \
-         scripts/bench_batch.sh; do
+         scripts/bench_batch.sh scripts/mortredctl_doctor.sh \
+         scripts/security_warn.sh; do
     check "bash -n $f" bash -n "$ROOT/$f"
 done
 check "py_compile fetch/gen/check" "$PY" -m py_compile \
@@ -100,6 +102,7 @@ check "convert_trt_engines.sh --list" bash "$ROOT/scripts/convert_trt_engines.sh
 
 # 4) Weights manifest dry-run
 check "fetch_weights.py --dry-run" "$PY" "$ROOT/scripts/fetch_weights.py" --dry-run
+check "security_warn.sh --self-test" bash "$ROOT/scripts/security_warn.sh" --self-test
 
 # 5) 3rd_party completeness (failure is only a warning in --basic mode)
 if [ "$MODE" = "full" ]; then

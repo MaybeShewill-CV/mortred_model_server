@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Caddy reverse-proxy example (`deploy/caddy/Caddyfile`) as the supported TLS
+  front for loopback gateway/supervisor. `mortredctl doctor` prints warnings
+  (never fails) for a non-loopback listen, a token shorter than 32 characters,
+  or identical management/inference tokens.
 - Gateway routes `POST /v1/models/{id}/infer` and `/v1/models/{id}/jobs*` to
   the model's loopback port. Job `Location` / `poll_url` / `result_url` are
   rewritten onto that prefix. The legacy `{server_uri}` POST path still works.
