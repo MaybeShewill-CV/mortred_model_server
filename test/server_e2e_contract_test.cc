@@ -299,7 +299,8 @@ int find_free_port() {
     return port;
 }
 
-std::string build_config(int port, const std::string& extra, int request_size_limit_mb) {
+std::string build_config(int port, const std::string& extra, int request_size_limit_mb,
+                         bool with_auth) {
     std::ostringstream cfg;
     cfg << "[TEST_SERVER]\n";
     cfg << "host=\"127.0.0.1\"\n";
@@ -311,7 +312,9 @@ std::string build_config(int port, const std::string& extra, int request_size_li
     cfg << "handler_threads=4\n";
     cfg << "worker_nums=1\n";
     cfg << "server_uri=\"/test/model\"\n";
-    cfg << "auth_token=\"test-secret\"\n";
+    if (with_auth) {
+        cfg << "auth_token=\"test-secret\"\n";
+    }
     // model_run_timeout and rate_limit_qps are not written to the base config:
     // cases that need them pass them via extra, because TOML forbids duplicate
     // keys (parse would fail outright); when absent the server uses the same
@@ -353,15 +356,15 @@ struct ServerHandle {
     }
 };
 
-ServerHandle start_server(const std::string& extra = "",
-                          int request_size_limit_mb = 64) {
+ServerHandle start_server(const std::string& extra = "", int request_size_limit_mb = 64,
+                          bool with_auth = true) {
     ServerHandle handle;
     for (int attempt = 0; attempt < 20; ++attempt) {
         const int port = find_free_port();
         if (port <= 0) {
             continue;
         }
-        auto parsed = toml::parse(build_config(port, extra, request_size_limit_mb));
+        auto parsed = toml::parse(build_config(port, extra, request_size_limit_mb, with_auth));
         if (!parsed) {
             ADD_FAILURE() << "failed to parse test config";
             return handle;
@@ -737,7 +740,7 @@ TEST(server_e2e_contract, metrics_inference_duration_sum_is_positive_after_reque
     auto resp = send_request(handle.port, "POST", "/test/model", body, k_json_auth_headers);
     ASSERT_EQ(resp.status, 200);
 
-    auto metrics = send_request(handle.port, "GET", "/metrics", "", {});
+    auto metrics = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
     ASSERT_EQ(metrics.status, 200);
     const std::string key = "mortred_inference_duration_ms_sum";
     const auto pos = metrics.body.find(key);
@@ -748,6 +751,24 @@ TEST(server_e2e_contract, metrics_inference_duration_sum_is_positive_after_reque
         metrics.body.substr(value_pos + 1, metrics.body.find('\n', value_pos)).c_str());
     EXPECT_GT(sum, 0.0) << "inference duration histogram must observe the real "
                         << "run time, not the pre-assignment zero";
+}
+
+TEST(server_e2e_contract, metrics_requires_bearer_when_auth_token_is_set) {
+    ServerHandle handle = start_server();
+    auto anon = send_request(handle.port, "GET", "/metrics", "", {});
+    EXPECT_EQ(anon.status, 401);
+    auto health = send_request(handle.port, "GET", "/healthz", "", {});
+    EXPECT_EQ(health.status, 200);
+    auto ready = send_request(handle.port, "GET", "/ready", "", {});
+    EXPECT_EQ(ready.status, 200);
+    auto ok = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    EXPECT_EQ(ok.status, 200);
+}
+
+TEST(server_e2e_contract, metrics_stays_public_when_auth_token_is_empty) {
+    ServerHandle handle = start_server("", 64, false);
+    auto metrics = send_request(handle.port, "GET", "/metrics", "", {});
+    EXPECT_EQ(metrics.status, 200);
 }
 
 namespace {
@@ -801,7 +822,8 @@ TEST(server_e2e_contract, queue_limit_returns_429_with_retry_after) {
     EXPECT_GE(retry_after, 1);
     EXPECT_LE(retry_after, 60);
 
-    const auto metrics = send_request(handle.port, "GET", "/metrics", "", {});
+    const auto metrics = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    ASSERT_EQ(metrics.status, 200);
     EXPECT_GT(metrics_value(metrics.body, "mortred_queue_rejected_total"), 0.0);
 }
 
@@ -838,7 +860,8 @@ TEST(server_e2e_contract, batch_collects_and_distributes_per_request_results) {
     // all four requests went through the batch path: 4 observed items in
     // fewer than 4 batches proves real coalescing happened (exactly-one-
     // batch assertions would be timing-fragile on loaded CI machines)
-    const auto metrics = send_request(handle.port, "GET", "/metrics", "", {});
+    const auto metrics = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    ASSERT_EQ(metrics.status, 200);
     EXPECT_EQ(metrics_value(metrics.body, "mortred_batch_size_sum"), 4.0);
     const double batch_count = metrics_value(metrics.body, "mortred_batch_size_count");
     EXPECT_GE(batch_count, 1.0);

@@ -552,8 +552,10 @@ TEST_F(GatewayAuthTest, StaticTokenFallbackStillWorksWhenConfigured) {
 
 TEST_F(GatewayAuthTest, NonLoopbackKeysOnlyStartsAndEnforcesKeys) {
     // a non-loopback listener with API keys (no static token) is a legitimate
-    // deployment: it must start, and keys must be enforced
-    ASSERT_TRUE(StartGateway("0.0.0.0", "", keys_toml(valid_key_)));
+    // deployment: it must start, and keys must be enforced. scrape token is
+    // required on non-loopback so GET /metrics is not public.
+    ASSERT_TRUE(StartGateway("0.0.0.0", "", keys_toml(valid_key_),
+                             {{"MORTRED_METRICS_TOKEN", "scrape-token"}}));
 
     auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}");
     EXPECT_EQ(r.status, 401);
@@ -603,7 +605,9 @@ TEST_F(GatewayAuthTest, AdminScopeKeyMayInfer) {
 }
 
 TEST_F(GatewayAuthTest, NonLoopbackWithOnlyApiTokenStarts) {
-    ASSERT_TRUE(StartGateway("0.0.0.0", "", "", {{"MORTRED_API_TOKEN", "mgmt-token"}}));
+    ASSERT_TRUE(StartGateway("0.0.0.0", "", "",
+                             {{"MORTRED_API_TOKEN", "mgmt-token"},
+                              {"MORTRED_METRICS_TOKEN", "scrape-token"}}));
     auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}");
     EXPECT_EQ(r.status, 401);
     r = send_request(gateway_port_, "POST", kAuthRoute, "{}", "mgmt-token");
@@ -642,6 +646,26 @@ TEST_F(GatewayAuthTest, MetricsTokenAcceptsScrapeBearer) {
     EXPECT_EQ(r.status, 200);
     r = send_request(gateway_port_, "POST", kAuthRoute, "{}", "scrape-token");
     EXPECT_EQ(r.status, 401) << "metrics scrape token must not infer";
+}
+
+TEST_F(GatewayAuthTest, NonLoopbackWithoutMetricsTokenRefusesToStart) {
+    EXPECT_FALSE(StartGateway("0.0.0.0", "ext-token", ""));
+}
+
+TEST_F(GatewayAuthTest, MetricsTokenMatchingInferenceRefusesToStart) {
+    EXPECT_FALSE(StartGateway("127.0.0.1", "ext-token", "",
+                              {{"MORTRED_METRICS_TOKEN", "ext-token"}}));
+}
+
+TEST_F(GatewayAuthTest, NonLoopbackWithDistinctMetricsTokenStarts) {
+    ASSERT_TRUE(StartGateway("0.0.0.0", "ext-token", "",
+                             {{"MORTRED_METRICS_TOKEN", "scrape-token"}}));
+    auto r = send_request(gateway_port_, "GET", "/metrics", "");
+    EXPECT_EQ(r.status, 401);
+    r = send_request(gateway_port_, "GET", "/metrics", "", "scrape-token");
+    EXPECT_EQ(r.status, 200);
+    r = send_request(gateway_port_, "GET", "/healthz", "");
+    EXPECT_EQ(r.status, 200);
 }
 
 int main(int argc, char** argv) {

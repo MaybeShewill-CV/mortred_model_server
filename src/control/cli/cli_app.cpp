@@ -96,7 +96,7 @@ void usage() {
                  "  commands: status [id] | catalog | start <id> | stop <id> | restart <id>\n"
                  "            logs <id> [--offset N] [--limit N]\n"
                  "            infer <id> --image <path>\n"
-                 "            init [--profile cpu|gpu] | doctor | upgrade [version]\n"
+                 "            init [--profile cpu|gpu] | doctor [--strict] | upgrade [version]\n"
                  "  env: MORTREDCTL_ADDR (default http://127.0.0.1:8787), MORTREDCTL_TOKEN,\n"
                  "       MORTREDCTL_GATEWAY_ADDR (default http://127.0.0.1:8080)\n");
 }

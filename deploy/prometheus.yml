@@ -1,12 +1,14 @@
 # Mortred Model Server - Prometheus scrape configuration
 #
-# Default job: gateway GET /metrics (public unless MORTRED_METRICS_TOKEN is set).
+# Default job: gateway GET /metrics (public on loopback unless
+# MORTRED_METRICS_TOKEN is set). A non-loopback gateway refuses to start
+# without that scrape token.
 #
 # Supervisor GET /api/v1/metrics requires Authorization: Bearer
-# <MORTRED_API_TOKEN>. Model /metrics is loopback-only — scrape those
-# targets only when Prometheus shares the model's network namespace
-# (host network, or the same machine as the systemd unit). Do not
-# publish model ports to make them scrapeable.
+# <MORTRED_API_TOKEN>. Model /metrics is loopback-only and, when the
+# supervisor injected MORTRED_AUTH_TOKEN, requires that same Bearer.
+# Scrape model targets only when Prometheus shares the model's network
+# namespace. Do not publish model ports to make them scrapeable.
 # If the gateway has MORTRED_METRICS_TOKEN, uncomment authorization
 # below. credentials_file must contain the raw scrape token (no
 # "Bearer " prefix). Do not put the inference token in that file.

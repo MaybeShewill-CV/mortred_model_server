@@ -9,7 +9,8 @@
 #      caddy run --config deploy/caddy/Caddyfile
 #
 # Leave the admin site commented out unless the console must be on the
-# internet. Do not docker-publish model ports.
+# internet. Do not docker-publish model ports (9001+); model /metrics
+# uses the supervisor internal token and is not a public scrape target.
 
 infer.example.com {
 	reverse_proxy 127.0.0.1:8080

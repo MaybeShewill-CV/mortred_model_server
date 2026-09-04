@@ -9,8 +9,10 @@
 #
 # Two host ports: supervisor (management) 8787 + gateway (inference) 8080.
 # Both bind 127.0.0.1 on the host. LAN/WAN access belongs on a TLS reverse
-# proxy in front; use "8080:8080" / "8787:8787" only if you accept plaintext
-# Bearer tokens on that interface.
+# proxy in front (deploy/caddy/Caddyfile). Use "8080:8080" / "8787:8787" only
+# if you accept plaintext Bearer tokens on that interface — and then you MUST
+# set a distinct MORTRED_METRICS_TOKEN or the gateway will refuse to start.
+# Do not publish model ports (9001+).
 services:
   mortred:
     profiles: ["gpu"]
