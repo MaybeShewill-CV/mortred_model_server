@@ -32,6 +32,8 @@ Verifies a few high-signal invariants:
 13. src/models/model_io_define.h stays a pure aggregate of src/models/io/*.h,
     and the IO headers include opencv2/core.hpp instead of the opencv.hpp
     umbrella header.
+14. conf/ci_hosted_golden.json matches golden sources, HF cpu weights, the
+    GPU smoke filter in ci.yml, and every HTTP catalog id has a CI tier.
 
 Exit code 0 means consistent; non-zero means the repository needs attention.
 """
@@ -562,6 +564,9 @@ def main() -> int:
     errors.extend(check_model_todo_markers())
     errors.extend(check_model_io_split())
     errors.extend(check_demo_client_health())
+    from check_hosted_golden import check_ci_inference_contract
+
+    errors.extend(check_ci_inference_contract())
     if args.check_stale_binaries:
         errors.extend(check_stale_binaries())
 

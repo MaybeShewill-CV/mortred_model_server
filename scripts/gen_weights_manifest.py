@@ -38,6 +38,12 @@ CPU_WEIGHTS = {
     "weights/classification/resnet/resnet-50.mnn",
     "weights/object_detection/yolov8/yolov8s.onnx",
     "weights/scene_segmentation/hrnet/hrnetw48_ccd.onnx",
+    # Hosted cpu-profile golden set (conf/ci_hosted_golden.json). Keep these
+    # tagged cpu so fetch --profile cpu and CI stay aligned after regenerate.
+    "weights/object_detection/nanodet/nanodet_plus_m_1x5.mnn",
+    "weights/ocr/db_text_detector/db_model_large.mnn",
+    "weights/feature_point/superpoint/superpoint_120x160.mnn",
+    "weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.mnn",
 }
 
 

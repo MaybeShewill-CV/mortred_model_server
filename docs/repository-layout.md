@@ -8,7 +8,7 @@ generated executables, configuration files, and documentation.
 | Path | Purpose | Tracked in VCS |
 |---|---|---|
 | `src/` | C++ source code (common / models / server / factory / apps) | Yes |
-| `conf/` | Model and server configuration examples | Yes |
+| `conf/` | Model/server configuration, weight manifest, hosted golden CI contract (`ci_hosted_golden.json`) | Yes |
 | `docs/` | User and developer documentation | Yes |
 | `demo_data/` | Small sample images used by tutorials/benchmarks | Yes |
 | `test/` | Unit tests and golden test data | Yes |

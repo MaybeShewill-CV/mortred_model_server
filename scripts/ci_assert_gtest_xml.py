@@ -11,12 +11,14 @@ must fail in that case. Local developers keep skip-as-pass; CI writes
 Usage:
   python3 scripts/ci_assert_gtest_xml.py report.xml
   python3 scripts/ci_assert_gtest_xml.py report.xml --allow-skips
+  python3 scripts/ci_assert_gtest_xml.py report.xml --allow-skips --inventory-out skips.json
   python3 scripts/ci_assert_gtest_xml.py --self-test
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import tempfile
 import xml.etree.ElementTree as ET
@@ -79,7 +81,7 @@ def _skipped_names(suite: ET.Element) -> list[str]:
     return out
 
 
-def evaluate(path: Path, allow_skips: bool) -> int:
+def evaluate(path: Path, allow_skips: bool, inventory_out: Path | None = None) -> int:
     if not path.is_file():
         print(f"[FAIL] gtest xml not found: {path}", file=sys.stderr)
         return 1
@@ -92,6 +94,25 @@ def evaluate(path: Path, allow_skips: bool) -> int:
     print(f"[gtest] tests={tests} failures={failures} errors={errors} skipped={skipped}")
     for name in names:
         print(f"  [skip] {name}")
+
+    if inventory_out is not None:
+        inventory_out.parent.mkdir(parents=True, exist_ok=True)
+        inventory_out.write_text(
+            json.dumps(
+                {
+                    "source_xml": str(path),
+                    "tests": tests,
+                    "failures": failures,
+                    "errors": errors,
+                    "skipped": skipped,
+                    "skipped_names": names,
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        print(f"[gtest] wrote skip inventory: {inventory_out}")
 
     if tests <= 0:
         print("[FAIL] gtest xml reports zero tests (filter matched nothing?)", file=sys.stderr)
@@ -147,6 +168,14 @@ def _self_test() -> int:
         if evaluate(tmp_path / "skip.xml", allow_skips=True) != 0:
             print("[FAIL] self-test: skipped xml should pass with --allow-skips", file=sys.stderr)
             return 1
+        inv = tmp_path / "inv.json"
+        if evaluate(tmp_path / "skip.xml", allow_skips=True, inventory_out=inv) != 0:
+            print("[FAIL] self-test: inventory write should still pass with --allow-skips", file=sys.stderr)
+            return 1
+        payload = json.loads(inv.read_text(encoding="utf-8"))
+        if payload.get("skipped") != 1 or "model_golden.yolov8_detection" not in payload.get("skipped_names", []):
+            print("[FAIL] self-test: inventory json missing skipped names", file=sys.stderr)
+            return 1
         if evaluate(tmp_path / "empty.xml", allow_skips=True) == 0:
             print("[FAIL] self-test: zero tests must fail", file=sys.stderr)
             return 1
@@ -166,13 +195,19 @@ def main() -> int:
         action="store_true",
         help="do not fail when skipped>0 (still fail on 0 tests / failures)",
     )
+    parser.add_argument(
+        "--inventory-out",
+        type=Path,
+        default=None,
+        help="write skipped test names as JSON (used by nightly --allow-skips)",
+    )
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     if args.self_test:
         return _self_test()
     if args.xml is None:
         parser.error("xml path is required unless --self-test")
-    return evaluate(args.xml, args.allow_skips)
+    return evaluate(args.xml, args.allow_skips, args.inventory_out)
 
 
 if __name__ == "__main__":
