@@ -59,7 +59,7 @@ inline std::string result_image_path(const std::string &output_dir, const std::s
 template <typename OUTPUT>
 int run_image_family_benchmark(
     const std::string &model_id, const std::string &display_name,
-    const std::function<std::unique_ptr<jinq::models::BaseAiModel<ImageInput, OUTPUT>>(const std::string &)> &make_model,
+    const std::function<std::unique_ptr<jinq::models::BaseAiModel<ImageInput, OUTPUT>>()> &make_model,
     const ImageFamilyHooks<OUTPUT> &hooks, int argc, char **argv) {
     BenchmarkSpec<ImageInput, OUTPUT> spec;
     spec.model_name = model_id;

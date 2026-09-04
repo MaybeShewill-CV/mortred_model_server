@@ -3,7 +3,6 @@
 function(add_mortred_unified_app target)
     add_executable(${target}
         ${CMAKE_CURRENT_LIST_DIR}/product_index.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/benchmark/custom_drivers.cpp
         ${ARGN})
     target_link_libraries(${target} common models factory vendored::workflow glog::glog)
     target_compile_options(${target} PRIVATE -Wno-deprecated-declarations)
@@ -13,10 +12,15 @@ endfunction()
 
 # Unified HTTP + benchmark entrypoints. ProductIndex is a projection of the
 # factory catalogs, so a new catalog row does not need a new ELF or CMake line.
+# custom_drivers.cpp (CLIP/SAM/LightGlue/ByteTrack/diffusion bench) is linked
+# only into the benchmark ELF; product_index.cpp sees those rows under
+# MORTRED_WITH_CUSTOM_DRIVERS.
 add_mortred_unified_app(mortred-model-server.out
     ${CMAKE_CURRENT_LIST_DIR}/model_server_main.cpp)
 add_mortred_unified_app(mortred-model-benchmark.out
-    ${CMAKE_CURRENT_LIST_DIR}/model_benchmark_main.cpp)
+    ${CMAKE_CURRENT_LIST_DIR}/model_benchmark_main.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/benchmark/custom_drivers.cpp)
+target_compile_definitions(mortred-model-benchmark.out PRIVATE MORTRED_WITH_CUSTOM_DRIVERS)
 
 # --- control-plane executables ---
 # src/apps produces every executable; the implementations live in src/control

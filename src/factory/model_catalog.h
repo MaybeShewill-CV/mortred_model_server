@@ -22,7 +22,7 @@ namespace model_catalog {
  * have no HTTP surface yet.
  */
 template <typename INPUT, typename OUTPUT> struct ModelCatalogEntry : public jinq::models::catalog::ModelEntry {
-    std::function<std::unique_ptr<jinq::models::BaseAiModel<INPUT, OUTPUT>>(const std::string &)> make_model;
+    std::function<std::unique_ptr<jinq::models::BaseAiModel<INPUT, OUTPUT>>()> make_model;
 };
 
 template <typename INPUT, typename OUTPUT>
@@ -42,7 +42,7 @@ std::unique_ptr<jinq::models::BaseAiModel<INPUT, OUTPUT>> create_model(const std
         LOG(ERROR) << "model section not found in model catalog: " << model_section;
         return nullptr;
     }
-    return entry->make_model(model_section);
+    return entry->make_model();
 }
 
 } // namespace model_catalog

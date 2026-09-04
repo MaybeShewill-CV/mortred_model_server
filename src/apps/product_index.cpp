@@ -13,11 +13,15 @@
 #include <set>
 #include <utility>
 
+#ifdef MORTRED_WITH_CUSTOM_DRIVERS
 #include "apps/benchmark/custom_drivers.h"
+#endif
 #include "apps/benchmark/family_hooks.h"
 #include "apps/benchmark/image_family.h"
 #include "factory/classification_task.h"
+#ifdef MORTRED_WITH_CUSTOM_DRIVERS
 #include "factory/clip_task.h"
+#endif
 #include "factory/cv_catalog.h"
 #include "factory/diffusion_task.h"
 #include "factory/enhancement_task.h"
@@ -146,17 +150,22 @@ std::vector<ProductEntry> build_index() {
         product.display_name = entry.display_name;
         product.server_section = entry.server_section;
         product.http = true;
+#ifdef MORTRED_WITH_CUSTOM_DRIVERS
         product.benchmark = true;
+#endif
         const auto captured = entry;
         product.make_server = [captured](const std::string &name) {
             return jinq::factory::cv_catalog::create_server(captured, name);
         };
+#ifdef MORTRED_WITH_CUSTOM_DRIVERS
         product.run_benchmark = [id = entry.model_section](int argc, char **argv) {
             return jinq::apps::benchmark::run_diffusion_family_benchmark(id, argc, argv);
         };
+#endif
         push_unique(&out, &seen, std::move(product));
     }
 
+#ifdef MORTRED_WITH_CUSTOM_DRIVERS
     project_bench_only(&out, &seen, "scene_segmentation", jinq::factory::scene_segmentation::bench_catalog(),
                        [](const auto &entry, int argc, char **argv) {
                            return run_image_family_benchmark<jinq::apps::benchmark::SegOutput>(
@@ -191,6 +200,7 @@ std::vector<ProductEntry> build_index() {
         return jinq::apps::benchmark::run_byte_track_benchmark(argc, argv);
     };
     push_unique(&out, &seen, std::move(mot));
+#endif
 
     std::sort(out.begin(), out.end(), [](const ProductEntry &a, const ProductEntry &b) { return a.id < b.id; });
     return out;

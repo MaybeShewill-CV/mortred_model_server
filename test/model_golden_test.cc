@@ -51,7 +51,7 @@ TEST(model_golden, mobilenetv2_batch_matches_single) {
     if (!weights_available(conf))
         GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::classification::create_mobilenetv2_classifier<mat_input, std_classification_output>("mobilenetv2_golden");
+    auto model = jinq::factory::classification::create_mobilenetv2_classifier<mat_input, std_classification_output>();
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG");
@@ -84,7 +84,7 @@ TEST(model_golden, mobilenetv2_mixed_batch_isolates_failed_items) {
     if (!weights_available(conf))
         GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::classification::create_mobilenetv2_classifier<mat_input, std_classification_output>("mobilenetv2_mixed");
+    auto model = jinq::factory::classification::create_mobilenetv2_classifier<mat_input, std_classification_output>();
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG");
@@ -127,7 +127,7 @@ TEST(model_golden, densenet_batch_matches_single) {
     if (!weights_available(conf))
         GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::classification::create_densenet_classifier<mat_input, std_classification_output>("densenet_golden");
+    auto model = jinq::factory::classification::create_densenet_classifier<mat_input, std_classification_output>();
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG");
@@ -180,7 +180,7 @@ TEST(model_golden, yolov8_mixed_size_batch_matches_single_runs) {
     if (!weights_available(conf))
         GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
-    auto model = jinq::factory::object_detection::create_yolov8_detector<mat_input, std_object_detection_output>("yolov8_batch");
+    auto model = jinq::factory::object_detection::create_yolov8_detector<mat_input, std_object_detection_output>();
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
 
@@ -264,8 +264,7 @@ TEST(model_golden, sam_prompt_prediction) {
         GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::segment_anything::create_sam_predictor<jinq::models::io_define::segment_anything::sam_prompt_input,
-                                                                       jinq::models::io_define::segment_anything::std_sam_prompt_output>(
-        "sam_golden");
+                                                                       jinq::models::io_define::segment_anything::std_sam_prompt_output>();
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/sam/truck.jpg");
@@ -285,8 +284,7 @@ TEST(model_golden, sam_automask_generation) {
         GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model = jinq::factory::segment_anything::create_sam_auto_mask_generator<mat_input,
-                                                                                 jinq::models::io_define::segment_anything::sam_amg_output>(
-        "sam_amg_golden");
+                                                                                 jinq::models::io_define::segment_anything::sam_amg_output>();
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     cv::Mat image = read_input_image("demo_data/model_test_input/sam/truck.jpg");
@@ -304,8 +302,7 @@ TEST(model_golden, openai_clip_embedding) {
         GTEST_SKIP() << "weights not available";
     auto cfg = load_model_cfg(conf);
     auto model =
-        jinq::factory::clip::create_openai_clip<jinq::models::io_define::clip::clip_input, jinq::models::io_define::clip::clip_output>(
-            "openai_clip_golden");
+        jinq::factory::clip::create_openai_clip<jinq::models::io_define::clip::clip_input, jinq::models::io_define::clip::clip_output>();
     ASSERT_NE(model, nullptr);
     ASSERT_EQ(model->init(cfg), StatusCode::OK);
     jinq::models::io_define::clip::clip_input text_input;

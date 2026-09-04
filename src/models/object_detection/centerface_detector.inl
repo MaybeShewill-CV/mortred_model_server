@@ -77,9 +77,9 @@ StatusCode CenterFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<Name
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
 
-    DetectionGeometryScale geometry_scale;
+    GeometryScale geometry_scale;
     std::string geometry_error;
-    if (!make_detection_geometry_scale(context, &geometry_scale, &geometry_error)) {
+    if (!backend::make_geometry_scale(context, &geometry_scale, &geometry_error)) {
         LOG(ERROR) << "centerface " << geometry_error;
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
@@ -155,9 +155,9 @@ StatusCode CenterFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<Name
 
     // refine bbox coords back into the user image space
     for (auto &face_box : decode_result) {
-        face_box.bbox = scale_detection_bbox(face_box.bbox, geometry_scale);
+        face_box.bbox = backend::scale_bbox(face_box.bbox, geometry_scale);
         for (auto &point : face_box.landmarks) {
-            point = scale_detection_point(point, geometry_scale);
+            point = backend::scale_point(point, geometry_scale);
         }
     }
 

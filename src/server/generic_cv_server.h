@@ -43,7 +43,7 @@ template<typename MODEL_OUTPUT>
 using CvWorkerPtr = std::unique_ptr<jinq::models::BaseAiModel<ImageInput, MODEL_OUTPUT>>;
 
 template<typename MODEL_OUTPUT>
-using CvWorkerFactory = std::function<CvWorkerPtr<MODEL_OUTPUT>(const std::string&)>;
+using CvWorkerFactory = std::function<CvWorkerPtr<MODEL_OUTPUT>()>;
 
 template<typename MODEL_OUTPUT>
 using CvResponseFiller = void (*)(rapidjson::Document::AllocatorType&,
@@ -164,7 +164,7 @@ StatusCode CvModelServer<MODEL_OUTPUT>::Impl::init(const toml::table& config) {
     auto model_cfg = std::move(model_cfg_parsed).table();
 
     for (int index = 0; index < worker_nums; ++index) {
-        auto worker = _m_spec.make_worker("worker_" + std::to_string(index + 1));
+        auto worker = _m_spec.make_worker();
         if (!worker->is_successfully_initialized()) {
             if (worker->init(model_cfg) != StatusCode::OK) {
                 this->_m_successfully_initialized = false;

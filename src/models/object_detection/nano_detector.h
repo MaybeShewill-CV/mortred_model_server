@@ -52,7 +52,7 @@ template <typename INPUT, typename OUTPUT> class NanoDetector : public jinq::mod
 
     std::vector<float> refine_bbox_coords(const float *preds, int x, int y, int stride,
                                           const jinq::models::backend::InferenceContext &context,
-                                          const DetectionGeometryScale &geometry_scale) const;
+                                          const GeometryScale &geometry_scale) const;
 
     void generate_grid_center_priors();
 

@@ -48,8 +48,8 @@ BaseAiServerImpl（协议 + 执行编排，两条路径共用）
 
 worker 池在同步/异步请求间刻意共享：这就是资源仲裁设计。`AsyncJobTable`
 只管账本——身份、准入、状态机、保留策略（TTL + LRU）与 wait/notify。它对
-Workflow HTTP、worker 池、metrics **零依赖**；`task_request` 与
-`go_result<MODEL_OUTPUT>` 被上提到该头文件的命名空间作用域，服务器与账本
+Workflow HTTP、worker 池、metrics **零依赖**；`InferenceTask` 与
+`InferenceResult<MODEL_OUTPUT>` 定义在 `inference_task.h`，服务器与账本
 共享唯一定义。
 
 ## 3. 并发不变式（契约）

@@ -78,16 +78,16 @@ StatusCode NanoDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTenso
     const int num_points = static_cast<int>(_m_center_priors.size());
     const int num_channels = _m_detection_params.class_nums + (_m_reg_max + 1) * 4;
     F32OutputView output_view;
-    const auto output_status = validated_f32_output(
+    const auto output_status = backend::validated_f32_named_output(
         outputs, "output", {jinq::models::backend::DType::F32, 3, {1, num_points, num_channels}}, "nanodet", &output_view);
     if (output_status != StatusCode::OK) {
         return output_status;
     }
     const float *tensor_preds_host = output_view.data;
 
-    DetectionGeometryScale geometry_scale;
+    GeometryScale geometry_scale;
     std::string geometry_error;
-    if (!make_detection_geometry_scale(context, &geometry_scale, &geometry_error)) {
+    if (!backend::make_geometry_scale(context, &geometry_scale, &geometry_error)) {
         LOG(ERROR) << "nanodet " << geometry_error;
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
@@ -123,7 +123,7 @@ StatusCode NanoDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTenso
 template <typename INPUT, typename OUTPUT>
 std::vector<float> NanoDetector<INPUT, OUTPUT>::refine_bbox_coords(const float *preds, int x, int y, int stride,
                                                                    const jinq::models::backend::InferenceContext &context,
-                                                                   const DetectionGeometryScale &geometry_scale) const {
+                                                                   const GeometryScale &geometry_scale) const {
     const auto ct_x = static_cast<float>(x * stride);
     const auto ct_y = static_cast<float>(y * stride);
     std::vector<float> dis_pred;
@@ -142,7 +142,7 @@ std::vector<float> NanoDetector<INPUT, OUTPUT>::refine_bbox_coords(const float *
         dis_pred[i] = dis;
     }
 
-    const auto bbox = scale_detection_bbox(
+    const auto bbox = backend::scale_bbox(
         {std::max(ct_x - dis_pred[0], 0.0f), std::max(ct_y - dis_pred[1], 0.0f),
          std::min(ct_x + dis_pred[2], static_cast<float>(context.network_size.width)) - std::max(ct_x - dis_pred[0], 0.0f),
          std::min(ct_y + dis_pred[3], static_cast<float>(context.network_size.height)) - std::max(ct_y - dis_pred[1], 0.0f)},

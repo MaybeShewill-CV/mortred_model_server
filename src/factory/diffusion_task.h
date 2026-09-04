@@ -29,8 +29,7 @@ using Base64Output = jinq::models::io_define::common_io::base64_input;
 // every sampler is mounted on the server through the same base64 adapter, so
 // the whole task shares one output type and one catalog
 template <typename SAMPLER, typename SAMPLER_INPUT, typename SAMPLER_OUTPUT>
-std::unique_ptr<BaseAiModel<ImageInput, Base64Output>> make_server_worker(const std::string &worker_name) {
-    (void)worker_name;
+std::unique_ptr<BaseAiModel<ImageInput, Base64Output>> make_server_worker() {
     return std::make_unique<DiffusionModelAdapter<SAMPLER, SAMPLER_INPUT, SAMPLER_OUTPUT>>();
 }
 
@@ -97,10 +96,6 @@ inline const std::vector<Entry> &catalog() {
               &jinq::server::response::fill_base64_image, ldm_param_specs()},
     };
     return entries;
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::string &model_section, const std::string &server_name) {
-    return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
 }
 
 } // namespace diffusion

@@ -19,14 +19,12 @@ using jinq::models::mono_depth_estimation::DepthAnything;
 using jinq::models::mono_depth_estimation::Metric3D;
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_metric3d_estimator(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_metric3d_estimator() {
     return std::make_unique<Metric3D<INPUT, OUTPUT>>();
 }
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_depth_anything_estimator(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_depth_anything_estimator() {
     return std::make_unique<DepthAnything<INPUT, OUTPUT>>();
 }
 
@@ -42,10 +40,6 @@ inline const std::vector<Entry> &catalog() {
               &create_depth_anything_estimator<ImageInput, Output>, &jinq::server::response::fill_depth_estimation, {}},
     };
     return entries;
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::string &model_section, const std::string &server_name) {
-    return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
 }
 
 } // namespace mono_depth_estimation

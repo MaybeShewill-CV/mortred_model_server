@@ -19,6 +19,13 @@ All notable changes to this project are documented here. The format follows
   accepted `img_data` and ignored unknown keys).
 - `http_response.h` (`{req_id, code, msg, data}` shim). Process-level JSON
   now uses `UnifiedResponse` from `response_envelope.h`.
+- Unused family `create_server` wrappers (every caller already used
+  `cv_catalog::create_server`).
+- Detector rename shims (`DetectionGeometryScale`,
+  `make_detection_geometry_scale`, `scale_detection_bbox` /
+  `scale_detection_point`, `validated_f32_output`).
+- `task_request` / `go_result` aliases for `InferenceTask` /
+  `InferenceResult`.
 
 ### Changed
 - Envelope codec lives in `common/request_envelope.h` and
@@ -44,6 +51,13 @@ All notable changes to this project are documented here. The format follows
   worker wait and inference.
 - Gateway forwards the client `Content-Type`/`Accept` verbatim (binary body
   encoding groundwork).
+- HTTP and benchmark ELFs no longer share `custom_drivers.cpp`; bench-only
+  product rows compile only into the benchmark target (`MORTRED_WITH_CUSTOM_DRIVERS`).
+- Gateway and supervisor share `control/http_reply.h` for JSON replies
+  (error JSON shapes are unchanged).
+- Factory `create_*` / `make_server_worker` / catalog `make_model` /
+  `CvWorkerFactory` drop the unused name argument.
+- `common` no longer links OpenCV (`cv_utils` is header-only).
 
 ### Fixed
 - Supervisor Web UI, `/api/v1/infer`, `/api/v1/jobs` and pipelines now speak

@@ -110,7 +110,7 @@ class AsyncJobTable {
         ResultStatus status = ResultStatus::NOT_FOUND;
         AsyncJobState state = AsyncJobState::PENDING; // NOT_DONE: current state
         std::string task_id;                          // READY: request id echo
-        go_result<MODEL_OUTPUT> value;                // READY: copied result
+        InferenceResult<MODEL_OUTPUT> value;                // READY: copied result
     };
 
     /*** Set admission/retention config. Call once during server init, before serving. */
@@ -126,7 +126,7 @@ class AsyncJobTable {
      * Admit a job (atomic CAS against max_queue), assign a unique id and
      * store the request. The runner later retrieves it via take_request().
      */
-    SubmitResult submit(task_request req) {
+    SubmitResult submit(InferenceTask req) {
         if (!try_admit()) {
             return {SubmitStatus::QUEUE_FULL, ""};
         }
@@ -159,7 +159,7 @@ class AsyncJobTable {
     }
 
     /*** Terminal DONE with a result. Exactly-once; the only success-path decrement. */
-    bool finish(const std::string& id, go_result<MODEL_OUTPUT> result) {
+    bool finish(const std::string& id, InferenceResult<MODEL_OUTPUT> result) {
         auto job = find(id);
         if (job == nullptr) {
             return false;
@@ -190,7 +190,7 @@ class AsyncJobTable {
      * is moved out (large base64 image). The /jobs/{id}/result request-id
      * echo keeps working because only the payload leaves the job.
      */
-    std::optional<task_request> take_request(const std::string& id) {
+    std::optional<InferenceTask> take_request(const std::string& id) {
         auto job = find(id);
         if (job == nullptr) {
             return std::nullopt;
@@ -277,12 +277,12 @@ class AsyncJobTable {
   private:
     struct Job {
         std::string id;
-        task_request req;  // payload moved out once by the runner
+        InferenceTask req;  // payload moved out once by the runner
         int64_t submitted_at_ms = 0;
         std::atomic<AsyncJobState> state{AsyncJobState::PENDING};
         std::mutex mu;     // guards result/error/completed_at + cv
         std::condition_variable cv;
-        go_result<MODEL_OUTPUT> result; // valid when state == DONE
+        InferenceResult<MODEL_OUTPUT> result; // valid when state == DONE
         std::string error;              // non-empty on FAILED / TIMEOUT
         // atomic: written under mu but TSAN flags it as a data race when an
         // evicted job's heap block is reused by a new allocation (mutex
@@ -326,7 +326,7 @@ class AsyncJobTable {
     bool transition_terminal(const std::shared_ptr<Job>& job,
                              AsyncJobState terminal,
                              const std::string& error,
-                             std::optional<go_result<MODEL_OUTPUT>> result) {
+                             std::optional<InferenceResult<MODEL_OUTPUT>> result) {
         std::lock_guard<std::mutex> lock(job->mu);
         if (is_async_terminal(job->state.load())) {
             return false;  // exactly-once: a second transition is a no-op

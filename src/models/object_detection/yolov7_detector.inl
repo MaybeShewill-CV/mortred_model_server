@@ -90,9 +90,9 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
         {{142, 110}, {192, 243}, {459, 401}},
     };
 
-    DetectionGeometryScale geometry_scale;
+    GeometryScale geometry_scale;
     std::string geometry_error;
-    if (!make_detection_geometry_scale(context, &geometry_scale, &geometry_error)) {
+    if (!backend::make_geometry_scale(context, &geometry_scale, &geometry_error)) {
         LOG(ERROR) << "yolov7 " << geometry_error;
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
@@ -166,7 +166,7 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
     }
 
     for (auto &bbox : decode_result) {
-        bbox.bbox = scale_detection_bbox(bbox.bbox, geometry_scale);
+        bbox.bbox = backend::scale_bbox(bbox.bbox, geometry_scale);
     }
 
     DetectionOutput nms_result = finalize_detections(std::move(decode_result), _m_detection_params, context);

@@ -39,17 +39,17 @@ using jinq::common::StatusCode;
 using jinq::server::AsyncJobState;
 using jinq::server::AsyncJobTable;
 using jinq::server::is_async_terminal;
-using jinq::server::task_request;
+using jinq::server::InferenceTask;
 
 struct TrivialOutput {
     int value = 0;
 };
 
 using Table = AsyncJobTable<TrivialOutput>;
-using Result = jinq::server::go_result<TrivialOutput>;
+using Result = jinq::server::InferenceResult<TrivialOutput>;
 
-task_request make_req(const std::string& id, const std::string& payload) {
-    task_request req;
+InferenceTask make_req(const std::string& id, const std::string& payload) {
+    InferenceTask req;
     req.task_id = id;
     req.items.push_back({jinq::models::io_define::common_io::byte_source::origin_kind::base64_text, payload});
     return req;

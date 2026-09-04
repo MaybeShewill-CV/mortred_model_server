@@ -21,20 +21,17 @@ using jinq::models::classification::MobileNetv2;
 using jinq::models::classification::ResNet;
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_mobilenetv2_classifier(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_mobilenetv2_classifier() {
     return std::make_unique<MobileNetv2<INPUT, OUTPUT>>();
 }
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_resnet_classifier(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_resnet_classifier() {
     return std::make_unique<ResNet<INPUT, OUTPUT>>();
 }
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_densenet_classifier(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_densenet_classifier() {
     return std::make_unique<DenseNet<INPUT, OUTPUT>>();
 }
 
@@ -63,10 +60,6 @@ inline const std::vector<Entry> &catalog() {
               &jinq::server::response::fill_classification, classification_param_specs()},
     };
     return entries;
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::string &model_section, const std::string &server_name) {
-    return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
 }
 
 } // namespace classification

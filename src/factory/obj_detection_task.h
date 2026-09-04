@@ -29,44 +29,37 @@ using jinq::models::object_detection::YoloV7Detector;
 using jinq::models::object_detection::YoloV8Detector;
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_yolov5_detector(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_yolov5_detector() {
     return std::make_unique<YoloV5Detector<INPUT, OUTPUT>>();
 }
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_yolov6_detector(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_yolov6_detector() {
     return std::make_unique<YoloV6Detector<INPUT, OUTPUT>>();
 }
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_nanodet_detector(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_nanodet_detector() {
     return std::make_unique<NanoDetector<INPUT, OUTPUT>>();
 }
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_libface_detector(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_libface_detector() {
     return std::make_unique<LibFaceDetector<INPUT, OUTPUT>>();
 }
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_yolov7_detector(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_yolov7_detector() {
     return std::make_unique<YoloV7Detector<INPUT, OUTPUT>>();
 }
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_yolov8_detector(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_yolov8_detector() {
     return std::make_unique<YoloV8Detector<INPUT, OUTPUT>>();
 }
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_centerface_detector(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_centerface_detector() {
     return std::make_unique<CenterFaceDetector<INPUT, OUTPUT>>();
 }
 
@@ -115,13 +108,6 @@ inline const std::vector<FaceEntry> &face_catalog() {
                   detection_param_specs()},
     };
     return entries;
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::string &model_section, const std::string &server_name) {
-    if (jinq::factory::cv_catalog::find_entry(catalog(), model_section) != nullptr) {
-        return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
-    }
-    return jinq::factory::cv_catalog::create_server(face_catalog(), model_section, server_name);
 }
 
 } // namespace object_detection

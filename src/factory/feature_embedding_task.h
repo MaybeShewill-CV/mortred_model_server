@@ -25,8 +25,7 @@ using jinq::models::BaseAiModel;
 using jinq::models::feature_embedding::Dinov2;
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_dinov2_feature_extractor(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_dinov2_feature_extractor() {
     return std::make_unique<Dinov2<INPUT, OUTPUT>>();
 }
 
@@ -59,10 +58,6 @@ inline const std::vector<Entry> &catalog() {
               feature_embedding_param_specs()},
     };
     return entries;
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::string &model_section, const std::string &server_name) {
-    return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
 }
 
 } // namespace feature_embedding

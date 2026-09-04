@@ -23,20 +23,17 @@ using jinq::models::segment_anything::FastSamSegmentor;
 using jinq::models::segment_anything::SamAutoMaskGenerator;
 using jinq::models::segment_anything::SamPredictor;
 
-template <typename INPUT, typename OUTPUT> std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_sam_predictor(const std::string &model_name) {
-    (void)model_name;
+template <typename INPUT, typename OUTPUT> std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_sam_predictor() {
     return std::make_unique<SamPredictor<INPUT, OUTPUT>>();
 }
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_sam_auto_mask_generator(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_sam_auto_mask_generator() {
     return std::make_unique<SamAutoMaskGenerator<INPUT, OUTPUT>>();
 }
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_fast_sam_segmentor(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_fast_sam_segmentor() {
     return std::make_unique<FastSamSegmentor<INPUT, OUTPUT>>();
 }
 
@@ -88,10 +85,6 @@ inline const std::vector<AmgEntry> &amg_catalog() {
                  &jinq::server::response::fill_sam_amg, sam_amg_param_specs()},
     };
     return entries;
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::string &model_section, const std::string &server_name) {
-    return jinq::factory::cv_catalog::create_server(amg_catalog(), model_section, server_name);
 }
 
 } // namespace segment_anything

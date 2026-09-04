@@ -18,6 +18,5 @@ target_link_libraries(
     PUBLIC mortred_common_includes
     Threads::Threads
     glog::glog
-    ${OPENCV_LIBS}
 )
 set_target_properties(common PROPERTIES LINKER_LANGUAGE CXX)
