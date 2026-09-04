@@ -18,8 +18,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <system_error>
+#include <vector>
 
 #include <workflow/HttpMessage.h>
 #include <workflow/HttpUtil.h>
@@ -45,8 +47,10 @@ using mortred::control::ControlConfig;
 Catalog g_catalog;
 ControlConfig g_cfg;
 std::string g_auth_token;       // external bearer token ("" = loopback mode)
+std::string g_admin_token;      // MORTRED_API_TOKEN; UI / mortredctl smoke
 mortred::control::ApiKeyManager g_api_keys;  // multi-key auth (P0-4)
 std::string g_internal_token;   // shared with model servers via supervisor env
+std::vector<std::string> g_cors_origins;  // UI origins allowed to call infer
 jinq::server::PrometheusMetrics g_metrics;
 
 std::string resolve_project_root() {
@@ -91,6 +95,68 @@ std::string header_value(const protocol::HttpRequest* req, const std::string& na
         }
     }
     return "";
+}
+
+std::string trim_copy(const std::string& s) {
+    size_t b = 0;
+    size_t e = s.size();
+    while (b < e && (s[b] == ' ' || s[b] == '\t')) {
+        ++b;
+    }
+    while (e > b && (s[e - 1] == ' ' || s[e - 1] == '\t')) {
+        --e;
+    }
+    return s.substr(b, e - b);
+}
+
+void load_cors_origins(const char* env) {
+    g_cors_origins.clear();
+    if (env == nullptr || *env == '\0') {
+        return;
+    }
+    const std::string raw(env);
+    size_t start = 0;
+    while (start <= raw.size()) {
+        const size_t comma = raw.find(',', start);
+        const size_t end = comma == std::string::npos ? raw.size() : comma;
+        const std::string item = trim_copy(raw.substr(start, end - start));
+        if (!item.empty()) {
+            g_cors_origins.push_back(item);
+        }
+        if (comma == std::string::npos) {
+            break;
+        }
+        start = comma + 1;
+    }
+}
+
+bool origin_allowed(const std::string& origin) {
+    if (origin.empty()) {
+        return false;
+    }
+    for (const auto& allowed : g_cors_origins) {
+        if (origin == allowed) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void maybe_add_cors(WFHttpTask* task) {
+    const std::string origin = header_value(task->get_req(), "origin");
+    if (!origin_allowed(origin)) {
+        return;
+    }
+    auto* resp = task->get_resp();
+    resp->add_header_pair("Access-Control-Allow-Origin", origin.c_str());
+    resp->add_header_pair("Access-Control-Allow-Methods", "POST, OPTIONS");
+    resp->add_header_pair("Access-Control-Allow-Headers", "Authorization, Content-Type");
+    resp->add_header_pair("Vary", "Origin");
+}
+
+bool key_may_infer(const std::shared_ptr<const mortred::control::ApiKey>& key) {
+    return mortred::control::ApiKeyManager::has_scope(key, "inference") ||
+           mortred::control::ApiKeyManager::has_scope(key, "admin");
 }
 
 using mortred::control::reply_json;
@@ -199,6 +265,12 @@ void process(WFHttpTask* task) {
     const char* raw_method = task->get_req()->get_method();
     const std::string method = raw_method == nullptr ? "" : raw_method;
 
+    maybe_add_cors(task);
+    if (method == "OPTIONS") {
+        task->get_resp()->set_status_code("204");
+        return;
+    }
+
     if (path == "/healthz") {
         task->get_resp()->set_status_code("200");
         task->get_resp()->add_header_pair("Content-Type", "text/plain; charset=utf-8");
@@ -230,7 +302,7 @@ void process(WFHttpTask* task) {
         // shared_ptr ownership: safe across a concurrent reload() that swaps
         // the whole key set (P0-2)
         const auto key = g_api_keys.authenticate(auth_header);
-        if (key != nullptr && mortred::control::ApiKeyManager::has_scope(key, "inference")) {
+        if (key_may_infer(key)) {
             authorized = true;
             key_name = key->name;
         }
@@ -245,6 +317,11 @@ void process(WFHttpTask* task) {
         jinq::common::is_bearer_authorized(auth_header, g_auth_token)) {
         authorized = true;
         key_name = "legacy";
+    }
+    if (!authorized && !g_admin_token.empty() &&
+        jinq::common::is_bearer_authorized(auth_header, g_admin_token)) {
+        authorized = true;
+        key_name = "admin";
     }
 
     if (!authorized) {
@@ -297,6 +374,10 @@ int run_gateway(int argc, char** argv) {
         env != nullptr && *env != '\0') {
         g_auth_token = env;
     }
+    if (const char* env = std::getenv("MORTRED_API_TOKEN"); env != nullptr && *env != '\0') {
+        g_admin_token = env;
+    }
+    load_cors_origins(std::getenv("MORTRED_GATEWAY_CORS_ORIGINS"));
     if (const char* env = std::getenv("MORTRED_INTERNAL_TOKEN"); env != nullptr && *env != '\0') {
         g_internal_token = env;
     }
@@ -328,18 +409,19 @@ int run_gateway(int argc, char** argv) {
     // operator who configured keys wants authentication, and silently serving
     // without it would be a fail-open security hole.
     if (!jinq::common::is_loopback_host(g_cfg.gateway.host) &&
-        g_auth_token.empty() && !api_keys_loaded) {
+        g_auth_token.empty() && g_admin_token.empty() && !api_keys_loaded) {
         std::fprintf(stderr,
                      "mortred-gateway: refusing to listen on non-loopback host %s without any "
-                     "external auth (set MORTRED_GATEWAY_AUTH_TOKEN or provide a valid "
+                     "external auth (set MORTRED_GATEWAY_AUTH_TOKEN, MORTRED_API_TOKEN, or provide a valid "
                      "conf/api_keys.toml)\n",
                      g_cfg.gateway.host.c_str());
         return 1;
     }
-    if (api_keys_parse_failed && g_auth_token.empty()) {
+    if (api_keys_parse_failed && g_auth_token.empty() && g_admin_token.empty()) {
         std::fprintf(stderr,
                      "mortred-gateway: refusing to start: conf/api_keys.toml exists but failed to "
-                     "parse, and no MORTRED_GATEWAY_AUTH_TOKEN fallback is configured\n");
+                     "parse, and no MORTRED_GATEWAY_AUTH_TOKEN or MORTRED_API_TOKEN fallback is "
+                     "configured\n");
         return 1;
     }
     if (api_keys_parse_failed) {

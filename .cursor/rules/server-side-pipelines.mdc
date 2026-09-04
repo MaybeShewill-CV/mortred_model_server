@@ -1,0 +1,15 @@
+---
+description: Server-side pipelines stay out of supervisor and gateway
+alwaysApply: true
+---
+
+# Server-side pipelines
+
+A formal multi-model pipeline product is **out of the current control-plane/data-plane split**. If it is built later:
+
+- It must be a **separate orchestrator** that is a **client of the gateway** (`POST /v1/models/{id}/infer`).
+- Do **not** put workflow/orchestration back on the supervisor (`/api/v1/pipelines`) or inside the gateway process.
+- The supervisor stays process lifecycle / catalog / logs / keys / UI only.
+- The gateway stays a stateless reverse proxy.
+
+Until that product exists, clients compose steps themselves by calling the gateway sequentially.

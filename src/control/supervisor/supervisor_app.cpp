@@ -1146,6 +1146,22 @@ int run_supervisor() {
 
     g_supervisor = std::make_unique<ProcessSupervisor>(g_root, g_cfg, config_path);
     g_supervisor->set_catalog(g_catalog);
+    // Gateway reads these at startup. Inject before autostart so the child
+    // inherits them: management token is a valid data-plane credential for UI
+    // / mortredctl infer, and CORS origins let the :8787 UI call :8080.
+    if (!g_auth_token.empty()) {
+        ::setenv("MORTRED_API_TOKEN", g_auth_token.c_str(), 1);
+    }
+    {
+        const std::string port = std::to_string(g_cfg.supervisor.api_port);
+        std::string origins = "http://127.0.0.1:" + port + ",http://localhost:" + port;
+        const std::string& host = g_cfg.supervisor.api_host;
+        if (host != "0.0.0.0" && host != "::" && host != "[::]" && host != "127.0.0.1" &&
+            host != "localhost") {
+            origins += ",http://" + host + ":" + port;
+        }
+        ::setenv("MORTRED_GATEWAY_CORS_ORIGINS", origins.c_str(), 1);
+    }
     std::string thread_err;
     if (!g_supervisor->start_threads(&thread_err)) {
         std::fprintf(stderr, "mortred-supervisor: %s\n", thread_err.c_str());
