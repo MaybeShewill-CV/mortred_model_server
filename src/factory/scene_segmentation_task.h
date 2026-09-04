@@ -24,26 +24,22 @@ using jinq::models::scene_segmentation::MsOcrNet;
 using jinq::models::scene_segmentation::PPHumanSeg;
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_bisenetv2_segmentor(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_bisenetv2_segmentor() {
     return std::make_unique<BiseNetV2<INPUT, OUTPUT>>();
 }
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_pphuman_segmentor(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_pphuman_segmentor() {
     return std::make_unique<PPHumanSeg<INPUT, OUTPUT>>();
 }
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_msocrnet_segmentor(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_msocrnet_segmentor() {
     return std::make_unique<MsOcrNet<INPUT, OUTPUT>>();
 }
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_hrnet_segmentor(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_hrnet_segmentor() {
     return std::make_unique<HRNetSegmentation<INPUT, OUTPUT>>();
 }
 
@@ -61,10 +57,6 @@ inline const std::vector<Entry> &catalog() {
               &jinq::server::response::fill_scene_segmentation, {}},
     };
     return entries;
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::string &model_section, const std::string &server_name) {
-    return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
 }
 
 using BenchEntry = jinq::factory::model_catalog::ModelCatalogEntry<ImageInput, Output>;

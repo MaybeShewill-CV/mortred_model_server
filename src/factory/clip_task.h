@@ -18,8 +18,7 @@ using jinq::models::BaseAiModel;
 
 using jinq::models::clip::OpenAiClip;
 
-template <typename INPUT, typename OUTPUT> std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_openai_clip(const std::string &model_name) {
-    (void)model_name;
+template <typename INPUT, typename OUTPUT> std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_openai_clip() {
     return std::make_unique<OpenAiClip<INPUT, OUTPUT>>();
 }
 

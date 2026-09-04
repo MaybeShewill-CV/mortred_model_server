@@ -19,14 +19,12 @@ using jinq::models::matting::ModNetMatting;
 using jinq::models::matting::PPMatting;
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_modnet_segmentor(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_modnet_segmentor() {
     return std::make_unique<ModNetMatting<INPUT, OUTPUT>>();
 }
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_ppmatting_segmentor(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_ppmatting_segmentor() {
     return std::make_unique<PPMatting<INPUT, OUTPUT>>();
 }
 
@@ -41,10 +39,6 @@ inline const std::vector<Entry> &catalog() {
         Entry{"MODNET", "modnet", "MODNET_SERVER", &create_modnet_segmentor<ImageInput, Output>, &jinq::server::response::fill_matting, {}},
     };
     return entries;
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::string &model_section, const std::string &server_name) {
-    return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
 }
 
 } // namespace matting

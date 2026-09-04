@@ -73,7 +73,7 @@ int run_ddpm_benchmark(int argc, char **argv) {
     spec.image_path_of = [](int n, char **a) {
         return std::string(n >= 3 ? a[2] : "../demo_data/model_test_input/diffusion/ddpm");
     };
-    spec.make_model = [](const std::string &) {
+    spec.make_model = []() {
         return std::unique_ptr<jinq::models::BaseAiModel<std_ddpm_input, std_ddpm_output>>(
             new jinq::models::diffusion::DDPMSampler<std_ddpm_input, std_ddpm_output>());
     };
@@ -125,7 +125,7 @@ int run_ddim_benchmark(int argc, char **argv) {
         return in;
     };
     spec.image_path_of = [](int, char **) { return std::string("../demo_data/model_test_input/diffusion/ddim"); };
-    spec.make_model = [](const std::string &) {
+    spec.make_model = []() {
         return std::unique_ptr<jinq::models::BaseAiModel<std_ddim_input, std_ddim_output>>(
             new jinq::models::diffusion::DDIMSampler<std_ddim_input, std_ddim_output>());
     };
@@ -183,7 +183,7 @@ int run_cls_cond_ddim_benchmark(int argc, char **argv) {
         return in;
     };
     spec.image_path_of = [](int, char **) { return std::string("../demo_data/model_test_input/diffusion/ddim"); };
-    spec.make_model = [](const std::string &) {
+    spec.make_model = []() {
         return std::unique_ptr<jinq::models::BaseAiModel<std_cls_cond_ddim_input, std_cls_cond_ddim_output>>(
             new jinq::models::diffusion::ClsCondDDIMSampler<std_cls_cond_ddim_input, std_cls_cond_ddim_output>());
     };
@@ -241,7 +241,7 @@ int run_ldm_benchmark(int argc, char **argv) {
         return in;
     };
     spec.image_path_of = [](int, char **) { return std::string("../demo_data/model_test_input/diffusion/ldm"); };
-    spec.make_model = [](const std::string &) {
+    spec.make_model = []() {
         return std::unique_ptr<jinq::models::BaseAiModel<std_ldm_input, std_ldm_output>>(
             new jinq::models::diffusion::LDMSampler<std_ldm_input, std_ldm_output>());
     };
@@ -357,8 +357,7 @@ int run_sam_predictor_benchmark(int argc, char **argv) {
         LOG(ERROR) << "config file path: " << config_file_path << " not exists";
         return -1;
     }
-    auto sam_model = jinq::factory::segment_anything::create_sam_predictor<sam_prompt_input, std_sam_prompt_output>(
-        "sam_predictor");
+    auto sam_model = jinq::factory::segment_anything::create_sam_predictor<sam_prompt_input, std_sam_prompt_output>();
     auto cfg_parsed = toml::parse_file(config_file_path);
     if (!cfg_parsed) {
         LOG(ERROR) << "parse toml config file failed, error: " << std::string(cfg_parsed.error().description());
@@ -420,7 +419,7 @@ int run_fast_sam_benchmark(int argc, char **argv) {
         return -1;
     }
     auto fast_sam_model =
-        jinq::factory::segment_anything::create_fast_sam_segmentor<mat_input, std_fast_sam_output>("fast_sam");
+        jinq::factory::segment_anything::create_fast_sam_segmentor<mat_input, std_fast_sam_output>();
     auto cfg_parsed = toml::parse_file(config_file_path);
     if (!cfg_parsed) {
         LOG(ERROR) << "parse toml config file failed, error: " << std::string(cfg_parsed.error().description());
@@ -488,9 +487,8 @@ int run_lightglue_benchmark(int argc, char **argv) {
     spec.image_path_of = [](int n, char **a) {
         return std::string(n == 4 ? a[2] : "../demo_data/model_test_input/feature_point/match_test_01.jpg");
     };
-    spec.make_model = [](const std::string &) {
-        return jinq::factory::feature_point::create_lightglue_matcher<pair_mat_input, std_feature_point_match_output>(
-            "lightglue");
+    spec.make_model = []() {
+        return jinq::factory::feature_point::create_lightglue_matcher<pair_mat_input, std_feature_point_match_output>();
     };
     spec.handle_output = [](const pair_mat_input &in, const std_feature_point_match_output &out,
                             const std::string &image_path) {

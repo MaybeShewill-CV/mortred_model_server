@@ -134,9 +134,9 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTe
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
 
-    DetectionGeometryScale geometry_scale;
+    GeometryScale geometry_scale;
     std::string geometry_error;
-    if (!make_detection_geometry_scale(context, &geometry_scale, &geometry_error)) {
+    if (!backend::make_geometry_scale(context, &geometry_scale, &geometry_error)) {
         LOG(ERROR) << "libface " << geometry_error;
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
@@ -179,9 +179,9 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTe
 
     auto nms_result = finalize_detections(std::move(decode_result), _m_detection_params, context);
     for (auto &face_box : nms_result) {
-        face_box.bbox = scale_detection_bbox(face_box.bbox, geometry_scale);
+        face_box.bbox = backend::scale_bbox(face_box.bbox, geometry_scale);
         for (auto &landmark : face_box.landmarks) {
-            landmark = scale_detection_point(landmark, geometry_scale);
+            landmark = backend::scale_point(landmark, geometry_scale);
         }
         face_box.category = "face";
     }

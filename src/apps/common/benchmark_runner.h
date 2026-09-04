@@ -57,8 +57,7 @@ struct BenchmarkSpec {
     // has no image)
     std::function<std::string(int argc, char** argv)> image_path_of;
     // model construction: factory create_X or direct make_unique (diffusion)
-    std::function<std::unique_ptr<jinq::models::BaseAiModel<INPUT, OUTPUT>>(const std::string&)>
-        make_model;
+    std::function<std::unique_ptr<jinq::models::BaseAiModel<INPUT, OUTPUT>>()> make_model;
     // called once after the loop: logging / visualization / saving
     std::function<void(const INPUT& in, const OUTPUT& out, const std::string& image_path)>
         handle_output;
@@ -122,7 +121,7 @@ int run_single_benchmark(int argc, char** argv, const BenchmarkSpec<INPUT, OUTPU
     }
     OUTPUT model_output{};
 
-    auto model = spec.make_model(spec.model_name);
+    auto model = spec.make_model();
     model->init(cfg);
     if (!model->is_successfully_initialized()) {
         LOG(INFO) << spec.display_name << " init failed";
@@ -195,7 +194,7 @@ int run_batch_benchmark(int argc, char** argv, const BenchmarkSpec<INPUT, OUTPUT
     if (!spec.input_ok(model_input)) {
         return -1;
     }
-    auto model = spec.make_model(spec.model_name);
+    auto model = spec.make_model();
     model->init(cfg);
     if (!model->is_successfully_initialized()) {
         LOG(ERROR) << spec.display_name << " init failed";

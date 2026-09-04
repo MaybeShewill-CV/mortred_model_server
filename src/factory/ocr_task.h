@@ -17,8 +17,7 @@ using jinq::models::BaseAiModel;
 using jinq::models::ocr::DBTextDetector;
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_dbtext_detector(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_dbtext_detector() {
     return std::make_unique<DBTextDetector<INPUT, OUTPUT>>();
 }
 
@@ -41,10 +40,6 @@ inline const std::vector<Entry> &catalog() {
               ocr_param_specs()},
     };
     return entries;
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::string &model_section, const std::string &server_name) {
-    return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
 }
 
 } // namespace ocr

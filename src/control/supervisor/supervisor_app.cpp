@@ -47,6 +47,7 @@
 #include "common/request_size_limit.h"
 #include "control/catalog.h"
 #include "control/control_config.h"
+#include "control/http_reply.h"
 #include "control/management_envelope.h"
 #include "control/mini_toml.h"
 #include "control/supervisor.h"
@@ -59,6 +60,7 @@ using mortred::control::Catalog;
 using mortred::control::ControlConfig;
 using mortred::control::ProcessSupervisor;
 using mortred::control::kGatewayId;
+using mortred::control::reply_json;
 
 Catalog g_catalog;
 std::unique_ptr<ProcessSupervisor> g_supervisor;
@@ -199,14 +201,6 @@ std::string header_value(const protocol::HttpRequest* req, const std::string& na
         }
     }
     return "";
-}
-
-void reply_json(WFHttpTask* task, int http_status, const std::string& body) {
-    auto* resp = task->get_resp();
-    resp->set_status_code(std::to_string(http_status).c_str());
-    resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
-    resp->add_header_pair("Cache-Control", "no-store");
-    resp->append_output_body(body.data(), body.size());
 }
 
 std::string json_error(const std::string& msg) {

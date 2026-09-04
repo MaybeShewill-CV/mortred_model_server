@@ -12,7 +12,6 @@
 #include "models/backend/f32_output.h"
 #include "models/backend/inference_context.h"
 #include "models/backend/request_geometry.h"
-#include "models/backend/tensor_contract.h"
 #include "models/object_detection/detection_params.h"
 
 namespace jinq {
@@ -27,27 +26,7 @@ using jinq::common::StatusCode;
  * contexts once instead of producing NaN/Inf boxes deep inside a decoder.
  */
 using backend::GeometryScale;
-using DetectionGeometryScale = GeometryScale;
-
-inline bool make_detection_geometry_scale(const backend::InferenceContext &context, DetectionGeometryScale *scale, std::string *error) {
-    return backend::make_geometry_scale(context, scale, error);
-}
-
-inline cv::Rect2f scale_detection_bbox(const cv::Rect2f &bbox, const DetectionGeometryScale &scale) {
-    return backend::scale_bbox(bbox, scale);
-}
-
-inline cv::Point2f scale_detection_point(const cv::Point2f &point, const DetectionGeometryScale &scale) {
-    return backend::scale_point(point, scale);
-}
-
 using backend::F32OutputView;
-
-inline StatusCode validated_f32_output(const std::vector<backend::NamedTensor> &outputs, const std::string &name,
-                                       const backend::TensorContract &contract, const std::string &log_prefix,
-                                       F32OutputView *view = nullptr) {
-    return backend::validated_f32_named_output(outputs, name, contract, log_prefix, view);
-}
 
 /***
  * Shared detector tail: per-class NMS, top-k truncation and category filling.

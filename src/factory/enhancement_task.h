@@ -21,20 +21,17 @@ using jinq::models::enhancement::EnlightenGan;
 using jinq::models::enhancement::RealEsrGan;
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_enlightengan_enhancementor(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_enlightengan_enhancementor() {
     return std::make_unique<EnlightenGan<INPUT, OUTPUT>>();
 }
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_attentivegan_enhancementor(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_attentivegan_enhancementor() {
     return std::make_unique<AttentiveGanDerain<INPUT, OUTPUT>>();
 }
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_realesrgan_enhancementor(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_realesrgan_enhancementor() {
     return std::make_unique<RealEsrGan<INPUT, OUTPUT>>();
 }
 
@@ -52,10 +49,6 @@ inline const std::vector<Entry> &catalog() {
               &jinq::server::response::fill_enhancement, {}},
     };
     return entries;
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::string &model_section, const std::string &server_name) {
-    return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
 }
 
 } // namespace enhancement

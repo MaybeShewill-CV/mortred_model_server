@@ -59,8 +59,8 @@ The worker pool stays shared between sync and async requests on purpose:
 that is the resource arbitration design. `AsyncJobTable` owns only the
 ledger - identity, admission, the state machine, retention (TTL + LRU) and
 wait/notify. It has **zero** dependencies on Workflow HTTP, the worker pool
-or metrics; `task_request` and `go_result<MODEL_OUTPUT>` were hoisted to
-namespace scope in its header so the server and the ledger share exactly one
+or metrics; `InferenceTask` and `InferenceResult<MODEL_OUTPUT>` live in
+`inference_task.h` so the server and the ledger share exactly one
 definition of each.
 
 ## 3. Concurrency invariants (the contract)

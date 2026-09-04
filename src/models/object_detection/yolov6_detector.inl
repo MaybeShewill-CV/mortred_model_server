@@ -73,7 +73,7 @@ template <typename INPUT, typename OUTPUT>
 StatusCode YoloV6Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
                                                       const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
     F32OutputView output_view;
-    const auto output_status = validated_f32_output(
+    const auto output_status = backend::validated_f32_named_output(
         outputs, "outputs", {jinq::models::backend::DType::F32, 3, {1, -1, _m_detection_params.class_nums + 5}}, "yolov6", &output_view);
     if (output_status != StatusCode::OK) {
         return output_status;
@@ -83,9 +83,9 @@ StatusCode YoloV6Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
     const auto batch_nums = tensor.shape[0];
     const auto raw_pred_bbox_nums = tensor.shape[1];
 
-    DetectionGeometryScale geometry_scale;
+    GeometryScale geometry_scale;
     std::string geometry_error;
-    if (!make_detection_geometry_scale(context, &geometry_scale, &geometry_error)) {
+    if (!backend::make_geometry_scale(context, &geometry_scale, &geometry_error)) {
         LOG(ERROR) << "yolov6 " << geometry_error;
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
@@ -132,7 +132,7 @@ StatusCode YoloV6Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
             jinq::models::io_define::object_detection::bbox tmp_bbox;
             tmp_bbox.class_id = class_id;
             tmp_bbox.score = bbox_score;
-            tmp_bbox.bbox = scale_detection_bbox({raw_bbox_info[0] - raw_bbox_info[2] / 2.0f, raw_bbox_info[1] - raw_bbox_info[3] / 2.0f,
+            tmp_bbox.bbox = backend::scale_bbox({raw_bbox_info[0] - raw_bbox_info[2] / 2.0f, raw_bbox_info[1] - raw_bbox_info[3] / 2.0f,
                                                   raw_bbox_info[2], raw_bbox_info[3]},
                                                  geometry_scale);
             if (tmp_bbox.bbox.area() < _m_detection_params.min_box_area_px) {

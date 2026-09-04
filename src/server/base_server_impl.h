@@ -108,7 +108,7 @@ namespace detail {
 
 /*** builds the worker's own input type from a base64 payload string. The
  * unified image_input carries a base64 byte_source plus an empty param view
- * (request params arrive with the M4 task_request reshape); legacy test
+ * (request params arrive with the M4 InferenceTask reshape); legacy test
  * workers keep the plain base64_input contract. */
 template <typename INPUT>
 inline INPUT make_model_input_from_payload(std::string payload) {
@@ -407,8 +407,8 @@ protected:
     // dispatch (the task is destroyed together with its members). Written only
     // by do_work; read by the success branch of do_work_cb via task->user_data.
     // execution types live in inference_task.h (shared with AsyncJobTable)
-    using go_result = jinq::server::go_result<MODEL_OUTPUT>;
-    using task_request = jinq::server::task_request;
+    using InferenceResult = jinq::server::InferenceResult<MODEL_OUTPUT>;
+    using InferenceTask = jinq::server::InferenceTask;
 
     // request metadata: bound by value into the go task's callback closure
     // (another task member, freed with the task). Written once by serve_process
@@ -437,7 +437,7 @@ protected:
      * index-aligned with req.items; the runner writes one slot per completed
      * entry under mu and notifies when the last slot lands. */
     struct request_state {
-        task_request req;
+        InferenceTask req;
         std::mutex mu;
         std::condition_variable cv;
         size_t completed = 0;
@@ -456,8 +456,8 @@ protected:
     // on every path, including cancel before dispatch.
     struct go_task_functor {
         BaseAiServerImpl* self;
-        task_request req;
-        go_result ctx;
+        InferenceTask req;
+        InferenceResult ctx;
 
         void operator()(WFGoTask* task) {
             // publish the address of THIS copy's ctx: do_work_cb, running
@@ -528,7 +528,7 @@ protected:
         // run every item of the job with one worker checkout (same item
         // semantics as the synchronous path, deadline included)
         const auto run_start = Timestamp::now();
-        go_result result;
+        InferenceResult result;
         run_items(worker, *req, &result);
         const auto run_end = Timestamp::now();
         _m_working_queue.enqueue(std::move(worker));
@@ -624,7 +624,7 @@ protected:
             return;
         }
 
-        task_request task_req;
+        InferenceTask task_req;
         task_req.task_id = task_id;
         task_req.items = std::move(parsed.items);
         task_req.params = std::move(parsed.params);
@@ -811,17 +811,17 @@ protected:
      * @param req
      * @param result
      */
-    void do_work(task_request* req, go_result* result);
+    void do_work(InferenceTask* req, InferenceResult* result);
 
     /*** enqueue into the batch queue and wait for the runner's completion */
-    void run_via_batch(task_request* req, go_result* result);
+    void run_via_batch(InferenceTask* req, InferenceResult* result);
 
     /*** run every item of a request with one worker checkout (deadline-aware);
      * shared by the synchronous single path and the async runner */
-    void run_items(WORKER& worker, const task_request& req, go_result* result);
+    void run_items(WORKER& worker, const InferenceTask& req, InferenceResult* result);
 
     /*** derive the aggregate status + partial flag from item statuses */
-    static void aggregate_item_statuses(go_result* result);
+    static void aggregate_item_statuses(InferenceResult* result);
 
     /*** dedicated collector thread (max_batch_size > 1 only) */
     void batch_loop();
@@ -1036,7 +1036,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
             return;
         }
 
-        task_request task_req;
+        InferenceTask task_req;
         task_req.task_id = task_id;
         task_req.items = std::move(parsed.items);
         task_req.params = std::move(parsed.params);
@@ -1106,8 +1106,8 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
  */
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
-    BaseAiServerImpl::task_request* req,
-    BaseAiServerImpl::go_result* result) {
+    BaseAiServerImpl::InferenceTask* req,
+    BaseAiServerImpl::InferenceResult* result) {
     // the result is a member of the go task's closure: the framework keeps the
     // task alive until this routine returns even when detached (timeout) or
     // when the series is cancelled mid-run, so writing it is always safe
@@ -1193,8 +1193,8 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
 
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::run_items(
-    WORKER& worker, const BaseAiServerImpl::task_request& req,
-    BaseAiServerImpl::go_result* result) {
+    WORKER& worker, const BaseAiServerImpl::InferenceTask& req,
+    BaseAiServerImpl::InferenceResult* result) {
     using ModelInput = typename WORKER::element_type::input_type;
     const size_t n_items = req.item_count();
     result->options = req.options;
@@ -1224,7 +1224,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::run_items(
 
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::aggregate_item_statuses(
-    BaseAiServerImpl::go_result* result) {
+    BaseAiServerImpl::InferenceResult* result) {
     size_t ok_count = 0;
     StatusCode first_error = StatusCode::OK;
     bool any_timeout = false;
@@ -1263,8 +1263,8 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::aggregate_item_statuses(
 */
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::run_via_batch(
-    BaseAiServerImpl::task_request* req,
-    BaseAiServerImpl::go_result* result) {
+    BaseAiServerImpl::InferenceTask* req,
+    BaseAiServerImpl::InferenceResult* result) {
     // one shared state per request; every item becomes one queue entry, so
     // items of different requests interleave inside the engine batch
     auto state = std::make_shared<request_state>();
@@ -1508,7 +1508,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(
         // success: the routine has returned (routine -> handle -> done ->
         // callback, workflow guarantees happens-before) and published its ctx
         // address at entry, so every field is safe to read
-        auto* result = static_cast<go_result*>(task->user_data);
+        auto* result = static_cast<InferenceResult*>(task->user_data);
         status = result->model_run_status;
         unified.task_id = meta.task_id;
         unified.partial = result->partial;

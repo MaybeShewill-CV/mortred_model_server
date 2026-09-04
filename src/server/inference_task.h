@@ -43,8 +43,6 @@ struct InferenceTask {
     size_t item_count() const { return items.size(); }
 };
 
-using task_request = InferenceTask;
-
 template <typename MODEL_OUTPUT>
 struct InferenceResult {
     StatusCode model_run_status = StatusCode::OK;
@@ -56,9 +54,6 @@ struct InferenceResult {
     std::vector<MODEL_OUTPUT> item_outputs;
     std::vector<StatusCode> item_status;
 };
-
-template <typename MODEL_OUTPUT>
-using go_result = InferenceResult<MODEL_OUTPUT>;
 
 } // namespace server
 } // namespace jinq

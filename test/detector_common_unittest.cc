@@ -11,14 +11,14 @@ using jinq::common::StatusCode;
 using jinq::models::backend::DType;
 using jinq::models::backend::NamedTensor;
 using jinq::models::backend::Tensor;
-using jinq::models::object_detection::DetectionGeometryScale;
+using jinq::models::backend::GeometryScale;
+using jinq::models::backend::make_geometry_scale;
+using jinq::models::backend::scale_bbox;
+using jinq::models::backend::scale_point;
+using jinq::models::backend::validated_f32_named_output;
 using jinq::models::object_detection::DetectionParams;
 using jinq::models::object_detection::F32OutputView;
-using jinq::models::object_detection::make_detection_geometry_scale;
 using jinq::models::object_detection::make_nchw_input;
-using jinq::models::object_detection::scale_detection_bbox;
-using jinq::models::object_detection::scale_detection_point;
-using jinq::models::object_detection::validated_f32_output;
 
 namespace {
 
@@ -40,19 +40,19 @@ NamedTensor valid_output() {
 
 TEST(DetectorCommon, BuildsAndAppliesRequestGeometryScale) {
     const auto context = test_context();
-    DetectionGeometryScale scale;
+    GeometryScale scale;
     std::string error;
-    ASSERT_TRUE(make_detection_geometry_scale(context, &scale, &error)) << error;
+    ASSERT_TRUE(make_geometry_scale(context, &scale, &error)) << error;
     EXPECT_FLOAT_EQ(scale.width, 2.0f);
     EXPECT_FLOAT_EQ(scale.height, 6.0f);
 
-    const auto bbox = scale_detection_bbox({1.0f, 2.0f, 3.0f, 4.0f}, scale);
+    const auto bbox = scale_bbox({1.0f, 2.0f, 3.0f, 4.0f}, scale);
     EXPECT_FLOAT_EQ(bbox.x, 2.0f);
     EXPECT_FLOAT_EQ(bbox.y, 12.0f);
     EXPECT_FLOAT_EQ(bbox.width, 6.0f);
     EXPECT_FLOAT_EQ(bbox.height, 24.0f);
 
-    const auto point = scale_detection_point({1.5f, 2.5f}, scale);
+    const auto point = scale_point({1.5f, 2.5f}, scale);
     EXPECT_FLOAT_EQ(point.x, 3.0f);
     EXPECT_FLOAT_EQ(point.y, 15.0f);
 }
@@ -60,16 +60,16 @@ TEST(DetectorCommon, BuildsAndAppliesRequestGeometryScale) {
 TEST(DetectorCommon, RejectsInvalidRequestGeometry) {
     auto context = test_context();
     context.network_size = cv::Size();
-    DetectionGeometryScale scale;
+    GeometryScale scale;
     std::string error;
-    EXPECT_FALSE(make_detection_geometry_scale(context, &scale, &error));
+    EXPECT_FALSE(make_geometry_scale(context, &scale, &error));
     EXPECT_NE(error.find("invalid request geometry"), std::string::npos);
 }
 
 TEST(DetectorCommon, ValidatesNamedF32Output) {
     std::vector<NamedTensor> outputs{valid_output()};
     F32OutputView view;
-    const auto status = validated_f32_output(outputs, "output", {DType::F32, 3, {1, 84, 1}}, "test detector", &view);
+    const auto status = validated_f32_named_output(outputs, "output", {DType::F32, 3, {1, 84, 1}}, "test detector", &view);
     ASSERT_EQ(status, StatusCode::OK);
     ASSERT_NE(view.tensor, nullptr);
     ASSERT_NE(view.data, nullptr);
@@ -79,14 +79,14 @@ TEST(DetectorCommon, ValidatesNamedF32Output) {
 
 TEST(DetectorCommon, DistinguishesMissingAndContractFailedOutputs) {
     std::vector<NamedTensor> outputs{valid_output()};
-    EXPECT_EQ(validated_f32_output(outputs, "missing", {DType::F32, 1, {1}}, "test detector"), StatusCode::MODEL_EMPTY_OUTPUT);
-    EXPECT_EQ(validated_f32_output(outputs, "output", {DType::F32, 3, {1, 83, 1}}, "test detector"),
+    EXPECT_EQ(validated_f32_named_output(outputs, "missing", {DType::F32, 1, {1}}, "test detector"), StatusCode::MODEL_EMPTY_OUTPUT);
+    EXPECT_EQ(validated_f32_named_output(outputs, "output", {DType::F32, 3, {1, 83, 1}}, "test detector"),
               StatusCode::MODEL_OUTPUT_CONTRACT_FAILED);
 
     auto non_finite = valid_output();
     *reinterpret_cast<float *>(non_finite.tensor.buffer.data()) = std::numeric_limits<float>::quiet_NaN();
     outputs[0] = non_finite;
-    EXPECT_EQ(validated_f32_output(outputs, "output", {DType::F32, 3, {1, 84, 1}}, "test detector"),
+    EXPECT_EQ(validated_f32_named_output(outputs, "output", {DType::F32, 3, {1, 84, 1}}, "test detector"),
               StatusCode::MODEL_OUTPUT_CONTRACT_FAILED);
 }
 

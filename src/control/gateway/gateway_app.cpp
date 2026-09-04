@@ -32,6 +32,7 @@
 #include "control/api_key_manager.h"
 #include "control/catalog.h"
 #include "control/control_config.h"
+#include "control/http_reply.h"
 #include "server/prometheus_metrics.h"
 
 #include "control/gateway/gateway_app.h"
@@ -92,13 +93,7 @@ std::string header_value(const protocol::HttpRequest* req, const std::string& na
     return "";
 }
 
-void reply_json(WFHttpTask* task, int http_status, const std::string& body) {
-    auto* resp = task->get_resp();
-    resp->set_status_code(std::to_string(http_status).c_str());
-    resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
-    resp->add_header_pair("Cache-Control", "no-store");
-    resp->append_output_body(body.data(), body.size());
-}
+using mortred::control::reply_json;
 
 void reply_error(WFHttpTask* task, int http_status, const std::string& msg) {
     // fixed internal messages only: no client data is reflected into JSON

@@ -21,14 +21,12 @@ using jinq::models::feature_point::LightGlue;
 using jinq::models::feature_point::SuperPoint;
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_superpoint_extractor(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_superpoint_extractor() {
     return std::make_unique<SuperPoint<INPUT, OUTPUT>>();
 }
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_lightglue_matcher(const std::string &model_name) {
-    (void)model_name;
+std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_lightglue_matcher() {
     return std::make_unique<LightGlue<INPUT, OUTPUT>>();
 }
 
@@ -53,10 +51,6 @@ inline const std::vector<Entry> &catalog() {
               &jinq::server::response::fill_feature_points, feature_point_param_specs()},
     };
     return entries;
-}
-
-inline std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::string &model_section, const std::string &server_name) {
-    return jinq::factory::cv_catalog::create_server(catalog(), model_section, server_name);
 }
 
 using MatchInput = jinq::models::io_define::common_io::pair_mat_input;
