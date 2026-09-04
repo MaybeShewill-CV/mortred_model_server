@@ -21,22 +21,21 @@ When the server starts successfully at the `port` configured in your server conf
 
 ## Python Client Example
 
-You may find a demo python client to test the server at [test_server.py#L39-L67](../scripts/server/test_server.py). It's very easy to post a request
+You may find a demo python client at [test_server.py](../scripts/server/test_server.py). Sequential smoke tests and closed-loop load both use the Python standard library (no locust, no requests).
 
 `Classification Client Code Snappit`
 ![sample_mobilenetv2_cls_client](../resources/images/mobilenetv2_sample_client.png)
 
 Server's url can be found in server configuration. For a detailed server configuration refer to [about_model_server_configuration](../docs/about_model_server_configuration.md)
 
-To use test python client you may run
+To use the demo client:
 
-```python
-cd $PROJECT_ROOT/scripts
-export PYTHONPATH=$PWD:$PYTHONPATH
-python server/test_server.py --server mobilenetv2 --mode single
+```bash
+cd $PROJECT_ROOT
+python3 scripts/server/test_server.py --server mobilenetv2 --mode single --times 3
 ```
 
-The client will send [the default test image](../demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG) 1000 times sequencially.
+The client posts [the default test image](../demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG) and prints the HTTP status plus a truncated UnifiedResponse body.
 
 `mobilenetv2 classification server output`
 ![server_output](../resources/images/exam_server_output.png)
@@ -44,58 +43,61 @@ The client will send [the default test image](../demo_data/model_test_input/clas
 `mobilenetv2 client server output`
 ![server_output](../resources/images/exam_client_output.png)
 
-You may get the class_id and the score from the response.
+You may get the class_id and the score from `results[].data`.
 
 ## Description Of Python Client
 
-The script at [test_server.py](../scripts/server/test_server.py) not only supports a sequential toy client but also supports locust pressure test mode. It reads `host` / `port` / `server_uri` directly from the server config under `conf/server/`, so the target URL always matches the running server:
+[test_server.py](../scripts/server/test_server.py) reads `host` / `port` / `server_uri` from `conf/server/`, so the target URL matches the running server. HTTP serving RPS is measured by [http_infer_rps.py](../scripts/server/http_infer_rps.py) (not in-process FPS): N keep-alive threads, one pre-encoded JSON envelope, unique `req_id` per request, and a report with RPS plus latency percentiles.
 
 ```bash
 # list all discoverable model servers
-python server/test_server.py --list
+python3 scripts/server/test_server.py --list
 
-# single mode: post a demo image 1000 times
-python server/test_server.py --server mobilenetv2 --mode single
+# single mode: print a few sequential responses
+python3 scripts/server/test_server.py --server mobilenetv2 --mode single --times 3
 
-# locust pressure test
-python server/test_server.py --server mobilenetv2 --mode locust --users 20 --spawn-rate 10 --time 10m
+# closed-loop load (stdlib; no locust)
+python3 scripts/server/test_server.py --server mobilenetv2 --mode load \
+    --concurrency 8 --duration 30s
+
+# same load through the gateway catalog path
+python3 scripts/server/test_server.py --server MOBILENETV2 --mode load \
+    --gateway --token "$MORTRED_GATEWAY_AUTH_TOKEN" --concurrency 8 --duration 30s
+
+# or call the load client with an explicit URL
+python3 scripts/server/http_infer_rps.py --url http://127.0.0.1:9003/mobilenetv2cls \
+    --image demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG \
+    --concurrency 8 --duration 30s --out /tmp/load.json
 ```
 
-**--server:** the server section name or a unique prefix, e.g. `mobilenetv2`, `yolov5`
+**--server:** the server section name, catalog id, or a unique prefix, e.g. `mobilenetv2`, `MOBILENETV2`
 
-**--mode:** `single` posts the same request `--times` times; `locust` runs a headless concurrent pressure test
+**--mode:** `single` prints `--times` sequential responses; `load` runs the closed-loop client
 
 **--image:** override the demo input image (a per-model default under `demo_data/model_test_input` is used otherwise)
 
 **--dry-run:** print the request plan without sending anything
 
-**--users / --spawn-rate / --time:** locust concurrency, spawn rate and test duration
+**--concurrency / --duration / --requests:** load-mode worker count and stop condition (`30s`, `2m`, or a fixed request count)
 
-For detailed usage of Locust library you may find some help from [locust documents](https://docs.locust.io/en/stable/)
+**--gateway:** POST `http://127.0.0.1:8080/v1/models/{id}/infer` instead of the model's loopback port
 
-Simply start the pressure test via
+`--self-test` on `http_infer_rps.py` spins an in-process HTTP server and checks that 40 concurrent requests all succeed.
 
-```python
-cd $PROJECT_ROOT/scripts
-export PYTHONPATH=$PWD:$PYTHONPATH
-python server/test_server.py --server mobilenetv2 --mode locust
-```
+The screenshots below are from an older locust run with `worker_nums=4` then `12`. The qualitative lesson is unchanged: HTTP RPS tracks `worker_nums` until GPU/queue saturation; raising workers past that point does not raise RPS. Re-measure with `--mode load` on your GPU.
 
-Here is server's output under pressure test with `worker_nums=4` configured
-
-`mobile client output with locust mode`
+`historical client output under load`
 ![locust_client_output](../resources/images/locust_client_output.png)
 
-`mobile server output with locust mode`
+`historical server output under load`
 ![locust_server_output](../resources/images/locust_server_output.png)
 
-As you can see up above the rps only reaches around 288 req/s which is far from meeting my expectations. When you look at the server's output you may find the GPU usage was pretty low and some of the task even timed out. Besides the worker queue size remain empty at any time which means you may enlarge worker counts to promote the server's rps. The test result shows avg resp time is 68ms minimu resp time is 13ms.
+With `worker_nums=4` the old run sat around 288 req/s, GPU utilization was low, some tasks timed out, and the worker queue stayed empty. Raising `worker_nums` is the first lever when the queue is idle.
 ![losust_test_result_1](../resources/images/locust_test_result_1.png)
 
-Now enlarge the worker nums from 4 to 12 and let's see what happens.
+Enlarging workers from 4 to 12 filled the queue, raised GPU utilization, cut average latency, and roughly doubled RPS toward the in-process benchmark.
 ![locust_server_output_enlarge](../resources/images/locust_server_output_enlarge.png)
-You may find almost no timed out task and worker queue size remains at least one worker. Gpu utilization also rise a lot. The test result shows avg resp time reduced to 35ms minimu resp time remains around 13ms and the rps reaches 546 req/s which is almost the same speed as model's inference benchmark result. :fire::fire::fire:
 ![losust_test_result_2](../resources/images/locust_test_result_2.png)
 
-But do not expect to enlarge more workers to unlimitedly promote the server's performance. It may benefit nothing when you enlarge worker to 24. Rps remains the same.
+Do not expect unlimited RPS from more workers. At 24 workers that run's RPS stayed flat.
 ![losust_test_result_3](../resources/images/locust_test_result_3.png)

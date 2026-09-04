@@ -9,18 +9,20 @@ from the configs the servers actually start with. A per-model demo image map
 (defaults under demo_data/model_test_input) provides the request payload; a
 custom image can be supplied with --image.
 
+Stdlib only (no locust, no requests). Concurrent HTTP RPS lives in http_infer_rps.py.
+
 Usage (run from anywhere; the repository root is located relative to this file):
 
-  # list all discoverable model servers
-  python server/test_server.py --list
+  python3 scripts/server/test_server.py --list
 
-  # single-mode smoke test: post a demo image N times
-  python server/test_server.py --server mobilenetv2 --mode single [--times 1000]
-  python server/test_server.py --server mobilenetv2 --mode single --dry-run
+  python3 scripts/server/test_server.py --server mobilenetv2 --mode single [--times 3]
+  python3 scripts/server/test_server.py --server mobilenetv2 --mode single --dry-run
 
-  # locust load test (requires: pip install locust requests)
-  python server/test_server.py --server yolov5 --mode locust \
-      [--users 20] [--spawn-rate 10] [--time 10m]
+  python3 scripts/server/test_server.py --server yolov5 --mode load \\
+      --concurrency 8 --duration 30s
+
+  python3 scripts/server/test_server.py --server MOBILENETV2 --mode load \\
+      --gateway --token "$MORTRED_GATEWAY_AUTH_TOKEN" --concurrency 8 --duration 30s
 """
 
 from __future__ import annotations
@@ -28,19 +30,21 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import http.client
 import json
 import os
-import subprocess
 import sys
 import time
+import urllib.parse
 from pathlib import Path
 
 # repository root: <root>/scripts/server/test_server.py -> parents[2]
 ROOT = Path(__file__).resolve().parents[2]
-# make scripts/repo_toml.py importable regardless of cwd / PYTHONPATH
 sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "scripts" / "server"))
 
 from repo_toml import load_toml  # noqa: E402
+from http_infer_rps import LoadConfig, parse_duration, print_report, run_load  # noqa: E402
 
 # per-model demo image (relative to demo_data/model_test_input), keyed by the
 # normalized model directory name under conf/server/<category>/<model>/
@@ -90,6 +94,7 @@ def normalize(name: str) -> str:
 def build_catalog(root: Path) -> list[dict]:
     """Discover model servers from conf/server/*.toml (single source of truth)."""
     entries: list[dict] = []
+    seen: set[tuple] = set()
     conf_root = root / "conf" / "server"
     if not conf_root.exists():
         return entries
@@ -112,13 +117,21 @@ def build_catalog(root: Path) -> list[dict]:
                 port = int(kv.get("port", 0))
             except (TypeError, ValueError):
                 port = 0
-            host = kv.get("host") or "localhost"
+            host = kv.get("host") or "127.0.0.1"
+            model_id = kv.get("model")
+            if not isinstance(model_id, str) or not model_id:
+                model_id = section[:-7] if section.endswith("_SERVER") else section
+            key = (section, host, port, uri)
+            if key in seen:
+                continue
+            seen.add(key)
             entries.append({
                 "section": section,
                 "norm_section": normalize(section),
                 "category": category,
                 "model_dir": model_dir,
                 "norm_model": normalize(model_dir),
+                "model_id": model_id,
                 "host": host,
                 "port": port,
                 "uri": uri,
@@ -139,6 +152,9 @@ def resolve_server(arg: str, entries: list[dict]) -> tuple[dict | None, str | No
     if len(exact) > 1:
         names = ", ".join(sorted(e["section"] for e in exact))
         return None, "ambiguous server name %r, candidates: %s" % (arg, names)
+    by_id = [e for e in entries if normalize(e["model_id"]) == norm]
+    if len(by_id) == 1:
+        return by_id[0], None
     sub = [e for e in entries if norm in e["norm_section"]]
     if len(sub) == 1:
         return sub[0], None
@@ -157,15 +173,53 @@ def resolve_demo_image(entry: dict, root: Path) -> Path | None:
 
 
 def build_payload(image_path: Path) -> dict:
-    with open(image_path, "rb") as f:
-        image_data = f.read()
-    task_id = str(image_path) + str(time.time())
-    task_id = hashlib.md5(task_id.encode()).hexdigest()
+    image_data = image_path.read_bytes()
+    task_id = hashlib.md5((str(image_path) + str(time.time())).encode()).hexdigest()
     return {
-        # unified envelope: images[] is always an array, results[] aligns by index
         "images": [base64.b64encode(image_data).decode()],
         "req_id": task_id,
     }
+
+
+def apply_gateway(entry: dict, gateway: str) -> dict:
+    """Route through mortred-gateway catalog path, not the model's loopback port."""
+    out = dict(entry)
+    hostport = gateway.strip()
+    if "://" in hostport:
+        parsed = urllib.parse.urlparse(hostport)
+        hostport = parsed.netloc or hostport
+    out["url"] = "http://%s/v1/models/%s/infer" % (hostport, entry["model_id"])
+    return out
+
+
+def _post_once(url: str, payload: dict, token: str, timeout_s: float) -> tuple[int, str]:
+    parsed = urllib.parse.urlparse(url)
+    host = parsed.hostname or "127.0.0.1"
+    if host in ("localhost", "::1"):
+        host = "127.0.0.1"
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    path = parsed.path or "/"
+    if parsed.query:
+        path = path + "?" + parsed.query
+    body = json.dumps(payload).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json; charset=utf-8",
+        "Content-Length": str(len(body)),
+        "Accept": "application/json",
+    }
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    if parsed.scheme == "https":
+        conn: http.client.HTTPConnection = http.client.HTTPSConnection(host, port, timeout=timeout_s)
+    else:
+        conn = http.client.HTTPConnection(host, port, timeout=timeout_s)
+    try:
+        conn.request("POST", path, body=body, headers=headers)
+        resp = conn.getresponse()
+        text = resp.read().decode("utf-8", errors="replace")
+        return resp.status, text
+    finally:
+        conn.close()
 
 
 def run_single(entry: dict, image_path: Path, times: int, dry_run: bool,
@@ -178,47 +232,57 @@ def run_single(entry: dict, image_path: Path, times: int, dry_run: bool,
     if dry_run:
         print("[dry-run] no request sent")
         return 0
-    try:
-        import requests
-    except ImportError:
-        print("requests is required for single mode: pip install requests")
-        return 1
     payload = build_payload(image_path)
-    headers = {"Authorization": "Bearer %s" % token} if token else {}
     for i in range(times):
         try:
-            resp = requests.post(url=url, data=json.dumps(payload), headers=headers, timeout=30)
-            print("[%d/%d] http=%d %s" % (i + 1, times, resp.status_code, resp.text[:200]))
-        except Exception as exc:  # noqa: BLE001 - demo client, surface the error
+            status, text = _post_once(url, payload, token, 30.0)
+            print("[%d/%d] http=%d %s" % (i + 1, times, status, text[:200]))
+            if status >= 400:
+                return 1
+        except OSError as exc:
             print("request failed: %s" % exc)
             return 1
     return 0
 
 
-def run_locust(entry: dict, image_path: Path, users: int, spawn_rate: int, duration: str, dry_run: bool) -> int:
+def run_load_mode(entry: dict, image_path: Path, args: argparse.Namespace) -> int:
     url = entry["url"]
     print("server      : %s" % entry["section"])
     print("url         : %s" % url)
     print("input image : %s" % image_path)
-    print("locust      : -u %d -r %d -t %s" % (users, spawn_rate, duration))
-    if dry_run:
-        print("[dry-run] no load test started")
+    if args.dry_run:
+        print("[dry-run] concurrency=%d duration=%s requests=%d" % (
+            args.concurrency, args.duration or "-", args.requests))
         return 0
-    try:
-        import locust  # noqa: F401
-    except ImportError:
-        print("locust is required for locust mode: pip install locust")
+    duration_s = parse_duration(args.duration) if args.duration else 0.0
+    warmup_s = parse_duration(args.warmup) if args.warmup else 0.0
+    if duration_s <= 0 and args.requests <= 0:
+        print("load mode needs --duration and/or --requests", file=sys.stderr)
         return 1
-    script = ROOT / "scripts" / "server" / "locust_performance.py"
-    env = dict(os.environ)
-    env["LOCUST_URL"] = url
-    env["LOCUST_IMG"] = str(image_path)
-    cmd = [
-        sys.executable, "-m", "locust", "-f", str(script),
-        "--host=" + url, "--headless",
-        "-u", str(users), "-r", str(spawn_rate), "-t", duration,
-    ]
-    return subprocess.run(cmd, env=env).returncode
+    token = args.token or os.environ.get("MORTRED_GATEWAY_AUTH_TOKEN", "")
+    cfg = LoadConfig(
+        url=url,
+        image_path=image_path,
+        concurrency=args.concurrency,
+        duration_s=duration_s,
+        requests=args.requests,
+        warmup_s=warmup_s,
+        qps=args.qps,
+        timeout_s=args.timeout,
+        token=token,
+        follow_retry_after=args.follow_retry_after,
+        progress=not args.quiet,
+    )
+    try:
+        report = run_load(cfg)
+    except (ValueError, TimeoutError, OSError) as exc:
+        print("load failed: %s" % exc, file=sys.stderr)
+        return 1
+    print_report(report)
+    if args.out:
+        Path(args.out).write_text(json.dumps(report.to_dict(), indent=2) + "\n", encoding="utf-8")
+        print("wrote %s" % args.out)
+    return 0 if report.ok > 0 else 1
 
 
 def main() -> int:
@@ -226,20 +290,30 @@ def main() -> int:
         description="Mortred model server demo client (config-driven from conf/server).")
     parser.add_argument("--list", action="store_true", help="list all discoverable model servers")
     parser.add_argument("--server", type=str, default="", help="model server name, e.g. mobilenetv2 / yolov5")
-    parser.add_argument("--mode", choices=["single", "locust"], default="single",
-                        help="single: loop a demo request; locust: headless load test")
-    parser.add_argument("--times", type=int, default=1000, help="loop times for single mode (default 1000)")
+    parser.add_argument("--mode", choices=["single", "load"], default="single",
+                        help="single: print sequential responses; load: closed-loop concurrent client")
+    parser.add_argument("--times", type=int, default=3, help="loop times for single mode (default 3)")
     parser.add_argument("--image", type=str, default="", help="override the demo input image path")
     parser.add_argument("--dry-run", action="store_true",
                         help="print the plan and exit without sending any request")
-    parser.add_argument("-u", "--users", type=int, default=20, help="locust number of users")
-    parser.add_argument("-r", "--spawn-rate", type=int, default=10, help="locust spawn rate")
-    parser.add_argument("-t", "--time", type=str, default="10m", help="locust test duration")
+    parser.add_argument("-c", "--concurrency", type=int, default=8,
+                        help="load-mode worker threads (keep-alive connections)")
+    parser.add_argument("-d", "--duration", default="",
+                        help="load-mode measure window, e.g. 30s / 2m")
+    parser.add_argument("-n", "--requests", type=int, default=0,
+                        help="load-mode stop after this many measured requests")
+    parser.add_argument("--warmup", default="0s", help="load-mode discard samples for this long")
+    parser.add_argument("--qps", type=float, default=0.0, help="optional shared rate cap (0 = closed loop)")
+    parser.add_argument("--timeout", type=float, default=30.0, help="per-request socket timeout seconds")
+    parser.add_argument("--follow-retry-after", action="store_true",
+                        help="sleep Retry-After on HTTP 429")
+    parser.add_argument("--out", default="", help="write load JSON report to this path")
+    parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--gateway", nargs="?", const="127.0.0.1:8080", default="",
-                        help="route requests through mortred-gateway (optional HOST:PORT, "
-                             "default 127.0.0.1:8080) instead of the model port directly")
+                        help="route via mortred-gateway POST /v1/models/{id}/infer "
+                             "(optional HOST:PORT, default 127.0.0.1:8080)")
     parser.add_argument("--token", default="",
-                        help="bearer token sent as Authorization header (gateway auth)")
+                        help="Authorization Bearer (default MORTRED_GATEWAY_AUTH_TOKEN)")
     args = parser.parse_args()
 
     entries = build_catalog(ROOT)
@@ -250,7 +324,7 @@ def main() -> int:
         print("discovered %d model servers:" % len(entries))
         for e in sorted(entries, key=lambda x: x["section"]):
             workers = "worker_nums=%s" % e["worker_nums"] if e["worker_nums"] else ""
-            print("  %-32s %s %s" % (e["section"], e["url"], workers))
+            print("  %-32s %s  model=%s %s" % (e["section"], e["url"], e["model_id"], workers))
         return 0
 
     if not args.server:
@@ -264,8 +338,7 @@ def main() -> int:
         print(err)
         return 1
     if args.gateway:
-        entry = dict(entry)
-        entry["url"] = "http://%s%s" % (args.gateway, entry["uri"])
+        entry = apply_gateway(entry, args.gateway)
         print("via gateway : %s" % args.gateway)
 
     if args.image:
@@ -282,8 +355,9 @@ def main() -> int:
         return 1
 
     if args.mode == "single":
-        return run_single(entry, image_path, args.times, args.dry_run, token=args.token)
-    return run_locust(entry, image_path, args.users, args.spawn_rate, args.time, args.dry_run)
+        token = args.token or os.environ.get("MORTRED_GATEWAY_AUTH_TOKEN", "")
+        return run_single(entry, image_path, args.times, args.dry_run, token=token)
+    return run_load_mode(entry, image_path, args)
 
 
 if __name__ == "__main__":

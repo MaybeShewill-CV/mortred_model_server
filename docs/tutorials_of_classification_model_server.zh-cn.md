@@ -21,22 +21,21 @@ cd $PROJECT_ROOT/_bin
 
 ## Python 客户端示例
 
-在文件 [test_server.py#L39-L67](../scripts/server/test_server.py) 处有一个简单的python客户端代码来测试上述启动的server，你可以很容易的post一个请求
+在文件 [test_server.py](../scripts/server/test_server.py) 处有演示客户端。顺序冒烟和闭环压测都只用 Python 标准库（不依赖 locust / requests）。
 
 `python客户端代码片段`
 ![sample_mobilenetv2_cls_client](../resources/images/mobilenetv2_sample_client.png)
 
 服务的url地址可以在服务启动之前在配置文件中进行配置修改。你可以在 [模型服务器配置说明文档](../docs/about_model_server_configuration.zh-cn.md) 中找到详细说明。
 
-调用python客户端的方式如下
+调用方式：
 
-```python
-cd $PROJECT_ROOT/scripts
-export PYTHONPATH=$PWD:$PYTHONPATH
-python server/test_server.py --server mobilenetv2 --mode single
+```bash
+cd $PROJECT_ROOT
+python3 scripts/server/test_server.py --server mobilenetv2 --mode single --times 3
 ```
 
-在 `single` 模式下，客户端会顺序发送 [默认测试图像](../demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG) 1000次
+客户端会发送 [默认测试图像](../demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG)，并打印 HTTP 状态码与截断后的 UnifiedResponse。
 
 `mobilenetv2 图像分类服务器输出`
 ![server_output](../resources/images/exam_server_output.png)
@@ -44,59 +43,56 @@ python server/test_server.py --server mobilenetv2 --mode single
 `mobilenetv2 图像分类客户端输出`
 ![server_output](../resources/images/exam_client_output.png)
 
-你可以从服务端返回的response信息中获取图像的分类结果和具体置信度分数。
+分类 id 与分数在 `results[].data` 里。
 
 ## Python 客户端代码说明
 
-[test_server.py](../scripts/server/test_server.py) 所创建的简单python客户端不仅支持顺序发送并且支持基于locust的并发压测模式。客户端直接读取 `conf/server/` 下的服务器配置（`host` / `port` / `server_uri`），因此测试目标 URL 始终与正在运行的服务器一致：
+[test_server.py](../scripts/server/test_server.py) 直接读取 `conf/server/` 下的 `host` / `port` / `server_uri`。测 HTTP serving RPS 用 [http_infer_rps.py](../scripts/server/http_infer_rps.py)（不是进程内 FPS）：N 条 keep-alive 线程、预先编码的 JSON 信封、每请求唯一 `req_id`，并输出 RPS 与延迟分位数。
 
 ```bash
-# 列出所有可用的模型服务器
-python server/test_server.py --list
+python3 scripts/server/test_server.py --list
 
-# single 模式：发送演示图片 1000 次
-python server/test_server.py --server mobilenetv2 --mode single
+python3 scripts/server/test_server.py --server mobilenetv2 --mode single --times 3
 
-# locust 压测模式
-python server/test_server.py --server mobilenetv2 --mode locust --users 20 --spawn-rate 10 --time 10m
+python3 scripts/server/test_server.py --server mobilenetv2 --mode load \
+    --concurrency 8 --duration 30s
+
+python3 scripts/server/test_server.py --server MOBILENETV2 --mode load \
+    --gateway --token "$MORTRED_GATEWAY_AUTH_TOKEN" --concurrency 8 --duration 30s
+
+python3 scripts/server/http_infer_rps.py --url http://127.0.0.1:9003/mobilenetv2cls \
+    --image demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG \
+    --concurrency 8 --duration 30s --out /tmp/load.json
 ```
 
-**--server:** 服务器配置段名或唯一前缀，例如 `mobilenetv2`、`yolov5`
+**--server:** 配置段名、catalog id 或唯一前缀，例如 `mobilenetv2`、`MOBILENETV2`
 
-**--mode:** `single` 顺序发送 `--times` 次请求；`locust` 并发压测
+**--mode:** `single` 顺序打印 `--times` 次响应；`load` 闭环并发客户端
 
 **--image:** 覆盖演示输入图片（默认使用 `demo_data/model_test_input` 下按模型选择的示例图）
 
 **--dry-run:** 只打印请求计划，不发送任何请求
 
-**--users / --spawn-rate / --time:** locust 并发数、每秒启动数与压测时长
+**--concurrency / --duration / --requests:** 压测线程数与停止条件（`30s`、`2m` 或固定请求数）
 
-关于 `Locust` 库的详细文档可以查询 [locust documents](https://docs.locust.io/en/stable/)
+**--gateway:** 改为 POST `http://127.0.0.1:8080/v1/models/{id}/infer`
 
-启动python客户端进行压测的方式如下
+`http_infer_rps.py --self-test` 会在进程内起一个 HTTP 服务并验证 40 个并发请求全部成功。
 
-```python
-cd $PROJECT_ROOT/scripts
-export PYTHONPATH=$PWD:$PYTHONPATH
-python server/test_server.py --server mobilenetv2 --mode locust
-```
+下面截图来自旧的 locust 实验（`worker_nums` 从 4 提到 12）。结论不变：HTTP RPS 随 worker 增加直到 GPU/队列饱和，再加 worker 不会无限抬高吞吐。请在你的 GPU 上用 `--mode load` 重新测量。
 
-在服务器配置 `worker_nums=4` 的情况下，服务端和客户端的输出如下图所示
-
-`压测模式下的客户端输出`
+`历史压测客户端输出`
 ![locust_client_output](../resources/images/locust_client_output.png)
 
-`压测模式下的服务端输出`
+`历史压测服务端输出`
 ![locust_server_output](../resources/images/locust_server_output.png)
 
-正如上述输出看到压测结果，服务端只能达到288 req/s，平均响应时间为68ms，最小响应时间为13ms，这个结果显然不能让人满意。当你仔细观察服务器gpu资源你会发现gpu利用率其实是不高的，甚至某些请求会计算超时，并且 `worker queue` 持续为空。这种情形下可以尝试增大服务器配置文件中的 `worker_nums` 来提高整个服务器的吞吐。
+`worker_nums=4` 时旧实验大约 288 req/s，GPU 利用率偏低、部分请求超时、worker 队列持续为空。队列空闲时首先加大 `worker_nums`。
 ![losust_test_result_1](../resources/images/locust_test_result_1.png)
 
-下面让我们增大 `worker_nums` 到12来看看效果如何
+增大到 12 后队列不再枯竭，GPU 利用率上升，平均延迟下降，RPS 接近进程内基准。
 ![locust_server_output_enlarge](../resources/images/locust_server_output_enlarge.png)
-
-你可以看到几乎没有超时的请求再次出现并且 `worker queue` 不会持续性枯竭，服务器上的gpu利用率也提升了不少。压测结果显示平均响应时间减少到了35ms，最小响应时间13ms，rps则提升到了546 req/s 这个数据几乎和本地的模型基准测试结果无二了 :fire::fire::fire:
 ![losust_test_result_2](../resources/images/locust_test_result_2.png)
 
-当然你不能通过无限制的增大 `worker_nums` 来获取服务性能上的增益，例如当增大 `worker_nums` 到24的时候压测的 `rps` 数据几乎没有什么提升
+不能靠无限加大 `worker_nums` 提升吞吐；该实验到 24 时 RPS 基本持平。
 ![losust_test_result_3](../resources/images/locust_test_result_3.png)

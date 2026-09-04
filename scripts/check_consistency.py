@@ -13,8 +13,9 @@ Verifies a few high-signal invariants:
 6. Every conf/server/*.toml `server_uri` is covered by docs/openapi.json paths.
 7. The demo client (`scripts/server/test_server.py`) is self-contained:
    - orphaned config files (`config_utils.py`, `conf/py_demo/`) must not exist;
-   - the client and the locust worker compile;
-   - `test_server.py --list` exits 0 without network / requests / locust.
+   - the client and `http_infer_rps.py` compile;
+   - `test_server.py --list` and `http_infer_rps.py --self-test` exit 0 without
+     locust / requests.
 8. Every conf/server/*.toml follows the canonical two-section layout
    (`model_config_file_path` lives in the [MODEL] subtable, not the server
    section).
@@ -225,9 +226,16 @@ def check_demo_client_health() -> list[str]:
                 "(demo client reads conf/server directly)"
             )
 
-    # syntax check for the client and the locust worker
+    locust = ROOT / "scripts" / "server" / "locust_performance.py"
+    if locust.exists():
+        errors.append(
+            "orphan locust worker must be removed: scripts/server/locust_performance.py "
+            "(use scripts/server/http_infer_rps.py)"
+        )
+
+    # syntax check for the catalog client and the HTTP serving-RPS client
     for script in [ROOT / "scripts" / "server" / "test_server.py",
-                   ROOT / "scripts" / "server" / "locust_performance.py"]:
+                   ROOT / "scripts" / "server" / "http_infer_rps.py"]:
         if not script.exists():
             errors.append(f"missing demo client file: {script.relative_to(ROOT)}")
             continue
@@ -249,6 +257,20 @@ def check_demo_client_health() -> list[str]:
         errors.append(
             f"test_server.py --list failed (exit {result.returncode}): "
             f"{result.stdout.strip()} {result.stderr.strip()}"
+        )
+
+    try:
+        selftest = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "server" / "http_infer_rps.py"), "--self-test"],
+            cwd=str(ROOT), capture_output=True, text=True, timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        errors.append(f"http_infer_rps.py --self-test could not run: {exc}")
+        return errors
+    if selftest.returncode != 0:
+        errors.append(
+            f"http_infer_rps.py --self-test failed (exit {selftest.returncode}): "
+            f"{selftest.stdout.strip()} {selftest.stderr.strip()}"
         )
 
     return errors
