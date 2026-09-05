@@ -166,14 +166,16 @@ public:
      * go closure, kept alive by the framework's task lifetime). The wait is
      * deliberately unbounded ??a hung model keeps its worker forever and the
      * destructor blocks; that is handled by the outer process manager (e.g.
-     * mortred-supervisor's SIGINT -> SIGKILL fallback), not here. The drain only runs
-     * when init succeeded: the worker watermark is committed at the end of a
-     * successful init, so a partially-filled queue from a failed init would
-     * otherwise spin forever ??on failure the queue destructor releases the
-     * remaining workers itself. Residual note: a go task popped by the
-     * executor but preempted before its first queue access is not observable
-     * through the queue; this microsecond-level window is mitigated by
-     * stop()/wait_finish() preceding destruction in all callers.
+     * mortred-supervisor's SIGINT -> SIGKILL fallback), not here. Model and
+     * gateway mains arm ProcessStop so SIGINT/SIGTERM reach server->stop()
+     * and this drain; a hung model is still SIGKILL'd after kStopGraceMs.
+     * The drain only runs when init succeeded: the worker watermark is
+     * committed at the end of a successful init, so a partially-filled queue
+     * from a failed init would otherwise spin forever ??on failure the queue
+     * destructor releases the remaining workers itself. Residual note: a go
+     * task popped by the executor but preempted before its first queue access
+     * is not observable through the queue; this microsecond-level window is
+     * mitigated by stop()/wait_finish() preceding destruction in all callers.
      */
     virtual ~BaseAiServerImpl() {
         // stop the batch runner first: it may hold a worker, and queued

@@ -34,7 +34,8 @@ src/
 │   ├── product_index.*      # catalog projection for --model
 │   ├── model_server_main.cpp
 │   └── model_benchmark_main.cpp
-├── common/                  # shared utility library: base64, cv_utils, auth, parser...
+├── common/                  # shared utility library: base64, cv_utils, auth, parser,
+│                            # process_stop (header-only, workflow daemons only)
 ├── factory/                 # model/server type-erased factory and registration headers
 ├── models/                  # model inference implementations
 └── server/                  # reusable HTTP server framework (BaseAiServerImpl, AsyncJobTable)

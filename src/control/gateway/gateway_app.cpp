@@ -29,13 +29,13 @@
 #include <rapidjson/writer.h>
 #include <workflow/HttpMessage.h>
 #include <workflow/HttpUtil.h>
-#include <workflow/WFFacilities.h>
 #include <workflow/WFHttpServer.h>
 #include <workflow/WFTaskFactory.h>
 #include <workflow/Workflow.h>
 
 #include "common/auth_token.h"
 #include "common/listen_policy.h"
+#include "common/process_stop.h"
 #include "control/api_key_manager.h"
 #include "control/catalog.h"
 #include "control/control_config.h"
@@ -606,6 +606,9 @@ int run_gateway(int argc, char** argv) {
     }
     g_metrics.set_model("gateway");
 
+    jinq::common::ProcessStop process_stop;
+    process_stop.arm();
+
     WFServerParams params = SERVER_PARAMS_DEFAULT;
     params.max_connections = g_cfg.gateway.max_connections;
     params.request_size_limit =
@@ -626,8 +629,7 @@ int run_gateway(int argc, char** argv) {
                  g_cfg.gateway.host.c_str(), g_cfg.gateway.port, g_catalog.entries().size(),
                  auth_mode, jinq::common::mortred_expose_mode().c_str());
 
-    WFFacilities::WaitGroup wait_group(1);
-    wait_group.wait();
+    process_stop.wait();
     server.stop();
     return 0;
 }
