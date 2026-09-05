@@ -301,8 +301,10 @@ void forward_to_model(WFHttpTask* task, const ResolvedRoute& route, const std::s
                         std::chrono::steady_clock::now() - t0)
                         .count());
                 reply_error(task, code,
-                            code == 503 ? "model server not running or still loading"
-                                        : "upstream transport failure");
+                            code == 503
+                                ? "model server not running or still loading; "
+                                  "TensorRT ids need mortredctl prepare"
+                                : "upstream transport failure");
                 return;
             }
             const std::string status(t->get_resp()->get_status_code());

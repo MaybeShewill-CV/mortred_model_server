@@ -8,12 +8,26 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- `convert_trt_engines.sh` retries without min/opt/maxShapes when TensorRT
+  reports a static ONNX (`Static model does not take explicit shapes`). The
+  yolov8 profile is for dynamic batch; some weight drops are fixed 1x3x640x640.
+- `prepare_pack.sh` runs the `/ready` probe with cwd = `_bin`/`bin`, matching
+  supervisor spawn, so `model_config_file_path = "../conf/..."` resolves when
+  the script is invoked from the repo root.
+- `prepare_pack.sh` stops the `/ready` probe with SIGINT (same as the
+  supervisor) instead of SIGTERM, so glog does not dump a failure stack.
+  Probe logs go to `logs/prepare-<id>.log`; a failed ready prints that file.
 - GPU catalog ports: diffusion servers collided with scene segmentation
   (9070–9072). DDPM/DDIM/CLS_COND_DDIM/LDM now listen on 9081–9084 so
   `mortred-supervisor` can init the full GPU catalog (pack autostart still
   loads every profile-matching `conf/server` file).
 
 ### Added
+- Pack-scoped TensorRT prepare (`scripts/prepare_pack.sh`, `mortredctl prepare`):
+  convert only engines used by `MORTRED_PACK`, refuse spawn if a file is missing
+  or empty (no crash-loop), optional `/ready` at `worker_nums=1`.
+  `MORTRED_AUTO_BUILD_ENGINES` still converts the whole zoo and stays opt-in.
+  `doctor --strict` fails when pack TRT files are missing.
 - Machine-local autostart pack (`conf/packs/demo.toml`, `MORTRED_PACK`): listed
   catalog ids boot; `MORTRED_AUTOSTART=true` no longer starts the whole zoo.
   Pack `worker_nums` / `model_config` override the child via env without

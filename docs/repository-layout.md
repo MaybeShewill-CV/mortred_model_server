@@ -58,6 +58,7 @@ and must not be relied upon.
 Identity is the factory catalog `model_section` (`YOLOV8`, `MOBILENETV2`, …).
 `mortred-model-server.out --list` prints the HTTP-capable ids.
 The supervisor autostart set is `conf/packs/demo.toml` (or `MORTRED_PACK`), not the whole `conf/server/` tree.
+Pack TensorRT engines are converted with `scripts/prepare_pack.sh` (`mortredctl prepare`); the supervisor will not spawn a TRT id whose engine file is missing or empty.
 
 ### Benchmark/tool executables
 

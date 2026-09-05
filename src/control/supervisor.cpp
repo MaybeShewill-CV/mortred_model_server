@@ -24,6 +24,7 @@
 #include <sstream>
 
 #include "control/ready_probe.h"
+#include "control/trt_spawn_gate.h"
 
 namespace mortred {
 namespace control {
@@ -211,6 +212,12 @@ void ProcessSupervisor::log_line(const std::string& id, const std::string& line)
 }
 
 bool ProcessSupervisor::spawn_locked(Child* child, std::string* err) {
+    if (!child->is_gateway) {
+        if (!trt_engines_ready_for_spawn(_project_root, _cfg.supervisor.bin_dir,
+                                         child->entry.config, child->policy.model_config, err)) {
+            return false;
+        }
+    }
     const std::string exe_path = child->is_gateway
                                      ? (std::filesystem::path(_project_root) /
                                         _cfg.supervisor.bin_dir / "mortred-gateway.out")
@@ -395,7 +402,18 @@ bool ProcessSupervisor::start_server(const std::string& id, std::string* err) {
     }
     child->wanted = true;
     child->stopping = false;
-    if (!spawn_locked(child, err)) {
+    std::string local_err;
+    std::string* spawn_err = err != nullptr ? err : &local_err;
+    if (!spawn_locked(child, spawn_err)) {
+        if (is_trt_gate_error(*spawn_err)) {
+            child->wanted = false;
+            child->error = *spawn_err;
+            child->engine.note_permanent_failure();
+            if (child->log != nullptr) {
+                child->log->append("[supervisor] " + *spawn_err);
+            }
+            return false;
+        }
         // fork/pipe level failure: treat as an unclean exit so the restart
         // policy machinery schedules the retry
         child->engine.note_exit(monotonic_ms(), false, false);
@@ -763,9 +781,18 @@ void ProcessSupervisor::monitor_loop() {
                 child->backoff_due_ms = 0;
                 std::string err;
                 if (!spawn_locked(child, &err)) {
-                    child->engine.note_exit(monotonic_ms(), false, false);
-                    if (child->log != nullptr) {
-                        child->log->append("[supervisor] respawn failed: " + err);
+                    if (is_trt_gate_error(err)) {
+                        child->wanted = false;
+                        child->error = err;
+                        child->engine.note_permanent_failure();
+                        if (child->log != nullptr) {
+                            child->log->append("[supervisor] " + err);
+                        }
+                    } else {
+                        child->engine.note_exit(monotonic_ms(), false, false);
+                        if (child->log != nullptr) {
+                            child->log->append("[supervisor] respawn failed: " + err);
+                        }
                     }
                 } else if (child->log != nullptr) {
                     child->log->append("[supervisor] respawned after backoff");

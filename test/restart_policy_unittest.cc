@@ -114,6 +114,15 @@ TEST(restart_policy, crash_loop_gives_up_and_requires_manual_start) {
     EXPECT_EQ(e.state(), SupervisedState::kFailed);
 }
 
+TEST(restart_policy, permanent_failure_does_not_restart) {
+    RestartEngine e(RestartPolicyKind::kOnFailure);
+    e.note_started(0);
+    e.note_permanent_failure();
+    EXPECT_EQ(e.state(), SupervisedState::kFailed);
+    const auto d = e.note_exit(10, false, false);
+    EXPECT_FALSE(d.restart);
+}
+
 TEST(restart_policy, cancel_returns_to_stopped) {
     RestartEngine e(RestartPolicyKind::kOnFailure);
     e.note_started(0);

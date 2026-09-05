@@ -76,6 +76,7 @@ cat <<EOF
 == init done (profile: $PROFILE) ==
 next:
   1. set tokens (MORTRED_API_TOKEN / MORTRED_GATEWAY_AUTH_TOKEN)
-  2. start the supervisor (systemctl start mortred-supervisor, or docker compose)
-  3. mortredctl doctor    # live acceptance
+  2. if the pack uses TensorRT: mortredctl prepare
+  3. start the supervisor (systemctl start mortred-supervisor, or docker compose)
+  4. mortredctl doctor    # live acceptance
 EOF

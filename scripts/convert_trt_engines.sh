@@ -228,7 +228,23 @@ for line in "${ENTRIES[@]}"; do
         continue
     fi
     mkdir -p "$(dirname "$engine_path")"
-    if out="$("$TRTEXEC" "${args[@]}" 2>&1)"; then
+    run_trtexec() {
+        # shellcheck disable=SC2034
+        out="$("$TRTEXEC" "$@" 2>&1)"
+    }
+    converted_ok=0
+    if run_trtexec "${args[@]}"; then
+        converted_ok=1
+    elif [ -n "$flags" ] && echo "$out" | grep -q "Static model does not take explicit shapes"; then
+        echo "[warn] $model: ONNX inputs are static; retrying without min/opt/maxShapes"
+        args=(--onnx="$onnx_path" --saveEngine="$engine_path" --buildOnly)
+        [ -n "$fp_flag" ] && args+=("$fp_flag")
+        args+=("$WS_FLAG")
+        if run_trtexec "${args[@]}"; then
+            converted_ok=1
+        fi
+    fi
+    if [ "$converted_ok" -eq 1 ]; then
         if [ -s "$engine_path" ]; then
             converted=$((converted+1))
             echo "  -> $engine"
@@ -240,7 +256,7 @@ for line in "${ENTRIES[@]}"; do
     else
         rc=$?
         failed=$((failed+1)); failed_models+=("$model")
-        echo "[FAIL] $model: trtexec failed (exit code $rc)"
+        echo "[FAIL] $model: trtexec failed${rc:+ (exit code $rc)}"
         echo "$out" | tail -n 15
         [ "$STRICT" -eq 1 ] && exit 1
     fi
