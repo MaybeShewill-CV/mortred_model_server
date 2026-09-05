@@ -59,6 +59,41 @@ def gpu_inventory() -> dict | None:
     return {"name": parts[0], "memory_total_mib": total, "driver": parts[2]}
 
 
+def _csv_float(raw: str) -> float | None:
+    text = raw.strip().replace(" MiB", "").replace("MiB", "")
+    if not text or text.upper() in ("N/A", "[N/A]", "NOT SUPPORTED", "[NOT SUPPORTED]"):
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def gpu_mem_device_mib() -> float | None:
+    """Whole-device used MiB (WSL often has this when per-pid compute-apps is empty)."""
+    try:
+        out = subprocess.check_output(
+            [
+                "nvidia-smi",
+                "--query-gpu=memory.used",
+                "--format=csv,noheader,nounits",
+            ],
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return None
+    total = 0.0
+    any_val = False
+    for line in out.splitlines():
+        val = _csv_float(line.split(",")[0] if line else "")
+        if val is None:
+            continue
+        total += val
+        any_val = True
+    return total if any_val else None
+
+
 def gpu_mem_mib_for_pid(pid: int) -> float | None:
     try:
         out = subprocess.check_output(
@@ -80,11 +115,23 @@ def gpu_mem_mib_for_pid(pid: int) -> float | None:
         try:
             if int(parts[0]) != pid:
                 continue
-            val = float(parts[1])
         except ValueError:
+            continue
+        val = _csv_float(parts[1])
+        if val is None:
             continue
         peak = val if peak is None else max(peak, val)
     return peak
+
+
+def gpu_mem_sample(pid: int) -> tuple[float | None, str]:
+    proc = gpu_mem_mib_for_pid(pid)
+    if proc is not None:
+        return proc, "process"
+    device = gpu_mem_device_mib()
+    if device is not None:
+        return device, "device"
+    return None, "unavailable"
 
 
 def log_looks_oom(text: str) -> bool:
@@ -184,11 +231,11 @@ def wait_http_ready(url: str, timeout_s: float, proc: subprocess.Popen[bytes]) -
     return False
 
 
-def sample_mem_during(pid: int, stop: threading.Event, bucket: list[float]) -> None:
+def sample_mem_during(pid: int, stop: threading.Event, bucket: list[tuple[float, str]]) -> None:
     while not stop.is_set():
-        val = gpu_mem_mib_for_pid(pid)
+        val, scope = gpu_mem_sample(pid)
         if val is not None:
-            bucket.append(val)
+            bucket.append((val, scope))
         stop.wait(0.4)
 
 
@@ -251,9 +298,10 @@ def run_one_point(
                 point["log_tail"] = tail
             return point
         point["started"] = True
-        ready_mem = gpu_mem_mib_for_pid(proc.pid)
+        ready_mem, ready_scope = gpu_mem_sample(proc.pid)
         point["gpu_mem_mib_ready"] = ready_mem
-        samples: list[float] = []
+        point["gpu_mem_scope"] = ready_scope
+        samples: list[tuple[float, str]] = []
         stop = threading.Event()
         sampler = threading.Thread(target=sample_mem_during, args=(proc.pid, stop, samples), daemon=True)
         sampler.start()
@@ -271,14 +319,19 @@ def run_one_point(
         )
         stop.set()
         sampler.join(timeout=2)
-        peak = max(samples) if samples else ready_mem
+        if samples:
+            peak = max(v for v, _s in samples)
+            if any(s == "process" for _v, s in samples):
+                point["gpu_mem_scope"] = "process"
+        else:
+            peak = ready_mem
         point["gpu_mem_mib_peak"] = peak
-        point["rps"] = report.rps
+        point["rps"] = round(report.rps, 3)
         point["ok"] = report.ok
         point["errors"] = report.errors
         point["requests"] = report.requests
-        point["p50_ms"] = report.latency_ms.get("p50")
-        point["p99_ms"] = report.latency_ms.get("p99")
+        point["p50_ms"] = round(report.latency_ms.get("p50") or 0.0, 3)
+        point["p99_ms"] = round(report.latency_ms.get("p99") or 0.0, 3)
         point["concurrency"] = conc
         text = log_path.read_text(encoding="utf-8", errors="replace") if log_path.is_file() else ""
         point["oom"] = log_looks_oom(text)
@@ -382,10 +435,12 @@ def calibrate(
                 stop_proc(proc)
                 continue
             procs.append((model_id, proc))
+            mem, scope = gpu_mem_sample(proc.pid)
             joint["per_model"][model_id] = {
                 "started": True,
                 "pid": proc.pid,
-                "gpu_mem_mib": gpu_mem_mib_for_pid(proc.pid),
+                "gpu_mem_mib": mem,
+                "gpu_mem_scope": scope,
             }
         total = 0.0
         any_mem = False
@@ -422,6 +477,9 @@ def self_test() -> int:
         return 1
     if log_looks_oom("CUDA out of memory") is False:
         print("self-test: oom marker missed", file=sys.stderr)
+        return 1
+    if _csv_float("N/A") is not None or _csv_float("512") != 512.0:
+        print("self-test: _csv_float", file=sys.stderr)
         return 1
     from repo_toml import load_toml
 
