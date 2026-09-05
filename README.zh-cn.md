@@ -337,13 +337,14 @@ fmt / 头文件库）构建并安装进 `3rd_party/{include,libs}`，无需手�
 ## Docker（全自动构建运行环境）
 
 ```bash
-docker build -t mortred_model_server .
+docker build -t mortred_model_server:gpu .
 docker run --gpus all -p 127.0.0.1:8080:8080 -p 127.0.0.1:8787:8787 \
   -v $PWD/weights:/opt/mortred/weights \
   -e MORTRED_GATEWAY_AUTH_TOKEN=your-inference-token \
   -e MORTRED_API_TOKEN=your-management-token \
-  mortred_model_server
-# 或：docker compose up -d（见 docker-compose.yml）
+  -e MORTRED_METRICS_TOKEN=your-scrape-token \
+  mortred_model_server:gpu
+# 或：docker compose --profile gpu up -d（CPU：--profile cpu；见 docker-compose.yml）
 ```
 
 镜像会自动构建全部依赖与完整项目、运行单元/e2e 测试并交付控制面；

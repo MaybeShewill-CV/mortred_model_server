@@ -545,11 +545,10 @@ jobs:
             scripts/fetch_weights.py scripts/gen_weights_manifest.py \
             scripts/check_consistency.py scripts/check_hosted_golden.py \
             scripts/gen_openapi.py scripts/repo_toml.py \
-            scripts/ci_assert_gtest_xml.py
+            scripts/ci_assert_gtest_xml.py \
+            scripts/ci_assert_container_layout.py
           python3 scripts/ci_assert_gtest_xml.py --self-test
-          # exec-form ENTRYPOINT cannot run this script without a shebang;
-          # bash -n above does not catch that.
-          head -n1 scripts/docker_entrypoint.sh | grep -qx '#!/usr/bin/env bash'
+          python3 scripts/ci_assert_container_layout.py
 
       - name: Validate manifests (JSON / YAML)
         run: |

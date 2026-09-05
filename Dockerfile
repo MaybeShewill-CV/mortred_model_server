@@ -5,13 +5,19 @@
 # CUDA 12 / TRT 10 线：替换 base 为 12.x 并在 install_deps.sh 加 --cuda-version 12
 # （引擎转换使用外部 trtexec，需用与本机 TRT 版本匹配的 CLI 重建）。
 #
-# 构建：docker build -t mortred_model_server .
-# 运行：docker run --gpus all -p 8787:8787 -v <weights>:/opt/mortred/weights -e APP_AUTH_TOKEN=... mortred_model_server
-#
+# GPU runtime (default last stage = mortred-gpu):
+#   docker build -t mortred_model_server:gpu .
+#   docker run --gpus all -p 127.0.0.1:8080:8080 -p 127.0.0.1:8787:8787 \
+#     -v <weights>:/opt/mortred/weights -e MORTRED_API_TOKEN=... \
+#     -e MORTRED_GATEWAY_AUTH_TOKEN=... -e MORTRED_METRICS_TOKEN=... \
+#     mortred_model_server:gpu
 # CPU profile（无 NVIDIA GPU 的机器）：
-# 构建：docker build --target mortred-cpu -t mortred_model_server:cpu .
-# 运行：docker run -p 8787:8787 -p 8080:8080 -v <weights>:/opt/mortred/weights -e APP_AUTH_TOKEN=... mortred_model_server:cpu
-# （TensorRT 编译排除，catalog 只暴露 *_cpu 配置的精选模型；compose 用 --profile cpu）
+#   docker build --target mortred-cpu -t mortred_model_server:cpu .
+#   docker run -p 127.0.0.1:8787:8787 -p 127.0.0.1:8080:8080 \
+#     -v <weights>:/opt/mortred/weights -e MORTRED_API_TOKEN=... \
+#     -e MORTRED_GATEWAY_AUTH_TOKEN=... -e MORTRED_METRICS_TOKEN=... \
+#     mortred_model_server:cpu
+# （TensorRT 编译排除，catalog 只暴露 profile=cpu 的精选模型；compose 用 --profile cpu）
 
 # ---------- 阶段 1：第三方依赖（install_deps.sh 全自动） ----------
 FROM nvidia/cuda:11.8.0-devel-ubuntu20.04 AS deps
@@ -138,6 +144,10 @@ RUN ./scripts/install_deps.sh --cpu --all \
 # ---------- 阶段 2c：cpu full build + 测试 + 安装树 ----------
 FROM ubuntu:22.04 AS build-cpu
 
+# CI compose boot may pass SKIP_DOCKER_CHECK=1; user/release builds must leave
+# this at 0 so the image still runs the cpu-profile check target.
+ARG SKIP_DOCKER_CHECK=0
+
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential cmake git libssl-dev \
@@ -151,12 +161,16 @@ RUN cmake -S /src -B /src/build \
         -DMORTRED_BUILD_FULL=ON -DMORTRED_BUILD_PROFILE=cpu \
         -DMORTRED_INSTALL=ON -DCMAKE_BUILD_TYPE=Release \
     && cmake --build /src/build -j"$(nproc)" \
-    && LD_LIBRARY_PATH=/src/_lib:/src/3rd_party/libs cmake --build /src/build --target check -j"$(nproc)" \
+    && if [ "$SKIP_DOCKER_CHECK" = "1" ]; then \
+         echo "SKIP_DOCKER_CHECK=1: skipping in-image check (CI compose boot)"; \
+       else \
+         LD_LIBRARY_PATH=/src/_lib:/src/3rd_party/libs cmake --build /src/build --target check -j"$(nproc)"; \
+       fi \
     && cmake --install /src/build --prefix /opt/mortred
 
 # ---------- 阶段 3c：cpu 运行时 ----------
 FROM ubuntu:22.04 AS mortred-cpu
-# default target remains the gpu runtime above; mortred-cpu is opt-in
+# opt-in: docker build --target mortred-cpu  /  compose --profile cpu
 
 ENV DEBIAN_FRONTEND=noninteractive \
     MORTRED_PROJECT_ROOT=/opt/mortred \
@@ -179,3 +193,8 @@ EXPOSE 8787 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD curl -fs http://localhost:8787/api/v1/health || exit 1
 ENTRYPOINT ["/opt/mortred/scripts/docker_entrypoint.sh"]
+
+# Last stage = Docker's default `docker build` target. Keep this as the GPU
+# runtime so `docker build -t mortred_model_server:gpu .` matches README.
+# Compose --profile gpu must set target: mortred-gpu (never an empty string).
+FROM runtime AS mortred-gpu
