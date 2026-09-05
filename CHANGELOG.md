@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- `convert_trt_engines.sh` retries without min/opt/maxShapes when TensorRT
+  reports a static ONNX (`Static model does not take explicit shapes`). The
+  yolov8 profile is for dynamic batch; some weight drops are fixed 1x3x640x640.
 - `prepare_pack.sh` runs the `/ready` probe with cwd = `_bin`/`bin`, matching
   supervisor spawn, so `model_config_file_path = "../conf/..."` resolves when
   the script is invoked from the repo root.
