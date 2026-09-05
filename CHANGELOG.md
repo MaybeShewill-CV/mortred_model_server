@@ -36,6 +36,9 @@ All notable changes to this project are documented here. The format follows
   loads every profile-matching `conf/server` file).
 
 ### Added
+- ONNX Runtime CUDA `gpu_mem_limit` defaults to 2048 MiB per session
+  (`gpu_mem_limit_mb` / `MORTRED_ORT_GPU_MEM_LIMIT_MB`; `0` = unlimited).
+  The previous `gpu_mem_limit = 0` let the CUDA EP arena grow without bound.
 - Machine pack ops in [docs/deployment.md](docs/deployment.md) §10
   (and [中文](docs/deployment.zh-cn.md)): autostart listed ids only, `mortredctl
   prepare` for pack TensorRT engines, `mortredctl calibrate` / `--write-pack`

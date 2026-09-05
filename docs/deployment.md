@@ -500,6 +500,14 @@ Runs before supervisor autostart, minutes-long, **off by default**. Prefer
 §10.2 for a pack. `mortredctl doctor` warns on missing pack engines;
 `--strict` fails.
 
+### 10.6 ONNX Runtime CUDA arena
+
+ORT CUDA used to set `gpu_mem_limit = 0` (arena grows without bound). The
+default is now **2048 MiB per session** (`gpu_mem_limit_mb` on
+`[MODEL.backend]`, or `MORTRED_ORT_GPU_MEM_LIMIT_MB`). `worker_nums=4` means
+up to four arenas. `0` restores unlimited. MNN and TensorRT have no equivalent
+knob; stay inside the pack + calibrate budget (§10.3).
+
 ## 11. Authentication & Security
 
 ### 11.1 Tokens
