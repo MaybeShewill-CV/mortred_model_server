@@ -6,8 +6,7 @@
 ************************************************/
 
 // Shared main() body for all model server executables: glog setup, config
-// parsing, host/port extraction, server start and wait. Per-server mains
-// reduce to a section name + factory callback.
+// parsing, host/port extraction, ProcessStop (SIGINT/SIGTERM), start and wait.
 #ifndef MORTRED_APPS_MODEL_SERVER_MAIN_H
 #define MORTRED_APPS_MODEL_SERVER_MAIN_H
 
@@ -19,9 +18,9 @@
 #include <string>
 
 #include <glog/logging.h>
-#include <workflow/WFFacilities.h>
 #include "toml/toml.hpp"
 
+#include "common/process_stop.h"
 #include "server/abstract_server.h"
 
 namespace jinq {
@@ -33,6 +32,13 @@ inline int run_model_server_main(
     const std::string& server_section,
     const std::function<std::unique_ptr<jinq::server::BaseAiServer>(const std::string&)>&
         make_server) {
+    // Arm before glog/Workflow threads so they inherit the blocked SIGINT/SIGTERM
+    // mask. Usage-only invocations skip arm() and never wait().
+    jinq::common::ProcessStop process_stop;
+    if (argc == 2) {
+        process_stop.arm();
+    }
+
     google::InitGoogleLogging(argv[0]);
     google::InstallFailureSignalHandler();
     google::SetStderrLogging(google::GLOG_INFO);
@@ -44,8 +50,6 @@ inline int run_model_server_main(
         LOG(INFO) << "exe cfg_path";
         return -1;
     }
-
-    WFFacilities::WaitGroup wait_group(1);
 
     std::string config_file_path = argv[1];
     LOG(INFO) << "cfg file path: " << config_file_path;
@@ -86,7 +90,7 @@ inline int run_model_server_main(
     }
     const int rc = server->start(host.c_str(), static_cast<unsigned short>(port));
     if (rc == 0) {
-        wait_group.wait();
+        process_stop.wait();
         server->stop();
         return 0;
     }

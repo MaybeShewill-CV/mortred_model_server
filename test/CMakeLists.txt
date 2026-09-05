@@ -69,6 +69,7 @@ if(MORTRED_WORKFLOW_AVAILABLE)
     # HTTP-level e2e contract tests need to link workflow; if a tests-only build has no
     # vendored workflow lib, skip them (full builds / local dev run them).
     list(APPEND TEST_LIST server_e2e_contract_test)
+    list(APPEND TEST_LIST process_stop_unittest)
 endif()
 
 # ApiKeyManager::authenticate needs OpenSSL SHA-256; the header is otherwise
@@ -207,6 +208,8 @@ foreach(src ${TEST_LIST})
         set(EXTRA_LIBS glog::glog)
     elseif(${src} STREQUAL "server_e2e_contract_test")
         set(EXTRA_LIBS glog::glog vendored::workflow pthread)
+    elseif(${src} STREQUAL "process_stop_unittest")
+        set(EXTRA_LIBS vendored::workflow pthread)
     endif()
     add_executable(${src} EXCLUDE_FROM_ALL ${src}.cc ${EXTRA_SRCS})
     target_link_libraries(${src} common ${EXTRA_LIBS} ${GTEST_LIBS})

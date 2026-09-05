@@ -7,6 +7,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Model and gateway mains arm a `ProcessStop` latch (block SIGINT/SIGTERM,
+  sigwait thread, idempotent `WaitGroup::done()`) so those signals reach
+  `server->stop()` and the impl destructor drain instead of default-killing
+  the process. Supervisor already had this path; `kStopGraceMs` SIGKILL
+  remains the hung-model backstop.
+
+> 模型进程与网关的 `main` 在 SIGINT/SIGTERM 时会 `done()` WaitGroup，从而走到
+> `stop()` 和析构 drain；不再被默认信号直接杀死。Supervisor 本身原本就是这样。
+
 ### Changed
 - `POST /jobs` flushes HTTP 202 at admission. The runner is a detached
   Workflow go task (`go->start()`), so submit no longer waits for
