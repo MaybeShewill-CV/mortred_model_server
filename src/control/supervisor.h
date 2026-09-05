@@ -129,7 +129,8 @@ class ProcessSupervisor {
     Child* find_locked(const std::string& id);
     const Child* find_locked(const std::string& id) const;
     std::string bin_path(const Child& child) const;
-    bool spawn_locked(Child* child, std::string* err);
+    void apply_exit_decision(Child* child, const RestartEngine::Decision& decision,
+                             bool expected_stop);
     void handle_exit(pid_t pid, int wait_status);
     void reaper_loop();
     void signal_loop();

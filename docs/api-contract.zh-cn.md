@@ -17,11 +17,11 @@
 代理终结 TLS。fail-closed 拒绝非环回且无鉴权，以及非环回且无独立 scrape token。
 
 监督器（supervisor，`:8787`）在 `/api/v1/` 下提供管理 REST API
-（health/catalog/status/生命周期/日志/metrics/keys）与内嵌 Web UI；
+（health/catalog/status/生命周期/日志/metrics）与内嵌 Web UI；
 `mortredctl` 是它的命令行客户端。**推理冒烟**（控制台发送按钮和
 `mortredctl infer`）把数据面信封 POST 到网关的
 `/v1/models/{id}/infer`，Bearer 与管理 API 相同（`MORTRED_API_TOKEN`）。
-监督进程只做管理（catalog / 启停 / 日志 / keys / UI）。推理和异步 jobs
+监督进程只做管理（catalog / 启停 / 日志 / UI）。推理和异步 jobs
 走网关。`:8080` 上的遗留 `{server_uri}` 仍然可用。
 
 所有模型服务器遵循统一的 HTTP JSON 契约。权威的机器可读描述是

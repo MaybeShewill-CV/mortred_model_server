@@ -160,6 +160,25 @@ class SupervisorTest : public ::testing::Test {
 
 }  // namespace
 
+TEST_F(SupervisorTest, spawn_failure_schedules_backoff_retry) {
+    fs::remove(root_ / "bin" / "fake_model_server.out");
+    auto sup = make_supervisor();
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    std::string err;
+    EXPECT_FALSE(sup->start_server("fake_model_server", &err));
+    EXPECT_NE(err.find("executable not found"), std::string::npos) << err;
+    const auto first = sup->status("fake_model_server");
+    EXPECT_EQ(first.state, "backoff") << first.error;
+    EXPECT_GE(first.restart_count, 1);
+    ASSERT_TRUE(wait_for([&sup, n = first.restart_count]() {
+                    return sup->status("fake_model_server").restart_count > n;
+                },
+                4000))
+        << "spawn failure must schedule Decision backoff so the monitor retries";
+}
+
 TEST_F(SupervisorTest, start_reaches_ready_state) {
     auto sup = make_supervisor();
     sup->set_catalog(catalog_);

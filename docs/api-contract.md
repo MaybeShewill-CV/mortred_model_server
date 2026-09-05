@@ -21,12 +21,12 @@ auth, a missing metrics token, and a wildcard bind unless
 `MORTRED_EXPOSE=docker` or `unsafe`.
 
 The supervisor (`:8787`) exposes the management REST API under `/api/v1/`
-(health/catalog/status/lifecycle/logs/metrics/keys) and the embedded web UI;
+(health/catalog/status/lifecycle/logs/metrics) and the embedded web UI;
 `mortredctl` is its CLI client. **Inference smoke tests** (the Web UI send
 button and `mortredctl infer`) POST the data-plane envelope to
 `POST /v1/models/{id}/infer` on the gateway, with the same Bearer token as
 the management API (`MORTRED_API_TOKEN`). The supervisor is management only
-(catalog / lifecycle / logs / keys / UI). Inference and async jobs go through
+(catalog / lifecycle / logs / UI). Inference and async jobs go through
 the gateway. Legacy `{server_uri}` on `:8080` is still accepted.
 
 All model servers follow a unified HTTP JSON contract. The authoritative machine-readable

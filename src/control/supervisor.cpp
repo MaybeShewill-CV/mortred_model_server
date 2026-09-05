@@ -35,7 +35,6 @@ constexpr int kStopGraceMs = 5000;
 constexpr int kStartingProbeIntervalMs = 500;
 constexpr int kRunningProbeIntervalMs = 10000;
 constexpr int kProbeTimeoutMs = 1000;
-constexpr int64_t kAutostartReadyTimeoutMs = 10 * 60 * 1000;
 
 void close_all_fds_except_stdio() {
     DIR* d = opendir("/proc/self/fd");
@@ -208,6 +207,27 @@ void ProcessSupervisor::log_line(const std::string& id, const std::string& line)
     Child* child = find_locked(id);
     if (child != nullptr && child->log != nullptr) {
         child->log->append("[supervisor] " + line);
+    }
+}
+
+void ProcessSupervisor::apply_exit_decision(Child* child,
+                                            const RestartEngine::Decision& decision,
+                                            bool expected_stop) {
+    const bool restart = decision.restart && child->wanted && !_shutdown_requested.load();
+    if (decision.gave_up) {
+        child->error = "crash loop detected: >5 restarts within 60s; manual start required";
+        child->wanted = false;
+        child->backoff_due_ms = 0;
+        if (child->log != nullptr) {
+            child->log->append("[supervisor] " + child->error);
+        }
+    } else if (restart) {
+        child->backoff_due_ms = monotonic_ms() + decision.delay_ms;
+    } else {
+        child->backoff_due_ms = 0;
+        if (!expected_stop) {
+            child->wanted = false;
+        }
     }
 }
 
@@ -414,9 +434,11 @@ bool ProcessSupervisor::start_server(const std::string& id, std::string* err) {
             }
             return false;
         }
-        // fork/pipe level failure: treat as an unclean exit so the restart
-        // policy machinery schedules the retry
-        child->engine.note_exit(monotonic_ms(), false, false);
+        const auto decision = child->engine.note_exit(monotonic_ms(), false, false);
+        apply_exit_decision(child, decision, false);
+        if (child->log != nullptr) {
+            child->log->append("[supervisor] spawn failed: " + *spawn_err);
+        }
         return false;
     }
     return true;
@@ -563,8 +585,6 @@ void ProcessSupervisor::probe_readiness(Child* child, int64_t now_ms) {
 
 void ProcessSupervisor::handle_exit(pid_t pid, int wait_status) {
     bool expected = false;
-    bool restart = false;
-    int delay_ms = 0;
     Child* child = nullptr;
     int out_fd = -1;
     int err_fd = -1;
@@ -592,20 +612,7 @@ void ProcessSupervisor::handle_exit(pid_t pid, int wait_status) {
         child->stopping = false;
         const bool clean = WIFEXITED(wait_status) && WEXITSTATUS(wait_status) == 0;
         const auto decision = child->engine.note_exit(monotonic_ms(), clean, expected);
-        restart = decision.restart && child->wanted && !_shutdown_requested.load();
-        delay_ms = decision.delay_ms;
-        if (decision.gave_up) {
-            child->error = "crash loop detected: >5 restarts within 60s; manual start required";
-            child->wanted = false;
-            child->log->append("[supervisor] " + child->error);
-        } else if (restart) {
-            child->backoff_due_ms = monotonic_ms() + delay_ms;
-        } else {
-            child->backoff_due_ms = 0;
-            if (!expected) {
-                child->wanted = false;
-            }
-        }
+        apply_exit_decision(child, decision, expected);
         out_fd = child->out_fd;
         err_fd = child->err_fd;
         child->out_fd = -1;
@@ -789,7 +796,9 @@ void ProcessSupervisor::monitor_loop() {
                             child->log->append("[supervisor] " + err);
                         }
                     } else {
-                        child->engine.note_exit(monotonic_ms(), false, false);
+                        const auto decision =
+                            child->engine.note_exit(monotonic_ms(), false, false);
+                        apply_exit_decision(child, decision, false);
                         if (child->log != nullptr) {
                             child->log->append("[supervisor] respawn failed: " + err);
                         }

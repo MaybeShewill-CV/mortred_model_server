@@ -61,7 +61,15 @@ std::string key_entry(const std::string& name, const std::string& secret,
 
 }  // namespace
 
-TEST(api_key_manager, load_and_authenticate_roundtrip) {
+TEST(api_key_manager, comment_only_file_is_empty_not_parse_error) {
+    const auto path = write_config("# copied from api_keys.toml.example\n");
+    ApiKeyManager mgr;
+    ASSERT_TRUE(mgr.load(path));
+    EXPECT_EQ(mgr.key_count(), 0u);
+    EXPECT_EQ(mgr.authenticate("Bearer anything"), nullptr);
+}
+
+TEST(api_key_manager, authenticates_valid_bearer) {
     const auto path = write_config(key_entry("alpha", "secret-alpha", "inference", true, 0));
     ApiKeyManager mgr;
     ASSERT_TRUE(mgr.load(path));

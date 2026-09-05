@@ -20,11 +20,13 @@
                                             │  (仅环回地址)  │
                                             └──────────────┘
 
-┌──────────────────┐    管理 Key             ┌──────────────┐
-│ 服务端管理员      │ ─────────────────────→ │   监督器      │
-│ (运维人员)       │  /api/v1/keys{,/reload} │   (:8787)    │
+┌──────────────────┐    改 toml 后重启网关    ┌──────────────┐
+│ 服务端管理员      │  POST .../servers/...  │   监督器      │
+│ (运维人员)       │  /restart              │   (:8787)    │
 └──────────────────┘                        └──────────────┘
 ```
+
+开发默认用 `mortredctl init-trust`（环境变量 token）。`conf/api_keys.toml` 是网关进程上的可选多租户鉴权。监督器 **没有** key 热加载：改文件后重启 gateway 子进程。`scope` 只决定该 Bearer **能不能推理**，不能管 :8787。
 
 ## 客户端用户指南
 
@@ -177,9 +179,9 @@ enabled = true
 ```
 
 ```bash
-# 第 4 步：热加载（无需重启网关）
+# 第 4 步：重启 gateway 子进程以加载 conf/api_keys.toml
 curl -X POST -H "Authorization: Bearer $MORTRED_API_TOKEN" \
-  http://localhost:8787/api/v1/keys/reload
+  http://localhost:8787/api/v1/servers/__gateway/restart
 
 # 第 5 步：将 key 字符串交给客户端（不是哈希！）
 # 客户端使用:  Authorization: Bearer 3a7f9b2e8c4d...
@@ -188,23 +190,7 @@ curl -X POST -H "Authorization: Bearer $MORTRED_API_TOKEN" \
 
 ### 管理 Key
 
-#### 列出全部 key
-```bash
-curl -H "Authorization: Bearer $MORTRED_API_TOKEN" \
-  http://localhost:8787/api/v1/keys
-```
-
-响应：
-```json
-{
-  "keys": [
-    {"name": "tenant-a", "scope": "inference", "enabled": true,
-     "total_requests": 15234, "total_rejected": 12},
-    {"name": "admin", "scope": "all", "enabled": true,
-     "total_requests": 45, "total_rejected": 0}
-  ]
-}
-```
+监督器 **不** 暴露 key 列表或用量计数。计数器在网关进程内，重启后清零。
 
 #### 禁用 key（不删除）
 ```toml
@@ -213,7 +199,7 @@ curl -H "Authorization: Bearer $MORTRED_API_TOKEN" \
 hash = "..."
 enabled = false   # 下一次请求立即被拒
 ```
-然后热加载。
+然后重启 gateway 子进程。
 
 #### 重新启用 key
 ```toml
@@ -221,10 +207,10 @@ enabled = false   # 下一次请求立即被拒
 hash = "..."
 enabled = true
 ```
-热加载。
+重启 gateway 子进程。
 
 #### 删除 key
-从 `conf/api_keys.toml` 中删除整个 `[keys.name]` 段，然后热加载。
+从 `conf/api_keys.toml` 中删除整个 `[keys.name]` 段，然后重启 gateway 子进程。
 
 #### 修改 key 的限流配额
 ```toml
@@ -232,23 +218,11 @@ enabled = true
 hash = "..."
 rate_limit_qps = 200   # 原来是 100
 ```
-热加载后立即生效。
+重启 gateway 子进程。对新请求立即生效。
 
-### Key 轮换流程（零停机）
+### Key 轮换流程
 
-```
-轮换前:  [keys.tenant-a] hash=旧哈希
-
-第 1 步:  [keys.tenant-a]    hash=旧哈希       ← 保留旧 key
-          [keys.tenant-a-v2] hash=新哈希       ← 添加新 key
-          → 热加载 → 两个 key 同时有效
-
-第 2 步:  客户端切换到新 key（旧 key 仍可用作回退）
-
-第 3 步:  [keys.tenant-a-v2] hash=新哈希       ← 只留新 key
-          （删除 [keys.tenant-a]）
-          → 热加载 → 旧 key 被拒绝
-```
+文件里同时保留新旧 `[keys.*]`，重启 gateway，切换客户端，再删旧条目并再重启一次。重启期间网关会短暂不可用；一次重启时文件里同时有两个哈希，可避免客户端空窗。
 
 ### 配置文件安全
 
@@ -263,24 +237,18 @@ echo "conf/api_keys.toml" >> .gitignore
 
 ### 监控 Key 用量
 
-```bash
-# 查看各 key 的请求计数
-curl -H "Authorization: Bearer $MORTRED_API_TOKEN" \
-  http://localhost:8787/api/v1/keys | jq '.keys[] | {name, total_requests, total_rejected}'
-
-# Prometheus 已内置告警规则
-# （deploy/alert-rules.yml → MortredOverloadRejections）
-```
+每 key 计数在网关进程内，**:8787 不导出**。用网关访问日志（`X-Mortred-Key`）或 Prometheus HTTP 指标。网关子进程重启后计数清零。
 
 ### 故障排查
 
 | 问题 | 原因 | 解决方式 |
 |---|---|---|
-| 所有请求 401 | api_keys.toml 不存在或为空 | 检查文件路径和内容 |
-| 新 key 不生效 | 配置修改后未热加载 | `POST /api/v1/keys/reload` |
-| Key 可用但返回 429 | 超出限流配额 | 增大配置中的 rate_limit_qps |
+| 所有请求 401 | 无 token、空 `api_keys.toml`、或 Bearer 错误 | `mortredctl init-trust` 或写入 `[keys.*]` 哈希；空/仅注释的 key 文件不算鉴权 |
+| 新 key 不生效 | 网关仍在跑旧文件 | 重启 gateway 子进程 |
+| Key 可用但返回 429 | 超出限流配额 | 增大 `rate_limit_qps` 并重启网关 |
 | 客户端丢失 key | 只存储了哈希 | 生成新 key，禁用旧 key |
-| 网关日志 "failed to parse" | TOML 语法错误 | 检查 hash = "..." 的引号 |
+| 网关日志 "failed to parse" | TOML 语法错误 | 修好文件；没有静态 token 时网关拒绝启动 |
+| 网关日志 "empty key file is not auth" | 复制了示例但没写哈希 | 补 key 或使用 init-trust token |
 
 ---
 
@@ -317,7 +285,7 @@ scope = "inference"
 rate_limit_qps = 500
 enabled = true
 
-# 运维管理员（可访问管理端点）
+# 运维 key（同一推理路径；不能解锁 :8787）
 [keys.ops-team]
 hash = "c3d4e5f6a7b8..."
 scope = "all"
@@ -340,14 +308,12 @@ enabled = false
 
 任一通过即授权。响应头 `X-Mortred-Key` 标识使用了哪个 key。
 
-### 管理 API 摘要
+监督器没有 `/api/v1/keys` 接口。改完 `conf/api_keys.toml` 后重启 gateway 子进程：
 
-| 端点 | 方法 | 说明 |
-|---|---|---|
-| `/api/v1/keys` | GET | 列出全部 key（名称、作用域、状态、用量） |
-| `/api/v1/keys/reload` | POST | 配置变更后热加载 |
-
-两者均需监督器的 `MORTRED_API_TOKEN`（管理员凭证）。
+```bash
+curl -X POST -H "Authorization: Bearer $MORTRED_API_TOKEN" \
+  http://localhost:8787/api/v1/servers/__gateway/restart
+```
 
 ```bash
 curl -X POST http://localhost:8080/mortred_ai_server_v1/obj_detection/yolov8 \
@@ -364,25 +330,13 @@ curl -X POST http://localhost:8080/mortred_ai_server_v1/obj_detection/yolov8 \
 
 任一通过即授权。响应头 `X-Mortred-Key` 标识使用了哪个 key。
 
-## 管理 API
-
-通过监督器（:8787，需要 MORTRED_API_TOKEN）：
-
-```bash
-# 列出全部 key
-curl -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:8787/api/v1/keys
-
-# 热加载
-curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:8787/api/v1/keys/reload
-```
-
 ## Key 轮换
 
-1. 生成新 key
-2. 将新哈希加入 conf/api_keys.toml（与旧 key 并存）
-3. 热加载
-4. 分发新 key 给客户端
-5. 删除旧 key 并再次热加载
+1. 生成新 key：`openssl rand -hex 32`
+2. 将新哈希与旧 key 一并写入 conf/api_keys.toml
+3. 重启 gateway 子进程
+4. 把新 key 交给客户端
+5. 删除旧 key 并再次重启 gateway 子进程
 
 ## 安全说明
 

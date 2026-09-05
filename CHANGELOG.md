@@ -7,6 +7,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Removed
+- Supervisor `GET /api/v1/keys` and `POST /api/v1/keys/reload`. Those routes
+  mutated a copy of `ApiKeyManager` that never authenticated inference
+  traffic. Edit `conf/api_keys.toml` then restart the gateway child
+  (`POST /api/v1/servers/__gateway/restart`). `scope=admin` still does not
+  unlock `:8787`; management stays `MORTRED_API_TOKEN` only.
+
+### Changed
+- `ApiKeyManager::load` treats a readable empty or comment-only key file as
+  success with `key_count()==0` (not a parse failure). The gateway still
+  refuses to start with no static token and no keys; with a static token it
+  logs a warning and uses that token only.
+- Spawn failures (fork/exec, missing exe, monitor respawn) now apply
+  `RestartEngine::Decision` the same way as child exits, so backoff is
+  scheduled instead of leaving `wanted` true with a dead pid.
+- Deleted unused `kAutostartReadyTimeoutMs` (never referenced; 10-minute
+  kill is still out of scope).
+
 ### Changed
 - One model toml per model: removed `*_cpu_config.toml` duplicates. Git
   defaults `backend.device` to `gpu` (including omitted keys). The value is
