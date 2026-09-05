@@ -718,6 +718,15 @@ cannot serve inference without it.
 ## 15. FAQ
 
 <details>
+<summary>How do I verify long-task POST /jobs returns 202 immediately?</summary>
+
+Follow the step-by-step customer procedure in
+[async-jobs-customer-test.md](async-jobs-customer-test.md). `POST /v1/models/{id}/jobs`
+must return in milliseconds while the same payload on `/infer` still takes the
+full sampling time. Immediate `/result` must be 409.
+</details>
+
+<details>
 <summary>Will the cpu profile support more models over time?</summary>
 
 Yes, version by version via the formal process in §8.2 - but it stays a curated

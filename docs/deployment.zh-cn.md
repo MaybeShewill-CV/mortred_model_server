@@ -679,6 +679,14 @@ internal token 二次确认。即使 9xxx 端口误暴露，没有 internal toke
 ## 15. FAQ
 
 <details>
+<summary>怎样验收长任务 POST /jobs 是立刻 202？</summary>
+
+按 [async-jobs-customer-test.zh-cn.md](async-jobs-customer-test.zh-cn.md) 逐步做。
+`POST /v1/models/{id}/jobs` 必须在毫秒级返回，同一 payload 的 `/infer` 仍要跑完采样时间。
+提交后立刻 `/result` 必须是 409。
+</details>
+
+<details>
 <summary>cpu profile 以后会支持更多模型吗？</summary>
 
 会按版本扩充（走 §8.2 的正式流程），但保持"精选"定位——每个入选模型都要背 CPU 性能与验收。

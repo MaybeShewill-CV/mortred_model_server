@@ -179,7 +179,8 @@ HttpResp send_request(int port,
                       const std::string& method,
                       const std::string& path,
                       const std::string& body,
-                      const std::vector<std::pair<std::string, std::string>>& headers) {
+                      const std::vector<std::pair<std::string, std::string>>& headers,
+                      int recv_timeout_sec = 5) {
     const int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
         ADD_FAILURE() << "socket() failed";
@@ -222,7 +223,7 @@ HttpResp send_request(int port,
     }
 
     timeval timeout{};
-    timeout.tv_sec = 5;
+    timeout.tv_sec = recv_timeout_sec > 0 ? recv_timeout_sec : 5;
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
     std::string response;
@@ -896,6 +897,38 @@ TEST(server_e2e_contract, async_submit_returns_202_with_job_id) {
     EXPECT_STREQ(doc["state"].GetString(), "pending");
 }
 
+TEST(server_e2e_contract, async_submit_202_does_not_wait_for_inference) {
+    // POST /jobs must flush 202 at admission. A 1.5s fake run must not be on
+    // the HTTP series: wall clock of POST stays well under fake_delay_ms, and
+    // the job must still be non-terminal when POST returns.
+    ServerHandle handle = start_server("async_enabled=true\nfake_delay_ms=1500\n");
+    const auto t0 = std::chrono::steady_clock::now();
+    const auto submit =
+        send_request(handle.port, "POST", "/jobs",
+                     "{\"images\":[\"aGVsbG8=\"]}", k_json_auth_headers);
+    const auto post_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                             std::chrono::steady_clock::now() - t0)
+                             .count();
+    ASSERT_EQ(submit.status, 202) << submit.body;
+    EXPECT_LT(post_ms, 500) << "POST /jobs blocked on inference for " << post_ms << "ms";
+    auto submit_doc = parse_body(submit.body);
+    const std::string job_id = submit_doc["job_id"].GetString();
+
+    const auto status = send_request(handle.port, "GET", "/jobs/" + job_id, "", k_json_auth_headers);
+    ASSERT_EQ(status.status, 200) << status.body;
+    auto status_doc = parse_body(status.body);
+    ASSERT_TRUE(status_doc.HasMember("state") && status_doc["state"].IsString());
+    const std::string state = status_doc["state"].GetString();
+    EXPECT_NE(state, "done") << "job already terminal at admission";
+    EXPECT_TRUE(state == "pending" || state == "running") << "state=" << state;
+
+    const auto result =
+        send_request(handle.port, "GET", "/jobs/" + job_id + "/result", "", k_json_auth_headers);
+    EXPECT_EQ(result.status, 409) << result.body;
+    auto err_doc = parse_body(result.body);
+    EXPECT_TRUE(err_doc.HasMember("error"));
+}
+
 TEST(server_e2e_contract, async_lifecycle_pending_to_done_to_result) {
     ServerHandle handle = start_server("async_enabled=true\nfake_delay_ms=200\n");
     const auto submit =
@@ -930,23 +963,18 @@ TEST(server_e2e_contract, async_lifecycle_pending_to_done_to_result) {
 }
 
 TEST(server_e2e_contract, async_incomplete_result_returns_409) {
-    ServerHandle handle = start_server("async_enabled=true\nfake_delay_ms=5000\n");
+    ServerHandle handle = start_server("async_enabled=true\nfake_delay_ms=1500\n");
     const auto submit =
         send_request(handle.port, "POST", "/jobs",
                      "{\"images\":[\"aGVsbG8=\"]}", k_json_auth_headers);
     ASSERT_EQ(submit.status, 202);
     auto doc = parse_body(submit.body);
     const std::string job_id = doc["job_id"].GetString();
-    // job should still be running (5s delay), so result -> 409
-    // (racing: if the job somehow finished, 200 is also acceptable)
     const auto result =
         send_request(handle.port, "GET", "/jobs/" + job_id + "/result", "", k_json_auth_headers);
-    if (result.status == 409) {
-        auto err_doc = parse_body(result.body);
-        EXPECT_TRUE(err_doc.HasMember("error"));
-    } else {
-        EXPECT_EQ(result.status, 200) << "expected 409 (running) or 200 (fast finish)";
-    }
+    ASSERT_EQ(result.status, 409) << result.body;
+    auto err_doc = parse_body(result.body);
+    EXPECT_TRUE(err_doc.HasMember("error"));
 }
 
 TEST(server_e2e_contract, async_nonexistent_job_returns_404) {
@@ -965,6 +993,14 @@ TEST(server_e2e_contract, async_disabled_returns_404) {
     EXPECT_EQ(resp.status, 404);
 }
 
+TEST(server_e2e_contract, async_jobs_require_auth) {
+    ServerHandle handle = start_server("async_enabled=true\n");
+    const auto resp =
+        send_request(handle.port, "POST", "/jobs", "{\"images\":[\"aGVsbG8=\"]}",
+                     {{"Content-Type", "application/json; charset=utf-8"}});
+    EXPECT_EQ(resp.status, 401);
+}
+
 TEST(server_e2e_contract, async_long_poll_wait_returns_done) {
     ServerHandle handle = start_server("async_enabled=true\nfake_delay_ms=300\n");
     const auto submit =
@@ -974,21 +1010,68 @@ TEST(server_e2e_contract, async_long_poll_wait_returns_done) {
     auto doc = parse_body(submit.body);
     const std::string job_id = doc["job_id"].GetString();
 
-    // long-poll with 5s timeout: should return "done" after ~300ms
+    // long-poll with 5s timeout: should return "done" after ~300ms, not at
+    // pending->running
     const auto wait = send_request(handle.port, "GET", "/jobs/" + job_id + "/wait?timeout=5000",
-                                   "", k_json_auth_headers);
-    EXPECT_EQ(wait.status, 200);
+                                   "", k_json_auth_headers, 15);
+    EXPECT_EQ(wait.status, 200) << wait.body;
     auto wait_doc = parse_body(wait.body);
     EXPECT_STREQ(wait_doc["state"].GetString(), "done");
+}
+
+TEST(server_e2e_contract, async_wait_timeout_returns_current_state) {
+    ServerHandle handle = start_server("async_enabled=true\nfake_delay_ms=2000\n");
+    const auto submit =
+        send_request(handle.port, "POST", "/jobs",
+                     "{\"images\":[\"aGVsbG8=\"]}", k_json_auth_headers);
+    ASSERT_EQ(submit.status, 202);
+    auto doc = parse_body(submit.body);
+    const std::string job_id = doc["job_id"].GetString();
+
+    const auto t0 = std::chrono::steady_clock::now();
+    const auto wait = send_request(handle.port, "GET", "/jobs/" + job_id + "/wait?timeout=200",
+                                   "", k_json_auth_headers, 5);
+    const auto wait_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                             std::chrono::steady_clock::now() - t0)
+                             .count();
+    EXPECT_EQ(wait.status, 200) << wait.body;
+    EXPECT_LT(wait_ms, 800) << "wait ignored timeout budget: " << wait_ms << "ms";
+    auto wait_doc = parse_body(wait.body);
+    const std::string state = wait_doc["state"].GetString();
+    EXPECT_NE(state, "done");
+    EXPECT_TRUE(state == "pending" || state == "running") << "state=" << state;
+}
+
+TEST(server_e2e_contract, async_two_waiters_both_see_done) {
+    ServerHandle handle = start_server("async_enabled=true\nfake_delay_ms=300\n");
+    const auto submit =
+        send_request(handle.port, "POST", "/jobs",
+                     "{\"images\":[\"aGVsbG8=\"]}", k_json_auth_headers);
+    ASSERT_EQ(submit.status, 202);
+    const std::string job_id = parse_body(submit.body)["job_id"].GetString();
+
+    HttpResp w1;
+    HttpResp w2;
+    std::thread t1([&]() {
+        w1 = send_request(handle.port, "GET", "/jobs/" + job_id + "/wait?timeout=5000",
+                          "", k_json_auth_headers, 15);
+    });
+    std::thread t2([&]() {
+        w2 = send_request(handle.port, "GET", "/jobs/" + job_id + "/wait?timeout=5000",
+                          "", k_json_auth_headers, 15);
+    });
+    t1.join();
+    t2.join();
+    EXPECT_EQ(w1.status, 200) << w1.body;
+    EXPECT_EQ(w2.status, 200) << w2.body;
+    EXPECT_STREQ(parse_body(w1.body)["state"].GetString(), "done");
+    EXPECT_STREQ(parse_body(w2.body)["state"].GetString(), "done");
 }
 
 TEST(server_e2e_contract, async_queue_full_returns_429) {
     // max_queue=1 with a 2s model: two CONCURRENT submissions race for one
     // admission slot - the CAS must admit exactly one (202) and reject the
-    // other (429 + error body). Concurrent submission is required because the
-    // 202 reply is only flushed after the job's go task completes (Workflow
-    // server-series semantics, unchanged from the previous implementation),
-    // so a serial second submit would always observe a free queue.
+    // other (429 + error body).
     ServerHandle handle =
         start_server("async_enabled=true\nfake_delay_ms=2000\nasync_max_queue=1\n");
     HttpResp r1, r2;
@@ -1012,6 +1095,23 @@ TEST(server_e2e_contract, async_queue_full_returns_429) {
     auto doc = parse_body(rejected_body);
     ASSERT_FALSE(doc.HasParseError()) << "body=" << rejected_body;
     EXPECT_TRUE(doc.HasMember("error")) << "body=" << rejected_body;
+}
+
+TEST(server_e2e_contract, async_queue_full_serial_returns_429) {
+    // After 202-at-admission, a serial second POST while job1 is still
+    // running must observe a full queue (this used to be impossible because
+    // POST blocked until the runner finished and depth went back to zero).
+    ServerHandle handle =
+        start_server("async_enabled=true\nfake_delay_ms=1500\nasync_max_queue=1\n");
+    const auto r1 = send_request(handle.port, "POST", "/jobs",
+                                 "{\"images\":[\"aGVsbG8=\"]}", k_json_auth_headers);
+    ASSERT_EQ(r1.status, 202) << r1.body;
+    const auto r2 = send_request(handle.port, "POST", "/jobs",
+                                 "{\"images\":[\"aGVsbG8=\"]}", k_json_auth_headers);
+    EXPECT_EQ(r2.status, 429) << r2.body;
+    auto doc = parse_body(r2.body);
+    ASSERT_FALSE(doc.HasParseError()) << "body=" << r2.body;
+    EXPECT_TRUE(doc.HasMember("error")) << "body=" << r2.body;
 }
 
 TEST(server_e2e_contract, batch_item_failure_isolated) {

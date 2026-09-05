@@ -191,10 +191,15 @@ is the same 404 envelope as an unknown `server_uri`. If the model has
 
 | Endpoint (model port) | Success | Errors |
 |---|---|---|
-| `POST /jobs` | `202` with `job_id`, `state`, `poll_url`, `result_url` | `429` when the admission queue is full |
+| `POST /jobs` | `202` at **admission** with `job_id`, `state: pending`, `poll_url`, `result_url` | `429` when the admission queue is full |
 | `GET /jobs/{id}` | `200` with `state` (`pending`/`running`/`done`/`failed`/`timeout`) | `404` unknown id |
-| `GET /jobs/{id}/wait?timeout=N` | `200` after a state change or terminal state | `404` unknown id |
-| `GET /jobs/{id}/result` | `200` standard envelope (repeatable) | `404` unknown id, `409` not finished |
+| `GET /jobs/{id}/wait?timeout=N` | `200` when the job is **terminal**, or when the wait budget expires (`timeout` is milliseconds; default 30000, cap 300000). State may still be `pending`/`running` on expiry | `404` unknown id |
+| `GET /jobs/{id}/result` | `200` standard envelope (repeatable) | `404` unknown id, `409` not finished (including `pending`/`running`/`failed`/`timeout`) |
+
+`202` means the server accepted the job, not that inference has finished. A
+correct client never treats `POST /jobs` like a blocking `/infer`. Step-by-step
+customer verification is in
+[async-jobs-customer-test.md](async-jobs-customer-test.md).
 
 The job ledger is in-memory (lost on restart). The component design, concurrency
 contract and verification gates are documented in

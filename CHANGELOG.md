@@ -7,6 +7,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- `POST /jobs` flushes HTTP 202 at admission. The runner is a detached
+  Workflow go task (`go->start()`), so submit no longer waits for
+  `run_items`. `GET /jobs/{id}/wait` hangs the HTTP series on a named
+  counter and wakes on a terminal job or the wait budget (milliseconds),
+  not on `pending`→`running`. Serial submits can now observe `429` while a
+  job is still running. Customer steps:
+  [async-jobs-customer-test.md](docs/async-jobs-customer-test.md).
+
+> `POST /jobs` 在准入时立即返回 202，不再等推理结束。`GET …/wait` 在终态或
+> wait 预算耗尽时返回（单位毫秒）。客户逐步验收见
+> [async-jobs-customer-test.zh-cn.md](docs/async-jobs-customer-test.zh-cn.md)。
+
 ### Removed
 - Supervisor `GET /api/v1/keys` and `POST /api/v1/keys/reload`. Those routes
   mutated a copy of `ApiKeyManager` that never authenticated inference

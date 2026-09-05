@@ -40,9 +40,11 @@
 BaseAiServerImpl（协议 + 执行编排，两条路径共用）
 ├─ 同步路径:  parse -> worker 池 -> 模型 -> 序列化
 └─ 异步路径:  parse -> AsyncJobTable.submit()      （准入 + 建档）
-                      -> WFGoTask -> worker 池      （执行仍在这里）
-                      -> 模型运行
+                      -> 立刻刷出 202（HTTP series 为空）
+                      -> WFGoTask->start()          （独立 series）
+                      -> worker 池 / 模型运行
                       -> AsyncJobTable.finish()     （终态记账）
+                      -> count_by_name 唤醒 waiter  （go task 回调）
                       -> 序列化（数据来自 snapshot/take_result）
 ```
 
@@ -93,19 +95,16 @@ Workflow HTTP、worker 池、metrics **零依赖**；`InferenceTask` 与
 
 ## 5. HTTP 端点与 Table API 映射
 
-| HTTP 端点 | Table 调用 | 说明 |
+| HTTP 端点 | 表 API | 说明 |
 |---|---|---|
-| `POST /jobs` | `submit(req)` | 202 返回 `job_id`；CAS 拒绝时 429 |
-| `GET /jobs/{id}` | `snapshot(id)` | 未知 id 404；低成本一致视图 |
-| `GET /jobs/{id}/wait?timeout=N` | `snapshot(id)` 后 `wait(id, initial, N)` | 在 go task 中执行；轮询期间被淘汰则回退初始快照 |
+| `POST /jobs` | `submit(req)` | **准入时**刷出 202。runner 走 `go->start()` 新 series，不 `push_back` 到 HTTP series。CAS 拒绝时 429 |
+| `GET /jobs/{id}` | `snapshot(id)` | 未知 id 404；低成本一致视图；HTTP series 为空 |
+| `GET /jobs/{id}/wait?timeout=N` | `snapshot(id)` | 已终态则在 `process()` 里 200。否则 HTTP series 挂在**命名 Workflow counter**（target 1）上，另有独立 timer。唤醒条件是**终态**或 wait 预算耗尽——不是 `pending`→`running`。`timeout` 单位毫秒（默认 30000，上限 300000） |
 | `GET /jobs/{id}/result` | `take_result(id)` | 未知 404 / 非 DONE 409 / 200 标准封装；保留期内可重复读取 |
 
-metrics 与 worker 获取留在服务器一侧；账本是纯状态。
+metrics、worker 获取与 waiter 唤醒留在服务器一侧；账本是纯状态。`AsyncJobTable::wait()`（条件变量）仍供单测使用；HTTP wait 路径不再把 go 线程堵在这把 CV 上。
 
-已知 Workflow series 语义（保持不变，兼容性优先）：POST /jobs 的 202
-响应要等该 job 的 go task 完成后才刷出，因为 runner 被推入了 HTTP task 的
-series。这是旧实现遗留的时延瑕疵，本次刻意不改；因此准入 429 只能通过并发
-提交观察到（e2e 429 契约测试正是这样驱动的）。
+`POST /jobs` 的 202 表示 job **已被准入**，不表示推理已完成。客户端必须 poll、wait 或取 `/result`。
 
 ## 6. 验证方法
 
@@ -127,16 +126,26 @@ ASan+UBSan 门禁。TSAN 运行只关闭 detect_deadlocks 与 report_mutex_bugs�
 互斥量误报 double-lock / lock-order-inversion；数据竞争检测——P0 的真正门禁
 ——保持全开（已用故意写竞态的对照程序验证仍然报警）。压力测试以 4 个提交线程、2 个 runner、3 个轮询线程、
 2 个 waiter 对同一张表持续压测约 3 秒，结束时断言全部不变式（深度归零、
-每个接受的 job 恰好终止一次、id 唯一）。
+每个接受的 job 恰好终止一次、id 唯一）。HTTP 层准入时延由
+`server_e2e_contract` 覆盖：POST 墙钟 << `fake_delay_ms`、任务运行中串行
+429、409 不再接受 200 回退、wait 在终态（或 wait 预算）唤醒、两个并发
+waiter。
 
 ## 7. 兼容性声明
 
-本次重构是纯内部并发修复：
+账本重构是纯内部并发修复。后续的 Workflow series 修复改变的是**可观察时延**，
+不是 JSON / 状态码契约：
 
-- HTTP wire 零变更：状态码（202/404/405/409/429）、JSON 结构、响应头
+- HTTP wire：状态码（202/404/405/409/429）、JSON 结构、响应头
   （`Location`、`Content-Type`）与错误文案全部保持不变。
+- `POST /jobs` 的 202 现在在准入时刷出，**不**表示模型已经跑完。
+  `GET /jobs/{id}/wait` 在 job 进入终态**或** wait 预算耗尽时返回
+  （状态仍可能是 `pending` / `running`）；不会仅仅因为进入 `running` 就返回。
 - 配置零变更：`async_enabled`、`async_timeout`、`async_max_queue`、
   `async_job_ttl`、`async_max_completed` 名称、默认值、语义不变
   （`async_max_queue` <= 0 仍然拒绝一切提交）。
 - job 状态仍在内存中、重启即失——行为不变；持久化属于未来工作，且不得
   改变 wire 契约。
+
+客户如何用 curl / 网关验证长任务（429、409、wait 超时、鉴权）见
+[async-jobs-customer-test.zh-cn.md](async-jobs-customer-test.zh-cn.md)。
