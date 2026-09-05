@@ -144,13 +144,12 @@ python3 scripts/fetch_weights.py            # 下载全部权重到 weights/
 python3 scripts/fetch_weights.py --check    # 校验完整性（sha256）
 ```
 
-如果本机 GPU/TRT 版本与预置引擎不匹配，请先按 [部署说明](#部署说明) 重新生成
-硬件适配的 TensorRT engine：
+如果本机 GPU/TRT 版本与预置引擎不匹配，请按 [部署说明](docs/deployment.zh-cn.md) §10
+为本机 **pack** 生成 engine（`mortredctl prepare`），不要默认转整个 zoo：
 
 ```bash
 cd $PROJECT_ROOT_DIR
-./scripts/convert_trt_engines.sh --list     # 查看引擎清单
-./scripts/convert_trt_engines.sh            # 为当前机器生成缺失引擎
+mortredctl prepare --pack conf/packs/yolov8.toml
 ```
 
 完成后的文件夹结构应该如图所示。
@@ -362,18 +361,15 @@ TLS 仍在反代上终结。
 
 ## TensorRT 引擎重建（硬件适配）
 
-预置引擎可能与你的 GPU 架构 / TRT 版本不匹配，请用 ONNX 源为本机重新生成。
-转换依赖外部 `trtexec`（TensorRT 官方 CLI）：`sudo ./scripts/install_deps.sh --nvidia`
-会自动安装到 `3rd_party/bin/`，或使用系统 TensorRT 包自带版本（可用
-`--trtexec /path/to/trtexec` 指定）：
+Engine 绑定本机 GPU / TRT。日常只转 **当前 pack**（见 [部署指南 §10](docs/deployment.zh-cn.md)）：
 
 ```bash
-./scripts/convert_trt_engines.sh --list    # 查看引擎清单（19 个）
-./scripts/convert_trt_engines.sh           # 生成缺失引擎（FP16 + 动态 profile）
-./scripts/convert_trt_engines.sh --force   # 全部重建
+mortredctl prepare --pack conf/packs/yolov8.toml
 ```
 
-脚本会探测本机 TensorRT 主版本并选择对应的 workspace 参数；本机存在多个 TensorRT 时可用 `--trtexec` 指定。
+全量 zoo 仍可用 `scripts/convert_trt_engines.sh`（需要 `trtexec`：
+`sudo ./scripts/install_deps.sh --nvidia`）。`MORTRED_AUTO_BUILD_ENGINES=true`
+会转整个 zoo，默认关闭。
 
 # `TODO`
 

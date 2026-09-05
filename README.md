@@ -92,14 +92,16 @@ sudo systemctl start mortred-supervisor
 
 ```bash
 mortredctl init [--profile cpu|gpu]   # detect hw, fetch weight subset, verify
+mortredctl prepare [--pack FILE]      # GPU: pack TensorRT engines on this card
+mortredctl calibrate [--pack FILE]    # worker_nums report; --write-pack is opt-in
 mortredctl doctor                     # live acceptance + non-fatal security warnings
 mortredctl doctor --strict            # same, but security warnings fail the gate
 mortredctl status | catalog           # runtime introspection
 ```
 
-GPU note: TensorRT engines are per-machine artifacts; convert missing ones
-with `scripts/convert_trt_engines.sh`, or start the container with
-`-e MORTRED_AUTO_BUILD_ENGINES=true` to convert before autostart.
+GPU note: convert **pack** TensorRT engines on this machine with
+`mortredctl prepare` (not the whole zoo). `MORTRED_AUTO_BUILD_ENGINES=true`
+still converts every engine and stays opt-in. See [docs/deployment.md](docs/deployment.md) §10.
 
 ### Building from source
 
@@ -220,20 +222,16 @@ fails on those warnings. TLS stays at the reverse proxy.
 
 ## TensorRT engine regeneration (hardware-adapted)
 
-Prebuilt engines may mismatch your GPU architecture / TRT version. Regenerate
-them from the ONNX sources for this machine. Conversion uses the external
-`trtexec` CLI (TensorRT official tool): `sudo ./scripts/install_deps.sh --nvidia`
-installs it into `3rd_party/bin/`, or point to your system TensorRT copy with
-`--trtexec /path/to/trtexec`:
+Engines are bound to this GPU / TensorRT. Day-to-day, convert **the current
+pack** ([deployment guide §10](docs/deployment.md)):
 
 ```bash
-./scripts/convert_trt_engines.sh --list    # show the manifest (19 engines)
-./scripts/convert_trt_engines.sh           # convert missing engines (FP16 + dynamic profiles)
-./scripts/convert_trt_engines.sh --force   # rebuild everything
+mortredctl prepare --pack conf/packs/yolov8.toml
 ```
 
-The script detects the local TensorRT major version and emits the matching
-workspace flag. Use `--trtexec` when multiple TensorRT installations coexist.
+Zoo-wide convert remains `scripts/convert_trt_engines.sh` (`trtexec` via
+`sudo ./scripts/install_deps.sh --nvidia`). `MORTRED_AUTO_BUILD_ENGINES=true`
+converts every engine and stays off by default.
 
 # `TODO`
 

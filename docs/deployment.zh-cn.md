@@ -18,7 +18,7 @@
 - [7. 源码构建](#7-源码构建)
 - [8. Profile 体系详解](#8-profile-体系详解)
 - [9. 权重管理](#9-权重管理)
-- [10. TensorRT Engine（仅 GPU）](#10-tensorrt-engine仅-gpu)
+- [10. 机器 Pack 与 TensorRT](#10-机器-pack-与-tensorrt)
 - [11. 认证与安全](#11-认证与安全)
 - [12. 升级与回滚](#12-升级与回滚)
 - [13. 监控集成](#13-监控集成)
@@ -65,7 +65,7 @@ flowchart LR
 |---|---|
 | 只有 2 个对外端口 | 网关 `8080`（推理流量）、supervisor `8787`（管理 + Web 控制台） |
 | 模型进程仅绑 loopback | 外部无法绕过网关直连模型；supervisor 注入 internal token |
-| supervisor 管理一切 | 模型进程崩溃自动按退避策略重启；crash-loop 有保护 |
+| supervisor 管的是 **pack** | 只拉起 `conf/packs/*.toml` 里列出的 catalog id；`MORTRED_AUTOSTART=true` **不会**把整个 `conf/server` 树打满 GPU |
 | fail-closed | 非环回且无推理/管理鉴权时**拒绝启动**。非环回网关还必须有**互不相同的** `MORTRED_METRICS_TOKEN`。TLS 仍在反代上终结。 |
 
 **端口一览**：
@@ -96,7 +96,7 @@ flowchart TD
 | **硬件要求** | NVIDIA GPU + 驱动，CUDA 11.8 或 12 线 | 任意 x64 机器 |
 | **可用模型** | 全部（分类/检测/OCR/分割/SAM/扩散/CLIP/MOT…） | 精选集：mobilenetv2、resnet50、yolov8、hrnet |
 | **权重体积** | 全量 manifest（数十 GB） | 精选子集（约 1 GB） |
-| **Engine 转换** | 需要（每机器一次，见 §10） | 不需要 |
+| **Engine 转换** | 本机为本 pack 转 engine（§10.2）；全量 zoo 转换仍是可选项 | 不需要 |
 
 > **不确定就选 cpu**：选错的最坏结果是换个 profile 重来，数据面配置完全兼容。
 
@@ -227,7 +227,7 @@ curl -fs -H "Authorization: Bearer $MORTRED_API_TOKEN" \
 | 停止 | `docker compose --profile cpu down` |
 | 升级镜像 | `docker compose --profile cpu pull && docker compose --profile cpu up -d` |
 | 进入容器排查 | `docker exec -it mortred-cpu bash` |
-| GPU 首启转换缺失 engine | 环境变量加 `MORTRED_AUTO_BUILD_ENGINES=true`（见 §10.3） |
+| GPU pack engine | `mortredctl prepare`（§10.2）；全量 `MORTRED_AUTO_BUILD_ENGINES` 仍默认关 |
 
 ### 5.4 使用预构建镜像（免本地编译）
 
@@ -405,35 +405,80 @@ python3 scripts/fetch_weights.py --dry-run         # 只打印将下载什么
 
 ---
 
-## 10. TensorRT Engine（仅 GPU）
+## 10. 机器 Pack 与 TensorRT
 
-### 10.1 为什么需要转换
+Compose 和容器入口会设 `MORTRED_AUTOSTART=true` **以及** `MORTRED_PACK`（默认
+`conf/packs/demo.toml`）。这只会拉起 **pack 里列出的 catalog id**，不是
+`conf/server/` 整树。仍然是一模型一进程；git 里 `conf/server` 的 `worker_nums`
+保持 `1`。Pack 的 `worker_nums` / `model_config` 通过环境变量覆盖子进程。
 
-TRT engine 是**硬件架构 + TRT 版本**绑定的二进制：预生成的 engine 换机器大概率不可用。
-所以权重里的 `.onnx` 是源，每台 GPU 机器要转出自己的 `.engine`。
+### 10.1 Pack 文件
 
-### 10.2 转换
+```toml
+# conf/packs/demo.toml — 仓库示例，git 里保持 worker_nums=1
+[pack.MOBILENETV2]
+worker_nums = 1
 
-```bash
-./scripts/convert_trt_engines.sh --list    # 查看清单（哪些 engine 缺失）
-./scripts/convert_trt_engines.sh           # 只转缺失的（FP16 + 动态 batch profile）
-./scripts/convert_trt_engines.sh --force   # 全部重建
+# 机器本地副本，例如 /etc/mortred/pack.toml
+[pack.YOLOV8]
+worker_nums = 4
+# model_config = "conf/model/object_detection/yolov8/yolov8_config.toml"  # 可选变体
 ```
 
-需要 `trtexec`：`sudo ./scripts/install_deps.sh --nvidia` 会装到 `3rd_party/bin/`；
-多版本共存时用 `--trtexec /path/to/trtexec` 指定。
+未知 id 会让 supervisor 启动失败。把 `MORTRED_PACK` 指到机器上的 pack（compose
+环境变量、systemd `supervisor.env`、或进程环境）。不要把校准后的
+`worker_nums` 提交进仓库示例 pack。
 
-### 10.3 容器首启自动转换（可选）
+### 10.2 为本 pack 准备 TensorRT engine（GPU）
+
+Engine 绑定 **这张卡 + 这套 TensorRT**。只转 pack 用到的：
+
+```bash
+mortredctl prepare --pack conf/packs/yolov8.toml          # 或 scripts/prepare_pack.sh
+mortredctl doctor --strict                                 # pack engine 缺失则失败
+```
+
+supervisor **拒绝 spawn** engine 文件缺失或为空的 TensorRT id（状态 `failed`，
+不 crash-loop）。`/ready` 才是真正能加载，不只是文件非空。
+
+demo pack 是 MobilenetV2（无 TensorRT）。YOLOV8 pack 必须在目标 GPU 上
+prepare。`MORTRED_AUTO_BUILD_ENGINES=true` 仍会转 **整个 zoo**，且 **默认关闭**。
+
+### 10.3 校准 `worker_nums`
+
+先停 supervisor / 残留的 `mortred-model-server`。脚本会自己在目录端口上起服
+（YOLOV8 = 9056）；端口占用是 `start_failed`，不是 OOM。
+
+```bash
+ss -ltnp | grep 9056 || true
+python3 scripts/calibrate_pack.py --pack conf/packs/yolov8.toml \
+    --workers 1,2,4,8 --duration 8s --output logs/calibrate-yolov8.json
+# 只把 w* 写进这个 pack（永不写 conf/server）：
+python3 scripts/calibrate_pack.py --pack /path/to/machine-pack.toml --write-pack
+```
+
+JSON 里 `gpu_mem_mib_*` 是进程占用（`nvml_pid` / `nvml_name`），WSL 上往往是
+spawn 前的 **整卡 delta**，不是整卡 `memory.used`。`--write-pack` 之后重启
+supervisor，pack 的 `worker_nums` 才会注入。
+
+### 10.4 全量 zoo 转换（可选）
+
+```bash
+./scripts/convert_trt_engines.sh --list
+./scripts/convert_trt_engines.sh
+./scripts/convert_trt_engines.sh --force
+```
+
+需要 `trtexec`（`sudo ./scripts/install_deps.sh --nvidia` → `3rd_party/bin/`）。
+
+### 10.5 容器首启自动转换（可选）
 
 ```bash
 docker compose --profile gpu up -d -e MORTRED_AUTO_BUILD_ENGINES=true
-# 或 docker run 时加 -e MORTRED_AUTO_BUILD_ENGINES=true
 ```
 
-转换发生在 supervisor autostart 之前，耗时分钟级，**默认关闭**（属显式选择）。
-`mortredctl doctor` 对缺失 engine 只告警不判失败。
-
----
+发生在 supervisor autostart 之前，耗时分钟级，**默认关闭**。日常用 §10.2。
+`mortredctl doctor` 对缺失 pack engine 告警；`--strict` 失败。
 
 ## 11. 认证与安全
 
@@ -574,12 +619,13 @@ mortredctl doctor          # 或 verify_deployment.sh --live
 | 服务起不来，日志见 `refuse to start` | 非环回监听但缺 token | 配好两个 token 再启动（§11.1） |
 | `401` 且带 `WWW-Authenticate` | token 错/缺 | 核对 `Authorization: Bearer ...` 与对应 token |
 | catalog 是空的 | `MORTRED_PROFILE` 与配置不匹配 | 确认环境变量；cpu 下确认存在 `*_cpu` 配置 |
-| 模型进程反复重启 | 权重缺失 / engine 缺失 / 配置错 | `mortredctl status`、`mortredctl logs <id>` 看根因 |
+| 模型进程反复重启 | 权重缺失 / engine 缺失 / 配置错 | `mortredctl status`、`mortredctl logs <id>`；TRT 先 `mortredctl prepare` |
+| calibrate `Cannot start server` / 端口占用 | supervisor 或残留模型仍在听 | 先停 systemd/compose/supervisor，再 `ss -ltnp` 看目录端口（§10.3） |
 | 下载权重 404/超时 | HF 不可达 | 离线流程（§9.4）或配置镜像 |
 | sha256 校验失败 | 下载损坏 / manifest 过期 | 删除该文件重拉；仍失败则重新生成 manifest |
 | `429` 响应 | 队列满或 key 限流 | 调 `max_queue_depth` / `rate_limit_qps`；看 `/metrics` |
 | gpu 模型 init 报 "tensorrt backend is not compiled" | cpu 构建跑了 trt 配置 | 换 gpu 构建/镜像，或该模型用 cpu 配置 |
-| 容器里 engine 全缺 | 未转换或未开自动转换 | §10；或 `MORTRED_AUTO_BUILD_ENGINES=true` |
+| 容器里 engine 全缺 | pack 未 prepare，自动转换默认关 | §10.2；全量 zoo 转换是可选项 |
 
 ### 14.2 日志位置
 
@@ -635,6 +681,14 @@ internal token 二次确认。即使 9xxx 端口误暴露，没有 internal toke
 
 模型配置里的路径是相对安装树解析的。tarball 轨道默认在 `/opt/mortred/weights`；
 Docker 轨道挂载到容器内该路径即可，宿主机位置随意。
+</details>
+
+<details>
+<summary>worker_nums 写在哪？</summary>
+
+git 里 `conf/server` 保持 `worker_nums=1`。并发写在机器 pack 的
+`[pack.<ID>] worker_nums`，由 `MORTRED_PACK` 注入。用 `mortredctl calibrate`
+扫曲线，`--write-pack` 写到机器本地 pack，然后重启 supervisor（§10.3）。
 </details>
 
 <details>
