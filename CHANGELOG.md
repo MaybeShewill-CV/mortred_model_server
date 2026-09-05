@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- `prepare_pack.sh` runs the `/ready` probe with cwd = `_bin`/`bin`, matching
+  supervisor spawn, so `model_config_file_path = "../conf/..."` resolves when
+  the script is invoked from the repo root.
 - `prepare_pack.sh` stops the `/ready` probe with SIGINT (same as the
   supervisor) instead of SIGTERM, so glog does not dump a failure stack.
   Probe logs go to `logs/prepare-<id>.log`; a failed ready prints that file.

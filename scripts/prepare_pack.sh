@@ -153,8 +153,14 @@ PY
     [ -n "$port" ] || fail "no port in $server_toml"
     echo "  start $model_id on :$port (engine $(basename "$engine_path"))"
     probe_log="$ROOT/logs/prepare-${model_id}.log"
-    MORTRED_WORKER_NUMS=1 MORTRED_PROJECT_ROOT="$ROOT" \
-        "$SERVER_BIN" --model "$model_id" "$server_toml" >"$probe_log" 2>&1 &
+    # model_config_file_path is ../conf/... relative to the binary dir, same as
+    # supervisor spawn (chdir _bin/bin). Do not start from the repo root.
+    bin_dir="$(dirname "$SERVER_BIN")"
+    (
+        cd "$bin_dir" || exit 127
+        exec env MORTRED_WORKER_NUMS=1 MORTRED_PROJECT_ROOT="$ROOT" \
+            "$SERVER_BIN" --model "$model_id" "$server_toml"
+    ) >"$probe_log" 2>&1 &
     pid=$!
     PIDS+=("$pid")
     if ! wait_ready "$port"; then
