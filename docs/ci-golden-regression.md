@@ -62,8 +62,8 @@ Local developers without weights keep `GTEST_SKIP` (env unset).
 
 YOLOv8 HTTP serving still uses `conf/model/object_detection/yolov8/yolov8_config.toml`
 (TensorRT). Hosted detection coverage is **NanoDet MNN**, not that engine.
-`yolov8_cpu_config.toml` is the CPU deploy variant and is not the golden
-config.
+There is no separate YOLO CPU toml: TensorRT plus `device=cpu` is a
+configuration error.
 
 ## Maintainer GPU smoke (`gpu-pr-gate`)
 

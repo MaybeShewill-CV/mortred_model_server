@@ -88,6 +88,26 @@ inline std::string server_model_config_path(const std::string& project_root,
     return {};
 }
 
+inline bool tensorrt_cpu_device_error(const mini_toml::Doc& doc, std::string* err) {
+    for (const auto& [section, kv] : doc) {
+        if (!looks_like_backend_section(section)) {
+            continue;
+        }
+        const std::string type = kv.count("type") != 0 ? kv.at("type") : "";
+        if (!is_tensorrt_type(type)) {
+            continue;
+        }
+        const std::string device = kv.count("device") != 0 ? lower_copy(kv.at("device")) : "gpu";
+        if (device == "cpu") {
+            if (err != nullptr) {
+                *err = "tensorrt backend requires device=gpu; device=cpu is a configuration error";
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
 inline std::vector<std::string> trt_engine_raw_paths(const mini_toml::Doc& doc) {
     std::vector<std::string> out;
     for (const auto& [section, kv] : doc) {
@@ -132,6 +152,9 @@ inline bool trt_engines_ready_for_spawn(const std::string& project_root,
         if (err != nullptr) {
             *err = "cannot parse model config: " + model_toml;
         }
+        return false;
+    }
+    if (detail::tensorrt_cpu_device_error(doc, err)) {
         return false;
     }
     const auto raw_paths = detail::trt_engine_raw_paths(doc);

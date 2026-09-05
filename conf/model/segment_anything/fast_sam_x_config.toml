@@ -2,7 +2,7 @@
 [FAST_SAM.backend]
 type = "mnn"
 model_file_path = "../weights/sam/fastsam_x/FastSAM-x.mnn"
-device = "cuda"
+device = "gpu"
 threads = 4
 input_layout = "nchw"
 precision_mode = 0

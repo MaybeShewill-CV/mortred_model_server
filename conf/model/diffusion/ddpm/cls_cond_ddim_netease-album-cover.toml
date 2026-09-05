@@ -8,6 +8,6 @@ beta_end = 0.02
 [DDPM_UNET.backend]
 type = "onnx"
 model_file_path = "../weights/diffusion/ddpm/cls_cond_ddpm_netease_album_cover_128x128.onnx"
-device = "cuda"
+device = "gpu"
 device_id = 0
 threads = 4

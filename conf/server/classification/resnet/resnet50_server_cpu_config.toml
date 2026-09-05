@@ -1,6 +1,7 @@
 [RESNET_CLASSIFICATION_SERVER]
 model="RESNET"
-# deployment profile filter: this entry only appears when MORTRED_PROFILE=cpu
+# deployment profile filter: this entry only appears when MORTRED_PROFILE=cpu.
+# Same model toml as gpu; set device="cpu" in that file on CPU boxes.
 profile="cpu"
 port=9003
 host="localhost"
@@ -18,4 +19,4 @@ server_uri="/mortred_ai_server_v1/classification/resnet"
 server_exe="mortred-model-server.out"
 
 [RESNET]
-model_config_file_path="../conf/model/classification/resnet/resnet50_cpu_config.toml"
+model_config_file_path="../conf/model/classification/resnet/resnet50_config.toml"

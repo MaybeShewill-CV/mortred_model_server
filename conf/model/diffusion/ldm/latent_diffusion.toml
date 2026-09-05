@@ -14,4 +14,4 @@ beta_end = 0.02
 [DDPM_UNET.backend]
 type = "tensorrt"
 model_file_path = "../weights/diffusion/ldm/latent_ddpm_celeba-hq.engine"
-device = "cuda"
+device = "gpu"

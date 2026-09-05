@@ -8,7 +8,7 @@
 [YOLOV8.backend]
 type = "tensorrt"              # mnn | onnx | tensorrt
 model_file_path = "../weights/object_detection/yolov8/yolov8s.engine"
-device = "cuda"                # cpu | cuda，默认 cpu
+device = "gpu"                # cpu | gpu，缺省 gpu
 device_id = 0                  # 可选，CUDA 设备序号
 threads = 4                    # MNN / ONNX CPU 线程数，默认 4
 input_layout = "auto"          # 仅 MNN：auto | nhwc | nchw
@@ -32,7 +32,7 @@ class_names = ["person", "bicycle"]
 |---|---|---|
 | `type` | `backend` | 推理引擎：`mnn`、`onnx` 或 `tensorrt` |
 | `model_file_path` | `backend` | 权重或 engine 文件 |
-| `device` | `backend` | `cpu` 或 `cuda`；TensorRT engine 始终在 CUDA 上执行 |
+| `device` | `backend` | `cpu` 或 `gpu`；缺省为 `gpu`。`type=tensorrt` 且 `device=cpu` 是配置错误 |
 | `device_id` / `gpu_device_id` | `backend` | CUDA 设备序号，二者等价 |
 | `threads` | `backend` | MNN / ONNX CPU 推理线程数 |
 | `gpu_mem_limit_mb` | `backend`（onnx+cuda） | CUDA EP arena **每个 session/worker** 上限；默认 **2048** MiB；`0` = 不限制。环境变量 `MORTRED_ORT_GPU_MEM_LIMIT_MB` 可覆盖。MNN/TRT 忽略。 |
@@ -54,12 +54,12 @@ class_names = ["person", "bicycle"]
 [SAM_PREDICTOR.encoder_backend]
 type = "tensorrt"
 model_file_path = "../weights/sam/mobile_sam/sm61/mobile_sam_encoder.engine"
-device = "cuda"
+device = "gpu"
 
 [SAM_PREDICTOR.decoder_backend]
 type = "tensorrt"
 model_file_path = "../weights/sam/mobile_sam/sm61/mobile_sam_decoder.engine"
-device = "cuda"
+device = "gpu"
 ```
 
 当前多引擎模型包括：

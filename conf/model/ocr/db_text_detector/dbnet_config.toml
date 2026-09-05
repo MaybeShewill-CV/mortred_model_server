@@ -3,7 +3,7 @@
 [DB_TEXT.backend]
 type = "mnn"
 model_file_path = "../weights/ocr/db_text_detector/db_model_large.mnn"
-device = "cuda"
+device = "gpu"
 threads = 4
 input_layout = "nchw"
 input_names = ["x"]

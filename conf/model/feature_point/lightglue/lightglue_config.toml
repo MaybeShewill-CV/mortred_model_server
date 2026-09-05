@@ -3,7 +3,7 @@
 [LIGHTGLUE.extractor_backend]
 type = "tensorrt"
 model_file_path = "../weights/feature_point/lightglue/extractor.engine"
-device = "cuda"
+device = "gpu"
 device_id = 0
 input_names = ["image"]
 output_names = ["keypoints", "scores", "descriptors"]
@@ -11,7 +11,7 @@ output_names = ["keypoints", "scores", "descriptors"]
 [LIGHTGLUE.matcher_backend]
 type = "tensorrt"
 model_file_path = "../weights/feature_point/lightglue/matcher.engine"
-device = "cuda"
+device = "gpu"
 device_id = 0
 input_names = ["kpts0", "kpts1", "desc0", "desc1"]
 output_names = ["matches0", "mscores0"]

@@ -97,7 +97,7 @@ StatusCode OrtSession::init(const BackendConfig& config, std::string* err) {
         _m_session_options.SetIntraOpNumThreads(config.threads);
         _m_session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
         _m_session_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
-        if (config.use_cuda()) {
+        if (config.use_gpu()) {
             int limit_mb = config.gpu_mem_limit_mb;
             if (const char* env = std::getenv("MORTRED_ORT_GPU_MEM_LIMIT_MB");
                 env != nullptr && *env != '\0') {

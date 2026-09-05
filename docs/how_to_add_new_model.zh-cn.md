@@ -130,7 +130,7 @@ class MyModel : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
 [MY_MODEL.backend]
 type = "mnn"                # mnn | onnx | tensorrt
 model_file_path = "../weights/my_model/model.mnn"
-device = "cuda"             # cpu | cuda
+device = "gpu"             # cpu | gpu
 threads = 4
 gpu_mem_limit_mb = 2048     # 仅 onnx+cuda；0 = 不限制；默认 2048
 input_layout = "nhwc"       # 仅 mnn: auto | nhwc | nchw

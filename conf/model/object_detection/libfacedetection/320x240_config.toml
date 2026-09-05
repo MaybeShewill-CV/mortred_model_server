@@ -2,7 +2,7 @@
 [LIBFACE.backend]
 type = "mnn"
 model_file_path = "../weights/object_detection/libfacedetection/face_detection_320x240_model.model"
-device = "cuda"
+device = "gpu"
 threads = 4
 precision_mode = 0
 power_mode = 0

@@ -2,7 +2,7 @@
 [DENSENET.backend]
 type = "mnn"
 model_file_path = "../weights/classification/densenet/densenet-121.mnn"
-device = "cuda"
+device = "gpu"
 threads = 4
 input_layout = "nhwc"
 precision_mode = 0

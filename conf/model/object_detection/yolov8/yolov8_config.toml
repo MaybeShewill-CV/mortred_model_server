@@ -2,7 +2,7 @@
 [YOLOV8.backend]
 type = "tensorrt"
 model_file_path = "../weights/object_detection/yolov8/yolov8s.engine"
-device = "cuda"
+device = "gpu"
 
 [YOLOV8.params]
 model_class_nums = 80

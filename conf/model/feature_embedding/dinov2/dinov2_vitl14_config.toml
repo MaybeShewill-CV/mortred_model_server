@@ -2,7 +2,7 @@
 [DINOV2.backend]
 type = "mnn"
 model_file_path = "../weights/classification/dinov2/dinov2_vitl14_pretrain.mnn"
-device = "cpu"
+device = "gpu"
 threads = 4
 input_layout = "nchw"
 precision_mode = 0

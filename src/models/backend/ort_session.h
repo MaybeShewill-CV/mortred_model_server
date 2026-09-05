@@ -25,7 +25,7 @@ using jinq::common::StatusCode;
 
 /***
  * RAII ONNX Runtime inference session. Env/SessionOptions/Session are owned
- * by value/smart pointer; device=cuda enables the CUDA execution provider.
+ * by value/smart pointer; device=gpu enables the CUDA execution provider.
  */
 class OrtSession : public InferenceSession {
   public:

@@ -2,7 +2,7 @@
 [MSOCRNET.backend]
 type = "onnx"
 model_file_path = "../weights/scene_segmentation/msocrnet/msocrnet_fp16.onnx"
-device = "cuda"
+device = "gpu"
 device_id = 0
 threads = 4
 

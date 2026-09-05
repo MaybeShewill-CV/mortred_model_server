@@ -8,7 +8,7 @@ a two-table schema per model section:
 [YOLOV8.backend]               # backend selection (shared by all models)
 type = "tensorrt"              # mnn | onnx | tensorrt
 model_file_path = "../weights/object_detection/yolov8/yolov8s.engine"
-device = "cuda"                # cpu | cuda (default cpu)
+device = "gpu"                # cpu | gpu (omitted defaults to gpu; tensorrt forbids cpu)
 device_id = 0                  # optional, cuda device index
 threads = 4                    # cpu threads for mnn/onnx (default 4)
 input_layout = "auto"          # mnn only: auto | nhwc | nchw
@@ -32,7 +32,7 @@ class_names = ['person', 'bicycle']
 |-----|-------|-------------|
 | `type` | backend | inference engine: `mnn`, `onnx` (ONNX Runtime) or `tensorrt` |
 | `model_file_path` | backend | weights file (`.mnn`, `.onnx`, `.engine`) |
-| `device` | backend | `cpu` or `cuda`; TRT engines always run on cuda |
+| `device` | backend | `cpu` or `gpu`; omitted defaults to `gpu`. `type=tensorrt` with `device=cpu` is a configuration error |
 | `device_id` / `gpu_device_id` | backend | cuda device index (alias accepted) |
 | `threads` | backend | intra-op threads for mnn / onnx cpu |
 | `gpu_mem_limit_mb` | backend (onnx+cuda) | CUDA EP arena cap **per session/worker**; default **2048**; `0` = unlimited (legacy). Override with `MORTRED_ORT_GPU_MEM_LIMIT_MB`. MNN/TRT ignore it. |

@@ -2,7 +2,7 @@
 [RESNET.backend]
 type = "mnn"
 model_file_path = "../weights/classification/resnet/resnet-50.mnn"
-device = "cuda"
+device = "gpu"
 threads = 4
 input_layout = "nhwc"
 precision_mode = 2

@@ -7,6 +7,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- One model toml per model: removed `*_cpu_config.toml` duplicates. Git
+  defaults `backend.device` to `gpu` (including omitted keys). The value is
+  `cpu` or `gpu` (`cuda` is rejected). `type=tensorrt` with `device=cpu`
+  with `device=cpu` fails at parse, session create, and supervisor spawn.
+  CPU catalog entries point at the same files; operators who need CPU inference
+  set `device = "cpu"` themselves. YOLOv8 and HRNet are not in the cpu catalog
+  (TensorRT).
+
 ### Fixed
 - TensorRT spawn gate no longer fails when the model toml path is a dummy or
   missing (`SupervisorTest.spawn_passes_model_flag_for_unified_exe`). The gate

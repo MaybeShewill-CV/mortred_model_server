@@ -91,14 +91,14 @@ flowchart TD
     A["NVIDIA GPU present?"] -->|"nvidia-smi -L succeeds"| GPU["gpu profile"]
     A -->|"no GPU / unsure"| CPU["cpu profile"]
     GPU --> G1["full model zoo<br/>MNN-CUDA / ORT-CUDA / TensorRT"]
-    CPU --> C1["curated 4 models<br/>MNN-CPU / ORT-CPU, no TensorRT"]
+    CPU --> C1["curated 2 models<br/>MNN-CPU, no TensorRT"]
 ```
 
 | | `gpu` (default) | `cpu` |
 |---|---|---|
 | **Backends** | MNN-CUDA / ORT-CUDA / TensorRT | MNN-CPU / ORT-CPU (TensorRT compiled out) |
 | **Hardware** | NVIDIA GPU + driver, CUDA 11.8 or 12 line | any x64 machine |
-| **Models** | everything (classification/detection/OCR/seg/SAM/diffusion/CLIP/MOT...) | curated: mobilenetv2, resnet50, yolov8, hrnet |
+| **Models** | everything (classification/detection/OCR/seg/SAM/diffusion/CLIP/MOT...) | curated: mobilenetv2, resnet50 |
 | **Weight size** | full manifest (tens of GB) | curated subset (~1 GB) |
 | **Engine conversion** | pack engines on this GPU (§10.2); zoo-wide convert is opt-in | not needed |
 
@@ -223,7 +223,7 @@ curl -fs -H "Authorization: Bearer $MORTRED_API_TOKEN" \
 ```
 
 **Expected**: `/api/v1/health` returns OK; the catalog lists exactly the profile's
-models (cpu: the four `*_cpu` entries - mobilenetv2 / resnet50 / yolov8 / hrnet).
+models (cpu: the two `*_cpu` entries - mobilenetv2 / resnet50).
 
 ### 5.3 Day-2 operations
 
@@ -373,11 +373,12 @@ set is active at a time).
 
 ### 8.2 Extending the cpu curated set (a CHANGELOG-level change)
 
-1. add `<model>_cpu_config.toml` under `conf/model/<task>/<model>/` (backend `mnn`/`onnx`, `device="cpu"`);
-2. add the matching server config with `profile="cpu"`;
-3. add the weight path to `CPU_WEIGHTS` in `scripts/gen_weights_manifest.py`;
-4. regenerate the manifest;
-5. add a cpu smoke verification for the model; record it in CHANGELOG.
+1. point a `conf/server/...` file with `profile="cpu"` at the **same** model toml (do not add a second `*_cpu_config.toml`);
+2. that toml must use `mnn`/`onnx` — `type=tensorrt` with `device=cpu` is a configuration error;
+3. on a CPU box set `device = "cpu"` in that one file (git defaults are `gpu`);
+4. add the weight path to `CPU_WEIGHTS` in `scripts/gen_weights_manifest.py`;
+5. regenerate the manifest;
+6. add a cpu smoke verification for the model; record it in CHANGELOG.
 
 > The curated set is deliberately **frozen per release**: extending it is a
 > release decision (performance + acceptance ownership), not a config tweak.

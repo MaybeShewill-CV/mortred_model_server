@@ -41,6 +41,12 @@ std::unique_ptr<InferenceSession> InferenceSession::create(const BackendConfig& 
         }
         session = std::move(ort_session);
     } else if (config.is_tensorrt()) {
+        if (config.device == "cpu") {
+            if (err != nullptr) {
+                *err = "tensorrt backend requires device=gpu; device=cpu is a configuration error";
+            }
+            return nullptr;
+        }
 #ifdef MORTRED_HAS_TRT
         auto trt_session = std::make_unique<TrtSession>();
         const auto status = trt_session->init(config, err);

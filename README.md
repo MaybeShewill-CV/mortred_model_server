@@ -48,7 +48,7 @@ All models and detectors can be downloaded from my [Hugging Face Page](https://h
 > |---|---|---|
 > | backends | MNN-CUDA / ORT-CUDA / TensorRT | MNN-CPU / ORT-CPU |
 > | hardware | NVIDIA GPU + CUDA 11/12 | any x64 machine |
-> | models | full zoo | curated set (mobilenetv2, resnet50, yolov8, hrnet) |
+> | models | full zoo | curated set (mobilenetv2, resnet50) |
 >
 > Three entries, one core (`mortredctl`): pick whichever fits; they all end at
 > the same `mortredctl doctor` acceptance gate.
