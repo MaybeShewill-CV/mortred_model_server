@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Calibrate worker_nums for a machine pack. Report only; never writes conf/server.
+"""Calibrate worker_nums for a machine pack. Never writes conf/server.
 
 For each pack id, sweep worker_nums, POST with http_infer_rps, and sample GPU
 memory for that server process (NVML compute-apps by pid, else a unique
@@ -9,10 +9,14 @@ taken before spawn (gpu_mem_source=device_delta). Suggests w* from the RPS
 curve. A joint pass starts every id at its suggested w; it sums only real
 NVML per-process rows, otherwise reports one pack device delta.
 
+Optional --write-pack updates worker_nums on [pack.<ID>] tables in that pack
+file only. Git example packs should stay worker_nums=1.
+
 Usage:
   python3 scripts/calibrate_pack.py --pack conf/packs/demo.toml
   python3 scripts/calibrate_pack.py --pack conf/packs/yolov8.toml \\
       --workers 1,2,4 --duration 8s --output logs/calibrate-yolov8.json
+  python3 scripts/calibrate_pack.py --pack /etc/mortred/pack.toml --write-pack
   python3 scripts/calibrate_pack.py --self-test
 """
 
@@ -21,10 +25,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -195,6 +201,84 @@ def pick_w_star(points: list[dict]) -> tuple[int, str]:
             note = "approx_linear" if gain >= 0.8 * w_ratio else "partial_scale"
         last_good = point
     return int(last_good["worker_nums"]) if last_good else 1, note
+
+
+def _under(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def write_pack_worker_nums(pack: Path, updates: dict[str, int]) -> list[dict]:
+    """Set worker_nums on [pack.<ID>] tables. Refuses conf/server paths."""
+    if _under(pack, ROOT / "conf" / "server"):
+        raise ValueError("refusing to write conf/server; pass a pack toml")
+    if not updates:
+        return []
+    original = pack.read_text(encoding="utf-8")
+    newline = "\n" if "\r\n" not in original else "\r\n"
+    lines = original.splitlines()
+    out: list[str] = []
+    current: str | None = None
+    remaining = dict(updates)
+    wrote_line = False
+    applied: list[dict] = []
+
+    def close_section() -> None:
+        nonlocal wrote_line
+        if current is not None and current in remaining and not wrote_line:
+            w = remaining.pop(current)
+            out.append("worker_nums = %d" % w)
+            applied.append({"id": current, "worker_nums": w, "action": "insert"})
+        wrote_line = False
+
+    worker_re = re.compile(r"^(\s*worker_nums\s*=\s*)\d+(.*)$")
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            close_section()
+            current = None
+            if stripped.startswith("[pack."):
+                current = stripped[6:-1].strip()
+            out.append(line)
+            continue
+        if current is not None and current in remaining:
+            match = worker_re.match(line)
+            if match:
+                w = remaining.pop(current)
+                out.append("%s%d%s" % (match.group(1), w, match.group(2)))
+                applied.append({"id": current, "worker_nums": w, "action": "update"})
+                wrote_line = True
+                continue
+        out.append(line)
+    close_section()
+    text = newline.join(out)
+    if original.endswith(newline) or original.endswith("\n"):
+        if not text.endswith(newline):
+            text += newline
+    pack.write_text(text, encoding="utf-8")
+    for leftover in remaining:
+        applied.append({"id": leftover, "error": "no [pack.%s] table" % leftover})
+    return applied
+
+
+def pack_writes_from_report(report: dict) -> dict[str, int]:
+    updates: dict[str, int] = {}
+    for row in report.get("models") or []:
+        model_id = row.get("id")
+        if not isinstance(model_id, str) or not model_id:
+            continue
+        if row.get("reason") == "start_failed":
+            continue
+        points = row.get("points") or []
+        if not any(p.get("started") for p in points):
+            continue
+        w = row.get("suggested_worker_nums")
+        if isinstance(w, int) and 1 <= w <= 256:
+            updates[model_id] = w
+    return updates
 
 
 def listen_port_blocked(port: int) -> str | None:
@@ -445,6 +529,7 @@ def calibrate(
         "duration_s": duration_s,
         "workers_swept": workers,
         "wrote_conf_server": False,
+        "wrote_pack": False,
         "models": [],
         "joint": None,
     }
@@ -613,6 +698,54 @@ def self_test() -> int:
     if port != 9002 or not uri.startswith("/"):
         print("self-test: server_listen failed", port, uri, file=sys.stderr)
         return 1
+    tmp = Path(tempfile.mkdtemp()) / "pack.toml"
+    tmp.write_text(
+        "# machine pack\n[pack.MOBILENETV2]\nworker_nums = 1\n\n[pack.YOLOV8]\n",
+        encoding="utf-8",
+    )
+    fake = {
+        "models": [
+            {
+                "id": "MOBILENETV2",
+                "suggested_worker_nums": 4,
+                "reason": "rps_gain_below_10pct",
+                "points": [{"started": True}],
+            },
+            {
+                "id": "YOLOV8",
+                "suggested_worker_nums": 2,
+                "reason": "single_point",
+                "points": [{"started": True}],
+            },
+            {
+                "id": "SKIPME",
+                "suggested_worker_nums": 8,
+                "reason": "start_failed",
+                "points": [{"started": False}],
+            },
+        ]
+    }
+    updates = pack_writes_from_report(fake)
+    if updates != {"MOBILENETV2": 4, "YOLOV8": 2}:
+        print("self-test: pack_writes_from_report", updates, file=sys.stderr)
+        return 1
+    applied = write_pack_worker_nums(tmp, updates)
+    body = tmp.read_text(encoding="utf-8")
+    if "worker_nums = 4" not in body or "worker_nums = 2" not in body:
+        print("self-test: pack write body", body, file=sys.stderr)
+        return 1
+    if any(a.get("error") for a in applied):
+        print("self-test: unexpected pack write error", applied, file=sys.stderr)
+        return 1
+    try:
+        write_pack_worker_nums(cfg, {"MOBILENETV2": 4})
+        print("self-test: should refuse conf/server", file=sys.stderr)
+        return 1
+    except ValueError:
+        pass
+    if int(load_toml(cfg)["MOBILENETV2_CLASSIFICATION_SERVER"].get("worker_nums") or 0) != 1:
+        print("self-test: conf/server worker_nums mutated", file=sys.stderr)
+        return 1
     print("calibrate_pack.py self-test passed")
     return 0
 
@@ -625,6 +758,11 @@ def main() -> int:
     parser.add_argument("--duration", default="8s")
     parser.add_argument("--output", type=Path, help="write JSON report")
     parser.add_argument("--skip-joint", action="store_true")
+    parser.add_argument(
+        "--write-pack",
+        action="store_true",
+        help="write suggested worker_nums into the pack file (never conf/server)",
+    )
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     if args.self_test:
@@ -637,6 +775,15 @@ def main() -> int:
         parser.error("workers must be >= 1")
     duration_s = parse_duration(args.duration)
     report = calibrate(args.project_root, pack, workers, duration_s, args.skip_joint)
+    if args.write_pack:
+        try:
+            applied = write_pack_worker_nums(pack, pack_writes_from_report(report))
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        report["wrote_pack"] = any(a.get("worker_nums") for a in applied)
+        report["pack_writes"] = applied
+        if report["wrote_pack"]:
+            print("wrote worker_nums into %s" % pack, file=sys.stderr)
     text = json.dumps(report, indent=2)
     print(text)
     if args.output:
