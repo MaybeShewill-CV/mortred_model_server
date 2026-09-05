@@ -120,7 +120,7 @@ StatusCode MnnSession::init(const BackendConfig& config, std::string* err) {
     }
 
     MNN::ScheduleConfig schedule_config;
-    if (config.use_cuda()) {
+    if (config.use_gpu()) {
         schedule_config.type = MNN_FORWARD_CUDA;
     } else {
         schedule_config.type = MNN_FORWARD_CPU;

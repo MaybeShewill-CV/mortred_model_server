@@ -2,7 +2,7 @@
 [SUPERPOINT.backend]
 type = "mnn"
 model_file_path = "../weights/feature_point/superpoint/superpoint_120x160.mnn"
-device = "cuda"
+device = "gpu"
 threads = 4
 input_layout = "nchw"
 precision_mode = 0

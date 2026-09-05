@@ -3,9 +3,9 @@
 [SAM_PREDICTOR.encoder_backend]
 type = "tensorrt"
 model_file_path = "../weights/sam/mobile_sam/sm61/mobile_sam_encoder.engine"
-device = "cuda"
+device = "gpu"
 
 [SAM_PREDICTOR.decoder_backend]
 type = "tensorrt"
 model_file_path = "../weights/sam/mobile_sam/sm61/mobile_sam_decoder.engine"
-device = "cuda"
+device = "gpu"

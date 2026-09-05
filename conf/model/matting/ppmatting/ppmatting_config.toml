@@ -2,7 +2,7 @@
 [PP_MATTING.backend]
 type = "mnn"
 model_file_path = "../weights/matting/ppmatting/ppmatting_hrnet_w18_human_512.mnn"
-device = "cuda"
+device = "gpu"
 threads = 4
 input_layout = "nchw"
 precision_mode = 0

@@ -178,6 +178,31 @@ TEST(config_schema, empty_model_file_path_fails) {
     EXPECT_NE(err.find("model_file_path"), std::string::npos) << err;
 }
 
+TEST(config_schema, tensorrt_cpu_device_fails) {
+    auto table = parse_text(
+        "[M]\n[M.backend]\ntype=\"tensorrt\"\nmodel_file_path=\"x.engine\"\ndevice=\"cpu\"\n");
+    std::string err;
+    EXPECT_FALSE(parse_backend_config(table, nullptr, &err));
+    EXPECT_NE(err.find("device=gpu"), std::string::npos) << err;
+}
+
+TEST(config_schema, cuda_device_is_rejected) {
+    auto table = parse_text(
+        "[M]\n[M.backend]\ntype=\"mnn\"\nmodel_file_path=\"x.mnn\"\ndevice=\"cuda\"\n");
+    std::string err;
+    EXPECT_FALSE(parse_backend_config(table, nullptr, &err));
+    EXPECT_NE(err.find("cpu"), std::string::npos) << err;
+    EXPECT_NE(err.find("gpu"), std::string::npos) << err;
+}
+
+TEST(config_schema, omitted_device_defaults_to_gpu) {
+    auto table = parse_text("[M]\n[M.backend]\ntype=\"mnn\"\nmodel_file_path=\"x.mnn\"\n");
+    std::string err;
+    jinq::models::backend::BackendConfig cfg;
+    ASSERT_TRUE(parse_backend_config(table, &cfg, &err)) << err;
+    EXPECT_EQ(cfg.device, "gpu");
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

@@ -3,9 +3,9 @@
 [SAM_PREDICTOR.encoder_backend]
 type = "tensorrt"
 model_file_path = "../weights/sam/nano_sam/sm61/nano_sam_encoder_fp16.engine"
-device = "cuda"
+device = "gpu"
 
 [SAM_PREDICTOR.decoder_backend]
 type = "tensorrt"
 model_file_path = "../weights/sam/nano_sam/sm61/nano_sam_decoder.engine"
-device = "cuda"
+device = "gpu"

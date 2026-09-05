@@ -2,7 +2,7 @@
 [METRIC3D.backend]
 type = "tensorrt"
 model_file_path = "../weights/mono_depth_estimation/metric3d/metric3d_750k_1088x1920.engine"
-device = "cuda"
+device = "gpu"
 
 [METRIC3D.params]
 focal_length = 1000.0

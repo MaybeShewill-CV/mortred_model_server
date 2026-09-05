@@ -3,7 +3,7 @@
 [BISENETV2.backend]
 type = "mnn"
 model_file_path = "../weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.mnn"
-device = "cuda"
+device = "gpu"
 threads = 4
 input_layout = "nhwc"
 input_names = ["input_tensor"]

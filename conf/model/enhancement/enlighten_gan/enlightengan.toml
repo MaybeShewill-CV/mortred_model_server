@@ -2,7 +2,7 @@
 [ENLIGHTENGAN.backend]
 type = "mnn"
 model_file_path = "../weights/enhancement/enlighten_gan/enlightengan.model"
-device = "cuda"
+device = "gpu"
 threads = 4
 output_names = ["output"]
 input_layout = "nchw"

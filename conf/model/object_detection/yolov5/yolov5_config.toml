@@ -4,7 +4,7 @@
 [YOLOV5.backend]
 type = "mnn"
 model_file_path = "../weights/object_detection/yolov5/yolov5l.mnn"
-device = "cuda"
+device = "gpu"
 threads = 4
 input_layout = "nchw"
 precision_mode = 0

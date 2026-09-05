@@ -118,7 +118,7 @@ TEST(BackendConfig, ParseValidAndInvalidBlocks) {
 [MODEL.backend]
 type = "mnn"
 model_file_path = "a.mnn"
-device = "cuda"
+device = "gpu"
 threads = 3
 [MODEL.params]
 score = 0.5
@@ -130,7 +130,7 @@ score = 0.5
     ASSERT_TRUE(jinq::models::backend::parse_backend_config(*valid_section, &config, &err)) << err;
     EXPECT_EQ(config.type, "mnn");
     EXPECT_EQ(config.model_file_path, "a.mnn");
-    EXPECT_EQ(config.device, "cuda");
+    EXPECT_EQ(config.device, "gpu");
     EXPECT_EQ(config.threads, 3);
     EXPECT_EQ(config.gpu_mem_limit_mb, 2048);
 
@@ -139,7 +139,7 @@ score = 0.5
 [MODEL.backend]
 type = "onnx"
 model_file_path = "a.onnx"
-device = "cuda"
+device = "gpu"
 gpu_mem_limit_mb = 512
 )toml");
     const toml::table* onnx_limit_section = onnx_limit["MODEL"].as_table();
@@ -231,13 +231,20 @@ TEST(BackendSession, UnknownBackendAndMissingFileFail) {
     EXPECT_NE(err.find("not exist"), std::string::npos) << err;
 
     err.clear();
-    EXPECT_EQ(InferenceSession::create(make_config("tensorrt", "weights/not/exist.engine"), &err),
+    EXPECT_EQ(InferenceSession::create(
+                  make_config("tensorrt", "weights/not/exist.engine", "gpu"), &err),
               nullptr);
 #ifdef MORTRED_HAS_TRT
     EXPECT_NE(err.find("not exist"), std::string::npos) << err;
 #else
     EXPECT_NE(err.find("not compiled"), std::string::npos) << err;
 #endif
+
+    err.clear();
+    EXPECT_EQ(InferenceSession::create(
+                  make_config("tensorrt", "weights/not/exist.engine", "cpu"), &err),
+              nullptr);
+    EXPECT_NE(err.find("configuration error"), std::string::npos) << err;
 }
 
 TEST(MnnSession, InitAndRunMobilenetv2) {
@@ -325,7 +332,7 @@ TEST(TrtSession, ResolvesLightglueDynamicOutputs) {
     }
     std::string err;
     auto session =
-        InferenceSession::create(make_config("tensorrt", kLightglueExtractor, "cuda"), &err);
+        InferenceSession::create(make_config("tensorrt", kLightglueExtractor, "gpu"), &err);
     if (session == nullptr) {
         MORTRED_SKIP_OR_FAIL_WEIGHTS(std::string("tensorrt/gpu unavailable: ") + err);
     }
@@ -374,7 +381,7 @@ TEST(TrtSession, InitAndRunYolov8) {
         MORTRED_SKIP_OR_FAIL_WEIGHTS("tensorrt engine not available");
     }
     std::string err;
-    auto session = InferenceSession::create(make_config("tensorrt", kTrtModel, "cuda"), &err);
+    auto session = InferenceSession::create(make_config("tensorrt", kTrtModel, "gpu"), &err);
     if (session == nullptr) {
         MORTRED_SKIP_OR_FAIL_WEIGHTS(std::string("tensorrt/gpu unavailable: ") + err);
     }
@@ -454,7 +461,7 @@ TEST(MultiBackend, CoexistInOneProcess) {
 
     if (file_exists(kTrtModel)) {
 #ifdef MORTRED_HAS_TRT
-        auto trt_session = InferenceSession::create(make_config("tensorrt", kTrtModel, "cuda"), &err);
+        auto trt_session = InferenceSession::create(make_config("tensorrt", kTrtModel, "gpu"), &err);
         if (trt_session != nullptr) {
             const auto& trt_input = trt_session->inputs().front();
             std::vector<NamedTensor> trt_inputs;

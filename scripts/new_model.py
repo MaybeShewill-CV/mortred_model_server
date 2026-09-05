@@ -44,9 +44,9 @@ IDENTIFIER = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 UPPER_IDENTIFIER = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 BACKENDS = {
-    "mnn": {"device": "cuda", "weight_ext": "mnn", "extra": 'input_layout = "nhwc"\nthreads = 4'},
-    "onnx": {"device": "cpu", "weight_ext": "onnx", "extra": ""},
-    "tensorrt": {"device": "cuda", "weight_ext": "engine", "extra": ""},
+    "mnn": {"device": "gpu", "weight_ext": "mnn", "extra": 'input_layout = "nhwc"\nthreads = 4'},
+    "onnx": {"device": "gpu", "weight_ext": "onnx", "extra": ""},
+    "tensorrt": {"device": "gpu", "weight_ext": "engine", "extra": ""},
 }
 
 

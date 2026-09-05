@@ -2,7 +2,7 @@
 [DEPTH_ANYTHING.backend]
 type = "tensorrt"
 model_file_path = "../weights/mono_depth_estimation/depth_anything/depth_anything_vits14.engine"
-device = "cuda"
+device = "gpu"
 
 [DEPTH_ANYTHING.params]
 focal_length = 0.0

@@ -87,14 +87,14 @@ flowchart TD
     A["机器上有 NVIDIA GPU 吗？"] -->|"nvidia-smi -L 成功"| GPU["gpu profile"]
     A -->|"无 GPU / 不确定"| CPU["cpu profile"]
     GPU --> G1["全部模型可用<br/>MNN-CUDA / ORT-CUDA / TensorRT"]
-    CPU --> C1["精选 4 模型<br/>MNN-CPU / ORT-CPU，无 TensorRT"]
+    CPU --> C1["精选 2 模型<br/>MNN-CPU，无 TensorRT"]
 ```
 
 | | `gpu`（默认） | `cpu` |
 |---|---|---|
 | **推理后端** | MNN-CUDA / ORT-CUDA / TensorRT | MNN-CPU / ORT-CPU（TensorRT 编译排除） |
 | **硬件要求** | NVIDIA GPU + 驱动，CUDA 11.8 或 12 线 | 任意 x64 机器 |
-| **可用模型** | 全部（分类/检测/OCR/分割/SAM/扩散/CLIP/MOT…） | 精选集：mobilenetv2、resnet50、yolov8、hrnet |
+| **可用模型** | 全部（分类/检测/OCR/分割/SAM/扩散/CLIP/MOT…） | 精选集：mobilenetv2、resnet50 |
 | **权重体积** | 全量 manifest（数十 GB） | 精选子集（约 1 GB） |
 | **Engine 转换** | 本机为本 pack 转 engine（§10.2）；全量 zoo 转换仍是可选项 | 不需要 |
 
@@ -216,7 +216,7 @@ curl -fs -H "Authorization: Bearer $MORTRED_API_TOKEN" \
     http://localhost:8787/api/v1/catalog | python3 -m json.tool | head -20
 ```
 
-**预期**：`/api/v1/health` 返回 OK；catalog 只列出当前 profile 的模型（cpu profile 应恰好看到 mobilenetv2 / resnet50 / yolov8 / hrnet 四个 `*_cpu` 条目）。
+**预期**：`/api/v1/health` 返回 OK；catalog 只列出当前 profile 的模型（cpu profile 应恰好看到 mobilenetv2 / resnet50 两个 `*_cpu` 条目）。
 
 ### 5.3 常用操作
 
@@ -361,11 +361,12 @@ export MORTRED_PROFILE=cpu     # supervisor 与 gateway 都读它；缺省 = gpu
 
 ### 8.2 扩充 cpu 精选集（CHANGELOG 级变更）
 
-1. `conf/model/<task>/<model>/` 新增 `<model>_cpu_config.toml`（backend 用 `mnn`/`onnx`，`device="cpu"`）；
-2. `conf/server/.../` 新增对应 server 配置，含 `profile="cpu"`；
-3. `scripts/gen_weights_manifest.py` 的 `CPU_WEIGHTS` 集合加入该权重路径；
-4. 跑 `gen_weights_manifest.py` 重新生成 manifest；
-5. 补充该模型的 cpu 冒烟验证，CHANGELOG 记录。
+1. `conf/server/.../` 增加 `profile="cpu"` 的 server 配置，指向**同一份**模型 toml（不要再加 `*_cpu_config.toml`）；
+2. 该 toml 必须是 `mnn`/`onnx`——`type=tensorrt` 且 `device=cpu` 视为配置错误；
+3. CPU 机器上在这一份文件里把 `device` 改成 `"cpu"`（仓库默认是 `"gpu"`）；
+4. `scripts/gen_weights_manifest.py` 的 `CPU_WEIGHTS` 集合加入该权重路径；
+5. 跑 `gen_weights_manifest.py` 重新生成 manifest；
+6. 补充该模型的 cpu 冒烟验证，CHANGELOG 记录。
 
 > 精选集刻意**随版本冻结**：扩充是发布决策（要为它背性能与验收），不是随手改配置。
 

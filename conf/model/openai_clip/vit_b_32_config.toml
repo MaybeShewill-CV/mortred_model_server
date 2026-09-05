@@ -3,7 +3,7 @@
 [OPENAI_CLIP.visual_backend]
 type = "mnn"
 model_file_path = "../weights/openai_clip/vit-b-32/visual.mnn"
-device = "cuda"
+device = "gpu"
 threads = 4
 precision_mode = 0
 power_mode = 0
@@ -13,7 +13,7 @@ output_names = ["output"]
 [OPENAI_CLIP.text_backend]
 type = "mnn"
 model_file_path = "../weights/openai_clip/vit-b-32/textual.mnn"
-device = "cuda"
+device = "gpu"
 threads = 4
 precision_mode = 0
 power_mode = 0

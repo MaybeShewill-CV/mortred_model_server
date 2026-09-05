@@ -3,7 +3,7 @@
 [SAM_PREDICTOR.encoder_backend]
 type = "mnn"
 model_file_path = "../weights/sam/vit_l/sam_vit_l_encoder.mnn"
-device = "cuda"
+device = "gpu"
 threads = 4
 input_names = ["input_image"]
 output_names = ["image_embeddings"]
@@ -11,5 +11,5 @@ output_names = ["image_embeddings"]
 [SAM_PREDICTOR.decoder_backend]
 type = "onnx"
 model_file_path = "../weights/sam/vit_l/sam_vit_l_decoder.onnx"
-device = "cpu"
+device = "gpu"
 threads = 4

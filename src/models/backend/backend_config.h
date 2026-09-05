@@ -29,7 +29,7 @@ namespace backend {
  *   [MODEL.backend]
  *   type = "mnn" | "onnx" | "tensorrt"
  *   model_file_path = "..."
- *   device = "cpu" | "cuda"
+ *   device = "cpu" | "gpu"  # omitted defaults to gpu; tensorrt forbids cpu
  *   device_id = 0
  *   threads = 4
  *   gpu_mem_limit_mb = 2048  # onnx+cuda arena; 0 = unlimited; default 2048
@@ -42,7 +42,7 @@ namespace backend {
 struct BackendConfig {
     std::string type;
     std::string model_file_path;
-    std::string device = "cpu";
+    std::string device = "gpu";
     int device_id = 0;
     int threads = 4;
     // ONNX Runtime CUDA EP BFC arena cap per session (one worker). 0 = unlimited
@@ -58,7 +58,7 @@ struct BackendConfig {
     bool is_mnn() const { return type == "mnn"; }
     bool is_onnx() const { return type == "onnx"; }
     bool is_tensorrt() const { return type == "tensorrt"; }
-    bool use_cuda() const { return device == "cuda"; }
+    bool use_gpu() const { return device == "gpu"; }
 };
 
 namespace detail {
@@ -173,14 +173,20 @@ inline bool parse_backend_table(const toml::table& backend_table, BackendConfig*
     if (!detail::read_string(backend_table, "device", &config.device, err)) {
         return false;
     }
-    if (!config.device.empty() && config.device != "cpu" && config.device != "cuda") {
+    if (!config.device.empty() && config.device != "cpu" && config.device != "gpu") {
         if (err != nullptr) {
-            *err = "backend key 'device' must be 'cpu' or 'cuda', got '" + config.device + "'";
+            *err = "backend key 'device' must be 'cpu' or 'gpu', got '" + config.device + "'";
         }
         return false;
     }
     if (config.device.empty()) {
-        config.device = "cpu";
+        config.device = "gpu";
+    }
+    if (config.is_tensorrt() && config.device == "cpu") {
+        if (err != nullptr) {
+            *err = "tensorrt backend requires device=gpu; device=cpu is a configuration error";
+        }
+        return false;
     }
     if (!detail::read_int(backend_table, "device_id", &config.device_id, err) ||
         !detail::read_int(backend_table, "gpu_device_id", &config.device_id, err) ||

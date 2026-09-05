@@ -2,4 +2,4 @@
 [HRNET_SEGMENTATION.backend]
 type = "tensorrt"
 model_file_path = "../weights/scene_segmentation/hrnet/hrnetw48_ccd_fp32.engine"
-device = "cuda"
+device = "gpu"

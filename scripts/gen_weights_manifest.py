@@ -30,9 +30,9 @@ OUT = ROOT / "conf" / "weights_manifest.json"
 HF_API = "https://huggingface.co/api/models/MaybeShewill-CV/mortred_model_server"
 
 # Curated cpu-profile weight set (the cpu deployment profile serves exactly
-# these models; matches the *_cpu_config.toml variants under conf/). Extend
-# this list when adding a model to the cpu catalog - it drives both the
-# manifest "profiles" tag and fetch_weights.py --profile cpu.
+# these models from the same model tomls as gpu, with device=cpu set by the
+# operator). Extend this list when adding a model to the cpu catalog - it
+# drives both the manifest "profiles" tag and fetch_weights.py --profile cpu.
 CPU_WEIGHTS = {
     "weights/classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn",
     "weights/classification/resnet/resnet-50.mnn",

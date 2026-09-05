@@ -57,6 +57,17 @@ BACKEND_SOURCE_KEYS = {
     "backend_precision_mode": "precision_mode",
     "backend_power_mode": "power_mode",
 }
+
+def copy_backend_fields(source_table: Mapping[str, Any], backend: Dict[str, Any]) -> None:
+    for old_key, new_key in BACKEND_SOURCE_KEYS.items():
+        if old_key not in source_table:
+            continue
+        value = source_table[old_key]
+        if new_key == "device" and isinstance(value, str) and value.lower() == "cuda":
+            value = "gpu"
+        backend[new_key] = value
+
+
 BARE_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
@@ -266,9 +277,7 @@ def migrate_lightglue_section(
         return None
 
     backend_common: Dict[str, Any] = {"type": "tensorrt"}
-    for old_key, new_key in BACKEND_SOURCE_KEYS.items():
-        if old_key in source_table:
-            backend_common[new_key] = source_table[old_key]
+    copy_backend_fields(source_table, backend_common)
     if "compute_backend" not in source_table:
         backend_common["device"] = "cpu"
 
@@ -340,9 +349,7 @@ def migrate_openai_clip_section(
             )
             return None
         backend = {"type": "mnn", "model_file_path": model_path}
-        for old_key, new_key in BACKEND_SOURCE_KEYS.items():
-            if old_key in source_table:
-                backend[new_key] = source_table[old_key]
+        copy_backend_fields(source_table, backend)
         if "compute_backend" not in source_table:
             backend["device"] = "cpu"
         extra_backends[backend_key] = backend
@@ -393,9 +400,7 @@ def sam_backend_from_table(
         return None
 
     backend: Dict[str, Any] = {"type": target_type, "model_file_path": model_path}
-    for old_key, new_key in BACKEND_SOURCE_KEYS.items():
-        if old_key in source_table:
-            backend[new_key] = source_table[old_key]
+    copy_backend_fields(source_table, backend)
     if "compute_backend" not in source_table:
         backend["device"] = "cpu"
     return backend
@@ -569,9 +574,7 @@ def migrate_section(
         return None
 
     backend: Dict[str, Any] = {"type": target_type}
-    for old_key, new_key in BACKEND_SOURCE_KEYS.items():
-        if old_key in source_table:
-            backend[new_key] = source_table[old_key]
+    copy_backend_fields(source_table, backend)
     if "compute_backend" not in source_table:
         backend["device"] = "cpu"
 
@@ -1263,7 +1266,7 @@ def run_selftest() -> int:
         {
             "type": "tensorrt",
             "model_file_path": "../weights/extractor.engine",
-            "device": "cuda",
+            "device": "gpu",
             "device_id": 0,
         },
         "lightglue extractor backend",
@@ -1289,7 +1292,7 @@ def run_selftest() -> int:
         {
             "type": "onnx",
             "model_file_path": "../weights/ddpm.onnx",
-            "device": "cuda",
+            "device": "gpu",
             "device_id": 2,
             "threads": 4,
         },
@@ -1355,7 +1358,7 @@ def run_selftest() -> int:
         {
             "type": "mnn",
             "model_file_path": "../weights/sam_vit_encoder.mnn",
-            "device": "cuda",
+            "device": "gpu",
             "threads": 4,
         },
         "SAM ViT encoder backend",
@@ -1388,7 +1391,7 @@ def run_selftest() -> int:
         {
             "type": "mnn",
             "model_file_path": "../weights/libface.model",
-            "device": "cuda",
+            "device": "gpu",
             "threads": 1,
         },
         "pure MNN .model backend",
@@ -1412,7 +1415,7 @@ def run_selftest() -> int:
         {
             "type": "mnn",
             "model_file_path": "../weights/visual.mnn",
-            "device": "cuda",
+            "device": "gpu",
             "threads": 4,
             "precision_mode": 0,
             "power_mode": 0,
@@ -1446,7 +1449,7 @@ def run_selftest() -> int:
         {
             "type": "mnn",
             "model_file_path": "../weights/mobilenetv2.mnn",
-            "device": "cuda",
+            "device": "gpu",
             "threads": 4,
             "precision_mode": 0,
             "power_mode": 0,

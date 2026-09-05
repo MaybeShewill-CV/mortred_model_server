@@ -3,7 +3,7 @@
 [PP_HUMANSEG.backend]
 type = "mnn"
 model_file_path = "../weights/scene_segmentation/pphuman_seg/pp_humanseg_192x192_mobile.mnn"
-device = "cuda"
+device = "gpu"
 threads = 4
 input_layout = "nchw"
 input_names = ["x"]

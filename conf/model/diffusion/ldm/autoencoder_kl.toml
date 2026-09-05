@@ -2,4 +2,4 @@
 [AUTOENCODER_KL.backend]
 type = "tensorrt"
 model_file_path = "../weights/diffusion/ldm/autoencoder_kl_decoder.engine"
-device = "cuda"
+device = "gpu"

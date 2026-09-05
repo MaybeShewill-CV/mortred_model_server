@@ -4,7 +4,7 @@
 [NanoDet.backend]
 type = "mnn"
 model_file_path = "../weights/object_detection/nanodet/nanodet_plus_m_1x5.mnn"
-device = "cuda"
+device = "gpu"
 threads = 4
 input_layout = "nchw"
 precision_mode = 0

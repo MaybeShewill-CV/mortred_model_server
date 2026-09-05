@@ -2,7 +2,7 @@
 [MOBILENETV2.backend]
 type = "mnn"
 model_file_path = "../weights/classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn"
-device = "cuda"
+device = "gpu"
 threads = 4
 input_layout = "nhwc"
 precision_mode = 0

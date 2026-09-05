@@ -64,6 +64,20 @@ TEST_F(TrtSpawnGateTest, mnn_backend_is_not_gated) {
         << err;
 }
 
+TEST_F(TrtSpawnGateTest, tensorrt_cpu_device_fails_even_with_engine) {
+    write_model("[X.backend]\ntype=\"tensorrt\"\nmodel_file_path=\"../weights/x.engine\"\n"
+                "device=\"cpu\"\n");
+    std::ofstream engine(root_ / "weights" / "x.engine", std::ios::binary);
+    engine << "payload";
+    engine.close();
+    std::string err;
+    EXPECT_FALSE(trt_engines_ready_for_spawn(root_.string(), "_bin",
+                                             (root_ / "conf" / "server" / "x.toml").string(),
+                                             "", &err));
+    EXPECT_NE(err.find("configuration error"), std::string::npos) << err;
+    EXPECT_FALSE(is_trt_gate_error(err)) << err;
+}
+
 TEST_F(TrtSpawnGateTest, missing_engine_fails_closed) {
     write_model("[X.backend]\ntype=\"tensorrt\"\nmodel_file_path=\"../weights/x.engine\"\n");
     std::string err;

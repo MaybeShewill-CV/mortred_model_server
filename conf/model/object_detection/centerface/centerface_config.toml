@@ -2,7 +2,7 @@
 [CENTER_FACE.backend]
 type = "mnn"
 model_file_path = "../weights/object_detection/centerface_detection/centerface.model"
-device = "cpu"
+device = "gpu"
 threads = 4
 input_layout = "nchw"
 precision_mode = 0

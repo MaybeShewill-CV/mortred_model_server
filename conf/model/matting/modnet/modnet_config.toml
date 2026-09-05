@@ -3,7 +3,7 @@
 [MODNET_MATTING.backend]
 type = "mnn"
 model_file_path = "../weights/matting/modnet/modnet_hrnet_w18.mnn"
-device = "cuda"
+device = "gpu"
 threads = 4
 input_layout = "nchw"
 input_names = ["img"]
