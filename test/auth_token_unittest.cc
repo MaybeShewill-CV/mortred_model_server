@@ -66,6 +66,8 @@ TEST(listen_policy, docker_and_unsafe_allow_wildcard) {
     EXPECT_FALSE(jinq::common::listen_host_permitted("0.0.0.0"));
     ::unsetenv("MORTRED_EXPOSE");
 }
+
+int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
