@@ -8,7 +8,8 @@
 # mount defaults to ./weights, override with WEIGHTS_DIR.
 #
 # Two host ports: supervisor (management) 8787 + gateway (inference) 8080.
-# Both bind 127.0.0.1 on the host. LAN/WAN access belongs on a TLS reverse
+# Both bind 127.0.0.1 on the host. Autostart uses conf/packs/demo.toml
+# (MORTRED_PACK), not every conf/server model. LAN/WAN access belongs on a TLS reverse
 # proxy in front (deploy/caddy/Caddyfile). Use "8080:8080" / "8787:8787" only
 # if you accept plaintext Bearer tokens on that interface — and then you MUST
 # set a distinct MORTRED_METRICS_TOKEN or the gateway will refuse to start.
@@ -26,6 +27,7 @@ services:
       MORTRED_GATEWAY_AUTH_TOKEN: "${MORTRED_GATEWAY_AUTH_TOKEN:?set MORTRED_GATEWAY_AUTH_TOKEN to protect inference}"
       MORTRED_METRICS_TOKEN: "${MORTRED_METRICS_TOKEN:-}"
       MORTRED_AUTOSTART: "true"
+      MORTRED_PACK: "/opt/mortred/conf/packs/demo.toml"
     ports:
       - "127.0.0.1:8787:8787"
       - "127.0.0.1:8080:8080"
@@ -59,6 +61,7 @@ services:
       MORTRED_METRICS_TOKEN: "${MORTRED_METRICS_TOKEN:-}"
       MORTRED_PROFILE: "cpu"
       MORTRED_AUTOSTART: "true"
+      MORTRED_PACK: "/opt/mortred/conf/packs/demo.toml"
     ports:
       - "127.0.0.1:8787:8787"
       - "127.0.0.1:8080:8080"

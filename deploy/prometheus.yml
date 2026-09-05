@@ -76,5 +76,5 @@ scrape_configs:
   #       labels: { component: model, model: metric3d }
   # - job_name: mortred-model-ddpm
   #   static_configs:
-  #     - targets: ['localhost:9070']
+  #     - targets: ['localhost:9081']
   #       labels: { component: model, model: ddpm }

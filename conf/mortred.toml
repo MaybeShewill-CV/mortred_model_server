@@ -8,8 +8,12 @@
 api_host = "127.0.0.1"
 api_port = 8787
 # autostart eligible model servers when the supervisor starts (env
-# MORTRED_AUTOSTART=true|false overrides; containers default to true)
+# MORTRED_AUTOSTART=true|false overrides; containers default to true).
+# When a pack is loaded (pack_file or MORTRED_PACK), only [pack.<ID>] members
+# autostart; autostart_default applies only if no pack is set.
 autostart_default = false
+# machine-local pack (relative to project root). Empty = no pack.
+# pack_file = "conf/packs/demo.toml"
 # gateway starts first, then models with this width (1 = sequential, safest
 # for GPU memory; raise for CPU models)
 start_concurrency = 1

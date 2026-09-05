@@ -35,6 +35,7 @@ Verifies a few high-signal invariants:
     umbrella header.
 14. conf/ci_hosted_golden.json matches golden sources, HF cpu weights, the
     GPU smoke filter in ci.yml, and every HTTP catalog id has a CI tier.
+15. `conf/packs/demo.toml` `[pack.<ID>]` ids exist as `model=` in conf/server.
 
 Exit code 0 means consistent; non-zero means the repository needs attention.
 """
@@ -539,6 +540,106 @@ def check_model_todo_markers() -> list[str]:
     return errors
 
 
+def check_unique_catalog_listen() -> list[str]:
+    """Ports / ids / URIs must be unique within one catalog profile, matching
+    Catalog::init. CPU/GPU variants of the same model may share a port because
+    only one profile is active per supervisor run."""
+    errors: list[str] = []
+    conf_server = ROOT / "conf" / "server"
+    if not conf_server.is_dir():
+        return errors
+    rows: list[tuple[str, str, int, str, str]] = []
+    for cfg in sorted(conf_server.rglob("*.toml")):
+        rel = cfg.relative_to(ROOT).as_posix()
+        try:
+            table = load_toml(cfg)
+        except (ValueError, OSError):
+            continue
+        server_sections = [sec for sec in table if sec.endswith("_SERVER")]
+        if len(server_sections) != 1:
+            continue
+        kv = table[server_sections[0]]
+        if not isinstance(kv, dict):
+            continue
+        profile = str(kv.get("profile") or "gpu")
+        try:
+            port = int(kv.get("port") or 0)
+        except (TypeError, ValueError):
+            continue
+        uri = str(kv.get("server_uri") or "")
+        mid = str(kv.get("model") or "")
+        if port <= 0 or not uri.startswith("/") or not mid:
+            continue
+        rows.append((rel, profile, port, uri, mid))
+
+    for runtime in ("gpu", "cpu"):
+        seen_ports: dict[int, str] = {}
+        seen_uris: dict[str, str] = {}
+        seen_ids: dict[str, str] = {}
+        for rel, profile, port, uri, mid in rows:
+            if profile != "any" and profile != runtime:
+                continue
+            prev = seen_ports.get(port)
+            if prev is not None:
+                errors.append(
+                    f"duplicate model server port {port} (profile={runtime}): "
+                    f"{prev} and {rel}"
+                )
+            else:
+                seen_ports[port] = rel
+            prev = seen_uris.get(uri)
+            if prev is not None:
+                errors.append(
+                    f"duplicate server_uri {uri} (profile={runtime}): "
+                    f"{prev} and {rel}"
+                )
+            else:
+                seen_uris[uri] = rel
+            prev = seen_ids.get(mid)
+            if prev is not None:
+                errors.append(
+                    f"duplicate server id {mid} (profile={runtime}): "
+                    f"{prev} and {rel}"
+                )
+            else:
+                seen_ids[mid] = rel
+    return errors
+
+
+def check_demo_pack() -> list[str]:
+    """The shipped demo pack must only name HTTP catalog ids."""
+    errors: list[str] = []
+    pack = ROOT / "conf" / "packs" / "demo.toml"
+    if not pack.is_file():
+        return ["missing conf/packs/demo.toml"]
+    catalog_ids: set[str] = set()
+    conf_server = ROOT / "conf" / "server"
+    if conf_server.is_dir():
+        for cfg in conf_server.rglob("*.toml"):
+            try:
+                table = load_toml(cfg)
+            except (ValueError, OSError):
+                continue
+            for kv in table.values():
+                if isinstance(kv, dict):
+                    model = kv.get("model")
+                    if isinstance(model, str) and model:
+                        catalog_ids.add(model)
+    found = False
+    for line in pack.read_text(encoding="utf-8").splitlines():
+        t = line.strip()
+        if t.startswith("[pack.") and t.endswith("]"):
+            pid = t[6:-1]
+            found = True
+            if pid not in catalog_ids:
+                errors.append(
+                    f"conf/packs/demo.toml unknown catalog id [{pid}]"
+                )
+    if not found:
+        errors.append("conf/packs/demo.toml has no [pack.<ID>] tables")
+    return errors
+
+
 def check_model_io_split() -> list[str]:
     """Guard the src/models/io/ split:
     - model_io_define.h stays a pure aggregate (includes only, no types), so
@@ -586,6 +687,8 @@ def main() -> int:
     errors.extend(check_model_todo_markers())
     errors.extend(check_model_io_split())
     errors.extend(check_demo_client_health())
+    errors.extend(check_unique_catalog_listen())
+    errors.extend(check_demo_pack())
     from check_hosted_golden import check_ci_inference_contract
 
     errors.extend(check_ci_inference_contract())

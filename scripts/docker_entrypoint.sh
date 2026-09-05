@@ -9,8 +9,9 @@ export MORTRED_API_HOST="${MORTRED_API_HOST:-0.0.0.0}"
 export MORTRED_API_PORT="${MORTRED_API_PORT:-8787}"
 export MORTRED_GATEWAY_HOST="${MORTRED_GATEWAY_HOST:-0.0.0.0}"
 export MORTRED_GATEWAY_PORT="${MORTRED_GATEWAY_PORT:-8080}"
-# containers are service deployments: autostart everything eligible by default
+# containers autostart the machine pack (default demo), not the whole catalog
 export MORTRED_AUTOSTART="${MORTRED_AUTOSTART:-true}"
+export MORTRED_PACK="${MORTRED_PACK:-$APP_PROJECT_ROOT/conf/packs/demo.toml}"
 # Runtime libs: prefer the installed tree lib (contains 3rd_party libs), then fall back to system paths
 export LD_LIBRARY_PATH="/opt/mortred/lib:${LD_LIBRARY_PATH:-}"
 # Engine conversion tool (trtexec) default location: installed tree bin/ (copied by install_deps.sh --nvidia)

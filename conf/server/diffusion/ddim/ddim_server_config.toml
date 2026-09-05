@@ -1,6 +1,6 @@
 [DDIM_SERVER]
 model="DDIM"
-port=9071
+port=9082
 host="localhost"
 max_connections=100
 peer_resp_timeout=600

@@ -12,6 +12,7 @@
 #ifndef MORTRED_MODEL_SERVER_GENERIC_CV_SERVER_H
 #define MORTRED_MODEL_SERVER_GENERIC_CV_SERVER_H
 
+#include <cstdlib>
 #include <functional>
 #include <memory>
 #include <string>
@@ -148,6 +149,10 @@ StatusCode CvModelServer<MODEL_OUTPUT>::Impl::init(const toml::table& config) {
         return StatusCode::SERVER_INIT_FAILED;
     }
     auto model_cfg_path = (*model_section_ptr)["model_config_file_path"].value_or<std::string>("");
+    if (const char* env = std::getenv("MORTRED_MODEL_CONFIG_FILE");
+        env != nullptr && *env != '\0') {
+        model_cfg_path = env;
+    }
     if (!jinq::common::FilePathUtil::is_file_exist(model_cfg_path)) {
         LOG(ERROR) << _m_spec.display_name << " model config file not exist: " << model_cfg_path;
         this->_m_successfully_initialized = false;

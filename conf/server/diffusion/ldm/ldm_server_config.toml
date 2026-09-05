@@ -1,6 +1,6 @@
 [LDM_SERVER]
 model="LDM"
-port=9073
+port=9084
 host="localhost"
 max_connections=100
 peer_resp_timeout=600

@@ -74,6 +74,14 @@ using jinq::common::k_default_request_size_limit_mb;
  */
 inline int parse_worker_nums(const toml::table& server_section) {
     auto worker_nums = static_cast<int>(server_section["worker_nums"].value_or<int64_t>(0));
+    if (const char* env = std::getenv("MORTRED_WORKER_NUMS"); env != nullptr && *env != '\0') {
+        try {
+            worker_nums = std::stoi(env);
+        } catch (...) {
+            LOG(ERROR) << "invalid MORTRED_WORKER_NUMS: " << env;
+            return -1;
+        }
+    }
     if (worker_nums <= 0) {
         LOG(ERROR) << "invalid worker_nums: " << worker_nums
                    << " (missing, zero or negative), requests would hang forever";
