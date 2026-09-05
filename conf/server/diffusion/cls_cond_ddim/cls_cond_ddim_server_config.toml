@@ -1,6 +1,6 @@
 [CLS_COND_DDIM_SERVER]
 model="CLS_COND_DDIM"
-port=9072
+port=9083
 host="localhost"
 max_connections=100
 peer_resp_timeout=600

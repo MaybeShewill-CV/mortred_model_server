@@ -7,6 +7,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- GPU catalog ports: diffusion servers collided with scene segmentation
+  (9070–9072). DDPM/DDIM/CLS_COND_DDIM/LDM now listen on 9081–9084 so
+  `mortred-supervisor` can init the full GPU catalog (pack autostart still
+  loads every profile-matching `conf/server` file).
+
 ### Added
 - Machine-local autostart pack (`conf/packs/demo.toml`, `MORTRED_PACK`): listed
   catalog ids boot; `MORTRED_AUTOSTART=true` no longer starts the whole zoo.

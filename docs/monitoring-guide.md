@@ -70,7 +70,7 @@ prometheus --config.file=deploy/prometheus.yml --storage.tsdb.path=/tmp/prom-dat
 |---|---|---|---|
 | Gateway | :8080 | `/metrics` | Inference entry (public on loopback unless `MORTRED_METRICS_TOKEN`; required off-loopback) |
 | Supervisor | :8787 | `/api/v1/metrics` | Process management (requires Bearer `MORTRED_API_TOKEN`) |
-| Model servers | loopback :9001-9074 | `/metrics` | Same network namespace as Prometheus; do not publish these ports |
+| Model servers | loopback :9001-9084 | `/metrics` | Same network namespace as Prometheus; do not publish these ports |
 
 ### Adding a New Model Scrape Target
 

@@ -9,7 +9,7 @@ set -euo pipefail
 
 MODEL="ddpm"
 TIMESTEP=100
-PORT=9070
+PORT=""
 SERVER_PID=""
 
 while [ $# -gt 0 ]; do
@@ -29,6 +29,13 @@ case "$MODEL" in
     ddim) CONFIG="conf/server/diffusion/ddim/ddim_server_config.toml"; MODEL_ID="DDIM" ;;
     *) echo "unsupported model: $MODEL (use ddpm or ddim)"; exit 1 ;;
 esac
+
+if [ -z "$PORT" ]; then
+    PORT="$(awk -F= '/^port=/ { gsub(/[[:space:]]/, "", $2); print $2; exit }' "$ROOT/$CONFIG")"
+fi
+if [ -z "$PORT" ]; then
+    echo "could not read port from $CONFIG (pass --port)"; exit 1
+fi
 
 echo "[smoke] model=$MODEL timestep=$TIMESTEP port=$PORT"
 

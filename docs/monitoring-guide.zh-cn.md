@@ -68,7 +68,7 @@ prometheus --config.file=deploy/prometheus.yml --storage.tsdb.path=/tmp/prom-dat
 |---|---|---|---|
 | 网关 | :8080 | `/metrics` | 推理入口（环回上未设 token 时公开；非环回必须 scrape token） |
 | 监督器 | :8787 | `/api/v1/metrics` | 进程管理（需要 Bearer `MORTRED_API_TOKEN`） |
-| 模型服务器 | 环回 :9001-9074 | `/metrics` | 与 Prometheus 同一网络命名空间；不要映射这些端口 |
+| 模型服务器 | 环回 :9001-9084 | `/metrics` | 与 Prometheus 同一网络命名空间；不要映射这些端口 |
 
 ### 添加新模型抓取
 
