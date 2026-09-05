@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """Calibrate worker_nums for a machine pack. Report only; never writes conf/server.
 
-For each pack id, sweep worker_nums, POST with http_infer_rps, and sample the
-process GPU memory via nvidia-smi. Suggests w* from the RPS curve. A joint
-pass then starts every id at its suggested w and records residency.
+For each pack id, sweep worker_nums, POST with http_infer_rps, and sample GPU
+memory for that server process (NVML compute-apps by pid, else a unique
+mortred-model-server name). Whole-card memory.used is never treated as the
+model; if WSL has no process row, occupancy is device.used minus a sample
+taken before spawn (gpu_mem_source=device_delta). Suggests w* from the RPS
+curve. A joint pass starts every id at its suggested w; it sums only real
+NVML per-process rows, otherwise reports one pack device delta.
 
 Usage:
   python3 scripts/calibrate_pack.py --pack conf/packs/demo.toml
@@ -18,6 +22,7 @@ import argparse
 import json
 import os
 import signal
+import socket
 import subprocess
 import sys
 import threading
@@ -94,43 +99,69 @@ def gpu_mem_device_mib() -> float | None:
     return total if any_val else None
 
 
-def gpu_mem_mib_for_pid(pid: int) -> float | None:
+def gpu_compute_apps() -> list[tuple[int | None, str, float | None]]:
+    """NVML compute-apps rows: (pid, process_name, used_mib)."""
     try:
         out = subprocess.check_output(
             [
                 "nvidia-smi",
-                "--query-compute-apps=pid,used_gpu_memory",
+                "--query-compute-apps=pid,process_name,used_gpu_memory",
                 "--format=csv,noheader,nounits",
             ],
             text=True,
             timeout=5,
         )
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        return None
-    peak = None
+        return []
+    rows: list[tuple[int | None, str, float | None]] = []
     for line in out.splitlines():
         parts = [p.strip() for p in line.split(",")]
-        if len(parts) < 2:
+        if len(parts) < 3:
             continue
+        pid: int | None
         try:
-            if int(parts[0]) != pid:
-                continue
+            pid = int(parts[0])
         except ValueError:
-            continue
-        val = _csv_float(parts[1])
-        if val is None:
-            continue
-        peak = val if peak is None else max(peak, val)
-    return peak
+            pid = None
+        rows.append((pid, parts[1], _csv_float(parts[2])))
+    return rows
 
 
-def gpu_mem_sample(pid: int) -> tuple[float | None, str]:
-    proc = gpu_mem_mib_for_pid(pid)
+def gpu_mem_process(pid: int) -> tuple[float | None, str]:
+    """Per-process GPU used MiB from NVML. Never returns whole-device used."""
+    apps = gpu_compute_apps()
+    for apid, _name, mem in apps:
+        if apid == pid and mem is not None:
+            return mem, "nvml_pid"
+    named = [
+        (apid, name, mem)
+        for apid, name, mem in apps
+        if mem is not None and "mortred-model-server" in name
+    ]
+    if len(named) == 1:
+        return named[0][2], "nvml_name"
+    return None, "unavailable"
+
+
+def occupancy_from_device(now: float | None, baseline: float | None) -> float | None:
+    if now is None or baseline is None:
+        return None
+    return max(0.0, now - baseline)
+
+
+def gpu_mem_model(pid: int, baseline_device_mib: float | None) -> tuple[float | None, str]:
+    """Model occupancy: NVML process row, else idle-to-now device delta.
+
+    Whole-card memory.used is not the model. A delta vs the sample taken
+    before this process started is only an estimate (WSL often has no PID
+    row); it is labeled device_delta.
+    """
+    proc, src = gpu_mem_process(pid)
     if proc is not None:
-        return proc, "process"
-    device = gpu_mem_device_mib()
-    if device is not None:
-        return device, "device"
+        return proc, src
+    delta = occupancy_from_device(gpu_mem_device_mib(), baseline_device_mib)
+    if delta is not None:
+        return delta, "device_delta"
     return None, "unavailable"
 
 
@@ -145,7 +176,8 @@ def pick_w_star(points: list[dict]) -> tuple[int, str]:
     note = "single_point"
     for point in points:
         if not point.get("started") or point.get("oom"):
-            return (int(last_good["worker_nums"]) if last_good else 1, "oom_or_start_failed")
+            why = "oom_or_start_failed" if point.get("oom") else "start_failed"
+            return (int(last_good["worker_nums"]) if last_good else 1, why)
         ok = int(point.get("ok") or 0)
         total = int(point.get("requests") or 0)
         if total > 0 and ok / total < 0.9:
@@ -163,6 +195,20 @@ def pick_w_star(points: list[dict]) -> tuple[int, str]:
             note = "approx_linear" if gain >= 0.8 * w_ratio else "partial_scale"
         last_good = point
     return int(last_good["worker_nums"]) if last_good else 1, note
+
+
+def listen_port_blocked(port: int) -> str | None:
+    """Return an error string if 127.0.0.1:port cannot be bound (already served)."""
+    if port <= 0:
+        return "invalid port"
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.bind(("127.0.0.1", port))
+    except OSError as exc:
+        return str(exc)
+    finally:
+        sock.close()
+    return None
 
 
 def find_server_bin(root: Path) -> Path | None:
@@ -195,6 +241,8 @@ def start_model(
 ) -> subprocess.Popen[bytes]:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
+    env.pop("MORTRED_LISTEN_PORT", None)
+    env["MORTRED_LISTEN_HOST"] = "127.0.0.1"
     env["MORTRED_PROJECT_ROOT"] = str(root)
     env["MORTRED_WORKER_NUMS"] = str(workers)
     env["LD_LIBRARY_PATH"] = "%s:%s:%s" % (
@@ -231,9 +279,14 @@ def wait_http_ready(url: str, timeout_s: float, proc: subprocess.Popen[bytes]) -
     return False
 
 
-def sample_mem_during(pid: int, stop: threading.Event, bucket: list[tuple[float, str]]) -> None:
+def sample_mem_during(
+    pid: int,
+    baseline: float | None,
+    stop: threading.Event,
+    bucket: list[tuple[float, str]],
+) -> None:
     while not stop.is_set():
-        val, scope = gpu_mem_sample(pid)
+        val, scope = gpu_mem_model(pid, baseline)
         if val is not None:
             bucket.append((val, scope))
         stop.wait(0.4)
@@ -278,6 +331,19 @@ def run_one_point(
             "oom": False,
             "error": "invalid port/server_uri in %s" % found,
         }
+    blocked = listen_port_blocked(port)
+    if blocked:
+        return {
+            "worker_nums": workers,
+            "started": False,
+            "oom": False,
+            "error": (
+                "port %d already in use (%s); stop mortred-supervisor / "
+                "another mortred-model-server before calibrate"
+                % (port, blocked)
+            ),
+        }
+    baseline = gpu_mem_device_mib()
     proc = start_model(root, binary, model_id, found, workers, log_path, extra)
     ready_url = "http://127.0.0.1:%d/ready" % port
     infer_url = "http://127.0.0.1:%d%s" % (port, uri)
@@ -293,17 +359,28 @@ def run_one_point(
             text = log_path.read_text(encoding="utf-8", errors="replace") if log_path.is_file() else ""
             point["oom"] = log_looks_oom(text)
             tail = "\n".join(text.strip().splitlines()[-12:])
-            point["error"] = "not ready (exit=%s) probing %s" % (proc.poll(), ready_url)
+            if "Cannot start server" in text:
+                point["error"] = (
+                    "HTTP listen failed after model init (exit=%s) on %s; "
+                    "engine loaded — usually port %d is already bound "
+                    "(stop mortred-supervisor / another model server)"
+                    % (proc.poll(), ready_url, port)
+                )
+            else:
+                point["error"] = "not ready (exit=%s) probing %s" % (proc.poll(), ready_url)
             if tail:
                 point["log_tail"] = tail
             return point
         point["started"] = True
-        ready_mem, ready_scope = gpu_mem_sample(proc.pid)
+        ready_mem, ready_scope = gpu_mem_model(proc.pid, baseline)
         point["gpu_mem_mib_ready"] = ready_mem
-        point["gpu_mem_scope"] = ready_scope
+        point["gpu_mem_source"] = ready_scope
+        point["gpu_mem_device_used_mib"] = gpu_mem_device_mib()
         samples: list[tuple[float, str]] = []
         stop = threading.Event()
-        sampler = threading.Thread(target=sample_mem_during, args=(proc.pid, stop, samples), daemon=True)
+        sampler = threading.Thread(
+            target=sample_mem_during, args=(proc.pid, baseline, stop, samples), daemon=True
+        )
         sampler.start()
         conc = max(1, concurrency)
         report = run_load(
@@ -321,8 +398,10 @@ def run_one_point(
         sampler.join(timeout=2)
         if samples:
             peak = max(v for v, _s in samples)
-            if any(s == "process" for _v, s in samples):
-                point["gpu_mem_scope"] = "process"
+            if any(s.startswith("nvml_") for _v, s in samples):
+                point["gpu_mem_source"] = next(s for _v, s in samples if s.startswith("nvml_"))
+            elif ready_scope == "device_delta":
+                point["gpu_mem_source"] = "device_delta"
         else:
             peak = ready_mem
         point["gpu_mem_mib_peak"] = peak
@@ -387,12 +466,13 @@ def calibrate(
             )
             points.append(point)
             print(
-                "    started=%s rps=%s p99=%s mem_peak=%s oom=%s"
+                "    started=%s rps=%s p99=%s mem_peak=%s source=%s oom=%s"
                 % (
                     point.get("started"),
                     point.get("rps"),
                     point.get("p99_ms"),
                     point.get("gpu_mem_mib_peak"),
+                    point.get("gpu_mem_source"),
                     point.get("oom"),
                 ),
                 flush=True,
@@ -411,12 +491,17 @@ def calibrate(
             }
         )
 
-    if skip_joint or len(suggested) < 1:
+    any_started = any(
+        any(p.get("started") for p in row.get("points") or [])
+        for row in report["models"]
+    )
+    if skip_joint or not any_started:
         return report
 
     print("== joint residency at suggested w ==")
     procs: list[tuple[str, subprocess.Popen[bytes]]] = []
     joint: dict = {"worker_nums": dict(suggested), "per_model": {}}
+    baseline = gpu_mem_device_mib()
     try:
         for model_id, w in suggested.items():
             found = find_server_toml(root, model_id)
@@ -427,29 +512,51 @@ def calibrate(
             extra = {}
             if override:
                 extra["MORTRED_MODEL_CONFIG_FILE"] = override
-            proc = start_model(root, binary, model_id, found, w, log_path, extra)
             port, _uri = server_listen(found)
+            blocked = listen_port_blocked(port)
+            if blocked:
+                joint["per_model"][model_id] = {
+                    "started": False,
+                    "error": "port %d already in use (%s)" % (port, blocked),
+                }
+                continue
+            proc = start_model(root, binary, model_id, found, w, log_path, extra)
             ready_url = "http://127.0.0.1:%d/ready" % port
             if not wait_http_ready(ready_url, 90.0, proc):
                 joint["per_model"][model_id] = {"started": False, "error": "not ready"}
                 stop_proc(proc)
                 continue
             procs.append((model_id, proc))
-            mem, scope = gpu_mem_sample(proc.pid)
-            joint["per_model"][model_id] = {
+            mem, src = gpu_mem_process(proc.pid)
+            row = {
                 "started": True,
                 "pid": proc.pid,
                 "gpu_mem_mib": mem,
-                "gpu_mem_scope": scope,
+                "gpu_mem_source": src,
             }
-        total = 0.0
-        any_mem = False
+            joint["per_model"][model_id] = row
+        nvml_sum = 0.0
+        nvml_n = 0
         for row in joint["per_model"].values():
-            mem = row.get("gpu_mem_mib")
-            if isinstance(mem, (int, float)):
-                total += float(mem)
-                any_mem = True
-        joint["gpu_mem_mib_sum"] = total if any_mem else None
+            if row.get("gpu_mem_source", "").startswith("nvml_") and isinstance(
+                row.get("gpu_mem_mib"), (int, float)
+            ):
+                nvml_sum += float(row["gpu_mem_mib"])
+                nvml_n += 1
+        started = [r for r in joint["per_model"].values() if r.get("started")]
+        if started and nvml_n == len(started):
+            joint["gpu_mem_mib_sum"] = nvml_sum
+        else:
+            joint["gpu_mem_mib_sum"] = None
+            after = gpu_mem_device_mib()
+            joint["gpu_mem_device_used_mib"] = after
+            if baseline is not None and after is not None:
+                joint["gpu_mem_pack_delta_mib"] = max(0.0, after - baseline)
+            joint["gpu_mem_note"] = (
+                "per-model NVML pid rows unavailable; pack_delta is "
+                "device.used now minus device.used before the joint spawn, "
+                "not a sum of isolated model footprints"
+            )
         report["joint"] = joint
     finally:
         for _, proc in procs:
@@ -475,11 +582,24 @@ def self_test() -> int:
     if w != 1 or why != "oom_or_start_failed":
         print("self-test: expected w*=1 on oom, got", w, why, file=sys.stderr)
         return 1
+    fail_pts = [
+        {"worker_nums": 1, "started": False, "oom": False, "ok": 0, "requests": 0, "rps": 0.0},
+    ]
+    w, why = pick_w_star(fail_pts)
+    if w != 1 or why != "start_failed":
+        print("self-test: expected start_failed, got", w, why, file=sys.stderr)
+        return 1
     if log_looks_oom("CUDA out of memory") is False:
         print("self-test: oom marker missed", file=sys.stderr)
         return 1
     if _csv_float("N/A") is not None or _csv_float("512") != 512.0:
         print("self-test: _csv_float", file=sys.stderr)
+        return 1
+    if occupancy_from_device(4096.0, 1024.0) != 3072.0:
+        print("self-test: occupancy_from_device", file=sys.stderr)
+        return 1
+    if occupancy_from_device(800.0, 1024.0) != 0.0:
+        print("self-test: occupancy_from_device clamp", file=sys.stderr)
         return 1
     from repo_toml import load_toml
 

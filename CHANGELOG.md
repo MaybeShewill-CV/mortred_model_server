@@ -8,9 +8,16 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
-- Calibrate GPU memory was null on WSL: per-pid `compute-apps` often does not
-  list the Linux server PID. Fall back to device `memory.used` and set
-  `gpu_mem_scope` to `process` / `device` / `unavailable`.
+- Calibrate / model-server HTTP start: YOLOV8 TRT can init then fail
+  `Cannot start server` when `:9056` is already bound (supervisor still
+  serving the pack). Probe now binds `127.0.0.1` like the supervisor, refuses
+  a busy port before spawn, and logs host:port/errno on listen failure.
+  Bind failure is `start_failed`, not OOM.
+- Calibrate no longer treats whole-card `memory.used` as the model's footprint.
+  Per-model numbers come from NVML compute-apps (pid, else unique
+  `mortred-model-server` name). If WSL has no process row, `gpu_mem_mib_*` is
+  the **delta** vs device used sampled before that spawn (`gpu_mem_source=
+  device_delta`), not the card total. Joint residency does not sum deltas.
 - Calibrate probed `127.0.0.1:0` on Python 3.10: `repo_toml` ignored unquoted
   `port=9002`. Fallback parser now reads integers; calibrate takes port/uri
   from the same `conf/server` file used to spawn.
@@ -30,8 +37,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 - Pack worker_nums calibration report (`scripts/calibrate_pack.py`,
-  `mortredctl calibrate`): sweep w, HTTP RPS via `http_infer_rps.py`, pid GPU
-  memory, suggested w*, optional joint residency. Does not write `conf/server`.
+  `mortredctl calibrate`): sweep w, HTTP RPS via `http_infer_rps.py`, per-process
+  GPU occupancy (NVML pid/name, else pre-spawn device delta), suggested w*,
+  optional joint residency. Does not write `conf/server`.
 - Pack-scoped TensorRT prepare (`scripts/prepare_pack.sh`, `mortredctl prepare`):
   convert only engines used by `MORTRED_PACK`, refuse spawn if a file is missing
   or empty (no crash-loop), optional `/ready` at `worker_nums=1`.
