@@ -72,12 +72,14 @@ for f in scripts/install_deps.sh scripts/convert_trt_engines.sh \
          scripts/docker_entrypoint.sh scripts/check_repo_clean.sh \
          scripts/clean_artifacts.sh scripts/setup_full_deps.sh \
          scripts/bench_batch.sh scripts/mortredctl_doctor.sh \
+         scripts/mortredctl_prepare.sh scripts/prepare_pack.sh \
          scripts/security_warn.sh; do
     check "bash -n $f" bash -n "$ROOT/$f"
 done
 check "py_compile fetch/gen/check" "$PY" -m py_compile \
     "$ROOT/scripts/fetch_weights.py" "$ROOT/scripts/gen_weights_manifest.py" \
-    "$ROOT/scripts/check_consistency.py" "$ROOT/scripts/gen_openapi.py" "$ROOT/scripts/repo_toml.py"
+    "$ROOT/scripts/check_consistency.py" "$ROOT/scripts/gen_openapi.py" \
+    "$ROOT/scripts/repo_toml.py" "$ROOT/scripts/pack_trt.py"
 
 # 2) Manifest validity
 check "JSON: trt_engines/profiles/weights" "$PY" - "$ROOT" <<'PY'

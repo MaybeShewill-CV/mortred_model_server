@@ -61,6 +61,7 @@ set(TEST_LIST
     restart_policy_unittest
     catalog_unittest
     control_config_unittest
+    trt_spawn_gate_unittest
     supervisor_unittest
 )
 
@@ -191,6 +192,8 @@ foreach(src ${TEST_LIST})
     elseif(${src} STREQUAL "catalog_unittest")
         set(EXTRA_LIBS control pthread)
     elseif(${src} STREQUAL "control_config_unittest")
+        set(EXTRA_LIBS control pthread)
+    elseif(${src} STREQUAL "trt_spawn_gate_unittest")
         set(EXTRA_LIBS control pthread)
     elseif(${src} STREQUAL "restart_policy_unittest")
         set(EXTRA_LIBS control pthread)

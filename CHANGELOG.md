@@ -14,6 +14,11 @@ All notable changes to this project are documented here. The format follows
   loads every profile-matching `conf/server` file).
 
 ### Added
+- Pack-scoped TensorRT prepare (`scripts/prepare_pack.sh`, `mortredctl prepare`):
+  convert only engines used by `MORTRED_PACK`, refuse spawn if a file is missing
+  or empty (no crash-loop), optional `/ready` at `worker_nums=1`.
+  `MORTRED_AUTO_BUILD_ENGINES` still converts the whole zoo and stays opt-in.
+  `doctor --strict` fails when pack TRT files are missing.
 - Machine-local autostart pack (`conf/packs/demo.toml`, `MORTRED_PACK`): listed
   catalog ids boot; `MORTRED_AUTOSTART=true` no longer starts the whole zoo.
   Pack `worker_nums` / `model_config` override the child via env without

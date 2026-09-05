@@ -15,13 +15,29 @@ for arg in "$@"; do
         --strict) STRICT_ARGS=(--strict) ;;
         -h|--help)
             echo "usage: mortredctl doctor [--strict]"
-            echo "  --strict  fail if security_warn.sh reported any warning"
+            echo "  --strict  fail on security warnings or missing pack TRT engines"
             exit 0
             ;;
     esac
 done
 
 echo "== Mortred doctor =="
+PACK="${MORTRED_PACK:-$ROOT/conf/packs/demo.toml}"
+echo "== pack TensorRT files ($PACK) =="
+if [ -f "$PACK" ]; then
+    if python3 "$ROOT/scripts/pack_trt.py" --project-root "$ROOT" --pack "$PACK" --check; then
+        echo "  [ok] pack TRT engines present or pack has no TensorRT backends"
+    else
+        echo "  [WARN] pack TensorRT engine missing/empty; run mortredctl prepare"
+        if [ ${#STRICT_ARGS[@]} -gt 0 ]; then
+            echo "[FAIL] mortredctl doctor --strict: pack TRT engines missing"
+            exit 1
+        fi
+    fi
+else
+    echo "  [WARN] pack file not found: $PACK"
+fi
+
 "$ROOT/scripts/security_warn.sh" "${STRICT_ARGS[@]}"
 
 if command -v curl >/dev/null 2>&1 && curl -fs --max-time 5 "$ADDR/api/v1/health" >/dev/null 2>&1; then

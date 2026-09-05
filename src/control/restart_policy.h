@@ -91,6 +91,12 @@ class RestartEngine {
         }
     }
 
+    /*** missing engine / config: Failed, no backoff */
+    void note_permanent_failure() {
+        reset();
+        _state = SupervisedState::kFailed;
+    }
+
     /*** external cancel (manual stop while in backoff): back to Stopped */
     void note_cancel() {
         reset();
@@ -106,6 +112,9 @@ class RestartEngine {
         if (expected_stop) {
             reset();
             _state = SupervisedState::kStopped;
+            return Decision{};
+        }
+        if (_state == SupervisedState::kFailed) {
             return Decision{};
         }
         // a stable run heals both the backoff ladder and the crash window
