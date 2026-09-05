@@ -36,6 +36,10 @@ All notable changes to this project are documented here. The format follows
   loads every profile-matching `conf/server` file).
 
 ### Added
+- Machine pack ops in [docs/deployment.md](docs/deployment.md) §10
+  (and [中文](docs/deployment.zh-cn.md)): autostart listed ids only, `mortredctl
+  prepare` for pack TensorRT engines, `mortredctl calibrate` / `--write-pack`
+  for `worker_nums` on the pack file (`conf/server` stays `1`).
 - Pack worker_nums calibration report (`scripts/calibrate_pack.py`,
   `mortredctl calibrate`): sweep w, HTTP RPS via `http_infer_rps.py`, per-process
   GPU occupancy (NVML pid/name, else pre-spawn device delta), suggested w*,

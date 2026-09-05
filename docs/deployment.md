@@ -21,7 +21,7 @@
 - [7. Building from Source](#7-building-from-source)
 - [8. The Profile System](#8-the-profile-system)
 - [9. Weights Management](#9-weights-management)
-- [10. TensorRT Engines (GPU only)](#10-tensorrt-engines-gpu-only)
+- [10. Machine pack and TensorRT](#10-machine-pack-and-tensorrt)
 - [11. Authentication & Security](#11-authentication--security)
 - [12. Upgrades & Rollback](#12-upgrades--rollback)
 - [13. Monitoring](#13-monitoring)
@@ -69,7 +69,7 @@ flowchart LR
 |---|---|
 | Only 2 external ports | gateway `8080` (inference), supervisor `8787` (management + web UI) |
 | Model servers bind loopback only | Nothing bypasses the gateway; supervisor injects an internal token |
-| The supervisor manages everything | Crashed model servers restart with backoff; crash-loop protection |
+| The supervisor manages a **pack** | Listed `conf/packs/*.toml` ids autostart; `MORTRED_AUTOSTART=true` does **not** boot the whole `conf/server` tree |
 | Fail-closed | Non-loopback listener without inference/management auth **refuses to start**. Non-loopback gateway also requires a **distinct** `MORTRED_METRICS_TOKEN`. Not TLS (terminate at a reverse proxy). |
 
 **Ports at a glance**:
@@ -100,7 +100,7 @@ flowchart TD
 | **Hardware** | NVIDIA GPU + driver, CUDA 11.8 or 12 line | any x64 machine |
 | **Models** | everything (classification/detection/OCR/seg/SAM/diffusion/CLIP/MOT...) | curated: mobilenetv2, resnet50, yolov8, hrnet |
 | **Weight size** | full manifest (tens of GB) | curated subset (~1 GB) |
-| **Engine conversion** | required, once per machine (§10) | not needed |
+| **Engine conversion** | pack engines on this GPU (§10.2); zoo-wide convert is opt-in | not needed |
 
 > **Unsure? Pick cpu.** The worst case of a wrong choice is redoing with the other
 > profile; the data-plane configs are fully compatible.
@@ -234,7 +234,7 @@ models (cpu: the four `*_cpu` entries - mobilenetv2 / resnet50 / yolov8 / hrnet)
 | Stop | `docker compose --profile cpu down` |
 | Upgrade image | `docker compose --profile cpu pull && docker compose --profile cpu up -d` |
 | Shell into container | `docker exec -it mortred-cpu bash` |
-| GPU first-start engine build | env `MORTRED_AUTO_BUILD_ENGINES=true` (§10.3) |
+| GPU pack engines | `mortredctl prepare` (§10.2); zoo-wide `MORTRED_AUTO_BUILD_ENGINES` stays opt-in |
 
 ### 5.4 Prebuilt images (no local build)
 
@@ -419,37 +419,86 @@ Fetch `weights/` on a networked machine → copy to the target → run
 
 ---
 
-## 10. TensorRT Engines (GPU only)
+## 10. Machine pack and TensorRT
 
-### 10.1 Why conversion is needed
+Compose and the container entrypoint set `MORTRED_AUTOSTART=true` **and**
+`MORTRED_PACK` (default `conf/packs/demo.toml`). That combination starts the
+**listed catalog ids**, not every file under `conf/server/`. Identity is still
+one process per catalog id; `conf/server` `worker_nums` stays `1`. Pack
+`worker_nums` / `model_config` override the child via env.
 
-A TRT engine is bound to **GPU architecture + TRT version**: a prebuilt engine
-usually fails on another machine. The `.onnx` files in the weight set are the
-source; every GPU machine converts its own `.engine`.
+### 10.1 Pack file
 
-### 10.2 Converting
+```toml
+# conf/packs/demo.toml — shipped example; keep worker_nums=1 in git
+[pack.MOBILENETV2]
+worker_nums = 1
 
-```bash
-./scripts/convert_trt_engines.sh --list    # manifest (which engines are missing)
-./scripts/convert_trt_engines.sh           # convert missing only (FP16 + batch profiles)
-./scripts/convert_trt_engines.sh --force   # rebuild everything
+# machine-local copy, e.g. /etc/mortred/pack.toml
+[pack.YOLOV8]
+worker_nums = 4
+# model_config = "conf/model/object_detection/yolov8/yolov8_config.toml"  # optional variant
 ```
 
-Requires `trtexec`: `sudo ./scripts/install_deps.sh --nvidia` installs it into
-`3rd_party/bin/`; with multiple TRT installs use `--trtexec /path/to/trtexec`.
+Unknown ids fail supervisor start. Point `MORTRED_PACK` at the machine file
+(compose env, systemd `supervisor.env`, or the process environment). Do not
+commit calibrated `worker_nums` in the git example packs.
 
-### 10.3 First-start auto-conversion in containers (optional)
+### 10.2 Prepare pack TensorRT engines (GPU)
+
+Engines are bound to **this GPU + this TensorRT**. Convert only what the pack
+uses:
+
+```bash
+mortredctl prepare --pack conf/packs/yolov8.toml          # or: scripts/prepare_pack.sh
+mortredctl doctor --strict                                 # missing pack engines fail
+```
+
+The supervisor **refuses to spawn** a TensorRT id whose engine file is missing
+or empty (status `failed`, no crash-loop). `/ready` is real loadability, not
+just a nonempty file.
+
+Demo pack is MobilenetV2 (no TensorRT). A YOLOV8 pack needs prepare on the
+target GPU. `MORTRED_AUTO_BUILD_ENGINES=true` still converts the **whole zoo**
+and stays **off** by default.
+
+### 10.3 Calibrate `worker_nums`
+
+Stop supervisor / leftover `mortred-model-server` first. The script starts its
+own server on the catalog port (YOLOV8 = 9056); a busy port is `start_failed`,
+not OOM.
+
+```bash
+ss -ltnp | grep 9056 || true
+python3 scripts/calibrate_pack.py --pack conf/packs/yolov8.toml \
+    --workers 1,2,4,8 --duration 8s --output logs/calibrate-yolov8.json
+# persist w* into that pack file only (never conf/server):
+python3 scripts/calibrate_pack.py --pack /path/to/machine-pack.toml --write-pack
+```
+
+JSON `gpu_mem_mib_*` is process occupancy (`nvml_pid` / `nvml_name`) or a
+pre-spawn **device delta** on WSL — not whole-card `memory.used`. Restart the
+supervisor after `--write-pack` so pack `worker_nums` is injected.
+
+### 10.4 Zoo-wide convert (optional)
+
+```bash
+./scripts/convert_trt_engines.sh --list
+./scripts/convert_trt_engines.sh            # every missing engine in the manifest
+./scripts/convert_trt_engines.sh --force
+```
+
+Needs `trtexec` (`sudo ./scripts/install_deps.sh --nvidia` → `3rd_party/bin/`).
+
+### 10.5 First-start auto-conversion in containers (optional)
 
 ```bash
 docker compose --profile gpu up -d -e MORTRED_AUTO_BUILD_ENGINES=true
-# or: docker run -e MORTRED_AUTO_BUILD_ENGINES=true ...
 ```
 
-Conversion runs before the supervisor autostarts; it takes minutes and is
-**off by default** (an explicit choice). `mortredctl doctor` warns about
-missing engines without failing.
-
----
+Runs before supervisor autostart, minutes-long, **off by default**. Prefer
+§10.2 for a pack. `mortredctl doctor` warns on missing pack engines;
+`--strict` fails.
 
 ## 11. Authentication & Security
 
@@ -597,12 +646,13 @@ mortredctl doctor          # or: verify_deployment.sh --live
 | refuses to start, log says so | non-loopback listener without token | set both tokens (§11.1) |
 | `401` with `WWW-Authenticate` | wrong/missing token | check `Authorization: Bearer ...` |
 | empty catalog | `MORTRED_PROFILE` mismatch | check the env var; cpu needs the `*_cpu` configs |
-| model server crash-loops | missing weights / missing engine / bad config | `mortredctl status`, `mortredctl logs <id>` |
+| model server crash-loops | missing weights / missing engine / bad config | `mortredctl status`, `mortredctl logs <id>`; TRT: `mortredctl prepare` |
+| calibrate `Cannot start server` / port busy | supervisor or leftover model still listening | stop systemd/compose/supervisor first, then `ss -ltnp` on the catalog port (§10.3) |
 | weight download 404/timeout | HF unreachable | offline flow (§9.4) or a mirror |
+| container has zero engines | pack not prepared, auto-build off | §10.2; zoo-wide convert is opt-in |
 | sha256 mismatch | corrupted download / stale manifest | delete the file and refetch; regenerate the manifest |
 | `429` responses | queue full or key rate-limited | tune `max_queue_depth` / `rate_limit_qps`; check `/metrics` |
 | gpu model init: "tensorrt backend is not compiled" | cpu build given a trt config | use the gpu build/image, or a cpu config for that model |
-| container has zero engines | not converted, auto-build off | §10; or `MORTRED_AUTO_BUILD_ENGINES=true` |
 
 ### 14.2 Log locations
 
@@ -666,7 +716,13 @@ path - the host-side location is up to you.
 </details>
 
 <details>
-<summary>No python3 - how do I fetch weights?</summary>
+<summary>Where do I set worker_nums?</summary>
+
+Git `conf/server` stays `worker_nums=1`. Put concurrency on the machine pack
+(`[pack.<ID>] worker_nums`) and inject via `MORTRED_PACK`. Calibrate with
+`mortredctl calibrate`; persist with `--write-pack` on a machine-local pack
+file, then restart the supervisor (§10.3).
+</details>
 
 Fetch on any machine with python, copy the whole `weights/` directory over, and
 run `fetch_weights.py --check` on the target (verification also needs python3;
