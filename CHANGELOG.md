@@ -39,7 +39,9 @@ All notable changes to this project are documented here. The format follows
 - Pack worker_nums calibration report (`scripts/calibrate_pack.py`,
   `mortredctl calibrate`): sweep w, HTTP RPS via `http_infer_rps.py`, per-process
   GPU occupancy (NVML pid/name, else pre-spawn device delta), suggested w*,
-  optional joint residency. Does not write `conf/server`.
+  optional joint residency. `--write-pack` updates `[pack.<ID>] worker_nums`
+  in that pack file only. Does not write `conf/server` (git copies stay
+  `worker_nums=1`).
 - Pack-scoped TensorRT prepare (`scripts/prepare_pack.sh`, `mortredctl prepare`):
   convert only engines used by `MORTRED_PACK`, refuse spawn if a file is missing
   or empty (no crash-loop), optional `/ready` at `worker_nums=1`.

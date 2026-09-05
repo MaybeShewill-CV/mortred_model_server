@@ -97,7 +97,7 @@ void usage() {
                  "            logs <id> [--offset N] [--limit N]\n"
                  "            infer <id> --image <path>\n"
                  "            init [--profile cpu|gpu] | doctor [--strict] | prepare [--pack FILE]\n"
-                 "            calibrate [--pack FILE] | upgrade [version]\n"
+                 "            calibrate [--pack FILE] [--write-pack] | upgrade [version]\n"
                  "  env: MORTREDCTL_ADDR (default http://127.0.0.1:8787), MORTREDCTL_TOKEN,\n"
                  "       MORTREDCTL_GATEWAY_ADDR (default http://127.0.0.1:8080)\n");
 }

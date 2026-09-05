@@ -36,8 +36,9 @@ Verifies a few high-signal invariants:
 14. conf/ci_hosted_golden.json matches golden sources, HF cpu weights, the
     GPU smoke filter in ci.yml, and every HTTP catalog id has a CI tier.
 15. `conf/packs/demo.toml` `[pack.<ID>]` ids exist as `model=` in conf/server.
-16. `scripts/pack_trt.py --self-test` covers pack TRT engine discovery.
-17. `scripts/calibrate_pack.py --self-test` covers w* selection (no GPU).
+16. Git `conf/packs/*.toml` keep `worker_nums=1` (calibration is machine-local).
+17. `scripts/pack_trt.py --self-test` covers pack TRT engine discovery.
+18. `scripts/calibrate_pack.py --self-test` covers w* selection (no GPU).
 
 Exit code 0 means consistent; non-zero means the repository needs attention.
 """
@@ -642,6 +643,36 @@ def check_demo_pack() -> list[str]:
     return errors
 
 
+def check_example_packs_worker_nums() -> list[str]:
+    """Shipped example packs keep worker_nums=1; machine calibration is local."""
+    errors: list[str] = []
+    packs = ROOT / "conf" / "packs"
+    if not packs.is_dir():
+        return ["missing conf/packs/"]
+    for pack in sorted(packs.glob("*.toml")):
+        current = None
+        for line in pack.read_text(encoding="utf-8").splitlines():
+            t = line.strip()
+            if t.startswith("[pack.") and t.endswith("]"):
+                current = t[6:-1].strip()
+                continue
+            if current and t.startswith("worker_nums"):
+                _, _, raw = t.partition("=")
+                raw = raw.split("#", 1)[0].strip()
+                try:
+                    w = int(raw)
+                except ValueError:
+                    errors.append("%s: invalid worker_nums in [%s]" % (pack.name, current))
+                    continue
+                if w != 1:
+                    errors.append(
+                        "%s: [pack.%s] worker_nums=%d (git examples must stay 1; "
+                        "calibrate --write-pack is machine-local)"
+                        % (pack.relative_to(ROOT), current, w)
+                    )
+    return errors
+
+
 def check_model_io_split() -> list[str]:
     """Guard the src/models/io/ split:
     - model_io_define.h stays a pure aggregate (includes only, no types), so
@@ -691,6 +722,7 @@ def main() -> int:
     errors.extend(check_demo_client_health())
     errors.extend(check_unique_catalog_listen())
     errors.extend(check_demo_pack())
+    errors.extend(check_example_packs_worker_nums())
     try:
         pack_trt = subprocess.run(
             [sys.executable, str(ROOT / "scripts" / "pack_trt.py"), "--self-test"],
