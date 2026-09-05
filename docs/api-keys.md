@@ -142,7 +142,8 @@ The effective auth mode is decided at startup and printed in the listen log:
 |---|---|---|
 | `api-keys auth` | `conf/api_keys.toml` loaded successfully | Requests must match a key. The static-token fallback is **not** consulted when no static token is configured — an unauthenticated request gets `401`. |
 | `static-token auth` | no usable key file, token set | Legacy behavior: requests must match the token. |
-| `AUTH DISABLED` | neither configured | Only reachable on loopback listeners; non-loopback listeners refuse to start (fail-closed). |
+
+There is no anonymous (`AUTH DISABLED`) mode. Missing tokens refuse to start.
 
 Fail-closed startup rules:
 

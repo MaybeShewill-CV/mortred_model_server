@@ -40,6 +40,7 @@
 #include <workflow/Workflow.h>
 
 #include "common/auth_token.h"
+#include "common/listen_policy.h"
 #include "control/api_key_manager.h"
 #include "common/request_size_limit.h"
 #include "control/catalog.h"
@@ -659,12 +660,20 @@ int run_supervisor() {
                        : source_ui.string();
     }
 
-    // fail-closed: non-loopback management API requires a token
-    if (!jinq::common::is_loopback_host(g_cfg.supervisor.api_host) && g_auth_token.empty()) {
+    // fail-closed: management API always requires a token, including loopback
+    if (g_auth_token.empty()) {
         std::fprintf(stderr,
-                     "mortred-supervisor: refusing to listen on non-loopback host %s without "
-                     "MORTRED_API_TOKEN\n",
-                     g_cfg.supervisor.api_host.c_str());
+                     "mortred-supervisor: refusing to start without MORTRED_API_TOKEN "
+                     "(loopback is not an anonymous management plane). "
+                     "Generate with: mortredctl init-trust\n");
+        return 1;
+    }
+    if (!jinq::common::listen_host_permitted(g_cfg.supervisor.api_host)) {
+        std::fprintf(stderr,
+                     "mortred-supervisor: refusing to listen on %s (MORTRED_EXPOSE=%s). "
+                     "Bind 127.0.0.1; containers: MORTRED_EXPOSE=docker\n",
+                     g_cfg.supervisor.api_host.c_str(),
+                     jinq::common::mortred_expose_mode().c_str());
         return 1;
     }
 
@@ -755,10 +764,10 @@ int run_supervisor() {
         return 1;
     }
     std::fprintf(stderr,
-                 "mortred-supervisor listening on http://%s:%d (managed servers: %zu)%s\n",
+                 "mortred-supervisor listening on http://%s:%d (managed servers: %zu, auth enabled, "
+                 "expose=%s)\n",
                  g_cfg.supervisor.api_host.c_str(), g_cfg.supervisor.api_port,
-                 g_catalog.entries().size(),
-                 g_auth_token.empty() ? " (auth disabled)" : " (auth enabled)");
+                 g_catalog.entries().size(), jinq::common::mortred_expose_mode().c_str());
 
     g_supervisor->autostart_all();
 

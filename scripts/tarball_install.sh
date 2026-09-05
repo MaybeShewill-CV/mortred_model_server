@@ -57,10 +57,11 @@ fi
 cp "$SRC/deploy/mortred-supervisor.service" /etc/systemd/system/
 if [ ! -f /etc/mortred/supervisor.env ]; then
     cat > /etc/mortred/supervisor.env <<'EOF'
-# REQUIRED for non-loopback serving (fail-closed without them):
+# REQUIRED (gateway/supervisor refuse to start without them):
 # MORTRED_API_TOKEN=<management token>
 # MORTRED_GATEWAY_AUTH_TOKEN=<inference token>
 # MORTRED_METRICS_TOKEN=<metrics scrape token, distinct from the two above>
+# Generate: mortredctl init-trust && sudo cp conf/local/trust.env /etc/mortred/supervisor.env
 EOF
     chmod 600 /etc/mortred/supervisor.env
 fi

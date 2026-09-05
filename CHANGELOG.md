@@ -40,6 +40,13 @@ All notable changes to this project are documented here. The format follows
   loads every profile-matching `conf/server` file).
 
 ### Added
+- Trust boundary for P0-4: `mortredctl init-trust` writes gitignored
+  `conf/local/trust.env` (inference / management / scrape / internal). Gateway
+  and supervisor refuse to start without their tokens, including on loopback.
+  `GET /metrics` is never public. Wildcard bind requires `MORTRED_EXPOSE=docker`
+  (containers) or `unsafe`. Nginx is the supported TLS edge
+  (`mortredctl init-edge --mode lan|acme|files`, `deploy/nginx`, compose
+  profile `edge` on Linux host network). Caddy is removed.
 - ONNX Runtime CUDA `gpu_mem_limit` defaults to 2048 MiB per session
   (`gpu_mem_limit_mb` / `MORTRED_ORT_GPU_MEM_LIMIT_MB`; `0` = unlimited).
   The previous `gpu_mem_limit = 0` let the CUDA EP arena grow without bound.
@@ -75,14 +82,6 @@ All notable changes to this project are documented here. The format follows
   `skipped=0`. GPU smoke and TensorRT are still maintainer-only. Nightly
   remaining goldens write a skip-inventory artifact. HTTP catalog ids must
   declare a CI tier (`hosted` / `gpu-smoke` / `nightly`).
-- Caddy reverse-proxy example (`deploy/caddy/Caddyfile`) as the supported TLS
-  front for loopback gateway/supervisor. `mortredctl doctor` prints warnings
-  (never fails unless `--strict`) for a non-loopback listen, a token shorter
-  than 32 characters, or identical tokens.
-- Optional gateway scrape token `MORTRED_METRICS_TOKEN`. Unset keeps
-  `GET /metrics` public **on loopback**. A non-loopback gateway refuses to
-  start without a distinct scrape Bearer. Managed model `/metrics` requires
-  the supervisor internal token when `MORTRED_AUTH_TOKEN` is set.
 - Gateway routes `POST /v1/models/{id}/infer` and `/v1/models/{id}/jobs*` to
   the model's loopback port. Job `Location` / `poll_url` / `result_url` are
   rewritten onto that prefix. The legacy `{server_uri}` POST path still works.

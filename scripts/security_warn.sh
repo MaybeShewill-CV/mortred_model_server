@@ -139,19 +139,19 @@ run_warnings() {
     api_host="${api_host:-127.0.0.1}"
 
     if ! is_loopback_host "$gw_host"; then
-        warn "gateway listen $gw_host is not loopback (plain HTTP). Terminate TLS at a reverse proxy; see deploy/caddy/Caddyfile"
+        warn "gateway listen $gw_host is not loopback (plain HTTP). Terminate TLS at Nginx; see deploy/nginx and mortredctl init-edge"
     fi
     if ! is_loopback_host "$api_host"; then
-        warn "supervisor listen $api_host is not loopback (plain HTTP). Terminate TLS at a reverse proxy; see deploy/caddy/Caddyfile"
+        warn "supervisor listen $api_host is not loopback (plain HTTP). Terminate TLS at Nginx; see deploy/nginx and mortredctl init-edge"
     fi
 
     ss_host="$(host_from_ss 8080 || true)"
     if [ "$ss_host" = "0.0.0.0" ] && is_loopback_host "$gw_host"; then
-        warn "host has 0.0.0.0:8080 listening (compose/docker publish). Bearer tokens are plaintext on that interface; bind 127.0.0.1 or put Caddy in front (deploy/caddy/Caddyfile)"
+        warn "host has 0.0.0.0:8080 listening (compose/docker publish). Bearer tokens are plaintext on that interface; bind 127.0.0.1 or put Nginx in front (mortredctl init-edge)"
     fi
     ss_host="$(host_from_ss 8787 || true)"
     if [ "$ss_host" = "0.0.0.0" ] && is_loopback_host "$api_host"; then
-        warn "host has 0.0.0.0:8787 listening. Keep the management port off the public internet; see deploy/caddy/Caddyfile"
+        warn "host has 0.0.0.0:8787 listening. Keep the management port off the public internet; see deploy/nginx"
     fi
 
     api_tok="${MORTRED_API_TOKEN:-}"
@@ -167,8 +167,8 @@ run_warnings() {
     fi
 
     metrics_tok="${MORTRED_METRICS_TOKEN:-}"
-    if ! is_loopback_host "$gw_host" && [ -z "$metrics_tok" ]; then
-        warn "GET /metrics would be public on a non-loopback gateway listen; the gateway refuses to start until MORTRED_METRICS_TOKEN is set (do not reuse the inference token)"
+    if [ -z "$metrics_tok" ]; then
+        warn "MORTRED_METRICS_TOKEN is unset; the gateway refuses to start (GET /metrics is never public). Run mortredctl init-trust"
     fi
     if [ -n "$metrics_tok" ] && [ "${#metrics_tok}" -lt 32 ]; then
         warn "MORTRED_METRICS_TOKEN is shorter than 32 characters"
@@ -241,8 +241,8 @@ run_self_test() {
         echo "  [FAIL] missing identical-token warning"
         failed=$((failed + 1))
     }
-    echo "$out" | grep -q 'GET /metrics would be public' || {
-        echo "  [FAIL] missing public-metrics warning on non-loopback gateway"
+    echo "$out" | grep -q 'MORTRED_METRICS_TOKEN is unset' || {
+        echo "  [FAIL] missing unset-metrics warning"
         failed=$((failed + 1))
     }
     if echo "$out" | grep -q 'tokA'; then
@@ -256,7 +256,7 @@ run_self_test() {
         SECURITY_WARN_SKIP_SS=1 \
         MORTRED_GATEWAY_HOST=127.0.0.1 \
         MORTRED_API_HOST=127.0.0.1 \
-        MORTRED_METRICS_TOKEN= \
+        MORTRED_METRICS_TOKEN="$(printf 'c%.0s' {1..32})" \
         MORTRED_API_TOKEN="$(printf 'a%.0s' {1..32})" \
         MORTRED_GATEWAY_AUTH_TOKEN="$(printf 'b%.0s' {1..32})" \
         bash "$ROOT/scripts/security_warn.sh"
@@ -272,6 +272,7 @@ run_self_test() {
         MORTRED_API_HOST=127.0.0.1 \
         MORTRED_API_TOKEN="$(printf 'a%.0s' {1..32})" \
         MORTRED_GATEWAY_AUTH_TOKEN="$(printf 'b%.0s' {1..32})" \
+        MORTRED_METRICS_TOKEN="$(printf 'c%.0s' {1..32})" \
         bash "$ROOT/scripts/security_warn.sh" --strict; then
         echo "  [ok]   --strict exits 0 on loopback + distinct tokens"
     else

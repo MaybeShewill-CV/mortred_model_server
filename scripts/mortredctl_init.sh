@@ -75,9 +75,10 @@ cat <<EOF
 
 == init done (profile: $PROFILE) ==
 next:
-  1. set tokens (MORTRED_API_TOKEN / MORTRED_GATEWAY_AUTH_TOKEN)
+  1. mortredctl init-trust && set -a && . conf/local/trust.env && set +a
   2. if the pack uses TensorRT: mortredctl prepare
   3. start the supervisor (systemctl start mortred-supervisor, or docker compose)
-  4. mortredctl calibrate --pack conf/packs/demo.toml   # report; add --write-pack to persist w* in the pack
-  5. mortredctl doctor    # live acceptance
+  4. optional TLS: mortredctl init-edge --mode lan
+  5. mortredctl calibrate --pack conf/packs/demo.toml   # report; add --write-pack to persist w* in the pack
+  6. mortredctl doctor    # live acceptance
 EOF

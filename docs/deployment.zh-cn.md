@@ -66,13 +66,13 @@ flowchart LR
 | 只有 2 个对外端口 | 网关 `8080`（推理流量）、supervisor `8787`（管理 + Web 控制台） |
 | 模型进程仅绑 loopback | 外部无法绕过网关直连模型；supervisor 注入 internal token |
 | supervisor 管的是 **pack** | 只拉起 `conf/packs/*.toml` 里列出的 catalog id；`MORTRED_AUTOSTART=true` **不会**把整个 `conf/server` 树打满 GPU |
-| fail-closed | 非环回且无推理/管理鉴权时**拒绝启动**。非环回网关还必须有**互不相同的** `MORTRED_METRICS_TOKEN`。TLS 仍在反代上终结。 |
+| fail-closed | 缺推理/管理身份或 scrape token 时**拒绝启动**（含环回）。通配绑定需要 `MORTRED_EXPOSE=docker` 或 `unsafe`。TLS 在 Nginx（`mortredctl init-edge`）。 |
 
 **端口一览**：
 
 | 端口 | 进程 | 用途 | 鉴权 |
 |---|---|---|---|
-| `8080` | mortred-gateway | 推理入口 `/mortred_ai_server_v1/...`、`/healthz`、`/metrics` | infer/jobs 要 Bearer；`/healthz` 公开；`/metrics` 环回上未设 token 时公开；**非环回必须**设独立 `MORTRED_METRICS_TOKEN` |
+| `8080` | mortred-gateway | 推理入口 `/mortred_ai_server_v1/...`、`/healthz`、`/metrics` | infer/jobs 要 Bearer；`/healthz` 公开；`/metrics` 一律要 `MORTRED_METRICS_TOKEN`（含环回） |
 | `8787` | mortred-supervisor | 管理 API `/api/v1/*`、Web 控制台 | Bearer token |
 | `9002+` | 各模型进程 | 仅 loopback | internal token（含已注入时的 `GET /metrics`） |
 
@@ -495,7 +495,7 @@ MNN / TensorRT 没有对等旋钮；靠 pack + 校准控制驻留（§10.3）。
 |---|---|---|
 | `MORTRED_API_TOKEN` | supervisor 管理 API + Web 控制台 | `/etc/mortred/supervisor.env`（tarball）/ 容器环境变量 |
 | `MORTRED_GATEWAY_AUTH_TOKEN` | 网关推理入口 | 同上 |
-| `MORTRED_METRICS_TOKEN` | 网关 `GET /metrics` scrape Bearer | 同上（不设则仅环回上 `/metrics` 公开；非环回必填且不能与推理/管理 token 相同） |
+| `MORTRED_METRICS_TOKEN` | 网关 `GET /metrics` scrape Bearer | 必填（含环回）；不能与推理/管理 token 相同 |
 
 ```bash
 openssl rand -hex 24    # 生成方式（每个 token 各用一次）
@@ -534,29 +534,32 @@ curl -X POST -H "Authorization: Bearer $MORTRED_API_TOKEN" \
 - [ ] 8080/8787 发布在 `127.0.0.1`，除非前面已有 TLS 反代
 - [ ] 即使有 TLS，管理面 8787 也不要直接暴露到公网
 - [ ] `conf/api_keys.toml`（若使用）600 权限，不入库不入镜像
-- [ ] 反代上启用 TLS（Mortred 自身是 HTTP）；见 [§11.4](#114-tls-反代caddy)
+- [ ] 反代上启用 TLS（Mortred 自身是 HTTP）；见 [§11.4](#114-tls-反代nginx)
 - [ ] 防火墙放行清单里没有模型进程端口（它们本就只绑 loopback）
 - [ ] Grafana / Prometheus 端口留在环回；Grafana 密码不是镜像默认值
 - [ ] Prometheus 不要去刮已经映射出环回的模型端口
 - [ ] 若 8080 能从环回以外访问，已设置独立的 `MORTRED_METRICS_TOKEN`
 
-### 11.4 TLS 反代（Caddy）
+### 11.4 TLS 反代（Nginx）
 
-Mortred 不终结 TLS。可复制路径：
+Mortred 不终结 TLS。一等公民是 **主机网络上的 Nginx**（`mortredctl init-edge`）。
+不要在 gateway / supervisor 进程里做 TLS。不要把 Nginx 放进 Docker bridge 再去打宿主机的 `127.0.0.1:8080`。
 
 ```bash
-# 8080/8787 留在 127.0.0.1（compose 默认），然后：
-# 1. 改 deploy/caddy/Caddyfile 里的 infer.example.com
-# 2. 把 DNS 指到这台机器（80/443）
-caddy run --config deploy/caddy/Caddyfile
+mortredctl init-trust
+set -a && . conf/local/trust.env && set +a
+mortredctl init-edge --mode lan --server-name localhost
+nginx -t -p conf/local/edge -c nginx.conf
+# 局域网：浏览器信任一次 conf/local/edge/tls/ca.pem
+# 公网域名：mortredctl init-edge --mode acme --server-name infer.example.com
+#   然后 certbot certonly --webroot -w /var/www/mortred-acme -d infer.example.com
+#   （不要用 certbot --nginx，它会改写站点文件）
 ```
 
-没有公网 DNS 的本机冒烟用该文件里注释掉的 `:8443 { tls internal ... }`。
-不要在 gateway / supervisor 进程里做 TLS。
+8080/8787 留在 `127.0.0.1`。compose `profile: edge` 仅 Linux `network_mode: host`。
 
-`mortredctl doctor` 会在有效监听非环回、token 短于 32 字符、或 token 相同时
-打印警告。不加 `--strict` 时不因此失败；`--strict` 会把任何警告变成失败。
-doctor 不实现 TLS。
+`mortredctl doctor` 会在有效监听非环回、token 短于 32 字符、token 相同、或未设
+`MORTRED_METRICS_TOKEN` 时打印警告。`--strict` 把警告变成失败。doctor 不实现 TLS。
 
 ---
 
@@ -595,7 +598,7 @@ mortredctl doctor
 
 | 端点 | 内容 |
 |---|---|
-| `GET :8080/metrics` | 网关：HTTP 请求计数/时延、推理时延、队列等待、worker 可用性（环回上未设 token 时公开；非环回必须 scrape token） |
+| `GET :8080/metrics` | 网关：HTTP 请求计数/时延、推理时延、队列等待、worker 可用性（一律要 scrape token） |
 | `GET :8787/api/v1/metrics` | supervisor：进程状态、重启计数（需要 Bearer `MORTRED_API_TOKEN`） |
 
 仓库自带一套**本机**监控栈（Prometheus + Grafana + 告警规则）。端口只绑环回；

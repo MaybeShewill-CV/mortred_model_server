@@ -11,13 +11,14 @@ legacy `server_uri`, and forwards to the model's loopback port. The gateway
 enforces the external Bearer token (`MORTRED_GATEWAY_AUTH_TOKEN` or
 `MORTRED_API_TOKEN`), maps a dead upstream to `503` and transport failures to
 `502`; all model-server status codes below pass through unchanged. `GET
-/healthz` is public on the gateway. `GET /metrics` is public on loopback
-unless `MORTRED_METRICS_TOKEN` is set. A non-loopback gateway refuses to
-start without a distinct scrape Bearer (not the inference token). Model ports are
-loopback-only and must not be exposed. Mortred itself is plain HTTP; TLS
-must be terminated by a reverse proxy in front of the gateway. Fail-closed
-startup refuses a non-loopback listener with no auth, and a non-loopback
-gateway without a distinct metrics token.
+/healthz` is public on the gateway. `GET /metrics` requires
+`MORTRED_METRICS_TOKEN` on every listen, including loopback. A gateway
+refuses to start without a distinct scrape Bearer (not the inference token).
+Model ports are loopback-only and must not be exposed. Mortred itself is
+plain HTTP; TLS is terminated by Nginx on the host network
+(`mortredctl init-edge`). Fail-closed startup refuses a listener with no
+auth, a missing metrics token, and a wildcard bind unless
+`MORTRED_EXPOSE=docker` or `unsafe`.
 
 The supervisor (`:8787`) exposes the management REST API under `/api/v1/`
 (health/catalog/status/lifecycle/logs/metrics/keys) and the embedded web UI;
@@ -45,14 +46,13 @@ Authorization: Bearer <token>
 - Missing or invalid token: `401` + `WWW-Authenticate: Bearer realm="Mortred"`.
 - Health/metadata endpoints (`/healthz`, `/ready`, `/openapi.json`) are public.
   Supervisor `GET /api/v1/metrics` requires the management token. Gateway
-  `GET /metrics` is public on loopback unless `MORTRED_METRICS_TOKEN` is set.
-  A non-loopback gateway refuses to start without a distinct scrape Bearer.
-  Model `GET /metrics` requires the process auth token when one is configured
-  (supervisor children always have `MORTRED_AUTH_TOKEN`). `/healthz` stays
-  public. Do not reuse the inference token as the scrape secret.
-- When `auth_token` is empty, model endpoints are open, but the server refuses to listen
-  on a non-loopback host (fail-closed). That gate is not TLS, not metrics
-  privacy, and not a token-strength check.
+  `GET /metrics` requires `MORTRED_METRICS_TOKEN` on every listen.
+  Model `GET /metrics` requires the process auth token (supervisor children
+  always have `MORTRED_AUTH_TOKEN`); empty token yields 401, not a public
+  scrape. `/healthz` stays public. Do not reuse the inference token as the scrape secret.
+- When `auth_token` is empty, model inference and `/metrics` return 401.
+  Health/metadata stay public. The server still refuses a non-loopback listen
+  without a token, and refuses a wildcard bind unless `MORTRED_EXPOSE=docker|unsafe`.
 
 ## Request rules
 

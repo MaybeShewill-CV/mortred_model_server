@@ -73,7 +73,9 @@ for f in scripts/install_deps.sh scripts/convert_trt_engines.sh \
          scripts/clean_artifacts.sh scripts/setup_full_deps.sh \
          scripts/bench_batch.sh scripts/mortredctl_doctor.sh \
          scripts/mortredctl_prepare.sh scripts/prepare_pack.sh \
-         scripts/mortredctl_calibrate.sh scripts/security_warn.sh; do
+         scripts/mortredctl_calibrate.sh scripts/security_warn.sh \
+         scripts/mortredctl_init.sh scripts/mortredctl_init-trust.sh \
+         scripts/mortredctl_init-edge.sh; do
     check "bash -n $f" bash -n "$ROOT/$f"
 done
 check "py_compile fetch/gen/check" "$PY" -m py_compile \
@@ -106,6 +108,21 @@ check "convert_trt_engines.sh --list" bash "$ROOT/scripts/convert_trt_engines.sh
 # 4) Weights manifest dry-run
 check "fetch_weights.py --dry-run" "$PY" "$ROOT/scripts/fetch_weights.py" --dry-run
 check "security_warn.sh --self-test" bash "$ROOT/scripts/security_warn.sh" --self-test
+
+EDGE_TMP="$(mktemp -d)"
+if bash "$ROOT/scripts/mortredctl_init-edge.sh" --mode lan --out "$EDGE_TMP" --server-name localhost >/dev/null; then
+    if grep -q 'proxy_pass http://127.0.0.1:8080' "$EDGE_TMP/nginx.conf" \
+        && grep -q 'ssl_certificate tls/server.crt' "$EDGE_TMP/nginx.conf"; then
+        echo "  [ok]   mortredctl init-edge --mode lan"
+    else
+        echo "  [FAIL] init-edge nginx.conf missing proxy/ssl paths"
+        FAILED=$((FAILED+1))
+    fi
+else
+    echo "  [FAIL] mortredctl init-edge --mode lan"
+    FAILED=$((FAILED+1))
+fi
+rm -rf "$EDGE_TMP"
 
 # 5) 3rd_party completeness (failure is only a warning in --basic mode)
 if [ "$MODE" = "full" ]; then
@@ -149,6 +166,13 @@ if [ "$MODE" = "live" ]; then
             echo "  [FAIL] gateway $route unauthenticated POST expected 401, got $code"
             FAILED=$((FAILED+1))
         fi
+    fi
+    code="$(curl -s -o /dev/null -w '%{http_code}' "http://$GATEWAY/metrics" || echo 000)"
+    if [ "$code" = "401" ]; then
+        echo "  [ok]   gateway /metrics requires scrape token (401)"
+    else
+        echo "  [FAIL] gateway /metrics unauthenticated GET expected 401, got $code"
+        FAILED=$((FAILED+1))
     fi
 fi
 

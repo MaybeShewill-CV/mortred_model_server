@@ -1,0 +1,23 @@
+# Mortred edge: TLS at Nginx, Mortred stays on 127.0.0.1 HTTP.
+#
+# This file is a skeleton. `mortredctl init-edge` writes a complete config to
+# conf/local/edge/nginx.conf (gitignored). Do not point a production nginx -c
+# at this skeleton.
+
+worker_processes auto;
+error_log /var/log/nginx/mortred-edge-error.log warn;
+pid /run/mortred-edge.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+    sendfile      on;
+    server_tokens off;
+
+    # filled by mortredctl init-edge
+    include /etc/mortred/edge/generated.conf;
+}

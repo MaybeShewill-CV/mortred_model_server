@@ -9,6 +9,8 @@ export MORTRED_API_HOST="${MORTRED_API_HOST:-0.0.0.0}"
 export MORTRED_API_PORT="${MORTRED_API_PORT:-8787}"
 export MORTRED_GATEWAY_HOST="${MORTRED_GATEWAY_HOST:-0.0.0.0}"
 export MORTRED_GATEWAY_PORT="${MORTRED_GATEWAY_PORT:-8080}"
+# inside the container the process binds 0.0.0.0; compose publishes 127.0.0.1 on the host
+export MORTRED_EXPOSE="${MORTRED_EXPOSE:-docker}"
 # containers autostart the machine pack (default demo), not the whole catalog
 export MORTRED_AUTOSTART="${MORTRED_AUTOSTART:-true}"
 export MORTRED_PACK="${MORTRED_PACK:-$APP_PROJECT_ROOT/conf/packs/demo.toml}"
@@ -23,11 +25,14 @@ export APP_BIN_DIR="${APP_BIN_DIR:-bin}"
 export APP_LIB_DIR="${APP_LIB_DIR:-lib}"
 export APP_LIBS_DIR="${APP_LIBS_DIR:-lib}"
 
-if [ -z "${MORTRED_API_TOKEN:-}" ] && [ "${MORTRED_API_HOST}" != "127.0.0.1" ]; then
-    echo "[entrypoint] WARNING: non-loopback supervisor without MORTRED_API_TOKEN; it will refuse to start (fail-closed)" >&2
+if [ -z "${MORTRED_API_TOKEN:-}" ]; then
+    echo "[entrypoint] WARNING: MORTRED_API_TOKEN unset; supervisor will refuse to start" >&2
 fi
-if [ -z "${MORTRED_GATEWAY_AUTH_TOKEN:-}" ] && [ "${MORTRED_GATEWAY_HOST}" != "127.0.0.1" ]; then
-    echo "[entrypoint] WARNING: non-loopback gateway without MORTRED_GATEWAY_AUTH_TOKEN; it will refuse to start (fail-closed)" >&2
+if [ -z "${MORTRED_GATEWAY_AUTH_TOKEN:-}" ]; then
+    echo "[entrypoint] WARNING: MORTRED_GATEWAY_AUTH_TOKEN unset; gateway will refuse to start unless conf/api_keys.toml is valid" >&2
+fi
+if [ -z "${MORTRED_METRICS_TOKEN:-}" ]; then
+    echo "[entrypoint] WARNING: MORTRED_METRICS_TOKEN unset; gateway will refuse to start" >&2
 fi
 
 # Optional gpu convenience: convert MISSING TRT engines before the supervisor

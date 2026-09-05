@@ -8,8 +8,10 @@
 #   sudo systemctl daemon-reload && sudo systemctl enable --now mortred-supervisor
 #
 # 敏感配置（token 等）放 /etc/mortred/supervisor.env（chmod 600）:
-#   MORTRED_API_TOKEN=<management token>
-#   MORTRED_GATEWAY_AUTH_TOKEN=<inference token>
+#   mortredctl init-trust && sudo cp conf/local/trust.env /etc/mortred/supervisor.env
+#   MORTRED_API_TOKEN / MORTRED_GATEWAY_AUTH_TOKEN / MORTRED_METRICS_TOKEN
+# TLS: mortredctl init-edge --mode lan && sudo cp -a conf/local/edge /etc/mortred/edge
+#      sudo systemctl enable --now mortred-edge
 #
 # The supervisor manages mortred-gateway + all model servers; systemd only
 # supervises the supervisor itself.

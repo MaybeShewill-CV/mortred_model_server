@@ -96,7 +96,8 @@ void usage() {
                  "  commands: status [id] | catalog | start <id> | stop <id> | restart <id>\n"
                  "            logs <id> [--offset N] [--limit N]\n"
                  "            infer <id> --image <path>\n"
-                 "            init [--profile cpu|gpu] | doctor [--strict] | prepare [--pack FILE]\n"
+                 "            init [--profile cpu|gpu] | init-trust [--force] | init-edge --mode lan|acme|files\n"
+                 "            doctor [--strict] | prepare [--pack FILE]\n"
                  "            calibrate [--pack FILE] [--write-pack] | upgrade [version]\n"
                  "  env: MORTREDCTL_ADDR (default http://127.0.0.1:8787), MORTREDCTL_TOKEN,\n"
                  "       MORTREDCTL_GATEWAY_ADDR (default http://127.0.0.1:8080)\n");
@@ -164,7 +165,7 @@ int run_cli(int argc, char** argv) {
     // local ops commands: thin dispatchers to the scripts/ core
     // (single source of truth shared with bootstrap.sh and the docs)
     if (cmd == "init" || cmd == "doctor" || cmd == "upgrade" || cmd == "prepare" ||
-        cmd == "calibrate") {
+        cmd == "calibrate" || cmd == "init-trust" || cmd == "init-edge") {
         const std::string root = []() {
             if (const char* env = std::getenv("MORTRED_PROJECT_ROOT"); env != nullptr && *env != '\0') {
                 return std::string(env);
