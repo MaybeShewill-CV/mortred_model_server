@@ -159,6 +159,7 @@ PY
     (
         cd "$bin_dir" || exit 127
         exec env MORTRED_WORKER_NUMS=1 MORTRED_PROJECT_ROOT="$ROOT" \
+            MORTRED_LISTEN_HOST=127.0.0.1 \
             "$SERVER_BIN" --model "$model_id" "$server_toml"
     ) >"$probe_log" 2>&1 &
     pid=$!

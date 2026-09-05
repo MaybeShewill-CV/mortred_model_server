@@ -11,10 +11,12 @@
 #ifndef MORTRED_APPS_MODEL_SERVER_MAIN_H
 #define MORTRED_APPS_MODEL_SERVER_MAIN_H
 
+#include <cerrno>
+#include <cstring>
+#include <cstdlib>
 #include <functional>
 #include <memory>
 #include <string>
-#include <cstdlib>
 
 #include <glog/logging.h>
 #include <workflow/WFFacilities.h>
@@ -82,12 +84,19 @@ inline int run_model_server_main(
                    << std::to_string(static_cast<int>(status));
         return -1;
     }
-    if (server->start(host.c_str(), static_cast<unsigned short>(port)) == 0) {
+    const int rc = server->start(host.c_str(), static_cast<unsigned short>(port));
+    if (rc == 0) {
         wait_group.wait();
         server->stop();
         return 0;
     }
-    LOG(ERROR) << "Cannot start server";
+    LOG(ERROR) << "Cannot start server on " << host << ":" << port;
+    if (errno != 0) {
+        LOG(ERROR) << "listen errno=" << errno << ": " << std::strerror(errno);
+    } else {
+        LOG(ERROR) << "listen failed (port already in use is the usual cause; "
+                   << "stop mortred-supervisor or another process on this port)";
+    }
     return -1;
 }
 

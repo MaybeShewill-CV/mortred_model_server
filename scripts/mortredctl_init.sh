@@ -78,5 +78,6 @@ next:
   1. set tokens (MORTRED_API_TOKEN / MORTRED_GATEWAY_AUTH_TOKEN)
   2. if the pack uses TensorRT: mortredctl prepare
   3. start the supervisor (systemctl start mortred-supervisor, or docker compose)
-  4. mortredctl doctor    # live acceptance
+  4. mortredctl calibrate --pack conf/packs/demo.toml   # optional worker_nums report
+  5. mortredctl doctor    # live acceptance
 EOF

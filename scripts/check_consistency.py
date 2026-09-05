@@ -37,6 +37,7 @@ Verifies a few high-signal invariants:
     GPU smoke filter in ci.yml, and every HTTP catalog id has a CI tier.
 15. `conf/packs/demo.toml` `[pack.<ID>]` ids exist as `model=` in conf/server.
 16. `scripts/pack_trt.py --self-test` covers pack TRT engine discovery.
+17. `scripts/calibrate_pack.py --self-test` covers w* selection (no GPU).
 
 Exit code 0 means consistent; non-zero means the repository needs attention.
 """
@@ -699,6 +700,15 @@ def main() -> int:
             errors.append(
                 "pack_trt.py --self-test failed: "
                 + (pack_trt.stdout + pack_trt.stderr).strip()
+            )
+        cal = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "calibrate_pack.py"), "--self-test"],
+            cwd=str(ROOT), capture_output=True, text=True, timeout=60,
+        )
+        if cal.returncode != 0:
+            errors.append(
+                "calibrate_pack.py --self-test failed: "
+                + (cal.stdout + cal.stderr).strip()
             )
     except (OSError, subprocess.TimeoutExpired) as exc:
         errors.append(f"pack_trt.py --self-test could not run: {exc}")
