@@ -75,7 +75,7 @@ for f in scripts/install_deps.sh scripts/convert_trt_engines.sh \
          scripts/mortredctl_prepare.sh scripts/prepare_pack.sh \
          scripts/mortredctl_calibrate.sh scripts/security_warn.sh \
          scripts/mortredctl_init.sh scripts/mortredctl_init-trust.sh \
-         scripts/mortredctl_init-edge.sh; do
+         scripts/mortredctl_init-edge.sh scripts/ci_container_boot.sh; do
     check "bash -n $f" bash -n "$ROOT/$f"
 done
 check "py_compile fetch/gen/check" "$PY" -m py_compile \

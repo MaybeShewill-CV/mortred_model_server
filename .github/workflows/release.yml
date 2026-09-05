@@ -75,7 +75,7 @@ jobs:
 
   gpu-tarball:
     runs-on: ubuntu-22.04
-    timeout-minutes: 120
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v7
 
@@ -129,6 +129,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 120
     needs: [cpu-tarball]
+    # GPU runtime tags (:*-gpu / :latest-gpu) are pushed from gpu-tarball.
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v3

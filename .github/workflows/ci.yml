@@ -538,7 +538,8 @@ jobs:
           for f in scripts/install_deps.sh scripts/convert_trt_engines.sh \
                    scripts/docker_entrypoint.sh scripts/check_repo_clean.sh \
                    scripts/clean_artifacts.sh scripts/setup_full_deps.sh \
-                   scripts/mortredctl_doctor.sh scripts/security_warn.sh; do
+                   scripts/mortredctl_doctor.sh scripts/security_warn.sh \
+                   scripts/ci_container_boot.sh; do
             bash -n "$f"
           done
           python3 -m py_compile \
@@ -628,6 +629,42 @@ jobs:
           # (v1.7 errors "is a directory"); no-arg mode auto-discovers
           # .github/workflows/*.{yml,yaml} from the repo root
           ./actionlint -color
+
+  # ---------------------------------------------------------------------------
+  # Job D2: cpu compose boot. Always queued on PR/push so a required check can
+  # stay green on unrelated diffs; the expensive image build runs on container
+  # path changes and on every push to main. Hosted runners have no GPU:
+  # --profile gpu is not in this job (see docs/ci-golden-regression.md).
+  # ---------------------------------------------------------------------------
+  container-boot:
+    name: container boot (cpu compose)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            docker:
+              - 'Dockerfile'
+              - 'docker-compose.yml'
+              - 'scripts/docker_entrypoint.sh'
+              - 'scripts/ci_container_boot.sh'
+              - 'scripts/ci_assert_container_layout.py'
+              - 'conf/packs/demo.toml'
+              - '.github/workflows/ci.yml'
+
+      - name: CPU compose up, healthz, infer, process liveness
+        if: ${{ steps.filter.outputs.docker == 'true' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        env:
+          SKIP_DOCKER_CHECK: "1"
+          MORTRED_API_TOKEN: ci-container-boot-api-token-not-secret
+          MORTRED_GATEWAY_AUTH_TOKEN: ci-container-boot-gw-token-not-secret
+          MORTRED_METRICS_TOKEN: ci-container-boot-metrics-token-not-secret
+        run: ./scripts/ci_container_boot.sh
 
   # ---------------------------------------------------------------------------
   # Job E: full-build -Werror gate (Docker carrier, reuses install_deps.sh for fully automated deps)
