@@ -47,6 +47,14 @@ class TrtSpawnGateTest : public ::testing::Test {
 
 }  // namespace
 
+TEST_F(TrtSpawnGateTest, missing_model_toml_is_not_trt_gate) {
+    std::string err;
+    EXPECT_TRUE(trt_engines_ready_for_spawn(root_.string(), "_bin",
+                                            (root_ / "conf" / "server" / "x.toml").string(),
+                                            "", &err))
+        << err;
+}
+
 TEST_F(TrtSpawnGateTest, mnn_backend_is_not_gated) {
     write_model("[X.backend]\ntype=\"mnn\"\nmodel_file_path=\"../weights/x.mnn\"\n");
     std::string err;

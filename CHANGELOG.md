@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- TensorRT spawn gate no longer fails when the model toml path is a dummy or
+  missing (`SupervisorTest.spawn_passes_model_flag_for_unified_exe`). The gate
+  only refuse-spawns after it can read `type=tensorrt` and the engine file is
+  missing or empty.
 - Calibrate / model-server HTTP start: YOLOV8 TRT can init then fail
   `Cannot start server` when `:9056` is already bound (supervisor still
   serving the pack). Probe now binds `127.0.0.1` like the supervisor, refuses

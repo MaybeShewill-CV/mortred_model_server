@@ -123,10 +123,9 @@ inline bool trt_engines_ready_for_spawn(const std::string& project_root,
     }
     std::error_code ec;
     if (!std::filesystem::is_regular_file(model_toml, ec)) {
-        if (err != nullptr) {
-            *err = "model config not found: " + model_toml;
-        }
-        return false;
+        // Dummy / missing paths are not a TensorRT engine problem. The child
+        // still fails at init; crash-loop protection stays on that path.
+        return true;
     }
     mini_toml::Doc doc;
     if (!mini_toml::load(model_toml, &doc)) {
