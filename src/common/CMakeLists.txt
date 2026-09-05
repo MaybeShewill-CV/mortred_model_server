@@ -3,6 +3,7 @@
 set(COMMON_LIB_SRC
     ${CMAKE_CURRENT_LIST_DIR}/time_stamp.cpp
     ${CMAKE_CURRENT_LIST_DIR}/auth_token.h
+    ${CMAKE_CURRENT_LIST_DIR}/listen_policy.h
     ${CMAKE_CURRENT_LIST_DIR}/base64.h
     ${CMAKE_CURRENT_LIST_DIR}/cv_utils.h
     ${CMAKE_CURRENT_LIST_DIR}/file_path_util.h

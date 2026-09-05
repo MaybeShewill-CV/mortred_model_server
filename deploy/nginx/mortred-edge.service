@@ -1,0 +1,16 @@
+[Unit]
+Description=Mortred TLS edge (Nginx in front of loopback gateway)
+Documentation=https://github.com/MaybeShewill-CV/mortred_model_server
+After=network-online.target mortred-supervisor.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=/usr/sbin/nginx -t -p /etc/mortred/edge -c nginx.conf
+ExecStart=/usr/sbin/nginx -p /etc/mortred/edge -c nginx.conf -g "daemon off;"
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

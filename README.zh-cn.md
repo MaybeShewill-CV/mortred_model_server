@@ -351,13 +351,13 @@ docker run --gpus all -p 127.0.0.1:8080:8080 -p 127.0.0.1:8787:8787 \
 （管理面 :8787，内嵌 Web UI + REST API）监督 `mortred-gateway`（数据面
 :8080，推理统一入口）与全部模型进程；模型进程仅绑定 127.0.0.1，不再
 逐端口暴露。compose 与 `docker run` 示例把 8080/8787 绑在宿主机
-`127.0.0.1` 上。对外暴露必须由反向代理终结 TLS；不要在没有反代时把
-这些端口发到 `0.0.0.0`（Bearer 会明文传输）。网关 `GET /metrics` 在环回上默认公开；
-非环回必须设置独立的 `MORTRED_METRICS_TOKEN`，否则拒绝启动。scrape token 不能与
-推理/管理 token 相同。反代样例见
-[deploy/caddy/Caddyfile](deploy/caddy/Caddyfile)。`mortredctl doctor`
-会对非环回监听和过短/相同的 token 告警；`doctor --strict` 会因这些警告失败。
-TLS 仍在反代上终结。
+`127.0.0.1` 上。对外暴露必须由主机网络上的 Nginx 终结 TLS
+（`mortredctl init-edge`，[deploy/nginx](deploy/nginx)）；不要在没有边缘时把
+这些端口发到 `0.0.0.0`（Bearer 会明文传输）。网关 `GET /metrics` 在环回上也要
+`MORTRED_METRICS_TOKEN`。缺推理/管理身份、缺 scrape token、scrape 与其它身份相同、
+或未设 `MORTRED_EXPOSE=docker|unsafe` 的通配绑定都会拒绝启动。
+`mortredctl doctor` 会对非环回监听、缺失 scrape token 和过短/相同的 token 告警；
+`doctor --strict` 会因这些警告失败。TLS 仍在 Nginx 上终结。
 
 ## TensorRT 引擎重建（硬件适配）
 

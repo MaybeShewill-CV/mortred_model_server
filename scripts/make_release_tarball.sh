@@ -35,9 +35,11 @@ rm -rf "$STAGING"
 cmake --install "$BUILD_DIR" --prefix "$STAGING/opt/mortred"
 
 # systemd unit + installer, both outside the /opt/mortred prefix
-mkdir -p "$STAGING/deploy/caddy"
+mkdir -p "$STAGING/deploy/nginx/snippets"
 cp "$ROOT/deploy/mortred-supervisor.service" "$STAGING/deploy/"
-cp "$ROOT/deploy/caddy/Caddyfile" "$STAGING/deploy/caddy/"
+cp "$ROOT/deploy/nginx/mortred-edge.service" "$STAGING/deploy/nginx/"
+cp "$ROOT/deploy/nginx/nginx.conf.skeleton" "$STAGING/deploy/nginx/"
+cp "$ROOT/deploy/nginx/snippets/"*.conf "$STAGING/deploy/nginx/snippets/"
 cp "$ROOT/scripts/tarball_install.sh" "$STAGING/install.sh"
 chmod +x "$STAGING/install.sh"
 

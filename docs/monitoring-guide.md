@@ -30,8 +30,8 @@ Complete guide to the Mortred Model Server monitoring lifecycle: deployment, con
 └─────────────────────────────────────────────────────────────┘
 ```
 
-Gateway `:8080/metrics` is the default scrape target (public on loopback
-unless `MORTRED_METRICS_TOKEN` is set; required on a non-loopback gateway).
+Gateway `:8080/metrics` is the default scrape target and always requires
+`MORTRED_METRICS_TOKEN` (including loopback).
 Supervisor `:8787/api/v1/metrics` needs the management Bearer token. Model
 `/metrics` is loopback-only and needs the supervisor internal token when
 that child was started with `MORTRED_AUTH_TOKEN`. Do not publish model ports.
@@ -68,7 +68,7 @@ prometheus --config.file=deploy/prometheus.yml --storage.tsdb.path=/tmp/prom-dat
 
 | Component | Port | Endpoint | Description |
 |---|---|---|---|
-| Gateway | :8080 | `/metrics` | Inference entry (public on loopback unless `MORTRED_METRICS_TOKEN`; required off-loopback) |
+| Gateway | :8080 | `/metrics` | Inference entry (`MORTRED_METRICS_TOKEN` required, including loopback) |
 | Supervisor | :8787 | `/api/v1/metrics` | Process management (requires Bearer `MORTRED_API_TOKEN`) |
 | Model servers | loopback :9001-9084 | `/metrics` | Same network namespace as Prometheus; do not publish these ports |
 

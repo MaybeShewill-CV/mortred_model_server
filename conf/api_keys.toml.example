@@ -1,0 +1,14 @@
+# Example only. Copy to conf/api_keys.toml on the machine (mode 600) after
+# replacing every hash. The runtime file is gitignored; this example is not
+# loaded by the gateway.
+#
+# echo -n "your-secret-key" | sha256sum
+#
+# Auth: a valid key file is enough for inference. Empty
+# MORTRED_GATEWAY_AUTH_TOKEN does not authorize anyone once keys exist.
+
+# [keys.client-a]
+# hash = "<sha256 hex of the Bearer secret>"
+# scope = "inference"
+# rate_limit_qps = 100
+# enabled = true

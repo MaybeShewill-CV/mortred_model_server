@@ -92,6 +92,8 @@ sudo systemctl start mortred-supervisor
 
 ```bash
 mortredctl init [--profile cpu|gpu]   # detect hw, fetch weight subset, verify
+mortredctl init-trust                 # write conf/local/trust.env (gitignored)
+mortredctl init-edge --mode lan       # optional Nginx TLS on the host network
 mortredctl prepare [--pack FILE]      # GPU: pack TensorRT engines on this card
 mortredctl calibrate [--pack FILE]    # worker_nums report; --write-pack is opt-in
 mortredctl doctor                     # live acceptance + non-fatal security warnings
@@ -210,15 +212,16 @@ ships the control plane. In-container topology: `mortred-supervisor`
 (data plane :8080, the single inference entry) and all model servers; model
 processes bind loopback only and are no longer exposed port by port. The
 compose and `docker run` examples bind 8080/8787 to `127.0.0.1` on the host.
-External exposure must terminate TLS at a reverse proxy; do not publish
-those ports on `0.0.0.0` without one (Bearer tokens would travel in the
-clear). Gateway `GET /metrics` is public on loopback unless `MORTRED_METRICS_TOKEN`
-is set; a non-loopback gateway refuses to start without a distinct scrape token.
-Fail-closed also refuses a non-loopback listener with no inference/management
-auth, and refuses a scrape token that matches those. A copy-paste Caddyfile is
-in [deploy/caddy/Caddyfile](deploy/caddy/Caddyfile). `mortredctl doctor`
-warns about non-loopback listeners and weak/identical tokens; `doctor --strict`
-fails on those warnings. TLS stays at the reverse proxy.
+External exposure must terminate TLS at Nginx on the host network
+(`mortredctl init-edge`, [deploy/nginx](deploy/nginx)); do not publish
+those ports on `0.0.0.0` without it (Bearer tokens would travel in the
+clear). Gateway `GET /metrics` always requires `MORTRED_METRICS_TOKEN`,
+including on loopback. Fail-closed also refuses a listener with no
+inference/management auth, a missing scrape token, a scrape token that
+matches those, and a wildcard bind unless `MORTRED_EXPOSE=docker` (containers)
+or `unsafe` (plaintext on metal). `mortredctl doctor` warns about non-loopback
+listeners, missing scrape token, and weak/identical tokens; `doctor --strict`
+fails on those warnings. TLS stays at Nginx.
 
 ## TensorRT engine regeneration (hardware-adapted)
 

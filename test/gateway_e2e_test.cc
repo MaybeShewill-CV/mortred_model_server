@@ -201,6 +201,7 @@ class GatewayE2ETest : public ::testing::Test {
         gateway_pid_ = spawn(gateway_env, {},
                              {{"MORTRED_PROJECT_ROOT", root_.string()},
                               {"MORTRED_GATEWAY_AUTH_TOKEN", "ext-token"},
+                              {"MORTRED_METRICS_TOKEN", "scrape-token"},
                               {"MORTRED_INTERNAL_TOKEN", "int-token"},
                               {"MORTRED_GATEWAY_HOST", "127.0.0.1"},
                               {"MORTRED_GATEWAY_PORT", std::to_string(gateway_port_)},
@@ -398,7 +399,7 @@ TEST_F(GatewayE2ETest, upstream_overload_headers_pass_through) {
 }
 
 TEST_F(GatewayE2ETest, metrics_endpoint_renders) {
-    const auto r = send_request(gateway_port_, "GET", "/metrics", "");
+    const auto r = send_request(gateway_port_, "GET", "/metrics", "", "scrape-token");
     EXPECT_EQ(r.status, 200);
     EXPECT_NE(r.body.find("mortred_http_requests_total"), std::string::npos);
 }
@@ -484,8 +485,30 @@ class GatewayAuthTest : public ::testing::Test {
             {"MORTRED_GATEWAY_PORT", std::to_string(gateway_port_)},
             {"MORTRED_INTERNAL_TOKEN", "int-token"},
         };
+        if (host != "127.0.0.1" && host != "localhost" && host != "::1") {
+            bool has_expose = false;
+            for (const auto& kv : extra_env) {
+                if (kv.first == "MORTRED_EXPOSE") {
+                    has_expose = true;
+                    break;
+                }
+            }
+            if (!has_expose) {
+                env.emplace_back("MORTRED_EXPOSE", "docker");
+            }
+        }
         if (!auth_token.empty()) {
             env.emplace_back("MORTRED_GATEWAY_AUTH_TOKEN", auth_token);
+        }
+        bool has_metrics = false;
+        for (const auto& kv : extra_env) {
+            if (kv.first == "MORTRED_METRICS_TOKEN") {
+                has_metrics = true;
+                break;
+            }
+        }
+        if (!has_metrics) {
+            env.emplace_back("MORTRED_METRICS_TOKEN", "scrape-token");
         }
         for (const auto& kv : extra_env) {
             env.push_back(kv);
@@ -614,12 +637,9 @@ TEST_F(GatewayAuthTest, NonLoopbackWithOnlyApiTokenStarts) {
     EXPECT_EQ(r.status, 200);
 }
 
-TEST_F(GatewayAuthTest, MetricsTokenUnsetStaysPublic) {
-    ASSERT_TRUE(StartGateway("127.0.0.1", "ext-token", ""));
-    auto r = send_request(gateway_port_, "GET", "/metrics", "");
-    EXPECT_EQ(r.status, 200);
-    r = send_request(gateway_port_, "GET", "/healthz", "");
-    EXPECT_EQ(r.status, 200);
+TEST_F(GatewayAuthTest, MetricsTokenUnsetRefusesToStart) {
+    EXPECT_FALSE(StartGateway("127.0.0.1", "ext-token", "",
+                              {{"MORTRED_METRICS_TOKEN", ""}}));
 }
 
 TEST_F(GatewayAuthTest, MetricsTokenRejectsAnonymousAndWrongBearer) {
@@ -648,8 +668,15 @@ TEST_F(GatewayAuthTest, MetricsTokenAcceptsScrapeBearer) {
     EXPECT_EQ(r.status, 401) << "metrics scrape token must not infer";
 }
 
+TEST_F(GatewayAuthTest, WildcardListenWithoutExposeRefusesToStart) {
+    EXPECT_FALSE(StartGateway("0.0.0.0", "ext-token", "",
+                              {{"MORTRED_EXPOSE", "loopback"},
+                               {"MORTRED_METRICS_TOKEN", "scrape-token"}}));
+}
+
 TEST_F(GatewayAuthTest, NonLoopbackWithoutMetricsTokenRefusesToStart) {
-    EXPECT_FALSE(StartGateway("0.0.0.0", "ext-token", ""));
+    EXPECT_FALSE(StartGateway("0.0.0.0", "ext-token", "",
+                              {{"MORTRED_METRICS_TOKEN", ""}}));
 }
 
 TEST_F(GatewayAuthTest, MetricsTokenMatchingInferenceRefusesToStart) {

@@ -1,17 +1,13 @@
 # Mortred Model Server - Prometheus scrape configuration
 #
-# Default job: gateway GET /metrics (public on loopback unless
-# MORTRED_METRICS_TOKEN is set). A non-loopback gateway refuses to start
-# without that scrape token.
+# Default job: gateway GET /metrics. Always send the scrape Bearer
+# (MORTRED_METRICS_TOKEN). Loopback is not a public scrape.
 #
 # Supervisor GET /api/v1/metrics requires Authorization: Bearer
-# <MORTRED_API_TOKEN>. Model /metrics is loopback-only and, when the
-# supervisor injected MORTRED_AUTH_TOKEN, requires that same Bearer.
-# Scrape model targets only when Prometheus shares the model's network
-# namespace. Do not publish model ports to make them scrapeable.
-# If the gateway has MORTRED_METRICS_TOKEN, uncomment authorization
-# below. credentials_file must contain the raw scrape token (no
-# "Bearer " prefix). Do not put the inference token in that file.
+# <MORTRED_API_TOKEN>. Model /metrics is loopback-only and requires
+# the supervisor internal token (MORTRED_AUTH_TOKEN).
+# credentials_file must contain the raw scrape token (no "Bearer "
+# prefix). Do not put the inference token in that file.
 #
 # Install (bare metal):
 #   sudo cp deploy/prometheus.yml /etc/prometheus/prometheus.yml
@@ -42,9 +38,9 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:8080']
         labels: { component: gateway }
-    # authorization:
-    #   type: Bearer
-    #   credentials_file: /etc/prometheus/mortred_metrics_token
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/mortred_metrics_token
 
   # Uncomment when Prometheus can reach :8787 and can read the management
   # token. credentials_file must contain the raw token (no "Bearer " prefix).

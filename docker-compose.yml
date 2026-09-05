@@ -4,15 +4,16 @@
 #   docker compose --profile gpu up -d
 # CPU profile (no NVIDIA GPU required):
 #   docker compose --profile cpu up -d
-# Both: APP_AUTH_TOKEN + MORTRED_GATEWAY_AUTH_TOKEN must be set; weights dir
-# mount defaults to ./weights, override with WEIGHTS_DIR.
+# Both: MORTRED_API_TOKEN + MORTRED_GATEWAY_AUTH_TOKEN + MORTRED_METRICS_TOKEN
+# must be set (`mortredctl init-trust`). weights dir mount defaults to ./weights,
+# override with WEIGHTS_DIR.
 #
 # Two host ports: supervisor (management) 8787 + gateway (inference) 8080.
 # Both bind 127.0.0.1 on the host. Autostart uses conf/packs/demo.toml
-# (MORTRED_PACK), not every conf/server model. LAN/WAN access belongs on a TLS reverse
-# proxy in front (deploy/caddy/Caddyfile). Use "8080:8080" / "8787:8787" only
-# if you accept plaintext Bearer tokens on that interface — and then you MUST
-# set a distinct MORTRED_METRICS_TOKEN or the gateway will refuse to start.
+# (MORTRED_PACK), not every conf/server model. LAN/WAN TLS is Nginx on the
+# host network (mortredctl init-edge, deploy/nginx). Use "8080:8080" /
+# "8787:8787" only if you accept plaintext Bearer tokens on that interface —
+# then MORTRED_EXPOSE=unsafe and a distinct MORTRED_METRICS_TOKEN are required.
 # Do not publish model ports (9001+).
 services:
   mortred:
@@ -23,9 +24,10 @@ services:
     image: mortred_model_server:latest
     container_name: mortred
     environment:
+      MORTRED_EXPOSE: docker
       MORTRED_API_TOKEN: "${MORTRED_API_TOKEN:?set MORTRED_API_TOKEN to protect the supervisor API}"
       MORTRED_GATEWAY_AUTH_TOKEN: "${MORTRED_GATEWAY_AUTH_TOKEN:?set MORTRED_GATEWAY_AUTH_TOKEN to protect inference}"
-      MORTRED_METRICS_TOKEN: "${MORTRED_METRICS_TOKEN:-}"
+      MORTRED_METRICS_TOKEN: "${MORTRED_METRICS_TOKEN:?set MORTRED_METRICS_TOKEN (distinct scrape secret)}"
       MORTRED_AUTOSTART: "true"
       MORTRED_PACK: "/opt/mortred/conf/packs/demo.toml"
     ports:
@@ -56,9 +58,10 @@ services:
     image: mortred_model_server:cpu
     container_name: mortred-cpu
     environment:
+      MORTRED_EXPOSE: docker
       MORTRED_API_TOKEN: "${MORTRED_API_TOKEN:?set MORTRED_API_TOKEN to protect the supervisor API}"
       MORTRED_GATEWAY_AUTH_TOKEN: "${MORTRED_GATEWAY_AUTH_TOKEN:?set MORTRED_GATEWAY_AUTH_TOKEN to protect inference}"
-      MORTRED_METRICS_TOKEN: "${MORTRED_METRICS_TOKEN:-}"
+      MORTRED_METRICS_TOKEN: "${MORTRED_METRICS_TOKEN:?set MORTRED_METRICS_TOKEN (distinct scrape secret)}"
       MORTRED_PROFILE: "cpu"
       MORTRED_AUTOSTART: "true"
       MORTRED_PACK: "/opt/mortred/conf/packs/demo.toml"
@@ -73,4 +76,16 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+    restart: unless-stopped
+
+  # Linux host network only. Generate first:
+  #   mortredctl init-edge --mode lan --out conf/local/edge
+  # A bridge-network Nginx cannot reach Mortred's 127.0.0.1 listeners.
+  mortred-edge:
+    profiles: ["edge"]
+    image: nginx:1.26-alpine
+    network_mode: host
+    volumes:
+      - "${MORTRED_EDGE_DIR:-./conf/local/edge}:/data/edge:ro"
+    command: ["nginx", "-p", "/data/edge", "-c", "nginx.conf", "-g", "daemon off;"]
     restart: unless-stopped

@@ -41,6 +41,7 @@
 #include "workflow/Workflow.h"
 
 #include "common/auth_token.h"
+#include "common/listen_policy.h"
 #include "common/base64.h"
 #include "common/cv_utils.h"
 #include "common/request_size_limit.h"
@@ -885,15 +886,12 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         reply_rate_limited(task);
         return;
     }
-    // auth: health/metadata stay public. /metrics is public only when no
-    // auth_token is configured (loopback dev). Managed children get
-    // MORTRED_AUTH_TOKEN from the supervisor and then require that Bearer.
+    // auth: health/metadata stay public. /metrics always requires the process
+    // auth_token (supervisor injects MORTRED_AUTH_TOKEN). Empty token is not a
+    // public-metrics mode.
     bool is_health_endpoint = strcmp(request_uri, "/healthz") == 0 ||
                               strcmp(request_uri, "/ready") == 0 ||
                               strcmp(request_uri, "/openapi.json") == 0;
-    if (strcmp(request_uri, "/metrics") == 0 && _m_auth_token.empty()) {
-        is_health_endpoint = true;
-    }
     // async job endpoints (require auth like model endpoints)
     const bool is_async_endpoint = _m_async_enabled &&
                                    strncmp(request_uri, "/jobs", 5) == 0 &&
@@ -1570,6 +1568,13 @@ StatusCode BaseAiServerImpl<WORKER, MODEL_OUTPUT>::parse_server_security_config(
     // the fail-closed check must judge the EFFECTIVE host (env override wins)
     if (const char* env = std::getenv("MORTRED_LISTEN_HOST"); env != nullptr && *env != '\0') {
         listen_host = env;
+    }
+    if (!jinq::common::listen_host_permitted(listen_host)) {
+        LOG(ERROR) << "refusing to serve on " << listen_host
+                   << " (MORTRED_EXPOSE=" << jinq::common::mortred_expose_mode()
+                   << "); bind 127.0.0.1 or set MORTRED_EXPOSE=docker|unsafe";
+        _m_successfully_initialized = false;
+        return StatusCode::SERVER_INIT_FAILED;
     }
     if (!jinq::common::is_loopback_host(listen_host) && _m_auth_token.empty()) {
         LOG(ERROR) << "refusing to serve on non-loopback host " << listen_host

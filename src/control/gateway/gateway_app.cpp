@@ -35,6 +35,7 @@
 #include <workflow/Workflow.h>
 
 #include "common/auth_token.h"
+#include "common/listen_policy.h"
 #include "control/api_key_manager.h"
 #include "control/catalog.h"
 #include "control/control_config.h"
@@ -52,7 +53,7 @@ Catalog g_catalog;
 ControlConfig g_cfg;
 std::string g_auth_token;       // external bearer token ("" = loopback mode)
 std::string g_admin_token;      // MORTRED_API_TOKEN; UI / mortredctl smoke
-std::string g_metrics_token;    // scrape Bearer; required on non-loopback, optional on loopback
+std::string g_metrics_token;    // scrape Bearer; required on every listen, including loopback
 mortred::control::ApiKeyManager g_api_keys;  // multi-key auth (P0-4)
 std::string g_internal_token;   // shared with model servers via supervisor env
 std::vector<std::string> g_cors_origins;  // UI origins allowed to call infer
@@ -390,15 +391,13 @@ void process(WFHttpTask* task) {
         return;
     }
     if (path == "/metrics") {
-        if (!g_metrics_token.empty()) {
-            const std::string auth_header = header_value(task->get_req(), "authorization");
-            if (!jinq::common::is_bearer_authorized(auth_header, g_metrics_token)) {
-                g_metrics.inc_http_requests(method, "401");
-                task->get_resp()->add_header_pair("WWW-Authenticate",
-                                                 "Bearer realm=\"Mortred\"");
-                reply_error(task, 401, "unauthorized");
-                return;
-            }
+        const std::string auth_header = header_value(task->get_req(), "authorization");
+        if (!jinq::common::is_bearer_authorized(auth_header, g_metrics_token)) {
+            g_metrics.inc_http_requests(method, "401");
+            task->get_resp()->add_header_pair("WWW-Authenticate",
+                                             "Bearer realm=\"Mortred\"");
+            reply_error(task, 401, "unauthorized");
+            return;
         }
         auto* resp = task->get_resp();
         resp->set_status_code("200");
@@ -535,18 +534,23 @@ int run_gateway(int argc, char** argv) {
         }
     }
 
-    // fail-closed startup: a non-loopback listener needs at least one external
-    // auth mechanism (static token or API keys). A present-but-broken
-    // api_keys.toml is also fatal when no static token can take over: an
-    // operator who configured keys wants authentication, and silently serving
-    // without it would be a fail-open security hole.
-    if (!jinq::common::is_loopback_host(g_cfg.gateway.host) &&
-        g_auth_token.empty() && g_admin_token.empty() && !api_keys_loaded) {
+    if (!jinq::common::listen_host_permitted(g_cfg.gateway.host)) {
         std::fprintf(stderr,
-                     "mortred-gateway: refusing to listen on non-loopback host %s without any "
-                     "external auth (set MORTRED_GATEWAY_AUTH_TOKEN, MORTRED_API_TOKEN, or provide a valid "
-                     "conf/api_keys.toml)\n",
-                     g_cfg.gateway.host.c_str());
+                     "mortred-gateway: refusing to listen on %s (MORTRED_EXPOSE=%s). "
+                     "Bind 127.0.0.1 and terminate TLS at Nginx (deploy/nginx). "
+                     "Containers: MORTRED_EXPOSE=docker. Metal wildcard: MORTRED_EXPOSE=unsafe "
+                     "(plaintext; doctor --strict fails)\n",
+                     g_cfg.gateway.host.c_str(),
+                     jinq::common::mortred_expose_mode().c_str());
+        return 1;
+    }
+    // fail-closed: every listen needs inference/management auth. Broken
+    // api_keys.toml is fatal when no static token can take over.
+    if (g_auth_token.empty() && g_admin_token.empty() && !api_keys_loaded) {
+        std::fprintf(stderr,
+                     "mortred-gateway: refusing to start without external auth "
+                     "(set MORTRED_GATEWAY_AUTH_TOKEN, MORTRED_API_TOKEN, or provide a valid "
+                     "conf/api_keys.toml). Loopback is not an anonymous mode.\n");
         return 1;
     }
     if (api_keys_parse_failed && g_auth_token.empty() && g_admin_token.empty()) {
@@ -561,16 +565,15 @@ int run_gateway(int argc, char** argv) {
                      "mortred-gateway: WARNING: conf/api_keys.toml failed to parse; continuing "
                      "with static-token auth only\n");
     }
-    if (!jinq::common::is_loopback_host(g_cfg.gateway.host) && g_metrics_token.empty()) {
+    if (g_metrics_token.empty()) {
         std::fprintf(stderr,
-                     "mortred-gateway: refusing to listen on non-loopback host %s without "
-                     "MORTRED_METRICS_TOKEN (GET /metrics would be public; set a scrape Bearer "
-                     "distinct from the inference and management tokens)\n",
-                     g_cfg.gateway.host.c_str());
+                     "mortred-gateway: refusing to start without MORTRED_METRICS_TOKEN "
+                     "(GET /metrics is never public, including loopback; set a scrape Bearer "
+                     "distinct from the inference and management tokens). "
+                     "Generate with: mortredctl init-trust\n");
         return 1;
     }
-    if (!g_metrics_token.empty() &&
-        (g_metrics_token == g_auth_token || g_metrics_token == g_admin_token)) {
+    if (g_metrics_token == g_auth_token || g_metrics_token == g_admin_token) {
         std::fprintf(stderr,
                      "mortred-gateway: refusing to start: MORTRED_METRICS_TOKEN matches an "
                      "inference or management token; Prometheus would then hold that privilege\n");
@@ -601,12 +604,12 @@ int run_gateway(int argc, char** argv) {
     }
     const char* auth_mode = g_api_keys.key_count() > 0
                                 ? "api-keys auth"
-                                : (!g_auth_token.empty() || !g_admin_token.empty())
-                                      ? "static-token auth"
-                                      : "AUTH DISABLED (loopback only)";
-    std::fprintf(stderr, "mortred-gateway listening on http://%s:%d (routes: %zu) [%s%s]\n",
+                                : "static-token auth";
+    std::fprintf(stderr,
+                 "mortred-gateway listening on http://%s:%d (routes: %zu) [%s, metrics scrape "
+                 "token, expose=%s]\n",
                  g_cfg.gateway.host.c_str(), g_cfg.gateway.port, g_catalog.entries().size(),
-                 auth_mode, g_metrics_token.empty() ? "" : ", metrics scrape token");
+                 auth_mode, jinq::common::mortred_expose_mode().c_str());
 
     WFFacilities::WaitGroup wait_group(1);
     wait_group.wait();

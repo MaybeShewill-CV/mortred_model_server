@@ -130,7 +130,7 @@ if(MORTRED_INSTALL)
                                  GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
     endif()
     install(DIRECTORY conf docs demo_data resources DESTINATION .)
-    install(DIRECTORY ${PROJECT_ROOT_DIR}/deploy/caddy DESTINATION deploy)
+    install(DIRECTORY ${PROJECT_ROOT_DIR}/deploy/nginx DESTINATION deploy)
     install(DIRECTORY scripts DESTINATION .
             FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
                              GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)

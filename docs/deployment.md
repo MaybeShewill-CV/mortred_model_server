@@ -70,15 +70,15 @@ flowchart LR
 | Only 2 external ports | gateway `8080` (inference), supervisor `8787` (management + web UI) |
 | Model servers bind loopback only | Nothing bypasses the gateway; supervisor injects an internal token |
 | The supervisor manages a **pack** | Listed `conf/packs/*.toml` ids autostart; `MORTRED_AUTOSTART=true` does **not** boot the whole `conf/server` tree |
-| Fail-closed | Non-loopback listener without inference/management auth **refuses to start**. Non-loopback gateway also requires a **distinct** `MORTRED_METRICS_TOKEN`. Not TLS (terminate at a reverse proxy). |
+| Fail-closed | Missing inference/management auth or scrape token **refuses to start**, including loopback. Wildcard bind needs `MORTRED_EXPOSE=docker` or `unsafe`. TLS is Nginx (`mortredctl init-edge`). |
 
 **Ports at a glance**:
 
 | Port | Process | Purpose | Auth |
 |---|---|---|---|
-| `8080` | mortred-gateway | inference `/mortred_ai_server_v1/...`, `/healthz`, `/metrics` | Bearer on infer/jobs; `/healthz` public; `/metrics` public on loopback unless `MORTRED_METRICS_TOKEN`; **required** (and distinct) on non-loopback |
+| `8080` | mortred-gateway | inference `/mortred_ai_server_v1/...`, `/healthz`, `/metrics` | Bearer on infer/jobs; `/healthz` public; `/metrics` requires `MORTRED_METRICS_TOKEN` (including loopback) |
 | `8787` | mortred-supervisor | mgmt API `/api/v1/*`, web console | Bearer token |
-| `9002+` | model servers | loopback only | internal token (including `GET /metrics` when that token is set) |
+| `9002+` | model servers | loopback only | internal token (including `GET /metrics`) |
 
 ---
 
@@ -516,19 +516,20 @@ knob; stay inside the pack + calibrate budget (§10.3).
 |---|---|---|
 | `MORTRED_API_TOKEN` | supervisor mgmt API + web console | `/etc/mortred/supervisor.env` (tarball) / container env |
 | `MORTRED_GATEWAY_AUTH_TOKEN` | gateway inference entry | same |
-| `MORTRED_METRICS_TOKEN` | gateway `GET /metrics` scrape Bearer | same (unset = public **only** on loopback; required and distinct on non-loopback) |
+| `MORTRED_METRICS_TOKEN` | gateway `GET /metrics` scrape Bearer | same (required on every listen; distinct from the two above) |
 
 ```bash
 openssl rand -hex 24    # generate (one independent value per token)
 ```
 
-**Fail-closed semantics**: a non-loopback listener without its token **refuses
-to start** and prints why. A non-loopback gateway also refuses if
+**Fail-closed semantics**: a listener without its token **refuses to start**
+and prints why, including on loopback. The gateway also refuses if
 `MORTRED_METRICS_TOKEN` is empty or matches the inference/management token.
-Never deploy with a hole. That gate does **not** terminate TLS (use a reverse
-proxy) or reject a short token at process start. `mortredctl doctor --strict`
-fails on those warnings (plaintext listen, short tokens, identical tokens).
-Default `doctor` still prints them without failing.
+Wildcard bind requires `MORTRED_EXPOSE=docker` (containers) or `unsafe`.
+That gate does **not** terminate TLS (`mortredctl init-edge` / Nginx) or
+reject a short token at process start. `mortredctl doctor --strict`
+fails on those warnings (plaintext listen, missing scrape token, short
+tokens, identical tokens). Default `doctor` still prints them without failing.
 Do not reuse the inference token as the scrape secret.
 
 ### 11.2 Multi-tenant API keys (gateway layer)
@@ -559,30 +560,40 @@ See [api-keys.md](api-keys.md) for the full guide incl. zero-downtime rotation.
 - [ ] 8080/8787 published on `127.0.0.1` unless a TLS reverse proxy sits in front
 - [ ] keep 8787 off the public internet even behind TLS
 - [ ] `conf/api_keys.toml` (if used) mode 600, never committed or baked into images
-- [ ] TLS terminated at your reverse proxy (Mortred itself is plain HTTP); see [§11.4](#114-tls-reverse-proxy-caddy)
+- [ ] TLS terminated at Nginx on the host network (Mortred itself is plain HTTP); see [§11.4](#114-tls-reverse-proxy-nginx)
 - [ ] no model-server ports in the firewall allowlist (they are loopback-only anyway)
 - [ ] Grafana/Prometheus ports stay on loopback; Grafana password is not the image default
 - [ ] Prometheus does not scrape model ports that have been published off-loopback
 - [ ] if 8080 is reachable off-loopback, `MORTRED_METRICS_TOKEN` is set and distinct from the inference token
 
-### 11.4 TLS reverse proxy (Caddy)
+### 11.4 TLS reverse proxy (Nginx)
 
-Mortred does not terminate TLS. Copy-paste path:
+Mortred does not terminate TLS. First-class edge is **Nginx on the host
+network** (`mortredctl init-edge`). Do not put TLS inside the gateway or
+supervisor process. Do not run Nginx in a Docker bridge network and expect
+it to reach `127.0.0.1:8080` on the host.
 
 ```bash
-# keep 8080/8787 on 127.0.0.1 (compose default), then:
-# 1. replace infer.example.com in deploy/caddy/Caddyfile
-# 2. point DNS at this machine (80/443)
-caddy run --config deploy/caddy/Caddyfile
+mortredctl init-trust
+set -a && . conf/local/trust.env && set +a
+mortredctl init-edge --mode lan --server-name localhost
+# optional: sudo cp -a conf/local/edge /etc/mortred/edge
+#           sudo cp deploy/nginx/mortred-edge.service /etc/systemd/system/
+#           sudo systemctl enable --now mortred-edge
+nginx -t -p conf/local/edge -c nginx.conf
+# LAN: trust conf/local/edge/tls/ca.pem once in the browser
+# Public DNS: mortredctl init-edge --mode acme --server-name infer.example.com
+#   then: certbot certonly --webroot -w /var/www/mortred-acme -d infer.example.com
+#   (do not use certbot --nginx; it rewrites the site file)
 ```
 
-Local smoke without public DNS is the commented `:8443 { tls internal ... }`
-block in that file. Do not put TLS inside the gateway or supervisor process.
+Keep 8080/8787 on `127.0.0.1`. Compose `profile: edge` is Linux
+`network_mode: host` only.
 
 `mortredctl doctor` warns when the effective listen is not loopback, when a
-token is shorter than 32 characters, or when tokens are identical.
-Those lines are warnings only unless you pass `--strict` (then any warning
-fails doctor). Doctor does not implement TLS.
+token is shorter than 32 characters, when tokens are identical, or when
+`MORTRED_METRICS_TOKEN` is unset. Those lines fail `doctor --strict`.
+Doctor does not implement TLS.
 
 ---
 
@@ -623,7 +634,7 @@ Out-of-the-box Prometheus endpoints:
 
 | Endpoint | Content |
 |---|---|
-| `GET :8080/metrics` | gateway: HTTP counts/latency, inference latency, queue wait, worker availability (public on loopback unless `MORTRED_METRICS_TOKEN`; required off-loopback) |
+| `GET :8080/metrics` | gateway: HTTP counts/latency, inference latency, queue wait, worker availability (`MORTRED_METRICS_TOKEN` required, including loopback) |
 | `GET :8787/api/v1/metrics` | supervisor: process states, restart counters (Bearer `MORTRED_API_TOKEN`) |
 
 A **local** monitoring stack ships in the repo (Prometheus + Grafana + alert

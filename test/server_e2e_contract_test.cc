@@ -765,10 +765,12 @@ TEST(server_e2e_contract, metrics_requires_bearer_when_auth_token_is_set) {
     EXPECT_EQ(ok.status, 200);
 }
 
-TEST(server_e2e_contract, metrics_stays_public_when_auth_token_is_empty) {
+TEST(server_e2e_contract, metrics_is_unauthorized_when_auth_token_is_empty) {
     ServerHandle handle = start_server("", 64, false);
     auto metrics = send_request(handle.port, "GET", "/metrics", "", {});
-    EXPECT_EQ(metrics.status, 200);
+    EXPECT_EQ(metrics.status, 401);
+    auto health = send_request(handle.port, "GET", "/healthz", "", {});
+    EXPECT_EQ(health.status, 200);
 }
 
 namespace {

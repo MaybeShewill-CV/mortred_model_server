@@ -98,14 +98,13 @@ inline bool constant_time_equals(const std::string& lhs, const std::string& rhs)
 }
 
 /***
- * Auth entry point:
- * - no token configured (loopback mode) -> allow;
- * - token configured -> must match the Bearer Token in the Authorization header.
+ * Auth entry point: empty configured token never authorizes (no anonymous mode).
+ * Callers that intend a public route must skip this function.
  */
 inline bool is_bearer_authorized(const std::string& authorization_header,
                                  const std::string& configured_token) {
     if (configured_token.empty()) {
-        return true;
+        return false;
     }
     return constant_time_equals(bearer_token_of(authorization_header),
                                 configured_token);

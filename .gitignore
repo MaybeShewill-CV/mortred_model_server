@@ -69,3 +69,5 @@ generated_configs/
 logs/mortred-supervisor.pid
 dist/
 src/common/mortred_version.h
+conf/local/
+conf/api_keys.toml
