@@ -513,23 +513,29 @@ int run_gateway(int argc, char** argv) {
         g_internal_token = env;
     }
 
-    // multi-key auth: load from conf/api_keys.toml if present (P0-4). The load
-    // outcome is part of the startup auth decision, so it runs BEFORE the
-    // fail-closed listener check below.
+    // fail-closed: every listen needs inference/management auth. Broken or
+    // empty api_keys.toml is fatal when no static token can take over.
     bool api_keys_loaded = false;
     bool api_keys_parse_failed = false;
+    bool api_keys_empty_file = false;
     {
         const std::string api_keys_path =
             (std::filesystem::path(root) / "conf" / "api_keys.toml").string();
         if (std::filesystem::exists(api_keys_path)) {
-            if (g_api_keys.load(api_keys_path)) {
-                api_keys_loaded = true;
-                std::fprintf(stderr, "mortred-gateway: loaded %zu API keys from %s\n",
-                             g_api_keys.key_count(), api_keys_path.c_str());
-            } else {
+            if (!g_api_keys.load(api_keys_path)) {
                 api_keys_parse_failed = true;
                 std::fprintf(stderr, "mortred-gateway: ERROR: failed to parse %s\n",
                              api_keys_path.c_str());
+            } else if (g_api_keys.key_count() == 0) {
+                api_keys_empty_file = true;
+                std::fprintf(stderr,
+                             "mortred-gateway: ERROR: %s parsed but contains no keys "
+                             "(empty key file is not auth)\n",
+                             api_keys_path.c_str());
+            } else {
+                api_keys_loaded = true;
+                std::fprintf(stderr, "mortred-gateway: loaded %zu API keys from %s\n",
+                             g_api_keys.key_count(), api_keys_path.c_str());
             }
         }
     }
@@ -544,25 +550,34 @@ int run_gateway(int argc, char** argv) {
                      jinq::common::mortred_expose_mode().c_str());
         return 1;
     }
-    // fail-closed: every listen needs inference/management auth. Broken
-    // api_keys.toml is fatal when no static token can take over.
-    if (g_auth_token.empty() && g_admin_token.empty() && !api_keys_loaded) {
-        std::fprintf(stderr,
-                     "mortred-gateway: refusing to start without external auth "
-                     "(set MORTRED_GATEWAY_AUTH_TOKEN, MORTRED_API_TOKEN, or provide a valid "
-                     "conf/api_keys.toml). Loopback is not an anonymous mode.\n");
-        return 1;
-    }
-    if (api_keys_parse_failed && g_auth_token.empty() && g_admin_token.empty()) {
-        std::fprintf(stderr,
-                     "mortred-gateway: refusing to start: conf/api_keys.toml exists but failed to "
-                     "parse, and no MORTRED_GATEWAY_AUTH_TOKEN or MORTRED_API_TOKEN fallback is "
-                     "configured\n");
+    const bool has_static_token = !g_auth_token.empty() || !g_admin_token.empty();
+    if (!has_static_token && !api_keys_loaded) {
+        if (api_keys_empty_file) {
+            std::fprintf(stderr,
+                         "mortred-gateway: refusing to start: conf/api_keys.toml has no keys "
+                         "(empty key file is not auth). Set MORTRED_GATEWAY_AUTH_TOKEN / "
+                         "MORTRED_API_TOKEN, or add at least one [keys.*] hash. "
+                         "Loopback is not an anonymous mode.\n");
+        } else if (api_keys_parse_failed) {
+            std::fprintf(stderr,
+                         "mortred-gateway: refusing to start: conf/api_keys.toml exists but failed "
+                         "to parse, and no MORTRED_GATEWAY_AUTH_TOKEN or MORTRED_API_TOKEN "
+                         "fallback is configured\n");
+        } else {
+            std::fprintf(stderr,
+                         "mortred-gateway: refusing to start without external auth "
+                         "(set MORTRED_GATEWAY_AUTH_TOKEN, MORTRED_API_TOKEN, or provide a valid "
+                         "conf/api_keys.toml). Loopback is not an anonymous mode.\n");
+        }
         return 1;
     }
     if (api_keys_parse_failed) {
         std::fprintf(stderr,
                      "mortred-gateway: WARNING: conf/api_keys.toml failed to parse; continuing "
+                     "with static-token auth only\n");
+    } else if (api_keys_empty_file) {
+        std::fprintf(stderr,
+                     "mortred-gateway: WARNING: conf/api_keys.toml has no keys; continuing "
                      "with static-token auth only\n");
     }
     if (g_metrics_token.empty()) {

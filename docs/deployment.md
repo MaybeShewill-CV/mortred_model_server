@@ -546,7 +546,8 @@ Do not reuse the inference token as the scrape secret.
 ### 11.2 Multi-tenant API keys (gateway layer)
 
 Beyond the single static token, the gateway supports per-key management
-(hashed at rest, scopes, rate limits, hot reload):
+(hashed at rest, scopes, rate limits). There is no hot reload: restart the
+gateway child after editing the file.
 
 ```toml
 # conf/api_keys.toml
@@ -559,7 +560,7 @@ enabled = true
 
 ```bash
 curl -X POST -H "Authorization: Bearer $MORTRED_API_TOKEN" \
-     http://localhost:8787/api/v1/keys/reload      # hot reload, no restart
+     http://localhost:8787/api/v1/servers/__gateway/restart
 ```
 
 See [api-keys.md](api-keys.md) for the full guide incl. zero-downtime rotation.

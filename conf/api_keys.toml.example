@@ -1,9 +1,11 @@
 # Example only. Copy to conf/api_keys.toml on the machine (mode 600) after
-# replacing every hash. The runtime file is gitignored; this example is not
-# loaded by the gateway.
+# replacing every hash with at least one real [keys.*] entry. A comment-only
+# copy is not authentication. The runtime file is gitignored; this example is
+# not loaded by the gateway.
 #
 # echo -n "your-secret-key" | sha256sum
 #
+# Default development auth is mortredctl init-trust (env tokens), not this file.
 # Auth: a valid key file is enough for inference. Empty
 # MORTRED_GATEWAY_AUTH_TOKEN does not authorize anyone once keys exist.
 

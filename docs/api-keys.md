@@ -20,11 +20,18 @@ This guide covers the complete lifecycle of API keys: how a **service administra
                                             │  (loopback)  │
                                             └──────────────┘
 
-┌──────────────────┐    manage keys         ┌──────────────┐
-│ Service Admin    │ ─────────────────────→ │  Supervisor  │
-│ (operator)       │  /api/v1/keys{,/reload}│   (:8787)    │
-└──────────────────┘                        └──────────────┘
+┌──────────────────┐    restart gateway      ┌──────────────┐
+│ Service Admin    │  after editing toml    │  Supervisor  │
+│ (operator)       │  POST .../servers/...  │   (:8787)    │
+└──────────────────┘    /restart            └──────────────┘
 ```
+
+Development default is `mortredctl init-trust` (env tokens). `conf/api_keys.toml`
+is optional multi-tenant auth on the **gateway** process. There is no
+supervisor hot-reload for keys: edit the file, then restart the gateway child
+(`POST /api/v1/servers/__gateway/restart` with `MORTRED_API_TOKEN`).
+`scope` (`inference` | `admin` | `all`) only affects whether the gateway
+accepts that Bearer for **inference**. It does not grant :8787 management.
 
 ## For Client Users
 
@@ -205,9 +212,9 @@ enabled = true
 ```
 
 ```bash
-# Step 4: Hot-reload (no gateway restart needed)
+# Step 4: Restart the gateway child so it reloads conf/api_keys.toml
 curl -X POST -H "Authorization: Bearer $MORTRED_API_TOKEN" \
-  http://localhost:8787/api/v1/keys/reload
+  http://localhost:8787/api/v1/servers/__gateway/restart
 
 # Step 5: Give the key string to the client (NOT the hash)
 # The client uses: Authorization: Bearer 3a7f9b2e8c4d...
@@ -216,23 +223,8 @@ curl -X POST -H "Authorization: Bearer $MORTRED_API_TOKEN" \
 
 ### Managing Keys
 
-#### List all keys
-```bash
-curl -H "Authorization: Bearer $MORTRED_API_TOKEN" \
-  http://localhost:8787/api/v1/keys
-```
-
-Response:
-```json
-{
-  "keys": [
-    {"name": "tenant-a", "scope": "inference", "enabled": true,
-     "total_requests": 15234, "total_rejected": 12},
-    {"name": "admin", "scope": "all", "enabled": true,
-     "total_requests": 45, "total_rejected": 0}
-  ]
-}
-```
+Key list and usage counters are **not** exposed on the supervisor. Counters
+live in the gateway process and reset on restart.
 
 #### Disable a key (without deleting)
 ```toml
@@ -241,7 +233,7 @@ Response:
 hash = "..."
 enabled = false   # immediately rejected on next request
 ```
-Then reload: `POST /api/v1/keys/reload`
+Then restart the gateway child.
 
 #### Re-enable a key
 ```toml
@@ -249,10 +241,11 @@ Then reload: `POST /api/v1/keys/reload`
 hash = "..."
 enabled = true
 ```
-Reload.
+Restart the gateway child.
 
 #### Delete a key
-Remove the entire `[keys.name]` section from `conf/api_keys.toml`, then reload.
+Remove the entire `[keys.name]` section from `conf/api_keys.toml`, then restart
+the gateway child.
 
 #### Change a key's rate limit
 ```toml
@@ -260,23 +253,14 @@ Remove the entire `[keys.name]` section from `conf/api_keys.toml`, then reload.
 hash = "..."
 rate_limit_qps = 200   # was 100
 ```
-Reload. Takes effect immediately for new requests.
+Restart the gateway child. Takes effect immediately for new requests.
 
-### Key Rotation Procedure (zero downtime)
+### Key Rotation Procedure
 
-```
-Before:  [keys.tenant-a] hash=old_hash
-
-Step 1:  [keys.tenant-a]  hash=old_hash          ← keep old
-         [keys.tenant-a-v2] hash=new_hash        ← add new
-         → reload → both keys work
-
-Step 2:  Client switches to new key (old still works as fallback)
-
-Step 3:  [keys.tenant-a-v2] hash=new_hash        ← only new
-         (remove [keys.tenant-a])
-         → reload → old key rejected
-```
+Keep old and new `[keys.*]` entries in the file, restart the gateway child,
+switch the client, then remove the old entry and restart again. The gateway
+is down for the restart; overlapping hashes in one file avoid a client
+outage if you restart once with both keys present.
 
 ### Configuration File Security
 
@@ -292,24 +276,20 @@ echo "conf/api_keys.toml" >> .gitignore
 
 ### Monitoring Key Usage
 
-```bash
-# Check per-key request counts
-curl -H "Authorization: Bearer $MORTRED_API_TOKEN" \
-  http://localhost:8787/api/v1/keys | jq '.keys[] | {name, total_requests, total_rejected}'
-
-# Set up a Prometheus alert for high rejection rates
-# (already in deploy/alert-rules.yml → MortredOverloadRejections)
-```
+Per-key counters are in-process on the gateway and are not exported on
+`:8787`. Use gateway access logs (`X-Mortred-Key`) or Prometheus HTTP
+metrics. Counters reset when the gateway child restarts.
 
 ### Troubleshooting
 
 | Problem | Cause | Fix |
 |---|---|---|
-| All requests return 401 | api_keys.toml not found or empty | Check file path and content |
-| New key doesn't work | Not reloaded after config change | `POST /api/v1/keys/reload` |
-| Key works but returns 429 | Rate limit reached | Increase `rate_limit_qps` in config |
+| All requests return 401 | no token, empty `api_keys.toml`, or wrong Bearer | `mortredctl init-trust` or add a `[keys.*]` hash; empty/comment-only key file is not auth |
+| New key doesn't work | gateway still running old file | restart the gateway child |
+| Key works but returns 429 | Rate limit reached | Increase `rate_limit_qps` in config and restart gateway |
 | Client lost their key | Only hash is stored | Generate a new key, disable the old one |
-| Gateway logs "failed to parse" | TOML syntax error | Fix the file; without a static token the gateway refuses to start (fail-closed), with one it falls back to token-only auth |
+| Gateway logs "failed to parse" | TOML syntax error | Fix the file; without a static token the gateway refuses to start |
+| Gateway logs "empty key file is not auth" | copied example with no hashes | add keys or use init-trust tokens |
 
 ---
 
@@ -346,7 +326,7 @@ scope = "inference"
 rate_limit_qps = 500
 enabled = true
 
-# Operations admin (can access management endpoints)
+# Operator key (same inference path; does not unlock :8787)
 [keys.ops-team]
 hash = "c3d4e5f6a7b8..."
 scope = "all"
@@ -369,14 +349,13 @@ The gateway checks in order:
 
 If either succeeds, the request is authorized. The `X-Mortred-Key` response header identifies which key was used.
 
-### Management API Summary
+There is no supervisor `/api/v1/keys` surface. After editing
+`conf/api_keys.toml`, restart the gateway child:
 
-| Endpoint | Method | Description |
-|---|---|---|
-| `/api/v1/keys` | GET | List all keys (name, scope, enabled, usage) |
-| `/api/v1/keys/reload` | POST | Hot-reload after config change |
-
-Both require the supervisor's `MORTRED_API_TOKEN` (admin credential).
+```bash
+curl -X POST -H "Authorization: Bearer $MORTRED_API_TOKEN" \
+  http://localhost:8787/api/v1/servers/__gateway/restart
+```
 
 ```bash
 curl -X POST http://localhost:8080/mortred_ai_server_v1/obj_detection/yolov8 \
@@ -393,25 +372,13 @@ The gateway checks in order:
 
 If either succeeds, the request is authorized. The `X-Mortred-Key` response header identifies which key was used.
 
-## Management API
-
-Via the supervisor (:8787, requires MORTRED_API_TOKEN):
-
-```bash
-# List all keys (name, scope, enabled, usage - never the hash)
-curl -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:8787/api/v1/keys
-
-# Hot-reload after editing conf/api_keys.toml
-curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:8787/api/v1/keys/reload
-```
-
 ## Key Rotation
 
 1. Generate a new key: `openssl rand -hex 32`
 2. Add the new hash alongside the old key in conf/api_keys.toml
-3. Hot-reload: `POST /api/v1/keys/reload`
+3. Restart the gateway child
 4. Distribute the new key to the client
-5. Remove the old key and reload again
+5. Remove the old key and restart the gateway child again
 
 ## Security Notes
 

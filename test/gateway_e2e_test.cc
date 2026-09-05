@@ -592,6 +592,16 @@ TEST_F(GatewayAuthTest, NonLoopbackWithoutAnyAuthRefusesToStart) {
     EXPECT_FALSE(StartGateway("0.0.0.0", "", ""));
 }
 
+TEST_F(GatewayAuthTest, EmptyApiKeysWithoutTokenRefusesToStart) {
+    EXPECT_FALSE(StartGateway("127.0.0.1", "", "# copied example, no [keys.*]\n"));
+}
+
+TEST_F(GatewayAuthTest, EmptyApiKeysWithTokenFallsBackToStaticToken) {
+    ASSERT_TRUE(StartGateway("127.0.0.1", "ext-token", "# copied example, no [keys.*]\n"));
+    auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}", "ext-token");
+    EXPECT_EQ(r.status, 200);
+}
+
 TEST_F(GatewayAuthTest, BrokenApiKeysWithoutTokenRefusesToStart) {
     // an operator who configured keys wants authentication; a broken file
     // must not silently downgrade to an unauthenticated listener

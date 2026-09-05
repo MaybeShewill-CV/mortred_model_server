@@ -7,7 +7,7 @@
 
 // Control-plane daemon: supervises mortred-gateway + all model servers,
 // exposes the versioned /api/v1 management REST API (catalog / lifecycle /
-// logs / keys) and the embedded web UI. Inference goes through the gateway.
+// logs) and the embedded web UI. Inference goes through the gateway.
 
 #include <unistd.h>
 
@@ -41,7 +41,6 @@
 
 #include "common/auth_token.h"
 #include "common/listen_policy.h"
-#include "control/api_key_manager.h"
 #include "common/request_size_limit.h"
 #include "control/catalog.h"
 #include "control/control_config.h"
@@ -65,7 +64,6 @@ ControlConfig g_cfg;
 std::string g_root;
 std::string g_ui_dir;
 std::string g_auth_token;
-mortred::control::ApiKeyManager g_api_keys;
 
 void handle_graceful_restart(WFHttpTask* task, const std::string& server_id);
 bool server_has_active_jobs(const std::string& server_id);
@@ -529,37 +527,6 @@ void process(WFHttpTask* task) {
         handle_status(task);
     } else if (path == "/api/v1/metrics" && method == "GET") {
         handle_metrics(task);
-    } else if (path == "/api/v1/keys" && method == "GET") {
-        // list API keys (name, scope, enabled, usage stats - never the hash)
-        auto* resp = task->get_resp();
-        resp->set_status_code("200");
-        resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
-        rapidjson::Document d;
-        d.SetObject();
-        auto& a = d.GetAllocator();
-        rapidjson::Value arr(rapidjson::kArrayType);
-        for (const auto& info : g_api_keys.list_keys()) {
-            rapidjson::Value item(rapidjson::kObjectType);
-            item.AddMember("name", rapidjson::Value(info.name.c_str(), info.name.size(), a), a);
-            item.AddMember("scope",
-                           rapidjson::Value(info.scope.c_str(), info.scope.size(), a), a);
-            item.AddMember("enabled", info.enabled, a);
-            item.AddMember("total_requests",
-                           static_cast<uint64_t>(info.total_requests), a);
-            item.AddMember("total_rejected",
-                           static_cast<uint64_t>(info.total_rejected), a);
-            arr.PushBack(item, a);
-        }
-        d.AddMember("keys", arr, a);
-        rapidjson::StringBuffer buf;
-        rapidjson::Writer<rapidjson::StringBuffer> w(buf);
-        d.Accept(w);
-        resp->append_output_body(buf.GetString(), buf.GetSize());
-    } else if (path == "/api/v1/keys/reload" && method == "POST") {
-        // hot-reload API keys from the config file
-        const bool ok = g_api_keys.reload();
-        reply_json(task, ok ? 200 : 500,
-                   ok ? "{\"ok\":true}" : "{\"ok\":false,\"error\":\"reload failed\"}");
     } else if (path.rfind("/api/v1/servers/", 0) == 0) {
         const std::string rest = path.substr(std::string("/api/v1/servers/").size());
         const auto slash = rest.rfind('/');
@@ -715,18 +682,6 @@ int run_supervisor() {
         }
         std::fprintf(stderr, "mortred-supervisor: pack %s (autostart %zu model(s))\n",
                      pack.string().c_str(), pack_n);
-    }
-
-    // load API keys if the config exists (shared with the gateway)
-    {
-        const std::string api_keys_path =
-            (std::filesystem::path(g_root) / "conf" / "api_keys.toml").string();
-        if (std::filesystem::exists(api_keys_path)) {
-            if (g_api_keys.load(api_keys_path)) {
-                std::fprintf(stderr, "mortred-supervisor: loaded %zu API keys\n",
-                             g_api_keys.key_count());
-            }
-        }
     }
 
     g_supervisor = std::make_unique<ProcessSupervisor>(g_root, g_cfg, config_path);

@@ -62,7 +62,9 @@ struct ApiKey {
 class ApiKeyManager {
   public:
     /***
-     * Load keys from a TOML file. Returns false on parse error.
+     * Load keys from a TOML file. Returns false only when the file cannot be
+     * parsed. A readable file with zero [keys.*] entries returns true and
+     * key_count()==0 (empty is not a parse error).
      * Format:
      *   [keys.<name>]
      *   hash = "sha256hex..."   # SHA-256 of the API key string
@@ -144,7 +146,7 @@ inline bool ApiKeyManager::load(const std::string& path) {
             keys_[key->hash] = key;
         }
     }
-    return !keys_.empty();
+    return true;
 }
 
 inline bool ApiKeyManager::reload() {

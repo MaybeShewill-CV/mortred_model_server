@@ -520,7 +520,7 @@ openssl rand -hex 24    # 生成方式（每个 token 各用一次）
 
 ### 11.2 多租户 API Key（网关层）
 
-单 token 之外，网关支持按 key 管理（哈希存储、scope、限流、热加载）：
+单 token 之外，网关支持按 key 管理（哈希存储、scope、限流）。没有热加载：改文件后重启 gateway 子进程。
 
 ```toml
 # conf/api_keys.toml
@@ -533,7 +533,7 @@ enabled = true
 
 ```bash
 curl -X POST -H "Authorization: Bearer $MORTRED_API_TOKEN" \
-     http://localhost:8787/api/v1/keys/reload      # 热加载，不重启
+     http://localhost:8787/api/v1/servers/__gateway/restart
 ```
 
 详见 [api-keys.md](api-keys.zh-cn.md)（含密钥轮换零停机流程）。

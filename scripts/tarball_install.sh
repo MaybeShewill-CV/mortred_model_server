@@ -9,7 +9,7 @@
 #   1. apt runtime deps (ubuntu 20.04/22.04; no build toolchain needed)
 #   2. /opt/mortred tree + mortred system user
 #   3. systemd unit (reads /etc/mortred/supervisor.env for tokens; fail-closed:
-#      without tokens the supervisor binds loopback only)
+#      without tokens the supervisor refuses to start)
 #   4. weights hint: fetch_weights.py --profile <profile>
 set -euo pipefail
 
