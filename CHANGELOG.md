@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- `prepare_pack.sh` stops the `/ready` probe with SIGINT (same as the
+  supervisor) instead of SIGTERM, so glog does not dump a failure stack.
+  Probe logs go to `logs/prepare-<id>.log`; a failed ready prints that file.
 - GPU catalog ports: diffusion servers collided with scene segmentation
   (9070–9072). DDPM/DDIM/CLS_COND_DDIM/LDM now listen on 9081–9084 so
   `mortred-supervisor` can init the full GPU catalog (pack autostart still

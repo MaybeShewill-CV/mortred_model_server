@@ -99,12 +99,36 @@ fi
 
 echo "== /ready (worker_nums=1) =="
 export LD_LIBRARY_PATH="$ROOT/_lib:$ROOT/3rd_party/libs:${LD_LIBRARY_PATH:-}"
+mkdir -p "$ROOT/logs"
 PIDS=()
+
+# SIGTERM trips glog's failure handler (stack dump that looks like a crash).
+# Supervisor stop uses SIGINT; match that, then SIGKILL if it will not exit.
+stop_probe() {
+    local pid="$1"
+    [ -n "$pid" ] || return 0
+    if ! kill -0 "$pid" 2>/dev/null; then
+        wait "$pid" 2>/dev/null || true
+        return 0
+    fi
+    kill -INT "$pid" 2>/dev/null || true
+    local i=0
+    while [ "$i" -lt 50 ]; do
+        if ! kill -0 "$pid" 2>/dev/null; then
+            wait "$pid" 2>/dev/null || true
+            return 0
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    kill -KILL "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+}
+
 cleanup() {
     local pid
     for pid in "${PIDS[@]:-}"; do
-        kill "$pid" 2>/dev/null || true
-        wait "$pid" 2>/dev/null || true
+        stop_probe "$pid"
     done
 }
 trap cleanup EXIT
@@ -128,16 +152,18 @@ PY
     port="$(awk -F= '/^port=/ { gsub(/[[:space:]]/, "", $2); print $2; exit }' "$server_toml")"
     [ -n "$port" ] || fail "no port in $server_toml"
     echo "  start $model_id on :$port (engine $(basename "$engine_path"))"
+    probe_log="$ROOT/logs/prepare-${model_id}.log"
     MORTRED_WORKER_NUMS=1 MORTRED_PROJECT_ROOT="$ROOT" \
-        "$SERVER_BIN" --model "$model_id" "$server_toml" &
+        "$SERVER_BIN" --model "$model_id" "$server_toml" >"$probe_log" 2>&1 &
     pid=$!
     PIDS+=("$pid")
     if ! wait_ready "$port"; then
+        echo "---- $probe_log ----" >&2
+        cat "$probe_log" >&2 || true
         fail "$model_id did not become /ready on :$port (engine may not deserialize)"
     fi
     echo "  [ok] $model_id /ready"
-    kill "$pid" 2>/dev/null || true
-    wait "$pid" 2>/dev/null || true
+    stop_probe "$pid"
     PIDS=()
 done <<<"$LIST"
 
