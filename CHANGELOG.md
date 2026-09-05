@@ -7,8 +7,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-### Fixed
-- `convert_trt_engines.sh` retries without min/opt/maxShapes when TensorRT
+- Calibrate probed `127.0.0.1:0` on Python 3.10: `repo_toml` ignored unquoted
+  `port=9002`. Fallback parser now reads integers; calibrate takes port/uri
+  from the same `conf/server` file used to spawn.
   reports a static ONNX (`Static model does not take explicit shapes`). The
   yolov8 profile is for dynamic batch; some weight drops are fixed 1x3x640x640.
 - `prepare_pack.sh` runs the `/ready` probe with cwd = `_bin`/`bin`, matching

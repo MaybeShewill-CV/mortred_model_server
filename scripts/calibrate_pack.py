@@ -29,7 +29,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "scripts" / "server"))
 
 from http_infer_rps import LoadConfig, parse_duration, run_load  # noqa: E402
-from pack_trt import pack_ids  # noqa: E402
+from pack_trt import find_server_toml, pack_ids, server_listen  # noqa: E402
 from test_server import build_catalog, resolve_demo_image, resolve_server  # noqa: E402
 
 OOM_MARKERS = ("out of memory", "cuda oom", "cudnn_status_alloc_failed", "std::bad_alloc")
@@ -215,8 +215,6 @@ def run_one_point(
     extra = {}
     if model_config:
         extra["MORTRED_MODEL_CONFIG_FILE"] = model_config
-    from pack_trt import find_server_toml
-
     found = find_server_toml(root, model_id)
     if found is None:
         return {
@@ -225,9 +223,17 @@ def run_one_point(
             "oom": False,
             "error": "no conf/server mapping",
         }
+    port, uri = server_listen(found)
+    if port <= 0 or not uri:
+        return {
+            "worker_nums": workers,
+            "started": False,
+            "oom": False,
+            "error": "invalid port/server_uri in %s" % found,
+        }
     proc = start_model(root, binary, model_id, found, workers, log_path, extra)
-    ready_url = "http://127.0.0.1:%d/ready" % int(entry["port"])
-    infer_url = "http://127.0.0.1:%d%s" % (int(entry["port"]), entry["uri"])
+    ready_url = "http://127.0.0.1:%d/ready" % port
+    infer_url = "http://127.0.0.1:%d%s" % (port, uri)
     point: dict = {
         "worker_nums": workers,
         "started": False,
@@ -239,7 +245,10 @@ def run_one_point(
         if not wait_http_ready(ready_url, 90.0, proc):
             text = log_path.read_text(encoding="utf-8", errors="replace") if log_path.is_file() else ""
             point["oom"] = log_looks_oom(text)
-            point["error"] = "not ready (exit=%s)" % proc.poll()
+            tail = "\n".join(text.strip().splitlines()[-12:])
+            point["error"] = "not ready (exit=%s) probing %s" % (proc.poll(), ready_url)
+            if tail:
+                point["log_tail"] = tail
             return point
         point["started"] = True
         ready_mem = gpu_mem_mib_for_pid(proc.pid)
@@ -357,9 +366,6 @@ def calibrate(
     joint: dict = {"worker_nums": dict(suggested), "per_model": {}}
     try:
         for model_id, w in suggested.items():
-            entry = catalog_entry(root, model_id)
-            from pack_trt import find_server_toml
-
             found = find_server_toml(root, model_id)
             if found is None:
                 continue
@@ -369,7 +375,8 @@ def calibrate(
             if override:
                 extra["MORTRED_MODEL_CONFIG_FILE"] = override
             proc = start_model(root, binary, model_id, found, w, log_path, extra)
-            ready_url = "http://127.0.0.1:%d/ready" % int(entry["port"])
+            port, _uri = server_listen(found)
+            ready_url = "http://127.0.0.1:%d/ready" % port
             if not wait_http_ready(ready_url, 90.0, proc):
                 joint["per_model"][model_id] = {"started": False, "error": "not ready"}
                 stop_proc(proc)
@@ -415,6 +422,18 @@ def self_test() -> int:
         return 1
     if log_looks_oom("CUDA out of memory") is False:
         print("self-test: oom marker missed", file=sys.stderr)
+        return 1
+    from repo_toml import load_toml
+
+    cfg = ROOT / "conf" / "server" / "classification" / "mobilenetv2" / "mobilenetv2_server_config.toml"
+    table = load_toml(cfg)
+    server = table.get("MOBILENETV2_CLASSIFICATION_SERVER") or {}
+    if int(server.get("port") or 0) != 9002:
+        print("self-test: expected unquoted port=9002, got", server.get("port"), file=sys.stderr)
+        return 1
+    port, uri = server_listen(cfg)
+    if port != 9002 or not uri.startswith("/"):
+        print("self-test: server_listen failed", port, uri, file=sys.stderr)
         return 1
     print("calibrate_pack.py self-test passed")
     return 0

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -74,6 +75,9 @@ def pack_model_config(pack_path: Path, catalog_id: str, project_root: Path) -> P
 
 
 def find_server_toml(project_root: Path, catalog_id: str) -> Path | None:
+    runtime = os.environ.get("MORTRED_PROFILE", "gpu")
+    if runtime != "cpu":
+        runtime = "gpu"
     conf_server = project_root / "conf" / "server"
     if not conf_server.is_dir():
         return None
@@ -82,10 +86,42 @@ def find_server_toml(project_root: Path, catalog_id: str) -> Path | None:
             table = load_toml(cfg)
         except (OSError, ValueError):
             continue
-        for kv in table.values():
-            if isinstance(kv, dict) and _as_str(kv.get("model")) == catalog_id:
-                return cfg
+        server_kv = None
+        for name, kv in table.items():
+            if isinstance(kv, dict) and str(name).endswith("_SERVER"):
+                server_kv = kv
+                break
+        if not isinstance(server_kv, dict):
+            continue
+        if _as_str(server_kv.get("model")) != catalog_id:
+            continue
+        profile = _as_str(server_kv.get("profile") or "gpu")
+        if profile != "any" and profile != runtime:
+            continue
+        return cfg
     return None
+
+
+def server_listen(server_toml: Path) -> tuple[int, str]:
+    """port and server_uri from the *_SERVER table."""
+    try:
+        table = load_toml(server_toml)
+    except (OSError, ValueError):
+        return 0, ""
+    for name, kv in table.items():
+        if not isinstance(kv, dict):
+            continue
+        uri = _as_str(kv.get("server_uri"))
+        if not uri and not str(name).endswith("_SERVER"):
+            continue
+        port_raw = kv.get("port")
+        try:
+            port = int(port_raw or 0)
+        except (TypeError, ValueError):
+            port = 0
+        if port > 0 and uri.startswith("/"):
+            return port, uri
+    return 0, ""
 
 
 def server_model_config(server_toml: Path, project_root: Path) -> Path | None:

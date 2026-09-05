@@ -16,7 +16,24 @@ except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
     tomllib = None
 
 _SECTION_RE = re.compile(r"^\s*\[([^\]]+)\]\s*$")
-_KV_RE = re.compile(r'^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"([^"]*)"\s*(?:#.*)?$')
+_KV_RE = re.compile(
+    r'^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^#]+?))(?:\s*#.*)?\s*$'
+)
+
+
+def _parse_unquoted(raw: str):
+    text = raw.strip()
+    low = text.lower()
+    if low in ("true", "false"):
+        return low == "true"
+    try:
+        return int(text)
+    except ValueError:
+        pass
+    try:
+        return float(text)
+    except ValueError:
+        return text
 
 
 def load_toml(path: str | Path) -> dict:
@@ -35,5 +52,11 @@ def load_toml(path: str | Path) -> dict:
                 continue
             match = _KV_RE.match(line)
             if match:
-                section[match.group(1)] = match.group(2)
+                key = match.group(1)
+                if match.group(2) is not None:
+                    section[key] = match.group(2)
+                elif match.group(3) is not None:
+                    section[key] = match.group(3)
+                else:
+                    section[key] = _parse_unquoted(match.group(4) or "")
     return result
