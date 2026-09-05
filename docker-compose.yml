@@ -20,8 +20,8 @@ services:
     profiles: ["gpu"]
     build:
       context: .
-      target: ""           # default target = gpu runtime
-    image: mortred_model_server:latest
+      target: mortred-gpu
+    image: mortred_model_server:gpu
     container_name: mortred
     environment:
       MORTRED_EXPOSE: docker

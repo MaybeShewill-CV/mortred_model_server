@@ -12,6 +12,7 @@ contribution path.” Use the table.
 | Path | Runner | Green means | Does **not** mean |
 |---|---|---|---|
 | Fork PR | GitHub `ubuntu-22.04` (`cpu-profile`) | cpu profile compiled; output contracts passed; **MNN CPU goldens in `conf/ci_hosted_golden.json` hosted set** (sha256 locked, skipped=0): classification, detection, OCR, keypoints, segmentation | TensorRT, CUDA, YOLOv8 engine, full zoo, ORT-CUDA |
+| Hosted `container boot (cpu compose)` | GitHub `ubuntu-22.04` | On Dockerfile / compose / entrypoint / demo pack / this workflow: cpu runtime image **starts**; supervisor `/api/v1/health`; gateway `/healthz`; one MOBILENETV2 infer; supervisor and gateway still in `docker top`. Unrelated PRs skip the image build and stay green | GPU compose, TensorRT, GHCR `:gpu` pull, every catalog model |
 | Same-repo PR / push `main`, **no** `MORTRED_HAS_GPU_RUNNER` | GitHub hosted only | Same as fork PR. GPU jobs are **skipped**, not queued | TensorRT / CUDA goldens ran |
 | Same-repo PR / push `main`, variable `true` | Hosted + self-hosted GPU | Fork claims **plus** 8 golden cases, skipped=0 | Nightly zoo or cross-backend allclose |
 | Schedule / `workflow_dispatch` + variable `true` | GPU runner (`gpu-nightly-full`) | Smoke-8 fail-closed; remaining goldens may skip **if** listed in the skip-inventory artifact | Bit-exact MNN/ONNX/TRT |
@@ -22,6 +23,12 @@ not `gpu golden smoke` by itself. GPU jobs skip when the repository variable
 fork PRs. The wrapper treats that skip as success only when `cpu-profile`
 succeeded. Do not set `inference paths` required while GPU jobs are still
 *queued* waiting for a missing runner.
+
+`container boot (cpu compose)` is a **separate** Docker-runtime check. It is
+safe to require once it has gone green: unrelated PRs only run checkout +
+path filter. Do not read it as GPU compose coverage. `--profile gpu` boot
+belongs on a self-hosted GPU runner (`MORTRED_HAS_GPU_RUNNER=true`), not on
+GitHub-hosted VMs.
 
 Changing `src/models/backend/trt_session.cpp` (or any TensorRT-only path) is
 **not** proven on a fork PR. Maintainer PRs need `MORTRED_HAS_GPU_RUNNER=true`

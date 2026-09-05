@@ -17,6 +17,10 @@ All notable changes to this project are documented here. The format follows
   (TensorRT).
 
 ### Fixed
+- Container runtime: `docker_entrypoint.sh` now has a `bash` shebang so
+  exec-form `ENTRYPOINT` can start; compose `--profile gpu` builds
+  `target: mortred-gpu` (the Dockerfile last stage is that alias, so
+  `docker build .` is the GPU runtime again, not `mortred-cpu`).
 - TensorRT spawn gate no longer fails when the model toml path is a dummy or
   missing (`SupervisorTest.spawn_passes_model_flag_for_unified_exe`). The gate
   only refuse-spawns after it can read `type=tensorrt` and the engine file is
@@ -49,6 +53,13 @@ All notable changes to this project are documented here. The format follows
   loads every profile-matching `conf/server` file).
 
 ### Added
+- Release workflow pushes `ghcr.io/...:vX.Y.Z-gpu` and `:latest-gpu` from the
+  existing gpu-tarball Docker compile (cpu tags stay in the images job).
+- Hosted CI job `container boot (cpu compose)`: compose up → supervisor
+  health → gateway `/healthz` → one MOBILENETV2 infer → supervisor/gateway
+  process liveness. Infer uses a CI-only `device=cpu` pack overlay (git
+  model tomls stay `device=gpu`). Expensive rebuild is path-filtered; GPU
+  compose is not claimed on GitHub-hosted runners.
 - Trust boundary for P0-4: `mortredctl init-trust` writes gitignored
   `conf/local/trust.env` (inference / management / scrape / internal). Gateway
   and supervisor refuse to start without their tokens, including on loopback.

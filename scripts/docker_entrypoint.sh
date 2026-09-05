@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # docker_entrypoint.sh - container entrypoint: inject environment + start the
 # mortred-supervisor (control plane). The supervisor manages mortred-gateway and
 # all model servers inside the container; weights are volume-mounted.

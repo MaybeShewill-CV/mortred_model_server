@@ -237,7 +237,17 @@ docker run -d --name mortred \
   -p 127.0.0.1:8787:8787 -p 127.0.0.1:8080:8080 \
   -v "$PWD/weights:/opt/mortred/weights" \
   -e MORTRED_API_TOKEN=... -e MORTRED_GATEWAY_AUTH_TOKEN=... \
+  -e MORTRED_METRICS_TOKEN=... \
   ghcr.io/maybeshewill-cv/mortred_model_server:v0.1.0-cpu
+
+# GPU 运行时镜像（需要 NVIDIA Container Toolkit）：
+docker pull ghcr.io/maybeshewill-cv/mortred_model_server:v0.1.0-gpu
+docker run -d --name mortred --gpus all \
+  -p 127.0.0.1:8787:8787 -p 127.0.0.1:8080:8080 \
+  -v "$PWD/weights:/opt/mortred/weights" \
+  -e MORTRED_API_TOKEN=... -e MORTRED_GATEWAY_AUTH_TOKEN=... \
+  -e MORTRED_METRICS_TOKEN=... \
+  ghcr.io/maybeshewill-cv/mortred_model_server:v0.1.0-gpu
 ```
 
 ---

@@ -197,13 +197,14 @@ a single script — no manual compilation or copying:
 ## Docker (fully automated build)
 
 ```bash
-docker build -t mortred_model_server .
+docker build -t mortred_model_server:gpu .
 docker run --gpus all -p 127.0.0.1:8080:8080 -p 127.0.0.1:8787:8787 \
   -v $PWD/weights:/opt/mortred/weights \
   -e MORTRED_GATEWAY_AUTH_TOKEN=your-inference-token \
   -e MORTRED_API_TOKEN=your-management-token \
-  mortred_model_server
-# or: docker compose up -d   (see docker-compose.yml)
+  -e MORTRED_METRICS_TOKEN=your-scrape-token \
+  mortred_model_server:gpu
+# or: docker compose --profile gpu up -d   (CPU: --profile cpu; see docker-compose.yml)
 ```
 
 The image builds all deps + the full project, runs the unit/e2e tests, and
