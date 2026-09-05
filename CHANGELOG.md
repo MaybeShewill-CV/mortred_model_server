@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- TensorRT spawn gate no longer fails when the model toml path is a dummy or
+  missing (`SupervisorTest.spawn_passes_model_flag_for_unified_exe`). The gate
+  only refuse-spawns after it can read `type=tensorrt` and the engine file is
+  missing or empty.
 - Calibrate / model-server HTTP start: YOLOV8 TRT can init then fail
   `Cannot start server` when `:9056` is already bound (supervisor still
   serving the pack). Probe now binds `127.0.0.1` like the supervisor, refuses
@@ -36,6 +40,9 @@ All notable changes to this project are documented here. The format follows
   loads every profile-matching `conf/server` file).
 
 ### Added
+- ONNX Runtime CUDA `gpu_mem_limit` defaults to 2048 MiB per session
+  (`gpu_mem_limit_mb` / `MORTRED_ORT_GPU_MEM_LIMIT_MB`; `0` = unlimited).
+  The previous `gpu_mem_limit = 0` let the CUDA EP arena grow without bound.
 - Machine pack ops in [docs/deployment.md](docs/deployment.md) §10
   (and [中文](docs/deployment.zh-cn.md)): autostart listed ids only, `mortredctl
   prepare` for pack TensorRT engines, `mortredctl calibrate` / `--write-pack`

@@ -8,7 +8,11 @@
 #include "models/backend/ort_session.h"
 
 #include <algorithm>
+#include <cstdint>
+#include <cstdlib>
 #include <cstring>
+#include <limits>
+#include <string>
 
 #include "glog/logging.h"
 
@@ -94,15 +98,48 @@ StatusCode OrtSession::init(const BackendConfig& config, std::string* err) {
         _m_session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
         _m_session_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
         if (config.use_cuda()) {
+            int limit_mb = config.gpu_mem_limit_mb;
+            if (const char* env = std::getenv("MORTRED_ORT_GPU_MEM_LIMIT_MB");
+                env != nullptr && *env != '\0') {
+                try {
+                    limit_mb = std::stoi(env);
+                } catch (...) {
+                    if (err != nullptr) {
+                        *err = "invalid MORTRED_ORT_GPU_MEM_LIMIT_MB";
+                    }
+                    return StatusCode::MODEL_INIT_FAILED;
+                }
+            }
+            if (limit_mb < 0) {
+                if (err != nullptr) {
+                    *err = "onnxruntime gpu_mem_limit_mb must be >= 0 (0 = unlimited)";
+                }
+                return StatusCode::MODEL_INIT_FAILED;
+            }
+            size_t limit_bytes = 0;
+            if (limit_mb > 0) {
+                const uint64_t bytes =
+                    static_cast<uint64_t>(limit_mb) * 1024ull * 1024ull;
+                if (bytes > std::numeric_limits<size_t>::max()) {
+                    if (err != nullptr) {
+                        *err = "onnxruntime gpu_mem_limit_mb overflows size_t";
+                    }
+                    return StatusCode::MODEL_INIT_FAILED;
+                }
+                limit_bytes = static_cast<size_t>(bytes);
+            }
             OrtCUDAProviderOptions cuda_options;
             cuda_options.device_id = config.device_id;
             cuda_options.cudnn_conv_algo_search = OrtCudnnConvAlgoSearchDefault;
-            cuda_options.gpu_mem_limit = 0;
+            cuda_options.gpu_mem_limit = limit_bytes;
             cuda_options.arena_extend_strategy = 1;
             cuda_options.do_copy_in_default_stream = 1;
             cuda_options.has_user_compute_stream = 0;
             cuda_options.default_memory_arena_cfg = nullptr;
             _m_session_options.AppendExecutionProvider_CUDA(cuda_options);
+            LOG(INFO) << "onnxruntime cuda gpu_mem_limit_mb=" << limit_mb
+                      << (limit_mb == 0 ? " (unlimited)" : "")
+                      << " device_id=" << config.device_id;
             // fuse/transform passes of ALL are not guaranteed on the CUDA EP
             _m_session_options.SetGraphOptimizationLevel(
                 GraphOptimizationLevel::ORT_ENABLE_EXTENDED);

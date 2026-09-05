@@ -132,6 +132,46 @@ score = 0.5
     EXPECT_EQ(config.model_file_path, "a.mnn");
     EXPECT_EQ(config.device, "cuda");
     EXPECT_EQ(config.threads, 3);
+    EXPECT_EQ(config.gpu_mem_limit_mb, 2048);
+
+    const auto onnx_limit = parse_toml(R"toml(
+[MODEL]
+[MODEL.backend]
+type = "onnx"
+model_file_path = "a.onnx"
+device = "cuda"
+gpu_mem_limit_mb = 512
+)toml");
+    const toml::table* onnx_limit_section = onnx_limit["MODEL"].as_table();
+    ASSERT_NE(onnx_limit_section, nullptr);
+    ASSERT_TRUE(jinq::models::backend::parse_backend_config(*onnx_limit_section, &config, &err))
+        << err;
+    EXPECT_EQ(config.gpu_mem_limit_mb, 512);
+
+    const auto unlimited = parse_toml(R"toml(
+[MODEL]
+[MODEL.backend]
+type = "onnx"
+model_file_path = "a.onnx"
+gpu_mem_limit_mb = 0
+)toml");
+    const toml::table* unlimited_section = unlimited["MODEL"].as_table();
+    ASSERT_NE(unlimited_section, nullptr);
+    ASSERT_TRUE(jinq::models::backend::parse_backend_config(*unlimited_section, &config, &err))
+        << err;
+    EXPECT_EQ(config.gpu_mem_limit_mb, 0);
+
+    const auto bad_limit = parse_toml(R"toml(
+[MODEL]
+[MODEL.backend]
+type = "onnx"
+model_file_path = "a.onnx"
+gpu_mem_limit_mb = -1
+)toml");
+    const toml::table* bad_limit_section = bad_limit["MODEL"].as_table();
+    ASSERT_NE(bad_limit_section, nullptr);
+    EXPECT_FALSE(jinq::models::backend::parse_backend_config(*bad_limit_section, &config, &err));
+    EXPECT_NE(err.find("gpu_mem_limit_mb"), std::string::npos) << err;
 
     const auto unknown_type = parse_toml(R"toml(
 [MODEL]

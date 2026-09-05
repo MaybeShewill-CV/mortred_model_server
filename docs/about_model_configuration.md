@@ -35,6 +35,7 @@ class_names = ['person', 'bicycle']
 | `device` | backend | `cpu` or `cuda`; TRT engines always run on cuda |
 | `device_id` / `gpu_device_id` | backend | cuda device index (alias accepted) |
 | `threads` | backend | intra-op threads for mnn / onnx cpu |
+| `gpu_mem_limit_mb` | backend (onnx+cuda) | CUDA EP arena cap **per session/worker**; default **2048**; `0` = unlimited (legacy). Override with `MORTRED_ORT_GPU_MEM_LIMIT_MB`. MNN/TRT ignore it. |
 | `input_layout` | backend (mnn) | host tensor byte order: `nhwc` for TF-style exports, `nchw` for CHW exports, `auto` follows the model file |
 | `precision_mode` / `power_mode` | backend (mnn) | `MNN::BackendConfig` modes |
 | `input_names` / `output_names` | backend | io name override/filter, useful for models exposing auxiliary outputs |

@@ -131,6 +131,7 @@ type = "mnn"                # mnn | onnx | tensorrt
 model_file_path = "../weights/my_model/model.mnn"
 device = "cuda"             # cpu | cuda
 threads = 4
+gpu_mem_limit_mb = 2048     # onnx+cuda only; 0 = unlimited; default 2048
 input_layout = "nhwc"       # mnn only: auto | nhwc | nchw
 
 [MY_MODEL.params]

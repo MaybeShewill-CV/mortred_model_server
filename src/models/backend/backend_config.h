@@ -32,6 +32,7 @@ namespace backend {
  *   device = "cpu" | "cuda"
  *   device_id = 0
  *   threads = 4
+ *   gpu_mem_limit_mb = 2048  # onnx+cuda arena; 0 = unlimited; default 2048
  *   precision_mode = 0     # mnn only
  *   power_mode = 0         # mnn only
  *   input_layout = "auto" | "nhwc" | "nchw"   # mnn only
@@ -44,6 +45,10 @@ struct BackendConfig {
     std::string device = "cpu";
     int device_id = 0;
     int threads = 4;
+    // ONNX Runtime CUDA EP BFC arena cap per session (one worker). 0 = unlimited
+    // (legacy). Default is a finite budget so a pack of models cannot each grow
+    // the arena to the whole card. MNN/TensorRT ignore this field.
+    int gpu_mem_limit_mb = 2048;
     int precision_mode = 0;
     int power_mode = 0;
     std::string input_layout = "auto";
@@ -181,12 +186,19 @@ inline bool parse_backend_table(const toml::table& backend_table, BackendConfig*
         !detail::read_int(backend_table, "gpu_device_id", &config.device_id, err) ||
         !detail::read_int(backend_table, "threads", &config.threads, err) ||
         !detail::read_int(backend_table, "precision_mode", &config.precision_mode, err) ||
-        !detail::read_int(backend_table, "power_mode", &config.power_mode, err)) {
+        !detail::read_int(backend_table, "power_mode", &config.power_mode, err) ||
+        !detail::read_int(backend_table, "gpu_mem_limit_mb", &config.gpu_mem_limit_mb, err)) {
         return false;
     }
     if (config.threads <= 0) {
         if (err != nullptr) {
             *err = "backend key 'threads' must be positive";
+        }
+        return false;
+    }
+    if (config.gpu_mem_limit_mb < 0) {
+        if (err != nullptr) {
+            *err = "backend key 'gpu_mem_limit_mb' must be >= 0 (0 = unlimited)";
         }
         return false;
     }

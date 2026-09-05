@@ -480,6 +480,13 @@ docker compose --profile gpu up -d -e MORTRED_AUTO_BUILD_ENGINES=true
 发生在 supervisor autostart 之前，耗时分钟级，**默认关闭**。日常用 §10.2。
 `mortredctl doctor` 对缺失 pack engine 告警；`--strict` 失败。
 
+### 10.6 ONNX Runtime CUDA arena
+
+ORT CUDA 以前是 `gpu_mem_limit = 0`（arena 无限涨）。现在默认 **每个 session
+2048 MiB**（`[MODEL.backend] gpu_mem_limit_mb`，或
+`MORTRED_ORT_GPU_MEM_LIMIT_MB`）。`worker_nums=4` 最多四份 arena。`0` 恢复不限制。
+MNN / TensorRT 没有对等旋钮；靠 pack + 校准控制驻留（§10.3）。
+
 ## 11. 认证与安全
 
 ### 11.1 三层 token
