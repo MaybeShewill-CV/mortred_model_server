@@ -323,6 +323,7 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err) {
             if (!model_config_override.empty()) {
                 ::setenv("MORTRED_MODEL_CONFIG_FILE", model_config_override.c_str(), 1);
             }
+        }
         if (::chdir(bin_dir.c_str()) != 0) {
             ::_exit(127);
         }
