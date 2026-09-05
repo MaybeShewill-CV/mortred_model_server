@@ -7,6 +7,9 @@
 
 #include "control/control_config.h"
 
+#include <filesystem>
+#include <unordered_set>
+
 #include "control/mini_toml.h"
 #include "control/restart_policy.h"
 
@@ -19,7 +22,13 @@ ServerPolicy ControlConfig::effective_policy(const std::string& id) const {
     if (it != servers.end()) {
         p = it->second;
     }
-    if (!p.has_autostart) {
+    if (supervisor.pack_active) {
+        // unlisted catalog ids never autostart, even if autostart_default is true
+        if (!p.has_autostart) {
+            p.has_autostart = true;
+            p.autostart = false;
+        }
+    } else if (!p.has_autostart) {
         p.autostart = supervisor.autostart_default;
     }
     if (!p.has_restart_policy) {
@@ -84,6 +93,7 @@ bool ControlConfig::load(const std::string& path, ControlConfig* out, std::strin
             !read_str(kv, "bin_dir", &cfg.supervisor.bin_dir, ctx, err) ||
             !read_str(kv, "lib_dir", &cfg.supervisor.lib_dir, ctx, err) ||
             !read_str(kv, "libs_dir", &cfg.supervisor.libs_dir, ctx, err) ||
+            !read_str(kv, "pack_file", &cfg.supervisor.pack_file, ctx, err) ||
             !read_int(kv, "api_port", &cfg.supervisor.api_port, 1, 65535, ctx, err) ||
             !read_int(kv, "start_concurrency", &cfg.supervisor.start_concurrency, 1, 32, ctx, err) ||
             !read_int(kv, "log_rotate_mb", &cfg.supervisor.log_rotate_mb, 1, 4096, ctx, err)) {
@@ -147,6 +157,84 @@ bool ControlConfig::load(const std::string& path, ControlConfig* out, std::strin
     }
 
     *out = cfg;
+    return true;
+}
+
+bool ControlConfig::apply_pack(const std::string& pack_path, const std::vector<std::string>& valid_ids,
+                               const std::string& project_root, ControlConfig* cfg, std::string* err) {
+    mini_toml::Doc doc;
+    if (!mini_toml::load(pack_path, &doc)) {
+        if (err != nullptr) {
+            *err = "cannot open pack file: " + pack_path;
+        }
+        return false;
+    }
+
+    std::unordered_set<std::string> allowed(valid_ids.begin(), valid_ids.end());
+    bool any = false;
+    for (const auto& [section, kv] : doc) {
+        if (section.compare(0, 5, "pack.") != 0) {
+            continue;
+        }
+        const std::string id = section.substr(5);
+        if (id.empty()) {
+            if (err != nullptr) {
+                *err = "[" + section + "]: empty pack id";
+            }
+            return false;
+        }
+        if (allowed.find(id) == allowed.end()) {
+            if (err != nullptr) {
+                *err = "[" + section + "]: unknown catalog id '" + id + "'";
+            }
+            return false;
+        }
+        any = true;
+        ServerPolicy& p = cfg->servers[id];
+        p.has_autostart = true;
+        p.autostart = true;
+        if (kv.count("autostart") != 0) {
+            p.autostart = mini_toml::to_bool(kv.at("autostart"), true);
+        }
+        if (kv.count("worker_nums") != 0) {
+            const int w = mini_toml::to_int(kv.at("worker_nums"), 0);
+            if (w < 1 || w > 256) {
+                if (err != nullptr) {
+                    *err = "[" + section + "]: worker_nums must be in [1, 256]";
+                }
+                return false;
+            }
+            p.has_worker_nums = true;
+            p.worker_nums = w;
+        }
+        if (kv.count("model_config") != 0) {
+            std::string rel = kv.at("model_config");
+            if (rel.empty()) {
+                if (err != nullptr) {
+                    *err = "[" + section + "]: model_config must be a non-empty path";
+                }
+                return false;
+            }
+            std::filesystem::path path(rel);
+            if (!path.is_absolute()) {
+                path = std::filesystem::path(project_root) / path;
+            }
+            if (!std::filesystem::is_regular_file(path)) {
+                if (err != nullptr) {
+                    *err = "[" + section + "]: model_config not found: " + path.string();
+                }
+                return false;
+            }
+            p.model_config = path.lexically_normal().string();
+        }
+    }
+    if (!any) {
+        if (err != nullptr) {
+            *err = "pack file has no [pack.<ID>] tables: " + pack_path;
+        }
+        return false;
+    }
+    cfg->supervisor.pack_active = true;
     return true;
 }
 

@@ -10,6 +10,7 @@
 
 #include <map>
 #include <string>
+#include <vector>
 
 namespace mortred {
 namespace control {
@@ -18,6 +19,8 @@ struct SupervisorConfig {
     std::string api_host = "127.0.0.1";
     int api_port = 8787;
     bool autostart_default = false;
+    std::string pack_file;               // optional; env MORTRED_PACK overrides
+    bool pack_active = false;            // true after a pack file is applied
     int start_concurrency = 1;           // gateway first, then models with this width
     int log_rotate_mb = 10;
     std::string log_dir = "logs";        // relative to project root
@@ -46,6 +49,9 @@ struct ServerPolicy {
     bool autostart = false;
     bool has_restart_policy = false;
     std::string restart_policy = "on-failure";
+    bool has_worker_nums = false;
+    int worker_nums = 0;
+    std::string model_config;  // absolute path; empty = use server toml
 };
 
 struct ControlConfig {
@@ -58,6 +64,12 @@ struct ControlConfig {
 
     /*** parse conf/mortred.toml; false + err on malformed/unknown values */
     static bool load(const std::string& path, ControlConfig* out, std::string* err);
+
+    /*** Apply a machine-local pack: listed ids autostart, others do not.
+     *  valid_ids are catalog ids (model_section). Unknown pack ids fail closed.
+     *  project_root resolves relative model_config paths. */
+    static bool apply_pack(const std::string& pack_path, const std::vector<std::string>& valid_ids,
+                           const std::string& project_root, ControlConfig* cfg, std::string* err);
 };
 
 }  // namespace control

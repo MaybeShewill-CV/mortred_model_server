@@ -73,6 +73,50 @@ TEST_F(ControlConfigTest, parses_all_sections) {
     EXPECT_EQ(fallback.restart_policy, "on-failure");
 }
 
+TEST_F(ControlConfigTest, pack_limits_autostart_to_listed_ids) {
+    write("[supervisor]\nautostart_default = true\n");
+    ControlConfig cfg;
+    std::string err;
+    ASSERT_TRUE(ControlConfig::load(path_.string(), &cfg, &err)) << err;
+
+    const fs::path pack = fs::temp_directory_path() / "mortred_pack_test.toml";
+    {
+        std::ofstream out(pack);
+        out << "[pack.MOBILENETV2]\nworker_nums = 4\n";
+    }
+    ASSERT_TRUE(ControlConfig::apply_pack(pack.string(), {"MOBILENETV2", "YOLOV8"},
+                                          fs::temp_directory_path().string(), &cfg, &err))
+        << err;
+    EXPECT_TRUE(cfg.supervisor.pack_active);
+    const auto listed = cfg.effective_policy("MOBILENETV2");
+    EXPECT_TRUE(listed.autostart);
+    EXPECT_TRUE(listed.has_worker_nums);
+    EXPECT_EQ(listed.worker_nums, 4);
+    const auto other = cfg.effective_policy("YOLOV8");
+    EXPECT_FALSE(other.autostart);
+    EXPECT_FALSE(cfg.effective_policy("DBNET").autostart);
+
+    std::error_code ec;
+    fs::remove(pack, ec);
+}
+
+TEST_F(ControlConfigTest, pack_rejects_unknown_id) {
+    write("[supervisor]\n");
+    ControlConfig cfg;
+    std::string err;
+    ASSERT_TRUE(ControlConfig::load(path_.string(), &cfg, &err)) << err;
+    const fs::path pack = fs::temp_directory_path() / "mortred_pack_bad.toml";
+    {
+        std::ofstream out(pack);
+        out << "[pack.NOT_A_MODEL]\nworker_nums = 1\n";
+    }
+    EXPECT_FALSE(ControlConfig::apply_pack(pack.string(), {"MOBILENETV2"},
+                                           fs::temp_directory_path().string(), &cfg, &err));
+    EXPECT_NE(err.find("unknown catalog id"), std::string::npos);
+    std::error_code ec;
+    fs::remove(pack, ec);
+}
+
 TEST_F(ControlConfigTest, rejects_invalid_restart_policy) {
     write("[servers.x]\nrestart_policy = \"sometimes\"\n");
     ControlConfig cfg;

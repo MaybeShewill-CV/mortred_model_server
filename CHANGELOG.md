@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Machine-local autostart pack (`conf/packs/demo.toml`, `MORTRED_PACK`): listed
+  catalog ids boot; `MORTRED_AUTOSTART=true` no longer starts the whole zoo.
+  Pack `worker_nums` / `model_config` override the child via env without
+  rewriting `conf/server` (still `worker_nums=1`).
 - Stdlib HTTP inference RPS client (`scripts/server/http_infer_rps.py`): keep-alive
   workers, pre-encoded envelope, serving RPS + latency percentiles, optional `--qps`,
   JSON report. `test_server.py --mode load` wraps catalog/gateway URLs. No locust

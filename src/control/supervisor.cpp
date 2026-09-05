@@ -265,6 +265,11 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err) {
     const std::string exe_name = child->is_gateway ? "mortred-gateway.out" : child->entry.exe;
     const std::string config_arg = child->is_gateway ? std::string() : child->entry.config;
     const std::string model_arg = child->is_gateway ? std::string() : child->entry.model;
+    const bool inject_workers = !child->is_gateway && child->policy.has_worker_nums;
+    const std::string worker_str =
+        inject_workers ? std::to_string(child->policy.worker_nums) : std::string();
+    const std::string model_config_override =
+        child->is_gateway ? std::string() : child->policy.model_config;
 
     const pid_t pid = ::fork();
     if (pid < 0) {
@@ -312,7 +317,12 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err) {
             // token regardless of what their TOML declares
             ::setenv("MORTRED_LISTEN_HOST", "127.0.0.1", 1);
             ::setenv("MORTRED_AUTH_TOKEN", internal_token.c_str(), 1);
-        }
+            if (inject_workers) {
+                ::setenv("MORTRED_WORKER_NUMS", worker_str.c_str(), 1);
+            }
+            if (!model_config_override.empty()) {
+                ::setenv("MORTRED_MODEL_CONFIG_FILE", model_config_override.c_str(), 1);
+            }
         if (::chdir(bin_dir.c_str()) != 0) {
             ::_exit(127);
         }

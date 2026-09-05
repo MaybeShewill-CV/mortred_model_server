@@ -24,6 +24,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <vector>
 #include <string_view>
 #include <system_error>
 #include <thread>
@@ -676,6 +677,35 @@ int run_supervisor() {
                      runtime_profile.c_str(),
                      catalog_err.c_str());
         return 1;
+    }
+
+    std::string pack_path = g_cfg.supervisor.pack_file;
+    if (const char* env = std::getenv("MORTRED_PACK"); env != nullptr && *env != '\0') {
+        pack_path = env;
+    }
+    if (!pack_path.empty()) {
+        std::filesystem::path pack(pack_path);
+        if (!pack.is_absolute()) {
+            pack = std::filesystem::path(g_root) / pack;
+        }
+        std::vector<std::string> catalog_ids;
+        catalog_ids.reserve(g_catalog.entries().size());
+        for (const auto& e : g_catalog.entries()) {
+            catalog_ids.push_back(e.id);
+        }
+        std::string pack_err;
+        if (!ControlConfig::apply_pack(pack.string(), catalog_ids, g_root, &g_cfg, &pack_err)) {
+            std::fprintf(stderr, "mortred-supervisor: invalid pack: %s\n", pack_err.c_str());
+            return 1;
+        }
+        size_t pack_n = 0;
+        for (const auto& item : g_cfg.servers) {
+            if (item.second.has_autostart && item.second.autostart) {
+                ++pack_n;
+            }
+        }
+        std::fprintf(stderr, "mortred-supervisor: pack %s (autostart %zu model(s))\n",
+                     pack.string().c_str(), pack_n);
     }
 
     // load API keys if the config exists (shared with the gateway)

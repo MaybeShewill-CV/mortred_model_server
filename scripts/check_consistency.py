@@ -35,6 +35,7 @@ Verifies a few high-signal invariants:
     umbrella header.
 14. conf/ci_hosted_golden.json matches golden sources, HF cpu weights, the
     GPU smoke filter in ci.yml, and every HTTP catalog id has a CI tier.
+15. `conf/packs/demo.toml` `[pack.<ID>]` ids exist as `model=` in conf/server.
 
 Exit code 0 means consistent; non-zero means the repository needs attention.
 """
@@ -539,6 +540,40 @@ def check_model_todo_markers() -> list[str]:
     return errors
 
 
+def check_demo_pack() -> list[str]:
+    """The shipped demo pack must only name HTTP catalog ids."""
+    errors: list[str] = []
+    pack = ROOT / "conf" / "packs" / "demo.toml"
+    if not pack.is_file():
+        return ["missing conf/packs/demo.toml"]
+    catalog_ids: set[str] = set()
+    conf_server = ROOT / "conf" / "server"
+    if conf_server.is_dir():
+        for cfg in conf_server.rglob("*.toml"):
+            try:
+                table = load_toml(cfg)
+            except (ValueError, OSError):
+                continue
+            for kv in table.values():
+                if isinstance(kv, dict):
+                    model = kv.get("model")
+                    if isinstance(model, str) and model:
+                        catalog_ids.add(model)
+    found = False
+    for line in pack.read_text(encoding="utf-8").splitlines():
+        t = line.strip()
+        if t.startswith("[pack.") and t.endswith("]"):
+            pid = t[6:-1]
+            found = True
+            if pid not in catalog_ids:
+                errors.append(
+                    f"conf/packs/demo.toml unknown catalog id [{pid}]"
+                )
+    if not found:
+        errors.append("conf/packs/demo.toml has no [pack.<ID>] tables")
+    return errors
+
+
 def check_model_io_split() -> list[str]:
     """Guard the src/models/io/ split:
     - model_io_define.h stays a pure aggregate (includes only, no types), so
@@ -586,6 +621,7 @@ def main() -> int:
     errors.extend(check_model_todo_markers())
     errors.extend(check_model_io_split())
     errors.extend(check_demo_client_health())
+    errors.extend(check_demo_pack())
     from check_hosted_golden import check_ci_inference_contract
 
     errors.extend(check_ci_inference_contract())

@@ -1,0 +1,9 @@
+# Machine-local autostart pack (not a hardware encyclopedia).
+# Supervisor: listed catalog ids autostart; everyone else does not, even when
+# MORTRED_AUTOSTART=true. worker_nums here overrides conf/server (which stays 1).
+# Optional model_config is a path to an existing conf/model/*.toml variant.
+#
+# Containers default MORTRED_PACK to this file so compose does not boot the zoo.
+
+[pack.MOBILENETV2]
+worker_nums = 1

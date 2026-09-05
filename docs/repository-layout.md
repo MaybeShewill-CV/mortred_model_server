@@ -8,7 +8,7 @@ generated executables, configuration files, and documentation.
 | Path | Purpose | Tracked in VCS |
 |---|---|---|
 | `src/` | C++ source code (common / models / server / factory / apps) | Yes |
-| `conf/` | Model/server configuration, weight manifest, hosted golden CI contract (`ci_hosted_golden.json`) | Yes |
+| `conf/` | Model/server configuration, autostart packs (`conf/packs/`), weight manifest, hosted golden CI contract (`ci_hosted_golden.json`) | Yes |
 | `docs/` | User and developer documentation | Yes |
 | `demo_data/` | Small sample images used by tutorials/benchmarks | Yes |
 | `test/` | Unit tests and golden test data | Yes |
@@ -57,6 +57,7 @@ and must not be relied upon.
 
 Identity is the factory catalog `model_section` (`YOLOV8`, `MOBILENETV2`, …).
 `mortred-model-server.out --list` prints the HTTP-capable ids.
+The supervisor autostart set is `conf/packs/demo.toml` (or `MORTRED_PACK`), not the whole `conf/server/` tree.
 
 ### Benchmark/tool executables
 
