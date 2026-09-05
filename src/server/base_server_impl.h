@@ -13,6 +13,7 @@
 #include <cctype>
 #include <chrono>
 #include <condition_variable>
+#include <ctime>
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
@@ -190,6 +191,15 @@ public:
             return;
         }
         constexpr int k_poll_ms = 5;
+        // Detached POST /jobs runners (go->start()) and GET /wait counters
+        // keep using this / the job table after the HTTP series has already
+        // flushed. Drain them before members disappear; the worker-queue
+        // wait below is not enough because async_run_job still touches the
+        // table and metrics after it returns a worker.
+        while (_m_async_inflight.load(std::memory_order_acquire) != 0 ||
+               _m_async_wait_inflight.load(std::memory_order_acquire) != 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(k_poll_ms));
+        }
         while (_m_working_queue.size_approx() != _m_worker_nums) {
             std::this_thread::sleep_for(std::chrono::milliseconds(k_poll_ms));
         }
@@ -313,6 +323,13 @@ protected:
     // contract-dump milestone)
     std::string _m_model_name;
     AsyncTable _m_async_table;
+    // Detached async-job go tasks still running after POST /jobs returned 202.
+    std::atomic<int> _m_async_inflight{0};
+    // GET /jobs/{id}/wait series hanging on a named Workflow counter.
+    std::atomic<int> _m_async_wait_inflight{0};
+    std::atomic<uint64_t> _m_async_wait_seq{0};
+    std::mutex _m_async_waiters_mu;
+    std::unordered_map<std::string, std::vector<std::string>> _m_async_waiters;
 
 protected:
     /***
@@ -558,6 +575,91 @@ protected:
             static_cast<size_t>(std::max(0, _m_async_table.queue_depth())));
     }
 
+    static int parse_wait_timeout_ms(const std::string& uri) {
+        int timeout_ms = 30000;
+        const auto q = uri.find('?');
+        if (q == std::string::npos) {
+            return timeout_ms;
+        }
+        const std::string query = uri.substr(q + 1);
+        size_t pos = std::string::npos;
+        if (query.rfind("timeout=", 0) == 0) {
+            pos = 0;
+        } else {
+            const auto amp = query.find("&timeout=");
+            if (amp != std::string::npos) {
+                pos = amp + 1;
+            }
+        }
+        if (pos == std::string::npos) {
+            return timeout_ms;
+        }
+        timeout_ms = std::atoi(query.c_str() + pos + 8);
+        if (timeout_ms <= 0) {
+            timeout_ms = 30000;
+        }
+        if (timeout_ms > 300000) {
+            timeout_ms = 300000;
+        }
+        return timeout_ms;
+    }
+
+    void reply_async_status(WFHttpTask* task, const std::string& id,
+                            const typename AsyncTable::Snapshot& snap) {
+        rapidjson::Document d;
+        d.SetObject();
+        auto& a = d.GetAllocator();
+        d.AddMember("job_id", rapidjson::Value(id.c_str(), id.size(), a), a);
+        d.AddMember("state", rapidjson::Value(async_state_str(snap.state), a), a);
+        d.AddMember("elapsed_ms",
+                    static_cast<int64_t>(monotonic_ms() - snap.submitted_at_ms), a);
+        if (!snap.error.empty()) {
+            d.AddMember("error",
+                        rapidjson::Value(snap.error.c_str(), snap.error.size(), a), a);
+        }
+        rapidjson::StringBuffer buf;
+        rapidjson::Writer<rapidjson::StringBuffer> w(buf);
+        d.Accept(w);
+        auto* resp = task->get_resp();
+        resp->set_status_code("200");
+        resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
+        resp->append_output_body(buf.GetString(), buf.GetSize());
+    }
+
+    void register_async_waiter(const std::string& job_id, const std::string& waiter_name) {
+        std::lock_guard<std::mutex> lock(_m_async_waiters_mu);
+        _m_async_waiters[job_id].push_back(waiter_name);
+    }
+
+    void unregister_async_waiter(const std::string& job_id, const std::string& waiter_name) {
+        std::lock_guard<std::mutex> lock(_m_async_waiters_mu);
+        auto it = _m_async_waiters.find(job_id);
+        if (it == _m_async_waiters.end()) {
+            return;
+        }
+        auto& names = it->second;
+        names.erase(std::remove(names.begin(), names.end(), waiter_name), names.end());
+        if (names.empty()) {
+            _m_async_waiters.erase(it);
+        }
+    }
+
+    void wake_async_waiters(const std::string& job_id) {
+        std::vector<std::string> names;
+        {
+            std::lock_guard<std::mutex> lock(_m_async_waiters_mu);
+            auto it = _m_async_waiters.find(job_id);
+            if (it == _m_async_waiters.end()) {
+                return;
+            }
+            names.swap(it->second);
+            _m_async_waiters.erase(it);
+        }
+        for (const auto& name : names) {
+            WFTaskFactory::count_by_name(name, 1);
+        }
+    }
+
     /***
      * Async job endpoints: POST /jobs, GET /jobs/{id},
      * GET /jobs/{id}/wait, GET /jobs/{id}/result
@@ -656,27 +758,37 @@ protected:
             static_cast<size_t>(std::max(0, _m_async_table.queue_depth())));
 
         const std::string job_id = submitted.job_id;
-        // schedule the async execution via a WFGoTask
-        auto* series = series_of(task);
+        // Independent series: the HTTP series stays empty after process()
+        // returns, so Workflow flushes 202 at admission. Do not push_back the
+        // runner onto series_of(task) — that would delay the reply until
+        // run_items finishes.
+        _m_async_inflight.fetch_add(1, std::memory_order_acq_rel);
         auto* go_task = WFTaskFactory::create_go_task(
             "async_job", [this, job_id]() { async_run_job(job_id); });
-        series->push_back(go_task);
+        go_task->set_callback([this, job_id](WFGoTask*) {
+            // Notify waiters only here (after the compute function returns),
+            // never from inside async_run_job. Named counters remember a
+            // count that races ahead of the waiter.
+            wake_async_waiters(job_id);
+            _m_async_inflight.fetch_sub(1, std::memory_order_acq_rel);
+        });
+        go_task->start();
 
-        // reply 202 immediately (the go task runs after the HTTP response is sent)
+        const std::string location = "/jobs/" + job_id;
+        const std::string poll_url = location;
+        const std::string result_url = location + "/result";
         auto* resp = task->get_resp();
         resp->set_status_code("202");
         resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
-        resp->add_header_pair("Location", ("/jobs/" + job_id).c_str());
+        resp->add_header_pair("Location", location.c_str());
         rapidjson::Document d;
         d.SetObject();
         auto& a = d.GetAllocator();
         d.AddMember("job_id", rapidjson::Value(job_id.c_str(), job_id.size(), a), a);
         d.AddMember("state", "pending", a);
-        d.AddMember("poll_url", rapidjson::Value(("/jobs/" + job_id).c_str(),
-                                                 ("/jobs/" + job_id).size(), a), a);
+        d.AddMember("poll_url", rapidjson::Value(poll_url.c_str(), poll_url.size(), a), a);
         d.AddMember("result_url",
-                    rapidjson::Value(("/jobs/" + job_id + "/result").c_str(),
-                                     ("/jobs/" + job_id + "/result").size(), a), a);
+                    rapidjson::Value(result_url.c_str(), result_url.size(), a), a);
         rapidjson::StringBuffer buf;
         rapidjson::Writer<rapidjson::StringBuffer> w(buf);
         d.Accept(w);
@@ -690,76 +802,55 @@ protected:
             reply_async_error(task, 404, "job not found: " + id);
             return;
         }
-        const int64_t elapsed = monotonic_ms() - snap->submitted_at_ms;
-
-        rapidjson::Document d;
-        d.SetObject();
-        auto& a = d.GetAllocator();
-        d.AddMember("job_id", rapidjson::Value(id.c_str(), id.size(), a), a);
-        d.AddMember("state", rapidjson::Value(async_state_str(snap->state), a), a);
-        d.AddMember("elapsed_ms", static_cast<int64_t>(elapsed), a);
-        if (!snap->error.empty()) {
-            d.AddMember("error",
-                        rapidjson::Value(snap->error.c_str(), snap->error.size(), a), a);
-        }
-        rapidjson::StringBuffer buf;
-        rapidjson::Writer<rapidjson::StringBuffer> w(buf);
-        d.Accept(w);
-        auto* resp = task->get_resp();
-        resp->set_status_code("200");
-        resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
-        resp->append_output_body(buf.GetString(), buf.GetSize());
+        reply_async_status(task, id, *snap);
     }
 
-    /*** GET /jobs/{id}/wait?timeout=N: long-poll for state change */
+    /*** GET /jobs/{id}/wait?timeout=N: hang the HTTP series until terminal or budget */
     void handle_async_wait(WFHttpTask* task, const std::string& id, const std::string& uri) {
         auto initial = _m_async_table.snapshot(id);
         if (!initial.has_value()) {
             reply_async_error(task, 404, "job not found: " + id);
             return;
         }
-        // parse timeout from query string (default 30s)
-        int timeout_ms = 30000;
-        const auto q = uri.find("?timeout=");
-        if (q != std::string::npos) {
-            timeout_ms = std::atoi(uri.substr(q + 9).c_str());
-            if (timeout_ms <= 0) timeout_ms = 30000;
-            if (timeout_ms > 300000) timeout_ms = 300000;  // cap at 5 min
+        if (is_async_terminal(initial->state)) {
+            reply_async_status(task, id, *initial);
+            return;
+        }
+        const int timeout_ms = parse_wait_timeout_ms(uri);
+        const std::string waiter_name =
+            "mortred.jobwait." + id + "." +
+            std::to_string(_m_async_wait_seq.fetch_add(1, std::memory_order_relaxed));
+        register_async_waiter(id, waiter_name);
+        _m_async_wait_inflight.fetch_add(1, std::memory_order_acq_rel);
+
+        // Named counter(target=1), not WFConditional: a signal that happens
+        // before the waiter is dispatched is lost, but a count is remembered.
+        // Unique names so one waiter's timeout cannot complete another waiter's
+        // counter. Job completion counts every registered name.
+        auto* counter = WFTaskFactory::create_counter_task(
+            waiter_name, 1,
+            [this, task, id, waiter_name](WFCounterTask*) {
+                unregister_async_waiter(id, waiter_name);
+                auto snap = _m_async_table.snapshot(id);
+                if (!snap.has_value()) {
+                    reply_async_error(task, 404, "job not found: " + id);
+                } else {
+                    reply_async_status(task, id, *snap);
+                }
+                _m_async_wait_inflight.fetch_sub(1, std::memory_order_acq_rel);
+            });
+        series_of(task)->push_back(counter);
+
+        if (auto again = _m_async_table.snapshot(id);
+            again.has_value() && is_async_terminal(again->state)) {
+            WFTaskFactory::count_by_name(waiter_name, 1);
         }
 
-        // schedule a go task that blocks on the job's condition variable; the
-        // wait itself lives inside the table, so the CV handoff is correct
-        auto* series = series_of(task);
-        auto* go = WFTaskFactory::create_go_task(
-            "async_wait",
-            [this, task, id, initial_snap = std::move(*initial), timeout_ms]() {
-                // wait() re-looks-up by id: a non-terminal job is never
-                // evicted; if a terminal one was evicted in between, the
-                // initial snapshot already carries the terminal state
-                const auto snap =
-                    _m_async_table.wait(id, initial_snap.state, timeout_ms)
-                        .value_or(initial_snap);
-                auto* resp = task->get_resp();
-                resp->set_status_code("200");
-                resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
-                rapidjson::Document d;
-                d.SetObject();
-                auto& a = d.GetAllocator();
-                d.AddMember("job_id", rapidjson::Value(id.c_str(), id.size(), a), a);
-                d.AddMember("state",
-                            rapidjson::Value(async_state_str(snap.state), a), a);
-                d.AddMember("elapsed_ms",
-                            static_cast<int64_t>(monotonic_ms() - snap.submitted_at_ms), a);
-                if (!snap.error.empty()) {
-                    d.AddMember("error",
-                                rapidjson::Value(snap.error.c_str(), snap.error.size(), a), a);
-                }
-                rapidjson::StringBuffer buf;
-                rapidjson::Writer<rapidjson::StringBuffer> w(buf);
-                d.Accept(w);
-                resp->append_output_body(buf.GetString(), buf.GetSize());
-            });
-        series->push_back(go);
+        auto* timer = WFTaskFactory::create_timer_task(
+            static_cast<time_t>(timeout_ms / 1000),
+            static_cast<long>(timeout_ms % 1000) * 1000000L,
+            [waiter_name](WFTimerTask*) { WFTaskFactory::count_by_name(waiter_name, 1); });
+        timer->start();
     }
 
     /*** GET /jobs/{id}/result: return result if DONE, 409 otherwise */

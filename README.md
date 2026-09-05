@@ -38,6 +38,7 @@ All models and detectors can be downloaded from my [Hugging Face Page](https://h
 * [How To](#how-to)
 * [Web Server Configuration](#web-server-configuration)
 * [HTTP API Contract](./docs/api-contract.md)
+* [Long-task `/jobs` customer test](./docs/async-jobs-customer-test.md)
 
 # `Quick Start`
 

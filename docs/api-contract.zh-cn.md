@@ -188,10 +188,14 @@ worker 数量估算排水时间，钳制在 1-60 秒）。网关将两者原样�
 
 | 端点（模型端口） | 成功 | 错误 |
 |---|---|---|
-| `POST /jobs` | `202`，返回 `job_id`、`state`、`poll_url`、`result_url` | 准入队列满时 `429` |
+| `POST /jobs` | **准入时** `202`，返回 `job_id`、`state: pending`、`poll_url`、`result_url` | 准入队列满时 `429` |
 | `GET /jobs/{id}` | `200`，返回 `state`（`pending`/`running`/`done`/`failed`/`timeout`） | 未知 id `404` |
-| `GET /jobs/{id}/wait?timeout=N` | 状态变化或终态后 `200` | 未知 id `404` |
-| `GET /jobs/{id}/result` | `200` 标准响应封装（可重复读取） | 未知 id `404`，未完成 `409` |
+| `GET /jobs/{id}/wait?timeout=N` | job **进入终态**或 wait 预算耗尽时 `200`（`timeout` 单位毫秒；默认 30000，上限 300000）。预算耗尽时 state 仍可能是 `pending`/`running` | 未知 id `404` |
+| `GET /jobs/{id}/result` | `200` 标准响应封装（可重复读取） | 未知 id `404`，未完成 `409`（含 `pending`/`running`/`failed`/`timeout`） |
+
+`202` 表示服务器接受了该 job，不表示推理已经完成。正确的客户端不要把
+`POST /jobs` 当成阻塞的 `/infer`。逐步验收步骤见
+[async-jobs-customer-test.zh-cn.md](async-jobs-customer-test.zh-cn.md)。
 
 任务账本保存在内存中（重启即失）。组件设计、并发契约与验证门禁见
 [async-job-table.zh-cn.md](async-job-table.zh-cn.md)。

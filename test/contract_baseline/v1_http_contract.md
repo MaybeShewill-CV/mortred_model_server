@@ -63,9 +63,9 @@ Content-Type: application/json  # 缺失或非 JSON → 415
 ## 5. 异步作业端点（`async_enabled` 服务）
 
 ```
-POST /jobs                     → 202 {"job_id","state":"pending","poll_url","result_url"} + Location
+POST /jobs                     → 202 准入立即返回 {"job_id","state":"pending","poll_url","result_url"} + Location
 GET  /jobs/{id}                → 200 {"job_id","state","elapsed_ms"[,"error"]}
-GET  /jobs/{id}/wait?timeout=N → 同上（长轮询，默认 30s，上限 300s）
+GET  /jobs/{id}/wait?timeout=N → 同上（终态或 wait 预算耗尽；timeout 单位毫秒，默认 30s，上限 300s）
 GET  /jobs/{id}/result         → 200 标准 v1 信封（同 §2）｜409 {"error":"job not finished…"}
 ```
 

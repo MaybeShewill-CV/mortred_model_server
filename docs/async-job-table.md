@@ -49,9 +49,11 @@ state bookkeeping* - not sync vs. async:
 BaseAiServerImpl  (protocol + execution orchestration, for BOTH paths)
 ├─ sync path:   parse -> worker pool -> model -> serialize
 └─ async path:  parse -> AsyncJobTable.submit()      (admission + record)
-                       -> WFGoTask -> worker pool    (execution stays here)
-                       -> model run
+                       -> 202 flushed (HTTP series empty)
+                       -> WFGoTask->start()          (independent series)
+                       -> worker pool / model run
                        -> AsyncJobTable.finish()     (terminal bookkeeping)
+                       -> count_by_name waiters      (go-task callback)
                        -> serialize (data from snapshot/take_result)
 ```
 
@@ -111,20 +113,14 @@ Any future change to `async_job_table.h` must preserve all five:
 
 | HTTP endpoint | Table call(s) | Notes |
 |---|---|---|
-| `POST /jobs` | `submit(req)` | 202 with `job_id`; 429 when the CAS rejects |
-| `GET /jobs/{id}` | `snapshot(id)` | 404 unknown id; cheap consistent view |
-| `GET /jobs/{id}/wait?timeout=N` | `snapshot(id)` then `wait(id, initial, N)` | runs in a go task; falls back to the initial snapshot if the job was evicted mid-poll |
+| `POST /jobs` | `submit(req)` | 202 is flushed at **admission**. The runner is `go->start()` on a new series, not `push_back` on the HTTP series. 429 when the CAS rejects. |
+| `GET /jobs/{id}` | `snapshot(id)` | 404 unknown id; cheap consistent view; empty HTTP series |
+| `GET /jobs/{id}/wait?timeout=N` | `snapshot(id)` | If already terminal, 200 in `process()`. Otherwise the HTTP series hangs on a **named Workflow counter** (target 1) plus an independent timer. Wakes on **terminal state** or wait-budget expiry — not on `pending`→`running`. `timeout` is milliseconds (default 30000, cap 300000). |
 | `GET /jobs/{id}/result` | `take_result(id)` | 404 unknown / 409 not DONE / 200 with the standard envelope; repeatable until retention ends |
 
-The server keeps metrics and worker acquisition on its side of the boundary;
-the table is pure state.
+The server keeps metrics, worker acquisition and waiter wake-up on its side of the boundary; the table is pure state. `AsyncJobTable::wait()` (condition variable) remains for unit tests; the HTTP wait path does not block a go thread on that CV.
 
-Known Workflow-series semantics (unchanged, preserved for compatibility): the
-202 reply of POST /jobs is flushed only after the job's go task completes,
-because the runner is pushed into the HTTP task's series. This is a latency
-wart of the previous implementation, deliberately not changed here; the
-admission gate is therefore observable only via concurrent submissions (which
-is exactly how the e2e 429 contract test drives it).
+`POST /jobs` 202 means the job was **admitted**, not that inference finished. Clients must poll, wait, or fetch `/result`.
 
 ## 6. Verification
 
@@ -149,16 +145,27 @@ enabled (verified with a deliberately racy control program). The stress test
 drives 4 submitters, 2 runners,
 3 pollers and 2 waiters against one table for ~3 s and asserts the
 invariants at the end (depth returns to zero, every accepted job terminates
-exactly once, ids stay unique).
+exactly once, ids stay unique). HTTP-level admission timing is covered by
+`server_e2e_contract`: POST wall-clock << `fake_delay_ms`, serial 429 while a
+job is running, 409 without a 200 fallback, wait wakes on terminal (or wait
+budget), two concurrent waiters.
 
 ## 7. Compatibility statement
 
-The rework is a pure internal concurrency fix:
+The ledger rework was a pure internal concurrency fix. The later Workflow-series
+fix changes **observable latency**, not the JSON/status-code contract:
 
-- No HTTP wire change: status codes (202/404/405/409/429), JSON bodies,
-  headers (`Location`, `Content-Type`) and the error strings are unchanged.
+- HTTP wire: status codes (202/404/405/409/429), JSON bodies, headers
+  (`Location`, `Content-Type`) and the error strings are unchanged.
+- `POST /jobs` 202 is now flushed at admission. It does **not** mean the
+  model has finished. `GET /jobs/{id}/wait` returns when the job is
+  terminal **or** the wait budget expires (state may still be `pending` /
+  `running`); it does not return solely because the job moved to `running`.
 - No configuration change: `async_enabled`, `async_timeout`,
   `async_max_queue`, `async_job_ttl`, `async_max_completed` keep their names,
   defaults and semantics (`async_max_queue` <= 0 still admits nothing).
 - Job state remains in-memory and is lost on restart - unchanged behavior;
   persistence is future work and must not change the wire contract.
+
+How to exercise this as a customer (curl, gateway, 429, 409, wait timeout,
+auth) is documented in [async-jobs-customer-test.md](async-jobs-customer-test.md).

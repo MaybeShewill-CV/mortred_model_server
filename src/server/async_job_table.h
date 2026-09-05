@@ -225,6 +225,8 @@ class AsyncJobTable {
      * Long-poll until the state differs from `initial` or reaches a terminal
      * state, at most `timeout_ms` (<= 0 waits indefinitely). Returns the
      * final snapshot, or nullopt if the job disappeared (evicted).
+     * HTTP GET /jobs/{id}/wait does not call this: it hangs a named Workflow
+     * counter on the HTTP series instead. Unit tests still use this CV path.
      */
     std::optional<Snapshot> wait(const std::string& id, AsyncJobState initial, int timeout_ms) {
         auto job = find(id);

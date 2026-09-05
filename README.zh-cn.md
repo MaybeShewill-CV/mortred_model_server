@@ -36,6 +36,7 @@
 * [文档教程](#文档教程)
 * [网络服务器配置说明](#网络服务器配置说明)
 * [HTTP API 契约](./docs/api-contract.zh-cn.md)
+* [长任务 `/jobs` 客户验收](./docs/async-jobs-customer-test.zh-cn.md)
 * [Model_Zoo](#model_zoo)
 
 # `快速开始`
