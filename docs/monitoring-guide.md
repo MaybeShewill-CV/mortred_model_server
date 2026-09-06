@@ -101,8 +101,8 @@ scrape them.
 
 | Metric | Type | Labels | Description |
 |---|---|---|---|
-| `mortred_http_requests_total` | counter | model, method, status | Cumulative HTTP requests |
-| `mortred_http_request_duration_ms` | histogram | model, method, status | Request latency (ms) |
+| `mortred_http_requests_total` | counter | model, method, status | Cumulative HTTP requests (async job endpoints included; async replies carry no duration sample) |
+| `mortred_http_request_duration_ms` | histogram | model, method, status | Request latency (ms; sync inference time - async endpoints add no sample) |
 | `mortred_queue_rejected_total` | counter | model | Cumulative 429 rejections |
 
 ```promql

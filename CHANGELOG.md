@@ -8,6 +8,40 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- Gateway forwards the raw-body control headers `X-Mortred-Params`,
+  `X-Mortred-Options` and `X-Request-ID` to the model server, and echoes
+  `X-Request-ID` on its own error replies. Raw-body requests previously lost
+  their params/options and client correlation when proxied through the
+  gateway (JSON-envelope requests were unaffected). All other client headers
+  stay dropped - the default-deny forward list is the header-injection guard.
+
+> 网关现在向模型服务器转发 raw-body 控制头 `X-Mortred-Params` /
+> `X-Mortred-Options` / `X-Request-ID`，并在自身错误回复中回显
+> `X-Request-ID`。此前 raw-body 请求经网关代理后参数与关联 id 被静默丢弃
+> （JSON envelope 路径不受影响）。其余客户端头仍然丢弃——默认拒绝的转发
+> 白名单就是防头注入的屏障。
+
+- Supervisor `process()` folds a null request method to `""` like the
+  gateway/model-server guards. A malformed request line (workflow leaves
+  `get_method()` null) used to construct `std::string` from nullptr - UB,
+  typically a crash of the management plane.
+
+> Supervisor 的 `process()` 现在与网关/模型服务器一样把空 method 折叠为
+> `""`。此前畸形请求行（workflow 返回 null method）会从 nullptr 构造
+> `std::string`——未定义行为，通常表现为管理面崩溃。
+
+- Async job replies are counted in `mortred_http_requests_total`: the `202`
+  submit reply, `200` status/wait/result replies and the async error codes
+  (404/405/409/429) were previously invisible on the model-server dashboards.
+  Async replies deliberately carry no `mortred_http_request_duration_ms`
+  sample - that histogram observes inference time and the async HTTP path
+  has none.
+
+> 异步任务回复现在计入 `mortred_http_requests_total`：此前 202 提交回复、
+> 200 状态/等待/结果回复以及异步错误码（404/405/409/429）在模型服务器监控
+> 上不可见。异步回复刻意不产生 `mortred_http_request_duration_ms` 样本——该
+> 直方图观测的是推理耗时，异步 HTTP 路径上没有这一耗时。
+
 - Model and gateway mains arm a `ProcessStop` latch (block SIGINT/SIGTERM,
   sigwait thread, idempotent `WaitGroup::done()`) so those signals reach
   `server->stop()` and the impl destructor drain instead of default-killing

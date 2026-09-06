@@ -1159,6 +1159,46 @@ TEST(server_e2e_contract, batch_item_failure_isolated) {
     EXPECT_EQ(doc_c["results"][0]["data"]["value"].GetInt(), 31);
 }
 
+TEST(server_e2e_contract, async_job_replies_are_counted_in_http_requests) {
+    // async success replies (202 submit, 200 status/wait/result) and async
+    // error replies (404 unknown job) must appear in mortred_http_requests_total;
+    // before this contract they were invisible on the model-server dashboards
+    ServerHandle handle = start_server("async_enabled = true\nfake_delay_ms = 120\n");
+    const std::string body = "{\"images\":[\"aGVsbG8=\"]}";
+
+    const auto accepted = send_request(handle.port, "POST", "/jobs", body, k_json_auth_headers);
+    ASSERT_EQ(accepted.status, 202) << accepted.body;
+    auto doc = parse_body(accepted.body);
+    ASSERT_FALSE(doc.HasParseError());
+    ASSERT_TRUE(doc.HasMember("job_id"));
+    const std::string job_id = doc["job_id"].GetString();
+
+    const auto status =
+        send_request(handle.port, "GET", "/jobs/" + job_id, "", k_json_auth_headers);
+    EXPECT_EQ(status.status, 200) << status.body;
+
+    const auto waited = send_request(handle.port, "GET", "/jobs/" + job_id + "/wait?timeout=5000",
+                                     "", k_json_auth_headers, 10);
+    EXPECT_EQ(waited.status, 200) << waited.body;
+
+    const auto result =
+        send_request(handle.port, "GET", "/jobs/" + job_id + "/result", "", k_json_auth_headers);
+    EXPECT_EQ(result.status, 200) << result.body;
+
+    const auto missing = send_request(handle.port, "GET", "/jobs/job_does_not_exist", "",
+                                      k_json_auth_headers);
+    EXPECT_EQ(missing.status, 404) << missing.body;
+
+    const auto metrics = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    ASSERT_EQ(metrics.status, 200) << metrics.body;
+    EXPECT_NE(metrics.body.find("method=\"POST\",status=\"202\""), std::string::npos)
+        << metrics.body;
+    EXPECT_NE(metrics.body.find("method=\"GET\",status=\"200\""), std::string::npos)
+        << metrics.body;
+    EXPECT_NE(metrics.body.find("method=\"GET\",status=\"404\""), std::string::npos)
+        << metrics.body;
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

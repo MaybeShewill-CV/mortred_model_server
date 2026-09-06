@@ -98,7 +98,7 @@ prometheus --config.file=deploy/prometheus.yml --storage.tsdb.path=/tmp/prom-dat
 
 | 指标 | 类型 | 标签 | 说明 |
 |---|---|---|---|
-| `mortred_http_requests_total` | counter | model, method, status | HTTP 请求累计 |
+| `mortred_http_requests_total` | counter | model, method, status | HTTP 请求累计（含异步任务端点；异步回复不产生时长样本） |
 | `mortred_http_request_duration_ms` | histogram | model, method, status | 请求耗时（毫秒） |
 | `mortred_queue_rejected_total` | counter | model | 429 拒绝累计 |
 
