@@ -4,8 +4,11 @@
 #include <cstring>
 #include <optional>
 
+#include <opencv2/imgproc.hpp>
+
 #include "common/cv_utils.h"
 #include "glog/logging.h"
+#include "models/backend/request_geometry.h"
 
 namespace jinq {
 namespace models {
@@ -101,6 +104,36 @@ ImagePipeline &ImagePipeline::resize(const cv::Size &size) {
     cv::Mat resized;
     cv::resize(image_, resized, size, 0.0, 0.0, cv::INTER_LINEAR);
     image_ = std::move(resized);
+    return *this;
+}
+
+ImagePipeline &ImagePipeline::letterbox(const cv::Size &size, std::uint8_t pad_value) {
+    if (status_ != StatusCode::OK) {
+        return *this;
+    }
+    if (!valid_size(size) || !valid_size(image_.size())) {
+        set_error(status_, error_, invalid_image("letterbox", "source and target size must be positive"));
+        return *this;
+    }
+    const LetterboxGeometry geom = compute_letterbox_geometry(image_.size(), size);
+    if (!valid_size(geom.unpadded)) {
+        set_error(status_, error_, invalid_image("letterbox", "computed unpadded size is invalid"));
+        return *this;
+    }
+    cv::Mat resized;
+    if (image_.size() != geom.unpadded) {
+        cv::resize(image_, resized, geom.unpadded, 0.0, 0.0, cv::INTER_LINEAR);
+    } else {
+        resized = image_;
+    }
+    const cv::Scalar pad = cv::Scalar::all(static_cast<double>(pad_value));
+    cv::Mat padded;
+    cv::copyMakeBorder(resized, padded, geom.pad_y, geom.pad_bottom, geom.pad_x, geom.pad_right, cv::BORDER_CONSTANT, pad);
+    if (padded.size() != size) {
+        set_error(status_, error_, invalid_image("letterbox", "padded size mismatches the network input"));
+        return *this;
+    }
+    image_ = std::move(padded);
     return *this;
 }
 

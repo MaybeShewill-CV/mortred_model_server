@@ -7,11 +7,10 @@
 
 #include "yolov8_detector.h"
 
-#include <algorithm>
-
 #include "glog/logging.h"
 #include "models/backend/model_runtime.h"
 #include "models/object_detection/detector_common.h"
+#include "models/object_detection/yolov8_decode.h"
 
 namespace jinq {
 namespace models {
@@ -53,10 +52,10 @@ template <typename INPUT, typename OUTPUT> StatusCode YoloV8Detector<INPUT, OUTP
 }
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> YoloV8Detector<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
-    // resize / colour / normalize, emitted as f32 nchw
+    // letterbox / colour / normalize, emitted as f32 nchw
     auto result = jinq::models::backend::ImagePipeline(input_image)
                       .bgr_to_rgb()
-                      .resize(_m_input_size_host)
+                      .letterbox(_m_input_size_host)
                       .to_float()
                       .scale(1.0f / 255.0f)
                       .nchw(this->session().inputs().front().name);
@@ -81,49 +80,17 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
     const auto row_size = tensor.shape[1];
     const auto proposal_counts = tensor.shape[2];
 
-    // collect class-filtered candidates in the network (host) coordinate
-    // space; NMS runs before mapping the kept boxes back to the input image
     DetectionOutput candidates;
-    for (int64_t i = 0; i < proposal_counts; ++i) {
-        const float cx = out_data[0 * proposal_counts + i];
-        const float cy = out_data[1 * proposal_counts + i];
-        const float w = out_data[2 * proposal_counts + i];
-        const float h = out_data[3 * proposal_counts + i];
+    collect_yolov8_candidates(out_data, row_size, proposal_counts, _m_detection_params.score_threshold, &candidates);
 
-        float cls_score = 0.0f;
-        int cls_id = -1;
-        // class scores occupy rows 4..row_size-1 (all of them, the last 4
-        // classes must not be dropped)
-        for (int64_t j = 4; j < row_size; ++j) {
-            const float score = out_data[j * proposal_counts + i];
-            if (score > cls_score) {
-                cls_score = score;
-                cls_id = static_cast<int>(j - 4);
-            }
-        }
-        if (cls_score < _m_detection_params.score_threshold) {
-            continue;
-        }
-
-        jinq::models::io_define::object_detection::bbox candidate;
-        candidate.bbox = cv::Rect2f(cx - w / 2.0f, cy - h / 2.0f, w, h);
-        candidate.score = cls_score;
-        candidate.class_id = cls_id;
-        candidates.push_back(candidate);
-    }
-
-    GeometryScale geometry_scale;
+    LetterboxGeometry letterbox;
     std::string geometry_error;
-    if (!backend::make_geometry_scale(context, &geometry_scale, &geometry_error)) {
+    if (!backend::make_letterbox_geometry(context, &letterbox, &geometry_error)) {
         LOG(ERROR) << "yolov8 " << geometry_error;
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
     DetectionOutput nms_result = finalize_detections(std::move(candidates), _m_detection_params, context);
-
-    // rescale kept boxes from the network space to the original image size
-    for (auto &bbox : nms_result) {
-        bbox.bbox = backend::scale_bbox(bbox.bbox, geometry_scale);
-    }
+    unmap_letterbox_detections(nms_result, letterbox, context.source_size);
     output = std::move(nms_result);
     return StatusCode::OK;
 }

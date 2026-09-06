@@ -53,6 +53,8 @@ class ImagePipeline {
     ImagePipeline &bgra_to_rgb();
     ImagePipeline &bgr_to_gray();
     ImagePipeline &resize(const cv::Size &size);
+    /*** Ultralytics YOLO letterbox: keep-ratio resize + center pad (default 114) ***/
+    ImagePipeline &letterbox(const cv::Size &size, std::uint8_t pad_value = 114);
     ImagePipeline &center_crop(const cv::Size &size);
     ImagePipeline &to_float();
     ImagePipeline &scale(float factor);

@@ -1,24 +1,32 @@
 #include <gtest/gtest.h>
 
+#include <cstdint>
 #include <limits>
 #include <string>
 #include <vector>
 
 #include "models/model_io_define.h"
 #include "models/object_detection/detector_common.h"
+#include "models/object_detection/yolov8_decode.h"
 
 using jinq::common::StatusCode;
 using jinq::models::backend::DType;
 using jinq::models::backend::NamedTensor;
 using jinq::models::backend::Tensor;
 using jinq::models::backend::GeometryScale;
+using jinq::models::backend::LetterboxGeometry;
+using jinq::models::backend::compute_letterbox_geometry;
 using jinq::models::backend::make_geometry_scale;
+using jinq::models::backend::make_letterbox_geometry;
 using jinq::models::backend::scale_bbox;
 using jinq::models::backend::scale_point;
+using jinq::models::backend::unmap_letterbox_bbox;
 using jinq::models::backend::validated_f32_named_output;
 using jinq::models::object_detection::DetectionParams;
 using jinq::models::object_detection::F32OutputView;
+using jinq::models::object_detection::collect_yolov8_candidates;
 using jinq::models::object_detection::make_nchw_input;
+using jinq::models::object_detection::unmap_letterbox_detections;
 
 namespace {
 
@@ -188,4 +196,102 @@ TEST(DetectorCommon, RejectsInvalidNchwInput) {
     EXPECT_FALSE(make_nchw_input("images", cv::Mat(), &input));
     EXPECT_FALSE(make_nchw_input("images", cv::Mat(1, 1, CV_8UC3), &input));
     EXPECT_FALSE(make_nchw_input("images", cv::Mat(1, 1, CV_32FC3), nullptr));
+}
+
+TEST(DetectorCommon, ComputesUltralyticsLetterboxAndUnmapsBoxes) {
+    jinq::models::backend::InferenceContext context;
+    context.source_size = cv::Size(800, 600);
+    context.network_size = cv::Size(640, 640);
+
+    LetterboxGeometry geom;
+    std::string error;
+    ASSERT_TRUE(make_letterbox_geometry(context, &geom, &error)) << error;
+    EXPECT_FLOAT_EQ(geom.scale, 0.8f);
+    EXPECT_EQ(geom.unpadded, cv::Size(640, 480));
+    EXPECT_EQ(geom.pad_x, 0);
+    EXPECT_EQ(geom.pad_y, 80);
+    EXPECT_EQ(geom.pad_right, 0);
+    EXPECT_EQ(geom.pad_bottom, 80);
+
+    const auto identity = compute_letterbox_geometry({640, 640}, {640, 640});
+    EXPECT_FLOAT_EQ(identity.scale, 1.0f);
+    EXPECT_EQ(identity.pad_x, 0);
+    EXPECT_EQ(identity.pad_y, 0);
+
+    const auto mapped = unmap_letterbox_bbox({80.0f, 120.0f, 64.0f, 32.0f}, geom, context.source_size);
+    EXPECT_FLOAT_EQ(mapped.x, 100.0f);
+    EXPECT_FLOAT_EQ(mapped.y, 50.0f);
+    EXPECT_FLOAT_EQ(mapped.width, 80.0f);
+    EXPECT_FLOAT_EQ(mapped.height, 40.0f);
+
+    const auto clipped = unmap_letterbox_bbox({0.0f, 0.0f, 10.0f, 40.0f}, geom, context.source_size);
+    EXPECT_FLOAT_EQ(clipped.x, 0.0f);
+    EXPECT_FLOAT_EQ(clipped.y, 0.0f);
+    EXPECT_FLOAT_EQ(clipped.width, 12.5f);
+    EXPECT_FLOAT_EQ(clipped.height, 0.0f);
+
+    context.network_size = cv::Size();
+    EXPECT_FALSE(make_letterbox_geometry(context, &geom, &error));
+    EXPECT_NE(error.find("invalid request geometry"), std::string::npos);
+}
+
+TEST(DetectorCommon, YoloV8SyntheticDecodeNmsThenLetterboxUnmap) {
+    constexpr int64_t k_rows = 6;
+    constexpr int64_t k_proposals = 3;
+    std::vector<float> packed(static_cast<size_t>(k_rows * k_proposals), 0.0f);
+    packed[0 * k_proposals + 0] = 320.0f;
+    packed[0 * k_proposals + 1] = 322.0f;
+    packed[0 * k_proposals + 2] = 100.0f;
+    packed[1 * k_proposals + 0] = 320.0f;
+    packed[1 * k_proposals + 1] = 322.0f;
+    packed[1 * k_proposals + 2] = 100.0f;
+    packed[2 * k_proposals + 0] = 100.0f;
+    packed[2 * k_proposals + 1] = 100.0f;
+    packed[2 * k_proposals + 2] = 40.0f;
+    packed[3 * k_proposals + 0] = 80.0f;
+    packed[3 * k_proposals + 1] = 80.0f;
+    packed[3 * k_proposals + 2] = 40.0f;
+    packed[4 * k_proposals + 0] = 0.9f;
+    packed[4 * k_proposals + 1] = 0.8f;
+    packed[4 * k_proposals + 2] = 0.1f;
+    packed[5 * k_proposals + 0] = 0.1f;
+    packed[5 * k_proposals + 1] = 0.1f;
+    packed[5 * k_proposals + 2] = 0.7f;
+
+    jinq::models::io_define::object_detection::std_object_detection_output candidates;
+    collect_yolov8_candidates(packed.data(), k_rows, k_proposals, 0.5f, &candidates);
+    ASSERT_EQ(candidates.size(), 3u);
+
+    DetectionParams params;
+    params.class_nums = 2;
+    params.class_names = {"person", "bicycle"};
+    params.score_threshold = 0.5f;
+    params.nms_threshold = 0.5f;
+    params.keep_top_k = 10;
+
+    auto kept = jinq::models::object_detection::finalize_detections(std::move(candidates), params);
+    ASSERT_EQ(kept.size(), 2u);
+    EXPECT_EQ(kept[0].class_id, 0);
+    EXPECT_FLOAT_EQ(kept[0].score, 0.9f);
+    EXPECT_EQ(kept[0].category, "person");
+    EXPECT_EQ(kept[1].class_id, 1);
+    EXPECT_FLOAT_EQ(kept[1].score, 0.7f);
+    EXPECT_EQ(kept[1].category, "bicycle");
+
+    jinq::models::backend::InferenceContext context;
+    context.source_size = cv::Size(800, 600);
+    context.network_size = cv::Size(640, 640);
+    LetterboxGeometry geom;
+    std::string error;
+    ASSERT_TRUE(make_letterbox_geometry(context, &geom, &error)) << error;
+    unmap_letterbox_detections(kept, geom, context.source_size);
+
+    EXPECT_FLOAT_EQ(kept[0].bbox.x, 337.5f);
+    EXPECT_FLOAT_EQ(kept[0].bbox.y, 250.0f);
+    EXPECT_FLOAT_EQ(kept[0].bbox.width, 125.0f);
+    EXPECT_FLOAT_EQ(kept[0].bbox.height, 100.0f);
+    EXPECT_FLOAT_EQ(kept[1].bbox.x, 100.0f);
+    EXPECT_FLOAT_EQ(kept[1].bbox.y, 0.0f);
+    EXPECT_FLOAT_EQ(kept[1].bbox.width, 50.0f);
+    EXPECT_FLOAT_EQ(kept[1].bbox.height, 50.0f);
 }

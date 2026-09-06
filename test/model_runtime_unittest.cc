@@ -240,3 +240,32 @@ TEST(SessionIoValidator, AllowsDynamicBatchButRejectsDynamicSpatialDims) {
     ASSERT_FALSE(invalid.ok());
     EXPECT_EQ(invalid.status, StatusCode::MODEL_INIT_FAILED);
 }
+
+TEST(ImagePipeline, LetterboxPadsCenterAndKeepsRatio) {
+    cv::Mat wide(2, 4, CV_8UC3, cv::Scalar(10, 20, 30));
+    auto boxed = ImagePipeline(wide).letterbox({4, 4}).mat();
+    ASSERT_TRUE(boxed.ok()) << boxed.error;
+    ASSERT_EQ(boxed.value.size(), cv::Size(4, 4));
+    for (int x = 0; x < 4; ++x) {
+        EXPECT_EQ(boxed.value.at<cv::Vec3b>(0, x), cv::Vec3b(114, 114, 114));
+        EXPECT_EQ(boxed.value.at<cv::Vec3b>(3, x), cv::Vec3b(114, 114, 114));
+        EXPECT_EQ(boxed.value.at<cv::Vec3b>(1, x), cv::Vec3b(10, 20, 30));
+        EXPECT_EQ(boxed.value.at<cv::Vec3b>(2, x), cv::Vec3b(10, 20, 30));
+    }
+
+    cv::Mat square(4, 4, CV_8UC3);
+    for (int y = 0; y < 4; ++y) {
+        for (int x = 0; x < 4; ++x) {
+            square.at<cv::Vec3b>(y, x) = cv::Vec3b(static_cast<uchar>(x), static_cast<uchar>(y), 50);
+        }
+    }
+    auto resized = ImagePipeline(square).resize({4, 4}).mat();
+    auto letterboxed = ImagePipeline(square).letterbox({4, 4}).mat();
+    ASSERT_TRUE(resized.ok()) << resized.error;
+    ASSERT_TRUE(letterboxed.ok()) << letterboxed.error;
+    EXPECT_FLOAT_EQ(cv::norm(resized.value, letterboxed.value, cv::NORM_INF), 0.0f);
+
+    const auto invalid_size = ImagePipeline(square).letterbox({0, 4}).mat();
+    ASSERT_FALSE(invalid_size.ok());
+    EXPECT_EQ(invalid_size.status, StatusCode::MODEL_EMPTY_INPUT_IMAGE);
+}

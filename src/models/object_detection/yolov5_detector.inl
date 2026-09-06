@@ -56,9 +56,9 @@ template <typename INPUT, typename OUTPUT> StatusCode YoloV5Detector<INPUT, OUTP
 }
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> YoloV5Detector<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
-    // resize / colour / normalize, emitted as f32 nchw
+    // letterbox / colour / normalize, emitted as f32 nchw
     auto result = jinq::models::backend::ImagePipeline(input_image)
-                      .resize(_m_input_size_host)
+                      .letterbox(_m_input_size_host)
                       .bgr_to_rgb()
                       .to_float()
                       .scale(1.0f / 255.0f)
@@ -85,9 +85,9 @@ StatusCode YoloV5Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
     const auto raw_pred_bbox_nums = tensor.shape[1];
     const size_t row_size = static_cast<size_t>(_m_detection_params.class_nums + 5);
 
-    GeometryScale geometry_scale;
+    LetterboxGeometry letterbox;
     std::string geometry_error;
-    if (!backend::make_geometry_scale(context, &geometry_scale, &geometry_error)) {
+    if (!backend::make_letterbox_geometry(context, &letterbox, &geometry_error)) {
         LOG(ERROR) << "yolov5 " << geometry_error;
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
@@ -124,8 +124,9 @@ StatusCode YoloV5Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
             jinq::models::io_define::object_detection::bbox tmp_bbox;
             tmp_bbox.class_id = class_id;
             tmp_bbox.score = bbox_score;
-            tmp_bbox.bbox = backend::scale_bbox(
-                {output_tensordata[offset + 0] - box_w / 2.0f, output_tensordata[offset + 1] - box_h / 2.0f, box_w, box_h}, geometry_scale);
+            tmp_bbox.bbox = backend::unmap_letterbox_bbox(
+                {output_tensordata[offset + 0] - box_w / 2.0f, output_tensordata[offset + 1] - box_h / 2.0f, box_w, box_h}, letterbox,
+                context.source_size);
             if (tmp_bbox.bbox.area() < _m_detection_params.min_box_area_px) {
                 continue;
             }
