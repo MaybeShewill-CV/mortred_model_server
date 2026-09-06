@@ -258,6 +258,47 @@ TEST_F(GatewayE2ETest, model_route_forwards_to_upstream) {
     EXPECT_NE(r.body.find("\"fake\":true"), std::string::npos) << r.body;
 }
 
+TEST_F(GatewayE2ETest, whitelisted_client_headers_reach_the_upstream) {
+    // raw-body mode consumes params/options from X-Mortred-* headers and the
+    // correlation id from X-Request-ID; the gateway must forward all three
+    const std::map<std::string, std::string> hdrs = {
+        {"X-Mortred-Params", "{\"score_thr\":0.25}"},
+        {"X-Mortred-Options", "{\"raw\":true}"},
+        {"X-Request-ID", "req-e2e-forward-1"}};
+    const auto r = send_request(gateway_port_, "POST", "/mortred_ai_server_v1/test/fake",
+                                "{\"images\":[\"aGk=\"]}", "ext-token", hdrs);
+    ASSERT_EQ(r.status, 200) << r.body;
+    EXPECT_NE(r.body.find("\"x-mortred-params\":\"{\\\"score_thr\\\":0.25}\""),
+              std::string::npos)
+        << r.body;
+    EXPECT_NE(r.body.find("\"x-mortred-options\":\"{\\\"raw\\\":true}\""), std::string::npos)
+        << r.body;
+    EXPECT_NE(r.body.find("\"x-request-id\":\"req-e2e-forward-1\""), std::string::npos)
+        << r.body;
+}
+
+TEST_F(GatewayE2ETest, non_whitelisted_client_headers_are_dropped) {
+    const std::map<std::string, std::string> hdrs = {{"X-Evil-Inject", "must-not-pass"}};
+    const auto r = send_request(gateway_port_, "POST", "/mortred_ai_server_v1/test/fake",
+                                "{\"images\":[\"aGk=\"]}", "ext-token", hdrs);
+    ASSERT_EQ(r.status, 200) << r.body;
+    EXPECT_EQ(r.body.find("x-evil-inject"), std::string::npos) << r.body;
+    EXPECT_EQ(r.body.find("must-not-pass"), std::string::npos) << r.body;
+    // the internal-token swap must survive the forwarding whitelist
+    EXPECT_NE(r.body.find("\"authorization\":\"Bearer int-token\""), std::string::npos)
+        << r.body;
+}
+
+TEST_F(GatewayE2ETest, gateway_local_error_echoes_request_id) {
+    const auto r =
+        send_request(gateway_port_, "POST", "/no/such/route", "{}", "ext-token",
+                     {{"X-Request-ID", "req-echo-42"}});
+    EXPECT_EQ(r.status, 404);
+    const auto it = r.headers.find("x-request-id");
+    ASSERT_NE(it, r.headers.end()) << "gateway-local error must echo X-Request-ID";
+    EXPECT_EQ(it->second, "req-echo-42");
+}
+
 TEST_F(GatewayE2ETest, prefixed_infer_matches_legacy_uri) {
     const auto r = send_request(gateway_port_, "POST", "/v1/models/FAKE/infer",
                                 "{\"images\":[\"aGk=\"]}", "ext-token");

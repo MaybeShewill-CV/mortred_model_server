@@ -85,6 +85,7 @@ endif()
 
 if(MORTRED_BUILD_FULL)
     list(APPEND TEST_LIST gateway_e2e_test)
+    list(APPEND TEST_LIST supervisor_malformed_e2e_test)
     list(APPEND TEST_LIST object_detection_output_contract_unittest)
     list(APPEND TEST_LIST model_output_contract_unittest)
     list(APPEND TEST_LIST dinov2_output_contract_unittest)
@@ -202,6 +203,8 @@ foreach(src ${TEST_LIST})
         # the auth fixture hashes keys via ApiKeyManager::sha256_hex (OpenSSL
         # SHA-256 inlined from the header), same link need as api_key_manager_unittest
         set(EXTRA_LIBS control OpenSSL::Crypto pthread)
+    elseif(${src} STREQUAL "supervisor_malformed_e2e_test")
+        set(EXTRA_LIBS pthread)
     elseif(${src} STREQUAL "response_schema_test")
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "openapi_consistency_test")
@@ -220,6 +223,9 @@ foreach(src ${TEST_LIST})
         target_compile_definitions(${src} PRIVATE
             MORTRED_FAKE_BIN_DEFAULT="$<TARGET_FILE:fake_model_server>"
             MORTRED_GATEWAY_BIN_DEFAULT="$<TARGET_FILE:mortred-gateway.out>")
+    elseif(${src} STREQUAL "supervisor_malformed_e2e_test")
+        target_compile_definitions(${src} PRIVATE
+            MORTRED_SUPERVISOR_BIN_DEFAULT="$<TARGET_FILE:mortred-supervisor.out>")
     endif()
     if(EXTRA_COMPILE_OPTIONS)
         target_compile_options(${src} PRIVATE ${EXTRA_COMPILE_OPTIONS})
@@ -238,6 +244,7 @@ endforeach()
 add_dependencies(supervisor_unittest fake_model_server)
 if(MORTRED_BUILD_FULL)
     add_dependencies(gateway_e2e_test fake_model_server mortred-gateway.out)
+    add_dependencies(supervisor_malformed_e2e_test mortred-supervisor.out)
 endif()
 
 if(CMAKE_MEMORYCHECK_COMMAND)

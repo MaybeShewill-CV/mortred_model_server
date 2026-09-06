@@ -491,7 +491,10 @@ void handle_graceful_restart(WFHttpTask* task, const std::string& server_id) {
 
 void process(WFHttpTask* task) {
     const std::string path = uri_path(task->get_req()->get_request_uri());
-    const std::string method = task->get_req()->get_method();
+    // workflow leaves method null when the request line is malformed; fold to
+    // "" like the gateway/model-server guards instead of UB in std::string
+    const char* raw_method = task->get_req()->get_method();
+    const std::string method = raw_method == nullptr ? "" : raw_method;
     const std::string full_uri =
         task->get_req()->get_request_uri() == nullptr ? "" : task->get_req()->get_request_uri();
 

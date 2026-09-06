@@ -624,6 +624,7 @@ protected:
         d.Accept(w);
         auto* resp = task->get_resp();
         resp->set_status_code("200");
+        _m_metrics.inc_http_requests("GET", "200");
         resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
         resp->append_output_body(buf.GetString(), buf.GetSize());
     }
@@ -705,7 +706,6 @@ protected:
     void handle_async_submit(WFHttpTask* task) {
         // cheap early rejection (the authoritative check is the CAS in the table)
         if (_m_async_table.queue_depth() >= _m_async_table.config().max_queue) {
-            _m_metrics.inc_http_requests("POST", "429");
             reply_async_error(task, 429, "async queue full (max " +
                                              std::to_string(_m_async_table.config().max_queue) +
                                              ")");
@@ -749,7 +749,6 @@ protected:
 
         const auto submitted = _m_async_table.submit(std::move(task_req));
         if (submitted.status == AsyncTable::SubmitStatus::QUEUE_FULL) {
-            _m_metrics.inc_http_requests("POST", "429");
             reply_async_error(task, 429, "async queue full (max " +
                                              std::to_string(_m_async_table.config().max_queue) +
                                              ")");
@@ -781,6 +780,10 @@ protected:
         const std::string result_url = location + "/result";
         auto* resp = task->get_resp();
         resp->set_status_code("202");
+        // async replies carry no http-duration sample: the sync histogram
+        // observes inference time (worker run + queue wait) and the async HTTP
+        // path has none - mixing in handler wall time would change its meaning
+        _m_metrics.inc_http_requests("POST", "202");
         resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
         resp->add_header_pair("Location", location.c_str());
         rapidjson::Document d;
@@ -891,10 +894,15 @@ protected:
             unified.results.push_back(std::move(item));
         }
         reply_unified_json(task->get_resp(), unified);
+        _m_metrics.inc_http_requests("GET", "200");
     }
 
-    /*** helper: reply a simple error JSON */
-    static void reply_async_error(WFHttpTask* task, int http_code, const std::string& msg) {
+    /*** helper: reply a simple error JSON. The single count site for async
+     * error responses - do not pre-count at the call sites (double counting) */
+    void reply_async_error(WFHttpTask* task, int http_code, const std::string& msg) {
+        const char* raw_method = task->get_req()->get_method();
+        const std::string method = raw_method == nullptr ? "" : raw_method;
+        _m_metrics.inc_http_requests(method, std::to_string(http_code));
         auto* resp = task->get_resp();
         resp->set_status_code(std::to_string(http_code).c_str());
         resp->add_header_pair("Content-Type", "application/json; charset=utf-8");

@@ -169,7 +169,12 @@ using mortred::control::reply_json;
 using mortred::control::reply_unified_error;
 
 void reply_error(WFHttpTask* task, int http_status, const std::string& msg) {
-    // fixed internal messages only: no client data is reflected into JSON
+    // fixed internal messages only: no client data is reflected into JSON; the
+    // request id is echoed verbatim so gateway-local failures stay correlatable
+    const std::string request_id = header_value(task->get_req(), "x-request-id");
+    if (!request_id.empty()) {
+        task->get_resp()->add_header_pair("X-Request-ID", request_id.c_str());
+    }
     reply_unified_error(task, http_status, msg);
 }
 
@@ -365,6 +370,17 @@ void forward_to_model(WFHttpTask* task, const ResolvedRoute& route, const std::s
     if (!internal_token.empty()) {
         const std::string auth = "Bearer " + internal_token;
         client->get_req()->add_header_pair("Authorization", auth.c_str());
+    }
+    // client-controlled headers with model-server semantics: raw-body params /
+    // options and request correlation. Everything else stays dropped - the
+    // default-deny forward list is the gateway's header-injection guard.
+    static const char* const kForwardedClientHeaders[] = {
+        "X-Mortred-Params", "X-Mortred-Options", "X-Request-ID"};
+    for (const char* name : kForwardedClientHeaders) {
+        const std::string value = header_value(task->get_req(), name);
+        if (!value.empty()) {
+            client->get_req()->add_header_pair(name, value.c_str());
+        }
     }
     client->set_send_timeout(send_timeout);
     client->set_receive_timeout(recv_timeout);
