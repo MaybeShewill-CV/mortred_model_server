@@ -23,22 +23,17 @@ add_mortred_unified_app(mortred-model-benchmark.out
 target_compile_definitions(mortred-model-benchmark.out PRIVATE MORTRED_WITH_CUSTOM_DRIVERS)
 
 # --- control-plane executables ---
-# src/apps produces every executable; the implementations live in src/control
-# (thin mains here + *_app.cpp compiled in, mirroring the models/.inl pattern).
+# src/apps produces every executable; the implementations live in the
+# src/control libraries (thin mains here; gateway/supervisor app objects come
+# from the control_workflow static library, cli from its own compile unit).
 if(MORTRED_WORKFLOW_AVAILABLE)
     add_executable(mortred-gateway.out
-        ${CMAKE_CURRENT_LIST_DIR}/control/gateway.cpp
-        ${PROJECT_ROOT_DIR}/src/control/gateway/gateway_app.cpp)
-    target_include_directories(mortred-gateway.out PRIVATE ${PROJECT_ROOT_DIR}/src)
-    target_include_directories(mortred-gateway.out SYSTEM PRIVATE ${PROJECT_ROOT_DIR}/3rd_party/include)
-    target_link_libraries(mortred-gateway.out PRIVATE control vendored::workflow vendored::crypto Threads::Threads)
+        ${CMAKE_CURRENT_LIST_DIR}/control/gateway.cpp)
+    target_link_libraries(mortred-gateway.out PRIVATE control_workflow)
 
     add_executable(mortred-supervisor.out
-        ${CMAKE_CURRENT_LIST_DIR}/control/supervisor.cpp
-        ${PROJECT_ROOT_DIR}/src/control/supervisor/supervisor_app.cpp)
-    target_include_directories(mortred-supervisor.out PRIVATE ${PROJECT_ROOT_DIR}/src)
-    target_include_directories(mortred-supervisor.out SYSTEM PRIVATE ${PROJECT_ROOT_DIR}/3rd_party/include)
-    target_link_libraries(mortred-supervisor.out PRIVATE control common vendored::workflow Threads::Threads)
+        ${CMAKE_CURRENT_LIST_DIR}/control/supervisor.cpp)
+    target_link_libraries(mortred-supervisor.out PRIVATE control_workflow)
 
     add_executable(mortredctl.out
         ${CMAKE_CURRENT_LIST_DIR}/control/mortredctl.cpp
