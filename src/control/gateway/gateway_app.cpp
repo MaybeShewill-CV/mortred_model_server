@@ -39,6 +39,7 @@
 #include "control/api_key_manager.h"
 #include "control/catalog.h"
 #include "control/control_config.h"
+#include "control/project_root.h"
 #include "control/http_reply.h"
 #include "server/prometheus_metrics.h"
 
@@ -58,33 +59,6 @@ mortred::control::ApiKeyManager g_api_keys;  // multi-key auth (P0-4)
 std::string g_internal_token;   // shared with model servers via supervisor env
 std::vector<std::string> g_cors_origins;  // UI origins allowed to call infer
 jinq::server::PrometheusMetrics g_metrics;
-
-std::string resolve_project_root() {
-    if (const char* env = std::getenv("MORTRED_PROJECT_ROOT"); env != nullptr && *env != '\0') {
-        return env;
-    }
-    char buf[4096];
-    const ssize_t n = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
-    if (n <= 0) {
-        return ".";
-    }
-    buf[n] = '\0';
-    std::filesystem::path p(buf);
-    auto dir = p.parent_path();
-    for (int i = 0; i < 12 && !dir.empty(); ++i) {
-        std::error_code ec;
-        const bool has_bin = std::filesystem::exists(dir / "_bin", ec) ||
-                             std::filesystem::exists(dir / "bin", ec);
-        ec.clear();
-        const bool has_deps = std::filesystem::exists(dir / "3rd_party", ec) ||
-                              std::filesystem::exists(dir / "lib", ec);
-        if (has_bin && has_deps) {
-            return dir.string();
-        }
-        dir = dir.parent_path();
-    }
-    return ".";
-}
 
 std::string header_value(const protocol::HttpRequest* req, const std::string& name) {
     protocol::HttpHeaderCursor cursor(req);

@@ -44,6 +44,7 @@
 #include "common/request_size_limit.h"
 #include "control/catalog.h"
 #include "control/control_config.h"
+#include "control/project_root.h"
 #include "control/http_reply.h"
 #include "control/mini_toml.h"
 #include "control/supervisor.h"
@@ -67,33 +68,6 @@ std::string g_auth_token;
 
 void handle_graceful_restart(WFHttpTask* task, const std::string& server_id);
 bool server_has_active_jobs(const std::string& server_id);
-
-std::string resolve_project_root() {
-    if (const char* env = std::getenv("MORTRED_PROJECT_ROOT"); env != nullptr && *env != '\0') {
-        return env;
-    }
-    char buf[4096];
-    const ssize_t n = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
-    if (n <= 0) {
-        return ".";
-    }
-    buf[n] = '\0';
-    std::filesystem::path p(buf);
-    auto dir = p.parent_path();
-    for (int i = 0; i < 12 && !dir.empty(); ++i) {
-        std::error_code ec;
-        const bool has_bin = std::filesystem::exists(dir / "_bin", ec) ||
-                             std::filesystem::exists(dir / "bin", ec);
-        ec.clear();
-        const bool has_deps = std::filesystem::exists(dir / "3rd_party", ec) ||
-                              std::filesystem::exists(dir / "lib", ec);
-        if (has_bin && has_deps) {
-            return dir.string();
-        }
-        dir = dir.parent_path();
-    }
-    return ".";
-}
 
 std::string read_file(const std::string& path) {
     std::ifstream in(path, std::ios::binary);
