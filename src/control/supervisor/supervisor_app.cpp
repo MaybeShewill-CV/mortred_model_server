@@ -676,8 +676,12 @@ bool SupervisorApp::listen() {
 
 void SupervisorApp::stop_listen() {
     if (server_ != nullptr) {
+        // WFServerBase::stop() is ALREADY shutdown()+wait_finish() (blocking).
+        // The historical "stop(); wait_finish();" double call hung forever on
+        // the second wait - in the daemon this was masked by systemd's
+        // TimeoutStopSec SIGKILL, so mortred-supervisor never actually exited
+        // gracefully. stop() alone is the correct, complete teardown.
         server_->stop();
-        server_->wait_finish();
         server_.reset();
     }
     if (supervisor_ != nullptr) {
