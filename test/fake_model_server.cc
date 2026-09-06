@@ -12,6 +12,7 @@
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <cctype>
 #include <cstdio>
 #include <signal.h>
 #include <sys/socket.h>
@@ -60,6 +61,29 @@ std::map<std::string, std::string> parse_config(const std::string& path) {
         kv[trim(t.substr(0, eq))] = v;
     }
     return kv;
+}
+
+std::string lower_copy(std::string s) {
+    for (char& c : s) {
+        c = static_cast<char>(::tolower(static_cast<unsigned char>(c)));
+    }
+    return s;
+}
+
+std::string json_escape(const std::string& s) {
+    std::string out;
+    out.reserve(s.size());
+    for (const char c : s) {
+        if (c == '"' || c == '\\') {
+            out.push_back('\\');
+            out.push_back(c);
+        } else if (static_cast<unsigned char>(c) < 0x20) {
+            out.push_back(' ');
+        } else {
+            out.push_back(c);
+        }
+    }
+    return out;
 }
 
 void handle_client(int fd, const std::string& mode) {
@@ -117,6 +141,41 @@ void handle_client(int fd, const std::string& mode) {
     } else if (method == "GET") {
         body = "ok";
     }
+    // echo every received header (lowercased names) into JSON bodies so
+    // gateway forwarding tests can assert both presence (X-Mortred-*,
+    // X-Request-ID) and absence (non-whitelisted client headers must never
+    // reach the model server)
+    if (body.size() >= 1 && body.front() == '{') {
+        std::string fragment = ",\"upstream_headers\":{";
+        bool first = true;
+        size_t pos = req.find("\r\n");
+        const size_t headers_end = req.find("\r\n\r\n");
+        if (pos != std::string::npos && headers_end != std::string::npos) {
+            pos += 2;
+            while (pos < headers_end) {
+                const size_t line_end = req.find("\r\n", pos);
+                const std::string line =
+                    req.substr(pos, line_end == std::string::npos ? std::string::npos
+                                                                  : line_end - pos);
+                const auto colon = line.find(':');
+                if (colon != std::string::npos) {
+                    if (!first) {
+                        fragment += ",";
+                    }
+                    first = false;
+                    fragment += "\"" + json_escape(lower_copy(line.substr(0, colon))) + "\":\"" +
+                                json_escape(trim(line.substr(colon + 1))) + "\"";
+                }
+                if (line_end == std::string::npos) {
+                    break;
+                }
+                pos = line_end + 2;
+            }
+        }
+        fragment += "}";
+        body.insert(body.size() - 1, fragment);
+    }
+
     const std::string resp = "HTTP/1.1 " + status + "\r\n" +
                              "Content-Type: application/json; charset=utf-8\r\n" +
                              "Content-Length: " + std::to_string(body.size()) + "\r\n" +
