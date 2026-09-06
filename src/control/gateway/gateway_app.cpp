@@ -40,51 +40,15 @@
 #include "control/catalog.h"
 #include "control/control_config.h"
 #include "control/http_reply.h"
+#include "control/project_root.h"
 #include "server/prometheus_metrics.h"
 
 #include "control/gateway/gateway_app.h"
 
 namespace {
 
-using mortred::control::Catalog;
-using mortred::control::ControlConfig;
-
-Catalog g_catalog;
-ControlConfig g_cfg;
-std::string g_auth_token;       // external bearer token ("" = loopback mode)
-std::string g_admin_token;      // MORTRED_API_TOKEN; UI / mortredctl smoke
-std::string g_metrics_token;    // scrape Bearer; required on every listen, including loopback
-mortred::control::ApiKeyManager g_api_keys;  // multi-key auth (P0-4)
-std::string g_internal_token;   // shared with model servers via supervisor env
-std::vector<std::string> g_cors_origins;  // UI origins allowed to call infer
-jinq::server::PrometheusMetrics g_metrics;
-
-std::string resolve_project_root() {
-    if (const char* env = std::getenv("MORTRED_PROJECT_ROOT"); env != nullptr && *env != '\0') {
-        return env;
-    }
-    char buf[4096];
-    const ssize_t n = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
-    if (n <= 0) {
-        return ".";
-    }
-    buf[n] = '\0';
-    std::filesystem::path p(buf);
-    auto dir = p.parent_path();
-    for (int i = 0; i < 12 && !dir.empty(); ++i) {
-        std::error_code ec;
-        const bool has_bin = std::filesystem::exists(dir / "_bin", ec) ||
-                             std::filesystem::exists(dir / "bin", ec);
-        ec.clear();
-        const bool has_deps = std::filesystem::exists(dir / "3rd_party", ec) ||
-                              std::filesystem::exists(dir / "lib", ec);
-        if (has_bin && has_deps) {
-            return dir.string();
-        }
-        dir = dir.parent_path();
-    }
-    return ".";
-}
+using mortred::control::ApiKey;
+using mortred::control::ServerEntry;
 
 std::string header_value(const protocol::HttpRequest* req, const std::string& name) {
     protocol::HttpHeaderCursor cursor(req);
@@ -115,52 +79,7 @@ std::string trim_copy(const std::string& s) {
     return s.substr(b, e - b);
 }
 
-void load_cors_origins(const char* env) {
-    g_cors_origins.clear();
-    if (env == nullptr || *env == '\0') {
-        return;
-    }
-    const std::string raw(env);
-    size_t start = 0;
-    while (start <= raw.size()) {
-        const size_t comma = raw.find(',', start);
-        const size_t end = comma == std::string::npos ? raw.size() : comma;
-        const std::string item = trim_copy(raw.substr(start, end - start));
-        if (!item.empty()) {
-            g_cors_origins.push_back(item);
-        }
-        if (comma == std::string::npos) {
-            break;
-        }
-        start = comma + 1;
-    }
-}
-
-bool origin_allowed(const std::string& origin) {
-    if (origin.empty()) {
-        return false;
-    }
-    for (const auto& allowed : g_cors_origins) {
-        if (origin == allowed) {
-            return true;
-        }
-    }
-    return false;
-}
-
-void maybe_add_cors(WFHttpTask* task) {
-    const std::string origin = header_value(task->get_req(), "origin");
-    if (!origin_allowed(origin)) {
-        return;
-    }
-    auto* resp = task->get_resp();
-    resp->add_header_pair("Access-Control-Allow-Origin", origin.c_str());
-    resp->add_header_pair("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    resp->add_header_pair("Access-Control-Allow-Headers", "Authorization, Content-Type");
-    resp->add_header_pair("Vary", "Origin");
-}
-
-bool key_may_infer(const std::shared_ptr<const mortred::control::ApiKey>& key) {
+bool key_may_infer(const std::shared_ptr<const ApiKey>& key) {
     return mortred::control::ApiKeyManager::has_scope(key, "inference") ||
            mortred::control::ApiKeyManager::has_scope(key, "admin");
 }
@@ -227,15 +146,60 @@ std::string rewrite_job_url_fields(const char* data, size_t size, const std::str
     return std::string(buf.GetString(), buf.GetSize());
 }
 
-struct ResolvedRoute {
-    const mortred::control::ServerEntry* entry = nullptr;
-    std::string upstream_path;
-    std::string allowed_method;
-    bool rewrite_job_urls = false;
-    bool append_query = false;
-};
+}  // namespace
 
-bool resolve_route(const std::string& path, ResolvedRoute* out) {
+namespace mortred {
+namespace control {
+
+GatewayApp::~GatewayApp() {
+    stop_listen();
+}
+
+void GatewayApp::load_cors_origins(const std::string& raw) {
+    cors_origins_.clear();
+    if (raw.empty()) {
+        return;
+    }
+    size_t start = 0;
+    while (start <= raw.size()) {
+        const size_t comma = raw.find(',', start);
+        const size_t end = comma == std::string::npos ? raw.size() : comma;
+        const std::string item = trim_copy(raw.substr(start, end - start));
+        if (!item.empty()) {
+            cors_origins_.push_back(item);
+        }
+        if (comma == std::string::npos) {
+            break;
+        }
+        start = comma + 1;
+    }
+}
+
+bool GatewayApp::origin_allowed(const std::string& origin) const {
+    if (origin.empty()) {
+        return false;
+    }
+    for (const auto& allowed : cors_origins_) {
+        if (origin == allowed) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void GatewayApp::maybe_add_cors(WFHttpTask* task) const {
+    const std::string origin = header_value(task->get_req(), "origin");
+    if (!origin_allowed(origin)) {
+        return;
+    }
+    auto* resp = task->get_resp();
+    resp->add_header_pair("Access-Control-Allow-Origin", origin.c_str());
+    resp->add_header_pair("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    resp->add_header_pair("Access-Control-Allow-Headers", "Authorization, Content-Type");
+    resp->add_header_pair("Vary", "Origin");
+}
+
+bool GatewayApp::resolve_route(const std::string& path, ResolvedRoute* out) const {
     static const std::string kPrefix = "/v1/models/";
     if (path.rfind(kPrefix, 0) == 0) {
         const std::string rest = path.substr(kPrefix.size());
@@ -245,7 +209,7 @@ bool resolve_route(const std::string& path, ResolvedRoute* out) {
         }
         const std::string id = rest.substr(0, slash);
         const std::string suffix = rest.substr(slash);
-        const auto* entry = g_catalog.find(id);
+        const auto* entry = catalog_.find(id);
         if (entry == nullptr) {
             return false;
         }
@@ -270,7 +234,7 @@ bool resolve_route(const std::string& path, ResolvedRoute* out) {
         }
         return false;
     }
-    const auto* entry = g_catalog.find_by_uri(path);
+    const auto* entry = catalog_.find_by_uri(path);
     if (entry == nullptr) {
         return false;
     }
@@ -280,8 +244,8 @@ bool resolve_route(const std::string& path, ResolvedRoute* out) {
     return true;
 }
 
-void forward_to_model(WFHttpTask* task, const ResolvedRoute& route, const std::string& method,
-                      const std::string& query) {
+void GatewayApp::forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
+                                  const std::string& method, const std::string& query) {
     std::string body;
     if (method == "POST") {
         body = protocol::HttpUtil::decode_chunked_body(task->get_req());
@@ -290,18 +254,19 @@ void forward_to_model(WFHttpTask* task, const ResolvedRoute& route, const std::s
         "http://127.0.0.1:" + std::to_string(route.entry->port) + route.upstream_path + query;
     const std::string model_id = route.entry->id;
     const bool rewrite_job_urls = route.rewrite_job_urls;
-    const int send_timeout = g_cfg.gateway.upstream_send_timeout_ms;
-    const int recv_timeout = g_cfg.gateway.upstream_recv_timeout_ms;
-    const std::string internal_token = g_internal_token;
+    const int send_timeout = cfg_.gateway.upstream_send_timeout_ms;
+    const int recv_timeout = cfg_.gateway.upstream_recv_timeout_ms;
+    const std::string internal_token = internal_token_;
     const auto t0 = std::chrono::steady_clock::now();
 
     auto* client = WFTaskFactory::create_http_task(
-        url, 0, 0, [task, model_id, method, t0, rewrite_job_urls](WFHttpTask* t) {
+        url, 0, 0,
+        [this, task, model_id, method, t0, rewrite_job_urls](WFHttpTask* t) {
             auto* resp = task->get_resp();
             if (t->get_state() != WFT_STATE_SUCCESS) {
                 const int code = t->get_error() == ECONNREFUSED ? 503 : 502;
-                g_metrics.inc_http_requests(method, std::to_string(code));
-                g_metrics.observe_http_duration_ms(
+                metrics_.inc_http_requests(method, std::to_string(code));
+                metrics_.observe_http_duration_ms(
                     method, std::to_string(code),
                     std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::steady_clock::now() - t0)
@@ -314,8 +279,8 @@ void forward_to_model(WFHttpTask* task, const ResolvedRoute& route, const std::s
                 return;
             }
             const std::string status(t->get_resp()->get_status_code());
-            g_metrics.inc_http_requests(method, status);
-            g_metrics.observe_http_duration_ms(
+            metrics_.inc_http_requests(method, status);
+            metrics_.observe_http_duration_ms(
                 method, status,
                 std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::steady_clock::now() - t0)
@@ -387,7 +352,7 @@ void forward_to_model(WFHttpTask* task, const ResolvedRoute& route, const std::s
     series_of(task)->push_back(client);
 }
 
-void process(WFHttpTask* task) {
+void GatewayApp::process(WFHttpTask* task) {
     const std::string path = uri_path(task->get_req()->get_request_uri());
     // workflow leaves method null when the request line is malformed; uri_path
     // already folds a null uri into "", do the same for the method
@@ -408,8 +373,8 @@ void process(WFHttpTask* task) {
     }
     if (path == "/metrics") {
         const std::string auth_header = header_value(task->get_req(), "authorization");
-        if (!jinq::common::is_bearer_authorized(auth_header, g_metrics_token)) {
-            g_metrics.inc_http_requests(method, "401");
+        if (!jinq::common::is_bearer_authorized(auth_header, metrics_token_)) {
+            metrics_.inc_http_requests(method, "401");
             task->get_resp()->add_header_pair("WWW-Authenticate",
                                              "Bearer realm=\"Mortred\"");
             reply_error(task, 401, "unauthorized");
@@ -418,14 +383,14 @@ void process(WFHttpTask* task) {
         auto* resp = task->get_resp();
         resp->set_status_code("200");
         resp->add_header_pair("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
-        const auto body = g_metrics.render();
+        const auto body = metrics_.render();
         resp->append_output_body(body.data(), body.size());
         return;
     }
 
     ResolvedRoute route;
     if (!resolve_route(path, &route)) {
-        g_metrics.inc_http_requests(method, "404");
+        metrics_.inc_http_requests(method, "404");
         reply_error(task, 404, "no model route for this path");
         return;
     }
@@ -435,10 +400,10 @@ void process(WFHttpTask* task) {
     std::string key_name;
 
     // try multi-key auth first (P0-4)
-    if (g_api_keys.key_count() > 0) {
+    if (api_keys_.key_count() > 0) {
         // shared_ptr ownership: safe across a concurrent reload() that swaps
         // the whole key set (P0-2)
-        const auto key = g_api_keys.authenticate(auth_header);
+        const auto key = api_keys_.authenticate(auth_header);
         if (key_may_infer(key)) {
             authorized = true;
             key_name = key->name;
@@ -450,19 +415,19 @@ void process(WFHttpTask* task) {
     // nothing-configured case; once API keys are configured, an
     // unauthenticated request must stay denied instead of falling through to
     // the empty static token (fail-open).
-    if (!authorized && !g_auth_token.empty() &&
-        jinq::common::is_bearer_authorized(auth_header, g_auth_token)) {
+    if (!authorized && !auth_token_.empty() &&
+        jinq::common::is_bearer_authorized(auth_header, auth_token_)) {
         authorized = true;
         key_name = "legacy";
     }
-    if (!authorized && !g_admin_token.empty() &&
-        jinq::common::is_bearer_authorized(auth_header, g_admin_token)) {
+    if (!authorized && !admin_token_.empty() &&
+        jinq::common::is_bearer_authorized(auth_header, admin_token_)) {
         authorized = true;
         key_name = "admin";
     }
 
     if (!authorized) {
-        g_metrics.inc_http_requests(method, "401");
+        metrics_.inc_http_requests(method, "401");
         task->get_resp()->add_header_pair("WWW-Authenticate", "Bearer realm=\"Mortred\"");
         reply_error(task, 401, "unauthorized");
         return;
@@ -472,62 +437,38 @@ void process(WFHttpTask* task) {
         task->get_resp()->add_header_pair("X-Mortred-Key", key_name.c_str());
     }
     if (method != route.allowed_method) {
-        g_metrics.inc_http_requests(method, "405");
+        metrics_.inc_http_requests(method, "405");
         task->get_resp()->add_header_pair("Allow", route.allowed_method.c_str());
         reply_error(task, 405, "method not allowed");
         return;
     }
-    const std::string query = route.append_query ? uri_query(task->get_req()->get_request_uri()) : "";
+    const std::string query =
+        route.append_query ? uri_query(task->get_req()->get_request_uri()) : "";
     forward_to_model(task, route, method, query);
 }
 
-}  // namespace
-
-namespace mortred {
-namespace control {
-
-int run_gateway(int argc, char** argv) {
-    if (argc > 1 && (std::strcmp(argv[1], "--help") == 0 || std::strcmp(argv[1], "-h") == 0)) {
-        std::fprintf(stderr, "usage: mortred-gateway.out (config via env / conf/mortred.toml)\n");
-        return 0;
-    }
-
-    const std::string root = resolve_project_root();
-    std::string config_path;
-    if (const char* env = std::getenv("MORTRED_CONTROL_CONFIG");
-        env != nullptr && *env != '\0') {
-        config_path = env;
-    } else {
-        config_path = (std::filesystem::path(root) / "conf" / "mortred.toml").string();
+bool GatewayApp::init(const GatewayInitOptions& options) {
+    std::string config_path = options.config_path;
+    if (config_path.empty()) {
+        config_path =
+            (std::filesystem::path(options.project_root) / "conf" / "mortred.toml").string();
     }
     std::string cfg_err;
-    if (!ControlConfig::load(config_path, &g_cfg, &cfg_err)) {
+    if (!ControlConfig::load(config_path, &cfg_, &cfg_err)) {
         std::fprintf(stderr, "mortred-gateway: invalid control config: %s\n", cfg_err.c_str());
-        return 1;
+        return false;
     }
-    if (const char* env = std::getenv("MORTRED_GATEWAY_HOST"); env != nullptr && *env != '\0') {
-        g_cfg.gateway.host = env;
+    if (!options.host.empty()) {
+        cfg_.gateway.host = options.host;
     }
-    if (const char* env = std::getenv("MORTRED_GATEWAY_PORT"); env != nullptr && *env != '\0') {
-        const int port = std::atoi(env);
-        if (port > 0 && port <= 65535) {
-            g_cfg.gateway.port = port;
-        }
+    if (options.port > 0 && options.port <= 65535) {
+        cfg_.gateway.port = options.port;
     }
-    if (const char* env = std::getenv("MORTRED_GATEWAY_AUTH_TOKEN");
-        env != nullptr && *env != '\0') {
-        g_auth_token = env;
-    }
-    if (const char* env = std::getenv("MORTRED_API_TOKEN"); env != nullptr && *env != '\0') {
-        g_admin_token = env;
-    }
-    if (const char* env = std::getenv("MORTRED_METRICS_TOKEN"); env != nullptr && *env != '\0') {
-        g_metrics_token = env;
-    }
-    load_cors_origins(std::getenv("MORTRED_GATEWAY_CORS_ORIGINS"));
-    if (const char* env = std::getenv("MORTRED_INTERNAL_TOKEN"); env != nullptr && *env != '\0') {
-        g_internal_token = env;
-    }
+    auth_token_ = options.auth_token;
+    admin_token_ = options.admin_token;
+    metrics_token_ = options.metrics_token;
+    internal_token_ = options.internal_token;
+    load_cors_origins(options.cors_origins);
 
     // fail-closed: every listen needs inference/management auth. Broken or
     // empty api_keys.toml is fatal when no static token can take over.
@@ -536,13 +477,13 @@ int run_gateway(int argc, char** argv) {
     bool api_keys_empty_file = false;
     {
         const std::string api_keys_path =
-            (std::filesystem::path(root) / "conf" / "api_keys.toml").string();
+            (std::filesystem::path(options.project_root) / "conf" / "api_keys.toml").string();
         if (std::filesystem::exists(api_keys_path)) {
-            if (!g_api_keys.load(api_keys_path)) {
+            if (!api_keys_.load(api_keys_path)) {
                 api_keys_parse_failed = true;
                 std::fprintf(stderr, "mortred-gateway: ERROR: failed to parse %s\n",
                              api_keys_path.c_str());
-            } else if (g_api_keys.key_count() == 0) {
+            } else if (api_keys_.key_count() == 0) {
                 api_keys_empty_file = true;
                 std::fprintf(stderr,
                              "mortred-gateway: ERROR: %s parsed but contains no keys "
@@ -551,22 +492,22 @@ int run_gateway(int argc, char** argv) {
             } else {
                 api_keys_loaded = true;
                 std::fprintf(stderr, "mortred-gateway: loaded %zu API keys from %s\n",
-                             g_api_keys.key_count(), api_keys_path.c_str());
+                             api_keys_.key_count(), api_keys_path.c_str());
             }
         }
     }
 
-    if (!jinq::common::listen_host_permitted(g_cfg.gateway.host)) {
+    if (!jinq::common::listen_host_permitted(cfg_.gateway.host)) {
         std::fprintf(stderr,
                      "mortred-gateway: refusing to listen on %s (MORTRED_EXPOSE=%s). "
                      "Bind 127.0.0.1 and terminate TLS at Nginx (deploy/nginx). "
                      "Containers: MORTRED_EXPOSE=docker. Metal wildcard: MORTRED_EXPOSE=unsafe "
                      "(plaintext; doctor --strict fails)\n",
-                     g_cfg.gateway.host.c_str(),
+                     cfg_.gateway.host.c_str(),
                      jinq::common::mortred_expose_mode().c_str());
-        return 1;
+        return false;
     }
-    const bool has_static_token = !g_auth_token.empty() || !g_admin_token.empty();
+    const bool has_static_token = !auth_token_.empty() || !admin_token_.empty();
     if (!has_static_token && !api_keys_loaded) {
         if (api_keys_empty_file) {
             std::fprintf(stderr,
@@ -585,7 +526,7 @@ int run_gateway(int argc, char** argv) {
                          "(set MORTRED_GATEWAY_AUTH_TOKEN, MORTRED_API_TOKEN, or provide a valid "
                          "conf/api_keys.toml). Loopback is not an anonymous mode.\n");
         }
-        return 1;
+        return false;
     }
     if (api_keys_parse_failed) {
         std::fprintf(stderr,
@@ -596,58 +537,124 @@ int run_gateway(int argc, char** argv) {
                      "mortred-gateway: WARNING: conf/api_keys.toml has no keys; continuing "
                      "with static-token auth only\n");
     }
-    if (g_metrics_token.empty()) {
+    if (metrics_token_.empty()) {
         std::fprintf(stderr,
                      "mortred-gateway: refusing to start without MORTRED_METRICS_TOKEN "
                      "(GET /metrics is never public, including loopback; set a scrape Bearer "
                      "distinct from the inference and management tokens). "
                      "Generate with: mortredctl init-trust\n");
-        return 1;
+        return false;
     }
-    if (g_metrics_token == g_auth_token || g_metrics_token == g_admin_token) {
+    if (metrics_token_ == auth_token_ || metrics_token_ == admin_token_) {
         std::fprintf(stderr,
                      "mortred-gateway: refusing to start: MORTRED_METRICS_TOKEN matches an "
                      "inference or management token; Prometheus would then hold that privilege\n");
-        return 1;
+        return false;
     }
 
+    std::string runtime_profile = options.profile;
+    if (runtime_profile.empty()) {
+        const char* profile_env = std::getenv("MORTRED_PROFILE");
+        runtime_profile =
+            (profile_env != nullptr && std::string(profile_env) == "cpu") ? "cpu" : "gpu";
+    }
     std::string catalog_err;
-    const char* profile_env = std::getenv("MORTRED_PROFILE");
-    const std::string runtime_profile =
-        (profile_env != nullptr && std::string(profile_env) == "cpu") ? "cpu" : "gpu";
-    if (!g_catalog.init(root, &catalog_err, runtime_profile)) {
+    if (!catalog_.init(options.project_root, &catalog_err, runtime_profile)) {
         std::fprintf(stderr, "mortred-gateway: catalog init failed (profile=%s): %s\n",
                      runtime_profile.c_str(), catalog_err.c_str());
+        return false;
+    }
+    metrics_.set_model("gateway");
+    return true;
+}
+
+bool GatewayApp::listen() {
+    WFServerParams params = SERVER_PARAMS_DEFAULT;
+    params.max_connections = cfg_.gateway.max_connections;
+    params.request_size_limit =
+        static_cast<size_t>(cfg_.gateway.request_size_limit_mb) * 1024 * 1024;
+    server_ = std::make_unique<WFHttpServer>(
+        &params, [this](WFHttpTask* task) { process(task); });
+    if (server_->start(cfg_.gateway.host.c_str(),
+                       static_cast<unsigned short>(cfg_.gateway.port)) != 0) {
+        std::fprintf(stderr, "mortred-gateway: cannot listen on %s:%d\n",
+                     cfg_.gateway.host.c_str(), cfg_.gateway.port);
+        server_.reset();
+        return false;
+    }
+    return true;
+}
+
+void GatewayApp::stop_listen() {
+    if (server_ != nullptr) {
+        server_->stop();
+        server_.reset();
+    }
+}
+
+int GatewayApp::run(int argc, char** argv) {
+    if (argc > 1 && (std::strcmp(argv[1], "--help") == 0 || std::strcmp(argv[1], "-h") == 0)) {
+        std::fprintf(stderr, "usage: mortred-gateway.out (config via env / conf/mortred.toml)\n");
+        return 0;
+    }
+
+    GatewayInitOptions options;
+    options.project_root = resolve_project_root();
+    if (const char* env = std::getenv("MORTRED_CONTROL_CONFIG");
+        env != nullptr && *env != '\0') {
+        options.config_path = env;
+    }
+    if (const char* env = std::getenv("MORTRED_GATEWAY_HOST"); env != nullptr && *env != '\0') {
+        options.host = env;
+    }
+    if (const char* env = std::getenv("MORTRED_GATEWAY_PORT"); env != nullptr && *env != '\0') {
+        const int port = std::atoi(env);
+        if (port > 0 && port <= 65535) {
+            options.port = port;
+        }
+    }
+    if (const char* env = std::getenv("MORTRED_GATEWAY_AUTH_TOKEN");
+        env != nullptr && *env != '\0') {
+        options.auth_token = env;
+    }
+    if (const char* env = std::getenv("MORTRED_API_TOKEN"); env != nullptr && *env != '\0') {
+        options.admin_token = env;
+    }
+    if (const char* env = std::getenv("MORTRED_METRICS_TOKEN"); env != nullptr && *env != '\0') {
+        options.metrics_token = env;
+    }
+    if (const char* env = std::getenv("MORTRED_INTERNAL_TOKEN"); env != nullptr && *env != '\0') {
+        options.internal_token = env;
+    }
+    if (const char* env = std::getenv("MORTRED_GATEWAY_CORS_ORIGINS");
+        env != nullptr && *env != '\0') {
+        options.cors_origins = env;
+    }
+    if (!init(options)) {
         return 1;
     }
-    g_metrics.set_model("gateway");
 
     jinq::common::ProcessStop process_stop;
     process_stop.arm();
 
-    WFServerParams params = SERVER_PARAMS_DEFAULT;
-    params.max_connections = g_cfg.gateway.max_connections;
-    params.request_size_limit =
-        static_cast<size_t>(g_cfg.gateway.request_size_limit_mb) * 1024 * 1024;
-    WFHttpServer server(&params, process);
-    if (server.start(g_cfg.gateway.host.c_str(),
-                     static_cast<unsigned short>(g_cfg.gateway.port)) != 0) {
-        std::fprintf(stderr, "mortred-gateway: cannot listen on %s:%d\n",
-                     g_cfg.gateway.host.c_str(), g_cfg.gateway.port);
+    if (!listen()) {
         return 1;
     }
-    const char* auth_mode = g_api_keys.key_count() > 0
-                                ? "api-keys auth"
-                                : "static-token auth";
+    const char* auth_mode =
+        api_keys_.key_count() > 0 ? "api-keys auth" : "static-token auth";
     std::fprintf(stderr,
                  "mortred-gateway listening on http://%s:%d (routes: %zu) [%s, metrics scrape "
                  "token, expose=%s]\n",
-                 g_cfg.gateway.host.c_str(), g_cfg.gateway.port, g_catalog.entries().size(),
+                 cfg_.gateway.host.c_str(), cfg_.gateway.port, catalog_.entries().size(),
                  auth_mode, jinq::common::mortred_expose_mode().c_str());
 
     process_stop.wait();
-    server.stop();
+    stop_listen();
     return 0;
+}
+
+int run_gateway(int argc, char** argv) {
+    return GatewayApp().run(argc, argv);
 }
 
 }  // namespace control

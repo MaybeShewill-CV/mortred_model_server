@@ -70,6 +70,10 @@ if(MORTRED_WORKFLOW_AVAILABLE)
     # vendored workflow lib, skip them (full builds / local dev run them).
     list(APPEND TEST_LIST server_e2e_contract_test)
     list(APPEND TEST_LIST process_stop_unittest)
+    # in-process GatewayApp / SupervisorApp instances (control_workflow target
+    # exists under the same condition)
+    list(APPEND TEST_LIST gateway_multiinstance_test)
+    list(APPEND TEST_LIST supervisor_multiinstance_test)
 endif()
 
 # ApiKeyManager::authenticate needs OpenSSL SHA-256; the header is otherwise
@@ -205,6 +209,10 @@ foreach(src ${TEST_LIST})
         set(EXTRA_LIBS control OpenSSL::Crypto pthread)
     elseif(${src} STREQUAL "supervisor_malformed_e2e_test")
         set(EXTRA_LIBS pthread)
+    elseif(${src} STREQUAL "gateway_multiinstance_test")
+        set(EXTRA_LIBS control_workflow pthread)
+    elseif(${src} STREQUAL "supervisor_multiinstance_test")
+        set(EXTRA_LIBS control_workflow pthread)
     elseif(${src} STREQUAL "response_schema_test")
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "openapi_consistency_test")

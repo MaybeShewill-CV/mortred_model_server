@@ -6,14 +6,15 @@
 ************************************************/
 
 // Control-plane daemon: supervises mortred-gateway + all model servers,
-// exposes the versioned /api/v1 management REST API (catalog / lifecycle /
-// logs) and the embedded web UI. Inference goes through the gateway.
+// serves the /api/v1 management REST + web console (static file UI from
+// share/mortred/ui, logs) and the embedded web UI. Inference goes through
+// the gateway. All state is instance-local (SupervisorApp).
 
 #include <unistd.h>
 
 #include <algorithm>
-#include <cerrno>
 #include <cctype>
+#include <cerrno>
 #include <charconv>
 #include <chrono>
 #include <cstdio>
@@ -24,10 +25,10 @@
 #include <memory>
 #include <sstream>
 #include <string>
-#include <vector>
 #include <string_view>
 #include <system_error>
 #include <thread>
+#include <vector>
 
 #include <rapidjson/document.h>
 #include <rapidjson/stringbuffer.h>
@@ -46,54 +47,15 @@
 #include "control/control_config.h"
 #include "control/http_reply.h"
 #include "control/mini_toml.h"
+#include "control/project_root.h"
 #include "control/supervisor.h"
 
 #include "control/supervisor/supervisor_app.h"
 
 namespace {
 
-using mortred::control::Catalog;
-using mortred::control::ControlConfig;
 using mortred::control::ProcessSupervisor;
 using mortred::control::kGatewayId;
-using mortred::control::reply_json;
-
-Catalog g_catalog;
-std::unique_ptr<ProcessSupervisor> g_supervisor;
-ControlConfig g_cfg;
-std::string g_root;
-std::string g_ui_dir;
-std::string g_auth_token;
-
-void handle_graceful_restart(WFHttpTask* task, const std::string& server_id);
-bool server_has_active_jobs(const std::string& server_id);
-
-std::string resolve_project_root() {
-    if (const char* env = std::getenv("MORTRED_PROJECT_ROOT"); env != nullptr && *env != '\0') {
-        return env;
-    }
-    char buf[4096];
-    const ssize_t n = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
-    if (n <= 0) {
-        return ".";
-    }
-    buf[n] = '\0';
-    std::filesystem::path p(buf);
-    auto dir = p.parent_path();
-    for (int i = 0; i < 12 && !dir.empty(); ++i) {
-        std::error_code ec;
-        const bool has_bin = std::filesystem::exists(dir / "_bin", ec) ||
-                             std::filesystem::exists(dir / "bin", ec);
-        ec.clear();
-        const bool has_deps = std::filesystem::exists(dir / "3rd_party", ec) ||
-                              std::filesystem::exists(dir / "lib", ec);
-        if (has_bin && has_deps) {
-            return dir.string();
-        }
-        dir = dir.parent_path();
-    }
-    return ".";
-}
 
 std::string read_file(const std::string& path) {
     std::ifstream in(path, std::ios::binary);
@@ -212,12 +174,33 @@ void add_status_object(rapidjson::Document::AllocatorType& a, rapidjson::Value* 
     }
 }
 
-void handle_catalog(WFHttpTask* task) {
+int run_env_int(const char* name, int fallback) {
+    const char* env = std::getenv(name);
+    if (env == nullptr || *env == '\0') {
+        return fallback;
+    }
+    try {
+        return std::stoi(env);
+    } catch (...) {
+        return fallback;
+    }
+}
+
+}  // namespace
+
+namespace mortred {
+namespace control {
+
+SupervisorApp::~SupervisorApp() {
+    stop_listen();
+}
+
+void SupervisorApp::handle_catalog(WFHttpTask* task) {
     rapidjson::Document d;
     d.SetObject();
     auto& a = d.GetAllocator();
     rapidjson::Value servers(rapidjson::kArrayType);
-    for (const auto& e : g_catalog.entries()) {
+    for (const auto& e : catalog_.entries()) {
         rapidjson::Value obj(rapidjson::kObjectType);
         obj.AddMember("id", rapidjson::Value(e.id.c_str(), e.id.size(), a), a);
         obj.AddMember("name", rapidjson::Value(e.name.c_str(), e.name.size(), a), a);
@@ -231,25 +214,25 @@ void handle_catalog(WFHttpTask* task) {
     reply_json(task, 200, serialize(d));
 }
 
-void handle_status(WFHttpTask* task) {
+void SupervisorApp::handle_status(WFHttpTask* task) {
     rapidjson::Document d;
     d.SetObject();
     auto& a = d.GetAllocator();
 
-    const auto gateway_status = g_supervisor->status(kGatewayId);
+    const auto gateway_status = supervisor_->status(kGatewayId);
     rapidjson::Value gateway(rapidjson::kObjectType);
     add_status_object(a, &gateway, kGatewayId, gateway_status);
     rapidjson::Value gateway_addr(rapidjson::kObjectType);
     gateway_addr.AddMember("host",
-                           rapidjson::Value(g_cfg.gateway.host.c_str(),
-                                             g_cfg.gateway.host.size(), a),
+                           rapidjson::Value(cfg_.gateway.host.c_str(),
+                                             cfg_.gateway.host.size(), a),
                            a);
-    gateway_addr.AddMember("port", g_cfg.gateway.port, a);
+    gateway_addr.AddMember("port", cfg_.gateway.port, a);
     gateway.AddMember("address", gateway_addr, a);
     d.AddMember("gateway", gateway, a);
 
     rapidjson::Value servers(rapidjson::kArrayType);
-    for (const auto& [id, s] : g_supervisor->statuses()) {
+    for (const auto& [id, s] : supervisor_->statuses()) {
         if (id == kGatewayId) {
             continue;
         }
@@ -261,18 +244,18 @@ void handle_status(WFHttpTask* task) {
     reply_json(task, 200, serialize(d));
 }
 
-void handle_server_detail(WFHttpTask* task, const std::string& id) {
-    if (!g_supervisor->has_server(id)) {
+void SupervisorApp::handle_server_detail(WFHttpTask* task, const std::string& id) {
+    if (!supervisor_->has_server(id)) {
         reply_json(task, 404, json_error("unknown server id: " + id));
         return;
     }
-    const auto s = g_supervisor->status(id);
+    const auto s = supervisor_->status(id);
     rapidjson::Document d;
     d.SetObject();
     auto& a = d.GetAllocator();
     rapidjson::Value obj(rapidjson::kObjectType);
     add_status_object(a, &obj, id, s);
-    const auto* entry = g_catalog.find(id);
+    const auto* entry = catalog_.find(id);
     if (entry != nullptr) {
         obj.AddMember("uri", rapidjson::Value(entry->uri.c_str(), entry->uri.size(), a), a);
         obj.AddMember("port", entry->port, a);
@@ -283,19 +266,20 @@ void handle_server_detail(WFHttpTask* task, const std::string& id) {
     reply_json(task, 200, serialize(d));
 }
 
-void handle_server_action(WFHttpTask* task, const std::string& id, const std::string& action) {
-    if (!g_supervisor->has_server(id)) {
+void SupervisorApp::handle_server_action(WFHttpTask* task, const std::string& id,
+                                         const std::string& action) {
+    if (!supervisor_->has_server(id)) {
         reply_json(task, 404, json_error("unknown server id: " + id));
         return;
     }
     std::string err;
     bool ok = false;
     if (action == "start") {
-        ok = g_supervisor->start_server(id, &err);
+        ok = supervisor_->start_server(id, &err);
     } else if (action == "stop") {
-        ok = g_supervisor->stop_server(id, &err);
+        ok = supervisor_->stop_server(id, &err);
     } else if (action == "restart") {
-        ok = g_supervisor->restart_server(id, &err);
+        ok = supervisor_->restart_server(id, &err);
     } else {
         reply_json(task, 400, json_error("unknown action: " + action));
         return;
@@ -310,8 +294,9 @@ void handle_server_action(WFHttpTask* task, const std::string& id, const std::st
     reply_json(task, 200, serialize(d));
 }
 
-void handle_logs(WFHttpTask* task, const std::string& id, const std::string& uri) {
-    auto* buffer = g_supervisor->logs(id);
+void SupervisorApp::handle_logs(WFHttpTask* task, const std::string& id,
+                                const std::string& uri) {
+    auto* buffer = supervisor_->logs(id);
     if (buffer == nullptr) {
         reply_json(task, 404, json_error("unknown server id: " + id));
         return;
@@ -334,12 +319,12 @@ void handle_logs(WFHttpTask* task, const std::string& id, const std::string& uri
     reply_json(task, 200, serialize(d));
 }
 
-void handle_metrics(WFHttpTask* task) {
+void SupervisorApp::handle_metrics(WFHttpTask* task) {
     std::ostringstream ss;
     ss << "# HELP mortred_supervisor_state Supervised process state (0=stopped,1=starting,"
           "2=running,3=backoff,4=failed)\n";
     ss << "# TYPE mortred_supervisor_state gauge\n";
-    for (const auto& [id, s] : g_supervisor->statuses()) {
+    for (const auto& [id, s] : supervisor_->statuses()) {
         int code = 0;
         if (s.state == "starting") {
             code = 1;
@@ -354,12 +339,12 @@ void handle_metrics(WFHttpTask* task) {
     }
     ss << "# HELP mortred_supervisor_ready Readiness of supervised processes\n";
     ss << "# TYPE mortred_supervisor_ready gauge\n";
-    for (const auto& [id, s] : g_supervisor->statuses()) {
+    for (const auto& [id, s] : supervisor_->statuses()) {
         ss << "mortred_supervisor_ready{server=\"" << id << "\"} " << (s.ready ? 1 : 0) << "\n";
     }
     ss << "# HELP mortred_supervisor_restarts_total Total restarts per supervised process\n";
     ss << "# TYPE mortred_supervisor_restarts_total counter\n";
-    for (const auto& [id, s] : g_supervisor->statuses()) {
+    for (const auto& [id, s] : supervisor_->statuses()) {
         ss << "mortred_supervisor_restarts_total{server=\"" << id << "\"} " << s.restart_count
            << "\n";
     }
@@ -370,13 +355,13 @@ void handle_metrics(WFHttpTask* task) {
     resp->append_output_body(body.data(), body.size());
 }
 
-void serve_static(WFHttpTask* task, const std::string& path) {
+void SupervisorApp::serve_static(WFHttpTask* task, const std::string& path) {
     std::string rel = (path == "/" || path.empty()) ? "index.html" : path.substr(1);
     if (rel.find("..") != std::string::npos) {
         reply_json(task, 400, json_error("bad path"));
         return;
     }
-    const std::string file = (std::filesystem::path(g_ui_dir) / rel).string();
+    const std::string file = (std::filesystem::path(ui_dir_) / rel).string();
     const std::string content = read_file(file);
     if (content.empty()) {
         reply_json(task, 404, json_error("not found"));
@@ -389,12 +374,12 @@ void serve_static(WFHttpTask* task, const std::string& path) {
 }
 
 /*** check the model's loopback /metrics for in-flight async jobs (graceful drain) */
-bool server_has_active_jobs(const std::string& server_id) {
-    const auto* entry = g_catalog.find(server_id);
+bool SupervisorApp::server_has_active_jobs(const std::string& server_id) {
+    const auto* entry = catalog_.find(server_id);
     if (entry == nullptr) {
         return false;
     }
-    const auto s = g_supervisor->status(server_id);
+    const auto s = supervisor_->status(server_id);
     if (s.pid < 0) {
         return false;
     }
@@ -417,8 +402,8 @@ bool server_has_active_jobs(const std::string& server_id) {
         });
     client->get_req()->set_method("GET");
     std::string metrics_auth;
-    if (g_supervisor != nullptr && !g_supervisor->internal_token().empty()) {
-        metrics_auth = "Bearer " + g_supervisor->internal_token();
+    if (supervisor_ != nullptr && !supervisor_->internal_token().empty()) {
+        metrics_auth = "Bearer " + supervisor_->internal_token();
         client->get_req()->add_header_pair("Authorization", metrics_auth.c_str());
     }
     client->set_receive_timeout(2000);
@@ -449,13 +434,13 @@ bool server_has_active_jobs(const std::string& server_id) {
 }
 
 /*** graceful drain: wait up to timeout for async jobs to complete before restart */
-void handle_graceful_restart(WFHttpTask* task, const std::string& server_id) {
+void SupervisorApp::handle_graceful_restart(WFHttpTask* task, const std::string& server_id) {
     constexpr int k_drain_timeout_ms = 120000;  // 2 min
     constexpr int k_poll_interval_ms = 2000;
 
     auto* series = series_of(task);
     auto* go = WFTaskFactory::create_go_task(
-        "graceful_restart", [task, server_id, k_drain_timeout_ms, k_poll_interval_ms]() {
+        "graceful_restart", [this, task, server_id, k_drain_timeout_ms, k_poll_interval_ms]() {
             const auto start = std::chrono::steady_clock::now();
             bool drained = false;
             while (std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -469,7 +454,7 @@ void handle_graceful_restart(WFHttpTask* task, const std::string& server_id) {
                     std::chrono::milliseconds(k_poll_interval_ms));
             }
             std::string err;
-            const bool ok = g_supervisor->restart_server(server_id, &err);
+            const bool ok = supervisor_->restart_server(server_id, &err);
             auto* resp = task->get_resp();
             resp->set_status_code(ok ? "200" : "500");
             resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
@@ -489,7 +474,7 @@ void handle_graceful_restart(WFHttpTask* task, const std::string& server_id) {
     series->push_back(go);
 }
 
-void process(WFHttpTask* task) {
+void SupervisorApp::process(WFHttpTask* task) {
     const std::string path = uri_path(task->get_req()->get_request_uri());
     // workflow leaves method null when the request line is malformed; fold to
     // "" like the gateway/model-server guards instead of UB in std::string
@@ -503,7 +488,7 @@ void process(WFHttpTask* task) {
     // management API requires the supervisor bearer token
     if (is_api && path != "/api/v1/health" &&
         !jinq::common::is_bearer_authorized(
-            header_value(task->get_req(), "Authorization"), g_auth_token)) {
+            header_value(task->get_req(), "Authorization"), auth_token_)) {
         task->get_resp()->add_header_pair("WWW-Authenticate", "Bearer realm=\"Mortred\"");
         reply_json(task, 401, json_error("unauthorized"));
         return;
@@ -563,122 +548,98 @@ void process(WFHttpTask* task) {
     }
 }
 
-int run_env_int(const char* name, int fallback) {
-    const char* env = std::getenv(name);
-    if (env == nullptr || *env == '\0') {
-        return fallback;
-    }
-    try {
-        return std::stoi(env);
-    } catch (...) {
-        return fallback;
-    }
-}
-
-}  // namespace
-
-namespace mortred {
-namespace control {
-
-int run_supervisor() {
-    // supervision signals must be blocked before any thread exists
-    ProcessSupervisor::block_supervision_signals();
-
-    g_root = resolve_project_root();
-    std::string config_path;
-    if (const char* env = std::getenv("MORTRED_CONTROL_CONFIG");
-        env != nullptr && *env != '\0') {
-        config_path = env;
-    } else {
-        config_path = (std::filesystem::path(g_root) / "conf" / "mortred.toml").string();
+bool SupervisorApp::init(const SupervisorInitOptions& options) {
+    root_ = options.project_root;
+    std::string config_path = options.config_path;
+    if (config_path.empty()) {
+        config_path = (std::filesystem::path(root_) / "conf" / "mortred.toml").string();
     }
     std::string cfg_err;
-    if (!ControlConfig::load(config_path, &g_cfg, &cfg_err)) {
+    if (!ControlConfig::load(config_path, &cfg_, &cfg_err)) {
         std::fprintf(stderr, "mortred-supervisor: invalid control config: %s\n", cfg_err.c_str());
-        return 1;
+        return false;
     }
 
-    if (const char* env = std::getenv("MORTRED_API_HOST"); env != nullptr && *env != '\0') {
-        g_cfg.supervisor.api_host = env;
+    if (!options.api_host.empty()) {
+        cfg_.supervisor.api_host = options.api_host;
     }
-    g_cfg.supervisor.api_port = run_env_int("MORTRED_API_PORT", g_cfg.supervisor.api_port);
-    if (const char* env = std::getenv("MORTRED_API_TOKEN"); env != nullptr && *env != '\0') {
-        g_auth_token = env;
+    if (options.api_port > 0) {
+        cfg_.supervisor.api_port = options.api_port;
     }
-    if (const char* env = std::getenv("MORTRED_AUTOSTART"); env != nullptr && *env != '\0') {
-        const std::string v = mortred::control::mini_toml::trim(env);
-        g_cfg.supervisor.autostart_default = (v == "true" || v == "1");
+    auth_token_ = options.api_token;
+    if (options.autostart_default >= 0) {
+        cfg_.supervisor.autostart_default = options.autostart_default != 0;
     }
-    if (const char* env = std::getenv("APP_BIN_DIR"); env != nullptr && *env != '\0') {
-        g_cfg.supervisor.bin_dir = env;
+    if (!options.bin_dir.empty()) {
+        cfg_.supervisor.bin_dir = options.bin_dir;
     }
-    if (const char* env = std::getenv("APP_LIB_DIR"); env != nullptr && *env != '\0') {
-        g_cfg.supervisor.lib_dir = env;
+    if (!options.lib_dir.empty()) {
+        cfg_.supervisor.lib_dir = options.lib_dir;
     }
-    if (const char* env = std::getenv("APP_LIBS_DIR"); env != nullptr && *env != '\0') {
-        g_cfg.supervisor.libs_dir = env;
+    if (!options.libs_dir.empty()) {
+        cfg_.supervisor.libs_dir = options.libs_dir;
     }
-    if (const char* env = std::getenv("MORTRED_UI_DIR"); env != nullptr && *env != '\0') {
-        g_ui_dir = env;
+    if (!options.ui_dir.empty()) {
+        ui_dir_ = options.ui_dir;
     } else {
-        const std::filesystem::path install_ui = std::filesystem::path(g_root) / "share" / "mortred" / "ui";
-        const std::filesystem::path source_ui =
-            std::filesystem::path(g_root) / "src" / "control" / "supervisor" / "ui";
+        const std::filesystem::path install_ui = std::filesystem::path(root_) / "share" /
+                                                  "mortred" / "ui";
+        const std::filesystem::path source_ui = std::filesystem::path(root_) / "src" /
+                                                 "control" / "supervisor" / "ui";
         std::error_code ec;
-        g_ui_dir = std::filesystem::exists(install_ui / "index.html", ec)
-                       ? install_ui.string()
-                       : source_ui.string();
+        ui_dir_ = std::filesystem::exists(install_ui / "index.html", ec)
+                      ? install_ui.string()
+                      : source_ui.string();
     }
 
     // fail-closed: management API always requires a token, including loopback
-    if (g_auth_token.empty()) {
+    if (auth_token_.empty()) {
         std::fprintf(stderr,
                      "mortred-supervisor: refusing to start without MORTRED_API_TOKEN "
                      "(loopback is not an anonymous management plane). "
                      "Generate with: mortredctl init-trust\n");
-        return 1;
+        return false;
     }
-    if (!jinq::common::listen_host_permitted(g_cfg.supervisor.api_host)) {
+    if (!jinq::common::listen_host_permitted(cfg_.supervisor.api_host)) {
         std::fprintf(stderr,
                      "mortred-supervisor: refusing to listen on %s (MORTRED_EXPOSE=%s). "
                      "Bind 127.0.0.1; containers: MORTRED_EXPOSE=docker\n",
-                     g_cfg.supervisor.api_host.c_str(),
+                     cfg_.supervisor.api_host.c_str(),
                      jinq::common::mortred_expose_mode().c_str());
-        return 1;
+        return false;
     }
 
+    std::string runtime_profile = options.profile;
+    if (runtime_profile.empty()) {
+        const char* profile_env = std::getenv("MORTRED_PROFILE");
+        runtime_profile =
+            (profile_env != nullptr && std::string(profile_env) == "cpu") ? "cpu" : "gpu";
+    }
     std::string catalog_err;
-    const char* profile_env = std::getenv("MORTRED_PROFILE");
-    const std::string runtime_profile =
-        (profile_env != nullptr && std::string(profile_env) == "cpu") ? "cpu" : "gpu";
-    if (!g_catalog.init(g_root, &catalog_err, runtime_profile)) {
+    if (!catalog_.init(root_, &catalog_err, runtime_profile)) {
         std::fprintf(stderr, "mortred-supervisor: catalog init failed (profile=%s): %s\n",
-                     runtime_profile.c_str(),
-                     catalog_err.c_str());
-        return 1;
+                     runtime_profile.c_str(), catalog_err.c_str());
+        return false;
     }
 
-    std::string pack_path = g_cfg.supervisor.pack_file;
-    if (const char* env = std::getenv("MORTRED_PACK"); env != nullptr && *env != '\0') {
-        pack_path = env;
-    }
+    std::string pack_path = options.pack_path;
     if (!pack_path.empty()) {
         std::filesystem::path pack(pack_path);
         if (!pack.is_absolute()) {
-            pack = std::filesystem::path(g_root) / pack;
+            pack = std::filesystem::path(root_) / pack;
         }
         std::vector<std::string> catalog_ids;
-        catalog_ids.reserve(g_catalog.entries().size());
-        for (const auto& e : g_catalog.entries()) {
+        catalog_ids.reserve(catalog_.entries().size());
+        for (const auto& e : catalog_.entries()) {
             catalog_ids.push_back(e.id);
         }
         std::string pack_err;
-        if (!ControlConfig::apply_pack(pack.string(), catalog_ids, g_root, &g_cfg, &pack_err)) {
+        if (!ControlConfig::apply_pack(pack.string(), catalog_ids, root_, &cfg_, &pack_err)) {
             std::fprintf(stderr, "mortred-supervisor: invalid pack: %s\n", pack_err.c_str());
-            return 1;
+            return false;
         }
         size_t pack_n = 0;
-        for (const auto& item : g_cfg.servers) {
+        for (const auto& item : cfg_.servers) {
             if (item.second.has_autostart && item.second.autostart) {
                 ++pack_n;
             }
@@ -687,54 +648,126 @@ int run_supervisor() {
                      pack.string().c_str(), pack_n);
     }
 
-    g_supervisor = std::make_unique<ProcessSupervisor>(g_root, g_cfg, config_path);
-    g_supervisor->set_catalog(g_catalog);
+    supervisor_ = std::make_unique<ProcessSupervisor>(root_, cfg_, config_path);
+    supervisor_->set_catalog(catalog_);
+    std::string thread_err;
+    if (!supervisor_->start_threads(&thread_err)) {
+        std::fprintf(stderr, "mortred-supervisor: %s\n", thread_err.c_str());
+        return false;
+    }
+    return true;
+}
+
+bool SupervisorApp::listen() {
+    WFServerParams params = SERVER_PARAMS_DEFAULT;
+    params.request_size_limit =
+        jinq::common::k_default_request_size_limit_mb * 1024 * 1024;
+    server_ = std::make_unique<WFHttpServer>(
+        &params, [this](WFHttpTask* task) { process(task); });
+    if (server_->start(cfg_.supervisor.api_host.c_str(),
+                       static_cast<unsigned short>(cfg_.supervisor.api_port)) != 0) {
+        std::fprintf(stderr, "mortred-supervisor: cannot listen on %s:%d\n",
+                     cfg_.supervisor.api_host.c_str(), cfg_.supervisor.api_port);
+        server_.reset();
+        return false;
+    }
+    return true;
+}
+
+void SupervisorApp::stop_listen() {
+    if (server_ != nullptr) {
+        // WFServerBase::stop() is ALREADY shutdown()+wait_finish() (blocking).
+        // The historical "stop(); wait_finish();" double call hung forever on
+        // the second wait - in the daemon this was masked by systemd's
+        // TimeoutStopSec SIGKILL, so mortred-supervisor never actually exited
+        // gracefully. stop() alone is the correct, complete teardown.
+        server_->stop();
+        server_.reset();
+    }
+    if (supervisor_ != nullptr) {
+        supervisor_->request_shutdown();
+        supervisor_->wait_shutdown();
+    }
+}
+
+int SupervisorApp::run() {
+    // supervision signals must be blocked before any thread exists
+    ProcessSupervisor::block_supervision_signals();
+
+    SupervisorInitOptions options;
+    options.project_root = resolve_project_root();
+    if (const char* env = std::getenv("MORTRED_CONTROL_CONFIG");
+        env != nullptr && *env != '\0') {
+        options.config_path = env;
+    }
+    if (const char* env = std::getenv("MORTRED_API_HOST"); env != nullptr && *env != '\0') {
+        options.api_host = env;
+    }
+    options.api_port = run_env_int("MORTRED_API_PORT", 0);
+    if (const char* env = std::getenv("MORTRED_API_TOKEN"); env != nullptr && *env != '\0') {
+        options.api_token = env;
+    }
+    if (const char* env = std::getenv("MORTRED_AUTOSTART"); env != nullptr && *env != '\0') {
+        const std::string v = mini_toml::trim(env);
+        options.autostart_default = (v == "true" || v == "1") ? 1 : 0;
+    }
+    if (const char* env = std::getenv("APP_BIN_DIR"); env != nullptr && *env != '\0') {
+        options.bin_dir = env;
+    }
+    if (const char* env = std::getenv("APP_LIB_DIR"); env != nullptr && *env != '\0') {
+        options.lib_dir = env;
+    }
+    if (const char* env = std::getenv("APP_LIBS_DIR"); env != nullptr && *env != '\0') {
+        options.libs_dir = env;
+    }
+    if (const char* env = std::getenv("MORTRED_UI_DIR"); env != nullptr && *env != '\0') {
+        options.ui_dir = env;
+    }
+    if (const char* env = std::getenv("MORTRED_PACK"); env != nullptr && *env != '\0') {
+        options.pack_path = env;
+    }
+    if (!init(options)) {
+        return 1;
+    }
+
     // Gateway reads these at startup. Inject before autostart so the child
     // inherits them: management token is a valid data-plane credential for UI
     // / mortredctl infer, and CORS origins let the :8787 UI call :8080.
-    if (!g_auth_token.empty()) {
-        ::setenv("MORTRED_API_TOKEN", g_auth_token.c_str(), 1);
+    // (The process environment is deliberately global: children inherit it.)
+    if (!auth_token_.empty()) {
+        ::setenv("MORTRED_API_TOKEN", auth_token_.c_str(), 1);
     }
     {
-        const std::string port = std::to_string(g_cfg.supervisor.api_port);
+        const std::string port = std::to_string(cfg_.supervisor.api_port);
         std::string origins = "http://127.0.0.1:" + port + ",http://localhost:" + port;
-        const std::string& host = g_cfg.supervisor.api_host;
+        const std::string& host = cfg_.supervisor.api_host;
         if (host != "0.0.0.0" && host != "::" && host != "[::]" && host != "127.0.0.1" &&
             host != "localhost") {
             origins += ",http://" + host + ":" + port;
         }
         ::setenv("MORTRED_GATEWAY_CORS_ORIGINS", origins.c_str(), 1);
     }
-    std::string thread_err;
-    if (!g_supervisor->start_threads(&thread_err)) {
-        std::fprintf(stderr, "mortred-supervisor: %s\n", thread_err.c_str());
-        return 1;
-    }
 
-    WFServerParams params = SERVER_PARAMS_DEFAULT;
-    params.request_size_limit =
-        jinq::common::k_default_request_size_limit_mb * 1024 * 1024;
-    WFHttpServer server(&params, process);
-    if (server.start(g_cfg.supervisor.api_host.c_str(),
-                     static_cast<unsigned short>(g_cfg.supervisor.api_port)) != 0) {
-        std::fprintf(stderr, "mortred-supervisor: cannot listen on %s:%d\n",
-                     g_cfg.supervisor.api_host.c_str(), g_cfg.supervisor.api_port);
+    if (!listen()) {
         return 1;
     }
     std::fprintf(stderr,
                  "mortred-supervisor listening on http://%s:%d (managed servers: %zu, auth enabled, "
                  "expose=%s)\n",
-                 g_cfg.supervisor.api_host.c_str(), g_cfg.supervisor.api_port,
-                 g_catalog.entries().size(), jinq::common::mortred_expose_mode().c_str());
+                 cfg_.supervisor.api_host.c_str(), cfg_.supervisor.api_port,
+                 catalog_.entries().size(), jinq::common::mortred_expose_mode().c_str());
 
-    g_supervisor->autostart_all();
+    supervisor_->autostart_all();
 
-    while (!g_supervisor->shutdown_requested()) {
+    while (!supervisor_->shutdown_requested()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
-    server.stop();
-    server.wait_finish();
+    stop_listen();
     return 0;
+}
+
+int run_supervisor() {
+    return SupervisorApp().run();
 }
 
 }  // namespace control
