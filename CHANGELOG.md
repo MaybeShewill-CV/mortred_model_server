@@ -8,6 +8,15 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- `do_work` writes inference metrics and the run-time EWMA before returning
+  the worker to the queue (same order as `process_batch`). The destructor
+  drain treats an enqueued worker as permission to destroy those members;
+  writing them after enqueue raced a timed-out request's destructor.
+
+> `do_work` 在把 worker 还回队列之前写入推理 metrics 和运行时间 EWMA
+> （与 `process_batch` 相同）。析构 drain 把「worker 已入队」当作可以销毁
+> 这些成员；enqueue 后再写会与超时请求的析构竞态。
+
 - YOLO v5/v6/v7/v8 preprocess now uses Ultralytics-style center letterbox
   (keep-ratio, pad 114) instead of independent-axis stretch, and unmaps
   boxes with the matching pad/scale. Stretch `GeometryScale` remains for
