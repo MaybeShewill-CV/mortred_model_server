@@ -22,6 +22,15 @@
         ]
       },
       {
+        "gtest": "model_golden.yolov8_onnx_detection",
+        "family": "object_detection",
+        "catalog_id": "YOLOV8",
+        "config": "conf/ci/yolov8_onnx_hosted.toml",
+        "weights": [
+          "weights/object_detection/yolov8/yolov8s.onnx"
+        ]
+      },
+      {
         "gtest": "model_golden.dbnet_text_detection",
         "family": "ocr",
         "catalog_id": "DBNET",
@@ -101,7 +110,7 @@
     "SUPERPOINT": "hosted",
     "BISENETV2": "hosted",
     "YOLOV5": "gpu-smoke",
-    "YOLOV8": "gpu-smoke",
+    "YOLOV8": "hosted",
     "CENTER_FACE": "gpu-smoke",
     "RESNET": "nightly",
     "DENSENET": "nightly",

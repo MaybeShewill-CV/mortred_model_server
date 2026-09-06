@@ -8,7 +8,7 @@ generated executables, configuration files, and documentation.
 | Path | Purpose | Tracked in VCS |
 |---|---|---|
 | `src/` | C++ source code (common / models / server / factory / apps) | Yes |
-| `conf/` | Model/server configuration, autostart packs (`conf/packs/`), weight manifest, hosted golden CI contract (`ci_hosted_golden.json`) | Yes |
+| `conf/` | Model/server configuration, autostart packs (`conf/packs/`), CI-only overlays (`conf/ci/`), weight manifest, hosted golden CI contract (`ci_hosted_golden.json`) | Yes |
 | `docs/` | User and developer documentation | Yes |
 | `demo_data/` | Small sample images used by tutorials/benchmarks | Yes |
 | `test/` | Unit tests and golden test data | Yes |
@@ -89,6 +89,7 @@ Worker_nums calibration is `scripts/calibrate_pack.py` (`mortredctl calibrate`):
 
 ```text
 conf/
+├── ci/          # CI-only overlays (not product serving; e.g. YOLOv8 ONNX hosted golden)
 ├── model/       # model inference configuration (TOML syntax)
 └── server/      # model server configuration
 ```

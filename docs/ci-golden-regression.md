@@ -11,7 +11,7 @@ contribution path.” Use the table.
 
 | Path | Runner | Green means | Does **not** mean |
 |---|---|---|---|
-| Fork PR | GitHub `ubuntu-22.04` (`cpu-profile`) | cpu profile compiled; output contracts passed; **MNN CPU goldens in `conf/ci_hosted_golden.json` hosted set** (sha256 locked, skipped=0): classification, detection, OCR, keypoints, segmentation | TensorRT, CUDA, YOLOv8 engine, full zoo, ORT-CUDA |
+| Fork PR | GitHub `ubuntu-22.04` (`cpu-profile`) | cpu profile compiled; output contracts passed; **MNN/ONNX goldens in `conf/ci_hosted_golden.json` hosted set** (sha256 locked, skipped=0): classification, NanoDet, **YOLOv8 ONNX overlay**, OCR, keypoints, segmentation | TensorRT, CUDA, YOLOv8 `.engine`, full zoo, ORT-CUDA |
 | Hosted `container boot (cpu compose)` | GitHub `ubuntu-22.04` | On Dockerfile / compose / entrypoint / demo pack / this workflow: cpu runtime image **starts**; supervisor `/api/v1/health`; gateway `/healthz`; one MOBILENETV2 infer; supervisor and gateway still in `docker top`. Unrelated PRs skip the image build and stay green | GPU compose, TensorRT, GHCR `:gpu` pull, every catalog model |
 | Same-repo PR / push `main`, **no** `MORTRED_HAS_GPU_RUNNER` | GitHub hosted only | Same as fork PR. GPU jobs are **skipped**, not queued | TensorRT / CUDA goldens ran |
 | Same-repo PR / push `main`, variable `true` | Hosted + self-hosted GPU | Fork claims **plus** 8 golden cases, skipped=0 | Nightly zoo or cross-backend allclose |
@@ -33,8 +33,9 @@ GitHub-hosted VMs.
 Changing `src/models/backend/trt_session.cpp` (or any TensorRT-only path) is
 **not** proven on a fork PR. Maintainer PRs need `MORTRED_HAS_GPU_RUNNER=true`
 so `gpu-pr-gate` runs. Hosted CPU goldens use `device=cpu` via
-`force_cpu_backend` and only `mnn`/`onnx` configs; `yolov8_config.toml`
-(`type=tensorrt`) stays on the GPU smoke list.
+`force_cpu_backend` and only `mnn`/`onnx` configs. Product
+`yolov8_config.toml` (`type=tensorrt`) stays on the GPU smoke list; the
+fork-visible YOLO case is the CI overlay `conf/ci/yolov8_onnx_hosted.toml`.
 
 ## Enable maintainer GPU jobs
 
@@ -68,9 +69,11 @@ fail-closed.
 Local developers without weights keep `GTEST_SKIP` (env unset).
 
 YOLOv8 HTTP serving still uses `conf/model/object_detection/yolov8/yolov8_config.toml`
-(TensorRT). Hosted detection coverage is **NanoDet MNN**, not that engine.
-There is no separate YOLO CPU toml: TensorRT plus `device=cpu` is a
-configuration error.
+(TensorRT). Fork-hosted detection coverage is **NanoDet MNN** plus the
+**YOLOv8 ONNX overlay** (`conf/ci/yolov8_onnx_hosted.toml`, `yolov8s.onnx`).
+That overlay is not a product serving config: `conf/server` must keep
+pointing at the TensorRT toml. Hosted ONNX passing does **not** prove the
+serving engine. TensorRT plus `device=cpu` remains a configuration error.
 
 ## Maintainer GPU smoke (`gpu-pr-gate`)
 
@@ -86,7 +89,7 @@ Eight cases (`gpu_smoke.cases` in `conf/ci_hosted_golden.json`, must match
 | Case | Family |
 |---|---|
 | `yolov5_detection` | object detection |
-| `yolov8_detection` | TensorRT decode + geometry |
+| `yolov8_detection` | TensorRT decode + letterbox geometry |
 | `yolov8_mixed_size_batch_matches_single_runs` | mixed-size batch |
 | `nanodet_detection` | anchor-free decode |
 | `centerface_detection` | landmarks |
@@ -124,7 +127,7 @@ Every HTTP catalog id in `src/factory/*_task.h` must appear in
 
 | Tier | Meaning |
 |---|---|
-| `hosted` | Fail-closed on GitHub-hosted `cpu-profile` (fork-visible) |
+| `hosted` | Fail-closed on GitHub-hosted `cpu-profile` (fork-visible). `YOLOV8` is hosted via the ONNX overlay; GPU smoke still runs the product TensorRT golden |
 | `gpu-smoke` | Fail-closed on maintainer GPU PR gate; not claimed on forks |
 | `nightly` | Allowed to skip on PR; exercised on `gpu-nightly-full` when weights exist |
 
@@ -164,10 +167,15 @@ python3 scripts/ci_assert_gtest_xml.py /tmp/gpu-smoke.xml
 
 ## Refreshing goldens
 
-Generate on the **same** GPU runner that gates PRs:
+`yolov8_onnx_detection` is regenerated on a **cpu-profile** build with
+`yolov8s.onnx` (WSL is fine). Product YOLO TensorRT goldens
+(`yolov8_detection`) still need the **same GPU runner** that gates PRs:
 
 ```bash
-MORTRED_UPDATE_GOLDEN=1 ./build-gpu/bin/model_golden_test
+MORTRED_UPDATE_GOLDEN=1 ./build-cpu/bin/model_golden_test \
+  --gtest_filter='model_golden.yolov8_onnx_detection'
+MORTRED_UPDATE_GOLDEN=1 ./build-gpu/bin/model_golden_test \
+  --gtest_filter='model_golden.yolov5_detection:model_golden.yolov6_detection:model_golden.yolov7_detection:model_golden.yolov8_detection'
 git add test/golden/
 ```
 

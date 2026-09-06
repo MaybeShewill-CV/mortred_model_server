@@ -37,6 +37,14 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${MORTRED_LIB_OUTPUT_DIR})
 # Vendored deps: explicit imported targets (exact soname + fatal error if missing + auto-reconfigure on change)
 include(${PROJECT_ROOT_DIR}/cmake/VendoredDeps.cmake)
 mortred_probe_workflow()
+# control_workflow (gateway/supervisor app objects) is built whenever workflow
+# is present, including tests-only on a machine that already ran
+# install_deps.sh. ApiKeyManager SHA-256 needs the same libcrypto soname the
+# install tree ships; importing it only inside MORTRED_BUILD_FULL left
+# tests-only configure failing with "vendored::crypto was not found".
+if(MORTRED_WORKFLOW_AVAILABLE)
+    mortred_import_shared(crypto libcrypto.so.1.1)
+endif()
 
 # CI / unit-test mode: skip CUDA/MNN/TRT-dependent models and servers; build only common + tests
 option(MORTRED_BUILD_FULL "Build full project (models/server/apps, requires CUDA/MNN/TRT)" ON)
@@ -83,9 +91,6 @@ if(MORTRED_BUILD_FULL)
     mortred_import_shared(mnn            libMNN.so)
     mortred_import_shared(fmt            libfmt.so.9)
     mortred_import_shared(onnxruntime    libonnxruntime.so.1.18.0)
-    # the gateway calls ApiKeyManager::authenticate (SHA-256); pin the vendored
-    # crypto so link-time and runtime (LD_LIBRARY_PATH install tree) agree
-    mortred_import_shared(crypto         libcrypto.so.1.1)
     if(MORTRED_BUILD_PROFILE STREQUAL "cpu")
         message(STATUS "Build profile: cpu (MNN-CPU + ORT-CPU, TensorRT compiled out)")
     else()

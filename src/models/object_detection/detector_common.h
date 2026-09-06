@@ -26,7 +26,15 @@ using jinq::common::StatusCode;
  * contexts once instead of producing NaN/Inf boxes deep inside a decoder.
  */
 using backend::GeometryScale;
+using backend::LetterboxGeometry;
 using backend::F32OutputView;
+
+template <typename T>
+inline void unmap_letterbox_detections(std::vector<T> &detections, const backend::LetterboxGeometry &geom, const cv::Size &source) {
+    for (auto &detection : detections) {
+        detection.bbox = backend::unmap_letterbox_bbox(detection.bbox, geom, source);
+    }
+}
 
 /***
  * Shared detector tail: per-class NMS, top-k truncation and category filling.

@@ -54,9 +54,9 @@ template <typename INPUT, typename OUTPUT> StatusCode YoloV7Detector<INPUT, OUTP
 }
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> YoloV7Detector<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
-    // resize / colour / normalize, emitted as f32 nchw
+    // letterbox / colour / normalize, emitted as f32 nchw
     auto result = jinq::models::backend::ImagePipeline(input_image)
-                      .resize(_m_input_size_host)
+                      .letterbox(_m_input_size_host)
                       .bgr_to_rgb()
                       .to_float()
                       .scale(1.0f / 255.0f)
@@ -90,9 +90,9 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
         {{142, 110}, {192, 243}, {459, 401}},
     };
 
-    GeometryScale geometry_scale;
+    LetterboxGeometry letterbox;
     std::string geometry_error;
-    if (!backend::make_geometry_scale(context, &geometry_scale, &geometry_error)) {
+    if (!backend::make_letterbox_geometry(context, &letterbox, &geometry_error)) {
         LOG(ERROR) << "yolov7 " << geometry_error;
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
@@ -166,7 +166,7 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
     }
 
     for (auto &bbox : decode_result) {
-        bbox.bbox = backend::scale_bbox(bbox.bbox, geometry_scale);
+        bbox.bbox = backend::unmap_letterbox_bbox(bbox.bbox, letterbox, context.source_size);
     }
 
     DetectionOutput nms_result = finalize_detections(std::move(decode_result), _m_detection_params, context);

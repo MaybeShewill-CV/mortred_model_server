@@ -176,6 +176,10 @@ GOLDEN_OBJECT_DETECTION_CASE(yolov8_detection, "conf/model/object_detection/yolo
                              "demo_data/model_test_input/object_detection/bus.jpg", jinq::factory::object_detection::create_yolov8_detector,
                              std_object_detection_output);
 
+GOLDEN_OBJECT_DETECTION_CASE(yolov8_onnx_detection, "conf/ci/yolov8_onnx_hosted.toml",
+                             "demo_data/model_test_input/object_detection/bus.jpg", jinq::factory::object_detection::create_yolov8_detector,
+                             std_object_detection_output);
+
 TEST(model_golden, yolov8_mixed_size_batch_matches_single_runs) {
     std::string conf = "conf/model/object_detection/yolov8/yolov8_config.toml";
     if (!weights_available(conf))

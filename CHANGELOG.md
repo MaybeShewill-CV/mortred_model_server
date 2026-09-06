@@ -8,6 +8,19 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- YOLO v5/v6/v7/v8 preprocess now uses Ultralytics-style center letterbox
+  (keep-ratio, pad 114) instead of independent-axis stretch, and unmaps
+  boxes with the matching pad/scale. Stretch `GeometryScale` remains for
+  NanoDet / CenterFace / LibFace. Fork CI proves YOLOv8 decode+NMS+unmap
+  via a CI-only ONNX overlay (`conf/ci/yolov8_onnx_hosted.toml`,
+  `yolov8s.onnx`); product `yolov8_config.toml` is still TensorRT.
+
+> YOLO v5/v6/v7/v8 预处理改为 Ultralytics 导出同款中心 letterbox（等比、
+> 填充 114），框反变换用同一套 pad/scale。NanoDet / CenterFace / LibFace
+> 仍走拉伸 `GeometryScale`。Fork CI 用仅 CI 的 ONNX overlay
+> （`conf/ci/yolov8_onnx_hosted.toml`，`yolov8s.onnx`）证明 YOLOv8
+> decode+NMS+unmap；出厂 `yolov8_config.toml` 仍是 TensorRT。
+
 - Supervisor graceful shutdown no longer hangs. `WFServerBase::stop()` is
   already `shutdown() + wait_finish()` (blocking); the old teardown called
   `wait_finish()` a second time and blocked forever. In production this was
