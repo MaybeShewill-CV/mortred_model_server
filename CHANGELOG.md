@@ -8,6 +8,38 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- Supervisor graceful shutdown no longer hangs. `WFServerBase::stop()` is
+  already `shutdown() + wait_finish()` (blocking); the old teardown called
+  `wait_finish()` a second time and blocked forever. In production this was
+  masked by systemd's `TimeoutStopSec` SIGKILL - `mortred-supervisor` never
+  actually exited gracefully. Found by the in-process SupervisorApp teardown
+  of this refactor.
+
+> Supervisor 优雅关停不再挂死。`WFServerBase::stop()` 本身就是阻塞的
+> `shutdown() + wait_finish()`；旧代码又补了一次 `wait_finish()`，第二次
+> 永久阻塞。生产上一直被 systemd `TimeoutStopSec` 的 SIGKILL 掩盖——
+> `mortred-supervisor` 此前从未真正优雅退出过。由本次重构的进程内
+> SupervisorApp 关停路径暴露。
+
+### Changed
+- Control plane de-globalized (internal refactor, no behavior change):
+  the gateway/supervisor file-scope globals are gone. `GatewayApp` /
+  `SupervisorApp` own their state (catalog, config, tokens, api keys,
+  metrics, supervisor); `run()` maps the process environment onto an
+  explicit `*InitOptions`, and the app objects live in a new
+  workflow-bound `control_workflow` library so tests link them in-process.
+  Acceptance: two gateway and two supervisor instances with distinct
+  roots/tokens/catalogs serve side by side in one process
+  (`gateway_multiinstance_test`, `supervisor_multiinstance_test`).
+
+> 控制面去全局化（内部重构，无行为变化）：网关/supervisor 的文件级全局
+> 状态移除，`GatewayApp` / `SupervisorApp` 持有各自状态；`run()` 将进程
+> 环境映射为显式的 `*InitOptions`，app 对象移入新的依赖 workflow 的
+> `control_workflow` 库以便测试进程内链接。验收：两个网关与两个
+> supervisor 实例（不同 root/token/catalog）可同进程并存
+> （`gateway_multiinstance_test`、`supervisor_multiinstance_test`）。
+
+### Fixed
 - Gateway forwards the raw-body control headers `X-Mortred-Params`,
   `X-Mortred-Options` and `X-Request-ID` to the model server, and echoes
   `X-Request-ID` on its own error replies. Raw-body requests previously lost
