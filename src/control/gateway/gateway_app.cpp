@@ -41,6 +41,7 @@
 #include "control/control_config.h"
 #include "control/http_reply.h"
 #include "control/project_root.h"
+#include "control/trust_tokens.h"
 #include "server/prometheus_metrics.h"
 
 #include "control/gateway/gateway_app.h"
@@ -537,18 +538,19 @@ bool GatewayApp::init(const GatewayInitOptions& options) {
                      "mortred-gateway: WARNING: conf/api_keys.toml has no keys; continuing "
                      "with static-token auth only\n");
     }
-    if (metrics_token_.empty()) {
-        std::fprintf(stderr,
-                     "mortred-gateway: refusing to start without MORTRED_METRICS_TOKEN "
-                     "(GET /metrics is never public, including loopback; set a scrape Bearer "
-                     "distinct from the inference and management tokens). "
-                     "Generate with: mortredctl init-trust\n");
-        return false;
-    }
-    if (metrics_token_ == auth_token_ || metrics_token_ == admin_token_) {
-        std::fprintf(stderr,
-                     "mortred-gateway: refusing to start: MORTRED_METRICS_TOKEN matches an "
-                     "inference or management token; Prometheus would then hold that privilege\n");
+    const auto scrape = scrape_token_usable(metrics_token_, auth_token_, admin_token_);
+    if (!scrape.ok) {
+        if (metrics_token_.empty()) {
+            std::fprintf(stderr,
+                         "mortred-gateway: refusing to start without MORTRED_METRICS_TOKEN "
+                         "(GET /metrics is never public, including loopback; set a scrape Bearer "
+                         "distinct from the inference and management tokens). "
+                         "Generate with: mortredctl init-trust\n");
+        } else {
+            std::fprintf(stderr,
+                         "mortred-gateway: refusing to start: MORTRED_METRICS_TOKEN matches an "
+                         "inference or management token; Prometheus would then hold that privilege\n");
+        }
         return false;
     }
 

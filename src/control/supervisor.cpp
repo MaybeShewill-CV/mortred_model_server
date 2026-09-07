@@ -24,6 +24,7 @@
 #include <sstream>
 
 #include "control/ready_probe.h"
+#include "control/trust_tokens.h"
 #include "control/trt_spawn_gate.h"
 
 namespace mortred {
@@ -75,6 +76,10 @@ void read_pipe_loop(int fd, LogBuffer* buffer) {
     if (!line.empty()) {
         buffer->append(line);
     }
+}
+
+bool is_permanent_spawn_error(const std::string& err) {
+    return is_trt_gate_error(err) || is_scrape_token_error(err);
 }
 
 }  // namespace
@@ -152,6 +157,15 @@ const ProcessSupervisor::Child* ProcessSupervisor::find_locked(const std::string
 std::string ProcessSupervisor::bin_path(const Child& child) const {
     return (std::filesystem::path(_project_root) / _cfg.supervisor.bin_dir / child.entry.exe)
         .string();
+}
+
+void ProcessSupervisor::set_gateway_trust(const std::string& metrics_token,
+                                          const std::string& infer_token,
+                                          const std::string& admin_token) {
+    std::lock_guard<std::mutex> lock(_mu);
+    _gateway_metrics_token = metrics_token;
+    _gateway_infer_token = infer_token;
+    _gateway_admin_token = admin_token;
 }
 
 void ProcessSupervisor::set_catalog(const Catalog& catalog) {
@@ -232,11 +246,19 @@ void ProcessSupervisor::apply_exit_decision(Child* child,
 }
 
 bool ProcessSupervisor::spawn_locked(Child* child, std::string* err) {
-    if (!child->is_gateway) {
-        if (!trt_engines_ready_for_spawn(_project_root, _cfg.supervisor.bin_dir,
-                                         child->entry.config, child->policy.model_config, err)) {
+    if (child->is_gateway) {
+        const auto scrape = scrape_token_usable(_gateway_metrics_token, _gateway_infer_token,
+                                                _gateway_admin_token);
+        if (!scrape.ok) {
+            if (err != nullptr) {
+                *err = scrape_token_spawn_error(scrape);
+            }
             return false;
         }
+    } else if (!trt_engines_ready_for_spawn(_project_root, _cfg.supervisor.bin_dir,
+                                            child->entry.config, child->policy.model_config,
+                                            err)) {
+        return false;
     }
     const std::string exe_path = child->is_gateway
                                      ? (std::filesystem::path(_project_root) /
@@ -288,6 +310,9 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err) {
     const std::string control_config = _control_config_path;
     const std::string gateway_host = _cfg.gateway.host;
     const int gateway_port = _cfg.gateway.port;
+    const std::string gateway_metrics_token = _gateway_metrics_token;
+    const std::string gateway_infer_token = _gateway_infer_token;
+    const std::string gateway_admin_token = _gateway_admin_token;
     const bool is_gateway = child->is_gateway;
     const std::string exe_name = child->is_gateway ? "mortred-gateway.out" : child->entry.exe;
     const std::string config_arg = child->is_gateway ? std::string() : child->entry.config;
@@ -339,6 +364,15 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err) {
             ::setenv("MORTRED_GATEWAY_HOST", gateway_host.c_str(), 1);
             std::string port_str = std::to_string(gateway_port);
             ::setenv("MORTRED_GATEWAY_PORT", port_str.c_str(), 1);
+            if (!gateway_metrics_token.empty()) {
+                ::setenv("MORTRED_METRICS_TOKEN", gateway_metrics_token.c_str(), 1);
+            }
+            if (!gateway_infer_token.empty()) {
+                ::setenv("MORTRED_GATEWAY_AUTH_TOKEN", gateway_infer_token.c_str(), 1);
+            }
+            if (!gateway_admin_token.empty()) {
+                ::setenv("MORTRED_API_TOKEN", gateway_admin_token.c_str(), 1);
+            }
         } else {
             // managed children are loopback-only and protected by the internal
             // token regardless of what their TOML declares
@@ -425,7 +459,7 @@ bool ProcessSupervisor::start_server(const std::string& id, std::string* err) {
     std::string local_err;
     std::string* spawn_err = err != nullptr ? err : &local_err;
     if (!spawn_locked(child, spawn_err)) {
-        if (is_trt_gate_error(*spawn_err)) {
+        if (is_permanent_spawn_error(*spawn_err)) {
             child->wanted = false;
             child->error = *spawn_err;
             child->engine.note_permanent_failure();
@@ -788,7 +822,7 @@ void ProcessSupervisor::monitor_loop() {
                 child->backoff_due_ms = 0;
                 std::string err;
                 if (!spawn_locked(child, &err)) {
-                    if (is_trt_gate_error(err)) {
+                    if (is_permanent_spawn_error(err)) {
                         child->wanted = false;
                         child->error = err;
                         child->engine.note_permanent_failure();

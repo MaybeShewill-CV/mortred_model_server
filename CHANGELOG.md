@@ -22,6 +22,17 @@ All notable changes to this project are documented here. The format follows
 > HTTP catalog 与 bench-only。
 
 ### Fixed
+- Supervisor now refuses to listen (when `mortred-gateway.out` is on disk) and
+  refuses to spawn `__gateway` unless `MORTRED_METRICS_TOKEN` is set and
+  distinct from the inference and management tokens — the same rule the
+  gateway already enforced. Missing or colliding scrape secrets are a
+  permanent failure, not a restart backoff, so a healthy `:8787` banner can
+  no longer hide a gateway crash loop. `/api/v1/keys` remains 404.
+
+> Supervisor 在磁盘上已有 `mortred-gateway.out` 时，若 scrape token 未设置或与
+> 推理/管理 token 相同则拒绝 listen；spawn `__gateway` 使用同一谓词，失败记为
+> permanent 而非 backoff，避免「健康横幅 + 网关崩溃循环」。`/api/v1/keys` 仍是 404。
+
 - `BaseAiModel::run` (and packed `BackendCvModel::run_batch`) catch throws from
   `run_impl` / OpenCV and return `MODEL_RUN_SESSION_FAILED`, so a workflow go
   thread does not `std::terminate` the process. Diffusion DDPM/DDIM/cls-cond

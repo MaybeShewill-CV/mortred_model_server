@@ -18,6 +18,7 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -54,7 +55,8 @@ int find_free_port() {
 }
 
 int http_status(int port, const std::string& method, const std::string& path,
-                const std::string& auth, std::string* body = nullptr) {
+                const std::string& auth, std::string* body = nullptr,
+                const std::string& req_body = "") {
     const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
         return 0;
@@ -73,7 +75,11 @@ int http_status(int port, const std::string& method, const std::string& path,
     if (!auth.empty()) {
         req << "Authorization: Bearer " << auth << "\r\n";
     }
-    req << "\r\n";
+    if (!req_body.empty()) {
+        req << "Content-Type: application/json\r\n";
+    }
+    req << "Content-Length: " << req_body.size() << "\r\n\r\n";
+    req << req_body;
     const std::string request = req.str();
     ::send(fd, request.data(), request.size(), 0);
     std::string response;
@@ -192,4 +198,130 @@ TEST_F(SupervisorMultiInstanceTest, catalogs_are_not_shared) {
 TEST_F(SupervisorMultiInstanceTest, supervisor_metrics_render_per_instance) {
     EXPECT_EQ(http_status(a_.port, "GET", "/api/v1/metrics", a_.token), 200);
     EXPECT_EQ(http_status(b_.port, "GET", "/api/v1/metrics", b_.token), 200);
+}
+
+TEST_F(SupervisorMultiInstanceTest, server_actions_require_bearer_and_post) {
+    EXPECT_EQ(http_status(a_.port, "POST", "/api/v1/servers/SUPER_A/start", ""), 401);
+    EXPECT_EQ(http_status(a_.port, "GET", "/api/v1/servers/SUPER_A/start", a_.token), 405);
+    EXPECT_EQ(http_status(a_.port, "POST", "/api/v1/servers/nope/start", a_.token, nullptr, "{}"),
+              404);
+    EXPECT_EQ(http_status(a_.port, "POST", "/api/v1/servers/SUPER_A/explode", a_.token, nullptr, "{}"),
+              400);
+}
+
+TEST_F(SupervisorMultiInstanceTest, start_stop_restart_return_json_ok) {
+    std::string body;
+    ASSERT_EQ(http_status(a_.port, "POST", "/api/v1/servers/SUPER_A/start", a_.token, &body, "{}"),
+              200);
+    EXPECT_NE(body.find("\"ok\""), std::string::npos) << body;
+
+    body.clear();
+    ASSERT_EQ(http_status(a_.port, "POST", "/api/v1/servers/SUPER_A/stop", a_.token, &body, "{}"),
+              200);
+    EXPECT_NE(body.find("\"ok\""), std::string::npos) << body;
+
+    body.clear();
+    ASSERT_EQ(http_status(a_.port, "POST", "/api/v1/servers/SUPER_A/restart", a_.token, &body, "{}"),
+              200);
+    EXPECT_NE(body.find("\"ok\""), std::string::npos) << body;
+}
+
+TEST_F(SupervisorMultiInstanceTest, logs_are_json_for_known_server) {
+    std::string body;
+    ASSERT_EQ(http_status(a_.port, "GET", "/api/v1/servers/SUPER_A/logs", a_.token, &body), 200);
+    EXPECT_NE(body.find("\"lines\""), std::string::npos) << body;
+    EXPECT_NE(body.find("\"offset\""), std::string::npos) << body;
+    EXPECT_NE(body.find("\"total\""), std::string::npos) << body;
+    EXPECT_EQ(http_status(a_.port, "POST", "/api/v1/servers/SUPER_A/logs", a_.token), 405);
+    EXPECT_EQ(http_status(a_.port, "GET", "/api/v1/servers/nope/logs", a_.token), 404);
+}
+
+TEST_F(SupervisorMultiInstanceTest, graceful_restart_returns_quickly) {
+    std::string body;
+    const auto t0 = std::chrono::steady_clock::now();
+    const int status =
+        http_status(a_.port, "POST", "/api/v1/servers/SUPER_A/graceful_restart", a_.token, &body, "{}");
+    const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::steady_clock::now() - t0)
+                                .count();
+    EXPECT_LT(elapsed_ms, 10000) << "drain must not wait the 120s timeout";
+    EXPECT_TRUE(status == 200 || status == 500) << status << " " << body;
+    EXPECT_NE(body.find("\"drained\":true"), std::string::npos) << body;
+}
+
+TEST_F(SupervisorMultiInstanceTest, keys_routes_stay_gone) {
+    EXPECT_EQ(http_status(a_.port, "GET", "/api/v1/keys", a_.token), 404);
+    EXPECT_EQ(http_status(a_.port, "POST", "/api/v1/keys", a_.token, nullptr, "{}"), 404);
+    EXPECT_EQ(http_status(a_.port, "POST", "/api/v1/keys/reload", a_.token, nullptr, "{}"), 404);
+}
+
+TEST(SupervisorAppInit, scrape_not_required_without_gateway_binary) {
+    const fs::path root =
+        fs::temp_directory_path() / ("mortred_sup_init_noscrape_" + std::to_string(::getpid()));
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root / "conf" / "server", ec);
+    std::ofstream mortred(root / "conf" / "mortred.toml");
+    mortred << "[supervisor]\n";
+    mortred.close();
+    std::ofstream server(root / "conf" / "server" / "ONLY.toml");
+    server << "[ONLY_SERVER]\nmodel=\"ONLY\"\nport=1\nserver_uri=\"/only\"\n"
+           << "server_exe=\"fake_model_server.out\"\n";
+    server.close();
+
+    mortred::control::SupervisorApp app;
+    mortred::control::SupervisorInitOptions opt;
+    opt.project_root = root.string();
+    opt.api_host = "127.0.0.1";
+    opt.api_port = find_free_port();
+    opt.api_token = "mgmt-token";
+    opt.autostart_default = 0;
+    EXPECT_TRUE(app.init(opt));
+    app.stop_listen();
+    fs::remove_all(root, ec);
+}
+
+TEST(SupervisorAppInit, scrape_required_when_gateway_binary_present) {
+    const fs::path root =
+        fs::temp_directory_path() / ("mortred_sup_init_scrape_" + std::to_string(::getpid()));
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root / "conf" / "server", ec);
+    fs::create_directories(root / "_bin", ec);
+    std::ofstream mortred(root / "conf" / "mortred.toml");
+    mortred << "[supervisor]\n";
+    mortred.close();
+    std::ofstream server(root / "conf" / "server" / "ONLY.toml");
+    server << "[ONLY_SERVER]\nmodel=\"ONLY\"\nport=1\nserver_uri=\"/only\"\n"
+           << "server_exe=\"fake_model_server.out\"\n";
+    server.close();
+    std::ofstream gw(root / "_bin" / "mortred-gateway.out");
+    gw << "stub\n";
+    gw.close();
+
+    mortred::control::SupervisorInitOptions opt;
+    opt.project_root = root.string();
+    opt.api_host = "127.0.0.1";
+    opt.api_port = find_free_port();
+    opt.api_token = "mgmt-token";
+    opt.autostart_default = 0;
+
+    {
+        mortred::control::SupervisorApp app;
+        EXPECT_FALSE(app.init(opt));
+    }
+    {
+        mortred::control::SupervisorApp app;
+        opt.metrics_token = "mgmt-token";
+        opt.gateway_auth_token = "infer-token";
+        EXPECT_FALSE(app.init(opt));
+    }
+    {
+        mortred::control::SupervisorApp app;
+        opt.metrics_token = "scrape-token";
+        opt.gateway_auth_token = "infer-token";
+        EXPECT_TRUE(app.init(opt));
+        app.stop_listen();
+    }
+    fs::remove_all(root, ec);
 }

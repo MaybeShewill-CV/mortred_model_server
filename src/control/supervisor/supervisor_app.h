@@ -31,6 +31,8 @@ struct SupervisorInitOptions {
     std::string api_host;     // "" = config value
     int api_port = 0;         // 0 = config value
     std::string api_token;    // management bearer; never empty
+    std::string metrics_token;         // scrape Bearer; required if gateway binary exists
+    std::string gateway_auth_token;    // inference Bearer (MORTRED_GATEWAY_AUTH_TOKEN)
     std::string ui_dir;       // "" = <root>/share/mortred/ui | source ui
     std::string pack_path;    // "" = no machine pack
     int autostart_default = -1;  // -1 = keep config; 0/1 override

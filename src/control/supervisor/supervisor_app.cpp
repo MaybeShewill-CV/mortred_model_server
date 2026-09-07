@@ -49,6 +49,7 @@
 #include "control/mini_toml.h"
 #include "control/project_root.h"
 #include "control/supervisor.h"
+#include "control/trust_tokens.h"
 
 #include "control/supervisor/supervisor_app.h"
 
@@ -296,11 +297,11 @@ void SupervisorApp::handle_server_action(WFHttpTask* task, const std::string& id
 
 void SupervisorApp::handle_logs(WFHttpTask* task, const std::string& id,
                                 const std::string& uri) {
-    auto* buffer = supervisor_->logs(id);
-    if (buffer == nullptr) {
+    if (!supervisor_->has_server(id)) {
         reply_json(task, 404, json_error("unknown server id: " + id));
         return;
     }
+    auto* buffer = supervisor_->logs(id);
     size_t offset = parse_size(query_value(uri, "offset"), 0);
     size_t limit = parse_size(query_value(uri, "limit"), 200);
     if (limit > 1000) {
@@ -310,10 +311,12 @@ void SupervisorApp::handle_logs(WFHttpTask* task, const std::string& id,
     d.SetObject();
     auto& a = d.GetAllocator();
     d.AddMember("offset", static_cast<uint64_t>(offset), a);
-    d.AddMember("total", static_cast<uint64_t>(buffer->size()), a);
+    d.AddMember("total", static_cast<uint64_t>(buffer == nullptr ? 0 : buffer->size()), a);
     rapidjson::Value lines(rapidjson::kArrayType);
-    for (const auto& line : buffer->slice(offset, limit)) {
-        lines.PushBack(rapidjson::Value(line.c_str(), line.size(), a), a);
+    if (buffer != nullptr) {
+        for (const auto& line : buffer->slice(offset, limit)) {
+            lines.PushBack(rapidjson::Value(line.c_str(), line.size(), a), a);
+        }
     }
     d.AddMember("lines", lines, a);
     reply_json(task, 200, serialize(d));
@@ -648,7 +651,31 @@ bool SupervisorApp::init(const SupervisorInitOptions& options) {
                      pack.string().c_str(), pack_n);
     }
 
+    const std::filesystem::path gateway_bin =
+        std::filesystem::path(root_) / cfg_.supervisor.bin_dir / "mortred-gateway.out";
+    std::error_code gw_ec;
+    if (std::filesystem::exists(gateway_bin, gw_ec)) {
+        const auto scrape = scrape_token_usable(options.metrics_token, options.gateway_auth_token,
+                                                auth_token_);
+        if (!scrape.ok) {
+            if (options.metrics_token.empty()) {
+                std::fprintf(stderr,
+                             "mortred-supervisor: refusing to start without MORTRED_METRICS_TOKEN "
+                             "(gateway GET /metrics is never public, including loopback; set a "
+                             "scrape Bearer distinct from the inference and management tokens). "
+                             "Generate with: mortredctl init-trust\n");
+            } else {
+                std::fprintf(stderr,
+                             "mortred-supervisor: refusing to start: MORTRED_METRICS_TOKEN matches "
+                             "an inference or management token; Prometheus would then hold that "
+                             "privilege\n");
+            }
+            return false;
+        }
+    }
+
     supervisor_ = std::make_unique<ProcessSupervisor>(root_, cfg_, config_path);
+    supervisor_->set_gateway_trust(options.metrics_token, options.gateway_auth_token, auth_token_);
     supervisor_->set_catalog(catalog_);
     std::string thread_err;
     if (!supervisor_->start_threads(&thread_err)) {
@@ -706,6 +733,13 @@ int SupervisorApp::run() {
     options.api_port = run_env_int("MORTRED_API_PORT", 0);
     if (const char* env = std::getenv("MORTRED_API_TOKEN"); env != nullptr && *env != '\0') {
         options.api_token = env;
+    }
+    if (const char* env = std::getenv("MORTRED_METRICS_TOKEN"); env != nullptr && *env != '\0') {
+        options.metrics_token = env;
+    }
+    if (const char* env = std::getenv("MORTRED_GATEWAY_AUTH_TOKEN");
+        env != nullptr && *env != '\0') {
+        options.gateway_auth_token = env;
     }
     if (const char* env = std::getenv("MORTRED_AUTOSTART"); env != nullptr && *env != '\0') {
         const std::string v = mini_toml::trim(env);

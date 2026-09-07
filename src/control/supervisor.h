@@ -62,6 +62,12 @@ class ProcessSupervisor {
     ProcessSupervisor(const ProcessSupervisor&) = delete;
     ProcessSupervisor& operator=(const ProcessSupervisor&) = delete;
 
+    /*** scrape / inference / management tokens used only when spawning __gateway.
+     * Empty metrics (the default) permanently fails gateway spawn. Tests set
+     * these on the object; the daemon copies them from SupervisorInitOptions. */
+    void set_gateway_trust(const std::string& metrics_token, const std::string& infer_token,
+                           const std::string& admin_token);
+
     /*** build the child table from the catalog; gateway child is implicit */
     void set_catalog(const Catalog& catalog);
 
@@ -148,6 +154,9 @@ class ProcessSupervisor {
     ControlConfig _cfg;
     std::string _control_config_path;
     std::string _internal_token;
+    std::string _gateway_metrics_token;
+    std::string _gateway_infer_token;
+    std::string _gateway_admin_token;
 
     mutable std::mutex _mu;
     std::condition_variable _cv;
