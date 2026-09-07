@@ -54,7 +54,9 @@ if command -v ldd >/dev/null 2>&1 && command -v nm >/dev/null 2>&1 && [ -e "$SER
     MODELS_SO="$(ldd "$SERVER_BIN" 2>/dev/null | awk '/libmodels/{print $3; exit}')"
     if [ -n "${MODELS_SO:-}" ] && [ -e "$MODELS_SO" ]; then
         echo "[smoke] libmodels=$MODELS_SO"
-        if ! nm -D "$MODELS_SO" 2>/dev/null | grep -q 'ImagePipeline9letterbox'; then
+        # grep -q closes the pipe on the first match; with pipefail, nm then
+        # exits 141 (SIGPIPE) and this check falsely reports a stale .so.
+        if ! nm -D "$MODELS_SO" 2>/dev/null | grep 'ImagePipeline9letterbox' >/dev/null; then
             echo "[FAIL] $MODELS_SO has no ImagePipeline::letterbox (stale .so)."
             echo "  Rebuild models against the current tree, then re-run:"
             echo "    touch src/models/backend/model_runtime.cpp"
