@@ -82,7 +82,7 @@ public:
         return StatusCode::OK;
     }
 
-    void call_do_work(InferenceTask* req, InferenceResult<TestOutput>* result) {
+    void call_do_work(InferenceTask* req, InferenceResult* result) {
         do_work(req, result);
     }
 
