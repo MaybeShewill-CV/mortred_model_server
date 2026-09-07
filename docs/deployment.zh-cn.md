@@ -94,7 +94,7 @@ flowchart TD
 |---|---|---|
 | **推理后端** | MNN-CUDA / ORT-CUDA / TensorRT | MNN-CPU / ORT-CPU（TensorRT 编译排除） |
 | **硬件要求** | NVIDIA GPU + 驱动，CUDA 11.8 或 12 线 | 任意 x64 机器 |
-| **可用模型** | 全部（分类/检测/OCR/分割/SAM/扩散/CLIP/MOT…） | 精选集：mobilenetv2、resnet50 |
+| **可用模型** | HTTP catalog（分类/检测/OCR/分割/抠图/增强/SuperPoint/深度/DINOv2/SAM AMG/扩散）。bench-only：CLIP、LightGlue、FastSAM、SAM prompt、MsOcrNet。无 MOT。RT-DETR 未实现。 | 精选集：mobilenetv2、resnet50 |
 | **权重体积** | 全量 manifest（数十 GB） | 精选子集（约 1 GB） |
 | **Engine 转换** | 本机为本 pack 转 engine（§10.2）；全量 zoo 转换仍是可选项 | 不需要 |
 
@@ -148,7 +148,7 @@ flowchart TD
 最快路径——检测硬件、选轨道、一路到底：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MaybeSheewill-CV/mortred_model_server/main/scripts/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/MaybeShewill-CV/mortred_model_server/main/scripts/bootstrap.sh | bash
 ```
 
 **它会做什么**：
@@ -165,7 +165,7 @@ curl -fsSL https://raw.githubusercontent.com/MaybeSheewill-CV/mortred_model_serv
   detected profile: cpu
 == docker track ==
 next:
-  1. git clone https://github.com/MaybeSheewill-CV/mortred_model_server.git && cd mortred_model_server
+  1. git clone https://github.com/MaybeShewill-CV/mortred_model_server.git && cd mortred_model_server
   2. python3 scripts/fetch_weights.py --profile cpu
   3. MORTRED_API_TOKEN=<mgmt> MORTRED_GATEWAY_AUTH_TOKEN=<infer> \
          docker compose --profile cpu up -d
@@ -182,7 +182,7 @@ next:
 
 ```bash
 # ① 获取代码（compose 文件与权重脚本随仓库走）
-git clone https://github.com/MaybeSheewill-CV/mortred_model_server.git
+git clone https://github.com/MaybeShewill-CV/mortred_model_server.git
 cd mortred_model_server
 
 # ② 拉取当前 profile 的权重子集（断点续传 + sha256 校验）
@@ -207,9 +207,10 @@ GPU 轨道需要 NVIDIA Container Toolkit（`docker run --gpus all` 可用即已
 # 健康探针（supervisor）
 curl -fs http://localhost:8787/api/v1/health
 
-# 网关健康 + 指标（公开端点）
+# 网关健康（公开）+ 指标（含环回也要 scrape token）
 curl -fs http://localhost:8080/healthz
-curl -fs http://localhost:8080/metrics | head -5
+curl -fs -H "Authorization: Bearer $MORTRED_METRICS_TOKEN" \
+    http://localhost:8080/metrics | head -5
 
 # 带鉴权的目录查询
 curl -fs -H "Authorization: Bearer $MORTRED_API_TOKEN" \
@@ -258,12 +259,12 @@ docker run -d --name mortred --gpus all \
 
 ### 6.1 下载与校验
 
-从 [Releases](https://github.com/MaybeSheewill-CV/mortred_model_server/releases) 下载对应 profile 的包（以 v0.1.0 / cpu 为例）：
+从 [Releases](https://github.com/MaybeShewill-CV/mortred_model_server/releases) 下载对应 profile 的包（以 v0.1.0 / cpu 为例）：
 
 ```bash
 VER=0.1.0
 curl -fLO https://github.com/MaybeShewill-CV/mortred_model_server/releases/download/v$VER/mortred_model_server-$VER-cpu-linux-x64.tar.gz
-curl -fLO https://github.com/MaybeSheewill-CV/mortred_model_server/releases/download/v$VER/mortred_model_server-$VER-cpu-linux-x64.tar.gz.sha256
+curl -fLO https://github.com/MaybeShewill-CV/mortred_model_server/releases/download/v$VER/mortred_model_server-$VER-cpu-linux-x64.tar.gz.sha256
 sha256sum -c mortred_model_server-$VER-cpu-linux-x64.tar.gz.sha256   # 必须输出 OK
 ```
 

@@ -60,22 +60,28 @@ Every request to the gateway must include the `Authorization: Bearer <key>` head
 
 #### Sync Inference (real-time)
 
+Prefer the catalog path. The legacy `server_uri` still works with the same body.
+
 ```bash
-curl -X POST http://localhost:8080/mortred_ai_server_v1/obj_detection/yolov8 \
+IMG=$(base64 -w0 image.jpg)
+curl -X POST http://localhost:8080/v1/models/YOLOV8/infer \
   -H "Authorization: Bearer $MORTRED_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"img_data": "'"$(base64 -w0 image.jpg)"'", "req_id": "my-request-1"}'
+  -d '{"images":["'"$IMG"'"],"req_id":"my-request-1"}'
 ```
 
 #### Async Job (long-running: diffusion, SAM)
+
+Submit the same envelope as `/infer`. Model knobs such as `timestep` belong in
+`params`, not at the root.
 
 ```bash
 # 1. Submit
 curl -X POST http://localhost:8080/v1/models/DDPM/jobs \
   -H "Authorization: Bearer $MORTRED_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"img_data": "...", "timestep": 100}'
-# Returns: {"job_id": "job_xxx", "state": "pending"}
+  -d '{"images":["'"$(base64 -w0 image.jpg)"'"],"req_id":"job-1","params":{"timestep":100}}'
+# Returns HTTP 202: {"job_id": "job_xxx", "state": "pending", "poll_url": "...", "result_url": "..."}
 
 # 2. Poll
 curl http://localhost:8080/v1/models/DDPM/jobs/job_xxx \
@@ -102,9 +108,9 @@ with open("image.jpg", "rb") as f:
     img_b64 = base64.b64encode(f.read()).decode()
 
 # Inference
-resp = requests.post(f"{GATEWAY}/mortred_ai_server_v1/obj_detection/yolov8",
+resp = requests.post(f"{GATEWAY}/v1/models/YOLOV8/infer",
                      headers=headers,
-                     json={"img_data": img_b64, "req_id": "demo"})
+                     json={"images": [img_b64], "req_id": "demo"})
 print(resp.json())
 ```
 
@@ -197,7 +203,7 @@ openssl rand -hex 32
 
 # Step 2: Compute the SHA-256 hash (this is what goes in the config)
 echo -n "3a7f9b2e8c4d1f6a0b5c3d8e2f7a4b9c6d1e0f3a5b8c2d7e4f1a6b3c8d0e5f" | sha256sum
-# Example output: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+# Example output: 278ea5c810f26733365d39e13857a53bf2d6d1fd8a98f47f668c574cb5417c53
 
 # Step 3: Record the hash in conf/api_keys.toml
 ```
@@ -205,7 +211,7 @@ echo -n "3a7f9b2e8c4d1f6a0b5c3d8e2f7a4b9c6d1e0f3a5b8c2d7e4f1a6b3c8d0e5f" | sha25
 ```toml
 # conf/api_keys.toml — add the new client
 [keys.new-client]
-hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+hash = "278ea5c810f26733365d39e13857a53bf2d6d1fd8a98f47f668c574cb5417c53"
 scope = "inference"
 rate_limit_qps = 100
 enabled = true
@@ -218,7 +224,7 @@ curl -X POST -H "Authorization: Bearer $MORTRED_API_TOKEN" \
 
 # Step 5: Give the key string to the client (NOT the hash)
 # The client uses: Authorization: Bearer 3a7f9b2e8c4d...
-# You store:       hash = "e3b0c44298fc..."
+# You store:       hash = "278ea5c8..."
 ```
 
 ### Managing Keys
@@ -231,7 +237,7 @@ live in the gateway process and reset on restart.
 # conf/api_keys.toml
 [keys.suspended-client]
 hash = "..."
-enabled = false   # immediately rejected on next request
+enabled = false   # takes effect after the gateway child restarts
 ```
 Then restart the gateway child.
 
@@ -358,19 +364,11 @@ curl -X POST -H "Authorization: Bearer $MORTRED_API_TOKEN" \
 ```
 
 ```bash
-curl -X POST http://localhost:8080/mortred_ai_server_v1/obj_detection/yolov8 \
+curl -X POST http://localhost:8080/v1/models/YOLOV8/infer \
   -H "Authorization: Bearer YOUR_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"img_data": "base64..."}'
+  -d '{"images":["base64..."],"req_id":"demo"}'
 ```
-
-## Authentication Priority
-
-The gateway checks in order:
-1. API Key (multi-key): hash the Bearer token, look up in conf/api_keys.toml, check scope and rate limit
-2. Static token (legacy): compare with MORTRED_GATEWAY_AUTH_TOKEN
-
-If either succeeds, the request is authorized. The `X-Mortred-Key` response header identifies which key was used.
 
 ## Key Rotation
 
@@ -384,7 +382,7 @@ If either succeeds, the request is authorized. The `X-Mortred-Key` response head
 
 - Keys are never stored in plaintext - only SHA-256 hashes
 - The key file should be chmod 600 and owned by the service user
-- Disabled keys are rejected immediately
+- Disabled keys are rejected after the gateway child reloads the file
 - Rate limiting is per-key fixed-window (1 second)
 - All authentication happens at the gateway; model servers are loopback-only behind the internal token
 

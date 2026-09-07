@@ -3,6 +3,10 @@
 | [English](api-contract.md) | [中文](api-contract.zh-cn.md) |
 |---|---|
 
+机器可读契约是 `docs/openapi.json`（每个模型进程的 `GET /openapi.json` 也提供）。
+本页是人读摘要。不要再复制已删除的 `{req_id, code, msg, data}` 信封或 `img_data`
+字段——那些请求会返回 **422**。
+
 ## 拓扑说明：mortred-gateway
 
 生产流量统一经由 **mortred-gateway**（默认 `:8080`）。网关先按 catalog
@@ -10,11 +14,12 @@
 仅监听环回地址的模型服务器。网关负责外部 Bearer Token 鉴权
 （`MORTRED_GATEWAY_AUTH_TOKEN` 或 `MORTRED_API_TOKEN`），将上游不可达映射为
 `503`、传输失败映射为 `502`；下文所有模型服务器状态码均原样透传。网关的
-`GET /healthz` 为公开端点。`GET /metrics` 在环回上默认公开；非环回网关必须设置
-独立的 `MORTRED_METRICS_TOKEN`（不要复用推理 token）。
-模型端口仅绑定环回地址、
-不得对外暴露。Mortred 自身是明文 HTTP；对外服务必须由网关前置的反向
-代理终结 TLS。fail-closed 拒绝非环回且无鉴权，以及非环回且无独立 scrape token。
+`GET /healthz` 为公开端点。`GET /metrics` **含环回在内一律**需要
+`MORTRED_METRICS_TOKEN`。网关拒绝在缺少独立 scrape Bearer（不得与推理
+token 相同）时启动。模型端口仅绑定环回地址、不得对外暴露。Mortred 自身是
+明文 HTTP；对外服务必须由主机网络上的 Nginx 终结 TLS
+（`mortredctl init-edge`）。fail-closed 拒绝无鉴权监听、缺少 metrics token、
+以及未设 `MORTRED_EXPOSE=docker` 或 `unsafe` 的通配绑定。
 
 监督器（supervisor，`:8787`）在 `/api/v1/` 下提供管理 REST API
 （health/catalog/status/生命周期/日志/metrics）与内嵌 Web UI；
@@ -24,10 +29,8 @@
 监督进程只做管理（catalog / 启停 / 日志 / UI）。推理和异步 jobs
 走网关。`:8080` 上的遗留 `{server_uri}` 仍然可用。
 
-所有模型服务器遵循统一的 HTTP JSON 契约。权威的机器可读描述是
-`docs/openapi.json`（每个模型服务器在 `GET /openapi.json` 提供）；
-本文档是它的可读摘要。任何状态码、端点或响应结构的变更必须同时更新
-两份文件（用 `python scripts/gen_openapi.py` 重新生成）。
+状态码、端点或响应结构变更必须同时更新 `docs/openapi.json`
+（用 `python scripts/gen_openapi.py` 重新生成）。
 
 ## 鉴权
 
@@ -40,13 +43,13 @@ Authorization: Bearer <token>
 
 - 缺失或错误的 token：`401` + `WWW-Authenticate: Bearer realm="Mortred"`。
 - 健康/元数据端点（`/healthz`、`/ready`、`/openapi.json`）公开。
-  监督器 `GET /api/v1/metrics` 需要管理 token。网关 `GET /metrics` 在环回上默认公开；
-  非环回必须设置独立的 `MORTRED_METRICS_TOKEN`。模型在配置了 `auth_token` /
-  `MORTRED_AUTH_TOKEN` 时，`GET /metrics` 也要 Bearer（`/healthz` 仍公开）。
-  不要把推理 token 当作 scrape 密钥。
-- `auth_token` 为空时模型端点开放访问，但服务器拒绝在非环回地址上监听
-  （fail-closed，配置缺失即拒绝启动）。该门闩不是 TLS、不是指标保密、
-  也不是 token 强度检查。
+  监督器 `GET /api/v1/metrics` 需要管理 token。网关 `GET /metrics` **含环回**
+  一律要 `MORTRED_METRICS_TOKEN`。模型进程的 `GET /metrics` 需要进程鉴权
+  token（监督器拉起的子进程总有 `MORTRED_AUTH_TOKEN`）；空 token 返回 401，
+  不是公开刮取。`/healthz` 仍公开。不要把推理 token 当作 scrape 密钥。
+- `auth_token` 为空时，模型推理和 `/metrics` 返回 **401**。健康/元数据仍公开。
+  服务器仍拒绝无 token 的非环回监听，以及未设 `MORTRED_EXPOSE=docker|unsafe`
+  的通配绑定。空配置的 token **不会**授权任何请求。
 
 ## 请求规则
 
@@ -55,53 +58,84 @@ Authorization: Bearer <token>
   缺失或为其他媒体类型返回 `415`。
 - 请求体上限为 `request_size_limit` MB；显式 `Content-Length` 超限返回
   `413`。
+- JSON 根键只允许 `req_id`、`images`、`params`、`options`。未知键和已删除的
+  `img_data` 返回 **422**。
 
 ## 通用响应封装
 
 ```json
 {
-  "req_id": "客户端提供或服务器生成",
-  "code": 0,
-  "msg": "success",
-  "data": {}
+  "status": 0,
+  "status_str": "OK",
+  "task_id": "客户端提供或服务器生成",
+  "model": { "name": "MOBILENETV2", "version": "" },
+  "results": [
+    {
+      "status": 0,
+      "data": {
+        "class_id": 123,
+        "category": "tabby cat",
+        "scores": [0.1, 0.8, 0.1]
+      }
+    }
+  ],
+  "server_time_ms": 41.2,
+  "partial": false
 }
 ```
 
-错误时：
+契约校验失败时（HTTP 422）：
 
 ```json
 {
-  "req_id": "...",
-  "code": 50,
-  "msg": "decode json error",
-  "data": null
+  "status": 66,
+  "status_str": "invalid request parameter",
+  "task_id": "",
+  "results": [],
+  "server_time_ms": 0.0,
+  "partial": false,
+  "errors": [
+    {
+      "pointer": "/img_data",
+      "message": "field 'img_data' was removed; use images: [\"<base64>\"] (migration: img_data -> images[0])"
+    }
+  ]
 }
 ```
 
+先看 HTTP 状态，再看顶层 `status`，再逐项看 `results[i].status`。该项失败时
+`results[i].data` 为 `null`。忽略未知响应字段。各任务载荷在 `results[].data`
+下，定义见 `docs/openapi.json` `components.schemas`
+（`src/server/response_serializers.h`）。
+
 ## HTTP 状态码映射
 
-| 业务码 | 含义 | HTTP 状态码 |
+JSON 字段名是 **`status`**（不是 `code`）。映射见 `src/server/http_status.h`。
+
+| `status` | 含义 | HTTP |
 |---:|---|---:|
 | 0 | 成功 | 200 |
+| 68 | 截止超时，部分结果 | 200 |
 | 50 | JSON 解析错误 | 400 |
 | 3 | 输入图片为空 | 400 |
+| 66 | 非法请求（`img_data`、未知键、错误 `params`） | 422 |
 | 60 | 不支持的媒体类型 | 415 |
 | 61 | 请求实体过大 | 413 |
+| 67 | 单请求条目过多 | 413 |
 | 62 | 方法不允许 | 405 |
 | 63 | 未找到 | 404 |
 | 65 | 服务未就绪 | 503 |
 | 4 | 模型运行超时 | 504 |
-| 6 | ?????????? | 500 |
+| 6 | 模型输出契约失败 | 500 |
 | 401 | 未授权 | 401 |
-| 429 | 触发限流 | 429 |
-| 429 | 等待队列已满（超出 `max_queue_depth`；携带 `Retry-After`） | 429 |
+| 429 | 限流或等待队列已满（携带 `Retry-After`） | 429 |
 | 其他 | 服务器错误 | 500 |
 
 ## 通用响应头
 
 ```http
 Content-Type: application/json; charset=utf-8
-X-Request-ID: <req_id>
+X-Request-ID: <task_id>
 Cache-Control: no-store
 ```
 
@@ -111,7 +145,7 @@ Cache-Control: no-store
 |---|---|---|
 | `/healthz` | GET | 存活探针 |
 | `/ready` | GET | 就绪探针 |
-| `/metrics` | GET | Prometheus 指标 |
+| `/metrics` | GET | Prometheus 指标（鉴权见上） |
 | `/openapi.json` | GET | OpenAPI 文档（内嵌副本） |
 
 未知路径（含已删除的 `/welcome`、`/hello_world` HTML 探活）返回 `404` 与
@@ -122,6 +156,22 @@ Cache-Control: no-store
 ```json
 {
   "req_id": "可选",
+  "images": ["base64 编码的图片"],
+  "params": {},
+  "options": {}
+}
+```
+
+`images` 必填且恒为数组（≥1）。`params` / `options` 为可选对象。阈值、
+`timestep` 等模型参数放在 `params` 里，不要放在根上。
+
+### 已删除字段：`img_data`（HTTP 422）
+
+下面不是成功请求。即使同时带了 `images` 也会被拒绝：
+
+```json
+{
+  "req_id": "legacy",
   "img_data": "base64 编码的图片"
 }
 ```
@@ -132,42 +182,15 @@ Cache-Control: no-store
 拒绝，并携带 `Retry-After` 响应头（依据队列深度、运行时长 EWMA 与
 worker 数量估算排水时间，钳制在 1-60 秒）。网关将两者原样转发。
 
-新增可选服务端配置键：
+新增可选服务端配置键：`max_queue_depth`（0 = 不限制）、`max_batch_size`
+（默认 1；大于 1 时在 `max_batch_delay_ms` 窗口内凑批），以及
+`mortred_queue_rejected_total` / `mortred_batch_size` /
+`mortred_batch_window_wait_ms` 指标。
 
-- `max_queue_depth`：等待队列上限，超过后快速失败（0 = 不限制）。
-  调优公式：`深度 ≈ worker_nums × 目标排队秒数 / 单次推理时长（秒）`。
-- `max_batch_size`：动态批处理，默认 1（关闭）；大于 1 时在
-  `max_batch_delay_ms` 收集窗口内凑批，合成一次 `[N,H,W,3]` 推理。
-  仅适用于支持动态 batch 维的模型（当前：mobilenetv2 / resnet50）。
-
-新增指标：`mortred_queue_rejected_total`（过载拒绝计数）、
-`mortred_batch_size`（实际批大小直方图）、
-`mortred_batch_window_wait_ms`（批收集窗口等待直方图）。
-
-批内逐条失败隔离：一条失败（坏图、解码错误）只返回它自己的错误码，
+批内逐条失败隔离：一条失败（坏图、解码错误）只返回它自己的错误 status，
 同批其他条目照常得到结果；仅会话级失败（引擎错误）才会使全部参与
 条目失败。
 
-## 模型推理响应
-
-```json
-{
-  "req_id": "...",
-  "code": 0,
-  "msg": "success",
-  "data": {
-    "class_id": 123,
-    "category": "tabby cat",
-    "scores": [0.1, 0.8, 0.1]
-  }
-}
-```
-
-所有非成功响应的 `data` 均为 `null`
-（400/401/404/405/413/415/429/500/503/504）。各任务的 `data` 结构
-（分类、检测、人脸、OCR、分割、抠图、增强、深度、特征点）定义于
-`docs/openapi.json` 的 `components.schemas`，由
-`src/server/response_serializers.h` 实现。
 ## 异步任务
 
 服务端开启 `async_enabled` 后，长耗时推理可异步提交。**模型端口**上的路径不变
@@ -194,7 +217,8 @@ worker 数量估算排水时间，钳制在 1-60 秒）。网关将两者原样�
 | `GET /jobs/{id}/result` | `200` 标准响应封装（可重复读取） | 未知 id `404`，未完成 `409`（含 `pending`/`running`/`failed`/`timeout`） |
 
 `202` 表示服务器接受了该 job，不表示推理已经完成。正确的客户端不要把
-`POST /jobs` 当成阻塞的 `/infer`。逐步验收步骤见
+`POST /jobs` 当成阻塞的 `/infer`。提交体与 `/infer` 相同（`images[]`）。
+逐步验收步骤见
 [async-jobs-customer-test.zh-cn.md](async-jobs-customer-test.zh-cn.md)。
 
 任务账本保存在内存中（重启即失）。组件设计、并发契约与验证门禁见

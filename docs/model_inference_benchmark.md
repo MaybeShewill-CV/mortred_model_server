@@ -1,5 +1,10 @@
 <b><font color='black' size='8' face='Helvetica'> Model Inference Benchmark </font></b>
 
+> Historical in-process FPS numbers (Ubuntu 18.04 / CUDA 11.1 / RTX 3080,
+> Driver 455.23.04). Not an HTTP RPS table and not a claim about the current
+> letterbox YOLO path. Re-measure on your GPU with
+> `mortred-model-benchmark.out`.
+
 The benchmark test environment is as follows：
 
 **OS:** Ubuntu 18.04.5 LTS / 5.4.0-53-generic

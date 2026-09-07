@@ -55,22 +55,27 @@
 
 #### 同步推理（实时）
 
+优先走 catalog 路径。遗留 `server_uri` 仍可用，请求体相同。
+
 ```bash
-curl -X POST http://localhost:8080/mortred_ai_server_v1/obj_detection/yolov8 \
+IMG=$(base64 -w0 image.jpg)
+curl -X POST http://localhost:8080/v1/models/YOLOV8/infer \
   -H "Authorization: Bearer $MORTRED_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"img_data": "'"$(base64 -w0 image.jpg)"'", "req_id": "my-request-1"}'
+  -d '{"images":["'"$IMG"'"],"req_id":"my-request-1"}'
 ```
 
 #### 异步任务（长耗时：扩散模型、SAM）
+
+提交体与 `/infer` 相同。`timestep` 等模型参数放在 `params` 里，不要放在根上。
 
 ```bash
 # 1. 提交
 curl -X POST http://localhost:8080/v1/models/DDPM/jobs \
   -H "Authorization: Bearer $MORTRED_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"img_data": "...", "timestep": 100}'
-# 返回: {"job_id": "job_xxx", "state": "pending"}
+  -d '{"images":["'"$(base64 -w0 image.jpg)"'"],"req_id":"job-1","params":{"timestep":100}}'
+# 返回 HTTP 202: {"job_id": "job_xxx", "state": "pending", "poll_url": "...", "result_url": "..."}
 
 # 2. 轮询
 curl http://localhost:8080/v1/models/DDPM/jobs/job_xxx \
@@ -97,9 +102,9 @@ with open("image.jpg", "rb") as f:
     img_b64 = base64.b64encode(f.read()).decode()
 
 # 推理
-resp = requests.post(f"{GATEWAY}/mortred_ai_server_v1/obj_detection/yolov8",
+resp = requests.post(f"{GATEWAY}/v1/models/YOLOV8/infer",
                      headers=headers,
-                     json={"img_data": img_b64, "req_id": "demo"})
+                     json={"images": [img_b64], "req_id": "demo"})
 print(resp.json())
 ```
 
@@ -164,7 +169,7 @@ openssl rand -hex 32
 
 # 第 2 步：计算 SHA-256 哈希（这个写入配置文件）
 echo -n "3a7f9b2e8c4d1f6a0b5c3d8e2f7a4b9c6d1e0f3a5b8c2d7e4f1a6b3c8d0e5f" | sha256sum
-# 示例输出: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+# 示例输出: 278ea5c810f26733365d39e13857a53bf2d6d1fd8a98f47f668c574cb5417c53
 
 # 第 3 步：将哈希写入 conf/api_keys.toml
 ```
@@ -172,7 +177,7 @@ echo -n "3a7f9b2e8c4d1f6a0b5c3d8e2f7a4b9c6d1e0f3a5b8c2d7e4f1a6b3c8d0e5f" | sha25
 ```toml
 # conf/api_keys.toml — 添加新客户端
 [keys.new-client]
-hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+hash = "278ea5c810f26733365d39e13857a53bf2d6d1fd8a98f47f668c574cb5417c53"
 scope = "inference"
 rate_limit_qps = 100
 enabled = true
@@ -185,7 +190,7 @@ curl -X POST -H "Authorization: Bearer $MORTRED_API_TOKEN" \
 
 # 第 5 步：将 key 字符串交给客户端（不是哈希！）
 # 客户端使用:  Authorization: Bearer 3a7f9b2e8c4d...
-# 你存储的是:   hash = "e3b0c44298fc..."
+# 你存储的是:   hash = "278ea5c8..."
 ```
 
 ### 管理 Key
@@ -197,7 +202,7 @@ curl -X POST -H "Authorization: Bearer $MORTRED_API_TOKEN" \
 # conf/api_keys.toml
 [keys.suspended-client]
 hash = "..."
-enabled = false   # 下一次请求立即被拒
+enabled = false   # 重启 gateway 子进程后生效
 ```
 然后重启 gateway 子进程。
 
@@ -316,19 +321,11 @@ curl -X POST -H "Authorization: Bearer $MORTRED_API_TOKEN" \
 ```
 
 ```bash
-curl -X POST http://localhost:8080/mortred_ai_server_v1/obj_detection/yolov8 \
+curl -X POST http://localhost:8080/v1/models/YOLOV8/infer \
   -H "Authorization: Bearer YOUR_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"img_data": "base64..."}'
+  -d '{"images":["base64..."],"req_id":"demo"}'
 ```
-
-## 鉴权优先级
-
-网关按顺序检查：
-1. API Key（多 key）：哈希 Bearer token → 查 conf/api_keys.toml → 作用域 → 限流
-2. 静态 token（旧版兼容）：与 MORTRED_GATEWAY_AUTH_TOKEN 比较
-
-任一通过即授权。响应头 `X-Mortred-Key` 标识使用了哪个 key。
 
 ## Key 轮换
 
@@ -342,7 +339,7 @@ curl -X POST http://localhost:8080/mortred_ai_server_v1/obj_detection/yolov8 \
 
 - Key 绝不以明文存储——只有 SHA-256 哈希
 - 配置文件应设为 chmod 600 并归服务用户所有
-- 被禁用的 key 立即拒绝
+- 被禁用的 key 在 gateway 子进程重新加载文件后才会拒绝
 - 限流为每 key 固定窗口（1 秒）
 - 所有鉴权在网关层完成；模型服务器仅绑定环回地址
 - fail-closed 只保证非环回监听必须配鉴权；不终结 TLS，也不隐藏网关 `/metrics`

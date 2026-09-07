@@ -35,15 +35,34 @@ cd $PROJECT_ROOT
 python3 scripts/server/test_server.py --server mobilenetv2 --mode single --times 3
 ```
 
-客户端会发送 [默认测试图像](../demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG)，并打印 HTTP 状态码与截断后的 UnifiedResponse。
+客户端会发送 [默认测试图像](../demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG)，并打印 HTTP 状态码与截断后的 UnifiedResponse。分类 id 与分数在 `results[].data`：
 
-`mobilenetv2 图像分类服务器输出`
+```json
+{
+  "status": 0,
+  "status_str": "OK",
+  "task_id": "demo",
+  "results": [
+    {
+      "status": 0,
+      "data": {
+        "class_id": 281,
+        "category": "tabby",
+        "scores": [0.01, 0.02]
+      }
+    }
+  ],
+  "partial": false
+}
+```
+
+下面截图是**历史输出**（统一信封之前）。现行契约以这段 JSON 和 `test_server.py` 为准。
+
+`历史 mobilenetv2 图像分类服务器输出`
 ![server_output](../resources/images/exam_server_output.png)
 
-`mobilenetv2 图像分类客户端输出`
+`历史 mobilenetv2 图像分类客户端输出`
 ![server_output](../resources/images/exam_client_output.png)
-
-分类 id 与分数在 `results[].data` 里。
 
 ## Python 客户端代码说明
 

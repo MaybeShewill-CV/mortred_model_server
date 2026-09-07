@@ -11,7 +11,7 @@ Use mobilenetv2's model server configuration for example
 
 **port:** server's port
 
-**max connections:** server's max connections. old connection will be kicked off if no spare connection left. Connections will be refused if no extra connections can be kicked. Enlarge this param when the amount of concurrency is large. You may find some useful disscussion on [#issue463](https://github.com/sogou/workflow/issues/463), [#issue906](https://github.com/sogou/workflow/issues/906) and [tutorial-05-http_proxy](https://github.com/sogou/workflow/blob/516da621aea136c4c25c048b89875f62c9d20af6/docs/en/tutorial-05-http_proxy.md)
+**max_connections:** server's max connections. Old connections are kicked if no spare connection is left. Connections are refused if none can be kicked. Enlarge this when concurrency is large. See [#issue463](https://github.com/sogou/workflow/issues/463), [#issue906](https://github.com/sogou/workflow/issues/906) and [tutorial-05-http_proxy](https://github.com/sogou/workflow/blob/516da621aea136c4c25c048b89875f62c9d20af6/docs/en/tutorial-05-http_proxy.md).
 
 **peer_resp_timeout:** the maximum duration for reading or sending out a block of data. The default setting is 15 seconds.
 
@@ -21,9 +21,11 @@ Use mobilenetv2's model server configuration for example
 
 **model_run_timeout:** the time limit of a model's inference process. inference process will be interruptted if cost more time.
 
-**server_url:** server's uri path
+**server_uri:** HTTP path on the model process (legacy gateway match). Example: `/mortred_ai_server_v1/classification/mobilenetv2`. Through the gateway prefer `POST /v1/models/{id}/infer`.
 
-**model_config_file_path:** model's configuration file path. For detailed description of it you may refer to [about_model_configuration](../docs/about_model_configuration.md)
+**model / server_exe:** catalog id and `mortred-model-server.out`.
+
+**model_config_file_path:** lives in the `[MODEL]` table (not the `*_SERVER` table). See [about_model_configuration](about_model_configuration.md).
 
 <b><font color='GrayB' size='6' face='Helvetica'> Other Web Service Configuration </font></b>
 
@@ -40,13 +42,12 @@ Tune listen/timeout/worker settings in the matching `conf/server/**/*.toml`. Wor
 # max queued requests before the server answers 429 + Retry-After (0 = unlimited)
 max_queue_depth=32
 # dynamic batching: collect concurrent requests into one packed [N,...] run
-# (default 1 = off). Works for ALL single-session image models
+# (default 1 = off). Works for HTTP single-session image models
 # (classification/detection/segmentation/OCR/matting/enhancement/depth/
-# feature-point/FastSAM): engines with dynamic batch (MNN) gain real
-# throughput; TRT engines built with a static batch-1 profile transparently
-# fall back to per-item runs (correct, no gain until the engine is rebuilt
-# with a batch profile). Multi-session models (lightglue/SAM/CLIP) and
-# diffusion samplers are not batchable.
+# SuperPoint). FastSAM / CLIP / LightGlue are bench-only and not HTTP-batched.
+# Engines with dynamic batch (MNN) gain real throughput; TRT engines built
+# with a static batch-1 profile fall back to per-item runs. Multi-session
+# models (LightGlue / SAM prompt / CLIP) and diffusion samplers are not batchable.
 max_batch_size=8
 # batch collection window in ms: how long the first request waits for peers
 max_batch_delay_ms=5

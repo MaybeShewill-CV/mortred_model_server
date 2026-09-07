@@ -20,31 +20,34 @@ cd $PROJECT_ROOT/_bin
 
 测试仅需运行
 
-```python
-cd $PROJECT_ROOT/scripts
-export PYTHONPATH=$PWD:$PYTHONPATH
-python server/test_server.py --server superpoint --mode single
+```bash
+cd $PROJECT_ROOT
+python3 scripts/server/test_server.py --server superpoint --mode single
 ```
 
 ## 关于图像特征点检测服务器的特殊说明
 
-图像特征点检测服务器的输出是一张图像上的一系列特征点。图像特征点由位置和描述子构成。JSON 由 [`fill_feature_points`](../src/server/response_serializers.h) 生成，已经包含两者。服务器端回复的 response json 对象结构如下
+JSON 由 [`fill_feature_points`](../src/server/response_serializers.h) 生成。
+每个点包含 `score`、`location` `[x, y]` 和 `descriptor`。
 
-```python
-resp = {
-    'req_id': '',
-    'code': 1,
-    'msg': 'success',
-    'data': [
+```json
+{
+  "status": 0,
+  "status_str": "OK",
+  "task_id": "demo",
+  "results": [
+    {
+      "status": 0,
+      "data": [
         {
-            'score': 0.95,
-            'location': [100.5, 85.4],
-            'descriptor': []
-        },
-        {
-            ...
-        },
-    ]
+          "score": 0.95,
+          "location": [100.5, 85.4],
+          "descriptor": []
+        }
+      ]
+    }
+  ],
+  "partial": false
 }
 ```
 

@@ -1,6 +1,9 @@
 # P4：Modern Model Developer Experience 改造计划
 
-> 状态：实施中
+> **历史计划，不是用户手册。** 现行接入步骤见
+> [how_to_add_new_model.zh-cn.md](how_to_add_new_model.zh-cn.md) 与
+> [model-developer-guide.md](model-developer-guide.md)。HTTP 活示例见
+> [api-contract.zh-cn.md](api-contract.zh-cn.md)。
 > 执行清单：[model-developer-experience-todolist.zh-cn.md](model-developer-experience-todolist.zh-cn.md)
 > 基线：`main @ 5648960 refactor(models): validate latent and clip outputs`  
 > 建议分支：`refactor/models-p4-developer-experience`

@@ -1,7 +1,12 @@
 # HTTP API Contract
 
-| [English](api-contract.md) | [涓枃](api-contract.zh-cn.md) |
+| [English](api-contract.md) | [中文](api-contract.zh-cn.md) |
 |---|---|
+
+The machine-readable contract is `docs/openapi.json` (also served at
+`GET /openapi.json` on every model process). This page is the human summary.
+Do not copy the removed `{req_id, code, msg, data}` envelope or the `img_data`
+field from older blog posts — those requests answer **422**.
 
 ## Topology note: mortred-gateway
 
@@ -29,15 +34,13 @@ the management API (`MORTRED_API_TOKEN`). The supervisor is management only
 (catalog / lifecycle / logs / UI). Inference and async jobs go through
 the gateway. Legacy `{server_uri}` on `:8080` is still accepted.
 
-All model servers follow a unified HTTP JSON contract. The authoritative machine-readable
-description is `docs/openapi.json` (served by every model server at `GET /openapi.json`);
-this document is the human-readable summary. Any change to status codes, endpoints or
-response schemas must update both files (regenerate with `python scripts/gen_openapi.py`).
+Any change to status codes, endpoints or response schemas must update
+`docs/openapi.json` (regenerate with `python scripts/gen_openapi.py`).
 
 ## Authentication
 
-Model inference endpoints require an `Authorization` header when the server is configured
-with `auth_token`:
+Model inference endpoints require an `Authorization` header when the server is
+configured with `auth_token`:
 
 ```http
 Authorization: Bearer <token>
@@ -46,10 +49,11 @@ Authorization: Bearer <token>
 - Missing or invalid token: `401` + `WWW-Authenticate: Bearer realm="Mortred"`.
 - Health/metadata endpoints (`/healthz`, `/ready`, `/openapi.json`) are public.
   Supervisor `GET /api/v1/metrics` requires the management token. Gateway
-  `GET /metrics` requires `MORTRED_METRICS_TOKEN` on every listen.
-  Model `GET /metrics` requires the process auth token (supervisor children
-  always have `MORTRED_AUTH_TOKEN`); empty token yields 401, not a public
-  scrape. `/healthz` stays public. Do not reuse the inference token as the scrape secret.
+  `GET /metrics` requires `MORTRED_METRICS_TOKEN` on every listen, including
+  loopback. Model `GET /metrics` requires the process auth token (supervisor
+  children always have `MORTRED_AUTH_TOKEN`); empty token yields 401, not a
+  public scrape. `/healthz` stays public. Do not reuse the inference token as
+  the scrape secret.
 - When `auth_token` is empty, model inference and `/metrics` return 401.
   Health/metadata stay public. The server still refuses a non-loopback listen
   without a token, and refuses a wildcard bind unless `MORTRED_EXPOSE=docker|unsafe`.
@@ -61,53 +65,84 @@ Authorization: Bearer <token>
   missing or different media type returns `415`.
 - The request body is limited to `request_size_limit` MB; an explicit `Content-Length`
   above the limit returns `413`.
+- Allowed JSON keys are only `req_id`, `images`, `params`, `options`. Unknown keys
+  and the removed `img_data` field answer **422**.
 
 ## Common response envelope
 
 ```json
 {
-  "req_id": "client-provided-or-server-generated",
-  "code": 0,
-  "msg": "success",
-  "data": {}
+  "status": 0,
+  "status_str": "OK",
+  "task_id": "client-provided-or-server-generated",
+  "model": { "name": "MOBILENETV2", "version": "" },
+  "results": [
+    {
+      "status": 0,
+      "data": {
+        "class_id": 123,
+        "category": "tabby cat",
+        "scores": [0.1, 0.8, 0.1]
+      }
+    }
+  ],
+  "server_time_ms": 41.2,
+  "partial": false
 }
 ```
 
-On error:
+On a contract violation (HTTP 422):
 
 ```json
 {
-  "req_id": "...",
-  "code": 50,
-  "msg": "decode json error",
-  "data": null
+  "status": 66,
+  "status_str": "invalid request parameter",
+  "task_id": "",
+  "results": [],
+  "server_time_ms": 0.0,
+  "partial": false,
+  "errors": [
+    {
+      "pointer": "/img_data",
+      "message": "field 'img_data' was removed; use images: [\"<base64>\"] (migration: img_data -> images[0])"
+    }
+  ]
 }
 ```
 
+Read HTTP status first, then top-level `status`, then each `results[i].status`.
+`results[i].data` is `null` when that item failed. Ignore unknown response
+fields. Per-task payloads live under `results[].data` and are defined in
+`docs/openapi.json` `components.schemas` (`src/server/response_serializers.h`).
+
 ## HTTP status mapping
 
-| Business code | Meaning | HTTP status |
+The JSON field is **`status`** (not `code`). Mapping is `src/server/http_status.h`.
+
+| `status` | Meaning | HTTP |
 |---:|---|---:|
 | 0 | OK | 200 |
+| 68 | Deadline exceeded, partial results | 200 |
 | 50 | JSON decode error | 400 |
 | 3 | Empty input image | 400 |
+| 66 | Invalid request (`img_data`, unknown key, bad `params`) | 422 |
 | 60 | Unsupported media type | 415 |
 | 61 | Request entity too large | 413 |
+| 67 | Too many items in one request | 413 |
 | 62 | Method not allowed | 405 |
 | 63 | Not found | 404 |
 | 65 | Service not ready | 503 |
 | 4 | Model run timeout | 504 |
 | 6 | Model output contract failed | 500 |
 | 401 | Unauthorized | 401 |
-| 429 | Rate limited | 429 |
-| 429 | Queue full (`max_queue_depth` exceeded; carries `Retry-After`) | 429 |
+| 429 | Rate limited or queue full (`Retry-After`) | 429 |
 | others | Server error | 500 |
 
 ## Common headers
 
 ```http
 Content-Type: application/json; charset=utf-8
-X-Request-ID: <req_id>
+X-Request-ID: <task_id>
 Cache-Control: no-store
 ```
 
@@ -117,7 +152,7 @@ Cache-Control: no-store
 |---|---|---|
 | `/healthz` | GET | Liveness probe |
 | `/ready` | GET | Readiness probe |
-| `/metrics` | GET | Prometheus metrics |
+| `/metrics` | GET | Prometheus metrics (Bearer as above) |
 | `/openapi.json` | GET | OpenAPI document (served from the embedded copy) |
 
 Unknown paths, including the removed `/welcome` and `/hello_world` HTML
@@ -128,6 +163,24 @@ probes, answer `404` with process-level `UnifiedResponse`.
 ```json
 {
   "req_id": "optional",
+  "images": ["base64 encoded image"],
+  "params": {},
+  "options": {}
+}
+```
+
+`images` is required and always an array (≥1). `params` / `options` are optional
+objects. Model-specific knobs (thresholds, `timestep`, …) go in `params`, not
+at the root.
+
+### Removed field: `img_data` (HTTP 422)
+
+The following body is **not** a success request. It is rejected even if
+`images` is also present:
+
+```json
+{
+  "req_id": "legacy",
   "img_data": "base64 encoded image"
 }
 ```
@@ -144,29 +197,9 @@ a `max_batch_delay_ms` collection window), plus the
 `mortred_batch_window_wait_ms` metrics.
 
 Per-item failure isolation: within a batch, a failing item (bad image,
-decode error) returns its own error code while its batch mates keep their
+decode error) returns its own error status while its batch mates keep their
 results; only session-level failures (engine errors) fail every participating
 item.
-
-## Model inference response
-
-```json
-{
-  "req_id": "...",
-  "code": 0,
-  "msg": "success",
-  "data": {
-    "class_id": 123,
-    "category": "tabby cat",
-    "scores": [0.1, 0.8, 0.1]
-  }
-}
-```
-
-`data` is `null` for every non-OK response (400/401/404/405/413/415/429/500/503/504).
-Per-task `data` schemas (classification, detection, face, OCR, segmentation, matting,
-enhancement, depth, feature point) are defined in `docs/openapi.json`
-`components.schemas` and implemented by `src/server/response_serializers.h`.
 
 ## Async jobs
 
@@ -197,9 +230,9 @@ is the same 404 envelope as an unknown `server_uri`. If the model has
 | `GET /jobs/{id}/result` | `200` standard envelope (repeatable) | `404` unknown id, `409` not finished (including `pending`/`running`/`failed`/`timeout`) |
 
 `202` means the server accepted the job, not that inference has finished. A
-correct client never treats `POST /jobs` like a blocking `/infer`. Step-by-step
-customer verification is in
-[async-jobs-customer-test.md](async-jobs-customer-test.md).
+correct client never treats `POST /jobs` like a blocking `/infer`. Submit the
+same JSON envelope as `/infer` (`images[]`). Step-by-step customer verification
+is in [async-jobs-customer-test.md](async-jobs-customer-test.md).
 
 The job ledger is in-memory (lost on restart). The component design, concurrency
 contract and verification gates are documented in

@@ -20,8 +20,8 @@ output_names = ["output0"]     # 可选，可过滤辅助输出
 [YOLOV8.params]
 model_score_threshold = 0.25
 model_nms_threshold = 0.5
-model_input_image_size = [640, 640]   # [height, width]???????????? session ????
-max_image_pixels = 16777216           # ??????????
+model_input_image_size = [640, 640]   # [height, width]；必须与固定输入 H/W 一致
+max_image_pixels = 16777216           # 解码后像素上限
 max_image_side = 8192
 class_names = ["person", "bicycle"]
 ```
@@ -39,8 +39,8 @@ class_names = ["person", "bicycle"]
 | `input_layout` | `backend` | MNN host 张量布局：`nhwc`、`nchw` 或按模型自动识别 |
 | `precision_mode` / `power_mode` | `backend` | MNN `BackendConfig` 配置 |
 | `input_names` / `output_names` | `backend` | I/O 名称覆盖或过滤 |
-| `max_image_pixels` / `max_image_side` | ???? `params` | ???????????? 16777216 / 8192 |
-| `model_input_image_size` | ???????? `params` | `[height, width]`???? session ?? H/W ?? |
+| `max_image_pixels` / `max_image_side` | 图像 `params` | 解码输入安全上限，默认 16777216 / 8192 |
+| `model_input_image_size` | 固定尺寸图像 `params` | `[height, width]`，必须匹配 session 输入 H/W |
 | 其他字段 | `params` | 模型特有参数；名称和历史配置保持一致 |
 
 ## 多引擎模型
@@ -113,5 +113,7 @@ trt                   -> backend.type = "tensorrt"
 ## 测试说明
 
 `model_golden_test` 会把 `../` 前缀路径改写为仓库根路径，并将
-`backend.device` 强制为 `cpu`，保证无 GPU 的 CI 环境可复现。TensorRT
-engine 仍需要 GPU；权重或 GPU 不可用时相关 golden 用例会跳过。
+`backend.device` 强制为 `cpu`。产品 TensorRT 配置（例如 `yolov8_config.toml`）
+在 CPU 上是配置错误（`type=tensorrt` 禁止 `device=cpu`）。Fork hosted CI 用
+`conf/ci/yolov8_onnx_hosted.toml` 证明 YOLOv8 decode，不是 serving 的 `.engine`。
+TensorRT golden 仍走维护者 GPU 路径。

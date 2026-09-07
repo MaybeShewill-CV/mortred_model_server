@@ -98,7 +98,7 @@ flowchart TD
 |---|---|---|
 | **Backends** | MNN-CUDA / ORT-CUDA / TensorRT | MNN-CPU / ORT-CPU (TensorRT compiled out) |
 | **Hardware** | NVIDIA GPU + driver, CUDA 11.8 or 12 line | any x64 machine |
-| **Models** | everything (classification/detection/OCR/seg/SAM/diffusion/CLIP/MOT...) | curated: mobilenetv2, resnet50 |
+| **Models** | HTTP catalog (classification / detection / OCR / seg / matting / enhancement / SuperPoint / depth / DINOv2 / SAM AMG / diffusion). Bench-only: CLIP, LightGlue, FastSAM, SAM prompt, MsOcrNet. No MOT. RT-DETR is unimplemented. | curated: mobilenetv2, resnet50 |
 | **Weight size** | full manifest (tens of GB) | curated subset (~1 GB) |
 | **Engine conversion** | pack engines on this GPU (§10.2); zoo-wide convert is opt-in | not needed |
 
@@ -155,7 +155,7 @@ and converge on `mortredctl doctor` - there are no divergent paths.
 The fastest path - hardware detection, track selection, straight through:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MaybeSheWill-CV/mortred_model_server/main/scripts/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/MaybeShewill-CV/mortred_model_server/main/scripts/bootstrap.sh | bash
 ```
 
 **What it does**:
@@ -216,7 +216,8 @@ The gpu track needs the NVIDIA Container Toolkit (`docker run --gpus all` works 
 ```bash
 curl -fs http://localhost:8787/api/v1/health        # supervisor health
 curl -fs http://localhost:8080/healthz               # gateway health (public)
-curl -fs http://localhost:8080/metrics | head -5     # gateway metrics
+curl -fs -H "Authorization: Bearer $MORTRED_METRICS_TOKEN" \
+    http://localhost:8080/metrics | head -5          # gateway metrics
 
 curl -fs -H "Authorization: Bearer $MORTRED_API_TOKEN" \
     http://localhost:8787/api/v1/catalog | python3 -m json.tool | head -20
@@ -265,7 +266,7 @@ For bare-metal production: no Docker dependency, native systemd, self-healing re
 
 ### 6.1 Download and verify
 
-From [Releases](https://github.com/MaybeSheWill-CV/mortred_model_server/releases)
+From [Releases](https://github.com/MaybeShewill-CV/mortred_model_server/releases)
 (example: v0.1.0 / cpu):
 
 ```bash

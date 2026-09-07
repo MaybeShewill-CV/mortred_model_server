@@ -1,6 +1,7 @@
 # 统一请求契约改造（M1–M6）技术总结
 
-> 版本：main `8848a8a`（2026-08-31）
+> **历史迁移记录，不是现行人读契约。** 活示例见 [api-contract.md](api-contract.md) /
+> [api-contract.zh-cn.md](api-contract.zh-cn.md)。文中的 `img_data` 描述的是旧约。
 > 执行日志：见仓库根目录 `CONTRACT_V1_REFACTOR_PLAN.md`（M0–M6 全部勾选记录）
 > 本文面向：服务端维护者、业务接入方、运维。
 

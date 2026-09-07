@@ -14,7 +14,7 @@
 
 </div>
 
-   Mortred AI Model Server is a toy web server for deep learning models. Server tries its best to make the most usage of your cpu and gpu resources. All dl models are trained by `tensorflow/pytorch` and deployed via [MNN](https://github.com/alibaba/MNN) toolkit and supply web service through [workflow](https://github.com/sogou/workflow) framework finally.
+   Mortred is a Linux process-per-model CV inference appliance: one catalog id is one OS process. Clients talk to **mortred-gateway** (`:8080`); the supervisor (`:8787`) owns the process tree. Inference backends are [MNN](https://github.com/alibaba/MNN), ONNX Runtime, and TensorRT, served over [workflow](https://github.com/sogou/workflow). Weights are trained elsewhere (`tensorflow` / `pytorch`).
 
 Do not hesitate to let me know if you find bugs here cause I'm a c-with-struct noob :upside_down_face:
 
@@ -39,6 +39,7 @@ All models and detectors can be downloaded from my [Hugging Face Page](https://h
 * [Web Server Configuration](#web-server-configuration)
 * [HTTP API Contract](./docs/api-contract.md)
 * [Long-task `/jobs` customer test](./docs/async-jobs-customer-test.md)
+* [Model Zoo](#model-zoo)
 
 # `Quick Start`
 
@@ -57,7 +58,7 @@ All models and detectors can be downloaded from my [Hugging Face Page](https://h
 ### Entry 1: one-line bootstrap (fastest)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MaybeSheewill-CV/mortred_model_server/main/scripts/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/MaybeShewill-CV/mortred_model_server/main/scripts/bootstrap.sh | bash
 ```
 
 Detects your hardware (NVIDIA GPU → `gpu`, otherwise `cpu`), then delegates to
@@ -67,7 +68,7 @@ tarball and runs its installer.
 ### Entry 2: docker compose
 
 ```bash
-git clone https://github.com/MaybeSheewill-CV/mortred_model_server.git
+git clone https://github.com/MaybeShewill-CV/mortred_model_server.git
 cd mortred_model_server
 python3 scripts/fetch_weights.py --profile cpu        # or: gpu
 MORTRED_API_TOKEN=<mgmt-token> MORTRED_GATEWAY_AUTH_TOKEN=<infer-token> \
@@ -78,7 +79,7 @@ curl -fs http://localhost:8787/api/v1/health
 ### Entry 3: release tarball + systemd (bare metal)
 
 Download `mortred_model_server-<version>-<profile>-linux-x64.tar.gz` from
-[Releases](https://github.com/MaybeSheewill-CV/mortred_model_server/releases),
+[Releases](https://github.com/MaybeShewill-CV/mortred_model_server/releases),
 verify its `.sha256`, then:
 
 ```bash
@@ -175,6 +176,29 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 * [Model Developer Guide (task-oriented paths, contract / golden / debugging)](./docs/model-developer-guide.md)
 * [Inference CI (hosted MNN smoke vs maintainer GPU golden)](./docs/ci-golden-regression.md)
 * [P4: Modern Model Developer Experience Plan (Chinese)](./docs/model-developer-experience-p4.zh-cn.md)
+
+# `Model Zoo`
+
+HTTP-served (`mortred-model-server.out --list` / catalog id):
+
+| Task | Catalog id |
+|---|---|
+| Classification | `MOBILENETV2` `RESNET` `DENSENET` |
+| Detection | `YOLOV5` `YOLOV6` `YOLOV7` `YOLOV8` `NANODET` |
+| Face | `LIBFACE` `CENTER_FACE` |
+| OCR | `DBNET` |
+| Segmentation | `BISENETV2` `PPHUMAN_SEG` `HRNET` |
+| Matting | `MODNET` `PP_MATTING` |
+| Enhancement | `ENLIGHTEN_GAN` `ATTENTIVE_GAN_DERAIN` `REAL_ESRGAN` |
+| Feature points | `SUPERPOINT` |
+| Embedding | `DINOV2` |
+| Depth | `METRIC3D` `DEPTH_ANYTHING` |
+| SAM | `SAM_AMG` |
+| Diffusion | `DDPM` `DDIM` `CLS_COND_DDIM` `LDM` |
+
+Bench-only (no HTTP catalog): `OPENAI_CLIP`, `LIGHTGLUE`, `SAM_PREDICTOR`, `FAST_SAM`, `MSOCRNET`.
+
+Scaffold / not served: `RTDETR`. There is no MOT.
 
 # `Web Server Configuration`
 

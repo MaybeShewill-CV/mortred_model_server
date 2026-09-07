@@ -7,6 +7,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- Live documentation now matches the unified HTTP envelope (`images[]` /
+  `{status, status_str, task_id, results[]}`). `api-contract`, `api-keys`, and
+  the task tutorials no longer present `img_data` or `{code, msg, data}` as
+  success examples. Gateway `/metrics` docs require `MORTRED_METRICS_TOKEN`
+  on loopback in both languages. README Model Zoo splits HTTP catalog vs
+  bench-only.
+
+> 人读文档与统一信封对齐：请求 `images[]`，响应
+> `{status, status_str, task_id, results[]}`。`api-contract`、`api-keys` 与任务教程
+> 不再把 `img_data` 或 `{code, msg, data}` 写成成功示例。中英监控/部署均写明
+> 网关 `/metrics` 含环回也要 `MORTRED_METRICS_TOKEN`。README Model Zoo 区分
+> HTTP catalog 与 bench-only。
+
 ### Fixed
 - `BaseAiModel::run` (and packed `BackendCvModel::run_batch`) catch throws from
   `run_impl` / OpenCV and return `MODEL_RUN_SESSION_FAILED`, so a workflow go

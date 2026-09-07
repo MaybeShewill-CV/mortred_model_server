@@ -16,63 +16,71 @@ cd $PROJECT_ROOT/_bin
 
 When the server starts successfully at the `port` configured in your server config (`conf/server/<task>/<model>/*.toml`), `worker_nums` workers will be spawned and occupy your GPU resources. The shipped configs default to `worker_nums=1`; you may enlarge it if you have enough GPU memory.
 
-You may switch yolov5 model eg. yolov5s yolov5m etc by modifying model configuration. You may find instruction at [about_model_configuration.md#L20](../docs/about_model_configuration.md)
+You may switch yolov5 model eg. yolov5s yolov5m etc by modifying model configuration. See [about_model_configuration.md](about_model_configuration.md).
 
 ## Python Client Example
 
-Local python client test is similiar with mobilenetv2 classification server you may read [toturials_of_classfication_model_server.md](../docs/toturials_of_classification_model_server.md) for details.
+The Python client is the same as the classification tutorial:
+[tutorials_of_classification_model_server.md](tutorials_of_classification_model_server.md).
 
-To use test python client you may run
-
-```python
-cd $PROJECT_ROOT/scripts
-export PYTHONPATH=$PWD:$PYTHONPATH
-python server/test_server.py --server yolov5 --mode single
+```bash
+cd $PROJECT_ROOT
+python3 scripts/server/test_server.py --server yolov5 --mode single
 ```
 
 ## Unique Tips For Object Detection Model Python Client
 
-Object deteciton model's output is set of bounding boxes. A single bounding box consist of location, class_id and confidence. Server's response is a json like
+Object detection returns an array under `results[0].data`. Each box is
+`class_id`, `score`, `category`, `bbox` as `[x1, y1, x2, y2]`.
 
-```python
-resp = {
-    'req_id': '',
-    'code': 1,
-    'msg': 'success',
-    'data': [
+```json
+{
+  "status": 0,
+  "status_str": "OK",
+  "task_id": "demo",
+  "results": [
+    {
+      "status": 0,
+      "data": [
         {
-            'cls_id': 6,
-            'score': 0.65,
-            'points': [[tl_x, tl_y], [rb_x, rb_y]],
-            'detail_infos': {}
-        },
-        {
-            ...
-        },
-    ]
+          "class_id": 6,
+          "score": 0.65,
+          "category": "bus",
+          "bbox": [10.0, 20.0, 100.0, 200.0],
+          "detail_infos": {}
+        }
+      ]
+    }
+  ],
+  "partial": false
 }
 ```
 
 ## Unique Tips For Face Detection Model Python Client
 
-Face deteciton model's output is set of bboxes. A single bounding box consist of location, landmarks and confidence. Server's response is a json like
+Face detection uses the same envelope plus `landmarks` as `[x, y]` pairs.
 
-```python
-resp = {
-    'req_id': '',
-    'code': 1,
-    'msg': 'success',
-    'data': [
+```json
+{
+  "status": 0,
+  "status_str": "OK",
+  "task_id": "demo",
+  "results": [
+    {
+      "status": 0,
+      "data": [
         {
-            'cls_id': 6,
-            'score': 0.65,
-            'box': [[tl_x, tl_y], [rb_x, rb_y]],
-            'landmark': [[x1, y1], [x2, y2], [x3, y3], ...]
-        },
-        {
-            ...
-        },
-    ]
+          "class_id": 1,
+          "score": 0.65,
+          "category": "face",
+          "bbox": [10.0, 20.0, 100.0, 200.0],
+          "landmarks": [[12.0, 24.0], [90.0, 24.0]],
+          "detail_infos": {}
+        }
+      ]
+    }
+  ],
+  "partial": false
 }
 ```
 
@@ -91,7 +99,7 @@ Yolov5 :rocket: is a family of object detection architectures and models pretrai
 
 ![yolov5_server_output2](../resources/images/yolov5_server_output2.png)
 
-### LibFcae Model
+### LibFace Model
 
 Libface is a remarkable open source library for CNN-based face detection in images designed by [ShiqiYu](https://github.com/ShiqiYu). You may refer to [https://github.com/ShiqiYu/libfacedetection](https://github.com/ShiqiYu/libfacedetection) for details.
 

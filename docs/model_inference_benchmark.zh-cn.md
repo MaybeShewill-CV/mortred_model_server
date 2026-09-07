@@ -1,5 +1,9 @@
 <b><font color='black' size='8' face='Helvetica'> 模型基准测试 </font></b>
 
+> 历史进程内 FPS（Ubuntu 18.04 / CUDA 11.1 / RTX 3080，驱动 455.23.04）。
+> 不是 HTTP RPS，也不是当前 YOLO letterbox 路径的声明。请在本机 GPU 上用
+> `mortred-model-benchmark.out` 重测。
+
 基准测试环境如下：
 
 **OS:** Ubuntu 18.04.5 LTS / 5.4.0-53-generic
