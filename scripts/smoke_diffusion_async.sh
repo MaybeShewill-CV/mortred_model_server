@@ -8,6 +8,7 @@
 #   ./scripts/smoke_diffusion_async.sh                    # default: ddpm, 10 timesteps
 #   ./scripts/smoke_diffusion_async.sh --model ddim --timestep 20
 #   MORTRED_SERVER_BIN=/path/to/mortred-model-server.out ./scripts/smoke_diffusion_async.sh
+# /jobs is not public: empty auth_token is 401. Default MORTRED_AUTH_TOKEN if unset.
 set -euo pipefail
 
 MODEL="ddpm"
@@ -103,6 +104,13 @@ if [ ! -x "$SERVER_BIN" ]; then
     exit 1
 fi
 
+# Model /jobs and /metrics never authorize an empty token (api-contract).
+# Supervisor injects MORTRED_AUTH_TOKEN; standalone smoke must do the same.
+if [ -z "${MORTRED_AUTH_TOKEN:-}" ]; then
+    export MORTRED_AUTH_TOKEN="smoke-diffusion-local"
+fi
+AUTH_HEADER="Authorization: Bearer ${MORTRED_AUTH_TOKEN}"
+
 echo "[smoke] model=$MODEL $PARAM_KEY=$TIMESTEP port=$PORT bin=$SERVER_BIN"
 
 # start the model server with async enabled
@@ -148,6 +156,7 @@ echo "[smoke] server ready"
 echo "[smoke] submitting async job..."
 SUBMIT=$(curl -s -w '\n%{http_code}' -X POST "http://127.0.0.1:$PORT/jobs" \
     -H "Content-Type: application/json" \
+    -H "$AUTH_HEADER" \
     -d "$BODY")
 SUBMIT_CODE=$(echo "$SUBMIT" | tail -1)
 SUBMIT_BODY=$(echo "$SUBMIT" | head -n -1)
@@ -163,13 +172,13 @@ echo "[smoke] submitted: job_id=$JOB_ID (HTTP 202)"
 echo "[smoke] polling..."
 START=$(date +%s)
 for i in $(seq 1 600); do
-    STATUS=$(curl -s "http://127.0.0.1:$PORT/jobs/$JOB_ID")
+    STATUS=$(curl -s -H "$AUTH_HEADER" "http://127.0.0.1:$PORT/jobs/$JOB_ID")
     STATE=$(python3 -c "import json,sys; print(json.loads(sys.argv[1]).get('state',''))" "$STATUS")
     ELAPSED=$(( $(date +%s) - START ))
 
     if [ "$STATE" = "done" ]; then
         echo "[smoke] done in ${ELAPSED}s"
-        RESULT=$(curl -s "http://127.0.0.1:$PORT/jobs/$JOB_ID/result")
+        RESULT=$(curl -s -H "$AUTH_HEADER" "http://127.0.0.1:$PORT/jobs/$JOB_ID/result")
         python3 - "$RESULT" <<'PY'
 import json, sys
 doc = json.loads(sys.argv[1])

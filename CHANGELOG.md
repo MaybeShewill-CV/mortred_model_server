@@ -30,7 +30,9 @@ All notable changes to this project are documented here. The format follows
   Few-step CPU generate proof: `model_golden.ddpm_celeba_hq_fewstep` with
   `conf/ci/ddpm_onnx_fewstep.toml` (not in hosted; ONNX is ~143MiB). The case
   checks a 128x128 PNG from the HTTP adapter; it does not pin pixels
-  (`random_device` still seeds each run).
+  (`random_device` still seeds each run). The async smoke script sets
+  `MORTRED_AUTH_TOKEN` and sends `Authorization: Bearer` on `/jobs`
+  (empty token is 401; `/healthz` stays public).
 
 > HTTP 扩散工人在 `init` 时从模型 TOML 种入采样模板（`sample_size` / 默认步数 /
 > channels）。缺或空 `sample_size` 会 init 失败，而不再每请求
@@ -38,7 +40,8 @@ All notable changes to this project are documented here. The format follows
 > （不是根上 `timestep`）和统一结果信封。少步 CPU 出图证明：
 > `model_golden.ddpm_celeba_hq_fewstep` + `conf/ci/ddpm_onnx_fewstep.toml`
 > （不进 hosted；ONNX 约 143MiB）。该用例断言 HTTP adapter 走出 128x128 PNG，
-> 不钉像素（每次 `random_device` 仍重新播种）。
+> 不钉像素（每次 `random_device` 仍重新播种）。异步冒烟会设 `MORTRED_AUTH_TOKEN`
+> 并在 `/jobs` 带 `Authorization: Bearer`（空 token 是 401；`/healthz` 仍公开）。
 
 - Supervisor now refuses to listen (when `mortred-gateway.out` is on disk) and
   refuses to spawn `__gateway` unless `MORTRED_METRICS_TOKEN` is set and
