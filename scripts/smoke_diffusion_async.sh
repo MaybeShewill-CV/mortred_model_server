@@ -5,6 +5,7 @@
 # Usage:
 #   ./scripts/smoke_diffusion_async.sh                    # default: ddpm, 10 timesteps
 #   ./scripts/smoke_diffusion_async.sh --model ddim --timestep 20
+#   MORTRED_SERVER_BIN=/path/to/mortred-model-server.out ./scripts/smoke_diffusion_async.sh
 set -euo pipefail
 
 MODEL="ddpm"
@@ -22,6 +23,18 @@ while [ $# -gt 0 ]; do
 done
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SERVER_BIN="${MORTRED_SERVER_BIN:-$ROOT/_bin/mortred-model-server.out}"
+
+# ASan ELFs abort if libasan is not first on the load list. Prepending
+# _lib / 3rd_party to LD_LIBRARY_PATH is enough to trigger that. Resolve
+# the soname with a clean ldd (before we mutate LD_LIBRARY_PATH).
+if command -v ldd >/dev/null 2>&1 && [ -e "$SERVER_BIN" ]; then
+    ASAN_SO="$(env -u LD_PRELOAD LD_LIBRARY_PATH= ldd "$SERVER_BIN" 2>/dev/null | awk '/libasan/{print $3; exit}')"
+    if [ -n "${ASAN_SO:-}" ] && [ -e "$ASAN_SO" ]; then
+        export LD_PRELOAD="${ASAN_SO}${LD_PRELOAD:+:$LD_PRELOAD}"
+        echo "[smoke] ASan ELF: LD_PRELOAD=$ASAN_SO"
+    fi
+fi
 export LD_LIBRARY_PATH="$ROOT/_lib:$ROOT/3rd_party/libs:${LD_LIBRARY_PATH:-}"
 
 case "$MODEL" in
@@ -39,18 +52,36 @@ fi
 
 BODY="$(python3 -c "import json,sys; print(json.dumps({'images':['aGVsbG8='],'req_id':'smoke-test','params':{sys.argv[1]: int(sys.argv[2])}}))" "$PARAM_KEY" "$TIMESTEP")"
 
-echo "[smoke] model=$MODEL $PARAM_KEY=$TIMESTEP port=$PORT"
+if [ ! -x "$SERVER_BIN" ]; then
+    echo "[FAIL] missing executable $SERVER_BIN (set MORTRED_SERVER_BIN or build mortred-model-server.out)"
+    exit 1
+fi
+
+echo "[smoke] model=$MODEL $PARAM_KEY=$TIMESTEP port=$PORT bin=$SERVER_BIN"
 
 # start the model server with async enabled
 echo "[smoke] starting server..."
-"$ROOT/_bin/mortred-model-server.out" --model "$MODEL_ID" "$ROOT/$CONFIG" &
+SERVER_LOG="$(mktemp /tmp/mortred-diffusion-smoke.XXXXXX.log)"
+"$SERVER_BIN" --model "$MODEL_ID" "$ROOT/$CONFIG" >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
-trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
-sleep 3
+trap 'kill $SERVER_PID 2>/dev/null || true; rm -f "$SERVER_LOG"' EXIT
 
-# check server is up
-if ! curl -sf "http://127.0.0.1:$PORT/healthz" > /dev/null 2>&1; then
-    echo "[FAIL] server did not start (check logs)"
+ready=0
+for _ in $(seq 1 30); do
+    if curl -sf "http://127.0.0.1:$PORT/healthz" > /dev/null 2>&1; then
+        ready=1
+        break
+    fi
+    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+        echo "[FAIL] server exited before healthz"
+        cat "$SERVER_LOG"
+        exit 1
+    fi
+    sleep 1
+done
+if [ "$ready" -ne 1 ]; then
+    echo "[FAIL] server did not become ready on :$PORT within 30s"
+    cat "$SERVER_LOG"
     exit 1
 fi
 echo "[smoke] server ready"
