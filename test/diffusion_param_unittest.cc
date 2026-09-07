@@ -102,7 +102,7 @@ class FakeSampler {
     void fill_output(std_cls_cond_ddim_output &out) const {
         out.sampled_images.push_back(cv::Mat(2, 2, CV_8UC3, cv::Scalar(1, 2, 3)));
     }
-    void fill_output(std_ldm_output &out) const { out.sampled_image = cv::Mat(2, 2, CV_8UC3, cv::Scalar(1, 2, 3))); }
+    void fill_output(std_ldm_output &out) const { out.sampled_image = cv::Mat(2, 2, CV_8UC3, cv::Scalar(1, 2, 3)); }
 };
 
 image_input make_request(const ParamSet *params) {
