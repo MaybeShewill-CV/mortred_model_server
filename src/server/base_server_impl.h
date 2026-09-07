@@ -161,9 +161,11 @@ class BaseAiServerImpl {
 public:
     /***
      * drain in-flight go tasks before members are destroyed: wait until every
-     * worker is back in the queue (a running do_work holds exactly one worker,
-     * and after returning it touches only its task-owned ctx ??a member of the
-     * go closure, kept alive by the framework's task lifetime). The wait is
+     * worker is back in the queue (a running do_work holds exactly one worker;
+     * metrics/EWMA are written before that enqueue, so this wait is enough to
+     * keep _m_metrics and _m_run_time_ewma_ms alive. After enqueue, do_work
+     * writes only its task-owned ctx, a member of the go closure kept alive
+     * by the framework's task lifetime). The wait is
      * deliberately unbounded ??a hung model keeps its worker forever and the
      * destructor blocks; that is handled by the outer process manager (e.g.
      * mortred-supervisor's SIGINT -> SIGKILL fallback), not here. Model and
@@ -1278,16 +1280,15 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     const auto task_receive_ts = Timestamp::now();
     run_items(worker, *req, result);
 
-    // restore worker queue: the last member touch of this routine; afterwards
-    // only the task-owned result is written, so the destructor's queue drain
-    // stays sound
-    _m_working_queue.enqueue(std::move(worker));
-
     const auto task_finish_ts = Timestamp::now();
     result->task_finished_ts = task_finish_ts.to_format_str();
     result->worker_run_time_consuming = (task_finish_ts - task_receive_ts) * 1000;
     _m_metrics.observe_inference_duration_ms(result->worker_run_time_consuming);
     update_run_time_ewma(static_cast<int64_t>(result->worker_run_time_consuming));
+
+    // last server-member touch: destructor drain waits on this enqueue, so
+    // metrics/EWMA must already be done (same order as process_batch)
+    _m_working_queue.enqueue(std::move(worker));
 }
 
 template<typename WORKER, typename MODEL_OUTPUT>
