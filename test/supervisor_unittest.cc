@@ -364,6 +364,31 @@ TEST_F(SupervisorTest, shutdown_is_ordered_and_complete) {
     EXPECT_EQ(sup->status(kGatewayId).state, "stopped");
 }
 
+TEST_F(SupervisorTest, gateway_missing_scrape_token_is_permanent_failure) {
+    auto sup = make_supervisor();
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    std::string err;
+    EXPECT_FALSE(sup->start_server(kGatewayId, &err));
+    EXPECT_NE(err.find("MORTRED_METRICS_TOKEN"), std::string::npos) << err;
+    const auto s = sup->status(kGatewayId);
+    EXPECT_EQ(s.state, "failed") << s.error;
+    EXPECT_NE(s.state, "backoff");
+}
+
+TEST_F(SupervisorTest, gateway_colliding_scrape_token_is_permanent_failure) {
+    auto sup = make_supervisor();
+    sup->set_gateway_trust("shared-secret", "shared-secret", "admin-token");
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    std::string err;
+    EXPECT_FALSE(sup->start_server(kGatewayId, &err));
+    EXPECT_NE(err.find("matches an inference or management token"), std::string::npos) << err;
+    EXPECT_EQ(sup->status(kGatewayId).state, "failed");
+}
+
 int main(int argc, char** argv) {
     // supervision signals must be blocked before any thread exists
     ProcessSupervisor::block_supervision_signals();
