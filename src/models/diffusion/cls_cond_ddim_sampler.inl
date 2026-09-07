@@ -370,6 +370,10 @@ StatusCode ClsCondDDIMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT&
     auto save_all_mid_results = transformed_input.save_all_mid_results;
     auto xt_data = transformed_input.xt_data;
     auto eta = transformed_input.eta;
+    if (sample_size.width <= 0 || sample_size.height <= 0) {
+        LOG(ERROR) << "cls_cond_ddim sample_size is empty";
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
     // p-sample loop
     std::vector<float> xt;
     if (xt_data == nullptr) {
@@ -396,29 +400,16 @@ StatusCode ClsCondDDIMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT&
         // assign output predict x0 images
         auto hwc_data = CvUtils::convert_to_hwc_vec<float>(predict_x0, sample_channels, sample_size.height, sample_size.width);
         cv::Mat mid_image;
-        if (sample_channels == 1) {
-            mid_image = cv::Mat(sample_size, CV_32FC1, hwc_data.data());
-        } else if (sample_channels == 3) {
-            mid_image = cv::Mat(sample_size, CV_32FC3, hwc_data.data());
-        } else {
-            LOG(ERROR) << "not support image channels: " << sample_channels;
+        if (!CvUtils::hwc_float_to_display_bgr(hwc_data, sample_channels, sample_size, &mid_image)) {
+            LOG(ERROR) << "cannot convert cls-cond ddim x0 to display image, channels=" << sample_channels;
             continue;
         }
-        mid_image.convertTo(mid_image, CV_8UC3);
-        cv::cvtColor(mid_image, mid_image, cv::COLOR_RGB2BGR);
         internal_out.predicted_x0.push_back(mid_image);
-        // assign output predict samples images
         hwc_data = CvUtils::convert_to_hwc_vec<float>(predict_xt, sample_channels, sample_size.height, sample_size.width);
-        if (sample_channels == 1) {
-            mid_image = cv::Mat(sample_size, CV_32FC1, hwc_data.data());
-        } else if (sample_channels == 3) {
-            mid_image = cv::Mat(sample_size, CV_32FC3, hwc_data.data());
-        } else {
-            LOG(ERROR) << "not support image channels: " << sample_channels;
+        if (!CvUtils::hwc_float_to_display_bgr(hwc_data, sample_channels, sample_size, &mid_image)) {
+            LOG(ERROR) << "cannot convert cls-cond ddim sample to display image, channels=" << sample_channels;
             continue;
         }
-        mid_image.convertTo(mid_image, CV_8UC3);
-        cv::cvtColor(mid_image, mid_image, cv::COLOR_RGB2BGR);
         internal_out.sampled_images.push_back(mid_image);
     }
 

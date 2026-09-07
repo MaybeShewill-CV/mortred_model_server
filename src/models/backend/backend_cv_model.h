@@ -191,7 +191,7 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
         if (_m_session == nullptr) {
             return BaseAiModel<INPUT, OUTPUT>::run_batch(in, out, item_status);
         }
-        return run_image_batch(in, out, item_status);
+        return invoke_nothrow([&] { return run_image_batch(in, out, item_status); });
     }
 
   protected:
@@ -328,7 +328,7 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                                   std::vector<StatusCode> &item_status) {
         StatusCode aggregate = StatusCode::OK;
         for (const size_t idx : valid_items) {
-            item_status[idx] = run_impl(inputs[idx], outputs[idx]);
+            item_status[idx] = this->run(inputs[idx], outputs[idx]);
             if (item_status[idx] != StatusCode::OK) {
                 aggregate = item_status[idx];
             }
