@@ -38,7 +38,32 @@ if command -v ldd >/dev/null 2>&1 && [ -e "$SERVER_BIN" ]; then
         ASAN_SO=""
     fi
 fi
-export LD_LIBRARY_PATH="$ROOT/_lib:$ROOT/3rd_party/libs:${LD_LIBRARY_PATH:-}"
+# Prefer the lib/ next to the chosen ELF (build-cpu/bin -> build-cpu/lib).
+# Default BUILD_RPATH and a naive `_lib:` prefix both load repo `_lib`, which
+# on a mixed tree is often an older libmodels.so without ImagePipeline::letterbox.
+BIN_DIR="$(cd "$(dirname "$SERVER_BIN")" && pwd)"
+NEAR_LIB="$(cd "$BIN_DIR/.." && pwd)/lib"
+LIB_PATHS=""
+if [ -d "$NEAR_LIB" ]; then
+    LIB_PATHS="$NEAR_LIB"
+    echo "[smoke] lib search: $NEAR_LIB (alongside $SERVER_BIN)"
+fi
+export LD_LIBRARY_PATH="${LIB_PATHS:+$LIB_PATHS:}$ROOT/_lib:$ROOT/3rd_party/libs:${LD_LIBRARY_PATH:-}"
+
+if command -v ldd >/dev/null 2>&1 && command -v nm >/dev/null 2>&1 && [ -e "$SERVER_BIN" ]; then
+    MODELS_SO="$(ldd "$SERVER_BIN" 2>/dev/null | awk '/libmodels/{print $3; exit}')"
+    if [ -n "${MODELS_SO:-}" ] && [ -e "$MODELS_SO" ]; then
+        echo "[smoke] libmodels=$MODELS_SO"
+        if ! nm -D "$MODELS_SO" 2>/dev/null | grep -q 'ImagePipeline9letterbox'; then
+            echo "[FAIL] $MODELS_SO has no ImagePipeline::letterbox (stale .so)."
+            echo "  Rebuild models against the current tree, then re-run:"
+            echo "    touch src/models/backend/model_runtime.cpp"
+            echo "    cmake --build <build-dir> --target models mortred-model-server.out -j\"\$(nproc)\""
+            echo "    nm -D $MODELS_SO | grep letterbox   # must print a T symbol"
+            exit 1
+        fi
+    fi
+fi
 
 case "$MODEL" in
     ddpm) CONFIG="conf/server/diffusion/ddpm/ddpm_server_config.toml"; MODEL_ID="DDPM"; PARAM_KEY="timesteps" ;;
