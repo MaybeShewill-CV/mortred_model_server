@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # smoke_diffusion_async.sh - end-to-end smoke test for async diffusion sampling.
-# Requires: GPU + weights + built model server binary.
+# Requires: weights + built model server binary.
+# DDPM default uses conf/ci/ddpm_onnx_fewstep.toml (ONNX CPU). Product GPU toml:
+#   MORTRED_MODEL_CONFIG_FILE=conf/model/diffusion/ddpm/ddpm_celeba-hq.toml
 #
 # Usage:
 #   ./scripts/smoke_diffusion_async.sh                    # default: ddpm, 10 timesteps
@@ -24,6 +26,9 @@ done
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVER_BIN="${MORTRED_SERVER_BIN:-$ROOT/_bin/mortred-model-server.out}"
+if [ -e "$SERVER_BIN" ]; then
+    SERVER_BIN="$(cd "$(dirname "$SERVER_BIN")" && pwd)/$(basename "$SERVER_BIN")"
+fi
 ASAN_SO=""
 
 # ASan ELFs abort if libasan is not first on the load list. Prepending
@@ -73,6 +78,17 @@ case "$MODEL" in
     *) echo "unsupported model: $MODEL (use ddpm or ddim)"; exit 1 ;;
 esac
 
+# Server/model tomls use ../conf and ../weights relative to CWD. Product
+# processes start in _bin/. DDPM smoke defaults to the CPU overlay so a
+# build-cpu ELF (and WSL GPUs that cannot hold the 2GiB ORT CUDA arena)
+# can still generate. Override with MORTRED_MODEL_CONFIG_FILE.
+if [ -z "${MORTRED_MODEL_CONFIG_FILE:-}" ] && [ "$MODEL" = "ddpm" ]; then
+    export MORTRED_MODEL_CONFIG_FILE="$ROOT/conf/ci/ddpm_onnx_fewstep.toml"
+fi
+if [ -n "${MORTRED_MODEL_CONFIG_FILE:-}" ]; then
+    echo "[smoke] model config: $MORTRED_MODEL_CONFIG_FILE"
+fi
+
 if [ -z "$PORT" ]; then
     PORT="$(awk -F= '/^port=/ { gsub(/[[:space:]]/, "", $2); print $2; exit }' "$ROOT/$CONFIG")"
 fi
@@ -91,6 +107,9 @@ echo "[smoke] model=$MODEL $PARAM_KEY=$TIMESTEP port=$PORT bin=$SERVER_BIN"
 
 # start the model server with async enabled
 echo "[smoke] starting server..."
+mkdir -p "$ROOT/_bin"
+cd "$ROOT/_bin"
+echo "[smoke] cwd=$PWD"
 SERVER_LOG="$(mktemp /tmp/mortred-diffusion-smoke.XXXXXX.log)"
 SERVER_CMD=( "$SERVER_BIN" --model "$MODEL_ID" "$ROOT/$CONFIG" )
 if [ -n "$ASAN_SO" ]; then
