@@ -29,8 +29,8 @@
 └─────────────────────────────────────────────────────────────┘
 ```
 
-默认刮取目标是网关 `:8080/metrics`（环回上未设 `MORTRED_METRICS_TOKEN` 时公开；
-非环回网关必须设置 scrape token）。监督器 `:8787/api/v1/metrics`
+默认刮取目标是网关 `:8080/metrics`，**含环回在内一律**需要
+`MORTRED_METRICS_TOKEN`。监督器 `:8787/api/v1/metrics`
 需要管理 Bearer token。模型 `/metrics` 仅环回，且在监督器注入了
 `MORTRED_AUTH_TOKEN` 时需要同一 Bearer。不要为了刮指标而映射模型端口。
 
@@ -66,7 +66,7 @@ prometheus --config.file=deploy/prometheus.yml --storage.tsdb.path=/tmp/prom-dat
 
 | 组件 | 端口 | 端点 | 说明 |
 |---|---|---|---|
-| 网关 | :8080 | `/metrics` | 推理入口（环回上未设 token 时公开；非环回必须 scrape token） |
+| 网关 | :8080 | `/metrics` | 推理入口（含环回一律要 `MORTRED_METRICS_TOKEN`） |
 | 监督器 | :8787 | `/api/v1/metrics` | 进程管理（需要 Bearer `MORTRED_API_TOKEN`） |
 | 模型服务器 | 环回 :9001-9084 | `/metrics` | 与 Prometheus 同一网络命名空间；不要映射这些端口 |
 
@@ -287,10 +287,11 @@ curl -s http://localhost:9090/api/v1/targets | \
 ### 指标缺失
 
 ```bash
-curl -s http://localhost:8080/metrics | head -5
+curl -s -H "Authorization: Bearer $MORTRED_METRICS_TOKEN" \
+    http://localhost:8080/metrics | head -5
 ```
 
-常见原因：进程未运行 / 端口不对 / supervisor 需要 Bearer token /
+常见原因：进程未运行 / 端口不对 / 缺少 scrape token /
 Prometheus 在 Docker 里仍指向 `localhost` 而不是 `host.docker.internal`
 
 ### 告警不触发
@@ -315,9 +316,11 @@ curl -s http://localhost:3000/api/datasources | jq '.[] | {name, type, url}'
 ## 手动验证命令汇总
 
 ```bash
-# 网关
-curl -s http://localhost:8080/metrics | head -20
-curl -s http://localhost:8080/metrics | grep mortred_http_requests_total
+# 网关（含环回也要 scrape Bearer）
+curl -s -H "Authorization: Bearer $MORTRED_METRICS_TOKEN" \
+    http://localhost:8080/metrics | head -20
+curl -s -H "Authorization: Bearer $MORTRED_METRICS_TOKEN" \
+    http://localhost:8080/metrics | grep mortred_http_requests_total
 
 # 模型服务器（在跑模型的那台机器上打环回；不要 -p 这些端口）
 curl -s http://localhost:9002/metrics | grep mortred_up

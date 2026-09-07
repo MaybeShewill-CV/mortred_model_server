@@ -181,7 +181,8 @@ Two shapes exist on purpose:
   generic CV server (`CvModelEntry<OUTPUT>` carries the worker creator and the
   response filler).
 - [`factory/model_catalog.h`](../src/factory/model_catalog.h) - model families
-  consumed directly by benchmarks and in-process callers, which have no HTTP surface yet
+  consumed directly by benchmarks and in-process callers. They have **no HTTP
+  catalog by product lock**, not as a temporary gap
   (CLIP, SAM predictor, FastSAM).
 
 If a task has more than one output contract, split it into one typed catalog

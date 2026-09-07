@@ -75,9 +75,12 @@ classification:
 - The output contract is `std_object_detection_output` (or
   `std_face_detection_output` for faces - see below).
 - Decode is model-specific and stays in your detector. Reuse what is shared:
-  [`detector_common.h`](../src/models/segment_anything/../object_detection/detector_common.h)
-  already handles request-geometry scaling, named f32 output validation,
-  per-class NMS, top-k and category filling.
+  [`detector_common.h`](../src/models/object_detection/detector_common.h)
+  already handles named f32 output validation, per-class NMS, top-k and
+  category filling. **Geometry is not one helper:** Ultralytics YOLO weights
+  must use `ImagePipeline::letterbox` + `unmap_letterbox_bbox`. Stretch
+  `GeometryScale` is for NanoDet / CenterFace / LibFace. Do not copy the
+  classification `.resize()` snippet onto YOLO.
 - **Two output contracts means two catalogs.** `object_detection` keeps
   `catalog()` (generic boxes) and `face_catalog()` (boxes + landmarks). Do not
   merge them into one type-erased list - see

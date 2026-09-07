@@ -11,7 +11,7 @@
 
 **port:** 服务端口号
 
-**max connections:** 服务支持的最大连接数。旧链接会被踢出如果超过最大连接数。在没有链接可用的情况下新的链接请求会被拒绝。在并发量大的情况下可以增大这个参数. 你可以在以下issue和tutorial中找到一些有用信息 [#issue463](https://github.com/sogou/workflow/issues/463), [#issue906](https://github.com/sogou/workflow/issues/906) and [tutorial-05-http_proxy](https://github.com/sogou/workflow/blob/516da621aea136c4c25c048b89875f62c9d20af6/docs/en/tutorial-05-http_proxy.md)
+**max_connections:** 服务支持的最大连接数。旧连接会被踢出如果超过最大连接数。在没有连接可用的情况下新的连接请求会被拒绝。并发量大时可以增大这个参数。有用讨论见 [#issue463](https://github.com/sogou/workflow/issues/463), [#issue906](https://github.com/sogou/workflow/issues/906) and [tutorial-05-http_proxy](https://github.com/sogou/workflow/blob/516da621aea136c4c25c048b89875f62c9d20af6/docs/en/tutorial-05-http_proxy.md)
 
 **peer_resp_timeout:** 服务读取和发送一段数据的超时设置，默认15秒。
 
@@ -21,9 +21,11 @@
 
 **model_run_timeout:** 模型inference的超时设置，超时的任务会被中断，-1代表该值无限大。
 
-**server_url:** 服务的url地址
+**server_uri:** 模型进程上的 HTTP 路径（网关遗留匹配）。例：`/mortred_ai_server_v1/classification/mobilenetv2`。走网关时优先 `POST /v1/models/{id}/infer`。
 
-**model_config_file_path:** 服务使用的DL模型配置。关于DL模型参数配置说明可参考 [about_model_configuration](../docs/about_model_configuration.md)
+**model / server_exe:** catalog id 与 `mortred-model-server.out`。
+
+**model_config_file_path:** 写在 `[MODEL]` 表（不是 `*_SERVER` 表）。见 [about_model_configuration](about_model_configuration.zh-cn.md)。
 
 <b><font color='GrayB' size='6' face='Helvetica'> 其他一些网络服务参数配置 </font></b>
 
@@ -41,11 +43,10 @@ Listen / timeout / worker 参数写在对应的 `conf/server/**/*.toml` 里。Wo
 # 等待队列上限：超过后立即返回 429 + Retry-After（0 = 不限制）
 max_queue_depth=32
 # 动态批处理：收集并发请求打包成一次 [N,...] 推理（默认 1 = 关闭）
-# 适用于全部单 session 图像模型（分类/检测/分割/OCR/抠图/增强/深度/
-# 特征点/FastSAM）：引擎支持动态 batch（MNN）即获得真批收益；TRT 静态
-# batch=1 引擎会自动逐条回退（行为正确、无收益，重建带 batch profile
-# 的引擎后获得收益）。多 session 模型（lightglue/SAM/CLIP）与 diffusion
-# 采样器不适用批处理。
+# 适用于 HTTP 单 session 图像模型（分类/检测/分割/OCR/抠图/增强/深度/
+# SuperPoint）。FastSAM / CLIP / LightGlue 是 bench-only，不走 HTTP 批处理。
+# 引擎支持动态 batch（MNN）即获得真批收益；TRT 静态 batch=1 引擎会逐条回退。
+# 多 session 模型（LightGlue / SAM prompt / CLIP）与 diffusion 采样器不适用批处理。
 max_batch_size=8
 # 批收集窗口毫秒数：首条请求到达后最多等待这么久凑批
 max_batch_delay_ms=5

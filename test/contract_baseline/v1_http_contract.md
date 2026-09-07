@@ -1,6 +1,8 @@
 # v1 HTTP 契约基线（改造前快照，M0.2）
 
-> 用途：统一契约改造（Contract v1）迁移对照的"改动前"基准。
+> **不是现行契约。** 这是统一信封改造前的快照。现行请求是 `images[]`，现行响应是
+> `{status, status_str, task_id, results[]}`，见 [docs/api-contract.md](../../docs/api-contract.md)。
+> `img_data` 现在返回 422。
 > 来源：`src/common/json_request_parser.h`、`src/common/http_response.h`、
 > `src/server/base_server_impl.h`、`src/server/response_serializers.h`、
 > `src/server/http_status.h`、`test/server_e2e_contract_test.cc`（快照日期：2026-08-31）。

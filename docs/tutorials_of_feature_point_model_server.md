@@ -18,35 +18,37 @@ When the server starts successfully at the `port` configured in your server conf
 
 ## Python Client Example
 
-Local python client test is similiar with mobilenetv2 classification server you may read [toturials_of_classfication_model_server.md](../docs/toturials_of_classification_model_server.md) for details.
+The Python client is the same as the classification tutorial:
+[tutorials_of_classification_model_server.md](tutorials_of_classification_model_server.md).
 
-To use test python client you may run
-
-```python
-cd $PROJECT_ROOT/scripts
-export PYTHONPATH=$PWD:$PYTHONPATH
-python server/test_server.py --server superpoint --mode single
+```bash
+cd $PROJECT_ROOT
+python3 scripts/server/test_server.py --server superpoint --mode single
 ```
 
 ## Unique Tips For Feature Point Model Python Client
 
-Most of the feature's model output is a set of feature points. A single feature point consists of location and descriptor. The JSON payload is built by [`fill_feature_points`](../src/server/response_serializers.h) and already includes both. Server's response is a json like
+The JSON payload is built by [`fill_feature_points`](../src/server/response_serializers.h).
+Each point is `score`, `location` `[x, y]`, and `descriptor`.
 
-```python
-resp = {
-    'req_id': '',
-    'code': 1,
-    'msg': 'success',
-    'data': [
+```json
+{
+  "status": 0,
+  "status_str": "OK",
+  "task_id": "demo",
+  "results": [
+    {
+      "status": 0,
+      "data": [
         {
-            'score': 0.95,
-            'location': [100.5, 85.4],
-            'descriptor': []
-        },
-        {
-            ...
-        },
-    ]
+          "score": 0.95,
+          "location": [100.5, 85.4],
+          "descriptor": []
+        }
+      ]
+    }
+  ],
+  "partial": false
 }
 ```
 

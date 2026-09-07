@@ -20,55 +20,64 @@ cd $PROJECT_ROOT/_bin
 
 测试仅需运行
 
-```python
-cd $PROJECT_ROOT/scripts
-export PYTHONPATH=$PWD:$PYTHONPATH
-python server/test_server.py --server yolov5 --mode single
+```bash
+cd $PROJECT_ROOT
+python3 scripts/server/test_server.py --server yolov5 --mode single
 ```
 
 ## 关于目标检测服务器的一些特殊说明
 
-目标检测服务器的输出是属于一张图像上的一系列目标框。目标框由位置、类别和置信度构成。服务端的response json对象结构如下
+目标检测在 `results[0].data` 返回框数组。每个框是 `class_id`、`score`、
+`category`、`bbox`（`[x1, y1, x2, y2]`）。
 
-```python
-resp = {
-    'req_id': '',
-    'code': 1,
-    'msg': 'success',
-    'data': [
+```json
+{
+  "status": 0,
+  "status_str": "OK",
+  "task_id": "demo",
+  "results": [
+    {
+      "status": 0,
+      "data": [
         {
-            'cls_id': 6,
-            'score': 0.65,
-            'points': [[tl_x, tl_y], [rb_x, rb_y]],
-            'detail_infos': {}
-        },
-        {
-            ...
-        },
-    ]
+          "class_id": 6,
+          "score": 0.65,
+          "category": "bus",
+          "bbox": [10.0, 20.0, 100.0, 200.0],
+          "detail_infos": {}
+        }
+      ]
+    }
+  ],
+  "partial": false
 }
 ```
 
 ## 关于人脸检测服务器的一些特殊说明
 
-人脸检测服务器的输出是属于一张图像上的一系列人脸框。人脸框由位置、landmarks和置信度构成。服务端的response json对象结构如下
+人脸检测使用同一信封，外加 `landmarks`（`[x, y]` 点对）。
 
-```python
-resp = {
-    'req_id': '',
-    'code': 1,
-    'msg': 'success',
-    'data': [
+```json
+{
+  "status": 0,
+  "status_str": "OK",
+  "task_id": "demo",
+  "results": [
+    {
+      "status": 0,
+      "data": [
         {
-            'cls_id': 6,
-            'score': 0.65,
-            'box': [[tl_x, tl_y], [rb_x, rb_y]],
-            'landmark': [[x1, y1], [x2, y2], [x3, y3], ...]
-        },
-        {
-            ...
-        },
-    ]
+          "class_id": 1,
+          "score": 0.65,
+          "category": "face",
+          "bbox": [10.0, 20.0, 100.0, 200.0],
+          "landmarks": [[12.0, 24.0], [90.0, 24.0]],
+          "detail_infos": {}
+        }
+      ]
+    }
+  ],
+  "partial": false
 }
 ```
 
@@ -88,7 +97,7 @@ Yolov5 :rocket: 是一个 **niubi** 的目标检测模型。
 
 ![yolov5_server_output2](../resources/images/yolov5_server_output2.png)
 
-### LibFcae Model
+### LibFace 模型
 
 Libface 是由 [ShiqiYu](https://github.com/ShiqiYu) 老师出品的杰出人脸检测模型. 你可以参考 [https://github.com/ShiqiYu/libfacedetection](https://github.com/ShiqiYu/libfacedetection) 来获取模型细节。
 

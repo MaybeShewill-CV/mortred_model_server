@@ -1,5 +1,7 @@
 # M0 基线报告（2026-08-31）
 
+> **历史基线，不是现行测试清单。** 当时的 `json_request_parser.h` 已删除。
+
 ## M0.1 构建与测试基线
 
 - 构建环境：WSL Ubuntu（用户 `mortred`），`/tmp/mortred-build-ci`

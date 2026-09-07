@@ -35,15 +35,35 @@ cd $PROJECT_ROOT
 python3 scripts/server/test_server.py --server mobilenetv2 --mode single --times 3
 ```
 
-The client posts [the default test image](../demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG) and prints the HTTP status plus a truncated UnifiedResponse body.
+The client posts [the default test image](../demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG) and prints the HTTP status plus a truncated UnifiedResponse body. Class id and scores are in `results[].data`:
 
-`mobilenetv2 classification server output`
+```json
+{
+  "status": 0,
+  "status_str": "OK",
+  "task_id": "demo",
+  "results": [
+    {
+      "status": 0,
+      "data": {
+        "class_id": 281,
+        "category": "tabby",
+        "scores": [0.01, 0.02]
+      }
+    }
+  ],
+  "partial": false
+}
+```
+
+The screenshots below are **historical** (pre-unified envelope). Use the JSON
+above and `test_server.py` output, not the PNG, as the current contract.
+
+`historical mobilenetv2 classification server output`
 ![server_output](../resources/images/exam_server_output.png)
 
-`mobilenetv2 client server output`
+`historical mobilenetv2 client output`
 ![server_output](../resources/images/exam_client_output.png)
-
-You may get the class_id and the score from `results[].data`.
 
 ## Description Of Python Client
 

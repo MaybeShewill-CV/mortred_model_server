@@ -18,7 +18,7 @@
         "id": "data-plane",
         "label": "数据面主链路",
         "focus": ["clients", "gateway", "model_servers", "server_core", "exec", "models", "session", "engines"],
-        "note": "一条 base64 图片请求从网关到推理引擎的完整路径"
+        "note": "一条 images[] base64 请求从网关到推理引擎的完整路径"
       },
       {
         "id": "async-path",
@@ -51,7 +51,7 @@
       "size": [150, 72],
       "tag": "外部",
       "sources": [
-        { "path": "src/common/json_request_parser.h", "label": "img_data/req_id 契约" },
+        { "path": "src/common/request_envelope.h", "label": "images[] / req_id 契约" },
         { "path": "src/control/cli/cli_app.cpp", "label": "mortredctl" }
       ]
     },

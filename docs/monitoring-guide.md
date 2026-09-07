@@ -290,10 +290,11 @@ Common causes: model not running / wrong port / Docker networking (use host.dock
 ### Missing Metrics
 
 ```bash
-curl -s http://localhost:8080/metrics | head -5
+curl -s -H "Authorization: Bearer $MORTRED_METRICS_TOKEN" \
+    http://localhost:8080/metrics | head -5
 ```
 
-Common causes: process not running / wrong port / supervisor requires Bearer token /
+Common causes: process not running / wrong port / missing scrape token /
 Prometheus in Docker still pointing at `localhost` instead of `host.docker.internal`
 
 ### Alerts Not Firing
@@ -318,9 +319,11 @@ Ensure Prometheus URL is correct; test manually in Explore.
 ## Manual Verification Commands
 
 ```bash
-# Gateway
-curl -s http://localhost:8080/metrics | head -20
-curl -s http://localhost:8080/metrics | grep mortred_http_requests_total
+# Gateway (scrape Bearer required, including loopback)
+curl -s -H "Authorization: Bearer $MORTRED_METRICS_TOKEN" \
+    http://localhost:8080/metrics | head -20
+curl -s -H "Authorization: Bearer $MORTRED_METRICS_TOKEN" \
+    http://localhost:8080/metrics | grep mortred_http_requests_total
 
 # Model server (from the host that runs the model; loopback only — do not -p these ports)
 curl -s http://localhost:9002/metrics | grep mortred_up

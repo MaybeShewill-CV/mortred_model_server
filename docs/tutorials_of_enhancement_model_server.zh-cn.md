@@ -18,45 +18,53 @@ cd $PROJECT_ROOT/_bin
 
 ## Python 客户端示例
 
-启动测试客户端方式如下
+客户端与分类教程相同，见
+[tutorials_of_classification_model_server.zh-cn.md](tutorials_of_classification_model_server.zh-cn.md)。
 
-```python
-cd $PROJECT_ROOT/scripts
-export PYTHONPATH=$PWD:$PYTHONPATH
-python server/test_server.py --server attentive_gan --mode single
+```bash
+cd $PROJECT_ROOT
+python3 scripts/server/test_server.py --server attentive_gan --mode single
 ```
 
 ## 图像增强模型客户端的特殊说明
 
-绝大多数的图像增强模型的输出都可以抽象成一张增强过后的图像，图像增强服务器的response内容是一个json对象
+增强结果在 `results[0].data.image`（JPEG/PNG base64）。
 
-```python
-resp = {
-    'req_id': '',
-    'code': 1,
-    'msg': 'success',
-    'data': {
-        'enhance_result': base64_image_content
+```json
+{
+  "status": 0,
+  "status_str": "OK",
+  "task_id": "demo",
+  "results": [
+    {
+      "status": 0,
+      "data": {
+        "image": "<jpeg base64>"
+      }
     }
+  ],
+  "partial": false
 }
 ```
 
-`enhance_result` 保存了图像增强模型的输出图像，该图像被base64编码过，客户端获取结果的过程中需要做一下base64解码
+保存结果：
 
 ```python
-with open(src_image_path, 'rb') as f:
-    image_data = f.read()
-    base64_data = base64.b64encode(image_data)
+import base64
+import json
+import urllib.request
 
-    post_data = {
-        'img_data': base64_data.decode(),
-        'req_id': 'demo',
-    }
-    resp = requests.post(url=url, data=json.dumps(post_data))
-    output = json.loads(resp.text)['data']['enhance_result']
-    out_f = open('result.jpg', 'wb')
+with open(src_image_path, "rb") as f:
+    img_b64 = base64.b64encode(f.read()).decode()
+
+body = json.dumps({"images": [img_b64], "req_id": "demo"}).encode()
+req = urllib.request.Request(
+    url, data=body, headers={"Content-Type": "application/json"}
+)
+resp = json.loads(urllib.request.urlopen(req).read())
+output = resp["results"][0]["data"]["image"]
+with open("result.jpg", "wb") as out_f:
     out_f.write(base64.b64decode(output))
-    out_f.close()
 ```
 
 ## 图像增强模型的可视化结果示例

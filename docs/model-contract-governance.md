@@ -15,9 +15,12 @@ review checklist for new models and for changes to existing model families.
 Spatial models must not derive either size from mutable model members in
 `postprocess`. Use [`request_geometry.h`](../src/models/backend/request_geometry.h):
 
-- `make_geometry_scale` validates both sizes before coordinate mapping.
-- `scale_bbox` / `scale_point` map network coordinates to source coordinates.
-- `validated_source_size` validates the destination for dense output resizing.
+- YOLO v5/v6/v7/v8: `compute_letterbox_geometry` / `unmap_letterbox_bbox` with
+  `ImagePipeline::letterbox` (Ultralytics keep-ratio, pad 114). Do not stretch
+  those weights with `GeometryScale`.
+- NanoDet, CenterFace, LibFace, and other stretch-resize models:
+  `make_geometry_scale` then `scale_bbox` / `scale_point`.
+- Dense outputs: `validated_source_size` before resizing to the source image.
 
 This policy is applied to object detection, scene segmentation, OCR, matting,
 enhancement, SuperPoint, DepthAnything, Metric3D and FastSAM. Multi-session
