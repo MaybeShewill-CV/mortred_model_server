@@ -24,15 +24,18 @@ done
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVER_BIN="${MORTRED_SERVER_BIN:-$ROOT/_bin/mortred-model-server.out}"
+ASAN_SO=""
 
 # ASan ELFs abort if libasan is not first on the load list. Prepending
 # _lib / 3rd_party to LD_LIBRARY_PATH is enough to trigger that. Resolve
-# the soname with a clean ldd (before we mutate LD_LIBRARY_PATH).
+# the soname with a clean ldd; preload only the server process so curl and
+# python3 are not intercepted (CPython "leaks" under LSan are noise here).
 if command -v ldd >/dev/null 2>&1 && [ -e "$SERVER_BIN" ]; then
     ASAN_SO="$(env -u LD_PRELOAD LD_LIBRARY_PATH= ldd "$SERVER_BIN" 2>/dev/null | awk '/libasan/{print $3; exit}')"
     if [ -n "${ASAN_SO:-}" ] && [ -e "$ASAN_SO" ]; then
-        export LD_PRELOAD="${ASAN_SO}${LD_PRELOAD:+:$LD_PRELOAD}"
-        echo "[smoke] ASan ELF: LD_PRELOAD=$ASAN_SO"
+        echo "[smoke] ASan ELF: will LD_PRELOAD=$ASAN_SO for the server only"
+    else
+        ASAN_SO=""
     fi
 fi
 export LD_LIBRARY_PATH="$ROOT/_lib:$ROOT/3rd_party/libs:${LD_LIBRARY_PATH:-}"
@@ -62,7 +65,16 @@ echo "[smoke] model=$MODEL $PARAM_KEY=$TIMESTEP port=$PORT bin=$SERVER_BIN"
 # start the model server with async enabled
 echo "[smoke] starting server..."
 SERVER_LOG="$(mktemp /tmp/mortred-diffusion-smoke.XXXXXX.log)"
-"$SERVER_BIN" --model "$MODEL_ID" "$ROOT/$CONFIG" >"$SERVER_LOG" 2>&1 &
+SERVER_CMD=( "$SERVER_BIN" --model "$MODEL_ID" "$ROOT/$CONFIG" )
+if [ -n "$ASAN_SO" ]; then
+    # detect_leaks=0: this smoke SIGTERM-kills the process; LSan on ONNX/glog
+    # teardown is not the generate-path gate.
+    env LD_PRELOAD="${ASAN_SO}${LD_PRELOAD:+:$LD_PRELOAD}" \
+        ASAN_OPTIONS="${ASAN_OPTIONS:+${ASAN_OPTIONS}:}detect_leaks=0" \
+        "${SERVER_CMD[@]}" >"$SERVER_LOG" 2>&1 &
+else
+    "${SERVER_CMD[@]}" >"$SERVER_LOG" 2>&1 &
+fi
 SERVER_PID=$!
 trap 'kill $SERVER_PID 2>/dev/null || true; rm -f "$SERVER_LOG"' EXIT
 
