@@ -3,6 +3,11 @@ beta_schedule = "linear"
 total_timesteps = 1000
 beta_start = 0.0001
 beta_end = 0.02
+sample_size = [128, 128]
+sample_steps = 50
+channels = 3
+eta = 1.0
+cls_id = 0
 
 [DDPM_UNET]
 [DDPM_UNET.backend]

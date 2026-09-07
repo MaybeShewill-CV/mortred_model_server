@@ -68,6 +68,9 @@ export MGMT="__SUPERVISOR_BEARER__"
 export MODEL="DDPM"   # or DDIM / LDM / SAM_AMG / …
 
 # Same payload as a successful POST /v1/models/$MODEL/infer
+# Generative models ignore image pixels; dummy base64 is enough.
+# For a short DDPM smoke, add "params":{"timesteps":10} (default is the
+# TOML schedule length, often 1000 steps).
 IMG_B64="$(base64 < /path/to/valid-input.png | tr -d '\n')"   # macOS: base64 -i file
 export BODY=$(python3 -c "import json,os; print(json.dumps({'images':[os.environ['IMG_B64']],'req_id':'jobs-test-1'}))")
 ```

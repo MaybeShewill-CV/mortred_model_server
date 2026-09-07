@@ -3,12 +3,12 @@
 # Requires: GPU + weights + built model server binary.
 #
 # Usage:
-#   ./scripts/smoke_diffusion_async.sh                    # default: ddpm, 100 timesteps
-#   ./scripts/smoke_diffusion_async.sh --model ddim --timestep 50
+#   ./scripts/smoke_diffusion_async.sh                    # default: ddpm, 10 timesteps
+#   ./scripts/smoke_diffusion_async.sh --model ddim --timestep 20
 set -euo pipefail
 
 MODEL="ddpm"
-TIMESTEP=100
+TIMESTEP=10
 PORT=""
 SERVER_PID=""
 
@@ -25,8 +25,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export LD_LIBRARY_PATH="$ROOT/_lib:$ROOT/3rd_party/libs:${LD_LIBRARY_PATH:-}"
 
 case "$MODEL" in
-    ddpm) CONFIG="conf/server/diffusion/ddpm/ddpm_server_config.toml"; MODEL_ID="DDPM" ;;
-    ddim) CONFIG="conf/server/diffusion/ddim/ddim_server_config.toml"; MODEL_ID="DDIM" ;;
+    ddpm) CONFIG="conf/server/diffusion/ddpm/ddpm_server_config.toml"; MODEL_ID="DDPM"; PARAM_KEY="timesteps" ;;
+    ddim) CONFIG="conf/server/diffusion/ddim/ddim_server_config.toml"; MODEL_ID="DDIM"; PARAM_KEY="sample_steps" ;;
     *) echo "unsupported model: $MODEL (use ddpm or ddim)"; exit 1 ;;
 esac
 
@@ -37,36 +37,37 @@ if [ -z "$PORT" ]; then
     echo "could not read port from $CONFIG (pass --port)"; exit 1
 fi
 
-echo "[smoke] model=$MODEL timestep=$TIMESTEP port=$PORT"
+BODY="$(python3 -c "import json,sys; print(json.dumps({'images':['aGVsbG8='],'req_id':'smoke-test','params':{sys.argv[1]: int(sys.argv[2])}}))" "$PARAM_KEY" "$TIMESTEP")"
+
+echo "[smoke] model=$MODEL $PARAM_KEY=$TIMESTEP port=$PORT"
 
 # start the model server with async enabled
 echo "[smoke] starting server..."
 "$ROOT/_bin/mortred-model-server.out" --model "$MODEL_ID" "$ROOT/$CONFIG" &
 SERVER_PID=$!
+trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
 sleep 3
 
 # check server is up
 if ! curl -sf "http://127.0.0.1:$PORT/healthz" > /dev/null 2>&1; then
     echo "[FAIL] server did not start (check logs)"
-    kill $SERVER_PID 2>/dev/null || true
     exit 1
 fi
 echo "[smoke] server ready"
 
-# submit async job
+# submit async job (unified envelope: params.<key>, not a root timestep)
 echo "[smoke] submitting async job..."
 SUBMIT=$(curl -s -w '\n%{http_code}' -X POST "http://127.0.0.1:$PORT/jobs" \
     -H "Content-Type: application/json" \
--d "{\"images\":[\"aGVsbG8=\"],\"req_id\":\"smoke-test\",\"timestep\":$TIMESTEP}")
+    -d "$BODY")
 SUBMIT_CODE=$(echo "$SUBMIT" | tail -1)
 SUBMIT_BODY=$(echo "$SUBMIT" | head -n -1)
 
 if [ "$SUBMIT_CODE" != "202" ]; then
     echo "[FAIL] submit returned $SUBMIT_CODE: $SUBMIT_BODY"
-    kill $SERVER_PID 2>/dev/null || true
     exit 1
 fi
-JOB_ID=$(echo "$SUBMIT_BODY" | grep -o '"job_id":"[^"]*"' | cut -d'"' -f4)
+JOB_ID=$(python3 -c "import json,sys; print(json.loads(sys.argv[1])['job_id'])" "$SUBMIT_BODY")
 echo "[smoke] submitted: job_id=$JOB_ID (HTTP 202)"
 
 # poll until done (max 10 minutes)
@@ -74,26 +75,33 @@ echo "[smoke] polling..."
 START=$(date +%s)
 for i in $(seq 1 600); do
     STATUS=$(curl -s "http://127.0.0.1:$PORT/jobs/$JOB_ID")
-    STATE=$(echo "$STATUS" | grep -o '"state":"[^"]*"' | cut -d'"' -f4)
+    STATE=$(python3 -c "import json,sys; print(json.loads(sys.argv[1]).get('state',''))" "$STATUS")
     ELAPSED=$(( $(date +%s) - START ))
 
     if [ "$STATE" = "done" ]; then
         echo "[smoke] done in ${ELAPSED}s"
         RESULT=$(curl -s "http://127.0.0.1:$PORT/jobs/$JOB_ID/result")
-        CODE=$(echo "$RESULT" | grep -o '"code":[0-9]*' | cut -d: -f2)
-        echo "[smoke] result code=$CODE"
-        if [ "$CODE" = "0" ]; then
-            echo "[PASS] $MODEL async smoke test: submit->poll->result OK (${ELAPSED}s)"
-            kill $SERVER_PID 2>/dev/null || true
-            exit 0
-        else
-            echo "[FAIL] result code=$CODE (expected 0)"
-            kill $SERVER_PID 2>/dev/null || true
-            exit 1
-        fi
+        python3 - "$RESULT" <<'PY'
+import json, sys
+doc = json.loads(sys.argv[1])
+status = doc.get("status")
+results = doc.get("results") or []
+image = ""
+if results and isinstance(results[0], dict):
+    data = results[0].get("data") or {}
+    image = data.get("image") or ""
+print("status=%s image_len=%d" % (status, len(image)))
+if status != 0:
+    sys.stderr.write("[FAIL] result status=%s (expected 0)\n%s\n" % (status, sys.argv[1]))
+    sys.exit(1)
+if not image:
+    sys.stderr.write("[FAIL] results[0].data.image missing\n%s\n" % sys.argv[1])
+    sys.exit(1)
+PY
+        echo "[PASS] $MODEL async smoke test: submit->poll->result OK (${ELAPSED}s)"
+        exit 0
     elif [ "$STATE" = "failed" ] || [ "$STATE" = "timeout" ]; then
         echo "[FAIL] job $STATE: $STATUS"
-        kill $SERVER_PID 2>/dev/null || true
         exit 1
     fi
 
@@ -104,5 +112,4 @@ for i in $(seq 1 600); do
 done
 
 echo "[FAIL] job did not complete within 10 minutes"
-kill $SERVER_PID 2>/dev/null || true
 exit 1

@@ -170,8 +170,9 @@ probes, answer `404` with process-level `UnifiedResponse`.
 ```
 
 `images` is required and always an array (≥1). `params` / `options` are optional
-objects. Model-specific knobs (thresholds, `timestep`, …) go in `params`, not
-at the root.
+objects. Model-specific knobs (thresholds, DDPM `timesteps`, …) go in `params`, not
+at the root. Generative models still require `images[]` (≥1); the pixels are
+ignored, so a dummy base64 string is enough.
 
 ### Removed field: `img_data` (HTTP 422)
 

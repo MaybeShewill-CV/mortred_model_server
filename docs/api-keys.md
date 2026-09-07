@@ -72,15 +72,16 @@ curl -X POST http://localhost:8080/v1/models/YOLOV8/infer \
 
 #### Async Job (long-running: diffusion, SAM)
 
-Submit the same envelope as `/infer`. Model knobs such as `timestep` belong in
-`params`, not at the root.
+Submit the same envelope as `/infer`. Model knobs such as DDPM `timesteps`
+belong in `params`, not at the root. Generative models ignore `images[]`
+pixels; a dummy base64 string is a valid payload.
 
 ```bash
 # 1. Submit
 curl -X POST http://localhost:8080/v1/models/DDPM/jobs \
   -H "Authorization: Bearer $MORTRED_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"images":["'"$(base64 -w0 image.jpg)"'"],"req_id":"job-1","params":{"timestep":100}}'
+  -d '{"images":["aGVsbG8="],"req_id":"job-1","params":{"timesteps":10}}'
 # Returns HTTP 202: {"job_id": "job_xxx", "state": "pending", "poll_url": "...", "result_url": "..."}
 
 # 2. Poll

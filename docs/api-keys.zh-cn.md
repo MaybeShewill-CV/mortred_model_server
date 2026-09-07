@@ -67,14 +67,15 @@ curl -X POST http://localhost:8080/v1/models/YOLOV8/infer \
 
 #### 异步任务（长耗时：扩散模型、SAM）
 
-提交体与 `/infer` 相同。`timestep` 等模型参数放在 `params` 里，不要放在根上。
+提交体与 `/infer` 相同。DDPM 的 `timesteps` 等模型参数放在 `params` 里，不要放在根上。
+生成式模型会忽略 `images[]` 的像素，dummy base64 即可。
 
 ```bash
 # 1. 提交
 curl -X POST http://localhost:8080/v1/models/DDPM/jobs \
   -H "Authorization: Bearer $MORTRED_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"images":["'"$(base64 -w0 image.jpg)"'"],"req_id":"job-1","params":{"timestep":100}}'
+  -d '{"images":["aGVsbG8="],"req_id":"job-1","params":{"timesteps":10}}'
 # 返回 HTTP 202: {"job_id": "job_xxx", "state": "pending", "poll_url": "...", "result_url": "..."}
 
 # 2. 轮询

@@ -41,6 +41,7 @@ class_names = ['person', 'bicycle']
 | `input_names` / `output_names` | backend | io name override/filter, useful for models exposing auxiliary outputs |
 | `max_image_pixels` / `max_image_side` | image model params | decoded input safety limits; defaults are 16777216 and 8192 |
 | `model_input_image_size` | fixed-image model params | `[height, width]`; must match the session input H/W |
+| `sample_size` | diffusion `[DDPM_SAMPLER]` / `[DDIM_SAMPLER]` / `[LDM_SAMPLER]` | `[height, width]` of the generated canvas; must match the UNet weight. HTTP seeds this at adapter init; it is not a request `params` key |
 | everything else | params | model specific (thresholds, class names, sizes); key names are unchanged from the historical configs |
 
 Multi-engine models (SAM encoder + decoder, lightglue extractor + matcher) use
@@ -72,3 +73,5 @@ makes product TensorRT configs (for example `yolov8_config.toml`) a
 configuration error on CPU (`type=tensorrt` forbids `device=cpu`). Hosted fork
 CI proves YOLOv8 decode via the overlay `conf/ci/yolov8_onnx_hosted.toml`, not
 the serving `.engine`. TensorRT goldens stay on the maintainer GPU path.
+DDPM HTTP generate is proven by `conf/ci/ddpm_onnx_fewstep.toml` +
+`model_golden.ddpm_celeba_hq_fewstep` (not hosted; the ONNX is ~143MiB).
