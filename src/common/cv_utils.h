@@ -383,6 +383,37 @@ static inline std::vector<T> convert_to_hwc_vec(const std::vector<T>& input, int
     return result;
 }
 
+/*** HWC float in [0,255] to an 8U display Mat without OpenCV asserts:
+ * 1ch stays gray, 3ch RGB->BGR, 4ch RGBA->BGR. Empty size or a channel
+ * count other than 1/3/4 returns false (no throw). */
+static inline bool hwc_float_to_display_bgr(const std::vector<float>& hwc, int channels,
+                                            cv::Size size, cv::Mat* dst) {
+    if (dst == nullptr || size.width <= 0 || size.height <= 0) {
+        return false;
+    }
+    if (channels != 1 && channels != 3 && channels != 4) {
+        return false;
+    }
+    const size_t need = static_cast<size_t>(size.width) * static_cast<size_t>(size.height) *
+                        static_cast<size_t>(channels);
+    if (hwc.size() != need) {
+        return false;
+    }
+    cv::Mat src(size, CV_MAKE_TYPE(CV_32F, channels), const_cast<float*>(hwc.data()));
+    cv::Mat u8;
+    src.convertTo(u8, CV_8U);
+    if (channels == 1) {
+        *dst = std::move(u8);
+        return true;
+    }
+    if (channels == 3) {
+        cv::cvtColor(u8, *dst, cv::COLOR_RGB2BGR);
+        return true;
+    }
+    cv::cvtColor(u8, *dst, cv::COLOR_RGBA2BGR);
+    return true;
+}
+
 static inline cv::Mat stack_multiple_ddpm_images(const std::vector<cv::Mat>& multi_images, const int gap=2, const int images_per_row=8) {
     if (multi_images.empty()) {
         LOG(ERROR) << "input image vector is empty";

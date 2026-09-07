@@ -370,6 +370,10 @@ StatusCode DDIMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     auto xt_data = transformed_input.xt_data;
     auto eta = transformed_input.eta;
     auto save_raw_output = transformed_input.save_raw_output;
+    if (sample_size.width <= 0 || sample_size.height <= 0) {
+        LOG(ERROR) << "ddim sample_size is empty";
+        return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
 
     // p-sample loop
     _m_sample_status = StatusCode::OK;
@@ -393,6 +397,7 @@ StatusCode DDIMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
         if (save_raw_output) {
             internal_out.raw_predicted_x0.push_back(predict_x0);
             internal_out.raw_sampled_images.push_back(predict_xt);
+            continue;
         }
         // rescale image data to [0, 255]
         for (size_t idx = 0; idx < predict_x0.size(); ++idx) {
@@ -404,36 +409,18 @@ StatusCode DDIMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
             predict_xt[idx] = (predict_xt[idx] + 1.0f) * 0.5f * 255.0f + 0.5f;
             predict_xt[idx] = std::clamp(predict_xt[idx], 0.0f, 255.0f);
         }
-        // assign output predict x0 images
         auto hwc_data = CvUtils::convert_to_hwc_vec<float>(predict_x0, sample_channels, sample_size.height, sample_size.width);
         cv::Mat mid_image;
-        if (sample_channels == 1) {
-            mid_image = cv::Mat(sample_size, CV_32FC1, hwc_data.data());
-        } else if (sample_channels == 3) {
-            mid_image = cv::Mat(sample_size, CV_32FC3, hwc_data.data());
-        } else if (sample_channels == 4) {
-            mid_image = cv::Mat(sample_size, CV_32FC4, hwc_data.data());
-        } else {
-            LOG(ERROR) << "not support image channels: " << sample_channels;
+        if (!CvUtils::hwc_float_to_display_bgr(hwc_data, sample_channels, sample_size, &mid_image)) {
+            LOG(ERROR) << "cannot convert ddim x0 to display image, channels=" << sample_channels;
             continue;
         }
-        mid_image.convertTo(mid_image, CV_8UC3);
-        cv::cvtColor(mid_image, mid_image, cv::COLOR_RGB2BGR);
         internal_out.predicted_x0.push_back(mid_image);
-        // assign output predict samples images
         hwc_data = CvUtils::convert_to_hwc_vec<float>(predict_xt, sample_channels, sample_size.height, sample_size.width);
-        if (sample_channels == 1) {
-            mid_image = cv::Mat(sample_size, CV_32FC1, hwc_data.data());
-        } else if (sample_channels == 3) {
-            mid_image = cv::Mat(sample_size, CV_32FC3, hwc_data.data());
-        } else if (sample_channels == 4) {
-            mid_image = cv::Mat(sample_size, CV_32FC4, hwc_data.data());
-        } else {
-            LOG(ERROR) << "not support image channels: " << sample_channels;
+        if (!CvUtils::hwc_float_to_display_bgr(hwc_data, sample_channels, sample_size, &mid_image)) {
+            LOG(ERROR) << "cannot convert ddim sample to display image, channels=" << sample_channels;
             continue;
         }
-        mid_image.convertTo(mid_image, CV_8UC3);
-        cv::cvtColor(mid_image, mid_image, cv::COLOR_RGB2BGR);
         internal_out.sampled_images.push_back(mid_image);
     }
 

@@ -12,6 +12,7 @@
 
 #include "glog/logging.h"
 
+#include <exception>
 #include <vector>
 
 #include "common/status_code.h"
@@ -19,6 +20,23 @@
 namespace jinq {
 namespace models {
 using jinq::common::StatusCode;
+
+/*** Thread-pool / go-task fence: model code returns StatusCode, but OpenCV
+ * and allocators can still throw. An uncaught exception on a workflow go
+ * thread terminates the process. This is not error-as-exception control
+ * flow; it is the one boundary that keeps StatusCode as the contract. */
+template <typename Fn>
+inline StatusCode invoke_nothrow(Fn&& fn) {
+    try {
+        return fn();
+    } catch (const std::exception& e) {
+        LOG(ERROR) << "model threw std::exception: " << e.what();
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    } catch (...) {
+        LOG(ERROR) << "model threw a non-std exception";
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+}
 
 template<typename INPUT, typename OUTPUT>
 class BaseAiModel {
@@ -72,7 +90,7 @@ public:
             LOG(ERROR) << "model is not successfully initialized, refuse to run";
             return StatusCode::MODEL_INIT_FAILED;
         }
-        return run_impl(in, out);
+        return invoke_nothrow([&] { return run_impl(in, out); });
     }
 
     /***

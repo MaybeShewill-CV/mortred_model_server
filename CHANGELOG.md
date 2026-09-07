@@ -8,6 +8,19 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- `BaseAiModel::run` (and packed `BackendCvModel::run_batch`) catch throws from
+  `run_impl` / OpenCV and return `MODEL_RUN_SESSION_FAILED`, so a workflow go
+  thread does not `std::terminate` the process. Diffusion DDPM/DDIM/cls-cond
+  postprocess no longer `convertTo(CV_8UC3)` + `COLOR_RGB2BGR` on 1/4-channel
+  tensors (LDM latent `channels=4` with `save_raw_output`); display conversion
+  is channel-correct and skipped when only raw latents are needed.
+
+> `BaseAiModel::run`（以及 packed `BackendCvModel::run_batch`）接住 `run_impl` /
+> OpenCV 的抛出并返回 `MODEL_RUN_SESSION_FAILED`，避免 workflow go 线程
+> `std::terminate` 整进程。扩散 DDPM/DDIM/cls-cond 后处理不再对 1/4 通道
+> `convertTo(CV_8UC3)` + `COLOR_RGB2BGR`（LDM latent `channels=4` 且
+> `save_raw_output`）；出图按通道转换，只要 raw 时跳过。
+
 - `do_work` writes inference metrics and the run-time EWMA before returning
   the worker to the queue (same order as `process_batch`). The destructor
   drain treats an enqueued worker as permission to destroy those members;

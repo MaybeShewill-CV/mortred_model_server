@@ -155,3 +155,32 @@ TEST(cv_utils, colorize_sam_mask_max_label) {
     // label 3 is in range, so its pixels must not be painted as the id-0 fallback
     EXPECT_NE(color_mask.at<cv::Vec3b>(0, 0), cv::Vec3b(0, 0, 255));
 }
+
+TEST(cv_utils, hwc_float_to_display_bgr_rgb) {
+    const std::vector<float> hwc = {255.0f, 0.0f, 0.0f};
+    cv::Mat out;
+    ASSERT_TRUE(CvUtils::hwc_float_to_display_bgr(hwc, 3, cv::Size(1, 1), &out));
+    ASSERT_EQ(out.type(), CV_8UC3);
+    EXPECT_EQ(out.at<cv::Vec3b>(0, 0), cv::Vec3b(0, 0, 255));
+}
+
+TEST(cv_utils, hwc_float_to_display_bgr_gray) {
+    const std::vector<float> hwc = {128.0f};
+    cv::Mat out;
+    ASSERT_TRUE(CvUtils::hwc_float_to_display_bgr(hwc, 1, cv::Size(1, 1), &out));
+    ASSERT_EQ(out.type(), CV_8UC1);
+    EXPECT_EQ(out.at<unsigned char>(0, 0), 128);
+}
+
+TEST(cv_utils, hwc_float_to_display_bgr_rgba_does_not_throw) {
+    const std::vector<float> hwc = {255.0f, 0.0f, 0.0f, 255.0f};
+    cv::Mat out;
+    ASSERT_TRUE(CvUtils::hwc_float_to_display_bgr(hwc, 4, cv::Size(1, 1), &out));
+    ASSERT_EQ(out.type(), CV_8UC3);
+    EXPECT_EQ(out.at<cv::Vec3b>(0, 0), cv::Vec3b(0, 0, 255));
+}
+
+TEST(cv_utils, hwc_float_to_display_bgr_rejects_empty_size) {
+    cv::Mat out;
+    EXPECT_FALSE(CvUtils::hwc_float_to_display_bgr({255.0f, 0.0f, 0.0f}, 3, cv::Size(0, 0), &out));
+}
