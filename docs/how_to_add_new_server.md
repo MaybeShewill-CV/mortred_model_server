@@ -67,7 +67,13 @@ Then:
    a `catalog_tiers` entry in `conf/ci_hosted_golden.json`: `hosted`, `gpu-smoke`,
    or `nightly`, and a committed `test/golden/<case>.json` or `.png` if the
    tier is `hosted`);
-3. declare the new `server_uri` in `docs/openapi.json` via `scripts/gen_openapi.py`.
+3. run `python3 scripts/gen_openapi.py` and commit `docs/openapi.json` plus
+   `src/server/openapi_doc.h`. The generator reads the `[*_SERVER]` **section
+   name** and `server_uri`, so adding a server **or renaming either field**
+   requires a regen (stale `Request_*` schemas otherwise linger). `port` and
+   `worker_nums` do not appear in OpenAPI. If you also changed the catalog
+   `server_section` or ParamSpec, refresh `docs/contract_dump.json` first
+   (`contract_dump` binary), then run `gen_openapi.py`.
 
 ## Step 4: What The Base Framework Already Does For You
 

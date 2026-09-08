@@ -61,7 +61,12 @@ mortred-model-benchmark.out --model DENSENET /path/to/densenet_config.toml [imag
 2. `python3 scripts/check_consistency.py` 必须保持绿色（catalog id ↔ conf `model=`，
    `conf/ci_hosted_golden.json` 的 `catalog_tiers`：`hosted` / `gpu-smoke` / `nightly`，
    以及 `hosted` 档必须提交 `test/golden/<case>.json` 或 `.png`）；
-3. 通过 `scripts/gen_openapi.py` 在 `docs/openapi.json` 中声明新的 `server_uri`。
+3. 运行 `python3 scripts/gen_openapi.py`，并提交 `docs/openapi.json` 与
+   `src/server/openapi_doc.h`。生成器读的是 `[*_SERVER]` **节名** 和 `server_uri`，
+   因此新增服务或改这两个字段都必须 regen（否则会留下旧的 `Request_*` schema）。
+   `port` / `worker_nums` 不进入 OpenAPI。若同时改了 catalog 的 `server_section`
+   或 ParamSpec，先刷新 `docs/contract_dump.json`（`contract_dump` 二进制），
+   再跑 `gen_openapi.py`。
 
 ## 第 4 步：框架已经替你做的事
 
