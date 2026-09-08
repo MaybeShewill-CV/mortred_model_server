@@ -618,11 +618,21 @@ mortredctl doctor
 启动前必须设置 Grafana 密码。默认只刮网关 `/metrics`，详见
 [monitoring-guide.zh-cn.md](monitoring-guide.zh-cn.md)。
 
+该 compose 里的 Prometheus 以 uid **65534** 运行。scrape 密钥文件必须是
+mode 600 且属主为该 uid（裸机则属主为用户 `prometheus`）。
+`write_prometheus_credentials.sh` 会做 `chown`。在 Prometheus **容器内**抓取
+要用 **`host.docker.internal:8080`**，不要用 `localhost:8080`（那是 Prometheus
+自己）。Linux compose 通过 `extra_hosts` 解析该名字。
+
 ```bash
+set -a && . conf/local/trust.env && set +a   # MORTRED_METRICS_TOKEN
+./scripts/write_prometheus_credentials.sh    # 可能 sudo 把属主改成 65534:65534
 export GRAFANA_ADMIN_PASSWORD="$(openssl rand -hex 16)"
 docker compose -f deploy/docker-compose.monitoring.yml up -d
 # Grafana: http://localhost:3000
 # 告警规则: deploy/alert-rules.yml（含过载拒绝率告警）
+# 裸机：sudo cp deploy/prometheus.yml /etc/prometheus/ &&
+#   sudo ./scripts/write_prometheus_credentials.sh /etc/prometheus/mortred_metrics_token
 ```
 
 ---

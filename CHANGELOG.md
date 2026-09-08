@@ -7,6 +7,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- `write_prometheus_credentials.sh` `chown`s the scrape secret to the process
+  that reads it: uid **65534** (compose `prom/prometheus` nobody) or user
+  **prometheus** (apt unit, `/etc/prometheus/*`). Mode stays 600. Compose
+  monitoring scrapes `host.docker.internal:8080` via `prometheus.compose.yml`
+  (`localhost` inside that container is Prometheus). `deployment` documents
+  both the ownership step and the Docker DNS name.
+
+> `write_prometheus_credentials.sh` 把 scrape 密钥 `chown` 给真正读它的进程：
+> compose 里 `prom/prometheus` 的 uid **65534**，或 apt 单元的 **prometheus**
+> 用户（`/etc/prometheus/*`）。权限仍是 600。compose 监控通过
+> `prometheus.compose.yml` 刮 `host.docker.internal:8080`（容器内 `localhost`
+> 是 Prometheus 自己）。`deployment` 补了属主步骤和该 Docker 主机名。
+
 ### Changed
 - `check_trt_engine_manifest` walks HTTP catalog `[*.backend] type="tensorrt"`
   paths (not the removed `*_TRT` tables) against `conf/trt_engines.json`.

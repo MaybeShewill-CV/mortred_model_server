@@ -9,7 +9,9 @@
 # credentials_file must contain the raw scrape token (no "Bearer "
 # prefix). Do not put the inference token in that file. Compose writes it
 # via scripts/write_prometheus_credentials.sh (default
-# conf/local/mortred_metrics_token, gitignored) and bind-mounts it here.
+# conf/local/mortred_metrics_token, gitignored, uid 65534 / mode 600) and
+# bind-mounts it. Bare metal: same script to /etc/prometheus/mortred_metrics_token
+# (owner prometheus, mode 600).
 #
 # Install (bare metal):
 #   sudo cp deploy/prometheus.yml /etc/prometheus/prometheus.yml
@@ -18,9 +20,9 @@
 #   sudo ./scripts/write_prometheus_credentials.sh /etc/prometheus/mortred_metrics_token
 #   sudo systemctl restart prometheus
 #
-# Docker Compose monitoring stack: replace localhost with
-# host.docker.internal in the gateway target (see extra_hosts in
-# deploy/docker-compose.monitoring.yml).
+# Docker Compose monitoring stack uses deploy/prometheus.compose.yml
+# (host.docker.internal:8080 + extra_hosts). This file keeps localhost
+# for systemd / host-network Prometheus.
 #
 # Standalone:
 #   prometheus --config.file=deploy/prometheus.yml --storage.tsdb.path=/tmp/prom-data

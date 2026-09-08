@@ -43,13 +43,13 @@ that child was started with `MORTRED_AUTH_TOKEN`. Do not publish model ports.
 ```bash
 export GRAFANA_ADMIN_PASSWORD="$(openssl rand -hex 16)"
 set -a && . conf/local/trust.env && set +a   # must include MORTRED_METRICS_TOKEN
-./scripts/write_prometheus_credentials.sh
+./scripts/write_prometheus_credentials.sh    # chown 65534:65534 (may prompt sudo)
 docker compose -f deploy/docker-compose.monitoring.yml up -d
 # Grafana: http://localhost:3000  (user admin / $GRAFANA_ADMIN_PASSWORD)
 # Prometheus: http://localhost:9090  (loopback only)
 # Prometheus datasource + the Mortred dashboard are provisioned.
-# Note: on Linux, replace "localhost" with "host.docker.internal"
-# in deploy/prometheus.yml gateway targets.
+# Compose scrapes host.docker.internal:8080 (prometheus.compose.yml).
+# localhost:8080 inside that container is Prometheus, not Mortred.
 ```
 
 ### Option 2: Bare Metal

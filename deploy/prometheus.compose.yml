@@ -1,0 +1,43 @@
+# Prometheus scrape config for deploy/docker-compose.monitoring.yml.
+# Same jobs as prometheus.yml, but the gateway target is
+# host.docker.internal:8080. Inside the Prometheus container, localhost is
+# Prometheus itself; extra_hosts maps host.docker.internal to the host
+# gateway. Bare-metal installs keep deploy/prometheus.yml (localhost).
+#
+# credentials_file is the in-container path of the bind-mounted token
+# (scripts/write_prometheus_credentials.sh, owner uid 65534, mode 600).
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alert-rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+scrape_configs:
+  - job_name: mortred-gateway
+    static_configs:
+      - targets: ['host.docker.internal:8080']
+        labels: { component: gateway }
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/mortred_metrics_token
+
+  # Uncomment when Prometheus can reach host :8787 and can read the
+  # management token. credentials_file must contain the raw token.
+  # - job_name: mortred-supervisor
+  #   metrics_path: /api/v1/metrics
+  #   authorization:
+  #     type: Bearer
+  #     credentials_file: /etc/prometheus/mortred_api_token
+  #   static_configs:
+  #     - targets: ['host.docker.internal:8787']
+  #       labels: { component: supervisor }
+
+  # Model /metrics stays loopback on the Mortred host. A Prometheus
+  # container cannot scrape it; do not docker-publish those ports.
