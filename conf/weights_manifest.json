@@ -1297,7 +1297,6 @@
       "hf_path": "scene_segmentation/hrnet/hrnetw48_ccd.onnx",
       "on_hf": false,
       "profiles": [
-        "cpu",
         "gpu"
       ]
     },

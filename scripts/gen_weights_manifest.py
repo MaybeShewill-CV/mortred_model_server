@@ -37,7 +37,6 @@ CPU_WEIGHTS = {
     "weights/classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn",
     "weights/classification/resnet/resnet-50.mnn",
     "weights/object_detection/yolov8/yolov8s.onnx",
-    "weights/scene_segmentation/hrnet/hrnetw48_ccd.onnx",
     # Hosted cpu-profile golden set (conf/ci_hosted_golden.json). Keep these
     # tagged cpu so fetch --profile cpu and CI stay aligned after regenerate.
     "weights/object_detection/nanodet/nanodet_plus_m_1x5.mnn",
