@@ -10,6 +10,7 @@ using jinq::models::backend::DType;
 using jinq::models::backend::NamedTensor;
 using jinq::models::backend::Tensor;
 using jinq::models::backend::TensorContract;
+using jinq::models::backend::TensorLayout;
 
 namespace {
 
@@ -74,4 +75,39 @@ TEST(TensorContract, FindsOutputByName) {
     ASSERT_NE(jinq::models::backend::find_output(outputs, "b"), nullptr);
     EXPECT_EQ(jinq::models::backend::find_output(outputs, "b")->name, "b");
     EXPECT_EQ(jinq::models::backend::find_output(outputs, "missing"), nullptr);
+}
+
+TEST(TensorContract, UnknownLayoutDoesNotCheckTag) {
+    auto output = named_f32("output", {1, 3, 2, 2}, 12 * sizeof(float));
+    output.tensor.layout = TensorLayout::Nhwc;
+    std::string error;
+    EXPECT_TRUE(jinq::models::backend::validate_output_tensor(
+        output, {DType::F32, 4, {1, 3, 2, 2}}, &error))
+        << error;
+}
+
+TEST(TensorContract, RejectsNhwcWhenContractIsNchw) {
+    auto output = named_f32("output", {1, 3, 2, 2}, 12 * sizeof(float));
+    output.tensor.layout = TensorLayout::Nhwc;
+    std::string error;
+    EXPECT_FALSE(jinq::models::backend::validate_output_tensor(
+        output, {DType::F32, 4, {1, 3, 2, 2}, TensorLayout::Nchw}, &error));
+    EXPECT_NE(error.find("layout"), std::string::npos) << error;
+}
+
+TEST(TensorContract, AcceptsMatchingNchwLayout) {
+    auto output = named_f32("output", {1, 3, 2, 2}, 12 * sizeof(float));
+    output.tensor.layout = TensorLayout::Nchw;
+    std::string error;
+    EXPECT_TRUE(jinq::models::backend::validate_output_tensor(
+        output, {DType::F32, 4, {1, 3, 2, 2}, TensorLayout::Nchw}, &error))
+        << error;
+}
+
+TEST(TensorLayout, HostOutputLayoutByRank) {
+    EXPECT_EQ(jinq::models::backend::host_output_layout({1, 3, 8, 8}), TensorLayout::Nchw);
+    EXPECT_EQ(jinq::models::backend::host_output_layout({1, 1000}), TensorLayout::Linear);
+    EXPECT_EQ(jinq::models::backend::host_output_layout({1000}), TensorLayout::Linear);
+    EXPECT_EQ(jinq::models::backend::host_output_layout({1, 84, 8400}), TensorLayout::Unknown);
+    EXPECT_EQ(jinq::models::backend::host_output_layout({2, 3, 4, 5, 6}), TensorLayout::Unknown);
 }

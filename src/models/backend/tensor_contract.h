@@ -18,6 +18,8 @@ struct TensorContract {
     DType dtype = DType::F32;
     size_t rank = 0;
     std::vector<int64_t> shape; // -1 means any positive dimension
+    // last so {dtype, rank, shape} brace-init stays valid; Unknown = do not check
+    TensorLayout layout = TensorLayout::Unknown;
 };
 
 inline const NamedTensor *find_output(const std::vector<NamedTensor> &outputs, const std::string &name) {
@@ -58,6 +60,13 @@ inline bool validate_output_tensor(const NamedTensor &output, const TensorContra
         if (error != nullptr) {
             *error = "output '" + output.name + "' dtype is " + dtype_to_string(output.tensor.dtype) + ", expected " +
                      dtype_to_string(contract.dtype);
+        }
+        return false;
+    }
+    if (contract.layout != TensorLayout::Unknown && output.tensor.layout != contract.layout) {
+        if (error != nullptr) {
+            *error = "output '" + output.name + "' layout is " + tensor_layout_to_string(output.tensor.layout) +
+                     ", expected " + tensor_layout_to_string(contract.layout);
         }
         return false;
     }

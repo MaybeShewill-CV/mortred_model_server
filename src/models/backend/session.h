@@ -30,11 +30,16 @@ struct TensorInfo {
     DType dtype = DType::F32;
     std::vector<int64_t> shape;
     bool dynamic = false;
+    TensorLayout layout = TensorLayout::Unknown;
 
     std::string to_string() const {
         std::string out = name + ":";
         out += dtype_to_string(dtype);
         out += shape_to_string(shape);
+        if (layout != TensorLayout::Unknown) {
+            out += " ";
+            out += tensor_layout_to_string(layout);
+        }
         if (dynamic) {
             out += " (dynamic)";
         }
@@ -69,7 +74,8 @@ class InferenceSession {
      * run one inference. Input tensors are validated against the model io
      * (name / dtype / concrete shape); dynamic shapes are set per run. Output
      * buffers are reused inside the session, the returned tensors own a host
-     * copy with the concrete run-time shapes.
+     * copy with the concrete run-time shapes. Rank-4 outputs are tagged NCHW;
+     * rank-1/2 are Linear. Rank-3 stays Unknown.
      *
      * inputs()/outputs() follow [MODEL.backend] input_names and output_names
      * when those vectors are non-empty (subset + configured order). Empty

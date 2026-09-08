@@ -73,7 +73,8 @@ StatusCode PPHumanSeg<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>
     }
     jinq::models::backend::F32OutputView output_view;
     const auto output_status = jinq::models::backend::validated_f32_first_output(
-        outputs, {jinq::models::backend::DType::F32, 4, {1, 2, context.network_size.height, context.network_size.width}}, "pphumanseg",
+        outputs, {jinq::models::backend::DType::F32, 4, {1, 2, context.network_size.height, context.network_size.width},
+                  jinq::models::backend::TensorLayout::Nchw}, "pphumanseg",
         &output_view);
     if (output_status != StatusCode::OK) {
         return output_status;

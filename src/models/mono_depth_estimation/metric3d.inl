@@ -137,14 +137,18 @@ StatusCode Metric3D<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &
     }
     jinq::models::backend::F32OutputView depth_view;
     const auto depth_status = jinq::models::backend::validated_f32_named_output(
-        outputs, "prediction", {jinq::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width}},
+        outputs, "prediction",
+        {jinq::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width},
+         jinq::models::backend::TensorLayout::Nchw},
         "metric3d", &depth_view);
     if (depth_status != StatusCode::OK) {
         return depth_status;
     }
     jinq::models::backend::F32OutputView confidence_view;
     const auto confidence_status = jinq::models::backend::validated_f32_named_output(
-        outputs, "confidence", {jinq::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width}},
+        outputs, "confidence",
+        {jinq::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width},
+         jinq::models::backend::TensorLayout::Nchw},
         "metric3d", &confidence_view);
     if (confidence_status != StatusCode::OK) {
         return confidence_status;

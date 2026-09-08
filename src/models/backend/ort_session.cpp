@@ -164,6 +164,7 @@ StatusCode OrtSession::init(const BackendConfig& config, std::string* err) {
                 }
                 info.shape = shape_and_type.GetShape();
                 info.dynamic = shape_is_dynamic(info.shape);
+                info.layout = host_output_layout(info.shape);
                 infos->push_back(std::move(info));
             }
             return true;
@@ -313,6 +314,7 @@ StatusCode OrtSession::run(const std::vector<NamedTensor>& inputs,
                 return StatusCode::MODEL_RUN_SESSION_FAILED;
             }
             std::memcpy(named.tensor.buffer.data(), src, bytes);
+            named.tensor.layout = host_output_layout(named.tensor.shape);
             outputs.push_back(std::move(named));
         }
     } catch (const Ort::Exception& exception) {

@@ -79,7 +79,7 @@ StatusCode DDPMUNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &
     }
     jinq::models::backend::F32OutputView output_view;
     const auto output_status = jinq::models::backend::validated_f32_first_output(
-        outputs, {jinq::models::backend::DType::F32, 4, {1, -1, -1, -1}}, "ddpm unet", &output_view);
+        outputs, {jinq::models::backend::DType::F32, 4, {1, -1, -1, -1}, jinq::models::backend::TensorLayout::Nchw}, "ddpm unet", &output_view);
     if (output_status != StatusCode::OK) {
         return output_status;
     }
