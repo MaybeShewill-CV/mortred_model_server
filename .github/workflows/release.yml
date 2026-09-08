@@ -105,6 +105,7 @@ jobs:
           cp scripts/tarball_install.sh "$STAGING/install.sh"
           chmod +x "$STAGING/install.sh"
           printf 'gpu\n' > "$STAGING/opt/mortred/PROFILE"
+          # flat archive (same layout as make_release_tarball.sh): no wrapper dir
           tar -C "$STAGING" -czf "dist/mortred_model_server-$VERSION_NUM-gpu-linux-x64.tar.gz" .
           sha256sum "dist/mortred_model_server-$VERSION_NUM-gpu-linux-x64.tar.gz" > "dist/mortred_model_server-$VERSION_NUM-gpu-linux-x64.tar.gz.sha256"
           rm -rf "$STAGING"
