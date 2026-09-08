@@ -8,11 +8,13 @@
 #include "models/backend/mnn_session.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
 
 #include "glog/logging.h"
 
 #include "common/file_path_util.h"
+#include "models/backend/nchw_host.h"
 #include "models/backend/session_io.h"
 
 namespace jinq {
@@ -173,8 +175,10 @@ StatusCode MnnSession::init(const BackendConfig& config, std::string* err) {
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    // build infos last: dtypes must be valid, shapes are reported in the host
-    // layout used for copies (nhwc for TENSORFLOW dim type tensors)
+    // build infos last: dtypes must be valid. Input shapes use the host
+    // layout of the copies (nhwc when input_layout / TF dim type says so).
+    // Rank-4 outputs are always reported as logical NCHW; input_layout does
+    // not control output layout.
     for (const auto& item : _m_input_tensors) {
         TensorInfo info;
         info.name = item.first;
@@ -201,9 +205,7 @@ StatusCode MnnSession::init(const BackendConfig& config, std::string* err) {
             }
             return StatusCode::MODEL_INIT_FAILED;
         }
-        for (const auto& dim : item.second->shape()) {
-            info.shape.push_back(dim);
-        }
+        info.shape = to_nchw(item.second->shape(), item.second->getDimensionType());
         info.dynamic = shape_is_dynamic(info.shape);
         _m_output_infos.push_back(std::move(info));
     }
@@ -318,7 +320,7 @@ StatusCode MnnSession::run(const std::vector<NamedTensor>& inputs,
     }
 
     outputs.clear();
-    outputs.reserve(_m_output_tensors.size());
+    outputs.reserve(_m_output_infos.size());
     for (const auto& info : _m_output_infos) {
         auto* mnn_tensor = _m_output_tensors.at(info.name);
         if (mnn_tensor == nullptr) {
@@ -331,12 +333,29 @@ StatusCode MnnSession::run(const std::vector<NamedTensor>& inputs,
         NamedTensor named;
         named.name = info.name;
         named.tensor.dtype = info.dtype;
+        std::vector<int64_t> host_shape;
+        host_shape.reserve(host_tensor.shape().size());
         for (const auto& dim : host_tensor.shape()) {
-            named.tensor.shape.push_back(dim);
+            host_shape.push_back(dim);
         }
         const auto bytes = static_cast<size_t>(host_tensor.size());
-        named.tensor.buffer.resize(bytes);
-        std::memcpy(named.tensor.buffer.data(), host_tensor.host<void>(), bytes);
+        const auto* src = static_cast<const uint8_t*>(host_tensor.host<void>());
+        const bool nhwc4 = mnn_tensor->getDimensionType() == MNN::Tensor::DimensionType::TENSORFLOW &&
+                           host_shape.size() == 4;
+        if (nhwc4) {
+            named.tensor.shape = nchw_shape_from_nhwc4(host_shape);
+            named.tensor.buffer.resize(bytes);
+            if (!permute_nhwc_to_nchw_bytes(src, named.tensor.buffer.data(), host_shape[0],
+                                            host_shape[1], host_shape[2], host_shape[3],
+                                            dtype_size(named.tensor.dtype))) {
+                LOG(ERROR) << "mnn output '" << info.name << "' nhwc to nchw permute failed";
+                return StatusCode::MODEL_RUN_SESSION_FAILED;
+            }
+        } else {
+            named.tensor.shape = std::move(host_shape);
+            named.tensor.buffer.resize(bytes);
+            std::memcpy(named.tensor.buffer.data(), src, bytes);
+        }
         outputs.push_back(std::move(named));
     }
     return StatusCode::OK;

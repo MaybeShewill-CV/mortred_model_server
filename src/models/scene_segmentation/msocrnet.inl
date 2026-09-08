@@ -94,19 +94,34 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &
         LOG(ERROR) << "msocrnet argmax output dtype must be i32/i64, got " << tensor.dtype;
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
-    // argmax mask layout: [1,H,W] (onnx) or [1,H,W,1] (mnn)
+    // argmax mask layout: [1,H,W], NCHW [1,1,H,W], or legacy NHWC [1,H,W,1]
     jinq::models::backend::TensorContract mask_contract;
     mask_contract.dtype = jinq::models::backend::DType::I32;
-    mask_contract.rank = tensor.shape.size() == 3 ? 3 : 4;
-    mask_contract.shape = mask_contract.rank == 3 ? std::vector<int64_t>{1, context.network_size.height, context.network_size.width}
-                                                  : std::vector<int64_t>{1, context.network_size.height, context.network_size.width, 1};
-    if (!jinq::models::backend::validate_output_tensor(outputs.front(), mask_contract, &contract_error)) {
-        // The exact dtype is checked again below for the i64 fallback.
+    auto try_mask = [&](size_t rank, std::vector<int64_t> shape) {
+        mask_contract.rank = rank;
+        mask_contract.shape = std::move(shape);
+        return jinq::models::backend::validate_output_tensor(outputs.front(), mask_contract, &contract_error);
+    };
+    bool mask_ok = try_mask(3, {1, context.network_size.height, context.network_size.width});
+    if (!mask_ok) {
+        mask_ok = try_mask(4, {1, 1, context.network_size.height, context.network_size.width});
+    }
+    if (!mask_ok) {
+        mask_ok = try_mask(4, {1, context.network_size.height, context.network_size.width, 1});
+    }
+    if (!mask_ok) {
         mask_contract.dtype = jinq::models::backend::DType::I64;
-        if (!jinq::models::backend::validate_output_tensor(outputs.front(), mask_contract, &contract_error)) {
-            LOG(ERROR) << "msocrnet output contract failed: " << contract_error;
-            return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+        mask_ok = try_mask(3, {1, context.network_size.height, context.network_size.width});
+        if (!mask_ok) {
+            mask_ok = try_mask(4, {1, 1, context.network_size.height, context.network_size.width});
         }
+        if (!mask_ok) {
+            mask_ok = try_mask(4, {1, context.network_size.height, context.network_size.width, 1});
+        }
+    }
+    if (!mask_ok) {
+        LOG(ERROR) << "msocrnet output contract failed: " << contract_error;
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
     if (tensor.shape.size() != 3 && tensor.shape.size() != 4) {
         LOG(ERROR) << "unexpected msocrnet output shape: " << jinq::models::backend::shape_to_string(tensor.shape);

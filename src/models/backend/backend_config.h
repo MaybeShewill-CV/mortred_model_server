@@ -35,7 +35,8 @@ namespace backend {
  *   gpu_mem_limit_mb = 2048  # onnx+cuda arena; 0 = unlimited; default 2048
  *   precision_mode = 0     # mnn only
  *   power_mode = 0         # mnn only
- *   input_layout = "auto" | "nhwc" | "nchw"   # mnn only
+ *   input_layout = "auto" | "nhwc" | "nchw"   # mnn input copies only
+ *   Rank-4 MNN outputs are always host NCHW regardless of input_layout.
  *   input_names = ["..."]  # optional; empty keeps backend discovery order
  *   output_names = ["..."] # optional; empty keeps backend discovery order
  *
