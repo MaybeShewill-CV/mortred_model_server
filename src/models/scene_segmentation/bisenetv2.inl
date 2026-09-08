@@ -83,26 +83,35 @@ StatusCode BiseNetV2<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> 
         return source_status;
     }
     jinq::models::backend::F32OutputView output_view;
+    const auto height = context.network_size.height;
+    const auto width = context.network_size.width;
+    const bool nchw = outputs.front().tensor.shape.size() == 4;
     const auto output_status = jinq::models::backend::validated_f32_first_output(
-        outputs, {jinq::models::backend::DType::F32, 3, {context.network_size.height, context.network_size.width, -1}}, "bisenetv2",
-        &output_view);
+        outputs,
+        nchw ? jinq::models::backend::TensorContract{jinq::models::backend::DType::F32, 4,
+                                                     {1, -1, height, width}}
+             : jinq::models::backend::TensorContract{jinq::models::backend::DType::F32, 3,
+                                                      {height, width, -1}},
+        "bisenetv2", &output_view);
     if (output_status != StatusCode::OK) {
         return output_status;
     }
     const auto &tensor = *output_view.tensor;
     const auto *host_data = output_view.data;
-    const auto cls_nums = tensor.shape.back();
+    const auto cls_nums = nchw ? tensor.shape[1] : tensor.shape.back();
+    const auto plane = static_cast<int64_t>(height) * width;
 
-    // model output is float [H, W, cls_nums], compute argmax per pixel
     cv::Mat result_image(context.network_size, CV_32SC1, cv::Scalar(0));
     for (auto row = 0; row < result_image.rows; ++row) {
         for (auto col = 0; col < result_image.cols; ++col) {
-            const float *logit = host_data + (row * result_image.cols + col) * cls_nums;
             int best_cls = 0;
-            float best_val = logit[0];
-            for (auto cls = 1; cls < cls_nums; ++cls) {
-                if (logit[cls] > best_val) {
-                    best_val = logit[cls];
+            float best_val = 0.0f;
+            for (auto cls = 0; cls < cls_nums; ++cls) {
+                const float val = nchw
+                                      ? host_data[cls * plane + row * width + col]
+                                      : host_data[(row * width + col) * cls_nums + cls];
+                if (cls == 0 || val > best_val) {
+                    best_val = val;
                     best_cls = cls;
                 }
             }

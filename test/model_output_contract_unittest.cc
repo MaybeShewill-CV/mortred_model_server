@@ -199,6 +199,18 @@ TEST(ModelOutputContract, SceneSegmentationMapsToRequestSourceSize) {
 
     outputs.front().tensor.shape = {2, 2, 2};
     EXPECT_EQ(bisenet.postprocess(outputs, context(cv::Size(9, 6), cv::Size(3, 2)), result), StatusCode::MODEL_OUTPUT_CONTRACT_FAILED);
+
+    // NCHW [1,C,H,W] after MNN host conversion: class 1 wins every pixel
+    std::vector<NamedTensor> nchw_outputs{f32_tensor("final_output", {1, 2, 2, 3})};
+    auto *nchw_data = reinterpret_cast<float *>(nchw_outputs.front().tensor.buffer.data());
+    const auto plane = 2 * 3;
+    for (int idx = 0; idx < plane; ++idx) {
+        nchw_data[idx] = -1.0f;
+        nchw_data[plane + idx] = 1.0f;
+    }
+    ASSERT_EQ(bisenet.postprocess(nchw_outputs, context(cv::Size(9, 6), cv::Size(3, 2)), result), StatusCode::OK);
+    EXPECT_EQ(result.segmentation_result.size(), cv::Size(9, 6));
+    EXPECT_EQ(result.segmentation_result.at<int32_t>(0, 0), 1);
 }
 
 TEST(ModelOutputContract, BinarySegmentationDecodesNetworkPlanes) {
