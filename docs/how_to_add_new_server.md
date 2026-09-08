@@ -64,8 +64,9 @@ Then:
    `server_exe = "mortred-model-server.out"` (copy a sibling and adjust
    `server_uri`, `port`, `worker_nums`);
 2. `python3 scripts/check_consistency.py` must stay green (catalog id ↔ conf `model=`,
-   and a `catalog_tiers` entry in `conf/ci_hosted_golden.json`: `hosted`, `gpu-smoke`,
-   or `nightly`);
+   a `catalog_tiers` entry in `conf/ci_hosted_golden.json`: `hosted`, `gpu-smoke`,
+   or `nightly`, and a committed `test/golden/<case>.json` or `.png` if the
+   tier is `hosted`);
 3. declare the new `server_uri` in `docs/openapi.json` via `scripts/gen_openapi.py`.
 
 ## Step 4: What The Base Framework Already Does For You

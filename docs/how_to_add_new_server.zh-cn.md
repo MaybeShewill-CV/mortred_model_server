@@ -59,7 +59,8 @@ mortred-model-benchmark.out --model DENSENET /path/to/densenet_config.toml [imag
    `server_exe = "mortred-model-server.out"`（复制同类配置并调整
    `server_uri`、`port`、`worker_nums`）；
 2. `python3 scripts/check_consistency.py` 必须保持绿色（catalog id ↔ conf `model=`，
-   以及 `conf/ci_hosted_golden.json` 的 `catalog_tiers`：`hosted` / `gpu-smoke` / `nightly`）；
+   `conf/ci_hosted_golden.json` 的 `catalog_tiers`：`hosted` / `gpu-smoke` / `nightly`，
+   以及 `hosted` 档必须提交 `test/golden/<case>.json` 或 `.png`）；
 3. 通过 `scripts/gen_openapi.py` 在 `docs/openapi.json` 中声明新的 `server_uri`。
 
 ## 第 4 步：框架已经替你做的事

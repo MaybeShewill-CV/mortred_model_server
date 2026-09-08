@@ -34,7 +34,8 @@ Verifies a few high-signal invariants:
     and the IO headers include opencv2/core.hpp instead of the opencv.hpp
     umbrella header.
 14. conf/ci_hosted_golden.json matches golden sources, HF cpu weights, the
-    GPU smoke filter in ci.yml, and every HTTP catalog id has a CI tier.
+    GPU smoke filter in ci.yml, every HTTP catalog id has a CI tier, and each
+    hosted case has a committed test/golden/<case>.json or .png baseline.
 15. `conf/packs/demo.toml` `[pack.<ID>]` ids exist as `model=` in conf/server.
 16. Git `conf/packs/*.toml` keep `worker_nums=1` (calibration is machine-local).
 17. `scripts/pack_trt.py --self-test` covers pack TRT engine discovery.

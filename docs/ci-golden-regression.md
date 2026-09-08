@@ -52,7 +52,9 @@ an explicit flag:
 
 Source of truth: `conf/ci_hosted_golden.json`. `scripts/check_hosted_golden.py`
 (also invoked from `scripts/check_consistency.py`) rejects a set that is not
-on Hugging Face, not tagged `cpu`, or that points at a TensorRT engine.
+on Hugging Face, not tagged `cpu`, that points at a TensorRT engine, or that
+has no committed `test/golden/<case>.json` / `.png` (so a missing YOLO ONNX
+baseline cannot hide behind a green consistency job).
 
 1. Cache `weights/` keyed by that JSON + `conf/weights_manifest.json`.
 2. `scripts/fetch_weights.py --only …` for each hosted weight (stdlib urllib

@@ -4,6 +4,7 @@
 conf/ci_hosted_golden.json is the single source of truth. This script checks:
 
 - each hosted gtest name exists in test/model_golden_test.cc
+- each hosted case has a committed baseline test/golden/<case>.json or .png
 - hosted configs are MNN/ONNX (not TensorRT / .engine)
 - listed weights exist in conf/weights_manifest.json, on_hf, profiles contain cpu
 - hosted download size stays under max_bytes
@@ -56,6 +57,24 @@ def load_contract() -> dict:
         return json.load(handle)
 
 
+def golden_stem(gtest: str) -> str:
+    prefix = "model_golden."
+    if gtest.startswith(prefix):
+        return gtest[len(prefix) :]
+    return gtest
+
+
+def hosted_baseline_paths(gtest: str) -> tuple[Path, Path]:
+    stem = golden_stem(gtest)
+    golden_dir = ROOT / "test" / "golden"
+    return golden_dir / f"{stem}.json", golden_dir / f"{stem}.png"
+
+
+def hosted_baseline_exists(gtest: str) -> bool:
+    json_path, png_path = hosted_baseline_paths(gtest)
+    return json_path.is_file() or png_path.is_file()
+
+
 def gtest_names_in_source() -> set[str]:
     text = GOLDEN_CC.read_text(encoding="utf-8")
     names: set[str] = set()
@@ -92,6 +111,13 @@ def check_hosted_case(case: dict, known_gtest: set[str], by_path: dict[str, dict
         return ["hosted case missing gtest"]
     if gtest not in known_gtest:
         errors.append(f"{gtest}: not declared in test/model_golden_test.cc")
+    if not hosted_baseline_exists(gtest):
+        stem = golden_stem(gtest)
+        errors.append(
+            f"{gtest}: missing baseline test/golden/{stem}.json or "
+            f"test/golden/{stem}.png (generate with MORTRED_UPDATE_GOLDEN=1 "
+            "or drop the case from hosted)"
+        )
     config = case.get("config")
     if not config or not (ROOT / config).is_file():
         errors.append(f"{gtest}: config missing: {config}")
