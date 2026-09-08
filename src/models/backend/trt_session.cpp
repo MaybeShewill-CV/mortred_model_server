@@ -319,25 +319,9 @@ StatusCode TrtSession::init(const BackendConfig& config, std::string* err) {
     const auto is_input = [this](const std::string& name) {
         return _m_engine->getTensorIOMode(name.c_str()) == nvinfer1::TensorIOMode::kINPUT;
     };
-    const auto wanted_input = [&config, &is_input](const std::string& name) {
-        if (!is_input(name)) {
-            return false;
-        }
-        if (config.input_names.empty()) {
-            return true;
-        }
-        return std::find(config.input_names.begin(), config.input_names.end(), name) !=
-               config.input_names.end();
-    };
-    const auto wanted_output = [this, &config](const std::string& name) {
-        if (_m_engine->getTensorIOMode(name.c_str()) != nvinfer1::TensorIOMode::kOUTPUT) {
-            return false;
-        }
-        if (config.output_names.empty()) {
-            return true;
-        }
-        return std::find(config.output_names.begin(), config.output_names.end(), name) !=
-               config.output_names.end();
+    const auto wanted_input = [&is_input](const std::string& name) { return is_input(name); };
+    const auto wanted_output = [this](const std::string& name) {
+        return _m_engine->getTensorIOMode(name.c_str()) == nvinfer1::TensorIOMode::kOUTPUT;
     };
 
     const int32_t io_count = _m_engine->getNbIOTensors();

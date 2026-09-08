@@ -150,11 +150,6 @@ StatusCode MnnSession::init(const BackendConfig& config, std::string* err) {
         if (item.second == nullptr) {
             continue;
         }
-        if (!config.input_names.empty() &&
-            std::find(config.input_names.begin(), config.input_names.end(), item.first) ==
-                config.input_names.end()) {
-            continue;
-        }
         auto dim_type = item.second->getDimensionType();
         if (config.input_layout == "nhwc") {
             dim_type = MNN::Tensor::DimensionType::TENSORFLOW;
@@ -167,11 +162,6 @@ StatusCode MnnSession::init(const BackendConfig& config, std::string* err) {
     }
     for (const auto& item : all_outputs) {
         if (item.second == nullptr) {
-            continue;
-        }
-        if (!config.output_names.empty() &&
-            std::find(config.output_names.begin(), config.output_names.end(), item.first) ==
-                config.output_names.end()) {
             continue;
         }
         _m_output_tensors[item.first] = item.second;
