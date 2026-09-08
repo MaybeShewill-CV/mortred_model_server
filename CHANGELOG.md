@@ -8,6 +8,17 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Changed
+- `check_trt_engine_manifest` walks HTTP catalog `[*.backend] type="tensorrt"`
+  paths (not the removed `*_TRT` tables) against `conf/trt_engines.json`.
+  Scaffold configs (`TODO(new_model)` / not in the HTTP catalog) are skipped.
+  `fetch_weights --profile cpu` no longer includes the off-HF hrnet ONNX that
+  the cpu catalog does not serve.
+
+> checker 按 HTTP catalog 的 `[*.backend] type="tensorrt"` 对照
+> `trt_engines.json`（不再找已删除的 `*_TRT`）。脚手架（`TODO(new_model)` /
+> 不在 HTTP catalog）跳过。cpu 权重集合不再含 catalog 不服务、且不在 HF 上的
+> hrnet ONNX。
+
 - Release tarball layout is documented as **flat**: `install.sh`, `opt/mortred/`,
   and `deploy/` sit at the archive root (`make_release_tarball.sh` and the gpu
   release job already packed that way). README / deployment / installer comments

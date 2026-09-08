@@ -22,9 +22,9 @@ Verifies a few high-signal invariants:
 9. Every `*_SERVER` section declares `model=` matching the non-`_SERVER` table,
    `server_exe` is `mortred-model-server.out`, and the `model` set matches the
    HTTP subset of the C++ factory catalogs.
-10. Every engine referenced by conf/model [*_TRT] sections is declared in
-    conf/trt_engines.json, so the engine-regeneration script can never miss a
-    config-required engine.
+10. Every TensorRT `model_file_path` on an HTTP catalog model's
+    `[*.backend] type="tensorrt"` table is declared in conf/trt_engines.json.
+    Scaffold configs (`TODO(new_model)` or not in the HTTP catalog) are skipped.
 11. templates/model/tasks.json stays in sync with the real sources, so the
     scaffolder can never drift away from the C++ catalogs (catalog header,
     response filler, io namespace, output type, model directory).
@@ -383,11 +383,51 @@ def check_server_exe_mapping() -> list[str]:
     return errors
 
 
+def _walk_tables(obj: object, prefix: str = "") -> list[tuple[str, dict]]:
+    rows: list[tuple[str, dict]] = []
+    if not isinstance(obj, dict):
+        return rows
+    rows.append((prefix, obj))
+    for key, val in obj.items():
+        if isinstance(val, dict):
+            child = f"{prefix}.{key}" if prefix else str(key)
+            rows.extend(_walk_tables(val, child))
+    return rows
+
+
+def _http_catalog_model_tomls() -> dict[Path, str]:
+    """model toml path -> catalog id for HTTP catalog servers only."""
+    catalog_ids = parse_cpp_http_models()
+    out: dict[Path, str] = {}
+    conf_server = ROOT / "conf" / "server"
+    if not conf_server.exists():
+        return out
+    for cfg in sorted(conf_server.rglob("*.toml")):
+        try:
+            table = load_toml(cfg)
+        except (ValueError, OSError):
+            continue
+        model_id = ""
+        model_cfg_rel = ""
+        for name, kv in table.items():
+            if not isinstance(kv, dict):
+                continue
+            if str(name).endswith("_SERVER"):
+                raw = kv.get("model")
+                if raw:
+                    model_id = str(raw)
+            elif not model_cfg_rel and kv.get("model_config_file_path"):
+                model_cfg_rel = str(kv["model_config_file_path"])
+        if not model_id or model_id not in catalog_ids or not model_cfg_rel:
+            continue
+        resolved = (ROOT / "_bin" / model_cfg_rel).resolve()
+        if resolved.is_file():
+            out[resolved] = model_id
+    return out
+
+
 def check_trt_engine_manifest() -> list[str]:
-    """Every engine referenced by conf/model [*_TRT] sections (any key ending
-    with `model_file_path`) must be declared in conf/trt_engines.json, so the
-    engine-regeneration script (scripts/convert_trt_engines.sh) can never miss
-    a config-required engine."""
+    """TensorRT backends used by HTTP catalog models must be in trt_engines.json."""
     errors: list[str] = []
     manifest_path = ROOT / "conf" / "trt_engines.json"
     if not manifest_path.exists():
@@ -398,27 +438,34 @@ def check_trt_engine_manifest() -> list[str]:
         errors.append(f"conf/trt_engines.json is not valid JSON: {exc}")
         return errors
     declared = {e.get("engine") for e in manifest.get("engines", [])}
-    for cfg in sorted((ROOT / "conf" / "model").rglob("*.toml")):
+    for cfg, model_id in sorted(_http_catalog_model_tomls().items(), key=lambda kv: kv[0].as_posix()):
         try:
+            text = cfg.read_text(encoding="utf-8")
             table = load_toml(cfg)
         except (ValueError, OSError):
             continue
-        for sec, kv in table.items():
-            if not sec.endswith("_TRT") or not isinstance(kv, dict):
+        if "TODO(new_model)" in text:
+            continue
+        rel_cfg = cfg.relative_to(ROOT).as_posix() if cfg.is_relative_to(ROOT) else str(cfg)
+        for sec, kv in _walk_tables(table):
+            if "backend" not in sec.lower():
                 continue
-            for key, value in kv.items():
-                if not key.endswith("model_file_path") or not value:
-                    continue
-                resolved = (ROOT / "_bin" / value).resolve()
-                try:
-                    rel = resolved.relative_to(ROOT).as_posix()
-                except ValueError:
-                    continue
-                if rel not in declared:
-                    errors.append(
-                        f"{cfg.relative_to(ROOT)} [{sec}] {key} engine {rel} "
-                        "missing from conf/trt_engines.json"
-                    )
+            backend_type = str(kv.get("type") or "").strip().strip('"').lower()
+            if backend_type != "tensorrt":
+                continue
+            raw = kv.get("model_file_path")
+            if not raw:
+                continue
+            resolved = (ROOT / "_bin" / str(raw)).resolve()
+            try:
+                rel = resolved.relative_to(ROOT).as_posix()
+            except ValueError:
+                continue
+            if rel not in declared:
+                errors.append(
+                    f"{rel_cfg} [{sec or model_id}] type=tensorrt engine {rel} "
+                    "missing from conf/trt_engines.json"
+                )
     return errors
 
 
