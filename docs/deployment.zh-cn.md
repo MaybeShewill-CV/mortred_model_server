@@ -167,9 +167,9 @@ curl -fsSL https://raw.githubusercontent.com/MaybeShewill-CV/mortred_model_serve
 next:
   1. git clone https://github.com/MaybeShewill-CV/mortred_model_server.git && cd mortred_model_server
   2. python3 scripts/fetch_weights.py --profile cpu
-  3. MORTRED_API_TOKEN=<mgmt> MORTRED_GATEWAY_AUTH_TOKEN=<infer> \
-         docker compose --profile cpu up -d
-  4. curl -fs http://localhost:8787/api/v1/health
+  3. ./scripts/mortredctl_init-trust.sh && set -a && . conf/local/trust.env && set +a
+  4. docker compose --profile cpu up -d
+  5. curl -fs http://localhost:8787/api/v1/health
 ```
 
 > bootstrap 本身刻意保持"薄"：它只做检测与委托，不复制任何业务逻辑——升级 mortredctl 即升级全部入口。
@@ -188,9 +188,9 @@ cd mortred_model_server
 # ② 拉取当前 profile 的权重子集（断点续传 + sha256 校验）
 python3 scripts/fetch_weights.py --profile cpu     # GPU 机器换成 gpu
 
-# ③ 设置两个 token（缺省即 fail-closed，服务拒绝对外监听）
-export MORTRED_API_TOKEN="$(openssl rand -hex 24)"        # 管理面
-export MORTRED_GATEWAY_AUTH_TOKEN="$(openssl rand -hex 24)" # 推理面
+# ③ 三个互异 token（compose 对 scrape 也是 `:?`，缺了插值即失败）
+./scripts/mortredctl_init-trust.sh
+set -a && . conf/local/trust.env && set +a
 
 # ④ 启动（本地构建镜像；首次约 10-25 分钟编译）
 docker compose --profile cpu up -d      # GPU 机器换成 --profile gpu
@@ -291,10 +291,9 @@ sudo ./install.sh
 ### 6.3 配置 token 与权重
 
 ```bash
-# ① 编辑 token（两个都必填，否则 fail-closed 只监听 loopback）
-sudoedit /etc/mortred/supervisor.env
-#   MORTRED_API_TOKEN=<openssl rand -hex 24 的输出>
-#   MORTRED_GATEWAY_AUTH_TOKEN=<另一个随机值>
+# ① 生成三个 token（覆盖 install.sh 留下的注释模板）
+sudo /opt/mortred/bin/mortredctl.out init-trust --force --out /etc/mortred/supervisor.env
+# 或自行 sudoedit 填入三个 MORTRED_*_TOKEN
 
 # ② 拉权重（在安装树内执行）
 cd /opt/mortred

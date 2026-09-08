@@ -8,6 +8,17 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Changed
+- Entry 2/3 and bootstrap now export all three tokens (`mortredctl init-trust`
+  / `supervisor.env`). Compose already required `MORTRED_METRICS_TOKEN`; the
+  copied quick-start commands now match. The optional monitoring compose
+  bind-mounts a scrape credentials file (not minted by the app compose or
+  the release tarball) and provisions the Grafana Prometheus datasource.
+
+> 入口二/三与 bootstrap 改为三个 token（`init-trust` / `supervisor.env`），
+> 与 compose 已有的 `:?` scrape 必填对齐。可选监控 compose 挂载 scrape
+> credentials 文件（不由应用 compose 或发布 tarball 发明 token），并
+> provision Grafana 的 Prometheus 数据源。
+
 - Live documentation now matches the unified HTTP envelope (`images[]` /
   `{status, status_str, task_id, results[]}`). `api-contract`, `api-keys`, and
   the task tutorials no longer present `img_data` or `{code, msg, data}` as

@@ -42,9 +42,12 @@ that child was started with `MORTRED_AUTH_TOKEN`. Do not publish model ports.
 
 ```bash
 export GRAFANA_ADMIN_PASSWORD="$(openssl rand -hex 16)"
+set -a && . conf/local/trust.env && set +a   # must include MORTRED_METRICS_TOKEN
+./scripts/write_prometheus_credentials.sh
 docker compose -f deploy/docker-compose.monitoring.yml up -d
 # Grafana: http://localhost:3000  (user admin / $GRAFANA_ADMIN_PASSWORD)
 # Prometheus: http://localhost:9090  (loopback only)
+# Prometheus datasource + the Mortred dashboard are provisioned.
 # Note: on Linux, replace "localhost" with "host.docker.internal"
 # in deploy/prometheus.yml gateway targets.
 ```
@@ -55,6 +58,8 @@ docker compose -f deploy/docker-compose.monitoring.yml up -d
 sudo apt install prometheus grafana
 sudo cp deploy/prometheus.yml /etc/prometheus/prometheus.yml
 sudo cp deploy/alert-rules.yml /etc/prometheus/alert-rules.yml
+set -a && . conf/local/trust.env && set +a
+sudo ./scripts/write_prometheus_credentials.sh /etc/prometheus/mortred_metrics_token
 sudo systemctl restart prometheus
 ```
 
@@ -240,6 +245,10 @@ curl -X POST http://localhost:9090/-/reload  # hot reload
 ### Import
 
 Dashboard → Import → Upload `deploy/grafana-dashboard.json` → Select Prometheus datasource → Import
+
+The compose stack provisions the Prometheus datasource (`uid: prometheus`)
+and loads this JSON from `/var/lib/grafana/dashboards`; the Import UI is
+only needed for a Grafana that was installed without that provisioning.
 
 ### Panel Interpretation
 

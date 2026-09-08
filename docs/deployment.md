@@ -175,9 +175,9 @@ curl -fsSL https://raw.githubusercontent.com/MaybeShewill-CV/mortred_model_serve
 next:
   1. git clone https://github.com/MaybeShewill-CV/mortred_model_server.git && cd mortred_model_server
   2. python3 scripts/fetch_weights.py --profile cpu
-  3. MORTRED_API_TOKEN=<mgmt> MORTRED_GATEWAY_AUTH_TOKEN=<infer> \
-         docker compose --profile cpu up -d
-  4. curl -fs http://localhost:8787/api/v1/health
+  3. ./scripts/mortredctl_init-trust.sh && set -a && . conf/local/trust.env && set +a
+  4. docker compose --profile cpu up -d
+  5. curl -fs http://localhost:8787/api/v1/health
 ```
 
 > The bootstrap stays deliberately thin: detection and delegation only. Upgrading
@@ -197,9 +197,9 @@ cd mortred_model_server
 # 2. fetch the weight subset for your profile (resumable + sha256 verified)
 python3 scripts/fetch_weights.py --profile cpu     # gpu machines: gpu
 
-# 3. set the two tokens (fail-closed without them)
-export MORTRED_API_TOKEN="$(openssl rand -hex 24)"          # management
-export MORTRED_GATEWAY_AUTH_TOKEN="$(openssl rand -hex 24)" # inference
+# 3. three distinct tokens (compose interpolates all three; missing scrape fails closed)
+./scripts/mortredctl_init-trust.sh
+set -a && . conf/local/trust.env && set +a
 
 # 4. start (builds locally; first build ~10-25 min)
 docker compose --profile cpu up -d      # GPU machines: --profile gpu
@@ -300,9 +300,9 @@ sudo ./install.sh
 ### 6.3 Tokens and weights
 
 ```bash
-sudoedit /etc/mortred/supervisor.env
-#   MORTRED_API_TOKEN=<output of openssl rand -hex 24>
-#   MORTRED_GATEWAY_AUTH_TOKEN=<another random value>
+# generate three tokens (overwrites the comment-only placeholder from install.sh)
+sudo /opt/mortred/bin/mortredctl.out init-trust --force --out /etc/mortred/supervisor.env
+# or sudoedit the three MORTRED_*_TOKEN lines yourself
 
 cd /opt/mortred
 sudo -u mortred python3 scripts/fetch_weights.py --profile cpu

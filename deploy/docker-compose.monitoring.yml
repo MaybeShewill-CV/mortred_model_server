@@ -1,7 +1,14 @@
 # Local observation stack for Mortred Model Server.
 # Not a production monitoring deployment: ports bind loopback only.
 #
+# Mortred's own docker-compose.yml does not run Prometheus. This file only
+# observes a Mortred process that is already up (host or another compose
+# project). It does not mint scrape tokens.
+#
+#   mortredctl init-trust
+#   set -a && . conf/local/trust.env && set +a
 #   export GRAFANA_ADMIN_PASSWORD="$(openssl rand -hex 16)"
+#   ./scripts/write_prometheus_credentials.sh
 #   docker compose -f deploy/docker-compose.monitoring.yml up -d
 #   Grafana:    http://localhost:3000
 #   Prometheus: http://localhost:9090
@@ -18,6 +25,7 @@ services:
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      - ${MORTRED_METRICS_TOKEN_FILE:-../conf/local/mortred_metrics_token}:/etc/prometheus/mortred_metrics_token:ro
       - prometheus-data:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -30,6 +38,7 @@ services:
     container_name: mortred-grafana
     ports: ["127.0.0.1:3000:3000"]
     volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana-dashboard.json:/var/lib/grafana/dashboards/mortred.json:ro
       - grafana-data:/var/lib/grafana
     environment:
