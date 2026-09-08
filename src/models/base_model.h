@@ -99,9 +99,11 @@ public:
      * succeeded. Per-item failures (preprocess / postprocess) are ISOLATED:
      * one bad item never fails its batch mates. Session-level failures cannot
      * be attributed to an item and are broadcast to all participating items -
-     * implementations must follow this contract. The default loops run_impl
-     * per item so every model stays correct under a batch scheduler; batch
-     * capable models override it with a single N-dim session run.
+     * implementations must follow this contract, including throws caught at
+     * the packed-batch fence (no item may remain OK after a session throw).
+     * The default loops run() per item so every model stays correct under a
+     * batch scheduler; batch capable models override it with a single N-dim
+     * session run.
      */
     virtual StatusCode run_batch(const std::vector<INPUT>& in,
                                  std::vector<OUTPUT>& out,

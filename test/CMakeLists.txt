@@ -38,6 +38,7 @@ set(TEST_LIST
     time_stamp_unittest
     cv_utils_unittest
     base_model_nvi_unittest
+    packed_batch_nvi_unittest
     detection_params_unittest
     detector_common_unittest
     model_runtime_unittest
@@ -136,6 +137,8 @@ foreach(src ${TEST_LIST})
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "base_model_nvi_unittest")
         set(EXTRA_LIBS glog::glog)
+    elseif(${src} STREQUAL "packed_batch_nvi_unittest")
+        set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "tensor_contract_unittest")
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "detection_params_unittest")

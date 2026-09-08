@@ -9,6 +9,7 @@
 #define MORTRED_MODELS_BACKEND_BACKEND_CV_MODEL_H
 
 #include <cstring>
+#include <exception>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -186,12 +187,30 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
      * single runs: correct everywhere, faster wherever dynamic N is
      * supported. Multi-session models (lightglue / sam / clip) keep the
      * default per-item loop.
+     *
+     * A throw inside the packed session is a session-level failure: it cannot
+     * be attributed to one item. invoke_nothrow alone is not enough —
+     * run_image_batch pre-assigns item_status to OK, and the HTTP layer
+     * reports per-item codes. Catch must broadcast SESSION_FAILED so no item
+     * stays OK (silent fake success).
      */
     StatusCode run_batch(const std::vector<INPUT> &in, std::vector<OUTPUT> &out, std::vector<StatusCode> &item_status) override {
         if (_m_session == nullptr) {
             return BaseAiModel<INPUT, OUTPUT>::run_batch(in, out, item_status);
         }
-        return invoke_nothrow([&] { return run_image_batch(in, out, item_status); });
+        try {
+            return run_image_batch(in, out, item_status);
+        } catch (const std::exception &e) {
+            LOG(ERROR) << "model threw std::exception: " << e.what();
+            out.assign(in.size(), OUTPUT{});
+            item_status.assign(in.size(), StatusCode::MODEL_RUN_SESSION_FAILED);
+            return StatusCode::MODEL_RUN_SESSION_FAILED;
+        } catch (...) {
+            LOG(ERROR) << "model threw a non-std exception";
+            out.assign(in.size(), OUTPUT{});
+            item_status.assign(in.size(), StatusCode::MODEL_RUN_SESSION_FAILED);
+            return StatusCode::MODEL_RUN_SESSION_FAILED;
+        }
     }
 
   protected:
