@@ -268,12 +268,12 @@ TEST(MnnSession, InitAndRunMobilenetv2) {
     EXPECT_EQ(input_info.dtype, jinq::models::backend::DType::F32);
     EXPECT_FALSE(input_info.dynamic);
     EXPECT_EQ(output_info.dtype, jinq::models::backend::DType::F32);
-    if (input_info.shape.size() == 4) {
-        EXPECT_EQ(input_info.layout, jinq::models::backend::TensorLayout::Nhwc);
-    }
-    if (output_info.shape.size() <= 2) {
-        EXPECT_EQ(output_info.layout, jinq::models::backend::TensorLayout::Linear);
-    }
+    // this export is CAFFE; auto host copies stay NCHW. production toml sets
+    // input_layout=nhwc and that path is checked below.
+    EXPECT_EQ(input_info.shape, (std::vector<int64_t>{1, 3, 224, 224}));
+    EXPECT_EQ(input_info.layout, jinq::models::backend::TensorLayout::Nchw);
+    EXPECT_EQ(output_info.shape.size(), 2u);
+    EXPECT_EQ(output_info.layout, jinq::models::backend::TensorLayout::Linear);
 
     std::vector<NamedTensor> inputs;
     NamedTensor input;
@@ -286,11 +286,7 @@ TEST(MnnSession, InitAndRunMobilenetv2) {
     ASSERT_EQ(outputs.size(), 1u);
     EXPECT_EQ(outputs.front().name, output_info.name);
     EXPECT_GT(outputs.front().tensor.element_count(), 0);
-    if (outputs.front().tensor.shape.size() == 4) {
-        EXPECT_EQ(outputs.front().tensor.layout, jinq::models::backend::TensorLayout::Nchw);
-    } else if (outputs.front().tensor.shape.size() <= 2) {
-        EXPECT_EQ(outputs.front().tensor.layout, jinq::models::backend::TensorLayout::Linear);
-    }
+    EXPECT_EQ(outputs.front().tensor.layout, jinq::models::backend::TensorLayout::Linear);
 
     // dtype mismatch must be rejected
     auto bad_inputs = inputs;
@@ -305,6 +301,15 @@ TEST(MnnSession, InitAndRunMobilenetv2) {
     // missing inputs must be rejected
     std::vector<NamedTensor> empty_inputs;
     EXPECT_EQ(session->run(empty_inputs, outputs), StatusCode::MODEL_RUN_SESSION_FAILED);
+
+    auto nhwc_cfg = make_config("mnn", kMnnModel);
+    nhwc_cfg.input_layout = "nhwc";
+    auto nhwc_session = InferenceSession::create(nhwc_cfg, &err);
+    ASSERT_NE(nhwc_session, nullptr) << err;
+    const auto& nhwc_in = nhwc_session->inputs().front();
+    EXPECT_EQ(nhwc_in.shape, (std::vector<int64_t>{1, 224, 224, 3}));
+    EXPECT_EQ(nhwc_in.layout, jinq::models::backend::TensorLayout::Nhwc);
+    EXPECT_EQ(nhwc_session->outputs().front().layout, jinq::models::backend::TensorLayout::Linear);
 }
 
 TEST(MnnSession, ConfiguredOutputNameOrder) {
