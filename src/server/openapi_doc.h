@@ -25,7 +25,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
     "title": "Mortred Model Server API",
     "version": "1.0.0",
     "description": "Unified HTTP API for Mortred model servers. Model endpoints require `Authorization: Bearer <token>` when auth_token is configured. Request envelope: {req_id, images[], params, options}; response envelope: {status, status_str, task_id, model, results[], server_time_ms, partial}. The legacy img_data field was removed: it answers 422 with a migration hint.",
-    "x-contract-hash": "5c8503bf95515975a85aa8be2958b8a025ba213eb1e5731b198ed0e3d9a2f720"
+    "x-contract-hash": "b320c08dde6d040146cc649381361fae41acb57ea3ba9e531c842e6b0aece400"
   },
   "paths": {
     "/healthz": {
@@ -5275,20 +5275,6 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             ],
             "default": "png",
             "description": "Image encoding of embedded outputs"
-          },
-          "include_image": {
-            "type": "boolean",
-            "default": true
-          },
-          "max_results": {
-            "type": "integer",
-            "minimum": 0,
-            "default": 0,
-            "description": "0 = unlimited"
-          },
-          "echo_params": {
-            "type": "boolean",
-            "default": false
           }
         }
       },

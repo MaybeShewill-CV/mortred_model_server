@@ -399,7 +399,7 @@ def unified_response_schema(options_defaults: dict) -> dict:
 def output_options_schema(options_defaults: dict) -> dict:
     return {
         "type": "object",
-        "additionalProperties": False,
+        "additionalProperties": bool(options_defaults.get("additional_properties", False)),
         "properties": {
             "encoding": {
                 "type": "string",
@@ -407,14 +407,6 @@ def output_options_schema(options_defaults: dict) -> dict:
                 "default": options_defaults.get("encoding", "png"),
                 "description": "Image encoding of embedded outputs",
             },
-            "include_image": {"type": "boolean", "default": options_defaults.get("include_image", True)},
-            "max_results": {
-                "type": "integer",
-                "minimum": 0,
-                "default": options_defaults.get("max_results", 0),
-                "description": "0 = unlimited",
-            },
-            "echo_params": {"type": "boolean", "default": options_defaults.get("echo_params", False)},
         },
     }
 
