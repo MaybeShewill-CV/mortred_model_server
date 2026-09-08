@@ -54,10 +54,20 @@ struct TestOutput {
     int value = 0;
 };
 
+struct RunControl {
+    std::atomic<int> runs{0};
+    std::atomic<int> entered{0};
+    std::atomic<bool> hold{false};
+    std::atomic<bool> release{false};
+    int delay_ms = 0;
+};
+
 class SlowModel : public BaseAiModel<base64_input, TestOutput> {
 public:
-    SlowModel(int delay_ms, std::shared_ptr<std::atomic<int>> runs)
-        : _m_delay_ms(delay_ms), _m_runs(std::move(runs)) {}
+    explicit SlowModel(int delay_ms) : _m_delay_ms(delay_ms) {}
+
+    explicit SlowModel(std::shared_ptr<RunControl> control)
+        : _m_control(std::move(control)) {}
 
     StatusCode init(const toml::table&) override {
         _m_initialized = true;
@@ -65,10 +75,19 @@ public:
     }
 
     StatusCode run_impl(const base64_input&, TestOutput& out) override {
-        if (_m_runs) {
-            _m_runs->fetch_add(1);
+        if (_m_control) {
+            _m_control->runs.fetch_add(1);
+            _m_control->entered.fetch_add(1);
+            if (_m_control->hold.load()) {
+                while (!_m_control->release.load()) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                }
+            } else if (_m_control->delay_ms > 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(_m_control->delay_ms));
+            }
+        } else if (_m_delay_ms > 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(_m_delay_ms));
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(_m_delay_ms));
         out.value = 1;
         return StatusCode::OK;
     }
@@ -79,7 +98,7 @@ public:
 
 private:
     int _m_delay_ms = 0;
-    std::shared_ptr<std::atomic<int>> _m_runs;
+    std::shared_ptr<RunControl> _m_control;
     bool _m_initialized = false;
 };
 
@@ -90,7 +109,7 @@ public:
     }
 
     StatusCode init_minimal(int delay_ms) {
-        auto worker = std::make_unique<SlowModel>(delay_ms, nullptr);
+        auto worker = std::make_unique<SlowModel>(delay_ms);
         toml::table empty;
         if (worker->init(empty) != StatusCode::OK) {
             return StatusCode::SERVER_INIT_FAILED;
@@ -135,10 +154,11 @@ public:
         if (worker_nums <= 0) {
             return StatusCode::SERVER_INIT_FAILED;
         }
-        _m_delay_ms = static_cast<int>(section["fake_delay_ms"].value_or<int64_t>(0));
-        _m_runs = std::make_shared<std::atomic<int>>(0);
+        _m_control = std::make_shared<RunControl>();
+        _m_control->delay_ms =
+            static_cast<int>(section["fake_delay_ms"].value_or<int64_t>(0));
         for (int i = 0; i < worker_nums; ++i) {
-            auto worker = std::make_unique<SlowModel>(_m_delay_ms, _m_runs);
+            auto worker = std::make_unique<SlowModel>(_m_control);
             if (worker->init(config) != StatusCode::OK) {
                 return StatusCode::SERVER_INIT_FAILED;
             }
@@ -158,7 +178,24 @@ public:
     }
 
     int run_count() const {
-        return _m_runs ? _m_runs->load() : 0;
+        return _m_control ? _m_control->runs.load() : 0;
+    }
+
+    int entered() const {
+        return _m_control ? _m_control->entered.load() : 0;
+    }
+
+    void hold_in_run() {
+        if (_m_control) {
+            _m_control->release.store(false);
+            _m_control->hold.store(true);
+        }
+    }
+
+    void release_run() {
+        if (_m_control) {
+            _m_control->release.store(true);
+        }
     }
 
 protected:
@@ -171,8 +208,7 @@ protected:
     }
 
 private:
-    int _m_delay_ms = 0;
-    std::shared_ptr<std::atomic<int>> _m_runs;
+    std::shared_ptr<RunControl> _m_control;
 };
 
 class LifetimeHttpServer : public BaseAiServer {
@@ -428,24 +464,45 @@ TEST(do_work_lifetime, destructor_concurrent_with_in_flight_do_work) {
 }
 
 TEST(do_work_lifetime, timedgo_timeout_while_do_work_running) {
+    // 100ms is too tight under ASan: the go task can start after the request
+    // deadline, skip run_impl, and still return 504. Hold inside run_impl
+    // so timed-go must fire while the worker is checked out.
     ServerHandle handle =
-        start_server("/lifetime/timeout_running",
-                     "model_run_timeout=100\nfake_delay_ms=400\n");
+        start_server("/lifetime/timeout_running", "model_run_timeout=500\n");
     ASSERT_NE(handle.server, nullptr);
     ASSERT_GT(handle.port, 0);
+    handle.server->impl()->hold_in_run();
+
+    HttpResp resp;
+    std::thread req([&]() {
+        resp = send_request(handle.port, handle.uri, k_json_body);
+    });
+
+    const bool started = wait_for(
+        [&]() {
+            return handle.server->impl()->entered() >= 1 &&
+                   handle.server->impl()->queue_approx() == 0;
+        },
+        5000);
+    if (!started) {
+        handle.server->impl()->release_run();
+        req.join();
+    }
+    ASSERT_TRUE(started) << "run_impl never started";
 
     const auto t0 = std::chrono::steady_clock::now();
-    const auto resp = send_request(handle.port, handle.uri, k_json_body);
+    req.join();
     const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                 std::chrono::steady_clock::now() - t0)
                                 .count();
 
     EXPECT_EQ(resp.status, 504);
-    EXPECT_LT(elapsed_ms, 300) << "timed-go should answer before the worker finishes";
+    EXPECT_LT(elapsed_ms, 2000) << "timed-go should answer while run_impl is held";
     EXPECT_EQ(handle.server->impl()->run_count(), 1);
     EXPECT_EQ(handle.server->impl()->queue_approx(), 0u)
         << "do_work should still hold the worker after do_work_cb timeout";
 
+    handle.server->impl()->release_run();
     handle.server->stop();
     handle.server.reset();
 }
