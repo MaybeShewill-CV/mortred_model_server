@@ -10,8 +10,11 @@
 
 #include <gtest/gtest.h>
 
+#include "common/status_code.h"
 #include "server/prometheus_metrics.h"
 
+using jinq::common::StatusCode;
+using jinq::common::to_underlying;
 using jinq::server::PrometheusMetrics;
 
 TEST(prometheus_metrics, counters_and_gauges) {
@@ -22,7 +25,7 @@ TEST(prometheus_metrics, counters_and_gauges) {
     m.inc_http_requests("POST", "400");
     m.inc_inference_success();
     m.inc_inference_failure();
-    m.inc_inference_requests("6");
+    m.inc_inference_requests(to_underlying(StatusCode::MODEL_OUTPUT_CONTRACT_FAILED));
     m.set_workers_available(3);
     m.set_workers_busy(1);
     m.set_queue_depth(2);
@@ -51,8 +54,39 @@ TEST(prometheus_metrics, histograms) {
 
     auto text = m.render();
     EXPECT_NE(text.find("mortred_http_request_duration_ms_count"), std::string::npos);
+    EXPECT_NE(text.find("mortred_http_request_duration_ms_bucket{model=\"resnet\",method=\"POST\",status=\"200\",le=\"+Inf\"} 2"),
+              std::string::npos);
     EXPECT_NE(text.find("mortred_queue_wait_duration_ms_count"), std::string::npos);
     EXPECT_NE(text.find("mortred_inference_duration_ms_count"), std::string::npos);
+}
+
+TEST(prometheus_metrics, histogram_plus_inf_matches_count_and_includes_overflow) {
+    PrometheusMetrics m;
+    m.set_model("resnet");
+    m.observe_inference_duration_ms(10.0);
+    m.observe_inference_duration_ms(10000.0);
+
+    auto text = m.render();
+    EXPECT_NE(text.find("mortred_inference_duration_ms_bucket{model=\"resnet\",le=\"5000\"} 1"),
+              std::string::npos);
+    EXPECT_NE(text.find("mortred_inference_duration_ms_bucket{model=\"resnet\",le=\"+Inf\"} 2"),
+              std::string::npos);
+    EXPECT_NE(text.find("mortred_inference_duration_ms_count{model=\"resnet\"} 2"), std::string::npos);
+}
+
+TEST(prometheus_metrics, contract_failure_counter_uses_status_code_not_string_six) {
+    PrometheusMetrics m;
+    m.set_model("resnet");
+    m.inc_inference_requests(0);
+    m.inc_inference_requests(to_underlying(StatusCode::MODEL_OUTPUT_CONTRACT_FAILED));
+
+    auto text = m.render();
+    EXPECT_NE(text.find("mortred_inference_requests_total{model=\"resnet\",status=\"0\"} 1"),
+              std::string::npos);
+    EXPECT_NE(text.find("mortred_inference_requests_total{model=\"resnet\",status=\"6\"} 1"),
+              std::string::npos);
+    EXPECT_NE(text.find("mortred_model_output_contract_failures_total{model=\"resnet\"} 1"),
+              std::string::npos);
 }
 
 TEST(prometheus_metrics, concurrent_updates_are_safe) {

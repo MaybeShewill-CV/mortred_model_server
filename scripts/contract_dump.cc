@@ -32,12 +32,10 @@
 #include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
-#include "server/output_options.h"
 
 namespace {
 
 using jinq::models::backend::ParamSpec;
-using jinq::server::OutputOptions;
 
 rapidjson::Document param_spec_json(const ParamSpec &spec, rapidjson::Document::AllocatorType &allocator) {
     rapidjson::Document value(rapidjson::kObjectType, &allocator);
@@ -99,9 +97,6 @@ rapidjson::Document output_options_json(rapidjson::Document::AllocatorType &allo
     rapidjson::Document value(rapidjson::kObjectType, &allocator);
     auto &a = value.GetAllocator();
     value.AddMember("encoding", rapidjson::Value("png", a), a);
-    value.AddMember("include_image", true, a);
-    value.AddMember("max_results", 0, a);
-    value.AddMember("echo_params", false, a);
     value.AddMember("additional_properties", false, a);
     return value;
 }

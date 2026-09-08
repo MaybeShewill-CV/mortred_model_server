@@ -43,17 +43,13 @@ TEST(request_envelope, valid_single_image_with_defaults) {
     EXPECT_EQ(request.items[0].data, "aGVsbG8=");
     EXPECT_EQ(request.params, nullptr);
 
-    // default output options
     EXPECT_EQ(request.options.encoding, OutputOptions::ImageEncoding::PNG);
-    EXPECT_TRUE(request.options.include_image);
-    EXPECT_EQ(request.options.max_results, 0);
-    EXPECT_FALSE(request.options.echo_params);
 }
 
 TEST(request_envelope, valid_multi_image_with_req_id_and_options) {
     const auto request = parse_request_envelope(
         R"({"req_id":"trace-42","images":["aGk=","ieU="],"params":{"score_threshold":0.4,"top_k":50},)"
-        R"("options":{"encoding":"jpeg","include_image":false,"max_results":10,"echo_params":true}})",
+        R"("options":{"encoding":"jpeg"}})",
         sample_specs());
     EXPECT_TRUE(request.is_valid);
     EXPECT_EQ(request.req_id, "trace-42");
@@ -63,9 +59,6 @@ TEST(request_envelope, valid_multi_image_with_req_id_and_options) {
     EXPECT_FLOAT_EQ(request.params->get_f32("score_threshold", 0.0f), 0.4f);
     EXPECT_EQ(request.params->get_i32("top_k", 0), 50);
     EXPECT_EQ(request.options.encoding, OutputOptions::ImageEncoding::JPEG);
-    EXPECT_FALSE(request.options.include_image);
-    EXPECT_EQ(request.options.max_results, 10);
-    EXPECT_TRUE(request.options.echo_params);
 }
 
 TEST(request_envelope, empty_params_object_is_distinct_from_absent) {
@@ -200,9 +193,9 @@ TEST(request_envelope, option_errors_are_prefixed) {
         {R"("options":{"foo":1})", "/options/foo", "unknown option"},
         {R"("options":{"encoding":"bmp"})", "/options/encoding", "must be one of: png, jpeg, webp"},
         {R"("options":{"encoding":3})", "/options/encoding", "must be a string"},
-        {R"("options":{"include_image":"yes"})", "/options/include_image", "must be a boolean"},
-        {R"("options":{"max_results":-1})", "/options/max_results", "non-negative"},
-        {R"("options":{"max_results":1.5})", "/options/max_results", "non-negative"},
+        {R"("options":{"include_image":false})", "/options/include_image", "unknown option"},
+        {R"("options":{"max_results":10})", "/options/max_results", "unknown option"},
+        {R"("options":{"echo_params":true})", "/options/echo_params", "unknown option"},
     };
     for (const auto &item : cases) {
         const auto request =
@@ -230,8 +223,6 @@ TEST(request_envelope, options_partial_override_keeps_defaults) {
     EXPECT_TRUE(request.is_valid);
     EXPECT_EQ(request.options.encoding, OutputOptions::ImageEncoding::WEBP);
     EXPECT_STREQ(request.options.encoding_extension(), ".webp");
-    EXPECT_TRUE(request.options.include_image);
-    EXPECT_EQ(request.options.max_results, 0);
 }
 
 TEST(request_envelope, raw_body_builds_single_raw_item) {
@@ -285,11 +276,15 @@ TEST(request_envelope, raw_params_header_uses_the_same_validator_and_pointers) {
 }
 
 TEST(request_envelope, raw_options_header_parsers_like_the_json_path) {
-    auto request = parse_raw_request("img", "", "", R"({"encoding":"jpeg","max_results":5})",
-                                     sample_specs());
+    auto request = parse_raw_request("img", "", "", R"({"encoding":"jpeg"})", sample_specs());
     EXPECT_TRUE(request.is_valid);
     EXPECT_EQ(request.options.encoding, OutputOptions::ImageEncoding::JPEG);
-    EXPECT_EQ(request.options.max_results, 5);
+
+    request = parse_raw_request("img", "", "", R"({"include_image":false})", sample_specs());
+    EXPECT_FALSE(request.is_valid);
+    ASSERT_EQ(request.violations.size(), 1u);
+    EXPECT_EQ(request.violations[0].pointer, "/options/include_image");
+    EXPECT_NE(request.violations[0].message.find("unknown option"), std::string::npos);
 
     request = parse_raw_request("img", "", "", R"({"encoding":"bmp"})", sample_specs());
     EXPECT_FALSE(request.is_valid);

@@ -32,7 +32,7 @@ TEST(envelope_codec, request_roundtrip_preserves_fields) {
     request.has_params = true;
     request.params.Parse(R"({"top_k":3})");
     request.has_options = true;
-    request.options.Parse(R"({"include_image":false})");
+    request.options.Parse(R"({"encoding":"jpeg"})");
 
     const auto decoded = decode_request(encode(request));
     ASSERT_TRUE(decoded.ok);
@@ -42,7 +42,7 @@ TEST(envelope_codec, request_roundtrip_preserves_fields) {
     ASSERT_TRUE(decoded.value.has_params);
     EXPECT_EQ(decoded.value.params["top_k"].GetInt(), 3);
     ASSERT_TRUE(decoded.value.has_options);
-    EXPECT_FALSE(decoded.value.options["include_image"].GetBool());
+    EXPECT_STREQ(decoded.value.options["encoding"].GetString(), "jpeg");
 }
 
 TEST(envelope_codec, request_img_data_never_succeeds) {
