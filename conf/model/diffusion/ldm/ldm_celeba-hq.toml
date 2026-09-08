@@ -4,3 +4,6 @@ latent_diffusion_cfg="../conf/model/diffusion/ldm/latent_diffusion.toml"
 latent_dims=4
 downscale=8
 latent_scale=0.18215
+sample_size = [256, 256]
+step_size = 50
+sampler_type = "ddim"

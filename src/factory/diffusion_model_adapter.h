@@ -2,6 +2,7 @@
 #define MORTRED_FACTORY_DIFFUSION_MODEL_ADAPTER_H
 
 #include <opencv2/opencv.hpp>
+#include <memory>
 #include <type_traits>
 #include <vector>
 
@@ -10,6 +11,7 @@
 #include "common/status_code.h"
 #include "models/base_model.h"
 #include "models/backend/param_spec.h"
+#include "models/diffusion/sampler_input_defaults.h"
 #include "models/model_io_define.h"
 
 namespace jinq {
@@ -32,10 +34,24 @@ class DiffusionModelAdapter : public jinq::models::BaseAiModel<ImageInput, Base6
   public:
     jinq::common::StatusCode init(const toml::table &cfg) override {
         _m_sampler = std::make_unique<SAMPLER>();
-        const auto status = _m_sampler->init(cfg);
-        _m_initialized = status == jinq::common::StatusCode::OK;
-        return status;
+        auto status = _m_sampler->init(cfg);
+        if (status != jinq::common::StatusCode::OK) {
+            _m_initialized = false;
+            return status;
+        }
+        status = jinq::models::diffusion::seed_sampler_input(cfg, &_m_input);
+        if (status != jinq::common::StatusCode::OK) {
+            _m_initialized = false;
+            return status;
+        }
+        if constexpr (!std::is_same_v<SAMPLER_INPUT, jinq::models::io_define::diffusion::std_ldm_input>) {
+            _m_input.save_all_mid_results = false;
+        }
+        _m_initialized = true;
+        return jinq::common::StatusCode::OK;
     }
+
+    bool is_successfully_initialized() const override { return _m_initialized; }
 
   protected:
     jinq::common::StatusCode run_impl(const ImageInput &in, Base64Output &out) override {
@@ -59,8 +75,6 @@ class DiffusionModelAdapter : public jinq::models::BaseAiModel<ImageInput, Base6
         out.input_image_content = jinq::common::base64::encode(buffer.data(), buffer.size());
         return jinq::common::StatusCode::OK;
     }
-
-    bool is_successfully_initialized() const override { return _m_initialized; }
 
     SAMPLER_INPUT &mutable_input() { return _m_input; }
 

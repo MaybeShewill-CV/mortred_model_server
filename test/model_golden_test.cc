@@ -13,6 +13,7 @@
  *   - batch 与单条一致性（3 个）：需要 run_batch 与逐条对照；
  *   - SAM prompt / AMG：输入是 prompt 结构或多 session；
  *   - CLIP：文本 + 图像双塔输入。
+ *   - DDPM few-step：生成式工人是 image_input 适配器，不用读图宏。
  *
  * 行为约定与迁移前完全一致：
  *   - 权重缺失时 GTEST_SKIP（本地 / 无 GPU 环境可跑）；
@@ -24,8 +25,11 @@
 
 #include "model_golden_registry.h"
 
+#include <vector>
+
 #include "factory/classification_task.h"
 #include "factory/clip_task.h"
+#include "factory/diffusion_model_adapter.h"
 #include "factory/enhancement_task.h"
 #include "factory/feature_embedding_task.h"
 #include "factory/feature_point_task.h"
@@ -34,6 +38,11 @@
 #include "factory/ocr_task.h"
 #include "factory/sam_task.h"
 #include "factory/scene_segmentation_task.h"
+
+#include "common/base64.h"
+#include "models/backend/param_spec.h"
+#include "models/diffusion/ddpm_sampler.h"
+#include "models/io/diffusion.h"
 
 // the registry owns the helpers and the IO type aliases; the hand-written
 // cases below use them unqualified exactly as they did before the migration
@@ -325,4 +334,43 @@ TEST(model_golden, openai_clip_embedding) {
     jinq::models::io_define::clip::clip_output output;
     ASSERT_EQ(model->run(input, output), StatusCode::OK);
     expect_embeddings("openai_clip_embedding", output.embeddings);
+}
+
+TEST(model_golden, ddpm_celeba_hq_fewstep) {
+    // HTTP worker path: DiffusionModelAdapter + real UNet, not FakeSampler.
+    // Few steps. Not in hosted (ONNX is ~143MiB). Nightly / local with weights.
+    // Dummy images[] payload is ignored. Pixel fingerprint is not asserted:
+    // p_sample still draws from std::random_device even when
+    // use_fixed_noise_for_psample is set (that flag only reuses one noise
+    // vector inside a single run).
+    const std::string conf = "conf/ci/ddpm_onnx_fewstep.toml";
+    if (!weights_available(conf))
+        MORTRED_SKIP_OR_FAIL_WEIGHTS("weights not available");
+    auto cfg = load_model_cfg(conf);
+    using Sampler = jinq::models::diffusion::DDPMSampler<jinq::models::io_define::diffusion::std_ddpm_input,
+                                                         jinq::models::io_define::diffusion::std_ddpm_output>;
+    jinq::factory::diffusion::DiffusionModelAdapter<Sampler, jinq::models::io_define::diffusion::std_ddpm_input,
+                                                    jinq::models::io_define::diffusion::std_ddpm_output>
+        adapter;
+    ASSERT_EQ(adapter.init(cfg), StatusCode::OK);
+
+    jinq::models::backend::ParamSet params;
+    params.set_i32("timesteps", 2);
+    jinq::models::io_define::common_io::image_input request;
+    request.image.origin = jinq::models::io_define::common_io::byte_source::origin_kind::base64_text;
+    request.image.data = "aGVsbG8=";
+    request.params = &params;
+
+    jinq::models::io_define::common_io::base64_input output;
+    ASSERT_EQ(adapter.run(request, output), StatusCode::OK);
+    ASSERT_FALSE(output.input_image_content.empty());
+
+    const std::string png_bytes = jinq::common::base64::decode(output.input_image_content);
+    ASSERT_FALSE(png_bytes.empty());
+    const std::vector<uchar> buffer(png_bytes.begin(), png_bytes.end());
+    const cv::Mat image = cv::imdecode(buffer, cv::IMREAD_COLOR);
+    ASSERT_FALSE(image.empty());
+    EXPECT_EQ(image.cols, 128);
+    EXPECT_EQ(image.rows, 128);
+    EXPECT_EQ(image.channels(), 3);
 }

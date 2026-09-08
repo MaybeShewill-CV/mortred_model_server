@@ -1,0 +1,24 @@
+# CI-only overlay: few-step CPU DDPM generate proof.
+# Product serving stays conf/model/diffusion/ddpm/ddpm_celeba-hq.toml (GPU ONNX).
+# Do not point conf/server DDPM at this file.
+#
+# sample_size matches the celeba-hq 128 UNet. Request params.timesteps (2)
+# keeps the golden short; the schedule length below stays 1000 so the beta
+# table matches the weight. use_fixed_noise_for_psample reuses one noise
+# vector inside a run; it does not seed std::random_device.
+
+[DDPM_SAMPLER]
+beta_schedule = "linear"
+timesteps = 1000
+beta_start = 0.0001
+beta_end = 0.02
+sample_size = [128, 128]
+channels = 3
+use_fixed_noise_for_psample = true
+
+[DDPM_UNET]
+[DDPM_UNET.backend]
+type = "onnx"
+model_file_path = "../weights/diffusion/ddpm/ddpm_unet_celeba-hq-128x128.onnx"
+device = "cpu"
+threads = 4

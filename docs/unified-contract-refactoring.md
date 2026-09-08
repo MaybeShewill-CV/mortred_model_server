@@ -395,7 +395,7 @@ GET  /jobs/{id}/result → 统一响应信封（未完成 409）
 |---|---|---|
 | multipart 多图二进制 | 未做 | raw 恒单图；有需求时按附加演进加入 |
 | 每图独立参数 | 明确不做 | 参数矩阵爆炸，无真实场景支撑 |
-| diffusion 参数端到端验证 | 接线层已验证 | fake-sampler 单测证明参数进入采样输入；真实引擎的生成效果验证待 GPU 基准活动搭车。注意步数类参数显著改变时长，异步调用方应据此设置 deadline |
+| diffusion 参数端到端验证 | 模板由 TOML 种入 | adapter `init` 从 sampler 节读取 `sample_size`（权重合同）和默认步数；HTTP 强制 `save_all_mid_results=false`。fake-sampler 单测覆盖缺省尺寸失败与 `params` 覆盖。真实 UNet 少步出图见 `model_golden.ddpm_celeba_hq_fewstep`（CI overlay，不进 hosted；断言 128x128 PNG，不钉像素）。步数显著改变时长，异步调用方应据此设置 deadline |
 | URL/object_ref 输入源 | 类型层预留 | 解析器不接受；待 SSRF/egress 策略层 |
 | `model.version` | 恒空串 | 待版本指纹（权重/引擎/配置 hash）里程碑 |
 | TLS / 每 Key 限流 / 用量计量 | 不在本次范围 | SME P0 清单 #6 |

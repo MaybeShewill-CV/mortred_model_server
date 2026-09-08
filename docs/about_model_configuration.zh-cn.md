@@ -41,6 +41,7 @@ class_names = ["person", "bicycle"]
 | `input_names` / `output_names` | `backend` | I/O 名称覆盖或过滤 |
 | `max_image_pixels` / `max_image_side` | 图像 `params` | 解码输入安全上限，默认 16777216 / 8192 |
 | `model_input_image_size` | 固定尺寸图像 `params` | `[height, width]`，必须匹配 session 输入 H/W |
+| `sample_size` | 扩散 `[DDPM_SAMPLER]` / `[DDIM_SAMPLER]` / `[LDM_SAMPLER]` | 生成画布 `[height, width]`，必须匹配 UNet 权重。HTTP 在 adapter init 时种入模板；不是请求 `params` 键 |
 | 其他字段 | `params` | 模型特有参数；名称和历史配置保持一致 |
 
 ## 多引擎模型
@@ -116,4 +117,6 @@ trt                   -> backend.type = "tensorrt"
 `backend.device` 强制为 `cpu`。产品 TensorRT 配置（例如 `yolov8_config.toml`）
 在 CPU 上是配置错误（`type=tensorrt` 禁止 `device=cpu`）。Fork hosted CI 用
 `conf/ci/yolov8_onnx_hosted.toml` 证明 YOLOv8 decode，不是 serving 的 `.engine`。
-TensorRT golden 仍走维护者 GPU 路径。
+TensorRT golden 仍走维护者 GPU 路径。DDPM HTTP 出图由
+`conf/ci/ddpm_onnx_fewstep.toml` + `model_golden.ddpm_celeba_hq_fewstep`
+证明（不进 hosted；ONNX 约 143MiB）。

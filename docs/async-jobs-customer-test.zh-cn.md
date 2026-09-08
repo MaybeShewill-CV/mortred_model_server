@@ -61,6 +61,8 @@ export MGMT="__SUPERVISOR_BEARER__"
 export MODEL="DDPM"   # 或 DDIM / LDM / SAM_AMG / …
 
 # 与成功的 POST /v1/models/$MODEL/infer 相同的 payload
+# 生成式模型忽略图像像素，dummy base64 即可。短冒烟可加
+# "params":{"timesteps":10}（默认是 TOML 调度长度，常为 1000 步）。
 IMG_B64="$(base64 < /path/to/valid-input.png | tr -d '\n')"   # macOS: base64 -i file
 export BODY=$(python3 -c "import json,os; print(json.dumps({'images':[os.environ['IMG_B64']],'req_id':'jobs-test-1'}))")
 ```

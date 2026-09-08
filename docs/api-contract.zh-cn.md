@@ -163,7 +163,8 @@ Cache-Control: no-store
 ```
 
 `images` 必填且恒为数组（≥1）。`params` / `options` 为可选对象。阈值、
-`timestep` 等模型参数放在 `params` 里，不要放在根上。
+DDPM `timesteps` 等模型参数放在 `params` 里，不要放在根上。生成式模型同样
+需要 `images[]`；像素会被忽略，dummy base64 即可。
 
 ### 已删除字段：`img_data`（HTTP 422）
 
