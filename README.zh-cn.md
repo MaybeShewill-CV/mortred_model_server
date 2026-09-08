@@ -58,7 +58,10 @@
 curl -fsSL https://raw.githubusercontent.com/MaybeShewill-CV/mortred_model_server/main/scripts/bootstrap.sh | bash
 ```
 
-探测硬件（有 NVIDIA → `gpu`，否则 `cpu`），有 Docker 则走 compose，否则下载最新 release tarball 并安装。
+探测硬件（有 NVIDIA → `gpu`，否则 `cpu`）。有 Docker 则打印 compose 轨道。无
+Docker 则解析 GitHub 最新 **release tag**，再下载
+`mortred_model_server-<version>-<profile>-linux-x64.tar.gz`（**没有**
+`...-latest-...` 这种 tarball 文件名）。若还没有 Release，则 WARN 并打印源码构建路径。
 
 ### 入口二：docker compose
 

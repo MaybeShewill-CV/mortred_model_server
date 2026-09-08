@@ -37,6 +37,21 @@ All notable changes to this project are documented here. The format follows
 > 是 Prometheus 自己）。`deployment` 补了属主步骤和该 Docker 主机名。
 
 ### Changed
+- Entry 1 without Docker resolves the GitHub latest **tag** and downloads
+  `mortred_model_server-<version>-<profile>-linux-x64.tar.gz`. Release does not
+  publish a `...-latest-...` tarball name (GHCR `:latest-cpu` / `:latest-gpu`
+  stay image tags). README / deployment / `bootstrap.sh` no longer claim that
+  path always installs: no Release yet prints WARN and the source-build track.
+  `verify_deployment.sh --basic` rejects packing or fetching
+  `mortred_model_server-latest-`.
+
+> 入口一无 Docker 按 GitHub latest **tag** 下
+> `mortred_model_server-<version>-<profile>-linux-x64.tar.gz`。Release 不挂
+> `...-latest-...` tarball 文件名（GHCR `:latest-cpu` / `:latest-gpu` 仍是镜像
+> tag）。README / deployment / `bootstrap.sh` 不再写成「无 Docker 一定能装上」：
+> 还没有 Release 时 WARN 并落到源码构建。`verify_deployment.sh --basic` 禁止
+> 打包或下载 `mortred_model_server-latest-`。
+
 - YOLOv5 / v6 / v7 / v8 apply `min_box_area_px` in decoder **network
   (letterboxed) pixels** before letterbox unmap. v5/v6 previously filtered
   source pixels after unmap; v8 ignored the key. Synthetic decode tests

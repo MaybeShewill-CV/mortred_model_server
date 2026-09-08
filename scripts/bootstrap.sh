@@ -7,8 +7,11 @@
 #   curl -fsSL https://raw.githubusercontent.com/MaybeShewill-CV/mortred_model_server/main/scripts/bootstrap.sh | bash
 #
 # Track selection:
-#   docker present -> docker compose --profile <cpu|gpu> up (builds locally)
-#   no docker      -> download the latest release tarball + sudo ./install.sh
+#   docker present -> print compose instructions (builds locally)
+#   no docker      -> resolve GitHub latest *tag*, download
+#                     mortred_model_server-<ver>-<profile>-linux-x64.tar.gz
+#                     (no ...-latest-... filename), then sudo ./install.sh
+#   no tag/asset   -> warn and print the source-build path
 #   neither possible -> printed manual path (source build)
 set -uo pipefail
 
@@ -61,7 +64,8 @@ if command -v curl >/dev/null 2>&1; then
             exec sudo ./install.sh
         fi
     fi
-    echo "  [WARN] no release tarball published yet for profile $PROFILE" >&2
+    echo "  [WARN] no versioned release tarball published yet for profile $PROFILE" >&2
+    echo "  [WARN] (GitHub latest tag missing or that profile asset is unpublished; there is no ...-latest-... tarball name)" >&2
 fi
 
 # ---- track 3: manual ----

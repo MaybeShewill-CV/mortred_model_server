@@ -61,9 +61,12 @@ All models and detectors can be downloaded from my [Hugging Face Page](https://h
 curl -fsSL https://raw.githubusercontent.com/MaybeShewill-CV/mortred_model_server/main/scripts/bootstrap.sh | bash
 ```
 
-Detects your hardware (NVIDIA GPU → `gpu`, otherwise `cpu`), then delegates to
-the docker track (if docker is present) or downloads the latest release
-tarball and runs its installer.
+Detects your hardware (NVIDIA GPU → `gpu`, otherwise `cpu`). With Docker it
+prints the compose track. Without Docker it resolves the latest GitHub
+**release tag** and downloads
+`mortred_model_server-<version>-<profile>-linux-x64.tar.gz` (there is no
+`...-latest-...` tarball filename). If no Release exists yet, it warns and
+prints the source-build path.
 
 ### Entry 2: docker compose
 
