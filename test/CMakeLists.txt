@@ -43,6 +43,7 @@ set(TEST_LIST
     detector_common_unittest
     model_runtime_unittest
     tensor_contract_unittest
+    session_io_unittest
     param_spec_unittest
     model_factory_unittest
     byte_tracker_unittest
@@ -140,6 +141,8 @@ foreach(src ${TEST_LIST})
     elseif(${src} STREQUAL "packed_batch_nvi_unittest")
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "tensor_contract_unittest")
+        set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
+    elseif(${src} STREQUAL "session_io_unittest")
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "detection_params_unittest")
         set(EXTRA_LIBS glog::glog)

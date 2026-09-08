@@ -36,8 +36,15 @@ namespace backend {
  *   precision_mode = 0     # mnn only
  *   power_mode = 0         # mnn only
  *   input_layout = "auto" | "nhwc" | "nchw"   # mnn only
- *   input_names = ["..."]  # optional, defaults to the model file io
- *   output_names = ["..."] # optional, defaults to the model file io
+ *   input_names = ["..."]  # optional; empty keeps backend discovery order
+ *   output_names = ["..."] # optional; empty keeps backend discovery order
+ *
+ *   Non-empty input_names / output_names select a subset and fix the order
+ *   of session.inputs()/outputs() and run() results. That order is the same
+ *   for mnn, onnx, and tensorrt. Empty names leave each backend's native
+ *   discovery order (not stable across engines); multi-output models must
+ *   set output_names or look tensors up by name. outputs.front() is only
+ *   portable when output_names is set.
  */
 struct BackendConfig {
     std::string type;

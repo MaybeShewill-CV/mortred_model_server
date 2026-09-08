@@ -17,6 +17,7 @@
 #include "glog/logging.h"
 
 #include "common/file_path_util.h"
+#include "models/backend/session_io.h"
 
 namespace jinq {
 namespace models {
@@ -375,27 +376,13 @@ StatusCode TrtSession::init(const BackendConfig& config, std::string* err) {
         }
         return StatusCode::MODEL_INIT_FAILED;
     }
-    for (const auto& name : config.input_names) {
-        const auto found = std::any_of(
-            _m_input_infos.begin(), _m_input_infos.end(),
-            [&name](const TensorInfo& info) { return info.name == name; });
-        if (!found) {
-            if (err != nullptr) {
-                *err = "configured tensorrt input tensor not found: " + name;
-            }
-            return StatusCode::MODEL_INIT_FAILED;
-        }
+    if (apply_configured_io_names(config.input_names, &_m_input_infos, "input", err) !=
+        StatusCode::OK) {
+        return StatusCode::MODEL_INIT_FAILED;
     }
-    for (const auto& name : config.output_names) {
-        const auto found = std::any_of(
-            _m_output_infos.begin(), _m_output_infos.end(),
-            [&name](const TensorInfo& info) { return info.name == name; });
-        if (!found) {
-            if (err != nullptr) {
-                *err = "configured tensorrt output tensor not found: " + name;
-            }
-            return StatusCode::MODEL_INIT_FAILED;
-        }
+    if (apply_configured_io_names(config.output_names, &_m_output_infos, "output", err) !=
+        StatusCode::OK) {
+        return StatusCode::MODEL_INIT_FAILED;
     }
 
     // Outputs whose shape cannot be inferred from the input shape require an

@@ -13,6 +13,7 @@
 #include "glog/logging.h"
 
 #include "common/file_path_util.h"
+#include "models/backend/session_io.h"
 
 namespace jinq {
 namespace models {
@@ -181,22 +182,6 @@ StatusCode MnnSession::init(const BackendConfig& config, std::string* err) {
         }
         return StatusCode::MODEL_INIT_FAILED;
     }
-    for (const auto& name : config.input_names) {
-        if (_m_input_tensors.find(name) == _m_input_tensors.end()) {
-            if (err != nullptr) {
-                *err = "configured mnn input tensor not found: " + name;
-            }
-            return StatusCode::MODEL_INIT_FAILED;
-        }
-    }
-    for (const auto& name : config.output_names) {
-        if (_m_output_tensors.find(name) == _m_output_tensors.end()) {
-            if (err != nullptr) {
-                *err = "configured mnn output tensor not found: " + name;
-            }
-            return StatusCode::MODEL_INIT_FAILED;
-        }
-    }
 
     // build infos last: dtypes must be valid, shapes are reported in the host
     // layout used for copies (nhwc for TENSORFLOW dim type tensors)
@@ -231,6 +216,14 @@ StatusCode MnnSession::init(const BackendConfig& config, std::string* err) {
         }
         info.dynamic = shape_is_dynamic(info.shape);
         _m_output_infos.push_back(std::move(info));
+    }
+    if (apply_configured_io_names(config.input_names, &_m_input_infos, "input", err) !=
+        StatusCode::OK) {
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    if (apply_configured_io_names(config.output_names, &_m_output_infos, "output", err) !=
+        StatusCode::OK) {
+        return StatusCode::MODEL_INIT_FAILED;
     }
 
     _m_model_file_path = config.model_file_path;
@@ -267,8 +260,8 @@ StatusCode MnnSession::run(const std::vector<NamedTensor>& inputs,
         LOG(ERROR) << "mnn session is not initialized";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    if (inputs.size() != _m_input_tensors.size()) {
-        LOG(ERROR) << "mnn session expects " << _m_input_tensors.size() << " inputs, got "
+    if (inputs.size() != _m_input_infos.size()) {
+        LOG(ERROR) << "mnn session expects " << _m_input_infos.size() << " inputs, got "
                    << inputs.size();
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
