@@ -1095,7 +1095,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         auto reply_reject = [&](StatusCode status,
                                 std::vector<jinq::common::ResponseError> errors) {
             _m_metrics.inc_http_requests(request_method, std::to_string(http_status_of(status)));
-            _m_metrics.inc_inference_requests(std::to_string(jinq::common::to_underlying(status)));
+            _m_metrics.inc_inference_requests(jinq::common::to_underlying(status));
             _m_metrics.inc_inference_failure();
             reply_unified_json(task->get_resp(),
                                unified_rejection(task_id, status, std::move(errors)));
@@ -1426,7 +1426,9 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::batch_loop() {
         }
         batch.clear();
         batch.push_back(std::move(first));
-        const int64_t window_deadline = monotonic_ms() + _m_max_batch_delay_ms;
+        // window starts after the first item; idle 100ms polls above are not wait
+        const int64_t window_start = monotonic_ms();
+        const int64_t window_deadline = window_start + _m_max_batch_delay_ms;
         while (batch.size() < static_cast<size_t>(_m_max_batch_size)) {
             const int remain_ms = static_cast<int>(window_deadline - monotonic_ms());
             if (remain_ms <= 0) {
@@ -1448,7 +1450,8 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::batch_loop() {
             batch.push_back(std::move(extra));
         }
         _m_metrics.observe_batch_size(static_cast<double>(batch.size()));
-        _m_metrics.observe_batch_window_wait_ms(0);
+        const int64_t waited_ms = monotonic_ms() - window_start;
+        _m_metrics.observe_batch_window_wait_ms(static_cast<double>(waited_ms < 0 ? 0 : waited_ms));
         process_batch(batch);
     }
     // shutdown: fail everything still queued so waiters wake immediately
@@ -1648,7 +1651,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(
                                         worker_run_time_consuming + find_worker_time_consuming);
     // inference counters are per ITEM: a 16-image request reports 16 samples
     for (const auto& item : unified.results) {
-        _m_metrics.inc_inference_requests(std::to_string(item.status));
+        _m_metrics.inc_inference_requests(item.status);
     }
     _m_metrics.inc_inference_success(ok_items);
     _m_metrics.inc_inference_failure(unified.results.size() - ok_items);

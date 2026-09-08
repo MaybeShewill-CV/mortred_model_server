@@ -18,6 +18,8 @@
 #include <string>
 #include <vector>
 
+#include "common/status_code.h"
+
 namespace jinq {
 namespace server {
 
@@ -52,11 +54,10 @@ class PrometheusMetrics {
         observe_histogram_locked(http_duration_, http_duration_buckets_, method + "|" + status, ms);
     }
 
-    void inc_inference_requests(const std::string &status) {
+    void inc_inference_requests(int status) {
         std::lock_guard<std::mutex> lock(mutex_);
-        inference_requests_[status]++;
-        // StatusCode::MODEL_OUTPUT_CONTRACT_FAILED has stable wire code 6.
-        if (status == "6") {
+        inference_requests_[std::to_string(status)]++;
+        if (status == jinq::common::to_underlying(jinq::common::StatusCode::MODEL_OUTPUT_CONTRACT_FAILED)) {
             model_output_contract_failures_++;
         }
     }
@@ -291,6 +292,13 @@ class PrometheusMetrics {
                 }
                 ss << ",le=\"" << bucket_limits[i] << "\"} " << kv.second[i] << "\n";
             }
+            const uint64_t count = hist.count.count(label) ? hist.count.at(label) : 0;
+            ss << metric_name << "_bucket{model=\"" << model_ << "\"";
+            if (!label.empty()) {
+                ss << ",method=\"" << label.substr(0, label.find('|')) << "\"";
+                ss << ",status=\"" << label.substr(label.find('|') + 1) << "\"";
+            }
+            ss << ",le=\"+Inf\"} " << count << "\n";
             ss << metric_name << "_sum{model=\"" << model_ << "\"";
             if (!label.empty()) {
                 ss << ",method=\"" << label.substr(0, label.find('|')) << "\"";
@@ -302,7 +310,7 @@ class PrometheusMetrics {
                 ss << ",method=\"" << label.substr(0, label.find('|')) << "\"";
                 ss << ",status=\"" << label.substr(label.find('|') + 1) << "\"";
             }
-            ss << "} " << (hist.count.count(label) ? hist.count.at(label) : 0) << "\n";
+            ss << "} " << count << "\n";
         }
     }
 
