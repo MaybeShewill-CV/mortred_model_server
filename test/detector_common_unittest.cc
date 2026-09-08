@@ -7,6 +7,8 @@
 
 #include "models/model_io_define.h"
 #include "models/object_detection/detector_common.h"
+#include "models/object_detection/yolo_cxcywh_decode.h"
+#include "models/object_detection/yolov7_decode.h"
 #include "models/object_detection/yolov8_decode.h"
 
 using jinq::common::StatusCode;
@@ -24,8 +26,11 @@ using jinq::models::backend::unmap_letterbox_bbox;
 using jinq::models::backend::validated_f32_named_output;
 using jinq::models::object_detection::DetectionParams;
 using jinq::models::object_detection::F32OutputView;
+using jinq::models::object_detection::collect_yolo_cxcywh_obj_candidates;
+using jinq::models::object_detection::collect_yolov7_head_candidates;
 using jinq::models::object_detection::collect_yolov8_candidates;
 using jinq::models::object_detection::make_nchw_input;
+using jinq::models::object_detection::passes_min_box_area;
 using jinq::models::object_detection::unmap_letterbox_detections;
 
 namespace {
@@ -259,7 +264,7 @@ TEST(DetectorCommon, YoloV8SyntheticDecodeNmsThenLetterboxUnmap) {
     packed[5 * k_proposals + 2] = 0.7f;
 
     jinq::models::io_define::object_detection::std_object_detection_output candidates;
-    collect_yolov8_candidates(packed.data(), k_rows, k_proposals, 0.5f, &candidates);
+    collect_yolov8_candidates(packed.data(), k_rows, k_proposals, 0.5f, 5.0f, &candidates);
     ASSERT_EQ(candidates.size(), 3u);
 
     DetectionParams params;
@@ -294,4 +299,90 @@ TEST(DetectorCommon, YoloV8SyntheticDecodeNmsThenLetterboxUnmap) {
     EXPECT_FLOAT_EQ(kept[1].bbox.y, 0.0f);
     EXPECT_FLOAT_EQ(kept[1].bbox.width, 50.0f);
     EXPECT_FLOAT_EQ(kept[1].bbox.height, 50.0f);
+}
+
+TEST(DetectorCommon, YoloCxcywhObjSyntheticDecodeFiltersNetworkArea) {
+    // Two packed [1, 2, 7] rows (v5/v6): 2x2 area=4 must drop at min=5;
+    // 3x3 area=9 stays. Boxes remain in network pixels.
+    constexpr int class_nums = 2;
+    constexpr int64_t proposals = 2;
+    const float small_row[] = {10.0f, 10.0f, 2.0f, 2.0f, 1.0f, 0.9f, 0.1f};
+    const float large_row[] = {30.0f, 10.0f, 3.0f, 3.0f, 1.0f, 0.9f, 0.1f};
+    std::vector<float> packed;
+    packed.insert(packed.end(), small_row, small_row + 7);
+    packed.insert(packed.end(), large_row, large_row + 7);
+
+    jinq::models::io_define::object_detection::std_object_detection_output candidates;
+    collect_yolo_cxcywh_obj_candidates(packed.data(), 1, proposals, class_nums, 0.5f, 5.0f, &candidates);
+    ASSERT_EQ(candidates.size(), 1u);
+    EXPECT_FLOAT_EQ(candidates[0].bbox.width, 3.0f);
+    EXPECT_FLOAT_EQ(candidates[0].bbox.height, 3.0f);
+
+    candidates.clear();
+    collect_yolo_cxcywh_obj_candidates(packed.data(), 1, proposals, class_nums, 0.5f, 0.0f, &candidates);
+    EXPECT_EQ(candidates.size(), 2u);
+
+    // Contrast: the dropped 2x2 network box unmaps to 4x4=16 source px when
+    // letterbox scale is 0.5, which would have passed a post-unmap filter.
+    jinq::models::backend::InferenceContext context;
+    context.source_size = cv::Size(400, 400);
+    context.network_size = cv::Size(200, 200);
+    LetterboxGeometry geom;
+    std::string error;
+    ASSERT_TRUE(make_letterbox_geometry(context, &geom, &error)) << error;
+    EXPECT_FLOAT_EQ(geom.scale, 0.5f);
+    const auto unmapped_small = unmap_letterbox_bbox({9.0f, 9.0f, 2.0f, 2.0f}, geom, context.source_size);
+    EXPECT_FLOAT_EQ(unmapped_small.area(), 16.0f);
+    EXPECT_TRUE(passes_min_box_area(unmapped_small, 5.0f));
+}
+
+TEST(DetectorCommon, YoloV7SyntheticDecodeFiltersNetworkArea) {
+    // 1x1 grid, 1 class (attrs=6). Anchor 0 with dw/dh logits -2.2 decodes to
+    // a sub-5px network box; anchor 1 with zeros decodes to the 19x36 anchor.
+    constexpr int attrs = 6;
+    constexpr int grid = 1;
+    constexpr int anchor_nums = 3;
+    std::vector<float> data(static_cast<size_t>(anchor_nums * grid * grid * attrs), -10.0f);
+    const float anchors[3][2] = {{12.0f, 16.0f}, {19.0f, 36.0f}, {40.0f, 28.0f}};
+    auto fill = [&](int anchor, float dx, float dy, float dw, float dh, float obj, float cls) {
+        float *p = data.data() + anchor * attrs;
+        p[0] = dx;
+        p[1] = dy;
+        p[2] = dw;
+        p[3] = dh;
+        p[4] = obj;
+        p[5] = cls;
+    };
+    fill(0, 0.0f, 0.0f, -2.2f, -2.2f, 6.0f, 6.0f);
+    fill(1, 0.0f, 0.0f, 0.0f, 0.0f, 6.0f, 6.0f);
+
+    jinq::models::io_define::object_detection::std_object_detection_output candidates;
+    collect_yolov7_head_candidates(data.data(), anchor_nums, grid, grid, attrs, 8, anchors, 0.4f, 5.0f, &candidates);
+    ASSERT_EQ(candidates.size(), 1u);
+    EXPECT_NEAR(candidates[0].bbox.width, 19.0f, 1e-4);
+    EXPECT_NEAR(candidates[0].bbox.height, 36.0f, 1e-4);
+}
+
+TEST(DetectorCommon, YoloV8SyntheticDecodeFiltersNetworkArea) {
+    constexpr int64_t k_rows = 6;
+    constexpr int64_t k_proposals = 2;
+    std::vector<float> packed(static_cast<size_t>(k_rows * k_proposals), 0.0f);
+    packed[0 * k_proposals + 0] = 10.0f;
+    packed[0 * k_proposals + 1] = 30.0f;
+    packed[1 * k_proposals + 0] = 10.0f;
+    packed[1 * k_proposals + 1] = 10.0f;
+    packed[2 * k_proposals + 0] = 2.0f;
+    packed[2 * k_proposals + 1] = 3.0f;
+    packed[3 * k_proposals + 0] = 2.0f;
+    packed[3 * k_proposals + 1] = 3.0f;
+    packed[4 * k_proposals + 0] = 0.9f;
+    packed[4 * k_proposals + 1] = 0.9f;
+    packed[5 * k_proposals + 0] = 0.1f;
+    packed[5 * k_proposals + 1] = 0.1f;
+
+    jinq::models::io_define::object_detection::std_object_detection_output candidates;
+    collect_yolov8_candidates(packed.data(), k_rows, k_proposals, 0.5f, 5.0f, &candidates);
+    ASSERT_EQ(candidates.size(), 1u);
+    EXPECT_FLOAT_EQ(candidates[0].bbox.width, 3.0f);
+    EXPECT_FLOAT_EQ(candidates[0].bbox.height, 3.0f);
 }

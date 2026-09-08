@@ -12,6 +12,7 @@
 #include "glog/logging.h"
 #include "models/backend/model_runtime.h"
 #include "models/object_detection/detector_common.h"
+#include "models/object_detection/yolo_cxcywh_decode.h"
 
 namespace jinq {
 namespace models {
@@ -83,7 +84,6 @@ StatusCode YoloV5Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
     const float *output_tensordata = output_view.data;
     const auto batch_nums = tensor.shape[0];
     const auto raw_pred_bbox_nums = tensor.shape[1];
-    const size_t row_size = static_cast<size_t>(_m_detection_params.class_nums + 5);
 
     LetterboxGeometry letterbox;
     std::string geometry_error;
@@ -93,46 +93,9 @@ StatusCode YoloV5Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
     }
 
     DetectionOutput decode_result;
-    for (int batch_num = 0; batch_num < batch_nums; ++batch_num) {
-        const size_t batch_offset = batch_num * raw_pred_bbox_nums * row_size;
-        for (int bbox_index = 0; bbox_index < raw_pred_bbox_nums; ++bbox_index) {
-            const size_t offset = batch_offset + bbox_index * row_size;
-            // thresh bboxes with lower score
-            int class_id = -1;
-            float max_cls_score = 0.0;
-            for (auto cls_idx = 0; cls_idx < _m_detection_params.class_nums; ++cls_idx) {
-                const float cls_score = output_tensordata[offset + cls_idx + 5];
-                if (cls_score > max_cls_score) {
-                    max_cls_score = cls_score;
-                    class_id = cls_idx;
-                }
-            }
-
-            const float obj_score = output_tensordata[offset + 4];
-            const auto bbox_score = obj_score * max_cls_score;
-            if (bbox_score < _m_detection_params.score_threshold) {
-                continue;
-            }
-
-            const float box_w = output_tensordata[offset + 2];
-            const float box_h = output_tensordata[offset + 3];
-            // thresh invalid bboxes
-            if (box_w <= 0 || box_h <= 0) {
-                continue;
-            }
-
-            jinq::models::io_define::object_detection::bbox tmp_bbox;
-            tmp_bbox.class_id = class_id;
-            tmp_bbox.score = bbox_score;
-            tmp_bbox.bbox = backend::unmap_letterbox_bbox(
-                {output_tensordata[offset + 0] - box_w / 2.0f, output_tensordata[offset + 1] - box_h / 2.0f, box_w, box_h}, letterbox,
-                context.source_size);
-            if (tmp_bbox.bbox.area() < _m_detection_params.min_box_area_px) {
-                continue;
-            }
-            decode_result.push_back(tmp_bbox);
-        }
-    }
+    collect_yolo_cxcywh_obj_candidates(output_tensordata, batch_nums, raw_pred_bbox_nums, _m_detection_params.class_nums,
+                                       _m_detection_params.score_threshold, _m_detection_params.min_box_area_px, &decode_result);
+    unmap_letterbox_detections(decode_result, letterbox, context.source_size);
 
     DetectionOutput nms_result = finalize_detections(std::move(decode_result), _m_detection_params, context);
     output = std::move(nms_result);

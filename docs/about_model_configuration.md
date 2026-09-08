@@ -41,6 +41,7 @@ class_names = ['person', 'bicycle']
 | `input_names` / `output_names` | backend | io name override/filter, useful for models exposing auxiliary outputs |
 | `max_image_pixels` / `max_image_side` | image model params | decoded input safety limits; defaults are 16777216 and 8192 |
 | `model_input_image_size` | fixed-image model params | `[height, width]`; must match the session input H/W |
+| `min_box_area_px` | YOLOv5 / v6 / v7 / v8 params | drop boxes whose `width*height` in **network (letterboxed) pixels** is below this; default `5`; compared **before** letterbox unmap |
 | `sample_size` | diffusion `[DDPM_SAMPLER]` / `[DDIM_SAMPLER]` / `[LDM_SAMPLER]` | `[height, width]` of the generated canvas; must match the UNet weight. HTTP seeds this at adapter init; it is not a request `params` key |
 | everything else | params | model specific (thresholds, class names, sizes); key names are unchanged from the historical configs |
 

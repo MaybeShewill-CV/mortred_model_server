@@ -6,6 +6,7 @@
 
 using jinq::models::object_detection::DetectionParams;
 using jinq::models::object_detection::parse_model_input_size;
+using jinq::models::object_detection::passes_min_box_area;
 
 namespace {
 
@@ -19,6 +20,12 @@ toml::table parse_toml(const std::string &content) {
 }
 
 } // namespace
+
+TEST(DetectionParams, PassesMinBoxAreaUsesNetworkPixelArea) {
+    EXPECT_TRUE(passes_min_box_area(cv::Rect2f(0.0f, 0.0f, 5.0f, 1.0f), 5.0f));
+    EXPECT_FALSE(passes_min_box_area(cv::Rect2f(0.0f, 0.0f, 2.0f, 2.0f), 5.0f));
+    EXPECT_TRUE(passes_min_box_area(cv::Rect2f(0.0f, 0.0f, 2.0f, 2.0f), 0.0f));
+}
 
 TEST(DetectionParams, ParsesValidParamsAndLabels) {
     auto params = parse_toml(R"toml(

@@ -7,13 +7,12 @@
 
 #include "yolov6_detector.h"
 
-#include <cmath>
-#include <limits>
 #include <utility>
 
 #include "glog/logging.h"
 #include "models/backend/model_runtime.h"
 #include "models/object_detection/detector_common.h"
+#include "models/object_detection/yolo_cxcywh_decode.h"
 
 namespace jinq {
 namespace models {
@@ -90,57 +89,10 @@ StatusCode YoloV6Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
 
-    std::vector<std::vector<float>> raw_output;
-    raw_output.resize(raw_pred_bbox_nums);
-    for (auto &&tmp : raw_output) {
-        tmp.resize(_m_detection_params.class_nums + 5, 0.0);
-    }
-    for (auto index = 0; index < raw_pred_bbox_nums; ++index) {
-        for (auto idx = 0; idx < _m_detection_params.class_nums + 5; idx++) {
-            raw_output[index][idx] = output_tensordata[index * (_m_detection_params.class_nums + 5) + idx];
-        }
-    }
-
     DetectionOutput decode_result;
-    for (int batch_num = 0; batch_num < batch_nums; ++batch_num) {
-        for (int bbox_index = 0; bbox_index < raw_pred_bbox_nums; ++bbox_index) {
-            const std::vector<float> raw_bbox_info = raw_output[bbox_index];
-            // thresh bboxes with lower score
-            int class_id = -1;
-            float max_cls_score = 0.0;
-            for (auto cls_idx = 0; cls_idx < _m_detection_params.class_nums; ++cls_idx) {
-                if (raw_bbox_info[cls_idx + 5] > max_cls_score) {
-                    max_cls_score = raw_bbox_info[cls_idx + 5];
-                    class_id = cls_idx;
-                }
-            }
-
-            const auto bbox_score = raw_bbox_info[4] * max_cls_score;
-            if (bbox_score < _m_detection_params.score_threshold) {
-                continue;
-            }
-            // thresh invalid bboxes
-            if (raw_bbox_info[2] <= 0 || raw_bbox_info[3] <= 0) {
-                continue;
-            }
-
-            const auto bbox_area = std::sqrt(raw_bbox_info[2] * raw_bbox_info[3]);
-            if (bbox_area < 0 || bbox_area > std::numeric_limits<float>::max()) {
-                continue;
-            }
-
-            jinq::models::io_define::object_detection::bbox tmp_bbox;
-            tmp_bbox.class_id = class_id;
-            tmp_bbox.score = bbox_score;
-            tmp_bbox.bbox = backend::unmap_letterbox_bbox({raw_bbox_info[0] - raw_bbox_info[2] / 2.0f, raw_bbox_info[1] - raw_bbox_info[3] / 2.0f,
-                                                           raw_bbox_info[2], raw_bbox_info[3]},
-                                                          letterbox, context.source_size);
-            if (tmp_bbox.bbox.area() < _m_detection_params.min_box_area_px) {
-                continue;
-            }
-            decode_result.push_back(tmp_bbox);
-        }
-    }
+    collect_yolo_cxcywh_obj_candidates(output_tensordata, batch_nums, raw_pred_bbox_nums, _m_detection_params.class_nums,
+                                       _m_detection_params.score_threshold, _m_detection_params.min_box_area_px, &decode_result);
+    unmap_letterbox_detections(decode_result, letterbox, context.source_size);
 
     DetectionOutput nms_result = finalize_detections(std::move(decode_result), _m_detection_params, context);
     output = std::move(nms_result);
