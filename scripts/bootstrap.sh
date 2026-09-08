@@ -13,7 +13,6 @@
 set -uo pipefail
 
 REPO="MaybeShewill-CV/mortred_model_server"
-DL_BASE="https://github.com/$REPO/releases/latest/download"
 
 echo "== Mortred bootstrap =="
 
@@ -41,19 +40,26 @@ EOF
 fi
 
 # ---- track 2: release tarball ----
+# Assets are versioned (mortred_model_server-<ver>-<profile>-linux-x64.tar.gz).
+# There is no ...-latest-... filename; resolve the latest tag like mortredctl upgrade.
 if command -v curl >/dev/null 2>&1; then
-    TGZ="mortred_model_server-latest-$PROFILE-linux-x64.tar.gz"
-    if curl -fsSL --max-time 15 -o /dev/null "$DL_BASE/$TGZ"; then
-        echo "== tarball track =="
-        WORK="$(mktemp -d)"
-        curl -fSL "$DL_BASE/$TGZ" -o "$WORK/$TGZ"
-        curl -fsSL "$DL_BASE/$TGZ.sha256" -o "$WORK/$TGZ.sha256" 2>/dev/null \
-            && (cd "$WORK" && sha256sum -c "$TGZ.sha256") \
-            || echo "  [WARN] no published sha256; proceeding unverified" >&2
-        tar -xzf "$WORK/$TGZ" -C "$WORK"
-        cd "$WORK"
-        echo "== running installer (needs sudo) =="
-        exec sudo ./install.sh
+    VERSION="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
+        | grep -oP '"tag_name":\s*"\K[^"]+' | head -n1 || true)"
+    if [ -n "${VERSION:-}" ]; then
+        TGZ="mortred_model_server-${VERSION#v}-$PROFILE-linux-x64.tar.gz"
+        URL="https://github.com/$REPO/releases/download/$VERSION/$TGZ"
+        if curl -fsSL --max-time 15 -o /dev/null "$URL"; then
+            echo "== tarball track ($VERSION) =="
+            WORK="$(mktemp -d)"
+            curl -fSL "$URL" -o "$WORK/$TGZ"
+            curl -fsSL "$URL.sha256" -o "$WORK/$TGZ.sha256" 2>/dev/null \
+                && (cd "$WORK" && sha256sum -c "$TGZ.sha256") \
+                || echo "  [WARN] no published sha256; proceeding unverified" >&2
+            tar -xzf "$WORK/$TGZ" -C "$WORK"
+            cd "$WORK"
+            echo "== running installer (needs sudo) =="
+            exec sudo ./install.sh
+        fi
     fi
     echo "  [WARN] no release tarball published yet for profile $PROFILE" >&2
 fi

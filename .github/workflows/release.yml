@@ -98,16 +98,25 @@ jobs:
           mkdir -p dist
           VERSION_NUM="${VERSION#v}"
           STAGING=dist/staging-gpu
-          mkdir -p "$STAGING"
-          cp -a /tmp/opt-mortred "$STAGING/opt/"
-          mkdir -p "$STAGING/deploy"
+          rm -rf "$STAGING"
+          mkdir -p "$STAGING/opt/mortred" "$STAGING/deploy/nginx/snippets"
+          # same tree as make_release_tarball.sh: opt/mortred/{bin,lib,...}
+          # not opt/opt-mortred or opt/{bin,lib} (GNU cp -a dest-missing trap)
+          cp -a /tmp/opt-mortred/. "$STAGING/opt/mortred/"
           cp deploy/mortred-supervisor.service "$STAGING/deploy/"
+          cp deploy/nginx/mortred-edge.service "$STAGING/deploy/nginx/"
+          cp deploy/nginx/nginx.conf.skeleton "$STAGING/deploy/nginx/"
+          cp deploy/nginx/snippets/*.conf "$STAGING/deploy/nginx/snippets/"
           cp scripts/tarball_install.sh "$STAGING/install.sh"
           chmod +x "$STAGING/install.sh"
           printf 'gpu\n' > "$STAGING/opt/mortred/PROFILE"
+          test -f "$STAGING/opt/mortred/PROFILE"
+          test -x "$STAGING/install.sh"
+          test ! -e "$STAGING/opt/opt-mortred"
           # flat archive (same layout as make_release_tarball.sh): no wrapper dir
-          tar -C "$STAGING" -czf "dist/mortred_model_server-$VERSION_NUM-gpu-linux-x64.tar.gz" .
-          sha256sum "dist/mortred_model_server-$VERSION_NUM-gpu-linux-x64.tar.gz" > "dist/mortred_model_server-$VERSION_NUM-gpu-linux-x64.tar.gz.sha256"
+          TGZ="mortred_model_server-$VERSION_NUM-gpu-linux-x64.tar.gz"
+          tar -C "$STAGING" -czf "dist/$TGZ" .
+          (cd dist && sha256sum "$TGZ" > "$TGZ.sha256" && sha256sum -c "$TGZ.sha256")
           rm -rf "$STAGING"
 
       - uses: actions/upload-artifact@v7
@@ -167,3 +176,5 @@ jobs:
           VERSION="${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"
           TAG_BODY="$(awk -v ver="${VERSION#v}" '/^## /{if (found) exit; found=($0=="## ["ver"]")} found' CHANGELOG.md)"
           gh release create "$VERSION" dist/*.tar.gz* --title "$VERSION" --notes "${TAG_BODY:-See CHANGELOG.md}"
+          # tarball names are versioned (no mortred_model_server-latest-* asset).
+          # bootstrap.sh / mortredctl upgrade resolve the latest git tag via the API.

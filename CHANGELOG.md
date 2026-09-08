@@ -8,6 +8,21 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- Release checksums use the tarball **basename** so `sha256sum -c` after
+  `curl -fLO` prints `OK` (deployment §6.1). `sha256sum /abs/path` wrote a
+  runner path that does not exist on the operator machine. `bootstrap.sh`
+  downloads `mortred_model_server-<tag>-<profile>-linux-x64.tar.gz` after
+  resolving the latest GitHub release tag (there is no `...-latest-...`
+  asset). GPU release staging copies into `opt/mortred/` like the cpu packer
+  (`cp -a src/. dest/`, not `cp -a src dest/opt/`).
+
+> 发布 `.sha256` 只写 tarball **文件名**，`curl -fLO` 后 `sha256sum -c` 才能
+> 打出 `OK`（deployment §6.1）。原先 `sha256sum /绝对路径` 会把 runner 路径写进
+> 校验文件。`bootstrap.sh` 先解析 latest tag，再下
+> `mortred_model_server-<tag>-<profile>-linux-x64.tar.gz`（没有 `...-latest-...`
+> 资产）。gpu staging 与 cpu 一样落到 `opt/mortred/`（`cp -a src/. dest/`，
+> 不是 `cp -a src dest/opt/`）。
+
 - `write_prometheus_credentials.sh` `chown`s the scrape secret to the process
   that reads it: uid **65534** (compose `prom/prometheus` nobody) or user
   **prometheus** (apt unit, `/etc/prometheus/*`). Mode stays 600. Compose
