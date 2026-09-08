@@ -80,6 +80,34 @@ for f in scripts/install_deps.sh scripts/convert_trt_engines.sh \
          scripts/make_release_tarball.sh; do
     check "bash -n $f" bash -n "$ROOT/$f"
 done
+check "no latest- tarball filename" "$PY" - "$ROOT" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+files = [
+    "scripts/bootstrap.sh",
+    "scripts/mortredctl_upgrade.sh",
+    "scripts/make_release_tarball.sh",
+    ".github/workflows/release.yml",
+]
+# GHCR :latest-cpu / :latest-gpu image tags are allowed. This forbids fetching
+# or packing a GitHub release asset named mortred_model_server-latest-*.
+use = re.compile(
+    r"(TGZ\s*=|OUT_TGZ\s*=|curl\s+|releases/download/).{0,120}mortred_model_server-latest-"
+)
+bad = []
+for rel in files:
+    path = root / rel
+    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if use.search(line):
+            bad.append(f"{rel}:{lineno}: {line.strip()}")
+if bad:
+    sys.stderr.write("forbidden mortred_model_server-latest- tarball fetch/pack:\n")
+    sys.stderr.write("\n".join(bad) + "\n")
+    sys.exit(1)
+PY
 check "py_compile fetch/gen/check" "$PY" -m py_compile \
     "$ROOT/scripts/fetch_weights.py" "$ROOT/scripts/gen_weights_manifest.py" \
     "$ROOT/scripts/check_consistency.py" "$ROOT/scripts/gen_openapi.py" \

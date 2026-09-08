@@ -161,10 +161,14 @@ curl -fsSL https://raw.githubusercontent.com/MaybeShewill-CV/mortred_model_serve
 **What it does**:
 
 1. Probes `nvidia-smi -L` → recommends `gpu` or `cpu`;
-2. Docker present → prints the three-step compose instructions (§5);
-3. No Docker → downloads the latest release tarball for the profile, verifies
-   sha256, runs `sudo ./install.sh` (§6);
-4. Neither possible → prints the source-build path (§7).
+2. Docker present → prints the compose instructions (§5);
+3. No Docker → resolves the latest GitHub **release tag**, downloads
+   `mortred_model_server-<version>-<profile>-linux-x64.tar.gz` (there is no
+   `...-latest-...` tarball filename), verifies the sibling `.sha256` when
+   published, then `sudo ./install.sh` (§6);
+4. No Release yet, or that profile asset is missing → prints
+   `[WARN] no versioned release tarball published yet for profile …` and the
+   source-build path (§7). This is a documented track, not a hidden failure.
 
 **Expected output** (no GPU, Docker present):
 
@@ -178,6 +182,20 @@ next:
   3. ./scripts/mortredctl_init-trust.sh && set -a && . conf/local/trust.env && set +a
   4. docker compose --profile cpu up -d
   5. curl -fs http://localhost:8787/api/v1/health
+```
+
+**Expected output** (no GPU, no Docker, no GitHub Release yet):
+
+```text
+== Mortred bootstrap ==
+  detected profile: cpu
+  [WARN] no versioned release tarball published yet for profile cpu
+  [WARN] (GitHub latest tag missing or that profile asset is unpublished; there is no ...-latest-... tarball name)
+== manual track ==
+  1. git clone https://github.com/MaybeShewill-CV/mortred_model_server.git && cd mortred_model_server
+  2. ./scripts/install_deps.sh --cpu --all
+  3. cmake --preset full-cpu && cmake --build --preset full-cpu
+  4. mortredctl init --profile cpu
 ```
 
 > The bootstrap stays deliberately thin: detection and delegation only. Upgrading

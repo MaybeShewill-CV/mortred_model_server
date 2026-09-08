@@ -154,9 +154,14 @@ curl -fsSL https://raw.githubusercontent.com/MaybeShewill-CV/mortred_model_serve
 **它会做什么**：
 
 1. `nvidia-smi -L` 探测 → 推荐 `gpu` 或 `cpu` profile；
-2. 有 Docker → 打印 compose 轨道的三步指令（见 §5）；
-3. 无 Docker → 自动下载当前 profile 的最新 release tarball、校验 sha256、执行 `sudo ./install.sh`（见 §6）；
-4. 两者都不可用 → 打印源码构建路径（见 §7）。
+2. 有 Docker → 打印 compose 轨道指令（见 §5）；
+3. 无 Docker → 解析 GitHub 最新 **release tag**，下载
+   `mortred_model_server-<version>-<profile>-linux-x64.tar.gz`（**没有**
+   `...-latest-...` 这种 tarball 文件名），有同名 `.sha256` 则校验，然后
+   `sudo ./install.sh`（见 §6）；
+4. 还没有 Release，或该 profile 的包不存在 → 打印
+   `[WARN] no versioned release tarball published yet for profile …`，再打印
+   源码构建路径（见 §7）。这是文档里的轨道，不是隐藏失败。
 
 **预期输出（无 GPU + 有 Docker 的机器）**：
 
@@ -170,6 +175,20 @@ next:
   3. ./scripts/mortredctl_init-trust.sh && set -a && . conf/local/trust.env && set +a
   4. docker compose --profile cpu up -d
   5. curl -fs http://localhost:8787/api/v1/health
+```
+
+**预期输出（无 GPU、无 Docker、尚无 GitHub Release）**：
+
+```text
+== Mortred bootstrap ==
+  detected profile: cpu
+  [WARN] no versioned release tarball published yet for profile cpu
+  [WARN] (GitHub latest tag missing or that profile asset is unpublished; there is no ...-latest-... tarball name)
+== manual track ==
+  1. git clone https://github.com/MaybeShewill-CV/mortred_model_server.git && cd mortred_model_server
+  2. ./scripts/install_deps.sh --cpu --all
+  3. cmake --preset full-cpu && cmake --build --preset full-cpu
+  4. mortredctl init --profile cpu
 ```
 
 > bootstrap 本身刻意保持"薄"：它只做检测与委托，不复制任何业务逻辑——升级 mortredctl 即升级全部入口。
