@@ -228,12 +228,16 @@ StatusCode SuperPoint<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>
     const auto grid_height = context.network_size.height / _m_cell_size;
     const auto grid_width = context.network_size.width / _m_cell_size;
     auto semi_status = jinq::models::backend::validated_f32_named_output(
-        outputs, "output_1", {jinq::models::backend::DType::F32, 4, {1, 65, grid_height, grid_width}}, "superpoint");
+        outputs, "output_1",
+        {jinq::models::backend::DType::F32, 4, {1, 65, grid_height, grid_width}, jinq::models::backend::TensorLayout::Nchw},
+        "superpoint");
     if (semi_status != StatusCode::OK) {
         return semi_status;
     }
     const auto desc_status = jinq::models::backend::validated_f32_named_output(
-        outputs, "output_2", {jinq::models::backend::DType::F32, 4, {1, 256, grid_height, grid_width}}, "superpoint");
+        outputs, "output_2",
+        {jinq::models::backend::DType::F32, 4, {1, 256, grid_height, grid_width}, jinq::models::backend::TensorLayout::Nchw},
+        "superpoint");
     if (desc_status != StatusCode::OK) {
         return desc_status;
     }

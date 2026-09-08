@@ -112,7 +112,9 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
     }
     jinq::models::backend::F32OutputView output_view;
     const auto output_status = jinq::models::backend::validated_f32_named_output(
-        outputs, _m_output_name, {jinq::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width}},
+        outputs, _m_output_name,
+        {jinq::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width},
+         jinq::models::backend::TensorLayout::Nchw},
         "db text", &output_view);
     if (output_status != StatusCode::OK) {
         return output_status;

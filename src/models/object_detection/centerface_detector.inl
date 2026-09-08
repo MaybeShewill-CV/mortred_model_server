@@ -87,7 +87,10 @@ StatusCode CenterFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<Name
     // heatmap layout: [1,1,H,W] over the /4 feature map
     const jinq::models::backend::Tensor &heat_tensor = heatmap->tensor;
     std::string contract_error;
-    if (!jinq::models::backend::validate_output_tensor(*heatmap, {jinq::models::backend::DType::F32, 4, {1, 1, -1, -1}}, &contract_error)) {
+    if (!jinq::models::backend::validate_output_tensor(
+            *heatmap,
+            {jinq::models::backend::DType::F32, 4, {1, 1, -1, -1}, jinq::models::backend::TensorLayout::Nchw},
+            &contract_error)) {
         LOG(ERROR) << "centerface heatmap contract failed: " << contract_error;
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
@@ -97,7 +100,10 @@ StatusCode CenterFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<Name
     const std::vector<std::pair<const jinq::models::backend::NamedTensor *, int>> contracted = {{scale, 2}, {offset, 2}, {landmark, 10}};
     for (const auto &item : contracted) {
         if (!jinq::models::backend::validate_output_tensor(
-                *item.first, {jinq::models::backend::DType::F32, 4, {1, item.second, output_height, output_width}}, &contract_error)) {
+                *item.first,
+                {jinq::models::backend::DType::F32, 4, {1, item.second, output_height, output_width},
+                 jinq::models::backend::TensorLayout::Nchw},
+                &contract_error)) {
             LOG(ERROR) << "centerface output contract failed: " << contract_error;
             return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
         }

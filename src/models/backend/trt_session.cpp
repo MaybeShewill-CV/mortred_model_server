@@ -347,6 +347,7 @@ StatusCode TrtSession::init(const BackendConfig& config, std::string* err) {
         }
         info.shape = from_trt_dims(_m_engine->getTensorShape(name.c_str()));
         info.dynamic = shape_is_dynamic(info.shape);
+        info.layout = host_output_layout(info.shape);
         _m_device_buffers.emplace(name, DeviceBuffer{});
         if (as_input) {
             _m_input_infos.push_back(std::move(info));
@@ -585,6 +586,7 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
         named.name = info.name;
         named.tensor.dtype = info.dtype;
         named.tensor.shape = shape;
+        named.tensor.layout = host_output_layout(shape);
         const auto bytes =
             static_cast<size_t>(shape_volume(shape)) * dtype_size(info.dtype);
         named.tensor.buffer.resize(bytes);

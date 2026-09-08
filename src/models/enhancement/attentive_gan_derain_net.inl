@@ -79,6 +79,7 @@ StatusCode AttentiveGanDerain<INPUT, OUTPUT>::postprocess(const std::vector<Name
     if (nchw4) {
         output_contract.rank = 4;
         output_contract.shape = {1, 3, -1, -1};
+        output_contract.layout = jinq::models::backend::TensorLayout::Nchw;
     } else {
         output_contract.rank = output_rank == 3 ? 3 : 4;
         output_contract.shape = output_rank == 3 ? std::vector<int64_t>{-1, -1, 3} : std::vector<int64_t>{1, -1, -1, 3};

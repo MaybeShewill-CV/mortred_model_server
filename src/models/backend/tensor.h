@@ -68,6 +68,41 @@ inline std::ostream& operator<<(std::ostream& os, const DType& dtype) {
     return os << dtype_to_string(dtype);
 }
 
+/***
+ * Host memory layout of a Tensor. Rank-4 vision outputs from run() are NCHW.
+ * Rank-1/2 scores are Linear. Rank-3 stays Unknown (YOLO rows vs HWC maps).
+ * Unknown on a TensorContract means "do not check".
+ */
+enum class TensorLayout {
+    Unknown,
+    Nchw,
+    Nhwc,
+    Linear,
+};
+
+inline const char* tensor_layout_to_string(const TensorLayout& layout) {
+    switch (layout) {
+        case TensorLayout::Nchw:
+            return "nchw";
+        case TensorLayout::Nhwc:
+            return "nhwc";
+        case TensorLayout::Linear:
+            return "linear";
+        default:
+            return "unknown";
+    }
+}
+
+inline TensorLayout host_output_layout(const std::vector<int64_t>& shape) {
+    if (shape.size() == 4) {
+        return TensorLayout::Nchw;
+    }
+    if (shape.size() == 1 || shape.size() == 2) {
+        return TensorLayout::Linear;
+    }
+    return TensorLayout::Unknown;
+}
+
 template<typename T>
 inline DType dtype_of() {
     if constexpr (std::is_same<T, float>::value) {
@@ -125,6 +160,7 @@ struct Tensor {
     DType dtype = DType::F32;
     std::vector<int64_t> shape;
     std::vector<uint8_t> buffer;
+    TensorLayout layout = TensorLayout::Unknown;
 
     Tensor() = default;
     Tensor(const Tensor&) = default;
@@ -137,6 +173,7 @@ struct Tensor {
         Tensor tensor;
         tensor.dtype = dtype;
         tensor.shape = shape;
+        tensor.layout = host_output_layout(shape);
         const auto element_count = shape_volume(shape);
         CHECK_GT(element_count, 0) << "tensor shape must be concrete and non-empty: "
                                    << shape_to_string(shape);
@@ -174,6 +211,7 @@ struct Tensor {
             return tensor;
         }
         tensor.shape = {1, image.rows, image.cols, image.channels()};
+        tensor.layout = TensorLayout::Nhwc;
         const auto bytes = image.total() * image.elemSize();
         tensor.buffer.resize(bytes);
         if (image.isContinuous()) {

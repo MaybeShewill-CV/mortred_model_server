@@ -192,6 +192,13 @@ StatusCode MnnSession::init(const BackendConfig& config, std::string* err) {
         info.shape = to_host_shape(item.second->shape(), _m_input_device_dim_types.at(item.first),
                                    input_dim_types.at(item.first));
         info.dynamic = shape_is_dynamic(info.shape);
+        if (info.shape.size() == 4) {
+            info.layout = input_dim_types.at(item.first) == MNN::Tensor::DimensionType::TENSORFLOW
+                              ? TensorLayout::Nhwc
+                              : TensorLayout::Nchw;
+        } else {
+            info.layout = host_output_layout(info.shape);
+        }
         _m_input_dim_types[item.first] = input_dim_types.at(item.first);
         _m_input_infos.push_back(std::move(info));
     }
@@ -207,6 +214,7 @@ StatusCode MnnSession::init(const BackendConfig& config, std::string* err) {
         }
         info.shape = to_nchw(item.second->shape(), item.second->getDimensionType());
         info.dynamic = shape_is_dynamic(info.shape);
+        info.layout = host_output_layout(info.shape);
         _m_output_infos.push_back(std::move(info));
     }
     if (apply_configured_io_names(config.input_names, &_m_input_infos, "input", err) !=
@@ -356,6 +364,7 @@ StatusCode MnnSession::run(const std::vector<NamedTensor>& inputs,
             named.tensor.buffer.resize(bytes);
             std::memcpy(named.tensor.buffer.data(), src, bytes);
         }
+        named.tensor.layout = host_output_layout(named.tensor.shape);
         outputs.push_back(std::move(named));
     }
     return StatusCode::OK;

@@ -16,6 +16,7 @@ using jinq::models::backend::ParamReader;
 using jinq::models::backend::SessionIoValidator;
 using jinq::models::backend::Tensor;
 using jinq::models::backend::TensorInfo;
+using jinq::models::backend::TensorLayout;
 
 namespace {
 
@@ -53,7 +54,9 @@ class FakeSession final : public jinq::models::backend::InferenceSession {
     std::vector<TensorInfo> outputs_;
 };
 
-TensorInfo image_info(DType dtype = DType::F32) { return {"images", dtype, {1, 3, 4, 5}, false}; }
+TensorInfo image_info(DType dtype = DType::F32) {
+    return {"images", dtype, {1, 3, 4, 5}, false, TensorLayout::Nchw};
+}
 
 } // namespace
 
@@ -66,6 +69,7 @@ TEST(ImagePipeline, ProducesNchwAndPreservesSourceImage) {
     EXPECT_EQ(result.value.name, "images");
     EXPECT_EQ(result.value.tensor.dtype, DType::F32);
     EXPECT_EQ(result.value.tensor.shape, std::vector<int64_t>({1, 3, 2, 3}));
+    EXPECT_EQ(result.value.tensor.layout, TensorLayout::Nchw);
     ASSERT_EQ(result.value.tensor.buffer.size(), 18u * sizeof(float));
 
     const auto *data = reinterpret_cast<const float *>(result.value.tensor.buffer.data());
@@ -83,6 +87,7 @@ TEST(ImagePipeline, ProducesNhwcAndSupportsMeanStd) {
         ImagePipeline(source).bgr_to_rgb().to_float().scale(1.0f / 255.0f).mean_std({0.0f, 0.5f, 1.0f}, {1.0f, 0.5f, 0.25f}).nhwc("input");
     ASSERT_TRUE(result.ok()) << result.error;
     EXPECT_EQ(result.value.tensor.shape, std::vector<int64_t>({1, 2, 2, 3}));
+    EXPECT_EQ(result.value.tensor.layout, TensorLayout::Nhwc);
 
     const auto *data = reinterpret_cast<const float *>(result.value.tensor.buffer.data());
     for (size_t idx = 0; idx < 4; ++idx) {
@@ -98,6 +103,7 @@ TEST(ImagePipeline, ConvertsBgraToRgbAndRejectsOtherChannelCounts) {
     auto result = ImagePipeline(source).bgra_to_rgb().to_float().nhwc("input");
     ASSERT_TRUE(result.ok()) << result.error;
     EXPECT_EQ(result.value.tensor.shape, std::vector<int64_t>({1, 2, 2, 3}));
+    EXPECT_EQ(result.value.tensor.layout, TensorLayout::Nhwc);
 
     const auto *data = reinterpret_cast<const float *>(result.value.tensor.buffer.data());
     for (size_t idx = 0; idx < 4; ++idx) {
@@ -225,16 +231,17 @@ TEST(SessionIoValidator, ValidatesNameDtypeShapeAndLayout) {
 
     EXPECT_EQ(SessionIoValidator(session).input("missing").validate().status, StatusCode::MODEL_INIT_FAILED);
     EXPECT_EQ(SessionIoValidator(session).input("images").dtype(DType::I32).validate().status, StatusCode::MODEL_INIT_FAILED);
+    EXPECT_EQ(SessionIoValidator(session).input("images").nhwc().validate().status, StatusCode::MODEL_INIT_FAILED);
     EXPECT_EQ(SessionIoValidator(session).input("images").nhwc().channels(3).validate().status, StatusCode::MODEL_INIT_FAILED);
 }
 
 TEST(SessionIoValidator, AllowsDynamicBatchButRejectsDynamicSpatialDims) {
-    TensorInfo dynamic = {"images", DType::F32, {-1, 3, 4, 5}, true};
+    TensorInfo dynamic = {"images", DType::F32, {-1, 3, 4, 5}, true, TensorLayout::Nchw};
     FakeSession dynamic_batch({dynamic}, {});
     auto valid = SessionIoValidator(dynamic_batch).input().f32().nchw().channels(3).allow_dynamic_batch().validate();
     EXPECT_TRUE(valid.ok()) << valid.error;
 
-    TensorInfo dynamic_spatial = {"images", DType::F32, {-1, 3, -1, 5}, true};
+    TensorInfo dynamic_spatial = {"images", DType::F32, {-1, 3, -1, 5}, true, TensorLayout::Nchw};
     FakeSession invalid_session({dynamic_spatial}, {});
     auto invalid = SessionIoValidator(invalid_session).input().f32().nchw().allow_dynamic_batch().validate();
     ASSERT_FALSE(invalid.ok());

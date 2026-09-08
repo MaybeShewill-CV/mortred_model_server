@@ -195,7 +195,8 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::postprocess(const std::vector<NamedTenso
     }
     jinq::models::backend::F32OutputView output_view;
     const auto output_status = jinq::models::backend::validated_f32_first_output(
-        outputs, {jinq::models::backend::DType::F32, 4, {1, 3, network_size.height, network_size.width}}, "enlighten gan",
+        outputs, {jinq::models::backend::DType::F32, 4, {1, 3, network_size.height, network_size.width},
+                  jinq::models::backend::TensorLayout::Nchw}, "enlighten gan",
         &output_view);
     if (output_status != StatusCode::OK) {
         return output_status;

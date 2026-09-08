@@ -217,8 +217,10 @@ RuntimeResult<NamedTensor> ImagePipeline::pack(const std::string &name, bool nch
     named.name = name;
     if (nchw) {
         named.tensor = Tensor::make<float>({1, image_.channels(), image_.rows, image_.cols});
+        named.tensor.layout = TensorLayout::Nchw;
     } else {
         named.tensor = Tensor::make<float>({1, image_.rows, image_.cols, image_.channels()});
+        named.tensor.layout = TensorLayout::Nhwc;
     }
 
     if (nchw) {
@@ -267,6 +269,11 @@ OutputReader &OutputReader::f32() {
 OutputReader &OutputReader::shape(std::vector<int64_t> shape) {
     contract_.rank = shape.size();
     contract_.shape = std::move(shape);
+    return *this;
+}
+
+OutputReader &OutputReader::nchw() {
+    contract_.layout = TensorLayout::Nchw;
     return *this;
 }
 
@@ -548,6 +555,12 @@ RuntimeResult<TensorInfo> SessionIoValidator::validate() const {
     if (channels_ >= 0) {
         if (info.shape.size() != 4 || (nchw_ ? info.shape[1] : info.shape[3]) != channels_) {
             return {StatusCode::MODEL_INIT_FAILED, "unexpected session io channels: " + description, {}};
+        }
+    }
+    if (has_layout_ && info.layout != TensorLayout::Unknown) {
+        const auto expected = nchw_ ? TensorLayout::Nchw : TensorLayout::Nhwc;
+        if (info.layout != expected) {
+            return {StatusCode::MODEL_INIT_FAILED, "unexpected session io layout: " + description, {}};
         }
     }
     if (static_shape_ && info.dynamic) {

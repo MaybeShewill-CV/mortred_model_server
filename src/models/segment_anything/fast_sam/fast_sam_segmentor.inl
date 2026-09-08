@@ -147,8 +147,10 @@ StatusCode FastSamSegmentor<INPUT, OUTPUT>::postprocess(const std::vector<NamedT
     }
     jinq::models::backend::F32OutputView protos_view;
     const auto protos_status = jinq::models::backend::validated_f32_named_output(
-        outputs, "output1", {jinq::models::backend::DType::F32, 4, {1, -1, _m_preds_mask_size.height, _m_preds_mask_size.width}}, "fastsam",
-        &protos_view);
+        outputs, "output1",
+        {jinq::models::backend::DType::F32, 4, {1, -1, _m_preds_mask_size.height, _m_preds_mask_size.width},
+         jinq::models::backend::TensorLayout::Nchw},
+        "fastsam", &protos_view);
     if (protos_status != StatusCode::OK) {
         return protos_status;
     }

@@ -97,14 +97,17 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &
     // argmax mask layout: [1,H,W], NCHW [1,1,H,W], or legacy NHWC [1,H,W,1]
     jinq::models::backend::TensorContract mask_contract;
     mask_contract.dtype = jinq::models::backend::DType::I32;
-    auto try_mask = [&](size_t rank, std::vector<int64_t> shape) {
+    auto try_mask = [&](size_t rank, std::vector<int64_t> shape,
+                        jinq::models::backend::TensorLayout layout = jinq::models::backend::TensorLayout::Unknown) {
         mask_contract.rank = rank;
         mask_contract.shape = std::move(shape);
+        mask_contract.layout = layout;
         return jinq::models::backend::validate_output_tensor(outputs.front(), mask_contract, &contract_error);
     };
     bool mask_ok = try_mask(3, {1, context.network_size.height, context.network_size.width});
     if (!mask_ok) {
-        mask_ok = try_mask(4, {1, 1, context.network_size.height, context.network_size.width});
+        mask_ok = try_mask(4, {1, 1, context.network_size.height, context.network_size.width},
+                           jinq::models::backend::TensorLayout::Nchw);
     }
     if (!mask_ok) {
         mask_ok = try_mask(4, {1, context.network_size.height, context.network_size.width, 1});
@@ -113,7 +116,8 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &
         mask_contract.dtype = jinq::models::backend::DType::I64;
         mask_ok = try_mask(3, {1, context.network_size.height, context.network_size.width});
         if (!mask_ok) {
-            mask_ok = try_mask(4, {1, 1, context.network_size.height, context.network_size.width});
+            mask_ok = try_mask(4, {1, 1, context.network_size.height, context.network_size.width},
+                               jinq::models::backend::TensorLayout::Nchw);
         }
         if (!mask_ok) {
             mask_ok = try_mask(4, {1, context.network_size.height, context.network_size.width, 1});

@@ -81,6 +81,7 @@ class OutputReader {
 
     OutputReader &f32();
     OutputReader &shape(std::vector<int64_t> shape);
+    OutputReader &nchw();
     OutputReader &finite();
 
     RuntimeResult<F32OutputView> read() const;

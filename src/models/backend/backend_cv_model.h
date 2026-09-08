@@ -300,6 +300,7 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
         }
         out->name = input_name;
         out->tensor = backend::Tensor::make<float>({static_cast<int64_t>(mats.size()), rows, cols, 3});
+        out->tensor.layout = backend::TensorLayout::Nhwc;
         const size_t item_bytes = static_cast<size_t>(rows) * cols * 3 * sizeof(float);
         for (size_t idx = 0; idx < mats.size(); ++idx) {
             std::memcpy(out->tensor.buffer.data() + idx * item_bytes, mats[idx].data, item_bytes);

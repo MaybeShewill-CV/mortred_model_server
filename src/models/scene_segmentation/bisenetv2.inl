@@ -89,7 +89,8 @@ StatusCode BiseNetV2<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> 
     const auto output_status = jinq::models::backend::validated_f32_first_output(
         outputs,
         nchw ? jinq::models::backend::TensorContract{jinq::models::backend::DType::F32, 4,
-                                                     {1, -1, height, width}}
+                                                     {1, -1, height, width},
+                                                     jinq::models::backend::TensorLayout::Nchw}
              : jinq::models::backend::TensorContract{jinq::models::backend::DType::F32, 3,
                                                       {height, width, -1}},
         "bisenetv2", &output_view);
