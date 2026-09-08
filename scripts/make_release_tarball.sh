@@ -63,7 +63,11 @@ find "$STAGING/opt/mortred/bin" -maxdepth 1 -type f \
 mkdir -p "$ROOT/dist"
 echo "== pack $OUT_TGZ (flat: install.sh, opt/mortred/, deploy/) =="
 tar -C "$STAGING" -czf "$OUT_TGZ" .
-sha256sum "$OUT_TGZ" > "$OUT_TGZ.sha256"
+# checksum file must name only the basename so `sha256sum -c` works after
+# curl -fLO into an empty directory (deployment §6.1).
+OUT_DIR="$(dirname "$OUT_TGZ")"
+OUT_BASE="$(basename "$OUT_TGZ")"
+(cd "$OUT_DIR" && sha256sum "$OUT_BASE" > "$OUT_BASE.sha256" && sha256sum -c "$OUT_BASE.sha256")
 rm -rf "$STAGING"
 
 echo "== done =="
