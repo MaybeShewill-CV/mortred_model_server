@@ -17,6 +17,7 @@
 #include "glog/logging.h"
 
 #include "common/file_path_util.h"
+#include "models/backend/session_io.h"
 
 namespace jinq {
 namespace models {
@@ -150,8 +151,6 @@ StatusCode OrtSession::init(const BackendConfig& config, std::string* err) {
         Ort::AllocatorWithDefaultOptions allocator;
         const auto fill_infos = [&allocator](size_t count, auto get_name, auto get_type_info,
                                              std::vector<TensorInfo>* infos,
-                                             std::vector<std::string>* names,
-                                             std::vector<const char*>* name_ptrs,
                                              std::string* parse_err) -> bool {
             for (size_t idx = 0; idx < count; ++idx) {
                 TensorInfo info;
@@ -166,12 +165,6 @@ StatusCode OrtSession::init(const BackendConfig& config, std::string* err) {
                 info.shape = shape_and_type.GetShape();
                 info.dynamic = shape_is_dynamic(info.shape);
                 infos->push_back(std::move(info));
-                names->push_back(infos->back().name);
-            }
-            name_ptrs->clear();
-            name_ptrs->reserve(names->size());
-            for (const auto& name : *names) {
-                name_ptrs->push_back(name.c_str());
             }
             return true;
         };
@@ -181,8 +174,7 @@ StatusCode OrtSession::init(const BackendConfig& config, std::string* err) {
             [this](size_t idx, Ort::AllocatorWithDefaultOptions& alloc) {
                 return std::string(_m_session->GetInputNameAllocated(idx, alloc).get());
             },
-            [this](size_t idx) { return _m_session->GetInputTypeInfo(idx); }, &_m_input_infos,
-            &_m_input_names, &_m_input_name_ptrs, err);
+            [this](size_t idx) { return _m_session->GetInputTypeInfo(idx); }, &_m_input_infos, err);
         if (!inputs_ok) {
             return StatusCode::MODEL_INIT_FAILED;
         }
@@ -192,7 +184,7 @@ StatusCode OrtSession::init(const BackendConfig& config, std::string* err) {
                 return std::string(_m_session->GetOutputNameAllocated(idx, alloc).get());
             },
             [this](size_t idx) { return _m_session->GetOutputTypeInfo(idx); }, &_m_output_infos,
-            &_m_output_names, &_m_output_name_ptrs, err);
+            err);
         if (!outputs_ok) {
             return StatusCode::MODEL_INIT_FAILED;
         }
@@ -210,32 +202,30 @@ StatusCode OrtSession::init(const BackendConfig& config, std::string* err) {
         }
         return StatusCode::MODEL_INIT_FAILED;
     }
-    if (!config.input_names.empty()) {
-        for (const auto& name : config.input_names) {
-            const auto found = std::find_if(
-                _m_input_infos.begin(), _m_input_infos.end(),
-                [&name](const TensorInfo& info) { return info.name == name; });
-            if (found == _m_input_infos.end()) {
-                if (err != nullptr) {
-                    *err = "configured onnx input tensor not found: " + name;
-                }
-                return StatusCode::MODEL_INIT_FAILED;
-            }
-        }
+    if (apply_configured_io_names(config.input_names, &_m_input_infos, "input", err) !=
+        StatusCode::OK) {
+        return StatusCode::MODEL_INIT_FAILED;
     }
-    if (!config.output_names.empty()) {
-        for (const auto& name : config.output_names) {
-            const auto found = std::find_if(
-                _m_output_infos.begin(), _m_output_infos.end(),
-                [&name](const TensorInfo& info) { return info.name == name; });
-            if (found == _m_output_infos.end()) {
-                if (err != nullptr) {
-                    *err = "configured onnx output tensor not found: " + name;
-                }
-                return StatusCode::MODEL_INIT_FAILED;
-            }
-        }
+    if (apply_configured_io_names(config.output_names, &_m_output_infos, "output", err) !=
+        StatusCode::OK) {
+        return StatusCode::MODEL_INIT_FAILED;
     }
+    const auto rebuild_name_ptrs = [](const std::vector<TensorInfo>& infos,
+                                      std::vector<std::string>* names,
+                                      std::vector<const char*>* name_ptrs) {
+        names->clear();
+        names->reserve(infos.size());
+        for (const auto& info : infos) {
+            names->push_back(info.name);
+        }
+        name_ptrs->clear();
+        name_ptrs->reserve(names->size());
+        for (const auto& name : *names) {
+            name_ptrs->push_back(name.c_str());
+        }
+    };
+    rebuild_name_ptrs(_m_input_infos, &_m_input_names, &_m_input_name_ptrs);
+    rebuild_name_ptrs(_m_output_infos, &_m_output_names, &_m_output_name_ptrs);
 
     _m_model_file_path = config.model_file_path;
     for (const auto& info : _m_input_infos) {
@@ -263,18 +253,21 @@ StatusCode OrtSession::run(const std::vector<NamedTensor>& inputs,
         const auto memory_info = Ort::MemoryInfo::CreateCpu(
             OrtAllocatorType::OrtDeviceAllocator, OrtMemType::OrtMemTypeDefault);
         std::vector<Ort::Value> ort_inputs;
-        ort_inputs.reserve(inputs.size());
-        for (const auto& named : inputs) {
-            const auto info_iter = std::find_if(
-                _m_input_infos.begin(), _m_input_infos.end(),
-                [&named](const TensorInfo& info) { return info.name == named.name; });
-            if (info_iter == _m_input_infos.end()) {
-                LOG(ERROR) << "unknown onnxruntime input tensor: " << named.name;
+        ort_inputs.reserve(_m_input_infos.size());
+        // Bind in session input order so name ptrs and Ort::Value slots match,
+        // independent of the caller's NamedTensor vector order.
+        for (const auto& info : _m_input_infos) {
+            const auto named_iter = std::find_if(
+                inputs.begin(), inputs.end(),
+                [&info](const NamedTensor& named) { return named.name == info.name; });
+            if (named_iter == inputs.end()) {
+                LOG(ERROR) << "missing onnxruntime input tensor: " << info.name;
                 return StatusCode::MODEL_RUN_SESSION_FAILED;
             }
-            if (info_iter->dtype != named.tensor.dtype) {
+            const auto& named = *named_iter;
+            if (info.dtype != named.tensor.dtype) {
                 LOG(ERROR) << "onnxruntime input '" << named.name << "' dtype mismatch, expected "
-                           << info_iter->to_string() << ", got "
+                           << info.to_string() << ", got "
                            << dtype_to_string(named.tensor.dtype);
                 return StatusCode::MODEL_RUN_SESSION_FAILED;
             }

@@ -17,6 +17,7 @@
 #include "glog/logging.h"
 
 #include "common/file_path_util.h"
+#include "models/backend/session_io.h"
 
 namespace jinq {
 namespace models {
@@ -318,25 +319,9 @@ StatusCode TrtSession::init(const BackendConfig& config, std::string* err) {
     const auto is_input = [this](const std::string& name) {
         return _m_engine->getTensorIOMode(name.c_str()) == nvinfer1::TensorIOMode::kINPUT;
     };
-    const auto wanted_input = [&config, &is_input](const std::string& name) {
-        if (!is_input(name)) {
-            return false;
-        }
-        if (config.input_names.empty()) {
-            return true;
-        }
-        return std::find(config.input_names.begin(), config.input_names.end(), name) !=
-               config.input_names.end();
-    };
-    const auto wanted_output = [this, &config](const std::string& name) {
-        if (_m_engine->getTensorIOMode(name.c_str()) != nvinfer1::TensorIOMode::kOUTPUT) {
-            return false;
-        }
-        if (config.output_names.empty()) {
-            return true;
-        }
-        return std::find(config.output_names.begin(), config.output_names.end(), name) !=
-               config.output_names.end();
+    const auto wanted_input = [&is_input](const std::string& name) { return is_input(name); };
+    const auto wanted_output = [this](const std::string& name) {
+        return _m_engine->getTensorIOMode(name.c_str()) == nvinfer1::TensorIOMode::kOUTPUT;
     };
 
     const int32_t io_count = _m_engine->getNbIOTensors();
@@ -375,27 +360,13 @@ StatusCode TrtSession::init(const BackendConfig& config, std::string* err) {
         }
         return StatusCode::MODEL_INIT_FAILED;
     }
-    for (const auto& name : config.input_names) {
-        const auto found = std::any_of(
-            _m_input_infos.begin(), _m_input_infos.end(),
-            [&name](const TensorInfo& info) { return info.name == name; });
-        if (!found) {
-            if (err != nullptr) {
-                *err = "configured tensorrt input tensor not found: " + name;
-            }
-            return StatusCode::MODEL_INIT_FAILED;
-        }
+    if (apply_configured_io_names(config.input_names, &_m_input_infos, "input", err) !=
+        StatusCode::OK) {
+        return StatusCode::MODEL_INIT_FAILED;
     }
-    for (const auto& name : config.output_names) {
-        const auto found = std::any_of(
-            _m_output_infos.begin(), _m_output_infos.end(),
-            [&name](const TensorInfo& info) { return info.name == name; });
-        if (!found) {
-            if (err != nullptr) {
-                *err = "configured tensorrt output tensor not found: " + name;
-            }
-            return StatusCode::MODEL_INIT_FAILED;
-        }
+    if (apply_configured_io_names(config.output_names, &_m_output_infos, "output", err) !=
+        StatusCode::OK) {
+        return StatusCode::MODEL_INIT_FAILED;
     }
 
     // Outputs whose shape cannot be inferred from the input shape require an

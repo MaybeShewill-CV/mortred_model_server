@@ -70,6 +70,10 @@ class InferenceSession {
      * (name / dtype / concrete shape); dynamic shapes are set per run. Output
      * buffers are reused inside the session, the returned tensors own a host
      * copy with the concrete run-time shapes.
+     *
+     * inputs()/outputs() follow [MODEL.backend] input_names and output_names
+     * when those vectors are non-empty (subset + configured order). Empty
+     * names keep backend-native discovery order.
      */
     virtual StatusCode run(const std::vector<NamedTensor>& inputs,
                                          std::vector<NamedTensor>& outputs) = 0;

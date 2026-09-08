@@ -289,6 +289,30 @@ TEST(MnnSession, InitAndRunMobilenetv2) {
     EXPECT_EQ(session->run(empty_inputs, outputs), StatusCode::MODEL_RUN_SESSION_FAILED);
 }
 
+TEST(MnnSession, ConfiguredOutputNameOrder) {
+    if (!file_exists(kMnnModel)) {
+        MORTRED_SKIP_OR_FAIL_WEIGHTS("mnn weights not available");
+    }
+    std::string err;
+    auto discovered = InferenceSession::create(make_config("mnn", kMnnModel), &err);
+    ASSERT_NE(discovered, nullptr) << err;
+    ASSERT_EQ(discovered->outputs().size(), 1u);
+    const auto output_name = discovered->outputs().front().name;
+    const auto input_name = discovered->inputs().front().name;
+
+    auto cfg = make_config("mnn", kMnnModel);
+    cfg.output_names = {output_name};
+    cfg.input_names = {input_name};
+    auto session = InferenceSession::create(cfg, &err);
+    ASSERT_NE(session, nullptr) << err;
+    ASSERT_EQ(session->outputs().size(), 1u);
+    EXPECT_EQ(session->outputs().front().name, output_name);
+
+    cfg.output_names = {"no_such_output"};
+    EXPECT_EQ(InferenceSession::create(cfg, &err), nullptr);
+    EXPECT_NE(err.find("not found"), std::string::npos) << err;
+}
+
 TEST(OrtSession, InitAndRunDdpmUnet) {
     if (!file_exists(kOnnxModel)) {
         MORTRED_SKIP_OR_FAIL_WEIGHTS("onnx weights not available");
@@ -323,6 +347,48 @@ TEST(OrtSession, InitAndRunDdpmUnet) {
     auto bad_inputs = inputs;
     bad_inputs[1].tensor = Tensor::make<int32_t>(t_info.shape);
     EXPECT_EQ(session->run(bad_inputs, outputs), StatusCode::MODEL_RUN_SESSION_FAILED);
+}
+
+TEST(OrtSession, ConfiguredOutputNameOrder) {
+    if (!file_exists(kOnnxModel)) {
+        MORTRED_SKIP_OR_FAIL_WEIGHTS("onnx weights not available");
+    }
+    std::string err;
+    auto discovered = InferenceSession::create(make_config("onnx", kOnnxModel), &err);
+    ASSERT_NE(discovered, nullptr) << err;
+    ASSERT_EQ(discovered->outputs().size(), 1u);
+    const auto output_name = discovered->outputs().front().name;
+
+    auto cfg = make_config("onnx", kOnnxModel);
+    cfg.output_names = {output_name};
+    auto session = InferenceSession::create(cfg, &err);
+    ASSERT_NE(session, nullptr) << err;
+    ASSERT_EQ(session->outputs().size(), 1u);
+    EXPECT_EQ(session->outputs().front().name, output_name);
+
+    const auto& xt_info = find_info(session->inputs(), "xt");
+    const auto& t_info = find_info(session->inputs(), "t");
+    std::vector<NamedTensor> inputs;
+    NamedTensor xt;
+    xt.name = "xt";
+    xt.tensor = Tensor::make<float>(xt_info.shape);
+    inputs.push_back(std::move(xt));
+    NamedTensor timestep;
+    timestep.name = "t";
+    timestep.tensor = Tensor::make<int64_t>(t_info.shape);
+    timestep.tensor.data<int64_t>()[0] = 42;
+    inputs.push_back(std::move(timestep));
+    // caller input order is reversed relative to typical graph order
+    std::swap(inputs[0], inputs[1]);
+
+    std::vector<NamedTensor> outputs;
+    ASSERT_EQ(session->run(inputs, outputs), StatusCode::OK);
+    ASSERT_EQ(outputs.size(), 1u);
+    EXPECT_EQ(outputs.front().name, output_name);
+
+    cfg.output_names = {"no_such_output"};
+    EXPECT_EQ(InferenceSession::create(cfg, &err), nullptr);
+    EXPECT_NE(err.find("not found"), std::string::npos) << err;
 }
 
 #ifdef MORTRED_HAS_TRT
@@ -374,6 +440,43 @@ TEST(TrtSession, ResolvesLightglueDynamicOutputs) {
     EXPECT_TRUE(descriptors->tensor.shape_is_concrete());
     EXPECT_EQ(keypoints->tensor.element_count(), scores->tensor.element_count() * 2);
     EXPECT_EQ(descriptors->tensor.element_count(), scores->tensor.element_count() * 256);
+}
+
+TEST(TrtSession, ConfiguredOutputNameOrder) {
+    if (!file_exists(kLightglueExtractor) || !file_exists(kFeatureImage)) {
+        MORTRED_SKIP_OR_FAIL_WEIGHTS("lightglue weights or test image not available");
+    }
+    std::string err;
+    auto cfg = make_config("tensorrt", kLightglueExtractor, "gpu");
+    cfg.output_names = {"descriptors", "keypoints", "scores"};
+    auto session = InferenceSession::create(cfg, &err);
+    if (session == nullptr) {
+        MORTRED_SKIP_OR_FAIL_WEIGHTS(std::string("tensorrt/gpu unavailable: ") + err);
+    }
+    ASSERT_EQ(session->outputs().size(), 3u) << info_names(session->outputs());
+    EXPECT_EQ(session->outputs()[0].name, "descriptors");
+    EXPECT_EQ(session->outputs()[1].name, "keypoints");
+    EXPECT_EQ(session->outputs()[2].name, "scores");
+
+    const auto& image_info = find_info(session->inputs(), "image");
+    cv::Mat image = cv::imread(kFeatureImage, cv::IMREAD_COLOR);
+    ASSERT_FALSE(image.empty());
+    cv::resize(image, image, cv::Size(128, 96));
+    cv::cvtColor(image, image, cv::COLOR_BGR2GRAY);
+    image.convertTo(image, CV_32FC1, 1.0 / 255.0);
+    NamedTensor named;
+    named.name = image_info.name;
+    named.tensor = Tensor::make<float>({1, 1, image.rows, image.cols});
+    ASSERT_EQ(image.total() * image.elemSize(), named.tensor.byte_size());
+    std::memcpy(named.tensor.buffer.data(), image.data, named.tensor.byte_size());
+    std::vector<NamedTensor> inputs;
+    inputs.push_back(std::move(named));
+    std::vector<NamedTensor> outputs;
+    ASSERT_EQ(session->run(inputs, outputs), StatusCode::OK);
+    ASSERT_EQ(outputs.size(), 3u);
+    EXPECT_EQ(outputs[0].name, "descriptors");
+    EXPECT_EQ(outputs[1].name, "keypoints");
+    EXPECT_EQ(outputs[2].name, "scores");
 }
 
 TEST(TrtSession, InitAndRunYolov8) {
