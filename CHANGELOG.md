@@ -8,6 +8,16 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Changed
+- Release tarball layout is documented as **flat**: `install.sh`, `opt/mortred/`,
+  and `deploy/` sit at the archive root (`make_release_tarball.sh` and the gpu
+  release job already packed that way). README / deployment / installer comments
+  unpack into an empty directory instead of `cd` into a wrapper the packer does
+  not create.
+
+> 发布 tarball 按**平铺**写进文档：包根就是 `install.sh`、`opt/mortred/`、
+> `deploy/`（打包脚本和 gpu release job 本来就是这样打的）。README / 部署 /
+> 安装脚本注释改为解到空目录，不再 `cd` 一个打包器不会生成的 wrapper 目录。
+
 - Entry 2/3 and bootstrap now export all three tokens (`mortredctl init-trust`
   / `supervisor.env`). Compose already required `MORTRED_METRICS_TOKEN`; the
   copied quick-start commands now match. The optional monitoring compose
@@ -33,6 +43,15 @@ All notable changes to this project are documented here. The format follows
 > HTTP catalog 与 bench-only。
 
 ### Fixed
+- `ci_container_boot.sh` asserts the unified infer envelope (`status` /
+  `results[]`, including `results[0].status`) instead of the removed `code`
+  field. `payload.get("code", 0)` always passed, so a HTTP 200 with
+  `status != 0` would still print success.
+
+> `ci_container_boot.sh` 按统一信封断言推理结果（`status` / `results[]`，含
+> `results[0].status`），不再读已删除的 `code`。`payload.get("code", 0)` 会永远
+> 通过，HTTP 200 且 `status != 0` 仍会打印成功。
+
 - HTTP diffusion workers now seed the sampler input template from the model
   TOML at `init` (`sample_size` / default steps / channels). A missing or
   empty `sample_size` fails init instead of serving `MODEL_EMPTY_INPUT_IMAGE`

@@ -187,26 +187,34 @@ req = urllib.request.Request(
 try:
     with urllib.request.urlopen(req, timeout=60) as resp:
         raw = resp.read()
-        status = resp.status
+        http_status = resp.status
 except urllib.error.HTTPError as exc:
     err_body = exc.read().decode("utf-8", errors="replace")
     print("[FAIL] infer HTTP %s: %s" % (exc.code, err_body[:2000]), file=sys.stderr)
     raise SystemExit(1)
 payload = json.loads(raw.decode("utf-8"))
-if status != 200:
-    print("[FAIL] infer HTTP %s: %s" % (status, payload), file=sys.stderr)
+if http_status != 200:
+    print("[FAIL] infer HTTP %s: %s" % (http_status, payload), file=sys.stderr)
     raise SystemExit(1)
 if not isinstance(payload, dict):
     print("[FAIL] infer response is not a JSON object", file=sys.stderr)
     raise SystemExit(1)
-code = payload.get("code", 0)
-if code not in (0, "0"):
-    print("[FAIL] infer business code %r: %s" % (code, json.dumps(payload)[:2000]), file=sys.stderr)
+# unified envelope: {status, status_str, results[]}; the removed `code` field
+# is absent, so payload.get("code", 0) would always pass.
+biz_status = payload.get("status")
+if biz_status not in (0, "0"):
+    print("[FAIL] infer business status %r: %s" % (biz_status, json.dumps(payload)[:2000]), file=sys.stderr)
     raise SystemExit(1)
-if payload.get("results") is None and payload.get("data") is None:
-    print("[FAIL] infer missing results/data: %s" % list(payload), file=sys.stderr)
+results = payload.get("results")
+if not isinstance(results, list) or not results:
+    print("[FAIL] infer missing results: %s" % list(payload), file=sys.stderr)
     raise SystemExit(1)
-print("[ok] infer HTTP 200 code=0 keys=%s" % sorted(payload.keys()))
+item0 = results[0] if isinstance(results[0], dict) else {}
+item_status = item0.get("status")
+if item_status not in (0, "0"):
+    print("[FAIL] infer results[0].status %r: %s" % (item_status, json.dumps(payload)[:2000]), file=sys.stderr)
+    raise SystemExit(1)
+print("[ok] infer HTTP 200 status=0 keys=%s" % sorted(payload.keys()))
 PY
 
 echo "== supervisor / gateway processes still alive =="

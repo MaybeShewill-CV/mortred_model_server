@@ -274,8 +274,9 @@ sha256sum -c mortred_model_server-$VER-cpu-linux-x64.tar.gz.sha256   # 必须输
 ### 6.2 安装（root）
 
 ```bash
-tar -xzf mortred_model_server-$VER-cpu-linux-x64.tar.gz
-cd mortred_model_server-$VER-cpu-linux-x64
+mkdir unpack
+tar -xzf mortred_model_server-$VER-cpu-linux-x64.tar.gz -C unpack
+cd unpack   # 平铺：根上就是 install.sh、opt/mortred/、deploy/
 sudo ./install.sh
 ```
 
@@ -346,6 +347,7 @@ cmake --preset tests-only && cmake --build --preset tests-only && ctest --preset
 
 ```bash
 ./scripts/make_release_tarball.sh cpu 0.1.0 build    # 产出 dist/*.tar.gz + .sha256
+# 平铺打包（根上是 install.sh / opt/mortred / deploy）；解到空目录再装
 ```
 
 ---

@@ -283,8 +283,9 @@ sha256sum -c mortred_model_server-$VER-cpu-linux-x64.tar.gz.sha256   # must prin
 ### 6.2 Install (root)
 
 ```bash
-tar -xzf mortred_model_server-$VER-cpu-linux-x64.tar.gz
-cd mortred_model_server-$VER-cpu-linux-x64
+mkdir unpack
+tar -xzf mortred_model_server-$VER-cpu-linux-x64.tar.gz -C unpack
+cd unpack   # flat archive: install.sh, opt/mortred/, deploy/ at the root
 sudo ./install.sh
 ```
 
@@ -356,6 +357,7 @@ cmake --preset tests-only && cmake --build --preset tests-only && ctest --preset
 
 ```bash
 ./scripts/make_release_tarball.sh cpu 0.1.0 build    # -> dist/*.tar.gz + .sha256
+# archive is flat (install.sh / opt/mortred / deploy at the root); unpack into an empty dir
 ```
 
 ---

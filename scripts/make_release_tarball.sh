@@ -10,10 +10,10 @@
 #   mortred_model_server-<version>-<profile>-linux-x64.tar.gz
 #   mortred_model_server-<version>-<profile>-linux-x64.tar.gz.sha256
 #
-# The tarball contains the installed tree (bin/lib/conf/docs/scripts/web ui),
-# the systemd unit, and install.sh (runtime apt deps + /opt/mortred layout +
-# systemd wiring). Weights are NOT bundled: install.sh hints
-# `python3 scripts/fetch_weights.py --profile <profile>` instead (a full
+# The tarball is FLAT (no wrapper directory): install.sh, opt/mortred/, and
+# deploy/ sit at the archive root. Unpack into an empty directory, then run
+# sudo ./install.sh from that directory. Weights are NOT bundled: install.sh
+# hints `python3 scripts/fetch_weights.py --profile <profile>` instead (a full
 # weight set is tens of GB; shipping it in the tarball would be wasteful).
 
 set -euo pipefail
@@ -61,7 +61,7 @@ find "$STAGING/opt/mortred/bin" -maxdepth 1 -type f \
      \( -name '*_unittest' -o -name '*_test' \) -delete 2>/dev/null || true
 
 mkdir -p "$ROOT/dist"
-echo "== pack $OUT_TGZ =="
+echo "== pack $OUT_TGZ (flat: install.sh, opt/mortred/, deploy/) =="
 tar -C "$STAGING" -czf "$OUT_TGZ" .
 sha256sum "$OUT_TGZ" > "$OUT_TGZ.sha256"
 rm -rf "$STAGING"

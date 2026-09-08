@@ -78,7 +78,8 @@ curl -fs http://localhost:8787/api/v1/health
 下载 `mortred_model_server-<version>-<profile>-linux-x64.tar.gz`，校验 `.sha256`，然后：
 
 ```bash
-tar -xzf mortred_model_server-*-linux-x64.tar.gz && cd mortred_model_server-*-linux-x64
+mkdir unpack && tar -xzf mortred_model_server-*-linux-x64.tar.gz -C unpack
+cd unpack                                          # 平铺：install.sh、opt/、deploy/
 sudo ./install.sh
 sudo /opt/mortred/bin/mortredctl.out init-trust --force --out /etc/mortred/supervisor.env
 cd /opt/mortred && python3 scripts/fetch_weights.py --profile cpu

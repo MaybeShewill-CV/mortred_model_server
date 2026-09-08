@@ -2,8 +2,8 @@
 # tarball_install.sh - installer INSIDE the release tarball (run as root from
 # the unpacked tarball root). Idempotent.
 #
-#   tar -xzf mortred_model_server-<version>-<profile>-linux-x64.tar.gz
-#   cd mortred_model_server-<version>-<profile>-linux-x64 && sudo ./install.sh
+#   mkdir unpack && tar -xzf mortred_model_server-<version>-<profile>-linux-x64.tar.gz -C unpack
+#   cd unpack && sudo ./install.sh
 #
 # What it does:
 #   1. apt runtime deps (ubuntu 20.04/22.04; no build toolchain needed)
