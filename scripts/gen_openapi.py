@@ -15,6 +15,10 @@ sending it receive 422 with a migration hint.
 Usage:
   python scripts/gen_openapi.py            # regenerate all derived artifacts
   python scripts/gen_openapi.py --check    # fail if anything is out of date
+
+conf/server [*_SERVER] section names and server_uri feed this script. After
+those change, regenerate and commit both output files. port is not an input;
+factory server_section / ParamSpec changes also need a new contract_dump.json.
 """
 
 from __future__ import annotations
@@ -591,6 +595,13 @@ def main() -> int:
         if problems:
             for p in problems:
                 print("ERROR: %s (run: python scripts/gen_openapi.py)" % p)
+            print(
+                "After changing a conf/server [*_SERVER] section name or "
+                "server_uri, regenerate and commit docs/openapi.json and "
+                "src/server/openapi_doc.h. port/worker_nums do not affect "
+                "OpenAPI; factory server_section or ParamSpec changes also "
+                "need a refreshed docs/contract_dump.json first."
+            )
             return 1
         print("OpenAPI generation is up to date.")
         return 0

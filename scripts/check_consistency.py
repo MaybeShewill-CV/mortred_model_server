@@ -11,6 +11,8 @@ Verifies a few high-signal invariants:
 5. Every conf/server/*.toml `model_config_file_path` points to an existing
    `.toml` file (the repo migrated model configs from .ini to .toml).
 6. Every conf/server/*.toml `server_uri` is covered by docs/openapi.json paths.
+   Paths and Request_* schemas come from `scripts/gen_openapi.py` (section name
+   + server_uri). After those fields change, regenerate OpenAPI; `port` does not.
 7. The demo client (`scripts/server/test_server.py`) is self-contained:
    - orphaned config files (`config_utils.py`, `conf/py_demo/`) must not exist;
    - the client and `http_infer_rps.py` compile;
@@ -190,7 +192,10 @@ def check_openapi_covers_server_uris() -> list[str]:
                 if uri not in declared_paths:
                     errors.append(
                         f"server_uri {uri} (from {cfg.relative_to(ROOT)}) "
-                        "is missing from docs/openapi.json paths"
+                        "is missing from docs/openapi.json paths; "
+                        "run: python scripts/gen_openapi.py "
+                        "(required after a section name or server_uri change) "
+                        "and commit docs/openapi.json and src/server/openapi_doc.h"
                     )
     return errors
 

@@ -4407,37 +4407,6 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
           }
         }
       },
-      "Request_HRNET_SEGMENTATION_SERVER": {
-        "type": "object",
-        "required": [
-          "images"
-        ],
-        "additionalProperties": false,
-        "properties": {
-          "req_id": {
-            "type": "string",
-            "description": "Optional trace id echoed as task_id"
-          },
-          "images": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "description": "Base64 encoded image"
-            },
-            "minItems": 1,
-            "description": "One result entry per image (index-aligned results[])"
-          },
-          "options": {
-            "$ref": "#/components/schemas/OutputOptions"
-          },
-          "params": {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": false,
-            "description": "This model declares no request-level parameters"
-          }
-        }
-      },
       "Request_HRNET_SERVER": {
         "type": "object",
         "required": [
