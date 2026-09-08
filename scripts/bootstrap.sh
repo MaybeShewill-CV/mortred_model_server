@@ -32,9 +32,9 @@ if command -v docker >/dev/null 2>&1; then
 next:
   1. git clone https://github.com/$REPO.git && cd mortred_model_server
   2. python3 scripts/fetch_weights.py --profile $PROFILE
-  3. MORTRED_API_TOKEN=<mgmt> MORTRED_GATEWAY_AUTH_TOKEN=<infer> \\
-         docker compose --profile $PROFILE up -d
-  4. curl -fs http://localhost:8787/api/v1/health
+  3. ./scripts/mortredctl_init-trust.sh && set -a && . conf/local/trust.env && set +a
+  4. docker compose --profile $PROFILE up -d
+  5. curl -fs http://localhost:8787/api/v1/health
 EOF
         exit 0
     fi

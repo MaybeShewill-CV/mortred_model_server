@@ -66,8 +66,9 @@ curl -fsSL https://raw.githubusercontent.com/MaybeShewill-CV/mortred_model_serve
 git clone https://github.com/MaybeShewill-CV/mortred_model_server.git
 cd mortred_model_server
 python3 scripts/fetch_weights.py --profile cpu        # 或: gpu
-MORTRED_API_TOKEN=<mgmt-token> MORTRED_GATEWAY_AUTH_TOKEN=<infer-token> \
-    docker compose --profile cpu up -d                # 或: --profile gpu
+./scripts/mortredctl_init-trust.sh                    # 三个互异 token
+set -a && . conf/local/trust.env && set +a
+docker compose --profile cpu up -d                    # 或: --profile gpu
 curl -fs http://localhost:8787/api/v1/health
 ```
 
@@ -79,7 +80,7 @@ curl -fs http://localhost:8787/api/v1/health
 ```bash
 tar -xzf mortred_model_server-*-linux-x64.tar.gz && cd mortred_model_server-*-linux-x64
 sudo ./install.sh
-sudoedit /etc/mortred/supervisor.env               # 两个 token
+sudo /opt/mortred/bin/mortredctl.out init-trust --force --out /etc/mortred/supervisor.env
 cd /opt/mortred && python3 scripts/fetch_weights.py --profile cpu
 sudo systemctl start mortred-supervisor
 ```

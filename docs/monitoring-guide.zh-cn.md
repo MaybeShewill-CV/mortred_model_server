@@ -40,9 +40,12 @@
 
 ```bash
 export GRAFANA_ADMIN_PASSWORD="$(openssl rand -hex 16)"
+set -a && . conf/local/trust.env && set +a   # 必须含 MORTRED_METRICS_TOKEN
+./scripts/write_prometheus_credentials.sh
 docker compose -f deploy/docker-compose.monitoring.yml up -d
 # Grafana: http://localhost:3000（用户 admin / $GRAFANA_ADMIN_PASSWORD）
 # Prometheus: http://localhost:9090（仅环回）
+# Prometheus 数据源与 Mortred dashboard 已 provisioning。
 # 注意：Linux 上需将 prometheus.yml 中网关 target 的 localhost
 # 改为 host.docker.internal
 ```
@@ -53,6 +56,8 @@ docker compose -f deploy/docker-compose.monitoring.yml up -d
 sudo apt install prometheus grafana
 sudo cp deploy/prometheus.yml /etc/prometheus/prometheus.yml
 sudo cp deploy/alert-rules.yml /etc/prometheus/alert-rules.yml
+set -a && . conf/local/trust.env && set +a
+sudo ./scripts/write_prometheus_credentials.sh /etc/prometheus/mortred_metrics_token
 sudo systemctl restart prometheus
 ```
 
@@ -237,6 +242,10 @@ curl -X POST http://localhost:9090/-/reload  # 热加载
 ### 导入
 
 Dashboard → Import → 上传 `deploy/grafana-dashboard.json` → 选择 Prometheus 数据源 → Import
+
+compose 栈会 provision Prometheus 数据源（`uid: prometheus`）并从
+`/var/lib/grafana/dashboards` 加载该 JSON；只有没走这套 provisioning 的
+Grafana 才需要 Import 界面。
 
 ### 面板解读
 

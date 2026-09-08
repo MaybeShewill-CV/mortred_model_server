@@ -75,7 +75,8 @@ for f in scripts/install_deps.sh scripts/convert_trt_engines.sh \
          scripts/mortredctl_prepare.sh scripts/prepare_pack.sh \
          scripts/mortredctl_calibrate.sh scripts/security_warn.sh \
          scripts/mortredctl_init.sh scripts/mortredctl_init-trust.sh \
-         scripts/mortredctl_init-edge.sh scripts/ci_container_boot.sh; do
+         scripts/mortredctl_init-edge.sh scripts/ci_container_boot.sh \
+         scripts/write_prometheus_credentials.sh; do
     check "bash -n $f" bash -n "$ROOT/$f"
 done
 check "py_compile fetch/gen/check" "$PY" -m py_compile \
@@ -98,6 +99,7 @@ PY
 if "$PY" -c "import yaml" >/dev/null 2>&1; then
     # Path passed via argv (MSYS converts standalone args to Windows paths; not inside -c strings)
     check "YAML: docker-compose.yml" "$PY" -c "import yaml,sys; yaml.safe_load(open(sys.argv[1], encoding='utf-8'))" "$ROOT/docker-compose.yml"
+    check "YAML: docker-compose.monitoring.yml" "$PY" -c "import yaml,sys; yaml.safe_load(open(sys.argv[1], encoding='utf-8'))" "$ROOT/deploy/docker-compose.monitoring.yml"
 else
     echo "  [warn] yaml module missing, skipping docker-compose.yml validation (pip install pyyaml)"
 fi

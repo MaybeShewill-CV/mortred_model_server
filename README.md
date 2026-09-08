@@ -71,8 +71,9 @@ tarball and runs its installer.
 git clone https://github.com/MaybeShewill-CV/mortred_model_server.git
 cd mortred_model_server
 python3 scripts/fetch_weights.py --profile cpu        # or: gpu
-MORTRED_API_TOKEN=<mgmt-token> MORTRED_GATEWAY_AUTH_TOKEN=<infer-token> \
-    docker compose --profile cpu up -d                # or: --profile gpu
+./scripts/mortredctl_init-trust.sh                    # three distinct tokens
+set -a && . conf/local/trust.env && set +a
+docker compose --profile cpu up -d                    # or: --profile gpu
 curl -fs http://localhost:8787/api/v1/health
 ```
 
@@ -85,7 +86,8 @@ verify its `.sha256`, then:
 ```bash
 tar -xzf mortred_model_server-*-linux-x64.tar.gz && cd mortred_model_server-*-linux-x64
 sudo ./install.sh                                  # runtime deps + /opt/mortred + systemd
-sudoedit /etc/mortred/supervisor.env               # set both tokens
+# install.sh writes a comment-only placeholder; --force fills real secrets
+sudo /opt/mortred/bin/mortredctl.out init-trust --force --out /etc/mortred/supervisor.env
 cd /opt/mortred && python3 scripts/fetch_weights.py --profile cpu
 sudo systemctl start mortred-supervisor
 ```

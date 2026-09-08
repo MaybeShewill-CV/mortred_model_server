@@ -57,11 +57,12 @@ fi
 cp "$SRC/deploy/mortred-supervisor.service" /etc/systemd/system/
 if [ ! -f /etc/mortred/supervisor.env ]; then
     cat > /etc/mortred/supervisor.env <<'EOF'
-# REQUIRED (gateway/supervisor refuse to start without them):
+# REQUIRED (gateway/supervisor refuse to start without all three, distinct):
 # MORTRED_API_TOKEN=<management token>
 # MORTRED_GATEWAY_AUTH_TOKEN=<inference token>
-# MORTRED_METRICS_TOKEN=<metrics scrape token, distinct from the two above>
-# Generate: mortredctl init-trust && sudo cp conf/local/trust.env /etc/mortred/supervisor.env
+# MORTRED_METRICS_TOKEN=<metrics scrape token>
+# Generate (overwrites this placeholder):
+#   sudo /opt/mortred/bin/mortredctl.out init-trust --force --out /etc/mortred/supervisor.env
 EOF
     chmod 600 /etc/mortred/supervisor.env
 fi
@@ -70,7 +71,8 @@ systemctl enable mortred-supervisor
 
 echo "== [4/4] next steps =="
 cat <<EOF
-  1. edit /etc/mortred/supervisor.env (set both tokens; chmod 600 kept)
+  1. fill /etc/mortred/supervisor.env with three distinct tokens:
+       sudo /opt/mortred/bin/mortredctl.out init-trust --force --out /etc/mortred/supervisor.env
   2. download weights:   cd $PREFIX && python3 scripts/fetch_weights.py --profile $PROFILE
   3. start:              sudo systemctl start mortred-supervisor
   4. verify:             curl -fs http://127.0.0.1:8787/api/v1/health

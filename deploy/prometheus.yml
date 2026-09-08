@@ -7,11 +7,15 @@
 # <MORTRED_API_TOKEN>. Model /metrics is loopback-only and requires
 # the supervisor internal token (MORTRED_AUTH_TOKEN).
 # credentials_file must contain the raw scrape token (no "Bearer "
-# prefix). Do not put the inference token in that file.
+# prefix). Do not put the inference token in that file. Compose writes it
+# via scripts/write_prometheus_credentials.sh (default
+# conf/local/mortred_metrics_token, gitignored) and bind-mounts it here.
 #
 # Install (bare metal):
 #   sudo cp deploy/prometheus.yml /etc/prometheus/prometheus.yml
 #   sudo cp deploy/alert-rules.yml /etc/prometheus/alert-rules.yml
+#   set -a && . conf/local/trust.env && set +a
+#   sudo ./scripts/write_prometheus_credentials.sh /etc/prometheus/mortred_metrics_token
 #   sudo systemctl restart prometheus
 #
 # Docker Compose monitoring stack: replace localhost with

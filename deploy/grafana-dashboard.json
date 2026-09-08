@@ -7,6 +7,7 @@
   "time": { "from": "now-1h", "to": "now" },
   "panels": [
     {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "id": 1, "title": "Service Availability",
       "type": "stat", "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
       "targets": [{ "expr": "up{job=~\"mortred-.*\"}", "legendFormat": "{{job}}" }],
@@ -15,11 +16,13 @@
       ]}}}
     },
     {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "id": 2, "title": "Inference Rate (req/s)",
       "type": "timeseries", "gridPos": { "h": 8, "w": 6, "x": 6, "y": 0 },
       "targets": [{ "expr": "sum(rate(mortred_http_requests_total{status=\"200\"}[1m])) by (model)", "legendFormat": "{{model}}" }]
     },
     {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "id": 3, "title": "Error Rate (5xx %)",
       "type": "timeseries", "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 },
       "targets": [{
@@ -31,11 +34,13 @@
       }}}
     },
     {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "id": 4, "title": "Overload Rejections (429/s)",
       "type": "timeseries", "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 },
       "targets": [{ "expr": "sum(rate(mortred_queue_rejected_total[5m])) by (model)", "legendFormat": "{{model}}" }]
     },
     {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "id": 5, "title": "Inference Latency p50 / p95 / p99 (ms)",
       "type": "timeseries", "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
       "targets": [
@@ -45,11 +50,13 @@
       ]
     },
     {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "id": 6, "title": "Queue Depth",
       "type": "timeseries", "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
       "targets": [{ "expr": "mortred_queue_depth", "legendFormat": "{{model}}" }]
     },
     {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "id": 7, "title": "Workers (busy / available)",
       "type": "timeseries", "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
       "targets": [
@@ -58,6 +65,7 @@
       ]
     },
     {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "id": 8, "title": "Batch Size Distribution",
       "type": "timeseries", "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
       "targets": [{
@@ -66,6 +74,7 @@
       }]
     },
     {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "id": 9, "title": "Batch Collection Window Wait (ms)",
       "type": "timeseries", "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
       "targets": [{
@@ -74,16 +83,19 @@
       }]
     },
     {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "id": 10, "title": "Async Jobs by State",
       "type": "timeseries", "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
       "targets": [{ "expr": "sum(rate(mortred_async_jobs_total[5m])) by (state)", "legendFormat": "{{state}}" }]
     },
     {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "id": 11, "title": "Async Queue Depth",
       "type": "timeseries", "gridPos": { "h": 8, "w": 8, "x": 0, "y": 24 },
       "targets": [{ "expr": "mortred_async_queue_depth", "legendFormat": "{{model}}" }]
     },
     {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "id": 12, "title": "Supervisor Process States",
       "type": "stat", "gridPos": { "h": 8, "w": 8, "x": 8, "y": 24 },
       "targets": [{ "expr": "mortred_supervisor_state", "legendFormat": "{{server}}" }],
@@ -92,6 +104,7 @@
       }]}}
     },
     {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "id": 13, "title": "Process Restart Rate",
       "type": "timeseries", "gridPos": { "h": 8, "w": 8, "x": 16, "y": 24 },
       "targets": [{ "expr": "rate(mortred_supervisor_restarts_total[5m])", "legendFormat": "{{server}}" }]
