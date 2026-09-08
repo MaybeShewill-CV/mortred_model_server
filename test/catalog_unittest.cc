@@ -13,9 +13,12 @@
 #include <unistd.h>
 
 #include "control/catalog.h"
+#include "control/mini_toml.h"
 
 namespace fs = std::filesystem;
 using mortred::control::Catalog;
+using mortred::control::mini_toml::Doc;
+using mortred::control::mini_toml::Table;
 
 namespace {
 
@@ -203,6 +206,93 @@ TEST_F(CatalogTest, profile_unknown_falls_back_to_gpu) {
     ASSERT_TRUE(weird.init(root_.string(), &err, "tpu")) << err;  // treated as gpu
     EXPECT_EQ(weird.entries().size(), 1u);
 }
+
+TEST_F(CatalogTest, unreadable_toml_is_fatal) {
+    write_server("unreadable.toml", kValidServer);
+    const auto path = root_ / "conf" / "server" / "object_detection" / "unreadable.toml";
+    std::error_code pec;
+    fs::permissions(path, fs::perms::none, pec);
+    ASSERT_FALSE(pec) << pec.message();
+    std::ifstream probe(path);
+    if (probe.good()) {
+        fs::permissions(path, fs::perms::owner_all, pec);
+        GTEST_SKIP() << "platform still allows reading chmod 000 files";
+    }
+    Catalog catalog;
+    std::string err;
+    EXPECT_FALSE(catalog.init(root_.string(), &err));
+    EXPECT_NE(err.find("failed to load TOML"), std::string::npos) << err;
+    fs::permissions(path, fs::perms::owner_all, pec);
+}
+
+const Table* server_table_of(const Doc& doc) {
+    for (const auto& [sec, table] : doc) {
+        if (sec.size() > 7 && sec.compare(sec.size() - 7, 7, "_SERVER") == 0) {
+            return &table;
+        }
+    }
+    return nullptr;
+}
+
+void expect_real_conf_tree_boots(const std::string& profile) {
+    const fs::path root = fs::current_path();
+    const fs::path conf = root / "conf" / "server";
+    ASSERT_TRUE(fs::is_directory(conf))
+        << "conf/server not found under " << root
+        << "; run from the repository root (ctest WORKING_DIRECTORY)";
+
+    size_t eligible = 0;
+    for (const auto& file : fs::recursive_directory_iterator(conf)) {
+        if (!file.is_regular_file() || file.path().extension() != ".toml") {
+            continue;
+        }
+        Doc doc;
+        ASSERT_TRUE(mortred::control::mini_toml::load(file.path().string(), &doc))
+            << file.path();
+        const auto* kv = server_table_of(doc);
+        ASSERT_NE(kv, nullptr) << file.path() << " has no *_SERVER section";
+        const std::string entry_profile =
+            kv->count("profile") != 0 ? kv->at("profile") : "gpu";
+        if (entry_profile == "any" || entry_profile == profile) {
+            ++eligible;
+        }
+    }
+
+    Catalog catalog;
+    std::string err;
+    ASSERT_TRUE(catalog.init(root.string(), &err, profile)) << err;
+    ASSERT_EQ(catalog.entries().size(), eligible)
+        << profile << " catalog skipped or dropped files";
+    ASSERT_FALSE(catalog.entries().empty()) << profile << " catalog is empty";
+    for (const auto& e : catalog.entries()) {
+        EXPECT_GT(e.port, 0) << e.id;
+        ASSERT_FALSE(e.uri.empty()) << e.id;
+        EXPECT_EQ(e.uri.front(), '/');
+        EXPECT_FALSE(e.id.empty());
+        EXPECT_TRUE(e.profile == profile || e.profile == "any")
+            << e.id << " profile=" << e.profile;
+        EXPECT_EQ(e.exe, mortred::control::kUnifiedServerExe) << e.id;
+    }
+}
+
+TEST(CatalogRealTree, boots_gpu_profile) {
+    ASSERT_NO_FATAL_FAILURE(expect_real_conf_tree_boots("gpu"));
+    Catalog catalog;
+    std::string err;
+    ASSERT_TRUE(catalog.init(fs::current_path().string(), &err, "gpu")) << err;
+    EXPECT_NE(catalog.find("YOLOV8"), nullptr);
+    EXPECT_NE(catalog.find("MOBILENETV2"), nullptr);
+}
+
+TEST(CatalogRealTree, boots_cpu_profile) {
+    ASSERT_NO_FATAL_FAILURE(expect_real_conf_tree_boots("cpu"));
+    Catalog catalog;
+    std::string err;
+    ASSERT_TRUE(catalog.init(fs::current_path().string(), &err, "cpu")) << err;
+    EXPECT_NE(catalog.find("MOBILENETV2"), nullptr);
+    EXPECT_NE(catalog.find("RESNET"), nullptr);
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

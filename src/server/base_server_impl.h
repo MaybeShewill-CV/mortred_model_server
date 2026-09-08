@@ -1168,8 +1168,14 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         if (_m_model_run_timeout <= 0) {
             serve_task = WFTaskFactory::create_go_task<std::nullptr_t>(_m_server_uri, nullptr);
         } else {
+            // workflow timed-go takes seconds + nanoseconds in [0, 1e9).
+            // Folding the whole millisecond budget into nanoseconds overflows
+            // that range at model_run_timeout >= 1000.
+            const int timeout_ms = _m_model_run_timeout;
             serve_task = WFTaskFactory::create_timedgo_task<std::nullptr_t>(
-                0, static_cast<long>(_m_model_run_timeout * 1e6), _m_server_uri, nullptr);
+                static_cast<time_t>(timeout_ms / 1000),
+                static_cast<long>((timeout_ms % 1000) * 1000000L),
+                _m_server_uri, nullptr);
         }
         auto&& work_cb = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb,
                                    this, std::placeholders::_1, std::move(meta), resp);

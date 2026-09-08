@@ -254,11 +254,11 @@ jobs:
           python3 scripts/server/http_infer_rps.py --self-test
 
   # ---------------------------------------------------------------------------
-  # Job B2: sanitizers - permanent regression gate for the async job ledger.
-  # TSAN runs the sanitizer-labeled async tests (data-race gate); ASan+UBSan
-  # runs the full tests-only suite (memory gate). TSAN scope is deliberately
-  # limited to the async tests: unrelated modules may still carry historical
-  # races, and widening the label is a separate follow-up.
+  # Job B2: sanitizers - permanent regression gate for the async job ledger
+  # and do_work / timed-go lifetime. TSAN runs the sanitizer-labeled tests
+  # (data-race gate); ASan+UBSan runs the full tests-only suite (memory gate).
+  # Unrelated modules may still carry historical races; do not widen this
+  # label past the binaries listed in the build step below.
   # ---------------------------------------------------------------------------
   sanitizers:
     name: sanitizers (tsan + asan/ubsan)
@@ -289,7 +289,7 @@ jobs:
       - name: Build vendored workflow (model_factory_unittest links it)
         run: ./scripts/install_deps.sh --workflow
 
-      - name: Configure and run TSAN gate (async tests)
+      - name: Configure and run TSAN gate (async + do_work lifetime)
         run: |
           cmake -B build-tsan \
             -DMORTRED_BUILD_FULL=OFF \
@@ -301,7 +301,7 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           LD_LIBRARY_PATH="${{ github.workspace }}/build-tsan/lib" \
-            cmake --build build-tsan --target async_job_unittest async_job_stress_test api_key_manager_unittest -j"$(nproc)"
+            cmake --build build-tsan --target async_job_unittest async_job_stress_test api_key_manager_unittest do_work_lifetime_unittest -j"$(nproc)"
           # detect_deadlocks / report_mutex_bugs are disabled: this GCC's TSAN
           # cannot model condition_variable::wait_for (false "double lock" and
           # lock-order-inversion on legally CV-guarded mutexes). Data-race
