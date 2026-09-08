@@ -40,21 +40,21 @@ inline constexpr const char* kUnifiedServerExe = "mortred-model-server.out";
  * must declare port + server_uri. Product servers identify themselves with
  * `model = "YOLOV8"` (id = model, default exe mortred-model-server.out).
  * Test fakes omit `model` and keep an explicit server_exe; id is the exe stem.
- * Load fails on duplicate ids, duplicate ports or duplicate routing URIs.
+ * Load fails on unreadable TOML, duplicate ids, duplicate ports or duplicate
+ * routing URIs.
  */
 class Catalog {
   public:
     /***
      * @param project_root project root directory (contains conf/server)
      * @param err filled with the first fatal problem when returning false
-     */
-    /***
-     * @param project_root project root directory (contains conf/server)
-     * @param err filled with the first fatal problem when returning false
      * @param profile runtime deployment profile ("cpu" | "gpu", default gpu);
      *        entries whose profile field is not this value and not "any" are
      *        filtered out BEFORE the duplicate-id/port/uri checks, so cpu and
-     *        gpu variants of the same model may reuse the same port
+     *        gpu variants of the same model may reuse the same port.
+     *        Unreadable TOML is fatal. Files without a [*_SERVER] section,
+     *        profile-filtered files, missing exe without `model`, and exe
+     *        names that do not end in .out are skipped.
      */
     bool init(const std::string& project_root, std::string* err = nullptr,
               const std::string& profile = "gpu");

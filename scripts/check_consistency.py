@@ -594,7 +594,12 @@ def check_model_todo_markers() -> list[str]:
 def check_unique_catalog_listen() -> list[str]:
     """Ports / ids / URIs must be unique within one catalog profile, matching
     Catalog::init. CPU/GPU variants of the same model may share a port because
-    only one profile is active per supervisor run."""
+    only one profile is active per supervisor run.
+
+    No-compile lint with the full TOML parser. catalog_unittest boots the
+    committed conf/server tree through C++ Catalog::init (mini_toml). Keep
+    both so parser drift between the subset loader and toml still fails CI.
+    """
     errors: list[str] = []
     conf_server = ROOT / "conf" / "server"
     if not conf_server.is_dir():

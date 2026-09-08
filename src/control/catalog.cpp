@@ -78,7 +78,10 @@ bool Catalog::init(const std::string& project_root, std::string* err,
         const std::string cfg_path = file.path().string();
         mini_toml::Doc doc;
         if (!mini_toml::load(cfg_path, &doc)) {
-            continue;
+            if (err != nullptr) {
+                *err = cfg_path + ": failed to load TOML";
+            }
+            return false;
         }
 
         // exactly one [*_SERVER] section per server config (consistency-checked)
