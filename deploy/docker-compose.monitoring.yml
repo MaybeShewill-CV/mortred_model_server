@@ -8,14 +8,14 @@
 #   mortredctl init-trust
 #   set -a && . conf/local/trust.env && set +a
 #   export GRAFANA_ADMIN_PASSWORD="$(openssl rand -hex 16)"
-#   ./scripts/write_prometheus_credentials.sh
+#   ./scripts/write_prometheus_credentials.sh   # chowns uid 65534 (Docker nobody)
 #   docker compose -f deploy/docker-compose.monitoring.yml up -d
 #   Grafana:    http://localhost:3000
 #   Prometheus: http://localhost:9090
 #
-# Point deploy/prometheus.yml gateway targets at host.docker.internal:8080
-# when Mortred runs on the host or in another compose project (Linux needs
-# the extra_hosts mapping below).
+# Scrapes host.docker.internal:8080 (see prometheus.compose.yml). extra_hosts
+# maps that name to the host gateway on Linux. Do not use localhost:8080
+# here — that would scrape the Prometheus container itself.
 
 services:
   prometheus:
@@ -23,7 +23,7 @@ services:
     container_name: mortred-prometheus
     ports: ["127.0.0.1:9090:9090"]
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus.compose.yml:/etc/prometheus/prometheus.yml:ro
       - ./alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
       - ${MORTRED_METRICS_TOKEN_FILE:-../conf/local/mortred_metrics_token}:/etc/prometheus/mortred_metrics_token:ro
       - prometheus-data:/prometheus

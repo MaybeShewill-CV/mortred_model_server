@@ -656,11 +656,22 @@ A **local** monitoring stack ships in the repo (Prometheus + Grafana + alert
 rules). Ports bind loopback; set a Grafana password before `up`. Default
 Prometheus scrape is gateway `/metrics` only — see [monitoring-guide.md](monitoring-guide.md).
 
+Prometheus in that compose file runs as uid **65534**. The scrape secret
+file must be mode 600 owned by that uid (or, on bare metal, by user
+`prometheus`). `write_prometheus_credentials.sh` does the `chown`. Inside the
+Prometheus container, scrape **`host.docker.internal:8080`** (not
+`localhost:8080` — that is the Prometheus process itself). Linux compose
+maps the name via `extra_hosts`.
+
 ```bash
+set -a && . conf/local/trust.env && set +a   # MORTRED_METRICS_TOKEN
+./scripts/write_prometheus_credentials.sh    # may prompt sudo to chown 65534:65534
 export GRAFANA_ADMIN_PASSWORD="$(openssl rand -hex 16)"
 docker compose -f deploy/docker-compose.monitoring.yml up -d
 # Grafana: http://localhost:3000
 # Alert rules: deploy/alert-rules.yml (includes overload-rejection alerting)
+# Bare metal instead: sudo cp deploy/prometheus.yml /etc/prometheus/ &&
+#   sudo ./scripts/write_prometheus_credentials.sh /etc/prometheus/mortred_metrics_token
 ```
 
 ---

@@ -41,13 +41,13 @@
 ```bash
 export GRAFANA_ADMIN_PASSWORD="$(openssl rand -hex 16)"
 set -a && . conf/local/trust.env && set +a   # 必须含 MORTRED_METRICS_TOKEN
-./scripts/write_prometheus_credentials.sh
+./scripts/write_prometheus_credentials.sh    # chown 65534:65534（可能要 sudo）
 docker compose -f deploy/docker-compose.monitoring.yml up -d
 # Grafana: http://localhost:3000（用户 admin / $GRAFANA_ADMIN_PASSWORD）
 # Prometheus: http://localhost:9090（仅环回）
 # Prometheus 数据源与 Mortred dashboard 已 provisioning。
-# 注意：Linux 上需将 prometheus.yml 中网关 target 的 localhost
-# 改为 host.docker.internal
+# compose 刮 host.docker.internal:8080（prometheus.compose.yml）。
+# 容器内 localhost:8080 是 Prometheus 自己，不是 Mortred。
 ```
 
 ### 方式二：裸机部署
