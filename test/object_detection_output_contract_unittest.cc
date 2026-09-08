@@ -9,6 +9,7 @@
 
 #include "models/backend/tensor.h"
 #include "models/model_io_define.h"
+#include "models/object_detection/yolov5_detector.h"
 #include "models/object_detection/yolov8_detector.h"
 
 using jinq::common::StatusCode;
@@ -16,6 +17,7 @@ using jinq::models::backend::DType;
 using jinq::models::backend::NamedTensor;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::object_detection::std_object_detection_output;
+using jinq::models::object_detection::YoloV5Detector;
 using jinq::models::object_detection::YoloV8Detector;
 
 namespace {
@@ -26,9 +28,16 @@ class TestYoloV8Detector : public YoloV8Detector<mat_input, std_object_detection
     using YoloV8Detector<mat_input, std_object_detection_output>::_m_detection_params;
 };
 
-NamedTensor output_tensor(DType dtype, const std::vector<int64_t> &shape, std::vector<float> values) {
+class TestYoloV5Detector : public YoloV5Detector<mat_input, std_object_detection_output> {
+  public:
+    using YoloV5Detector<mat_input, std_object_detection_output>::postprocess;
+    using YoloV5Detector<mat_input, std_object_detection_output>::_m_detection_params;
+};
+
+NamedTensor output_tensor(DType dtype, const std::vector<int64_t> &shape, std::vector<float> values,
+                          const std::string &name = "output0") {
     NamedTensor output;
-    output.name = "output0";
+    output.name = name;
     output.tensor.dtype = dtype;
     output.tensor.shape = shape;
     const size_t bytes = values.size() * sizeof(float);
@@ -149,4 +158,33 @@ TEST(ObjectDetectionOutputContract, RequestParamThresholdSweepIsMonotone) {
         EXPECT_EQ(detector.postprocess({tensor}, context, out), jinq::common::StatusCode::OK);
         EXPECT_EQ(out.size(), 1u);
     }
+}
+
+TEST(ObjectDetectionOutputContract, YoloV8FiltersMinBoxAreaInNetworkPixels) {
+    TestYoloV8Detector detector;
+    detector._m_detection_params.class_nums = 80;
+    detector._m_detection_params.score_threshold = 0.25f;
+    detector._m_detection_params.min_box_area_px = 5.0f;
+
+    std::vector<float> values(84, 0.0f);
+    values[0] = 10.0f;
+    values[1] = 10.0f;
+    values[2] = 2.0f;
+    values[3] = 2.0f;
+    values[4 + 5] = 0.9f;
+    std_object_detection_output result;
+    ASSERT_EQ(detector.postprocess({output_tensor(DType::F32, {1, 84, 1}, values)}, test_context(), result), StatusCode::OK);
+    EXPECT_TRUE(result.empty());
+}
+
+TEST(ObjectDetectionOutputContract, YoloV5FiltersMinBoxAreaInNetworkPixels) {
+    TestYoloV5Detector detector;
+    detector._m_detection_params.class_nums = 2;
+    detector._m_detection_params.score_threshold = 0.25f;
+    detector._m_detection_params.min_box_area_px = 5.0f;
+
+    const std::vector<float> row = {10.0f, 10.0f, 2.0f, 2.0f, 1.0f, 0.9f, 0.1f};
+    std_object_detection_output result;
+    ASSERT_EQ(detector.postprocess({output_tensor(DType::F32, {1, 1, 7}, row, "output")}, test_context(), result), StatusCode::OK);
+    EXPECT_TRUE(result.empty());
 }

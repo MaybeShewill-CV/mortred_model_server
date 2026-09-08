@@ -19,12 +19,19 @@ struct DetectionParams {
     float nms_threshold = 0.35f;
     int keep_top_k = 250;
     int class_nums = 80;
+    // Compared against bbox width*height in the decoder's network
+    // (letterboxed) pixel space, before letterbox unmap. Shared by
+    // YOLOv5 / v6 / v7 / v8. 0 keeps every finite box that passed score.
     float min_box_area_px = 5.0f;
     bool clip_boxes = false;
     std::vector<std::string> class_names;
 
     static bool parse(const toml::table &params, DetectionParams *out, std::string *error);
 };
+
+inline bool passes_min_box_area(const cv::Rect2f &bbox, float min_box_area_px) {
+    return bbox.area() >= min_box_area_px;
+}
 
 inline bool DetectionParams::parse(const toml::table &params, DetectionParams *out, std::string *error) {
     if (out == nullptr) {

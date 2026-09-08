@@ -81,7 +81,8 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
     const auto proposal_counts = tensor.shape[2];
 
     DetectionOutput candidates;
-    collect_yolov8_candidates(out_data, row_size, proposal_counts, _m_detection_params.score_threshold, &candidates);
+    collect_yolov8_candidates(out_data, row_size, proposal_counts, _m_detection_params.score_threshold,
+                              _m_detection_params.min_box_area_px, &candidates);
 
     LetterboxGeometry letterbox;
     std::string geometry_error;

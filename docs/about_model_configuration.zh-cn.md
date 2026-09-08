@@ -41,6 +41,7 @@ class_names = ["person", "bicycle"]
 | `input_names` / `output_names` | `backend` | I/O 名称覆盖或过滤 |
 | `max_image_pixels` / `max_image_side` | 图像 `params` | 解码输入安全上限，默认 16777216 / 8192 |
 | `model_input_image_size` | 固定尺寸图像 `params` | `[height, width]`，必须匹配 session 输入 H/W |
+| `min_box_area_px` | YOLOv5 / v6 / v7 / v8 `params` | 丢掉解码坐标系里 `width*height`（**letterbox 网络像素**）低于该值的框；默认 `5`；在 letterbox unmap **之前**比较 |
 | `sample_size` | 扩散 `[DDPM_SAMPLER]` / `[DDIM_SAMPLER]` / `[LDM_SAMPLER]` | 生成画布 `[height, width]`，必须匹配 UNet 权重。HTTP 在 adapter init 时种入模板；不是请求 `params` 键 |
 | 其他字段 | `params` | 模型特有参数；名称和历史配置保持一致 |
 

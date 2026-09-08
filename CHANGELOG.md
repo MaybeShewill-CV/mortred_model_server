@@ -37,6 +37,15 @@ All notable changes to this project are documented here. The format follows
 > 是 Prometheus 自己）。`deployment` 补了属主步骤和该 Docker 主机名。
 
 ### Changed
+- YOLOv5 / v6 / v7 / v8 apply `min_box_area_px` in decoder **network
+  (letterboxed) pixels** before letterbox unmap. v5/v6 previously filtered
+  source pixels after unmap; v8 ignored the key. Synthetic decode tests
+  cover the shared threshold.
+
+> YOLOv5 / v6 / v7 / v8 的 `min_box_area_px` 统一在解码坐标系（letterbox
+> **网络像素**）里、unmap 之前过滤。原先 v5/v6 在 unmap 后的源图像像素上比
+> 面积，v8 完全不读该键。合成解码单测覆盖这条共用阈值。
+
 - `check_trt_engine_manifest` walks HTTP catalog `[*.backend] type="tensorrt"`
   paths (not the removed `*_TRT` tables) against `conf/trt_engines.json`.
   Scaffold configs (`TODO(new_model)` / not in the HTTP catalog) are skipped.

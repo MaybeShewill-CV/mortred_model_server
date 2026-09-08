@@ -8,11 +8,11 @@
 #include "yolov7_detector.h"
 
 #include <algorithm>
-#include <cmath>
 
 #include "glog/logging.h"
 #include "models/backend/model_runtime.h"
 #include "models/object_detection/detector_common.h"
+#include "models/object_detection/yolov7_decode.h"
 
 namespace jinq {
 namespace models {
@@ -82,7 +82,6 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
 
-    auto sigmoid = [](float x) { return 1.0f / (1.0f + std::exp(-x)); };
     const int strides[3] = {8, 16, 32};
     const float anchors[3][3][2] = {
         {{12, 16}, {19, 36}, {40, 28}},
@@ -118,56 +117,11 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
             return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
         }
         const int stride = strides[hi];
-
-        for (int a = 0; a < anchor_nums && a < 3; ++a) {
-            const float anchor_w = anchors[hi][a][0];
-            const float anchor_h = anchors[hi][a][1];
-            for (int row = 0; row < grid_h; ++row) {
-                for (int col = 0; col < grid_w; ++col) {
-                    const float *p = data + (((a * grid_h + row) * grid_w + col) * attrs);
-                    const float obj_score = sigmoid(p[4]);
-                    if (obj_score < 0.05f) {
-                        continue;
-                    }
-                    int class_id = -1;
-                    float max_cls_score = 0.0f;
-                    for (int c = 5; c < attrs; ++c) {
-                        const float cls_score = sigmoid(p[c]);
-                        if (cls_score > max_cls_score) {
-                            max_cls_score = cls_score;
-                            class_id = c - 5;
-                        }
-                    }
-                    const float bbox_score = obj_score * max_cls_score;
-                    if (bbox_score < _m_detection_params.score_threshold) {
-                        continue;
-                    }
-                    const float center_x = (2.0f * sigmoid(p[0]) - 0.5f + col) * stride;
-                    const float center_y = (2.0f * sigmoid(p[1]) - 0.5f + row) * stride;
-                    const float box_w = std::pow(2.0f * sigmoid(p[2]), 2.0f) * anchor_w;
-                    const float box_h = std::pow(2.0f * sigmoid(p[3]), 2.0f) * anchor_h;
-                    if (box_w <= 0.0f || box_h <= 0.0f) {
-                        continue;
-                    }
-                    jinq::models::io_define::object_detection::bbox tmp_bbox;
-                    tmp_bbox.class_id = class_id;
-                    tmp_bbox.score = bbox_score;
-                    tmp_bbox.bbox.x = center_x - box_w / 2.0f;
-                    tmp_bbox.bbox.y = center_y - box_h / 2.0f;
-                    tmp_bbox.bbox.width = box_w;
-                    tmp_bbox.bbox.height = box_h;
-                    if (tmp_bbox.bbox.area() < _m_detection_params.min_box_area_px) {
-                        continue;
-                    }
-                    decode_result.push_back(tmp_bbox);
-                }
-            }
-        }
+        collect_yolov7_head_candidates(data, anchor_nums, grid_h, grid_w, attrs, stride, anchors[hi],
+                                       _m_detection_params.score_threshold, _m_detection_params.min_box_area_px, &decode_result);
     }
 
-    for (auto &bbox : decode_result) {
-        bbox.bbox = backend::unmap_letterbox_bbox(bbox.bbox, letterbox, context.source_size);
-    }
+    unmap_letterbox_detections(decode_result, letterbox, context.source_size);
 
     DetectionOutput nms_result = finalize_detections(std::move(decode_result), _m_detection_params, context);
     output = std::move(nms_result);
