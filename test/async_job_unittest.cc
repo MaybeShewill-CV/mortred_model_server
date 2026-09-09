@@ -174,7 +174,15 @@ TEST(async_job_table, wait_wakes_on_terminal_within_bound) {
         ASSERT_TRUE(table.finish(out.job_id, make_result(7)));
     });
     const auto t0 = std::chrono::steady_clock::now();
-    const auto snap = table.wait(out.job_id, AsyncJobState::PENDING, 5000);
+    auto snap = table.wait(out.job_id, AsyncJobState::PENDING, 5000);
+    // table.wait returns on any change from `initial`. The runner publishes
+    // PENDING→RUNNING then RUNNING→DONE; the first notify can therefore
+    // surface RUNNING if this thread re-acquires the mutex between the two
+    // stores (ASan / slow disks make that interleaving common). Keep waiting
+    // until a terminal state, which is what this test name asserts.
+    while (snap.has_value() && !is_async_terminal(snap->state)) {
+        snap = table.wait(out.job_id, snap->state, 5000);
+    }
     const auto elapsed =
         std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - t0)
