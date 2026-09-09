@@ -78,7 +78,7 @@ inline int parse_worker_nums(const toml::table& server_section) {
 
 inline StatusCode parse_server_security_config(const toml::table& server_section,
                                                ServerRuntimeConfig& cfg) {
-    cfg.auth_token = server_section["auth_token"].value_or<std::string>(cfg.auth_token);
+    cfg.auth_token = server_section["auth_token"].value_or<std::string>(std::string(cfg.auth_token));
     if (const char* env = std::getenv("MORTRED_AUTH_TOKEN"); env != nullptr && *env != '\0') {
         cfg.auth_token = env;
     }
@@ -141,8 +141,8 @@ inline StatusCode parse_server_runtime_config(const toml::table& server_section,
                      << "keeps its worker forever, subsequent requests block indefinitely and "
                      << "clients may never receive a response";
     }
-    cfg.stuck_worker_action =
-        server_section["stuck_worker_action"].value_or<std::string>(defaults.stuck_worker_action);
+    cfg.stuck_worker_action = server_section["stuck_worker_action"].value_or<std::string>(
+        std::string(defaults.stuck_worker_action));
     cfg.stuck_worker_threshold_times = static_cast<int>(
         server_section["stuck_worker_threshold_times"].value_or<int64_t>(
             defaults.stuck_worker_threshold_times));
@@ -175,7 +175,7 @@ inline StatusCode parse_server_runtime_config(const toml::table& server_section,
         cfg.max_request_items = defaults.max_request_items;
     }
     cfg.ewma_seed_ms = cfg.model_run_timeout > 0 ? cfg.model_run_timeout : defaults.ewma_seed_ms;
-    cfg.async_enabled = server_section["async_enabled"].value_or<bool>(defaults.async_enabled);
+    cfg.async_enabled = server_section["async_enabled"].value_or<bool>(bool{defaults.async_enabled});
     cfg.async_timeout = static_cast<int>(
         server_section["async_timeout"].value_or<int64_t>(defaults.async_timeout));
     cfg.async_max_queue = static_cast<int>(
