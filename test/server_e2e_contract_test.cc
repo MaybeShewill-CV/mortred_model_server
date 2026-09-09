@@ -870,6 +870,8 @@ TEST(server_e2e_contract, batch_collects_and_distributes_per_request_results) {
     const double batch_count = metrics_value(metrics.body, "mortred_batch_size_count");
     EXPECT_GE(batch_count, 1.0);
     EXPECT_LT(batch_count, 4.0) << "no coalescing happened: 4 batches of size 1";
+    EXPECT_GE(metrics_value(metrics.body, "mortred_batch_window_wait_ms_count"), 1.0)
+        << metrics.body;
 }
 
 TEST(server_e2e_contract, batch_timeout_returns_504) {
