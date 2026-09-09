@@ -28,6 +28,8 @@
 #include <gtest/gtest.h>
 #include <rapidjson/document.h>
 
+#include "models/base_model.h"
+#include "models/io/common_input.h"
 #include "server/abstract_server.h"
 #include "server/base_server_impl.h"
 
@@ -113,14 +115,13 @@ public:
                 if (worker->init(config) != StatusCode::OK) {
                     return StatusCode::SERVER_INIT_FAILED;
                 }
-                _m_working_queue.enqueue(std::move(worker));
+                adopt_worker(std::move(worker));
             }
             if (!section.contains("server_uri")) {
                 return StatusCode::SERVER_INIT_FAILED;
             }
-            _m_server_uri = section["server_uri"].value_or<std::string>("");
-            _m_worker_nums = static_cast<size_t>(worker_nums);
-            _m_successfully_initialized = true;
+            commit_identity(section["server_uri"].value_or<std::string>(""), "TEST", {});
+            commit_workers(static_cast<size_t>(worker_nums));
             return StatusCode::OK;
         }
 

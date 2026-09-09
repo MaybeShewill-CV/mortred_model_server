@@ -6,7 +6,7 @@
 
 #include <gtest/gtest.h>
 
-#include "server/base_server_impl.h"
+#include "server/server_runtime_config.h"
 
 using jinq::server::parse_worker_nums;
 

@@ -1,6 +1,6 @@
 # 如何新增一个模型服务
 
-本框架中新增一个 server 自注册表化重构后不再需要编写约 200 行的模板类：每个可服务模型是家族 `catalog()` 里的一条 `CvModelEntry`（两个 TOML 段名、worker 工厂、响应序列化器）。`ProductIndex` 把这一行投影到两个统一入口。通用实现位于 [jinq::server::CvModelServer&lt;MODEL_OUTPUT&gt;](../src/server/generic_cv_server.h)，它构建在 [jinq::server::BaseAiServerImpl&lt;WORKER, MODEL_OUTPUT&gt;](../src/server/base_server_impl.h) 之上，后者继续提供鉴权、限流、请求校验、单请求超时、worker 池、Prometheus 指标与 `/openapi.json` 端点。模型输入统一使用 base64 编码图像。下面以新增 densenet 图像分类服务为例；模型本身参考[如何新增模型](../docs/how_to_add_new_model.zh-cn.md)。
+本框架中新增一个 server 自注册表化重构后不再需要编写约 200 行的模板类：每个可服务模型是家族 `catalog()` 里的一条 `CvModelEntry`（两个 TOML 段名、worker 工厂、响应序列化器）。`ProductIndex` 把这一行投影到两个统一入口。通用实现位于 [jinq::server::CvModelServer&lt;MODEL_OUTPUT&gt;](../src/server/generic_cv_server.h)，它构建在编排器 [jinq::server::BaseAiServerImpl&lt;WORKER, MODEL_OUTPUT&gt;](../src/server/base_server_impl.h) 之上。鉴权、限流、请求校验、单请求超时、worker 租约（`worker_pool.h`）、Prometheus 指标与 `/openapi.json` 仍由该栈提供，只是拆成组合模块而不是一个上帝类。模型输入统一使用 base64 编码图像。下面以新增 densenet 图像分类服务为例；模型本身参考[如何新增模型](../docs/how_to_add_new_model.zh-cn.md)。
 
 ## 第 1 步：定义输出数据类型 :monkey_face:
 
@@ -70,7 +70,9 @@ mortred-model-benchmark.out --model DENSENET /path/to/densenet_config.toml [imag
 
 ## 第 4 步：框架已经替你做的事
 
-通常不需要触碰请求服务逻辑。`BaseAiServerImpl` 提供
-`serve_process` / `do_work` / `do_work_cb`：JSON 请求解析（含 400/413/415/405 契约错误）、
-Bearer 鉴权、按 IP 限流、阻塞队列取 worker（计入超时预算）、模型推理、经
-`fill_response` 的响应序列化、Prometheus 指标与结构化请求日志。
+通常不需要触碰请求服务逻辑。`BaseAiServerImpl` 仍负责 HTTP 前置门与 go-task
+生命周期（`serve_process` / `do_work` / `do_work_cb`）。JSON 解析（400/413/415/405）、
+Bearer 鉴权、按 IP 限流、worker 租约（计入超时预算）、模型推理、经 `fill_response`
+的序列化、Prometheus 指标与结构化请求日志，实现落在组合头文件里
+（`http_wire.h`、`request_admission.h`、`worker_pool.h`、`item_exec.h`、
+`async_endpoints.h`）。

@@ -114,9 +114,8 @@ public:
         if (worker->init(empty) != StatusCode::OK) {
             return StatusCode::SERVER_INIT_FAILED;
         }
-        _m_working_queue.enqueue(std::move(worker));
-        _m_worker_nums = 1;
-        _m_successfully_initialized = true;
+        adopt_worker(std::move(worker));
+        commit_workers(1);
         return StatusCode::OK;
     }
 
@@ -125,7 +124,7 @@ public:
     }
 
     size_t queue_approx() const {
-        return _m_working_queue.size_approx();
+        return _m_workers.available_approx();
     }
 
 protected:
@@ -162,19 +161,18 @@ public:
             if (worker->init(config) != StatusCode::OK) {
                 return StatusCode::SERVER_INIT_FAILED;
             }
-            _m_working_queue.enqueue(std::move(worker));
+            adopt_worker(std::move(worker));
         }
         if (!section.contains("server_uri")) {
             return StatusCode::SERVER_INIT_FAILED;
         }
-        _m_server_uri = section["server_uri"].value_or<std::string>("");
-        _m_worker_nums = static_cast<size_t>(worker_nums);
-        _m_successfully_initialized = true;
+        commit_identity(section["server_uri"].value_or<std::string>(""), "TEST", {});
+        commit_workers(static_cast<size_t>(worker_nums));
         return StatusCode::OK;
     }
 
     size_t queue_approx() const {
-        return _m_working_queue.size_approx();
+        return _m_workers.available_approx();
     }
 
     int run_count() const {

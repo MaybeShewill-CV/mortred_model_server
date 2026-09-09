@@ -1,6 +1,6 @@
 # How To Add New Server
 
-Here is brief instruction about how to add a new server in this framework. Since the registry-driven refactor, adding a served model is one `CvModelEntry` row in the family `catalog()` (two TOML section names, a worker factory and a response filler). `ProductIndex` projects that row onto both unified CLIs. The generic implementation lives in [jinq::server::CvModelServer&lt;MODEL_OUTPUT&gt;](../src/server/generic_cv_server.h) on top of [jinq::server::BaseAiServerImpl&lt;WORKER, MODEL_OUTPUT&gt;](../src/server/base_server_impl.h), which keeps providing auth, rate limiting, request validation, per-request timeout, the worker pool, Prometheus metrics and the `/openapi.json` endpoint. The model input uses base64 encoded images uniformly. The example below adds a densenet image classification server; the model itself comes from [how_to_add_new_model.md](../docs/how_to_add_new_model.md).
+Here is brief instruction about how to add a new server in this framework. Since the registry-driven refactor, adding a served model is one `CvModelEntry` row in the family `catalog()` (two TOML section names, a worker factory and a response filler). `ProductIndex` projects that row onto both unified CLIs. The generic implementation lives in [jinq::server::CvModelServer&lt;MODEL_OUTPUT&gt;](../src/server/generic_cv_server.h) on top of [jinq::server::BaseAiServerImpl&lt;WORKER, MODEL_OUTPUT&gt;](../src/server/base_server_impl.h), the serving orchestrator. Auth, rate limiting, request validation, per-request timeout, the worker lease (`worker_pool.h`), Prometheus metrics and `/openapi.json` still come with that stack; they are composed modules rather than one god class. The model input uses base64 encoded images uniformly. The example below adds a densenet image classification server; the model itself comes from [how_to_add_new_model.md](../docs/how_to_add_new_model.md).
 
 ## Step 1: Define Your Own Output Data Type :monkey_face:
 
@@ -77,8 +77,10 @@ Then:
 
 ## Step 4: What The Base Framework Already Does For You
 
-You usually do NOT need to touch request serving. `BaseAiServerImpl` provides
-`serve_process` / `do_work` / `do_work_cb`: JSON request parsing (with 400/413/415/405
-contract errors), bearer auth, per-IP rate limiting, worker checkout from the blocking
-queue (timeout budgeted), model inference, response serialization through
-`fill_response`, Prometheus metrics and structured request logs.
+You usually do NOT need to touch request serving. `BaseAiServerImpl` still owns
+the HTTP front door and go-task lifetime (`serve_process` / `do_work` / `do_work_cb`).
+JSON parsing (400/413/415/405), bearer auth, per-IP rate limiting, worker checkout
+(timeout budgeted), model inference, `fill_response` serialization, Prometheus
+metrics and structured request logs are implemented in the composed headers
+(`http_wire.h`, `request_admission.h`, `worker_pool.h`, `item_exec.h`,
+`async_endpoints.h`).

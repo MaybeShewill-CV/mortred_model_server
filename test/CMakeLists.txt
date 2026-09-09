@@ -54,6 +54,10 @@ set(TEST_LIST
     rate_limiter_unittest
     cv_image_input_unittest
     worker_nums_unittest
+    request_admission_unittest
+    server_runtime_config_unittest
+    worker_pool_unittest
+    item_exec_unittest
     http_contract_test
     backpressure_unittest
     prometheus_metrics_test
@@ -158,6 +162,12 @@ foreach(src ${TEST_LIST})
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "worker_nums_unittest")
         set(EXTRA_LIBS glog::glog)
+    elseif(${src} STREQUAL "server_runtime_config_unittest")
+        set(EXTRA_LIBS glog::glog)
+    elseif(${src} STREQUAL "worker_pool_unittest")
+        set(EXTRA_LIBS glog::glog)
+    elseif(${src} STREQUAL "item_exec_unittest")
+        set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "model_factory_unittest")
         # instantiates BaseAiServer (WFServer subclass): its vtable pulls
         # WFServerBase typeinfo from libworkflow, needed once sanitizer flags
@@ -259,7 +269,8 @@ foreach(src ${TEST_LIST})
     add_test(NAME ${src} COMMAND $<TARGET_FILE:${src}> WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
     add_dependencies(check ${src})
     if((${src} STREQUAL "async_job_unittest") OR (${src} STREQUAL "async_job_stress_test") OR
-       (${src} STREQUAL "api_key_manager_unittest") OR (${src} STREQUAL "do_work_lifetime_unittest"))
+       (${src} STREQUAL "api_key_manager_unittest") OR (${src} STREQUAL "do_work_lifetime_unittest") OR
+       (${src} STREQUAL "worker_pool_unittest"))
         # the sanitizer CI gate runs exactly these under -fsanitize=thread
         set_tests_properties(${src} PROPERTIES LABELS "sanitizer")
     endif()

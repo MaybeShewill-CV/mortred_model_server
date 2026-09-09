@@ -38,13 +38,14 @@
 
 ```text
 BaseAiServerImpl（协议 + 执行编排，两条路径共用）
-├─ 同步路径:  parse -> worker 池 -> 模型 -> 序列化
+├─ AsyncJobEndpoints（/jobs HTTP 适配：waiter、inflight、202/poll/wait/result）
+├─ 同步路径:  parse -> WorkerPool 取号 -> item_exec -> 序列化
 └─ 异步路径:  parse -> AsyncJobTable.submit()      （准入 + 建档）
                       -> 立刻刷出 202（HTTP series 为空）
                       -> WFGoTask->start()          （独立 series）
-                      -> worker 池 / 模型运行
+                      -> WorkerPool 取号 / item_exec
                       -> AsyncJobTable.finish()     （终态记账）
-                      -> count_by_name 唤醒 waiter  （go task 回调）
+                      -> count_by_name 唤醒 waiter  （AsyncJobEndpoints 的 go-task 回调）
                       -> 序列化（数据来自 snapshot/take_result）
 ```
 
@@ -102,7 +103,7 @@ Workflow HTTP、worker 池、metrics **零依赖**；`InferenceTask` 与
 | `GET /jobs/{id}/wait?timeout=N` | `snapshot(id)` | 已终态则在 `process()` 里 200。否则 HTTP series 挂在**命名 Workflow counter**（target 1）上，另有独立 timer。唤醒条件是**终态**或 wait 预算耗尽——不是 `pending`→`running`。`timeout` 单位毫秒（默认 30000，上限 300000） |
 | `GET /jobs/{id}/result` | `take_result(id)` | 未知 404 / 非 DONE 409 / 200 标准封装；保留期内可重复读取 |
 
-metrics、worker 获取与 waiter 唤醒留在服务器一侧；账本是纯状态。`AsyncJobTable::wait()`（条件变量）仍供单测使用；HTTP wait 路径不再把 go 线程堵在这把 CV 上。
+编排器仍负责 metrics、`WorkerPool` 取号和 `async_run_job`。`AsyncJobEndpoints` 是 HTTP 适配层：它注册命名 waiter，并只在计算 go-task 返回后唤醒。账本是纯状态。`AsyncJobTable::wait()`（条件变量）仍供单测使用；HTTP wait 路径不再把 go 线程堵在这把 CV 上。
 
 `POST /jobs` 的 202 表示 job **已被准入**，不表示推理已完成。客户端必须 poll、wait 或取 `/result`。
 

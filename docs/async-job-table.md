@@ -47,13 +47,14 @@ state bookkeeping* - not sync vs. async:
 
 ```text
 BaseAiServerImpl  (protocol + execution orchestration, for BOTH paths)
-├─ sync path:   parse -> worker pool -> model -> serialize
+├─ AsyncJobEndpoints  (HTTP /jobs adapter: waiters, inflight, 202/poll/wait/result)
+├─ sync path:   parse -> WorkerPool checkout -> item_exec -> serialize
 └─ async path:  parse -> AsyncJobTable.submit()      (admission + record)
                        -> 202 flushed (HTTP series empty)
                        -> WFGoTask->start()          (independent series)
-                       -> worker pool / model run
+                       -> WorkerPool checkout / item_exec
                        -> AsyncJobTable.finish()     (terminal bookkeeping)
-                       -> count_by_name waiters      (go-task callback)
+                       -> count_by_name waiters      (go-task callback on AsyncJobEndpoints)
                        -> serialize (data from snapshot/take_result)
 ```
 
@@ -118,7 +119,7 @@ Any future change to `async_job_table.h` must preserve all five:
 | `GET /jobs/{id}/wait?timeout=N` | `snapshot(id)` | If already terminal, 200 in `process()`. Otherwise the HTTP series hangs on a **named Workflow counter** (target 1) plus an independent timer. Wakes on **terminal state** or wait-budget expiry — not on `pending`→`running`. `timeout` is milliseconds (default 30000, cap 300000). |
 | `GET /jobs/{id}/result` | `take_result(id)` | 404 unknown / 409 not DONE / 200 with the standard envelope; repeatable until retention ends |
 
-The server keeps metrics, worker acquisition and waiter wake-up on its side of the boundary; the table is pure state. `AsyncJobTable::wait()` (condition variable) remains for unit tests; the HTTP wait path does not block a go thread on that CV.
+The orchestrator still owns metrics, `WorkerPool` checkout and `async_run_job`. `AsyncJobEndpoints` is the HTTP adapter: it registers named waiters and wakes them only after the compute go-task returns. The table is pure state. `AsyncJobTable::wait()` (condition variable) remains for unit tests; the HTTP wait path does not block a go thread on that CV.
 
 `POST /jobs` 202 means the job was **admitted**, not that inference finished. Clients must poll, wait, or fetch `/result`.
 
