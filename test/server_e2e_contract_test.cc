@@ -28,6 +28,8 @@
 #include <gtest/gtest.h>
 #include <rapidjson/document.h>
 
+#include "models/base_model.h"
+#include "models/io/common_input.h"
 #include "server/abstract_server.h"
 #include "server/base_server_impl.h"
 
