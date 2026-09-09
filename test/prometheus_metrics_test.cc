@@ -89,6 +89,20 @@ TEST(prometheus_metrics, contract_failure_counter_uses_status_code_not_string_si
               std::string::npos);
 }
 
+TEST(prometheus_metrics, batch_window_wait_histogram_includes_plus_inf) {
+    PrometheusMetrics m;
+    m.set_model("resnet");
+    m.observe_batch_window_wait_ms(10.0);
+    m.observe_batch_window_wait_ms(1000.0);
+
+    auto text = m.render();
+    EXPECT_NE(text.find("mortred_batch_window_wait_ms_bucket{model=\"resnet\",le=\"500\"} 1"),
+              std::string::npos);
+    EXPECT_NE(text.find("mortred_batch_window_wait_ms_bucket{model=\"resnet\",le=\"+Inf\"} 2"),
+              std::string::npos);
+    EXPECT_NE(text.find("mortred_batch_window_wait_ms_count{model=\"resnet\"} 2"), std::string::npos);
+}
+
 TEST(prometheus_metrics, concurrent_updates_are_safe) {
     PrometheusMetrics m;
     m.set_model("resnet");

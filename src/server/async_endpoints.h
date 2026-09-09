@@ -252,7 +252,8 @@ private:
             for (const auto& violation : parsed.violations) {
                 errors.push_back({violation.pointer, violation.message});
             }
-            _metrics->inc_http_requests("POST", "422");
+            _metrics->inc_http_requests("POST",
+                                        std::to_string(http_status_of(parsed.status)));
             reply_unified_json(task->get_resp(),
                                unified_rejection(task_id, parsed.status, std::move(errors)));
             return;

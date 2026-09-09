@@ -107,8 +107,11 @@ public:
             result->item_outputs = std::move(state->outputs);
             result->item_status = std::move(state->item_status);
         } else {
+            // deadline: the runner may still be writing, so copy under the lock;
+            // then latch done so late completions are dropped
             result->item_outputs = state->outputs;
             result->item_status = state->item_status;
+            state->done = true;
         }
         aggregate_item_statuses(result);
     }
@@ -200,6 +203,8 @@ private:
         inputs.reserve(batch.size());
         for (const auto& entry : batch) {
             const auto& owner = entry->owner;
+            // an item whose request deadline already passed still runs: the
+            // requester has woken, late results land in the abandoned state
             inputs.push_back(make_model_input<ModelInput>(
                 std::move(owner->req.items[entry->item_index]), owner->req.params.get()));
         }
@@ -228,6 +233,8 @@ private:
         const auto& owner = entry->owner;
         std::lock_guard<std::mutex> lock(owner->mu);
         if (owner->done) {
+            // shutdown raced the runner, or the requester already timed out:
+            // late results land in the abandoned state and are dropped
             return;
         }
         owner->outputs[entry->item_index] = std::move(output);

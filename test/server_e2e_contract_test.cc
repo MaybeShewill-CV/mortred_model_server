@@ -870,6 +870,8 @@ TEST(server_e2e_contract, batch_collects_and_distributes_per_request_results) {
     const double batch_count = metrics_value(metrics.body, "mortred_batch_size_count");
     EXPECT_GE(batch_count, 1.0);
     EXPECT_LT(batch_count, 4.0) << "no coalescing happened: 4 batches of size 1";
+    EXPECT_GE(metrics_value(metrics.body, "mortred_batch_window_wait_ms_count"), 1.0)
+        << metrics.body;
 }
 
 TEST(server_e2e_contract, batch_timeout_returns_504) {
@@ -883,6 +885,38 @@ TEST(server_e2e_contract, batch_timeout_returns_504) {
 }
 
 // ===== async job endpoints (P0-2) =====
+
+TEST(server_e2e_contract, async_submit_bad_json_metrics_use_http_400) {
+    ServerHandle handle = start_server("async_enabled=true\n");
+    const auto resp =
+        send_request(handle.port, "POST", "/jobs", "not-json", k_json_auth_headers);
+    EXPECT_EQ(resp.status, 400);
+    auto doc = parse_body(resp.body);
+    ASSERT_FALSE(doc.HasParseError());
+    EXPECT_EQ(doc["status"].GetInt(), 50);
+
+    const auto metrics = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    ASSERT_EQ(metrics.status, 200) << metrics.body;
+    EXPECT_NE(metrics.body.find("method=\"POST\",status=\"400\""), std::string::npos)
+        << metrics.body;
+    EXPECT_EQ(metrics.body.find("method=\"POST\",status=\"422\""), std::string::npos)
+        << metrics.body;
+}
+
+TEST(server_e2e_contract, async_submit_unknown_field_metrics_use_http_422) {
+    ServerHandle handle = start_server("async_enabled=true\n");
+    const auto resp =
+        send_request(handle.port, "POST", "/jobs", "{\"images\":[\"aGVsbG8=\"],\"foo\":1}",
+                     k_json_auth_headers);
+    EXPECT_EQ(resp.status, 422);
+
+    const auto metrics = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    ASSERT_EQ(metrics.status, 200) << metrics.body;
+    EXPECT_NE(metrics.body.find("method=\"POST\",status=\"422\""), std::string::npos)
+        << metrics.body;
+    EXPECT_EQ(metrics.body.find("method=\"POST\",status=\"400\""), std::string::npos)
+        << metrics.body;
+}
 
 TEST(server_e2e_contract, async_submit_returns_202_with_job_id) {
     ServerHandle handle = start_server("async_enabled=true\nfake_delay_ms=100\n");
