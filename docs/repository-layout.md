@@ -38,7 +38,9 @@ src/
 │                            # process_stop (header-only, workflow daemons only)
 ├── factory/                 # model/server type-erased factory and registration headers
 ├── models/                  # model inference implementations
-└── server/                  # reusable HTTP server framework (BaseAiServerImpl, AsyncJobTable)
+└── server/                  # reusable HTTP server framework (orchestrator BaseAiServerImpl
+                             # plus http_wire / request_admission / worker_pool / item_exec /
+                             # batch_collector / async_endpoints / AsyncJobTable)
 ```
 
 ## Executable to source mapping

@@ -132,10 +132,6 @@ StatusCode CvModelServer<MODEL_OUTPUT>::Impl::init(const toml::table& config) {
     if (common_status != StatusCode::OK) {
         return common_status;
     }
-    // the model's request-overridable parameter schema rides on the spec;
-    // the envelope validator rejects any key outside this declaration
-    this->_m_param_specs = _m_spec.param_specs;
-    this->_m_model_name = _m_spec.model_section;
     auto worker_nums = parse_worker_nums(server_section);
     if (worker_nums <= 0) {
         this->_m_successfully_initialized = false;
@@ -176,7 +172,7 @@ StatusCode CvModelServer<MODEL_OUTPUT>::Impl::init(const toml::table& config) {
                 return StatusCode::SERVER_INIT_FAILED;
             }
         }
-        this->_m_working_queue.enqueue(std::move(worker));
+        this->adopt_worker(std::move(worker));
     }
 
     // init server uri
@@ -185,11 +181,9 @@ StatusCode CvModelServer<MODEL_OUTPUT>::Impl::init(const toml::table& config) {
         this->_m_successfully_initialized = false;
         return StatusCode::SERVER_INIT_FAILED;
     }
-    this->_m_server_uri = server_section["server_uri"].value_or<std::string>("");
-
-    // commit the worker watermark only after the queue is fully filled
-    this->_m_worker_nums = static_cast<size_t>(worker_nums);
-    this->_m_successfully_initialized = true;
+    this->commit_identity(server_section["server_uri"].value_or<std::string>(""),
+                          _m_spec.model_section, _m_spec.param_specs);
+    this->commit_workers(static_cast<size_t>(worker_nums));
     LOG(INFO) << _m_spec.display_name << " server init successfully";
     return StatusCode::OK;
 }
