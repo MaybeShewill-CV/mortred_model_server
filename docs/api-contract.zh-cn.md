@@ -131,6 +131,11 @@ JSON 字段名是 **`status`**（不是 `code`）。映射见 `src/server/http_s
 | 429 | 限流或等待队列已满（携带 `Retry-After`） | 429 |
 | 其他 | 服务器错误 | 500 |
 
+已准入的模型请求 `results[]` 长度恒为 `N = images[]`。HTTP **504**（`status` 4）
+表示截止时还没有发布任何完成项，每项都是超时且 `data: null`。HTTP **200** +
+`status` 68 + `partial: true` 表示至少一项已按时完成——客户端不要把这种 200
+当 5xx 整单重试。拒绝信封（401/422/…）仍可用空 `results[]`。
+
 ## 通用响应头
 
 ```http

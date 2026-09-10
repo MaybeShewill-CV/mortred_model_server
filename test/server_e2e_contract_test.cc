@@ -710,7 +710,27 @@ TEST(server_e2e_contract, model_timeout_returns_504) {
     auto doc = parse_body(resp.body);
     ASSERT_FALSE(doc.HasParseError());
     EXPECT_EQ(doc["status"].GetInt(), 4);
-    EXPECT_TRUE(doc["results"].IsArray());
+    EXPECT_FALSE(doc["partial"].GetBool());
+    ASSERT_TRUE(doc["results"].IsArray());
+    ASSERT_EQ(doc["results"].Size(), 1u);
+    EXPECT_EQ(doc["results"][0]["status"].GetInt(), 4);
+    EXPECT_TRUE(doc["results"][0]["data"].IsNull());
+}
+
+TEST(server_e2e_contract, model_timeout_n_items_keeps_results_length) {
+    ServerHandle handle = start_server("model_run_timeout=100\nfake_delay_ms=1000\n");
+    auto resp = send_request(handle.port, "POST", "/test/model",
+                             "{\"images\":[\"aGVsbG8=\",\"aGVsbG8=\"]}", k_json_auth_headers);
+
+    EXPECT_EQ(resp.status, 504);
+    auto doc = parse_body(resp.body);
+    ASSERT_FALSE(doc.HasParseError());
+    EXPECT_EQ(doc["status"].GetInt(), 4);
+    EXPECT_FALSE(doc["partial"].GetBool());
+    ASSERT_TRUE(doc["results"].IsArray());
+    ASSERT_EQ(doc["results"].Size(), 2u);
+    EXPECT_EQ(doc["results"][0]["status"].GetInt(), 4);
+    EXPECT_EQ(doc["results"][1]["status"].GetInt(), 4);
 }
 
 TEST(server_e2e_contract, model_failure_returns_500_with_null_data) {
@@ -882,6 +902,12 @@ TEST(server_e2e_contract, batch_timeout_returns_504) {
                                    "{\"images\":[\"aGVsbG8=\"],\"req_id\":\"slow\"}",
                                    k_json_auth_headers);
     EXPECT_EQ(resp.status, 504);
+    auto doc = parse_body(resp.body);
+    ASSERT_FALSE(doc.HasParseError());
+    EXPECT_EQ(doc["status"].GetInt(), 4);
+    ASSERT_TRUE(doc["results"].IsArray());
+    ASSERT_EQ(doc["results"].Size(), 1u);
+    EXPECT_EQ(doc["results"][0]["status"].GetInt(), 4);
 }
 
 // ===== async job endpoints (P0-2) =====

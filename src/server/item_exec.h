@@ -106,6 +106,14 @@ inline void run_items(WORKER& worker, const InferenceTask& req,
     }
 }
 
+template <typename WORKER, typename MODEL_OUTPUT>
+inline StatusCode run_one(WORKER& worker, const InferenceTask& req, size_t idx,
+                          MODEL_OUTPUT* out) {
+    using ModelInput = typename WORKER::element_type::input_type;
+    ModelInput input = make_model_input<ModelInput>(req.items[idx], req.params.get());
+    return worker->run(input, *out);
+}
+
 template <typename MODEL_OUTPUT, typename FillFn>
 inline jinq::common::UnifiedResponse inference_result_to_unified(
     const std::string& task_id, const std::string& model_name,

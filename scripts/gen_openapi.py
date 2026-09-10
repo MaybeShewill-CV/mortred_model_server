@@ -320,8 +320,10 @@ def model_path_for(section: str, uri: str, entry: dict | None) -> dict:
             "responses": {
                 "200": {
                     "description": (
-                        "Unified envelope; results[] aligns with images[]. A mid-request "
-                        "deadline returns the completed items with partial=true."
+                        "Unified envelope; results[] is index-aligned with images[] "
+                        "(always length N). Mid-request deadline: HTTP 200 + status 68 + "
+                        "partial=true when any item completed; HTTP 504 with N timeout "
+                        "slots when none did."
                     ),
                     "content": {
                         "application/json": {
@@ -383,7 +385,10 @@ def unified_response_schema(options_defaults: dict) -> dict:
             "results": {
                 "type": "array",
                 "items": {"$ref": "#/components/schemas/ResponseItem"},
-                "description": "Index-aligned with the request images[]",
+                "description": (
+                    "Index-aligned with the request images[] (always length N for "
+                    "admitted inference; unpublished slots are MODEL_RUN_TIMEOUT)"
+                ),
             },
             "server_time_ms": {"type": "number"},
             "partial": {"type": "boolean", "description": "true when the deadline hit mid-request"},
@@ -530,7 +535,9 @@ def build_document() -> dict:
                     "Model or server error (per-item failures keep their own results[].status)"
                 ),
                 "NotReady": error_response("Server is not ready"),
-                "GatewayTimeout": error_response("Model run timeout"),
+                "GatewayTimeout": error_response(
+                    "Model run timeout: results[] length N, each MODEL_RUN_TIMEOUT"
+                ),
             },
         },
     }

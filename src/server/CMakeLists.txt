@@ -11,6 +11,7 @@ set(SERVER_LIB_SRC
     ${CMAKE_CURRENT_LIST_DIR}/http_status.h
     ${CMAKE_CURRENT_LIST_DIR}/http_wire.h
     ${CMAKE_CURRENT_LIST_DIR}/item_exec.h
+    ${CMAKE_CURRENT_LIST_DIR}/sync_request_graph.h
     ${CMAKE_CURRENT_LIST_DIR}/openapi_doc.h
     ${CMAKE_CURRENT_LIST_DIR}/output_options.h
     ${CMAKE_CURRENT_LIST_DIR}/prometheus_metrics.h
