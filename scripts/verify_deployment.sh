@@ -112,7 +112,7 @@ check "py_compile fetch/gen/check" "$PY" -m py_compile \
     "$ROOT/scripts/fetch_weights.py" "$ROOT/scripts/gen_weights_manifest.py" \
     "$ROOT/scripts/check_consistency.py" "$ROOT/scripts/gen_openapi.py" \
     "$ROOT/scripts/repo_toml.py" "$ROOT/scripts/pack_trt.py" \
-    "$ROOT/scripts/calibrate_pack.py"
+    "$ROOT/scripts/calibrate_pack.py" "$ROOT/scripts/pack_occupancy.py"
 
 # 2) Manifest validity
 check "JSON: trt_engines/profiles/weights" "$PY" - "$ROOT" <<'PY'

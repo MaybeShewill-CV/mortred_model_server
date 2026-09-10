@@ -15,7 +15,8 @@ for arg in "$@"; do
         --strict) STRICT_ARGS=(--strict) ;;
         -h|--help)
             echo "usage: mortredctl doctor [--strict]"
-            echo "  --strict  fail on security warnings or missing pack TRT engines"
+            echo "  --strict  fail on security warnings, missing pack TRT engines,"
+            echo "            missing occupancy stamps, or occupancy_policy=off / ENFORCE=0"
             exit 0
             ;;
     esac
@@ -23,19 +24,33 @@ done
 
 echo "== Mortred doctor =="
 PACK="${MORTRED_PACK:-$ROOT/conf/packs/demo.toml}"
+GATE_FAIL=0
+
+echo "== pack occupancy / identity ($PACK) =="
+if [ -f "$PACK" ]; then
+    if python3 "$ROOT/scripts/pack_occupancy.py" --project-root "$ROOT" --pack "$PACK" --check; then
+        echo "  [ok] occupancy stamps present or pack has no TensorRT backends"
+    else
+        echo "  [WARN] pack occupancy gate failed; stop supervisor, then: mortredctl calibrate --pack $PACK --write-pack"
+        GATE_FAIL=1
+    fi
+else
+    echo "  [WARN] pack file not found: $PACK"
+fi
+
 echo "== pack TensorRT files ($PACK) =="
 if [ -f "$PACK" ]; then
     if python3 "$ROOT/scripts/pack_trt.py" --project-root "$ROOT" --pack "$PACK" --check; then
         echo "  [ok] pack TRT engines present or pack has no TensorRT backends"
     else
-        echo "  [WARN] pack TensorRT engine missing/empty; run mortredctl prepare"
-        if [ ${#STRICT_ARGS[@]} -gt 0 ]; then
-            echo "[FAIL] mortredctl doctor --strict: pack TRT engines missing"
-            exit 1
-        fi
+        echo "  [WARN] pack TensorRT engine missing/empty; run mortredctl prepare --pack $PACK"
+        GATE_FAIL=1
     fi
-else
-    echo "  [WARN] pack file not found: $PACK"
+fi
+
+if [ ${#STRICT_ARGS[@]} -gt 0 ] && [ "$GATE_FAIL" -ne 0 ]; then
+    echo "[FAIL] mortredctl doctor --strict: pack TRT engines or occupancy stamps missing (or occupancy disabled)"
+    exit 1
 fi
 
 "$ROOT/scripts/security_warn.sh" "${STRICT_ARGS[@]}"

@@ -23,6 +23,7 @@
 #include <random>
 #include <sstream>
 
+#include "control/occupancy_gate.h"
 #include "control/ready_probe.h"
 #include "control/trust_tokens.h"
 #include "control/trt_spawn_gate.h"
@@ -79,7 +80,7 @@ void read_pipe_loop(int fd, LogBuffer* buffer) {
 }
 
 bool is_permanent_spawn_error(const std::string& err) {
-    return is_trt_gate_error(err) || is_scrape_token_error(err);
+    return is_trt_gate_error(err) || is_scrape_token_error(err) || is_occupancy_gate_error(err);
 }
 
 }  // namespace
@@ -259,6 +260,37 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err) {
                                             child->entry.config, child->policy.model_config,
                                             err)) {
         return false;
+    } else {
+        OccupancyCheckInput occ;
+        occ.pack_active = _cfg.supervisor.pack_active;
+        occ.pack_path = _cfg.supervisor.pack_file;
+        occ.occupancy_policy = _cfg.occupancy.policy;
+        occ.gpu_reserve_pct = _cfg.occupancy.gpu_reserve_pct;
+        occ.gpu_name = _cfg.occupancy.gpu_name;
+        occ.gpu_memory_total_mib = _cfg.occupancy.gpu_memory_total_mib;
+        occ.candidate_id = child->id;
+        occ.candidate_is_tensorrt =
+            model_uses_tensorrt(_project_root, _cfg.supervisor.bin_dir, child->entry.config,
+                                child->policy.model_config);
+        occ.worker_nums = child->policy.has_worker_nums ? child->policy.worker_nums : 0;
+        occ.has_gpu_mem_mib = child->policy.has_gpu_mem_mib;
+        occ.gpu_mem_mib = child->policy.gpu_mem_mib;
+        occ.gpu_mem_at_workers = child->policy.gpu_mem_at_workers;
+        for (const auto& [id, other] : _children) {
+            if (other == nullptr || other->is_gateway || other->id == child->id) {
+                continue;
+            }
+            if (other->pid > 0 && other->policy.has_gpu_mem_mib && other->policy.gpu_mem_mib > 0) {
+                OccupancySibling sib;
+                sib.id = other->id;
+                sib.gpu_mem_mib = other->policy.gpu_mem_mib;
+                occ.running_siblings.push_back(sib);
+            }
+        }
+        occ.live = query_nvidia_smi();
+        if (!occupancy_ready_for_spawn(occ, err)) {
+            return false;
+        }
     }
     const std::string exe_path = child->is_gateway
                                      ? (std::filesystem::path(_project_root) /

@@ -62,7 +62,7 @@ Identity is the factory catalog `model_section` (`YOLOV8`, `MOBILENETV2`, …).
 `mortred-model-server.out --list` prints the HTTP-capable ids.
 The supervisor autostart set is `conf/packs/demo.toml` (or `MORTRED_PACK`), not the whole `conf/server/` tree.
 Pack TensorRT engines are converted with `scripts/prepare_pack.sh` (`mortredctl prepare`); the supervisor will not spawn a TRT id whose engine file is missing or empty.
-Worker_nums calibration is `scripts/calibrate_pack.py` (`mortredctl calibrate`): JSON report, optional `--write-pack` updates the pack file only, `conf/server` stays `worker_nums=1`. GPU occupancy is NVML per-process (or a pre-spawn device delta on WSL), not whole-card `memory.used`.
+Worker_nums calibration is `scripts/calibrate_pack.py` (`mortredctl calibrate`): JSON report, optional `--write-pack` updates the pack file only (`worker_nums` plus occupancy stamps `gpu_mem_mib` / GPU fingerprint), `conf/server` stays `worker_nums=1`. GPU occupancy is NVML per-process (or a pre-spawn device delta on WSL), not whole-card `memory.used`. TensorRT ids in an active pack need that stamp to spawn (`src/control/occupancy_gate.h`); `scripts/pack_occupancy.py` and `mortredctl doctor --strict` fail on a missing stamp the same way they fail on a missing engine. `occupancy_policy=off` / `MORTRED_OCCUPANCY_ENFORCE=0` skip the spawn gate (unsafe) and fail `--strict`.
 
 ### Benchmark/tool executables
 

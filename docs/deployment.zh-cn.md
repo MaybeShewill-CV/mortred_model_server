@@ -459,39 +459,53 @@ worker_nums = 4
 
 未知 id 会让 supervisor 启动失败。把 `MORTRED_PACK` 指到机器上的 pack（compose
 环境变量、systemd `supervisor.env`、或进程环境）。不要把校准后的
-`worker_nums` 提交进仓库示例 pack。
+`worker_nums` 或 `gpu_mem_mib` 提交进仓库示例 pack。
 
 ### 10.2 为本 pack 准备 TensorRT engine（GPU）
 
 Engine 绑定 **这张卡 + 这套 TensorRT**。只转 pack 用到的：
 
 ```bash
-mortredctl prepare --pack conf/packs/yolov8.toml          # 或 scripts/prepare_pack.sh
-mortredctl doctor --strict                                 # pack engine 缺失则失败
+mortredctl prepare --pack /path/to/machine-pack.toml       # 或 scripts/prepare_pack.sh
+mortredctl doctor --strict                                 # pack engine 或占用 stamp 缺失则失败
 ```
 
 supervisor **拒绝 spawn** engine 文件缺失或为空的 TensorRT id（状态 `failed`，
-不 crash-loop）。`/ready` 才是真正能加载，不只是文件非空。
+不 crash-loop）。`/ready` 才是真正能加载，不只是文件非空。prepare 之后 TensorRT
+id 仍需要占用 stamp（§10.3）才能 spawn。
 
 demo pack 是 MobilenetV2（无 TensorRT）。YOLOV8 pack 必须在目标 GPU 上
 prepare。`MORTRED_AUTO_BUILD_ENGINES=true` 仍会转 **整个 zoo**，且 **默认关闭**。
 
-### 10.3 校准 `worker_nums`
+### 10.3 校准 `worker_nums` 与占用 stamp
 
 先停 supervisor / 残留的 `mortred-model-server`。脚本会自己在目录端口上起服
-（YOLOV8 = 9056）；端口占用是 `start_failed`，不是 OOM。
+（YOLOV8 = 9056）；端口占用是 `start_failed`，不是 OOM。`--write-pack` 前先把
+仓库示例 pack 拷到机器本地文件。
 
 ```bash
 ss -ltnp | grep 9056 || true
-python3 scripts/calibrate_pack.py --pack conf/packs/yolov8.toml \
+python3 scripts/calibrate_pack.py --pack /path/to/machine-pack.toml \
     --workers 1,2,4,8 --duration 8s --output logs/calibrate-yolov8.json
-# 只把 w* 写进这个 pack（永不写 conf/server）：
+# 只把 w*、gpu_mem_mib、GPU 指纹写进这个 pack（永不写 conf/server）：
 python3 scripts/calibrate_pack.py --pack /path/to/machine-pack.toml --write-pack
 ```
 
 JSON 里 `gpu_mem_mib_*` 是进程占用（`nvml_pid` / `nvml_name`），WSL 上往往是
-spawn 前的 **整卡 delta**，不是整卡 `memory.used`。`--write-pack` 之后重启
-supervisor，pack 的 `worker_nums` 才会注入。
+spawn 前的 **整卡 delta**，不是整卡 `memory.used`。`--write-pack` 会写入
+`gpu_mem_mib`、`gpu_mem_source`、`gpu_mem_at_workers`，以及 `[pack]` 的
+`gpu_name` / `gpu_memory_total_mib`。之后重启 supervisor，pack 的
+`worker_nums` 才会注入。
+
+supervisor **拒绝 spawn** 已启用 pack 里没有 `gpu_mem_mib` stamp、或
+`worker_nums` 与 `gpu_mem_at_workers` 不一致的 TensorRT id（状态 `failed`，
+不 crash-loop）。错误字符串就是下一命令：
+`mortredctl calibrate --pack <pack> --write-pack`。有总量字段时，联合预算是
+已运行兄弟 stamp 之和 + 本项，对比
+`gpu_memory_total_mib × (1 − gpu_reserve_pct/100)`。
+`occupancy_policy=off` 或 `MORTRED_OCCUPANCY_ENFORCE=0` 会跳过 spawn 闸（与
+`MORTRED_EXPOSE=unsafe` 同类）；`mortredctl doctor --strict` 仍失败。非法
+`occupancy_policy` 会让 pack 无法 apply。
 
 ### 10.4 全量 zoo 转换（可选）
 
@@ -510,14 +524,15 @@ docker compose --profile gpu up -d -e MORTRED_AUTO_BUILD_ENGINES=true
 ```
 
 发生在 supervisor autostart 之前，耗时分钟级，**默认关闭**。日常用 §10.2。
-`mortredctl doctor` 对缺失 pack engine 告警；`--strict` 失败。
+`mortredctl doctor` 对缺失 pack engine 或占用 stamp 告警；`--strict` 失败。
 
-### 10.6 ONNX Runtime CUDA arena
+### 10.6 ONNX Runtime CUDA arena 与 pack 占用
 
 ORT CUDA 以前是 `gpu_mem_limit = 0`（arena 无限涨）。现在默认 **每个 session
 2048 MiB**（`[MODEL.backend] gpu_mem_limit_mb`，或
 `MORTRED_ORT_GPU_MEM_LIMIT_MB`）。`worker_nums=4` 最多四份 arena。`0` 恢复不限制。
-MNN / TensorRT 没有对等旋钮；靠 pack + 校准控制驻留（§10.3）。
+MNN / TensorRT 没有对等旋钮。进程占用由 supervisor spawn 按 pack stamp 卡住
+（§10.3），不是把 `gpu_mem_limit_mb` 接到 TRT/MNN session。
 
 ## 11. 认证与安全
 

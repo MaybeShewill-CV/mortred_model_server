@@ -9,8 +9,9 @@ taken before spawn (gpu_mem_source=device_delta). Suggests w* from the RPS
 curve. A joint pass starts every id at its suggested w; it sums only real
 NVML per-process rows, otherwise reports one pack device delta.
 
-Optional --write-pack updates worker_nums on [pack.<ID>] tables in that pack
-file only. Git example packs should stay worker_nums=1.
+Optional --write-pack updates worker_nums and occupancy stamps on [pack.<ID>]
+(and GPU fingerprint on [pack]) in that pack file only. Git example packs
+should stay worker_nums=1 and must not commit gpu_mem_mib.
 
 Usage:
   python3 scripts/calibrate_pack.py --pack conf/packs/demo.toml
@@ -24,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import signal
@@ -211,57 +213,172 @@ def _under(path: Path, root: Path) -> bool:
         return False
 
 
-def write_pack_worker_nums(pack: Path, updates: dict[str, int]) -> list[dict]:
-    """Set worker_nums on [pack.<ID>] tables. Refuses conf/server paths."""
+def _ceil_positive_mib(value: object) -> int | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number <= 0:
+        return None
+    return max(1, int(math.ceil(number)))
+
+
+def _fmt_toml_value(value: object) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int) and not isinstance(value, bool):
+        return str(value)
+    text = str(value)
+    return '"%s"' % text.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _section_pack_id(header: str) -> str | None:
+    """[pack] -> ''; [pack.YOLOV8] -> YOLOV8; other -> None."""
+    if header == "[pack]":
+        return ""
+    if header.startswith("[pack.") and header.endswith("]"):
+        return header[6:-1].strip()
+    return None
+
+
+def write_pack_fields(
+    pack: Path,
+    id_fields: dict[str, dict[str, object]],
+    pack_fields: dict[str, object] | None = None,
+) -> list[dict]:
+    """Upsert keys on [pack] / [pack.<ID>]. Refuses conf/server paths."""
     if _under(pack, ROOT / "conf" / "server"):
         raise ValueError("refusing to write conf/server; pass a pack toml")
-    if not updates:
+    cleaned_ids: dict[str, dict[str, object]] = {}
+    for catalog_id, fields in id_fields.items():
+        kept = {k: v for k, v in fields.items() if v is not None}
+        if kept:
+            cleaned_ids[catalog_id] = kept
+    cleaned_pack = {k: v for k, v in (pack_fields or {}).items() if v is not None}
+    if not cleaned_ids and not cleaned_pack:
         return []
     original = pack.read_text(encoding="utf-8")
     newline = "\n" if "\r\n" not in original else "\r\n"
     lines = original.splitlines()
     out: list[str] = []
     current: str | None = None
-    remaining = dict(updates)
-    wrote_line = False
+    pending: dict[str, object] | None = None
+    saw_pack_global = False
+    remaining_ids = {k: dict(v) for k, v in cleaned_ids.items()}
+    remaining_pack = dict(cleaned_pack)
     applied: list[dict] = []
 
     def close_section() -> None:
-        nonlocal wrote_line
-        if current is not None and current in remaining and not wrote_line:
-            w = remaining.pop(current)
-            out.append("worker_nums = %d" % w)
-            applied.append({"id": current, "worker_nums": w, "action": "insert"})
-        wrote_line = False
+        nonlocal pending
+        if pending:
+            for key, value in list(pending.items()):
+                out.append("%s = %s" % (key, _fmt_toml_value(value)))
+            pending.clear()
 
-    worker_re = re.compile(r"^(\s*worker_nums\s*=\s*)\d+(.*)$")
     for line in lines:
         stripped = line.strip()
         if stripped.startswith("[") and stripped.endswith("]"):
             close_section()
-            current = None
-            if stripped.startswith("[pack."):
-                current = stripped[6:-1].strip()
+            current = _section_pack_id(stripped)
+            if current == "":
+                saw_pack_global = True
+                pending = remaining_pack
+            elif current is not None:
+                pending = remaining_ids.get(current)
+            else:
+                pending = None
             out.append(line)
             continue
-        if current is not None and current in remaining:
-            match = worker_re.match(line)
-            if match:
-                w = remaining.pop(current)
-                out.append("%s%d%s" % (match.group(1), w, match.group(2)))
-                applied.append({"id": current, "worker_nums": w, "action": "update"})
-                wrote_line = True
+        if pending is not None:
+            replaced = False
+            for key in list(pending):
+                match = re.match(r"^(\s*" + re.escape(key) + r"\s*=\s*).*$", line)
+                if match:
+                    out.append("%s%s" % (match.group(1), _fmt_toml_value(pending.pop(key))))
+                    replaced = True
+                    break
+            if replaced:
                 continue
         out.append(line)
     close_section()
+    for leftover in remaining_ids:
+        if remaining_ids[leftover]:
+            applied.append({"id": leftover, "error": "no [pack.%s] table" % leftover})
+    if remaining_pack and not saw_pack_global:
+        block = ["[pack]"]
+        for key, value in remaining_pack.items():
+            block.append("%s = %s" % (key, _fmt_toml_value(value)))
+        block.append("")
+        insert_at = 0
+        for i, line in enumerate(out):
+            if line.strip().startswith("[pack."):
+                insert_at = i
+                break
+        else:
+            insert_at = len(out)
+        out[insert_at:insert_at] = block
+        remaining_pack.clear()
+        applied.append({"section": "pack", "action": "insert"})
+    for catalog_id, fields in cleaned_ids.items():
+        if any(a.get("id") == catalog_id and a.get("error") for a in applied):
+            continue
+        applied.append({"id": catalog_id, "action": "write", **fields})
     text = newline.join(out)
     if original.endswith(newline) or original.endswith("\n"):
         if not text.endswith(newline):
             text += newline
     pack.write_text(text, encoding="utf-8")
-    for leftover in remaining:
-        applied.append({"id": leftover, "error": "no [pack.%s] table" % leftover})
     return applied
+
+
+def write_pack_worker_nums(pack: Path, updates: dict[str, int]) -> list[dict]:
+    """Set worker_nums on [pack.<ID>] tables. Refuses conf/server paths."""
+    return write_pack_fields(pack, {k: {"worker_nums": v} for k, v in updates.items()})
+
+
+def occupancy_fields_from_report(
+    report: dict,
+) -> tuple[dict[str, dict[str, object]], dict[str, object]]:
+    id_fields: dict[str, dict[str, object]] = {}
+    for row in report.get("models") or []:
+        model_id = row.get("id")
+        if not isinstance(model_id, str) or not model_id:
+            continue
+        if row.get("reason") == "start_failed":
+            continue
+        points = row.get("points") or []
+        if not any(p.get("started") for p in points):
+            continue
+        w = row.get("suggested_worker_nums")
+        if not isinstance(w, int) or not 1 <= w <= 256:
+            continue
+        fields: dict[str, object] = {"worker_nums": w, "gpu_mem_at_workers": w}
+        match = next(
+            (p for p in points if p.get("started") and int(p.get("worker_nums") or 0) == w),
+            None,
+        )
+        if match is None:
+            match = next((p for p in reversed(points) if p.get("started")), None)
+        if match is not None:
+            mib = _ceil_positive_mib(match.get("gpu_mem_mib_peak"))
+            if mib is not None:
+                fields["gpu_mem_mib"] = mib
+            src = match.get("gpu_mem_source")
+            if isinstance(src, str) and src and src != "unavailable":
+                fields["gpu_mem_source"] = src
+        id_fields[model_id] = fields
+    pack_fields: dict[str, object] = {}
+    gpu = report.get("gpu")
+    if isinstance(gpu, dict):
+        name = gpu.get("name")
+        if isinstance(name, str) and name.strip():
+            pack_fields["gpu_name"] = name.strip()
+        total = _ceil_positive_mib(gpu.get("memory_total_mib"))
+        if total is not None:
+            pack_fields["gpu_memory_total_mib"] = total
+    return id_fields, pack_fields
 
 
 def pack_writes_from_report(report: dict) -> dict[str, int]:
@@ -737,6 +854,35 @@ def self_test() -> int:
     if any(a.get("error") for a in applied):
         print("self-test: unexpected pack write error", applied, file=sys.stderr)
         return 1
+    occ = Path(tempfile.mkdtemp()) / "occ.toml"
+    occ.write_text("[pack.YOLOV8]\nworker_nums = 1\n", encoding="utf-8")
+    fake_occ = {
+        "gpu": {"name": "Fake GPU", "memory_total_mib": 8192.1},
+        "models": [
+            {
+                "id": "YOLOV8",
+                "suggested_worker_nums": 2,
+                "reason": "single_point",
+                "points": [
+                    {
+                        "started": True,
+                        "worker_nums": 2,
+                        "gpu_mem_mib_peak": 1800.2,
+                        "gpu_mem_source": "nvml_pid",
+                    }
+                ],
+            }
+        ],
+    }
+    id_fields, pack_fields = occupancy_fields_from_report(fake_occ)
+    write_pack_fields(occ, id_fields, pack_fields)
+    occ_body = occ.read_text(encoding="utf-8")
+    if "gpu_mem_mib = 1801" not in occ_body or "gpu_mem_at_workers = 2" not in occ_body:
+        print("self-test: occupancy stamp body", occ_body, file=sys.stderr)
+        return 1
+    if 'gpu_name = "Fake GPU"' not in occ_body or "gpu_memory_total_mib = 8193" not in occ_body:
+        print("self-test: gpu fingerprint body", occ_body, file=sys.stderr)
+        return 1
     try:
         write_pack_worker_nums(cfg, {"MOBILENETV2": 4})
         print("self-test: should refuse conf/server", file=sys.stderr)
@@ -761,7 +907,7 @@ def main() -> int:
     parser.add_argument(
         "--write-pack",
         action="store_true",
-        help="write suggested worker_nums into the pack file (never conf/server)",
+        help="write suggested worker_nums and occupancy stamps into the pack file (never conf/server)",
     )
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
@@ -777,13 +923,14 @@ def main() -> int:
     report = calibrate(args.project_root, pack, workers, duration_s, args.skip_joint)
     if args.write_pack:
         try:
-            applied = write_pack_worker_nums(pack, pack_writes_from_report(report))
+            id_fields, pack_fields = occupancy_fields_from_report(report)
+            applied = write_pack_fields(pack, id_fields, pack_fields)
         except ValueError as exc:
             raise SystemExit(str(exc)) from exc
-        report["wrote_pack"] = any(a.get("worker_nums") for a in applied)
+        report["wrote_pack"] = any(a.get("action") for a in applied if not a.get("error"))
         report["pack_writes"] = applied
         if report["wrote_pack"]:
-            print("wrote worker_nums into %s" % pack, file=sys.stderr)
+            print("wrote occupancy stamps into %s" % pack, file=sys.stderr)
     text = json.dumps(report, indent=2)
     print(text)
     if args.output:

@@ -7,6 +7,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Pack occupancy is fail-closed at supervisor spawn and `mortredctl doctor --strict`.
+  TensorRT ids in an active pack need `gpu_mem_mib` from
+  `mortredctl calibrate --write-pack` (plus `gpu_mem_at_workers` and a GPU
+  fingerprint on `[pack]`). Missing stamps, stale `worker_nums`, and joint-budget
+  overflow refuse spawn with the next command in the error (no crash-loop).
+  `occupancy_policy=off` / `MORTRED_OCCUPANCY_ENFORCE=0` skip the spawn gate
+  (unsafe) and fail `--strict`. `gpu_mem_limit_mb` stays ORT CUDA EP only.
+
+> pack 占用在 supervisor spawn 和 `mortredctl doctor --strict` 上 fail-closed。
+> 已启用 pack 里的 TensorRT id 必须有 `calibrate --write-pack` 写入的
+> `gpu_mem_mib`（以及 `gpu_mem_at_workers` 与 `[pack]` GPU 指纹）。缺 stamp、
+> `worker_nums` 过期、联合预算超限都会拒绝 spawn，错误里是下一条命令，不进
+> crash-loop。`occupancy_policy=off` / `MORTRED_OCCUPANCY_ENFORCE=0` 跳过 spawn
+> 闸（unsafe），`--strict` 仍失败。`gpu_mem_limit_mb` 仍然只约束 ORT CUDA EP。
+
 ### Fixed
 - Sync inference replies at `model_run_timeout` without dropping completed
   items. The HTTP series holds a unique-reply counter; per-item compute is a

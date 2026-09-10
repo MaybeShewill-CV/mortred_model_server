@@ -474,7 +474,7 @@ worker_nums = 4
 
 Unknown ids fail supervisor start. Point `MORTRED_PACK` at the machine file
 (compose env, systemd `supervisor.env`, or the process environment). Do not
-commit calibrated `worker_nums` in the git example packs.
+commit calibrated `worker_nums` or `gpu_mem_mib` in the git example packs.
 
 ### 10.2 Prepare pack TensorRT engines (GPU)
 
@@ -482,35 +482,48 @@ Engines are bound to **this GPU + this TensorRT**. Convert only what the pack
 uses:
 
 ```bash
-mortredctl prepare --pack conf/packs/yolov8.toml          # or: scripts/prepare_pack.sh
-mortredctl doctor --strict                                 # missing pack engines fail
+mortredctl prepare --pack /path/to/machine-pack.toml       # or: scripts/prepare_pack.sh
+mortredctl doctor --strict                                 # missing pack engines or occupancy stamps fail
 ```
 
 The supervisor **refuses to spawn** a TensorRT id whose engine file is missing
 or empty (status `failed`, no crash-loop). `/ready` is real loadability, not
-just a nonempty file.
+just a nonempty file. After prepare, TensorRT ids still need an occupancy
+stamp (§10.3) before spawn.
 
 Demo pack is MobilenetV2 (no TensorRT). A YOLOV8 pack needs prepare on the
 target GPU. `MORTRED_AUTO_BUILD_ENGINES=true` still converts the **whole zoo**
 and stays **off** by default.
 
-### 10.3 Calibrate `worker_nums`
+### 10.3 Calibrate `worker_nums` and occupancy stamps
 
 Stop supervisor / leftover `mortred-model-server` first. The script starts its
 own server on the catalog port (YOLOV8 = 9056); a busy port is `start_failed`,
-not OOM.
+not OOM. Copy the git example pack to a machine-local file before `--write-pack`.
 
 ```bash
 ss -ltnp | grep 9056 || true
-python3 scripts/calibrate_pack.py --pack conf/packs/yolov8.toml \
+python3 scripts/calibrate_pack.py --pack /path/to/machine-pack.toml \
     --workers 1,2,4,8 --duration 8s --output logs/calibrate-yolov8.json
-# persist w* into that pack file only (never conf/server):
+# persist w* + gpu_mem_mib + GPU fingerprint into that pack only (never conf/server):
 python3 scripts/calibrate_pack.py --pack /path/to/machine-pack.toml --write-pack
 ```
 
 JSON `gpu_mem_mib_*` is process occupancy (`nvml_pid` / `nvml_name`) or a
-pre-spawn **device delta** on WSL — not whole-card `memory.used`. Restart the
-supervisor after `--write-pack` so pack `worker_nums` is injected.
+pre-spawn **device delta** on WSL — not whole-card `memory.used`. `--write-pack`
+writes `gpu_mem_mib`, `gpu_mem_source`, `gpu_mem_at_workers`, and `[pack]`
+`gpu_name` / `gpu_memory_total_mib`. Restart the supervisor afterwards so pack
+`worker_nums` is injected.
+
+The supervisor **refuses to spawn** a TensorRT id in an active pack that has no
+`gpu_mem_mib` stamp, or whose `worker_nums` does not match `gpu_mem_at_workers`
+(status `failed`, no crash-loop). The error names the next command:
+`mortredctl calibrate --pack <pack> --write-pack`. Joint budget uses running
+siblings' stamps plus this stamp versus `gpu_memory_total_mib × (1 − gpu_reserve_pct/100)`
+when the total is present. `occupancy_policy=off` or `MORTRED_OCCUPANCY_ENFORCE=0`
+skips the spawn gate (unsafe, same class as `MORTRED_EXPOSE=unsafe`);
+`mortredctl doctor --strict` still fails. Invalid `occupancy_policy` refuses
+pack apply.
 
 ### 10.4 Zoo-wide convert (optional)
 
@@ -529,16 +542,17 @@ docker compose --profile gpu up -d -e MORTRED_AUTO_BUILD_ENGINES=true
 ```
 
 Runs before supervisor autostart, minutes-long, **off by default**. Prefer
-§10.2 for a pack. `mortredctl doctor` warns on missing pack engines;
-`--strict` fails.
+§10.2 for a pack. `mortredctl doctor` warns on missing pack engines or occupancy
+stamps; `--strict` fails.
 
-### 10.6 ONNX Runtime CUDA arena
+### 10.6 ONNX Runtime CUDA arena vs pack occupancy
 
 ORT CUDA used to set `gpu_mem_limit = 0` (arena grows without bound). The
 default is now **2048 MiB per session** (`gpu_mem_limit_mb` on
 `[MODEL.backend]`, or `MORTRED_ORT_GPU_MEM_LIMIT_MB`). `worker_nums=4` means
 up to four arenas. `0` restores unlimited. MNN and TensorRT have no equivalent
-knob; stay inside the pack + calibrate budget (§10.3).
+knob. Process occupancy is gated at supervisor spawn from the pack stamp
+(§10.3), not by wiring `gpu_mem_limit_mb` into TRT/MNN sessions.
 
 ## 11. Authentication & Security
 
