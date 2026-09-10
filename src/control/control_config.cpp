@@ -7,6 +7,8 @@
 
 #include "control/control_config.h"
 
+#include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <unordered_set>
 
@@ -69,6 +71,37 @@ bool read_str(const mini_toml::Table& kv, const std::string& key, std::string* o
         return false;
     }
     *out = v;
+    return true;
+}
+
+std::string lower_copy(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return s;
+}
+
+bool parse_pack_occupancy(const mini_toml::Table& kv, PackOccupancy* out, std::string* err) {
+    const std::string ctx = "[pack]";
+    if (kv.count("occupancy_policy") != 0) {
+        const std::string raw = kv.at("occupancy_policy");
+        const std::string v = lower_copy(raw);
+        if (v != "enforce" && v != "off") {
+            if (err != nullptr) {
+                *err = ctx + ": occupancy_policy must be enforce|off, got '" + raw + "'";
+            }
+            return false;
+        }
+        out->policy = v;
+    }
+    if (!read_int(kv, "gpu_reserve_pct", &out->gpu_reserve_pct, 0, 90, ctx, err)) {
+        return false;
+    }
+    if (!read_str(kv, "gpu_name", &out->gpu_name, ctx, err)) {
+        return false;
+    }
+    if (!read_int(kv, "gpu_memory_total_mib", &out->gpu_memory_total_mib, 1, 1048576, ctx, err)) {
+        return false;
+    }
     return true;
 }
 
@@ -172,6 +205,12 @@ bool ControlConfig::apply_pack(const std::string& pack_path, const std::vector<s
 
     std::unordered_set<std::string> allowed(valid_ids.begin(), valid_ids.end());
     bool any = false;
+    PackOccupancy occupancy;
+    if (doc.count("pack") != 0) {
+        if (!parse_pack_occupancy(doc.at("pack"), &occupancy, err)) {
+            return false;
+        }
+    }
     for (const auto& [section, kv] : doc) {
         if (section.compare(0, 5, "pack.") != 0) {
             continue;
@@ -227,6 +266,37 @@ bool ControlConfig::apply_pack(const std::string& pack_path, const std::vector<s
             }
             p.model_config = path.lexically_normal().string();
         }
+        if (kv.count("gpu_mem_mib") != 0) {
+            const int mib = mini_toml::to_int(kv.at("gpu_mem_mib"), 0);
+            if (mib < 1 || mib > 1048576) {
+                if (err != nullptr) {
+                    *err = "[" + section + "]: gpu_mem_mib must be in [1, 1048576]";
+                }
+                return false;
+            }
+            p.has_gpu_mem_mib = true;
+            p.gpu_mem_mib = mib;
+        }
+        if (kv.count("gpu_mem_at_workers") != 0) {
+            const int w = mini_toml::to_int(kv.at("gpu_mem_at_workers"), 0);
+            if (w < 1 || w > 256) {
+                if (err != nullptr) {
+                    *err = "[" + section + "]: gpu_mem_at_workers must be in [1, 256]";
+                }
+                return false;
+            }
+            p.gpu_mem_at_workers = w;
+        }
+        if (kv.count("gpu_mem_source") != 0) {
+            const std::string src = kv.at("gpu_mem_source");
+            if (src.empty()) {
+                if (err != nullptr) {
+                    *err = "[" + section + "]: gpu_mem_source must be a non-empty string";
+                }
+                return false;
+            }
+            p.gpu_mem_source = src;
+        }
     }
     if (!any) {
         if (err != nullptr) {
@@ -234,7 +304,9 @@ bool ControlConfig::apply_pack(const std::string& pack_path, const std::vector<s
         }
         return false;
     }
+    cfg->supervisor.pack_file = pack_path;
     cfg->supervisor.pack_active = true;
+    cfg->occupancy = occupancy;
     return true;
 }
 

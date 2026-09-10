@@ -105,7 +105,7 @@ mortredctl init-edge --mode lan       # optional Nginx TLS on the host network
 mortredctl prepare [--pack FILE]      # GPU: pack TensorRT engines on this card
 mortredctl calibrate [--pack FILE]    # worker_nums report; --write-pack is opt-in
 mortredctl doctor                     # live acceptance + non-fatal security warnings
-mortredctl doctor --strict            # same, but security warnings fail the gate
+mortredctl doctor --strict            # engines, occupancy stamps, and security warnings fail the gate
 mortredctl status | catalog           # runtime introspection
 ```
 

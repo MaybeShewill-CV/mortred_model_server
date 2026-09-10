@@ -39,6 +39,15 @@ struct GatewayConfig {
     int upstream_recv_timeout_ms = 180000;
 };
 
+/*** Pack-level GPU occupancy contract from the [pack] table. Default policy
+ *  is enforce: TensorRT ids need a calibrated gpu_mem_mib stamp to spawn. */
+struct PackOccupancy {
+    std::string policy = "enforce";  // enforce | off
+    int gpu_reserve_pct = 15;
+    std::string gpu_name;
+    int gpu_memory_total_mib = 0;  // 0 = unset; skip joint budget
+};
+
 /***
  * Per-server supervision policy from [servers.<id>]. Absent values fall back
  * to the supervisor defaults; restart_policy is "on-failure" | "always" | "no".
@@ -52,11 +61,16 @@ struct ServerPolicy {
     bool has_worker_nums = false;
     int worker_nums = 0;
     std::string model_config;  // absolute path; empty = use server toml
+    bool has_gpu_mem_mib = false;
+    int gpu_mem_mib = 0;
+    int gpu_mem_at_workers = 0;  // 0 = unset
+    std::string gpu_mem_source;
 };
 
 struct ControlConfig {
     SupervisorConfig supervisor;
     GatewayConfig gateway;
+    PackOccupancy occupancy;
     std::map<std::string, ServerPolicy> servers;
 
     /*** resolve the effective autostart/restart policy for a server id */

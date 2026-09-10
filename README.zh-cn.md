@@ -98,7 +98,7 @@ mortredctl init-edge --mode lan
 mortredctl prepare [--pack FILE]
 mortredctl calibrate [--pack FILE]
 mortredctl doctor
-mortredctl doctor --strict
+mortredctl doctor --strict            # 缺 engine、缺占用 stamp、占用门关闭、安全警告都会失败
 mortredctl status | catalog
 ```
 

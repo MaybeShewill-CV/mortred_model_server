@@ -15,6 +15,7 @@
 
 namespace fs = std::filesystem;
 using mortred::control::is_trt_gate_error;
+using mortred::control::model_uses_tensorrt;
 using mortred::control::trt_engines_ready_for_spawn;
 using mortred::control::trt_gate_error;
 
@@ -126,6 +127,15 @@ TEST_F(TrtSpawnGateTest, pack_override_model_config) {
 TEST(trt_spawn_gate, error_prefix) {
     EXPECT_TRUE(is_trt_gate_error(trt_gate_error("/tmp/x.engine")));
     EXPECT_FALSE(is_trt_gate_error("fork() failed"));
+}
+
+TEST_F(TrtSpawnGateTest, model_uses_tensorrt_detects_backend_type) {
+    write_model("[X.backend]\ntype=\"mnn\"\nmodel_file_path=\"../weights/x.mnn\"\n");
+    EXPECT_FALSE(model_uses_tensorrt(root_.string(), "_bin",
+                                     (root_ / "conf" / "server" / "x.toml").string(), ""));
+    write_model("[X.backend]\ntype=\"tensorrt\"\nmodel_file_path=\"../weights/x.engine\"\n");
+    EXPECT_TRUE(model_uses_tensorrt(root_.string(), "_bin",
+                                    (root_ / "conf" / "server" / "x.toml").string(), ""));
 }
 
 int main(int argc, char** argv) {

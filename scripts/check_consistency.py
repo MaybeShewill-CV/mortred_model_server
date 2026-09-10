@@ -42,6 +42,8 @@ Verifies a few high-signal invariants:
 16. Git `conf/packs/*.toml` keep `worker_nums=1` (calibration is machine-local).
 17. `scripts/pack_trt.py --self-test` covers pack TRT engine discovery.
 18. `scripts/calibrate_pack.py --self-test` covers w* selection (no GPU).
+19. `scripts/pack_occupancy.py --self-test` covers occupancy stamp checks (no GPU).
+20. Git example packs must not commit `gpu_mem_mib` occupancy stamps.
 
 Exit code 0 means consistent; non-zero means the repository needs attention.
 """
@@ -728,6 +730,11 @@ def check_example_packs_worker_nums() -> list[str]:
                         "calibrate --write-pack is machine-local)"
                         % (pack.relative_to(ROOT), current, w)
                     )
+            if current and t.startswith("gpu_mem_mib"):
+                errors.append(
+                    "%s: [pack.%s] gpu_mem_mib is machine-local; do not commit occupancy stamps"
+                    % (pack.relative_to(ROOT), current)
+                )
     return errors
 
 
@@ -799,6 +806,15 @@ def main() -> int:
             errors.append(
                 "calibrate_pack.py --self-test failed: "
                 + (cal.stdout + cal.stderr).strip()
+            )
+        occ = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "pack_occupancy.py"), "--self-test"],
+            cwd=str(ROOT), capture_output=True, text=True, timeout=60,
+        )
+        if occ.returncode != 0:
+            errors.append(
+                "pack_occupancy.py --self-test failed: "
+                + (occ.stdout + occ.stderr).strip()
             )
     except (OSError, subprocess.TimeoutExpired) as exc:
         errors.append(f"pack_trt.py --self-test could not run: {exc}")

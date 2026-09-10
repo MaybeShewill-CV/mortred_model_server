@@ -169,6 +169,40 @@ def trt_engine_paths(model_toml: Path, project_root: Path) -> list[Path]:
     return engines
 
 
+def model_is_tensorrt(model_toml: Path) -> bool:
+    try:
+        table = load_toml(model_toml)
+    except (OSError, ValueError):
+        return False
+    for name, kv in _walk_tables(table):
+        if "backend" not in name.lower():
+            continue
+        if _as_str(kv.get("type")).lower() == "tensorrt":
+            return True
+    return False
+
+
+def pack_model_toml(pack_path: Path, catalog_id: str, project_root: Path) -> Path | None:
+    override = pack_model_config(pack_path, catalog_id, project_root)
+    if override is not None:
+        return override
+    server = find_server_toml(project_root, catalog_id)
+    if server is None:
+        return None
+    return server_model_config(server, project_root)
+
+
+def pack_tensorrt_ids(pack_path: Path, project_root: Path) -> list[str]:
+    ids: list[str] = []
+    for pid in pack_ids(pack_path):
+        model_toml = pack_model_toml(pack_path, pid, project_root)
+        if model_toml is None or not model_toml.is_file():
+            continue
+        if model_is_tensorrt(model_toml):
+            ids.append(pid)
+    return ids
+
+
 def pack_trt_engines(pack_path: Path, project_root: Path) -> list[tuple[str, Path]]:
     rows: list[tuple[str, Path]] = []
     for pid in pack_ids(pack_path):
@@ -246,6 +280,13 @@ def self_test() -> int:
         mnn.write_text('[X.backend]\ntype="mnn"\nmodel_file_path="../weights/x.mnn"\n', encoding="utf-8")
         if pack_trt_engines(root / "conf" / "packs" / "p.toml", root):
             print("self-test: mnn backend must not list engines", file=sys.stderr)
+            return 1
+        mnn.write_text(
+            '[X.backend]\ntype="tensorrt"\nmodel_file_path="../weights/x.engine"\n',
+            encoding="utf-8",
+        )
+        if pack_tensorrt_ids(root / "conf" / "packs" / "p.toml", root) != ["X"]:
+            print("self-test: pack_tensorrt_ids", file=sys.stderr)
             return 1
     print("pack_trt.py self-test passed")
     return 0

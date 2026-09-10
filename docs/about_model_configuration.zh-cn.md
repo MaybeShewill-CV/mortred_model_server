@@ -35,7 +35,7 @@ class_names = ["person", "bicycle"]
 | `device` | `backend` | `cpu` 或 `gpu`；缺省为 `gpu`。`type=tensorrt` 且 `device=cpu` 是配置错误 |
 | `device_id` / `gpu_device_id` | `backend` | CUDA 设备序号，二者等价 |
 | `threads` | `backend` | MNN / ONNX CPU 推理线程数 |
-| `gpu_mem_limit_mb` | `backend`（onnx+cuda） | CUDA EP arena **每个 session/worker** 上限；默认 **2048** MiB；`0` = 不限制。环境变量 `MORTRED_ORT_GPU_MEM_LIMIT_MB` 可覆盖。MNN/TRT 忽略。 |
+| `gpu_mem_limit_mb` | `backend`（onnx+cuda） | CUDA EP arena **每个 session/worker** 上限；默认 **2048** MiB；`0` = 不限制。环境变量 `MORTRED_ORT_GPU_MEM_LIMIT_MB` 可覆盖。MNN/TRT 忽略。进程/整卡占用是 pack 上的 `gpu_mem_mib`（`mortredctl calibrate --write-pack`），不是这个键。 |
 | `input_layout` | `backend` | MNN host 张量布局：`nhwc`、`nchw` 或按模型自动识别 |
 | `precision_mode` / `power_mode` | `backend` | MNN `BackendConfig` 配置 |
 | `input_names` / `output_names` | `backend` | I/O 名称覆盖或过滤 |

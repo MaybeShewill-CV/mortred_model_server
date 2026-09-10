@@ -1,6 +1,9 @@
 # Example machine pack for YOLOV8 (TensorRT on gpu profile).
-# Convert engines first: mortredctl prepare --pack conf/packs/yolov8.toml
-# Calibrate with supervisor stopped so port 9056 is free.
+# Copy this file to a machine-local path, then:
+#   mortredctl prepare --pack /path/to/machine-pack.toml
+#   stop the supervisor, then:
+#   mortredctl calibrate --pack /path/to/machine-pack.toml --write-pack
+# Git examples must not include gpu_mem_mib; that stamp is the spawn gate.
 
 [pack.YOLOV8]
 worker_nums = 1

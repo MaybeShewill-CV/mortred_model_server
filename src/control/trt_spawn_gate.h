@@ -128,6 +128,37 @@ inline std::vector<std::string> trt_engine_raw_paths(const mini_toml::Doc& doc) 
 
 }  // namespace detail
 
+/*** True when the effective model toml has a TensorRT backend table. */
+inline bool model_uses_tensorrt(const std::string& project_root, const std::string& bin_dir,
+                                const std::string& server_toml,
+                                const std::string& model_config_override) {
+    std::string model_toml = model_config_override;
+    if (model_toml.empty()) {
+        model_toml = detail::server_model_config_path(project_root, bin_dir, server_toml);
+    }
+    if (model_toml.empty()) {
+        return false;
+    }
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(model_toml, ec)) {
+        return false;
+    }
+    mini_toml::Doc doc;
+    if (!mini_toml::load(model_toml, &doc)) {
+        return false;
+    }
+    for (const auto& [section, kv] : doc) {
+        if (!detail::looks_like_backend_section(section)) {
+            continue;
+        }
+        const std::string type = kv.count("type") != 0 ? kv.at("type") : "";
+        if (detail::is_tensorrt_type(type)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /*** Return false and fill err when a TensorRT model would spawn without engines. */
 inline bool trt_engines_ready_for_spawn(const std::string& project_root,
                                         const std::string& bin_dir,
