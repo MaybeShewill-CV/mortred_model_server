@@ -143,7 +143,7 @@ InferenceSession（MNN / ONNX Runtime / TensorRT 统一 NamedTensor 契约）
 
 - **任一非超时项失败 → HTTP 500** + 聚合 status，但 `results[]` 逐项枚举（错误必须在 HTTP 层对监控可见）
 - **部分超时（≥1 项完成）→ HTTP 200 + status=68 + partial=true**（部分结果优于全有全无）
-- **全部超时 → 504**，`results: []`
+- **全部超时（0 项已发布）→ 504**，`results[]` 长度仍为 N，每项 `MODEL_RUN_TIMEOUT`（4），无 data
 - 背压：**按 item 计数**（16 图请求 = 16 个队列槽位），429 携带 `Retry-After`（EWMA 估算）
 - deadline：`model_run_timeout` 是**绝对预算**，覆盖 排队等待 + worker 等待 + 全部 items 推理
 

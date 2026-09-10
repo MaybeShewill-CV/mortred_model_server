@@ -167,7 +167,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -304,7 +304,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -441,7 +441,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -578,7 +578,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -715,7 +715,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -852,7 +852,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -989,7 +989,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1126,7 +1126,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1263,7 +1263,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1400,7 +1400,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1537,7 +1537,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1674,7 +1674,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1811,7 +1811,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1948,7 +1948,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2085,7 +2085,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2222,7 +2222,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2359,7 +2359,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2496,7 +2496,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2633,7 +2633,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2770,7 +2770,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2907,7 +2907,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3044,7 +3044,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3181,7 +3181,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3318,7 +3318,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3455,7 +3455,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3592,7 +3592,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3729,7 +3729,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3866,7 +3866,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         ],
         "responses": {
           "200": {
-            "description": "Unified envelope; results[] aligns with images[]. A mid-request deadline returns the completed items with partial=true.",
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5211,7 +5211,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "items": {
               "$ref": "#/components/schemas/ResponseItem"
             },
-            "description": "Index-aligned with the request images[]"
+            "description": "Index-aligned with the request images[] (always length N for admitted inference; unpublished slots are MODEL_RUN_TIMEOUT)"
           },
           "server_time_ms": {
             "type": "number"
@@ -5661,7 +5661,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         }
       },
       "GatewayTimeout": {
-        "description": "Model run timeout",
+        "description": "Model run timeout: results[] length N, each MODEL_RUN_TIMEOUT",
         "content": {
           "application/json": {
             "schema": {

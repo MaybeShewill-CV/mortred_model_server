@@ -11,8 +11,8 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <cstring>
-#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
@@ -44,6 +44,7 @@
 #include "server/inference_task.h"
 #include "server/item_exec.h"
 #include "server/openapi_doc.h"
+#include "server/sync_request_graph.h"
 #include "server/output_options.h"
 #include "server/parsed_request.h"
 #include "server/prometheus_metrics.h"
@@ -63,11 +64,11 @@ class BaseAiServerImpl {
 public:
     /***
      * drain in-flight go tasks before members are destroyed: wait until every
-     * worker is back in the queue (a running do_work holds exactly one worker;
-     * metrics/EWMA are written before that enqueue, so this wait is enough to
-     * keep _m_metrics and the pool EWMA alive. After enqueue, do_work
-     * writes only its task-owned ctx, a member of the go closure kept alive
-     * by the framework's task lifetime). The wait is
+     * worker is back in the queue (a running do_work or sync-graph item holds
+     * exactly one worker; metrics/EWMA are written before that enqueue, so
+     * this wait is enough to keep _m_metrics and the pool EWMA alive. After
+     * HTTP has replied, a detached go may still hold the lease until its
+     * SUCCESS callback checkin). The wait is
      * deliberately unbounded — a hung model keeps its worker forever and the
      * destructor blocks; that is handled by the outer process manager (e.g.
      * mortred-supervisor's SIGINT -> SIGKILL fallback), not here. Model and
@@ -165,28 +166,19 @@ protected:
 
     using InferenceResult = jinq::server::InferenceResult<MODEL_OUTPUT>;
     using InferenceTask = jinq::server::InferenceTask;
-
-    struct request_meta {
-        std::string task_id;
-        std::string task_received_ts;
-        bool is_task_req_valid = false;
-    };
-
-    struct go_task_functor {
-        BaseAiServerImpl* self;
-        InferenceTask req;
-        InferenceResult ctx;
-
-        void operator()(WFGoTask* task) {
-            task->user_data = &ctx;
-            self->do_work(&req, &ctx);
-        }
-    };
+    using SyncState = SyncRequestState<WORKER, MODEL_OUTPUT>;
 
     void async_run_job(const std::string& job_id);
     void schedule_async_job(const std::string& job_id);
     void do_work(InferenceTask* req, InferenceResult* result);
-    void do_work_cb(WFGoTask* task, const request_meta& meta, protocol::HttpResponse* resp);
+    void schedule_sync_request(WFHttpTask* http_task, InferenceTask req, size_t n_items);
+    void start_sync_item(std::shared_ptr<SyncState> state, size_t k);
+    void start_sync_batch(std::shared_ptr<SyncState> state);
+    void on_sync_item_done(std::shared_ptr<SyncState> state, size_t k,
+                           std::shared_ptr<typename SyncState::ItemScratch> work,
+                           WFGoTask* task);
+    void reply_sync_request(std::shared_ptr<SyncState> state);
+    void release_sync_worker(std::shared_ptr<SyncState> state);
     void apply_runtime_config(const ServerRuntimeConfig& cfg);
     void wire_async_endpoints();
 };
@@ -378,7 +370,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
             return;
         }
         auto* req = task->get_req();
-        auto* resp = task->get_resp();
         const std::string content_type = header_value_of(req, "content-type");
         std::string request_encoding = "json";
         jinq::server::ParsedRequest parsed;
@@ -455,33 +446,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         _m_waiting_jobs += n_items;
         _m_received_jobs += n_items;
         _m_metrics.inc_received_jobs(n_items);
-        auto* series = series_of(task);
-        request_meta meta;
-        meta.task_id = task_req.task_id;
-        meta.is_task_req_valid = true;
-        meta.task_received_ts = Timestamp::now().to_format_str();
-        go_task_functor functor{this, std::move(task_req), {}};
-        WFGoTask* serve_task = nullptr;
-        if (_m_model_run_timeout <= 0) {
-            serve_task = WFTaskFactory::create_go_task<std::nullptr_t>(_m_server_uri, nullptr);
-        } else {
-            const int timeout_ms = _m_model_run_timeout;
-            serve_task = WFTaskFactory::create_timedgo_task<std::nullptr_t>(
-                static_cast<time_t>(timeout_ms / 1000),
-                static_cast<long>((timeout_ms % 1000) * 1000000L),
-                _m_server_uri, nullptr);
-        }
-        auto&& work_cb = std::bind(&BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb,
-                                   this, std::placeholders::_1, std::move(meta), resp);
-        serve_task->set_callback(work_cb);
-        WFTaskFactory::reset_go_task(serve_task, std::move(functor), serve_task);
-        *series << serve_task;
-
-        series->set_callback([this, n_items](const SeriesWork*) {
-            _m_finished_jobs += n_items;
-            _m_metrics.inc_finished_jobs(n_items);
-            _m_waiting_jobs -= n_items;
-        });
+        schedule_sync_request(task, std::move(task_req), n_items);
         return;
     } else {
         _m_metrics.inc_http_requests(request_method, "404");
@@ -531,44 +496,210 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
 }
 
 template<typename WORKER, typename MODEL_OUTPUT>
-void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work_cb(
-    WFGoTask* task, const request_meta& meta, protocol::HttpResponse* resp) {
-    auto state = task->get_state();
+void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::schedule_sync_request(
+    WFHttpTask* http_task, InferenceTask req, size_t n_items) {
+    auto state = std::make_shared<SyncState>();
+    state->n_items = n_items;
+    state->req = std::move(req);
+    state->task_id = state->req.task_id;
+    state->resp = http_task->get_resp();
+    state->waiter = make_sync_waiter_name(state->req.task_id);
+    state->result.options = state->req.options;
+    state->result.item_status.assign(n_items, StatusCode::MODEL_RUN_TIMEOUT);
+    state->result.item_outputs.assign(n_items, MODEL_OUTPUT{});
 
-    StatusCode status;
-    double worker_run_time_consuming = 0;
-    double find_worker_time_consuming = 0;
-    jinq::common::UnifiedResponse unified;
-    unified.model_name = _m_model_name;
-    size_t ok_items = 0;
+    auto* series = series_of(http_task);
+    auto* counter = WFTaskFactory::create_counter_task(
+        state->waiter, 1, [this, state](WFCounterTask*) { reply_sync_request(state); });
+    *series << counter;
+    series->set_callback([this, n_items](const SeriesWork*) {
+        _m_finished_jobs += n_items;
+        _m_metrics.inc_finished_jobs(n_items);
+        _m_waiting_jobs -= n_items;
+    });
 
-    if (state != WFT_STATE_SUCCESS) {
-        status = StatusCode::MODEL_RUN_TIMEOUT;
-        unified.task_id = meta.task_id;
-    } else {
-        auto* result = static_cast<InferenceResult*>(task->user_data);
-        unified = inference_result_to_unified(
-            meta.task_id, _m_model_name, *result,
-            [this](rapidjson::Document::AllocatorType& allocator, rapidjson::Document& data,
-                   const MODEL_OUTPUT& output, const OutputOptions& options) {
-                fill_response_data(allocator, data, output, options);
-            });
-        status = result->model_run_status;
-        for (const auto& item : unified.results) {
-            if (item.status == jinq::common::to_underlying(StatusCode::OK)) {
-                ++ok_items;
-            }
-        }
-        worker_run_time_consuming = result->worker_run_time_consuming;
-        find_worker_time_consuming = result->find_worker_time_consuming;
+    if (_m_max_batch_size > 1) {
+        // Collector wait_until already returns at the request deadline. An
+        // outer timer racing that wait would reply with published==0 and drop
+        // any items the runner had already filled.
+        start_sync_batch(state);
+        return;
     }
+
+    start_sync_item(state, 0);
+    if (_m_model_run_timeout <= 0) {
+        return;
+    }
+    const int timeout_ms = _m_model_run_timeout;
+    const std::string waiter = state->waiter;
+    auto* timer = WFTaskFactory::create_timer_task(
+        static_cast<time_t>(timeout_ms / 1000),
+        static_cast<long>((timeout_ms % 1000) * 1000000L),
+        [waiter](WFTimerTask*) { WFTaskFactory::count_by_name(waiter, 1); });
+    timer->start();
+}
+
+template<typename WORKER, typename MODEL_OUTPUT>
+void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::start_sync_batch(
+    std::shared_ptr<SyncState> state) {
+    const size_t n_items = state->n_items;
+    auto* go = WFTaskFactory::create_go_task(_m_server_uri, [this, state]() {
+        do_work(&state->req, &state->result);
+    });
+    go->set_callback([state, n_items](WFGoTask* task) {
+        if (task->get_state() == WFT_STATE_SUCCESS) {
+            state->published.store(n_items, std::memory_order_release);
+            state->find_worker_ms.store(
+                static_cast<int64_t>(state->result.find_worker_time_consuming),
+                std::memory_order_relaxed);
+            state->worker_run_ms.store(
+                static_cast<int64_t>(state->result.worker_run_time_consuming),
+                std::memory_order_relaxed);
+        }
+        WFTaskFactory::count_by_name(state->waiter, 1);
+    });
+    go->start();
+}
+
+template<typename WORKER, typename MODEL_OUTPUT>
+void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::start_sync_item(
+    std::shared_ptr<SyncState> state, size_t k) {
+    auto work = std::make_shared<typename SyncState::ItemScratch>();
+    auto* go = WFTaskFactory::create_go_task(_m_server_uri, [this, state, k, work]() {
+        if (state->replied.load(std::memory_order_acquire)) {
+            return;
+        }
+        if (k == 0) {
+            WORKER leased;
+            const auto ck = _m_workers.checkout(leased, checkout_wait_for(state->req));
+            if (!ck.ok) {
+                state->checkout_failed.store(true, std::memory_order_release);
+                return;
+            }
+            state->find_worker_ms.store(static_cast<int64_t>(ck.wait_ms),
+                                        std::memory_order_relaxed);
+            _m_metrics.observe_queue_wait_ms(ck.wait_ms);
+            state->worker = std::move(leased);
+            state->has_worker.store(true, std::memory_order_release);
+        }
+        if (state->replied.load(std::memory_order_acquire) ||
+            state->checkout_failed.load(std::memory_order_acquire) ||
+            !state->has_worker.load(std::memory_order_acquire)) {
+            return;
+        }
+        if (state->req.deadline != std::chrono::steady_clock::time_point::max() &&
+            std::chrono::steady_clock::now() >= state->req.deadline) {
+            return;
+        }
+        const auto t0 = Timestamp::now();
+        work->status = run_one(state->worker, state->req, k, &work->output);
+        work->ran = true;
+        work->run_ms = (Timestamp::now() - t0) * 1000.0;
+    });
+    go->set_callback([this, state, k, work](WFGoTask* task) {
+        on_sync_item_done(state, k, work, task);
+    });
+    go->start();
+}
+
+template<typename WORKER, typename MODEL_OUTPUT>
+void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::on_sync_item_done(
+    std::shared_ptr<SyncState> state, size_t k,
+    std::shared_ptr<typename SyncState::ItemScratch> work, WFGoTask* task) {
+    bool observed = false;
+    const auto observe_run = [this, work, &observed]() {
+        if (observed || !work->ran) {
+            return;
+        }
+        _m_metrics.observe_inference_duration_ms(work->run_ms);
+        _m_workers.observe_run_ms(static_cast<int64_t>(work->run_ms));
+        observed = true;
+    };
+    const auto finish_and_count = [this, state, &observe_run]() {
+        observe_run();
+        release_sync_worker(state);
+        WFTaskFactory::count_by_name(state->waiter, 1);
+    };
+
+    if (state->replied.load(std::memory_order_acquire)) {
+        observe_run();
+        release_sync_worker(state);
+        return;
+    }
+    if (task->get_state() != WFT_STATE_SUCCESS ||
+        state->checkout_failed.load(std::memory_order_acquire) || !work->ran) {
+        finish_and_count();
+        return;
+    }
+
+    state->result.item_outputs[k] = std::move(work->output);
+    state->result.item_status[k] = work->status;
+    state->published.store(k + 1, std::memory_order_release);
+    state->worker_run_ms.fetch_add(static_cast<int64_t>(work->run_ms),
+                                   std::memory_order_relaxed);
+    observe_run();
+
+    if (state->replied.load(std::memory_order_acquire)) {
+        release_sync_worker(state);
+        return;
+    }
+
+    const bool past_deadline =
+        state->req.deadline != std::chrono::steady_clock::time_point::max() &&
+        std::chrono::steady_clock::now() >= state->req.deadline;
+    if (k + 1 < state->n_items && !past_deadline) {
+        start_sync_item(state, k + 1);
+        return;
+    }
+    finish_and_count();
+}
+
+template<typename WORKER, typename MODEL_OUTPUT>
+void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::release_sync_worker(
+    std::shared_ptr<SyncState> state) {
+    if (!state->has_worker.exchange(false, std::memory_order_acq_rel)) {
+        return;
+    }
+    _m_workers.checkin(std::move(state->worker));
+}
+
+template<typename WORKER, typename MODEL_OUTPUT>
+void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::reply_sync_request(
+    std::shared_ptr<SyncState> state) {
+    if (state->replied.exchange(true, std::memory_order_acq_rel)) {
+        return;
+    }
+    const size_t n = state->published.load(std::memory_order_acquire);
+    state->result.find_worker_time_consuming =
+        static_cast<double>(state->find_worker_ms.load(std::memory_order_relaxed));
+    state->result.worker_run_time_consuming =
+        static_cast<double>(state->worker_run_ms.load(std::memory_order_relaxed));
+    state->result.task_finished_ts = Timestamp::now().to_format_str();
+    auto snap = assemble_published(state->result, n, state->n_items);
+    auto unified = inference_result_to_unified(
+        state->task_id, _m_model_name, snap,
+        [this](rapidjson::Document::AllocatorType& allocator, rapidjson::Document& data,
+               const MODEL_OUTPUT& output, const OutputOptions& options) {
+            fill_response_data(allocator, data, output, options);
+        });
+    const StatusCode status = snap.model_run_status;
     unified.status = jinq::common::to_underlying(status);
     unified.status_str = jinq::common::status_code_to_str(status);
-    reply_unified_json(resp, unified);
+    if (status != StatusCode::OK) {
+        LOG(ERROR) << "worker run failed with status " << jinq::common::to_underlying(status);
+    }
+    reply_unified_json(state->resp, unified);
 
+    size_t ok_items = 0;
+    for (const auto& item : unified.results) {
+        if (item.status == jinq::common::to_underlying(StatusCode::OK)) {
+            ++ok_items;
+        }
+    }
+    const double http_ms =
+        snap.worker_run_time_consuming + snap.find_worker_time_consuming;
     _m_metrics.inc_http_requests("POST", std::to_string(http_status_of(status)));
-    _m_metrics.observe_http_duration_ms("POST", std::to_string(http_status_of(status)),
-                                        worker_run_time_consuming + find_worker_time_consuming);
+    _m_metrics.observe_http_duration_ms("POST", std::to_string(http_status_of(status)), http_ms);
     for (const auto& item : unified.results) {
         _m_metrics.inc_inference_requests(item.status);
     }

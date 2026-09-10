@@ -8,6 +8,19 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- Sync inference replies at `model_run_timeout` without dropping completed
+  items. The HTTP series holds a unique-reply counter; per-item compute is a
+  detached go chain plus one request-level timer. `results[]` is always length
+  N: 504 / status 4 when nothing published; 200 / status 68 / `partial=true`
+  when at least one item finished. Batch still uses `submit_and_wait` (no
+  outer timer racing the collector).
+
+> 同步推理在 `model_run_timeout` 到期时回包，不再把已完成项丢掉。HTTP series
+> 上是唯一回复的 counter；逐项计算是脱离 series 的 go 链，外加一个请求级
+> timer。`results[]` 长度恒为 N：没有任何项发布时 504 / status 4；至少一项
+> 完成时 200 / status 68 / `partial=true`。凑批路径仍走 `submit_and_wait`，
+> 不用外层 timer 和 collector 抢跑。
+
 - Release checksums use the tarball **basename** so `sha256sum -c` after
   `curl -fLO` prints `OK` (deployment §6.1). `sha256sum /abs/path` wrote a
   runner path that does not exist on the operator machine. `bootstrap.sh`

@@ -6,13 +6,13 @@
 ************************************************/
 
 // Lifetime of do_work vs BaseAiServerImpl destruction, including the
-// production timed-go path (serve_process -> create_timedgo_task ->
-// do_work_cb). Direct call_do_work covers destructor drain when metrics
-// must not run after enqueue. HTTP cases cover do_work_cb's timeout
-// branch while the routine is still running, and while it has not
-// started (user_data still NULL). All HTTP servers in this binary use
-// compute_threads=1 so the first WORKFLOW_library_init pins a single
-// compute thread for the "routine not started" interleaving.
+// production sync deadline graph (serve_process -> WFCounterTask on the
+// HTTP series, detached create_go_task per item, request-level timer).
+// Direct call_do_work covers destructor drain when metrics must not run
+// after enqueue. HTTP cases cover reply-on-timeout while run_impl is still
+// running, and while the go task has not started. All HTTP servers in this
+// binary use compute_threads=1 so the first WORKFLOW_library_init pins a
+// single compute thread for the "routine not started" interleaving.
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -59,6 +59,7 @@ struct RunControl {
     std::atomic<int> entered{0};
     std::atomic<bool> hold{false};
     std::atomic<bool> release{false};
+    std::atomic<int> hold_from{1};
     int delay_ms = 0;
 };
 
@@ -76,9 +77,10 @@ public:
 
     StatusCode run_impl(const base64_input&, TestOutput& out) override {
         if (_m_control) {
+            const int entered = _m_control->entered.fetch_add(1) + 1;
             _m_control->runs.fetch_add(1);
-            _m_control->entered.fetch_add(1);
-            if (_m_control->hold.load()) {
+            if (_m_control->hold.load() &&
+                entered >= _m_control->hold_from.load()) {
                 while (!_m_control->release.load()) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(5));
                 }
@@ -184,7 +186,12 @@ public:
     }
 
     void hold_in_run() {
+        hold_from_entered(1);
+    }
+
+    void hold_from_entered(int n) {
         if (_m_control) {
+            _m_control->hold_from.store(n);
             _m_control->release.store(false);
             _m_control->hold.store(true);
         }
@@ -354,10 +361,12 @@ std::string build_config(int port, const std::string& uri, const std::string& ex
     cfg << "compute_threads=1\n";
     cfg << "handler_threads=4\n";
     cfg << "worker_nums=1\n";
-    cfg << "max_batch_size=1\n";
     cfg << "max_queue_depth=0\n";
     cfg << "server_uri=\"" << uri << "\"\n";
     cfg << "auth_token=\"test-secret\"\n";
+    if (extra.find("max_batch_size=") == std::string::npos) {
+        cfg << "max_batch_size=1\n";
+    }
     cfg << extra;
     return cfg.str();
 }
@@ -425,6 +434,13 @@ ServerHandle start_server(const std::string& uri, const std::string& extra) {
 }
 
 const char* k_json_body = "{\"images\":[\"aGVsbG8=\"]}";
+const char* k_json_body_two = "{\"images\":[\"aGVsbG8=\",\"aGVsbG8=\"]}";
+
+rapidjson::Document parse_json(const std::string& body) {
+    rapidjson::Document doc;
+    doc.Parse(body.c_str());
+    return doc;
+}
 
 }  // namespace
 
@@ -464,7 +480,7 @@ TEST(do_work_lifetime, destructor_concurrent_with_in_flight_do_work) {
 TEST(do_work_lifetime, timedgo_timeout_while_do_work_running) {
     // 100ms is too tight under ASan: the go task can start after the request
     // deadline, skip run_impl, and still return 504. Hold inside run_impl
-    // so timed-go must fire while the worker is checked out.
+    // so the request timer must fire while the worker is checked out.
     ServerHandle handle =
         start_server("/lifetime/timeout_running", "model_run_timeout=500\n");
     ASSERT_NE(handle.server, nullptr);
@@ -495,10 +511,18 @@ TEST(do_work_lifetime, timedgo_timeout_while_do_work_running) {
                                 .count();
 
     EXPECT_EQ(resp.status, 504);
-    EXPECT_LT(elapsed_ms, 2000) << "timed-go should answer while run_impl is held";
+    EXPECT_LT(elapsed_ms, 2000) << "deadline timer should answer while run_impl is held";
     EXPECT_EQ(handle.server->impl()->run_count(), 1);
     EXPECT_EQ(handle.server->impl()->queue_approx(), 0u)
-        << "do_work should still hold the worker after do_work_cb timeout";
+        << "the in-flight run should still hold the worker after HTTP 504";
+    auto doc = parse_json(resp.body);
+    ASSERT_FALSE(doc.HasParseError());
+    EXPECT_EQ(doc["status"].GetInt(), 4);
+    EXPECT_FALSE(doc["partial"].GetBool());
+    ASSERT_TRUE(doc["results"].IsArray());
+    ASSERT_EQ(doc["results"].Size(), 1u);
+    EXPECT_EQ(doc["results"][0]["status"].GetInt(), 4);
+    EXPECT_TRUE(doc["results"][0]["data"].IsNull());
 
     handle.server->impl()->release_run();
     handle.server->stop();
@@ -531,11 +555,91 @@ TEST(do_work_lifetime, timedgo_timeout_before_routine_starts) {
                                 .count();
 
     EXPECT_EQ(victim_resp.status, 504);
-    EXPECT_LT(elapsed_ms, 300) << "victim timed-go should fire while compute thread is busy";
+    EXPECT_LT(elapsed_ms, 300) << "victim timer should fire while compute thread is busy";
     EXPECT_EQ(victim.server->impl()->run_count(), 0)
-        << "victim functor must not have started (user_data still NULL)";
+        << "victim run_impl must not have started";
+    auto doc = parse_json(victim_resp.body);
+    ASSERT_FALSE(doc.HasParseError());
+    EXPECT_EQ(doc["status"].GetInt(), 4);
+    ASSERT_TRUE(doc["results"].IsArray());
+    ASSERT_EQ(doc["results"].Size(), 1u);
+    EXPECT_EQ(doc["results"][0]["status"].GetInt(), 4);
 
     occupier_req.join();
     EXPECT_EQ(occupier_resp.status, 200);
     EXPECT_EQ(occupier.server->impl()->run_count(), 1);
+}
+
+TEST(do_work_lifetime, deadline_graph_partial_keeps_prefix_success) {
+    ServerHandle handle =
+        start_server("/lifetime/partial", "model_run_timeout=500\n");
+    ASSERT_NE(handle.server, nullptr);
+    ASSERT_GT(handle.port, 0);
+    handle.server->impl()->hold_from_entered(2);
+
+    HttpResp resp;
+    std::thread req([&]() {
+        resp = send_request(handle.port, handle.uri, k_json_body_two);
+    });
+
+    const bool started = wait_for(
+        [&]() {
+            return handle.server->impl()->entered() >= 2 &&
+                   handle.server->impl()->queue_approx() == 0;
+        },
+        5000);
+    if (!started) {
+        handle.server->impl()->release_run();
+        req.join();
+    }
+    ASSERT_TRUE(started) << "second run_impl never started";
+
+    req.join();
+    EXPECT_EQ(resp.status, 200);
+    auto doc = parse_json(resp.body);
+    ASSERT_FALSE(doc.HasParseError());
+    EXPECT_EQ(doc["status"].GetInt(), 68);
+    EXPECT_TRUE(doc["partial"].GetBool());
+    ASSERT_TRUE(doc["results"].IsArray());
+    ASSERT_EQ(doc["results"].Size(), 2u);
+    EXPECT_EQ(doc["results"][0]["status"].GetInt(), 0);
+    ASSERT_TRUE(doc["results"][0]["data"].IsObject());
+    EXPECT_EQ(doc["results"][0]["data"]["value"].GetInt(), 1);
+    EXPECT_EQ(doc["results"][1]["status"].GetInt(), 4);
+    EXPECT_TRUE(doc["results"][1]["data"].IsNull());
+    EXPECT_EQ(handle.server->impl()->queue_approx(), 0u)
+        << "item 1 should still hold the worker after 200 PARTIAL";
+
+    handle.server->impl()->release_run();
+    handle.server->stop();
+    handle.server.reset();
+}
+
+TEST(do_work_lifetime, deadline_graph_all_success) {
+    ServerHandle handle =
+        start_server("/lifetime/ok", "model_run_timeout=2000\n");
+    ASSERT_NE(handle.server, nullptr);
+    ASSERT_GT(handle.port, 0);
+    const auto resp = send_request(handle.port, handle.uri, k_json_body);
+    EXPECT_EQ(resp.status, 200);
+    auto doc = parse_json(resp.body);
+    ASSERT_FALSE(doc.HasParseError());
+    EXPECT_EQ(doc["status"].GetInt(), 0);
+    EXPECT_FALSE(doc["partial"].GetBool());
+    ASSERT_EQ(doc["results"].Size(), 1u);
+    EXPECT_EQ(doc["results"][0]["status"].GetInt(), 0);
+}
+
+TEST(do_work_lifetime, deadline_graph_batch_replies_without_outer_timer) {
+    ServerHandle handle = start_server(
+        "/lifetime/batch", "model_run_timeout=500\nmax_batch_size=4\nmax_batch_delay_ms=20\n");
+    ASSERT_NE(handle.server, nullptr);
+    ASSERT_GT(handle.port, 0);
+    const auto resp = send_request(handle.port, handle.uri, k_json_body);
+    EXPECT_EQ(resp.status, 200);
+    auto doc = parse_json(resp.body);
+    ASSERT_FALSE(doc.HasParseError());
+    EXPECT_EQ(doc["status"].GetInt(), 0);
+    ASSERT_EQ(doc["results"].Size(), 1u);
+    EXPECT_EQ(doc["results"][0]["status"].GetInt(), 0);
 }

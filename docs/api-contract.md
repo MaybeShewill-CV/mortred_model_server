@@ -138,6 +138,13 @@ The JSON field is **`status`** (not `code`). Mapping is `src/server/http_status.
 | 429 | Rate limited or queue full (`Retry-After`) | 429 |
 | others | Server error | 500 |
 
+Admitted model requests always return `results[]` of length `N = images[]`.
+HTTP **504** (`status` 4) means zero items had been published when the
+deadline fired; each slot is timeout with `data: null`. HTTP **200** +
+`status` 68 + `partial: true` means at least one item completed in time —
+clients must not retry that response as a 5xx. Rejection envelopes (401/422/…)
+may still use empty `results[]`.
+
 ## Common headers
 
 ```http

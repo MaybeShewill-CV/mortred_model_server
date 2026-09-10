@@ -15,6 +15,7 @@
 #include "models/io/common_input.h"
 #include "server/inference_task.h"
 #include "server/item_exec.h"
+#include "server/sync_request_graph.h"
 
 using jinq::common::StatusCode;
 using jinq::models::io_define::common_io::base64_input;
@@ -22,9 +23,11 @@ using jinq::models::io_define::common_io::byte_source;
 using jinq::server::InferenceResult;
 using jinq::server::InferenceTask;
 using jinq::server::aggregate_item_statuses;
+using jinq::server::assemble_published;
 using jinq::server::inference_result_to_unified;
 using jinq::server::make_model_input;
 using jinq::server::run_items;
+using jinq::server::run_one;
 
 namespace {
 
@@ -109,6 +112,44 @@ TEST(item_exec, unified_fill_only_ok_items) {
     ASSERT_EQ(unified.results.size(), 1u);
     EXPECT_TRUE(unified.results[0].data.HasMember("value"));
     EXPECT_EQ(unified.results[0].data["value"].GetInt(), 3);
+}
+
+TEST(item_exec, run_one_writes_single_slot) {
+    FakeWorker worker = std::make_unique<FakeModel>();
+    InferenceTask req;
+    req.items.push_back(text_item("xy"));
+    req.items.push_back(text_item("fail"));
+    FakeOutput out;
+    EXPECT_EQ(run_one(worker, req, 0, &out), StatusCode::OK);
+    EXPECT_EQ(out.value, 2);
+    FakeOutput failed;
+    EXPECT_EQ(run_one(worker, req, 1, &failed), StatusCode::MODEL_RUN_SESSION_FAILED);
+}
+
+TEST(item_exec, assemble_published_pads_timeout_without_reading_tail) {
+    InferenceResult<FakeOutput> src;
+    src.item_status = {StatusCode::OK, StatusCode::OK};
+    src.item_outputs = {FakeOutput{1}, FakeOutput{99}};
+    auto snap = assemble_published(src, 1, 2);
+    EXPECT_EQ(snap.model_run_status, StatusCode::DEADLINE_EXCEEDED_PARTIAL);
+    EXPECT_TRUE(snap.partial);
+    ASSERT_EQ(snap.item_status.size(), 2u);
+    EXPECT_EQ(snap.item_status[0], StatusCode::OK);
+    EXPECT_EQ(snap.item_outputs[0].value, 1);
+    EXPECT_EQ(snap.item_status[1], StatusCode::MODEL_RUN_TIMEOUT);
+    EXPECT_EQ(snap.item_outputs[1].value, 0);
+}
+
+TEST(item_exec, assemble_published_zero_is_all_timeout) {
+    InferenceResult<FakeOutput> src;
+    src.item_status.assign(2, StatusCode::OK);
+    src.item_outputs = {FakeOutput{1}, FakeOutput{2}};
+    auto snap = assemble_published(src, 0, 2);
+    EXPECT_EQ(snap.model_run_status, StatusCode::MODEL_RUN_TIMEOUT);
+    EXPECT_FALSE(snap.partial);
+    ASSERT_EQ(snap.item_status.size(), 2u);
+    EXPECT_EQ(snap.item_status[0], StatusCode::MODEL_RUN_TIMEOUT);
+    EXPECT_EQ(snap.item_status[1], StatusCode::MODEL_RUN_TIMEOUT);
 }
 
 int main(int argc, char** argv) {
