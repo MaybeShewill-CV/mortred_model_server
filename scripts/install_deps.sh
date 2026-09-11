@@ -318,6 +318,12 @@ install_mnn() {
 }
 
 # ============ onnxruntime (official release tarball + sha256) ============
+curl_retry() { # url dest
+    local extra=()
+    curl --help 2>&1 | grep -q -- '--retry-all-errors' && extra+=(--retry-all-errors)
+    curl -fL --retry 8 --retry-delay 3 --connect-timeout 30 -C - "${extra[@]}" -o "$2" "$1"
+}
+
 install_onnxruntime() {
     if stamp "$ORT_STAMP"; then info "onnxruntime (${DEP_PROFILE}): already installed"; return; fi
     announce "install onnxruntime ${ONNXRUNTIME_VER} (${DEP_PROFILE})"
@@ -326,11 +332,7 @@ install_onnxruntime() {
     local dst="$BUILD_DIR/onnxruntime-pkg"
     mkdir -p "$dst"
     local pkg_path="$dst/$tgz"
-    if [ -n "$OFFLINE_DIR" ] && [ -f "$OFFLINE_DIR/$tgz" ]; then
-        cp "$OFFLINE_DIR/$tgz" "$pkg_path"
-    else
-        curl -fSL "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VER}/${tgz}" -o "$pkg_path"
-    fi
+    local url="https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VER}/${tgz}"
     # ---- fail-closed sha256 verification (never silently skipped) ----
     # Priority: explicit env ONNXRUNTIME_SHA256 > pinned table ONNXRUNTIME_SHA256S > official release API digest
     local expect_sha=""
@@ -348,7 +350,25 @@ install_onnxruntime() {
             | jq -r --arg name "$tgz" '.assets[] | select(.name == $name) | .digest // empty' \
             | sed 's/^sha256://' || true)"
     fi
-    [ -n "$expect_sha" ] || fail "cannot get sha256 for onnxruntime ${ONNXRUNTIME_VER}: set ONNXRUNTIME_SHA256 or fill the ONNXRUNTIME_SHA256S table (to get it: curl -fsSL -o /tmp/ort.tgz https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VER}/${tgz} && sha256sum /tmp/ort.tgz)"
+    [ -n "$expect_sha" ] || fail "cannot get sha256 for onnxruntime ${ONNXRUNTIME_VER}: set ONNXRUNTIME_SHA256 or fill the ONNXRUNTIME_SHA256S table (to get it: curl -fsSL -o /tmp/ort.tgz ${url} && sha256sum /tmp/ort.tgz)"
+
+    local have_pkg=0
+    if [ -f "$pkg_path" ] && echo "$expect_sha  $pkg_path" | sha256sum -c - >/dev/null 2>&1; then
+        info "onnxruntime tarball already present and hash-ok, skipping download"
+        have_pkg=1
+    elif [ -n "$OFFLINE_DIR" ] && [ -f "$OFFLINE_DIR/$tgz" ]; then
+        cp "$OFFLINE_DIR/$tgz" "$pkg_path"
+        have_pkg=1
+    fi
+    if [ "$have_pkg" -ne 1 ]; then
+        info "downloading ${tgz} (~400MB for gpu_cuda12; GitHub TLS drops are retried)"
+        curl_retry "$url" "$pkg_path" || true
+        if ! echo "$expect_sha  $pkg_path" | sha256sum -c - >/dev/null 2>&1; then
+            info "incomplete or corrupt tarball, retrying a full download"
+            rm -f "$pkg_path"
+            curl_retry "$url" "$pkg_path" || fail "onnxruntime download failed (GitHub TLS/network). Download ${url} elsewhere and rerun: ./scripts/install_deps.sh --onnxruntime --offline DIR"
+        fi
+    fi
     echo "$expect_sha  $pkg_path" | sha256sum -c - || fail "onnxruntime sha256 mismatch"
     tar -xzf "$pkg_path" -C "$dst"
     local src="$dst/onnxruntime-linux-x64${ORT_FLAVOR}-${ONNXRUNTIME_VER}"
