@@ -152,13 +152,18 @@ copy_tree() { # src_dir dst_dir label
     info "$3: copied into $2"
 }
 copy_libs() { # src_glob dst_dir label
-    local found=0
+    local found=0 dest
     # dst dir may not exist yet in fresh trees/containers (3rd_party/libs is
     # gitignored, so `COPY . /src/` never ships it) - cp would silently fail
     mkdir -p "$2"
     for f in $1; do
         [ -e "$f" ] || continue
-        cp -f "$f" "$2"/ || fail "copy_libs: failed to copy $f into $2 ($3)"
+        dest="$2/$(basename "$f")"
+        # Upgrade leftover: libfoo.so often stays as a dangling symlink after
+        # its old soname (e.g. libonnxruntime.so.1.18.0) was rm'd. GNU cp -f
+        # refuses to write through that ("not writing through dangling symlink").
+        rm -f "$dest"
+        cp -f "$f" "$dest" || fail "copy_libs: failed to copy $f into $2 ($3)"
         found=1
     done
     [ "$found" -eq 1 ] || fail "copy_libs: no files matched $1 ($3)"
@@ -302,6 +307,7 @@ install_mnn() {
         local mnn_cuda
         mnn_cuda="$(find "$build" -name 'libMNN_Cuda_Main.so*' -type f | head -n1)"
         [ -n "$mnn_cuda" ] || fail "libMNN_Cuda_Main.so not found under $build"
+        rm -f "$LIB_DIR/$(basename "$mnn_cuda")"
         cp -f "$mnn_cuda" "$LIB_DIR"/
         info "MNN CUDA lib: copied into $LIB_DIR"
     fi
@@ -348,7 +354,7 @@ install_onnxruntime() {
     local src="$dst/onnxruntime-linux-x64${ORT_FLAVOR}-${ONNXRUNTIME_VER}"
     [ -d "$src" ] || fail "onnxruntime unpack dir missing: $src"
     mkdir -p "$INCLUDE_DIR/onnxruntime"
-    rm -f "$LIB_DIR"/libonnxruntime.so.1.18.0*
+    rm -f "$LIB_DIR"/libonnxruntime.so*
     # 1.18 tarballs were a flat include/; 1.29 may nest include/onnxruntime/.
     if [ -f "$src/include/onnxruntime/onnxruntime_cxx_api.h" ]; then
         cp -rf "$src/include/onnxruntime/." "$INCLUDE_DIR/onnxruntime"/
