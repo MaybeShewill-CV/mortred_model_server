@@ -14,6 +14,7 @@
 //       --min images:1x3x640x640 --opt images:8x3x640x640 --max images:16x3x640x640
 
 #include <NvInfer.h>
+#include <NvInferVersion.h>
 #include <NvOnnxParser.h>
 
 #include <cstdint>
@@ -26,6 +27,8 @@
 #include <vector>
 
 using namespace nvinfer1;
+
+static_assert(NV_TENSORRT_MAJOR >= 10, "Mortred GPU line requires TensorRT 10 headers");
 
 namespace {
 
@@ -113,8 +116,8 @@ int main(int argc, char** argv) {
         std::cerr << "createInferBuilder failed (CUDA/GPU available?)" << std::endl;
         return 3;
     }
-    std::unique_ptr<INetworkDefinition> network(builder->createNetworkV2(
-        1U << static_cast<uint32_t>(NetworkDefinitionCreationFlag::kEXPLICIT_BATCH)));
+    // TensorRT 10: explicit batch is the only mode; the kEXPLICIT_BATCH flag is gone.
+    std::unique_ptr<INetworkDefinition> network(builder->createNetworkV2(0));
     std::unique_ptr<nvonnxparser::IParser> parser(
         nvonnxparser::createParser(*network, g_logger));
     if (network == nullptr || parser == nullptr) {

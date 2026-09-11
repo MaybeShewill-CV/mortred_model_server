@@ -1,9 +1,8 @@
 # syntax=docker/dockerfile:1
 # Mortred Model Server - 全自动构建运行环境
 #
-# 基线线：CUDA 11.8 + TensorRT 8.6.1 + cuDNN 8（与 3rd_party 已备集合一致）。
-# CUDA 12 / TRT 10 线：替换 base 为 12.x 并在 install_deps.sh 加 --cuda-version 12
-# （引擎转换使用外部 trtexec，需用与本机 TRT 版本匹配的 CLI 重建）。
+# GPU line: CUDA 12.6 + TensorRT 10.3.0.26 + cuDNN 9.10.2 + MNN 3.6.1 + ORT 1.29 cuda12.
+# CUDA 11 / TensorRT 8 are deleted. Engines must be rebuilt with matching trtexec.
 #
 # GPU runtime (default last stage = mortred-gpu):
 #   docker build -t mortred_model_server:gpu .
@@ -20,7 +19,7 @@
 # （TensorRT 编译排除，catalog 只暴露 profile=cpu 的精选模型；compose 用 --profile cpu）
 
 # ---------- 阶段 1：第三方依赖（install_deps.sh 全自动） ----------
-FROM nvidia/cuda:11.8.0-devel-ubuntu20.04 AS deps
+FROM nvidia/cuda:12.6.2-devel-ubuntu22.04 AS deps
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -35,35 +34,15 @@ RUN ./scripts/install_deps.sh --all \
     && ./scripts/install_deps.sh --check
 
 # ---------- 阶段 2：full build + 测试 + 安装树 ----------
-FROM nvidia/cuda:11.8.0-devel-ubuntu20.04 AS build
+FROM nvidia/cuda:12.6.2-devel-ubuntu22.04 AS build
 
 # CI 质量门禁等场景注入额外 CMake 开关（如 -DMORTRED_ENABLE_WERROR=ON）
 ARG EXTRA_CMAKE_FLAGS=""
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        build-essential git libssl-dev ca-certificates curl \
-        libeigen3-dev libopencv-dev \
-    # focal's apt cmake is 3.16.3 but the project requires >= 3.18; install
-    # the official binary tarball (build-cpu on jammy already ships 3.22)
-    && curl -fsSL https://cmake.org/files/v3.25/cmake-3.25.3-linux-x86_64.tar.gz -o /tmp/cmake.tgz \
-    && tar -xzf /tmp/cmake.tgz -C /opt \
-    && ln -sf /opt/cmake-3.25.3-linux-x86_64/bin/cmake /usr/local/bin/cmake \
-    && ln -sf /opt/cmake-3.25.3-linux-x86_64/bin/ctest /usr/local/bin/ctest \
-    && rm -f /tmp/cmake.tgz \
-    # focal's apt glog (0.5.0) ships no CMake config and libgtest-dev is
-    # sources-only, so find_package(glog/GTest) fails; build both from source
-    # at focal's own versions (glog 0.5.0 keeps the libglog.so.0 soname that
-    # the runtime stage's libgoogle-glog0v5 provides)
-    && git clone --depth 1 --branch v0.5.0 https://github.com/google/glog.git /tmp/glog \
-    && cmake -S /tmp/glog -B /tmp/glog/build -DCMAKE_BUILD_TYPE=Release \
-        -DBUILD_SHARED_LIBS=ON -DBUILD_TESTING=OFF -DGFLAGS=OFF -DCMAKE_INSTALL_PREFIX=/usr \
-    && cmake --build /tmp/glog/build -j"$(nproc)" && cmake --install /tmp/glog/build \
-    && git clone --depth 1 --branch release-1.10.0 https://github.com/google/googletest.git /tmp/gtest \
-    && cmake -S /tmp/gtest -B /tmp/gtest/build -DCMAKE_BUILD_TYPE=Release \
-        -DINSTALL_GTEST=ON -DBUILD_GMOCK=OFF -DCMAKE_INSTALL_PREFIX=/usr \
-    && cmake --build /tmp/gtest/build -j"$(nproc)" && cmake --install /tmp/gtest/build \
-    && rm -rf /tmp/glog /tmp/gtest \
+        build-essential git cmake libssl-dev ca-certificates curl \
+        libeigen3-dev libopencv-dev libgoogle-glog-dev libgtest-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
@@ -79,7 +58,7 @@ RUN cmake -S /src -B /src/build \
     && cmake --install /src/build --prefix /opt/mortred
 
 # ---------- 阶段 3：运行时（只装运行库） ----------
-FROM nvidia/cuda:11.8.0-runtime-ubuntu20.04 AS runtime
+FROM nvidia/cuda:12.6.2-runtime-ubuntu22.04 AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive \
     MORTRED_PROJECT_ROOT=/opt/mortred \
@@ -89,22 +68,21 @@ ENV DEBIAN_FRONTEND=noninteractive \
     MORTRED_GATEWAY_PORT=8080 \
     MORTRED_AUTOSTART=true
 
-# TensorRT / cuDNN / OpenCL / glog / OpenCV 运行库（NVIDIA apt + ubuntu apt）
+# TensorRT 10.3 / cuDNN 9 / OpenCL / glog / OpenCV / ORT CUDA EP (cublas+nvrtc)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl \
-        ocl-icd-libopencl1 libssl1.1 \
-        libgoogle-glog0v5 libopencv-core4.2 libopencv-imgproc4.2 libopencv-imgcodecs4.2 \
-    && curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-keyring_1.1-1_all.deb -o /tmp/cuda-keyring.deb \
+        ocl-icd-libopencl1 libssl3 \
+        libgoogle-glog0v6 libopencv-core4.5d libopencv-imgproc4.5d libopencv-imgcodecs4.5d \
+    && curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb -o /tmp/cuda-keyring.deb \
     && dpkg -i /tmp/cuda-keyring.deb && rm /tmp/cuda-keyring.deb \
     && apt-get update \
-    # exact pins matching the deps stage: bare names would pull TRT 11 and a
-    # cuDNN 8 cuda12.2 build (apt picks the higher +cuda12.2 revision), which
-    # cannot load against the CUDA 11.8 runtime; note libnvonnxparsers8 (with 's')
     && apt-get install -y --no-install-recommends \
-        libnvinfer8=8.6.1.6-1+cuda11.8 \
-        libnvinfer-plugin8=8.6.1.6-1+cuda11.8 \
-        libnvonnxparsers8=8.6.1.6-1+cuda11.8 \
-        libcudnn8=8.9.7.29-1+cuda11.8 \
+        libnvinfer10=10.3.0.26-1+cuda12.5 \
+        libnvinfer-plugin10=10.3.0.26-1+cuda12.5 \
+        libnvonnxparsers10=10.3.0.26-1+cuda12.5 \
+        libcudnn9-cuda-12=9.10.2.21-1 \
+        libcublas-12-6 \
+        cuda-nvrtc-12-6 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /opt/mortred /opt/mortred

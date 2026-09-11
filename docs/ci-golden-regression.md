@@ -141,7 +141,7 @@ Adding an HTTP model without a tier fails `python3 scripts/check_consistency.py`
 |---|---|
 | OS | Ubuntu 22.04 LTS |
 | NVIDIA driver | >= 535.x |
-| CUDA / TensorRT | 11.8 / 8.6.1 — match `3rd_party/` |
+| CUDA / TensorRT | 12.x / 10.3 — match `3rd_party/` |
 | Labels | `self-hosted`, `X64`, `gpu` |
 | Concurrency | One runner process per machine |
 
@@ -152,8 +152,10 @@ Adding an HTTP model without a tier fails `python3 scripts/check_consistency.py`
 ```
 
 Jobs symlink those into the checkout. Engines are GPU- and TRT-version
-specific: after a driver/TRT bump, wipe `weights/**/*.engine` and rebuild
-from ONNX before PR traffic.
+specific: after this CUDA 12 / TensorRT 10 bump (and any later driver/TRT
+bump), wipe `/opt/mortred-cache/3rd_party` and `weights/**/*.engine`, then
+`install_deps.sh --all && --check` and rebuild engines from ONNX before PR
+traffic.
 
 Preflight before relying on fail-closed smoke:
 

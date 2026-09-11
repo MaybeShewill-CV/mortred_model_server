@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # install_deps.sh - one-shot build/install of all Mortred third-party deps into 3rd_party/{include,libs}
 #
-# Goal: replace the "manually compile third-party libs + hand-copy into 3rd_party" flow. Defaults to this repo's
-# verified CUDA 11 / TensorRT 8.6 baseline; `--cuda-version 12` switches to the
-# CUDA 12 / TensorRT 10 line (engines must be rebuilt with a matching trtexec version).
+# GPU line is CUDA 12 + TensorRT 10.3 + cuDNN 9 + MNN 3.6.1 + ORT 1.29 cuda12.
+# CUDA 11 / TensorRT 8 are deleted. Engines must be rebuilt with matching trtexec.
 #
 # Usage:
 #   ./scripts/install_deps.sh --check            # verify 3rd_party completeness and print versions
@@ -14,7 +13,7 @@
 #   ./scripts/install_deps.sh --mnn              # build and install only MNN
 #   ./scripts/install_deps.sh --onnxruntime      # download and install only onnxruntime
 #   ./scripts/install_deps.sh --nvidia           # CUDA/TensorRT/cuDNN/trtexec (needs root + NVIDIA apt)
-#   ./scripts/install_deps.sh --cuda-version 12  # switch to the CUDA 12 / TRT 10 line
+#   ./scripts/install_deps.sh --cuda-version 12  # accepted no-op (12 is the only GPU line)
 #   ./scripts/install_deps.sh --offline DIR      # use a pre-downloaded package dir (offline)
 #   Environment variables:
 #   ONNXRUNTIME_SHA256=<hex>  explicitly pin the onnxruntime tarball hash (highest priority);
@@ -31,57 +30,39 @@ LIB_DIR="$ROOT/3rd_party/libs"
 STAMP_DIR="$ROOT/3rd_party/.install-stamp"
 BUILD_DIR="${MORTRED_DEPS_BUILD_DIR:-$ROOT/.deps-build}"
 
-# ---- Version matrix (two lines; tags verified to exist via git ls-remote/HTTP HEAD) ----
-CUDA_VERSION="${CUDA_VERSION:-11}"
-# NVIDIA base images (nvidia/cuda:*) export CUDA_VERSION="11.8.0" style values;
-# normalize to the major line so the env bleed cannot fail the 11|12 validation
+# ---- Version matrix (one GPU line; tags verified to exist via git ls-remote/HTTP HEAD) ----
+CUDA_VERSION="${CUDA_VERSION:-12}"
+# NVIDIA base images (nvidia/cuda:*) export CUDA_VERSION="12.6.0" style values;
+# normalize to the major line so the env bleed cannot fail the 12-only validation
 CUDA_VERSION="${CUDA_VERSION%%.*}"
-if [ "$CUDA_VERSION" = "12" ]; then
-    TRT_VER="10.3.0.26"
-    TRT_INCLUDE_DIR="TensorRT-10.3.0"
-    CUDNN_VER="9"
-    MNN_TAG="${MNN_TAG:-2.9.6}"      # CUDA 12 requires the MNN 2.9+ backend
-    MNN_CUDA_FLAGS="-DMNN_CUDA=ON -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda-12"
-else
-    TRT_VER="8.6.1.6"
-    TRT_INCLUDE_DIR="TensorRT-8.6.1.6"
-    CUDNN_VER="8"
-    MNN_TAG="${MNN_TAG:-2.7.0}"
-    MNN_CUDA_FLAGS="-DMNN_CUDA=ON"
-fi
+TRT_VER="10.3.0.26"
+TRT_INCLUDE_DIR="TensorRT-10.3.0"
+CUDNN_VER="9"
+MNN_TAG="${MNN_TAG:-3.6.1}"
+MNN_CUDA_FLAGS="-DMNN_CUDA=ON"
 WORKFLOW_TAG="${WORKFLOW_TAG:-v0.10.9}"
-ONNXRUNTIME_VER="${ONNXRUNTIME_VER:-1.18.0}"
+ONNXRUNTIME_VER="${ONNXRUNTIME_VER:-1.29.0}"
+NVIDIA_STAMP="nvidia-cuda12-trt10.3"
 # deployment profile: gpu (default, full CUDA/TRT stack) | cpu (MNN-CPU +
 # ORT-CPU, no NVIDIA). Drives MNN build flags, the ORT tarball flavor and the
 # --check expectations; stamps are profile-specific so trees never mix.
 DEP_PROFILE="${DEP_PROFILE:-gpu}"
-if [ "$DEP_PROFILE" = "cpu" ]; then
-    MNN_CUDA_FLAGS=""
-    MNN_STAMP="mnn-cpu"
-    MNN_BUILD_DIR_NAME="build-mortred-cpu"
-    ORT_FLAVOR=""      # cpu tarball: onnxruntime-linux-x64-<ver>.tgz (no -gpu suffix)
-    ORT_STAMP="onnxruntime-cpu"
-else
-    MNN_STAMP="mnn"
-    MNN_BUILD_DIR_NAME="build-mortred"
-    ORT_FLAVOR="-gpu"
-    ORT_STAMP="onnxruntime"
-fi
+MNN_STAMP="mnn-3.6.1-cuda12"
+MNN_BUILD_DIR_NAME="build-mortred"
+ORT_FLAVOR="-gpu_cuda12"
+ORT_STAMP="onnxruntime-gpu-1.29.0"
 ONNXRUNTIME_SHA256="${ONNXRUNTIME_SHA256:-}"
 # Pinned sha256 table for the official onnxruntime tarballs (asset filename -> hash). Verification priority:
 #   1) env var ONNXRUNTIME_SHA256 (highest; for offline/CI use)
 #   2) this table (for offline/air-gapped environments)
 #   3) official release API asset digest (automatic when online; GitHub publishes sha256 per release asset)
 #   none available -> refuse to install (never silently skip verification).
-# NOTE: GitHub leaves `digest: null` on release assets of older tags (v1.18.0 and earlier), so the API
-# fallback cannot verify those versions - keep every pinned version's gpu AND cpu flavor hashes in the
-# table below (the cpu profile downloads the non-gpu tarball).
-# To obtain a hash (run once with network access, verify against the official release assets, then fill this table for offline installs):
-#   curl -fsSL -o /tmp/ort.tgz https://github.com/microsoft/onnxruntime/releases/download/v1.18.0/onnxruntime-linux-x64-gpu-1.18.0.tgz
-#   sha256sum /tmp/ort.tgz
+# GPU package is the CUDA 12 artifact (not the CUDA 13 tarball, not the unsuffixed
+# -gpu- name removed in 1.27).
+# Digests from GitHub release assets v1.29.0.
 declare -A ONNXRUNTIME_SHA256S=(
-    ["onnxruntime-linux-x64-gpu-1.18.0.tgz"]="e49980108c0b9dd718c14fa2e6ba3cd90b9ff8e9bde8ebac0a2f1aacdc0603ca"
-    ["onnxruntime-linux-x64-1.18.0.tgz"]="fa4d11b3fa1b2bf1c3b2efa8f958634bc34edc95e351ac2a0408c6ad5c5504f0"
+    ["onnxruntime-linux-x64-gpu_cuda12-1.29.0.tgz"]="4ca594a0da83927befbd73fe020d7f569be151d70bb4fe9741ad405f4882e2ad"
+    ["onnxruntime-linux-x64-1.29.0.tgz"]="c3fddc4f139a045b0c4902c57410f0694f1c2fdf9b6939fbe38b1aeae7cd14ba"
 )
 OFFLINE_DIR=""
 JOBS="$(nproc 2>/dev/null || echo 4)"
@@ -95,6 +76,72 @@ mark() { mkdir -p "$STAMP_DIR"; touch "$STAMP_DIR/$1"; info "stamped: $1"; }
 
 require_cmd() {
     command -v "$1" >/dev/null 2>&1 || fail "missing command: $1 (apt install $2)"
+}
+
+apply_profile() {
+    if [ "$DEP_PROFILE" = "cpu" ]; then
+        MNN_CUDA_FLAGS=""
+        MNN_STAMP="mnn-3.6.1-cpu"
+        MNN_BUILD_DIR_NAME="build-mortred-cpu"
+        ORT_FLAVOR=""
+        ORT_STAMP="onnxruntime-cpu-1.29.0"
+    else
+        local cuda_home=""
+        if [ -x /usr/local/cuda/bin/nvcc ]; then
+            cuda_home=/usr/local/cuda
+        elif [ -d /usr/local/cuda-12 ]; then
+            cuda_home=/usr/local/cuda-12
+        fi
+        MNN_CUDA_FLAGS="-DMNN_CUDA=ON"
+        if [ -n "$cuda_home" ]; then
+            MNN_CUDA_FLAGS="$MNN_CUDA_FLAGS -DCUDA_TOOLKIT_ROOT_DIR=$cuda_home"
+        fi
+        MNN_STAMP="mnn-3.6.1-cuda12"
+        MNN_BUILD_DIR_NAME="build-mortred"
+        ORT_FLAVOR="-gpu_cuda12"
+        ORT_STAMP="onnxruntime-gpu-1.29.0"
+    fi
+    if [ -e /usr/lib/x86_64-linux-gnu/libcrypto.so.3 ]; then
+        RUNTIME_STAMP="runtime-libs-ssl3"
+    else
+        RUNTIME_STAMP="runtime-libs-ssl1.1"
+    fi
+}
+
+wipe_stale_gpu_leftovers() {
+    rm -rf "$INCLUDE_DIR"/TensorRT-8*
+    rm -f "$LIB_DIR"/libnvinfer.so.8* \
+          "$LIB_DIR"/libnvinfer_plugin.so.8* \
+          "$LIB_DIR"/libnvonnxparser.so.8* \
+          "$LIB_DIR"/libnvparsers.so.8* \
+          "$LIB_DIR"/libcudart.so.11* \
+          "$LIB_DIR"/libcudart.so.13* \
+          "$LIB_DIR"/libcudnn.so.8* \
+          "$LIB_DIR"/libonnxruntime.so.1.18.0*
+}
+
+wipe_stale_nvidia_tree() {
+    wipe_stale_gpu_leftovers
+    rm -f "$ROOT/3rd_party/bin/trtexec"
+}
+
+leftover_gpu_line() {
+    local -a hits=()
+    local f
+    for f in "$LIB_DIR"/libnvinfer.so.8* "$LIB_DIR"/libnvinfer_plugin.so.8* \
+             "$LIB_DIR"/libnvonnxparser.so.8* "$LIB_DIR"/libcudart.so.11* \
+             "$LIB_DIR"/libcudnn.so.8* "$LIB_DIR"/libonnxruntime.so.1.18.0* \
+             "$LIB_DIR"/libcudart.so.13*; do
+        [ -e "$f" ] && hits+=("$(basename "$f")")
+    done
+    for f in "$INCLUDE_DIR"/TensorRT-8*; do
+        [ -e "$f" ] && hits+=("$(basename "$f")")
+    done
+    if [ ${#hits[@]} -gt 0 ]; then
+        printf '%s\n' "${hits[@]}"
+        return 0
+    fi
+    return 1
 }
 
 # Generic helper for copying headers/libs: skips when the destination already has identical content
@@ -111,7 +158,7 @@ copy_libs() { # src_glob dst_dir label
     mkdir -p "$2"
     for f in $1; do
         [ -e "$f" ] || continue
-        cp -n "$f" "$2"/ || fail "copy_libs: failed to copy $f into $2 ($3)"
+        cp -f "$f" "$2"/ || fail "copy_libs: failed to copy $f into $2 ($3)"
         found=1
     done
     [ "$found" -eq 1 ] || fail "copy_libs: no files matched $1 ($3)"
@@ -216,7 +263,7 @@ install_workflow() {
 # legacy hand-copied files, so --all installs them like any other dependency
 # and --check keeps demanding them (install/check contract stays in sync).
 install_system_runtime_libs() {
-    if stamp runtime-libs; then info "runtime libs: already installed"; return; fi
+    if stamp "$RUNTIME_STAMP"; then info "runtime libs: already installed"; return; fi
     announce "install system runtime libs (ssl/crypto$( [ "$DEP_PROFILE" != "cpu" ] && echo /OpenCL ))"
     local sys=/usr/lib/x86_64-linux-gnu
     copy_libs "$sys/libssl.so*"    "$LIB_DIR" "libssl runtime"
@@ -224,7 +271,7 @@ install_system_runtime_libs() {
     if [ "$DEP_PROFILE" != "cpu" ]; then
         copy_libs "$sys/libOpenCL.so*" "$LIB_DIR" "OpenCL runtime"
     fi
-    mark runtime-libs
+    mark "$RUNTIME_STAMP"
 }
 # ============ MNN (built from source, pinned tag, CUDA backend) ============
 install_mnn() {
@@ -243,9 +290,9 @@ install_mnn() {
         -DMNN_BUILD_CONVERTER=OFF -DMNN_BUILD_TEST=OFF -DMNN_BUILD_BENCHMARK=OFF \
         $MNN_CUDA_FLAGS
     cmake --build "$build" -j"$JOBS"
-    # MNN 2.7.0 registers the CUDA backend as a separate loadable lib
-    # (libMNN_Cuda_Main.so, built by source/backend/cuda). Ensure it is built
-    # even if the default target set skipped it; fail loudly if it can't be.
+    # MNN 3.6.1 still registers the CUDA backend as a separate loadable lib
+    # (libMNN_Cuda_Main.so). Ensure it is built even if the default target set
+    # skipped it; fail loudly if it can't be. CUTLASS is fetched at configure.
     if [ "$DEP_PROFILE" != "cpu" ]; then
         cmake --build "$build" --target MNN_Cuda_Main -j"$JOBS" \
             || fail "MNN CUDA backend build failed (target MNN_Cuda_Main)"
@@ -255,7 +302,7 @@ install_mnn() {
         local mnn_cuda
         mnn_cuda="$(find "$build" -name 'libMNN_Cuda_Main.so*' -type f | head -n1)"
         [ -n "$mnn_cuda" ] || fail "libMNN_Cuda_Main.so not found under $build"
-        cp -n "$mnn_cuda" "$LIB_DIR"/
+        cp -f "$mnn_cuda" "$LIB_DIR"/
         info "MNN CUDA lib: copied into $LIB_DIR"
     fi
     mkdir -p "$INCLUDE_DIR/MNN"
@@ -299,11 +346,17 @@ install_onnxruntime() {
     echo "$expect_sha  $pkg_path" | sha256sum -c - || fail "onnxruntime sha256 mismatch"
     tar -xzf "$pkg_path" -C "$dst"
     local src="$dst/onnxruntime-linux-x64${ORT_FLAVOR}-${ONNXRUNTIME_VER}"
+    [ -d "$src" ] || fail "onnxruntime unpack dir missing: $src"
     mkdir -p "$INCLUDE_DIR/onnxruntime"
-    # 1.18.0 tarballs ship a FLAT include/ dir (include/onnxruntime_cxx_api.h,
-    # no include/onnxruntime/ subdir); copy the flat headers where --check
-    # expects them (onnxruntime/onnxruntime_cxx_api.h)
-    cp -rn "$src"/include/* "$INCLUDE_DIR/onnxruntime"/ 2>/dev/null || true
+    rm -f "$LIB_DIR"/libonnxruntime.so.1.18.0*
+    # 1.18 tarballs were a flat include/; 1.29 may nest include/onnxruntime/.
+    if [ -f "$src/include/onnxruntime/onnxruntime_cxx_api.h" ]; then
+        cp -rf "$src/include/onnxruntime/." "$INCLUDE_DIR/onnxruntime"/
+    elif [ -f "$src/include/onnxruntime_cxx_api.h" ]; then
+        cp -rf "$src"/include/. "$INCLUDE_DIR/onnxruntime"/
+    else
+        fail "onnxruntime headers not found under $src/include"
+    fi
     copy_libs "$src/lib/libonnxruntime*.so*" "$LIB_DIR" "onnxruntime libs"
 
     # Record: tgz checksum + installed lib hashes for --check re-verification (anti-tamper/corruption)
@@ -314,10 +367,23 @@ install_onnxruntime() {
 
 # ============ CUDA / TensorRT / cuDNN (NVIDIA apt, needs root) ============
 install_nvidia() {
-    if stamp nvidia; then info "nvidia stack: already installed"; return; fi
+    if stamp "$NVIDIA_STAMP"; then info "nvidia stack: already installed"; return; fi
     announce "install CUDA ${CUDA_VERSION} / TensorRT ${TRT_VER} / cuDNN ${CUDNN_VER} (needs root)"
     [ "$(id -u)" -eq 0 ] || fail "nvidia install requires root: run 'sudo ./scripts/install_deps.sh --nvidia'"
+    [ "$CUDA_VERSION" = "12" ] || fail "GPU line is CUDA 12 only (got $CUDA_VERSION)"
     require_cmd apt-get "apt"
+    local nvcc_bin=""
+    if command -v nvcc >/dev/null 2>&1; then
+        nvcc_bin="$(command -v nvcc)"
+    elif [ -x /usr/local/cuda/bin/nvcc ]; then
+        nvcc_bin=/usr/local/cuda/bin/nvcc
+    fi
+    if [ -n "$nvcc_bin" ]; then
+        local nvcc_major
+        nvcc_major="$("$nvcc_bin" --version | grep -oP 'release \K[0-9]+' | head -n1 || true)"
+        [ "$nvcc_major" = "12" ] || fail "nvcc major must be 12 (got ${nvcc_major:-unknown} from $nvcc_bin)"
+        info "nvcc already present ($nvcc_bin release $nvcc_major), skipping cuda-toolkit"
+    fi
     # NVIDIA apt repo: nvidia/cuda base images already configure it; bare machines
     # need the matching keyring. Pick the keyring by OS release - hardcoding one
     # distro (e.g. the jammy keyring on a focal image) mixes repos whose package
@@ -338,16 +404,13 @@ install_nvidia() {
     fi
     apt-get update
     # Deterministic install: download the EXACT versioned .debs and dpkg -i them.
-    # apt's resolver cannot be trusted here - libnvinfer8 depends on UNVERSIONED
-    # libcudnn8, so apt resolves it to the newest cuDNN 8 (the cuda12.2 build)
-    # and then fails the exact-version deps of the dev packages ('held broken
-    # packages'), even with every package pinned. Direct .deb install leaves no
-    # freedom to wander into +cuda12.x variants. All versions below verified
+    # apt's resolver cannot be trusted here. Direct .deb install leaves no
+    # freedom to wander into unversioned nvinfer. All versions below verified
     # against the repo Packages.gz indexes; the focal and jammy repos both
     # carry them.
     local repo_dir2 nv_repo deb_dir d
     repo_dir2="$(grep -rhoE 'repos/ubuntu[0-9]+/x86_64' /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null | head -n1 | sed 's#repos/##; s#/x86_64##')"
-    [ -n "$repo_dir2" ] || repo_dir2=ubuntu2004
+    [ -n "$repo_dir2" ] || repo_dir2=ubuntu2204
     nv_repo="https://developer.download.nvidia.com/compute/cuda/repos/${repo_dir2}/x86_64"
     deb_dir="$BUILD_DIR/nvidia-debs"
     mkdir -p "$deb_dir"
@@ -356,98 +419,68 @@ install_nvidia() {
         [ -f "$deb_dir/$d" ] || curl -fSL "$nv_repo/$d" -o "$deb_dir/$d"
         dpkg-deb --info "$deb_dir/$d" >/dev/null 2>&1 || fail "bad NVIDIA deb: $d"
     }
-    if [ "$CUDA_VERSION" = "12" ]; then
-        # devel images/machines with CUDA already installed skip the toolkit; only install TRT/cuDNN (avoid package conflicts)
-        if ! command -v nvcc >/dev/null 2>&1 && [ ! -x /usr/local/cuda/bin/nvcc ]; then
-            apt-get install -y --no-install-recommends cuda-toolkit-12-4
-        else
-            info "nvcc already present, skipping cuda-toolkit"
-        fi
-        # TRT 10.3.0.26 + cuDNN 9 (9.10.2.21 = highest version in BOTH the focal
-        # and jammy repos). libnvinfer-bin is NOT installed (its libnvparsers10
-        # 10.3.0.26 build is absent from the repos) - trtexec is extracted from
-        # its deb below. libnvparsers10 is skipped for the same reason.
-        local -a DEBS=(
-            libcudnn9-cuda-12_9.10.2.21-1_amd64.deb
-            libcudnn9-dev-cuda-12_9.10.2.21-1_amd64.deb
-            libnvinfer10_10.3.0.26-1+cuda12.5_amd64.deb
-            libnvinfer-plugin10_10.3.0.26-1+cuda12.5_amd64.deb
-            libnvonnxparsers10_10.3.0.26-1+cuda12.5_amd64.deb
-            libnvinfer-headers-dev_10.3.0.26-1+cuda12.5_amd64.deb
-            libnvinfer-headers-plugin-dev_10.3.0.26-1+cuda12.5_amd64.deb
-            libnvinfer-dev_10.3.0.26-1+cuda12.5_amd64.deb
-            libnvinfer-plugin-dev_10.3.0.26-1+cuda12.5_amd64.deb
-            libnvonnxparsers-dev_10.3.0.26-1+cuda12.5_amd64.deb
-        )
-    else
-        if ! command -v nvcc >/dev/null 2>&1 && [ ! -x /usr/local/cuda/bin/nvcc ]; then
-            apt-get install -y --no-install-recommends cuda-toolkit-11-8
-        else
-            info "nvcc already present, skipping cuda-toolkit"
-        fi
-        # TRT 8.6.1.6 + cuDNN 8 (cuda11.8 builds) - matches the vendored tree.
-        # libnvinfer-bin is NOT installed (its closure - lean/vc-plugin/dispatch/
-        # nvparsers - is incomplete in the repos and apt -f would "fix" it by
-        # installing TRT 10); trtexec is extracted from its deb below.
-        # libnvparsers8 is kept for trtexec's caffe-parser dependency.
-        local -a DEBS=(
-            libcudnn8_8.9.7.29-1+cuda11.8_amd64.deb
-            libcudnn8-dev_8.9.7.29-1+cuda11.8_amd64.deb
-            libnvinfer8_8.6.1.6-1+cuda11.8_amd64.deb
-            libnvinfer-plugin8_8.6.1.6-1+cuda11.8_amd64.deb
-            libnvonnxparsers8_8.6.1.6-1+cuda11.8_amd64.deb
-            libnvparsers8_8.6.1.6-1+cuda11.8_amd64.deb
-            libnvinfer-headers-dev_8.6.1.6-1+cuda11.8_amd64.deb
-            libnvinfer-headers-plugin-dev_8.6.1.6-1+cuda11.8_amd64.deb
-            libnvinfer-dev_8.6.1.6-1+cuda11.8_amd64.deb
-            libnvinfer-plugin-dev_8.6.1.6-1+cuda11.8_amd64.deb
-            libnvonnxparsers-dev_8.6.1.6-1+cuda11.8_amd64.deb
-        )
+    if [ -z "$nvcc_bin" ]; then
+        apt-get install -y --no-install-recommends cuda-toolkit-12-4
     fi
+    # TRT 10.3.0.26 + cuDNN 9 (9.10.2.21 = highest version in BOTH the focal
+    # and jammy repos). libnvinfer-bin is NOT installed (its libnvparsers10
+    # 10.3.0.26 build is absent from the repos) - trtexec is extracted from
+    # its deb below. libnvparsers10 is skipped for the same reason.
+    local -a DEBS=(
+        libcudnn9-cuda-12_9.10.2.21-1_amd64.deb
+        libcudnn9-dev-cuda-12_9.10.2.21-1_amd64.deb
+        libnvinfer10_10.3.0.26-1+cuda12.5_amd64.deb
+        libnvinfer-plugin10_10.3.0.26-1+cuda12.5_amd64.deb
+        libnvonnxparsers10_10.3.0.26-1+cuda12.5_amd64.deb
+        libnvinfer-headers-dev_10.3.0.26-1+cuda12.5_amd64.deb
+        libnvinfer-headers-plugin-dev_10.3.0.26-1+cuda12.5_amd64.deb
+        libnvinfer-dev_10.3.0.26-1+cuda12.5_amd64.deb
+        libnvinfer-plugin-dev_10.3.0.26-1+cuda12.5_amd64.deb
+        libnvonnxparsers-dev_10.3.0.26-1+cuda12.5_amd64.deb
+    )
     for d in "${DEBS[@]}"; do fetch_deb "$d"; done
     # dpkg unpacks/installs the set; it may exit non-zero when a system dep
     # (e.g. protobuf) is missing - the -f pass below pulls it and configures.
     dpkg -i "${DEBS[@]/#/$deb_dir/}" >/dev/null || true
-    # pull any remaining system deps (e.g. protobuf) from the OS repos; with the
-    # full exact-version set already installed -f has nothing to upgrade
     apt-get install -f -y --no-install-recommends
-    # fail loudly if anything got upgraded away from the pinned versions
-    local expect_pkg expect_ver
-    if [ "$CUDA_VERSION" = "12" ]; then
-        expect_pkg=libnvinfer10; expect_ver=10.3.0.26-1+cuda12.5
-    else
-        expect_pkg=libnvinfer8; expect_ver=8.6.1.6-1+cuda11.8
-    fi
+    local expect_pkg=libnvinfer10 expect_ver=10.3.0.26-1+cuda12.5
     [ "$(dpkg-query -W -f='${Version}' "$expect_pkg" 2>/dev/null)" = "$expect_ver" ] \
         || fail "TensorRT version mismatch: expected $expect_ver for $expect_pkg"
-    # trtexec: the official TensorRT CLI lives in the libnvinfer-bin deb, whose
-    # package closure (lean/vc-plugin/dispatch/nvparsers) is incomplete in the
-    # repos - so extract the binary without installing the package
-    local bin_deb trt_bin_dir
-    if [ "$CUDA_VERSION" = "12" ]; then
-        bin_deb="libnvinfer-bin_10.3.0.26-1+cuda12.5_amd64.deb"
-    else
-        bin_deb="libnvinfer-bin_8.6.1.6-1+cuda11.8_amd64.deb"
-    fi
+    local bin_deb="libnvinfer-bin_10.3.0.26-1+cuda12.5_amd64.deb"
     fetch_deb "$bin_deb"
-    trt_bin_dir="$deb_dir/bin-extract"
+    local trt_bin_dir="$deb_dir/bin-extract"
     rm -rf "$trt_bin_dir"
     dpkg-deb -x "$deb_dir/$bin_deb" "$trt_bin_dir"
     mkdir -p "$ROOT/3rd_party/bin"
-    cp -n "$trt_bin_dir/usr/src/tensorrt/bin/trtexec" "$ROOT/3rd_party/bin/trtexec" \
+    wipe_stale_nvidia_tree
+    cp -f "$trt_bin_dir/usr/src/tensorrt/bin/trtexec" "$ROOT/3rd_party/bin/trtexec" \
         || fail "trtexec extraction failed"
     chmod +x "$ROOT/3rd_party/bin/trtexec"
     info "trtexec: copied into 3rd_party/bin"
-    # Copy into 3rd_party (headers + libs)
     local trt_inc=/usr/include/x86_64-linux-gnu
     mkdir -p "$INCLUDE_DIR/$TRT_INCLUDE_DIR"
-    cp -rn "$trt_inc/NvInfer"*.h "$INCLUDE_DIR/$TRT_INCLUDE_DIR"/ 2>/dev/null || true
-    cp -rn "$trt_inc/NvOnnxParser.h" "$INCLUDE_DIR/$TRT_INCLUDE_DIR"/ 2>/dev/null || true
-    copy_libs "/usr/lib/x86_64-linux-gnu/libnvinfer*.so*" "$LIB_DIR" "TensorRT libs"
-    copy_libs "/usr/lib/x86_64-linux-gnu/libnvonnxparser*.so*" "$LIB_DIR" "TensorRT onnx parser"
-    copy_libs "/usr/local/cuda/lib64/libcudart*.so*" "$LIB_DIR" "CUDA runtime"
+    cp -rf "$trt_inc"/NvInfer*.h "$INCLUDE_DIR/$TRT_INCLUDE_DIR"/ 2>/dev/null || true
+    cp -f "$trt_inc/NvOnnxParser.h" "$INCLUDE_DIR/$TRT_INCLUDE_DIR"/ 2>/dev/null || true
+    copy_libs "/usr/lib/x86_64-linux-gnu/libnvinfer*.so.10*" "$LIB_DIR" "TensorRT nvinfer"
+    copy_libs "/usr/lib/x86_64-linux-gnu/libnvonnxparser*.so.10*" "$LIB_DIR" "TensorRT onnx parser"
+    if [ -d /usr/local/cuda/lib64 ]; then
+        copy_libs "/usr/local/cuda/lib64/libcudart.so.12*" "$LIB_DIR" "CUDA runtime"
+    else
+        copy_libs "/usr/local/cuda-12/lib64/libcudart.so.12*" "$LIB_DIR" "CUDA runtime"
+    fi
     copy_libs "/usr/lib/x86_64-linux-gnu/libcudnn*.so*" "$LIB_DIR" "cuDNN libs"
-    mark nvidia
+    wipe_stale_gpu_leftovers
+    leftover="$(leftover_gpu_line || true)"
+    [ -z "$leftover" ] || fail "leftover CUDA 11 / TensorRT 8 / ORT 1.18 after nvidia install: $leftover"
+    local need found f
+    for need in libnvinfer.so.10 libcudart.so.12 libcudnn.so.9; do
+        found=0
+        for f in "$LIB_DIR"/${need}*; do
+            [ -e "$f" ] && found=1 && break
+        done
+        [ "$found" -eq 1 ] || fail "$need missing after nvidia copy"
+    done
+    mark "$NVIDIA_STAMP"
 }
 
 # ============ verification ============
@@ -477,9 +510,15 @@ check() {
         echo "  [--] trtexec: not required (cpu profile)"
     else
         if command -v nvcc >/dev/null 2>&1; then
-            echo "  [ok] nvcc: $(nvcc --version | grep -oP 'release \K[0-9.]+' | head -n1)"
+            local nvcc_rel
+            nvcc_rel="$(nvcc --version | grep -oP 'release \K[0-9.]+' | head -n1)"
+            echo "  [ok] nvcc: $nvcc_rel"
+            [ "${nvcc_rel%%.*}" = "12" ] || { echo "  [!!] nvcc major must be 12"; problems+=("nvcc major"); }
         elif [ -x /usr/local/cuda/bin/nvcc ]; then
-            echo "  [ok] nvcc: $(/usr/local/cuda/bin/nvcc --version | grep -oP 'release \K[0-9.]+' | head -n1) (/usr/local/cuda)"
+            local nvcc_rel
+            nvcc_rel="$(/usr/local/cuda/bin/nvcc --version | grep -oP 'release \K[0-9.]+' | head -n1)"
+            echo "  [ok] nvcc: $nvcc_rel (/usr/local/cuda)"
+            [ "${nvcc_rel%%.*}" = "12" ] || { echo "  [!!] nvcc major must be 12"; problems+=("nvcc major"); }
         else
             echo "  [!!] nvcc MISSING (full build needs the CUDA toolchain)"
             problems+=("nvcc")
@@ -529,9 +568,9 @@ check() {
     if [ "$DEP_PROFILE" != "cpu" ]; then
         libs+=(
             "libMNN_Cuda_Main.so:MNN CUDA"
-            "libnvinfer.so:TensorRT"
-            "libnvonnxparser.so:TensorRT parser"
-            "libcudart.so:CUDA runtime"
+            "libnvinfer.so.10:TensorRT"
+            "libnvonnxparser.so.10:TensorRT parser"
+            "libcudart.so.12:CUDA runtime"
             "libcudnn.so:cuDNN"
             "libOpenCL.so:OpenCL"
         )
@@ -550,6 +589,23 @@ check() {
             problems+=("lib $name")
         fi
     done
+
+    if [ "$DEP_PROFILE" != "cpu" ]; then
+        local leftover
+        leftover="$(leftover_gpu_line || true)"
+        if [ -n "$leftover" ]; then
+            echo "  [!!] leftover CUDA 11 / TensorRT 8 / ORT 1.18 artifacts:"
+            while IFS= read -r line; do
+                [ -n "$line" ] && echo "       $line"
+            done <<<"$leftover"
+            problems+=("leftover TRT8/cudart11/ORT1.18")
+        else
+            echo "  [ok] no leftover TensorRT 8 / cudart 11 / ORT 1.18 artifacts"
+        fi
+        if ls "$LIB_DIR"/libnvinfer.so.8* >/dev/null 2>&1; then
+            problems+=("libnvinfer.so.8 present")
+        fi
+    fi
 
     # 4) onnxruntime artifact hash re-check (anti-tamper/corruption; recorded at install time)
     if [ -f "$STAMP_DIR/${ORT_STAMP}.libs.sha256" ]; then
@@ -590,17 +646,16 @@ while [ $# -gt 0 ]; do
         --onnxruntime) MODE="onnxruntime"; shift ;;
         --nvidia) MODE="nvidia"; shift ;;
         --cuda-version) CUDA_VERSION="$2"; shift 2 ;;
-        --cpu) DEP_PROFILE="cpu"; MNN_CUDA_FLAGS=""; MNN_STAMP="mnn-cpu"; MNN_BUILD_DIR_NAME="build-mortred-cpu"; ORT_FLAVOR=""; ORT_STAMP="onnxruntime-cpu"; shift ;;
+        --cpu) DEP_PROFILE="cpu"; shift ;;
         --offline) OFFLINE_DIR="$2"; shift 2 ;;
         -h|--help) usage ;;
         *) fail "unknown argument: $1 (see --help)" ;;
     esac
 done
 
-case "$CUDA_VERSION" in
-    11|12) ;;
-    *) fail "unsupported --cuda-version $CUDA_VERSION (11 or 12)" ;;
-esac
+CUDA_VERSION="${CUDA_VERSION%%.*}"
+[ "$CUDA_VERSION" = "12" ] || fail "unsupported --cuda-version $CUDA_VERSION (GPU line is CUDA 12 only)"
+apply_profile
 
 mkdir -p "$BUILD_DIR"
 

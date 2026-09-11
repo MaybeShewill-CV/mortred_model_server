@@ -93,7 +93,7 @@ flowchart TD
 | | `gpu`（默认） | `cpu` |
 |---|---|---|
 | **推理后端** | MNN-CUDA / ORT-CUDA / TensorRT | MNN-CPU / ORT-CPU（TensorRT 编译排除） |
-| **硬件要求** | NVIDIA GPU + 驱动，CUDA 11.8 或 12 线 | 任意 x64 机器 |
+| **硬件要求** | NVIDIA GPU + 驱动，CUDA 12 + TensorRT 10 | 任意 x64 机器 |
 | **可用模型** | HTTP catalog（分类/检测/OCR/分割/抠图/增强/SuperPoint/深度/DINOv2/SAM AMG/扩散）。bench-only：CLIP、LightGlue、FastSAM、SAM prompt、MsOcrNet。无 MOT。RT-DETR 未实现。 | 精选集：mobilenetv2、resnet50 |
 | **权重体积** | 全量 manifest（数十 GB） | 精选子集（约 1 GB） |
 | **Engine 转换** | 本机为本 pack 转 engine（§10.2）；全量 zoo 转换仍是可选项 | 不需要 |
@@ -121,7 +121,7 @@ flowchart TD
 | Profile | 最低 | 推荐 |
 |---|---|---|
 | cpu | 2 核 / 4 GB / 10 GB 磁盘 | 8 核 / 16 GB / SSD |
-| gpu | 上述 + 任意 CUDA 11/12 显卡 | RTX 3060+ / 8 GB 显存 / 50 GB 磁盘 |
+| gpu | 上述 + CUDA 12 显卡 | RTX 3060+ / 8 GB 显存 / 50 GB 磁盘 |
 
 ### 3.2 操作系统与软件
 
@@ -340,7 +340,7 @@ systemd 单元要点：`Restart=always`、`TimeoutStopSec=120`（有序关停：
 
 ```bash
 ./scripts/install_deps.sh --check          # 查看当前 3rd_party 完整性
-./scripts/install_deps.sh --all            # gpu 线（CUDA 11 默认；--cuda-version 12 切 12 线）
+./scripts/install_deps.sh --all            # gpu 线（CUDA 12 / TensorRT 10.3）
 ./scripts/install_deps.sh --cpu --all      # cpu 线：MNN-CPU + ORT-CPU，完全不装 NVIDIA/TRT
 sudo ./scripts/install_deps.sh --nvidia    # gpu 线的 CUDA/TRT/cuDNN（需 root，其余步骤无需）
 ```

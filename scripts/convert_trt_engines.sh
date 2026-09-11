@@ -154,15 +154,15 @@ if [ -z "$TRTEXEC" ] && [ "$MODE" != "dry-run" ]; then
     fail "trtexec not found (install via sudo ./scripts/install_deps.sh --nvidia; or pass --trtexec /path/to/trtexec)"
 fi
 
-# ---- Detect TRT major version: 8.x uses --workspace=<bytes>; 9+/10 use --memPoolSize=workspace:<size> ----
+# ---- Detect TRT major version: 10.x uses --memPoolSize=workspace:<size> ----
 TRT_MAJOR="${TRT_VERSION_MAJOR:-}"
 if [ -z "$TRT_MAJOR" ] && [ -n "$TRTEXEC" ]; then
     TRT_MAJOR="$("$TRTEXEC" --help 2>&1 | grep -m1 -oE 'version:?[[:space:]]*[0-9]+' | grep -oE '[0-9]+$' || true)"
 fi
 if [ -z "$TRT_MAJOR" ]; then
     if [ "$MODE" = "dry-run" ]; then
-        TRT_MAJOR=8
-        echo "[warn] dry-run: cannot detect TRT version, emitting 8.x syntax (override with TRT_VERSION_MAJOR)" >&2
+        TRT_MAJOR=10
+        echo "[warn] dry-run: cannot detect TRT version, emitting 10.x --memPoolSize syntax (override with TRT_VERSION_MAJOR)" >&2
     else
         fail "cannot detect TRT version (set TRT_VERSION_MAJOR or use the correct trtexec)"
     fi

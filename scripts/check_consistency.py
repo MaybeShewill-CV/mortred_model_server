@@ -44,6 +44,8 @@ Verifies a few high-signal invariants:
 18. `scripts/calibrate_pack.py --self-test` covers w* selection (no GPU).
 19. `scripts/pack_occupancy.py --self-test` covers occupancy stamp checks (no GPU).
 20. Git example packs must not commit `gpu_mem_mib` occupancy stamps.
+21. The GPU line (CMake / GPU Dockerfile / install_deps / tarball_install /
+    setup_full_deps) must not pin CUDA 11, TensorRT 8, ORT 1.18, or gpu_cuda13.
 
 Exit code 0 means consistent; non-zero means the repository needs attention.
 """
@@ -131,6 +133,57 @@ def check_stale_binaries() -> list[str]:
     for name in STALE_BINARIES:
         if (bin_dir / name).exists():
             errors.append(f"stale binary without source: _bin/{name}")
+    return errors
+
+
+def check_gpu_line_pins() -> list[str]:
+    """One GPU line: CUDA 12 + TRT 10.3 + ORT 1.29 cuda12. Ban leftover pins."""
+    errors: list[str] = []
+    everywhere = [
+        "libnvinfer8",
+        "cuda:11.8.0",
+        "TensorRT-8.6.1.6",
+        "onnxruntime-linux-x64-gpu-1.18",
+        "gpu_cuda13",
+    ]
+    cmake_only = [
+        "libnvinfer.so.8",
+        "libonnxruntime.so.1.18.0",
+    ]
+    files = [
+        ROOT / "CMakeLists.txt",
+        ROOT / "cmake" / "VendoredDeps.cmake",
+        ROOT / "src" / "models" / "CMakeLists.txt",
+        ROOT / "Dockerfile",
+        ROOT / "scripts" / "install_deps.sh",
+        ROOT / "scripts" / "tarball_install.sh",
+        ROOT / "scripts" / "setup_full_deps.sh",
+    ]
+    install_deps = ROOT / "scripts" / "install_deps.sh"
+    for path in files:
+        if not path.exists():
+            errors.append(f"gpu-line pin file missing: {path.relative_to(ROOT)}")
+            continue
+        text = path.read_text(encoding="utf-8")
+        banned = list(everywhere)
+        if path != install_deps:
+            banned.extend(cmake_only)
+        for token in banned:
+            if token not in text:
+                continue
+            leftover_ok = token in ("libnvinfer.so.8", "libonnxruntime.so.1.18.0")
+            for i, line in enumerate(text.splitlines(), 1):
+                if token not in line:
+                    continue
+                lowered = line.lower()
+                if leftover_ok and any(
+                    k in lowered for k in ("leftover", "glob", "wipe", "rm -f", "rm -rf")
+                ):
+                    continue
+                errors.append(
+                    f"{path.relative_to(ROOT)}:{i}: banned GPU-line pin {token!r} "
+                    "(CUDA 12 / TensorRT 10.3 / ORT 1.29 cuda12 only)"
+                )
     return errors
 
 
@@ -788,6 +841,7 @@ def main() -> int:
     errors.extend(check_unique_catalog_listen())
     errors.extend(check_demo_pack())
     errors.extend(check_example_packs_worker_nums())
+    errors.extend(check_gpu_line_pins())
     try:
         pack_trt = subprocess.run(
             [sys.executable, str(ROOT / "scripts" / "pack_trt.py"), "--self-test"],

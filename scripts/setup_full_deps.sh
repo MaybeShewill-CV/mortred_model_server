@@ -116,7 +116,7 @@ setup_tensorrt() {
     local root="${TENSORRT_ROOT_DIR:-}"
     [ -n "$root" ] && [ -d "$root" ] || return 0
     announce "filling in TensorRT (from ${root})"
-    copy_if_missing "${root}/include" "${INCLUDE_DIR}/TensorRT-8.6.1.6" "TensorRT headers"
+    copy_if_missing "${root}/include" "${INCLUDE_DIR}/TensorRT-10.3.0" "TensorRT headers"
     copy_glob_if_missing "${root}/lib/libnvinfer*.so*" "${LIB_DIR}" "TensorRT core libs"
     copy_glob_if_missing "${root}/lib/libnvonnxparser*.so*" "${LIB_DIR}" "TensorRT onnx parser libs"
 }
@@ -143,7 +143,7 @@ ensure_any "ONNXRUNTIME headers" "${INCLUDE_DIR}/onnxruntime/onnxruntime_cxx_api
 ensure_any "ONNXRUNTIME libs" "${LIB_DIR}"/libonnxruntime*.so* || true
 
 announce "checking TensorRT"
-ensure_any "TensorRT headers" "${INCLUDE_DIR}/TensorRT-8.6.1.6/NvInfer.h"
+ensure_any "TensorRT headers" "${INCLUDE_DIR}/TensorRT-10.3.0/NvInfer.h"
 ensure_any "TensorRT core libs" "${LIB_DIR}"/libnvinfer*.so* || true
 ensure_any "TensorRT onnx parser libs" "${LIB_DIR}"/libnvonnxparser*.so* || true
 
@@ -167,7 +167,7 @@ if [ "$MISSING" -ne 0 ]; then
     echo "  MNN_ROOT_DIR=/path/to/MNN \\"
     echo "  WORKFLOW_ROOT_DIR=/path/to/workflow \\"
     echo "  ONNXRUNTIME_ROOT_DIR=/path/to/onnxruntime \\"
-    echo "  TENSORRT_ROOT_DIR=/path/to/TensorRT-8.6.1.6 \\"
+    echo "  TENSORRT_ROOT_DIR=/path/to/TensorRT-10.3.0 \\"
     echo "  ./scripts/setup_full_deps.sh"
     exit 1
 fi

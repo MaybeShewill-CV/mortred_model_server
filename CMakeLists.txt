@@ -43,7 +43,7 @@ mortred_probe_workflow()
 # install tree ships; importing it only inside MORTRED_BUILD_FULL left
 # tests-only configure failing with "vendored::crypto was not found".
 if(MORTRED_WORKFLOW_AVAILABLE)
-    mortred_import_shared(crypto libcrypto.so.1.1)
+    mortred_import_crypto()
 endif()
 
 # CI / unit-test mode: skip CUDA/MNN/TRT-dependent models and servers; build only common + tests
@@ -87,19 +87,40 @@ add_subdirectory(src/common)
 add_subdirectory(src/control)
 
 if(MORTRED_BUILD_FULL)
-    # exact versions, fail if missing; the cpu profile drops the CUDA/TRT set
+    # exact sonames pin versions (CUDA 12 / TensorRT 10.3 / ORT 1.29)
     mortred_import_shared(mnn            libMNN.so)
     mortred_import_shared(fmt            libfmt.so.9)
-    mortred_import_shared(onnxruntime    libonnxruntime.so.1.18.0)
+    mortred_import_shared(onnxruntime    libonnxruntime.so.1.29.0)
     if(MORTRED_BUILD_PROFILE STREQUAL "cpu")
         message(STATUS "Build profile: cpu (MNN-CPU + ORT-CPU, TensorRT compiled out)")
     else()
-        message(STATUS "Build profile: gpu (full CUDA/TensorRT stack)")
+        message(STATUS "Build profile: gpu (full CUDA 12 / TensorRT 10 stack)")
+        string(TOUPPER "${CMAKE_BUILD_TYPE}" _mortred_bt)
+        string(CONCAT _mortred_sanitize_flags
+            "${CMAKE_C_FLAGS} ${CMAKE_CXX_FLAGS} "
+            "${CMAKE_C_FLAGS_${_mortred_bt}} ${CMAKE_CXX_FLAGS_${_mortred_bt}} "
+            "$ENV{CFLAGS} $ENV{CXXFLAGS}")
+        if(_mortred_sanitize_flags MATCHES "-fsanitize=[^;\"]*address")
+            message(FATAL_ERROR
+                "AddressSanitizer is forbidden on the full GPU build "
+                "(ASan + TensorRT/cudart mixed ELF). Rebuild Release without -fsanitize=address:\n"
+                "  cmake --preset full && cmake --build --preset full")
+        endif()
+        file(GLOB _mortred_leftover_trt8 "${MORTRED_3RD_LIBS}/libnvinfer.so.8*")
+        if(_mortred_leftover_trt8)
+            message(FATAL_ERROR
+                "leftover TensorRT 8 libraries in ${MORTRED_3RD_LIBS}:\n  ${_mortred_leftover_trt8}\n"
+                "fix: sudo ./scripts/install_deps.sh --nvidia")
+        endif()
         find_package(CUDAToolkit REQUIRED)
+        if(CUDAToolkit_VERSION VERSION_LESS 12 OR CUDAToolkit_VERSION VERSION_GREATER_EQUAL 13)
+            message(FATAL_ERROR
+                "CUDA Toolkit 12.x required, found ${CUDAToolkit_VERSION}")
+        endif()
         mortred_import_shared(mnn_cuda       libMNN_Cuda_Main.so)
-        mortred_import_shared(nvinfer        libnvinfer.so.8)
-        mortred_import_shared(nvinfer_plugin libnvinfer_plugin.so.8)
-        mortred_import_shared(nvonnxparser   libnvonnxparser.so.8)
+        mortred_import_shared(nvinfer        libnvinfer.so.10)
+        mortred_import_shared(nvinfer_plugin libnvinfer_plugin.so.10)
+        mortred_import_shared(nvonnxparser   libnvonnxparser.so.10)
     endif()
     add_subdirectory(src/models)
     add_subdirectory(src/factory)

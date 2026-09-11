@@ -584,7 +584,7 @@ jobs:
           TMP="$(mktemp -d)"
           cat > "$TMP/trtexec" <<'EOF'
           #!/usr/bin/env bash
-          if [[ "$*" == *--help* ]]; then echo "TensorRT version: 8.6.1.6"; exit 0; fi
+          if [[ "$*" == *--help* ]]; then echo "TensorRT version: 10.3.0.26"; exit 0; fi
           [ "${FAKE_FAIL:-0}" = "1" ] && exit 3
           [ "${FAKE_NO_OUTPUT:-0}" = "1" ] && exit 0
           for a in "$@"; do case "$a" in --saveEngine=*) echo engine > "${a#--saveEngine=}";; esac; done
@@ -597,10 +597,13 @@ jobs:
           touch weights/feature_point/lightglue/extractor.onnx
           # 1) --list needs no trtexec
           bash scripts/convert_trt_engines.sh --list | grep -q "total: 19"
-          # 2) --dry-run flag composition: fp16 + TRT8 workspace bytes + buildOnly
+          # 2) --dry-run flag composition: fp16 + TRT10 memPoolSize + buildOnly
           out="$(TRTEXEC="$TMP/trtexec" bash scripts/convert_trt_engines.sh --only ddpm_unet_celeba-hq-128 --force --dry-run)"
           echo "$out" | grep -q -- "--fp16"
-          echo "$out" | grep -q -- "--workspace=6442450944"
+          echo "$out" | grep -q -- "--memPoolSize=workspace:"
+          if echo "$out" | grep -q -- "--workspace="; then
+            echo "unexpected TensorRT 8 --workspace= flag" >&2; exit 1
+          fi
           echo "$out" | grep -q -- "--buildOnly"
           # 3) profile JSON -> --minShapes/--optShapes/--maxShapes translation
           #    --only filters by engine path (see convert_trt_engines.sh); extractor hits extractor.engine without hitting matcher

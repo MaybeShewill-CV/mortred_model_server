@@ -46,7 +46,7 @@
 > | | `gpu`（默认） | `cpu` |
 > |---|---|---|
 > | 后端 | MNN-CUDA / ORT-CUDA / TensorRT | MNN-CPU / ORT-CPU |
-> | 硬件 | NVIDIA GPU + CUDA 11/12 | 任意 x64 |
+> | 硬件 | NVIDIA GPU + CUDA 12 / TensorRT 10 | 任意 x64 |
 > | 模型 | HTTP catalog 全量 | 精选（mobilenetv2、resnet50） |
 >
 > 三个入口，同一套 `mortredctl`：选一条即可，终点都是 `mortredctl doctor`。
@@ -327,9 +327,8 @@ Scaffold、未实现、不在 HTTP catalog：`RTDETR`。无 MOT。
 fmt / 头文件库）构建并安装进 `3rd_party/{include,libs}`，无需手动编译与拷贝：
 
 ```bash
-./scripts/install_deps.sh --all     # 构建/安装全部（CUDA 11 基线线）
+./scripts/install_deps.sh --all     # CUDA 12 / TensorRT 10.3 / MNN 3.6.1 / ORT 1.29 cuda12
 ./scripts/install_deps.sh --check   # 校验完整性并打印版本
-./scripts/install_deps.sh --cuda-version 12   # 切换到 CUDA 12 / TRT 10 线
 ```
 
 ## Docker（全自动构建运行环境）

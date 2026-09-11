@@ -19,6 +19,8 @@
 #include "common/file_path_util.h"
 #include "models/backend/session_io.h"
 
+static_assert(NV_TENSORRT_MAJOR >= 10, "Mortred GPU line requires TensorRT 10 headers");
+
 namespace jinq {
 namespace models {
 namespace backend {
@@ -107,11 +109,12 @@ class TrtSession::DynamicOutputAllocator final : public nvinfer1::IOutputAllocat
         release();
     }
 
-    void* reallocateOutput(char const* tensor_name, void* current_memory, uint64_t size,
-                           uint64_t alignment) noexcept override {
+    void* reallocateOutputAsync(char const* tensor_name, void* current_memory, uint64_t size,
+                                uint64_t alignment, cudaStream_t stream) noexcept override {
         (void)tensor_name;
         (void)current_memory;
         (void)alignment;
+        (void)stream;
         allocation_failed = false;
         if (size == 0) {
             allocation_failed = true;
@@ -242,8 +245,7 @@ TrtSession::~TrtSession() {
         cudaStreamDestroy(_m_stream);
         _m_stream = nullptr;
     }
-    // TRT 10 removed destroy(); public destructors are the supported path on
-    // both 8.6 and 10.x
+    // TRT 10 removed destroy(); public destructors are the supported path.
     delete _m_context;
     _m_context = nullptr;
     delete _m_engine;
@@ -280,6 +282,21 @@ StatusCode TrtSession::init(const BackendConfig& config, std::string* err) {
     if (engine_stream.empty()) {
         if (err != nullptr) {
             *err = "tensorrt engine file is empty: " + config.model_file_path;
+        }
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+
+    const auto set_dev = cudaSetDevice(config.device_id);
+    if (set_dev != cudaSuccess) {
+        if (err != nullptr) {
+            *err = std::string("cudaSetDevice failed: ") + cudaGetErrorString(set_dev);
+        }
+        return StatusCode::MODEL_INIT_FAILED;
+    }
+    const auto cuda_init = cudaFree(nullptr);
+    if (cuda_init != cudaSuccess) {
+        if (err != nullptr) {
+            *err = std::string("CUDA runtime init failed: ") + cudaGetErrorString(cuda_init);
         }
         return StatusCode::MODEL_INIT_FAILED;
     }
@@ -406,7 +423,7 @@ StatusCode TrtSession::init(const BackendConfig& config, std::string* err) {
         // carries the batch profile (and which N range it accepts)
         if (info.dynamic) {
             // dynamic dims require an optimization profile at build time, so
-            // profile 0 always exists for a dynamic input (8.6 header API)
+            // profile 0 always exists for a dynamic input
             const auto shape_min = from_trt_dims(_m_engine->getProfileShape(
                 info.name.c_str(), 0, nvinfer1::OptProfileSelector::kMIN));
             const auto shape_opt = from_trt_dims(_m_engine->getProfileShape(

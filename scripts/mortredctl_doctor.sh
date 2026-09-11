@@ -26,6 +26,26 @@ echo "== Mortred doctor =="
 PACK="${MORTRED_PACK:-$ROOT/conf/packs/demo.toml}"
 GATE_FAIL=0
 
+echo "== GPU server ELF (ASan) =="
+ASAN_HIT=0
+for bin in \
+    "$ROOT/_bin/mortred-model-server.out" \
+    "$ROOT/bin/mortred-model-server.out" \
+    /opt/mortred/bin/mortred-model-server.out; do
+    [ -x "$bin" ] || continue
+    command -v ldd >/dev/null 2>&1 || continue
+    if ldd "$bin" 2>/dev/null | grep -Eq 'libasan\.|libclang_rt\.asan'; then
+        echo "  [FAIL] AddressSanitizer-linked GPU server: $bin"
+        echo "         Rebuild Release without -fsanitize=address:"
+        echo "           cmake --preset full && cmake --build --preset full"
+        ASAN_HIT=1
+    fi
+done
+if [ "$ASAN_HIT" -eq 1 ]; then
+    exit 1
+fi
+echo "  [ok] no libasan on mortred-model-server.out (or binary not present)"
+
 echo "== pack occupancy / identity ($PACK) =="
 if [ -f "$PACK" ]; then
     if python3 "$ROOT/scripts/pack_occupancy.py" --project-root "$ROOT" --pack "$PACK" --check; then

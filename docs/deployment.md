@@ -97,7 +97,7 @@ flowchart TD
 | | `gpu` (default) | `cpu` |
 |---|---|---|
 | **Backends** | MNN-CUDA / ORT-CUDA / TensorRT | MNN-CPU / ORT-CPU (TensorRT compiled out) |
-| **Hardware** | NVIDIA GPU + driver, CUDA 11.8 or 12 line | any x64 machine |
+| **Hardware** | NVIDIA GPU + driver, CUDA 12 + TensorRT 10 | any x64 machine |
 | **Models** | HTTP catalog (classification / detection / OCR / seg / matting / enhancement / SuperPoint / depth / DINOv2 / SAM AMG / diffusion). Bench-only: CLIP, LightGlue, FastSAM, SAM prompt, MsOcrNet. No MOT. RT-DETR is unimplemented. | curated: mobilenetv2, resnet50 |
 | **Weight size** | full manifest (tens of GB) | curated subset (~1 GB) |
 | **Engine conversion** | pack engines on this GPU (§10.2); zoo-wide convert is opt-in | not needed |
@@ -127,7 +127,7 @@ and converge on `mortredctl doctor` - there are no divergent paths.
 | Profile | Minimum | Recommended |
 |---|---|---|
 | cpu | 2 cores / 4 GB / 10 GB disk | 8 cores / 16 GB / SSD |
-| gpu | the above + any CUDA 11/12 GPU | RTX 3060+ / 8 GB VRAM / 50 GB disk |
+| gpu | the above + a CUDA 12 GPU | RTX 3060+ / 8 GB VRAM / 50 GB disk |
 
 ### 3.2 OS and software
 
@@ -348,7 +348,7 @@ For contributors and custom builds.
 
 ```bash
 ./scripts/install_deps.sh --check          # inspect current 3rd_party
-./scripts/install_deps.sh --all            # gpu line (CUDA 11 default; --cuda-version 12)
+./scripts/install_deps.sh --all            # gpu line (CUDA 12 / TensorRT 10.3)
 ./scripts/install_deps.sh --cpu --all      # cpu line: MNN-CPU + ORT-CPU, no NVIDIA/TRT
 sudo ./scripts/install_deps.sh --nvidia    # gpu line CUDA/TRT/cuDNN (root; nothing else needs it)
 ```

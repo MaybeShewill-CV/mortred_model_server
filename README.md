@@ -49,7 +49,7 @@ All models and detectors can be downloaded from my [Hugging Face Page](https://h
 > | | `gpu` (default) | `cpu` |
 > |---|---|---|
 > | backends | MNN-CUDA / ORT-CUDA / TensorRT | MNN-CPU / ORT-CPU |
-> | hardware | NVIDIA GPU + CUDA 11/12 | any x64 machine |
+> | hardware | NVIDIA GPU + CUDA 12 / TensorRT 10 | any x64 machine |
 > | models | full zoo | curated set (mobilenetv2, resnet50) |
 >
 > Three entries, one core (`mortredctl`): pick whichever fits; they all end at
@@ -117,7 +117,7 @@ still converts every engine and stays opt-in. See [docs/deployment.md](docs/depl
 
 ```bash
 # dependencies (version matrix + sha256 pinned + idempotent stamps)
-./scripts/install_deps.sh --all              # gpu line (CUDA 11 default)
+./scripts/install_deps.sh --all              # gpu line (CUDA 12 / TensorRT 10.3)
 ./scripts/install_deps.sh --cpu --all        # cpu line (no NVIDIA/TRT at all)
 
 # configure + build (presets carry the profile)
@@ -220,9 +220,8 @@ TensorRT / CUDA / fmt / header-only libs) into `3rd_party/{include,libs}` with
 a single script — no manual compilation or copying:
 
 ```bash
-./scripts/install_deps.sh --all     # build/install everything (CUDA 11 baseline)
+./scripts/install_deps.sh --all     # CUDA 12 / TensorRT 10.3 / MNN 3.6.1 / ORT 1.29 cuda12
 ./scripts/install_deps.sh --check   # verify integrity and print versions
-./scripts/install_deps.sh --cuda-version 12   # switch to the CUDA 12 / TRT 10 line
 ```
 
 ## Docker (fully automated build)

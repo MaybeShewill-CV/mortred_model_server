@@ -35,8 +35,8 @@ class SessionLogger : public nvinfer1::ILogger {
 }  // namespace trt_detail
 
 /***
- * RAII TensorRT inference session (tensor-address / enqueueV3 API, compatible
- * with TensorRT 8.6 and 10.x). Owns runtime/engine/context, the cuda stream
+ * RAII TensorRT 10 inference session (tensor-address / enqueueV3 API).
+ * Owns runtime/engine/context, the cuda stream
  * and per-io device buffers; dynamic shapes are applied per run with
  * setInputShape and output buffers are reallocated when their resolved shape
  * changes.

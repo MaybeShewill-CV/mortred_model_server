@@ -71,6 +71,12 @@ SERVER_BIN="$ROOT/_bin/mortred-model-server.out"
 if [ ! -x "$SERVER_BIN" ]; then
     SERVER_BIN="$ROOT/bin/mortred-model-server.out"
 fi
+if [ -x "$SERVER_BIN" ] && command -v ldd >/dev/null 2>&1; then
+    if ldd "$SERVER_BIN" 2>/dev/null | grep -Eq 'libasan\.|libclang_rt\.asan'; then
+        fail "GPU server is linked with AddressSanitizer ($SERVER_BIN). Rebuild Release without -fsanitize=address:
+  cmake --preset full && cmake --build --preset full"
+    fi
+fi
 
 wait_ready() {
     local port="$1" tries=0

@@ -68,14 +68,19 @@ if(MORTRED_BUILD_PROFILE STREQUAL "cpu")
         glog::glog
     )
 else()
-    # TensorRT header dir switches with version (TensorRT-8.6.1.6 / TensorRT-10.x); new code always
-    # uses version-less official paths such as #include "NvInfer.h"
-    file(GLOB MORTRED_TRT_INCLUDE_DIRS "${PROJECT_ROOT_DIR}/3rd_party/include/TensorRT-*")
-    list(SORT MORTRED_TRT_INCLUDE_DIRS)
-    list(GET MORTRED_TRT_INCLUDE_DIRS 0 MORTRED_TRT_INCLUDE_DIR)
-    if(NOT MORTRED_TRT_INCLUDE_DIR)
-        message(FATAL_ERROR "no vendored TensorRT include dir found under 3rd_party/include/TensorRT-*")
+    # TensorRT 10 headers only (#include "NvInfer.h"). leftover TensorRT-8* fails configure.
+    file(GLOB MORTRED_TRT8_INCLUDE_DIRS "${PROJECT_ROOT_DIR}/3rd_party/include/TensorRT-8*")
+    if(MORTRED_TRT8_INCLUDE_DIRS)
+        message(FATAL_ERROR
+            "leftover TensorRT 8 headers: ${MORTRED_TRT8_INCLUDE_DIRS}\n"
+            "fix: sudo ./scripts/install_deps.sh --nvidia")
     endif()
+    file(GLOB MORTRED_TRT_INCLUDE_DIRS "${PROJECT_ROOT_DIR}/3rd_party/include/TensorRT-10*")
+    list(SORT MORTRED_TRT_INCLUDE_DIRS)
+    if(NOT MORTRED_TRT_INCLUDE_DIRS)
+        message(FATAL_ERROR "no vendored TensorRT include dir found under 3rd_party/include/TensorRT-10*")
+    endif()
+    list(GET MORTRED_TRT_INCLUDE_DIRS 0 MORTRED_TRT_INCLUDE_DIR)
     message(STATUS "vendored tensorrt headers: ${MORTRED_TRT_INCLUDE_DIR}")
     target_include_directories(models SYSTEM PUBLIC ${MORTRED_TRT_INCLUDE_DIR})
     target_compile_definitions(models PUBLIC MORTRED_HAS_TRT=1)

@@ -66,6 +66,15 @@ All notable changes to this project are documented here. The format follows
 > 是 Prometheus 自己）。`deployment` 补了属主步骤和该 Docker 主机名。
 
 ### Changed
+- GPU line is CUDA 12 + TensorRT 10.3.0.26 + cuDNN 9.10.2 + MNN 3.6.1 +
+  ORT 1.29 cuda12. CUDA 11 / TensorRT 8 / ORT 1.18 are deleted; `--cuda-version
+  11` fails. Engines must be rebuilt with matching trtexec. Full GPU CMake
+  refuses AddressSanitizer (ASan + TRT/cudart mixed ELF).
+
+> GPU 线改为 CUDA 12 + TensorRT 10.3 + cuDNN 9 + MNN 3.6.1 + ORT 1.29 cuda12。
+> CUDA 11 / TensorRT 8 / ORT 1.18 删除；`--cuda-version 11` 失败。引擎必须用
+> 匹配的 trtexec 重建。full GPU CMake 拒绝 AddressSanitizer。
+
 - Entry 1 without Docker resolves the GitHub latest **tag** and downloads
   `mortred_model_server-<version>-<profile>-linux-x64.tar.gz`. Release does not
   publish a `...-latest-...` tarball name (GHCR `:latest-cpu` / `:latest-gpu`

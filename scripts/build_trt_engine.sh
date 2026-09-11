@@ -31,9 +31,13 @@ if [ -z "$ONNX" ] || [ -z "$SAVE" ] || [ -z "$PROFILE" ]; then
 fi
 
 if [ ! -x "$BUILDER" ]; then
-    TRT_INC="$(ls -d "$ROOT"/3rd_party/include/TensorRT-* 2>/dev/null | sort | head -1)"
+    if ls -d "$ROOT"/3rd_party/include/TensorRT-8* >/dev/null 2>&1; then
+        echo "[ERROR] leftover TensorRT 8 headers under 3rd_party/include (need TensorRT-10*)" >&2
+        exit 1
+    fi
+    TRT_INC="$(ls -d "$ROOT"/3rd_party/include/TensorRT-10* 2>/dev/null | sort | head -1)"
     if [ -z "$TRT_INC" ]; then
-        echo "[ERROR] no vendored TensorRT headers under 3rd_party/include" >&2
+        echo "[ERROR] no vendored TensorRT 10 headers under 3rd_party/include/TensorRT-10*" >&2
         exit 1
     fi
     mkdir -p "$BIN"

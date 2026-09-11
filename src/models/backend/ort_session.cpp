@@ -13,6 +13,7 @@
 #include <cstring>
 #include <limits>
 #include <string>
+#include <unordered_map>
 
 #include "glog/logging.h"
 
@@ -129,15 +130,19 @@ StatusCode OrtSession::init(const BackendConfig& config, std::string* err) {
                 }
                 limit_bytes = static_cast<size_t>(bytes);
             }
-            OrtCUDAProviderOptions cuda_options;
-            cuda_options.device_id = config.device_id;
-            cuda_options.cudnn_conv_algo_search = OrtCudnnConvAlgoSearchDefault;
-            cuda_options.gpu_mem_limit = limit_bytes;
-            cuda_options.arena_extend_strategy = 1;
-            cuda_options.do_copy_in_default_stream = 1;
-            cuda_options.has_user_compute_stream = 0;
-            cuda_options.default_memory_arena_cfg = nullptr;
-            _m_session_options.AppendExecutionProvider_CUDA(cuda_options);
+            Ort::CUDAProviderOptions cuda_opts;
+            const std::string mem_limit =
+                (limit_mb == 0)
+                    ? std::to_string(std::numeric_limits<size_t>::max())
+                    : std::to_string(limit_bytes);
+            cuda_opts.Update({
+                {"device_id", std::to_string(config.device_id)},
+                {"gpu_mem_limit", mem_limit},
+                {"arena_extend_strategy", "kSameAsRequested"},
+                {"cudnn_conv_algo_search", "DEFAULT"},
+                {"do_copy_in_default_stream", "1"},
+            });
+            _m_session_options.AppendExecutionProvider_CUDA_V2(*cuda_opts);
             LOG(INFO) << "onnxruntime cuda gpu_mem_limit_mb=" << limit_mb
                       << (limit_mb == 0 ? " (unlimited)" : "")
                       << " device_id=" << config.device_id;
