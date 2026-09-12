@@ -20,7 +20,10 @@
 #                             if unset, consult the ONNXRUNTIME_SHA256S table in this script, else the
 #                             official release API asset digest; refuse to install if none is available.
 #
-# Idempotent: each dependency leaves a stamp in 3rd_party/.install-stamp/ after a successful install; reruns skip automatically.
+# Idempotent: each dependency leaves a stamp in 3rd_party/.install-stamp/ after a
+# successful install. Reruns skip only when the stamp exists AND the copied
+# headers/libs are still present; missing artifacts drop the stamp and recopy.
+# `./scripts/install_deps.sh --check` is the full integrity pass.
 
 set -euo pipefail
 
@@ -73,6 +76,26 @@ announce() { echo ""; echo "==> $*"; }
 
 stamp() { test -f "$STAMP_DIR/$1"; }
 mark() { mkdir -p "$STAMP_DIR"; touch "$STAMP_DIR/$1"; info "stamped: $1"; }
+
+# 0 if stamp exists and every path/glob still has a match; else drop the stamp.
+stamp_fresh() {
+    local name="$1"
+    shift
+    stamp "$name" || return 1
+    local spec found f
+    for spec in "$@"; do
+        found=0
+        for f in $spec; do
+            [ -e "$f" ] && found=1 && break
+        done
+        if [ "$found" -ne 1 ]; then
+            info "$name: stamp present but missing $spec; will reinstall"
+            rm -f "$STAMP_DIR/$name"
+            return 1
+        fi
+    done
+    return 0
+}
 
 require_cmd() {
     command -v "$1" >/dev/null 2>&1 || fail "missing command: $1 (apt install $2)"
@@ -180,7 +203,7 @@ copy_libs() { # src_glob dst_dir label
 install_header_only() {
     local name="$1" url="$2" archive_subdir="$3" dst_subdir="$4" stamp_name="$5"
     local amalgamate="${6:-}"
-    if stamp "$stamp_name"; then
+    if stamp_fresh "$stamp_name" "$INCLUDE_DIR/$dst_subdir"/*; then
         info "$name: already installed (stamp)"
         return
     fi
@@ -223,7 +246,10 @@ install_header_only() {
 # tracked 3rd_party fmt headers - upstream never released a 9.1.1, so cloning
 # it fails; 9.1.0 keeps the libfmt.so.9 soname vendored::fmt imports) ============
 install_fmt() {
-    if stamp fmt; then info "fmt: already installed"; return; fi
+    if stamp_fresh fmt "$INCLUDE_DIR/fmt/format.h" "$LIB_DIR/libfmt.so*"; then
+        info "fmt: already installed"
+        return
+    fi
     announce "build fmt 9.1.0"
     require_cmd git "git"
     require_cmd cmake "cmake"
@@ -245,7 +271,10 @@ install_fmt() {
 
 # ============ workflow (built from source, pinned tag) ============
 install_workflow() {
-    if stamp workflow; then info "workflow: already installed"; return; fi
+    if stamp_fresh workflow "$INCLUDE_DIR/workflow/CommRequest.h" "$LIB_DIR/libworkflow.so*"; then
+        info "workflow: already installed"
+        return
+    fi
     announce "build workflow ${WORKFLOW_TAG}"
     require_cmd git "git"
     require_cmd make "build-essential"
@@ -268,7 +297,12 @@ install_workflow() {
 # legacy hand-copied files, so --all installs them like any other dependency
 # and --check keeps demanding them (install/check contract stays in sync).
 install_system_runtime_libs() {
-    if stamp "$RUNTIME_STAMP"; then info "runtime libs: already installed"; return; fi
+    local -a runtime_need=("$LIB_DIR/libssl.so*" "$LIB_DIR/libcrypto.so*")
+    [ "$DEP_PROFILE" = "cpu" ] || runtime_need+=("$LIB_DIR/libOpenCL.so*")
+    if stamp_fresh "$RUNTIME_STAMP" "${runtime_need[@]}"; then
+        info "runtime libs: already installed"
+        return
+    fi
     announce "install system runtime libs (ssl/crypto$( [ "$DEP_PROFILE" != "cpu" ] && echo /OpenCL ))"
     local sys=/usr/lib/x86_64-linux-gnu
     copy_libs "$sys/libssl.so*"    "$LIB_DIR" "libssl runtime"
@@ -280,7 +314,12 @@ install_system_runtime_libs() {
 }
 # ============ MNN (built from source, pinned tag, CUDA backend) ============
 install_mnn() {
-    if stamp "$MNN_STAMP"; then info "MNN (${DEP_PROFILE}): already installed"; return; fi
+    local -a mnn_need=("$INCLUDE_DIR/MNN/MNNForwardType.h" "$LIB_DIR/libMNN.so*")
+    [ "$DEP_PROFILE" = "cpu" ] || mnn_need+=("$LIB_DIR/libMNN_Cuda_Main.so*")
+    if stamp_fresh "$MNN_STAMP" "${mnn_need[@]}"; then
+        info "MNN (${DEP_PROFILE}): already installed"
+        return
+    fi
     announce "build MNN ${MNN_TAG} (profile=${DEP_PROFILE})"
     require_cmd git "git"
     require_cmd cmake "cmake"
@@ -325,7 +364,12 @@ curl_retry() { # url dest
 }
 
 install_onnxruntime() {
-    if stamp "$ORT_STAMP"; then info "onnxruntime (${DEP_PROFILE}): already installed"; return; fi
+    if stamp_fresh "$ORT_STAMP" \
+        "$INCLUDE_DIR/onnxruntime/onnxruntime_cxx_api.h" \
+        "$LIB_DIR/libonnxruntime.so*"; then
+        info "onnxruntime (${DEP_PROFILE}): already installed"
+        return
+    fi
     announce "install onnxruntime ${ONNXRUNTIME_VER} (${DEP_PROFILE})"
     require_cmd curl "curl"
     local tgz="onnxruntime-linux-x64${ORT_FLAVOR}-${ONNXRUNTIME_VER}.tgz"
@@ -446,7 +490,13 @@ install_onnxruntime() {
 
 # ============ CUDA / TensorRT / cuDNN (NVIDIA apt, needs root) ============
 install_nvidia() {
-    if stamp "$NVIDIA_STAMP"; then info "nvidia stack: already installed"; return; fi
+    if stamp_fresh "$NVIDIA_STAMP" \
+        "$INCLUDE_DIR/$TRT_INCLUDE_DIR/NvInfer.h" \
+        "$LIB_DIR/libnvinfer.so.10*" \
+        "$ROOT/3rd_party/bin/trtexec"; then
+        info "nvidia stack: already installed"
+        return
+    fi
     announce "install CUDA ${CUDA_VERSION} / TensorRT ${TRT_VER} / cuDNN ${CUDNN_VER} (needs root)"
     [ "$(id -u)" -eq 0 ] || fail "nvidia install requires root: run 'sudo ./scripts/install_deps.sh --nvidia'"
     [ "$CUDA_VERSION" = "12" ] || fail "GPU line is CUDA 12 only (got $CUDA_VERSION)"
