@@ -14,7 +14,7 @@
 #   ./scripts/install_deps.sh --onnxruntime      # download and install only onnxruntime
 #   ./scripts/install_deps.sh --nvidia           # CUDA/TensorRT/cuDNN/trtexec (needs root + NVIDIA apt)
 #   ./scripts/install_deps.sh --cuda-version 12  # accepted no-op (12 is the only GPU line)
-#   ./scripts/install_deps.sh --offline DIR      # use a pre-downloaded package dir (offline)
+#   ./scripts/install_deps.sh --offline DIR      # use a pre-downloaded package dir (.tgz / .tar / .tar.gz)
 #   Environment variables:
 #   ONNXRUNTIME_SHA256=<hex>  explicitly pin the onnxruntime tarball hash (highest priority);
 #                             if unset, consult the ONNXRUNTIME_SHA256S table in this script, else the
@@ -352,15 +352,30 @@ install_onnxruntime() {
     fi
     [ -n "$expect_sha" ] || fail "cannot get sha256 for onnxruntime ${ONNXRUNTIME_VER}: set ONNXRUNTIME_SHA256 or fill the ONNXRUNTIME_SHA256S table (to get it: curl -fsSL -o /tmp/ort.tgz ${url} && sha256sum /tmp/ort.tgz)"
 
-    local have_pkg=0
-    if [ -f "$pkg_path" ] && echo "$expect_sha  $pkg_path" | sha256sum -c - >/dev/null 2>&1; then
-        info "onnxruntime tarball already present and hash-ok, skipping download"
-        have_pkg=1
-    elif [ -n "$OFFLINE_DIR" ] && [ -f "$OFFLINE_DIR/$tgz" ]; then
-        cp "$OFFLINE_DIR/$tgz" "$pkg_path"
-        have_pkg=1
+    # Official name is .tgz; browsers/IDM often save the same blob as .tar / .tar.gz.
+    local stem="${tgz%.tgz}" cand found_archive=""
+    local -a search_dirs=("$dst")
+    if [ -n "$OFFLINE_DIR" ] && [ "$OFFLINE_DIR" != "$dst" ]; then
+        search_dirs+=("$OFFLINE_DIR")
     fi
-    if [ "$have_pkg" -ne 1 ]; then
+    for d in "${search_dirs[@]}"; do
+        for cand in "$d/$tgz" "$d/${stem}.tar.gz" "$d/${stem}.tar"; do
+            [ -f "$cand" ] || continue
+            if echo "$expect_sha  $cand" | sha256sum -c - >/dev/null 2>&1; then
+                found_archive="$cand"
+                break 2
+            fi
+        done
+    done
+    if [ -n "$found_archive" ]; then
+        info "using local onnxruntime archive: $found_archive"
+        if [ "$found_archive" != "$pkg_path" ]; then
+            rm -f "$pkg_path"
+            cp -f "$found_archive" "$pkg_path"
+        fi
+    elif [ -n "$OFFLINE_DIR" ]; then
+        fail "offline dir has no hash-ok $tgz (also tried ${stem}.tar.gz / ${stem}.tar under $OFFLINE_DIR and $dst). ls: $(ls -lh "$OFFLINE_DIR" 2>/dev/null || true)"
+    else
         info "downloading ${tgz} (~400MB for gpu_cuda12; GitHub TLS drops are retried)"
         curl_retry "$url" "$pkg_path" || true
         if ! echo "$expect_sha  $pkg_path" | sha256sum -c - >/dev/null 2>&1; then
