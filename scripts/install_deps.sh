@@ -107,6 +107,39 @@ curl_retry() { # url dest
     curl -fL --retry 8 --retry-delay 3 --connect-timeout 30 -C - "${extra[@]}" -o "$2" "$1"
 }
 
+# Clone a pinned tag; on GitHub TLS failure retry, then fall back to the
+# GitHub archive tarball. Reuses dest if a previous clone/unpack is present.
+ensure_pinned_src() { # dest git_url branch tarball_url
+    local dest="$1" url="$2" branch="$3" tarball="$4"
+    if [ -d "$dest/.git" ] || [ -e "$dest/CMakeLists.txt" ] || [ -e "$dest/Makefile" ]; then
+        info "reusing source $dest"
+        return 0
+    fi
+    rm -rf "$dest"
+    local n=0
+    while [ "$n" -lt 3 ]; do
+        n=$((n+1))
+        info "git clone ($n/3) $url ($branch)"
+        if git -c http.version=HTTP/1.1 clone --depth 1 --branch "$branch" "$url" "$dest"; then
+            return 0
+        fi
+        rm -rf "$dest"
+        sleep 3
+    done
+    info "git clone failed; downloading $tarball"
+    local tar="$BUILD_DIR/$(basename "$dest").tgz"
+    mkdir -p "$BUILD_DIR"
+    curl_retry "$tarball" "$tar" \
+        || fail "failed to fetch $tarball. Download it yourself and unpack into $dest"
+    local unpack inner
+    unpack="$(mktemp -d "$BUILD_DIR/unpack-XXXX")"
+    tar -xzf "$tar" -C "$unpack"
+    inner="$(find "$unpack" -mindepth 1 -maxdepth 1 -type d | head -n1)"
+    [ -n "$inner" ] || fail "empty tarball $tarball"
+    mv "$inner" "$dest"
+    rm -rf "$unpack"
+}
+
 # Directory still has at least one file (header-only stamps).
 stamp_fresh_dir() {
     local name="$1" dir="$2"
@@ -278,10 +311,8 @@ install_fmt() {
     require_cmd git "git"
     require_cmd cmake "cmake"
     local src="$BUILD_DIR/fmt-src"
-    mkdir -p "$src"
-    if [ ! -d "$src/.git" ]; then
-        git clone --depth 1 --branch 9.1.0 https://github.com/fmtlib/fmt.git "$src"
-    fi
+    ensure_pinned_src "$src" https://github.com/fmtlib/fmt.git 9.1.0 \
+        https://github.com/fmtlib/fmt/archive/refs/tags/9.1.0.tar.gz
     # BUILD_SHARED_LIBS=ON: fmt defaults to a static lib, but the vendored tree
     # and vendored::fmt expect libfmt.so.9 - fresh containers proved the default
     # produces only libfmt.a and copy_libs then finds nothing
@@ -303,10 +334,8 @@ install_workflow() {
     require_cmd git "git"
     require_cmd make "build-essential"
     local src="$BUILD_DIR/workflow-src"
-    mkdir -p "$src"
-    if [ ! -d "$src/.git" ]; then
-        git clone --depth 1 --branch "$WORKFLOW_TAG" https://github.com/sogou/workflow.git "$src"
-    fi
+    ensure_pinned_src "$src" https://github.com/sogou/workflow.git "$WORKFLOW_TAG" \
+        "https://github.com/sogou/workflow/archive/refs/tags/${WORKFLOW_TAG}.tar.gz"
     (cd "$src" && make -j"$JOBS" >/dev/null)
     mkdir -p "$INCLUDE_DIR/workflow"
     cp -rn "$src/_include/workflow"/* "$INCLUDE_DIR/workflow"/ 2>/dev/null || true
@@ -348,10 +377,8 @@ install_mnn() {
     require_cmd git "git"
     require_cmd cmake "cmake"
     local src="$BUILD_DIR/mnn-src"
-    mkdir -p "$src"
-    if [ ! -d "$src/.git" ]; then
-        git clone --depth 1 --branch "$MNN_TAG" https://github.com/alibaba/MNN.git "$src"
-    fi
+    ensure_pinned_src "$src" https://github.com/alibaba/MNN.git "$MNN_TAG" \
+        "https://github.com/alibaba/MNN/archive/refs/tags/${MNN_TAG}.tar.gz"
     local build="$src/$MNN_BUILD_DIR_NAME"
     cmake -S "$src" -B "$build" -DCMAKE_BUILD_TYPE=Release \
         -DMNN_BUILD_TRAIN=OFF -DMNN_BUILD_DEMO=OFF -DMNN_BUILD_TOOLS=OFF \
