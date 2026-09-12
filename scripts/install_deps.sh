@@ -352,29 +352,63 @@ install_onnxruntime() {
     fi
     [ -n "$expect_sha" ] || fail "cannot get sha256 for onnxruntime ${ONNXRUNTIME_VER}: set ONNXRUNTIME_SHA256 or fill the ONNXRUNTIME_SHA256S table (to get it: curl -fsSL -o /tmp/ort.tgz ${url} && sha256sum /tmp/ort.tgz)"
 
-    # Official name is .tgz; browsers/IDM often save the same blob as .tar / .tar.gz.
-    local stem="${tgz%.tgz}" cand found_archive=""
+    # Official asset is a ~400MB gzip .tgz. Browsers/Windows often save it as
+    # .tar (same gzip bytes) or gunzip it into a larger uncompressed tar (~580MB).
+    local stem="${tgz%.tgz}" cand found_archive="" extract_gzip=1
+    local expect_top="onnxruntime-linux-x64${ORT_FLAVOR}-${ONNXRUNTIME_VER}"
     local -a search_dirs=("$dst")
     if [ -n "$OFFLINE_DIR" ] && [ "$OFFLINE_DIR" != "$dst" ]; then
         search_dirs+=("$OFFLINE_DIR")
     fi
+    ort_archive_top() {
+        local f="$1" top=""
+        if gzip -t "$f" >/dev/null 2>&1; then
+            top="$(tar -tzf "$f" 2>/dev/null | head -n1 || true)"
+        else
+            top="$(tar -tf "$f" 2>/dev/null | head -n1 || true)"
+        fi
+        printf '%s' "$top"
+    }
     for d in "${search_dirs[@]}"; do
         for cand in "$d/$tgz" "$d/${stem}.tar.gz" "$d/${stem}.tar"; do
             [ -f "$cand" ] || continue
             if echo "$expect_sha  $cand" | sha256sum -c - >/dev/null 2>&1; then
                 found_archive="$cand"
+                extract_gzip=1
                 break 2
             fi
         done
     done
-    if [ -n "$found_archive" ]; then
-        info "using local onnxruntime archive: $found_archive"
+    if [ -z "$found_archive" ]; then
+        for d in "${search_dirs[@]}"; do
+            for cand in "$d/$tgz" "$d/${stem}.tar.gz" "$d/${stem}.tar"; do
+                [ -f "$cand" ] || continue
+                gzip -t "$cand" >/dev/null 2>&1 && continue
+                case "$(ort_archive_top "$cand")" in
+                    "${expect_top}"|"${expect_top}/"*)
+                        found_archive="$cand"
+                        extract_gzip=0
+                        break 2
+                        ;;
+                esac
+            done
+        done
+    fi
+    if [ -n "$found_archive" ] && [ "$extract_gzip" -eq 1 ]; then
+        info "using local onnxruntime archive (sha256 ok): $found_archive"
         if [ "$found_archive" != "$pkg_path" ]; then
             rm -f "$pkg_path"
             cp -f "$found_archive" "$pkg_path"
         fi
+        echo "$expect_sha  $pkg_path" | sha256sum -c - || fail "onnxruntime sha256 mismatch"
+        tar -xzf "$pkg_path" -C "$dst"
+    elif [ -n "$found_archive" ]; then
+        info "using uncompressed tar $found_archive (Windows often gunzips the GitHub .tgz; official sha256 is for the 400MB gzip)"
+        tar -xf "$found_archive" -C "$dst" \
+            || fail "failed to unpack uncompressed onnxruntime tar: $found_archive"
+        pkg_path="$found_archive"
     elif [ -n "$OFFLINE_DIR" ]; then
-        fail "offline dir has no hash-ok $tgz (also tried ${stem}.tar.gz / ${stem}.tar under $OFFLINE_DIR and $dst). ls: $(ls -lh "$OFFLINE_DIR" 2>/dev/null || true)"
+        fail "offline dir has no usable $tgz (sha256 ${expect_sha:0:12}..., ~400MB gzip) and no uncompressed tar whose top dir is ${expect_top}/. ls: $(ls -lh "$OFFLINE_DIR" 2>/dev/null || true)"
     else
         info "downloading ${tgz} (~400MB for gpu_cuda12; GitHub TLS drops are retried)"
         curl_retry "$url" "$pkg_path" || true
@@ -383,9 +417,9 @@ install_onnxruntime() {
             rm -f "$pkg_path"
             curl_retry "$url" "$pkg_path" || fail "onnxruntime download failed (GitHub TLS/network). Download ${url} elsewhere and rerun: ./scripts/install_deps.sh --onnxruntime --offline DIR"
         fi
+        echo "$expect_sha  $pkg_path" | sha256sum -c - || fail "onnxruntime sha256 mismatch"
+        tar -xzf "$pkg_path" -C "$dst"
     fi
-    echo "$expect_sha  $pkg_path" | sha256sum -c - || fail "onnxruntime sha256 mismatch"
-    tar -xzf "$pkg_path" -C "$dst"
     local src="$dst/onnxruntime-linux-x64${ORT_FLAVOR}-${ONNXRUNTIME_VER}"
     [ -d "$src" ] || fail "onnxruntime unpack dir missing: $src"
     mkdir -p "$INCLUDE_DIR/onnxruntime"
@@ -400,8 +434,12 @@ install_onnxruntime() {
     fi
     copy_libs "$src/lib/libonnxruntime*.so*" "$LIB_DIR" "onnxruntime libs"
 
-    # Record: tgz checksum + installed lib hashes for --check re-verification (anti-tamper/corruption)
-    echo "$expect_sha  $pkg_path" > "$STAMP_DIR/${ORT_STAMP}.sha256"
+    # Record: archive checksum + installed lib hashes for --check re-verification
+    if [ "$extract_gzip" -eq 1 ]; then
+        echo "$expect_sha  $pkg_path" > "$STAMP_DIR/${ORT_STAMP}.sha256"
+    else
+        sha256sum "$pkg_path" > "$STAMP_DIR/${ORT_STAMP}.sha256"
+    fi
     (cd "$LIB_DIR" && find . -maxdepth 1 -name 'libonnxruntime.so*' -type f -print0 | sort -z | xargs -0 -r sha256sum > "$STAMP_DIR/${ORT_STAMP}.libs.sha256")
     mark "$ORT_STAMP"
 }
