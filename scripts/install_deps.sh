@@ -101,6 +101,24 @@ require_cmd() {
     command -v "$1" >/dev/null 2>&1 || fail "missing command: $1 (apt install $2)"
 }
 
+curl_retry() { # url dest
+    local extra=()
+    curl --help 2>&1 | grep -q -- '--retry-all-errors' && extra+=(--retry-all-errors)
+    curl -fL --retry 8 --retry-delay 3 --connect-timeout 30 -C - "${extra[@]}" -o "$2" "$1"
+}
+
+# Directory still has at least one file (header-only stamps).
+stamp_fresh_dir() {
+    local name="$1" dir="$2"
+    stamp "$name" || return 1
+    if [ -n "$(find "$dir" -type f -print -quit 2>/dev/null)" ]; then
+        return 0
+    fi
+    info "$name: stamp present but $dir has no files; will reinstall"
+    rm -f "$STAMP_DIR/$name"
+    return 1
+}
+
 apply_profile() {
     if [ "$DEP_PROFILE" = "cpu" ]; then
         MNN_CUDA_FLAGS=""
@@ -203,7 +221,7 @@ copy_libs() { # src_glob dst_dir label
 install_header_only() {
     local name="$1" url="$2" archive_subdir="$3" dst_subdir="$4" stamp_name="$5"
     local amalgamate="${6:-}"
-    if stamp_fresh "$stamp_name" "$INCLUDE_DIR/$dst_subdir"/*; then
+    if stamp_fresh_dir "$stamp_name" "$INCLUDE_DIR/$dst_subdir"; then
         info "$name: already installed (stamp)"
         return
     fi
@@ -211,7 +229,13 @@ install_header_only() {
     require_cmd curl "curl"
     local tmp="$BUILD_DIR/$stamp_name"
     mkdir -p "$tmp"
-    curl -fsSL "$url" -o "$tmp/pkg.tar.gz"
+    if [ -f "$tmp/pkg.tar.gz" ] && tar -tzf "$tmp/pkg.tar.gz" >/dev/null 2>&1; then
+        info "$name: reusing $tmp/pkg.tar.gz"
+    else
+        rm -f "$tmp/pkg.tar.gz"
+        curl_retry "$url" "$tmp/pkg.tar.gz" \
+            || fail "$name: download failed ($url). Save the tarball as $tmp/pkg.tar.gz and rerun"
+    fi
     tar -xzf "$tmp/pkg.tar.gz" -C "$tmp"
     # Find the actual unpacked dir (release tarballs usually carry a prefix dir)
     local src
@@ -357,12 +381,6 @@ install_mnn() {
 }
 
 # ============ onnxruntime (official release tarball + sha256) ============
-curl_retry() { # url dest
-    local extra=()
-    curl --help 2>&1 | grep -q -- '--retry-all-errors' && extra+=(--retry-all-errors)
-    curl -fL --retry 8 --retry-delay 3 --connect-timeout 30 -C - "${extra[@]}" -o "$2" "$1"
-}
-
 install_onnxruntime() {
     if stamp_fresh "$ORT_STAMP" \
         "$INCLUDE_DIR/onnxruntime/onnxruntime_cxx_api.h" \
