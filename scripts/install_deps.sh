@@ -380,10 +380,20 @@ install_mnn() {
     ensure_pinned_src "$src" https://github.com/alibaba/MNN.git "$MNN_TAG" \
         "https://github.com/alibaba/MNN/archive/refs/tags/${MNN_TAG}.tar.gz"
     local build="$src/$MNN_BUILD_DIR_NAME"
+    local -a cmake_extra=()
+    if [ "$DEP_PROFILE" != "cpu" ]; then
+        # MNN CUDA FetchContent_Declare(cutlass GIT_TAG v2.9.0). GitHub git
+        # clone of NVIDIA/cutlass fails the same TLS way as MNN itself.
+        local cutlass_src="$BUILD_DIR/cutlass-v2.9.0"
+        ensure_pinned_src "$cutlass_src" https://github.com/NVIDIA/cutlass.git v2.9.0 \
+            https://github.com/NVIDIA/cutlass/archive/refs/tags/v2.9.0.tar.gz
+        cmake_extra+=(-DFETCHCONTENT_SOURCE_DIR_CUTLASS="$cutlass_src")
+        rm -rf "$build/_deps/cutlass-subbuild" "$src/3rd_party/cutlass"
+    fi
     cmake -S "$src" -B "$build" -DCMAKE_BUILD_TYPE=Release \
         -DMNN_BUILD_TRAIN=OFF -DMNN_BUILD_DEMO=OFF -DMNN_BUILD_TOOLS=OFF \
         -DMNN_BUILD_CONVERTER=OFF -DMNN_BUILD_TEST=OFF -DMNN_BUILD_BENCHMARK=OFF \
-        $MNN_CUDA_FLAGS
+        "${cmake_extra[@]}" $MNN_CUDA_FLAGS
     cmake --build "$build" -j"$JOBS"
     # MNN 3.6.1 still registers the CUDA backend as a separate loadable lib
     # (libMNN_Cuda_Main.so). Ensure it is built even if the default target set
