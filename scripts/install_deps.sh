@@ -6,7 +6,9 @@
 #
 # Usage:
 #   ./scripts/install_deps.sh --check            # verify 3rd_party completeness and print versions
-#   ./scripts/install_deps.sh --all              # install everything (default)
+#   ./scripts/install_deps.sh --all              # install everything (default); as root. Without
+#                                                # root it stops after the non-root deps and exits 3;
+#                                                # finish with: sudo ./scripts/install_deps.sh --nvidia
 #   ./scripts/install_deps.sh --cpu --all        # cpu profile: MNN without CUDA, ORT cpu tarball,
 #                                                # no NVIDIA/TRT stack at all (GPU-less machines)
 #   ./scripts/install_deps.sh --workflow         # build and install only workflow
@@ -810,12 +812,30 @@ check() {
     fi
     echo "== verification failed, missing items:"
     for p in "${problems[@]}"; do echo "   - $p"; done
-    echo "== fix: ./scripts/install_deps.sh --all (or the matching subcommand)"
+    # NVIDIA/TRT/cuDNN items (incl. leftover wipes) only come from the root-only
+    # --nvidia step; a non-root --all skips it, so hinting plain --all for those
+    # dead-ends the user in a loop.
+    local -a nvidia_problems=()
+    for p in "${problems[@]}"; do
+        case "$p" in
+            trtexec|nvcc|"nvcc major"|"header TensorRT"|"lib TensorRT"|"lib TensorRT parser"|"lib CUDA runtime"|"lib cuDNN"|\
+"leftover TRT8/cudart11/ORT1.18"|"libnvinfer.so.8 present")
+                nvidia_problems+=("$p") ;;
+        esac
+    done
+    if [ "${#nvidia_problems[@]}" -gt 0 ]; then
+        echo "== fix: sudo ./scripts/install_deps.sh --nvidia   (for: ${nvidia_problems[*]})"
+        if [ "${#nvidia_problems[@]}" -lt "${#problems[@]}" ]; then
+            echo "==      then: ./scripts/install_deps.sh --all (remaining items)"
+        fi
+    else
+        echo "== fix: ./scripts/install_deps.sh --all (or the matching subcommand)"
+    fi
     return 1
 }
 
 usage() {
-    sed -n '2,18p' "$0"
+    sed -n '2,21p' "$0"
     exit 0
 }
 
@@ -883,15 +903,25 @@ case "$MODE" in
         install_onnxruntime
         install_mnn
         install_system_runtime_libs
+        nvidia_pending=""
         if [ "$DEP_PROFILE" = "cpu" ]; then
             info "cpu profile: nvidia/TensorRT stack skipped entirely"
         elif [ "$(id -u)" -eq 0 ]; then
-            # nvidia needs root; run it separately (so --all doesn't error out without root)
             install_nvidia
         else
+            # gpu profile: check() treats the NVIDIA/TRT stack as required, so a
+            # non-root --all must not claim "all done" with exit 0. Exit 3 marks
+            # "nvidia step still pending" so it's distinguishable from failures.
+            nvidia_pending=1
             info "skipping nvidia (needs root): sudo ./scripts/install_deps.sh --nvidia"
         fi
         echo ""
+        if [ -n "$nvidia_pending" ]; then
+            echo "== non-root deps done, install INCOMPLETE: nvidia/TensorRT stack missing."
+            echo "== next: sudo ./scripts/install_deps.sh --nvidia"
+            echo "== then verify: ./scripts/install_deps.sh --check"
+            exit 3
+        fi
         echo "== all done. verify: ./scripts/install_deps.sh --check"
         ;;
 esac
