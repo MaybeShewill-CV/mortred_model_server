@@ -78,9 +78,17 @@ struct BatchRequestState {
         if (!state || idx >= state->outputs.size() || !state->slot_done) {
             return;
         }
+        if (state->slot_done[idx].load(std::memory_order_acquire)) {
+            return;
+        }
         state->outputs[idx] = std::move(output);
         state->item_status[idx] = status;
-        state->slot_done[idx].store(true, std::memory_order_release);
+        bool expected = false;
+        if (!state->slot_done[idx].compare_exchange_strong(
+                expected, true, std::memory_order_release, std::memory_order_acquire)) {
+            // Another writer published first; do not bump completed again.
+            return;
+        }
         const size_t n = state->outputs.size();
         const size_t prev = state->completed.fetch_add(1, std::memory_order_acq_rel);
         if (prev + 1 == n && state->notify_done) {
