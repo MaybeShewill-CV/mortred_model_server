@@ -574,7 +574,7 @@ install_nvidia() {
     # need the matching keyring. Pick the keyring by OS release - hardcoding one
     # distro (e.g. the jammy keyring on a focal image) mixes repos whose package
     # builds can mismatch the local CUDA.
-    if ! grep -rqs 'developer.download.nvidia.com' /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null; then
+    if ! grep -rqsE 'developer\.download\.nvidia\.(cn|com)' /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null; then
         local os_id os_ver repo_dir
         os_id="$(. /etc/os-release && echo "$ID")"
         os_ver="$(. /etc/os-release && echo "$VERSION_ID")"
@@ -594,15 +594,37 @@ install_nvidia() {
     # freedom to wander into unversioned nvinfer. All versions below verified
     # against the repo Packages.gz indexes; the focal and jammy repos both
     # carry them.
-    local repo_dir2 nv_repo deb_dir d
-    repo_dir2="$(grep -rhoE 'repos/ubuntu[0-9]+/x86_64' /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null | head -n1 | sed 's#repos/##; s#/x86_64##')"
-    [ -n "$repo_dir2" ] || repo_dir2=ubuntu2204
-    nv_repo="https://developer.download.nvidia.com/compute/cuda/repos/${repo_dir2}/x86_64"
+    # Download host: reuse whichever NVIDIA mirror apt already uses (CN
+    # networks configure developer.download.nvidia.cn). The repo DIR must not
+    # come from apt though: WSL machines point at repos/wsl-ubuntu, which
+    # carries no TensorRT/cuDNN debs at all, and the old ubuntu[0-9]+ grep
+    # matched nothing there - grep's exit 1 then killed this script silently
+    # under set -euo pipefail, right after apt-get update.
+    local repo_host repo_dir2 nv_repo deb_dir d
+    repo_host="$(grep -rhoE 'https?://developer\.download\.nvidia\.(cn|com)/compute/cuda/repos/' \
+        /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null | head -n1 || true)"
+    repo_host="${repo_host#*://}"
+    repo_host="${repo_host%%/*}"
+    case "$repo_host" in
+        developer.download.nvidia.cn|developer.download.nvidia.com) ;;
+        *) repo_host="developer.download.nvidia.com" ;;
+    esac
+    # TRT/cuDNN debs always come from the DISTRO repo (wsl-ubuntu has none of
+    # them; ubuntu2204 - including on the .cn mirror - carries every pinned
+    # version below).
+    repo_dir2="$(. /etc/os-release 2>/dev/null && echo "${ID}${VERSION_ID}" || true)"
+    repo_dir2="${repo_dir2//./}"
+    case "$repo_dir2" in
+        ubuntu2004|ubuntu2204) ;;
+        *) fail "unsupported distro for TensorRT debs: ${repo_dir2:-unknown} (need ubuntu 20.04/22.04)" ;;
+    esac
+    nv_repo="https://${repo_host}/compute/cuda/repos/${repo_dir2}/x86_64"
     deb_dir="$BUILD_DIR/nvidia-debs"
     mkdir -p "$deb_dir"
     fetch_deb() { # <deb filename>
         local d="$1"
-        [ -f "$deb_dir/$d" ] || curl -fSL "$nv_repo/$d" -o "$deb_dir/$d"
+        [ -f "$deb_dir/$d" ] || curl_retry "$nv_repo/$d" "$deb_dir/$d" \
+            || fail "deb download failed ($nv_repo/$d)"
         dpkg-deb --info "$deb_dir/$d" >/dev/null 2>&1 || fail "bad NVIDIA deb: $d"
     }
     if [ -z "$nvcc_bin" ]; then
