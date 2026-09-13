@@ -388,8 +388,9 @@ install_workflow() {
 # libssl/libcrypto: workflow links against them and mortred-gateway's API-key
 # SHA-256 path links libcrypto explicitly (vendored::crypto). libOpenCL: MNN's
 # OpenCL schedule backend dlopens it (gpu profile). Fresh containers have no
-# legacy hand-copied files, so --all installs them like any other dependency
-# and --check keeps demanding them (install/check contract stays in sync).
+# legacy hand-copied files, so --workflow and --all both install them (CMake
+# hard-requires vendored crypto whenever workflow is present) and --check
+# asserts the same sonames (install/check/CMake contract stays in sync).
 install_system_runtime_libs() {
     local -a runtime_need=("$LIB_DIR/libssl.so*" "$LIB_DIR/libcrypto.so*")
     [ "$DEP_PROFILE" = "cpu" ] || runtime_need+=("$LIB_DIR/libOpenCL.so*")
@@ -878,6 +879,16 @@ check() {
         fi
     done
 
+    # Match cmake/VendoredDeps.cmake mortred_import_crypto(): .so.3 preferred, else .so.1.1.
+    if [ -e "$LIB_DIR/libcrypto.so.3" ]; then
+        echo "  [ok] lib: libcrypto (libcrypto.so.3)"
+    elif [ -e "$LIB_DIR/libcrypto.so.1.1" ]; then
+        echo "  [ok] lib: libcrypto (libcrypto.so.1.1)"
+    else
+        echo "  [!!] lib: libcrypto MISSING (need libcrypto.so.3 or libcrypto.so.1.1)"
+        problems+=("lib libcrypto")
+    fi
+
     if [ "$DEP_PROFILE" != "cpu" ]; then
         local leftover
         leftover="$(leftover_gpu_line || true)"
@@ -967,7 +978,7 @@ mkdir -p "$BUILD_DIR"
 
 case "$MODE" in
     check) check ;;
-    workflow) install_workflow ;;
+    workflow) install_workflow; install_system_runtime_libs ;;
     mnn) install_mnn ;;
     onnxruntime) install_onnxruntime ;;
     nvidia) install_nvidia ;;

@@ -24,6 +24,16 @@ All notable changes to this project are documented here. The format follows
 > 闸（unsafe），`--strict` 仍失败。`gpu_mem_limit_mb` 仍然只约束 ORT CUDA EP。
 
 ### Fixed
+- `install_deps.sh --workflow` also installs vendored `libssl`/`libcrypto` (same
+  path as `--all`). CMake requires `vendored::crypto` whenever workflow is
+  present; sanitizer CI only ran `--workflow` and failed at configure.
+  `--check` now asserts `libcrypto.so.3` or `libcrypto.so.1.1`.
+
+> `install_deps.sh --workflow` 也会安装 vendored 的 `libssl`/`libcrypto`（与
+> `--all` 同路径）。有 workflow 时 CMake 硬要 `vendored::crypto`；sanitizer CI
+> 只跑 `--workflow` 会在 configure 阶段挂。`--check` 现在断言 `libcrypto.so.3`
+> 或 `libcrypto.so.1.1`。
+
 - `install_deps.sh` binds ORT headers to the pinned library version: wipe/reinstall
   replaces `3rd_party/include/onnxruntime` atomically, `stamp_fresh` invalidates on
   `ORT_API_VERSION` mismatch (and missing `struct CUDAProviderOptions` on gpu), and
