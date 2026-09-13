@@ -24,6 +24,16 @@ All notable changes to this project are documented here. The format follows
 > 闸（unsafe），`--strict` 仍失败。`gpu_mem_limit_mb` 仍然只约束 ORT CUDA EP。
 
 ### Fixed
+- Release workflow lowercases `github.repository` for GHCR image paths so
+  `ghcr.io/maybeshewill-cv/mortred_model_server` matches docs (uppercase owner
+  refs are illegal). Bootstrap refuses install when a published `.sha256` does
+  not match; missing checksum still WARN-and-continue.
+
+> release 工作流把 `github.repository` 转成小写再推 GHCR，与文档中的
+> `ghcr.io/maybeshewill-cv/mortred_model_server` 一致（大写 owner 非法）。
+> bootstrap 在已发布的 `.sha256` 与包内容不匹配时拒绝安装；缺少校验文件仍
+> WARN 后继续。
+
 - `install_deps.sh --workflow` also installs vendored `libssl`/`libcrypto` (same
   path as `--all`). CMake requires `vendored::crypto` whenever workflow is
   present; sanitizer CI only ran `--workflow` and failed at configure.

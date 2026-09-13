@@ -55,9 +55,12 @@ if command -v curl >/dev/null 2>&1; then
             echo "== tarball track ($VERSION) =="
             WORK="$(mktemp -d)"
             curl -fSL "$URL" -o "$WORK/$TGZ"
-            curl -fsSL "$URL.sha256" -o "$WORK/$TGZ.sha256" 2>/dev/null \
-                && (cd "$WORK" && sha256sum -c "$TGZ.sha256") \
-                || echo "  [WARN] no published sha256; proceeding unverified" >&2
+            if ! curl -fsSL "$URL.sha256" -o "$WORK/$TGZ.sha256" 2>/dev/null; then
+                echo "  [WARN] no published sha256 for $TGZ; proceeding unverified" >&2
+            elif ! (cd "$WORK" && sha256sum -c "$TGZ.sha256"); then
+                echo "  [ERROR] sha256 mismatch for $TGZ — refusing to install" >&2
+                exit 1
+            fi
             tar -xzf "$WORK/$TGZ" -C "$WORK"
             cd "$WORK"
             echo "== running installer (needs sudo) =="

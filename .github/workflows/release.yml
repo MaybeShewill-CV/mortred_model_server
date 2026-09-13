@@ -128,7 +128,9 @@ jobs:
       - name: Build and push gpu runtime image
         run: |
           VERSION="${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"
-          IMAGE="$REGISTRY/${{ github.repository }}"
+          IMAGE="$REGISTRY/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          # GHCR repository path must be lowercase
+          echo "$IMAGE" | grep -qE '^[a-z0-9._/-]+$' || { echo "invalid image ref: $IMAGE" >&2; exit 1; }
           # deps/build layers are already on this daemon from the tarball step
           docker build --target mortred-gpu \
             -t "$IMAGE:$VERSION-gpu" -t "$IMAGE:latest-gpu" .
@@ -154,7 +156,9 @@ jobs:
       - name: Build and push cpu image
         run: |
           VERSION="${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"
-          IMAGE="$REGISTRY/${{ github.repository }}"
+          IMAGE="$REGISTRY/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          # GHCR repository path must be lowercase
+          echo "$IMAGE" | grep -qE '^[a-z0-9._/-]+$' || { echo "invalid image ref: $IMAGE" >&2; exit 1; }
           docker build --target mortred-cpu -t "$IMAGE:$VERSION-cpu" -t "$IMAGE:latest-cpu" .
           docker push "$IMAGE:$VERSION-cpu"
           docker push "$IMAGE:latest-cpu"
