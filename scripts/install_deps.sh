@@ -99,6 +99,26 @@ stamp_fresh() {
     return 0
 }
 
+
+# ORT tarball 1.N.x ships ORT_API_VERSION == N (e.g. 1.29.0 -> 29).
+ort_expected_api_version() {
+    local rest="${ONNXRUNTIME_VER#*.}"
+    printf '%s' "${rest%%.*}"
+}
+
+# Prints the #define ORT_API_VERSION value from installed headers, or empty.
+read_installed_ort_api_version() {
+    local hdr="$INCLUDE_DIR/onnxruntime/onnxruntime_c_api.h"
+    [ -f "$hdr" ] || return 1
+    sed -n 's/^[[:space:]]*#define[[:space:]][[:space:]]*ORT_API_VERSION[[:space:]][[:space:]]*\([0-9][0-9]*\).*/\1/p' "$hdr" | head -n1
+}
+
+ort_cxx_has_cuda_provider_options() {
+    local hdr="$INCLUDE_DIR/onnxruntime/onnxruntime_cxx_api.h"
+    [ -f "$hdr" ] || return 1
+    grep -q 'struct CUDAProviderOptions' "$hdr"
+}
+
 require_cmd() {
     command -v "$1" >/dev/null 2>&1 || fail "missing command: $1 (apt install $2)"
 }
@@ -194,6 +214,15 @@ wipe_stale_gpu_leftovers() {
           "$LIB_DIR"/libcudart.so.13* \
           "$LIB_DIR"/libcudnn.so.8* \
           "$LIB_DIR"/libonnxruntime.so.1.18.0*
+    # Headers are an atomic unit with the pin: wrong/unreadable ORT_API_VERSION
+    # means wipe the whole tree (cp -rf alone cannot delete obsolete files).
+    local expect_api got_api=""
+    expect_api="$(ort_expected_api_version)"
+    got_api="$(read_installed_ort_api_version || true)"
+    if [ -d "$INCLUDE_DIR/onnxruntime" ] && [ "$got_api" != "$expect_api" ]; then
+        info "wiping stale onnxruntime headers (ORT_API_VERSION=${got_api:-missing}, want ${expect_api})"
+        rm -rf "$INCLUDE_DIR/onnxruntime"
+    fi
 }
 
 wipe_stale_nvidia_tree() {
@@ -213,6 +242,16 @@ leftover_gpu_line() {
     for f in "$INCLUDE_DIR"/TensorRT-8*; do
         [ -e "$f" ] && hits+=("$(basename "$f")")
     done
+    local expect_api got_api=""
+    expect_api="$(ort_expected_api_version)"
+    if [ -d "$INCLUDE_DIR/onnxruntime" ]; then
+        got_api="$(read_installed_ort_api_version || true)"
+        if [ -z "$got_api" ]; then
+            hits+=("onnxruntime headers (ORT_API_VERSION unreadable)")
+        elif [ "$got_api" != "$expect_api" ]; then
+            hits+=("onnxruntime headers ORT_API_VERSION=${got_api} (want ${expect_api})")
+        fi
+    fi
     if [ ${#hits[@]} -gt 0 ]; then
         printf '%s\n' "${hits[@]}"
         return 0
@@ -421,11 +460,24 @@ install_mnn() {
 
 # ============ onnxruntime (official release tarball + sha256) ============
 install_onnxruntime() {
+    local expect_api got_api=""
+    expect_api="$(ort_expected_api_version)"
     if stamp_fresh "$ORT_STAMP" \
         "$INCLUDE_DIR/onnxruntime/onnxruntime_cxx_api.h" \
+        "$INCLUDE_DIR/onnxruntime/onnxruntime_c_api.h" \
         "$LIB_DIR/libonnxruntime.so*"; then
-        info "onnxruntime (${DEP_PROFILE}): already installed"
-        return
+        got_api="$(read_installed_ort_api_version || true)"
+        if [ "$got_api" = "$expect_api" ] && \
+           { [ "$DEP_PROFILE" = "cpu" ] || ort_cxx_has_cuda_provider_options; }; then
+            info "onnxruntime (${DEP_PROFILE}): already installed (ORT_API_VERSION=${got_api})"
+            return
+        fi
+        if [ "$got_api" != "$expect_api" ]; then
+            info "onnxruntime: stamp present but ORT_API_VERSION=${got_api:-missing} (want ${expect_api}); will reinstall"
+        else
+            info "onnxruntime: stamp present but cxx headers lack struct CUDAProviderOptions; will reinstall"
+        fi
+        rm -f "$STAMP_DIR/$ORT_STAMP"
     fi
     announce "install onnxruntime ${ONNXRUNTIME_VER} (${DEP_PROFILE})"
     require_cmd curl "curl"
@@ -523,6 +575,8 @@ install_onnxruntime() {
     fi
     local src="$dst/onnxruntime-linux-x64${ORT_FLAVOR}-${ONNXRUNTIME_VER}"
     [ -d "$src" ] || fail "onnxruntime unpack dir missing: $src"
+    # Atomic header replace: never cp -rf onto a dirty tree (stale 1.18 files linger).
+    rm -rf "$INCLUDE_DIR/onnxruntime"
     mkdir -p "$INCLUDE_DIR/onnxruntime"
     rm -f "$LIB_DIR"/libonnxruntime.so*
     # 1.18 tarballs were a flat include/; 1.29 may nest include/onnxruntime/.
@@ -532,6 +586,11 @@ install_onnxruntime() {
         cp -rf "$src"/include/. "$INCLUDE_DIR/onnxruntime"/
     else
         fail "onnxruntime headers not found under $src/include"
+    fi
+    got_api="$(read_installed_ort_api_version || true)"
+    [ "$got_api" = "$expect_api" ] || fail "onnxruntime headers ORT_API_VERSION=${got_api:-missing} after install (want ${expect_api})"
+    if [ "$DEP_PROFILE" != "cpu" ] && ! ort_cxx_has_cuda_provider_options; then
+        fail "onnxruntime cxx headers missing struct CUDAProviderOptions (required by ort_session.cpp CUDA EP)"
     fi
     copy_libs "$src/lib/libonnxruntime*.so*" "$LIB_DIR" "onnxruntime libs"
 
@@ -764,6 +823,27 @@ check() {
             problems+=("header $label")
         fi
     done
+
+    # 2b) onnxruntime header API must match ONNXRUNTIME_VER pin (not just file presence)
+    local expect_api got_api=""
+    expect_api="$(ort_expected_api_version)"
+    if [ -f "$INCLUDE_DIR/onnxruntime/onnxruntime_c_api.h" ]; then
+        got_api="$(read_installed_ort_api_version || true)"
+        if [ "$got_api" = "$expect_api" ]; then
+            echo "  [ok] onnxruntime ORT_API_VERSION=${got_api} (pin ${ONNXRUNTIME_VER})"
+        else
+            echo "  [!!] onnxruntime ORT_API_VERSION=${got_api:-missing} (want ${expect_api} for pin ${ONNXRUNTIME_VER})"
+            problems+=("onnxruntime ORT_API_VERSION")
+        fi
+        if [ "$DEP_PROFILE" != "cpu" ]; then
+            if ort_cxx_has_cuda_provider_options; then
+                echo "  [ok] onnxruntime cxx struct CUDAProviderOptions"
+            else
+                echo "  [!!] onnxruntime cxx missing struct CUDAProviderOptions (GPU EP)"
+                problems+=("onnxruntime CUDAProviderOptions")
+            fi
+        fi
+    fi
 
     # 3) vendored dynamic libs
     local -a libs=(

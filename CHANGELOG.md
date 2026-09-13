@@ -24,6 +24,17 @@ All notable changes to this project are documented here. The format follows
 > 闸（unsafe），`--strict` 仍失败。`gpu_mem_limit_mb` 仍然只约束 ORT CUDA EP。
 
 ### Fixed
+- `install_deps.sh` binds ORT headers to the pinned library version: wipe/reinstall
+  replaces `3rd_party/include/onnxruntime` atomically, `stamp_fresh` invalidates on
+  `ORT_API_VERSION` mismatch (and missing `struct CUDAProviderOptions` on gpu), and
+  `--check` fail-closes on the same gates. Stops local full-GPU builds from compiling
+  `ort_session.cpp` CUDA EP against leftover ORT 1.18 headers while linking 1.29.
+
+> `install_deps.sh` 把 ORT 头与 pin 的库版本强绑定：wipe/重装会整目录替换
+> `3rd_party/include/onnxruntime`；`stamp_fresh` 在 `ORT_API_VERSION` 不匹配（gpu
+> 下缺 `struct CUDAProviderOptions`）时失效；`--check` 用同一套门闩 fail-closed。
+> 避免本地 full-GPU 用残留的 ORT 1.18 头编译 `ort_session.cpp` CUDA EP、却链接 1.29。
+
 - Sync inference replies at `model_run_timeout` without dropping completed
   items. The HTTP series holds a unique-reply counter; per-item compute is a
   detached go chain plus one request-level timer. `results[]` is always length
@@ -67,13 +78,16 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 - GPU line is CUDA 12 + TensorRT 10.3.0.26 + cuDNN 9.10.2 + MNN 3.6.1 +
-  ORT 1.29 cuda12. CUDA 11 / TensorRT 8 / ORT 1.18 are deleted; `--cuda-version
-  11` fails. Engines must be rebuilt with matching trtexec. Full GPU CMake
-  refuses AddressSanitizer (ASan + TRT/cudart mixed ELF).
+  ORT 1.29 cuda12. `install_deps` wipe/reinstall removes CUDA 11 / TensorRT 8 /
+  ORT 1.18 **libs and mismatched ORT headers**; `--check` requires
+  `ORT_API_VERSION` to match the pin. `--cuda-version 11` fails. Engines must
+  be rebuilt with matching trtexec. Full GPU CMake refuses AddressSanitizer
+  (ASan + TRT/cudart mixed ELF).
 
 > GPU 线改为 CUDA 12 + TensorRT 10.3 + cuDNN 9 + MNN 3.6.1 + ORT 1.29 cuda12。
-> CUDA 11 / TensorRT 8 / ORT 1.18 删除；`--cuda-version 11` 失败。引擎必须用
-> 匹配的 trtexec 重建。full GPU CMake 拒绝 AddressSanitizer。
+> `install_deps` 的 wipe/重装会清掉 CUDA 11 / TensorRT 8 / ORT 1.18 **库以及
+> 与 pin 不一致的 ORT 头**；`--check` 校验 `ORT_API_VERSION`。`--cuda-version 11`
+> 失败。引擎必须用匹配的 trtexec 重建。full GPU CMake 拒绝 AddressSanitizer。
 
 - Entry 1 without Docker resolves the GitHub latest **tag** and downloads
   `mortred_model_server-<version>-<profile>-linux-x64.tar.gz`. Release does not
