@@ -154,23 +154,38 @@ if [ -z "$TRTEXEC" ] && [ "$MODE" != "dry-run" ]; then
     fail "trtexec not found (install via sudo ./scripts/install_deps.sh --nvidia; or pass --trtexec /path/to/trtexec)"
 fi
 
+# trtexec AND libnvinfer.so.10 both hard-require libcuda.so.1 (verified via
+# DT_NEEDED; TRT 10 bundles everything else statically). On WSL that file is
+# injected by the Windows driver into /usr/lib/wsl/lib, which a stale ldconfig
+# cache frequently misses - put the directory on the path explicitly.
+extra_lib_path=""
+[ -d /usr/lib/wsl/lib ] && extra_lib_path="/usr/lib/wsl/lib"
+# vendored trtexec dlopens libnvinfer.so.10 at startup (the version banner
+# comes from the loaded library), so 3rd_party/libs must already be on the
+# library path when the version probe below runs - not only for conversions.
+if [[ "$TRTEXEC" == "$ROOT/3rd_party/"* ]]; then
+    extra_lib_path="$LIB_DIR${extra_lib_path:+:$extra_lib_path}"
+fi
+[ -n "$extra_lib_path" ] && export LD_LIBRARY_PATH="${extra_lib_path}:${LD_LIBRARY_PATH:-}"
+
 # ---- Detect TRT major version: 10.x uses --memPoolSize=workspace:<size> ----
 TRT_MAJOR="${TRT_VERSION_MAJOR:-}"
+trt_probe=""
 if [ -z "$TRT_MAJOR" ] && [ -n "$TRTEXEC" ]; then
-    TRT_MAJOR="$("$TRTEXEC" --help 2>&1 | grep -m1 -oE 'version:?[[:space:]]*[0-9]+' | grep -oE '[0-9]+$' || true)"
+    trt_probe="$("$TRTEXEC" --help 2>&1 || true)"
+    TRT_MAJOR="$(printf '%s\n' "$trt_probe" | grep -m1 -oE 'version:?[[:space:]]*[0-9]+' | grep -oE '[0-9]+$' || true)"
 fi
 if [ -z "$TRT_MAJOR" ]; then
     if [ "$MODE" = "dry-run" ]; then
         TRT_MAJOR=10
         echo "[warn] dry-run: cannot detect TRT version, emitting 10.x --memPoolSize syntax (override with TRT_VERSION_MAJOR)" >&2
     else
+        # surface WHY the probe failed (loader error, exec error, odd banner)
+        echo "---- $TRTEXEC --help output (first 8 lines) ----" >&2
+        printf '%s\n' "$trt_probe" | head -n 8 >&2
+        echo "------------------------------------------------" >&2
         fail "cannot detect TRT version (set TRT_VERSION_MAJOR or use the correct trtexec)"
     fi
-fi
-
-# vendored trtexec needs 3rd_party/libs on the dynamic library path
-if [[ "$TRTEXEC" == "$ROOT/3rd_party/"* ]]; then
-    export LD_LIBRARY_PATH="$LIB_DIR:${LD_LIBRARY_PATH:-}"
 fi
 
 size_to_bytes() {
