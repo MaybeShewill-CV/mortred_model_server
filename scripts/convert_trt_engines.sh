@@ -200,10 +200,30 @@ size_to_bytes() {
     esac
 }
 
+# trtexec 10.x's --memPoolSize parser only accepts KiB/MiB/GiB base-2 suffixes
+# (a bare number means MiB); the 8.x-style "6G" form fails to parse.
+ws_to_trt10_units() { # 6G -> 6GiB, 512m -> 512MiB, 1024 -> 1024, 6GiB -> 6GiB
+    local s="$1"
+    if [[ "$s" =~ ^([0-9]+([.][0-9]+)?)([KkMmGgTt])$ ]]; then
+        case "${BASH_REMATCH[3]}" in
+            [Kk]) echo "${BASH_REMATCH[1]}KiB" ;;
+            [Mm]) echo "${BASH_REMATCH[1]}MiB" ;;
+            [Gg]) echo "${BASH_REMATCH[1]}GiB" ;;
+            [Tt]) echo "${BASH_REMATCH[1]}TiB" ;;
+        esac
+    else
+        echo "$s"
+    fi
+}
+
 if [ "$TRT_MAJOR" -ge 9 ]; then
-    WS_FLAG="--memPoolSize=workspace:$WORKSPACE_STR"
+    # TRT 10 removed --buildOnly; --skipInference is its replacement. The
+    # banner of trtexec 10.3 lists exactly: --skipInference / KiB|MiB|GiB.
+    WS_FLAG="--memPoolSize=workspace:$(ws_to_trt10_units "$WORKSPACE_STR")"
+    BUILD_FLAG="--skipInference"
 else
     WS_FLAG="--workspace=$(size_to_bytes "$WORKSPACE_STR")"
+    BUILD_FLAG="--buildOnly"
 fi
 
 converted=0; skipped=0; missing_onnx=0; failed=0
@@ -233,7 +253,7 @@ for line in "${ENTRIES[@]}"; do
     esac
     # flags are derived from the profile (space-separated --minShapes/--optShapes/--maxShapes)
     # shellcheck disable=SC2206
-    args=(--onnx="$onnx_path" --saveEngine="$engine_path" --buildOnly)
+    args=(--onnx="$onnx_path" --saveEngine="$engine_path" "$BUILD_FLAG")
     [ -n "$fp_flag" ] && args+=("$fp_flag")
     args+=($flags)
     args+=("$WS_FLAG")
@@ -252,7 +272,7 @@ for line in "${ENTRIES[@]}"; do
         converted_ok=1
     elif [ -n "$flags" ] && echo "$out" | grep -q "Static model does not take explicit shapes"; then
         echo "[warn] $model: ONNX inputs are static; retrying without min/opt/maxShapes"
-        args=(--onnx="$onnx_path" --saveEngine="$engine_path" --buildOnly)
+        args=(--onnx="$onnx_path" --saveEngine="$engine_path" "$BUILD_FLAG")
         [ -n "$fp_flag" ] && args+=("$fp_flag")
         args+=("$WS_FLAG")
         if run_trtexec "${args[@]}"; then
