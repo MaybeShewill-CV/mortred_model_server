@@ -597,14 +597,17 @@ jobs:
           touch weights/feature_point/lightglue/extractor.onnx
           # 1) --list needs no trtexec
           bash scripts/convert_trt_engines.sh --list | grep -q "total: 19"
-          # 2) --dry-run flag composition: fp16 + TRT10 memPoolSize + buildOnly
+          # 2) --dry-run flag composition: fp16 + TRT10 memPoolSize + skipInference
           out="$(TRTEXEC="$TMP/trtexec" bash scripts/convert_trt_engines.sh --only ddpm_unet_celeba-hq-128 --force --dry-run)"
           echo "$out" | grep -q -- "--fp16"
           echo "$out" | grep -q -- "--memPoolSize=workspace:"
           if echo "$out" | grep -q -- "--workspace="; then
             echo "unexpected TensorRT 8 --workspace= flag" >&2; exit 1
           fi
-          echo "$out" | grep -q -- "--buildOnly"
+          echo "$out" | grep -q -- "--skipInference"
+          if echo "$out" | grep -q -- "--buildOnly"; then
+            echo "unexpected TensorRT 8 --buildOnly flag" >&2; exit 1
+          fi
           # 3) profile JSON -> --minShapes/--optShapes/--maxShapes translation
           #    --only filters by engine path (see convert_trt_engines.sh); extractor hits extractor.engine without hitting matcher
           out2="$(TRTEXEC="$TMP/trtexec" bash scripts/convert_trt_engines.sh --only extractor --force --dry-run)"

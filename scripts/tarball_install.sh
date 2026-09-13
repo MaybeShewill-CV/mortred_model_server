@@ -37,11 +37,14 @@ if [ "$PROFILE" = "gpu" ]; then
         curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb -o /tmp/cuda-keyring.deb
         dpkg -i /tmp/cuda-keyring.deb && rm -f /tmp/cuda-keyring.deb
         apt-get update
+        # Match Dockerfile runtime: TRT/cuDNN pins + ORT CUDA EP needs cublas/nvrtc
         apt-get install -y --no-install-recommends \
             libnvinfer10=10.3.0.26-1+cuda12.5 \
             libnvinfer-plugin10=10.3.0.26-1+cuda12.5 \
             libnvonnxparsers10=10.3.0.26-1+cuda12.5 \
             libcudnn9-cuda-12=9.10.2.21-1 \
+            libcublas-12-6 \
+            cuda-nvrtc-12-6 \
             ocl-icd-libopencl1
     fi
 fi
