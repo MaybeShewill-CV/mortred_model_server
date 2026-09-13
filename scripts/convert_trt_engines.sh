@@ -216,6 +216,108 @@ ws_to_trt10_units() { # 6G -> 6GiB, 512m -> 512MiB, 1024 -> 1024, 6GiB -> 6GiB
     fi
 }
 
+# Classify an ONNX model's inputs as static or dynamic WITHOUT any python
+# packages: parse the protobuf wire format directly (ModelProto.graph=7 →
+# GraphProto.input=11 / initializer=5 → ValueInfoProto.type=2 →
+# TypeProto.tensor_type=1 → Tensor.shape=2 → TensorShapeProto.dim=1 →
+# Dimension dim_value=1 (fixed) / dim_param=2 (symbolic)). Prints "static" or
+# "dynamic"; any parse failure exits nonzero so callers can fall back.
+onnx_shape_kind() { # <onnx-file>
+    python3 - "$1" <<'PY'
+import sys
+
+def varint(buf, i):
+    v = shift = 0
+    while True:
+        b = buf[i]; i += 1
+        v |= (b & 0x7F) << shift
+        if not b & 0x80:
+            return v, i
+        shift += 7
+
+def fields(buf):
+    i, n = 0, len(buf)
+    while i < n:
+        tag, i = varint(buf, i)
+        f, wt = tag >> 3, tag & 7
+        if wt == 0:
+            v, i = varint(buf, i)
+            yield f, wt, v
+        elif wt == 2:
+            l, i = varint(buf, i)
+            yield f, wt, buf[i:i + l]
+            i += l
+        elif wt == 5:
+            yield f, wt, buf[i:i + 4]; i += 4
+        elif wt == 1:
+            yield f, wt, buf[i:i + 8]; i += 8
+        else:
+            raise ValueError("wire type %d" % wt)
+
+def input_dims(vi):
+    name, shape = None, None
+    for f, wt, v in fields(vi):
+        if f == 1 and wt == 2:
+            name = v.decode("utf-8", "replace")
+        elif f == 2 and wt == 2:              # TypeProto
+            for f2, w2, v2 in fields(v):
+                if f2 == 1 and w2 == 2:       # tensor_type
+                    for f3, w3, v3 in fields(v2):
+                        if f3 == 2 and w3 == 2:
+                            shape = v3        # TensorShapeProto
+    if shape is None:
+        return name, None
+    dims = []
+    for f, wt, v in fields(shape):
+        if f == 1 and wt == 2:                # Dimension
+            val = None
+            for fd, wd, vd in fields(v):
+                if fd == 1 and wd == 0:
+                    val = vd                  # dim_value: fixed
+                elif fd == 2 and wd == 2:
+                    val = -1                  # dim_param: symbolic
+            dims.append(val)
+    return name, dims
+
+def fail(msg):
+    sys.stderr.write("onnx scan: %s\n" % msg)
+    sys.exit(1)
+
+try:
+    data = open(sys.argv[1], "rb").read()
+except OSError as e:
+    fail(str(e))
+try:
+    graph = None
+    for f, wt, v in fields(data):
+        if f == 7 and wt == 2:                    # ModelProto.graph
+            graph = v
+            break
+    if graph is None:
+        fail("no graph field - not an ONNX file?")
+    inits, inputs = set(), []
+    for f, wt, v in fields(graph):
+        if f == 5 and wt == 2:                    # initializer (weights)
+            for fi, wi, vi in fields(v):
+                if fi == 1 and wi == 2:           # TensorProto.name
+                    inits.add(vi.decode("utf-8", "replace"))
+        elif f == 11 and wt == 2:                 # graph.input
+            inputs.append(v)
+    real = [vi for vi in inputs
+            if (input_dims(vi)[0] or "") not in inits]
+    if not real:
+        fail("no non-initializer graph inputs found")
+    dynamic = False
+    for vi in real:
+        name, dims = input_dims(vi)
+        if dims is None or any(d is None or d < 0 for d in dims):
+            dynamic = True
+    print("dynamic" if dynamic else "static")
+except (ValueError, IndexError) as e:
+    fail("cannot parse (%r)" % (e,))
+PY
+}
+
 if [ "$TRT_MAJOR" -ge 9 ]; then
     # TRT 10 removed --buildOnly; --skipInference is its replacement. The
     # banner of trtexec 10.3 lists exactly: --skipInference / KiB|MiB|GiB.
@@ -251,6 +353,17 @@ for line in "${ENTRIES[@]}"; do
             [ "$STRICT" -eq 1 ] && exit 1
             continue ;;
     esac
+    # Pre-scan the ONNX: a static-shaped model rejects explicit
+    # --min/--opt/--maxShapes, so drop the profile flags up front instead of
+    # failing over via the trtexec retry below. Scan failure (no python3,
+    # exotic file) keeps the flags and lets the retry handle it.
+    if [ -n "$flags" ]; then
+        shape_kind="$(onnx_shape_kind "$onnx_path" 2>/dev/null || true)"
+        if [ "$shape_kind" = "static" ]; then
+            echo "[info] $model: static-shape ONNX; dropping shape profile flags"
+            flags=""
+        fi
+    fi
     # flags are derived from the profile (space-separated --minShapes/--optShapes/--maxShapes)
     # shellcheck disable=SC2206
     args=(--onnx="$onnx_path" --saveEngine="$engine_path" "$BUILD_FLAG")
