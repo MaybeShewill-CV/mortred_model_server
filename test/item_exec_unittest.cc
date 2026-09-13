@@ -23,6 +23,8 @@ using jinq::models::io_define::common_io::byte_source;
 using jinq::server::InferenceResult;
 using jinq::server::InferenceTask;
 using jinq::server::aggregate_item_statuses;
+using jinq::server::BatchRequestState;
+using jinq::server::assemble_batch_slots;
 using jinq::server::assemble_published;
 using jinq::server::inference_result_to_unified;
 using jinq::server::make_model_input;
@@ -138,6 +140,19 @@ TEST(item_exec, assemble_published_pads_timeout_without_reading_tail) {
     EXPECT_EQ(snap.item_outputs[0].value, 1);
     EXPECT_EQ(snap.item_status[1], StatusCode::MODEL_RUN_TIMEOUT);
     EXPECT_EQ(snap.item_outputs[1].value, 0);
+}
+
+
+TEST(item_exec, assemble_batch_slots_pads_unpublished) {
+    auto state = std::make_shared<BatchRequestState<FakeOutput>>();
+    state->init(2);
+    BatchRequestState<FakeOutput>::write_slot(state, 0, StatusCode::OK, FakeOutput{5});
+    auto snap = assemble_batch_slots(*state);
+    EXPECT_EQ(snap.model_run_status, StatusCode::DEADLINE_EXCEEDED_PARTIAL);
+    EXPECT_TRUE(snap.partial);
+    EXPECT_EQ(snap.item_status[0], StatusCode::OK);
+    EXPECT_EQ(snap.item_outputs[0].value, 5);
+    EXPECT_EQ(snap.item_status[1], StatusCode::MODEL_RUN_TIMEOUT);
 }
 
 TEST(item_exec, assemble_published_zero_is_all_timeout) {

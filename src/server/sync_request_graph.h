@@ -23,10 +23,10 @@
 //   copy only [0, n) into a snapshot; pad [n, N) TIMEOUT without reading
 //   slot[n].
 //
-// Batch (max_batch_size > 1): one detached go calling do_work /
-// submit_and_wait. No request-level timer — wait_until already wakes at T,
-// and an outer timer racing that wait would 504 with published==0 and drop
-// collector partials. Hang-past-deadline stays the collector's problem.
+// Batch (max_batch_size > 1): async BatchCollector::submit + the same
+// request-level timer race as the non-batch path. Reply takes an acquire
+// snapshot of each BatchRequestState::slot_done (TIMEOUT if not published);
+// late write_slot completions are dropped by replied.exchange.
 
 #ifndef MORTRED_SERVER_SYNC_REQUEST_GRAPH_H
 #define MORTRED_SERVER_SYNC_REQUEST_GRAPH_H
@@ -36,10 +36,12 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <utility>
 
 #include "common/status_code.h"
+#include "server/batch_collector.h"
 #include "server/inference_task.h"
 #include "server/item_exec.h"
 
@@ -89,6 +91,29 @@ inline InferenceResult<MODEL_OUTPUT> assemble_published(
     return out;
 }
 
+template <typename MODEL_OUTPUT>
+inline InferenceResult<MODEL_OUTPUT> assemble_batch_slots(
+    const BatchRequestState<MODEL_OUTPUT>& state) {
+    const size_t n_items = state.outputs.size();
+    InferenceResult<MODEL_OUTPUT> out;
+    out.options = state.req.options;
+    out.find_worker_time_consuming =
+        static_cast<double>(state.find_worker_ms.load(std::memory_order_relaxed));
+    out.worker_run_time_consuming =
+        static_cast<double>(state.worker_run_ms.load(std::memory_order_relaxed));
+    out.item_status.assign(n_items, StatusCode::MODEL_RUN_TIMEOUT);
+    out.item_outputs.assign(n_items, MODEL_OUTPUT{});
+    for (size_t i = 0; i < n_items; ++i) {
+        if (state.slot_done &&
+            state.slot_done[i].load(std::memory_order_acquire)) {
+            out.item_status[i] = state.item_status[i];
+            out.item_outputs[i] = state.outputs[i];
+        }
+    }
+    aggregate_item_statuses(&out);
+    return out;
+}
+
 template <typename WORKER, typename MODEL_OUTPUT>
 struct SyncRequestState {
     struct ItemScratch {
@@ -111,6 +136,7 @@ struct SyncRequestState {
     std::atomic<int64_t> find_worker_ms{0};
     std::atomic<int64_t> worker_run_ms{0};
     WORKER worker{};
+    std::shared_ptr<BatchRequestState<MODEL_OUTPUT>> batch_state;
 };
 
 }  // namespace server

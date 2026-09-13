@@ -13,6 +13,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
@@ -149,6 +150,12 @@ protected:
         _m_workers.commit_watermark(worker_nums);
         _m_successfully_initialized = true;
         if (_m_max_batch_size > 1) {
+            // _m_server_uri is committed before workers; install WF go starter
+            // here so BatchCollector never falls back to inline run in prod.
+            _m_batch.set_go_starter([this](std::function<void()> fn) {
+                auto* go = WFTaskFactory::create_go_task(_m_server_uri, std::move(fn));
+                go->start();
+            });
             _m_batch.start();
         }
     }
@@ -458,10 +465,9 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
     InferenceTask* req, InferenceResult* result) {
-    if (_m_max_batch_size > 1) {
-        _m_batch.submit_and_wait(req, result);
-        return;
-    }
+    // Batching is only via schedule_sync_request -> start_sync_batch.
+    // do_work always uses the single-worker path so async_run_job (and any
+    // direct callers) keep working when max_batch_size > 1.
     WORKER worker;
     const bool has_deadline = req->deadline != std::chrono::steady_clock::time_point::max();
     std::chrono::milliseconds wait{-1};
@@ -519,14 +525,13 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::schedule_sync_request(
     });
 
     if (_m_max_batch_size > 1) {
-        // Collector wait_until already returns at the request deadline. An
-        // outer timer racing that wait would reply with published==0 and drop
-        // any items the runner had already filled.
         start_sync_batch(state);
-        return;
+    } else {
+        start_sync_item(state, 0);
     }
 
-    start_sync_item(state, 0);
+    // Batch and non-batch share the request-level timer race: first count
+    // (compute done or deadline) wins the unique reply.
     if (_m_model_run_timeout <= 0) {
         return;
     }
@@ -542,23 +547,13 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::schedule_sync_request(
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::start_sync_batch(
     std::shared_ptr<SyncState> state) {
-    const size_t n_items = state->n_items;
-    auto* go = WFTaskFactory::create_go_task(_m_server_uri, [this, state]() {
-        do_work(&state->req, &state->result);
-    });
-    go->set_callback([state, n_items](WFGoTask* task) {
-        if (task->get_state() == WFT_STATE_SUCCESS) {
-            state->published.store(n_items, std::memory_order_release);
-            state->find_worker_ms.store(
-                static_cast<int64_t>(state->result.find_worker_time_consuming),
-                std::memory_order_relaxed);
-            state->worker_run_ms.store(
-                static_cast<int64_t>(state->result.worker_run_time_consuming),
-                std::memory_order_relaxed);
-        }
-        WFTaskFactory::count_by_name(state->waiter, 1);
-    });
-    go->start();
+    auto rs = std::make_shared<BatchRequestState<MODEL_OUTPUT>>();
+    rs->req = std::move(state->req);
+    rs->init(state->n_items);
+    const std::string waiter = state->waiter;
+    rs->notify_done = [waiter]() { WFTaskFactory::count_by_name(waiter, 1); };
+    state->batch_state = rs;
+    _m_batch.submit(rs);
 }
 
 template<typename WORKER, typename MODEL_OUTPUT>
@@ -669,13 +664,23 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::reply_sync_request(
     if (state->replied.exchange(true, std::memory_order_acq_rel)) {
         return;
     }
-    const size_t n = state->published.load(std::memory_order_acquire);
-    state->result.find_worker_time_consuming =
-        static_cast<double>(state->find_worker_ms.load(std::memory_order_relaxed));
-    state->result.worker_run_time_consuming =
-        static_cast<double>(state->worker_run_ms.load(std::memory_order_relaxed));
-    state->result.task_finished_ts = Timestamp::now().to_format_str();
-    auto snap = assemble_published(state->result, n, state->n_items);
+    InferenceResult snap;
+    if (state->batch_state) {
+        snap = assemble_batch_slots(*state->batch_state);
+        snap.find_worker_time_consuming = static_cast<double>(
+            state->batch_state->find_worker_ms.load(std::memory_order_relaxed));
+        snap.worker_run_time_consuming = static_cast<double>(
+            state->batch_state->worker_run_ms.load(std::memory_order_relaxed));
+        snap.task_finished_ts = Timestamp::now().to_format_str();
+    } else {
+        const size_t n = state->published.load(std::memory_order_acquire);
+        state->result.find_worker_time_consuming =
+            static_cast<double>(state->find_worker_ms.load(std::memory_order_relaxed));
+        state->result.worker_run_time_consuming =
+            static_cast<double>(state->worker_run_ms.load(std::memory_order_relaxed));
+        state->result.task_finished_ts = Timestamp::now().to_format_str();
+        snap = assemble_published(state->result, n, state->n_items);
+    }
     auto unified = inference_result_to_unified(
         state->task_id, _m_model_name, snap,
         [this](rapidjson::Document::AllocatorType& allocator, rapidjson::Document& data,

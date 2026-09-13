@@ -1,0 +1,190 @@
+/************************************************
+ * Author: Codex
+ * File: batch_collector_unittest.cc
+ * Date: 2026-09-13
+ ************************************************/
+
+// Focused tests for BatchRequestState::write_slot / notify ordering and a
+// lightweight BatchCollector pipeline (inline GoStarter) with a fake worker.
+
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <thread>
+#include <vector>
+
+#include <gtest/gtest.h>
+
+#include "common/status_code.h"
+#include "models/io/common_input.h"
+#include "server/batch_collector.h"
+#include "server/inference_task.h"
+#include "server/prometheus_metrics.h"
+#include "server/sync_request_graph.h"
+#include "server/worker_pool.h"
+
+using jinq::common::StatusCode;
+using jinq::models::io_define::common_io::base64_input;
+using jinq::models::io_define::common_io::byte_source;
+using jinq::server::BatchCollector;
+using jinq::server::BatchRequestState;
+using jinq::server::PrometheusMetrics;
+using jinq::server::WorkerPool;
+using jinq::server::assemble_batch_slots;
+
+namespace {
+
+struct FakeOutput {
+    int value = 0;
+};
+
+struct FakeModel {
+    using input_type = base64_input;
+    std::atomic<int> batch_calls{0};
+    int delay_ms = 0;
+
+    StatusCode run(const base64_input& in, FakeOutput& out) {
+        out.value = static_cast<int>(in.input_image_content.size());
+        return StatusCode::OK;
+    }
+
+    StatusCode run_batch(const std::vector<base64_input>& in, std::vector<FakeOutput>& out,
+                         std::vector<StatusCode>& item_status) {
+        batch_calls.fetch_add(1);
+        if (delay_ms > 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+        }
+        out.resize(in.size());
+        item_status.assign(in.size(), StatusCode::OK);
+        for (size_t i = 0; i < in.size(); ++i) {
+            out[i].value = static_cast<int>(in[i].input_image_content.size());
+        }
+        return StatusCode::OK;
+    }
+};
+
+using FakeWorker = std::unique_ptr<FakeModel>;
+
+byte_source text_item(std::string payload) {
+    byte_source item;
+    item.origin = byte_source::origin_kind::base64_text;
+    item.data = std::move(payload);
+    return item;
+}
+
+}  // namespace
+
+TEST(batch_collector, write_slot_notifies_once_on_last) {
+    auto state = std::make_shared<BatchRequestState<FakeOutput>>();
+    state->init(3);
+    std::atomic<int> notifies{0};
+    state->notify_done = [&]() { notifies.fetch_add(1); };
+
+    BatchRequestState<FakeOutput>::write_slot(state, 0, StatusCode::OK, FakeOutput{1});
+    EXPECT_EQ(notifies.load(), 0);
+    BatchRequestState<FakeOutput>::write_slot(state, 2, StatusCode::OK, FakeOutput{3});
+    EXPECT_EQ(notifies.load(), 0);
+    BatchRequestState<FakeOutput>::write_slot(state, 1, StatusCode::OK, FakeOutput{2});
+    EXPECT_EQ(notifies.load(), 1);
+
+    EXPECT_TRUE(state->slot_done[0].load(std::memory_order_acquire));
+    EXPECT_TRUE(state->slot_done[1].load(std::memory_order_acquire));
+    EXPECT_TRUE(state->slot_done[2].load(std::memory_order_acquire));
+    EXPECT_EQ(state->outputs[0].value, 1);
+    EXPECT_EQ(state->outputs[1].value, 2);
+    EXPECT_EQ(state->outputs[2].value, 3);
+}
+
+TEST(batch_collector, assemble_batch_slots_timeout_without_acquire) {
+    auto state = std::make_shared<BatchRequestState<FakeOutput>>();
+    state->init(2);
+    BatchRequestState<FakeOutput>::write_slot(state, 0, StatusCode::OK, FakeOutput{7});
+    state->find_worker_ms.store(11, std::memory_order_relaxed);
+    state->worker_run_ms.store(22, std::memory_order_relaxed);
+
+    auto snap = assemble_batch_slots(*state);
+    EXPECT_EQ(snap.model_run_status, StatusCode::DEADLINE_EXCEEDED_PARTIAL);
+    EXPECT_TRUE(snap.partial);
+    ASSERT_EQ(snap.item_status.size(), 2u);
+    EXPECT_EQ(snap.item_status[0], StatusCode::OK);
+    EXPECT_EQ(snap.item_outputs[0].value, 7);
+    EXPECT_EQ(snap.item_status[1], StatusCode::MODEL_RUN_TIMEOUT);
+    EXPECT_EQ(snap.item_outputs[1].value, 0);
+    EXPECT_EQ(snap.find_worker_time_consuming, 11.0);
+    EXPECT_EQ(snap.worker_run_time_consuming, 22.0);
+}
+
+TEST(batch_collector, submit_inline_go_runs_batch_and_notifies) {
+    WorkerPool<FakeWorker> pool;
+    PrometheusMetrics metrics;
+    auto model = std::make_unique<FakeModel>();
+    FakeModel* raw = model.get();
+    pool.adopt(std::move(model));
+    pool.commit_watermark(1);
+
+    // Empty GoStarter => inline run (unit-test only).
+    BatchCollector<FakeWorker, FakeOutput> collector(pool, metrics);
+    collector.configure(/*max_batch_size=*/4, /*max_batch_delay_ms=*/30,
+                        /*worker_wait_timeout_ms=*/500);
+    collector.start();
+
+    std::mutex mu;
+    std::condition_variable cv;
+    bool done = false;
+
+    auto state = std::make_shared<BatchRequestState<FakeOutput>>();
+    state->req.items.push_back(text_item("aa"));
+    state->req.items.push_back(text_item("bbbb"));
+    state->init(2);
+    state->notify_done = [&]() {
+        std::lock_guard<std::mutex> lock(mu);
+        done = true;
+        cv.notify_all();
+    };
+
+    collector.submit(state);
+
+    {
+        std::unique_lock<std::mutex> lock(mu);
+        ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(2), [&]() { return done; }));
+    }
+
+    EXPECT_GE(raw->batch_calls.load(), 1);
+    auto snap = assemble_batch_slots(*state);
+    EXPECT_EQ(snap.model_run_status, StatusCode::OK);
+    ASSERT_EQ(snap.item_status.size(), 2u);
+    EXPECT_EQ(snap.item_outputs[0].value, 2);
+    EXPECT_EQ(snap.item_outputs[1].value, 4);
+
+    collector.stop();
+}
+
+TEST(batch_collector, submit_when_stopped_timeouts_all_slots) {
+    WorkerPool<FakeWorker> pool;
+    PrometheusMetrics metrics;
+    BatchCollector<FakeWorker, FakeOutput> collector(pool, metrics);
+    collector.configure(4, 10, 100);
+    // never start -> not accepting
+
+    std::atomic<int> notifies{0};
+    auto state = std::make_shared<BatchRequestState<FakeOutput>>();
+    state->req.items.push_back(text_item("x"));
+    state->req.items.push_back(text_item("y"));
+    state->init(2);
+    state->notify_done = [&]() { notifies.fetch_add(1); };
+
+    collector.submit(state);
+    EXPECT_EQ(notifies.load(), 1);
+    auto snap = assemble_batch_slots(*state);
+    EXPECT_EQ(snap.model_run_status, StatusCode::MODEL_RUN_TIMEOUT);
+    EXPECT_EQ(snap.item_status[0], StatusCode::MODEL_RUN_TIMEOUT);
+    EXPECT_EQ(snap.item_status[1], StatusCode::MODEL_RUN_TIMEOUT);
+}
+
+int main(int argc, char** argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}

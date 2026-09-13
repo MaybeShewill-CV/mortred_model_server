@@ -630,7 +630,7 @@ TEST(do_work_lifetime, deadline_graph_all_success) {
     EXPECT_EQ(doc["results"][0]["status"].GetInt(), 0);
 }
 
-TEST(do_work_lifetime, deadline_graph_batch_replies_without_outer_timer) {
+TEST(do_work_lifetime, deadline_graph_batch_replies_with_outer_timer) {
     ServerHandle handle = start_server(
         "/lifetime/batch", "model_run_timeout=500\nmax_batch_size=4\nmax_batch_delay_ms=20\n");
     ASSERT_NE(handle.server, nullptr);

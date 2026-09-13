@@ -57,6 +57,7 @@ set(TEST_LIST
     request_admission_unittest
     server_runtime_config_unittest
     worker_pool_unittest
+    batch_collector_unittest
     item_exec_unittest
     http_contract_test
     backpressure_unittest
@@ -166,6 +167,8 @@ foreach(src ${TEST_LIST})
     elseif(${src} STREQUAL "server_runtime_config_unittest")
         set(EXTRA_LIBS glog::glog)
     elseif(${src} STREQUAL "worker_pool_unittest")
+        set(EXTRA_LIBS glog::glog)
+    elseif(${src} STREQUAL "batch_collector_unittest")
         set(EXTRA_LIBS glog::glog)
     elseif(${src} STREQUAL "item_exec_unittest")
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
