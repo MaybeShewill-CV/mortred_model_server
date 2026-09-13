@@ -757,7 +757,11 @@ TEST(server_e2e_contract, content_length_over_limit_returns_413) {
 }
 
 TEST(server_e2e_contract, metrics_inference_duration_sum_is_positive_after_request) {
-    ServerHandle handle = start_server();
+    // 25ms fake delay keeps the measured run time above coarse host clock
+    // granularity (e.g. WSL system_clock ticks at ~ms), so the histogram sum
+    // is nonzero on any machine. Still catches the observe-before-assign
+    // regression, which yields 0 regardless of the delay.
+    ServerHandle handle = start_server("fake_delay_ms=25\n");
     const std::string body = "{\"images\":[\"aGVsbG8=\"]}";
     auto resp = send_request(handle.port, "POST", "/test/model", body, k_json_auth_headers);
     ASSERT_EQ(resp.status, 200);
