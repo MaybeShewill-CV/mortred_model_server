@@ -180,7 +180,20 @@ if [ -n "$TRT_MAJOR_OVERRIDE" ]; then
     TRT_MAJOR="$TRT_MAJOR_OVERRIDE"
 elif [ -n "$TRTEXEC" ]; then
     trt_probe="$("$TRTEXEC" --help 2>&1 || true)"
-    TRT_MAJOR="$(printf '%s\n' "$trt_probe" | grep -m1 -oE 'version:?[[:space:]]*[0-9]+' | grep -oE '[0-9]+$' || true)"
+    # Prefer "TensorRT version: 10.3.0.26" (CI mock / some builds); else
+    # "[TensorRT v100300]" from real trtexec (major = leading digits: 6+ → 2, else 1).
+    TRT_MAJOR="$(printf '%s\n' "$trt_probe" | grep -m1 -oE 'version:?[[:space:]]*[0-9]+(\.[0-9]+)*' | grep -oE '[0-9]+' | head -1 || true)"
+    if [ -z "$TRT_MAJOR" ]; then
+        _enc="$(printf '%s\n' "$trt_probe" | grep -m1 -oE 'TensorRT[[:space:]]+v[0-9]+' | grep -oE '[0-9]+$' || true)"
+        if [ -n "$_enc" ]; then
+            if [ "${#_enc}" -ge 6 ]; then
+                TRT_MAJOR="${_enc:0:2}"
+            else
+                TRT_MAJOR="${_enc:0:1}"
+            fi
+        fi
+        unset _enc
+    fi
 fi
 if [ -z "$TRT_MAJOR" ]; then
     if [ -n "$TRTEXEC" ]; then
