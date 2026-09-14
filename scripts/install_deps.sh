@@ -12,6 +12,9 @@
 #   ./scripts/install_deps.sh --cpu --all        # cpu profile: MNN without CUDA, ORT cpu tarball,
 #                                                # no NVIDIA/TRT stack at all (GPU-less machines)
 #   ./scripts/install_deps.sh --workflow         # build and install only workflow
+#   ./scripts/install_deps.sh --headers          # header-only libs only (rapidjson/toml++/stb_image/
+#                                                # indicators/moodycamel); no compiler, no root - all
+#                                                # tests-only builds need from 3rd_party
 #   ./scripts/install_deps.sh --mnn              # build and install only MNN
 #   ./scripts/install_deps.sh --onnxruntime      # download and install only onnxruntime
 #   ./scripts/install_deps.sh --nvidia           # CUDA/TensorRT/cuDNN/trtexec (needs root + NVIDIA apt)
@@ -430,7 +433,20 @@ install_mnn() {
         ensure_pinned_src "$cutlass_src" https://github.com/NVIDIA/cutlass.git v2.9.0 \
             https://github.com/NVIDIA/cutlass/archive/refs/tags/v2.9.0.tar.gz
         cmake_extra+=(-DFETCHCONTENT_SOURCE_DIR_CUTLASS="$cutlass_src")
-        rm -rf "$build/_deps/cutlass-subbuild" "$src/3rd_party/cutlass"
+        rm -rf "$build/_deps/cutlass-subbuild"
+        # MNN's cuda CMakeLists pins its own FetchContent SOURCE_DIR at
+        # <mnn-src>/3rd_party/cutlass/v2.9.0 and wires the nvcc include dirs
+        # from there; the FETCHCONTENT_SOURCE_DIR_CUTLASS override only
+        # suppresses the clone - it never populates that path. Without this
+        # link every cutlass include fails at nvcc time with "No such file or
+        # directory" (observed on MNN 3.6.1). Recreated fresh each run; the
+        # copy fallback covers filesystems without symlink support (some WSL
+        # drvfs mounts).
+        rm -rf "$src/3rd_party/cutlass"
+        mkdir -p "$src/3rd_party/cutlass"
+        if ! ln -sfn "$cutlass_src" "$src/3rd_party/cutlass/v2.9.0" 2>/dev/null; then
+            cp -r "$cutlass_src" "$src/3rd_party/cutlass/v2.9.0"
+        fi
     fi
     cmake -S "$src" -B "$build" -DCMAKE_BUILD_TYPE=Release \
         -DMNN_BUILD_TRAIN=OFF -DMNN_BUILD_DEMO=OFF -DMNN_BUILD_TOOLS=OFF \
@@ -959,6 +975,7 @@ while [ $# -gt 0 ]; do
         --check) MODE="check"; shift ;;
         --all) MODE="all"; shift ;;
         --workflow) MODE="workflow"; shift ;;
+        --headers) MODE="headers"; shift ;;
         --mnn) MODE="mnn"; shift ;;
         --onnxruntime) MODE="onnxruntime"; shift ;;
         --nvidia) MODE="nvidia"; shift ;;
@@ -972,6 +989,42 @@ done
 
 CUDA_VERSION="${CUDA_VERSION%%.*}"
 [ "$CUDA_VERSION" = "12" ] || fail "unsupported --cuda-version $CUDA_VERSION (GPU line is CUDA 12 only)"
+# ============ header-only set (shared by --all and --headers) ============
+# --headers exists for tests-only builds (CI jobs and local checkouts that
+# compile test/ without the full stack): they need the vendored header-only
+# libs but none of the compiled ones (MNN/ORT/workflow/fmt), so this mode
+# needs neither a compiler toolchain nor root - only curl.
+install_headers_only() {
+    install_header_only rapidjson \
+        "https://github.com/Tencent/rapidjson/archive/refs/tags/v1.1.0.tar.gz" "include" "rapidjson" "rapidjson"
+    # toml++ v3.4.0 (marzer/tomlplusplus) - the app uses toml++'s API
+    # (table::contains / value::value_or / as_array returning pointers).
+    # The single header ships in the repo at the tag; toml11 (ToruNiina)
+    # is a DIFFERENT library whose header broke the models build.
+    announce "install toml++ v3.4.0 (single header)"
+    require_cmd curl "curl"
+    mkdir -p "$INCLUDE_DIR/toml"
+    [ -f "$INCLUDE_DIR/toml/toml.hpp" ] || \
+        curl -fsSL "https://raw.githubusercontent.com/marzer/tomlplusplus/v3.4.0/toml.hpp" -o "$INCLUDE_DIR/toml/toml.hpp"
+    # Pin TOML_EXCEPTIONS=0 (the project-wide exceptions-free contract,
+    # matching the originally vendored 3rd_party/include/toml/toml.hpp):
+    # upstream ships exceptions enabled by default, so toml::parse_file
+    # returns toml::table and the parse_result-based callers
+    # (benchmark_runner.h, generic_cv_server.h, ...) fail to compile.
+    if ! grep -q "^#ifndef TOML_EXCEPTIONS" "$INCLUDE_DIR/toml/toml.hpp"; then
+        { printf '#ifndef TOML_EXCEPTIONS\n#define TOML_EXCEPTIONS 0\n#endif\n\n'; \
+          cat "$INCLUDE_DIR/toml/toml.hpp"; } > "$INCLUDE_DIR/toml/toml.hpp.tmp" \
+            && mv "$INCLUDE_DIR/toml/toml.hpp.tmp" "$INCLUDE_DIR/toml/toml.hpp"
+    fi
+    mark tomlpp
+    install_header_only stb_image \
+        "https://github.com/nothings/stb/archive/2c980bb59875b0d32144a71867fbdebb2f77cd20.tar.gz" "" "stb_image" "stb_image"
+    install_header_only indicators \
+        "https://github.com/p-ranav/indicators/archive/refs/tags/v2.3.tar.gz" "include" "indicators" "indicators" "indicators.hpp"
+    install_header_only moodycamel \
+        "https://github.com/cameron314/concurrentqueue/archive/refs/tags/v1.0.4.tar.gz" "" "stl_container" "moodycamel"
+}
+
 apply_profile
 
 mkdir -p "$BUILD_DIR"
@@ -979,38 +1032,12 @@ mkdir -p "$BUILD_DIR"
 case "$MODE" in
     check) check ;;
     workflow) install_workflow; install_system_runtime_libs ;;
+    headers) install_headers_only ;;
     mnn) install_mnn ;;
     onnxruntime) install_onnxruntime ;;
     nvidia) install_nvidia ;;
     all)
-        install_header_only rapidjson \
-            "https://github.com/Tencent/rapidjson/archive/refs/tags/v1.1.0.tar.gz" "include" "rapidjson" "rapidjson"
-        # toml++ v3.4.0 (marzer/tomlplusplus) - the app uses toml++'s API
-        # (table::contains / value::value_or / as_array returning pointers).
-        # The single header ships in the repo at the tag; toml11 (ToruNiina)
-        # is a DIFFERENT library whose header broke the models build.
-        announce "install toml++ v3.4.0 (single header)"
-        require_cmd curl "curl"
-        mkdir -p "$INCLUDE_DIR/toml"
-        [ -f "$INCLUDE_DIR/toml/toml.hpp" ] || \
-            curl -fsSL "https://raw.githubusercontent.com/marzer/tomlplusplus/v3.4.0/toml.hpp" -o "$INCLUDE_DIR/toml/toml.hpp"
-        # Pin TOML_EXCEPTIONS=0 (the project-wide exceptions-free contract,
-        # matching the tracked 3rd_party/include/toml/toml.hpp): upstream ships
-        # exceptions enabled by default, so toml::parse_file returns toml::table
-        # and the parse_result-based callers (benchmark_runner.h,
-        # generic_cv_server.h, ...) fail to compile.
-        if ! grep -q "^#ifndef TOML_EXCEPTIONS" "$INCLUDE_DIR/toml/toml.hpp"; then
-            { printf '#ifndef TOML_EXCEPTIONS\n#define TOML_EXCEPTIONS 0\n#endif\n\n'; \
-              cat "$INCLUDE_DIR/toml/toml.hpp"; } > "$INCLUDE_DIR/toml/toml.hpp.tmp" \
-                && mv "$INCLUDE_DIR/toml/toml.hpp.tmp" "$INCLUDE_DIR/toml/toml.hpp"
-        fi
-        mark tomlpp
-        install_header_only stb_image \
-            "https://github.com/nothings/stb/archive/2c980bb59875b0d32144a71867fbdebb2f77cd20.tar.gz" "" "stb_image" "stb_image"
-        install_header_only indicators \
-            "https://github.com/p-ranav/indicators/archive/refs/tags/v2.3.tar.gz" "include" "indicators" "indicators" "indicators.hpp"
-        install_header_only moodycamel \
-            "https://github.com/cameron314/concurrentqueue/archive/refs/tags/v1.0.4.tar.gz" "" "stl_container" "moodycamel"
+        install_headers_only
         install_fmt
         install_workflow
         install_onnxruntime
