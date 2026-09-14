@@ -8,7 +8,7 @@
 
 | ID | 状态 | 事项 | 验收 |
 |---|---|---|---|
-| SME-10 | main (pending) | docs/evidence/sme-10-cmake-doc-gates-20260914.md |
+| SME-10 | main @ e16fae2 | docs/evidence/sme-10-cmake-doc-gates-20260914.md |
 | SME-09 | main @ c00a233 | docs/evidence/sme-09-batch-deadline-20260914.md |
 | SME-08 | main @ ec3fef7 | docs/evidence/sme-08-write-slot-epoch-20260914.md |
 | SME-07 | main @ 4cfe6e5 | docs/evidence/sme-07-auth-before-rate-limit-20260914.md |
