@@ -8,6 +8,7 @@
 
 | ID | 状态 | 事项 | 验收 |
 |---|---|---|---|
+| SME-13 | main (pending) | docs/evidence/sme-13-zombie-comments-20260914.md |
 | SME-12 | main @ 8798a0c | docs/evidence/sme-12-unsupported-boundaries-20260914.md |
 | SME-11 | main @ e66d8ed | docs/evidence/sme-11-oob-main-path-20260914.md |
 | SME-10 | main @ e16fae2 | docs/evidence/sme-10-cmake-doc-gates-20260914.md |
@@ -29,11 +30,11 @@
 | SME-10 | DONE | 干净机文档入口与 CMake 硬前置继续对齐（workflow/crypto/ORT 头等） | 干净树 configure 不踩已知坑 |
 | SME-11 | DONE | 开箱收成**一条**主航道（三 token / listen / pack 校准；失败时给出下一条命令） | 只跟一条路径即可 |
 | SME-12 | DONE | 写清不支持边界（RTDETR、Linux-only、必须重建 engine、TRT 10 only / 非 8·9） | 无假期待 |
-| SME-13 | DOING | 删 zombie 注释（如 `web_console` / `ServerManager`） | 源码无过时声称 |
+| SME-13 | DONE | 删 zombie 注释（如 `web_console` / `ServerManager`） | 源码无过时声称 |
 
 ## 当前焦点
 
-- **Next:** `SME-13` (DOING)
+- **Next:** _(SME-01…13 backlog complete)_
 - **Notes:** Round-2 基线综合 8.0 / 开箱 6.8；企业开箱仍否。CHANGELOG 仅参考，以源码为准。
 
 ## 完成记录
