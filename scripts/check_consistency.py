@@ -566,6 +566,30 @@ def check_security_scan() -> list[str]:
     return errors
 
 
+def check_release_ghcr_lowercase() -> list[str]:
+    """release.yml must lowercase github.repository before GHCR push (SME-04)."""
+    errors: list[str] = []
+    rel = ROOT / ".github" / "workflows" / "release.yml"
+    if not rel.is_file():
+        errors.append(".github/workflows/release.yml missing")
+        return errors
+    text = rel.read_text(encoding="utf-8")
+    needle = "tr '[:upper:]' '[:lower:]'"
+    if needle not in text:
+        errors.append(
+            "release.yml: IMAGE must pipe github.repository through "
+            "tr '[:upper:]' '[:lower:]' for GHCR"
+        )
+    if "invalid image ref" not in text:
+        errors.append("release.yml: must fail-closed on invalid IMAGE ref")
+    if text.count(needle) < 2:
+        errors.append(
+            f"release.yml: expected >=2 lowercase IMAGE constructions "
+            f"(found {text.count(needle)})"
+        )
+    return errors
+
+
 def check_ci_convert_trt_dry_run_contract() -> list[str]:
     """CI mock-trtexec dry-run must stay aligned with convert_trt_engines.sh.
 
@@ -897,6 +921,7 @@ def main() -> int:
     errors.extend(check_security_scan())
     errors.extend(check_ci_no_python3_runs_sh())
     errors.extend(check_ci_convert_trt_dry_run_contract())
+    errors.extend(check_release_ghcr_lowercase())
     errors.extend(check_scaffolder_task_metadata())
     errors.extend(check_model_todo_markers())
     errors.extend(check_model_io_split())
