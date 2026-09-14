@@ -32,6 +32,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 - **SME-03:** `scripts/check_consistency.py` gates the `ci.yml` mock-trtexec dry-run contract against `convert_trt_engines.sh` (require `--skipInference`, reject `--buildOnly`, TensorRT 10.x mock banner).
+- **SME-03:** `pack_trt.py --self-test` isolates `MORTRED_PROFILE` (and uses `profile="any"`) so a live CPU shell cannot fail hermetic consistency.
 - `install_deps.sh` toml++ one-shot install: timed curl into a stage file, reject
   truncated headers (<17000 lines), always ensure `TOML_EXCEPTIONS=0`, and do not
   stamp a partial download. SME-01 archives Linux tests-only 53/53 at `d51b0287`

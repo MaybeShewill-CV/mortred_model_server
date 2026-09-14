@@ -247,6 +247,19 @@ def check_engines(rows: list[tuple[str, Path]]) -> list[str]:
 
 
 def self_test() -> int:
+    # Isolate from caller env (e.g. MORTRED_PROFILE=cpu from a live CPU pack).
+    prev_profile = os.environ.get("MORTRED_PROFILE")
+    os.environ["MORTRED_PROFILE"] = "gpu"
+    try:
+        return _self_test_body()
+    finally:
+        if prev_profile is None:
+            os.environ.pop("MORTRED_PROFILE", None)
+        else:
+            os.environ["MORTRED_PROFILE"] = prev_profile
+
+
+def _self_test_body() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         (root / "conf" / "server" / "x").mkdir(parents=True)
@@ -255,7 +268,7 @@ def self_test() -> int:
         (root / "_bin").mkdir()
         (root / "weights").mkdir()
         (root / "conf" / "server" / "x" / "s.toml").write_text(
-            '[X_SERVER]\nmodel="X"\n[X]\nmodel_config_file_path="../conf/model/x.toml"\n',
+            '[X_SERVER]\nmodel="X"\nprofile="any"\n[X]\nmodel_config_file_path="../conf/model/x.toml"\n',
             encoding="utf-8",
         )
         (root / "conf" / "model" / "x.toml").write_text(
