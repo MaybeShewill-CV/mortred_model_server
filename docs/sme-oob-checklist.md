@@ -8,7 +8,7 @@
 
 | ID | 状态 | 事项 | 验收 |
 |---|---|---|---|
-| SME-07 | main (pending) | docs/evidence/sme-07-auth-before-rate-limit-20260914.md |
+| SME-07 | main @ 4cfe6e5 | docs/evidence/sme-07-auth-before-rate-limit-20260914.md |
 | SME-06 | main @ 6e1b7d1 | docs/evidence/sme-06-action-http-status-20260914.md |
 | SME-05 | main @ 1ebf4b4 | docs/evidence/sme-05-pack-file-apply-20260914.md |
 | SME-04 | main @ 7878a28 | docs/evidence/sme-04-release-dry-run-20260914.md; release_dry_run.sh |
