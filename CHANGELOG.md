@@ -31,6 +31,7 @@ All notable changes to this project are documented here. The format follows
 > 已链入），以及 SME-02 evidence（`docs/evidence/`）。
 
 ### Fixed
+- **SME-03:** `scripts/check_consistency.py` gates the `ci.yml` mock-trtexec dry-run contract against `convert_trt_engines.sh` (require `--skipInference`, reject `--buildOnly`, TensorRT 10.x mock banner).
 - `install_deps.sh` toml++ one-shot install: timed curl into a stage file, reject
   truncated headers (<17000 lines), always ensure `TOML_EXCEPTIONS=0`, and do not
   stamp a partial download. SME-01 archives Linux tests-only 53/53 at `d51b0287`

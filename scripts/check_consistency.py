@@ -566,6 +566,68 @@ def check_security_scan() -> list[str]:
     return errors
 
 
+def check_ci_convert_trt_dry_run_contract() -> list[str]:
+    """CI mock-trtexec dry-run must stay aligned with convert_trt_engines.sh.
+
+    Round-1 / SME-03: a green check_consistency must not coexist with a CI step
+    that still greps --buildOnly while TRT>=9 emits --skipInference.
+    """
+    errors: list[str] = []
+    script = ROOT / "scripts" / "convert_trt_engines.sh"
+    ci = ROOT / ".github" / "workflows" / "ci.yml"
+    if not script.is_file():
+        errors.append("scripts/convert_trt_engines.sh missing")
+        return errors
+    if not ci.is_file():
+        errors.append(".github/workflows/ci.yml missing")
+        return errors
+
+    script_text = script.read_text(encoding="utf-8")
+    if not re.search(
+        r'if \[ "\$TRT_MAJOR" -ge 9 \]; then[\s\S]{0,500}?BUILD_FLAG="--skipInference"',
+        script_text,
+    ):
+        errors.append(
+            "scripts/convert_trt_engines.sh: TRT_MAJOR>=9 path must set "
+            'BUILD_FLAG="--skipInference"'
+        )
+
+    ci_text = ci.read_text(encoding="utf-8")
+    step_anchor = "convert_trt_engines.sh contract tests (mock trtexec)"
+    if step_anchor not in ci_text:
+        errors.append(f".github/workflows/ci.yml: missing step {step_anchor!r}")
+        return errors
+    start = ci_text.index(step_anchor)
+    rest = ci_text[start:]
+    m_next = re.search(r"\n      - name:", rest[1:])
+    step = rest[: m_next.start() + 1] if m_next else rest
+
+    if not re.search(r'grep\s+-q\s+--\s+"--skipInference"', step):
+        errors.append(
+            ".github/workflows/ci.yml: mock dry-run step must grep --skipInference"
+        )
+    if not re.search(
+        r'grep\s+-q\s+--\s+"--buildOnly"[\s\S]{0,160}?exit 1',
+        step,
+    ):
+        errors.append(
+            ".github/workflows/ci.yml: mock dry-run step must fail if --buildOnly appears"
+        )
+    if "TensorRT version: 10." not in step:
+        errors.append(
+            ".github/workflows/ci.yml: mock trtexec --help must advertise TensorRT 10.x"
+        )
+    if re.search(
+        r'echo\s+"\$out"\s*\|\s*grep\s+-q\s+--\s+"--buildOnly"\s*$',
+        step,
+        re.M,
+    ):
+        errors.append(
+            ".github/workflows/ci.yml: must not require --buildOnly in dry-run output"
+        )
+    return errors
+
+
 def check_ci_no_python3_runs_sh() -> list[str]:
     """.github/workflows/*.yml must not run bash scripts via python3 (historical
     bug: ci.yml used `python3 scripts/convert_trt_engines.sh --list`, which made
@@ -834,6 +896,7 @@ def main() -> int:
     errors.extend(check_factory_register_type_banned())
     errors.extend(check_security_scan())
     errors.extend(check_ci_no_python3_runs_sh())
+    errors.extend(check_ci_convert_trt_dry_run_contract())
     errors.extend(check_scaffolder_task_metadata())
     errors.extend(check_model_todo_markers())
     errors.extend(check_model_io_split())
