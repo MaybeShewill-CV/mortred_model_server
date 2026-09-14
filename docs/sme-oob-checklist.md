@@ -9,6 +9,7 @@
 | ID | 状态 | 事项 | 验收 |
 |---|---|---|---|
 | SME-04 | main (this commit) | docs/evidence/sme-04-release-dry-run-20260914.md; release_dry_run.sh |
+| SME-04 | main @ 9328464 | docs/evidence/sme-04-release-dry-run-20260914.md; release_dry_run.sh |
 | SME-01 | DONE | WSL 归档全量 `tests-only`（+ 实际售卖 profile 的关键 GPU smoke） | 有可复现命令、退出码、失败清单 |
 | SME-02 | DONE | 官方最短成功路径跑通并写入主航道文档：`install_deps` → 三 token →（GPU）`convert_trt` → `doctor --strict` → 一次推理 | 新人按文档能跟到绿 |
 | SME-03 | DONE | `check_consistency`（或独立 checker）锁住 `ci.yml` dry-run/mock 契约 | 故意改错 CI 断言会被门禁抓住 |
