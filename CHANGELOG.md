@@ -33,6 +33,9 @@ All notable changes to this project are documented here. The format follows
 > 增加 cpu 源码树最短成功路径文档 `docs/shortest-path-cpu.md`（README Quick Start
 > 已链入），以及 SME-02 evidence（`docs/evidence/`）。
 
+### Changed
+- **Docs prune:** drop completed historical plans (base_server split, unified-contract refactor log, P4 DX plan/todolist/metrics) and large generated architecture HTML/diagrams; README / how-to / developer-guide links retargeted to living guides.
+
 ### Fixed
 - **Round-3 P0:** `check_consistency` convert/CI contract aligned with SME-16 (require unconditional `--skipInference`, refuse `-ge 9` / `--buildOnly`, require `-lt 10` gate and CI `TRT_VERSION_MAJOR=8` failure assert).
 - **SME-16:** `convert_trt_engines.sh` refuses TensorRT major &lt; 10 and drops the TRT 8 `--workspace`/`--buildOnly` path; `TRT_VERSION_MAJOR` only overrides failed banner probes (still fail-closed if &lt; 10). Dry-run no longer silently assumes 10 when version cannot be detected.
