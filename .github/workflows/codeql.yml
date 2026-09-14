@@ -69,6 +69,10 @@ jobs:
           sudo apt-get install -y --no-install-recommends libopencv-dev libgoogle-glog-dev libeigen3-dev libgtest-dev libssl-dev
 
       - if: matrix.mode == 'pr'
+        name: Install vendored header-only deps (3rd_party is generated, not tracked)
+        run: ./scripts/install_deps.sh --headers
+
+      - if: matrix.mode == 'pr'
         name: Configure (tests-only)
         run: cmake -B build-codeql -DMORTRED_BUILD_FULL=OFF
 

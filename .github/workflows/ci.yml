@@ -94,6 +94,9 @@ jobs:
           restore-keys: |
             ccache-${{ matrix.compiler }}-
 
+      - name: Install vendored header-only deps (3rd_party is generated, not tracked)
+        run: ./scripts/install_deps.sh --headers
+
       - name: Configure (tests-only, apt deps)
         run: >
           cmake -B build-ci
@@ -156,6 +159,9 @@ jobs:
           key: ccache-gcc-${{ hashFiles('CMakeLists.txt', 'cmake/**', 'src/**', 'test/**') }}
           restore-keys: |
             ccache-gcc-
+
+      - name: Install vendored header-only deps (3rd_party is generated, not tracked)
+        run: ./scripts/install_deps.sh --headers
 
       - name: Configure (tests-only, warnings as errors)
         run: >
@@ -286,8 +292,10 @@ jobs:
           restore-keys: |
             ccache-gcc-
 
-      - name: Build vendored workflow (model_factory_unittest links it)
-        run: ./scripts/install_deps.sh --workflow
+      - name: Build vendored workflow + header-only deps
+        run: |
+          ./scripts/install_deps.sh --workflow
+          ./scripts/install_deps.sh --headers
 
       - name: Configure and run TSAN gate (async + do_work lifetime)
         run: |
