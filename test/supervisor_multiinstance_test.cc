@@ -27,6 +27,10 @@
 
 #include "control/supervisor/supervisor_app.h"
 
+#ifndef MORTRED_FAKE_BIN_DEFAULT
+#define MORTRED_FAKE_BIN_DEFAULT ""
+#endif
+
 namespace fs = std::filesystem;
 
 namespace {
@@ -143,15 +147,28 @@ class SupervisorMultiInstanceTest : public ::testing::Test {
         b_.model_id = "SUPER_B";
         b_.token = "mgmt-b";
 
+        const char* fake_bin = std::getenv("MORTRED_FAKE_BIN");
+        if (fake_bin == nullptr || fake_bin[0] == '\0') {
+            fake_bin = MORTRED_FAKE_BIN_DEFAULT;
+        }
+        ASSERT_NE(fake_bin, nullptr);
+        ASSERT_NE(fake_bin[0], '\0') << "MORTRED_FAKE_BIN / compile default missing";
+
         for (auto* inst : {&a_, &b_}) {
             inst->port = find_free_port();
             ASSERT_GT(inst->port, 0);
             write_instance_config(*inst, find_free_port());
+            std::error_code copy_ec;
+            fs::create_directories(inst->root / "_bin", copy_ec);
+            fs::copy_file(fake_bin, inst->root / "_bin" / "fake_model_server.out",
+                          fs::copy_options::overwrite_existing, copy_ec);
+            ASSERT_FALSE(copy_ec) << copy_ec.message();
             mortred::control::SupervisorInitOptions opt;
             opt.project_root = inst->root.string();
             opt.api_host = "127.0.0.1";
             opt.api_port = inst->port;
             opt.api_token = inst->token;
+            opt.bin_dir = "_bin";
             opt.autostart_default = 0;  // supervise nothing; isolation only
             ASSERT_TRUE(inst->app.init(opt)) << "init failed for " << inst->model_id;
             ASSERT_TRUE(inst->app.listen()) << "listen failed for " << inst->model_id;
@@ -213,18 +230,18 @@ TEST_F(SupervisorMultiInstanceTest, server_actions_require_bearer_and_post) {
 TEST_F(SupervisorMultiInstanceTest, start_stop_restart_return_json_ok) {
     std::string body;
     ASSERT_EQ(http_status(a_.port, "POST", "/api/v1/servers/SUPER_A/start", a_.token, &body, "{}"),
-              200);
-    EXPECT_NE(body.find("\"ok\""), std::string::npos) << body;
+              200) << body;
+    EXPECT_NE(body.find("\"ok\":true"), std::string::npos) << body;
 
     body.clear();
     ASSERT_EQ(http_status(a_.port, "POST", "/api/v1/servers/SUPER_A/stop", a_.token, &body, "{}"),
-              200);
-    EXPECT_NE(body.find("\"ok\""), std::string::npos) << body;
+              200) << body;
+    EXPECT_NE(body.find("\"ok\":true"), std::string::npos) << body;
 
     body.clear();
     ASSERT_EQ(http_status(a_.port, "POST", "/api/v1/servers/SUPER_A/restart", a_.token, &body, "{}"),
-              200);
-    EXPECT_NE(body.find("\"ok\""), std::string::npos) << body;
+              200) << body;
+    EXPECT_NE(body.find("\"ok\":true"), std::string::npos) << body;
 }
 
 
