@@ -23,6 +23,13 @@ All notable changes to this project are documented here. The format follows
 > crash-loop。`occupancy_policy=off` / `MORTRED_OCCUPANCY_ENFORCE=0` 跳过 spawn
 > 闸（unsafe），`--strict` 仍失败。`gpu_mem_limit_mb` 仍然只约束 ORT CUDA EP。
 
+### Added
+- Cpu source-tree shortest success path: `docs/shortest-path-cpu.md` (linked from
+  README Quick Start) and SME-02 evidence under `docs/evidence/`.
+
+> 增加 cpu 源码树最短成功路径文档 `docs/shortest-path-cpu.md`（README Quick Start
+> 已链入），以及 SME-02 evidence（`docs/evidence/`）。
+
 ### Fixed
 - `install_deps.sh` toml++ one-shot install: timed curl into a stage file, reject
   truncated headers (<17000 lines), always ensure `TOML_EXCEPTIONS=0`, and do not

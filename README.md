@@ -115,6 +115,9 @@ still converts every engine and stays opt-in. See [docs/deployment.md](docs/depl
 
 ### Building from source
 
+For a **cpu source-tree shortest path** (trust → supervisor → one MOBILENETV2 infer),
+see [docs/shortest-path-cpu.md](docs/shortest-path-cpu.md).
+
 ```bash
 # dependencies (version matrix + sha256 pinned + idempotent stamps)
 ./scripts/install_deps.sh --all              # gpu line (CUDA 12 / TensorRT 10.3)
