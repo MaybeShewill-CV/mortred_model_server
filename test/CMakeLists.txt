@@ -261,6 +261,10 @@ foreach(src ${TEST_LIST})
     if(${src} STREQUAL "supervisor_unittest")
         target_compile_definitions(${src} PRIVATE
             MORTRED_FAKE_BIN_DEFAULT="$<TARGET_FILE:fake_model_server>")
+    elseif(${src} STREQUAL "supervisor_multiinstance_test")
+        target_compile_definitions(${src} PRIVATE
+            MORTRED_FAKE_BIN_DEFAULT="$<TARGET_FILE:fake_model_server>")
+        add_dependencies(${src} fake_model_server)
     elseif(${src} STREQUAL "gateway_e2e_test")
         target_compile_definitions(${src} PRIVATE
             MORTRED_FAKE_BIN_DEFAULT="$<TARGET_FILE:fake_model_server>"
