@@ -199,18 +199,6 @@ if [ "$TRT_MAJOR" -lt 10 ]; then
     fail "TensorRT major $TRT_MAJOR is not supported (product line is TensorRT 10.x only; leftover 8/9 are out of scope). Install the pinned stack: sudo ./scripts/install_deps.sh --nvidia"
 fi
 
-size_to_bytes() {
-    local s="$1" n u
-    n="${s%[KkMmGg]}"
-    u="${s: -1}"
-    case "$u" in
-        K|k) echo $((n*1024)) ;;
-        M|m) echo $((n*1024*1024)) ;;
-        G|g) echo $((n*1024*1024*1024)) ;;
-        *) echo "$n" ;;
-    esac
-}
-
 # trtexec 10.x's --memPoolSize parser only accepts KiB/MiB/GiB base-2 suffixes
 # (a bare number means MiB); the 8.x-style "6G" form fails to parse.
 ws_to_trt10_units() { # 6G -> 6GiB, 512m -> 512MiB, 1024 -> 1024, 6GiB -> 6GiB
