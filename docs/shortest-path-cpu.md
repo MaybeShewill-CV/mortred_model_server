@@ -8,10 +8,15 @@ Use when GPU / `install_deps.sh --all` is unavailable.
 ```bash
 cd /path/to/mortred_model_server
 git checkout main && git pull --ff-only origin main
-# Clean machine: ./scripts/install_deps.sh --cpu --all
+# Clean machine:
+./scripts/install_deps.sh --cpu --all
+./scripts/install_deps.sh --cpu --check   # must pass before cmake
 ```
 
 ## 1. Build
+
+Configure fail-closed on missing workflow/crypto or mismatched ORT headers
+(`ORT_API_VERSION` must match `libonnxruntime.so.1.29.0`); stderr names the fix.
 
 ```bash
 cmake --preset full-cpu

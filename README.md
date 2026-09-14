@@ -122,8 +122,12 @@ see [docs/shortest-path-cpu.md](docs/shortest-path-cpu.md).
 # dependencies (version matrix + sha256 pinned + idempotent stamps)
 ./scripts/install_deps.sh --all              # gpu line (CUDA 12 / TensorRT 10.3)
 ./scripts/install_deps.sh --cpu --all        # cpu line (no NVIDIA/TRT at all)
+./scripts/install_deps.sh --check            # gpu: verify 3rd_party before cmake
+./scripts/install_deps.sh --cpu --check      # cpu: same
 
-# configure + build (presets carry the profile)
+# configure + build (presets carry the profile). Configure is fail-closed on
+# missing workflow/crypto, wrong ORT headers (ORT_API_VERSION), leftover ORT 1.18 /
+# TRT 8 — stderr prints the matching install_deps fix line.
 cmake --preset full && cmake --build --preset full            # gpu
 cmake --preset full-cpu && cmake --build --preset full-cpu    # cpu
 

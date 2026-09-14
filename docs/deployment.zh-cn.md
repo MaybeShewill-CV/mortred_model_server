@@ -347,6 +347,8 @@ sudo ./scripts/install_deps.sh --nvidia    # gpu 线的 CUDA/TRT/cuDNN（需 roo
 
 离线安装：`--offline DIR` 使用预下载包目录；ORT tarball 强制 sha256 校验（缺哈希直接拒绝，绝不静默跳过）。
 
+CMake configure 对源码树与 `--check` 对齐的已知坑 fail-closed：缺 `libworkflow` / `libcrypto`、`ORT_API_VERSION` 与 `libonnxruntime.so.1.29.0` 不一致、残留 `libonnxruntime.so.1.18*` （gpu 上还有残留 TensorRT 8）。FATAL 文案会给出对应的 `install_deps` 修复命令。
+
 ### 7.2 编译（preset 自带 profile）
 
 ```bash

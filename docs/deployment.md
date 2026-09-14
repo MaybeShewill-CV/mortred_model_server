@@ -347,14 +347,20 @@ For contributors and custom builds.
 ### 7.1 Dependencies (version matrix + sha256 pinned + idempotent stamps)
 
 ```bash
-./scripts/install_deps.sh --check          # inspect current 3rd_party
 ./scripts/install_deps.sh --all            # gpu line (CUDA 12 / TensorRT 10.3)
 ./scripts/install_deps.sh --cpu --all      # cpu line: MNN-CPU + ORT-CPU, no NVIDIA/TRT
 sudo ./scripts/install_deps.sh --nvidia    # gpu line CUDA/TRT/cuDNN (root; nothing else needs it)
+./scripts/install_deps.sh --check          # gpu: verify 3rd_party before cmake
+./scripts/install_deps.sh --cpu --check    # cpu: same
 ```
 
 Offline: `--offline DIR` uses a pre-downloaded package dir. ORT tarballs are
 sha256-verified fail-closed (a missing hash refuses the install).
+
+CMake configure is fail-closed on the same footguns `--check` covers for a
+source build: missing `libworkflow` / `libcrypto`, `ORT_API_VERSION` ≠ pin for
+`libonnxruntime.so.1.29.0`, leftover `libonnxruntime.so.1.18*` (and on gpu,
+leftover TensorRT 8). The FATAL text prints the matching `install_deps` fix.
 
 ### 7.2 Build (presets carry the profile)
 

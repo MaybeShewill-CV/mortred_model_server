@@ -34,7 +34,17 @@ set(MORTRED_LIB_OUTPUT_DIR ${PROJECT_ROOT_DIR}/_lib CACHE PATH "Shared library o
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${MORTRED_BIN_OUTPUT_DIR})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${MORTRED_LIB_OUTPUT_DIR})
 
-# Vendored deps: explicit imported targets (exact soname + fatal error if missing + auto-reconfigure on change)
+# CI / unit-test mode + profile must be known before vendored FATAL fix strings (SME-10).
+option(MORTRED_BUILD_FULL "Build full project (models/server/apps, requires CUDA/MNN/TRT)" ON)
+# Deployment profile: gpu = full CUDA/TensorRT stack (default, unchanged);
+# cpu = MNN-CPU + ORT-CPU backends only, no TensorRT (the trt backend is
+# compiled out; trt-configured models fail init with a clear error). Single
+# source of truth for the deployment story - see docs/deployment.md.
+set(MORTRED_BUILD_PROFILE "gpu" CACHE STRING "Deployment profile: gpu | cpu")
+set_property(CACHE MORTRED_BUILD_PROFILE PROPERTY STRINGS gpu cpu)
+option(MORTRED_INSTALL "Create the tree-style install target (bin/lib tree)" OFF)
+
+# Vendored deps: exact soname + FATAL with profile-aware fix + auto-reconfigure
 include(${PROJECT_ROOT_DIR}/cmake/VendoredDeps.cmake)
 mortred_probe_workflow()
 # control_workflow (gateway/supervisor app objects) is built whenever workflow
@@ -45,16 +55,6 @@ mortred_probe_workflow()
 if(MORTRED_WORKFLOW_AVAILABLE)
     mortred_import_crypto()
 endif()
-
-# CI / unit-test mode: skip CUDA/MNN/TRT-dependent models and servers; build only common + tests
-option(MORTRED_BUILD_FULL "Build full project (models/server/apps, requires CUDA/MNN/TRT)" ON)
-# Deployment profile: gpu = full CUDA/TensorRT stack (default, unchanged);
-# cpu = MNN-CPU + ORT-CPU backends only, no TensorRT (the trt backend is
-# compiled out; trt-configured models fail init with a clear error). Single
-# source of truth for the deployment story - see docs/deployment.md.
-set(MORTRED_BUILD_PROFILE "gpu" CACHE STRING "Deployment profile: gpu | cpu")
-set_property(CACHE MORTRED_BUILD_PROFILE PROPERTY STRINGS gpu cpu)
-option(MORTRED_INSTALL "Create the tree-style install target (bin/lib tree)" OFF)
 
 # CI quality gate: treat compiler warnings as errors (enabled in tests-only builds)
 option(MORTRED_ENABLE_WERROR "Treat compiler warnings as errors (used by CI quality gate)" OFF)
@@ -87,10 +87,13 @@ add_subdirectory(src/common)
 add_subdirectory(src/control)
 
 if(MORTRED_BUILD_FULL)
+    # SME-10: fail closed at configure (clear fix cmds), not at obscure link/compile.
+    mortred_require_workflow_for_full()
     # exact sonames pin versions (CUDA 12 / TensorRT 10.3 / ORT 1.29)
     mortred_import_shared(mnn            libMNN.so)
     mortred_import_shared(fmt            libfmt.so.9)
     mortred_import_shared(onnxruntime    libonnxruntime.so.1.29.0)
+    mortred_assert_onnxruntime_pin()
     if(MORTRED_BUILD_PROFILE STREQUAL "cpu")
         message(STATUS "Build profile: cpu (MNN-CPU + ORT-CPU, TensorRT compiled out)")
     else()
@@ -110,7 +113,8 @@ if(MORTRED_BUILD_FULL)
         if(_mortred_leftover_trt8)
             message(FATAL_ERROR
                 "leftover TensorRT 8 libraries in ${MORTRED_3RD_LIBS}:\n  ${_mortred_leftover_trt8}\n"
-                "fix: sudo ./scripts/install_deps.sh --nvidia")
+                "fix: sudo ./scripts/install_deps.sh --nvidia\n"
+                "verify: ./scripts/install_deps.sh --check")
         endif()
         find_package(CUDAToolkit REQUIRED)
         if(CUDAToolkit_VERSION VERSION_LESS 12 OR CUDAToolkit_VERSION VERSION_GREATER_EQUAL 13)
