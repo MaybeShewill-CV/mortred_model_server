@@ -193,6 +193,15 @@ bool ControlConfig::load(const std::string& path, ControlConfig* out, std::strin
     return true;
 }
 
+
+std::string ControlConfig::resolve_pack_path(const std::string& override_path,
+                                             const std::string& pack_file_from_config) {
+    if (!override_path.empty()) {
+        return override_path;
+    }
+    return pack_file_from_config;
+}
+
 bool ControlConfig::apply_pack(const std::string& pack_path, const std::vector<std::string>& valid_ids,
                                const std::string& project_root, ControlConfig* cfg, std::string* err) {
     mini_toml::Doc doc;

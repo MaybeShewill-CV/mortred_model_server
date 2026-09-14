@@ -184,3 +184,24 @@ int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
+
+TEST_F(ControlConfigTest, resolve_pack_path_prefers_override_then_pack_file) {
+    EXPECT_EQ(ControlConfig::resolve_pack_path("env.toml", "file.toml"), "env.toml");
+    EXPECT_EQ(ControlConfig::resolve_pack_path("", "file.toml"), "file.toml");
+    EXPECT_EQ(ControlConfig::resolve_pack_path("", ""), "");
+}
+
+TEST_F(ControlConfigTest, load_parses_pack_file) {
+    write(
+        "[supervisor]\n"
+        "pack_file = \"conf/packs/demo.toml\"\n"
+        "autostart_default = false\n");
+    ControlConfig cfg;
+    std::string err;
+    ASSERT_TRUE(ControlConfig::load(path_.string(), &cfg, &err)) << err;
+    EXPECT_EQ(cfg.supervisor.pack_file, "conf/packs/demo.toml");
+    EXPECT_FALSE(cfg.supervisor.pack_active);  // load alone does not apply
+    EXPECT_EQ(ControlConfig::resolve_pack_path("", cfg.supervisor.pack_file),
+              "conf/packs/demo.toml");
+}
+

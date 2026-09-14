@@ -19,7 +19,7 @@ struct SupervisorConfig {
     std::string api_host = "127.0.0.1";
     int api_port = 8787;
     bool autostart_default = false;
-    std::string pack_file;               // optional; env MORTRED_PACK overrides
+    std::string pack_file;               // optional; applied at start; MORTRED_PACK overrides
     bool pack_active = false;            // true after a pack file is applied
     int start_concurrency = 1;           // gateway first, then models with this width
     int log_rotate_mb = 10;
@@ -78,6 +78,10 @@ struct ControlConfig {
 
     /*** parse conf/mortred.toml; false + err on malformed/unknown values */
     static bool load(const std::string& path, ControlConfig* out, std::string* err);
+
+    /*** Prefer override (MORTRED_PACK / CLI) over pack_file from mortred.toml. */
+    static std::string resolve_pack_path(const std::string& override_path,
+                                         const std::string& pack_file_from_config);
 
     /*** Apply a machine-local pack: listed ids autostart, others do not.
      *  valid_ids are catalog ids (model_section). Unknown pack ids fail closed.

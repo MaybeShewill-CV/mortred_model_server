@@ -625,7 +625,9 @@ bool SupervisorApp::init(const SupervisorInitOptions& options) {
         return false;
     }
 
-    std::string pack_path = options.pack_path;
+    // MORTRED_PACK / CLI override wins; else honor [supervisor].pack_file from mortred.toml.
+    std::string pack_path =
+        ControlConfig::resolve_pack_path(options.pack_path, cfg_.supervisor.pack_file);
     if (!pack_path.empty()) {
         std::filesystem::path pack(pack_path);
         if (!pack.is_absolute()) {
