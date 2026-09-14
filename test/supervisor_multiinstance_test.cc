@@ -121,7 +121,7 @@ void write_instance_config(const Instance& inst, int model_port) {
            << "model=\"" << inst.model_id << "\"\n"
            << "port=" << model_port << "\n"
            << "server_uri=\"/mortred_ai_server_v1/test/" << inst.model_id << "\"\n"
-           << "profile=\"any\"\n";
+           << "profile=\"any\"\n"
            << "server_exe=\"fake_model_server.out\"\n";
     server.close();
     std::ofstream mortred(inst.root / "conf" / "mortred.toml");
