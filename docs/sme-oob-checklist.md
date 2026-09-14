@@ -33,10 +33,11 @@
 | SME-12 | DONE | 写清不支持边界（RTDETR、Linux-only、必须重建 engine、TRT 10 only / 非 8·9） | 无假期待 |
 | SME-13 | DONE | 删 zombie 注释（如 `web_console` / `ServerManager`） | 源码无过时声称 |
 | SME-14 | DONE | `golden_drift_check.py --check` 进 CI + 重置基线 | PR 改 golden 必过零漂移门禁；基线与树一致 |
+| SME-16 | DOING | convert_trt 与产品 TRT 10.x 钉对齐（拒 major&lt;10；env 仅探测覆盖） | TRT_VERSION_MAJOR=8 dry-run FAIL；探测失败无静默兜底 |
 
 ## 当前焦点
 
-- **Next:** _(no open SME TODO)_
+- **Next:** `SME-16` (DOING)
 - **Notes:** Round-2 基线综合 8.0 / 开箱 6.8；企业开箱仍否。CHANGELOG 仅参考，以源码为准。
 
 ## 完成记录

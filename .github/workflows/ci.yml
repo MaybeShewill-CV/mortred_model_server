@@ -608,6 +608,10 @@ jobs:
           bash scripts/convert_trt_engines.sh --list | grep -q "total: 19"
           # 2) --dry-run flag composition: fp16 + TRT10 memPoolSize + skipInference
           out="$(TRTEXEC="$TMP/trtexec" bash scripts/convert_trt_engines.sh --only ddpm_unet_celeba-hq-128 --force --dry-run)"
+          # SME-16: env override cannot exempt major < 10
+          if TRT_VERSION_MAJOR=8 TRTEXEC="$TMP/trtexec" bash scripts/convert_trt_engines.sh --only ddpm_unet_celeba-hq-128 --force --dry-run; then
+            echo "expected non-zero exit when TRT_VERSION_MAJOR=8" >&2; exit 1
+          fi
           echo "$out" | grep -q -- "--fp16"
           echo "$out" | grep -q -- "--memPoolSize=workspace:"
           if echo "$out" | grep -q -- "--workspace="; then
