@@ -47,6 +47,7 @@ All models and detectors can be downloaded from my [Hugging Face Page](https://h
 end-to-end. When stuck, run `mortredctl next` (one next command). The three
 entries below are install shapes for that same lane (tokens → loopback listen →
 start → pack calibrate on GPU → `doctor --strict`).
+**Out of scope:** [unsupported boundaries](docs/unsupported-boundaries.md).
 
 > Linux is the only supported platform. Two deployment profiles exist and one
 > switch drives everything (build, dependencies, model catalog, weight subset):
@@ -221,6 +222,9 @@ HTTP-served (`mortred-model-server.out --list` / catalog id):
 Bench-only (no HTTP catalog): `OPENAI_CLIP`, `LIGHTGLUE`, `SAM_PREDICTOR`, `FAST_SAM`, `MSOCRNET`.
 
 Scaffold / not served: `RTDETR`. There is no MOT.
+
+**Unsupported boundaries** (Linux-only, RTDETR scaffold, TensorRT 10.x only,
+engines must rebuild on this GPU): [docs/unsupported-boundaries.md](docs/unsupported-boundaries.md) / [中文摘要](docs/unsupported-boundaries.zh-cn.md).
 
 # `Web Server Configuration`
 

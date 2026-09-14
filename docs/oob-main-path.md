@@ -15,6 +15,8 @@ unless you set `MORTRED_PROFILE=gpu` / `--profile gpu`.
 Alternate install shapes (compose / tarball / source build) are **entry variants**
 of this same lane — not separate products. See README Quick Start.
 
+What we do **not** support (RTDETR, non-Linux, TRT≠10, copying engines): [unsupported-boundaries.md](unsupported-boundaries.md).
+
 ## 0. Get a tree
 
 Pick **one** entry, then continue from §1:

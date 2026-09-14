@@ -8,6 +8,7 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **SME-12:** Document unsupported boundaries in `docs/unsupported-boundaries.md` (+ zh summary): Linux x64 only; RTDETR scaffold not in catalog; CUDA 12.x + TensorRT **10.x** only (8/9 out); engines must be rebuilt on this GPU/TRT; cpu profile has no TensorRT. Linked from README, oob-main-path, deployment, and rtdetr model doc.
 - **SME-11:** Single out-of-box main path: `docs/oob-main-path.md` plus `mortredctl next` (`scripts/mortredctl_next.sh`) prints one next command (three tokens → loopback listen tip → start supervisor → pack prepare/calibrate → `doctor --strict`). `init` / `init-trust` / doctor WARN·FAIL / prepare / calibrate emit `next:` lines. README Quick Start points at the main path; other entries are variants.
 - Pack occupancy is fail-closed at supervisor spawn and `mortredctl doctor --strict`.
   TensorRT ids in an active pack need `gpu_mem_mib` from

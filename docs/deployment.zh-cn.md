@@ -1,3 +1,5 @@
+> **不支持边界**：[unsupported-boundaries.zh-cn.md](unsupported-boundaries.zh-cn.md)。
+>
 > **SME 主航道**（一条路径 + `mortredctl next`）：[oob-main-path.md](oob-main-path.md)。
 >
 # 部署指南（Linux）

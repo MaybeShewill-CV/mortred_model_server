@@ -5,6 +5,8 @@
 > walkthroughs of all three install tracks, the profile system, weights and
 > engine management, security, upgrades/rollback, monitoring and troubleshooting.
 >
+> **Unsupported boundaries** (no false expectations): [unsupported-boundaries.md](unsupported-boundaries.md).
+>
 > **SME main path** (one lane + `mortredctl next`): [oob-main-path.md](oob-main-path.md).
 >
 > **After reading this you can**: bring Mortred up on a clean Ubuntu machine in
