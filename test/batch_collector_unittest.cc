@@ -249,6 +249,52 @@ TEST(batch_collector, submit_inline_go_runs_batch_and_notifies) {
     collector.stop();
 }
 
+
+TEST(batch_collector, expired_deadline_skips_worker_run) {
+    WorkerPool<FakeWorker> pool;
+    PrometheusMetrics metrics;
+    auto model = std::make_unique<FakeModel>();
+    FakeModel* raw = model.get();
+    raw->delay_ms = 50;
+    pool.adopt(std::move(model));
+    pool.commit_watermark(1);
+
+    BatchCollector<FakeWorker, FakeOutput> collector(pool, metrics);
+    collector.configure(/*max_batch_size=*/4, /*max_batch_delay_ms=*/5,
+                        /*worker_wait_timeout_ms=*/500);
+    collector.start();
+
+    std::mutex mu;
+    std::condition_variable cv;
+    bool done = false;
+
+    auto state = std::make_shared<BatchRequestState<FakeOutput>>();
+    state->req.items.push_back(text_item("aa"));
+    state->req.items.push_back(text_item("bb"));
+    state->req.deadline =
+        std::chrono::steady_clock::now() - std::chrono::milliseconds(1);
+    state->init(2);
+    state->notify_done = [&]() {
+        std::lock_guard<std::mutex> lock(mu);
+        done = true;
+        cv.notify_all();
+    };
+
+    collector.submit(state);
+    {
+        std::unique_lock<std::mutex> lock(mu);
+        ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(2), [&]() { return done; }));
+    }
+
+    EXPECT_EQ(raw->batch_calls.load(), 0);
+    auto snap = assemble_batch_slots(*state);
+    EXPECT_EQ(snap.model_run_status, StatusCode::MODEL_RUN_TIMEOUT);
+    EXPECT_EQ(snap.item_status[0], StatusCode::MODEL_RUN_TIMEOUT);
+    EXPECT_EQ(snap.item_status[1], StatusCode::MODEL_RUN_TIMEOUT);
+
+    collector.stop();
+}
+
 TEST(batch_collector, submit_when_stopped_timeouts_all_slots) {
     WorkerPool<FakeWorker> pool;
     PrometheusMetrics metrics;

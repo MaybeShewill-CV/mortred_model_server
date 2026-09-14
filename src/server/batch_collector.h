@@ -211,7 +211,27 @@ private:
         }
     }
 
-    /*** Drop stale (wrong epoch / not accepting) entries with TIMEOUT; keep live. */
+    static bool has_finite_deadline(const InferenceTask& req) {
+        return req.deadline != std::chrono::steady_clock::time_point::max();
+    }
+
+    static bool past_deadline(const InferenceTask& req) {
+        return has_finite_deadline(req) &&
+               std::chrono::steady_clock::now() >= req.deadline;
+    }
+
+    /*** Remaining ms until deadline; -1 if no finite deadline. */
+    static int64_t remaining_deadline_ms(const InferenceTask& req) {
+        if (!has_finite_deadline(req)) {
+            return -1;
+        }
+        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            req.deadline - std::chrono::steady_clock::now())
+                            .count();
+        return ms < 0 ? 0 : ms;
+    }
+
+    /*** Drop stale/expired entries with TIMEOUT; keep live (SME-08 epoch + SME-09 deadline). */
     void filter_live_batch(std::vector<std::shared_ptr<batch_entry>>& batch) {
         if (batch.empty()) {
             return;
@@ -224,7 +244,8 @@ private:
             if (!entry || !entry->owner) {
                 continue;
             }
-            if (!accepting || entry->epoch != epoch_now) {
+            if (!accepting || entry->epoch != epoch_now ||
+                past_deadline(entry->owner->req)) {
                 BatchRequestState<MODEL_OUTPUT>::write_slot(
                     entry->owner, entry->item_index, StatusCode::MODEL_RUN_TIMEOUT,
                     MODEL_OUTPUT{});
@@ -233,6 +254,28 @@ private:
             live.push_back(std::move(entry));
         }
         batch.swap(live);
+    }
+
+    /*** Checkout wait: min(configured cap, min remaining deadline in batch). */
+    std::chrono::milliseconds checkout_wait_for_batch(
+        const std::vector<std::shared_ptr<batch_entry>>& batch) const {
+        int64_t wait_ms = _worker_wait_timeout_ms > 0 ? _worker_wait_timeout_ms : -1;
+        for (const auto& entry : batch) {
+            if (!entry || !entry->owner) {
+                continue;
+            }
+            const int64_t rem = remaining_deadline_ms(entry->owner->req);
+            if (rem < 0) {
+                continue;
+            }
+            if (wait_ms < 0 || rem < wait_ms) {
+                wait_ms = rem;
+            }
+        }
+        if (wait_ms < 0) {
+            return std::chrono::milliseconds(-1);
+        }
+        return std::chrono::milliseconds(wait_ms);
     }
 
     void batch_loop() {
@@ -343,10 +386,15 @@ private:
             return;
         }
 
+        // SME-09: align with HTTP timer — do not take a worker for expired work.
+        filter_live_batch(batch);
+        if (batch.empty()) {
+            finish_in_flight();
+            return;
+        }
+
         WORKER worker;
-        const std::chrono::milliseconds wait = _worker_wait_timeout_ms > 0
-            ? std::chrono::milliseconds(_worker_wait_timeout_ms)
-            : std::chrono::milliseconds(-1);
+        const std::chrono::milliseconds wait = checkout_wait_for_batch(batch);
         const auto ck = _pool.checkout(worker, wait);
         if (!ck.ok) {
             for (const auto& entry : batch) {
@@ -360,6 +408,14 @@ private:
             return;
         }
         _metrics.observe_queue_wait_ms(ck.wait_ms);
+
+        // Deadline may have elapsed while waiting on the pool.
+        filter_live_batch(batch);
+        if (batch.empty()) {
+            _pool.checkin(std::move(worker));
+            finish_in_flight();
+            return;
+        }
 
         using ModelInput = typename WORKER::element_type::input_type;
         std::vector<ModelInput> inputs;

@@ -141,6 +141,7 @@ The JSON field is **`status`** (not `code`). Mapping is `src/server/http_status.
 | others | Server error | 500 |
 
 Admitted model requests always return `results[]` of length `N = images[]`.
+Batch path (`max_batch_size > 1`, SME-09): shares the same request `deadline` / HTTP timer; past-deadline entries time out without a new worker checkout (in-flight `run_batch` is not cooperatively cancelled).
 HTTP **504** (`status` 4) means zero items had been published when the
 deadline fired; each slot is timeout with `data: null`. HTTP **200** +
 `status` 68 + `partial: true` means at least one item completed in time —
