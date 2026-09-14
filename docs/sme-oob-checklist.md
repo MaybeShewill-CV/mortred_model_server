@@ -8,7 +8,7 @@
 
 | ID | 状态 | 事项 | 验收 |
 |---|---|---|---|
-| SME-09 | main (pending) | docs/evidence/sme-09-batch-deadline-20260914.md |
+| SME-09 | main @ c00a233 | docs/evidence/sme-09-batch-deadline-20260914.md |
 | SME-08 | main @ ec3fef7 | docs/evidence/sme-08-write-slot-epoch-20260914.md |
 | SME-07 | main @ 4cfe6e5 | docs/evidence/sme-07-auth-before-rate-limit-20260914.md |
 | SME-06 | main @ 6e1b7d1 | docs/evidence/sme-06-action-http-status-20260914.md |
