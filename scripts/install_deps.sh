@@ -1001,20 +1001,49 @@ install_headers_only() {
     # (table::contains / value::value_or / as_array returning pointers).
     # The single header ships in the repo at the tag; toml11 (ToruNiina)
     # is a DIFFERENT library whose header broke the models build.
+    #
+    # One-shot contract (do not leave a truncated header stamped):
+    #   - download via curl_retry into $BUILD_DIR (not straight onto slow/network FS)
+    #   - reject short/truncated files (complete v3.4.0 amalgam is ~17k+ lines)
+    #   - always ensure TOML_EXCEPTIONS=0 (parse_result / !parsed / .table() API)
     announce "install toml++ v3.4.0 (single header)"
     require_cmd curl "curl"
-    mkdir -p "$INCLUDE_DIR/toml"
-    [ -f "$INCLUDE_DIR/toml/toml.hpp" ] || \
-        curl -fsSL "https://raw.githubusercontent.com/marzer/tomlplusplus/v3.4.0/toml.hpp" -o "$INCLUDE_DIR/toml/toml.hpp"
-    # Pin TOML_EXCEPTIONS=0 (the project-wide exceptions-free contract,
-    # matching the originally vendored 3rd_party/include/toml/toml.hpp):
-    # upstream ships exceptions enabled by default, so toml::parse_file
-    # returns toml::table and the parse_result-based callers
-    # (benchmark_runner.h, generic_cv_server.h, ...) fail to compile.
-    if ! grep -q "^#ifndef TOML_EXCEPTIONS" "$INCLUDE_DIR/toml/toml.hpp"; then
-        { printf '#ifndef TOML_EXCEPTIONS\n#define TOML_EXCEPTIONS 0\n#endif\n\n'; \
-          cat "$INCLUDE_DIR/toml/toml.hpp"; } > "$INCLUDE_DIR/toml/toml.hpp.tmp" \
-            && mv "$INCLUDE_DIR/toml/toml.hpp.tmp" "$INCLUDE_DIR/toml/toml.hpp"
+    mkdir -p "$INCLUDE_DIR/toml" "$BUILD_DIR"
+    local toml_url="https://raw.githubusercontent.com/marzer/tomlplusplus/v3.4.0/toml.hpp"
+    local toml_stage="$BUILD_DIR/tomlplusplus-v3.4.0.hpp"
+    local toml_min_lines=17000
+    local need_fetch=1
+    if [ -f "$INCLUDE_DIR/toml/toml.hpp" ]; then
+        local have_lines
+        have_lines="$(wc -l < "$INCLUDE_DIR/toml/toml.hpp" | tr -d " ")"
+        if [ "${have_lines:-0}" -ge "$toml_min_lines" ] && \
+           head -5 "$INCLUDE_DIR/toml/toml.hpp" | grep -q "TOML_EXCEPTIONS"; then
+            need_fetch=0
+            info "toml++: already installed (${have_lines} lines, TOML_EXCEPTIONS present)"
+        else
+            info "toml++: replacing incomplete/missing-exceptions header (${have_lines:-0} lines)"
+            rm -f "$INCLUDE_DIR/toml/toml.hpp"
+        fi
+    fi
+    if [ "$need_fetch" -eq 1 ]; then
+        rm -f "$toml_stage"
+        # curl_retry has connect timeout + retries; add max-time so a hung
+        # raw.githubusercontent.com cannot block --headers/--all forever.
+        curl -fL --retry 8 --retry-delay 3 --connect-timeout 30 --max-time 180 \
+            -C - -o "$toml_stage" "$toml_url" \
+            || fail "toml++ download failed ($toml_url). Save the file as $toml_stage (wc -l >= ${toml_min_lines}) and rerun"
+        local got_lines
+        got_lines="$(wc -l < "$toml_stage" | tr -d " ")"
+        if [ "${got_lines:-0}" -lt "$toml_min_lines" ]; then
+            rm -f "$toml_stage"
+            fail "toml++ download looks truncated (${got_lines:-0} lines; want >= ${toml_min_lines}). Check network or place a full v3.4.0 toml.hpp at $toml_stage"
+        fi
+        {
+            printf "#ifndef TOML_EXCEPTIONS\n#define TOML_EXCEPTIONS 0\n#endif\n\n"
+            cat "$toml_stage"
+        } > "$INCLUDE_DIR/toml/toml.hpp.tmp"
+        mv "$INCLUDE_DIR/toml/toml.hpp.tmp" "$INCLUDE_DIR/toml/toml.hpp"
+        info "toml++: installed ($(wc -l < "$INCLUDE_DIR/toml/toml.hpp" | tr -d " ") lines, TOML_EXCEPTIONS=0)"
     fi
     mark tomlpp
     install_header_only stb_image \

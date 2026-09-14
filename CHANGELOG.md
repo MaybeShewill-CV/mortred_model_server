@@ -24,6 +24,15 @@ All notable changes to this project are documented here. The format follows
 > 闸（unsafe），`--strict` 仍失败。`gpu_mem_limit_mb` 仍然只约束 ORT CUDA EP。
 
 ### Fixed
+- `install_deps.sh` toml++ one-shot install: timed curl into a stage file, reject
+  truncated headers (<17000 lines), always ensure `TOML_EXCEPTIONS=0`, and do not
+  stamp a partial download. SME-01 archives Linux tests-only 53/53 at `d51b0287`
+  under `docs/evidence/` plus the living `docs/sme-oob-checklist.md`.
+
+> `install_deps.sh` 的 toml++ 改为限时下载到暂存文件、拒绝残片（&lt;17000 行）、
+> 始终保证 `TOML_EXCEPTIONS=0`，不对半截下载盖 stamp。SME-01 在 `docs/evidence/`
+> 归档了 Linux tests-only 53/53（`d51b0287`），并加入活清单 `docs/sme-oob-checklist.md`。
+
 - Release workflow lowercases `github.repository` for GHCR image paths so
   `ghcr.io/maybeshewill-cv/mortred_model_server` matches docs (uppercase owner
   refs are illegal). Bootstrap refuses install when a published `.sha256` does
