@@ -596,8 +596,10 @@ def check_release_ghcr_lowercase() -> list[str]:
 def check_ci_convert_trt_dry_run_contract() -> list[str]:
     """CI mock-trtexec dry-run must stay aligned with convert_trt_engines.sh.
 
-    Round-1 / SME-03: a green check_consistency must not coexist with a CI step
-    that still greps --buildOnly while TRT>=9 emits --skipInference.
+    SME-16 / Round-3: product pin is TensorRT 10.x only. convert_trt_engines.sh
+    must set BUILD_FLAG=--skipInference unconditionally (no TRT8 --buildOnly
+    branch, no TRT_MAJOR -ge 9 fork) and refuse major < 10. CI must still grep
+    --skipInference and fail if --buildOnly appears.
     """
     errors: list[str] = []
     script = ROOT / "scripts" / "convert_trt_engines.sh"
@@ -610,13 +612,24 @@ def check_ci_convert_trt_dry_run_contract() -> list[str]:
         return errors
 
     script_text = script.read_text(encoding="utf-8")
-    if not re.search(
-        r'if \[ "\$TRT_MAJOR" -ge 9 \]; then[\s\S]{0,500}?BUILD_FLAG="--skipInference"',
-        script_text,
-    ):
+    if 'BUILD_FLAG="--skipInference"' not in script_text:
         errors.append(
-            "scripts/convert_trt_engines.sh: TRT_MAJOR>=9 path must set "
-            'BUILD_FLAG="--skipInference"'
+            'scripts/convert_trt_engines.sh: must set BUILD_FLAG="--skipInference"'
+        )
+    if re.search(r'BUILD_FLAG="--buildOnly"', script_text):
+        errors.append(
+            'scripts/convert_trt_engines.sh: must not set BUILD_FLAG="--buildOnly" '
+            '(TRT 8 path removed; product line is TensorRT 10.x only)'
+        )
+    if re.search(r'\$TRT_MAJOR"\s+-ge\s+9', script_text):
+        errors.append(
+            "scripts/convert_trt_engines.sh: must not keep TRT_MAJOR -ge 9 fork "
+            "(SME-16: unconditional TRT 10.x flags)"
+        )
+    if not re.search(r'\$TRT_MAJOR"\s+-lt\s+10', script_text):
+        errors.append(
+            "scripts/convert_trt_engines.sh: must refuse TensorRT major < 10 "
+            'via [ "$TRT_MAJOR" -lt 10 ]'
         )
 
     ci_text = ci.read_text(encoding="utf-8")
@@ -639,6 +652,10 @@ def check_ci_convert_trt_dry_run_contract() -> list[str]:
     ):
         errors.append(
             ".github/workflows/ci.yml: mock dry-run step must fail if --buildOnly appears"
+        )
+    if "TRT_VERSION_MAJOR=8" not in step:
+        errors.append(
+            ".github/workflows/ci.yml: mock step must assert TRT_VERSION_MAJOR=8 fails"
         )
     if "TensorRT version: 10." not in step:
         errors.append(
