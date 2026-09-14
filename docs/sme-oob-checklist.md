@@ -9,7 +9,7 @@
 | ID | 状态 | 事项 | 验收 |
 |---|---|---|---|
 | SME-14 | main @ b0c96f5 | docs/evidence/sme-14-golden-drift-ci-20260914.md |
-| SME-16 | main @ (pending) | docs/evidence/sme-16-convert-trt10-gate-20260914.md |
+| SME-16 | main @ 39a6b68 | docs/evidence/sme-16-convert-trt10-gate-20260914.md |
 | SME-13 | main @ 4a956a9 | docs/evidence/sme-13-zombie-comments-20260914.md |
 | SME-12 | main @ 8798a0c | docs/evidence/sme-12-unsupported-boundaries-20260914.md |
 | SME-11 | main @ e66d8ed | docs/evidence/sme-11-oob-main-path-20260914.md |
