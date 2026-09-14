@@ -10,7 +10,7 @@
 |---|---|---|---|
 | SME-01 | DONE | WSL 归档全量 `tests-only`（+ 实际售卖 profile 的关键 GPU smoke） | 有可复现命令、退出码、失败清单 |
 | SME-02 | DONE | 官方最短成功路径跑通并写入主航道文档：`install_deps` → 三 token →（GPU）`convert_trt` → `doctor --strict` → 一次推理 | 新人按文档能跟到绿 |
-| SME-03 | DOING | `check_consistency`（或独立 checker）锁住 `ci.yml` dry-run/mock 契约 | 故意改错 CI 断言会被门禁抓住 |
+| SME-03 | DONE | `check_consistency`（或独立 checker）锁住 `ci.yml` dry-run/mock 契约 | 故意改错 CI 断言会被门禁抓住 |
 | SME-04 | TODO | 发版 dry-run：GHCR 小写、tarball+`.sha256`、bootstrap mismatch 拒装 | 预发或本地演练通过 |
 | SME-05 | TODO | `pack_file`：接线 `apply_pack` **或** 删掉/改诚实声称 | 配置与行为一致 |
 | SME-06 | TODO | supervisor start/stop/restart 失败非恒 HTTP 200（或文档+客户端统一只认 body） | 监控/脚本可依赖约定 |
@@ -24,7 +24,7 @@
 
 ## 当前焦点
 
-- **Next:** `SME-03` (DOING)
+- **Next:** `SME-04`
 - **Notes:** Round-2 基线综合 8.0 / 开箱 6.8；企业开箱仍否。CHANGELOG 仅参考，以源码为准。
 
 ## 完成记录
