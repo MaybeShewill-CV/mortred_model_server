@@ -16,6 +16,8 @@
 #   ./scripts/convert_trt_engines.sh --check-engines  # only verify existing engines (exist + non-empty)
 #   ./scripts/convert_trt_engines.sh --dry-run        # only print the commands that would run
 #   ./scripts/convert_trt_engines.sh --trtexec /path/to/trtexec
+#   TRT_VERSION_MAJOR=10 ./scripts/convert_trt_engines.sh --dry-run   # when trtexec cannot be probed
+# Product line: TensorRT 10.x only (TRT_VERSION_MAJOR < 10 is refused).
 #
 # trtexec lookup order: $TRTEXEC (env/--trtexec) → 3rd_party/bin/trtexec
 #                  (installed by install_deps.sh --nvidia) → PATH → /usr/src/tensorrt/bin/trtexec
@@ -141,7 +143,7 @@ if [ "$MODE" = "check-engines" ]; then
     exit 0
 fi
 
-# ---- Resolve trtexec (required for convert mode; dry-run falls back to TRT 8 syntax if missing) ----
+# ---- Resolve trtexec (required for convert; dry-run may omit it only if TRT_VERSION_MAJOR=10 is set) ----
 if [ -z "$TRTEXEC" ]; then
     for cand in "$ROOT/3rd_party/bin/trtexec" \
                 "$(command -v trtexec 2>/dev/null || true)" \
@@ -168,37 +170,47 @@ if [[ "$TRTEXEC" == "$ROOT/3rd_party/"* ]]; then
 fi
 [ -n "$extra_lib_path" ] && export LD_LIBRARY_PATH="${extra_lib_path}:${LD_LIBRARY_PATH:-}"
 
-# ---- Detect TRT major version: 10.x uses --memPoolSize=workspace:<size> ----
-TRT_MAJOR="${TRT_VERSION_MAJOR:-}"
+# ---- Detect TRT major version (product pin: TensorRT 10.x only, SME-16) ----
+# TRT_VERSION_MAJOR is an explicit override when the trtexec banner cannot be
+# parsed — it does NOT exempt major < 10. There is no silent dry-run fallback.
+TRT_MAJOR_OVERRIDE="${TRT_VERSION_MAJOR:-}"
+TRT_MAJOR=""
 trt_probe=""
-if [ -z "$TRT_MAJOR" ] && [ -n "$TRTEXEC" ]; then
+if [ -n "$TRT_MAJOR_OVERRIDE" ]; then
+    TRT_MAJOR="$TRT_MAJOR_OVERRIDE"
+elif [ -n "$TRTEXEC" ]; then
     trt_probe="$("$TRTEXEC" --help 2>&1 || true)"
-    TRT_MAJOR="$(printf '%s\n' "$trt_probe" | grep -m1 -oE 'version:?[[:space:]]*[0-9]+' | grep -oE '[0-9]+$' || true)"
+    # Prefer "TensorRT version: 10.3.0.26" (CI mock / some builds); else
+    # "[TensorRT v100300]" from real trtexec (major = leading digits: 6+ → 2, else 1).
+    TRT_MAJOR="$(printf '%s\n' "$trt_probe" | grep -m1 -oE 'version:?[[:space:]]*[0-9]+(\.[0-9]+)*' | grep -oE '[0-9]+' | head -1 || true)"
+    if [ -z "$TRT_MAJOR" ]; then
+        _enc="$(printf '%s\n' "$trt_probe" | grep -m1 -oE 'TensorRT[[:space:]]+v[0-9]+' | grep -oE '[0-9]+$' || true)"
+        if [ -n "$_enc" ]; then
+            if [ "${#_enc}" -ge 6 ]; then
+                TRT_MAJOR="${_enc:0:2}"
+            else
+                TRT_MAJOR="${_enc:0:1}"
+            fi
+        fi
+        unset _enc
+    fi
 fi
 if [ -z "$TRT_MAJOR" ]; then
-    if [ "$MODE" = "dry-run" ]; then
-        TRT_MAJOR=10
-        echo "[warn] dry-run: cannot detect TRT version, emitting 10.x --memPoolSize syntax (override with TRT_VERSION_MAJOR)" >&2
-    else
-        # surface WHY the probe failed (loader error, exec error, odd banner)
+    if [ -n "$TRTEXEC" ]; then
         echo "---- $TRTEXEC --help output (first 8 lines) ----" >&2
         printf '%s\n' "$trt_probe" | head -n 8 >&2
         echo "------------------------------------------------" >&2
-        fail "cannot detect TRT version (set TRT_VERSION_MAJOR or use the correct trtexec)"
     fi
+    fail "cannot detect TensorRT major version (need a probeable trtexec, or set TRT_VERSION_MAJOR=10 for dry-run without trtexec). Product line is TensorRT 10.x only — install via: sudo ./scripts/install_deps.sh --nvidia"
 fi
-
-size_to_bytes() {
-    local s="$1" n u
-    n="${s%[KkMmGg]}"
-    u="${s: -1}"
-    case "$u" in
-        K|k) echo $((n*1024)) ;;
-        M|m) echo $((n*1024*1024)) ;;
-        G|g) echo $((n*1024*1024*1024)) ;;
-        *) echo "$n" ;;
-    esac
-}
+case "$TRT_MAJOR" in
+    ''|*[!0-9]*)
+        fail "invalid TensorRT major '$TRT_MAJOR' (TRT_VERSION_MAJOR must be an integer >= 10)"
+        ;;
+esac
+if [ "$TRT_MAJOR" -lt 10 ]; then
+    fail "TensorRT major $TRT_MAJOR is not supported (product line is TensorRT 10.x only; leftover 8/9 are out of scope). Install the pinned stack: sudo ./scripts/install_deps.sh --nvidia"
+fi
 
 # trtexec 10.x's --memPoolSize parser only accepts KiB/MiB/GiB base-2 suffixes
 # (a bare number means MiB); the 8.x-style "6G" form fails to parse.
@@ -318,15 +330,10 @@ except (ValueError, IndexError) as e:
 PY
 }
 
-if [ "$TRT_MAJOR" -ge 9 ]; then
-    # TRT 10 removed --buildOnly; --skipInference is its replacement. The
-    # banner of trtexec 10.3 lists exactly: --skipInference / KiB|MiB|GiB.
-    WS_FLAG="--memPoolSize=workspace:$(ws_to_trt10_units "$WORKSPACE_STR")"
-    BUILD_FLAG="--skipInference"
-else
-    WS_FLAG="--workspace=$(size_to_bytes "$WORKSPACE_STR")"
-    BUILD_FLAG="--buildOnly"
-fi
+# Flags for TensorRT 10.x only (--buildOnly / bare --workspace are TRT 8).
+# Banner of trtexec 10.3 lists: --skipInference / KiB|MiB|GiB.
+WS_FLAG="--memPoolSize=workspace:$(ws_to_trt10_units "$WORKSPACE_STR")"
+BUILD_FLAG="--skipInference"
 
 converted=0; skipped=0; missing_onnx=0; failed=0
 declare -a failed_models=()

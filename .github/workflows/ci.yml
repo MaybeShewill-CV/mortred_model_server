@@ -608,6 +608,19 @@ jobs:
           bash scripts/convert_trt_engines.sh --list | grep -q "total: 19"
           # 2) --dry-run flag composition: fp16 + TRT10 memPoolSize + skipInference
           out="$(TRTEXEC="$TMP/trtexec" bash scripts/convert_trt_engines.sh --only ddpm_unet_celeba-hq-128 --force --dry-run)"
+          # SME-16: env override cannot exempt major < 10
+          if TRT_VERSION_MAJOR=8 TRTEXEC="$TMP/trtexec" bash scripts/convert_trt_engines.sh --only ddpm_unet_celeba-hq-128 --force --dry-run; then
+            echo "expected non-zero exit when TRT_VERSION_MAJOR=8" >&2; exit 1
+          fi
+          # SME-16: real trtexec banner form "[TensorRT v100300]" must parse major=10
+          cat > "$TMP/trtexec_vcode" <<'MOCK'
+          #!/usr/bin/env bash
+          echo "&&&& RUNNING TensorRT.trtexec [TensorRT v100300] # mock"
+          exit 0
+          MOCK
+          chmod +x "$TMP/trtexec_vcode"
+          out_v="$(TRTEXEC="$TMP/trtexec_vcode" bash scripts/convert_trt_engines.sh --only ddpm_unet_celeba-hq-128 --force --dry-run)"
+          echo "$out_v" | grep -q -- "--memPoolSize=workspace:" || { echo "v100300 banner must yield TRT10 flags" >&2; exit 1; }
           echo "$out" | grep -q -- "--fp16"
           echo "$out" | grep -q -- "--memPoolSize=workspace:"
           if echo "$out" | grep -q -- "--workspace="; then
