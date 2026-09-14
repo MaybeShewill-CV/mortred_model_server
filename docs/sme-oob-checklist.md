@@ -8,6 +8,7 @@
 
 | ID | 状态 | 事项 | 验收 |
 |---|---|---|---|
+| SME-08 | main (pending) | docs/evidence/sme-08-write-slot-epoch-20260914.md |
 | SME-07 | main @ 4cfe6e5 | docs/evidence/sme-07-auth-before-rate-limit-20260914.md |
 | SME-06 | main @ 6e1b7d1 | docs/evidence/sme-06-action-http-status-20260914.md |
 | SME-05 | main @ 1ebf4b4 | docs/evidence/sme-05-pack-file-apply-20260914.md |
@@ -19,7 +20,7 @@
 | SME-05 | DONE | `pack_file`：接线 `apply_pack` **或** 删掉/改诚实声称 | 配置与行为一致 |
 | SME-06 | DONE | supervisor start/stop/restart 失败非恒 HTTP 200（或文档+客户端统一只认 body） | 监控/脚本可依赖约定 |
 | SME-07 | DONE | 限流 vs 鉴权顺序：定产品意图并改代码或文档 | 行为与文档一致 |
-| SME-08 | DOING | 修 `write_slot` 并发写 / `submit`–`stop` TOCTOU | 有单测或明确竞态门闩 |
+| SME-08 | DONE | 修 `write_slot` 并发写 / `submit`–`stop` TOCTOU | 有单测或明确竞态门闩 |
 | SME-09 | TODO | 批路径尊重剩余 deadline（与 HTTP timer 对齐） | 504 后不长时间占 worker |
 | SME-10 | TODO | 干净机文档入口与 CMake 硬前置继续对齐（workflow/crypto/ORT 头等） | 干净树 configure 不踩已知坑 |
 | SME-11 | TODO | 开箱收成**一条**主航道（三 token / listen / pack 校准；失败时给出下一条命令） | 只跟一条路径即可 |
@@ -28,7 +29,7 @@
 
 ## 当前焦点
 
-- **Next:** `SME-08` (DOING)
+- **Next:** `SME-09`
 - **Notes:** Round-2 基线综合 8.0 / 开箱 6.8；企业开箱仍否。CHANGELOG 仅参考，以源码为准。
 
 ## 完成记录
