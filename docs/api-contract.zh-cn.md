@@ -22,6 +22,7 @@ token 相同）时启动。模型端口仅绑定环回地址、不得对外暴�
 以及未设 `MORTRED_EXPOSE=docker` 或 `unsafe` 的通配绑定。
 
 监督器（supervisor，`:8787`）在 `/api/v1/` 下提供管理 REST API
+`POST /api/v1/servers/{id}/start|stop|restart` 成功返回 **200** + `{"ok":true}`，失败返回 **500** + `{"ok":false,"error":...}`（与 `graceful_restart` 一致）。客户端可依赖 HTTP 状态或 body 的 `ok`。
 （health/catalog/status/生命周期/日志/metrics）与内嵌 Web UI；
 `mortredctl` 是它的命令行客户端。**推理冒烟**（控制台发送按钮和
 `mortredctl infer`）把数据面信封 POST 到网关的

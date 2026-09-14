@@ -15,7 +15,7 @@
 | SME-03 | DONE | `check_consistency`（或独立 checker）锁住 `ci.yml` dry-run/mock 契约 | 故意改错 CI 断言会被门禁抓住 |
 | SME-04 | DONE | 发版 dry-run：GHCR 小写、tarball+`.sha256`、bootstrap mismatch 拒装 | 预发或本地演练通过 |
 | SME-05 | DONE | `pack_file`：接线 `apply_pack` **或** 删掉/改诚实声称 | 配置与行为一致 |
-| SME-06 | TODO | supervisor start/stop/restart 失败非恒 HTTP 200（或文档+客户端统一只认 body） | 监控/脚本可依赖约定 |
+| SME-06 | DOING | supervisor start/stop/restart 失败非恒 HTTP 200（或文档+客户端统一只认 body） | 监控/脚本可依赖约定 |
 | SME-07 | TODO | 限流 vs 鉴权顺序：定产品意图并改代码或文档 | 行为与文档一致 |
 | SME-08 | TODO | 修 `write_slot` 并发写 / `submit`–`stop` TOCTOU | 有单测或明确竞态门闩 |
 | SME-09 | TODO | 批路径尊重剩余 deadline（与 HTTP timer 对齐） | 504 后不长时间占 worker |
@@ -26,7 +26,7 @@
 
 ## 当前焦点
 
-- **Next:** `SME-06`
+- **Next:** `SME-06` (DOING)
 - **Notes:** Round-2 基线综合 8.0 / 开箱 6.8；企业开箱仍否。CHANGELOG 仅参考，以源码为准。
 
 ## 完成记录

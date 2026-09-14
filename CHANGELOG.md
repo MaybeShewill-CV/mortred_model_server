@@ -31,6 +31,7 @@ All notable changes to this project are documented here. The format follows
 > 已链入），以及 SME-02 evidence（`docs/evidence/`）。
 
 ### Fixed
+- **SME-06:** `POST /api/v1/servers/{id}/start|stop|restart` returns HTTP **500** (with `ok:false`) on failure instead of always 200; aligns with `graceful_restart`. UI treats non-2xx as failure.
 - **SME-05:** Supervisor applies `[supervisor].pack_file` from `mortred.toml` via `ControlConfig::apply_pack` when `MORTRED_PACK` is unset (`resolve_pack_path`: env/CLI wins). Docs/comments matched behavior.
 - **SME-04:** `scripts/release_dry_run.sh` locally verifies GHCR IMAGE lowercase, tarball+basename `.sha256`, and bootstrap mismatch refuse; `check_consistency` gates `release.yml` lowercase IMAGE construction.
 - **SME-03:** `scripts/check_consistency.py` gates the `ci.yml` mock-trtexec dry-run contract against `convert_trt_engines.sh` (require `--skipInference`, reject `--buildOnly`, TensorRT 10.x mock banner).

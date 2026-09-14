@@ -226,6 +226,30 @@ TEST_F(SupervisorMultiInstanceTest, start_stop_restart_return_json_ok) {
     EXPECT_NE(body.find("\"ok\""), std::string::npos) << body;
 }
 
+
+TEST_F(SupervisorMultiInstanceTest, failed_start_stop_return_http_500) {
+    // stop while idle -> business failure; HTTP must not stay green (SME-06).
+    std::string body;
+    ASSERT_EQ(http_status(a_.port, "POST", "/api/v1/servers/SUPER_A/stop", a_.token, &body, "{}"),
+              500);
+    EXPECT_NE(body.find("\"ok\":false"), std::string::npos) << body;
+    EXPECT_NE(body.find("error"), std::string::npos) << body;
+
+    body.clear();
+    ASSERT_EQ(http_status(a_.port, "POST", "/api/v1/servers/SUPER_A/start", a_.token, &body, "{}"),
+              200);
+    body.clear();
+    // second start while running/starting -> 500 + ok:false
+    ASSERT_EQ(http_status(a_.port, "POST", "/api/v1/servers/SUPER_A/start", a_.token, &body, "{}"),
+              500);
+    EXPECT_NE(body.find("\"ok\":false"), std::string::npos) << body;
+
+    body.clear();
+    ASSERT_EQ(http_status(a_.port, "POST", "/api/v1/servers/SUPER_A/stop", a_.token, &body, "{}"),
+              200);
+}
+
+
 TEST_F(SupervisorMultiInstanceTest, logs_are_json_for_known_server) {
     std::string body;
     ASSERT_EQ(http_status(a_.port, "GET", "/api/v1/servers/SUPER_A/logs", a_.token, &body), 200);

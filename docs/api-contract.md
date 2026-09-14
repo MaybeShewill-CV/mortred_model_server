@@ -27,6 +27,7 @@ auth, a missing metrics token, and a wildcard bind unless
 
 The supervisor (`:8787`) exposes the management REST API under `/api/v1/`
 (health/catalog/status/lifecycle/logs/metrics) and the embedded web UI;
+`POST /api/v1/servers/{id}/start|stop|restart` returns **200** with `{"ok":true}` on success and **500** with `{"ok":false,"error":...}` on failure (same contract as `graceful_restart`). Clients may rely on the HTTP status or the body `ok` field.
 `mortredctl` is its CLI client. **Inference smoke tests** (the Web UI send
 button and `mortredctl infer`) POST the data-plane envelope to
 `POST /v1/models/{id}/infer` on the gateway, with the same Bearer token as

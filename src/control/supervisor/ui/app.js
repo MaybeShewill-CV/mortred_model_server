@@ -202,12 +202,14 @@ function renderServerList() {
 }
 
 async function controlServer(id, action) {
-  const { data } = await api(`/api/v1/servers/${encodeURIComponent(id)}/${action}`, { method: "POST" });
+  const { ok: httpOk, data } = await api(`/api/v1/servers/${encodeURIComponent(id)}/${action}`, { method: "POST" });
   const s = serverById(id);
   const label = s ? s.name : id;
   const zh = { start: "启动", stop: "停止", restart: "重启" }[action] || action;
-  if (data && data.ok === false) {
-    showToast(`${zh}失败：${data.error || "未知错误"}`, "error");
+  const failed = !httpOk || (data && data.ok === false);
+  if (failed) {
+    const err = (data && data.error) || "未知错误";
+    showToast(`${zh}失败：${err}`, "error");
   } else {
     showToast(`已${zh} ${label}`, "success");
   }

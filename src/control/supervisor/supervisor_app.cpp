@@ -292,7 +292,9 @@ void SupervisorApp::handle_server_action(WFHttpTask* task, const std::string& id
     if (!err.empty()) {
         d.AddMember("error", rapidjson::Value(err.c_str(), err.size(), a), a);
     }
-    reply_json(task, 200, serialize(d));
+    // Match graceful_restart: body always carries ok/error; HTTP mirrors success
+    // so monitors/curl -f do not treat failed start/stop/restart as green.
+    reply_json(task, ok ? 200 : 500, serialize(d));
 }
 
 void SupervisorApp::handle_logs(WFHttpTask* task, const std::string& id,
