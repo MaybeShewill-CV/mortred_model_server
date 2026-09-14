@@ -43,6 +43,7 @@ Authorization: Bearer <token>
 ```
 
 - 缺失或错误的 token：`401` + `WWW-Authenticate: Bearer realm="Mortred"`。
+- 模型端口请求门顺序（SME-07）：公开 `/healthz` `/ready` `/openapi.json`（不受 `rate_limit_qps`）；再 Bearer 鉴权（失败 **401**）；再按 IP 的 `rate_limit_qps`（**429**）。未鉴权流量不消耗该 IP 的 QPS 配额。
 - 健康/元数据端点（`/healthz`、`/ready`、`/openapi.json`）公开。
   监督器 `GET /api/v1/metrics` 需要管理 token。网关 `GET /metrics` **含环回**
   一律要 `MORTRED_METRICS_TOKEN`。模型进程的 `GET /metrics` 需要进程鉴权

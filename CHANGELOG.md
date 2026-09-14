@@ -31,6 +31,7 @@ All notable changes to this project are documented here. The format follows
 > 已链入），以及 SME-02 evidence（`docs/evidence/`）。
 
 ### Fixed
+- **SME-07:** Model `serve_process` authenticates before per-IP `rate_limit_qps`; `/healthz` `/ready` `/openapi.json` are exempt. Unauthenticated callers get **401** (not **429**) and do not burn the IP budget.
 - **SME-06:** `POST /api/v1/servers/{id}/start|stop|restart` returns HTTP **500** (with `ok:false`) on failure instead of always 200; aligns with `graceful_restart`. UI treats non-2xx as failure.
 - **SME-05:** Supervisor applies `[supervisor].pack_file` from `mortred.toml` via `ControlConfig::apply_pack` when `MORTRED_PACK` is unset (`resolve_pack_path`: env/CLI wins). Docs/comments matched behavior.
 - **SME-04:** `scripts/release_dry_run.sh` locally verifies GHCR IMAGE lowercase, tarball+basename `.sha256`, and bootstrap mismatch refuse; `check_consistency` gates `release.yml` lowercase IMAGE construction.

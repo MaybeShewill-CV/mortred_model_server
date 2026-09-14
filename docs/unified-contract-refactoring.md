@@ -60,7 +60,7 @@
 mortred-gateway（:8080，Content-Type/Accept 原样透传 + 内部 token）
    ▼
 模型服务进程（loopback）
-   ├─ serve_process：限流→鉴权→编码三分支→严格信封解析(422)→item 上限(413)
+   ├─ serve_process：鉴权→限流→编码三分支→严格信封解析(422)→item 上限(413)
    │   →按 item 背压(429+Retry-After)→deadline 打点→WFGoTask
    ├─ 单请求路径：一次 worker 领取跑完全部 items（逐项查预算）
    ├─ 批路径：每 item 一个 batch_entry + request_state 闩（跨请求打包同一引擎批）
@@ -323,7 +323,7 @@ def infer_raw(host, port, uri, token, image_path, params=None):
 1. **先看 HTTP，再看 `status`，最后逐项看 `results[i].status`**
 2. `results[i].data` 在该项失败时为 `null`——逐项判空，不要假设整包一致
 3. `partial: true` 表示 deadline 中途耗尽：已完成项可用，未完成项 `status=4`；业务可凭 `task_id` 重试缺失项
-4. 429 时读 `Retry-After` 头（秒）；注意**全端口按 IP 限流**（含健康检查）
+4. 429 时读 `Retry-After` 头（秒）；注意**已鉴权请求按 IP 限流**（`/healthz` `/ready` `/openapi.json` 豁免；SME-07）
 5. 422 时解析 `errors[].pointer` 定位字段——这是机器可读的排障入口
 6. **忽略未知响应字段**（客户端第一守则）：服务端只做附加演进，新字段随时可能出现
 

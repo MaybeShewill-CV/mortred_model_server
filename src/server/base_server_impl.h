@@ -318,14 +318,12 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
     if (request_method == nullptr) {
         request_method = "";
     }
-    if (_m_rate_limit_qps > 0 && !_m_rate_limiter.allow(peer_ip_of(task))) {
-        _m_metrics.inc_http_requests(request_method, "429");
-        reply_rate_limited(task, _m_model_name);
-        return;
-    }
-    bool is_health_endpoint = strcmp(request_uri, "/healthz") == 0 ||
-                              strcmp(request_uri, "/ready") == 0 ||
-                              strcmp(request_uri, "/openapi.json") == 0;
+    // SME-07 intent A: public health/metadata first; auth before IP QPS so
+    // unauthenticated traffic gets 401 (not 429) and cannot burn the IP budget.
+    // /healthz /ready /openapi.json are exempt from rate_limit_qps.
+    const bool is_health_endpoint = strcmp(request_uri, "/healthz") == 0 ||
+                                    strcmp(request_uri, "/ready") == 0 ||
+                                    strcmp(request_uri, "/openapi.json") == 0;
     const bool is_async_endpoint = _m_async_enabled &&
                                    strncmp(request_uri, "/jobs", 5) == 0 &&
                                    (request_uri[5] == '\0' || request_uri[5] == '/');
@@ -334,6 +332,12 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
             authorization_header_of(task->get_req()), _m_auth_token)) {
         _m_metrics.inc_http_requests(request_method, "401");
         reply_unauthorized(task, _m_model_name);
+        return;
+    }
+    if (!is_health_endpoint && _m_rate_limit_qps > 0 &&
+        !_m_rate_limiter.allow(peer_ip_of(task))) {
+        _m_metrics.inc_http_requests(request_method, "429");
+        reply_rate_limited(task, _m_model_name);
         return;
     }
 

@@ -48,6 +48,7 @@ Authorization: Bearer <token>
 ```
 
 - Missing or invalid token: `401` + `WWW-Authenticate: Bearer realm="Mortred"`.
+- Request gate order on model ports (SME-07): public `/healthz` `/ready` `/openapi.json` first (no `rate_limit_qps`); then Bearer auth (**401** if missing/invalid); then per-IP `rate_limit_qps` (**429**). Unauthenticated traffic does not consume the IP QPS budget.
 - Health/metadata endpoints (`/healthz`, `/ready`, `/openapi.json`) are public.
   Supervisor `GET /api/v1/metrics` requires the management token. Gateway
   `GET /metrics` requires `MORTRED_METRICS_TOKEN` on every listen, including

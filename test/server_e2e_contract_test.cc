@@ -701,6 +701,34 @@ TEST(server_e2e_contract, rate_limited_returns_429) {
     expect_process_envelope(doc, 429);
 }
 
+
+TEST(server_e2e_contract, unauthenticated_stays_401_under_rate_limit) {
+    // SME-07: auth before IP QPS — missing token must not consume the limiter
+    // or surface as 429.
+    ServerHandle handle = start_server("rate_limit_qps=1\n");
+    const std::string body = "{\"images\":[\"aGVsbG8=\"]}";
+    for (int i = 0; i < 5; ++i) {
+        auto resp = send_request(handle.port, "POST", "/test/model", body,
+                                 {{"Content-Type", "application/json"}});
+        EXPECT_EQ(resp.status, 401) << "iter=" << i << " body=" << resp.body;
+    }
+    // A subsequent authorized request still gets a full QPS budget.
+    auto ok = send_request(handle.port, "POST", "/test/model", body, k_json_auth_headers);
+    EXPECT_EQ(ok.status, 200) << ok.body;
+}
+
+TEST(server_e2e_contract, healthz_exempt_from_ip_rate_limit) {
+    ServerHandle handle = start_server("rate_limit_qps=1\n");
+    const std::string body = "{\"images\":[\"aGVsbG8=\"]}";
+    ASSERT_EQ(send_request(handle.port, "POST", "/test/model", body, k_json_auth_headers).status,
+              200);
+    ASSERT_EQ(send_request(handle.port, "POST", "/test/model", body, k_json_auth_headers).status,
+              429);
+    auto health = send_request(handle.port, "GET", "/healthz", "", {});
+    EXPECT_EQ(health.status, 200) << health.body;
+}
+
+
 TEST(server_e2e_contract, model_timeout_returns_504) {
     ServerHandle handle = start_server("model_run_timeout=100\nfake_delay_ms=1000\n");
     auto resp = send_request(handle.port, "POST", "/test/model",
