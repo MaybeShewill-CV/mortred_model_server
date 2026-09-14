@@ -280,11 +280,7 @@ python3 scripts/server/test_server.py --server mobilenetv2 --mode single --times
 
 # `模型说明`
 
-* [图像分类服务部署说明与示例](./docs/tutorials_of_classification_model_server.zh-cn.md)
-* [图像分割服务部署说明与示例](./docs/tutorials_of_segmentation_model_server.zh-cn.md)
-* [图像目标检测服务部署说明与示例](./docs/tutorials_of_object_detection_model_server.zh-cn.md)
-* [图像增强服务部署说明与示例](./docs/tutorials_of_enhancement_model_server.zh-cn.md)
-* [图像特征点检测服务部署说明与示例](./docs/tutorials_of_feature_point_model_server.zh-cn.md)
+* [模型服务教程（分类 / 检测 / 分割 / 增强 / 特征点合并）](./docs/tutorials_of_model_servers.zh-cn.md)
 
 # `文档教程`
 
