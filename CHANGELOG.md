@@ -33,6 +33,7 @@ All notable changes to this project are documented here. The format follows
 > 已链入），以及 SME-02 evidence（`docs/evidence/`）。
 
 ### Fixed
+- **SME-13:** Drop zombie `web_console` / `ServerManager` claims from `CMakeLists.txt`, `test/ready_probe_unittest.cc`, and `scripts/clean_artifacts.sh` (those apps are gone; `_bin`/`_lib` and `ready_probe` belong to supervisor/control).
 - **SME-10:** CMake configure fail-closed for full builds: require vendored workflow; assert ONNX Runtime headers `ORT_API_VERSION==29` and refuse leftover `libonnxruntime.so.1.18*`; FATAL fix lines are profile-aware (`--cpu --all` / `--all`) and match `install_deps --check`. README / shortest-path-cpu / deployment §7 document `--check` before cmake.
 - **SME-09:** Batch collector honors per-request `deadline` (same clock as the HTTP timer): expired entries TIMEOUT without checkout; checkout wait is `min(config, min remaining deadline)`; re-check after pool wait. In-flight `run_batch` is not cancelled mid-run.
 - **SME-08:** `write_slot` uses lock-free claim→write→publish (no dual writers on `outputs`); `submit`/`stop` use `_accepting`+epoch recheck with TIMEOUT fixup (no new mutex). Concurrent unit tests cover same-index races and submit/stop TOCTOU.

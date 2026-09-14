@@ -5,9 +5,8 @@
 # This script is intended to be run by a developer or CI before packaging/submitting.
 # It removes:
 #   - _bin, _lib
-#   - all build-* / cmake-build-* directories
+#   - common CMake build directories (build, build-*, cmake-build-*)
 #   - logs
-#   - Web Console backend build directory
 #
 # It does NOT remove downloaded model weights under weights/ because they may be
 # intentionally kept locally, but they are already ignored by .gitignore.
@@ -28,7 +27,6 @@ TARGETS=(
   "cmake-build-debug"
   "cmake-build-release"
   "logs"
-  "src/apps/web_console/backend/build"
 )
 
 for target in "${TARGETS[@]}"; do

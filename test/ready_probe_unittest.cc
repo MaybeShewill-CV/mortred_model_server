@@ -3,8 +3,8 @@
  * File: ready_probe_unittest.cc
  * Date: 2026-08-19
  *
- * ServerManager readiness probe contract: HTTP GET /ready, 2xx = ready;
- * non-2xx / connection refused / timeout all mean not ready.
+ * Supervisor/control readiness probe contract (control/ready_probe.h):
+ * HTTP GET /ready, 2xx = ready; non-2xx / connection refused / timeout = not ready.
  ************************************************/
 
 #include <arpa/inet.h>

@@ -28,7 +28,7 @@ message(STATUS "\tProcessor: ${CMAKE_SYSTEM_PROCESSOR}")
 message(STATUS "\tBuild Path: ${CMAKE_CURRENT_BINARY_DIR}")
 message(STATUS "\tBuild Type: ${CMAKE_BUILD_TYPE}")
 
-# Output dirs configurable; default to legacy _bin/_lib layout (web_console/ServerManager depends on it)
+# Output dirs configurable; default _bin/_lib layout used by runtime binaries, mortredctl, and scripts
 set(MORTRED_BIN_OUTPUT_DIR ${PROJECT_ROOT_DIR}/_bin CACHE PATH "Executable output directory")
 set(MORTRED_LIB_OUTPUT_DIR ${PROJECT_ROOT_DIR}/_lib CACHE PATH "Shared library output directory")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${MORTRED_BIN_OUTPUT_DIR})

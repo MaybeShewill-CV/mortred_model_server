@@ -29,11 +29,11 @@
 | SME-10 | DONE | 干净机文档入口与 CMake 硬前置继续对齐（workflow/crypto/ORT 头等） | 干净树 configure 不踩已知坑 |
 | SME-11 | DONE | 开箱收成**一条**主航道（三 token / listen / pack 校准；失败时给出下一条命令） | 只跟一条路径即可 |
 | SME-12 | DONE | 写清不支持边界（RTDETR、Linux-only、必须重建 engine、TRT 10 only / 非 8·9） | 无假期待 |
-| SME-13 | TODO | 删 zombie 注释（如 `web_console` / `ServerManager`） | 源码无过时声称 |
+| SME-13 | DOING | 删 zombie 注释（如 `web_console` / `ServerManager`） | 源码无过时声称 |
 
 ## 当前焦点
 
-- **Next:** `SME-13`
+- **Next:** `SME-13` (DOING)
 - **Notes:** Round-2 基线综合 8.0 / 开箱 6.8；企业开箱仍否。CHANGELOG 仅参考，以源码为准。
 
 ## 完成记录
