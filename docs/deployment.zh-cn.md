@@ -1,3 +1,5 @@
+> **SME 主航道**（一条路径 + `mortredctl next`）：[oob-main-path.md](oob-main-path.md)。
+>
 # 部署指南（Linux）
 
 > Mortred 仅面向 Linux。本文是[快速开始](../README.md)的完整运维手册：架构、选型决策、

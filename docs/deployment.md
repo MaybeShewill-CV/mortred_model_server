@@ -5,6 +5,8 @@
 > walkthroughs of all three install tracks, the profile system, weights and
 > engine management, security, upgrades/rollback, monitoring and troubleshooting.
 >
+> **SME main path** (one lane + `mortredctl next`): [oob-main-path.md](oob-main-path.md).
+>
 > **After reading this you can**: bring Mortred up on a clean Ubuntu machine in
 > 20 minutes and pass the acceptance gates.
 

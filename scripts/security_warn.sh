@@ -328,7 +328,8 @@ else
 fi
 run_warnings
 if [ "$STRICT" = 1 ] && [ "$WARNED" -gt 0 ]; then
-    echo "[FAIL] $WARNED security warning(s); mortredctl doctor --strict"
+    echo "[FAIL] $WARNED security warning(s)"
+    echo "next: mortredctl next  # or mortredctl init-edge --mode lan / fix tokens"
     exit 1
 fi
 exit 0

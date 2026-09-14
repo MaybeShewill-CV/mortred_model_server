@@ -51,7 +51,8 @@ if [ -f "$PACK" ]; then
     if python3 "$ROOT/scripts/pack_occupancy.py" --project-root "$ROOT" --pack "$PACK" --check; then
         echo "  [ok] occupancy stamps present or pack has no TensorRT backends"
     else
-        echo "  [WARN] pack occupancy gate failed; stop supervisor, then: mortredctl calibrate --pack $PACK --write-pack"
+        echo "  [WARN] pack occupancy gate failed; stop supervisor, then calibrate"
+        echo "next: mortredctl calibrate --pack $PACK --write-pack"
         GATE_FAIL=1
     fi
 else
@@ -63,13 +64,15 @@ if [ -f "$PACK" ]; then
     if python3 "$ROOT/scripts/pack_trt.py" --project-root "$ROOT" --pack "$PACK" --check; then
         echo "  [ok] pack TRT engines present or pack has no TensorRT backends"
     else
-        echo "  [WARN] pack TensorRT engine missing/empty; run mortredctl prepare --pack $PACK"
+        echo "  [WARN] pack TensorRT engine missing/empty"
+        echo "next: mortredctl prepare --pack $PACK"
         GATE_FAIL=1
     fi
 fi
 
 if [ ${#STRICT_ARGS[@]} -gt 0 ] && [ "$GATE_FAIL" -ne 0 ]; then
     echo "[FAIL] mortredctl doctor --strict: pack TRT engines or occupancy stamps missing (or occupancy disabled)"
+    echo "next: mortredctl next"
     exit 1
 fi
 
@@ -83,5 +86,6 @@ else
     "$ROOT/scripts/verify_deployment.sh" --basic
     echo ""
     echo "[FAIL] live checks skipped: start the service first"
+    echo "next: mortredctl next"
     exit 1
 fi

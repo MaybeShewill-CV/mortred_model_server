@@ -3,6 +3,8 @@
 Linux only. Ends at one authenticated inference through the gateway.
 Use when GPU / `install_deps.sh --all` is unavailable.
 
+**Full SME out-of-box lane** (tokens / listen / pack / `doctor`): [oob-main-path.md](oob-main-path.md) + `mortredctl next`. This page is only the source-tree cpu shortcut into that lane.
+
 ## 0. Repo + deps
 
 ```bash

@@ -62,7 +62,6 @@ EOF
 chmod 600 "$OUT"
 
 echo "== trust written: $OUT (mode 600) =="
-echo "next:"
-echo "  set -a && . $OUT && set +a"
-echo "  docker compose: copy the three MORTRED_*_TOKEN values into the environment"
-echo "  do not reuse scrape as inference or management"
+echo "why: three distinct tokens written; do not reuse scrape as inference/management"
+echo "next: set -a && . $OUT && set +a && mortredctl next"
+echo "note: docker compose — copy the three MORTRED_*_TOKEN values into the environment"

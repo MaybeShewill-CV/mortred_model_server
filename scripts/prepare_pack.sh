@@ -24,7 +24,7 @@ usage() {
     exit 0
 }
 
-fail() { echo "[ERROR] $*" >&2; exit 1; }
+fail() { echo "[ERROR] $*" >&2; echo "next: mortredctl next" >&2; exit 1; }
 
 while [ $# -gt 0 ]; do
     case "$1" in

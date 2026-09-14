@@ -8,6 +8,7 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **SME-11:** Single out-of-box main path: `docs/oob-main-path.md` plus `mortredctl next` (`scripts/mortredctl_next.sh`) prints one next command (three tokens → loopback listen tip → start supervisor → pack prepare/calibrate → `doctor --strict`). `init` / `init-trust` / doctor WARN·FAIL / prepare / calibrate emit `next:` lines. README Quick Start points at the main path; other entries are variants.
 - Pack occupancy is fail-closed at supervisor spawn and `mortredctl doctor --strict`.
   TensorRT ids in an active pack need `gpu_mem_mib` from
   `mortredctl calibrate --write-pack` (plus `gpu_mem_at_workers` and a GPU

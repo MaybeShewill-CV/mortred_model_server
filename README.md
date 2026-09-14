@@ -43,6 +43,11 @@ All models and detectors can be downloaded from my [Hugging Face Page](https://h
 
 # `Quick Start`
 
+**SME / first-hour main path:** follow [docs/oob-main-path.md](docs/oob-main-path.md)
+end-to-end. When stuck, run `mortredctl next` (one next command). The three
+entries below are install shapes for that same lane (tokens → loopback listen →
+start → pack calibrate on GPU → `doctor --strict`).
+
 > Linux is the only supported platform. Two deployment profiles exist and one
 > switch drives everything (build, dependencies, model catalog, weight subset):
 >
@@ -99,6 +104,7 @@ sudo systemctl start mortred-supervisor
 ### First-hour core: mortredctl
 
 ```bash
+mortredctl next                       # ONE next OOB command (docs/oob-main-path.md)
 mortredctl init [--profile cpu|gpu]   # detect hw, fetch weight subset, verify
 mortredctl init-trust                 # write conf/local/trust.env (gitignored)
 mortredctl init-edge --mode lan       # optional Nginx TLS on the host network

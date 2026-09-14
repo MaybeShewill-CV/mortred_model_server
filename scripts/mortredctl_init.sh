@@ -74,11 +74,6 @@ fi
 cat <<EOF
 
 == init done (profile: $PROFILE) ==
-next:
-  1. mortredctl init-trust && set -a && . conf/local/trust.env && set +a
-  2. if the pack uses TensorRT: mortredctl prepare --pack \$MORTRED_PACK
-  3. TensorRT pack: stop leftover servers, then mortredctl calibrate --pack <machine-pack> --write-pack
-  4. start the supervisor (systemctl start mortred-supervisor, or docker compose)
-  5. optional TLS: mortredctl init-edge --mode lan
-  6. mortredctl doctor --strict
+why: first-hour weights/profile ready; follow the single OOB lane
+next: mortredctl next
 EOF
