@@ -198,7 +198,6 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 * [How To Add New Server](./docs/how_to_add_new_server.md) :fire::fire:
 * [Model Developer Guide (task-oriented paths, contract / golden / debugging)](./docs/model-developer-guide.md)
 * [Inference CI (hosted MNN smoke vs maintainer GPU golden)](./docs/ci-golden-regression.md)
-* [P4: Modern Model Developer Experience Plan (Chinese)](./docs/model-developer-experience-p4.zh-cn.md)
 
 # `Model Zoo`
 

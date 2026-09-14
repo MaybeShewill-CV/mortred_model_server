@@ -213,4 +213,3 @@ scripts/run_tests.sh build/full -R model_golden_test --output-on-failure
 
 - [模型开发者指南](model-developer-guide.md) —— 六条任务路径、helper 边界、调试
 - [模型契约治理](model-contract-governance.md) —— 评审清单
-- [P4 改造计划](model-developer-experience-p4.zh-cn.md) —— 本次重构的设计与各阶段记录

@@ -277,11 +277,10 @@ add a comment saying why. Do not bend the helper until it fits.
 
 ## Current state and known gaps
 
-Status after phase 7:
+Status after the model developer-experience migration:
 
-- Phases 0-7 of the
-  [P4 plan](model-developer-experience-p4.zh-cn.md) are complete; phase 8
-  (this document) is the last one.
+- Runtime toolkit / catalog / contract golden paths are in tree; this guide
+  is the living entry (see also `how_to_add_new_model.md`).
 - 10 of 11 model families are on the runtime toolkit. Hand-written
   `std::memcpy` went from 30 to 3 and `ImagePipeline` usage from 3 to 31.
 - Three families have **no golden case**: depth, lightglue and LDM. Changes to
