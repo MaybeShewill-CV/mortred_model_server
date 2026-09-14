@@ -25,7 +25,7 @@
 //
 // Batch (max_batch_size > 1): async BatchCollector::submit + the same
 // request-level timer race as the non-batch path. Reply takes an acquire
-// snapshot of each BatchRequestState::slot_done (TIMEOUT if not published);
+// snapshot of each published BatchRequestState slots (TIMEOUT if not published);
 // late write_slot completions are dropped by replied.exchange.
 
 #ifndef MORTRED_SERVER_SYNC_REQUEST_GRAPH_H
@@ -104,8 +104,7 @@ inline InferenceResult<MODEL_OUTPUT> assemble_batch_slots(
     out.item_status.assign(n_items, StatusCode::MODEL_RUN_TIMEOUT);
     out.item_outputs.assign(n_items, MODEL_OUTPUT{});
     for (size_t i = 0; i < n_items; ++i) {
-        if (state.slot_done &&
-            state.slot_done[i].load(std::memory_order_acquire)) {
+        if (state.slot_published(i)) {
             out.item_status[i] = state.item_status[i];
             out.item_outputs[i] = state.outputs[i];
         }

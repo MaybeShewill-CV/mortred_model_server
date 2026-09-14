@@ -49,13 +49,20 @@ using jinq::common::Timestamp;
  * OWNS the request and the per-item result slots; every queued batch_entry
  * holds a shared_ptr to it, so the HTTP reply path may race the runner via
  * the request-level timer — late completions still land safely; reply takes
- * an acquire snapshot of slot_done. */
+ * an acquire snapshot of published slots (SME-08 claim-write-publish). */
 template <typename MODEL_OUTPUT>
 struct BatchRequestState {
+    // Per-slot publish protocol (no mutex): empty -> claimed -> published.
+    // Only the claim winner may write outputs/item_status; readers copy only
+    // after published (acquire).
+    static constexpr uint8_t kSlotEmpty = 0;
+    static constexpr uint8_t kSlotClaimed = 1;
+    static constexpr uint8_t kSlotPublished = 2;
+
     InferenceTask req;
     std::vector<MODEL_OUTPUT> outputs;
     std::vector<StatusCode> item_status;
-    std::unique_ptr<std::atomic<bool>[]> slot_done;
+    std::unique_ptr<std::atomic<uint8_t>[]> slot_state;
     std::atomic<size_t> completed{0};
     std::function<void()> notify_done;
     std::atomic<int64_t> find_worker_ms{0};
@@ -64,31 +71,34 @@ struct BatchRequestState {
     void init(size_t n) {
         outputs.assign(n, MODEL_OUTPUT{});
         item_status.assign(n, StatusCode::MODEL_RUN_TIMEOUT);
-        slot_done = std::make_unique<std::atomic<bool>[]>(n);
+        slot_state = std::make_unique<std::atomic<uint8_t>[]>(n);
         for (size_t i = 0; i < n; ++i) {
-            slot_done[i].store(false, std::memory_order_relaxed);
+            slot_state[i].store(kSlotEmpty, std::memory_order_relaxed);
         }
         completed.store(0, std::memory_order_relaxed);
     }
 
-    /*** Write one slot, publish via slot_done release, and notify_done exactly
-     * once when the last slot of this request completes. */
+    bool slot_published(size_t idx) const {
+        return slot_state && idx < outputs.size() &&
+               slot_state[idx].load(std::memory_order_acquire) == kSlotPublished;
+    }
+
+    /*** Claim -> write payload -> publish. Losers never touch outputs[idx].
+     * notify_done runs exactly once when the last slot publishes. */
     static void write_slot(const std::shared_ptr<BatchRequestState>& state, size_t idx,
                            StatusCode status, MODEL_OUTPUT&& output) {
-        if (!state || idx >= state->outputs.size() || !state->slot_done) {
+        if (!state || idx >= state->outputs.size() || !state->slot_state) {
             return;
         }
-        if (state->slot_done[idx].load(std::memory_order_acquire)) {
+        uint8_t expected = kSlotEmpty;
+        if (!state->slot_state[idx].compare_exchange_strong(
+                expected, kSlotClaimed, std::memory_order_acq_rel,
+                std::memory_order_acquire)) {
             return;
         }
         state->outputs[idx] = std::move(output);
         state->item_status[idx] = status;
-        bool expected = false;
-        if (!state->slot_done[idx].compare_exchange_strong(
-                expected, true, std::memory_order_release, std::memory_order_acquire)) {
-            // Another writer published first; do not bump completed again.
-            return;
-        }
+        state->slot_state[idx].store(kSlotPublished, std::memory_order_release);
         const size_t n = state->outputs.size();
         const size_t prev = state->completed.fetch_add(1, std::memory_order_acq_rel);
         if (prev + 1 == n && state->notify_done) {
@@ -138,39 +148,47 @@ public:
 
     /*** stop must fail queued/ready entries, wait for in-flight exec to finish
      * writing slots, then join — matching "stop batch first" in the
-     * orchestrator destructor. */
+     * orchestrator destructor. SME-08: bump epoch (no new mutex) so in-flight
+     * submit TOCTOUs fix up unpublished slots; final drain catches late
+     * enqueues after join. */
     void stop() {
-        if (!_thread.joinable()) {
-            return;
-        }
         _accepting.store(false, std::memory_order_release);
-        {
-            std::lock_guard<std::mutex> lock(_ready_mu);
-            _running.store(false, std::memory_order_release);
-            _ready_cv.notify_all();
+        _epoch.fetch_add(1, std::memory_order_acq_rel);
+        if (_thread.joinable()) {
+            {
+                std::lock_guard<std::mutex> lock(_ready_mu);
+                _running.store(false, std::memory_order_release);
+                _ready_cv.notify_all();
+            }
+            // Join first so the collector cannot race a late ++in_flight after we
+            // observe zero (it drains queue+ready on the way out). Then wait for
+            // any already-dispatched GoStarter exec to finish write_slot.
+            _thread.join();
+            wait_in_flight_zero();
         }
-        // Join first so the collector cannot race a late ++in_flight after we
-        // observe zero (it drains queue+ready on the way out). Then wait for
-        // any already-dispatched GoStarter exec to finish write_slot.
-        _thread.join();
-        wait_in_flight_zero();
+        drain_queue_and_ready();
     }
 
-    /*** Enqueue one batch_entry per item. Does not block the caller. */
+    /*** Enqueue one batch_entry per item. Does not block the caller.
+     * SME-08: stamp epoch; after enqueue re-check accepting/epoch and TIMEOUT
+     * any unpublished slots if stop raced past the first check (no new lock). */
     void submit(std::shared_ptr<BatchRequestState<MODEL_OUTPUT>> state) {
         if (!state) {
             return;
         }
         const size_t n_items = state->req.item_count();
+        const uint64_t epoch_at_entry = _epoch.load(std::memory_order_acquire);
         if (!_accepting.load(std::memory_order_acquire)) {
-            for (size_t idx = 0; idx < n_items; ++idx) {
-                BatchRequestState<MODEL_OUTPUT>::write_slot(
-                    state, idx, StatusCode::MODEL_RUN_TIMEOUT, MODEL_OUTPUT{});
-            }
+            fail_unpublished_slots(state);
             return;
         }
         for (size_t idx = 0; idx < n_items; ++idx) {
-            _queue.enqueue(std::make_shared<batch_entry>(batch_entry{idx, state}));
+            _queue.enqueue(std::make_shared<batch_entry>(
+                batch_entry{idx, state, epoch_at_entry}));
+        }
+        if (!_accepting.load(std::memory_order_acquire) ||
+            _epoch.load(std::memory_order_acquire) != epoch_at_entry) {
+            fail_unpublished_slots(state);
         }
     }
 
@@ -178,7 +196,44 @@ private:
     struct batch_entry {
         size_t item_index = 0;
         std::shared_ptr<BatchRequestState<MODEL_OUTPUT>> owner;
+        uint64_t epoch = 0;
     };
+
+    static void fail_unpublished_slots(
+        const std::shared_ptr<BatchRequestState<MODEL_OUTPUT>>& state) {
+        if (!state) {
+            return;
+        }
+        const size_t n = state->outputs.size();
+        for (size_t idx = 0; idx < n; ++idx) {
+            BatchRequestState<MODEL_OUTPUT>::write_slot(
+                state, idx, StatusCode::MODEL_RUN_TIMEOUT, MODEL_OUTPUT{});
+        }
+    }
+
+    /*** Drop stale (wrong epoch / not accepting) entries with TIMEOUT; keep live. */
+    void filter_live_batch(std::vector<std::shared_ptr<batch_entry>>& batch) {
+        if (batch.empty()) {
+            return;
+        }
+        const uint64_t epoch_now = _epoch.load(std::memory_order_acquire);
+        const bool accepting = _accepting.load(std::memory_order_acquire);
+        std::vector<std::shared_ptr<batch_entry>> live;
+        live.reserve(batch.size());
+        for (auto& entry : batch) {
+            if (!entry || !entry->owner) {
+                continue;
+            }
+            if (!accepting || entry->epoch != epoch_now) {
+                BatchRequestState<MODEL_OUTPUT>::write_slot(
+                    entry->owner, entry->item_index, StatusCode::MODEL_RUN_TIMEOUT,
+                    MODEL_OUTPUT{});
+                continue;
+            }
+            live.push_back(std::move(entry));
+        }
+        batch.swap(live);
+    }
 
     void batch_loop() {
         std::vector<std::shared_ptr<batch_entry>> batch;
@@ -208,6 +263,10 @@ private:
                     break;
                 }
                 batch.push_back(std::move(extra));
+            }
+            filter_live_batch(batch);
+            if (batch.empty()) {
+                continue;
             }
             _metrics.observe_batch_size(static_cast<double>(batch.size()));
             const int64_t waited_ms = worker_monotonic_ms() - window_start;
@@ -377,6 +436,7 @@ private:
     std::deque<std::vector<std::shared_ptr<batch_entry>>> _ready;
     size_t _in_flight = 0;
     std::atomic<bool> _accepting{false};
+    std::atomic<uint64_t> _epoch{0};
     std::atomic<bool> _running{false};
     std::thread _thread;
 };

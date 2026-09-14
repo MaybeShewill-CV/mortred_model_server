@@ -90,12 +90,99 @@ TEST(batch_collector, write_slot_notifies_once_on_last) {
     BatchRequestState<FakeOutput>::write_slot(state, 1, StatusCode::OK, FakeOutput{2});
     EXPECT_EQ(notifies.load(), 1);
 
-    EXPECT_TRUE(state->slot_done[0].load(std::memory_order_acquire));
-    EXPECT_TRUE(state->slot_done[1].load(std::memory_order_acquire));
-    EXPECT_TRUE(state->slot_done[2].load(std::memory_order_acquire));
+    EXPECT_TRUE(state->slot_published(0));
+    EXPECT_TRUE(state->slot_published(1));
+    EXPECT_TRUE(state->slot_published(2));
     EXPECT_EQ(state->outputs[0].value, 1);
     EXPECT_EQ(state->outputs[1].value, 2);
     EXPECT_EQ(state->outputs[2].value, 3);
+}
+
+
+TEST(batch_collector, write_slot_concurrent_same_index_publishes_once) {
+    auto state = std::make_shared<BatchRequestState<FakeOutput>>();
+    state->init(1);
+    std::atomic<int> notifies{0};
+    state->notify_done = [&]() { notifies.fetch_add(1); };
+
+    constexpr int kThreads = 8;
+    std::atomic<int> ready{0};
+    std::vector<std::thread> threads;
+    threads.reserve(kThreads);
+    for (int t = 0; t < kThreads; ++t) {
+        threads.emplace_back([&, t]() {
+            ready.fetch_add(1);
+            while (ready.load() < kThreads) {
+            }
+            BatchRequestState<FakeOutput>::write_slot(
+                state, 0, StatusCode::OK, FakeOutput{100 + t});
+        });
+    }
+    for (auto& th : threads) {
+        th.join();
+    }
+    EXPECT_TRUE(state->slot_published(0));
+    EXPECT_EQ(state->completed.load(std::memory_order_acquire), 1u);
+    EXPECT_EQ(notifies.load(), 1);
+    EXPECT_GE(state->outputs[0].value, 100);
+    EXPECT_LT(state->outputs[0].value, 100 + kThreads);
+}
+
+TEST(batch_collector, submit_stop_race_all_slots_publish) {
+    PrometheusMetrics metrics;
+    WorkerPool<FakeWorker> pool;
+    pool.adopt(std::make_unique<FakeModel>());
+    pool.commit_watermark(1);
+
+    // Empty GoStarter => inline run (unit-test only); focuses the TOCTOU fixup.
+    BatchCollector<FakeWorker, FakeOutput> collector(pool, metrics);
+    collector.configure(/*max_batch_size=*/4, /*max_batch_delay_ms=*/20,
+                        /*worker_wait_timeout_ms=*/200);
+    collector.start();
+
+    constexpr int kRequests = 32;
+    std::vector<std::shared_ptr<BatchRequestState<FakeOutput>>> states;
+    std::vector<std::shared_ptr<std::atomic<int>>> notifies;
+    states.reserve(kRequests);
+    notifies.reserve(kRequests);
+    for (int i = 0; i < kRequests; ++i) {
+        auto counter = std::make_shared<std::atomic<int>>(0);
+        notifies.push_back(counter);
+        auto state = std::make_shared<BatchRequestState<FakeOutput>>();
+        state->init(2);
+        state->req.items = {text_item("a"), text_item("bb")};
+        state->notify_done = [counter]() { counter->fetch_add(1); };
+        states.push_back(std::move(state));
+    }
+
+    std::atomic<int> go{0};
+    std::thread stopper([&]() {
+        go.fetch_add(1);
+        while (go.load() < 2) {
+        }
+        collector.stop();
+    });
+    std::thread submitter([&]() {
+        go.fetch_add(1);
+        while (go.load() < 2) {
+        }
+        for (auto& state : states) {
+            collector.submit(state);
+        }
+    });
+    stopper.join();
+    submitter.join();
+
+    for (int i = 0; i < kRequests; ++i) {
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        while (notifies[i]->load() == 0 && std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        EXPECT_EQ(notifies[i]->load(), 1) << "request " << i;
+        EXPECT_TRUE(states[i]->slot_published(0)) << "request " << i;
+        EXPECT_TRUE(states[i]->slot_published(1)) << "request " << i;
+        EXPECT_EQ(states[i]->completed.load(), 2u) << "request " << i;
+    }
 }
 
 TEST(batch_collector, assemble_batch_slots_timeout_without_acquire) {
