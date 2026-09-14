@@ -46,6 +46,9 @@ Verifies a few high-signal invariants:
 20. Git example packs must not commit `gpu_mem_mib` occupancy stamps.
 21. The GPU line (CMake / GPU Dockerfile / install_deps / tarball_install /
     setup_full_deps) must not pin CUDA 11, TensorRT 8, ORT 1.18, or gpu_cuda13.
+22. `scripts/golden_drift_check.py --check` matches `test/golden_baseline.json`
+    (case names + sha256 of every file under `test/golden/`). Refresh goldens
+    with `--record` in the same PR (see docs/ci-golden-regression.md).
 
 Exit code 0 means consistent; non-zero means the repository needs attention.
 """
@@ -906,6 +909,37 @@ def check_model_io_split() -> list[str]:
     return errors
 
 
+
+def check_golden_zero_drift() -> list[str]:
+    """Fail closed if test/golden/ or model_golden case list drifted vs baseline."""
+    script = ROOT / "scripts" / "golden_drift_check.py"
+    baseline = ROOT / "test" / "golden_baseline.json"
+    if not script.is_file():
+        return [f"missing {script.relative_to(ROOT)}"]
+    if not baseline.is_file():
+        return [
+            f"missing {baseline.relative_to(ROOT)}; "
+            "run: python3 scripts/golden_drift_check.py --record"
+        ]
+    try:
+        result = subprocess.run(
+            [sys.executable, str(script), "--check", "--baseline", str(baseline)],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return [f"golden_drift_check.py --check could not run: {exc}"]
+    if result.returncode == 0:
+        return []
+    detail = (result.stdout + result.stderr).strip() or f"exit {result.returncode}"
+    return [
+        "golden_drift_check.py --check failed (reset with --record after an "
+        f"intentional golden refresh): {detail}"
+    ]
+
+
 def main() -> int:
     args = parse_args()
     errors: list[str] = []
@@ -963,6 +997,7 @@ def main() -> int:
     from check_hosted_golden import check_ci_inference_contract
 
     errors.extend(check_ci_inference_contract())
+    errors.extend(check_golden_zero_drift())
     if args.check_stale_binaries:
         errors.extend(check_stale_binaries())
 

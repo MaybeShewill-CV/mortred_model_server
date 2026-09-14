@@ -171,6 +171,20 @@ python3 scripts/ci_assert_gtest_xml.py /tmp/gpu-smoke.xml
 
 ## Refreshing goldens
 
+After any intentional change to `test/golden/*` or golden case declarations in
+`test/model_golden_test.cc`, **reset the zero-drift baseline in the same PR**:
+
+```bash
+python3 scripts/golden_drift_check.py --record   # updates test/golden_baseline.json
+python3 scripts/golden_drift_check.py --check    # must exit 0
+```
+
+`scripts/check_consistency.py` (CI) runs `--check` fail-closed. A green
+`model_golden_test` only proves the binary matches the *current* files; the
+baseline proves those files did not silently change relative to the last
+recorded inventory + sha256 map.
+
+
 `yolov8_onnx_detection` is regenerated on a **cpu-profile** build with
 `yolov8s.onnx` (WSL is fine). Product YOLO TensorRT goldens
 (`yolov8_detection`) still need the **same GPU runner** that gates PRs:

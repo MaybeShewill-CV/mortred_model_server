@@ -553,6 +553,7 @@ jobs:
           python3 -m py_compile \
             scripts/fetch_weights.py scripts/gen_weights_manifest.py \
             scripts/check_consistency.py scripts/check_hosted_golden.py \
+            scripts/golden_drift_check.py \
             scripts/gen_openapi.py scripts/repo_toml.py \
             scripts/ci_assert_gtest_xml.py \
             scripts/ci_assert_container_layout.py
