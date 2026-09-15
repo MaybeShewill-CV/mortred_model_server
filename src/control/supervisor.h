@@ -83,8 +83,10 @@ class ProcessSupervisor {
     std::vector<std::pair<std::string, Status>> statuses() const;
     LogBuffer* logs(const std::string& id);
 
-    /*** gateway first (wait for /healthz), then autostart-eligible models */
-    void autostart_all();
+    /*** gateway first (wait for /healthz), then autostart-eligible models.
+     *  Both phases honor deadlines so a stuck child cannot block supervisor
+     *  startup forever. Failures and deadline expiry go to stderr. */
+    void autostart_all(int gateway_deadline_ms = 15000, int models_deadline_ms = 60000);
 
     /*** signal-thread entry: request the ordered shutdown sequence */
     void request_shutdown();

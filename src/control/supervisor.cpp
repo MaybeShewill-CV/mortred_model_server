@@ -15,6 +15,7 @@
 #include <unistd.h>
 
 #include <chrono>
+#include <cstdio>
 #include <algorithm>
 #include <cerrno>
 #include <cstdlib>
@@ -905,7 +906,14 @@ void ProcessSupervisor::wait_shutdown() {
     }
 }
 
-void ProcessSupervisor::autostart_all() {
+void ProcessSupervisor::autostart_all(int gateway_deadline_ms, int models_deadline_ms) {
+    if (gateway_deadline_ms <= 0) {
+        gateway_deadline_ms = 15000;
+    }
+    if (models_deadline_ms <= 0) {
+        models_deadline_ms = 60000;
+    }
+
     // gateway first: routing must exist before clients can reach models
     {
         const std::string gateway_bin =
@@ -913,14 +921,25 @@ void ProcessSupervisor::autostart_all() {
                 .string();
         if (std::filesystem::exists(gateway_bin)) {
             std::string err;
-            start_server(kGatewayId, &err);
-            const int64_t deadline = monotonic_ms() + 15000;
-            while (monotonic_ms() < deadline && !_shutdown_requested.load()) {
-                const Status s = status(kGatewayId);
-                if (s.state == "running" || s.pid < 0) {
-                    break;
+            if (!start_server(kGatewayId, &err)) {
+                std::fprintf(stderr, "mortred-supervisor: autostart gateway failed: %s\n",
+                             err.c_str());
+            } else {
+                const int64_t deadline = monotonic_ms() + gateway_deadline_ms;
+                while (monotonic_ms() < deadline && !_shutdown_requested.load()) {
+                    const Status s = status(kGatewayId);
+                    if (s.state == "running" || s.pid < 0) {
+                        break;
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
                 }
-                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                const Status s = status(kGatewayId);
+                if (s.state != "running") {
+                    std::fprintf(stderr,
+                                 "mortred-supervisor: autostart gateway deadline (%d ms) "
+                                 "elapsed (state=%s pid=%d error=%s)\n",
+                                 gateway_deadline_ms, s.state.c_str(), s.pid, s.error.c_str());
+                }
             }
         }
     }
@@ -937,7 +956,10 @@ void ProcessSupervisor::autostart_all() {
             queue.push_back(id);
         }
     }
-    const size_t width = static_cast<size_t>(_cfg.supervisor.start_concurrency);
+    if (queue.empty()) {
+        return;
+    }
+    const size_t width = static_cast<size_t>(std::max(1, _cfg.supervisor.start_concurrency));
     auto unresolved_count = [this, &queue](size_t launched) {
         size_t n = 0;
         for (size_t i = 0; i < launched && i < queue.size(); ++i) {
@@ -948,15 +970,33 @@ void ProcessSupervisor::autostart_all() {
         }
         return n;
     };
+    const int64_t deadline = monotonic_ms() + models_deadline_ms;
     size_t launched = 0;
     while (launched < queue.size() || unresolved_count(launched) > 0) {
         if (_shutdown_requested.load()) {
             return;
         }
+        if (monotonic_ms() >= deadline) {
+            std::fprintf(stderr,
+                         "mortred-supervisor: autostart models deadline (%d ms) elapsed "
+                         "with unresolved children:\n",
+                         models_deadline_ms);
+            for (size_t i = 0; i < launched && i < queue.size(); ++i) {
+                const Status s = status(queue[i]);
+                if (s.pid >= 0 && s.state != "running") {
+                    std::fprintf(stderr, "  - %s state=%s pid=%d error=%s\n", queue[i].c_str(),
+                                 s.state.c_str(), s.pid, s.error.c_str());
+                }
+            }
+            return;
+        }
         while (launched < queue.size() && unresolved_count(launched) < width) {
             const std::string& id = queue[launched++];
             std::string err;
-            start_server(id, &err);
+            if (!start_server(id, &err)) {
+                std::fprintf(stderr, "mortred-supervisor: autostart %s failed: %s\n", id.c_str(),
+                             err.c_str());
+            }
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }

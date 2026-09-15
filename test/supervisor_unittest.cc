@@ -301,6 +301,61 @@ TEST_F(SupervisorTest, restarts_do_not_leak_log_pipe_fds) {
                              << ", after " << fds << ")";
 }
 
+
+TEST_F(SupervisorTest, autostart_models_respects_deadline) {
+    // P1-B3: never-ready children used to pin autostart_all forever.
+    write_fake_config("never-ready", 0);
+    catalog_ = Catalog{};
+    write_catalog();
+
+    ControlConfig cfg;
+    cfg.supervisor.bin_dir = "bin";
+    cfg.supervisor.lib_dir = "lib";
+    cfg.supervisor.libs_dir = "lib";
+    cfg.supervisor.log_dir = "logs";
+    cfg.supervisor.log_rotate_mb = 1;
+    cfg.supervisor.autostart_default = true;
+    auto sup = std::make_unique<ProcessSupervisor>(
+        root_.string(), cfg, (root_ / "conf" / "mortred.toml").string());
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    const auto t0 = std::chrono::steady_clock::now();
+    sup->autostart_all(/*gateway_deadline_ms=*/1000, /*models_deadline_ms=*/800);
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - t0)
+                        .count();
+    EXPECT_LT(ms, 5000) << "autostart_all must return after models deadline, took " << ms
+                        << "ms";
+    const auto s = sup->status("fake_model_server");
+    EXPECT_NE(s.state, "running");
+    EXPECT_GT(s.pid, 0) << "never-ready child should still be alive at deadline";
+}
+
+TEST_F(SupervisorTest, autostart_reports_start_failure_without_hanging) {
+    fs::remove(root_ / "bin" / "fake_model_server.out");
+    ControlConfig cfg;
+    cfg.supervisor.bin_dir = "bin";
+    cfg.supervisor.lib_dir = "lib";
+    cfg.supervisor.libs_dir = "lib";
+    cfg.supervisor.log_dir = "logs";
+    cfg.supervisor.log_rotate_mb = 1;
+    cfg.supervisor.autostart_default = true;
+    auto sup = std::make_unique<ProcessSupervisor>(
+        root_.string(), cfg, (root_ / "conf" / "mortred.toml").string());
+    catalog_ = Catalog{};
+    write_catalog();
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    const auto t0 = std::chrono::steady_clock::now();
+    sup->autostart_all(/*gateway_deadline_ms=*/1000, /*models_deadline_ms=*/2000);
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - t0)
+                        .count();
+    EXPECT_LT(ms, 3000) << "failed autostart must not block on model deadline";
+}
+
 TEST_F(SupervisorTest, rapid_restarts_do_not_double_join_readers) {
     // P1-B2: spawn_locked used to join reader threads that handle_exit also
     // joins. stop→start can overlap those joins (UB / terminate). Ownership is
