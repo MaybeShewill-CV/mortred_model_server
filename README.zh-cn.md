@@ -284,9 +284,8 @@ python3 scripts/server/test_server.py --server mobilenetv2 --mode single --times
 
 # `文档教程`
 
-* [快速添加新的DL模型](./docs/how_to_add_new_model.zh-cn.md) :fire::fire:
+* [模型开发者指南（加模型 / 契约 / golden / 调试）](./docs/model-developer-guide.zh-cn.md) :fire::fire:
 * [快速添加新的DL服务](./docs/how_to_add_new_server.zh-cn.md) :fire::fire:
-* [模型开发者指南（任务路径 / 契约 / golden / 调试）](./docs/model-developer-guide.md)
 * [推理 CI（托管 MNN 冒烟 vs 维护者 GPU golden）](./docs/ci-golden-regression.md)
 
 # `网络服务器配置说明`

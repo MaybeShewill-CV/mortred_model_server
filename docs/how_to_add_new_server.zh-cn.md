@@ -1,6 +1,6 @@
 # 如何新增一个模型服务
 
-本框架中新增一个 server 自注册表化重构后不再需要编写约 200 行的模板类：每个可服务模型是家族 `catalog()` 里的一条 `CvModelEntry`（两个 TOML 段名、worker 工厂、响应序列化器）。`ProductIndex` 把这一行投影到两个统一入口。通用实现位于 [jinq::server::CvModelServer&lt;MODEL_OUTPUT&gt;](../src/server/generic_cv_server.h)，它构建在编排器 [jinq::server::BaseAiServerImpl&lt;WORKER, MODEL_OUTPUT&gt;](../src/server/base_server_impl.h) 之上。鉴权、限流、请求校验、单请求超时、worker 租约（`worker_pool.h`）、Prometheus 指标与 `/openapi.json` 仍由该栈提供，只是拆成组合模块而不是一个上帝类。模型输入统一使用 base64 编码图像。下面以新增 densenet 图像分类服务为例；模型本身参考[如何新增模型](../docs/how_to_add_new_model.zh-cn.md)。
+本框架中新增一个 server 自注册表化重构后不再需要编写约 200 行的模板类：每个可服务模型是家族 `catalog()` 里的一条 `CvModelEntry`（两个 TOML 段名、worker 工厂、响应序列化器）。`ProductIndex` 把这一行投影到两个统一入口。通用实现位于 [jinq::server::CvModelServer&lt;MODEL_OUTPUT&gt;](../src/server/generic_cv_server.h)，它构建在编排器 [jinq::server::BaseAiServerImpl&lt;WORKER, MODEL_OUTPUT&gt;](../src/server/base_server_impl.h) 之上。鉴权、限流、请求校验、单请求超时、worker 租约（`worker_pool.h`）、Prometheus 指标与 `/openapi.json` 仍由该栈提供，只是拆成组合模块而不是一个上帝类。模型输入统一使用 base64 编码图像。下面以新增 densenet 图像分类服务为例；模型本身参考[模型开发者指南](model-developer-guide.zh-cn.md)。
 
 ## 第 1 步：定义输出数据类型 :monkey_face:
 
