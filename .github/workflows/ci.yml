@@ -547,7 +547,8 @@ jobs:
                    scripts/docker_entrypoint.sh scripts/check_repo_clean.sh \
                    scripts/clean_artifacts.sh scripts/setup_full_deps.sh \
                    scripts/mortredctl_doctor.sh scripts/security_warn.sh \
-                   scripts/ci_container_boot.sh; do
+                   scripts/ci_container_boot.sh scripts/tarball_install.sh \
+                   scripts/make_release_tarball.sh; do
             bash -n "$f"
           done
           python3 -m py_compile \
@@ -864,13 +865,14 @@ jobs:
             --gtest_output=xml:"${RUNNER_TEMP}/gtest/gpu-smoke.xml"
           python3 scripts/ci_assert_gtest_xml.py "${RUNNER_TEMP}/gtest/gpu-smoke.xml"
 
-      - name: Upload ctest/golden log
+      - name: Upload golden smoke log
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: gpu-golden-smoke-log-${{ github.event.pull_request.number || github.run_id }}
-          path: |
-            build-gpu/Testing/Temporary/LastTest.log
+          # This job runs model_golden_test directly (no ctest), so LastTest.log
+          # never exists; upload the fail-closed gtest XML instead.
+          path: ${{ runner.temp }}/gtest/gpu-smoke.xml
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
