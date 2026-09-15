@@ -2,10 +2,16 @@ cmake_minimum_required(VERSION 3.15)
 
 project(mm_ai_server_test LANGUAGES C CXX)
 
+# Opt-in curated valgrind tests (A6). Default OFF so a machine with valgrind
+# installed does not silently double the suite under check/ctest.
+option(MORTRED_ENABLE_VALGRIND_TESTS
+       "Register a small curated set of *-memory-check ctests (label=valgrind)"
+       OFF)
 find_program(CMAKE_MEMORYCHECK_COMMAND valgrind)
 set(memcheck_command ${CMAKE_MEMORYCHECK_COMMAND} ${CMAKE_MEMORYCHECK_COMMAND_OPTIONS} --error-exitcode=1 --leak-check=full)
 
-add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)
+# Exclude label=valgrind from default check; CI/local run those via `ctest -L valgrind`.
+add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -LE valgrind)
 
 find_package(GTest REQUIRED)
 
@@ -294,10 +300,30 @@ if(MORTRED_BUILD_FULL)
     add_dependencies(supervisor_malformed_e2e_test mortred-supervisor.out)
 endif()
 
-if(CMAKE_MEMORYCHECK_COMMAND)
-    foreach(src ${TEST_LIST})
-        # Modern signature + generator expression to locate the binary (old ./${src} was relative to the project root and pointed at a nonexistent path)
+# Curated, fast, weight-free targets only — never the full TEST_LIST.
+set(MORTRED_VALGRIND_TEST_TARGETS
+    status_code_unittest
+    base64_unittest
+    param_spec_unittest
+    tensor_contract_unittest
+    session_io_unittest
+)
+
+if(MORTRED_ENABLE_VALGRIND_TESTS)
+    if(NOT CMAKE_MEMORYCHECK_COMMAND)
+        message(FATAL_ERROR
+            "MORTRED_ENABLE_VALGRIND_TESTS=ON but valgrind was not found "
+            "(CMAKE_MEMORYCHECK_COMMAND empty)")
+    endif()
+    foreach(src ${MORTRED_VALGRIND_TEST_TARGETS})
+        if(NOT TARGET ${src})
+            message(FATAL_ERROR "valgrind target missing from this build: ${src}")
+        endif()
+        # Modern signature + generator expression to locate the binary.
         add_test(NAME ${src}-memory-check
                  COMMAND ${memcheck_command} $<TARGET_FILE:${src}>)
+        set_tests_properties(${src}-memory-check PROPERTIES LABELS "valgrind")
     endforeach()
+    message(STATUS "Valgrind memory-check tests enabled (label=valgrind; "
+                   "run: ctest -L valgrind --output-on-failure)")
 endif()

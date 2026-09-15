@@ -220,3 +220,24 @@ git add test/golden/
 
 Update-mode `GTEST_SKIP`s after writing artifacts (not a weight skip). Commit
 golden files separately from logic changes.
+
+## Valgrind (A6 / curated memory-check)
+
+Hosted `tests` installs `valgrind` and configures with
+`-DMORTRED_ENABLE_VALGRIND_TESTS=ON`. That registers a **small curated** set of
+weight-free unittests under ctest label `valgrind` (not the full suite, and not
+part of `--target check`). CI runs:
+
+```bash
+ctest --test-dir build-ci -L valgrind --output-on-failure
+```
+
+Locally (tests-only preset):
+
+```bash
+cmake --preset tests-only -DMORTRED_ENABLE_VALGRIND_TESTS=ON
+cmake --build --preset tests-only --target status_code_unittest base64_unittest \
+  param_spec_unittest tensor_contract_unittest session_io_unittest
+ctest --test-dir build/tests-only -L valgrind --output-on-failure
+```
+

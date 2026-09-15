@@ -74,7 +74,7 @@ jobs:
           # Remove the conflicting packages first; no-op exit is fine when absent.
           sudo apt-get remove -y 'libunwind-*-dev' || true
           sudo apt-get install -y --no-install-recommends ccache jq autoconf autoconf-archive automake libtool \
-            libopencv-dev libgoogle-glog-dev libeigen3-dev libgtest-dev libssl-dev
+            libopencv-dev libgoogle-glog-dev libeigen3-dev libgtest-dev libssl-dev valgrind
           if [ "${{ matrix.compiler }}" = "clang" ]; then
             sudo apt-get install -y --no-install-recommends clang
             echo "CC=clang" >> "$GITHUB_ENV"
@@ -101,6 +101,7 @@ jobs:
         run: >
           cmake -B build-ci
           -DMORTRED_BUILD_FULL=OFF
+          -DMORTRED_ENABLE_VALGRIND_TESTS=ON
           -DMORTRED_BIN_OUTPUT_DIR="$MORTRED_CI_BIN_DIR"
           -DMORTRED_LIB_OUTPUT_DIR="$MORTRED_CI_LIB_DIR"
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
@@ -111,6 +112,17 @@ jobs:
       - name: Build and run unit tests
         run: |
           LD_LIBRARY_PATH="$MORTRED_CI_LIB_DIR" CTEST_OUTPUT_ON_FAILURE=1 cmake --build build-ci --target check -j"$(nproc)"
+
+      # A6: curated valgrind suite is labeled, not part of default check.
+      - name: Run curated valgrind memory-check tests
+        run: |
+          set -euo pipefail
+          # Fail closed if configure did not register the label (valgrind missing).
+          list="$(ctest --test-dir build-ci -N -L valgrind)"
+          echo "$list"
+          count="$(printf '%s\n' "$list" | grep -c 'Test #' || true)"
+          [ "${count}" -ge 5 ] || { echo "expected >=5 valgrind tests, got ${count}" >&2; exit 1; }
+          LD_LIBRARY_PATH="$MORTRED_CI_LIB_DIR" ctest --test-dir build-ci -L valgrind --output-on-failure
 
       - name: Verify git status is clean after build
         run: |
