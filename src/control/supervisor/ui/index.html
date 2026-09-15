@@ -11,30 +11,31 @@
     <div class="brand">mortred::mc</div>
     <div id="gateway-status" class="gateway-bar">gw …</div>
     <div id="conn-status" class="conn-unknown">connecting…</div>
-    <button id="btn-token" class="btn small" title="设置 Supervisor API 访问令牌">[T]</button>
+    <button id="btn-token" class="btn small" title="API token">[T]</button>
   </header>
 
   <!-- ============ VIEW: OVERVIEW ============ -->
   <div id="view-overview" class="view">
     <section id="gpu-panel" class="card gpu-panel">
       <div class="panel-head">
-        <span class="panel-title">gpu heartbeat</span>
-        <span id="gpu-readout" class="gpu-readout">…</span>
+        <span class="panel-title">gpu core</span>
+        <span id="gpu-name" class="gpu-name">…</span>
       </div>
+      <div id="gpu-metrics" class="gpu-metrics">— — —</div>
       <canvas id="gpu-canvas" class="gpu-canvas"></canvas>
     </section>
 
     <section class="card fleet-panel">
       <div class="panel-head">
-        <span class="panel-title">fleet_<span id="fleet-count">0</span></span>
+        <span class="panel-title">fleet_<span id="fleet-count">0</span> <span id="fleet-live" class="fleet-live"></span></span>
         <span class="panel-title dim">⌘K</span>
       </div>
       <div id="fleet-grid" class="fleet-grid"></div>
     </section>
 
-    <section class="card river-panel">
+    <section class="card telemetry-panel">
       <div class="panel-head">
-        <span class="panel-title">activity river</span>
+        <span class="panel-title">telemetry</span>
       </div>
       <div id="river-content" class="river-content"></div>
     </section>
@@ -50,6 +51,7 @@
       <aside class="card wb-identity-card">
         <div class="panel-head"><span class="panel-title">identity</span></div>
         <div id="wb-identity"></div>
+        <div id="wb-process"></div>
         <div class="wb-controls">
           <button id="wb-start" class="btn small">start</button>
           <button id="wb-restart" class="btn small">rst</button>
@@ -58,9 +60,7 @@
       </aside>
 
       <section class="card wb-bench-card">
-        <div class="panel-head">
-          <span class="panel-title">test bench</span>
-        </div>
+        <div class="panel-head"><span class="panel-title">test bench</span></div>
         <div id="empty-hint" class="empty-hint">// select a model from the fleet</div>
         <div id="image-input-area" class="hidden">
           <div class="input-row">

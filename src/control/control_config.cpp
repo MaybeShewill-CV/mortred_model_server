@@ -129,7 +129,9 @@ bool ControlConfig::load(const std::string& path, ControlConfig* out, std::strin
             !read_str(kv, "pack_file", &cfg.supervisor.pack_file, ctx, err) ||
             !read_int(kv, "api_port", &cfg.supervisor.api_port, 1, 65535, ctx, err) ||
             !read_int(kv, "start_concurrency", &cfg.supervisor.start_concurrency, 1, 32, ctx, err) ||
-            !read_int(kv, "log_rotate_mb", &cfg.supervisor.log_rotate_mb, 1, 4096, ctx, err)) {
+            !read_int(kv, "log_rotate_mb", &cfg.supervisor.log_rotate_mb, 1, 4096, ctx, err) ||
+            !read_int(kv, "gpu_sample_interval_ms", &cfg.supervisor.gpu_sample_interval_ms, 0,
+                      60000, ctx, err)) {
             return false;
         }
         if (kv.count("autostart_default") != 0) {

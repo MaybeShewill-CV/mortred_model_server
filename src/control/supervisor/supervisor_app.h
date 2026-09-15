@@ -15,6 +15,7 @@
 
 #include "control/catalog.h"
 #include "control/control_config.h"
+#include "control/gpu_sampler.h"
 #include "control/supervisor.h"
 
 namespace mortred {
@@ -74,6 +75,8 @@ private:
                               const std::string& action);
     void handle_logs(WFHttpTask* task, const std::string& id, const std::string& uri);
     void handle_metrics(WFHttpTask* task);
+    void handle_gpu(WFHttpTask* task);
+    void handle_process_info(WFHttpTask* task, const std::string& id);
     void handle_graceful_restart(WFHttpTask* task, const std::string& server_id);
     void serve_static(WFHttpTask* task, const std::string& path);
     bool server_has_active_jobs(const std::string& server_id);
@@ -86,6 +89,7 @@ private:
     std::string ui_dir_;
     std::string auth_token_;
     std::unique_ptr<WFHttpServer> server_;
+    std::unique_ptr<GpuSampler> gpu_sampler_;
 };
 
 /*** control-plane daemon entry (called by the thin main in src/apps) */

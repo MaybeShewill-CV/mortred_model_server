@@ -24,6 +24,7 @@ struct SupervisorConfig {
     int start_concurrency = 1;           // gateway first, then models with this width
     int log_rotate_mb = 10;
     std::string log_dir = "logs";        // relative to project root
+    int gpu_sample_interval_ms = 2000;   // HUD gpu sampler; 0 = disable
     // process layout (source tree defaults; install tree injected via env)
     std::string bin_dir = "_bin";
     std::string lib_dir = "_lib";

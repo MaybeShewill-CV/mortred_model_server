@@ -193,6 +193,7 @@ namespace mortred {
 namespace control {
 
 SupervisorApp::~SupervisorApp() {
+    if (gpu_sampler_) gpu_sampler_->stop();
     stop_listen();
 }
 
@@ -360,6 +361,92 @@ void SupervisorApp::handle_metrics(WFHttpTask* task) {
     resp->append_output_body(body.data(), body.size());
 }
 
+void SupervisorApp::handle_gpu(WFHttpTask* task) {
+    rapidjson::Document d;
+    d.SetObject();
+    auto& a = d.GetAllocator();
+    d.AddMember("available", gpu_sampler_ != nullptr && gpu_sampler_->available(), a);
+    d.AddMember("interval_ms", static_cast<int>(gpu_sampler_ ? gpu_sampler_->interval_ms() : 0), a);
+    const auto name = gpu_sampler_ ? gpu_sampler_->gpu_name() : std::string();
+    d.AddMember("name", rapidjson::Value(name.c_str(), name.size(), a), a);
+    rapidjson::Value samples(rapidjson::kArrayType);
+    for (const auto& s : (gpu_sampler_ ? gpu_sampler_->snapshot() : std::vector<GpuSample>())) {
+        rapidjson::Value obj(rapidjson::kObjectType);
+        obj.AddMember("t", s.t_unix_ms, a);
+        obj.AddMember("util", s.util, a);
+        obj.AddMember("mem_used_mib", s.mem_used_mib, a);
+        obj.AddMember("mem_total_mib", s.mem_total_mib, a);
+        obj.AddMember("temp", s.temp_c, a);
+        obj.AddMember("power_w", rapidjson::Value().SetDouble(s.power_w), a);
+        obj.AddMember("clocks_sm", s.clocks_sm_mhz, a);
+        obj.AddMember("clocks_mem", s.clocks_mem_mhz, a);
+        obj.AddMember("fan", s.fan_pct, a);
+        obj.AddMember("pcie_gen", s.pcie_gen, a);
+        obj.AddMember("pcie_width", s.pcie_width, a);
+        samples.PushBack(obj, a);
+    }
+    d.AddMember("samples", samples, a);
+    reply_json(task, 200, serialize(d));
+}
+
+void SupervisorApp::handle_process_info(WFHttpTask* task, const std::string& id) {
+    const auto* entry = catalog_.find(id);
+    if (entry == nullptr) {
+        reply_json(task, 404, json_error("unknown server id: " + id));
+        return;
+    }
+    const auto s = supervisor_->status(id);
+    rapidjson::Document d;
+    d.SetObject();
+    auto& a = d.GetAllocator();
+    d.AddMember("id", rapidjson::Value(id.c_str(), id.size(), a), a);
+    d.AddMember("state", rapidjson::Value(s.state.c_str(), s.state.size(), a), a);
+    d.AddMember("pid", s.pid, a);
+    d.AddMember("ready", s.ready, a);
+    d.AddMember("restart_count", s.restart_count, a);
+    d.AddMember("port", entry->port, a);
+
+    // /proc/<pid> live stats (valid only while running)
+    rapidjson::Value proc(rapidjson::kObjectType);
+    if (s.pid > 0) {
+        char path[64];
+        std::snprintf(path, sizeof(path), "/proc/%d/status", s.pid);
+        std::ifstream f(path);
+        std::string line;
+        long vm_rss_kb = -1;
+        int threads = -1;
+        while (std::getline(f, line)) {
+            if (line.rfind("VmRSS:", 0) == 0) {
+                vm_rss_kb = std::strtol(line.c_str() + 6, nullptr, 10);
+            } else if (line.rfind("Threads:", 0) == 0) {
+                threads = static_cast<int>(std::strtol(line.c_str() + 8, nullptr, 10));
+            }
+        }
+        proc.AddMember("rss_kb", static_cast<int64_t>(vm_rss_kb), a);
+        proc.AddMember("threads", threads, a);
+        // CPU% from /proc/<pid>/stat (utime+stime jiffies / elapsed)
+        std::snprintf(path, sizeof(path), "/proc/%d/stat", s.pid);
+        std::ifstream sf(path);
+        std::string stat_line;
+        std::getline(sf, stat_line);
+        // parse fields 14+15 after the (comm) field
+        const auto close = stat_line.rfind(')');
+        if (close != std::string::npos && stat_line.size() > close + 2) {
+            std::istringstream ss(stat_line.substr(close + 2));
+            long utime = 0, stime = 0;
+            for (int fld = 3; fld <= 16; ++fld) {
+                long v = 0;
+                ss >> v;
+                if (fld == 14) utime = v;
+                if (fld == 15) stime = v;
+            }
+            proc.AddMember("cpu_jiffies", static_cast<int64_t>(utime + stime), a);
+        }
+    }
+    d.AddMember("process", proc, a);
+    reply_json(task, 200, serialize(d));
+}
+
 void SupervisorApp::serve_static(WFHttpTask* task, const std::string& path) {
     std::string rel = (path == "/" || path.empty()) ? "index.html" : path.substr(1);
     if (rel.find("..") != std::string::npos) {
@@ -520,6 +607,8 @@ void SupervisorApp::process(WFHttpTask* task) {
         handle_status(task);
     } else if (path == "/api/v1/metrics" && method == "GET") {
         handle_metrics(task);
+    } else if (path == "/api/v1/gpu" && method == "GET") {
+        handle_gpu(task);
     } else if (path.rfind("/api/v1/servers/", 0) == 0) {
         const std::string rest = path.substr(std::string("/api/v1/servers/").size());
         const auto slash = rest.rfind('/');
@@ -533,6 +622,10 @@ void SupervisorApp::process(WFHttpTask* task) {
         }
         const std::string id = rest.substr(0, slash);
         const std::string action = rest.substr(slash + 1);
+        if (action == "process" && method == "GET") {
+            handle_process_info(task, id);
+            return;
+        }
         if (action == "logs") {
             if (method != "GET") {
                 reply_json(task, 405, json_error("method not allowed"));
@@ -679,6 +772,11 @@ bool SupervisorApp::init(const SupervisorInitOptions& options) {
     }
 
     supervisor_ = std::make_unique<ProcessSupervisor>(root_, cfg_, config_path);
+    // HUD gpu sampler: dedicated thread, ring buffer, graceful offline
+    if (cfg_.supervisor.gpu_sample_interval_ms > 0) {
+        gpu_sampler_ = std::make_unique<GpuSampler>(cfg_.supervisor.gpu_sample_interval_ms);
+        gpu_sampler_->start();
+    }
     supervisor_->set_gateway_trust(options.metrics_token, options.gateway_auth_token, auth_token_);
     supervisor_->set_catalog(catalog_);
     std::string thread_err;
