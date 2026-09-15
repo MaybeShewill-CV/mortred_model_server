@@ -186,11 +186,7 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 
 # `Tutorials`
 
-* [Image Classification Model Server Tutorials](./docs/tutorials_of_classification_model_server.md)
-* [Image Segmentation Model Server Tutorials](./docs/tutorials_of_segmentation_model_server.md)
-* [Image Object Detection Model Server Tutorials](./docs/tutorials_of_object_detection_model_server.md)
-* [Image Enhancement Model Server Tutorials](./docs/tutorials_of_enhancement_model_server.md)
-* [Image Feature Point Model Server Tutorials](./docs/tutorials_of_feature_point_model_server.md)
+* [Model Server Tutorials (classification / detection / segmentation / enhancement / feature point)](./docs/tutorials_of_model_servers.md)
 
 # `How To`
 
