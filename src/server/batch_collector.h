@@ -429,20 +429,29 @@ private:
         std::vector<StatusCode> item_status;
         const auto run_start = Timestamp::now();
         const auto status = worker->run_batch(inputs, outputs, item_status);
+        (void)status;  // per-item codes are authoritative; aggregate is not a filler
         const double run_ms = (Timestamp::now() - run_start) * 1000;
         // metrics + EWMA before checkin (pool drain / destructor contract)
         _pool.observe_run_ms(static_cast<int64_t>(run_ms));
         _metrics.observe_inference_duration_ms(run_ms);
         _pool.checkin(std::move(worker));
 
+        // item_status / outputs must be index-aligned with the batch. A short
+        // vector is a contract break: never fall back to the aggregate status
+        // (aggregate OK would silently mark missing items successful).
         for (size_t idx = 0; idx < batch.size(); ++idx) {
             const auto& entry = batch[idx];
             entry->owner->find_worker_ms.store(static_cast<int64_t>(ck.wait_ms),
                                                std::memory_order_relaxed);
             entry->owner->worker_run_ms.store(static_cast<int64_t>(run_ms),
                                               std::memory_order_relaxed);
-            const StatusCode entry_status = idx < item_status.size() ? item_status[idx] : status;
-            if (entry_status == StatusCode::OK && idx < outputs.size()) {
+            StatusCode entry_status = idx < item_status.size()
+                                          ? item_status[idx]
+                                          : StatusCode::MODEL_RUN_SESSION_FAILED;
+            if (entry_status == StatusCode::OK && idx >= outputs.size()) {
+                entry_status = StatusCode::MODEL_RUN_SESSION_FAILED;
+            }
+            if (entry_status == StatusCode::OK) {
                 BatchRequestState<MODEL_OUTPUT>::write_slot(
                     entry->owner, entry->item_index, entry_status, std::move(outputs[idx]));
             } else {
