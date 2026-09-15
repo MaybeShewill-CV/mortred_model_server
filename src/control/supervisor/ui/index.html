@@ -8,25 +8,60 @@
 </head>
 <body>
   <header id="topbar">
-    <div class="brand">🛰️ Mortred Supervisor</div>
-    <div id="gateway-status" class="gateway-bar">gateway: …</div>
-    <div id="conn-status" class="conn-unknown">连接中…</div>
-    <button id="btn-token" class="btn small" title="设置 Supervisor API 访问令牌">令牌</button>
+    <div class="brand">mortred::mc</div>
+    <div id="gateway-status" class="gateway-bar">gw …</div>
+    <div id="conn-status" class="conn-unknown">connecting…</div>
+    <button id="btn-token" class="btn small" title="设置 Supervisor API 访问令牌">[T]</button>
   </header>
 
-  <div id="layout">
-    <aside id="sidebar">
-      <div class="side-title">servers_<span id="server-count">0</span></div>
-      <div id="server-list"></div>
-    </aside>
+  <!-- ============ VIEW: OVERVIEW ============ -->
+  <div id="view-overview" class="view">
+    <section id="gpu-panel" class="card gpu-panel">
+      <div class="panel-head">
+        <span class="panel-title">gpu heartbeat</span>
+        <span id="gpu-readout" class="gpu-readout">…</span>
+      </div>
+      <canvas id="gpu-canvas" class="gpu-canvas"></canvas>
+    </section>
 
-    <main id="main">
-      <section id="input-panel" class="card">
-        <div class="panel-head">
-          <span class="panel-title">input</span>
-          <span id="selected-server-info"></span>
+    <section class="card fleet-panel">
+      <div class="panel-head">
+        <span class="panel-title">fleet_<span id="fleet-count">0</span></span>
+        <span class="panel-title dim">⌘K</span>
+      </div>
+      <div id="fleet-grid" class="fleet-grid"></div>
+    </section>
+
+    <section class="card river-panel">
+      <div class="panel-head">
+        <span class="panel-title">activity river</span>
+      </div>
+      <div id="river-content" class="river-content"></div>
+    </section>
+  </div>
+
+  <!-- ============ VIEW: MODEL WORKBENCH ============ -->
+  <div id="view-workbench" class="view hidden">
+    <div class="wb-head">
+      <button id="wb-breadcrumb" class="btn small">‹ fleet</button>
+      <span id="wb-title" class="wb-title"></span>
+    </div>
+    <div class="wb-grid">
+      <aside class="card wb-identity-card">
+        <div class="panel-head"><span class="panel-title">identity</span></div>
+        <div id="wb-identity"></div>
+        <div class="wb-controls">
+          <button id="wb-start" class="btn small">start</button>
+          <button id="wb-restart" class="btn small">rst</button>
+          <button id="wb-stop" class="btn small danger">stop</button>
         </div>
-        <div id="empty-hint" class="empty-hint">// select a server</div>
+      </aside>
+
+      <section class="card wb-bench-card">
+        <div class="panel-head">
+          <span class="panel-title">test bench</span>
+        </div>
+        <div id="empty-hint" class="empty-hint">// select a model from the fleet</div>
         <div id="image-input-area" class="hidden">
           <div class="input-row">
             <button id="btn-pick-file" class="btn">upload</button>
@@ -43,30 +78,35 @@
             <span id="batch-progress-text"></span>
           </div>
         </div>
+        <div id="results">
+          <div class="panel-head"><span class="panel-title">results</span></div>
+          <div id="results-list"></div>
+        </div>
       </section>
 
-      <section id="results">
-        <div class="panel-head"><span class="panel-title">results</span></div>
-        <div id="results-list"></div>
+      <section id="log-panel" class="wb-log-card">
+        <div id="log-toolbar">
+          <label>log</label>
+          <select id="log-server"></select>
+          <label class="inline"><input type="checkbox" id="log-follow" checked> follow</label>
+          <button id="btn-log-pause" class="btn small">pause</button>
+          <input id="log-filter" type="text" placeholder="filter…">
+          <button id="btn-log-clear" class="btn small">clear</button>
+          <span id="log-meta"></span>
+        </div>
+        <pre id="log-content"></pre>
       </section>
-    </main>
+    </div>
   </div>
 
-  <section id="log-panel">
-    <div id="log-toolbar">
-      <label>log</label>
-      <span id="log-current-server" class="log-current"></span>
-      <select id="log-server"></select>
-      <label class="inline"><input type="checkbox" id="log-follow" checked> 跟随</label>
-      <button id="btn-log-pause" class="btn small">暂停</button>
-      <input id="log-filter" type="text" placeholder="filter…">
-      <button id="btn-log-search" class="btn small">搜索</button>
-      <button id="btn-log-clear" class="btn small">清空</button>
-      <button id="btn-log-copy" class="btn small">复制</button>
-      <span id="log-meta"></span>
+  <!-- ============ COMMAND PALETTE ============ -->
+  <div id="palette" class="hidden">
+    <div id="palette-backdrop"></div>
+    <div id="palette-box">
+      <input id="palette-input" type="text" placeholder="start yolov8 / open ddpm / token…" autocomplete="off">
+      <div id="palette-list"></div>
     </div>
-    <pre id="log-content"></pre>
-  </section>
+  </div>
 
   <div id="toast-container"></div>
   <script src="app.js"></script>

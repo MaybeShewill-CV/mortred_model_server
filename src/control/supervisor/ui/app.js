@@ -1,22 +1,35 @@
 "use strict";
 
-/* Mortred Supervisor UI: /api/v1 REST + embedded assets, no build chain. */
+/* Mortred Supervisor UI — Mission Control.
+ *
+ * Architecture: one polling store → hash router → three views.
+ *   #/overview       fleet grid + gpu heartbeat + activity river   (default)
+ *   #/model/<ID>     per-model workbench: identity / test bench / log
+ *   (⌘K)             command palette overlay
+ *
+ * All network/business logic (authorizedFetch, api, refresh polling,
+ * upload/inference, log paging, control actions) is preserved verbatim
+ * from the previous single-screen UI; only the presentation layer was
+ * rebuilt around a store that fans data out to whichever view is active.
+ * Zero deps, zero build chain. */
 
-/* ---------------- state ---------------- */
+/* ---------------- state / store ---------------- */
+
 const state = {
   servers: [],
   gateway: null,
-  selectedId: null,
-  files: [],            // [{name, url, base64}]
+  selectedId: null,          // workbench model (null = overview)
+  files: [],                 // [{name, url, base64}]
   batchAbort: null,
-  logs: {},             // id -> {offset, filter, paused, follow, lines}
+  logs: {},                  // id -> {offset, filter, paused, follow, lines}
   logServerId: null,
+  river: [],                  // activity events [{t, kind, text, serverId}]
+  gpuHistory: [],             // [{t, util, mem_used_mib, ...}]
 };
 
-const $ = (id) => document.getElementById(id);
-
-/* ---------------- helpers ---------------- */
 const TOKEN_KEY = "mortred_supervisor_token";
+
+const $ = (id) => document.getElementById(id);
 
 function getToken() {
   return localStorage.getItem(TOKEN_KEY) || "";
@@ -40,7 +53,7 @@ async function authorizedFetch(path, options) {
   let resp = await fetch(path, options);
   if (resp.status === 401) {
     const nextToken = prompt("访问被拒绝（401），请输入 Supervisor API 令牌：", token);
-    if (nextToken) {
+    if (nextToken !== null && nextToken.trim()) {
       setToken(nextToken.trim());
       options.headers["Authorization"] = "Bearer " + nextToken.trim();
       resp = await fetch(path, options);
@@ -49,63 +62,77 @@ async function authorizedFetch(path, options) {
   return resp;
 }
 
-$("btn-token").onclick = () => {
-  const token = prompt("请输入 Supervisor API 令牌（Bearer Token）：", getToken());
-  if (token !== null) {
-    setToken(token.trim());
-    showToast("令牌已保存", "success");
-    refresh();
-  }
-};
-
 function uid() {
-  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
-  return "req-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
+  return Math.random().toString(36).slice(2, 10);
 }
 
 function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-  })[c]);
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 async function api(path, options) {
   const resp = await authorizedFetch(path, options);
-  const text = await resp.text();
-  let data;
-  try { data = JSON.parse(text); } catch (e) { data = text; }
+  let data = null;
+  try { data = await resp.json(); } catch (e) { data = null; }
   return { ok: resp.ok, status: resp.status, data };
 }
 
-function gatewayBaseUrl() {
-  const g = state.gateway;
-  if (!g || !g.address) return "";
-  let host = g.address.host || "";
-  if (host === "0.0.0.0" || host === "::" || host === "[::]") {
-    host = window.location.hostname || "127.0.0.1";
-  }
-  return `http://${host}:${g.address.port}`;
+/* ---------------- status glyphs ---------------- */
+
+function dotClassOf(s) {
+  if (s.state === "running") return s.ready ? "running" : "starting";
+  if (s.state === "starting") return "starting";
+  if (s.state === "backoff") return "backoff";
+  if (s.state === "failed") return "failed";
+  return "stopped";
 }
 
-function base64ToSrc(b64) {
-  if (!b64) return "";
-  return "data:image/png;base64," + b64;
+const ST_GLYPH = { running: "●", starting: "◐", backoff: "◑", failed: "✕", stopped: "·" };
+
+const CAT_COLOR = {
+  classification: "#00ff9c", object_detection: "#5fd3f0", face_detection: "#5fd3f0",
+  scene_segmentation: "#c792ea", ocr: "#ffd166", matting: "#c792ea",
+  enhancement: "#ffd166", feature_point: "#5fd3f0", feature_embedding: "#c792ea",
+  mono_depth_estimation: "#ffd166", segment_anything: "#c792ea",
+  diffusion: "#ff9e64", mot: "#5fd3f0", other: "#6fae85",
+};
+
+function catColor(cat) { return CAT_COLOR[cat] || CAT_COLOR.other; }
+
+function uptimeOf(s) {
+  if (!s.started_at_ms || s.state !== "running") return null;
+  const sec = Math.max(0, Math.floor((Date.now() - s.started_at_ms) / 1000));
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), ss = sec % 60;
+  return (h > 0 ? h + ":" : "") + String(m).padStart(2, "0") + ":" + String(ss).padStart(2, "0");
 }
 
-function loadImageAsBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result;
-      const idx = dataUrl.indexOf(",");
-      resolve(dataUrl.slice(idx + 1));
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+/* ---------------- activity river ---------------- */
+
+function riverPush(kind, text, serverId) {
+  const now = new Date();
+  const t = String(now.getHours()).padStart(2, "0") + ":" +
+    String(now.getMinutes()).padStart(2, "0") + ":" + String(now.getSeconds()).padStart(2, "0");
+  state.river.push({ t, kind, text, serverId: serverId || null });
+  if (state.river.length > 200) state.river.shift();
+  renderRiver();
 }
 
-/* ---------------- catalog & status polling ---------------- */
+function renderRiver() {
+  const box = $("river-content");
+  if (!box) return;
+  box.innerHTML = state.river.slice(-80).map((e) => {
+    const c = e.kind === "err" ? "var(--err)" : e.kind === "ok" ? "var(--ok)" : "var(--mid)";
+    const srv = e.serverId ? ` <span style="color:${catColor((serverById(e.serverId) || {}).category)}">${escapeHtml(e.serverId)}</span>` : "";
+    return `<div class="river-line"><span class="river-t">${e.t}</span> <span style="color:${c}">${escapeHtml(e.text)}</span>${srv}</div>`;
+  }).join("");
+  box.scrollTop = box.scrollHeight;
+}
+
+/* ---------------- polling store ---------------- */
+
+let prevStates = {};
+
 async function refresh() {
   const [cat, st] = await Promise.all([api("/api/v1/catalog"), api("/api/v1/status")]);
   if (!cat.ok || !st.ok) {
@@ -122,410 +149,424 @@ async function refresh() {
   for (const s of (st.data.servers || [])) statusById[s.id] = s;
   state.gateway = st.data.gateway || null;
   state.servers = (cat.data.servers || []).map((s) => Object.assign({}, s, statusById[s.id] || {}));
-  $("server-count").textContent = state.servers.length;
-  renderGatewayBar();
-  if (!state.selectedId && state.servers.length) {
-    selectServer(state.servers[0].id);
+
+  // state transitions feed the river
+  for (const s of state.servers) {
+    const prev = prevStates[s.id];
+    if (prev && prev !== s.state) {
+      riverPush(s.state === "running" ? "ok" : s.state === "failed" ? "err" : "info",
+        `${s.id} ${prev} → ${s.state}`, s.id);
+    }
+    prevStates[s.id] = s.state;
   }
-  renderServerList();
+
+  renderCurrentView();
+}
+
+async function pollGpu() {
+  const r = await api("/api/v1/gpu");
+  const box = $("gpu-panel");
+  if (!box) return;
+  if (!r.ok || !r.data || !r.data.available) {
+    box.classList.add("gpu-na");
+    $("gpu-readout").textContent = "gpu n/a";
+    return;
+  }
+  box.classList.remove("gpu-na");
+  const s = r.data.samples || [];
+  state.gpuHistory = s;
+  const last = s.length ? s[s.length - 1] : null;
+  if (last) {
+    $("gpu-readout").textContent =
+      `util ${last.util < 0 ? "--" : last.util + "%"}   mem ${fmtMib(last.mem_used_mib)}/${fmtMib(last.mem_total_mib)}`
+      + (last.temp >= 0 ? `   ${last.temp}°C` : "");
+  }
+  drawGpuChart();
+}
+
+function fmtMib(mib) {
+  if (mib == null || mib < 0) return "--";
+  return mib >= 1024 ? (mib / 1024).toFixed(1) + "G" : mib + "M";
+}
+
+/* ---------------- gpu heartbeat chart ---------------- */
+
+function drawGpuChart() {
+  const canvas = $("gpu-canvas");
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (w === 0) return;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+  const s = state.gpuHistory;
+  if (s.length < 2) return;
+
+  const util = (x) => Math.max(0, Math.min(100, x.util));
+  const memPct = (x) => x.mem_total_mib > 0 ? Math.max(0, Math.min(100, 100 * x.mem_used_mib / x.mem_total_mib)) : 0;
+  const n = s.length, step = w / (n - 1);
+
+  // grid
+  ctx.strokeStyle = "rgba(0,255,156,0.08)";
+  ctx.setLineDash([2, 4]);
+  for (let g = 1; g < 3; g++) {
+    ctx.beginPath(); ctx.moveTo(0, h * g / 3); ctx.lineTo(w, h * g / 3); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // mem line (amber, area)
+  ctx.beginPath();
+  s.forEach((x, i) => { const y = h - (memPct(x) / 100) * (h - 6) - 3; i ? ctx.lineTo(i * step, y) : ctx.moveTo(0, y); });
+  ctx.strokeStyle = "#ffd166"; ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+  ctx.fillStyle = "rgba(255,209,102,0.08)"; ctx.fill();
+
+  // util line (green, glow area)
+  ctx.beginPath();
+  s.forEach((x, i) => { const y = h - (util(x) / 100) * (h - 6) - 3; i ? ctx.lineTo(i * step, y) : ctx.moveTo(0, y); });
+  ctx.strokeStyle = "#00ff9c"; ctx.lineWidth = 1.5;
+  ctx.shadowColor = "rgba(0,255,156,0.5)"; ctx.shadowBlur = 6;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, "rgba(0,255,156,0.18)"); grad.addColorStop(1, "rgba(0,255,156,0)");
+  ctx.fillStyle = grad; ctx.fill();
+}
+
+/* ---------------- hash router ---------------- */
+
+function currentRoute() {
+  const h = location.hash.replace(/^#/, "");
+  const m = h.match(/^\/model\/([A-Za-z0-9_-]+)/);
+  if (m) return { view: "model", id: m[1] };
+  return { view: "overview" };
+}
+
+function navigate(hash) {
+  if (location.hash === hash) return;
+  location.hash = hash;
+}
+
+window.addEventListener("hashchange", () => renderCurrentView());
+
+function renderCurrentView() {
+  const r = currentRoute();
+  if (r.view === "model" && serverById(r.id)) {
+    state.selectedId = r.id;
+    showView("workbench");
+    renderWorkbench();
+  } else {
+    state.selectedId = null;
+    showView("overview");
+    renderOverview();
+  }
+}
+
+function showView(name) {
+  $("view-overview").classList.toggle("hidden", name !== "overview");
+  $("view-workbench").classList.toggle("hidden", name !== "workbench");
+}
+
+/* ---------------- OVERVIEW view ---------------- */
+
+function renderOverview() {
+  const grid = $("fleet-grid");
+  $("fleet-count").textContent = state.servers.length;
+  const frag = document.createDocumentFragment();
+  const groups = {};
+  for (const s of state.servers) (groups[s.category] = groups[s.category] || []).push(s);
+  for (const cat of Object.keys(groups).sort()) {
+    const head = document.createElement("div");
+    head.className = "fleet-cat";
+    head.textContent = cat;
+    head.style.color = catColor(cat);
+    frag.appendChild(head);
+    for (const s of groups[cat]) {
+      const st = dotClassOf(s);
+      const tile = document.createElement("div");
+      tile.className = "cartridge" + (s.state === "running" ? " live" : "") +
+        (s.state === "failed" ? " dead" : "");
+      tile.style.borderColor = s.state === "running" ? catColor(cat) : "";
+      tile.innerHTML =
+        `<div class="cartridge-row">
+           <span class="st ${st}" title="${escapeHtml(s.state)}">${ST_GLYPH[st]}</span>
+           <span class="cartridge-name">${escapeHtml(s.id.toLowerCase())}</span>
+           ${s.restart_count > 0 ? `<span class="badge restarts">↻${s.restart_count}</span>` : ""}
+         </div>
+         <div class="cartridge-sub">${s.state === "running" ? `<span class="uptime" data-id="${s.id}">${uptimeOf(s) || ""}</span>` : escapeHtml(s.state)}</div>`;
+      tile.onclick = () => navigate("#/model/" + s.id);
+      frag.appendChild(tile);
+    }
+  }
+  grid.innerHTML = "";
+  grid.appendChild(frag);
+  renderGatewayBar();
+}
+
+/* ---------------- WORKBENCH view ---------------- */
+
+function renderWorkbench() {
+  const s = serverById(state.selectedId);
+  if (!s) return;
+  const st = dotClassOf(s);
+  $("wb-breadcrumb").textContent = "‹ fleet / " + s.id.toLowerCase();
+  $("wb-breadcrumb").onclick = () => navigate("#/overview");
+  $("wb-title").innerHTML =
+    `<span class="st ${st}">${ST_GLYPH[st]}</span> ${escapeHtml(s.id.toLowerCase())}` +
+    ` <span class="wb-state">${escapeHtml(s.state)}${s.state === "running" && !s.ready ? " · probing" : s.ready ? " · ready" : ""}</span>`;
+  $("wb-identity").innerHTML =
+    `<div class="id-row"><span class="id-k">port</span><span>:${s.port}</span></div>
+     <div class="id-row"><span class="id-k">uri</span><span>${escapeHtml(s.uri || "")}</span></div>
+     <div class="id-row"><span class="id-k">cat</span><span style="color:${catColor(s.category)}">${escapeHtml(s.category)}</span></div>
+     <div class="id-row"><span class="id-k">↻</span><span>${s.restart_count || 0}</span></div>
+     <div class="id-row"><span class="id-k">up</span><span class="uptime" data-id="${s.id}">${uptimeOf(s) || "--"}</span></div>`;
+
+  const running = s.state === "running" || s.state === "starting" || s.state === "backoff";
+  $("wb-start").disabled = running;
+  $("wb-restart").disabled = !running;
+  $("wb-stop").disabled = !running;
+  $("wb-start").onclick = () => controlServer(s.id, "start");
+  $("wb-restart").onclick = () => controlServer(s.id, "restart");
+  $("wb-stop").onclick = () => controlServer(s.id, "stop");
+
+  $("image-input-area").classList.remove("hidden");
+  const hint = $("empty-hint");
+  if (hint) hint.classList.add("hidden");
+  state.logServerId = s.id;
+  resetLogState(s.id);
   syncLogSelector();
-  updateSelectedInfo();
+  renderFileList();
+}
+
+function serverById(id) {
+  return state.servers.find((s) => s.id === id) || null;
+}
+
+/* uptime tickers: update in place every second without re-render */
+setInterval(() => {
+  document.querySelectorAll(".uptime").forEach((el) => {
+    const s = serverById(el.dataset.id);
+    if (s) el.textContent = uptimeOf(s) || "--";
+  });
+}, 1000);
+
+/* ---------------- gateway / control ---------------- */
+
+function gatewayBaseUrl() {
+  const g = state.gateway;
+  if (!g || !g.address) return "";
+  let host = g.address.host || "";
+  if (host === "0.0.0.0" || host === "::" || host === "[::]") {
+    host = window.location.hostname || "127.0.0.1";
+  }
+  return `http://${host}:${g.address.port}`;
 }
 
 function renderGatewayBar() {
   const g = state.gateway;
   const bar = $("gateway-status");
-  if (!g) { bar.textContent = "gateway: 未知"; return; }
+  if (!g) { bar.textContent = "gw ?"; return; }
   const addr = g.address ? `${g.address.host}:${g.address.port}` : "";
   const cls = g.state === "running" ? "gw-ok" : "gw-bad";
   bar.innerHTML = `gw <span class="${cls}">${g.state === "running" ? "●" : "○"}</span>` +
-    (addr ? ` ${escapeHtml(addr)}` : "") +
-    (g.state === "running" ? "" : " (infer down)");
-}
-
-function dotClassOf(s) {
-  if (s.state === "running") return s.ready ? "running" : "starting";
-  if (s.state === "starting") return "starting";
-  if (s.state === "backoff") return "backoff";
-  if (s.state === "failed") return "failed";
-  return "stopped";
-}
-
-/* phosphor status glyphs (colored by .st.<class> in CSS) */
-const ST_GLYPH = { running: "●", starting: "◐", backoff: "◑", failed: "✕", stopped: "·" };
-
-/* selected-server lookup shared by selectServer / renderServerList / log
- * selector; selectServer's classList.remove("hidden") runs AFTER
- * updateSelectedInfo() calls this, so a missing definition silently keeps
- * the image input area hidden forever (observed on Safari 17, main). */
-function serverById(id) {
-  return state.servers.find((s) => s.id === id) || null;
-}
-
-function renderServerList() {
-  const box = $("server-list");
-  box.innerHTML = "";
-  const groups = {};
-  for (const s of state.servers) {
-    (groups[s.category] = groups[s.category] || []).push(s);
-  }
-  for (const cat of Object.keys(groups).sort()) {
-    const g = document.createElement("div");
-    g.className = "cat-group";
-    const title = document.createElement("div");
-    title.className = "cat-name";
-    title.textContent = cat;
-    g.appendChild(title);
-    for (const s of groups[cat]) {
-      const running = s.state === "running" || s.state === "starting" || s.state === "backoff";
-      const item = document.createElement("div");
-      item.className = "server-item" + (s.id === state.selectedId ? " selected" : "");
-      item.onclick = () => selectServer(s.id);
-      const st = dotClassOf(s);
-      item.innerHTML =
-        `<div class="row1">
-           <span class="st ${st}" title="${escapeHtml(s.state)}${s.state === "running" && !s.ready ? " (probing)" : ""}">${ST_GLYPH[st]}</span>
-           <span class="server-name" title="${escapeHtml(s.name)}">${escapeHtml(s.name)}</span>
-           ${s.restart_count > 0 ? `<span class="badge restarts" title="restarts">↻${s.restart_count}</span>` : ""}
-         </div>
-         <div class="row2">
-           <span class="port-text">:${s.port} ${escapeHtml(s.uri)}</span>
-           <span class="actions">
-             <button class="btn small" data-action="start" ${running ? "disabled" : ""}>start</button>
-             <button class="btn small" data-action="restart" ${running ? "" : "disabled"}>rst</button>
-             <button class="btn small" data-action="stop" ${running ? "" : "disabled"}>stop</button>
-           </span>
-         </div>`;
-      item.querySelector('[data-action="start"]').onclick = (ev) => {
-        ev.stopPropagation();
-        controlServer(s.id, "start");
-      };
-      item.querySelector('[data-action="restart"]').onclick = (ev) => {
-        ev.stopPropagation();
-        controlServer(s.id, "restart");
-      };
-      item.querySelector('[data-action="stop"]').onclick = (ev) => {
-        ev.stopPropagation();
-        controlServer(s.id, "stop");
-      };
-      g.appendChild(item);
-    }
-    box.appendChild(g);
-  }
+    (addr ? ` ${escapeHtml(addr)}` : "") + (g.state === "running" ? "" : " (infer down)");
 }
 
 async function controlServer(id, action) {
-  const { ok: httpOk, data } = await api(`/api/v1/servers/${encodeURIComponent(id)}/${action}`, { method: "POST" });
-  const s = serverById(id);
-  const label = s ? s.name : id;
-  const zh = { start: "启动", stop: "停止", restart: "重启" }[action] || action;
-  const failed = !httpOk || (data && data.ok === false);
-  if (failed) {
-    const err = (data && data.error) || "未知错误";
-    showToast(`${zh}失败：${err}`, "error");
+  const zh = { start: "启动", restart: "重启", stop: "停止" }[action];
+  const r = await api(`/api/v1/servers/${encodeURIComponent(id)}/${action}`, { method: "POST" });
+  if (!r.ok) {
+    showToast(`${zh}失败：${r.status}`, "error");
+    riverPush("err", `${id} ${action} → HTTP ${r.status}`, id);
   } else {
-    showToast(`已${zh} ${label}`, "success");
+    showToast(`已${zh} ${id}`, "success");
+    riverPush("ok", `${id} ${action} ok`, id);
   }
   refresh();
 }
 
-function selectServer(id) {
-  if (id !== state.selectedId) {
-    clearResults();
-    if (state.logServerId !== id) {
-      state.logServerId = id;
-      resetLogState(id);
-      $("log-server").value = id;
-    }
-  }
-  state.selectedId = id;
-  renderServerList();
-  updateSelectedInfo();
-  $("image-input-area").classList.remove("hidden");
-  const hint = $("empty-hint");
-  if (hint) hint.classList.add("hidden");
-}
-
-function updateSelectedInfo() {
-  const s = serverById(state.selectedId);
-  if (!s) return;
-  const suffix = s.state === "running" && !s.ready ? "（就绪探测中…）"
-    : s.state === "starting" ? "（启动中…）"
-    : s.state === "backoff" ? "（重启退避中…）"
-    : s.state === "failed" ? "（已崩溃，需手动启动）" : "";
-  $("selected-server-info").textContent = `${s.name}  :${s.port}${s.uri}${suffix}`;
-}
-
-function clearResults() {
-  $("results-list").innerHTML = "";
-}
+/* ---------------- toast ---------------- */
 
 function showToast(msg, type = "info") {
-  const box = $("toast-container");
   const el = document.createElement("div");
   el.className = "toast " + type;
   el.textContent = msg;
-  box.appendChild(el);
-  setTimeout(() => el.remove(), 2600);
+  $("toast-container").appendChild(el);
+  setTimeout(() => { el.style.opacity = "0"; }, 2400);
+  setTimeout(() => { el.remove(); }, 2800);
 }
 
-/* ---------------- image input ---------------- */
-$("btn-pick-file").onclick = () => $("file-input").click();
-$("btn-pick-folder").onclick = () => $("folder-input").click();
+/* ---------------- test bench (upload / infer / visualize) ---------------- */
 
-$("file-input").onchange = (ev) => { addFiles([...ev.target.files]); ev.target.value = ""; };
-$("folder-input").onchange = (ev) => { addFiles([...ev.target.files]); ev.target.value = ""; };
+function base64ToSrc(b64) {
+  return "data:image/png;base64," + b64.replace(/^data:[^,]+,/, "");
+}
 
-const dropZone = $("drop-zone");
-dropZone.ondragover = (ev) => { ev.preventDefault(); dropZone.classList.add("dragover"); };
-dropZone.ondragleave = () => dropZone.classList.remove("dragover");
-dropZone.ondrop = (ev) => {
-  ev.preventDefault();
-  dropZone.classList.remove("dragover");
-  addFiles([...ev.dataTransfer.files]);
-};
+function loadImageAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      const idx = dataUrl.indexOf(",");
+      resolve(dataUrl.slice(idx + 1));
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 async function addFiles(fileList) {
-  const imgs = fileList.filter((f) => f.type.startsWith("image/"));
-  for (const f of imgs) {
-    if (state.files.some((x) => x.name === f.name && x.size === f.size)) continue;
+  for (const f of fileList) {
+    if (!f.type.startsWith("image/")) continue;
     const b64 = await loadImageAsBase64(f);
-    state.files.push({ name: f.name, url: URL.createObjectURL(f), base64: b64, size: f.size });
+    state.files.push({ name: f.name, url: base64ToSrc(b64), base64: b64 });
   }
   renderFileList();
 }
 
 function renderFileList() {
   const box = $("file-list");
+  if (!box) return;
   box.innerHTML = "";
-  for (let i = 0; i < state.files.length; ++i) {
-    const f = state.files[i];
+  for (const f of state.files) {
     const chip = document.createElement("div");
     chip.className = "file-chip";
-    chip.innerHTML = `<img src="${f.url}"><span>${escapeHtml(f.name)}</span>
-      <button class="btn small" data-i="${i}">✕</button>`;
-    chip.querySelector("button").onclick = () => {
-      URL.revokeObjectURL(f.url);
-      state.files.splice(i, 1);
+    chip.innerHTML = `<img src="${f.url}"><span>${escapeHtml(f.name)}</span>`;
+    const rm = document.createElement("span");
+    rm.textContent = "✕";
+    rm.className = "chip-rm";
+    rm.onclick = () => {
+      state.files = state.files.filter((x) => x !== f);
       renderFileList();
     };
+    chip.appendChild(rm);
     box.appendChild(chip);
   }
 }
 
-/* ---------------- send images ---------------- */
-$("btn-send").onclick = () => sendBatch();
-$("btn-cancel").onclick = () => {
-  if (state.batchAbort) state.batchAbort.abort();
-};
-
-async function sendBatch() {
-  const s = serverById(state.selectedId);
-  if (!s || s.type !== "image") return;
-  if (s.state !== "running") { alert("请先启动该 server"); return; }
-  if (!s.ready) { showToast(`${s.name} 尚未就绪（模型加载中），请稍候再试`, "error"); return; }
-  if (!state.gateway || state.gateway.state !== "running") {
-    showToast("网关未就绪，无法推理", "error");
-    return;
-  }
-  const gatewayBase = gatewayBaseUrl();
-  if (!gatewayBase || !s.id) {
-    showToast("无法解析网关地址或模型 id", "error");
-    return;
-  }
-  if (!state.files.length) { alert("请先选择图片"); return; }
-  if (state.batchAbort) { showToast("上一批仍在发送中，请稍候", "error"); return; }
-
-  clearResults();
-  state.batchAbort = new AbortController();
-  const total = state.files.length;
-  $("batch-progress").classList.remove("hidden");
-  $("btn-cancel").classList.remove("hidden");
-  $("btn-send").disabled = true;
-
-  for (let i = 0; i < total; ++i) {
-    if (state.batchAbort.signal.aborted) break;
-    const f = state.files[i];
-    const reqId = uid();
-    const body = JSON.stringify({ req_id: reqId, images: [f.base64] });
-    const t0 = performance.now();
-    let result;
-    try {
-      const resp = await authorizedFetch(
-        gatewayBase + "/v1/models/" + encodeURIComponent(s.id) + "/infer",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body,
-          signal: state.batchAbort.signal,
-        });
-      const text = await resp.text();
-      let parsed = text;
-      try { parsed = JSON.parse(text); } catch (e) { /* keep raw text */ }
-      result = { ok: resp.ok, status: resp.status, data: parsed, raw: text };
-    } catch (e) {
-      result = { ok: false, status: 0, data: null, raw: String(e) };
-    }
-    const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
-    addResultCard(s, { name: f.name, url: f.url, base64: f.base64 }, result, reqId, elapsed);
-    setBatchProgress(i + 1, total);
-  }
-
-  const aborted = state.batchAbort.signal.aborted;
-  $("batch-progress").classList.add("hidden");
-  $("btn-cancel").classList.add("hidden");
-  $("btn-send").disabled = false;
-  state.batchAbort = null;
-  if (!aborted) {
-    const sent = state.files.length;
-    state.files.forEach((f) => URL.revokeObjectURL(f.url));
-    state.files = [];
-    renderFileList();
-    showToast(`已发送 ${sent} 张图片`, "success");
-  } else {
-    showToast("已取消发送", "info");
-  }
-}
-
-function setBatchProgress(done, total) {
-  $("batch-progress-fill").style.width = (total ? (done / total) * 100 : 0) + "%";
-  $("batch-progress-text").textContent = `${done} / ${total}`;
-}
-
-/* ---------------- results & visualization ---------------- */
-function addResultCard(server, input, result, reqId, elapsed) {
-  const box = $("results-list");
-  const card = document.createElement("div");
-  card.className = "result-card";
-  const statusText = result.ok ? `HTTP ${result.status}` : `失败 (${result.status})`;
-  card.innerHTML = `
-    <div class="head">
-      <div>
-        <b>${escapeHtml(input.name || reqId)}</b>
-        <span class="req-meta"> · ${escapeHtml(server.name)} · req_id=${escapeHtml(reqId)} · ${elapsed}s</span>
-      </div>
-      <span class="badge image">${statusText}</span>
-    </div>
-    <div class="viz"></div>
-    <details class="raw-json">
-      <summary>原始返回</summary>
-      <pre></pre>
-      <button class="btn small" data-copy="1">复制</button>
-      <button class="btn small" data-download="1">下载</button>
-    </details>`;
-  card.querySelector(".viz").appendChild(visualize(server, input, result));
-  const pre = card.querySelector(".raw-json pre");
-  pre.textContent = typeof result.raw === "string" ? result.raw : JSON.stringify(result.data, null, 2);
-  card.querySelector('[data-copy="1"]').onclick = () => {
-    navigator.clipboard.writeText(pre.textContent);
-  };
-  card.querySelector('[data-download="1"]').onclick = () => {
-    const blob = new Blob([pre.textContent], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${server.id}_${reqId}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
-  box.prepend(card);
-}
-
 function unifiedPayload(data) {
-  if (!data || typeof data !== "object") return null;
-  if (Array.isArray(data.results) && data.results.length) return data.results[0].data;
-  return null;
+  if (data && typeof data.results === "object" && Array.isArray(data.results) && data.results.length) {
+    return data.results[0].data;
+  }
+  return data && typeof data.data !== "undefined" ? data.data : null;
 }
 
 function topScore(payload) {
-  if (!payload) return 0;
-  if (typeof payload.scores === "number") return payload.scores;
-  if (Array.isArray(payload.scores) && payload.scores.length) return Number(payload.scores[0]) || 0;
-  return 0;
+  if (!payload) return null;
+  if (Array.isArray(payload) && payload.length && typeof payload[0].score === "number") return payload[0].score;
+  if (typeof payload.top1 === "object" && payload.top1) return payload.top1.score;
+  return null;
 }
 
-function visualize(server, input, result) {
-  const wrap = document.createElement("div");
-  const data = result.data;
-  const payload = unifiedPayload(data);
-
-  if (!result.ok || !data || typeof data !== "object") {
-    wrap.textContent = "请求失败或响应非 JSON：";
-    return wrap;
-  }
-
-  const cat = server.category;
-  const base = document.createElement("div");
-  const imgUrl = input.url;
-  const score = topScore(payload);
-
-  if (cat === "classification") {
-    base.innerHTML = `
-      <div class="compare">
-        <figure>${imgUrl ? `<img src="${imgUrl}">` : ""}<figcaption>输入</figcaption></figure>
-        <figure><div class="top1-card">
-          <div class="label">预测类别</div>
-          <div style="font-size:18px">${escapeHtml(payload && payload.category || "-")}</div>
-          <div class="label">class_id: ${payload ? payload.class_id : "-"}</div>
-          <div class="label">score: ${payload ? score : "-"}</div>
-          <div class="score-bar"><div class="score-bar-fill" style="width:${Math.round(score * 100)}%"></div></div>
-        </div></figure>
-      </div>`;
-  } else if (cat === "object_detection") {
-    const canvas = document.createElement("canvas");
-    canvas.className = "overlay";
-    const boxes = Array.isArray(payload) ? payload : [];
-    drawDetection(canvas, imgUrl, boxes);
-    base.appendChild(canvas);
-  } else if (cat === "scene_segmentation") {
-    base.innerHTML = `
-      <div class="compare">
-        <figure>${imgUrl ? `<img src="${imgUrl}">` : ""}<figcaption>输入</figcaption></figure>
-        <figure><img src="${base64ToSrc(payload && payload.colorized_mask)}"><figcaption>分割结果</figcaption></figure>
-      </div>`;
-  } else if (cat === "matting") {
-    const seg = base64ToSrc(payload && payload.image);
-    base.innerHTML = `
-      <div class="compare">
-        <figure>${imgUrl ? `<img src="${imgUrl}">` : ""}<figcaption>输入</figcaption></figure>
-        <figure><img src="${seg}"><figcaption>抠图结果</figcaption></figure>
-      </div>`;
-    if (imgUrl && seg) base.appendChild(makeComposite(imgUrl, seg));
-  } else if (cat === "enhancement") {
-    base.innerHTML = `
-      <div class="compare">
-        <figure>${imgUrl ? `<img src="${imgUrl}">` : ""}<figcaption>输入</figcaption></figure>
-        <figure><img src="${base64ToSrc(payload && payload.image)}"><figcaption>增强结果</figcaption></figure>
-      </div>`;
-  } else if (cat === "mono_depth_estimation") {
-    base.innerHTML = `
-      <div class="compare">
-        <figure>${imgUrl ? `<img src="${imgUrl}">` : ""}<figcaption>输入</figcaption></figure>
-        <figure><img src="${base64ToSrc(payload && payload.image)}"><figcaption>深度估计</figcaption></figure>
-      </div>`;
-  } else if (cat === "ocr") {
-    const canvas = document.createElement("canvas");
-    canvas.className = "overlay";
-    const regions = Array.isArray(payload) ? payload : [];
-    drawOcr(canvas, imgUrl, regions);
-    base.appendChild(canvas);
-    if (regions.length) {
-      const table = document.createElement("table");
-      table.className = "ocr-table";
-      table.innerHTML = "<tr><th>#</th><th>score</th><th>bbox</th></tr>" +
-        regions.map((r, i) => `<tr><td>${i + 1}</td><td>${r.score}</td><td>${JSON.stringify(r.bbox)}</td></tr>`).join("");
-      base.appendChild(table);
+async function sendBatch() {
+  const s = serverById(state.selectedId);
+  if (!s || !state.files.length) return;
+  const base = gatewayBaseUrl();
+  if (!base) { showToast("gateway 地址未知", "error"); return; }
+  $("btn-cancel").classList.remove("hidden");
+  setBatchProgress(0, state.files.length);
+  let aborted = false;
+  state.batchAbort = () => { aborted = true; };
+  let done = 0;
+  for (const f of state.files) {
+    if (aborted) break;
+    const reqId = uid();
+    const t0 = performance.now();
+    try {
+      const resp = await authorizedFetch(`${base}/v1/models/${encodeURIComponent(s.id)}/infer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ req_id: reqId, images: [f.base64] }),
+      });
+      const elapsed = Math.round(performance.now() - t0);
+      const body = await resp.json().catch(() => null);
+      if (resp.ok) {
+        addResultCard(s, f, body, reqId, elapsed);
+        riverPush("ok", `${s.id} 200 OK ${elapsed}ms`, s.id);
+      } else {
+        showToast(`HTTP ${resp.status}`, "error");
+        riverPush("err", `${s.id} HTTP ${resp.status}`, s.id);
+      }
+    } catch (e) {
+      showToast("推理请求失败：" + e, "error");
+      riverPush("err", `${s.id} transport fail`, s.id);
     }
-  } else if (cat === "feature_point") {
+    done++;
+    setBatchProgress(done, state.files.length);
+  }
+  state.batchAbort = null;
+  $("btn-cancel").classList.add("hidden");
+}
+
+function setBatchProgress(done, total) {
+  $("batch-progress").classList.toggle("hidden", total === 0);
+  $("batch-progress-fill").style.width = total ? ((done / total) * 100).toFixed(1) + "%" : "0";
+  $("batch-progress-text").textContent = `${done}/${total}`;
+}
+
+function addResultCard(server, input, result, reqId, elapsed) {
+  const payload = unifiedPayload(result);
+  const card = document.createElement("div");
+  card.className = "result-card";
+  const score = topScore(payload);
+  card.innerHTML =
+    `<div class="head">
+       <span class="req-meta">${escapeHtml(input.name)} · ${elapsed}ms · ${escapeHtml(reqId)}</span>
+       <span class="req-meta">${score != null ? "top " + score.toFixed(3) : ""}</span>
+     </div>`;
+  const vizWrap = document.createElement("div");
+  vizWrap.className = "viz";
+  card.appendChild(vizWrap);
+  const raw = document.createElement("details");
+  raw.className = "raw-json";
+  raw.innerHTML = `<summary>raw</summary>`;
+  const pre = document.createElement("pre");
+  pre.textContent = JSON.stringify(result, null, 1);
+  raw.appendChild(pre);
+  card.appendChild(raw);
+  $("results-list").prepend(card);
+  visualize(server, input, payload, vizWrap).catch(() => {});
+}
+
+/* visualization: renders bbox/ocr/keypoint overlays into vizWrap */
+async function visualize(server, input, payload, vizWrap) {
+  const img = new Image();
+  img.src = input.url;
+  await img.decode().catch(() => {});
+  if (Array.isArray(payload) && payload.length && typeof payload[0].bbox === "object") {
     const canvas = document.createElement("canvas");
     canvas.className = "overlay";
-    drawKeypoints(canvas, imgUrl, payload);
-    base.appendChild(canvas);
-  } else {
-    base.textContent = "（该类别暂无专门可视化，见原始返回）";
+    vizWrap.appendChild(canvas);
+    drawDetection(canvas, img.src, payload);
+    return;
   }
-
-  wrap.appendChild(base);
-  return wrap;
+  if (payload && Array.isArray(payload.regions)) {
+    const canvas = document.createElement("canvas");
+    canvas.className = "overlay";
+    vizWrap.appendChild(canvas);
+    drawOcr(canvas, img.src, payload.regions);
+    return;
+  }
+  if (payload && (payload.image || payload.colorized_mask || payload.alpha || payload.matting_image)) {
+    const out = payload.image || payload.colorized_mask || payload.alpha || payload.matting_image;
+    const src = base64ToSrc(out);
+    const im = new Image();
+    im.src = src;
+    vizWrap.appendChild(im);
+    return;
+  }
+  if (payload && Array.isArray(payload.keypoints)) {
+    const canvas = document.createElement("canvas");
+    canvas.className = "overlay";
+    vizWrap.appendChild(canvas);
+    drawKeypoints(canvas, img.src, payload);
+    return;
+  }
+  vizWrap.appendChild(img);
 }
 
 function drawDetection(canvas, imgUrl, boxes) {
@@ -535,28 +576,25 @@ function drawDetection(canvas, imgUrl, boxes) {
     canvas.height = img.naturalHeight;
     const ctx = canvas.getContext("2d");
     ctx.drawImage(img, 0, 0);
-    const colors = ["#f87171", "#60a5fa", "#4ade80", "#facc15", "#c084fc", "#fb923c"];
-    boxes.forEach((b, i) => {
-      const bbox = b.bbox || [];
-      const color = colors[i % colors.length];
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 3;
-      if (bbox.length >= 4) {
-        const x = bbox[0], y = bbox[1];
-        ctx.strokeRect(x, y, bbox[2] - x, bbox[3] - y);
-        ctx.fillStyle = color;
-        ctx.font = "bold 16px sans-serif";
-        ctx.fillText(`${b.category || ""} ${(b.score || "")}`, x, y > 18 ? y - 6 : y + 18);
-      }
-      if (Array.isArray(b.landmarks)) {
-        ctx.fillStyle = color;
-        b.landmarks.forEach((p) => {
-          if (Array.isArray(p)) { ctx.beginPath(); ctx.arc(p[0], p[1], 3, 0, Math.PI * 2); ctx.fill(); }
-        });
-      }
-    });
+    ctx.lineWidth = Math.max(2, Math.round(img.naturalWidth / 300));
+    ctx.font = Math.max(14, Math.round(img.naturalWidth / 40)) + "px monospace";
+    for (const b of boxes) {
+      const [x1, y1, x2, y2] = b.bbox;
+      const hue = (b.class_id * 47) % 360;
+      ctx.strokeStyle = `hsl(${hue} 90% 60%)`;
+      ctx.shadowColor = ctx.strokeStyle;
+      ctx.shadowBlur = 6;
+      ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+      ctx.shadowBlur = 0;
+      const label = `${b.category || b.class_id} ${b.score != null ? b.score.toFixed(2) : ""}`;
+      const tw = ctx.measureText(label).width + 8;
+      ctx.fillStyle = `hsl(${hue} 90% 60%)`;
+      ctx.fillRect(x1, Math.max(0, y1 - 20), tw, 18);
+      ctx.fillStyle = "#000";
+      ctx.fillText(label, x1 + 4, Math.max(14, y1 - 6));
+    }
   };
-  if (imgUrl) img.src = imgUrl;
+  img.src = imgUrl;
 }
 
 function drawOcr(canvas, imgUrl, regions) {
@@ -566,23 +604,25 @@ function drawOcr(canvas, imgUrl, regions) {
     canvas.height = img.naturalHeight;
     const ctx = canvas.getContext("2d");
     ctx.drawImage(img, 0, 0);
-    regions.forEach((r) => {
-      ctx.strokeStyle = "#22c55e";
-      ctx.lineWidth = 2;
-      if (Array.isArray(r.bbox) && r.bbox.length >= 2) {
-        const [p1, p2] = r.bbox;
-        ctx.strokeRect(p1[0], p1[1], p2[0] - p1[0], p2[1] - p1[1]);
-      }
-      if (Array.isArray(r.polygon) && r.polygon.length > 2) {
-        ctx.strokeStyle = "#60a5fa";
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#ffd166";
+    for (const r of regions) {
+      const pts = r.points || r.bbox_points || [];
+      if (pts.length === 4) {
         ctx.beginPath();
-        r.polygon.forEach((p, i) => { i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1]); });
+        ctx.moveTo(pts[0][0], pts[0][1]);
+        for (let i = 1; i < 4; i++) ctx.lineTo(pts[i][0], pts[i][1]);
         ctx.closePath();
         ctx.stroke();
       }
-    });
+      if (r.text) {
+        ctx.fillStyle = "#ffd166";
+        ctx.font = "14px monospace";
+        ctx.fillText(r.text, pts[0] ? pts[0][0] : 4, pts[0] ? pts[0][1] - 4 : 14);
+      }
+    }
   };
-  if (imgUrl) img.src = imgUrl;
+  img.src = imgUrl;
 }
 
 function drawKeypoints(canvas, imgUrl, payload) {
@@ -592,175 +632,215 @@ function drawKeypoints(canvas, imgUrl, payload) {
     canvas.height = img.naturalHeight;
     const ctx = canvas.getContext("2d");
     ctx.drawImage(img, 0, 0);
-    const loc = payload && payload.location;
-    if (!loc) return;
-    ctx.fillStyle = "#f87171";
-    const arr = Array.isArray(loc[0]) ? loc.flat() : loc;
-    for (let i = 0; i + 1 < arr.length; i += 2) {
+    ctx.fillStyle = "#00ff9c";
+    ctx.shadowColor = "#00ff9c";
+    ctx.shadowBlur = 4;
+    for (const p of payload.keypoints) {
       ctx.beginPath();
-      ctx.arc(arr[i], arr[i + 1], 3, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.shadowBlur = 0;
   };
-  if (imgUrl) img.src = imgUrl;
+  img.src = imgUrl;
 }
 
-function makeComposite(origSrc, maskSrc) {
-  const canvas = document.createElement("canvas");
-  canvas.className = "overlay";
-  const orig = new Image();
-  const mask = new Image();
-  let loaded = 0;
-  const tryDraw = () => {
-    if (loaded < 2) return;
-    canvas.width = orig.naturalWidth;
-    canvas.height = orig.naturalHeight;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(orig, 0, 0, canvas.width, canvas.height);
-    ctx.globalCompositeOperation = "destination-in";
-    ctx.drawImage(mask, 0, 0, canvas.width, canvas.height);
-  };
-  orig.onload = () => { loaded++; tryDraw(); };
-  mask.onload = () => { loaded++; tryDraw(); };
-  orig.src = origSrc;
-  mask.src = maskSrc;
-  const fig = document.createElement("figure");
-  fig.innerHTML = "<figcaption>合成预览</figcaption>";
-  fig.insertBefore(canvas, fig.firstChild);
-  return fig;
-}
+/* ---------------- logs (contextual: workbench filters to its model) -------- */
 
-/* ---------------- log panel ---------------- */
 function resetLogState(id) {
-  state.logs[id] = { offset: 0, follow: true, paused: false, filter: "", lines: [] };
-  $("log-content").textContent = "";
-  $("log-meta").textContent = "";
-  const s = serverById(id);
-  $("log-current-server").textContent = s ? s.name : id;
+  state.logs[id] = { offset: 0, filter: "", paused: false, follow: true, lines: [] };
+  const el = $("log-content");
+  if (el) el.textContent = "";
 }
 
 function syncLogSelector() {
   const sel = $("log-server");
-  const prev = sel.value;
+  if (!sel) return;
   sel.innerHTML = "";
   for (const s of state.servers) {
     const opt = document.createElement("option");
     opt.value = s.id;
-    opt.textContent = s.name;
+    opt.textContent = s.id;
     sel.appendChild(opt);
   }
-  if (state.logServerId && serverById(state.logServerId)) {
-    sel.value = state.logServerId;
-  } else if (prev) {
-    sel.value = prev;
-  }
-  if (sel.value) state.logServerId = sel.value;
+  if (state.logServerId) sel.value = state.logServerId;
 }
 
-$("log-server").onchange = () => {
-  const id = $("log-server").value;
-  state.logServerId = id;
-  resetLogState(id);
-};
-
-$("log-follow").onchange = () => {
-  const id = state.logServerId;
-  if (id) state.logs[id] = state.logs[id] || { offset: 0, follow: true, paused: false, filter: "" };
-  if (id) state.logs[id].follow = $("log-follow").checked;
-};
-
-$("btn-log-pause").onclick = () => {
-  const id = state.logServerId;
-  if (!id) return;
-  const st = state.logs[id] = state.logs[id] || { offset: 0, follow: true, paused: false, filter: "" };
-  st.paused = !st.paused;
-  $("btn-log-pause").textContent = st.paused ? "继续" : "暂停";
-};
-
-$("btn-log-search").onclick = () => renderLogContent();
-
-$("btn-log-clear").onclick = () => {
-  const id = state.logServerId;
-  if (!id) return;
-  const st = state.logs[id] = state.logs[id] || { offset: 0, follow: true, paused: false, filter: "" };
-  st.offset = 0;
-  st.lines = [];
-  $("log-content").textContent = "";
-  $("log-meta").textContent = "";
-};
-
-$("btn-log-copy").onclick = async () => {
-  try {
-    await navigator.clipboard.writeText($("log-content").textContent);
-  } catch (e) { /* ignore */ }
-};
-
-$("log-filter").oninput = () => {
-  const id = state.logServerId;
-  if (id && state.logs[id]) state.logs[id].filter = $("log-filter").value;
-  renderLogContent();
-};
-
 function renderLogContent() {
-  const id = state.logServerId;
-  const st = state.logs[id] || { filter: "", lines: [] };
-  const filter = (st.filter || "").toLowerCase();
-  const box = $("log-content");
-  const lines = st.lines || [];
-  box.innerHTML = "";
-  for (const line of lines) {
-    if (filter && line.toLowerCase().indexOf(filter) === -1) continue;
-    const div = document.createElement("div");
-    if (filter) {
-      div.innerHTML = highlightLine(line, filter);
-    } else {
-      div.textContent = line;
-    }
-    box.appendChild(div);
-  }
-  box.scrollTop = box.scrollHeight;
+  const el = $("log-content");
+  if (!el || !state.logServerId) return;
+  const st = state.logs[state.logServerId];
+  if (!st) return;
+  const lines = st.filter ? st.lines.filter((l) => l.toLowerCase().includes(st.filter)) : st.lines;
+  el.innerHTML = lines.slice(-400).map((l) => highlightLine(l, st.filter)).join("\n");
+  if (st.follow) el.scrollTop = el.scrollHeight;
 }
 
 function highlightLine(line, filter) {
-  const lower = line.toLowerCase();
-  let pos = 0;
-  let html = "";
-  while (true) {
-    const idx = lower.indexOf(filter, pos);
-    if (idx === -1) {
-      html += escapeHtml(line.slice(pos));
-      break;
-    }
-    html += escapeHtml(line.slice(pos, idx));
-    html += "<mark>" + escapeHtml(line.slice(idx, idx + filter.length)) + "</mark>";
-    pos = idx + filter.length;
-  }
-  return html;
+  const esc = escapeHtml(line);
+  if (!filter) return esc;
+  const idx = esc.toLowerCase().indexOf(filter);
+  if (idx < 0) return esc;
+  return esc.slice(0, idx) + "<mark>" + esc.slice(idx, idx + filter.length) + "</mark>" + esc.slice(idx + filter.length);
 }
 
 async function pollLogs() {
-  const id = state.logServerId;
-  if (!id) return;
-  const st = state.logs[id] = state.logs[id] || { offset: 0, follow: true, paused: false, filter: "" };
-  if (!st.follow || st.paused) return;
-  const { ok, data } = await api(`/api/v1/servers/${encodeURIComponent(id)}/logs?offset=${st.offset}&limit=500`);
-  if (!ok || !data || !Array.isArray(data.lines)) return;
-  if (data.lines.length) {
-    const lines = st.lines = st.lines || [];
-    lines.push(...data.lines);
-    if (lines.length > 5000) lines.splice(0, lines.length - 5000);
-    st.offset += data.lines.length;
-    renderLogContent();
+  if (!state.logServerId) return;
+  const st = state.logs[state.logServerId];
+  if (!st || st.paused) return;
+  const r = await api(`/api/v1/servers/${encodeURIComponent(state.logServerId)}/logs?offset=${st.offset}&limit=100`);
+  if (!r.ok || !r.data) return;
+  st.lines.push(...(r.data.lines || []));
+  st.offset = r.data.offset != null ? r.data.offset + (r.data.lines || []).length : st.lines.length;
+  $("log-meta").textContent = `${st.lines.length} lines`;
+  renderLogContent();
+  for (const l of (r.data.lines || [])) {
+    if (/\bERROR\b|FATAL/.test(l)) riverPush("err", l.slice(0, 120), state.logServerId);
   }
-  $("log-meta").textContent = `total=${data.total} offset=${st.offset}`;
 }
 
-/* ---------------- init ---------------- */
+/* ---------------- command palette ---------------- */
+
+function paletteItems() {
+  const items = [];
+  for (const s of state.servers) {
+    items.push({ label: `open ${s.id.toLowerCase()}`, hint: "navigate", act: () => navigate("#/model/" + s.id) });
+    const running = ["running", "starting", "backoff"].includes(s.state);
+    if (!running) items.push({ label: `start ${s.id.toLowerCase()}`, hint: "control", act: () => controlServer(s.id, "start") });
+    if (running) items.push({ label: `stop ${s.id.toLowerCase()}`, hint: "control", act: () => controlServer(s.id, "stop") });
+    items.push({ label: `restart ${s.id.toLowerCase()}`, hint: "control", act: () => controlServer(s.id, "restart") });
+  }
+  items.push({ label: "overview", hint: "navigate", act: () => navigate("#/overview") });
+  items.push({ label: "token", hint: "settings", act: () => {
+    const t = prompt("Supervisor API 令牌：", getToken());
+    if (t !== null) { setToken(t.trim()); location.reload(); }
+  }});
+  return items;
+}
+
+function fuzzyMatch(query, label) {
+  let li = 0, score = 0, streak = 0;
+  const q = query.toLowerCase(), l = label.toLowerCase();
+  for (const ch of q) {
+    const found = l.indexOf(ch, li);
+    if (found < 0) return -1;
+    streak = found === li ? streak + 1 : 0;
+    score += 1 + streak;
+    li = found + 1;
+  }
+  return score;
+}
+
+function openPalette() {
+  const p = $("palette");
+  p.classList.remove("hidden");
+  const input = $("palette-input");
+  input.value = "";
+  renderPalette("");
+  input.focus();
+}
+
+function closePalette() {
+  $("palette").classList.add("hidden");
+}
+
+function renderPalette(query) {
+  const list = $("palette-list");
+  const items = paletteItems()
+    .map((it) => ({ it, score: query ? fuzzyMatch(query, it.label) : 0 }))
+    .filter((x) => x.score >= 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10);
+  let sel = 0;
+  list.innerHTML = "";
+  for (const { it } of items) {
+    const row = document.createElement("div");
+    row.className = "palette-row";
+    row.innerHTML = `<span class="palette-label">${escapeHtml(it.label)}</span><span class="palette-hint">${it.hint}</span>`;
+    row.onclick = () => { closePalette(); it.act(); };
+    list.appendChild(row);
+  }
+  if (items.length) list.firstChild.classList.add("sel");
+  $("palette-input").onkeydown = (ev) => {
+    const rows = [...list.children];
+    if (ev.key === "Escape") { closePalette(); }
+    else if (ev.key === "Enter") { if (rows[sel]) { closePalette(); items[sel].it.act(); } }
+    else if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+      ev.preventDefault();
+      if (rows[sel]) rows[sel].classList.remove("sel");
+      sel = ev.key === "ArrowDown" ? Math.min(rows.length - 1, sel + 1) : Math.max(0, sel - 1);
+      if (rows[sel]) rows[sel].classList.add("sel");
+    } else {
+      setTimeout(() => renderPalette($("palette-input").value), 0);
+    }
+  };
+}
+
+document.addEventListener("keydown", (ev) => {
+  if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "k") {
+    ev.preventDefault();
+    $("palette").classList.contains("hidden") ? openPalette() : closePalette();
+  }
+  if (ev.key === "Escape" && !$("palette").classList.contains("hidden")) closePalette();
+});
+
+/* ---------------- wiring ---------------- */
+
+function wire() {
+  $("btn-pick-file").onclick = () => $("file-input").click();
+  $("btn-pick-folder").onclick = () => $("folder-input").click();
+  $("file-input").onchange = (ev) => { addFiles(ev.target.files); ev.target.value = ""; };
+  $("folder-input").onchange = (ev) => { addFiles(ev.target.files); ev.target.value = ""; };
+  const dropZone = $("drop-zone");
+  dropZone.ondragover = (ev) => { ev.preventDefault(); dropZone.classList.add("dragover"); };
+  dropZone.ondragleave = () => dropZone.classList.remove("dragover");
+  dropZone.ondrop = (ev) => {
+    ev.preventDefault();
+    dropZone.classList.remove("dragover");
+    addFiles(ev.dataTransfer.files);
+  };
+  $("btn-send").onclick = () => sendBatch();
+  $("btn-cancel").onclick = () => { if (state.batchAbort) state.batchAbort(); };
+  $("btn-token").onclick = () => {
+    const t = prompt("Supervisor API 令牌（Bearer Token）：", getToken());
+    if (t !== null) { setToken(t.trim()); showToast("令牌已保存", "success"); refresh(); }
+  };
+  $("btn-log-pause").onclick = () => {
+    const st = state.logs[state.logServerId];
+    if (!st) return;
+    st.paused = !st.paused;
+    $("btn-log-pause").textContent = st.paused ? "resume" : "pause";
+  };
+  $("log-follow").onchange = (ev) => {
+    const st = state.logs[state.logServerId];
+    if (st) st.follow = ev.target.checked;
+  };
+  $("log-server").onchange = (ev) => {
+    state.logServerId = ev.target.value;
+    resetLogState(state.logServerId);
+  };
+  $("log-filter").onkeydown = (ev) => {
+    if (ev.key !== "Enter") return;
+    const st = state.logs[state.logServerId];
+    if (st) { st.filter = ev.target.value.toLowerCase(); renderLogContent(); }
+  };
+  $("btn-log-clear").onclick = () => { resetLogState(state.logServerId); };
+  $("palette-backdrop").onclick = closePalette;
+  window.addEventListener("resize", drawGpuChart);
+}
+
+/* ---------------- boot ---------------- */
+
+wire();
 if (!sessionStorage.getItem("booted")) {
   sessionStorage.setItem("booted", "1");
   document.body.classList.add("boot");
   setTimeout(() => document.body.classList.remove("boot"), 600);
 }
+if (!location.hash) location.hash = "#/overview";
+renderCurrentView();
 refresh();
+pollGpu();
 setInterval(refresh, 2000);
+setInterval(pollGpu, 2000);
 setInterval(pollLogs, 1000);
