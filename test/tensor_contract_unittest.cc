@@ -111,3 +111,33 @@ TEST(TensorLayout, HostOutputLayoutByRank) {
     EXPECT_EQ(jinq::models::backend::host_output_layout({1, 84, 8400}), TensorLayout::Unknown);
     EXPECT_EQ(jinq::models::backend::host_output_layout({2, 3, 4, 5, 6}), TensorLayout::Unknown);
 }
+
+TEST(TensorContract, ShapeVolumeOverflowReturnsNegative) {
+    using jinq::models::backend::shape_volume;
+    EXPECT_EQ(shape_volume({2, 3, 4}), 24);
+    EXPECT_EQ(shape_volume({0, 5}), 0);
+    EXPECT_EQ(shape_volume({-1, 3}), -3);
+    EXPECT_EQ(shape_volume({1LL << 40, 1LL << 40}), -1);
+    EXPECT_EQ(shape_volume({std::numeric_limits<int64_t>::max(), 2}), -1);
+}
+
+TEST(TensorContract, CheckedShapeNbytesOverflow) {
+    using jinq::models::backend::checked_shape_nbytes;
+    size_t nbytes = 0;
+    EXPECT_TRUE(checked_shape_nbytes({2, 3, 4}, DType::F32, &nbytes));
+    EXPECT_EQ(nbytes, 2u * 3u * 4u * sizeof(float));
+    EXPECT_FALSE(checked_shape_nbytes({0, 4}, DType::F32, &nbytes));
+    EXPECT_FALSE(checked_shape_nbytes({-1, 4}, DType::F32, &nbytes));
+    EXPECT_FALSE(checked_shape_nbytes({1LL << 40, 1LL << 40}, DType::F32, &nbytes));
+}
+
+TEST(TensorContract, CheckedElementCountOverflowPath) {
+    Tensor tensor;
+    tensor.dtype = DType::F32;
+    tensor.shape = {std::numeric_limits<int64_t>::max()};
+    size_t bytes = 0;
+    std::string err;
+    EXPECT_FALSE(jinq::models::backend::checked_element_count(tensor, &bytes, &err));
+    EXPECT_NE(err.find("overflow"), std::string::npos) << err;
+}
+
