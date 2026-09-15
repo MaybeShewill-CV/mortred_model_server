@@ -48,6 +48,9 @@ struct FakeModel {
     // When true, return aggregate OK but only one item_status / output entry —
     // the historical collector bug filled the rest from aggregate OK.
     bool short_item_status = false;
+    // When true, item_status is full-length OK but outputs is short — OK slots
+    // past outputs.size() must become MODEL_RUN_SESSION_FAILED.
+    bool short_outputs = false;
 
     StatusCode run(const base64_input& in, FakeOutput& out) {
         out.value = static_cast<int>(in.input_image_content.size());
@@ -64,6 +67,12 @@ struct FakeModel {
             out.resize(1);
             out[0].value = static_cast<int>(in[0].input_image_content.size());
             item_status.assign(1, StatusCode::OK);
+            return StatusCode::OK;
+        }
+        if (short_outputs && !in.empty()) {
+            out.resize(1);
+            out[0].value = static_cast<int>(in[0].input_image_content.size());
+            item_status.assign(in.size(), StatusCode::OK);
             return StatusCode::OK;
         }
         out.resize(in.size());
@@ -375,6 +384,53 @@ TEST(batch_collector, short_item_status_is_session_failed_not_aggregate_ok) {
     EXPECT_EQ(snap.item_status[1], StatusCode::MODEL_RUN_SESSION_FAILED);
     EXPECT_EQ(snap.item_outputs[1].value, 0);
     EXPECT_NE(snap.model_run_status, StatusCode::OK);
+
+    collector.stop();
+}
+
+TEST(batch_collector, short_outputs_with_ok_status_is_session_failed) {
+    // T0/D1: full-length OK item_status + short outputs must not move OK
+    // into missing slots.
+    WorkerPool<FakeWorker> pool;
+    PrometheusMetrics metrics;
+    auto model = std::make_unique<FakeModel>();
+    FakeModel* raw = model.get();
+    raw->short_outputs = true;
+    pool.adopt(std::move(model));
+    pool.commit_watermark(1);
+
+    BatchCollector<FakeWorker, FakeOutput> collector(pool, metrics);
+    collector.configure(/*max_batch_size=*/4, /*max_batch_delay_ms=*/30,
+                        /*worker_wait_timeout_ms=*/500);
+    collector.start();
+
+    std::mutex mu;
+    std::condition_variable cv;
+    bool done = false;
+
+    auto state = std::make_shared<BatchRequestState<FakeOutput>>();
+    state->req.items.push_back(text_item("aa"));
+    state->req.items.push_back(text_item("bbbb"));
+    state->init(2);
+    state->notify_done = [&]() {
+        std::lock_guard<std::mutex> lock(mu);
+        done = true;
+        cv.notify_all();
+    };
+
+    collector.submit(state);
+    {
+        std::unique_lock<std::mutex> lock(mu);
+        ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(2), [&]() { return done; }));
+    }
+
+    EXPECT_GE(raw->batch_calls.load(), 1);
+    auto snap = assemble_batch_slots(*state);
+    ASSERT_EQ(snap.item_status.size(), 2u);
+    EXPECT_EQ(snap.item_status[0], StatusCode::OK);
+    EXPECT_EQ(snap.item_outputs[0].value, 2);
+    EXPECT_EQ(snap.item_status[1], StatusCode::MODEL_RUN_SESSION_FAILED);
+    EXPECT_EQ(snap.item_outputs[1].value, 0);
 
     collector.stop();
 }

@@ -128,6 +128,23 @@ inline StatusCode match_required_inputs(const std::vector<TensorInfo>& required,
     return StatusCode::OK;
 }
 
+/***
+ * Backend run() must produce exactly as many outputs as discovery / config
+ * advertised. A short or long vector is a contract break (OOB rename or
+ * silent truncation) — fail closed before indexing infos by ordinal.
+ */
+inline StatusCode require_output_count(size_t expected, size_t actual, const char *backend,
+                                       std::string *err) {
+    if (expected == actual) {
+        return StatusCode::OK;
+    }
+    if (err != nullptr) {
+        *err = std::string(backend) + " output count mismatch: expected " + std::to_string(expected) +
+               ", got " + std::to_string(actual);
+    }
+    return StatusCode::MODEL_RUN_SESSION_FAILED;
+}
+
 }  // namespace backend
 }  // namespace models
 }  // namespace jinq

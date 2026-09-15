@@ -10,6 +10,7 @@ using jinq::models::backend::NamedTensor;
 using jinq::models::backend::TensorInfo;
 using jinq::models::backend::apply_configured_io_names;
 using jinq::models::backend::match_required_inputs;
+using jinq::models::backend::require_output_count;
 
 namespace {
 
@@ -125,3 +126,17 @@ TEST(MatchRequiredInputs, SizeMismatchFails) {
     EXPECT_NE(err.find("expects"), std::string::npos) << err;
 }
 
+TEST(RequireOutputCount, AcceptsEqualCounts) {
+    std::string err;
+    EXPECT_EQ(require_output_count(3, 3, "onnxruntime", &err), StatusCode::OK);
+    EXPECT_TRUE(err.empty());
+}
+
+TEST(RequireOutputCount, RejectsShortAndLong) {
+    std::string err;
+    EXPECT_EQ(require_output_count(2, 1, "onnxruntime", &err), StatusCode::MODEL_RUN_SESSION_FAILED);
+    EXPECT_NE(err.find("output count mismatch"), std::string::npos) << err;
+    err.clear();
+    EXPECT_EQ(require_output_count(2, 3, "tensorrt", &err), StatusCode::MODEL_RUN_SESSION_FAILED);
+    EXPECT_NE(err.find("tensorrt"), std::string::npos) << err;
+}

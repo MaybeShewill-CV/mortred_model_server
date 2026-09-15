@@ -288,6 +288,13 @@ StatusCode OrtSession::run(const std::vector<NamedTensor>& inputs,
             Ort::RunOptions{nullptr}, _m_input_name_ptrs.data(), ort_inputs.data(),
             ort_inputs.size(), _m_output_name_ptrs.data(), _m_output_name_ptrs.size());
 
+        std::string count_err;
+        if (require_output_count(_m_output_infos.size(), ort_outputs.size(), "onnxruntime",
+                                 &count_err) != StatusCode::OK) {
+            LOG(ERROR) << count_err;
+            return StatusCode::MODEL_RUN_SESSION_FAILED;
+        }
+
         outputs.clear();
         outputs.reserve(ort_outputs.size());
         for (size_t idx = 0; idx < ort_outputs.size(); ++idx) {
