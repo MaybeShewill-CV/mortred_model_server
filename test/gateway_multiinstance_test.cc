@@ -26,6 +26,7 @@
 #include <sstream>
 #include <string>
 
+#include "control/api_key_manager.h"
 #include "control/gateway/gateway_app.h"
 
 namespace fs = std::filesystem;
@@ -58,6 +59,7 @@ int find_free_port() {
 struct HttpResp {
     int status = 0;
     std::string body;
+    std::string raw;
 };
 
 HttpResp send_request(int port, const std::string& method, const std::string& path,
@@ -97,6 +99,7 @@ HttpResp send_request(int port, const std::string& method, const std::string& pa
     }
     ::close(fd);
     HttpResp out;
+    out.raw = response;
     const auto sp = response.find(' ');
     if (sp != std::string::npos) {
         out.status = std::atoi(response.substr(sp + 1, 3).c_str());
@@ -223,6 +226,84 @@ TEST_F(GatewayMultiInstanceTest, scrape_tokens_are_not_shared_between_instances)
     EXPECT_EQ(foreign.status, 401);
     const auto own = send_request(a_.gateway_port, "GET", "/metrics", a_.scrape_token);
     EXPECT_EQ(own.status, 200);
+}
+
+TEST_F(GatewayMultiInstanceTest, rate_limited_key_gets_429_not_401) {
+    // PR-3a regression: authenticate() used to return a null key for BOTH
+    // "unknown card" and "valid card over QPS", so a throttled valid key
+    // fell through to the static-token path and got 401. Now it must be
+    // 429 + Retry-After. Built as a third instance whose project root
+    // carries conf/api_keys.toml (a qps=2 inference key) - the gateway
+    // loads it from <root>/conf on init.
+    Instance c;
+    c.root = base_dir_ / "c";
+    c.model_id = "MODEL_C";
+    c.gateway_port = find_free_port();
+    ASSERT_GT(c.gateway_port, 0);
+    write_instance_config(c, find_free_port());
+    {
+        std::ofstream keys(c.root / "conf" / "api_keys.toml");
+        keys << "[keys.limited]\n"
+             << "hash = \"" << mortred::control::ApiKeyManager::sha256_hex("key-c")
+             << "\"\n"
+             << "scope = \"inference\"\n"
+             << "rate_limit_qps = 2\n";
+    }
+    mortred::control::GatewayInitOptions opt;
+    opt.project_root = c.root.string();
+    opt.metrics_token = "scrape-c";
+    opt.internal_token = "internal-c";
+    opt.host = "127.0.0.1";
+    opt.port = c.gateway_port;
+    ASSERT_TRUE(c.app.init(opt)) << "instance C init failed";
+    ASSERT_TRUE(c.app.listen()) << "instance C listen failed";
+
+    int status_503 = 0;  // auth passed, upstream dead (the multiinstance trick)
+    int status_429 = 0;
+    int status_401 = 0;
+    int retry_after_secs = -1;
+    for (int i = 0; i < 6; ++i) {
+        const auto resp = send_request(c.gateway_port, "POST",
+                                       "/v1/models/MODEL_C/infer", "key-c");
+        if (resp.status == 503) {
+            ++status_503;
+        } else if (resp.status == 429) {
+            ++status_429;
+            // parse "Retry-After: <digits>" robustly: skip the spaces after
+            // the colon, then collect the digit run
+            // anchor to the header-line start so names like X-Retry-After
+            // can never substring-match; every header begins after CRLF
+            const auto pos = resp.raw.find("\r\nRetry-After:");
+            ASSERT_NE(pos, std::string::npos) << "429 without Retry-After header";
+            size_t vpos = pos + 2 + 12;  // CRLF + strlen("Retry-After:")
+            while (vpos < resp.raw.size() && resp.raw[vpos] == ' ') {
+                ++vpos;
+            }
+            std::string digits;
+            while (vpos < resp.raw.size() && resp.raw[vpos] >= '0' &&
+                   resp.raw[vpos] <= '9') {
+                digits.push_back(resp.raw[vpos]);
+                ++vpos;
+            }
+            ASSERT_FALSE(digits.empty()) << "Retry-After without a numeric value";
+            retry_after_secs = std::atoi(digits.c_str());
+        } else if (resp.status == 401) {
+            ++status_401;
+        }
+    }
+    // completeness: every request answered one of the three expected codes
+    EXPECT_EQ(status_503 + status_429 + status_401, 6);
+    // qps=2 admits 2 per 1-second window; at most ONE boundary can be crossed
+    // by six loopback requests (~2ms each), so admissions are 2 or 4
+    EXPECT_GE(status_503, 2);
+    EXPECT_LE(status_503, 4);
+    EXPECT_GE(status_429, 2);
+    // THE regression assertion: a valid throttled key never sees 401
+    EXPECT_EQ(status_401, 0);
+    // Retry-After is exactly 1 (the 1..1000 ms budget rounds up to one second)
+    EXPECT_EQ(retry_after_secs, 1);
+
+    c.app.stop_listen();
 }
 
 TEST_F(GatewayMultiInstanceTest, healthz_stays_public_on_both_instances) {

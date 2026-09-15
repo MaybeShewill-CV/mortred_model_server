@@ -49,6 +49,7 @@
 namespace {
 
 using mortred::control::ApiKey;
+using mortred::control::AuthReason;
 using mortred::control::ServerEntry;
 
 std::string header_value(const protocol::HttpRequest* req, const std::string& name) {
@@ -404,10 +405,22 @@ void GatewayApp::process(WFHttpTask* task) {
     if (api_keys_.key_count() > 0) {
         // shared_ptr ownership: safe across a concurrent reload() that swaps
         // the whole key set (P0-2)
-        const auto key = api_keys_.authenticate(auth_header);
-        if (key_may_infer(key)) {
+        const auto auth = api_keys_.authenticate(auth_header);
+        if (auth.reason == AuthReason::RATE_LIMITED) {
+            // a VALID key that is merely throttled: 429 + Retry-After, never
+            // 401, and never a fallthrough to the static-token path (the
+            // client presented working credentials)
+            metrics_.inc_http_requests(method, "429");
+            const int retry_s = (auth.retry_after_ms + 999) / 1000;
+            task->get_resp()->add_header_pair("Retry-After",
+                                              std::to_string(retry_s).c_str());
+            reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED,
+                                "api key rate limit exceeded");
+            return;
+        }
+        if (key_may_infer(auth.key)) {
             authorized = true;
-            key_name = key->name;
+            key_name = auth.key->name;
         }
     }
 
