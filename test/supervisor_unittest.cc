@@ -279,8 +279,8 @@ TEST_F(SupervisorTest, restarts_do_not_leak_log_pipe_fds) {
             const auto s = sup->status("fake_model_server");
             return s.state == "running" && s.ready;
         }, 15000)) << "restart round " << round << " did not recover";
-        // the old reader threads must observe EOF and be joined+closed before
-        // the count; 200ms is generous for a pipe EOF wakeup
+        // handle_exit must have joined readers and closed fds before the count;
+        // 200ms is generous for pipe EOF + join
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
         const int fds = count_open_fds();
         EXPECT_LE(fds, prev + 1) << "fd count grew after restart round " << round
@@ -299,6 +299,29 @@ TEST_F(SupervisorTest, restarts_do_not_leak_log_pipe_fds) {
     const int fds = count_open_fds();
     EXPECT_LE(fds, prev + 1) << "fd count grew after unexpected exit (before " << prev
                              << ", after " << fds << ")";
+}
+
+TEST_F(SupervisorTest, rapid_restarts_do_not_double_join_readers) {
+    // P1-B2: spawn_locked used to join reader threads that handle_exit also
+    // joins. stop→start can overlap those joins (UB / terminate). Ownership is
+    // now handle_exit-only; this hammer exercises the wait path.
+    auto sup = make_supervisor();
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    std::string err;
+    ASSERT_TRUE(sup->start_server("fake_model_server", &err)) << err;
+    ASSERT_TRUE(wait_for([&sup]() { return sup->status("fake_model_server").ready; }, 10000));
+
+    for (int round = 0; round < 20; ++round) {
+        ASSERT_TRUE(sup->restart_server("fake_model_server", &err))
+            << "round " << round << ": " << err;
+        ASSERT_TRUE(wait_for([&sup]() {
+            const auto s = sup->status("fake_model_server");
+            return s.state == "running" && s.ready;
+        }, 15000))
+            << "round " << round << " did not recover";
+    }
 }
 
 TEST_F(SupervisorTest, spawn_passes_model_flag_for_unified_exe) {

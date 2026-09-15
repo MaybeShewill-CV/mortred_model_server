@@ -117,13 +117,16 @@ class ProcessSupervisor {
         int64_t started_at_unix_ms = 0;
         int64_t backoff_due_ms = 0;   // monotonic ms deadline, 0 = none
         int64_t last_probe_ms = 0;
-        // read ends of the child's stdout/stderr pipes. Written by
-        // spawn_locked before the reader threads start, consumed (and closed)
-        // by handle_exit after joining them; -1 while no child is running.
+        // Log-pipe ownership: spawn_locked creates the pipes and reader
+        // threads, then sets readers_live. handle_exit is the SOLE joiner —
+        // it joins both threads, closes the fds, clears readers_live, and
+        // notifies _cv. spawn_locked must wait for !readers_live (never join)
+        // so restart cannot double-join the same std::thread.
         int out_fd = -1;
         int err_fd = -1;
         std::thread reader_out;
         std::thread reader_err;
+        std::atomic<bool> readers_live{false};
         std::unique_ptr<LogBuffer> log;
         std::string error;
     };
@@ -135,7 +138,7 @@ class ProcessSupervisor {
     Child* find_locked(const std::string& id);
     const Child* find_locked(const std::string& id) const;
     std::string bin_path(const Child& child) const;
-    bool spawn_locked(Child* child, std::string* err);
+    bool spawn_locked(Child* child, std::string* err, std::unique_lock<std::mutex>& lock);
     void apply_exit_decision(Child* child, const RestartEngine::Decision& decision,
                              bool expected_stop);
     void handle_exit(pid_t pid, int wait_status);
