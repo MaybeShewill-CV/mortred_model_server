@@ -77,6 +77,57 @@ inline StatusCode apply_configured_io_names(const std::vector<std::string>& name
     return StatusCode::OK;
 }
 
+
+/***
+ * Resolve run() inputs against the session's required TensorInfo list.
+ * Fail-closed on size mismatch, duplicate names, or any missing required
+ * name. On success, *ordered holds one pointer per required info (session
+ * order), independent of the caller's vector order.
+ */
+inline StatusCode match_required_inputs(const std::vector<TensorInfo>& required,
+                                        const std::vector<NamedTensor>& inputs,
+                                        std::vector<const NamedTensor*>* ordered,
+                                        std::string* err) {
+    if (ordered == nullptr) {
+        if (err != nullptr) {
+            *err = "internal error: ordered input list is null";
+        }
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+    if (inputs.size() != required.size()) {
+        if (err != nullptr) {
+            *err = "session expects " + std::to_string(required.size()) + " inputs, got " +
+                   std::to_string(inputs.size());
+        }
+        return StatusCode::MODEL_RUN_SESSION_FAILED;
+    }
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        for (size_t j = i + 1; j < inputs.size(); ++j) {
+            if (inputs[i].name == inputs[j].name) {
+                if (err != nullptr) {
+                    *err = "duplicate input tensor: " + inputs[i].name;
+                }
+                return StatusCode::MODEL_RUN_SESSION_FAILED;
+            }
+        }
+    }
+    ordered->clear();
+    ordered->reserve(required.size());
+    for (const auto& info : required) {
+        const auto found = std::find_if(
+            inputs.begin(), inputs.end(),
+            [&info](const NamedTensor& named) { return named.name == info.name; });
+        if (found == inputs.end()) {
+            if (err != nullptr) {
+                *err = "missing input tensor: " + info.name;
+            }
+            return StatusCode::MODEL_RUN_SESSION_FAILED;
+        }
+        ordered->push_back(&(*found));
+    }
+    return StatusCode::OK;
+}
+
 }  // namespace backend
 }  // namespace models
 }  // namespace jinq
