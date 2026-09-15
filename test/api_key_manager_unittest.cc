@@ -151,17 +151,27 @@ TEST(api_key_manager, rate_limited_valid_key_is_never_unknown) {
     ApiKeyManager mgr;
     ASSERT_TRUE(mgr.load(path));
 
-    // qps=2: the first TWO admissions of the window conform, the third
-    // throttles (allow_rate_limit checks the count before incrementing)
-    const auto first = mgr.authenticate("Bearer secret-limited");
-    ASSERT_EQ(first.reason, AuthReason::OK);
-    const auto second = mgr.authenticate("Bearer secret-limited");
-    ASSERT_EQ(second.reason, AuthReason::OK);
-    const auto third = mgr.authenticate("Bearer secret-limited");
-    ASSERT_EQ(third.reason, AuthReason::RATE_LIMITED);
-    EXPECT_GE(third.retry_after_ms, 1);
-    EXPECT_LE(third.retry_after_ms, 1000);
-    EXPECT_EQ(third.key, nullptr);
+    // qps=2: admissions conform until the window budget is spent, then the
+    // limiter trips (allow_rate_limit checks the count before incrementing).
+    // Hammer until it trips instead of assuming an exact call index: a
+    // 1-second boundary crossed mid-loop grants a fresh budget of two.
+    ASSERT_EQ(mgr.authenticate("Bearer secret-limited").reason, AuthReason::OK);
+    int admitted = 1;
+    mortred::control::AuthResult throttled;
+    throttled.reason = AuthReason::OK;
+    for (int i = 0; i < 8 && throttled.reason != AuthReason::RATE_LIMITED; ++i) {
+        throttled = mgr.authenticate("Bearer secret-limited");
+        if (throttled.reason == AuthReason::OK) {
+            ++admitted;
+        }
+    }
+    ASSERT_EQ(throttled.reason, AuthReason::RATE_LIMITED);
+    EXPECT_GE(throttled.retry_after_ms, 1);
+    EXPECT_LE(throttled.retry_after_ms, 1000);
+    EXPECT_EQ(throttled.key, nullptr);
+    // the microsecond-scale loop may cross at most one window boundary:
+    // 2 admissions per window, so at most 4 before the trip
+    EXPECT_LE(admitted, 4);
     // the wrong-secret card stays UNKNOWN regardless of any throttling
     EXPECT_EQ(mgr.authenticate("Bearer wrong-secret").reason, AuthReason::UNKNOWN);
 }

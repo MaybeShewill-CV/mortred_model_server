@@ -261,7 +261,7 @@ TEST_F(GatewayMultiInstanceTest, rate_limited_key_gets_429_not_401) {
     int status_503 = 0;  // auth passed, upstream dead (the multiinstance trick)
     int status_429 = 0;
     int status_401 = 0;
-    std::string retry_after;
+    int retry_after_secs = -1;
     for (int i = 0; i < 6; ++i) {
         const auto resp = send_request(c.gateway_port, "POST",
                                        "/v1/models/MODEL_C/infer", "key-c");
@@ -269,22 +269,39 @@ TEST_F(GatewayMultiInstanceTest, rate_limited_key_gets_429_not_401) {
             ++status_503;
         } else if (resp.status == 429) {
             ++status_429;
-            const auto pos = resp.raw.find("Retry-After:");
+            // parse "Retry-After: <digits>" robustly: skip the spaces after
+            // the colon, then collect the digit run
+            // anchor to the header-line start so names like X-Retry-After
+            // can never substring-match; every header begins after CRLF
+            const auto pos = resp.raw.find("\r\nRetry-After:");
             ASSERT_NE(pos, std::string::npos) << "429 without Retry-After header";
-            retry_after = resp.raw.substr(pos + 12, 2);
+            size_t vpos = pos + 2 + 12;  // CRLF + strlen("Retry-After:")
+            while (vpos < resp.raw.size() && resp.raw[vpos] == ' ') {
+                ++vpos;
+            }
+            std::string digits;
+            while (vpos < resp.raw.size() && resp.raw[vpos] >= '0' &&
+                   resp.raw[vpos] <= '9') {
+                digits.push_back(resp.raw[vpos]);
+                ++vpos;
+            }
+            ASSERT_FALSE(digits.empty()) << "Retry-After without a numeric value";
+            retry_after_secs = std::atoi(digits.c_str());
         } else if (resp.status == 401) {
             ++status_401;
         }
     }
-    // two admissions in the first window, the rest throttled; even with one
-    // window boundary crossed mid-loop there is at most one extra 503
+    // completeness: every request answered one of the three expected codes
+    EXPECT_EQ(status_503 + status_429 + status_401, 6);
+    // qps=2 admits 2 per 1-second window; at most ONE boundary can be crossed
+    // by six loopback requests (~2ms each), so admissions are 2 or 4
     EXPECT_GE(status_503, 2);
-    EXPECT_LE(status_503, 3);
-    EXPECT_GE(status_429, 3);
+    EXPECT_LE(status_503, 4);
+    EXPECT_GE(status_429, 2);
     // THE regression assertion: a valid throttled key never sees 401
     EXPECT_EQ(status_401, 0);
-    // Retry-After is a whole second (the 1s fixed window rounds up)
-    EXPECT_EQ(retry_after.substr(0, 1), "1");
+    // Retry-After is exactly 1 (the 1..1000 ms budget rounds up to one second)
+    EXPECT_EQ(retry_after_secs, 1);
 
     c.app.stop_listen();
 }
