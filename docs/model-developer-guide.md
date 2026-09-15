@@ -34,7 +34,7 @@ That produces five files:
 | `src/models/classification/efficient_net.inl` | `preprocess` / `postprocess` / `on_init` |
 | `conf/model/classification/efficientnet/efficientnet_config.toml` | weight path, params |
 | `test/efficient_net_output_contract_unittest.cc` | the real output shape |
-| `docs/models/classification/efficientnet.md` | status and TODOs |
+| optional per-model note under docs/ | status / TODOs if you keep one |
 
 At this point the model **compiles** and every hook returns
 `MODEL_NOT_IMPLEMENTED`, so it cannot be served by accident.

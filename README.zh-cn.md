@@ -107,7 +107,7 @@ GPU：用 `mortredctl prepare` 在本机转 **当前 pack** 的 TensorRT engine�
 ### 从源码构建
 
 **cpu 源码树最短成功路径**（trust → supervisor → 一次 MOBILENETV2 推理）见
-[docs/shortest-path-cpu.md](docs/shortest-path-cpu.md)。
+[docs/oob-main-path.md](docs/oob-main-path.md) §0c（cpu 源码编译）。
 
 手装 CUDA / MNN / WORKFLOW / OpenCV / TensorRT 不是快速开始；那是源码构建路径。
 两条 CMake 路径：

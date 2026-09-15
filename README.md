@@ -123,7 +123,7 @@ still converts every engine and stays opt-in. See [docs/deployment.md](docs/depl
 ### Building from source
 
 For a **cpu source-tree shortest path** (trust → supervisor → one MOBILENETV2 infer),
-see [docs/shortest-path-cpu.md](docs/shortest-path-cpu.md).
+see [docs/oob-main-path.md](docs/oob-main-path.md) §0c (cpu source build).
 
 ```bash
 # dependencies (version matrix + sha256 pinned + idempotent stamps)

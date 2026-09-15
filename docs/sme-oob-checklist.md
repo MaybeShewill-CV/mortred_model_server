@@ -8,18 +8,18 @@
 
 | ID | 状态 | 事项 | 验收 |
 |---|---|---|---|
-| SME-14 | main @ b0c96f5 | docs/evidence/sme-14-golden-drift-ci-20260914.md |
-| SME-16 | main @ 39a6b68 | docs/evidence/sme-16-convert-trt10-gate-20260914.md |
-| SME-13 | main @ 4a956a9 | docs/evidence/sme-13-zombie-comments-20260914.md |
-| SME-12 | main @ 8798a0c | docs/evidence/sme-12-unsupported-boundaries-20260914.md |
-| SME-11 | main @ e66d8ed | docs/evidence/sme-11-oob-main-path-20260914.md |
-| SME-10 | main @ e16fae2 | docs/evidence/sme-10-cmake-doc-gates-20260914.md |
-| SME-09 | main @ c00a233 | docs/evidence/sme-09-batch-deadline-20260914.md |
-| SME-08 | main @ ec3fef7 | docs/evidence/sme-08-write-slot-epoch-20260914.md |
-| SME-07 | main @ 4cfe6e5 | docs/evidence/sme-07-auth-before-rate-limit-20260914.md |
-| SME-06 | main @ 6e1b7d1 | docs/evidence/sme-06-action-http-status-20260914.md |
-| SME-05 | main @ 1ebf4b4 | docs/evidence/sme-05-pack-file-apply-20260914.md |
-| SME-04 | main @ 7878a28 | docs/evidence/sme-04-release-dry-run-20260914.md; release_dry_run.sh |
+| SME-14 | main @ b0c96f5 | _(merged; evidence pruned)_ |
+| SME-16 | main @ 39a6b68 | _(merged; evidence pruned)_ |
+| SME-13 | main @ 4a956a9 | _(merged; evidence pruned)_ |
+| SME-12 | main @ 8798a0c | _(merged; evidence pruned)_ |
+| SME-11 | main @ e66d8ed | _(merged; evidence pruned)_ |
+| SME-10 | main @ e16fae2 | _(merged; evidence pruned)_ |
+| SME-09 | main @ c00a233 | _(merged; evidence pruned)_ |
+| SME-08 | main @ ec3fef7 | _(merged; evidence pruned)_ |
+| SME-07 | main @ 4cfe6e5 | _(merged; evidence pruned)_ |
+| SME-06 | main @ 6e1b7d1 | _(merged; evidence pruned)_ |
+| SME-05 | main @ 1ebf4b4 | _(merged; evidence pruned)_ |
+| SME-04 | main @ 7878a28 | _(merged; evidence pruned)_ release_dry_run.sh |
 | SME-01 | DONE | WSL 归档全量 `tests-only`（+ 实际售卖 profile 的关键 GPU smoke） | 有可复现命令、退出码、失败清单 |
 | SME-02 | DONE | 官方最短成功路径跑通并写入主航道文档：`install_deps` → 三 token →（GPU）`convert_trt` → `doctor --strict` → 一次推理 | 新人按文档能跟到绿 |
 | SME-03 | DONE | `check_consistency`（或独立 checker）锁住 `ci.yml` dry-run/mock 契约 | 故意改错 CI 断言会被门禁抓住 |
@@ -45,5 +45,5 @@
 
 | ID | 合入 main | 备注 |
 |---|---|---|
-| SME-01 | main @ 224a460 | WSL tests-only check 53/53 @ d51b0287; docs/evidence/sme-01-tests-only-20260914.md |
-| SME-02 | main (this commit) | cpu shortest path OK; docs/shortest-path-cpu.md + docs/evidence/sme-02-shortest-path-cpu-20260914.md |
+| SME-01 | main @ 224a460 | WSL tests-only check 53/53 @ d51b0287 |
+| SME-02 | main (this commit) | cpu shortest path OK; oob-main-path.md §0c (cpu source) |

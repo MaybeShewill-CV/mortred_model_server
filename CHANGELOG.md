@@ -34,6 +34,7 @@ All notable changes to this project are documented here. The format follows
 > 已链入），以及 SME-02 evidence（`docs/evidence/`）。
 
 ### Changed
+- **Docs:** fold `shortest-path-cpu.md` into `oob-main-path.md` (single out-of-box lane); remove `docs/bench/`, `docs/evidence/`, and `docs/models/` (RTDETR note stays in unsupported-boundaries).
 - **Docs:** merge five per-task model-server tutorials into `docs/tutorials_of_model_servers.md` (+ zh-cn); README links updated.
 - **Docs prune:** drop completed historical plans (base_server split, unified-contract refactor log, P4 DX plan/todolist/metrics) and large generated architecture HTML/diagrams; README / how-to / developer-guide links retargeted to living guides.
 

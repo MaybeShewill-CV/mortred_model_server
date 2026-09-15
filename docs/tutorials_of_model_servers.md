@@ -4,7 +4,7 @@ Task servers share one binary and one demo client. This page covers **start a
 server** and **call it** for the common image tasks.
 
 Prerequisite: a built tree with `_bin/mortred-model-server.out` (see
-[oob-main-path.md](oob-main-path.md) / [shortest-path-cpu.md](shortest-path-cpu.md)).
+[oob-main-path.md](oob-main-path.md)).
 Config field reference: [about_model_server_configuration.md](about_model_server_configuration.md),
 [about_model_configuration.md](about_model_configuration.md).
 
