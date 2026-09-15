@@ -30,6 +30,23 @@ struct SupervisorConfig {
     std::string libs_dir = "3rd_party/libs";
 };
 
+/*** Edge per-IP rate limiting (gateway L1; [gateway.rate_limit] table).
+ * Ships disabled: enabled=false keeps the gateway byte-compatible with the
+ * pre-limiter behavior; shadow=true meters and counts but never rejects,
+ * which is the rollout observation mode. trusted_proxies lists EXACT
+ * addresses (v4 /32, v6 /128) whose Forwarded/X-Forwarded-For headers are
+ * honored; loopback is trusted by default because init-edge nginx runs in
+ * the host network namespace. */
+struct GatewayRateLimitConfig {
+    bool enabled = false;
+    bool shadow = false;
+    int rate_per_sec = 50;      // sustained per-source rate
+    int burst = 100;            // exact instantaneous capacity
+    int max_tracked = 262144;   // hard memory bound (~12 MiB)
+    // comma-separated EXACT addresses (mini_toml has no arrays)
+    std::string trusted_proxies = "127.0.0.1,::1";
+};
+
 struct GatewayConfig {
     std::string host = "127.0.0.1";
     int port = 8080;
@@ -37,6 +54,7 @@ struct GatewayConfig {
     int max_connections = 1000;
     int upstream_send_timeout_ms = 180000;
     int upstream_recv_timeout_ms = 180000;
+    GatewayRateLimitConfig rate_limit;
 };
 
 /*** Pack-level GPU occupancy contract from the [pack] table. Default policy
