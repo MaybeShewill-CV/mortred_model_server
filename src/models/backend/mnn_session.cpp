@@ -260,28 +260,27 @@ StatusCode MnnSession::run(const std::vector<NamedTensor>& inputs,
         LOG(ERROR) << "mnn session is not initialized";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    if (inputs.size() != _m_input_infos.size()) {
-        LOG(ERROR) << "mnn session expects " << _m_input_infos.size() << " inputs, got "
-                   << inputs.size();
+    std::vector<const NamedTensor*> ordered_inputs;
+    std::string match_err;
+    if (match_required_inputs(_m_input_infos, inputs, &ordered_inputs, &match_err) !=
+        StatusCode::OK) {
+        LOG(ERROR) << "mnn " << match_err;
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
 
     bool need_resize = false;
-    for (const auto& named : inputs) {
+    for (size_t idx = 0; idx < ordered_inputs.size(); ++idx) {
+        const auto& named = *ordered_inputs[idx];
+        const auto& info = _m_input_infos[idx];
         const auto iter = _m_input_tensors.find(named.name);
         if (iter == _m_input_tensors.end() || iter->second == nullptr) {
             LOG(ERROR) << "unknown mnn input tensor: " << named.name;
             return StatusCode::MODEL_RUN_SESSION_FAILED;
         }
         auto* mnn_tensor = iter->second;
-        const auto dtype_iter = std::find_if(
-            _m_input_infos.begin(), _m_input_infos.end(),
-            [&named](const TensorInfo& info) { return info.name == named.name; });
-        if (dtype_iter == _m_input_infos.end() || dtype_iter->dtype != named.tensor.dtype) {
+        if (info.dtype != named.tensor.dtype) {
             LOG(ERROR) << "mnn input '" << named.name << "' dtype mismatch, expected "
-                       << (dtype_iter == _m_input_infos.end() ? std::string("unknown")
-                                                              : dtype_iter->to_string())
-                       << ", got " << dtype_to_string(named.tensor.dtype);
+                       << info.to_string() << ", got " << dtype_to_string(named.tensor.dtype);
             return StatusCode::MODEL_RUN_SESSION_FAILED;
         }
         if (!named.tensor.shape_is_concrete()) {
@@ -307,7 +306,8 @@ StatusCode MnnSession::run(const std::vector<NamedTensor>& inputs,
         }
     }
 
-    for (const auto& named : inputs) {
+    for (const auto* named_ptr : ordered_inputs) {
+        const auto& named = *named_ptr;
         auto* mnn_tensor = _m_input_tensors.at(named.name);
         const auto dim_type = _m_input_dim_types.at(named.name);
         MNN::Tensor host_tensor(mnn_tensor, dim_type);

@@ -249,9 +249,11 @@ StatusCode OrtSession::run(const std::vector<NamedTensor>& inputs,
         LOG(ERROR) << "onnxruntime session is not initialized";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    if (inputs.size() != _m_input_infos.size()) {
-        LOG(ERROR) << "onnxruntime session expects " << _m_input_infos.size() << " inputs, got "
-                   << inputs.size();
+    std::vector<const NamedTensor*> ordered_inputs;
+    std::string match_err;
+    if (match_required_inputs(_m_input_infos, inputs, &ordered_inputs, &match_err) !=
+        StatusCode::OK) {
+        LOG(ERROR) << "onnxruntime " << match_err;
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
 
@@ -262,15 +264,9 @@ StatusCode OrtSession::run(const std::vector<NamedTensor>& inputs,
         ort_inputs.reserve(_m_input_infos.size());
         // Bind in session input order so name ptrs and Ort::Value slots match,
         // independent of the caller's NamedTensor vector order.
-        for (const auto& info : _m_input_infos) {
-            const auto named_iter = std::find_if(
-                inputs.begin(), inputs.end(),
-                [&info](const NamedTensor& named) { return named.name == info.name; });
-            if (named_iter == inputs.end()) {
-                LOG(ERROR) << "missing onnxruntime input tensor: " << info.name;
-                return StatusCode::MODEL_RUN_SESSION_FAILED;
-            }
-            const auto& named = *named_iter;
+        for (size_t idx = 0; idx < _m_input_infos.size(); ++idx) {
+            const auto& info = _m_input_infos[idx];
+            const auto& named = *ordered_inputs[idx];
             if (info.dtype != named.tensor.dtype) {
                 LOG(ERROR) << "onnxruntime input '" << named.name << "' dtype mismatch, expected "
                            << info.to_string() << ", got "

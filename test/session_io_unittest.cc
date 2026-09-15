@@ -6,8 +6,10 @@
 #include "models/backend/session_io.h"
 
 using jinq::common::StatusCode;
+using jinq::models::backend::NamedTensor;
 using jinq::models::backend::TensorInfo;
 using jinq::models::backend::apply_configured_io_names;
+using jinq::models::backend::match_required_inputs;
 
 namespace {
 
@@ -73,3 +75,53 @@ TEST(SessionIoNames, NullInfosFails) {
     EXPECT_EQ(apply_configured_io_names({"a"}, nullptr, "output", &err),
               StatusCode::MODEL_INIT_FAILED);
 }
+
+TEST(MatchRequiredInputs, AcceptsAnyOrderWithoutDuplicates) {
+    const std::vector<TensorInfo> required = {named_info("a"), named_info("b")};
+    std::vector<NamedTensor> inputs(2);
+    inputs[0].name = "b";
+    inputs[1].name = "a";
+    std::vector<const NamedTensor*> ordered;
+    std::string err;
+    ASSERT_EQ(match_required_inputs(required, inputs, &ordered, &err), StatusCode::OK) << err;
+    ASSERT_EQ(ordered.size(), 2u);
+    EXPECT_EQ(ordered[0]->name, "a");
+    EXPECT_EQ(ordered[1]->name, "b");
+}
+
+TEST(MatchRequiredInputs, DuplicateNamesFailClosed) {
+    // Historical TRT hole: size matched with [A,A] while required was [A,B].
+    const std::vector<TensorInfo> required = {named_info("a"), named_info("b")};
+    std::vector<NamedTensor> inputs(2);
+    inputs[0].name = "a";
+    inputs[1].name = "a";
+    std::vector<const NamedTensor*> ordered;
+    std::string err;
+    EXPECT_EQ(match_required_inputs(required, inputs, &ordered, &err),
+              StatusCode::MODEL_RUN_SESSION_FAILED);
+    EXPECT_NE(err.find("duplicate"), std::string::npos) << err;
+}
+
+TEST(MatchRequiredInputs, MissingRequiredNameFails) {
+    const std::vector<TensorInfo> required = {named_info("a"), named_info("b")};
+    std::vector<NamedTensor> inputs(2);
+    inputs[0].name = "a";
+    inputs[1].name = "c";
+    std::vector<const NamedTensor*> ordered;
+    std::string err;
+    EXPECT_EQ(match_required_inputs(required, inputs, &ordered, &err),
+              StatusCode::MODEL_RUN_SESSION_FAILED);
+    EXPECT_NE(err.find("missing"), std::string::npos) << err;
+}
+
+TEST(MatchRequiredInputs, SizeMismatchFails) {
+    const std::vector<TensorInfo> required = {named_info("a"), named_info("b")};
+    std::vector<NamedTensor> inputs(1);
+    inputs[0].name = "a";
+    std::vector<const NamedTensor*> ordered;
+    std::string err;
+    EXPECT_EQ(match_required_inputs(required, inputs, &ordered, &err),
+              StatusCode::MODEL_RUN_SESSION_FAILED);
+    EXPECT_NE(err.find("expects"), std::string::npos) << err;
+}
+

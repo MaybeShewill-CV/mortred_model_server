@@ -451,24 +451,21 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
         LOG(ERROR) << "tensorrt session is not initialized";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    if (inputs.size() != _m_input_infos.size()) {
-        LOG(ERROR) << "tensorrt session expects " << _m_input_infos.size() << " inputs, got "
-                   << inputs.size();
+    std::vector<const NamedTensor*> ordered_inputs;
+    std::string match_err;
+    if (match_required_inputs(_m_input_infos, inputs, &ordered_inputs, &match_err) !=
+        StatusCode::OK) {
+        LOG(ERROR) << "tensorrt " << match_err;
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
 
-    // apply input shapes (also validates every provided input against the io)
-    for (const auto& named : inputs) {
-        const auto info_iter = std::find_if(
-            _m_input_infos.begin(), _m_input_infos.end(),
-            [&named](const TensorInfo& info) { return info.name == named.name; });
-        if (info_iter == _m_input_infos.end()) {
-            LOG(ERROR) << "unknown tensorrt input tensor: " << named.name;
-            return StatusCode::MODEL_RUN_SESSION_FAILED;
-        }
-        if (info_iter->dtype != named.tensor.dtype) {
+    // apply input shapes in session order (required set already matched)
+    for (size_t idx = 0; idx < _m_input_infos.size(); ++idx) {
+        const auto& info = _m_input_infos[idx];
+        const auto& named = *ordered_inputs[idx];
+        if (info.dtype != named.tensor.dtype) {
             LOG(ERROR) << "tensorrt input '" << named.name << "' dtype mismatch, expected "
-                       << info_iter->to_string() << ", got " << dtype_to_string(named.tensor.dtype);
+                       << info.to_string() << ", got " << dtype_to_string(named.tensor.dtype);
             return StatusCode::MODEL_RUN_SESSION_FAILED;
         }
         if (!named.tensor.shape_is_concrete()) {
@@ -485,8 +482,9 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
         }
     }
 
-    // H2D + bind inputs
-    for (const auto& named : inputs) {
+    // H2D + bind inputs (same session order)
+    for (size_t idx = 0; idx < ordered_inputs.size(); ++idx) {
+        const auto& named = *ordered_inputs[idx];
         auto& buffer = _m_device_buffers.at(named.name);
         size_t input_bytes = 0;
         if (!checked_shape_nbytes(named.tensor.shape, named.tensor.dtype, &input_bytes)) {
