@@ -16,8 +16,13 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
 #include <cstdlib>
 #include <fcntl.h>
+#include <signal.h>
+#include <poll.h>
+#include <chrono>
+#include <thread>
 #include <string>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -99,8 +104,14 @@ inline bool is_occupancy_gate_error(const std::string& err) {
     return err.find("occupancy gate:") != std::string::npos;
 }
 
-inline LiveGpuSnapshot query_nvidia_smi() {
+// Probe nvidia-smi with a hard deadline. A hung driver/tool must not block
+// supervisor spawn forever; on timeout/failure returns available=false so
+// fingerprint/free-VRAM checks are skipped (stamp budget still applies).
+inline LiveGpuSnapshot query_nvidia_smi(int timeout_ms = 3000) {
     LiveGpuSnapshot snap;
+    if (timeout_ms <= 0) {
+        timeout_ms = 3000;
+    }
     int fds[2];
     if (::pipe(fds) != 0) {
         return snap;
@@ -130,19 +141,79 @@ inline LiveGpuSnapshot query_nvidia_smi() {
         ::_exit(127);
     }
     ::close(fds[1]);
+    const int flags = ::fcntl(fds[0], F_GETFL, 0);
+    if (flags >= 0) {
+        ::fcntl(fds[0], F_SETFL, flags | O_NONBLOCK);
+    }
     std::string out;
     char buf[256];
-    ssize_t n = 0;
-    while ((n = ::read(fds[0], buf, sizeof(buf))) > 0) {
-        out.append(buf, static_cast<size_t>(n));
-        if (out.size() > 4096) {
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    bool timed_out = false;
+    bool eof = false;
+    while (!eof && out.size() <= 4096) {
+        const auto now = std::chrono::steady_clock::now();
+        if (now >= deadline) {
+            timed_out = true;
             break;
         }
+        const auto remain = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+        pollfd pfd{};
+        pfd.fd = fds[0];
+        pfd.events = POLLIN;
+        const int pr = ::poll(&pfd, 1, static_cast<int>(remain.count()));
+        if (pr < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            timed_out = true;
+            break;
+        }
+        if (pr == 0) {
+            timed_out = true;
+            break;
+        }
+        const ssize_t n = ::read(fds[0], buf, sizeof(buf));
+        if (n > 0) {
+            out.append(buf, static_cast<size_t>(n));
+            continue;
+        }
+        if (n == 0) {
+            eof = true;
+            break;
+        }
+        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+            continue;
+        }
+        timed_out = true;
+        break;
     }
     ::close(fds[0]);
     int status = 0;
-    ::waitpid(pid, &status, 0);
-    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+    auto reap = [&]() -> bool {
+        for (int i = 0; i < 50; ++i) {
+            const pid_t r = ::waitpid(pid, &status, WNOHANG);
+            if (r == pid) {
+                return true;
+            }
+            if (r < 0 && errno != EINTR) {
+                return false;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+        return false;
+    };
+    // Always reap; kill if the probe hung, hit the read cap with the child
+    // still alive, or waitpid would otherwise block past the deadline.
+    if (timed_out || !eof) {
+        ::kill(pid, SIGKILL);
+    }
+    if (!reap()) {
+        ::kill(pid, SIGKILL);
+        reap();
+        return snap;
+    }
+    if (timed_out || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
         return snap;
     }
     const auto nl = out.find('\n');

@@ -7,7 +7,11 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <unistd.h>
 #include <string>
 
 #include "control/occupancy_gate.h"
@@ -18,6 +22,7 @@ using mortred::control::is_occupancy_gate_error;
 using mortred::control::occupancy_enforcement_disabled;
 using mortred::control::occupancy_gate_error;
 using mortred::control::occupancy_ready_for_spawn;
+using mortred::control::query_nvidia_smi;
 
 namespace {
 
@@ -180,4 +185,36 @@ TEST_F(OccupancyGateTest, error_prefix) {
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
+}
+
+TEST_F(OccupancyGateTest, query_nvidia_smi_times_out_on_hang) {
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() /
+                         ("mortred_smi_hang_" + std::to_string(::getpid()));
+    fs::create_directories(dir);
+    const fs::path fake = dir / "nvidia-smi";
+    {
+        std::ofstream out(fake);
+        out << "#!/bin/sh\nexec sleep 60\n";
+    }
+    fs::permissions(fake, fs::perms::owner_all | fs::perms::group_exec | fs::perms::others_exec);
+    const char* old_path = std::getenv("PATH");
+    const std::string new_path = dir.string() + ":" + (old_path ? old_path : "");
+    ASSERT_EQ(::setenv("PATH", new_path.c_str(), 1), 0);
+
+    const auto t0 = std::chrono::steady_clock::now();
+    const auto snap = query_nvidia_smi(/*timeout_ms=*/300);
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - t0)
+                        .count();
+
+    if (old_path) {
+        ::setenv("PATH", old_path, 1);
+    } else {
+        ::unsetenv("PATH");
+    }
+    fs::remove_all(dir);
+
+    EXPECT_FALSE(snap.available);
+    EXPECT_LT(ms, 2000) << "probe must return within timeout, took " << ms << "ms";
 }
