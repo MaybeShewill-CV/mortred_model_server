@@ -9,6 +9,7 @@
 #define MORTRED_MODELS_BACKEND_PARAM_SPEC_H
 
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -344,6 +345,11 @@ inline std::vector<ParamViolation> validate_params(const std::vector<ParamSpec> 
                 if (value.kind != ParamValue::Kind::I64) {
                     violations.push_back(
                         {pointer, "parameter '" + key + "' must be an integer (no decimal part, no bool/string)"});
+                    continue;
+                }
+                if (value.i64 < std::numeric_limits<int32_t>::min() ||
+                    value.i64 > std::numeric_limits<int32_t>::max()) {
+                    violations.push_back({pointer, "parameter '" + key + "' must fit in int32"});
                     continue;
                 }
                 if (spec->has_range && (number < spec->range_min || number > spec->range_max)) {

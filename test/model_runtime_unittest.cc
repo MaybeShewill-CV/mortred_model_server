@@ -221,6 +221,30 @@ size = [4, 5]
     EXPECT_EQ(bad_reader.status().status, StatusCode::MODEL_INIT_FAILED);
 }
 
+TEST(ParamReader, RejectsInt32Overflow) {
+    const auto params = parse_toml("count = 3000000000");
+    int32_t count = 0;
+    ParamReader reader(params, "I32_OVERFLOW");
+    reader.get("count", &count);
+    EXPECT_FALSE(reader.ok());
+    EXPECT_EQ(reader.status().status, StatusCode::MODEL_INIT_FAILED);
+    EXPECT_NE(reader.status().error.find("must fit in int32"), std::string::npos);
+
+    const auto neg = parse_toml("count = -3000000000");
+    int32_t neg_count = 0;
+    ParamReader neg_reader(neg, "I32_UNDERFLOW");
+    neg_reader.get("count", &neg_count);
+    EXPECT_FALSE(neg_reader.ok());
+    EXPECT_NE(neg_reader.status().error.find("must fit in int32"), std::string::npos);
+
+    const auto size_params = parse_toml("size = [4, 3000000000]");
+    cv::Size size;
+    ParamReader size_reader(size_params, "SIZE_OVERFLOW");
+    size_reader.get("size", &size);
+    EXPECT_FALSE(size_reader.ok());
+    EXPECT_NE(size_reader.status().error.find("must fit in int"), std::string::npos);
+}
+
 TEST(ParamReader, RejectsUnknownKeys) {
     const auto params = parse_toml("known = 1\nunknown = 2");
     int32_t known = 0;

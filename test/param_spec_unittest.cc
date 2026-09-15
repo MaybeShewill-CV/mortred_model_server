@@ -4,6 +4,7 @@
  * Date: 2026-08-31
  ************************************************/
 
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -145,6 +146,26 @@ TEST(validate_params, type_mismatches_are_rejected) {
         EXPECT_NE(violations[0].message.find("must be"), std::string::npos) << "key=" << candidate.first;
         EXPECT_TRUE(params.empty()) << "key=" << candidate.first;
     }
+}
+
+TEST(validate_params, i32_rejects_values_outside_int32) {
+    const auto specs = std::vector<ParamSpec>{ParamSpec::i32("top_k")};
+    ParamSet out;
+    const int64_t too_big = 3000000000LL;
+    const int64_t too_small = -3000000000LL;
+    auto high = validate_params(specs, {{"top_k", ParamValue::of(too_big)}}, &out);
+    ASSERT_EQ(high.size(), 1u);
+    EXPECT_NE(high[0].message.find("must fit in int32"), std::string::npos);
+
+    auto low = validate_params(specs, {{"top_k", ParamValue::of(too_small)}}, &out);
+    ASSERT_EQ(low.size(), 1u);
+    EXPECT_NE(low[0].message.find("must fit in int32"), std::string::npos);
+
+    // Boundary values still accepted when no tighter range is declared.
+    auto ok_max = validate_params(
+        specs, {{"top_k", ParamValue::of(static_cast<int64_t>(std::numeric_limits<int32_t>::max()))}}, &out);
+    EXPECT_TRUE(ok_max.empty());
+    EXPECT_EQ(out.get_i32("top_k", 0), std::numeric_limits<int32_t>::max());
 }
 
 TEST(validate_params, range_is_inclusive_and_rejects_out_of_bounds) {

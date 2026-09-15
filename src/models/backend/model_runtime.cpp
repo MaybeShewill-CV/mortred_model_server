@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstring>
 #include <optional>
+#include <limits>
 
 #include <opencv2/imgproc.hpp>
 
@@ -314,6 +315,9 @@ ParamReader &ParamReader::get(const std::string &key, int32_t *value) {
     if (!parsed.has_value()) {
         return fail("param '" + key + "' must be an integer");
     }
+    if (*parsed < std::numeric_limits<int32_t>::min() || *parsed > std::numeric_limits<int32_t>::max()) {
+        return fail("param '" + key + "' must fit in int32");
+    }
     *value = static_cast<int32_t>(*parsed);
     return *this;
 }
@@ -404,6 +408,9 @@ ParamReader &ParamReader::get(const std::string &key, cv::Size *value) {
     const auto width = (*array)[1].value<int64_t>();
     if (!height.has_value() || !width.has_value() || *height <= 0 || *width <= 0) {
         return fail("param '" + key + "' must contain positive integer dimensions");
+    }
+    if (*height > std::numeric_limits<int>::max() || *width > std::numeric_limits<int>::max()) {
+        return fail("param '" + key + "' dimensions must fit in int");
     }
     *value = cv::Size(static_cast<int>(*width), static_cast<int>(*height));
     return *this;
