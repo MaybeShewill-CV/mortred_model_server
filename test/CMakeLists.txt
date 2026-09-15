@@ -306,7 +306,8 @@ endforeach()
 
 # Manual GCRA performance baseline (PR-1 acceptance reference; NOT a CI test)
 add_executable(rate_limit_gcra_bench EXCLUDE_FROM_ALL rate_limit_gcra_bench.cc)
-target_link_libraries(rate_limit_gcra_bench pthread)
+# common carries the mortred_common_includes INTERFACE (src/ include root)
+target_link_libraries(rate_limit_gcra_bench common pthread)
 
 # e2e helper binaries: supervision tests need the fake model server; the
 # gateway e2e test additionally needs the real gateway binary (full builds)
