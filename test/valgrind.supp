@@ -1,0 +1,25 @@
+# Valgrind suppressions for curated memory-check (A6).
+# Third-party noise only — do not suppress definite leaks in mortred code.
+#
+# Observed on Ubuntu 22.04 + Valgrind 3.18 + libglog/libunwind during .init
+# of libglog (before main / InitGoogleLogging). All gtests still PASS; the
+# Memcheck:Param write(buf) under libunwind makes --error-exitcode=1 fail.
+
+{
+   glog_libunwind_ctor_syscall_write_buf
+   Memcheck:Param
+   write(buf)
+   fun:syscall
+   ...
+   obj:*/libunwind.so*
+}
+
+{
+   glog_libunwind_ctor_write_buf_via_backtrace
+   Memcheck:Param
+   write(buf)
+   ...
+   fun:_Unwind_Backtrace
+   ...
+   fun:call_init*
+}

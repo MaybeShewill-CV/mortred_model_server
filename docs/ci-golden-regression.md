@@ -241,3 +241,9 @@ cmake --build --preset tests-only --target status_code_unittest base64_unittest 
 ctest --test-dir build/tests-only -L valgrind --output-on-failure
 ```
 
+Memcheck uses `test/valgrind.supp` (wired into the `*-memory-check` command) to
+ignore known third-party `Memcheck:Param` noise from libglog/libunwind during
+`.init` / `_Unwind_Backtrace`. Do not add suppressions for definite leaks in
+mortred code.
+
+

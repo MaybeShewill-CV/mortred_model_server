@@ -8,7 +8,14 @@ option(MORTRED_ENABLE_VALGRIND_TESTS
        "Register a small curated set of *-memory-check ctests (label=valgrind)"
        OFF)
 find_program(CMAKE_MEMORYCHECK_COMMAND valgrind)
-set(memcheck_command ${CMAKE_MEMORYCHECK_COMMAND} ${CMAKE_MEMORYCHECK_COMMAND_OPTIONS} --error-exitcode=1 --leak-check=full)
+# Always use the in-tree suppression file (glog/libunwind .init Param noise).
+set(_mortred_valgrind_supp "${CMAKE_CURRENT_SOURCE_DIR}/valgrind.supp")
+set(memcheck_command
+    ${CMAKE_MEMORYCHECK_COMMAND}
+    ${CMAKE_MEMORYCHECK_COMMAND_OPTIONS}
+    --error-exitcode=1
+    --leak-check=full
+    --suppressions=${_mortred_valgrind_supp})
 
 # Exclude label=valgrind from default check; CI/local run those via `ctest -L valgrind`.
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -LE valgrind)
