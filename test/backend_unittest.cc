@@ -12,6 +12,8 @@
 
 #include <gtest/gtest.h>
 
+#include <limits>
+
 #include <algorithm>
 #include <cstring>
 #include <string>
@@ -26,6 +28,7 @@
 #include "models/backend/backend_config.h"
 #include "models/backend/session.h"
 #include "models/backend/tensor.h"
+#include "models/backend/tensor_contract.h"
 
 namespace {
 
@@ -117,6 +120,41 @@ TEST(BackendTensor, MakeAndFromMat) {
     const auto rejected = Tensor::from_mat(bad_depth, &ok);
     EXPECT_FALSE(ok);
     EXPECT_TRUE(rejected.buffer.empty());
+}
+
+
+TEST(BackendTensor, ShapeVolumeOverflowReturnsNegative) {
+    using jinq::models::backend::shape_volume;
+    EXPECT_EQ(shape_volume({2, 3, 4}), 24);
+    EXPECT_EQ(shape_volume({0, 5}), 0);
+    EXPECT_EQ(shape_volume({-1, 3}), -3);
+    // 2^40 * 2^40 overflows signed int64
+    EXPECT_EQ(shape_volume({1LL << 40, 1LL << 40}), -1);
+    EXPECT_EQ(shape_volume({std::numeric_limits<int64_t>::max(), 2}), -1);
+}
+
+TEST(BackendTensor, CheckedShapeNbytesOverflow) {
+    using jinq::models::backend::DType;
+    using jinq::models::backend::checked_shape_nbytes;
+    size_t nbytes = 0;
+    EXPECT_TRUE(checked_shape_nbytes({2, 3, 4}, DType::F32, &nbytes));
+    EXPECT_EQ(nbytes, 2u * 3u * 4u * sizeof(float));
+    EXPECT_FALSE(checked_shape_nbytes({0, 4}, DType::F32, &nbytes));
+    EXPECT_FALSE(checked_shape_nbytes({-1, 4}, DType::F32, &nbytes));
+    EXPECT_FALSE(checked_shape_nbytes({1LL << 40, 1LL << 40}, DType::F32, &nbytes));
+}
+
+TEST(BackendTensor, CheckedElementCountOverflowPath) {
+    using jinq::models::backend::DType;
+    using jinq::models::backend::Tensor;
+    using jinq::models::backend::checked_element_count;
+    Tensor tensor;
+    tensor.dtype = DType::F32;
+    tensor.shape = {std::numeric_limits<int64_t>::max()};
+    size_t bytes = 0;
+    std::string err;
+    EXPECT_FALSE(checked_element_count(tensor, &bytes, &err));
+    EXPECT_NE(err.find("overflow"), std::string::npos) << err;
 }
 
 TEST(BackendConfig, ParseValidAndInvalidBlocks) {

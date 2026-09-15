@@ -448,8 +448,9 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
             item_proto.shape[0] = 1;
             // byte_size() is buffer-based and the proto carries no buffer:
             // derive the item size from the concrete shape instead
-            const size_t item_bytes = static_cast<size_t>(backend::shape_volume(item_proto.shape)) * backend::dtype_size(item_proto.dtype);
-            if (item_bytes == 0 || tensor.buffer.size() < item_bytes * batch_n) {
+            size_t item_bytes = 0;
+            if (!backend::checked_shape_nbytes(item_proto.shape, item_proto.dtype, &item_bytes) ||
+                item_bytes == 0 || tensor.buffer.size() < item_bytes * batch_n) {
                 return run_batch_fallback(inputs, indices_of(prepared), outputs, item_status);
             }
             per_slot_items[slot].reserve(batch_n);
