@@ -1,4 +1,6 @@
 # syntax=docker/dockerfile:1
+# Base images are pinned by digest (see conf/base_images.lock). Refresh digests
+# with scripts/refresh_base_image_digests.sh when intentionally rebasing.
 # Mortred Model Server - 全自动构建运行环境
 #
 # GPU line: CUDA 12.6 + TensorRT 10.3.0.26 + cuDNN 9.10.2 + MNN 3.6.1 + ORT 1.29 cuda12.
@@ -19,7 +21,7 @@
 # （TensorRT 编译排除，catalog 只暴露 profile=cpu 的精选模型；compose 用 --profile cpu）
 
 # ---------- 阶段 1：第三方依赖（install_deps.sh 全自动） ----------
-FROM nvidia/cuda:12.6.2-devel-ubuntu22.04 AS deps
+FROM nvidia/cuda:12.6.2-devel-ubuntu22.04@sha256:1c253f721b28b27c924677493c8ed45812c1b1a562bca828c144683b444e7298 AS deps
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -34,7 +36,7 @@ RUN ./scripts/install_deps.sh --all \
     && ./scripts/install_deps.sh --check
 
 # ---------- 阶段 2：full build + 测试 + 安装树 ----------
-FROM nvidia/cuda:12.6.2-devel-ubuntu22.04 AS build
+FROM nvidia/cuda:12.6.2-devel-ubuntu22.04@sha256:1c253f721b28b27c924677493c8ed45812c1b1a562bca828c144683b444e7298 AS build
 
 # CI 质量门禁等场景注入额外 CMake 开关（如 -DMORTRED_ENABLE_WERROR=ON）
 ARG EXTRA_CMAKE_FLAGS=""
@@ -58,7 +60,7 @@ RUN cmake -S /src -B /src/build \
     && cmake --install /src/build --prefix /opt/mortred
 
 # ---------- 阶段 3：运行时（只装运行库） ----------
-FROM nvidia/cuda:12.6.2-runtime-ubuntu22.04 AS runtime
+FROM nvidia/cuda:12.6.2-runtime-ubuntu22.04@sha256:b4506fed312e533afe2fc310e789744a9f4f5bd25d999c1ae2a2025fc48ee223 AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive \
     MORTRED_PROJECT_ROOT=/opt/mortred \
@@ -106,7 +108,7 @@ ENTRYPOINT ["/opt/mortred/scripts/docker_entrypoint.sh"]
 # ============================================================================
 
 # ---------- 阶段 1c：cpu 第三方依赖 ----------
-FROM ubuntu:22.04 AS deps-cpu
+FROM ubuntu:22.04@sha256:829f6df217bcbae2b371026e81711d1a787c61b2967ad09d015063663ebafbf7 AS deps-cpu
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -120,7 +122,7 @@ RUN ./scripts/install_deps.sh --cpu --all \
     && ./scripts/install_deps.sh --cpu --check
 
 # ---------- 阶段 2c：cpu full build + 测试 + 安装树 ----------
-FROM ubuntu:22.04 AS build-cpu
+FROM ubuntu:22.04@sha256:829f6df217bcbae2b371026e81711d1a787c61b2967ad09d015063663ebafbf7 AS build-cpu
 
 # CI compose boot may pass SKIP_DOCKER_CHECK=1; user/release builds must leave
 # this at 0 so the image still runs the cpu-profile check target.
@@ -147,7 +149,7 @@ RUN cmake -S /src -B /src/build \
     && cmake --install /src/build --prefix /opt/mortred
 
 # ---------- 阶段 3c：cpu 运行时 ----------
-FROM ubuntu:22.04 AS mortred-cpu
+FROM ubuntu:22.04@sha256:829f6df217bcbae2b371026e81711d1a787c61b2967ad09d015063663ebafbf7 AS mortred-cpu
 # opt-in: docker build --target mortred-cpu  /  compose --profile cpu
 
 ENV DEBIAN_FRONTEND=noninteractive \

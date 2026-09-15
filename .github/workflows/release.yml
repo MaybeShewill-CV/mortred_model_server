@@ -3,7 +3,7 @@ name: release
 # Tag-driven release pipeline: vX.Y.Z builds and publishes
 #   - ghcr images: vX.Y.Z-cpu / vX.Y.Z-gpu (+ latest-cpu / latest-gpu)
 #   - tarballs:   mortred_model_server-X.Y.Z-{cpu,gpu}-linux-x64.tar.gz(+sha256)
-#   - a GitHub Release with the two tarballs attached
+#   - a GitHub Release with the two tarballs + SPDX SBOM attached
 # The tarball/artifact versions are asserted to equal the git tag.
 on:
   push:
@@ -136,6 +136,25 @@ jobs:
             -t "$IMAGE:$VERSION-gpu" -t "$IMAGE:latest-gpu" .
           docker push "$IMAGE:$VERSION-gpu"
           docker push "$IMAGE:latest-gpu"
+          echo "IMAGE_GPU=$IMAGE:$VERSION-gpu" >> "$GITHUB_ENV"
+
+      - name: Prepare dist for GPU SBOM
+        run: mkdir -p dist
+
+      - name: Generate SPDX SBOM for gpu image
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE_GPU }}
+          format: spdx-json
+          artifact-name: mortred-gpu.spdx.json
+          output-file: dist/mortred-gpu.spdx.json
+          upload-artifact: true
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sbom-gpu
+          path: dist/mortred-gpu.spdx.json
+          if-no-files-found: error
 
   images:
     runs-on: ubuntu-22.04
@@ -162,10 +181,29 @@ jobs:
           docker build --target mortred-cpu -t "$IMAGE:$VERSION-cpu" -t "$IMAGE:latest-cpu" .
           docker push "$IMAGE:$VERSION-cpu"
           docker push "$IMAGE:latest-cpu"
+          echo "IMAGE_CPU=$IMAGE:$VERSION-cpu" >> "$GITHUB_ENV"
+
+      - name: Prepare dist for CPU SBOM
+        run: mkdir -p dist
+
+      - name: Generate SPDX SBOM for cpu image
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE_CPU }}
+          format: spdx-json
+          artifact-name: mortred-cpu.spdx.json
+          output-file: dist/mortred-cpu.spdx.json
+          upload-artifact: true
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sbom-cpu
+          path: dist/mortred-cpu.spdx.json
+          if-no-files-found: error
 
   github-release:
     runs-on: ubuntu-22.04
-    needs: [cpu-tarball, gpu-tarball]
+    needs: [cpu-tarball, gpu-tarball, images]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v7
@@ -179,6 +217,12 @@ jobs:
         run: |
           VERSION="${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"
           TAG_BODY="$(awk -v ver="${VERSION#v}" '/^## /{if (found) exit; found=($0=="## ["ver"]")} found' CHANGELOG.md)"
-          gh release create "$VERSION" dist/*.tar.gz* --title "$VERSION" --notes "${TAG_BODY:-See CHANGELOG.md}"
+          # Attach tarballs (+sha256) and SPDX SBOMs from image jobs.
+          shopt -s nullglob
+          ASSETS=(dist/*.tar.gz*)
+          ASSETS+=(dist/*.spdx.json)
+          [ "${#ASSETS[@]}" -ge 2 ] || { echo "expected tarball assets under dist/" >&2; exit 1; }
+          ls dist/*.spdx.json >/dev/null 2>&1 || { echo "expected SPDX SBOM (*.spdx.json) under dist/" >&2; exit 1; }
+          gh release create "$VERSION" "${ASSETS[@]}" --title "$VERSION" --notes "${TAG_BODY:-See CHANGELOG.md}"
           # tarball names are versioned (no mortred_model_server-latest-* asset).
           # bootstrap.sh / mortredctl upgrade resolve the latest git tag via the API.

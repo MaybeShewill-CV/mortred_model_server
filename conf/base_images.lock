@@ -1,0 +1,6 @@
+# Locked base-image digests for Dockerfile FROM lines (linux/amd64 index).
+# Format: reference@digest
+# Refreshed: 2026-09-15 via Docker Hub registry API (manifest list digest).
+nvidia/cuda:12.6.2-devel-ubuntu22.04@sha256:1c253f721b28b27c924677493c8ed45812c1b1a562bca828c144683b444e7298
+nvidia/cuda:12.6.2-runtime-ubuntu22.04@sha256:b4506fed312e533afe2fc310e789744a9f4f5bd25d999c1ae2a2025fc48ee223
+ubuntu:22.04@sha256:829f6df217bcbae2b371026e81711d1a787c61b2967ad09d015063663ebafbf7

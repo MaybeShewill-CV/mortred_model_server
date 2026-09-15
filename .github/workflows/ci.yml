@@ -547,13 +547,14 @@ jobs:
                    scripts/docker_entrypoint.sh scripts/check_repo_clean.sh \
                    scripts/clean_artifacts.sh scripts/setup_full_deps.sh \
                    scripts/mortredctl_doctor.sh scripts/security_warn.sh \
-                   scripts/ci_container_boot.sh scripts/tarball_install.sh \
+                   scripts/ci_container_boot.sh scripts/tarball_install.sh
+            scripts/refresh_base_image_digests.sh \
                    scripts/make_release_tarball.sh; do
             bash -n "$f"
           done
           python3 -m py_compile \
             scripts/fetch_weights.py scripts/gen_weights_manifest.py \
-            scripts/check_consistency.py scripts/check_hosted_golden.py \
+            scripts/check_consistency.py scripts/check_base_image_digests.py scripts/check_hosted_golden.py \
             scripts/golden_drift_check.py \
             scripts/gen_openapi.py scripts/repo_toml.py \
             scripts/ci_assert_gtest_xml.py \

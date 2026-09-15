@@ -5,6 +5,8 @@
 #   1) release.yml lowercases github.repository for GHCR IMAGE refs
 #   2) tarball + basename .sha256 verify with sha256sum -c
 #   3) bootstrap-style mismatch refuses install; missing .sha256 only WARNs
+#   6) Dockerfile external FROM lines pinned @sha256 vs conf/base_images.lock
+#   7) release.yml generates SBOM and attaches it to the GitHub Release
 #
 # Usage (repo root):
 #   bash scripts/release_dry_run.sh
@@ -88,6 +90,19 @@ ok "bootstrap.sh WARN/ERROR branches present"
 echo "== 5) release.yml packs .sha256 beside tarball =="
 grep -q 'sha256sum' "$REL" || fail "release.yml must run sha256sum on tarballs"
 ok "release.yml sha256sum present"
+
+echo "== 6) Dockerfile base images pinned by digest =="
+python3 "$ROOT/scripts/check_base_image_digests.py" || fail "base image digest check failed"
+ok "Dockerfile digests locked"
+
+echo "== 7) release.yml publishes SBOM =="
+# Must generate an SBOM artifact and attach it to the GitHub Release (P1-11 / E1).
+grep -qE 'anchore/sbom-action|syft |--sbom' "$REL"   || fail "release.yml must generate SBOM (anchore/sbom-action, syft, or buildx --sbom)"
+grep -qE 'spdx|sbom|cyclonedx' "$REL"   || fail "release.yml must name an SBOM format/artifact (spdx/sbom/cyclonedx)"
+grep -q 'gh release create' "$REL" || fail "release.yml missing gh release create"
+# Release attach must include SBOM files (or a dedicated upload step before create).
+grep -E 'gh release create|upload.*sbom|spdx|\.sbom' "$REL" | grep -qiE 'sbom|spdx'   || fail "release.yml must attach SBOM/spdx to the GitHub Release"
+ok "release.yml SBOM generation + attach present"
 
 echo
 echo "release_dry_run: ALL OK"

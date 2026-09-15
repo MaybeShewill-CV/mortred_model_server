@@ -569,6 +569,29 @@ def check_security_scan() -> list[str]:
     return errors
 
 
+
+def check_base_image_digests() -> list[str]:
+    """Dockerfile external FROM lines must be tag@sha256 matching conf/base_images.lock."""
+    script = ROOT / "scripts" / "check_base_image_digests.py"
+    if not script.is_file():
+        return [f"missing {script.relative_to(ROOT)}"]
+    try:
+        result = subprocess.run(
+            [sys.executable, str(script)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return [f"check_base_image_digests.py could not run: {exc}"]
+    if result.returncode == 0:
+        return []
+    detail = (result.stdout + result.stderr).strip() or f"exit {result.returncode}"
+    return [f"base image digest pin check failed: {detail}"]
+
+
 def check_release_ghcr_lowercase() -> list[str]:
     """release.yml must lowercase github.repository before GHCR push (SME-04)."""
     errors: list[str] = []
@@ -973,6 +996,7 @@ def main() -> int:
     errors.extend(check_ci_no_python3_runs_sh())
     errors.extend(check_ci_convert_trt_dry_run_contract())
     errors.extend(check_release_ghcr_lowercase())
+    errors.extend(check_base_image_digests())
     errors.extend(check_scaffolder_task_metadata())
     errors.extend(check_model_todo_markers())
     errors.extend(check_model_io_split())
