@@ -130,7 +130,7 @@ async function pollGpu() {
   if(last){
     const cells = [
       {label:"UTIL", val:last.util<0?"--":last.util+"%", hot:last.util>85},
-      {label:"MEM", val:last.mem_total_mib>0?fmtMib(last.mem_used_mib)+"/"+fmtMib(last.mem_total_mib):"--", hot:last.mem_total_mib>0&&last.mem_used_mib/last.mem_total_mib>0.85},
+      {label:"VRAM", val:last.mem_total_mib>0?fmtMib(last.mem_used_mib)+"/"+fmtMib(last.mem_total_mib):"--", hot:last.mem_total_mib>0&&last.mem_used_mib/last.mem_total_mib>0.85},
       {label:"TEMP", val:last.temp_c<0?"--":last.temp_c+"°C", hot:last.temp_c>80},
       {label:"PWR", val:last.power_w<0?"--":last.power_w.toFixed(0)+"W", hot:last.power_w>300},
       {label:"SM CLK", val:last.clocks_sm_mhz<0?"--":last.clocks_sm_mhz+"MHz", hot:false},
@@ -250,14 +250,16 @@ function renderOverview(){
       tile.className="cartridge"+(isRun?" live":"")+(s.state==="failed"?" dead":"");
       if(isRun){tile.style.setProperty("--cat-glow",catColor(cat));tile.style.borderColor=catColor(cat)+"66";}
       tile.innerHTML=
-        `<div class="cartridge-row">
+        `${isRun?'<div class="accent-top"></div>':''}
+         <div class="cartridge-row">
            <span class="st ${st}">${ST_GLYPH[st]}</span>
            <span class="cartridge-name">${escapeHtml(s.id.toLowerCase())}</span>
            ${s.restart_count>0?`<span class="badge restarts">↻${s.restart_count}</span>`:""}
          </div>
          <div class="cartridge-sub">${isRun?`<span class="uptime" data-id="${s.id}">${uptimeOf(s)||""}</span>`:escapeHtml(s.state)}</div>
          <div class="cartridge-port">${s.port}</div>
-         <canvas class="cartridge-spark" data-id="${s.id}" width="120" height="20"></canvas>`;
+         <canvas class="cartridge-spark" data-id="${s.id}" width="120" height="22"></canvas>
+         ${isRun?`<div class="resource-bar"><div class="resource-fill" data-id="${s.id}"></div></div>`:''}`;
       tile.onclick=()=>navigate("#/model/"+s.id);
       frag.appendChild(tile);
     }

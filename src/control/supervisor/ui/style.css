@@ -205,37 +205,81 @@ body::before {
 }
 .fleet-cat {
   grid-column:1/-1;
-  font-size:10px; text-transform:uppercase; letter-spacing:.16em;
-  margin:10px 0 2px; padding-bottom:2px;
+  font-size:10px; text-transform:uppercase; letter-spacing:.18em;
+  margin:12px 0 4px; padding-bottom:3px;
   border-bottom:1px solid; opacity:.9;
+  display:flex; align-items:center; gap:6px;
 }
+.fleet-cat::before { content:"┌─"; color:var(--dim); font-size:9px; }
 .cartridge {
   position:relative; border:1px solid var(--border);
-  padding:8px 10px 6px; cursor:pointer;
-  background:var(--bg-panel);
+  padding:9px 12px 8px; cursor:pointer;
+  background:linear-gradient(135deg, var(--bg-panel) 0%, #070c07 100%);
   transition:background var(--t-fast), box-shadow var(--t-fast), border-color var(--t-fast), transform .12s;
   overflow:hidden;
 }
+/* corner brackets — sci-fi targeting reticle feel */
+.cartridge::before, .cartridge::after {
+  content:""; position:absolute; width:8px; height:8px; pointer-events:none;
+  border-color:var(--border-bright); border-style:solid; opacity:0;
+  transition:opacity var(--t-fast);
+}
+.cartridge::before { top:-1px; left:-1px; border-width:1px 0 0 1px; }
+.cartridge::after { bottom:-1px; right:-1px; border-width:0 1px 1px 0; }
+.cartridge:hover::before, .cartridge:hover::after,
+.cartridge.live::before, .cartridge.live::after { opacity:1; }
+
+/* top accent line on live — category-colored energy strip */
+.cartridge.live .accent-top {
+  position:absolute; top:0; left:0; right:0; height:2px;
+  background:linear-gradient(90deg, transparent, var(--cat-glow,#00ff9c), transparent);
+  opacity:.7;
+}
+
 .cartridge:hover { background:var(--bg-hover); transform:translateY(-1px); }
-.cartridge .cartridge-row { display:flex; align-items:center; gap:6px; }
+.cartridge .cartridge-row { display:flex; align-items:center; gap:7px; }
 .cartridge .cartridge-name {
-  font-size:12px; color:var(--mid); flex:1;
+  font-size:13px; font-weight:500; color:var(--mid); flex:1;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  letter-spacing:.02em;
 }
-.cartridge .cartridge-sub { font-size:10px; color:var(--dim); padding-left:1.2em; margin-top:2px; }
+.cartridge .cartridge-sub {
+  font-size:10px; color:var(--dim); padding-left:1.4em; margin-top:3px;
+  display:flex; align-items:center; gap:6px;
+}
 .cartridge .cartridge-port {
-  position:absolute; top:6px; right:8px; font-size:9px; color:var(--dim);
+  position:absolute; top:7px; right:10px; font-size:9px; color:var(--dim);
+  letter-spacing:.05em;
 }
-.cartridge .cartridge-spark { width:100%; height:20px; margin-top:4px; display:block; }
+.cartridge .cartridge-spark { width:100%; height:22px; margin-top:5px; display:block; opacity:.8; }
+
+/* resource bar under sparkline for running models */
+.cartridge .resource-bar {
+  height:3px; margin-top:5px; background:var(--border);
+  position:relative; overflow:hidden;
+}
+.cartridge .resource-fill {
+  height:100%; width:0%; transition:width .6s ease;
+  background:linear-gradient(90deg, var(--cat-glow,#00ff9c), rgba(0,255,156,.3));
+}
+/* zone markers on the resource bar */
+.cartridge .resource-bar::after {
+  content:""; position:absolute; inset:0;
+  background:repeating-linear-gradient(90deg, transparent, transparent 30%, rgba(0,0,0,.4) 30%, rgba(0,0,0,.4) calc(30% + 1px));
+}
 
 .cartridge.live {
+  border-color:var(--cat-glow,#00ff9c);
   box-shadow:
-    0 0 16px var(--cat-glow, rgba(0,255,156,.15)),
-    inset 0 0 30px rgba(0,255,156,.02);
+    0 0 20px var(--cat-glow, rgba(0,255,156,.12)),
+    inset 0 0 40px rgba(0,255,156,.03);
   animation:live-breathe 3.2s ease-in-out infinite;
 }
-.cartridge.live .cartridge-name { color:var(--text); text-shadow:0 0 6px var(--cat-glow,rgba(0,255,156,.3)); }
-.cartridge.live .cartridge-sub { color:var(--ok); }
+.cartridge.live .cartridge-name {
+  color:var(--text);
+  text-shadow:0 0 8px var(--cat-glow,rgba(0,255,156,.4));
+}
+.cartridge.live .cartridge-sub { color:var(--ok); text-shadow:0 0 4px rgba(0,255,156,.2); }
 @keyframes live-breathe {
   0%,100% { box-shadow:0 0 10px var(--cat-glow,rgba(0,255,156,.10)), inset 0 0 20px rgba(0,255,156,.01); }
   50% { box-shadow:0 0 20px var(--cat-glow,rgba(0,255,156,.22)), inset 0 0 30px rgba(0,255,156,.04); }
