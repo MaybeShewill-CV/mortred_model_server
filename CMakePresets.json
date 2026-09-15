@@ -100,22 +100,38 @@
     {
       "name": "tests-only",
       "configurePreset": "tests-only",
-      "jobs": 8
+      "jobs": 8,
+      "targets": [
+        "check"
+      ]
     },
     {
       "name": "tests-only-werror",
       "configurePreset": "tests-only-werror",
-      "jobs": 8
+      "jobs": 8,
+      "targets": [
+        "check"
+      ]
     },
     {
       "name": "tests-only-tsan",
       "configurePreset": "tests-only-tsan",
-      "jobs": 8
+      "jobs": 8,
+      "targets": [
+        "async_job_unittest",
+        "async_job_stress_test",
+        "api_key_manager_unittest",
+        "do_work_lifetime_unittest",
+        "worker_pool_unittest"
+      ]
     },
     {
       "name": "tests-only-asan",
       "configurePreset": "tests-only-asan",
-      "jobs": 8
+      "jobs": 8,
+      "targets": [
+        "check"
+      ]
     },
     {
       "name": "full",
@@ -150,7 +166,9 @@
         "outputOnFailure": true
       },
       "filter": {
-        "labels": ["sanitizer"]
+        "labels": [
+          "sanitizer"
+        ]
       }
     },
     {

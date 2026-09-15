@@ -360,12 +360,13 @@ CMake configure 对源码树与 `--check` 对齐的已知坑 fail-closed：缺 `
 ```bash
 cmake --preset full && cmake --build --preset full            # gpu 全量
 cmake --preset full-cpu && cmake --build --preset full-cpu    # cpu 全量
-cmake --preset tests-only && cmake --build --preset tests-only && ctest --preset tests-only
+cmake --preset tests-only && cmake --build --preset tests-only
+# 该 buildPreset 默认 target 为 check（编译 EXCLUDE_FROM_ALL 测试并跑 ctest）
 ```
 
 | Preset | 用途 |
 |---|---|
-| `tests-only` / `tests-only-werror` | 单测（apt 依赖，无引擎） |
+| `tests-only` / `tests-only-werror` | 单测；buildPreset 默认 target 为 `check` |
 | `tests-only-tsan` / `tests-only-asan` | sanitizer 门禁（见 §16） |
 | `full` / `full-werror` | gpu 全量 |
 | `full-cpu` | cpu 全量（无 CUDA/TRT） |

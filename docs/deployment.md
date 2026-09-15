@@ -374,12 +374,13 @@ leftover TensorRT 8). The FATAL text prints the matching `install_deps` fix.
 ```bash
 cmake --preset full && cmake --build --preset full            # gpu full
 cmake --preset full-cpu && cmake --build --preset full-cpu    # cpu full
-cmake --preset tests-only && cmake --build --preset tests-only && ctest --preset tests-only
+cmake --preset tests-only && cmake --build --preset tests-only
+# buildPreset default target is `check` (builds EXCLUDE_FROM_ALL tests + runs ctest)
 ```
 
 | Preset | Purpose |
 |---|---|
-| `tests-only` / `tests-only-werror` | unit tests (apt deps, no engines) |
+| `tests-only` / `tests-only-werror` | unit tests; build preset defaults to `check` |
 | `tests-only-tsan` / `tests-only-asan` | sanitizer gates (§16) |
 | `full` / `full-werror` | gpu full |
 | `full-cpu` | cpu full (no CUDA/TRT) |
