@@ -41,6 +41,7 @@ All notable changes to this project are documented here. The format follows
 - **Docs prune:** drop completed historical plans (base_server split, unified-contract refactor log, P4 DX plan/todolist/metrics) and large generated architecture HTML/diagrams; README / how-to / developer-guide links retargeted to living guides.
 
 ### Fixed
+- **P1-9 / A3:** CHANGELOG no longer claims batch uses deleted `submit_and_wait`; describe shared request-level timer + `BatchCollector::submit` snapshot semantics.
 - **P1-8 / A2:** label `batch_collector_unittest` as `sanitizer` and build it (with `worker_pool_unittest`) in the TSAN CI gate / tests-only-tsan preset.
 - **P1-3 / A1:** `tests-only*` build presets default to target `check` (so EXCLUDE_FROM_ALL unit tests are built); docs drop bare `ctest` after preset build. TSAN preset builds sanitizer-labeled binaries.
 - **Round-3 P0:** `check_consistency` convert/CI contract aligned with SME-16 (require unconditional `--skipInference`, refuse `-ge 9` / `--buildOnly`, require `-lt 10` gate and CI `TRT_VERSION_MAJOR=8` failure assert).
@@ -99,14 +100,17 @@ All notable changes to this project are documented here. The format follows
   items. The HTTP series holds a unique-reply counter; per-item compute is a
   detached go chain plus one request-level timer. `results[]` is always length
   N: 504 / status 4 when nothing published; 200 / status 68 / `partial=true`
-  when at least one item finished. Batch still uses `submit_and_wait` (no
-  outer timer racing the collector).
+  when at least one item finished. Batch uses async `BatchCollector::submit`
+  with the **same** request-level timer race as the non-batch path: reply
+  takes an acquire snapshot of published slots (unpublished → TIMEOUT);
+  late `write_slot` completions are dropped after the unique reply.
 
 > 同步推理在 `model_run_timeout` 到期时回包，不再把已完成项丢掉。HTTP series
 > 上是唯一回复的 counter；逐项计算是脱离 series 的 go 链，外加一个请求级
 > timer。`results[]` 长度恒为 N：没有任何项发布时 504 / status 4；至少一项
-> 完成时 200 / status 68 / `partial=true`。凑批路径仍走 `submit_and_wait`，
-> 不用外层 timer 和 collector 抢跑。
+> 完成时 200 / status 68 / `partial=true`。凑批走异步 `BatchCollector::submit`，
+> 与非凑批共用请求级 timer：回包对已发布 slot 做 acquire 快照（未发布 → TIMEOUT）；
+> 唯一回复之后迟到的 `write_slot` 会被丢弃。
 
 - Release checksums use the tarball **basename** so `sha256sum -c` after
   `curl -fLO` prints `OK` (deployment §6.1). `sha256sum /abs/path` wrote a
