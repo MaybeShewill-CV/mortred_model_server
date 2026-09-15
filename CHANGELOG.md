@@ -41,6 +41,7 @@ All notable changes to this project are documented here. The format follows
 - **Docs prune:** drop completed historical plans (base_server split, unified-contract refactor log, P4 DX plan/todolist/metrics) and large generated architecture HTML/diagrams; README / how-to / developer-guide links retargeted to living guides.
 
 ### Fixed
+- **P1-8 / A2:** label `batch_collector_unittest` as `sanitizer` and build it (with `worker_pool_unittest`) in the TSAN CI gate / tests-only-tsan preset.
 - **P1-3 / A1:** `tests-only*` build presets default to target `check` (so EXCLUDE_FROM_ALL unit tests are built); docs drop bare `ctest` after preset build. TSAN preset builds sanitizer-labeled binaries.
 - **Round-3 P0:** `check_consistency` convert/CI contract aligned with SME-16 (require unconditional `--skipInference`, refuse `-ge 9` / `--buildOnly`, require `-lt 10` gate and CI `TRT_VERSION_MAJOR=8` failure assert).
 - **SME-16:** `convert_trt_engines.sh` refuses TensorRT major &lt; 10 and drops the TRT 8 `--workspace`/`--buildOnly` path; `TRT_VERSION_MAJOR` only overrides failed banner probes (still fail-closed if &lt; 10). Dry-run no longer silently assumes 10 when version cannot be detected.
