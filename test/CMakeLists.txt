@@ -280,7 +280,7 @@ foreach(src ${TEST_LIST})
     add_dependencies(check ${src})
     if((${src} STREQUAL "async_job_unittest") OR (${src} STREQUAL "async_job_stress_test") OR
        (${src} STREQUAL "api_key_manager_unittest") OR (${src} STREQUAL "do_work_lifetime_unittest") OR
-       (${src} STREQUAL "worker_pool_unittest"))
+       (${src} STREQUAL "worker_pool_unittest") OR (${src} STREQUAL "batch_collector_unittest"))
         # the sanitizer CI gate runs exactly these under -fsanitize=thread
         set_tests_properties(${src} PROPERTIES LABELS "sanitizer")
     endif()

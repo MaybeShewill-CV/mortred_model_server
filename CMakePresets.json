@@ -122,7 +122,8 @@
         "async_job_stress_test",
         "api_key_manager_unittest",
         "do_work_lifetime_unittest",
-        "worker_pool_unittest"
+        "worker_pool_unittest",
+        "batch_collector_unittest"
       ]
     },
     {
