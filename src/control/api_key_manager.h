@@ -59,6 +59,20 @@ struct ApiKey {
  * lifetime - the old raw-pointer return was a use-after-free under
  * concurrent reload.
  */
+/*** Why an authenticate() call failed. UNKNOWN and DISABLED fall through to
+ * the caller's legacy-token path (401 when nothing else matches);
+ * RATE_LIMITED must NOT: a valid key that is merely throttled answers 429 +
+ * Retry-After, never "unauthorized". */
+enum class AuthReason { OK, UNKNOWN, DISABLED, RATE_LIMITED };
+
+struct AuthResult {
+    std::shared_ptr<const ApiKey> key;  // non-null iff reason == OK
+    AuthReason reason = AuthReason::UNKNOWN;
+    // exact ms until the per-key 1-second fixed window resets (1..1000);
+    // 0 unless reason == RATE_LIMITED
+    int32_t retry_after_ms = 0;
+};
+
 class ApiKeyManager {
   public:
     /***
@@ -78,13 +92,16 @@ class ApiKeyManager {
     bool reload();
 
     /***
-     * Authenticate a request: extract Bearer token, hash it, look up.
-     * @return empty shared_ptr if not found/disabled/rate-limited; otherwise
-     * a const key the caller OWNS for the duration of its use - safe across
-     * concurrent reload(), which replaces the internal key set.
-     * Also enforces per-key rate limiting before returning.
+     * Authenticate a request: extract Bearer token, hash it, look up,
+     * enforce the per-key rate limit.
+     * @return reason plus key ownership for OK / the exact Retry-After
+     * budget for RATE_LIMITED (see AuthResult). A throttled VALID key is
+     * RATE_LIMITED, not a null-key failure — conflating the two makes the
+     * gateway answer 401 for "sent too fast", which no client can act on.
+     * The returned shared_ptr keeps the key alive across a concurrent
+     * reload() that swaps the whole set (P0-2).
      */
-    std::shared_ptr<const ApiKey> authenticate(const std::string& authorization_header);
+    AuthResult authenticate(const std::string& authorization_header);
 
     /*** check scope (key ownership is held by the shared_ptr) */
     static bool has_scope(const std::shared_ptr<const ApiKey>& key,
@@ -156,15 +173,17 @@ inline bool ApiKeyManager::reload() {
     return load(config_path_);
 }
 
-inline std::shared_ptr<const ApiKey> ApiKeyManager::authenticate(
+inline AuthResult ApiKeyManager::authenticate(
     const std::string& authorization_header) {
+    AuthResult out;
     // extract Bearer token
     const std::string prefix = "bearer ";
     std::string lower;
     std::transform(authorization_header.begin(), authorization_header.end(),
                    std::back_inserter(lower), [](unsigned char c) { return std::tolower(c); });
     if (lower.rfind(prefix, 0) != 0) {
-        return nullptr;
+        out.reason = AuthReason::UNKNOWN;
+        return out;
     }
     std::string token = authorization_header.substr(prefix.size());
     // trim
@@ -175,7 +194,8 @@ inline std::shared_ptr<const ApiKey> ApiKeyManager::authenticate(
         token.pop_back();
     }
     if (token.empty()) {
-        return nullptr;
+        out.reason = AuthReason::UNKNOWN;
+        return out;
     }
 
     // hash and look up; the map holds shared_ptr so the returned key stays
@@ -185,8 +205,13 @@ inline std::shared_ptr<const ApiKey> ApiKeyManager::authenticate(
     {
         std::lock_guard<std::mutex> lock(mu_);
         const auto it = keys_.find(hash);
-        if (it == keys_.end() || !it->second->enabled) {
-            return nullptr;
+        if (it == keys_.end()) {
+            out.reason = AuthReason::UNKNOWN;
+            return out;
+        }
+        if (!it->second->enabled) {
+            out.reason = AuthReason::DISABLED;
+            return out;
         }
         key = it->second;
     }
@@ -195,9 +220,25 @@ inline std::shared_ptr<const ApiKey> ApiKeyManager::authenticate(
     key->total_requests.fetch_add(1);
     if (!allow_rate_limit(key.get())) {
         key->total_rejected.fetch_add(1);
-        return nullptr;
+        out.reason = AuthReason::RATE_LIMITED;
+        // exact budget left in this 1-second fixed window: the limiter
+        // buckets on floor(steady_ms / 1000)
+        const int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                   std::chrono::steady_clock::now().time_since_epoch())
+                                   .count();
+        int64_t remaining = 1000 - (now_ms % 1000);
+        if (remaining < 1) {
+            remaining = 1;
+        }
+        if (remaining > 1000) {
+            remaining = 1000;
+        }
+        out.retry_after_ms = static_cast<int32_t>(remaining);
+        return out;
     }
-    return key;
+    out.reason = AuthReason::OK;
+    out.key = std::move(key);
+    return out;
 }
 
 inline bool ApiKeyManager::has_scope(const std::shared_ptr<const ApiKey>& key,

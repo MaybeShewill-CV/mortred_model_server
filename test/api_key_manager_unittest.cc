@@ -33,6 +33,7 @@
 namespace {
 
 using mortred::control::ApiKeyManager;
+using mortred::control::AuthReason;
 
 std::string write_config(const std::string& body) {
     static std::atomic<unsigned> seq{0};
@@ -66,7 +67,9 @@ TEST(api_key_manager, comment_only_file_is_empty_not_parse_error) {
     ApiKeyManager mgr;
     ASSERT_TRUE(mgr.load(path));
     EXPECT_EQ(mgr.key_count(), 0u);
-    EXPECT_EQ(mgr.authenticate("Bearer anything"), nullptr);
+    const auto none = mgr.authenticate("Bearer anything");
+    EXPECT_EQ(none.reason, AuthReason::UNKNOWN);
+    EXPECT_EQ(none.key, nullptr);
 }
 
 TEST(api_key_manager, authenticates_valid_bearer) {
@@ -75,14 +78,16 @@ TEST(api_key_manager, authenticates_valid_bearer) {
     ASSERT_TRUE(mgr.load(path));
     EXPECT_EQ(mgr.key_count(), 1u);
 
-    const auto key = mgr.authenticate("Bearer secret-alpha");
-    ASSERT_NE(key, nullptr);
-    EXPECT_EQ(key->name, "alpha");
-    EXPECT_EQ(key->scope, "inference");
+    const auto ok = mgr.authenticate("Bearer secret-alpha");
+    ASSERT_EQ(ok.reason, AuthReason::OK);
+    ASSERT_NE(ok.key, nullptr);
+    EXPECT_EQ(ok.key->name, "alpha");
+    EXPECT_EQ(ok.key->scope, "inference");
+    EXPECT_EQ(ok.retry_after_ms, 0);
 
-    EXPECT_EQ(mgr.authenticate("Bearer wrong-secret"), nullptr);
-    EXPECT_EQ(mgr.authenticate("Basic dXNlcjpwYXNz"), nullptr);
-    EXPECT_EQ(mgr.authenticate(""), nullptr);
+    EXPECT_EQ(mgr.authenticate("Bearer wrong-secret").reason, AuthReason::UNKNOWN);
+    EXPECT_EQ(mgr.authenticate("Basic dXNlcjpwYXNz").reason, AuthReason::UNKNOWN);
+    EXPECT_EQ(mgr.authenticate("").reason, AuthReason::UNKNOWN);
 }
 
 TEST(api_key_manager, disabled_key_and_scope_semantics) {
@@ -94,17 +99,19 @@ TEST(api_key_manager, disabled_key_and_scope_semantics) {
     ASSERT_TRUE(mgr.load(path));
     EXPECT_EQ(mgr.key_count(), 3u);
 
-    EXPECT_EQ(mgr.authenticate("Bearer secret-off"), nullptr);
+    EXPECT_EQ(mgr.authenticate("Bearer secret-off").reason, AuthReason::DISABLED);
 
     const auto admin = mgr.authenticate("Bearer secret-admin");
-    ASSERT_NE(admin, nullptr);
-    EXPECT_TRUE(ApiKeyManager::has_scope(admin, "admin"));
-    EXPECT_FALSE(ApiKeyManager::has_scope(admin, "inference"));
+    ASSERT_EQ(admin.reason, AuthReason::OK);
+    ASSERT_NE(admin.key, nullptr);
+    EXPECT_TRUE(ApiKeyManager::has_scope(admin.key, "admin"));
+    EXPECT_FALSE(ApiKeyManager::has_scope(admin.key, "inference"));
 
     const auto su = mgr.authenticate("Bearer secret-su");
-    ASSERT_NE(su, nullptr);
-    EXPECT_TRUE(ApiKeyManager::has_scope(su, "inference"));
-    EXPECT_TRUE(ApiKeyManager::has_scope(su, "admin"));
+    ASSERT_EQ(su.reason, AuthReason::OK);
+    ASSERT_NE(su.key, nullptr);
+    EXPECT_TRUE(ApiKeyManager::has_scope(su.key, "inference"));
+    EXPECT_TRUE(ApiKeyManager::has_scope(su.key, "admin"));
 
     EXPECT_FALSE(ApiKeyManager::has_scope(nullptr, "admin"));
 }
@@ -115,21 +122,51 @@ TEST(api_key_manager, rate_limit_rejects_within_window) {
     ASSERT_TRUE(mgr.load(path));
 
     int rejected = 0;
+    int ok = 0;
     for (int i = 0; i < 50; ++i) {
-        if (mgr.authenticate("Bearer secret-limited") == nullptr) {
+        const auto r = mgr.authenticate("Bearer secret-limited");
+        if (r.reason == AuthReason::RATE_LIMITED) {
             ++rejected;
+            // exact budget left in the 1-second fixed window
+            EXPECT_GE(r.retry_after_ms, 1);
+            EXPECT_LE(r.retry_after_ms, 1000);
+            EXPECT_EQ(r.key, nullptr);
+        } else {
+            ASSERT_EQ(r.reason, AuthReason::OK);
+            ++ok;
         }
     }
     // qps=2: even if the fixed window boundary is crossed mid-loop, at most
     // a handful pass - the overwhelming majority must be rejected
     EXPECT_GE(rejected, 40);
+    EXPECT_LE(ok, 10);
+}
+
+TEST(api_key_manager, rate_limited_valid_key_is_never_unknown) {
+    // PR-3a regression: the old null-return conflated "wrong card" with
+    // "right card, too fast"; the gateway answered 401 for a throttled
+    // VALID key. RATE_LIMITED must be a distinct outcome with a usable
+    // Retry-After budget.
+    const auto path = write_config(key_entry("limited", "secret-limited", "inference", true, 2));
+    ApiKeyManager mgr;
+    ASSERT_TRUE(mgr.load(path));
+
+    const auto first = mgr.authenticate("Bearer secret-limited");
+    ASSERT_EQ(first.reason, AuthReason::OK);
+    const auto second = mgr.authenticate("Bearer secret-limited");
+    ASSERT_EQ(second.reason, AuthReason::RATE_LIMITED);
+    EXPECT_GE(second.retry_after_ms, 1);
+    EXPECT_LE(second.retry_after_ms, 1000);
+    EXPECT_EQ(second.key, nullptr);
+    // the wrong-secret card stays UNKNOWN regardless of any throttling
+    EXPECT_EQ(mgr.authenticate("Bearer wrong-secret").reason, AuthReason::UNKNOWN);
 }
 
 TEST(api_key_manager, reload_swaps_active_keys) {
     const auto path = write_config(key_entry("alpha", "secret-alpha", "inference", true, 0));
     ApiKeyManager mgr;
     ASSERT_TRUE(mgr.load(path));
-    EXPECT_NE(mgr.authenticate("Bearer secret-alpha"), nullptr);
+    EXPECT_EQ(mgr.authenticate("Bearer secret-alpha").reason, AuthReason::OK);
 
     // rewrite the same file with a different key set, then hot-reload
     {
@@ -138,10 +175,12 @@ TEST(api_key_manager, reload_swaps_active_keys) {
     }
     ASSERT_TRUE(mgr.reload());
 
-    EXPECT_EQ(mgr.authenticate("Bearer secret-alpha"), nullptr);  // old key gone
+    // old key gone
+    EXPECT_EQ(mgr.authenticate("Bearer secret-alpha").reason, AuthReason::UNKNOWN);
     const auto beta = mgr.authenticate("Bearer secret-beta");
-    ASSERT_NE(beta, nullptr);
-    EXPECT_EQ(beta->name, "beta");
+    ASSERT_EQ(beta.reason, AuthReason::OK);
+    ASSERT_NE(beta.key, nullptr);
+    EXPECT_EQ(beta.key->name, "beta");
     EXPECT_EQ(mgr.key_count(), 1u);
 }
 
@@ -149,7 +188,7 @@ TEST(api_key_manager, list_keys_reports_counters_without_hash) {
     const auto path = write_config(key_entry("alpha", "secret-alpha", "inference", true, 0));
     ApiKeyManager mgr;
     ASSERT_TRUE(mgr.load(path));
-    ASSERT_NE(mgr.authenticate("Bearer secret-alpha"), nullptr);
+    ASSERT_EQ(mgr.authenticate("Bearer secret-alpha").reason, AuthReason::OK);
 
     const auto keys = mgr.list_keys();
     ASSERT_EQ(keys.size(), 1u);
@@ -188,11 +227,11 @@ TEST(api_key_manager, concurrent_reload_never_dangles_authenticate) {
     for (int t = 0; t < 4; ++t) {
         readers.emplace_back([&]() {
             while (!stop.load(std::memory_order_relaxed)) {
-                const auto key = mgr.authenticate("Bearer secret-stable");
-                if (key != nullptr) {
+                const auto auth = mgr.authenticate("Bearer secret-stable");
+                if (auth.reason == AuthReason::OK) {
                     // the gateway reads exactly these fields after auth
-                    EXPECT_EQ(key->name, "stable");
-                    EXPECT_EQ(key->scope, "inference");
+                    EXPECT_EQ(auth.key->name, "stable");
+                    EXPECT_EQ(auth.key->scope, "inference");
                     auth_ok.fetch_add(1, std::memory_order_relaxed);
                 }
             }
@@ -223,8 +262,9 @@ TEST(api_key_manager, concurrent_reload_never_dangles_authenticate) {
     EXPECT_GT(auth_ok.load(), 0u);
     // final state remains usable regardless of which variant was last loaded
     const auto key = mgr.authenticate("Bearer secret-stable");
-    ASSERT_NE(key, nullptr);
-    EXPECT_EQ(key->name, "stable");
+    ASSERT_EQ(key.reason, AuthReason::OK);
+    ASSERT_NE(key.key, nullptr);
+    EXPECT_EQ(key.key->name, "stable");
 }
 
 int main(int argc, char** argv) {

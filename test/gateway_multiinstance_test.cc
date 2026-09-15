@@ -26,6 +26,7 @@
 #include <sstream>
 #include <string>
 
+#include "control/api_key_manager.h"
 #include "control/gateway/gateway_app.h"
 
 namespace fs = std::filesystem;
@@ -58,6 +59,7 @@ int find_free_port() {
 struct HttpResp {
     int status = 0;
     std::string body;
+    std::string raw;
 };
 
 HttpResp send_request(int port, const std::string& method, const std::string& path,
@@ -223,6 +225,67 @@ TEST_F(GatewayMultiInstanceTest, scrape_tokens_are_not_shared_between_instances)
     EXPECT_EQ(foreign.status, 401);
     const auto own = send_request(a_.gateway_port, "GET", "/metrics", a_.scrape_token);
     EXPECT_EQ(own.status, 200);
+}
+
+TEST_F(GatewayMultiInstanceTest, rate_limited_key_gets_429_not_401) {
+    // PR-3a regression: authenticate() used to return a null key for BOTH
+    // "unknown card" and "valid card over QPS", so a throttled valid key
+    // fell through to the static-token path and got 401. Now it must be
+    // 429 + Retry-After. Built as a third instance whose project root
+    // carries conf/api_keys.toml (a qps=2 inference key) - the gateway
+    // loads it from <root>/conf on init.
+    Instance c;
+    c.root = base_dir_ / "c";
+    c.model_id = "MODEL_C";
+    c.gateway_port = find_free_port();
+    ASSERT_GT(c.gateway_port, 0);
+    write_instance_config(c, find_free_port());
+    {
+        std::ofstream keys(c.root / "conf" / "api_keys.toml");
+        keys << "[keys.limited]\n"
+             << "hash = \"" << mortred::control::ApiKeyManager::sha256_hex("key-c")
+             << "\"\n"
+             << "scope = \"inference\"\n"
+             << "rate_limit_qps = 2\n";
+    }
+    mortred::control::GatewayInitOptions opt;
+    opt.project_root = c.root.string();
+    opt.metrics_token = "scrape-c";
+    opt.internal_token = "internal-c";
+    opt.host = "127.0.0.1";
+    opt.port = c.gateway_port;
+    ASSERT_TRUE(c.app.init(opt)) << "instance C init failed";
+    ASSERT_TRUE(c.app.listen()) << "instance C listen failed";
+
+    int status_503 = 0;  // auth passed, upstream dead (the multiinstance trick)
+    int status_429 = 0;
+    int status_401 = 0;
+    std::string retry_after;
+    for (int i = 0; i < 6; ++i) {
+        const auto resp = send_request(c.gateway_port, "POST",
+                                       "/v1/models/MODEL_C/infer", "key-c");
+        if (resp.status == 503) {
+            ++status_503;
+        } else if (resp.status == 429) {
+            ++status_429;
+            const auto pos = resp.raw.find("Retry-After:");
+            ASSERT_NE(pos, std::string::npos) << "429 without Retry-After header";
+            retry_after = resp.raw.substr(pos + 12, 2);
+        } else if (resp.status == 401) {
+            ++status_401;
+        }
+    }
+    // two admissions in the first window, the rest throttled; even with one
+    // window boundary crossed mid-loop there is at most one extra 503
+    EXPECT_GE(status_503, 2);
+    EXPECT_LE(status_503, 3);
+    EXPECT_GE(status_429, 3);
+    // THE regression assertion: a valid throttled key never sees 401
+    EXPECT_EQ(status_401, 0);
+    // Retry-After is a whole second (the 1s fixed window rounds up)
+    EXPECT_EQ(retry_after.substr(0, 1), "1");
+
+    c.app.stop_listen();
 }
 
 TEST_F(GatewayMultiInstanceTest, healthz_stays_public_on_both_instances) {
