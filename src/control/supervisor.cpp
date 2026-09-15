@@ -246,7 +246,8 @@ void ProcessSupervisor::apply_exit_decision(Child* child,
     }
 }
 
-bool ProcessSupervisor::spawn_locked(Child* child, std::string* err) {
+bool ProcessSupervisor::spawn_locked(Child* child, std::string* err,
+                                         std::unique_lock<std::mutex>& lock) {
     if (child->is_gateway) {
         const auto scrape = scrape_token_usable(_gateway_metrics_token, _gateway_infer_token,
                                                 _gateway_admin_token);
@@ -304,12 +305,14 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err) {
         return false;
     }
 
-    // a previous incarnation's pipe readers must be gone before new pipes land
-    if (child->reader_out.joinable()) {
-        child->reader_out.join();
-    }
-    if (child->reader_err.joinable()) {
-        child->reader_err.join();
+    // handle_exit exclusively joins prior readers; wait here (never join) so
+    // restart cannot double-join the same std::thread.
+    if (! _cv.wait_for(lock, std::chrono::seconds(10),
+                       [child]() { return !child->readers_live.load(); })) {
+        if (err != nullptr) {
+            *err = "timed out waiting for previous log pipe readers";
+        }
+        return false;
     }
 
     int out_pipe[2];
@@ -454,19 +457,18 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err) {
     child->error.clear();
     child->engine.note_started(monotonic_ms());
 
-    // the read ends of the log pipes are owned by the reader threads; the
-    // Child fields transfer them to handle_exit, which joins the threads and
-    // closes the fds after the readers observed EOF (see handle_exit)
+    // Readers + fds are owned until handle_exit joins/closes them.
     child->out_fd = out_pipe[0];
     child->err_fd = err_pipe[0];
     LogBuffer* buffer = child->log.get();
+    child->readers_live.store(true);
     child->reader_out = std::thread([fd = child->out_fd, buffer]() { read_pipe_loop(fd, buffer); });
     child->reader_err = std::thread([fd = child->err_fd, buffer]() { read_pipe_loop(fd, buffer); });
     return true;
 }
 
 bool ProcessSupervisor::start_server(const std::string& id, std::string* err) {
-    std::lock_guard<std::mutex> lock(_mu);
+    std::unique_lock<std::mutex> lock(_mu);
     Child* child = find_locked(id);
     if (child == nullptr) {
         if (err != nullptr) {
@@ -490,7 +492,7 @@ bool ProcessSupervisor::start_server(const std::string& id, std::string* err) {
     child->stopping = false;
     std::string local_err;
     std::string* spawn_err = err != nullptr ? err : &local_err;
-    if (!spawn_locked(child, spawn_err)) {
+    if (!spawn_locked(child, spawn_err, lock)) {
         if (is_permanent_spawn_error(*spawn_err)) {
             child->wanted = false;
             child->error = *spawn_err;
@@ -685,7 +687,8 @@ void ProcessSupervisor::handle_exit(pid_t pid, int wait_status) {
         child->err_fd = -1;
     }
 
-    // join readers without holding the table lock, then release the pipe fds
+    // Sole join site for log pipe readers (spawn_locked only waits on
+    // readers_live). Join without the table lock, then close fds.
     if (child->reader_out.joinable()) {
         child->reader_out.join();
     }
@@ -698,6 +701,7 @@ void ProcessSupervisor::handle_exit(pid_t pid, int wait_status) {
     if (err_fd >= 0) {
         ::close(err_fd);
     }
+    child->readers_live.store(false);
     _cv.notify_all();
 }
 
@@ -849,11 +853,11 @@ void ProcessSupervisor::monitor_loop() {
             probe_readiness(child, monotonic_ms());
         }
         if (!to_restart.empty()) {
-            std::lock_guard<std::mutex> lock(_mu);
+            std::unique_lock<std::mutex> lock(_mu);
             for (Child* child : to_restart) {
                 child->backoff_due_ms = 0;
                 std::string err;
-                if (!spawn_locked(child, &err)) {
+                if (!spawn_locked(child, &err, lock)) {
                     if (is_permanent_spawn_error(err)) {
                         child->wanted = false;
                         child->error = err;
