@@ -182,7 +182,7 @@ make -j10
 ```bash
 cmake --preset tests-only
 cmake --build --preset tests-only
-ctest --preset tests-only
+# 该 buildPreset 默认 target 为 check（编译 EXCLUDE_FROM_ALL 测试并跑 ctest）
 ```
 
 仓库目录规范与源码/配置/可执行文件映射见 [docs/repository-layout.md](docs/repository-layout.md)。
