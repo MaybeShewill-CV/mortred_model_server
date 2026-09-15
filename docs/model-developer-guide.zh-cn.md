@@ -2,7 +2,6 @@
 
 本仓库**添加 / 加固 CV 模型**的唯一入口。把模型挂上 HTTP（`conf/server`、OpenAPI、
 consistency）见 [how_to_add_new_server.zh-cn.md](how_to_add_new_server.zh-cn.md)。
-契约评审清单：[model-contract-governance.md](model-contract-governance.md)。
 
 英文全文与本页同步维护：[model-developer-guide.md](model-developer-guide.md)。
 
@@ -27,6 +26,7 @@ run_impl:  prepare_inputs -> session.run -> postprocess(context)
 `MODEL_OUTPUT_CONTRACT_FAILED`。
 
 配置字段见 [about_model_configuration.zh-cn.md](about_model_configuration.zh-cn.md)。
+仓库默认限制解码图 `max_image_pixels` / `max_image_side`；模特类全尺寸输入可在模型 TOML 提高并写明（如 MODNet / PPMatting）。
 Catalog 在 `src/factory/<task>_task.h` 加一行 `CvModelEntry`。
 
 ---
