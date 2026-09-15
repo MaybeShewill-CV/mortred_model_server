@@ -12,6 +12,10 @@
 
 #include <unistd.h>
 
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
@@ -155,6 +159,27 @@ namespace control {
 
 GatewayApp::~GatewayApp() {
     stop_listen();
+}
+
+/*** comma-separated list -> trimmed non-empty items (trusted_proxies config) */
+static std::vector<std::string> split_csv(const std::string& raw) {
+    std::vector<std::string> out;
+    size_t start = 0;
+    while (start <= raw.size()) {
+        const size_t comma = raw.find(',', start);
+        const size_t end = comma == std::string::npos ? raw.size() : comma;
+        std::string item = raw.substr(start, end - start);
+        const size_t b = item.find_first_not_of(" \t");
+        const size_t e = item.find_last_not_of(" \t");
+        if (b != std::string::npos) {
+            out.push_back(item.substr(b, e - b + 1));
+        }
+        if (comma == std::string::npos) {
+            break;
+        }
+        start = comma + 1;
+    }
+    return out;
 }
 
 void GatewayApp::load_cors_origins(const std::string& raw) {
@@ -354,6 +379,60 @@ void GatewayApp::forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
     series_of(task)->push_back(client);
 }
 
+/*** L1 per-source metering (PR-3b). Runs BEFORE route resolution and auth:
+ * anonymous floods must be shed before any per-request work beyond the
+ * cheap health/metrics probes above. Ordering inside process():
+ *   OPTIONS -> /healthz -> /metrics -> [THIS] -> route -> auth(L2) -> forward
+ * 429 carries Retry-After (exact GCRA budget, rounded up to whole seconds)
+ * and the IETF draft RateLimit-Limit/Remaining/Reset triple. Shadow mode
+ * counts but never rejects. Returns true when the request may proceed. */
+bool GatewayApp::check_ip_rate_limit(WFHttpTask* task, const std::string& method) {
+    if (ip_limiter_ == nullptr || method == "OPTIONS") {
+        return true;
+    }
+    // peer address from the TCP endpoint (same shape as the model-server
+    // peer_ip_of; workflow gives sockaddr storage directly)
+    struct sockaddr_storage peer_addr;
+    socklen_t addr_len = sizeof(peer_addr);
+    char ip_buf[INET6_ADDRSTRLEN] = {0};
+    if (task->get_peer_addr(reinterpret_cast<struct sockaddr*>(&peer_addr), &addr_len) == 0) {
+        if (peer_addr.ss_family == AF_INET) {
+            const auto* v4 = reinterpret_cast<const struct sockaddr_in*>(&peer_addr);
+            ::inet_ntop(AF_INET, &v4->sin_addr, ip_buf, sizeof(ip_buf));
+        } else if (peer_addr.ss_family == AF_INET6) {
+            const auto* v6 = reinterpret_cast<const struct sockaddr_in6*>(&peer_addr);
+            ::inet_ntop(AF_INET6, &v6->sin6_addr, ip_buf, sizeof(ip_buf));
+        }
+    }
+    const bool used_header = false;
+    const auto subject = mortred::control::ratelimit::derive_subject(
+        ip_buf, trusted_proxies_,
+        header_value(task->get_req(), "forwarded"),
+        header_value(task->get_req(), "x-forwarded-for"));
+    const int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                               std::chrono::steady_clock::now().time_since_epoch())
+                               .count();
+    const auto decision = ip_limiter_->admit(subject, now_ms);
+    if (decision.allowed) {
+        return true;
+    }
+    const int retry_s = (decision.retry_after_ms + 999) / 1000;
+    if (rate_limit_shadow_) {
+        metrics_.inc_http_requests(method, "shadow429");
+        return true;
+    }
+    metrics_.inc_http_requests(method, "429");
+    auto* resp = task->get_resp();
+    resp->add_header_pair("Retry-After", std::to_string(retry_s).c_str());
+    // IETF draft rate-limit header fields
+    resp->add_header_pair("RateLimit-Limit", std::to_string(rate_limit_rate_).c_str());
+    resp->add_header_pair("RateLimit-Remaining", "0");
+    resp->add_header_pair("RateLimit-Reset", std::to_string(retry_s).c_str());
+    reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED,
+                        "per-source rate limit exceeded");
+    return false;
+}
+
 void GatewayApp::process(WFHttpTask* task) {
     const std::string path = uri_path(task->get_req()->get_request_uri());
     // workflow leaves method null when the request line is malformed; uri_path
@@ -387,6 +466,10 @@ void GatewayApp::process(WFHttpTask* task) {
         resp->add_header_pair("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
         const auto body = metrics_.render();
         resp->append_output_body(body.data(), body.size());
+        return;
+    }
+
+    if (!check_ip_rate_limit(task, method)) {
         return;
     }
 
@@ -483,6 +566,33 @@ bool GatewayApp::init(const GatewayInitOptions& options) {
     metrics_token_ = options.metrics_token;
     internal_token_ = options.internal_token;
     load_cors_origins(options.cors_origins);
+
+    // L1 per-IP limiter: construct AFTER config load so [gateway.rate_limit]
+    // from mortred.toml applies; MORTRED_RATE_LIMIT env (values: off|shadow|
+    // enforce) overrides for docker/compose without editing the toml
+    if (const char* env = std::getenv("MORTRED_RATE_LIMIT"); env != nullptr &&
+        *env != '\0') {
+        const std::string mode(env);
+        cfg_.gateway.rate_limit.enabled = (mode == "enforce");
+        cfg_.gateway.rate_limit.shadow = (mode == "shadow");
+    }
+    const auto& rl = cfg_.gateway.rate_limit;
+    rate_limit_enabled_ = rl.enabled || rl.shadow;
+    rate_limit_shadow_ = rl.shadow;
+    rate_limit_rate_ = rl.rate_per_sec;
+    trusted_proxies_ = mortred::control::ratelimit::TrustedProxies::parse(
+        split_csv(rl.trusted_proxies));
+    ip_limiter_ = std::make_unique<mortred::control::ratelimit::ShardedIpLimiter>(
+        mortred::control::ratelimit::GcraPolicy{
+            static_cast<uint32_t>(rl.rate_per_sec), static_cast<uint32_t>(rl.burst)},
+        static_cast<size_t>(rl.max_tracked));
+    if (rate_limit_enabled_) {
+        std::fprintf(stderr,
+                     "mortred-gateway: per-IP rate limiting %s: %d/s burst %d, %zu trusted "
+                     "proxies\n",
+                     rate_limit_shadow_ ? "SHADOW (count, never reject)" : "ENFORCED",
+                     rl.rate_per_sec, rl.burst, trusted_proxies_.entries.size());
+    }
 
     // fail-closed: every listen needs inference/management auth. Broken or
     // empty api_keys.toml is fatal when no static token can take over.

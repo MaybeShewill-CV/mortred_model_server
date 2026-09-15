@@ -36,6 +36,18 @@ max_connections = 1000
 upstream_send_timeout_ms = 180000
 upstream_recv_timeout_ms = 180000
 
+# Edge per-IP rate limiting (gateway L1). Ships disabled; MORTRED_RATE_LIMIT
+# env (off|shadow|enforce) overrides for docker/compose. shadow = meter and
+# count, never reject - the rollout observation mode. trusted_proxies lists
+# EXACT addresses whose Forwarded/X-Forwarded-For headers are honored
+# (comma separated; loopback default = init-edge nginx in host network).
+[gateway.rate_limit]
+enabled = false
+shadow = false
+rate_per_sec = 50
+burst = 100
+trusted_proxies = "127.0.0.1,::1"
+
 # Per-server supervision overrides; <id> is the catalog model_section
 # (e.g. YOLOV8). Absent keys fall back to the defaults above.
 #

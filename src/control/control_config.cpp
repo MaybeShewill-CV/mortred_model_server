@@ -154,6 +154,31 @@ bool ControlConfig::load(const std::string& path, ControlConfig* out, std::strin
         }
     }
 
+    // [gateway.rate_limit]: its own mini_toml section (the parser has no
+    // dotted keys); every key optional with the struct defaults standing
+    if (doc.count("gateway.rate_limit") != 0) {
+        const auto& kv = doc.at("gateway.rate_limit");
+        const std::string ctx = "[gateway.rate_limit]";
+        auto& rl = cfg.gateway.rate_limit;
+        if (kv.count("enabled") != 0) {
+            rl.enabled = mini_toml::to_bool(kv.at("enabled"), false);
+        }
+        if (kv.count("shadow") != 0) {
+            rl.shadow = mini_toml::to_bool(kv.at("shadow"), false);
+        }
+        if (!read_int(kv, "rate_per_sec", &rl.rate_per_sec, 1, 100000, ctx, err) ||
+            !read_int(kv, "burst", &rl.burst, 1, 1000000, ctx, err) ||
+            !read_int(kv, "max_tracked", &rl.max_tracked, 0, 16777216, ctx, err)) {
+            return false;
+        }
+        // trusted_proxies is deliberately NOT read_str: the empty string is a
+        // valid configuration (trust nobody -> headers never honored), while
+        // read_str rejects empty values
+        if (kv.count("trusted_proxies") != 0) {
+            rl.trusted_proxies = mini_toml::unquote(kv.at("trusted_proxies"));
+        }
+    }
+
     for (const auto& [section, kv] : doc) {
         if (section.compare(0, 8, "servers.") != 0) {
             continue;

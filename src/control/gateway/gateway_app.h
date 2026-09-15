@@ -17,6 +17,8 @@
 #include "control/api_key_manager.h"
 #include "control/catalog.h"
 #include "control/control_config.h"
+#include "control/rate_limit/gcra.h"
+#include "control/rate_limit/subject.h"
 #include "server/prometheus_metrics.h"
 
 namespace mortred {
@@ -76,6 +78,7 @@ public:
 
 private:
     void process(WFHttpTask* task);
+    bool check_ip_rate_limit(WFHttpTask* task, const std::string& method);
     void forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
                           const std::string& method, const std::string& query);
     bool resolve_route(const std::string& path, ResolvedRoute* out) const;
@@ -88,6 +91,14 @@ private:
     ControlConfig cfg_;
     ApiKeyManager api_keys_;
     jinq::server::PrometheusMetrics metrics_;
+    // L1 per-IP metering (PR-3b): disabled unless configured; shadow mode
+    // meters + counts without rejecting
+    // constructed at init() (non-copyable: sharded mutexes); null = disabled
+    std::unique_ptr<mortred::control::ratelimit::ShardedIpLimiter> ip_limiter_;
+    mortred::control::ratelimit::TrustedProxies trusted_proxies_;
+    bool rate_limit_enabled_ = false;
+    bool rate_limit_shadow_ = false;
+    int rate_limit_rate_ = 0;
     std::string auth_token_;
     std::string admin_token_;
     std::string metrics_token_;
