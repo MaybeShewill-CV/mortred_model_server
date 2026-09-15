@@ -85,8 +85,10 @@ TEST(GcraPolicy, IntervalRoundsUpConservatively) {
     EXPECT_LE(1000 / p.interval_ms(), 3);
     EXPECT_EQ(kRate10Burst5.interval_ms(), 100);
     EXPECT_EQ(kRate10Burst5.burst_tolerance_ms(), 400);
-    EXPECT_FALSE(GcraPolicy{0, 5}.enabled());
-    EXPECT_FALSE(GcraPolicy{10, 0}.enabled());
+    // parentheses: GCC's preprocessor splits the braced-init comma into
+    // two macro arguments (clang does not — portable form uses parens)
+    EXPECT_FALSE((GcraPolicy{0, 5}.enabled()));
+    EXPECT_FALSE((GcraPolicy{10, 0}.enabled()));
 }
 
 TEST(GcraAdmit, DisabledPolicyAllowsWithoutTouchingState) {
@@ -153,7 +155,10 @@ TEST(GcraDifferential, RandomSequencesMatchReference) {
     // mixed regimes: poisson-ish gaps, bursts, idle stretches, clock jitter
     for (uint32_t seed = 1; seed <= 100; ++seed) {
         std::mt19937 rng(seed);
-        GcraPolicy policy{1 + rng() % 200, 1 + rng() % 50};
+        // mt19937::result_type is uint64 on linux: explicit casts avoid the
+        // -Wnarrowing error under the -Werror quality-gate preset
+        GcraPolicy policy{static_cast<uint32_t>(1 + rng() % 200),
+                          static_cast<uint32_t>(1 + rng() % 50)};
         std::atomic<int64_t> tat{0};
         RefGcra ref(policy);
         int64_t now = 0;
