@@ -76,7 +76,8 @@ resolve_python() {
 PY="$(resolve_python)" || fail "missing a working python3/python (needed to parse $MANIFEST)"
 
 # ---- Parse manifest + profiles with python, emit TSV: model<TAB>onnx<TAB>engine<TAB>fp<TAB>shape_flags ----
-# Write a temp file instead of process substitution: mapfile+heredoc+process substitution is unreliable in Windows Git Bash
+# Temp file (not process substitution): more reliable under Windows Git Bash.
+# Fill ENTRIES with while-read — avoids bash-4-only mapfile/readarray (macOS /bin/bash is 3.2).
 TMPLIST="$(mktemp)" || fail "mktemp failed"
 if ! "$PY" - "$ROOT" "$MANIFEST" "$ONLY" >"$TMPLIST" <<'PY'
 import json, sys
@@ -109,8 +110,12 @@ then
     rm -f "$TMPLIST"
     fail "failed to parse manifest: $MANIFEST"
 fi
-mapfile -t ENTRIES < "$TMPLIST"
+ENTRIES=()
+while IFS= read -r _line || [ -n "$_line" ]; do
+    ENTRIES+=("$_line")
+done < "$TMPLIST"
 rm -f "$TMPLIST"
+unset _line
 if [ "${#ENTRIES[@]}" -eq 0 ]; then
     [ -n "$ONLY" ] && fail "no entries matching '$ONLY' (see --list)"
     fail "manifest is empty: $MANIFEST"
