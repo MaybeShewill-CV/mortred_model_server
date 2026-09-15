@@ -26,7 +26,8 @@ struct F32OutputView {
  * rejected at the model boundary instead of reaching task-specific decoding.
  */
 inline StatusCode validated_f32_named_output(const std::vector<NamedTensor> &outputs, const std::string &name,
-                                             const TensorContract &contract, const std::string &log_prefix, F32OutputView *view = nullptr) {
+                                             const TensorContract &contract, const std::string &log_prefix,
+                                             F32OutputView *view = nullptr, bool require_finite = true) {
     const auto *named = find_output(outputs, name);
     if (named == nullptr) {
         LOG(ERROR) << log_prefix << " output tensor '" << name << "' is missing";
@@ -40,7 +41,11 @@ inline StatusCode validated_f32_named_output(const std::vector<NamedTensor> &out
     }
 
     const float *data = nullptr;
-    if (!get_f32_data(named->tensor, &data, &error) ||
+    if (!get_f32_data(named->tensor, &data, &error)) {
+        LOG(ERROR) << log_prefix << " output contract failed: " << error;
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+    }
+    if (require_finite &&
         !require_finite_f32(data, static_cast<size_t>(named->tensor.element_count()), named->name, &error)) {
         LOG(ERROR) << log_prefix << " output contract failed: " << error;
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
@@ -54,12 +59,13 @@ inline StatusCode validated_f32_named_output(const std::vector<NamedTensor> &out
 
 /*** single-output models do not need to know engine-generated output names ***/
 inline StatusCode validated_f32_first_output(const std::vector<NamedTensor> &outputs, const TensorContract &contract,
-                                             const std::string &log_prefix, F32OutputView *view = nullptr) {
+                                             const std::string &log_prefix, F32OutputView *view = nullptr,
+                                             bool require_finite = true) {
     if (outputs.empty()) {
         LOG(ERROR) << log_prefix << " output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    return validated_f32_named_output(outputs, outputs.front().name, contract, log_prefix, view);
+    return validated_f32_named_output(outputs, outputs.front().name, contract, log_prefix, view, require_finite);
 }
 
 } // namespace backend

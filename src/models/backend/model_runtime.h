@@ -82,6 +82,7 @@ class OutputReader {
     OutputReader &f32();
     OutputReader &shape(std::vector<int64_t> shape);
     OutputReader &nchw();
+    /*** opt-in: reject NaN/Inf in the f32 payload (off unless this is called) ***/
     OutputReader &finite();
 
     RuntimeResult<F32OutputView> read() const;

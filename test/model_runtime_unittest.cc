@@ -169,6 +169,17 @@ TEST(OutputReader, EnforcesNamedF32Contract) {
     outputs.front() = scores_tensor("scores");
     reinterpret_cast<float *>(outputs.front().tensor.buffer.data())[1] = std::numeric_limits<float>::quiet_NaN();
     EXPECT_EQ(OutputReader(outputs, "scores").f32().shape({1, 3}).finite().read().status, StatusCode::MODEL_OUTPUT_CONTRACT_FAILED);
+
+    // Without .finite(), NaN/Inf are allowed through OutputReader (opt-in gate).
+    auto nan_ok = OutputReader(outputs, "scores").f32().shape({1, 3}).read();
+    ASSERT_TRUE(nan_ok.ok()) << nan_ok.error;
+    EXPECT_TRUE(std::isnan(nan_ok.value.data[1]));
+
+    reinterpret_cast<float *>(outputs.front().tensor.buffer.data())[1] = std::numeric_limits<float>::infinity();
+    EXPECT_EQ(OutputReader(outputs, "scores").f32().shape({1, 3}).finite().read().status, StatusCode::MODEL_OUTPUT_CONTRACT_FAILED);
+    auto inf_ok = OutputReader(outputs, "scores").f32().shape({1, 3}).read();
+    ASSERT_TRUE(inf_ok.ok()) << inf_ok.error;
+    EXPECT_TRUE(std::isinf(inf_ok.value.data[1]));
 }
 
 TEST(ParamReader, ParsesAndValidatesCommonTypes) {

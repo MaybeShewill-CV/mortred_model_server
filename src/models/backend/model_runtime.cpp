@@ -284,7 +284,8 @@ OutputReader &OutputReader::finite() {
 
 RuntimeResult<F32OutputView> OutputReader::read() const {
     F32OutputView view;
-    const auto status = validated_f32_named_output(*outputs_, name_, contract_, "OutputReader", &view);
+    const auto status =
+        validated_f32_named_output(*outputs_, name_, contract_, "OutputReader", &view, require_finite_);
     if (status != StatusCode::OK) {
         return {status, "OutputReader contract failed", {}};
     }
