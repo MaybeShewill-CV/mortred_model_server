@@ -1,9 +1,7 @@
 # Model Developer Guide
 
-Single entry for **adding and hardening a CV model** in this repo. For mounting
-a finished model on HTTP (`conf/server`, OpenAPI, consistency), see
-[how_to_add_new_server.md](how_to_add_new_server.md). Contract review checklist:
-[model-contract-governance.md](model-contract-governance.md).
+Single entry for **adding and hardening a CV model** in this repo. For mounting a finished model on HTTP (`conf/server`, OpenAPI, consistency), see
+[how_to_add_new_server.md](how_to_add_new_server.md).
 
 Every command below is runnable from the repository root.
 
@@ -53,6 +51,11 @@ class MyModel : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
     jinq::common::StatusCode on_init(const toml::table& params) override;  // optional
 };
 ```
+
+Repo-wide decoded-image caps default to `max_image_pixels = 16777216` and
+`max_image_side = 8192` (see server/model config). A model may raise
+`max_image_pixels` when full-size camera input is normal (e.g. MODNet /
+PPMatting); document the override in that model TOML.
 
 Config shape (full keys: [about_model_configuration.md](about_model_configuration.md)):
 
