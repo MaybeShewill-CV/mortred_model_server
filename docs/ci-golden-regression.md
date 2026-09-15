@@ -135,6 +135,10 @@ gates; they are not a separate binary.
 | **T1** | Small real weights, sha256-locked | GitHub-hosted `cpu-profile` via `conf/ci_hosted_golden.json` `hosted` set | Hosted goldens ran with `skipped=0` |
 | **T2** | Full / nightly zoo | `gpu-nightly-full` / `catalog_tiers.nightly` | Nightly executed; if T2 did not run, summaries must say so (never look like full-zoo green) |
 
+CI prints this table via `scripts/ci_print_tier_summary.py` from `inference paths`
+(PR/push always marks **T2: NOT RUN**) and from `gpu-nightly-full` / `T2 tier notice`
+on schedule/manual.
+
 T0 owners (non-exhaustive; prefer adding cases here over new binaries):
 `tensor_contract_unittest`, `session_io_unittest`, `batch_collector_unittest`,
 `model_runtime_unittest`, `param_spec_unittest`, `packed_batch_nvi_unittest`.

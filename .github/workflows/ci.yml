@@ -547,8 +547,8 @@ jobs:
                    scripts/docker_entrypoint.sh scripts/check_repo_clean.sh \
                    scripts/clean_artifacts.sh scripts/setup_full_deps.sh \
                    scripts/mortredctl_doctor.sh scripts/security_warn.sh \
-                   scripts/ci_container_boot.sh scripts/tarball_install.sh
-            scripts/refresh_base_image_digests.sh \
+                   scripts/ci_container_boot.sh scripts/tarball_install.sh \
+                   scripts/refresh_base_image_digests.sh \
                    scripts/make_release_tarball.sh; do
             bash -n "$f"
           done
@@ -558,8 +558,10 @@ jobs:
             scripts/golden_drift_check.py \
             scripts/gen_openapi.py scripts/repo_toml.py \
             scripts/ci_assert_gtest_xml.py \
-            scripts/ci_assert_container_layout.py
+            scripts/ci_assert_container_layout.py \
+            scripts/ci_print_tier_summary.py
           python3 scripts/ci_assert_gtest_xml.py --self-test
+          python3 scripts/ci_print_tier_summary.py --self-test
           python3 scripts/ci_assert_container_layout.py
 
       - name: Validate manifests (JSON / YAML)
@@ -948,6 +950,16 @@ jobs:
             -R '^model_lifecycle_unittest$|^backend_unittest$|^gateway_e2e_test$' \
             --output-on-failure
 
+      - name: Print T2 tier summary
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 scripts/ci_print_tier_summary.py \
+            --t0 ran \
+            --t1 ran \
+            --t2 ran \
+            --t2-skip-inventory "${RUNNER_TEMP}/gtest/gpu-rest-skips.json"
+
       - name: Upload full regression log
         if: always()
         uses: actions/upload-artifact@v7
@@ -964,6 +976,30 @@ jobs:
   # repos with no GPU runner (gpu-pr-gate skipped). Require "inference paths";
   # do not require "gpu golden smoke" by itself.
   # ---------------------------------------------------------------------------
+  # D3: when schedule/manual cannot run gpu-nightly-full (no GPU runner), still
+  # emit an explicit T2 NOT RUN line so logs are not readable as full-zoo green.
+  t2-tier-notice:
+    name: T2 tier notice
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    needs: [gpu-nightly-full]
+    if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Print T2 status for this workflow
+        run: |
+          set -euo pipefail
+          t2='${{ needs.gpu-nightly-full.result }}'
+          status=not_run
+          if [ "${t2}" = "success" ]; then status=ran
+          elif [ "${t2}" = "skipped" ]; then status=skipped
+          elif [ "${t2}" = "failure" ] || [ "${t2}" = "cancelled" ]; then status=failed
+          fi
+          python3 scripts/ci_print_tier_summary.py \
+            --t0 unknown \
+            --t1 unknown \
+            --t2 "${status}"
+
   inference-paths:
     name: inference paths
     runs-on: ubuntu-22.04
@@ -971,12 +1007,27 @@ jobs:
     needs: [cpu-profile, gpu-pr-gate]
     if: ${{ always() && (github.event_name == 'pull_request' || github.event_name == 'push') }}
     steps:
+      - uses: actions/checkout@v4
+
       - name: Evaluate hosted vs maintainer GPU results
         run: |
           set -euo pipefail
           cpu='${{ needs.cpu-profile.result }}'
           gpu='${{ needs.gpu-pr-gate.result }}'
           echo "cpu-profile=${cpu} gpu-pr-gate=${gpu}"
+          # Map job results onto T0/T1/T2 labels. PR/push never runs gpu-nightly-full,
+          # so T2 must be printed as NOT RUN (D3) even when this wrapper is green.
+          t1=failed
+          [ "${cpu}" = "success" ] && t1=ran
+          smoke=failed
+          if [ "${gpu}" = "success" ]; then smoke=ran
+          elif [ "${gpu}" = "skipped" ]; then smoke=skipped
+          fi
+          python3 scripts/ci_print_tier_summary.py \
+            --t0 unknown \
+            --t1 "${t1}" \
+            --t2 not_run \
+            --gpu-smoke "${smoke}"
           if [ "${cpu}" != "success" ]; then
             echo "::error::cpu-profile must succeed (fork and maintainer hosted CPU goldens)" >&2
             exit 1
