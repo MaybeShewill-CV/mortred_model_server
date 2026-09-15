@@ -99,6 +99,7 @@ HttpResp send_request(int port, const std::string& method, const std::string& pa
     }
     ::close(fd);
     HttpResp out;
+    out.raw = response;
     const auto sp = response.find(' ');
     if (sp != std::string::npos) {
         out.status = std::atoi(response.substr(sp + 1, 3).c_str());
