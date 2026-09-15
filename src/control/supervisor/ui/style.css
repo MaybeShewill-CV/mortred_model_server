@@ -114,6 +114,8 @@ body.link-down #layout, body.link-down #log-panel { opacity: 0.6; }
 
 .input-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
 
+.hidden { display: none !important; }
+
 #drop-zone {
   border: 1px dashed var(--border);
   padding: 16px;
