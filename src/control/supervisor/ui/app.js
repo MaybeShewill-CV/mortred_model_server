@@ -149,6 +149,14 @@ function dotClassOf(s) {
   return "stopped";
 }
 
+/* selected-server lookup shared by selectServer / renderServerList / log
+ * selector; selectServer's classList.remove("hidden") runs AFTER
+ * updateSelectedInfo() calls this, so a missing definition silently keeps
+ * the image input area hidden forever (observed on Safari 17, main). */
+function serverById(id) {
+  return state.servers.find((s) => s.id === id) || null;
+}
+
 function renderServerList() {
   const box = $("server-list");
   box.innerHTML = "";
