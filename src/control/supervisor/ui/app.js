@@ -109,11 +109,13 @@ function loadImageAsBase64(file) {
 async function refresh() {
   const [cat, st] = await Promise.all([api("/api/v1/catalog"), api("/api/v1/status")]);
   if (!cat.ok || !st.ok) {
-    $("conn-status").textContent = "后端连接失败";
+    $("conn-status").textContent = "LINK DOWN";
     $("conn-status").className = "conn-err";
+    document.body.classList.add("link-down");
     return;
   }
-  $("conn-status").textContent = "已连接";
+  document.body.classList.remove("link-down");
+  $("conn-status").textContent = "LINK OK";
   $("conn-status").className = "conn-ok";
 
   const statusById = {};
@@ -136,9 +138,9 @@ function renderGatewayBar() {
   if (!g) { bar.textContent = "gateway: 未知"; return; }
   const addr = g.address ? `${g.address.host}:${g.address.port}` : "";
   const cls = g.state === "running" ? "gw-ok" : "gw-bad";
-  bar.innerHTML = `gateway: <span class="${cls}">${escapeHtml(g.state)}</span>` +
-    (g.state === "running" ? "" : "（推理流量不可用）") +
-    (addr ? ` · ${escapeHtml(addr)}` : "");
+  bar.innerHTML = `gw <span class="${cls}">${g.state === "running" ? "●" : "○"}</span>` +
+    (addr ? ` ${escapeHtml(addr)}` : "") +
+    (g.state === "running" ? "" : " (infer down)");
 }
 
 function dotClassOf(s) {
@@ -148,6 +150,9 @@ function dotClassOf(s) {
   if (s.state === "failed") return "failed";
   return "stopped";
 }
+
+/* phosphor status glyphs (colored by .st.<class> in CSS) */
+const ST_GLYPH = { running: "●", starting: "◐", backoff: "◑", failed: "✕", stopped: "·" };
 
 /* selected-server lookup shared by selectServer / renderServerList / log
  * selector; selectServer's classList.remove("hidden") runs AFTER
@@ -176,19 +181,19 @@ function renderServerList() {
       const item = document.createElement("div");
       item.className = "server-item" + (s.id === state.selectedId ? " selected" : "");
       item.onclick = () => selectServer(s.id);
+      const st = dotClassOf(s);
       item.innerHTML =
         `<div class="row1">
-           <span class="dot ${dotClassOf(s)}"></span>
+           <span class="st ${st}" title="${escapeHtml(s.state)}${s.state === "running" && !s.ready ? " (probing)" : ""}">${ST_GLYPH[st]}</span>
            <span class="server-name" title="${escapeHtml(s.name)}">${escapeHtml(s.name)}</span>
-           ${s.restart_count > 0 ? `<span class="badge restarts" title="自动重启次数">↻${s.restart_count}</span>` : ""}
-           <span class="badge ${s.type}">${s.type}</span>
+           ${s.restart_count > 0 ? `<span class="badge restarts" title="restarts">↻${s.restart_count}</span>` : ""}
          </div>
          <div class="row2">
            <span class="port-text">:${s.port} ${escapeHtml(s.uri)}</span>
            <span class="actions">
-             <button class="btn small" data-action="start" ${running ? "disabled" : ""}>启动</button>
-             <button class="btn small" data-action="restart" ${running ? "" : "disabled"}>重启</button>
-             <button class="btn small" data-action="stop" ${running ? "" : "disabled"}>停止</button>
+             <button class="btn small" data-action="start" ${running ? "disabled" : ""}>start</button>
+             <button class="btn small" data-action="restart" ${running ? "" : "disabled"}>rst</button>
+             <button class="btn small" data-action="stop" ${running ? "" : "disabled"}>stop</button>
            </span>
          </div>`;
       item.querySelector('[data-action="start"]').onclick = (ev) => {
@@ -237,6 +242,8 @@ function selectServer(id) {
   renderServerList();
   updateSelectedInfo();
   $("image-input-area").classList.remove("hidden");
+  const hint = $("empty-hint");
+  if (hint) hint.classList.add("hidden");
 }
 
 function updateSelectedInfo() {
@@ -749,6 +756,11 @@ async function pollLogs() {
 }
 
 /* ---------------- init ---------------- */
+if (!sessionStorage.getItem("booted")) {
+  sessionStorage.setItem("booted", "1");
+  document.body.classList.add("boot");
+  setTimeout(() => document.body.classList.remove("boot"), 600);
+}
 refresh();
 setInterval(refresh, 2000);
 setInterval(pollLogs, 1000);
