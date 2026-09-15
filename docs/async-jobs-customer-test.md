@@ -8,7 +8,6 @@ poll / wait → result). Use it to prove a long task behaves as the public
 contract describes, not as a blocking `/infer`.
 
 Wire contract: [api-contract.md](api-contract.md) § Async jobs.
-Internals: [async-job-table.md](async-job-table.md).
 
 ---
 

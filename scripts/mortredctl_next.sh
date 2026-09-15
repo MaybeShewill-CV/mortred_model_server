@@ -16,7 +16,7 @@ while [ $# -gt 0 ]; do
         --trust) TRUST="$2"; shift 2 ;;
         -h|--help)
             echo "usage: mortredctl next [--pack FILE] [--trust FILE]"
-            echo "  prints one next out-of-box command (docs/oob-main-path.md)"
+            echo "  prints one next out-of-box command (docs/deployment.md)"
             exit 0
             ;;
         *) echo "[ERROR] unknown argument: $1" >&2; exit 2 ;;
@@ -88,7 +88,7 @@ if [ "$sup_ok" -ne 1 ]; then
         say_next "docker compose --profile \${MORTRED_PROFILE:-cpu} up -d" \
             "supervisor not reachable at $ADDR; start compose"
     else
-        say_next "start mortred-supervisor (see docs/oob-main-path.md)" \
+        say_next "start mortred-supervisor (see docs/deployment.md)" \
             "supervisor not reachable at $ADDR"
     fi
     exit 0

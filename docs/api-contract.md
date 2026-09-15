@@ -247,4 +247,4 @@ is in [async-jobs-customer-test.md](async-jobs-customer-test.md).
 
 The job ledger is in-memory (lost on restart). The component design, concurrency
 contract and verification gates are documented in
-[async-job-table.md](async-job-table.md).
+[async-jobs-customer-test.md](async-jobs-customer-test.md).

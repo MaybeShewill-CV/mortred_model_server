@@ -230,4 +230,4 @@ worker 数量估算排水时间，钳制在 1-60 秒）。网关将两者原样�
 [async-jobs-customer-test.zh-cn.md](async-jobs-customer-test.zh-cn.md)。
 
 任务账本保存在内存中（重启即失）。组件设计、并发契约与验证门禁见
-[async-job-table.zh-cn.md](async-job-table.zh-cn.md)。
+[async-jobs-customer-test.zh-cn.md](async-jobs-customer-test.zh-cn.md)。

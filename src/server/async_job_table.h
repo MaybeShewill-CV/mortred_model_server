@@ -14,7 +14,7 @@
 // state machine, retention (TTL + LRU) and wait/notify. InferenceTask /
 // InferenceResult live in inference_task.h (shared with the sync path).
 //
-// Concurrency contract (see docs/async-job-table.md):
+// Concurrency contract (see docs/async-jobs-customer-test.md / docs/api-contract.md):
 //   - job state: std::atomic<AsyncJobState>; terminal checks (eviction,
 //     polling predicates) read it without taking any lock
 //   - result / error / completed_at: guarded by ONE mutex per job; the same

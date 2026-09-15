@@ -43,10 +43,9 @@ All models and detectors can be downloaded from my [Hugging Face Page](https://h
 
 # `Quick Start`
 
-**SME / first-hour main path:** follow [docs/oob-main-path.md](docs/oob-main-path.md)
-end-to-end. When stuck, run `mortredctl next` (one next command). The three
-entries below are install shapes for that same lane (tokens → loopback listen →
-start → pack calibrate on GPU → `doctor --strict`).
+**First-hour path:** pick an install entry below, then run `mortredctl next`
+repeatedly (tokens → loopback listen → start → GPU pack calibrate if needed →
+`doctor --strict`). Full walkthrough: [docs/deployment.md](docs/deployment.md).
 **Out of scope:** [unsupported boundaries](docs/unsupported-boundaries.md).
 
 > Linux is the only supported platform. Two deployment profiles exist and one
@@ -105,7 +104,7 @@ sudo systemctl start mortred-supervisor
 ### First-hour core: mortredctl
 
 ```bash
-mortredctl next                       # ONE next OOB command (docs/oob-main-path.md)
+mortredctl next                       # ONE next OOB command (see docs/deployment.md)
 mortredctl init [--profile cpu|gpu]   # detect hw, fetch weight subset, verify
 mortredctl init-trust                 # write conf/local/trust.env (gitignored)
 mortredctl init-edge --mode lan       # optional Nginx TLS on the host network
@@ -122,8 +121,8 @@ still converts every engine and stays opt-in. See [docs/deployment.md](docs/depl
 
 ### Building from source
 
-For a **cpu source-tree shortest path** (trust → supervisor → one MOBILENETV2 infer),
-see [docs/oob-main-path.md](docs/oob-main-path.md) §0c (cpu source build).
+Cpu source build: `install_deps.sh --cpu --all && --cpu --check`, then
+`cmake --preset full-cpu` (details: [docs/deployment.md](docs/deployment.md) §7).
 
 ```bash
 # dependencies (version matrix + sha256 pinned + idempotent stamps)
@@ -181,7 +180,6 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 `Benchmark Code Snappit`
 ![benchmakr_code_snappit](./resources/images/benchmark_code_snappit.png)
 
-* [Details Of Model Inference Benchmark](./docs/model_inference_benchmark.md)
 * [About Model Configuration](./docs/about_model_configuration.md)
 
 # `Tutorials`

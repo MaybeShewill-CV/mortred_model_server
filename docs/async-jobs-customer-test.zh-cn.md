@@ -7,7 +7,6 @@
 长任务符合公开契约，而不是把 `/jobs` 当成阻塞的 `/infer`。
 
 契约：[api-contract.zh-cn.md](api-contract.zh-cn.md)「异步任务」。
-实现细节：[async-job-table.zh-cn.md](async-job-table.zh-cn.md)。
 
 ---
 

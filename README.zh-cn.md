@@ -106,8 +106,8 @@ GPU：用 `mortredctl prepare` 在本机转 **当前 pack** 的 TensorRT engine�
 
 ### 从源码构建
 
-**cpu 源码树最短成功路径**（trust → supervisor → 一次 MOBILENETV2 推理）见
-[docs/oob-main-path.md](docs/oob-main-path.md) §0c（cpu 源码编译）。
+Cpu 源码构建：`install_deps.sh --cpu --all && --cpu --check`，再
+`cmake --preset full-cpu`（详见 [docs/deployment.zh-cn.md](docs/deployment.zh-cn.md) §7）。
 
 手装 CUDA / MNN / WORKFLOW / OpenCV / TensorRT 不是快速开始；那是源码构建路径。
 两条 CMake 路径：
@@ -275,7 +275,6 @@ python3 scripts/server/test_server.py --server mobilenetv2 --mode single --times
 `Benchmark 代码段`
 ![benchmakr_code_snappit](./resources/images/benchmark_code_snappit.png)
 
-* [Model_Zoo 所有模型的详细基准测试结果](./docs/model_inference_benchmark.zh-cn.md)
 * [关于模型推理的配置文件说明](./docs/about_model_configuration.zh-cn.md)
 
 # `模型说明`
