@@ -12,6 +12,8 @@
 
 #include <gtest/gtest.h>
 
+#include <limits>
+
 #include <algorithm>
 #include <cstring>
 #include <string>
@@ -118,6 +120,7 @@ TEST(BackendTensor, MakeAndFromMat) {
     EXPECT_FALSE(ok);
     EXPECT_TRUE(rejected.buffer.empty());
 }
+
 
 TEST(BackendConfig, ParseValidAndInvalidBlocks) {
     const auto valid = parse_toml(R"toml(

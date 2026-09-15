@@ -488,8 +488,14 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
     // H2D + bind inputs
     for (const auto& named : inputs) {
         auto& buffer = _m_device_buffers.at(named.name);
-        const auto status = buffer.ensure(
-            static_cast<size_t>(named.tensor.element_count()) * dtype_size(named.tensor.dtype));
+        size_t input_bytes = 0;
+        if (!checked_shape_nbytes(named.tensor.shape, named.tensor.dtype, &input_bytes)) {
+            LOG(ERROR) << "tensorrt input '" << named.name
+                       << "' shape byte size overflow or non-concrete: "
+                       << shape_to_string(named.tensor.shape);
+            return StatusCode::MODEL_RUN_SESSION_FAILED;
+        }
+        const auto status = buffer.ensure(input_bytes);
         if (status != StatusCode::OK) {
             return status;
         }
@@ -535,8 +541,13 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
             return StatusCode::TRT_ALLOC_DYNAMIC_SHAPE_MEMO;
         }
         auto& buffer = _m_device_buffers.at(info.name);
-        const auto bytes =
-            static_cast<size_t>(shape_volume(shape)) * dtype_size(info.dtype);
+        size_t bytes = 0;
+        if (!checked_shape_nbytes(shape, info.dtype, &bytes)) {
+            LOG(ERROR) << "tensorrt output '" << info.name
+                       << "' shape byte size overflow or non-concrete: "
+                       << shape_to_string(shape);
+            return StatusCode::MODEL_RUN_SESSION_FAILED;
+        }
         const auto status = buffer.ensure(bytes);
         if (status != StatusCode::OK) {
             return status;
@@ -578,9 +589,14 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
                        << "' shape unresolved after inference: " << shape_to_string(shape);
             return StatusCode::TRT_ALLOC_DYNAMIC_SHAPE_MEMO;
         }
-        const auto bytes =
-            static_cast<size_t>(shape_volume(shape)) * dtype_size(info.dtype);
-        if (bytes == 0 || allocator->capacity() < bytes) {
+        size_t bytes = 0;
+        if (!checked_shape_nbytes(shape, info.dtype, &bytes) || bytes == 0) {
+            LOG(ERROR) << "tensorrt dynamic output '" << info.name
+                       << "' shape byte size overflow or non-concrete: "
+                       << shape_to_string(shape);
+            return StatusCode::TRT_ALLOC_DYNAMIC_SHAPE_MEMO;
+        }
+        if (allocator->capacity() < bytes) {
             LOG(ERROR) << "tensorrt dynamic output '" << info.name << "' allocation "
                        << allocator->capacity() << " bytes is smaller than output "
                        << bytes << " bytes";
@@ -604,8 +620,13 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
         named.tensor.dtype = info.dtype;
         named.tensor.shape = shape;
         named.tensor.layout = host_output_layout(shape);
-        const auto bytes =
-            static_cast<size_t>(shape_volume(shape)) * dtype_size(info.dtype);
+        size_t bytes = 0;
+        if (!checked_shape_nbytes(shape, info.dtype, &bytes)) {
+            LOG(ERROR) << "tensorrt output '" << info.name
+                       << "' shape byte size overflow or non-concrete: "
+                       << shape_to_string(shape);
+            return StatusCode::MODEL_RUN_SESSION_FAILED;
+        }
         named.tensor.buffer.resize(bytes);
         const auto cuda_status = cudaMemcpyAsync(
             named.tensor.buffer.data(), item.memory, bytes, cudaMemcpyDeviceToHost, _m_stream);

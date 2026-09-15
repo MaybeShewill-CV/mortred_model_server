@@ -306,12 +306,14 @@ StatusCode OrtSession::run(const std::vector<NamedTensor>& inputs,
                 return StatusCode::MODEL_RUN_SESSION_FAILED;
             }
             named.tensor.shape = type_and_shape.GetShape();
-            const auto element_count = shape_volume(named.tensor.shape);
-            if (element_count <= 0) {
-                LOG(ERROR) << "onnxruntime output '" << named.name << "' is empty";
+            size_t bytes = 0;
+            if (!checked_shape_nbytes(named.tensor.shape, named.tensor.dtype, &bytes) ||
+                bytes == 0) {
+                LOG(ERROR) << "onnxruntime output '" << named.name
+                           << "' is empty or shape byte size overflows: "
+                           << shape_to_string(named.tensor.shape);
                 return StatusCode::MODEL_EMPTY_OUTPUT;
             }
-            const auto bytes = static_cast<size_t>(element_count) * dtype_size(named.tensor.dtype);
             named.tensor.buffer.resize(bytes);
             const void* src = ort_tensor_data(value, named.tensor.dtype);
             if (src == nullptr) {

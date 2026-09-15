@@ -9,6 +9,7 @@
 #define MORTRED_MODELS_BACKEND_TENSOR_H
 
 #include <cstdint>
+#include <limits>
 #include <cstring>
 #include <ostream>
 #include <string>
@@ -119,15 +120,53 @@ inline DType dtype_of() {
 }
 
 /****
- * product of shape dims; -1 dims yield a negative result on purpose so that
- * callers treat the shape as non concrete
+ * Product of shape dims.
+ * - Any dim < 0 (dynamic marker): legacy multiply so the product is typically
+ *   negative and callers treat the shape as non-concrete.
+ * - Any dim == 0: returns 0.
+ * - All dims > 0: returns the product, or -1 if the product would overflow
+ *   int64_t (so size_t casts cannot turn a wrap into a huge allocation).
  */
 inline int64_t shape_volume(const std::vector<int64_t>& shape) {
+    for (const auto dim : shape) {
+        if (dim < 0) {
+            int64_t volume = 1;
+            for (const auto d : shape) {
+                volume *= d;
+            }
+            return volume;
+        }
+    }
     int64_t volume = 1;
-    for (const auto& dim : shape) {
+    for (const auto dim : shape) {
+        if (dim == 0) {
+            return 0;
+        }
+        if (volume > std::numeric_limits<int64_t>::max() / dim) {
+            return -1;
+        }
         volume *= dim;
     }
     return volume;
+}
+
+/*** Byte size for a concrete shape; false on non-positive dims or size_t overflow. */
+inline bool checked_shape_nbytes(const std::vector<int64_t>& shape, DType dtype, size_t* nbytes) {
+    size_t bytes = dtype_size(dtype);
+    for (const int64_t dim : shape) {
+        if (dim <= 0) {
+            return false;
+        }
+        const uint64_t dim_u = static_cast<uint64_t>(dim);
+        if (bytes > std::numeric_limits<size_t>::max() / dim_u) {
+            return false;
+        }
+        bytes *= static_cast<size_t>(dim_u);
+    }
+    if (nbytes != nullptr) {
+        *nbytes = bytes;
+    }
+    return true;
 }
 
 inline bool shape_is_dynamic(const std::vector<int64_t>& shape) {
@@ -174,10 +213,11 @@ struct Tensor {
         tensor.dtype = dtype;
         tensor.shape = shape;
         tensor.layout = host_output_layout(shape);
-        const auto element_count = shape_volume(shape);
-        CHECK_GT(element_count, 0) << "tensor shape must be concrete and non-empty: "
-                                   << shape_to_string(shape);
-        tensor.buffer.assign(static_cast<size_t>(element_count) * dtype_size(dtype), 0);
+        size_t nbytes = 0;
+        CHECK(checked_shape_nbytes(shape, dtype, &nbytes))
+            << "tensor shape must be concrete, non-empty, and fit in size_t: "
+            << shape_to_string(shape);
+        tensor.buffer.assign(nbytes, 0);
         return tensor;
     }
 
