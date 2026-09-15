@@ -74,6 +74,7 @@ set(TEST_LIST
     item_exec_unittest
     http_contract_test
     backpressure_unittest
+    rate_limit_gcra_unittest
     prometheus_metrics_test
     response_schema_test
     openapi_consistency_test
@@ -181,6 +182,9 @@ foreach(src ${TEST_LIST})
         set(EXTRA_LIBS glog::glog)
     elseif(${src} STREQUAL "worker_pool_unittest")
         set(EXTRA_LIBS glog::glog)
+    elseif(${src} STREQUAL "rate_limit_gcra_unittest")
+        # pure GCRA kernel: no glog/opencv, only std threads
+        set(EXTRA_LIBS pthread)
     elseif(${src} STREQUAL "batch_collector_unittest")
         set(EXTRA_LIBS glog::glog)
     elseif(${src} STREQUAL "item_exec_unittest")
@@ -293,11 +297,17 @@ foreach(src ${TEST_LIST})
     add_dependencies(check ${src})
     if((${src} STREQUAL "async_job_unittest") OR (${src} STREQUAL "async_job_stress_test") OR
        (${src} STREQUAL "api_key_manager_unittest") OR (${src} STREQUAL "do_work_lifetime_unittest") OR
-       (${src} STREQUAL "worker_pool_unittest") OR (${src} STREQUAL "batch_collector_unittest"))
+       (${src} STREQUAL "worker_pool_unittest") OR (${src} STREQUAL "batch_collector_unittest") OR
+       (${src} STREQUAL "rate_limit_gcra_unittest"))
         # the sanitizer CI gate runs exactly these under -fsanitize=thread
         set_tests_properties(${src} PROPERTIES LABELS "sanitizer")
     endif()
 endforeach()
+
+# Manual GCRA performance baseline (PR-1 acceptance reference; NOT a CI test)
+add_executable(rate_limit_gcra_bench EXCLUDE_FROM_ALL rate_limit_gcra_bench.cc)
+# common carries the mortred_common_includes INTERFACE (src/ include root)
+target_link_libraries(rate_limit_gcra_bench common pthread)
 
 # e2e helper binaries: supervision tests need the fake model server; the
 # gateway e2e test additionally needs the real gateway binary (full builds)
