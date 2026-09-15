@@ -75,6 +75,7 @@ set(TEST_LIST
     http_contract_test
     backpressure_unittest
     rate_limit_gcra_unittest
+    rate_limit_subject_unittest
     prometheus_metrics_test
     response_schema_test
     openapi_consistency_test
@@ -185,6 +186,9 @@ foreach(src ${TEST_LIST})
     elseif(${src} STREQUAL "rate_limit_gcra_unittest")
         # pure GCRA kernel: no glog/opencv, only std threads
         set(EXTRA_LIBS pthread)
+    elseif(${src} STREQUAL "rate_limit_subject_unittest")
+        # pure subject derivation: no glog/opencv/pthreads
+        set(EXTRA_LIBS )
     elseif(${src} STREQUAL "batch_collector_unittest")
         set(EXTRA_LIBS glog::glog)
     elseif(${src} STREQUAL "item_exec_unittest")

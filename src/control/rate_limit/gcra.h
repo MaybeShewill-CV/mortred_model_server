@@ -120,6 +120,8 @@ struct SubjectKey {
     bool operator==(const SubjectKey& other) const {
         return family == other.family && prefix == other.prefix;
     }
+
+    bool operator!=(const SubjectKey& other) const { return !(*this == other); }
 };
 
 struct SubjectHash {
