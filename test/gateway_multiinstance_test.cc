@@ -333,6 +333,7 @@ TEST_F(GatewayMultiInstanceTest, ip_rate_limit_sheds_and_reports_retry_after) {
     mortred::control::GatewayInitOptions opt;
     opt.project_root = d.root.string();
     opt.metrics_token = "scrape-d";
+    opt.auth_token = "infer-d";
     opt.internal_token = "internal-d";
     opt.host = "127.0.0.1";
     opt.port = d.gateway_port;
@@ -391,6 +392,7 @@ TEST_F(GatewayMultiInstanceTest, xff_from_trusted_peer_buckets_by_client) {
     mortred::control::GatewayInitOptions opt;
     opt.project_root = d.root.string();
     opt.metrics_token = "scrape-d";
+    opt.auth_token = "infer-d";
     opt.internal_token = "internal-d";
     opt.host = "127.0.0.1";
     opt.port = d.gateway_port;
@@ -447,6 +449,7 @@ TEST_F(GatewayMultiInstanceTest, xff_from_untrusted_peer_is_ignored) {
     mortred::control::GatewayInitOptions opt;
     opt.project_root = d.root.string();
     opt.metrics_token = "scrape-d";
+    opt.auth_token = "infer-d";
     opt.internal_token = "internal-d";
     opt.host = "127.0.0.1";
     opt.port = d.gateway_port;
@@ -494,6 +497,7 @@ TEST_F(GatewayMultiInstanceTest, shadow_mode_never_rejects) {
     mortred::control::GatewayInitOptions opt;
     opt.project_root = d.root.string();
     opt.metrics_token = "scrape-d";
+    opt.auth_token = "infer-d";
     opt.internal_token = "internal-d";
     opt.host = "127.0.0.1";
     opt.port = d.gateway_port;
@@ -535,6 +539,7 @@ TEST_F(GatewayMultiInstanceTest, healthz_is_exempt_from_ip_limit) {
     mortred::control::GatewayInitOptions opt;
     opt.project_root = d.root.string();
     opt.metrics_token = "scrape-d";
+    opt.auth_token = "infer-d";
     opt.internal_token = "internal-d";
     opt.host = "127.0.0.1";
     opt.port = d.gateway_port;

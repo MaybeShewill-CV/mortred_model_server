@@ -168,9 +168,14 @@ bool ControlConfig::load(const std::string& path, ControlConfig* out, std::strin
         }
         if (!read_int(kv, "rate_per_sec", &rl.rate_per_sec, 1, 100000, ctx, err) ||
             !read_int(kv, "burst", &rl.burst, 1, 1000000, ctx, err) ||
-            !read_int(kv, "max_tracked", &rl.max_tracked, 0, 16777216, ctx, err) ||
-            !read_str(kv, "trusted_proxies", &rl.trusted_proxies, ctx, err)) {
+            !read_int(kv, "max_tracked", &rl.max_tracked, 0, 16777216, ctx, err)) {
             return false;
+        }
+        // trusted_proxies is deliberately NOT read_str: the empty string is a
+        // valid configuration (trust nobody -> headers never honored), while
+        // read_str rejects empty values
+        if (kv.count("trusted_proxies") != 0) {
+            rl.trusted_proxies = mini_toml::unquote(kv.at("trusted_proxies"));
         }
     }
 
