@@ -34,6 +34,7 @@ All notable changes to this project are documented here. The format follows
 > 已链入），以及 SME-02 evidence（`docs/evidence/`）。
 
 ### Changed
+- **Docs:** drop `oob-main-path.md` (first-hour lane lives in `deployment.md`); remove `sme-oob-checklist.md`, `async-job-table` (+zh), historical `model_inference_benchmark` (+zh), and `onnx-export-guide.md`.
 - **Docs:** remove `model-contract-governance.md` (rules live in `model-developer-guide`; image-size caps noted there).
 - **Docs:** fold `shortest-path-cpu.md` into `oob-main-path.md` (single out-of-box lane); remove `docs/bench/`, `docs/evidence/`, and `docs/models/` (RTDETR note stays in unsupported-boundaries).
 - **Docs:** merge five per-task model-server tutorials into `docs/tutorials_of_model_servers.md` (+ zh-cn); README links updated.

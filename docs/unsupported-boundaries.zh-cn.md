@@ -3,7 +3,7 @@
 完整英文版与表格见 [unsupported-boundaries.md](unsupported-boundaries.md)。
 源码 / CMake 为准；CHANGELOG 仅参考。
 
-开箱主航道：[oob-main-path.md](oob-main-path.md)。运维全书：[deployment.zh-cn.md](deployment.zh-cn.md)。
+开箱与运维：[deployment.zh-cn.md](deployment.zh-cn.md)（`mortredctl next`）。
 
 | 边界 | 不支持 / 勿期待 |
 |---|---|

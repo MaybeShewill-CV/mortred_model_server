@@ -3,7 +3,7 @@
 各任务共用一个二进制和一个演示客户端。本文说明如何**启动服务**并**发起调用**。
 
 前置：已编译出 `_bin/mortred-model-server.out`（见
-[oob-main-path.md](oob-main-path.md)）。
+[deployment.zh-cn.md](deployment.zh-cn.md)）。
 配置字段：[about_model_server_configuration.zh-cn.md](about_model_server_configuration.zh-cn.md)、
 [about_model_configuration.zh-cn.md](about_model_configuration.zh-cn.md)。
 

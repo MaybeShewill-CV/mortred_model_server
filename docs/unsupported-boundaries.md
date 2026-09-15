@@ -4,8 +4,7 @@ Mortred is sold and documented for a **narrow, supported envelope**. This page
 is the single list of what is **out of scope**. Source and CMake are ground
 truth; CHANGELOG is reference-only.
 
-For the first-hour lane, see [oob-main-path.md](oob-main-path.md). Full ops:
-[deployment.md](deployment.md).
+First-hour + full ops: [deployment.md](deployment.md) (`mortredctl next`).
 
 ## Operating system
 

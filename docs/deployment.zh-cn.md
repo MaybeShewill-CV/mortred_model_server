@@ -1,13 +1,15 @@
-> **不支持边界**：[unsupported-boundaries.zh-cn.md](unsupported-boundaries.zh-cn.md)。
->
-> **SME 主航道**（一条路径 + `mortredctl next`）：[oob-main-path.md](oob-main-path.md)。
->
 # 部署指南（Linux）
 
-> Mortred 仅面向 Linux。本文是[快速开始](../README.md)的完整运维手册：架构、选型决策、
+> Mortred 仅面向 Linux。本文是[快速开始](../README.zh-cn.md)的完整运维手册：架构、选型决策、
 > 三条安装轨道的逐步流程、Profile 体系、权重与 Engine 管理、安全、升级回滚、监控与故障排查。
 >
-> **读完本文你可以做到**：在一台干净的 Ubuntu 机器上，20 分钟内把 Mortred跑起来并通过验收门禁。
+> **不支持边界**：[unsupported-boundaries.zh-cn.md](unsupported-boundaries.zh-cn.md)。
+>
+> **第一小时主航道：** 任选下方一种安装入口（§4–§7），然后反复执行 `mortredctl next`
+> （token → 环回 listen → 启动 → 如需则 GPU pack prepare/calibrate → `doctor --strict`
+> → 一次推理）。每次只打印一条 `next:`。
+>
+> **读完本文你可以做到**：在一台干净的 Ubuntu 机器上，20 分钟内把 Mortred 跑起来并通过验收门禁。
 
 ---
 

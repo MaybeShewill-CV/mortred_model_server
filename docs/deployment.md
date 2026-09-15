@@ -7,10 +7,13 @@
 >
 > **Unsupported boundaries** (no false expectations): [unsupported-boundaries.md](unsupported-boundaries.md).
 >
-> **SME main path** (one lane + `mortredctl next`): [oob-main-path.md](oob-main-path.md).
+> **First-hour lane:** pick one install entry below (§4–§7), then
+> `mortredctl next` repeatedly (tokens → loopback listen → start → GPU pack
+> prepare/calibrate if needed → `doctor --strict` → one infer). It prints
+> exactly one `next:` command each time.
 >
 > **After reading this you can**: bring Mortred up on a clean Ubuntu machine in
-> 20 minutes and pass the acceptance gates.
+> 20 minutes and pass the acceptance gates (§16).
 
 ---
 
