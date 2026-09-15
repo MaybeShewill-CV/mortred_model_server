@@ -33,7 +33,7 @@ python scripts/new_model.py --task classification \
 | `src/models/classification/<file>.inl` | `preprocess` / `postprocess` / `on_init` 三个钩子 |
 | `conf/model/classification/<name>/<name>_config.toml` | `[SECTION]` + `.backend` + `.params` |
 | `test/<file>_output_contract_unittest.cc` | 输出契约测试 |
-| `docs/models/classification/<name>.md` | 文档骨架 |
+| （可选）模型说明 md | 需要时自行添加；仓库不再强制 `docs/models/` |
 
 此时模型**可以直接编译**，所有钩子返回 `MODEL_NOT_IMPLEMENTED`，
 半成品不会被误当成能跑的模型启动。
