@@ -27,6 +27,13 @@
   --sans: "Inter", -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono",
     Consolas, "Courier New", monospace;
+  /* type scale */
+  --fs-2xs: 10px;
+  --fs-xs: 10.5px;
+  --fs-sm: 11.5px;
+  --fs-md: 13px;
+  --fs-lg: 15px;
+  --fs-xl: 18px;
   /* geometry */
   --r-lg: 10px;
   --r-md: 7px;
@@ -36,6 +43,8 @@
   --t-blink: 1.2s steps(1);
   /* elevation */
   --shadow-pop: 0 24px 64px rgba(0, 0, 0, 0.55), 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-hover: 0 8px 28px rgba(0, 0, 0, 0.35);
+  --well-inset: inset 0 1px 4px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(0, 0, 0, 0.2);
 }
 
 * { box-sizing: border-box; }
@@ -45,7 +54,7 @@ html { color-scheme: dark; }
 body {
   margin: 0;
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: var(--fs-md);
   line-height: 1.5;
   background: var(--bg0);
   color: var(--txt);
@@ -54,6 +63,12 @@ body {
   display: flex;
   flex-direction: column;
   -webkit-font-smoothing: antialiased;
+}
+
+/* numeric data always aligns in columns */
+.hud-val, .cartridge-sub, .river-t, .id-row, #log-content,
+.gateway-bar, .cartridge-port, #batch-progress-text, .req-meta, .palette-hint {
+  font-variant-numeric: tabular-nums;
 }
 
 ::selection { background: var(--acc); color: var(--on-acc); }
@@ -158,11 +173,12 @@ body.link-down .view { opacity: 0.55; }
 /* ---------------- shared cards & bench ---------------- */
 
 .card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0) 56px), var(--bg1);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(255, 255, 255, 0) 56px), var(--bg1);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   margin-bottom: 12px;
   padding: 14px 16px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
 }
 
 .panel-head {
@@ -194,9 +210,10 @@ body.link-down .view { opacity: 0.55; }
   text-align: center;
   color: var(--txt-dim);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   margin-bottom: 10px;
-  background: rgba(255, 255, 255, 0.012);
+  background: rgba(0, 0, 0, 0.18);
+  box-shadow: var(--well-inset);
   transition: border-color var(--t-fast), color var(--t-fast), background var(--t-fast);
 }
 #drop-zone.dragover { border: 1px solid var(--acc); color: var(--acc); background: rgba(0, 224, 140, 0.05); }
@@ -256,15 +273,33 @@ canvas.overlay { max-width: 100%; border-radius: var(--r-md); }
 /* ---------------- views / router ---------------- */
 
 .view { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 18px 20px; }
+.view.enter { animation: view-in 220ms ease; }
+@keyframes view-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
 
-/* ---------------- atmosphere: faint top glow + engineering grid ---------------- */
+/* overview = fixed mission-control split: gpu / fleet(flex) / telemetry */
+#view-overview { display: flex; flex-direction: column; }
+#view-overview .fleet-panel {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
+}
+#view-overview .fleet-grid { flex: 1; min-height: 120px; overflow-y: auto; align-content: start; }
+#view-overview .telemetry-panel { flex-shrink: 0; margin-bottom: 0; }
+
+/* ---------------- atmosphere: top glow, engineering grid, vignette, grain ---------------- */
 
 body::before {
   content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background:
-    radial-gradient(ellipse 70% 45% at 50% -5%, rgba(0, 224, 140, 0.045), transparent),
-    repeating-linear-gradient(0deg, transparent, transparent 47px, rgba(255, 255, 255, 0.014) 48px),
-    repeating-linear-gradient(90deg, transparent, transparent 47px, rgba(255, 255, 255, 0.014) 48px);
+    radial-gradient(ellipse 70% 45% at 50% -5%, rgba(0, 224, 140, 0.05), transparent),
+    radial-gradient(ellipse 130% 100% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.3)),
+    repeating-linear-gradient(0deg, transparent, transparent 47px, rgba(255, 255, 255, 0.015) 48px),
+    repeating-linear-gradient(90deg, transparent, transparent 47px, rgba(255, 255, 255, 0.015) 48px);
+}
+/* faint film grain — material depth without any asset dependency */
+body::after {
+  content: ""; position: fixed; inset: 0; z-index: 2001; pointer-events: none;
+  opacity: 0.55; mix-blend-mode: overlay;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="140" height="140"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter><rect width="140" height="140" filter="url(%23n)" opacity="0.045"/></svg>');
 }
 
 /* ---------------- OVERVIEW: GPU hero ---------------- */
@@ -299,6 +334,25 @@ body::before {
 .hud-cell.hot { border-color: rgba(255, 109, 98, 0.4); background: rgba(255, 109, 98, 0.05); }
 .hud-cell.hot .hud-val { color: var(--err); }
 .gpu-canvas { width: 100%; height: 88px; display: block; }
+.gpu-chart-wrap { position: relative; }
+.gpu-crosshair {
+  position: absolute; top: 0; bottom: 0; width: 1px;
+  background: rgba(255, 255, 255, 0.2);
+  pointer-events: none;
+}
+.gpu-tip {
+  position: absolute; top: 6px; pointer-events: none; z-index: 5;
+  background: #12181d;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-pop);
+  padding: 7px 10px;
+  font-family: var(--mono); font-size: var(--fs-xs);
+  color: var(--txt); white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.gpu-tip .row { display: flex; justify-content: space-between; gap: 14px; }
+.gpu-tip .k { color: var(--txt-dim); margin-right: 8px; text-transform: uppercase; letter-spacing: 0.06em; font-size: 9.5px; }
 .gpu-legend {
   display: flex; gap: 16px; margin-top: 6px;
   font-family: var(--mono); font-size: 10px; color: var(--txt-dim);
@@ -312,13 +366,15 @@ body::before {
 .gpu-panel.gpu-na { opacity: 0.4; }
 .gpu-panel.gpu-na .gpu-canvas, .gpu-panel.gpu-na .gpu-metrics, .gpu-panel.gpu-na .gpu-legend { display: none; }
 
-/* ---------------- OVERVIEW: fleet filter chips ---------------- */
+/* ---------------- OVERVIEW: fleet chip rows (state + category filters) ---------------- */
 
-.fleet-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-.fleet-filters .chip {
+.fleet-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-sep { width: 1px; height: 16px; background: var(--line); margin: 0 4px; }
+.chip {
   appearance: none;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--txt-dim);
   background: var(--bg1);
   border: 1px solid var(--line);
@@ -327,14 +383,12 @@ body::before {
   cursor: pointer;
   transition: color var(--t-fast), border-color var(--t-fast), background var(--t-fast);
 }
-.fleet-filters .chip:hover { color: var(--txt); border-color: var(--line-2); }
-.fleet-filters .chip .n { opacity: 0.55; margin-left: 5px; }
-.fleet-filters .chip.on {
-  color: var(--acc);
-  border-color: rgba(0, 224, 140, 0.4);
-  background: rgba(0, 224, 140, 0.07);
-}
-.fleet-filters .chip.on .n { opacity: 0.8; }
+.chip:hover { color: var(--txt); border-color: var(--line-2); }
+.chip .n { opacity: 0.55; margin-left: 5px; font-variant-numeric: tabular-nums; }
+.chip.on { color: var(--acc); border-color: rgba(0, 224, 140, 0.4); background: rgba(0, 224, 140, 0.07); }
+.chip.on .n { opacity: 0.85; }
+/* state chips carry their own semantic color */
+.chip.st-chip.on { color: var(--sc, var(--acc)); border-color: color-mix(in srgb, var(--sc, var(--acc)) 45%, transparent); background: color-mix(in srgb, var(--sc, var(--acc)) 9%, transparent); }
 
 /* ---------------- OVERVIEW: fleet grid ---------------- */
 
@@ -349,7 +403,8 @@ body::before {
   border-radius: var(--r-lg);
   padding: 12px 14px 12px;
   cursor: pointer;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0) 48px), var(--bg1);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.016), rgba(255, 255, 255, 0) 48px), var(--bg1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
   transition: background var(--t-fast), box-shadow var(--t-fast), border-color var(--t-fast), transform var(--t-fast);
   overflow: hidden;
 }
@@ -357,7 +412,20 @@ body::before {
   background: var(--bg2);
   border-color: var(--line-2);
   transform: translateY(-1px);
+  box-shadow: var(--shadow-hover), inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
+.cartridge:active { transform: translateY(0); }
+.cartridge:focus-visible { border-color: rgba(0, 224, 140, 0.45); }
+/* targeting-reticle corner brackets on hover — the phosphor signature */
+.cartridge .c-tl, .cartridge .c-br {
+  position: absolute; width: 9px; height: 9px; pointer-events: none;
+  border-color: var(--cat-glow, var(--acc)); border-style: solid; opacity: 0;
+  transition: opacity var(--t-fast);
+}
+.cartridge .c-tl { top: 3px; left: 3px; border-width: 1px 0 0 1px; }
+.cartridge .c-br { bottom: 3px; right: 3px; border-width: 0 1px 1px 0; }
+.cartridge:hover .c-tl, .cartridge:hover .c-br,
+.cartridge:focus-visible .c-tl, .cartridge:focus-visible .c-br { opacity: 0.75; }
 /* top accent line on live — category-colored energy strip */
 .cartridge.live .accent-top {
   position: absolute; top: 0; left: 0; right: 0; height: 2px;
@@ -456,6 +524,7 @@ body::before {
   grid-column: 1/-1;
   border: 1px solid var(--line); border-radius: var(--r-lg);
   background: #0a0d10;
+  box-shadow: var(--well-inset);
   display: flex; flex-direction: column; height: 230px;
   overflow: hidden;
 }
@@ -508,7 +577,9 @@ body::before {
   border-radius: 12px;
   box-shadow: var(--shadow-pop);
   overflow: hidden;
+  animation: palette-in 160ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
 }
+@keyframes palette-in { from { opacity: 0; transform: translateX(-50%) scale(0.97) translateY(-6px); } to { opacity: 1; transform: translateX(-50%) scale(1) translateY(0); } }
 .palette-inputrow {
   display: flex; align-items: center; gap: 10px;
   padding: 14px 16px;
@@ -535,16 +606,69 @@ body::before {
   background: var(--bg2); padding: 2px 6px;
 }
 .palette-row.sel .palette-hint { color: var(--acc); border-color: rgba(0, 224, 140, 0.3); }
+.palette-row .pi {
+  display: inline-block; width: 1.4em; margin-left: -4px;
+  color: var(--txt-dim); font-family: var(--mono); font-size: 12px;
+}
+.palette-row.sel .pi { color: var(--acc); }
+.palette-empty { padding: 14px 16px; color: var(--txt-dim); font-family: var(--mono); font-size: 12px; }
 .palette-foot {
   display: flex; gap: 16px; padding: 8px 14px;
   border-top: 1px solid var(--line);
-  color: var(--txt-dim); font-size: 11px;
+  color: var(--txt-dim); font-size: var(--fs-xs);
 }
-.palette-foot kbd {
+
+/* ---------------- token dialog ---------------- */
+
+.dialog-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(4, 6, 8, 0.65); backdrop-filter: blur(5px);
+}
+.dialog-box {
+  position: absolute; top: 24vh; left: 50%; transform: translateX(-50%);
+  width: min(420px, 92vw);
+  background: #10151a;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  box-shadow: var(--shadow-pop);
+  padding: 18px;
+  animation: dialog-in 180ms ease;
+}
+@keyframes dialog-in { from { opacity: 0; transform: translateX(-50%) scale(0.97); } to { opacity: 1; transform: translateX(-50%) scale(1); } }
+.dialog-title {
+  font-family: var(--mono); font-size: var(--fs-xs);
+  color: var(--txt-dim); text-transform: uppercase; letter-spacing: 0.12em;
+  margin-bottom: 12px;
+}
+#token-input {
+  width: 100%;
+  background: var(--bg0); color: var(--txt-hi);
+  border: 1px solid var(--line); border-radius: var(--r-md);
+  padding: 9px 12px;
+  font-family: var(--mono); font-size: 13px;
+  outline: none;
+}
+#token-input:focus { border-color: rgba(0, 224, 140, 0.5); }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+
+/* ---------------- kbd hint (topbar) ---------------- */
+
+.kbd-hint {
+  display: inline-flex; align-items: center; gap: 4px;
+  color: var(--txt-dim); font-size: var(--fs-xs);
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--bg1);
+  padding: 3px 7px;
+  cursor: pointer;
+  transition: color var(--t-fast), border-color var(--t-fast);
+}
+.kbd-hint:hover { color: var(--txt); border-color: var(--line-2); }
+
+kbd {
   font-family: var(--mono); font-size: 9.5px;
   color: var(--txt); background: var(--bg2);
   border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px;
-  padding: 1px 5px; margin-right: 4px;
+  padding: 1px 5px;
 }
 
 /* ---------------- toasts ---------------- */
@@ -589,6 +713,10 @@ body.boot .view { animation-delay: 60ms; }
 /* ---------------- narrow screens ---------------- */
 
 @media (max-width: 1100px) {
+  /* fall back to scrolling document flow for the fixed mission-control split */
+  #view-overview { display: block; }
+  #view-overview .fleet-panel { display: block; }
+  #view-overview .fleet-grid { overflow-y: visible; }
   .wb-grid { grid-template-columns: 1fr; }
   .hud-cell { min-width: 30%; }
   .view { padding: 12px; }

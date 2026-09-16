@@ -13,7 +13,8 @@
     <div class="brand">mortred::mc</div>
     <div id="gateway-status" class="gateway-bar">gw …</div>
     <div id="conn-status" class="conn-unknown">connecting…</div>
-    <button id="btn-token" class="btn small" title="API token">[T]</button>
+    <span id="palette-hint" class="kbd-hint" title="command palette"><kbd>⌘K</kbd></span>
+    <button id="btn-token" class="btn small ghost" title="API token">[T]</button>
   </header>
 
   <!-- ============ VIEW: OVERVIEW ============ -->
@@ -24,7 +25,11 @@
         <span id="gpu-name" class="gpu-name">…</span>
       </div>
       <div id="gpu-metrics" class="gpu-metrics">— — —</div>
-      <canvas id="gpu-canvas" class="gpu-canvas"></canvas>
+      <div class="gpu-chart-wrap">
+        <canvas id="gpu-canvas" class="gpu-canvas"></canvas>
+        <div id="gpu-crosshair" class="gpu-crosshair hidden"></div>
+        <div id="gpu-tip" class="gpu-tip hidden"></div>
+      </div>
       <div class="gpu-legend">
         <span class="lg"><i class="sw sw-util"></i>util</span>
         <span class="lg"><i class="sw sw-mem"></i>vram</span>
@@ -36,7 +41,11 @@
       <div class="panel-head">
         <span class="panel-title">fleet_<span id="fleet-count">0</span> <span id="fleet-live" class="fleet-live"></span></span>
       </div>
-      <div id="fleet-filters" class="fleet-filters"></div>
+      <div class="fleet-controls">
+        <div id="fleet-states" class="chip-row"></div>
+        <span class="chip-sep"></span>
+        <div id="fleet-filters" class="chip-row"></div>
+      </div>
       <div id="fleet-grid" class="fleet-grid"></div>
     </section>
 
@@ -124,6 +133,20 @@
   </div>
 
   <div id="toast-container"></div>
+
+  <!-- ============ TOKEN DIALOG ============ -->
+  <div id="token-dialog" class="hidden">
+    <div id="token-backdrop" class="dialog-backdrop"></div>
+    <div class="dialog-box">
+      <div class="dialog-title">supervisor api token</div>
+      <input id="token-input" type="password" placeholder="paste token…" autocomplete="off" spellcheck="false">
+      <div class="dialog-actions">
+        <button id="token-cancel" class="btn small">cancel</button>
+        <button id="token-save" class="btn small primary">save</button>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>

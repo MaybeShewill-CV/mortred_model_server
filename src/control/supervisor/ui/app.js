@@ -11,6 +11,7 @@ const state = {
   river: [], gpuHistory: [],
   inferHistory: [],     // [{t, ok, ms}] from sendBatch
   fleetFilter: "all",   // "all" | category id
+  fleetState: "all",    // "all" | running | stopped | failed | starting
 };
 
 const TOKEN_KEY = "mortred_supervisor_token";
@@ -19,6 +20,21 @@ const $ = (id) => document.getElementById(id);
 function getToken() { return localStorage.getItem(TOKEN_KEY) || ""; }
 function setToken(t) { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); }
 
+/* styled token prompt (replaces native prompt(); resolves null on cancel) */
+let tokenDialogResolve = null;
+function askToken(prefill) {
+  return new Promise((resolve) => {
+    tokenDialogResolve = resolve;
+    $("token-input").value = prefill || "";
+    $("token-dialog").classList.remove("hidden");
+    $("token-input").focus();
+  });
+}
+function closeTokenDialog(value) {
+  $("token-dialog").classList.add("hidden");
+  if (tokenDialogResolve) { tokenDialogResolve(value); tokenDialogResolve = null; }
+}
+
 async function authorizedFetch(path, options) {
   options = options || {};
   options.headers = Object.assign({}, options.headers || {});
@@ -26,7 +42,7 @@ async function authorizedFetch(path, options) {
   if (token) options.headers["Authorization"] = "Bearer " + token;
   let resp = await fetch(path, options);
   if (resp.status === 401) {
-    const next = prompt("401 — Supervisor API token:", token);
+    const next = await askToken(token);
     if (next !== null && next.trim()) {
       setToken(next.trim());
       options.headers["Authorization"] = "Bearer " + next.trim();
@@ -57,14 +73,21 @@ function dotClassOf(s) {
   if (s.state==="failed") return "failed";
   return "stopped";
 }
+/* identity palette: one hue family per task category, uniform perceptual
+ * weight (same lightness/chroma band) so no category shouts over statuses */
 const CAT_COLOR = {
-  classification:"#00ff9c", object_detection:"#5fd3f0", face_detection:"#5fd3f0",
-  scene_segmentation:"#c792ea", ocr:"#ffd166", matting:"#c792ea",
-  enhancement:"#ffd166", feature_point:"#5fd3f0", feature_embedding:"#c792ea",
-  mono_depth_estimation:"#ffd166", segment_anything:"#c792ea",
-  diffusion:"#ff9e64", mot:"#5fd3f0", other:"#6fae85",
+  classification:"#2dd4bf", object_detection:"#38bdf8", face_detection:"#60a5fa",
+  scene_segmentation:"#a78bfa", ocr:"#fbbf24", matting:"#e879f9",
+  enhancement:"#fb923c", feature_point:"#fb7185", feature_embedding:"#a78bfa",
+  mono_depth_estimation:"#fb923c", segment_anything:"#e879f9",
+  diffusion:"#f472b6", mot:"#60a5fa", other:"#94a3b8",
 };
 function catColor(c) { return CAT_COLOR[c] || CAT_COLOR.other; }
+
+const STATE_COLOR = {
+  running:"var(--acc)", starting:"var(--warn)", backoff:"var(--warn)",
+  failed:"var(--err)", stopped:"var(--txt-dim)",
+};
 
 function uptimeOf(s) {
   if (!s.started_at_ms || s.state!=="running") return null;
@@ -112,6 +135,8 @@ async function refresh() {
     if(prev&&prev!==s.state) riverPush(s.state==="running"?"ok":s.state==="failed"?"err":"info",`${s.id} ${prev}→${s.state}`,s.id);
     prevStates[s.id]=s.state;
   }
+  const liveN = state.servers.filter(s=>["running","starting","backoff"].includes(s.state)).length;
+  document.title = (liveN>0?`●${liveN} live · `:"")+"Mortred Supervisor";
   renderCurrentView();
 }
 
@@ -193,6 +218,34 @@ function drawGpuHero(){
   }
 }
 
+/* GPU chart crosshair: sample inspector on hover */
+function wireGpuCrosshair(){
+  const cv=$("gpu-canvas"); if(!cv)return;
+  const hair=$("gpu-crosshair"), tip=$("gpu-tip");
+  const fmt=(v,u)=>v==null||v<0?"--":v+u;
+  cv.addEventListener("mousemove",(ev)=>{
+    const s=state.gpuHistory; if(s.length<2)return;
+    const rect=cv.getBoundingClientRect();
+    const x=ev.clientX-rect.left, w=rect.width;
+    const idx=Math.max(0,Math.min(s.length-1,Math.round((x/w)*(s.length-1))));
+    const d=s[idx];
+    hair.classList.remove("hidden");
+    hair.style.left=((idx/(s.length-1))*w)+"px";
+    tip.classList.remove("hidden");
+    tip.innerHTML=
+      `<div class="row"><span class="k">util</span><span style="color:var(--acc)">${fmt(d.util,"%")}</span></div>
+       <div class="row"><span class="k">vram</span><span style="color:var(--warn)">${d.mem_total_mib>0?Math.round(100*d.mem_used_mib/d.mem_total_mib)+"%":"--"}</span></div>
+       <div class="row"><span class="k">pwr</span><span style="color:#ff9e64">${fmt(d.power_w,"W")}</span></div>
+       <div class="row"><span class="k">temp</span><span>${fmt(d.temp_c,"°C")}</span></div>`;
+    const tipW=tip.offsetWidth;
+    const left=Math.max(0,Math.min(w-tipW,((idx/(s.length-1))*w)+10));
+    tip.style.left=left+"px";
+  });
+  cv.addEventListener("mouseleave",()=>{
+    hair.classList.add("hidden"); tip.classList.add("hidden");
+  });
+}
+
 /* draw sparkline in a small canvas; null data = designed idle baseline */
 function drawSparkline(canvas,data,color){
   if(!canvas)return;
@@ -216,6 +269,11 @@ function drawSparkline(canvas,data,color){
   ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.closePath();
   ctx.fillStyle=color+"14";
   ctx.fill();
+  // last-value end dot ties the line to "now"
+  const lx=w-1.5, ly=h-2-(data[data.length-1]/max)*(h-6);
+  ctx.beginPath(); ctx.arc(lx,ly,1.8,0,Math.PI*2);
+  ctx.fillStyle=color; ctx.shadowColor=color; ctx.shadowBlur=5;
+  ctx.fill(); ctx.shadowBlur=0;
 }
 
 /* ---------------- router ---------------- */
@@ -238,8 +296,11 @@ function renderCurrentView(){
   }
 }
 function showView(n){
-  $("view-overview").classList.toggle("hidden",n!=="overview");
-  $("view-workbench").classList.toggle("hidden",n!=="workbench");
+  const el=n==="overview"?$("view-overview"):$("view-workbench");
+  const other=n==="overview"?$("view-workbench"):$("view-overview");
+  other.classList.add("hidden");
+  el.classList.remove("hidden");
+  el.classList.remove("enter"); void el.offsetWidth; el.classList.add("enter");
 }
 
 /* ---------------- OVERVIEW: HUD ---------------- */
@@ -249,10 +310,10 @@ function renderOverview(){
   $("fleet-count").textContent=state.servers.length;
   const running=state.servers.filter(s=>["running","starting","backoff"].includes(s.state)).length;
   $("fleet-live").textContent=running+" live";
-  renderFleetFilters();
-  const shown=state.fleetFilter==="all"
-    ?state.servers
-    :state.servers.filter(s=>s.category===state.fleetFilter);
+  renderFleetControls();
+  const shown=state.servers.filter(s=>
+    (state.fleetFilter==="all"||s.category===state.fleetFilter)&&
+    fleetStateOf(s)===state.fleetState);
   const frag=document.createDocumentFragment();
   for(const s of shown){
     const st=dotClassOf(s);
@@ -260,44 +321,90 @@ function renderOverview(){
     const tile=document.createElement("div");
     tile.className="cartridge"+(isRun?" live":"")+(s.state==="failed"?" dead":"");
     if(isRun){tile.style.setProperty("--cat-glow",catColor(s.category));}
+    tile.setAttribute("role","button");
+    tile.setAttribute("tabindex","0");
+    tile.setAttribute("aria-label",`${s.id}, ${s.state}, port ${s.port}`);
     tile.innerHTML=
       `${isRun?'<div class="accent-top"></div>':''}
+       <i class="c-tl"></i><i class="c-br"></i>
        <div class="cartridge-row">
          <span class="st ${st}">${ST_GLYPH[st]}</span>
          <span class="cartridge-name">${escapeHtml(s.id.toLowerCase())}</span>
-         ${s.restart_count>0?`<span class="badge restarts">↻${s.restart_count}</span>`:""}
+         ${s.restart_count>0?`<span class="badge restarts" title="restarts: ${s.restart_count}">↻${s.restart_count}</span>`:""}
        </div>
        <div class="cartridge-sub">${isRun?`<span class="uptime" data-id="${s.id}">${uptimeOf(s)||"booting"}</span>`:escapeHtml(s.state)}</div>
        <div class="cartridge-port">:${s.port}</div>
        <canvas class="cartridge-spark" data-id="${s.id}"></canvas>`;
-    tile.onclick=()=>navigate("#/model/"+s.id);
+    const open=()=>navigate("#/model/"+s.id);
+    tile.onclick=open;
+    tile.onkeydown=(ev)=>{if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();open();}};
     frag.appendChild(tile);
+  }
+  if(!shown.length){
+    const empty=document.createElement("div");
+    empty.className="empty-hint";
+    empty.textContent="// no models match the current filters";
+    frag.appendChild(empty);
   }
   grid.innerHTML="";grid.appendChild(frag);
   renderGatewayBar();
   drawFleetSparks();
 }
 
-function renderFleetFilters(){
-  const box=$("fleet-filters"); if(!box)return;
-  const counts={};
-  for(const s of state.servers)counts[s.category]=(counts[s.category]||0)+1;
-  const mk=(key,label,n)=>{
+/* coarse state group used by the summary chips */
+function fleetStateOf(s){
+  if(s.state==="failed")return "failed";
+  if(s.state==="stopped")return "stopped";
+  if(s.state==="running")return "running";
+  return "starting"; // starting + backoff
+}
+
+function renderFleetControls(){
+  const statesBox=$("fleet-states"), catsBox=$("fleet-filters");
+  if(!statesBox||!catsBox)return;
+  const nBy={running:0,starting:0,stopped:0,failed:0};
+  for(const s of state.servers)nBy[fleetStateOf(s)]++;
+  statesBox.innerHTML="";
+  const all=document.createElement("button");
+  all.type="button";
+  all.className="chip"+(state.fleetState==="all"?" on":"");
+  all.innerHTML=`all<span class="n">${state.servers.length}</span>`;
+  all.onclick=()=>{state.fleetState="all";renderOverview();};
+  statesBox.appendChild(all);
+  for(const [key,color] of [["running","var(--acc)"],["starting","var(--warn)"],["failed","var(--err)"],["stopped","var(--txt-dim)"]]){
     const c=document.createElement("button");
     c.type="button";
-    c.className="chip"+(state.fleetFilter===key?" on":"");
-    c.innerHTML=`${escapeHtml(label)}<span class="n">${n}</span>`;
-    c.onclick=()=>{state.fleetFilter=key;renderOverview();};
-    return c;
-  };
-  box.innerHTML="";
-  box.appendChild(mk("all","all",state.servers.length));
-  for(const cat of Object.keys(counts).sort())box.appendChild(mk(cat,cat,counts[cat]));
+    c.className="chip st-chip"+(state.fleetState===key?" on":"");
+    c.style.setProperty("--sc",color);
+    c.innerHTML=`${escapeHtml(key)}<span class="n">${nBy[key]}</span>`;
+    c.onclick=()=>{state.fleetState=key;renderOverview();};
+    statesBox.appendChild(c);
+  }
+  const counts={};
+  for(const s of state.servers)counts[s.category]=(counts[s.category]||0)+1;
+  catsBox.innerHTML="";
+  const allCat=document.createElement("button");
+  allCat.type="button";
+  allCat.className="chip"+(state.fleetFilter==="all"?" on":"");
+  allCat.innerHTML=`all<span class="n">${state.servers.length}</span>`;
+  allCat.onclick=()=>{state.fleetFilter="all";renderOverview();};
+  catsBox.appendChild(allCat);
+  for(const cat of Object.keys(counts).sort()){
+    const c=document.createElement("button");
+    c.type="button";
+    c.className="chip"+(state.fleetFilter===cat?" on":"");
+    c.style.setProperty("--cat-glow",catColor(cat));
+    if(state.fleetFilter===cat)c.style.color=catColor(cat);
+    c.innerHTML=`${escapeHtml(cat)}<span class="n">${counts[cat]}</span>`;
+    c.onclick=()=>{state.fleetFilter=cat;renderOverview();};
+    catsBox.appendChild(c);
+  }
 }
 
 function drawFleetSparks(){
   for(const s of state.servers){
     if(state.fleetFilter!=="all"&&s.category!==state.fleetFilter)continue;
+    if(state.fleetState!=="all"&&fleetStateOf(s)!==state.fleetState)continue;
     const cv=document.querySelector(`canvas.cartridge-spark[data-id="${s.id}"]`);
     if(!cv)continue;
     // infer latency samples recorded by this browser session's test bench;
@@ -633,9 +740,9 @@ function paletteItems(){
     items.push({label:`restart ${s.id.toLowerCase()}`,hint:"ctrl",act:()=>controlServer(s.id,"restart")});
   }
   items.push({label:"overview",hint:"nav",act:()=>navigate("#/overview")});
-  items.push({label:"token",hint:"set",act:()=>{
-    const t=prompt("Supervisor API token:",getToken());
-    if(t!==null){setToken(t.trim());location.reload();}
+  items.push({label:"token",hint:"set",act:async()=>{
+    const t=await askToken(getToken());
+    if(t!==null&&t.trim()){setToken(t.trim());location.reload();}
   }});
   return items;
 }
@@ -654,15 +761,20 @@ function openPalette(){
 function closePalette(){$("palette").classList.add("hidden");}
 function renderPalette(query){
   const list=$("palette-list");
+  const HINT_ICON={nav:"▸",ctrl:"⟳",set:"◈"};
   const items=paletteItems()
     .map(it=>({it,sc:query?fuzzyMatch(query,it.label):0}))
     .filter(x=>x.sc>=0).sort((a,b)=>b.sc-a.sc).slice(0,10);
   let sel=0;list.innerHTML="";
   for(const{it}of items){
     const row=document.createElement("div");row.className="palette-row";
-    row.innerHTML=`<span>${escapeHtml(it.label)}</span><span class="palette-hint">${it.hint}</span>`;
+    row.innerHTML=`<span><span class="pi">${HINT_ICON[it.hint]||"·"}</span>${escapeHtml(it.label)}</span><span class="palette-hint">${it.hint}</span>`;
     row.onclick=()=>{closePalette();it.act();};
     list.appendChild(row);
+  }
+  if(!items.length){
+    const none=document.createElement("div");none.className="palette-empty";
+    none.textContent="// no matching commands";list.appendChild(none);
   }
   if(items.length)list.firstChild.classList.add("sel");
   $("palette-input").onkeydown=(ev)=>{
@@ -682,7 +794,10 @@ document.addEventListener("keydown",(ev)=>{
     ev.preventDefault();
     $("palette").classList.contains("hidden")?openPalette():closePalette();
   }
-  if(ev.key==="Escape"&&!$("palette").classList.contains("hidden"))closePalette();
+  if(ev.key==="Escape"){
+    if(!$("palette").classList.contains("hidden"))closePalette();
+    if(!$("token-dialog").classList.contains("hidden"))closeTokenDialog(null);
+  }
 });
 
 /* ---------------- wiring ---------------- */
@@ -698,10 +813,22 @@ function wire(){
   dz.ondrop=(ev)=>{ev.preventDefault();dz.classList.remove("dragover");addFiles(ev.dataTransfer.files);};
   $("btn-send").onclick=()=>sendBatch();
   $("btn-cancel").onclick=()=>{if(state.batchAbort)state.batchAbort();};
-  $("btn-token").onclick=()=>{
-    const t=prompt("Supervisor API token:",getToken());
+  $("btn-token").onclick=async()=>{
+    const t=await askToken(getToken());
     if(t!==null){setToken(t.trim());showToast("token saved","success");refresh();}
   };
+  $("token-save").onclick=()=>closeTokenDialog($("token-input").value);
+  $("token-cancel").onclick=()=>closeTokenDialog(null);
+  $("token-backdrop").onclick=()=>closeTokenDialog(null);
+  $("token-input").onkeydown=(ev)=>{
+    if(ev.key==="Enter")closeTokenDialog(ev.target.value);
+    if(ev.key==="Escape")closeTokenDialog(null);
+  };
+  // cross-platform palette shortcut label
+  const plat=(navigator.userAgentData&&navigator.userAgentData.platform)||navigator.platform||"";
+  $("palette-hint").innerHTML=`<kbd>${/Mac|iPhone|iPad/.test(plat)?"⌘":"Ctrl"} K</kbd>`;
+  $("palette-hint").onclick=()=>openPalette();
+  wireGpuCrosshair();
   $("btn-log-pause").onclick=()=>{
     const st=state.logs[state.logServerId];if(!st)return;
     st.paused=!st.paused;$("btn-log-pause").textContent=st.paused?"resume":"pause";
