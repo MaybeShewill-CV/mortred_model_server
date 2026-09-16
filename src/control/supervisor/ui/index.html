@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#07090b">
   <title>Mortred Supervisor</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -23,13 +25,18 @@
       </div>
       <div id="gpu-metrics" class="gpu-metrics">— — —</div>
       <canvas id="gpu-canvas" class="gpu-canvas"></canvas>
+      <div class="gpu-legend">
+        <span class="lg"><i class="sw sw-util"></i>util</span>
+        <span class="lg"><i class="sw sw-mem"></i>vram</span>
+        <span class="lg"><i class="sw sw-pwr"></i>power</span>
+      </div>
     </section>
 
     <section class="card fleet-panel">
       <div class="panel-head">
         <span class="panel-title">fleet_<span id="fleet-count">0</span> <span id="fleet-live" class="fleet-live"></span></span>
-        <span class="panel-title dim">⌘K</span>
       </div>
+      <div id="fleet-filters" class="fleet-filters"></div>
       <div id="fleet-grid" class="fleet-grid"></div>
     </section>
 
@@ -103,8 +110,16 @@
   <div id="palette" class="hidden">
     <div id="palette-backdrop"></div>
     <div id="palette-box">
-      <input id="palette-input" type="text" placeholder="start yolov8 / open ddpm / token…" autocomplete="off">
+      <div class="palette-inputrow">
+        <span class="palette-glyph">❯</span>
+        <input id="palette-input" type="text" placeholder="start yolov8 / open ddpm / token…" autocomplete="off">
+      </div>
       <div id="palette-list"></div>
+      <div class="palette-foot">
+        <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+        <span><kbd>↵</kbd> select</span>
+        <span><kbd>esc</kbd> close</span>
+      </div>
     </div>
   </div>
 

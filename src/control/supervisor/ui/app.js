@@ -10,6 +10,7 @@ const state = {
   batchAbort: null, logs: {}, logServerId: null,
   river: [], gpuHistory: [],
   inferHistory: [],     // [{t, ok, ms}] from sendBatch
+  fleetFilter: "all",   // "all" | category id
 };
 
 const TOKEN_KEY = "mortred_supervisor_token";
@@ -159,7 +160,7 @@ function drawGpuHero(){
   const yOf=(f)=>h-pad-(f*(h-pad*2));
 
   // grid
-  ctx.strokeStyle="rgba(0,255,156,0.06)"; ctx.setLineDash([1,6]);
+  ctx.strokeStyle="rgba(255,255,255,0.05)"; ctx.setLineDash([1,6]);
   for(let g=1;g<4;g++){ctx.beginPath();ctx.moveTo(0,h*g/4);ctx.lineTo(w,h*g/4);ctx.stroke();}
   ctx.setLineDash([]);
 
@@ -178,30 +179,42 @@ function drawGpuHero(){
     }
   }
 
-  drawSeries(x=>norm(x.power_w<0?0:x.power_w,0,400),"rgba(255,158,100,0.5)",null,false,true);  // power (dim orange dashed)
-  drawSeries(x=>norm(x.mem_total_mib>0?x.mem_used_mib/x.mem_total_mib:0,0,1),"#ffd166","rgba(255,209,102,0.06)",false,false); // mem (amber)
-  drawSeries(x=>norm(x.util<0?0:x.util,0,100),"#00ff9c","rgba(0,255,156,0.12)",true,false);     // util (green glow)
+  drawSeries(x=>norm(x.power_w<0?0:x.power_w,0,400),"rgba(255,158,100,0.45)",null,false,true);  // power (dim orange dashed)
+  drawSeries(x=>norm(x.mem_total_mib>0?x.mem_used_mib/x.mem_total_mib:0,0,1),"#ffc757","rgba(255,199,87,0.06)",false,false); // mem (amber)
+  drawSeries(x=>norm(x.util<0?0:x.util,0,100),"#00e08c","rgba(0,224,140,0.10)",true,false);     // util (green glow)
+
+  // util end-point marker
+  const lastS=s[s.length-1];
+  if(lastS){
+    const ex=w, ey=yOf(norm(lastS.util<0?0:lastS.util,0,100));
+    ctx.beginPath(); ctx.arc(ex-3,ey,2.5,0,Math.PI*2);
+    ctx.fillStyle="#00e08c"; ctx.shadowColor="#00e08c"; ctx.shadowBlur=6;
+    ctx.fill(); ctx.shadowBlur=0;
+  }
 }
 
-/* draw sparkline in a small canvas */
+/* draw sparkline in a small canvas; null data = designed idle baseline */
 function drawSparkline(canvas,data,color){
-  if(!canvas||!data||data.length<2)return;
+  if(!canvas)return;
   const dpr=window.devicePixelRatio||1;
   const w=canvas.clientWidth,h=canvas.clientHeight; if(w===0)return;
   canvas.width=w*dpr; canvas.height=h*dpr;
   const ctx=canvas.getContext("2d"); ctx.scale(dpr,dpr); ctx.clearRect(0,0,w,h);
+  if(!data||data.length<2){
+    ctx.strokeStyle="rgba(255,255,255,0.10)"; ctx.lineWidth=1;
+    ctx.setLineDash([2,4]); ctx.beginPath();
+    ctx.moveTo(2,h-2.5); ctx.lineTo(w-2,h-2.5); ctx.stroke();
+    ctx.setLineDash([]);
+    return;
+  }
   const max=Math.max(...data,1), step=w/(data.length-1);
   ctx.beginPath();
-  data.forEach((v,i)=>{const y=h-2-(v/max)*(h-4); i?ctx.lineTo(i*step,y):ctx.moveTo(0,y);});
-  ctx.strokeStyle=color; ctx.lineWidth=1;
-  ctx.shadowColor=color; ctx.shadowBlur=3;
+  data.forEach((v,i)=>{const y=h-2-(v/max)*(h-6); i?ctx.lineTo(i*step,y):ctx.moveTo(0,y);});
+  ctx.strokeStyle=color; ctx.lineWidth=1.2;
+  ctx.shadowColor=color; ctx.shadowBlur=4;
   ctx.stroke(); ctx.shadowBlur=0;
   ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.closePath();
-  ctx.fillStyle=color.replace(")",",0.1)").replace("#","rgba(").replace(/rgba\((\w+)\)/, (m,c)=>{
-    // hex to rgba
-    if(c.length===6){const r=parseInt(c.slice(0,2),16),g=parseInt(c.slice(2,4),16),b=parseInt(c.slice(4,6),16);return`rgba(${r},${g},${b},0.08)`;}
-    return m;
-  });
+  ctx.fillStyle=color+"14";
   ctx.fill();
 }
 
@@ -236,48 +249,61 @@ function renderOverview(){
   $("fleet-count").textContent=state.servers.length;
   const running=state.servers.filter(s=>["running","starting","backoff"].includes(s.state)).length;
   $("fleet-live").textContent=running+" live";
+  renderFleetFilters();
+  const shown=state.fleetFilter==="all"
+    ?state.servers
+    :state.servers.filter(s=>s.category===state.fleetFilter);
   const frag=document.createDocumentFragment();
-  const groups={};
-  for(const s of state.servers)(groups[s.category]=groups[s.category]||[]).push(s);
-  for(const cat of Object.keys(groups).sort()){
-    const head=document.createElement("div");head.className="fleet-cat";head.textContent=cat;
-    head.style.color=catColor(cat);head.style.borderColor=catColor(cat)+"33";
-    frag.appendChild(head);
-    for(const s of groups[cat]){
-      const st=dotClassOf(s);
-      const isRun=s.state==="running";
-      const tile=document.createElement("div");
-      tile.className="cartridge"+(isRun?" live":"")+(s.state==="failed"?" dead":"");
-      if(isRun){tile.style.setProperty("--cat-glow",catColor(cat));tile.style.borderColor=catColor(cat)+"66";}
-      tile.innerHTML=
-        `${isRun?'<div class="accent-top"></div>':''}
-         <div class="cartridge-row">
-           <span class="st ${st}">${ST_GLYPH[st]}</span>
-           <span class="cartridge-name">${escapeHtml(s.id.toLowerCase())}</span>
-           ${s.restart_count>0?`<span class="badge restarts">↻${s.restart_count}</span>`:""}
-         </div>
-         <div class="cartridge-sub">${isRun?`<span class="uptime" data-id="${s.id}">${uptimeOf(s)||""}</span>`:escapeHtml(s.state)}</div>
-         <div class="cartridge-port">${s.port}</div>
-         <canvas class="cartridge-spark" data-id="${s.id}" width="120" height="22"></canvas>
-         ${isRun?`<div class="resource-bar"><div class="resource-fill" data-id="${s.id}"></div></div>`:''}`;
-      tile.onclick=()=>navigate("#/model/"+s.id);
-      frag.appendChild(tile);
-    }
+  for(const s of shown){
+    const st=dotClassOf(s);
+    const isRun=s.state==="running";
+    const tile=document.createElement("div");
+    tile.className="cartridge"+(isRun?" live":"")+(s.state==="failed"?" dead":"");
+    if(isRun){tile.style.setProperty("--cat-glow",catColor(s.category));}
+    tile.innerHTML=
+      `${isRun?'<div class="accent-top"></div>':''}
+       <div class="cartridge-row">
+         <span class="st ${st}">${ST_GLYPH[st]}</span>
+         <span class="cartridge-name">${escapeHtml(s.id.toLowerCase())}</span>
+         ${s.restart_count>0?`<span class="badge restarts">↻${s.restart_count}</span>`:""}
+       </div>
+       <div class="cartridge-sub">${isRun?`<span class="uptime" data-id="${s.id}">${uptimeOf(s)||"booting"}</span>`:escapeHtml(s.state)}</div>
+       <div class="cartridge-port">:${s.port}</div>
+       <canvas class="cartridge-spark" data-id="${s.id}"></canvas>`;
+    tile.onclick=()=>navigate("#/model/"+s.id);
+    frag.appendChild(tile);
   }
   grid.innerHTML="";grid.appendChild(frag);
   renderGatewayBar();
-  // draw sparklines for running models (infer rate from state.river)
   drawFleetSparks();
+}
+
+function renderFleetFilters(){
+  const box=$("fleet-filters"); if(!box)return;
+  const counts={};
+  for(const s of state.servers)counts[s.category]=(counts[s.category]||0)+1;
+  const mk=(key,label,n)=>{
+    const c=document.createElement("button");
+    c.type="button";
+    c.className="chip"+(state.fleetFilter===key?" on":"");
+    c.innerHTML=`${escapeHtml(label)}<span class="n">${n}</span>`;
+    c.onclick=()=>{state.fleetFilter=key;renderOverview();};
+    return c;
+  };
+  box.innerHTML="";
+  box.appendChild(mk("all","all",state.servers.length));
+  for(const cat of Object.keys(counts).sort())box.appendChild(mk(cat,cat,counts[cat]));
 }
 
 function drawFleetSparks(){
   for(const s of state.servers){
-    if(s.state!=="running")continue;
+    if(state.fleetFilter!=="all"&&s.category!==state.fleetFilter)continue;
     const cv=document.querySelector(`canvas.cartridge-spark[data-id="${s.id}"]`);
     if(!cv)continue;
-    // use inferHistory entries for this server
+    // infer latency samples recorded by this browser session's test bench;
+    // cards without data get the designed idle baseline
     const data=state.inferHistory.filter(x=>x.serverId===s.id).slice(-30).map(x=>x.ms);
-    if(data.length>=2)drawSparkline(cv,data,catColor(s.category));
+    drawSparkline(cv,data.length>=2?data:null,catColor(s.category));
   }
 }
 
@@ -305,7 +331,11 @@ function renderWorkbench(){
   $("wb-stop").onclick=()=>controlServer(s.id,"stop");
   $("image-input-area").classList.remove("hidden");
   const hint=$("empty-hint"); if(hint)hint.classList.add("hidden");
-  state.logServerId=s.id; resetLogState(s.id); syncLogSelector(); renderFileList();
+  state.logServerId=s.id;
+  // reset log state only when switching models — refresh() re-renders every 2s
+  // and must not wipe the live log buffer each tick
+  if(!state.logs[s.id]){resetLogState(s.id);}
+  syncLogSelector(); renderFileList();
   // fetch process info for gauges
   pollProcessInfo(s.id);
 }
@@ -338,7 +368,10 @@ function gatewayBaseUrl(){
 function renderGatewayBar(){
   const g=state.gateway;const bar=$("gateway-status");
   if(!g){bar.textContent="gw ?";return;}
-  const addr=g.address?`${g.address.host}:${g.address.port}`:"";
+  // show a reachable host, not the raw bind address
+  let host=g.address?g.address.host:"";
+  if(host==="0.0.0.0"||host==="::"||host==="[::]")host=window.location.hostname||"127.0.0.1";
+  const addr=g.address?`${host}:${g.address.port}`:"";
   const cls=g.state==="running"?"gw-ok":"gw-bad";
   bar.innerHTML=`gw <span class="${cls}">${g.state==="running"?"●":"○"}</span>${addr?` ${escapeHtml(addr)}`:""}${g.state==="running"?"":" down"}`;
 }
