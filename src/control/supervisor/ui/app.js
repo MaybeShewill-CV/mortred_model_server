@@ -56,6 +56,14 @@ function uid() { return Math.random().toString(36).slice(2, 10); }
 function escapeHtml(s) {
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
+/* charts follow the CSS token system — one source of truth for color */
+const cssVarCache = {};
+function cssVar(name) {
+  if (!(name in cssVarCache)) {
+    cssVarCache[name] = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+  return cssVarCache[name];
+}
 async function api(path, options) {
   const resp = await authorizedFetch(path, options);
   let data = null;
@@ -120,12 +128,20 @@ function renderRiver() {
 let prevStates={};
 
 async function refresh() {
-  const [cat,st] = await Promise.all([api("/api/v1/catalog"), api("/api/v1/status")]);
+  let cat, st;
+  try {
+    [cat,st] = await Promise.all([api("/api/v1/catalog"), api("/api/v1/status")]);
+  } catch (e) {
+    cat = st = { ok: false };
+  }
   if (!cat.ok||!st.ok) {
     $("conn-status").textContent="LINK DOWN"; $("conn-status").className="conn-err";
-    document.body.classList.add("link-down"); return;
+    document.body.classList.add("link-down");
+    $("link-overlay").classList.remove("hidden");
+    return;
   }
   document.body.classList.remove("link-down");
+  $("link-overlay").classList.add("hidden");
   $("conn-status").textContent="LINK OK"; $("conn-status").className="conn-ok";
   const byId={}; for(const s of(st.data.servers||[])) byId[s.id]=s;
   state.gateway = st.data.gateway||null;
@@ -137,7 +153,25 @@ async function refresh() {
   }
   const liveN = state.servers.filter(s=>["running","starting","backoff"].includes(s.state)).length;
   document.title = (liveN>0?`●${liveN} live · `:"")+"Mortred Supervisor";
+  bootSequence(liveN);
   renderCurrentView();
+}
+
+/* one-shot typed boot line — the console comes alive on first link */
+let bootDone = false;
+function bootSequence(liveN){
+  if (bootDone) return;
+  bootDone = true;
+  const el=$("boot-line");
+  const msg=`// mortred supervisor · link established · ${state.servers.length} models · ${liveN} live`;
+  const reduced=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const hide=()=>{ el.classList.add("fading"); setTimeout(()=>el.classList.add("hidden"),550); };
+  if(reduced){ el.textContent=msg; setTimeout(hide,3200); return; }
+  let i=0;
+  const typer=setInterval(()=>{
+    el.textContent=msg.slice(0,++i);
+    if(i>=msg.length){ clearInterval(typer); setTimeout(hide,2400); }
+  },16);
 }
 
 async function pollGpu() {
@@ -146,26 +180,63 @@ async function pollGpu() {
   if(!r.ok||!r.data||!r.data.available){
     panel.classList.add("gpu-na");
     $("gpu-name").textContent="gpu offline";
+    $("gpu-meta").textContent="";
     $("gpu-metrics").innerHTML="— — —";
     return;
   }
   panel.classList.remove("gpu-na");
   state.gpuHistory = r.data.samples||[];
   $("gpu-name").textContent = r.data.name || "gpu";
+  const winS = Math.round(state.gpuHistory.length*2);
+  $("gpu-meta").textContent = state.gpuHistory.length ? `${winS>=120?(winS/60)+"m":winS+"s"} window · 2s poll` : "";
   const last = state.gpuHistory.length ? state.gpuHistory[state.gpuHistory.length-1] : null;
   if(last){
-    const cells = [
-      {label:"UTIL", val:last.util<0?"--":last.util+"%", hot:last.util>85},
-      {label:"VRAM", val:last.mem_total_mib>0?fmtMib(last.mem_used_mib)+"/"+fmtMib(last.mem_total_mib):"--", hot:last.mem_total_mib>0&&last.mem_used_mib/last.mem_total_mib>0.85},
-      {label:"TEMP", val:last.temp_c<0?"--":last.temp_c+"°C", hot:last.temp_c>80},
-      {label:"PWR", val:last.power_w<0?"--":last.power_w.toFixed(0)+"W", hot:last.power_w>300},
-      {label:"SM CLK", val:last.clocks_sm_mhz<0?"--":last.clocks_sm_mhz+"MHz", hot:false},
-      {label:"FAN", val:last.fan_pct<0?"--":last.fan_pct+"%", hot:false},
-    ];
-    $("gpu-metrics").innerHTML = cells.map(c=>
-      `<div class="hud-cell${c.hot?" hot":""}"><div class="hud-val">${c.val}</div><div class="hud-k">${c.label}</div></div>`).join("");
+    updateHudCells(last);
   }
   drawGpuHero();
+}
+
+/* numeric tween so the HUD counts toward its new value */
+const hudTween = {};
+function tweenValue(key, target, fmt, render){
+  const from = (hudTween[key]!=null && isFinite(hudTween[key])) ? hudTween[key] : target;
+  hudTween[key] = target;
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches || from===target){
+    render(fmt(target)); return;
+  }
+  const t0=performance.now(), dur=420;
+  const step=(t)=>{
+    const k=Math.min(1,(t-t0)/dur), e=1-Math.pow(1-k,3);
+    render(fmt(from+(target-from)*e));
+    if(k<1) requestAnimationFrame(step); else render(fmt(target));
+  };
+  requestAnimationFrame(step);
+}
+
+function updateHudCells(last){
+  const cells = [
+    {label:"UTIL",  key:"util",   val:last.util,   fmt:v=>Math.round(v)+"%", hot:last.util>85},
+    {label:"TEMP",  key:"temp",   val:last.temp_c, fmt:v=>Math.round(v)+"°C", hot:last.temp_c>80},
+    {label:"PWR",   key:"pwr",    val:last.power_w,fmt:v=>Math.round(v)+"W",  hot:last.power_w>300},
+    {label:"SM CLK",key:"clk",    val:last.clocks_sm_mhz, fmt:v=>Math.round(v)+"MHz", hot:false},
+    {label:"FAN",   key:"fan",    val:last.fan_pct,fmt:v=>Math.round(v)+"%",  hot:false},
+  ];
+  let html = cells.map(c=>{
+    if(c.val==null||c.val<0){
+      return `<div class="hud-cell"><div class="hud-val">--</div><div class="hud-k">${c.label}</div></div>`;
+    }
+    return `<div class="hud-cell${c.hot?" hot":""}"><div class="hud-val" data-tw="${c.key}">--</div><div class="hud-k">${c.label}</div></div>`;
+  }).join("");
+  const vram = last.mem_total_mib>0
+    ? fmtMib(last.mem_used_mib)+"/"+fmtMib(last.mem_total_mib)
+    : "--";
+  html = `<div class="hud-cell${last.mem_total_mib>0&&last.mem_used_mib/last.mem_total_mib>0.85?" hot":""}"><div class="hud-val">${vram}</div><div class="hud-k">VRAM</div></div>`+html;
+  $("gpu-metrics").innerHTML=html;
+  for(const c of cells){
+    if(c.val==null||c.val<0)continue;
+    const el=document.querySelector(`.hud-val[data-tw="${c.key}"]`);
+    if(el)tweenValue(c.key,c.val,c.fmt,(s)=>el.textContent=s);
+  }
 }
 
 function fmtMib(m){ if(m==null||m<0)return"--"; return m>=1024?(m/1024).toFixed(1)+"G":m+"M"; }
@@ -205,15 +276,15 @@ function drawGpuHero(){
   }
 
   drawSeries(x=>norm(x.power_w<0?0:x.power_w,0,400),"rgba(255,158,100,0.45)",null,false,true);  // power (dim orange dashed)
-  drawSeries(x=>norm(x.mem_total_mib>0?x.mem_used_mib/x.mem_total_mib:0,0,1),"#ffc757","rgba(255,199,87,0.06)",false,false); // mem (amber)
-  drawSeries(x=>norm(x.util<0?0:x.util,0,100),"#00e08c","rgba(0,224,140,0.10)",true,false);     // util (green glow)
+  drawSeries(x=>norm(x.mem_total_mib>0?x.mem_used_mib/x.mem_total_mib:0,0,1),cssVar("--warn"), "rgba(255,199,87,0.06)",false,false); // mem (amber)
+  drawSeries(x=>norm(x.util<0?0:x.util,0,100),cssVar("--acc"),"rgba(0,224,140,0.10)",true,false);     // util (green glow)
 
   // util end-point marker
   const lastS=s[s.length-1];
   if(lastS){
     const ex=w, ey=yOf(norm(lastS.util<0?0:lastS.util,0,100));
     ctx.beginPath(); ctx.arc(ex-3,ey,2.5,0,Math.PI*2);
-    ctx.fillStyle="#00e08c"; ctx.shadowColor="#00e08c"; ctx.shadowBlur=6;
+    ctx.fillStyle=cssVar("--acc"); ctx.shadowColor=cssVar("--acc"); ctx.shadowBlur=6;
     ctx.fill(); ctx.shadowBlur=0;
   }
 }
@@ -421,7 +492,9 @@ function renderWorkbench(){
   const st=dotClassOf(s);
   $("wb-breadcrumb").textContent="‹ fleet / "+s.id.toLowerCase();
   $("wb-breadcrumb").onclick=()=>navigate("#/overview");
-  $("wb-title").innerHTML=`<span class="st ${st}">${ST_GLYPH[st]}</span> ${escapeHtml(s.id.toLowerCase())}<span class="wb-state">${escapeHtml(s.state)}${s.ready?" · ready":""}</span>`;
+  const pillColor=s.state==="running"?"var(--acc)":s.state==="failed"?"var(--err)":
+    (s.state==="stopped"?"var(--txt-dim)":"var(--warn)");
+  $("wb-title").innerHTML=`<span class="st ${st}">${ST_GLYPH[st]}</span> ${escapeHtml(s.id.toLowerCase())} <span class="state-pill" style="--sc:${pillColor}">${escapeHtml(s.state)}${s.ready?" · ready":""}</span>`;
   $("wb-identity").innerHTML=
     `<div class="id-row"><span class="id-k">port</span><span>:${s.port}</span></div>
      <div class="id-row"><span class="id-k">uri</span><span>${escapeHtml(s.uri||"")}</span></div>
@@ -493,7 +566,7 @@ async function controlServer(id,action){
 function showToast(msg,type="info"){
   const el=document.createElement("div");el.className="toast "+type;el.textContent=msg;
   $("toast-container").appendChild(el);
-  setTimeout(()=>{el.style.opacity="0";},2400);
+  setTimeout(()=>{el.classList.add("leaving");},2400);
   setTimeout(()=>{el.remove();},2800);
 }
 
@@ -754,9 +827,12 @@ function fuzzyMatch(q,l){
   }
   return sc;
 }
+let paletteStagger=false;
 function openPalette(){
   const p=$("palette");p.classList.remove("hidden");
+  paletteStagger=true;
   const input=$("palette-input");input.value="";renderPalette("");input.focus();
+  paletteStagger=false;
 }
 function closePalette(){$("palette").classList.add("hidden");}
 function renderPalette(query){
@@ -765,9 +841,10 @@ function renderPalette(query){
   const items=paletteItems()
     .map(it=>({it,sc:query?fuzzyMatch(query,it.label):0}))
     .filter(x=>x.sc>=0).sort((a,b)=>b.sc-a.sc).slice(0,10);
-  let sel=0;list.innerHTML="";
+  let sel=0, idx=0; list.innerHTML="";
   for(const{it}of items){
     const row=document.createElement("div");row.className="palette-row";
+    if(paletteStagger){ row.classList.add("stagger"); row.style.animationDelay=(idx++*14)+"ms"; }
     row.innerHTML=`<span><span class="pi">${HINT_ICON[it.hint]||"·"}</span>${escapeHtml(it.label)}</span><span class="palette-hint">${it.hint}</span>`;
     row.onclick=()=>{closePalette();it.act();};
     list.appendChild(row);
@@ -828,6 +905,16 @@ function wire(){
   const plat=(navigator.userAgentData&&navigator.userAgentData.platform)||navigator.platform||"";
   $("palette-hint").innerHTML=`<kbd>${/Mac|iPhone|iPad/.test(plat)?"⌘":"Ctrl"} K</kbd>`;
   $("palette-hint").onclick=()=>openPalette();
+  // CRT scanline overlay toggle ([S]), persisted
+  const CRT_KEY="mortred_crt";
+  const applyCrt=(on)=>{ $("crt-overlay").classList.toggle("hidden",!on); $("btn-crt").classList.toggle("on",on); };
+  applyCrt(localStorage.getItem(CRT_KEY)==="1");
+  $("btn-crt").onclick=()=>{
+    const on=localStorage.getItem(CRT_KEY)!=="1";
+    localStorage.setItem(CRT_KEY,on?"1":"0");
+    applyCrt(on);
+    showToast(on?"crt scanlines on":"crt scanlines off","info");
+  };
   wireGpuCrosshair();
   $("btn-log-pause").onclick=()=>{
     const st=state.logs[state.logServerId];if(!st)return;

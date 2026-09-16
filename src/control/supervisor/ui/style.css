@@ -111,6 +111,20 @@ mark { background: rgba(255, 199, 87, 0.22); color: var(--warn); border-radius: 
 }
 @keyframes cursor-blink { 50% { opacity: 0; } }
 
+/* boot line: one-shot typed status message under the topbar */
+#boot-line {
+  flex-shrink: 0;
+  font-family: var(--mono); font-size: var(--fs-xs);
+  color: var(--acc);
+  background: rgba(0, 224, 140, 0.04);
+  border-bottom: 1px solid rgba(0, 224, 140, 0.12);
+  padding: 3px 18px;
+  white-space: nowrap; overflow: hidden;
+  transition: opacity 500ms ease;
+}
+#boot-line::after { content: "▌"; animation: cursor-blink var(--t-blink) infinite; }
+#boot-line.fading { opacity: 0; }
+
 #conn-status {
   margin-left: auto;
   white-space: nowrap;
@@ -127,8 +141,42 @@ mark { background: rgba(255, 199, 87, 0.22); color: var(--warn); border-radius: 
 .conn-err { color: var(--err); background: rgba(255, 109, 98, 0.07); border-color: rgba(255, 109, 98, 0.3); }
 .conn-err::before { content: "● "; }
 .conn-unknown { color: var(--warn); }
-/* link down = the page loses power: everything below dims */
-body.link-down .view { opacity: 0.55; }
+
+/* link-down overlay: the console loses signal, not just opacity */
+#link-overlay {
+  position: fixed; inset: 0; z-index: 1500;
+  background: rgba(4, 6, 8, 0.72);
+  backdrop-filter: blur(3px) grayscale(0.4);
+  display: flex; align-items: center; justify-content: center;
+}
+.link-box {
+  text-align: center;
+  font-family: var(--mono);
+  border: 1px solid rgba(255, 109, 98, 0.35);
+  background: rgba(16, 21, 26, 0.92);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-pop);
+  padding: 26px 48px;
+  animation: dialog-in 200ms ease;
+}
+.link-glyph { font-size: 26px; color: var(--err); text-shadow: 0 0 16px rgba(255, 109, 98, 0.6); }
+.link-title { font-size: var(--fs-lg); color: var(--err); letter-spacing: 0.22em; margin-top: 8px; }
+.link-sub { font-size: var(--fs-xs); color: var(--txt-dim); margin-top: 6px; }
+.dots::after { content: ""; animation: dots 1.4s steps(4) infinite; }
+@keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+
+/* CRT overlay: user-toggled phosphor scanlines for the whole console */
+#crt-overlay {
+  position: fixed; inset: 0; z-index: 2002; pointer-events: none;
+  background: repeating-linear-gradient(0deg,
+    rgba(0, 0, 0, 0.10) 0px, rgba(0, 0, 0, 0.10) 1px,
+    transparent 1px, transparent 3px);
+  mix-blend-mode: multiply;
+}
+#crt-overlay::after {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(ellipse 90% 80% at 50% 50%, transparent 62%, rgba(0, 0, 0, 0.22));
+}
 
 .gateway-bar {
   font-family: var(--mono);
@@ -169,6 +217,7 @@ body.link-down .view { opacity: 0.55; }
 .btn.danger:hover { background: rgba(255, 109, 98, 0.08); border-color: rgba(255, 109, 98, 0.55); }
 .btn.ghost { background: transparent; border-color: transparent; color: var(--txt); }
 .btn.ghost:hover { background: var(--bg2); border-color: transparent; color: var(--txt-hi); }
+.btn.ghost.on { background: rgba(0, 224, 140, 0.08); color: var(--acc); }
 
 /* ---------------- shared cards & bench ---------------- */
 
@@ -306,12 +355,19 @@ body::after {
 
 .gpu-panel { padding: 12px 16px; }
 .gpu-panel .panel-head { margin-bottom: 8px; }
+.gpu-head-right { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.gpu-meta {
+  font-family: var(--mono); font-size: 9.5px;
+  color: var(--txt-dim); letter-spacing: 0.08em; text-transform: uppercase;
+  white-space: nowrap;
+}
 .gpu-name {
   font-family: var(--mono);
   color: var(--txt-dim); font-size: 10.5px;
   text-transform: uppercase; letter-spacing: 0.08em;
   background: var(--bg2); border: 1px solid var(--line);
   border-radius: 999px; padding: 2px 10px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px;
 }
 .gpu-metrics { display: flex; gap: 8px; margin: 6px 0 10px; flex-wrap: wrap; }
 .hud-cell {
@@ -320,11 +376,18 @@ body::after {
   background: var(--bg2);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
+  transition: transform var(--t-fast), border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.hud-cell:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-2);
+  box-shadow: var(--shadow-hover);
 }
 .hud-val {
   font-family: var(--mono);
-  font-size: 17px; color: var(--txt-hi);
+  font-size: var(--fs-xl); color: var(--txt-hi);
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 .hud-k {
   font-family: var(--mono);
@@ -457,15 +520,17 @@ body::after {
 
 .cartridge.live {
   border-color: color-mix(in srgb, var(--cat-glow, #00e08c) 38%, transparent);
+  /* double ring: hairline halo outside the glow — reads as a gradient edge */
   box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--cat-glow, #00e08c) 16%, transparent),
     0 0 24px -8px var(--cat-glow, rgba(0, 224, 140, 0.5)),
     inset 0 1px 0 rgba(255, 255, 255, 0.03);
   animation: live-breathe 3.6s ease-in-out infinite;
 }
 .cartridge.live:hover { border-color: color-mix(in srgb, var(--cat-glow, #00e08c) 55%, transparent); }
 @keyframes live-breathe {
-  0%, 100% { box-shadow: 0 0 16px -8px var(--cat-glow, rgba(0, 224, 140, 0.4)), inset 0 1px 0 rgba(255, 255, 255, 0.03); }
-  50% { box-shadow: 0 0 28px -6px var(--cat-glow, rgba(0, 224, 140, 0.65)), inset 0 1px 0 rgba(255, 255, 255, 0.03); }
+  0%, 100% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--cat-glow, #00e08c) 14%, transparent), 0 0 16px -8px var(--cat-glow, rgba(0, 224, 140, 0.4)), inset 0 1px 0 rgba(255, 255, 255, 0.03); }
+  50% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--cat-glow, #00e08c) 22%, transparent), 0 0 28px -6px var(--cat-glow, rgba(0, 224, 140, 0.65)), inset 0 1px 0 rgba(255, 255, 255, 0.03); }
 }
 
 .cartridge.dead {
@@ -502,8 +567,19 @@ body::after {
 /* ---------------- WORKBENCH ---------------- */
 
 .wb-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-.wb-title { font-family: var(--mono); font-size: 15px; color: var(--txt-hi); }
-.wb-state { color: var(--txt-dim); font-size: 12px; margin-left: 6px; font-family: var(--sans); }
+.wb-title { font-family: var(--mono); font-size: var(--fs-lg); color: var(--txt-hi); }
+/* state pill: colored capsule replacing plain-text state */
+.state-pill {
+  font-family: var(--mono); font-size: var(--fs-xs);
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--sc, var(--txt-dim));
+  border: 1px solid color-mix(in srgb, var(--sc, var(--txt-dim)) 40%, transparent);
+  background: color-mix(in srgb, var(--sc, var(--txt-dim)) 8%, transparent);
+  border-radius: 999px;
+  padding: 2px 10px;
+  white-space: nowrap;
+}
+.state-pill::before { content: "● "; font-size: 8px; vertical-align: 1px; }
 .wb-grid { display: grid; grid-template-columns: 250px 1fr; gap: 12px; align-items: start; }
 .id-row {
   display: flex; gap: 10px; font-size: 12px;
@@ -545,6 +621,10 @@ body::after {
   flex: 1; margin: 0; padding: 10px 14px; overflow: auto;
   font-family: var(--mono); font-size: 12px; line-height: 1.6;
   white-space: pre-wrap; word-break: break-all; color: var(--txt);
+  /* phosphor scanlines — the log pane is a CRT inside the console */
+  background-image: repeating-linear-gradient(0deg,
+    rgba(255, 255, 255, 0.016) 0px, rgba(255, 255, 255, 0.016) 1px,
+    transparent 1px, transparent 3px);
 }
 #log-content:empty::after {
   content: "awaiting output ▌"; color: var(--txt-dim);
@@ -606,6 +686,8 @@ body::after {
   background: var(--bg2); padding: 2px 6px;
 }
 .palette-row.sel .palette-hint { color: var(--acc); border-color: rgba(0, 224, 140, 0.3); }
+.palette-row.stagger { animation: palette-row-in 180ms ease both; }
+@keyframes palette-row-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .palette-row .pi {
   display: inline-block; width: 1.4em; margin-left: -4px;
   color: var(--txt-dim); font-family: var(--mono); font-size: 12px;
@@ -686,9 +768,10 @@ kbd {
   border-radius: var(--r-md);
   box-shadow: var(--shadow-pop);
   animation: toast-in 160ms ease;
-  transition: opacity 300ms ease;
+  transition: opacity 300ms ease, transform 300ms ease;
   white-space: pre-line;
 }
+.toast.leaving { opacity: 0; transform: translateX(12px); }
 .toast.success { border-left-color: var(--acc); }
 .toast.success::before { content: "● "; color: var(--acc); }
 .toast.error { border-left-color: var(--err); }

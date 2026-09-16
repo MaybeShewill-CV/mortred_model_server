@@ -14,15 +14,20 @@
     <div id="gateway-status" class="gateway-bar">gw …</div>
     <div id="conn-status" class="conn-unknown">connecting…</div>
     <span id="palette-hint" class="kbd-hint" title="command palette"><kbd>⌘K</kbd></span>
+    <button id="btn-crt" class="btn small ghost" title="CRT scanline overlay">[S]</button>
     <button id="btn-token" class="btn small ghost" title="API token">[T]</button>
   </header>
+  <div id="boot-line" class="hidden"></div>
 
   <!-- ============ VIEW: OVERVIEW ============ -->
   <div id="view-overview" class="view">
     <section id="gpu-panel" class="card gpu-panel">
       <div class="panel-head">
         <span class="panel-title">gpu core</span>
-        <span id="gpu-name" class="gpu-name">…</span>
+        <span class="gpu-head-right">
+          <span id="gpu-meta" class="gpu-meta"></span>
+          <span id="gpu-name" class="gpu-name">…</span>
+        </span>
       </div>
       <div id="gpu-metrics" class="gpu-metrics">— — —</div>
       <div class="gpu-chart-wrap">
@@ -133,6 +138,18 @@
   </div>
 
   <div id="toast-container"></div>
+
+  <!-- ============ LINK-DOWN OVERLAY ============ -->
+  <div id="link-overlay" class="hidden">
+    <div class="link-box">
+      <div class="link-glyph">⚠</div>
+      <div class="link-title">LINK DOWN</div>
+      <div class="link-sub">supervisor unreachable — reconnecting<span class="dots"></span></div>
+    </div>
+  </div>
+
+  <!-- ============ CRT OVERLAY (toggle: [S]) ============ -->
+  <div id="crt-overlay" class="hidden"></div>
 
   <!-- ============ TOKEN DIALOG ============ -->
   <div id="token-dialog" class="hidden">
