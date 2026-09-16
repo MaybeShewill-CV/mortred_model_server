@@ -398,6 +398,17 @@ function topScore(p){
 async function sendBatch(){
   const s=serverById(state.selectedId);if(!s||!state.files.length)return;
   const base=gatewayBaseUrl();if(!base){showToast("gateway unknown","error");return;}
+  // pre-flight: tell the user exactly which URL will be hit and if it's reachable
+  const inferUrl=`${base}/v1/models/${encodeURIComponent(s.id)}/infer`;
+  try{
+    const pre=await fetch(`${base}/healthz`,{method:"GET",signal:AbortSignal.timeout(3000)});
+    if(!pre.ok)throw new Error(`gateway healthz returned ${pre.status}`);
+  }catch(e){
+    const detail=e&&e.name==="TimeoutError"?"timeout 3s":(e&&e.message)||String(e);
+    showToast(`gateway unreachable: ${detail}\n→ ${base}\n检查隧道(8080)和 WSL gateway 进程`, "error");
+    riverPush("err",`pre-flight fail: ${base} (${detail})`,s.id);
+    return;
+  }
   $("btn-cancel").classList.remove("hidden");setBatchProgress(0,state.files.length);
   let aborted=false;state.batchAbort=()=>{aborted=true;};
   let done=0;
@@ -415,7 +426,12 @@ async function sendBatch(){
       if(state.inferHistory.length>600)state.inferHistory.shift();
       if(resp.ok){addResultCard(s,f,body,reqId,ms);riverPush("ok",`${s.id} 200 ${ms}ms`,s.id);}
       else{showToast(`HTTP ${resp.status}`,"error");riverPush("err",`${s.id} HTTP ${resp.status}`,s.id);}
-    }catch(e){showToast("request fail","error");riverPush("err",`${s.id} transport`,s.id);}
+    }catch(e){
+      const url = `${base}/v1/models/${encodeURIComponent(s.id)}/infer`;
+      const detail = e && e.message ? e.message : String(e);
+      showToast(`infer fail: ${detail}\n→ ${url}`, "error");
+      riverPush("err", `${s.id} transport: ${detail} (${url})`, s.id);
+    }
     done++;setBatchProgress(done,state.files.length);
   }
   state.batchAbort=null;$("btn-cancel").classList.add("hidden");
