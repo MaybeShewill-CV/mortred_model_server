@@ -8,14 +8,18 @@
 // Thin REST client: management commands talk to mortred-supervisor; infer
 // smoke tests post the data-plane envelope to mortred-gateway.
 
+#include <chrono>
 #include <filesystem>
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <iostream>
+#include <numeric>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -45,7 +49,7 @@ struct HttpResult {
 };
 
 HttpResult http_request(const Options& opt, const std::string& method, const std::string& path,
-                        const std::string& body) {
+                        const std::string& body, int timeout_ms = 300000) {
     HttpResult out;
     const std::string url = opt.addr + path;
     WFFacilities::WaitGroup wg(1);
@@ -74,7 +78,7 @@ HttpResult http_request(const Options& opt, const std::string& method, const std
         const std::string auth = "Bearer " + opt.token;
         task->get_req()->add_header_pair("Authorization", auth.c_str());
     }
-    task->set_receive_timeout(300000);  // infer can take a while
+    task->set_receive_timeout(timeout_ms);  // infer can take a while; probes stay short
     task->start();
     wg.wait();
     return out;
@@ -102,6 +106,359 @@ void usage() {
                  "            calibrate [--pack FILE] [--write-pack] | next | upgrade [version]\n"
                  "  env: MORTREDCTL_ADDR (default http://127.0.0.1:8787), MORTREDCTL_TOKEN,\n"
                  "       MORTREDCTL_GATEWAY_ADDR (default http://127.0.0.1:8080)\n");
+}
+
+/* ---------------- ps / down: control-plane probe and shutdown ---------------- */
+
+const char* col_ok()   { static const char* c = ::isatty(STDOUT_FILENO) ? "\033[32m" : ""; return c; }
+const char* col_err()  { static const char* c = ::isatty(STDOUT_FILENO) ? "\033[31m" : ""; return c; }
+const char* col_warn() { static const char* c = ::isatty(STDOUT_FILENO) ? "\033[33m" : ""; return c; }
+const char* col_dim()  { static const char* c = ::isatty(STDOUT_FILENO) ? "\033[2m" : ""; return c; }
+const char* col_bold() { static const char* c = ::isatty(STDOUT_FILENO) ? "\033[1m" : ""; return c; }
+const char* col_off()  { static const char* c = ::isatty(STDOUT_FILENO) ? "\033[0m" : ""; return c; }
+
+std::string pad(const std::string& s, size_t n) {
+    return s.size() >= n ? s : s + std::string(n - s.size(), ' ');
+}
+
+std::string fmt_uptime(long long started_ms) {
+    if (started_ms <= 0) {
+        return "--";
+    }
+    const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::system_clock::now().time_since_epoch()).count();
+    long long sec = std::max(0LL, (now_ms - started_ms) / 1000);
+    const long long d = sec / 86400; sec %= 86400;
+    const long long h = sec / 3600;  sec %= 3600;
+    const long long m = sec / 60;
+    const long long s = sec % 60;
+    char buf[32];
+    if (d > 0) {
+        std::snprintf(buf, sizeof buf, "%lldd%lldh", d, h);
+    } else if (h > 0) {
+        std::snprintf(buf, sizeof buf, "%lld:%02lld:%02lld", h, m, s);
+    } else {
+        std::snprintf(buf, sizeof buf, "%lld:%02lld", m, s);
+    }
+    return buf;
+}
+
+std::string json_str(const rapidjson::Value& obj, const char* key, const char* fallback = "--") {
+    if (obj.IsObject() && obj.HasMember(key) && obj[key].IsString()) {
+        return obj[key].GetString();
+    }
+    return fallback;
+}
+
+long long json_i64(const rapidjson::Value& obj, const char* key, long long fallback = 0) {
+    if (obj.IsObject() && obj.HasMember(key) && obj[key].IsInt64()) {
+        return obj[key].GetInt64();
+    }
+    return fallback;
+}
+
+bool parse_json(const std::string& body, rapidjson::Document* doc) {
+    doc->Parse(body.c_str());
+    return !doc->HasParseError() && doc->IsObject();
+}
+
+const char* state_color(const std::string& state) {
+    if (state == "running") return col_ok();
+    if (state == "failed") return col_err();
+    if (state == "starting" || state == "backoff") return col_warn();
+    return col_dim();
+}
+
+int cmd_ps(const Options& opt) {
+    std::printf("%smortred ps%s\n", col_bold(), col_off());
+
+    // supervisor liveness (public endpoint, no auth)
+    const HttpResult health = http_request(opt, "GET", "/api/v1/health", "", 2500);
+    if (health.status == 200) {
+        std::printf("  SUPERVISOR  %s● up%s     %s\n", col_ok(), col_off(), opt.addr.c_str());
+    } else {
+        std::printf("  SUPERVISOR  %s● down%s   %s\n", col_err(), col_off(), opt.addr.c_str());
+        std::printf("%s    hint: ssh -L 8787:<host>:8787 … / systemctl status mortred-supervisor%s\n",
+                    col_dim(), col_off());
+    }
+
+    // gateway: truth = direct healthz probe
+    Options gw_opt = opt;
+    gw_opt.addr = opt.gateway_addr;
+    gw_opt.token.clear();  // healthz is public
+    const HttpResult gw = http_request(gw_opt, "GET", "/healthz", "", 2500);
+    const bool gw_alive = gw.status == 200;
+    std::printf("  GATEWAY     %s● %s%s   %s  healthz=%s\n",
+                gw_alive ? col_ok() : col_err(), gw_alive ? "up" : "down", col_off(),
+                opt.gateway_addr.c_str(), gw_alive ? "ok" : "no response");
+
+    // supervisor's view + per-server detail (needs token)
+    const HttpResult st = http_request(opt, "GET", "/api/v1/status", "", 3000);
+    const HttpResult cat = http_request(opt, "GET", "/api/v1/catalog", "", 3000);
+    const HttpResult gpu = http_request(opt, "GET", "/api/v1/gpu", "", 3000);
+
+    if (st.status == 401 || cat.status == 401) {
+        std::printf("%s    ⚠ management API needs a token: --token T / MORTREDCTL_TOKEN "
+                    "(server detail hidden)%s\n", col_warn(), col_off());
+        return (health.status == 200 && gw_alive) ? 0 : 1;
+    }
+
+    rapidjson::Document st_doc, cat_doc, gpu_doc;
+    const bool st_ok = st.status == 200 && parse_json(st.body, &st_doc);
+    const bool cat_ok = cat.status == 200 && parse_json(cat.body, &cat_doc);
+    if (!st_ok) {
+        if (health.status == 200) {
+            std::printf("%s    ⚠ /api/v1/status unreachable (HTTP %d)%s\n", col_warn(), st.status, col_off());
+        }
+        return (health.status == 200 && gw_alive) ? 0 : 1;
+    }
+
+    if (st_doc.HasMember("gateway") && st_doc["gateway"].IsObject()) {
+        const auto& g = st_doc["gateway"];
+        std::printf("%s    supervisor-view: state=%s", col_dim(), json_str(g, "state", "?").c_str());
+        if (json_i64(g, "pid") > 0) {
+            std::printf(" pid=%lld", json_i64(g, "pid"));
+        }
+        std::printf(" restarts=%lld", json_i64(g, "restart_count"));
+        if (g.HasMember("address") && g["address"].IsObject()) {
+            const auto& a = g["address"];
+            std::printf(" bind=%s:%lld", json_str(a, "host", "").c_str(), json_i64(a, "port"));
+        }
+        std::printf("%s\n", col_off());
+    }
+
+    if (gpu.status == 200 && parse_json(gpu.body, &gpu_doc) && gpu_doc.HasMember("samples") &&
+        gpu_doc["samples"].IsArray() && !gpu_doc["samples"].Empty()) {
+        const auto& last = gpu_doc["samples"][gpu_doc["samples"].Size() - 1];
+        const long long mem_t = json_i64(last, "mem_total_mib");
+        const long long mem_u = json_i64(last, "mem_used_mib");
+        char mem[48] = "--";
+        if (mem_t > 0) {
+            std::snprintf(mem, sizeof mem, "%.1fG/%.1fG (%lld%%)",
+                          mem_u / 1024.0, mem_t / 1024.0, mem_u * 100 / mem_t);
+        }
+        std::printf("  GPU         %s●%s %s  util %lld%%  vram %s  temp %lld°C  pwr %lldW\n",
+                    col_ok(), col_off(), json_str(gpu_doc, "name", "?").c_str(),
+                    json_i64(last, "util", -1), mem,
+                    json_i64(last, "temp_c", -1), json_i64(last, "power_w", -1));
+    }
+
+    // catalog x status merge table
+    if (!cat_ok) {
+        return (health.status == 200 && gw_alive) ? 0 : 1;
+    }
+    struct Row {
+        std::string id, state, category, type, port, pid, uptime, restarts, info;
+        bool ready = false, has_status = false;
+    };
+    std::vector<Row> rows;
+    if (cat_doc.HasMember("servers") && cat_doc["servers"].IsArray()) {
+        for (const auto& c : cat_doc["servers"].GetArray()) {
+            Row r;
+            r.id = json_str(c, "id");
+            r.category = json_str(c, "category");
+            r.type = json_str(c, "type");
+            r.port = std::to_string(json_i64(c, "port", -1));
+            if (st_doc.HasMember("servers") && st_doc["servers"].IsArray()) {
+                for (const auto& s : st_doc["servers"].GetArray()) {
+                    if (json_str(s, "id") == r.id) {
+                        r.has_status = true;
+                        r.state = json_str(s, "state", "stopped");
+                        r.ready = s.HasMember("ready") && s["ready"].IsBool() && s["ready"].GetBool();
+                        r.pid = std::to_string(json_i64(s, "pid", -1));
+                        r.uptime = fmt_uptime(json_i64(s, "started_at_ms"));
+                        r.restarts = std::to_string(json_i64(s, "restart_count"));
+                        if (s.HasMember("error") && s["error"].IsString()) {
+                            r.info = std::string("err: ") + s["error"].GetString();
+                        } else if (s.HasMember("last_exit_status") && s["last_exit_status"].IsInt64() &&
+                                   r.state != "running") {
+                            r.info = "last_exit=" + std::to_string(s["last_exit_status"].GetInt64());
+                        }
+                        break;
+                    }
+                }
+            }
+            if (!r.has_status) {
+                r.state = "stopped";
+                r.pid = "--";
+                r.uptime = "--";
+                r.restarts = "0";
+                r.info = "not in supervisor status (never started)";
+            }
+            rows.push_back(r);
+        }
+    }
+    long long live = 0;
+    for (const auto& r : rows) {
+        if (r.state == "running" || r.state == "starting" || r.state == "backoff") {
+            ++live;
+        }
+    }
+    std::printf("  SERVERS     %lld live / %zu total\n", live, rows.size());
+    std::printf("%s    %-18s%-12s%-7s%-20s%-6s%-7s%-8s%-10s%-4sinfo%s\n",
+                col_dim(), "id", "state", "ready", "category", "type", "port", "pid",
+                "uptime", "↻", col_off());
+    for (const auto& r : rows) {
+        std::printf("    %-18s%s%-12s%s%-6s%-20s%-6s%-7s%-8s%-10s%-4s",
+                    r.id.c_str(),
+                    state_color(r.state), pad(r.state, 12).c_str(), col_off(),
+                    r.ready ? "yes" : "no",
+                    r.category.c_str(), r.type.c_str(), r.port.c_str(),
+                    r.pid.c_str(), r.uptime.c_str(), r.restarts.c_str());
+        if (!r.info.empty()) {
+            const bool is_err = r.info.rfind("err: ", 0) == 0;
+            std::printf("%s%s%s", is_err ? col_err() : col_dim(), r.info.substr(0, 60).c_str(), col_off());
+        }
+        std::printf("\n");
+    }
+    return (health.status == 200 && gw_alive) ? 0 : 1;
+}
+
+bool confirm(const std::string& question, bool yes_flag) {
+    if (yes_flag) {
+        return true;
+    }
+    const char* env = std::getenv("MORTREDCTL_YES");
+    if (env != nullptr && std::string(env) == "1") {
+        return true;
+    }
+    if (::isatty(STDIN_FILENO) != 1) {
+        std::fprintf(stderr, "refusing interactive confirm without a tty (use --yes)\n");
+        return false;
+    }
+    std::fprintf(stderr, "%s [y/N] ", question.c_str());
+    std::string line;
+    if (!std::getline(std::cin, line)) {
+        return false;
+    }
+    return line == "y" || line == "Y" || line == "yes";
+}
+
+int cmd_down(const Options& opt, const std::vector<std::string>& rest) {
+    std::string id_list;
+    bool all = false, yes = false;
+    for (size_t i = 0; i < rest.size(); ++i) {
+        if (rest[i] == "--id" && i + 1 < rest.size()) {
+            id_list = rest[++i];
+        } else if (rest[i] == "--all") {
+            all = true;
+        } else if (rest[i] == "--yes") {
+            yes = true;
+        } else {
+            std::fprintf(stderr, "unknown down flag: %s\n", rest[i].c_str());
+            return 2;
+        }
+    }
+    // resolve targets
+    std::vector<std::string> targets, known;
+    const HttpResult st = http_request(opt, "GET", "/api/v1/status", "", 3000);
+    rapidjson::Document doc;
+    if (st.status != 200 || !parse_json(st.body, &doc) || !doc.HasMember("servers") ||
+        !doc["servers"].IsArray()) {
+        std::fprintf(stderr, "cannot list servers (supervisor %s HTTP %d); nothing stopped\n",
+                     opt.addr.c_str(), st.status);
+        return 1;
+    }
+    std::vector<std::string> running;
+    for (const auto& s : doc["servers"].GetArray()) {
+        const std::string id = json_str(s, "id");
+        known.push_back(id);
+        const std::string state = json_str(s, "state");
+        if (state == "running" || state == "starting" || state == "backoff") {
+            running.push_back(id);
+        }
+    }
+    if (!id_list.empty()) {
+        std::stringstream ss(id_list);
+        std::string item;
+        while (std::getline(ss, item, ',')) {
+            if (!item.empty()) {
+                targets.push_back(item);
+            }
+        }
+        for (const auto& id : targets) {
+            if (std::find(known.begin(), known.end(), id) == known.end()) {
+                std::fprintf(stderr, "unknown server ids: %s\n", id.c_str());
+                return 2;
+            }
+        }
+    } else {
+        targets = running;
+    }
+    if (targets.empty()) {
+        std::printf("no running model servers — nothing to stop\n");
+    } else {
+        std::string label = targets.size() <= 8
+            ? std::accumulate(targets.begin(), targets.end(), std::string(),
+                              [](const std::string& a, const std::string& b) {
+                                  return a.empty() ? b : a + ", " + b;
+                              })
+            : std::to_string(targets.size()) + " servers";
+        if (!confirm("stop " + label + "?", yes)) {
+            std::printf("aborted\n");
+            return 1;
+        }
+        int rc = 0;
+        for (const auto& id : targets) {
+            const HttpResult r = http_request(opt, "POST", "/api/v1/servers/" + id + "/stop", "{}", 10000);
+            if (r.status >= 200 && r.status < 300) {
+                std::printf("  %-18s ✓ stopped\n", id.c_str());
+            } else {
+                std::printf("  %-18s %s✗ HTTP %d %s%s\n", id.c_str(), col_err(), r.status,
+                            r.body.substr(0, 80).c_str(), col_off());
+                rc = 1;
+            }
+        }
+        if (!all) {
+            return rc;
+        }
+    }
+    if (!all) {
+        return 0;
+    }
+    if (!confirm("stop ALL servers + gateway + supervisor?", yes)) {
+        std::printf("aborted\n");
+        return 1;
+    }
+    // gateway+supervisor: no management API for this — local process control only
+    std::printf("\nstopping gateway + supervisor (local host only)…\n");
+    auto run = [](const std::vector<std::string>& argv) -> int {
+        std::vector<char*> av;
+        for (const auto& a : argv) {
+            av.push_back(const_cast<char*>(a.c_str()));
+        }
+        av.push_back(nullptr);
+        const pid_t pid = ::fork();
+        if (pid < 0) {
+            return -1;
+        }
+        if (pid == 0) {
+            ::execvp(av[0], av.data());
+            ::_exit(127);  // not installed
+        }
+        int status = 0;
+        ::waitpid(pid, &status, 0);
+        return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    };
+    const int sys_rc = run({"systemctl", "stop", "mortred-supervisor"});
+    if (sys_rc == 0) {
+        std::printf("  ✓ systemctl stop mortred-supervisor (kills the whole tree)\n");
+    } else {
+        bool killed_any = false;
+        for (const char* pattern : {"mortred-supervisor", "mortred-gateway"}) {
+            if (run({"pkill", "-TERM", "-f", pattern}) == 0) {
+                std::printf("  ✓ pkill -TERM -f %s\n", pattern);
+                killed_any = true;
+            }
+        }
+        if (!killed_any) {
+            std::printf("%s  no local mortred processes found — supervisor/gateway run elsewhere?%s\n",
+                        col_warn(), col_off());
+            std::printf("%s    (API has no gateway-stop endpoint; on the host: "
+                        "systemctl stop mortred-supervisor)%s\n", col_dim(), col_off());
+        }
+    }
+    return 0;
 }
 
 }  // namespace
@@ -167,7 +524,7 @@ int run_cli(int argc, char** argv) {
     // (single source of truth shared with bootstrap.sh and the docs)
     if (cmd == "init" || cmd == "doctor" || cmd == "upgrade" || cmd == "prepare" ||
         cmd == "calibrate" || cmd == "init-trust" || cmd == "init-edge" ||
-        cmd == "next" || cmd == "ps" || cmd == "down") {
+        cmd == "next") {
         const std::string root = []() {
             if (const char* env = std::getenv("MORTRED_PROJECT_ROOT"); env != nullptr && *env != '\0') {
                 return std::string(env);
@@ -214,6 +571,13 @@ int run_cli(int argc, char** argv) {
     }
 
     HttpResult r;
+    if (cmd == "ps") {
+        return cmd_ps(opt);
+    }
+    if (cmd == "down") {
+        std::vector<std::string> rest(args.begin() + static_cast<long>(index), args.end());
+        return cmd_down(opt, rest);
+    }
     if (cmd == "status" || cmd == "catalog") {
         r = http_request(opt, "GET", "/api/v1/" + cmd, "");
     } else if (cmd == "start" || cmd == "stop" || cmd == "restart") {
