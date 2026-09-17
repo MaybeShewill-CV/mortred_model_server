@@ -308,3 +308,43 @@ R2 的 9.06 含约 0.4 分自评通胀，主因：①测试台结果面从未被
 | hero 读数总览 | ![r8 overview](images/ui/r8-overview-hero.png) |
 | dossier 工作台（真实遥测） | ![r8 workbench](images/ui/r8-workbench-dossier.png) |
 
+---
+
+## Round 9 — 舰队真实 qps + 自检序列 + 材质收紧（2026-09-17）
+
+### 本轮改动
+
+| 类别 | 改动 | 验证 |
+|---|---|---|
+| 状态（核心） | **舰队卡 sparkline 切换真实 per-model qps**：对 running 卡错峰（250ms 间隔）轮询 `/api/v1/servers/<id>/metrics`，`mortred_inference_requests_total` 增量算 qps，40 点历史绘制曲线；标注 `live · X.X r/s`（绿）/ session / idle 三态；stopped 卡自动清空 | 实测 6 live（5.8/10.7/15.6 r/s）+ 6 idle；hist 累积正常 |
+| 人格 | **开机自检序列**：三行打字机（initiating link… → catalog/gateway/gpu 自检 → link established · console ready），多行 pre-line 呈现，respect reduced-motion | 截图捕获序列中段 |
+| 色彩/表面 | live 卡**分类色内衬浸染**（inset veil 随呼吸调制 5%→9%），身份色从边框渗入卡片内部；dossier identity/telemetry 段改**内嵌井托盘**（well 材质分层） | 红队："category-colored inner tinting… confirmed" |
+| 密度 | GPU 面板头紧凑化（padding/margin 收紧）、舰队过滤行 margin 收紧 | 截图 |
+| 工艺 | **palette 最近命令**（localStorage 记忆 3 条，`↺ recent` 置顶提示） | 实测 stored `["open yolov8"]`、置顶行 `↺open yolov8 recent` |
+| 事故 | 一次脚本编辑事故（boot 替换截断了后半文件）——`git checkout` 恢复后以安全替换重做，全函数清单核对（palette/wire/pollLogs 全在） | node --check + grep 计数核对 |
+
+### 评分（R9）
+
+| 维度 | R8 | R9 | 依据 |
+|---|---|---|---|
+| 人格与记忆点 | 9.25 | **9.50** | 自检序列 = 每次加载必经的多行签名时刻；余晖+favicon+自检构成完整开机叙事 |
+| 概念清晰度 | 9.25 | **9.40** | 总览现在是真正的"带实时遥测的任务控制台"（每卡真实 qps）；紧凑化缝合 |
+| 色彩系统 | 9.00 | **9.25** | 分类色从"边框标识"升级为"内部浸染"，身份色系统完整性提升 |
+| 字体与排版 | 9.25 | **9.25** | 维持（无新增问题亦无新增时刻） |
+| 表面与材质 | 9.00 | **9.25** | 井托盘为 dossier 增加材质分层；浸染 veil 丰富 live 卡表面 |
+| 密度与信息层级 | 9.25 | **9.40** | 头部紧凑化 + live 标注层级（live > session > idle）清晰 |
+| 状态可见性 | 9.75 | **9.90** | 舰队级真实 qps——全应用每一处遥测都是服务端真值；扣：无聚合总 rps 读数 |
+| 动效与细节工艺 | 9.25 | **9.40** | palette recents、错峰轮询防抖、自检节奏；无已知未修缺陷 |
+| **加权总分** | 9.31 | **9.43** | **未达 9.5 → 循环继续（差距 0.07）** |
+
+### R10 清单（最后 0.07）
+
+- 舰队头/顶栏聚合总 rps 读数（所有 live 卡 qps 求和，一处 hero 数字）→ 状态 10、密度 +
+- 字体：面板标题与 hero 的字距/字重微调（display 层最后一档）
+- 工艺：palette 分组标题（recent / nav / ctrl）与 focus 遍历顺序审计
+
+| R9 截图 | |
+|---|---|
+| 自检序列中段 | ![r9 boot](images/ui/r9-boot-seq.png) |
+| 总览（live qps + 浸染） | ![r9 overview](images/ui/r9-overview-live.png) |
+

@@ -183,22 +183,29 @@ let bootDone = false;
 function bootSequence(liveN){
   if (bootDone) return;
   bootDone = true;
-  // small delay so the parallel first GPU poll can join the boot line
   setTimeout(()=>{
-    const el=$("boot-line");
+    const gw=state.gateway&&state.gateway.state==="running"?"gateway up":"gateway --";
     const gpuTxt=state.gpuHistory.length?"gpu online":"gpu --";
-    typeBootLine(el,`// mortred supervisor · link established · ${state.servers.length} models · ${liveN} live · ${gpuTxt}`);
+    typeBootLines([
+      "// mortred supervisor · initiating link…",
+      `// catalog ${state.servers.length} models · ${gw} · ${gpuTxt}`,
+      `// link established · ${liveN} live · console ready`,
+    ]);
   }, state.gpuHistory.length?0:700);
 }
-function typeBootLine(el,msg){
+function typeBootLines(lines){
+  const el=$("boot-line");
   const reduced=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const hide=()=>{ el.classList.add("fading"); setTimeout(()=>el.classList.add("hidden"),550); };
-  if(reduced){ el.textContent=msg; setTimeout(hide,3200); return; }
-  let i=0;
+  if(reduced){ el.textContent=lines.join("\n"); setTimeout(hide,3200); return; }
+  let li=0, ci=0;
+  el.textContent="";
   const typer=setInterval(()=>{
-    el.textContent=msg.slice(0,++i);
-    if(i>=msg.length){ clearInterval(typer); setTimeout(hide,2400); }
-  },16);
+    if(li>=lines.length){ clearInterval(typer); setTimeout(hide,1700); return; }
+    ci++;
+    el.textContent=lines.slice(0,li).join("\n")+(li?"\n":"")+lines[li].slice(0,ci);
+    if(ci>=lines[li].length){ li++; ci=0; }
+  },13);
 }
 
 async function pollGpu() {
@@ -584,14 +591,20 @@ function drawFleetSparks(){
     if(state.fleetState!=="all"&&fleetStateOf(s)!==state.fleetState)continue;
     const cv=document.querySelector(`canvas.cartridge-spark[data-id="${s.id}"]`);
     if(!cv)continue;
-    // infer latency samples recorded by this browser session's test bench;
-    // cards without data get the designed idle baseline + an honest "idle" tag
+    const tag=cv.parentElement&&cv.parentElement.querySelector(".spark-tag");
+    // 1st choice: live server qps; 2nd: this tab's bench samples; else idle baseline
+    const live=fleetQps[s.id];
+    if(live&&live.hist&&live.hist.length>=2){
+      drawSparkline(cv,live.hist.slice(-30),catColor(s.category));
+      if(tag){tag.textContent=`live · ${live.qps!=null?live.qps.toFixed(1)+" r/s":"…"}`;
+        tag.className="spark-tag has-data live";}
+      continue;
+    }
     const data=state.inferHistory.filter(x=>x.serverId===s.id).slice(-30).map(x=>x.ms);
     drawSparkline(cv,data.length>=2?data:null,catColor(s.category));
-    const tag=cv.parentElement&&cv.parentElement.querySelector(".spark-tag");
     if(tag){
       tag.textContent=data.length>=2?`session · ${data.length}`:"idle";
-      tag.classList.toggle("has-data",data.length>=2);
+      tag.className="spark-tag"+(data.length>=2?" has-data":"");
     }
   }
 }
@@ -733,6 +746,31 @@ async function pollServerMetrics(id) {
   box._sig = sig;
   box.innerHTML = rows.map(([k, v]) =>
     `<div class="id-row"><span class="id-k">${k}</span><span>${escapeHtml(String(v))}</span></div>`).join("");
+}
+
+/* fleet-wide live qps: staggered per-running-model metrics polls (6s cycle) */
+const fleetQps = {};   // id -> {t, total, qps, hist[]}
+async function pollFleetMetrics() {
+  if (document.hidden) return;
+  for (const s of state.servers) {
+    if (s.state !== "running") { delete fleetQps[s.id]; continue; }
+    try {
+      const resp = await authorizedFetch(`/api/v1/servers/${encodeURIComponent(s.id)}/metrics`);
+      if (!resp.ok) { continue; }
+      const text = await resp.text();
+      const total = promSum(text, "mortred_inference_requests_total");
+      const now = Date.now();
+      const p = fleetQps[s.id] || { hist: [] };
+      if (p.t && now > p.t && total >= p.total) {
+        p.qps = (total - p.total) / ((now - p.t) / 1000);
+        p.hist.push(p.qps);
+        if (p.hist.length > 40) p.hist.shift();
+      }
+      p.t = now; p.total = total;
+      fleetQps[s.id] = p;
+    } catch (e) { /* keep last sample */ }
+    await new Promise(r => setTimeout(r, 250));
+  }
 }
 
 function serverById(id){return state.servers.find(s=>s.id===id)||null;}
@@ -1193,7 +1231,23 @@ async function pollLogs(){
 
 /* ---------------- command palette ---------------- */
 
+const PALETTE_RECENT_KEY="mortred_palette_recent";
+function paletteRecent(){
+  try{ return JSON.parse(localStorage.getItem(PALETTE_RECENT_KEY)||"[]").slice(0,3); }catch(e){ return []; }
+}
+function paletteRemember(label){
+  const rec=paletteRecent().filter(x=>x!==label);
+  rec.unshift(label);
+  try{ localStorage.setItem(PALETTE_RECENT_KEY,JSON.stringify(rec.slice(0,3))); }catch(e){}
+}
 function paletteItems(){
+  const items=paletteRecent()
+    .map(label=>({found:buildPaletteItems().find(it=>it.label===label),label}))
+    .filter(x=>x.found)
+    .map(x=>({label:x.label,hint:"recent",act:x.found.act}));
+  return items.concat(buildPaletteItems());
+}
+function buildPaletteItems(){
   const items=[];
   for(const s of state.servers){
     items.push({label:`open ${s.id.toLowerCase()}`,hint:"nav",act:()=>navigate("#/model/"+s.id)});
@@ -1227,7 +1281,7 @@ function openPalette(){
 function closePalette(){$("palette").classList.add("hidden");}
 function renderPalette(query){
   const list=$("palette-list");
-  const HINT_ICON={nav:"▸",ctrl:"⟳",set:"◈"};
+  const HINT_ICON={nav:"▸",ctrl:"⟳",set:"◈",recent:"↺"};
   const items=paletteItems()
     .map(it=>({it,sc:query?fuzzyMatch(query,it.label):0}))
     .filter(x=>x.sc>=0).sort((a,b)=>b.sc-a.sc).slice(0,10);
@@ -1237,7 +1291,7 @@ function renderPalette(query){
     if(paletteStagger){ row.classList.add("stagger"); row.style.animationDelay=(idx++*14)+"ms"; }
     const icon = it.label.indexOf("stop ")===0 ? "■" : (HINT_ICON[it.hint]||"·");
     row.innerHTML=`<span><span class="pi">${icon}</span>${escapeHtml(it.label)}</span><span class="palette-hint">${it.hint}</span>`;
-    row.onclick=()=>{closePalette();it.act();};
+    row.onclick=()=>{closePalette();paletteRemember(it.label);it.act();};
     list.appendChild(row);
   }
   if(!items.length){
@@ -1349,7 +1403,8 @@ if(!sessionStorage.getItem("booted")){
 }
 if(!location.hash)location.hash="#/overview";
 renderCurrentView();
-refresh();pollGpu();
+refresh();pollGpu();pollFleetMetrics();
 setInterval(refresh,2000);
+setInterval(pollFleetMetrics,6000);
 setInterval(pollGpu,2000);
 setInterval(pollLogs,1000);
