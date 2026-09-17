@@ -16,12 +16,14 @@
   --txt-hi: #e8f2ec;
   --txt: #a9bdb2;
   --txt-dim: #75897f;
-  /* accent + semantics */
-  --acc: #00e08c;
+  /* accent + semantics — calibrated onto the category palette's
+   * perceptual band (L≈72, matched chroma) so semantic and identity
+   * colors read as one system */
+  --acc: #0ade8f;
   --acc-bright: #00ff9c;
-  --warn: #ffc757;
-  --err: #ff6d62;
-  --info: #62b8ff;
+  --warn: #ffc043;
+  --err: #ff6a5c;
+  --info: #5fb6f8;
   --on-acc: #04120b;
   /* type */
   --sans: "Inter", -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
@@ -134,8 +136,8 @@ mark { background: rgba(255, 199, 87, 0.22); color: var(--warn); border-radius: 
 .topbar-rps {
   font-family: var(--mono); font-size: 11px;
   color: var(--acc);
-  background: rgba(0, 224, 140, 0.06);
-  border: 1px solid rgba(0, 224, 140, 0.25);
+  background: rgba(0, 224, 140, 0.08);
+  border: 1px solid rgba(0, 224, 140, 0.30);
   border-radius: 999px;
   padding: 3px 10px;
   white-space: nowrap;
@@ -153,9 +155,9 @@ mark { background: rgba(255, 199, 87, 0.22); color: var(--warn); border-radius: 
   border-radius: 999px;
   border: 1px solid var(--line);
 }
-.conn-ok { color: var(--acc); background: rgba(0, 224, 140, 0.07); border-color: rgba(0, 224, 140, 0.25); }
+.conn-ok { color: var(--acc); background: rgba(0, 224, 140, 0.08); border-color: rgba(0, 224, 140, 0.30); }
 .conn-ok::before { content: "● "; text-shadow: 0 0 6px rgba(0, 224, 140, 0.8); }
-.conn-err { color: var(--err); background: rgba(255, 109, 98, 0.07); border-color: rgba(255, 109, 98, 0.3); }
+.conn-err { color: var(--err); background: rgba(255, 109, 98, 0.08); border-color: rgba(255, 109, 98, 0.30); }
 .conn-err::before { content: "● "; }
 .conn-unknown { color: var(--warn); }
 
@@ -386,8 +388,8 @@ body::before {
 /* faint film grain — material depth without any asset dependency */
 body::after {
   content: ""; position: fixed; inset: 0; z-index: 2001; pointer-events: none;
-  opacity: 0.55; mix-blend-mode: overlay;
-  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="140" height="140"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter><rect width="140" height="140" filter="url(%23n)" opacity="0.045"/></svg>');
+  opacity: 0.65; mix-blend-mode: overlay;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="140" height="140"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter><rect width="140" height="140" filter="url(%23n)" opacity="0.06"/></svg>');
 }
 
 /* ---------------- OVERVIEW: GPU hero ---------------- */
@@ -697,7 +699,7 @@ body::after {
 .wb-log-card {
   grid-column: 1/-1;
   border: 1px solid var(--line); border-radius: var(--r-lg);
-  background: #0a0d10;
+  background: #080b0e;
   box-shadow: var(--well-inset);
   display: flex; flex-direction: column; height: 230px;
   overflow: hidden;
