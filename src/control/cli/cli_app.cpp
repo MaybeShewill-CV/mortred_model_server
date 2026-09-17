@@ -357,6 +357,14 @@ int cmd_down(const Options& opt, const std::vector<std::string>& rest) {
         !doc["servers"].IsArray()) {
         std::fprintf(stderr, "cannot list servers (supervisor %s HTTP %d); nothing stopped\n",
                      opt.addr.c_str(), st.status);
+        if (st.status == 401) {
+            std::fprintf(stderr,
+                         "401 = supervisor api token missing/wrong. Set MORTREDCTL_TOKEN (or pass "
+                         "--token) to the MORTRED_API_TOKEN value, e.g.:\n"
+                         "  export MORTREDCTL_TOKEN=$(grep -oP '(?<=^MORTRED_API_TOKEN=).*' "
+                         "/etc/mortred/supervisor.env | tr -d '\"')\n"
+                         "or bypass the api entirely: sudo systemctl stop mortred-supervisor\n");
+        }
         return 1;
     }
     std::vector<std::string> running;
@@ -483,6 +491,8 @@ int run_cli(int argc, char** argv) {
     }
     if (const char* env = std::getenv("MORTREDCTL_TOKEN"); env != nullptr && *env != '\0') {
         opt.token = env;
+    } else if (const char* env = std::getenv("MORTRED_API_TOKEN"); env != nullptr && *env != '\0') {
+        opt.token = env;  // same token the console uses; MORTREDCTL_TOKEN wins if both set
     }
 
     std::vector<std::string> args;
