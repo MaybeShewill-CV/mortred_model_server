@@ -497,6 +497,25 @@ function renderOverview(){
   }else if(!needEmpty&&emptyHint){emptyHint.remove();}
   renderGatewayBar();
   drawFleetSparks();
+  updateAggregateRps();
+}
+/* fleet-wide aggregate throughput: sum of live per-model qps */
+function updateAggregateRps(){
+  let sum=0, live=0;
+  for(const s of state.servers){
+    if(s.state!=="running")continue;
+    const q=fleetQps[s.id];
+    if(q&&q.qps!=null){sum+=q.qps;live++;}
+  }
+  const txt=live?`Σ ${sum.toFixed(1)} r/s`:"Σ -- r/s";
+  const head=$("fleet-live");
+  const running=state.servers.filter(s=>["running","starting","backoff"].includes(s.state)).length;
+  if(head)head.textContent=`${running} live${live?` · ${txt}`:""}`;
+  const top=$("topbar-rps");
+  if(top){
+    top.classList.toggle("hidden",!live);
+    if(live)top.textContent=txt;
+  }
 }
 
 function upsertCartridge(tiles,grid,s){
@@ -1248,20 +1267,20 @@ function paletteItems(){
   return items.concat(buildPaletteItems());
 }
 function buildPaletteItems(){
-  const items=[];
+  const nav=[],ctrl=[];
   for(const s of state.servers){
-    items.push({label:`open ${s.id.toLowerCase()}`,hint:"nav",act:()=>navigate("#/model/"+s.id)});
+    nav.push({label:`open ${s.id.toLowerCase()}`,hint:"nav",act:()=>navigate("#/model/"+s.id)});
     const running=["running","starting","backoff"].includes(s.state);
-    if(!running)items.push({label:`start ${s.id.toLowerCase()}`,hint:"ctrl",act:()=>controlServer(s.id,"start")});
-    if(running)items.push({label:`stop ${s.id.toLowerCase()}`,hint:"ctrl",act:()=>controlServer(s.id,"stop")});
-    items.push({label:`restart ${s.id.toLowerCase()}`,hint:"ctrl",act:()=>controlServer(s.id,"restart")});
+    if(!running)ctrl.push({label:`start ${s.id.toLowerCase()}`,hint:"ctrl",act:()=>controlServer(s.id,"start")});
+    if(running)ctrl.push({label:`stop ${s.id.toLowerCase()}`,hint:"ctrl",act:()=>controlServer(s.id,"stop")});
+    ctrl.push({label:`restart ${s.id.toLowerCase()}`,hint:"ctrl",act:()=>controlServer(s.id,"restart")});
   }
-  items.push({label:"overview",hint:"nav",act:()=>navigate("#/overview")});
-  items.push({label:"token",hint:"set",act:async()=>{
+  nav.push({label:"overview",hint:"nav",act:()=>navigate("#/overview")});
+  const set=[{label:"token",hint:"set",act:async()=>{
     const t=await askToken(getToken());
     if(t!==null&&t.trim()){setToken(t.trim());location.reload();}
-  }});
-  return items;
+  }}];
+  return nav.concat(ctrl,set);
 }
 function fuzzyMatch(q,l){
   let li=0,sc=0,streak=0;const Q=q.toLowerCase(),L=l.toLowerCase();
@@ -1286,7 +1305,15 @@ function renderPalette(query){
     .map(it=>({it,sc:query?fuzzyMatch(query,it.label):0}))
     .filter(x=>x.sc>=0).sort((a,b)=>b.sc-a.sc).slice(0,10);
   let sel=0, idx=0; list.innerHTML="";
+  const GROUP_LABEL={recent:"recent",nav:"navigate",ctrl:"control",set:"system"};
+  let lastGroup=null;
   for(const{it}of items){
+    if(!query && it.hint!==lastGroup){
+      lastGroup=it.hint;
+      const g=document.createElement("div");g.className="palette-group";
+      g.textContent=GROUP_LABEL[it.hint]||it.hint;
+      list.appendChild(g);
+    }
     const row=document.createElement("div");row.className="palette-row";
     if(paletteStagger){ row.classList.add("stagger"); row.style.animationDelay=(idx++*14)+"ms"; }
     const icon = it.label.indexOf("stop ")===0 ? "■" : (HINT_ICON[it.hint]||"·");
@@ -1298,9 +1325,10 @@ function renderPalette(query){
     const none=document.createElement("div");none.className="palette-empty";
     none.textContent="// no matching commands";list.appendChild(none);
   }
-  if(items.length)list.firstChild.classList.add("sel");
+  const firstRow=list.querySelector(".palette-row");
+  if(firstRow)firstRow.classList.add("sel");
   $("palette-input").onkeydown=(ev)=>{
-    const rows=[...list.children];
+    const rows=[...list.querySelectorAll(".palette-row")];
     if(ev.key==="Escape")closePalette();
     else if(ev.key==="Enter"){if(rows[sel]){closePalette();items[sel].it.act();}}
     else if(ev.key==="ArrowDown"||ev.key==="ArrowUp"){

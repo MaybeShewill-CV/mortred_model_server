@@ -131,6 +131,17 @@ mark { background: rgba(255, 199, 87, 0.22); color: var(--warn); border-radius: 
 #boot-line::after { content: "▌"; animation: cursor-blink var(--t-blink) infinite; }
 #boot-line.fading { opacity: 0; }
 
+.topbar-rps {
+  font-family: var(--mono); font-size: 11px;
+  color: var(--acc);
+  background: rgba(0, 224, 140, 0.06);
+  border: 1px solid rgba(0, 224, 140, 0.25);
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 6px rgba(0, 224, 140, 0.25);
+}
 #conn-status {
   margin-left: auto;
   white-space: nowrap;
@@ -251,6 +262,8 @@ mark { background: rgba(255, 199, 87, 0.22); color: var(--warn); border-radius: 
   text-transform: uppercase;
   letter-spacing: 0.14em;
 }
+/* one tracking scale for every micro-label in the console */
+.hud-k, .ds-head, .ws-k, .palette-hint { letter-spacing: 0.14em; }
 .panel-title.dim { opacity: 0.6; }
 
 .empty-hint { color: var(--txt-dim); padding: 8px 2px; font-family: var(--mono); font-size: 12px; }
@@ -798,6 +811,13 @@ body::after {
 }
 .palette-row.sel .pi { color: var(--acc); }
 .palette-empty { padding: 14px 16px; color: var(--txt-dim); font-family: var(--mono); font-size: 12px; }
+.palette-group {
+  font-family: var(--mono); font-size: 9px;
+  color: var(--txt-dim); text-transform: uppercase; letter-spacing: 0.14em;
+  padding: 8px 16px 3px;
+  border-bottom: 1px solid var(--line);
+  margin: 2px 6px 4px;
+}
 .palette-foot {
   display: flex; gap: 16px; padding: 8px 14px;
   border-top: 1px solid var(--line);
