@@ -148,3 +148,33 @@ R2 的 9.06 含约 0.4 分自评通胀，主因：①测试台结果面从未被
 | 推理结果卡首验 | ![audit bench](images/ui/audit-bench-result.png) |
 | 短视口 700px | ![audit short](images/ui/audit-short-viewport.png) |
 
+---
+
+## Round 4 — 用户报告缺陷修复（2026-09-17）
+
+> 用户实测发现 6 个此前所有轮次评审均未发现的问题。本轮全部修复，并暴露出一个
+> R1 起就存在的隐藏 bug（见 #0）。这轮的教训已写入 R3 反思的延伸：静态截图评审
+> 无法发现时序缺陷与跨视图工作流缺陷，评分体系需要"工作流正确性"维度。
+
+### 修复清单与验证结果
+
+| # | 问题 | 修复 | 验证 |
+|---|---|---|---|
+| 0 | **（连带发现）R1 起状态过滤漏 `all` 短路，舰队网格一直渲染为空** | 过滤条件补 `(fleetState==="all"\|\|…)` | 12 卡片恢复渲染 |
+| 1 | fleet/workbench 每 2s 全量重建 DOM 导致闪烁 | fleet 键控 diff 渲染（tile 复用+签名更新）；workbench/日志选择器/进程信息/chips 全部签名守卫 | 5.6s 时序采样：fleet 14/14、workbench 10/10 节点稳定 |
+| 2 | 发送推理时在 workbench 看不到 GPU 是否在跑 | 标题行右侧新增 GPU 迷你条（util/vram/temp + 40 采样 sparkline，pollGpu 同步更新） | DOM + 截图验证 |
+| 3 | 不同模型共享同一 TEST BENCH 和 RESULTS | bench 按模型命名空间（files/results 分离），切换模型互不污染、切回保留 | yolov8↔rt-detr 旅程验证 |
+| 4 | 发送会重复发送历史队列（先传 a 发送后再传 b，send 会发 a+b） | 发送语义改为"当前队列"：成功即出队，失败保留（红边+✗）待重试 | 旅程日志：a 发送后队列出队；第二次仅 +1 |
+| 5 | 看不到负载/已完成/处理中/排队 | 会话统计条：sent/ok/fail/p50/p95/in-flight（按模型统计）+ 进程 rss/threads | `sent2·ok2·fail0·p50 3ms·p95 3ms·in-flight 0` 实测 |
+| 6 | superpoint 特征点不渲染 | 对照 `response_serializers.h:216` 真实契约（`{score,location:[x,y],descriptor}`）重写渲染：辉光圆点按 score 缩放 + 计数图例；OCR 同步修正为 `polygon` 契约 | 8 点渲染 + 视觉验证 PASS |
+
+### 评分体系修订（本轮最重要的产出）
+
+八维度表全部是"静态视觉质量"维度，以下三项此前不在表内，今后作为一票否决项前置检查：
+**时序稳定性**（轮询不重建 DOM）、**跨视图工作流正确性**（状态隔离/操作语义）、
+**payload 契约保真**（UI 分支对照服务端序列化代码逐一核对）。
+
+| R4 截图 | |
+|---|---|
+| workbench：GPU 条 + 会话统计 + superpoint 特征点 | ![r4 superpoint](images/ui/r4-workbench-superpoint.png) |
+

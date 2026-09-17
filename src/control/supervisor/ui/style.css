@@ -276,6 +276,11 @@ mark { background: rgba(255, 199, 87, 0.22); color: var(--warn); border-radius: 
   border-radius: var(--r-md);
   padding: 4px 8px;
 }
+.file-chip.sending { border-color: rgba(0, 224, 140, 0.4); }
+.file-chip.failed { border-color: rgba(255, 109, 98, 0.5); background: rgba(255, 109, 98, 0.05); }
+.chip-st { font-family: var(--mono); font-size: 10px; color: var(--txt-dim); }
+.file-chip.sending .chip-st { color: var(--acc); }
+.file-chip.failed .chip-st { color: var(--err); }
 .file-chip img { width: 30px; height: 30px; object-fit: cover; border-radius: 4px; }
 .chip-rm { cursor: pointer; color: var(--txt-dim); }
 .chip-rm:hover { color: var(--err); }
@@ -566,8 +571,35 @@ body::after {
 
 /* ---------------- WORKBENCH ---------------- */
 
-.wb-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.wb-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
 .wb-title { font-family: var(--mono); font-size: var(--fs-lg); color: var(--txt-hi); }
+
+/* session stats strip: what this tab has done against the model */
+.wb-stats {
+  display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-family: var(--mono); font-size: var(--fs-xs);
+  color: var(--txt-dim);
+  background: var(--bg1); border: 1px solid var(--line); border-radius: 999px;
+  padding: 3px 12px;
+  font-variant-numeric: tabular-nums;
+}
+.wb-stats b { color: var(--txt-hi); font-weight: 500; margin-right: 2px; }
+.wb-stats .ws-k { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; margin-right: 3px; }
+.wb-stats .ws-sep { opacity: 0.4; }
+
+/* compact GPU readout on the workbench */
+.wb-gpu {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--bg1); border: 1px solid var(--line); border-radius: var(--r-md);
+  padding: 4px 12px;
+  font-variant-numeric: tabular-nums;
+}
+.wg-cell { display: inline-flex; align-items: baseline; gap: 4px; }
+.wg-cell b { font-family: var(--mono); font-size: 14px; font-weight: 500; color: var(--txt-hi); }
+.wg-cell.hot b { color: var(--err); }
+.wg-cell i { font-family: var(--mono); font-style: normal; font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--txt-dim); }
+.wg-spark { width: 110px; height: 26px; display: block; }
 /* state pill: colored capsule replacing plain-text state */
 .state-pill {
   font-family: var(--mono); font-size: var(--fs-xs);

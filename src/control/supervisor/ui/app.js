@@ -6,13 +6,16 @@
  * per-model workbench with identity gauges. Zero deps, zero build. */
 
 const state = {
-  servers: [], gateway: null, selectedId: null, files: [],
+  servers: [], gateway: null, selectedId: null,
   batchAbort: null, logs: {}, logServerId: null,
   river: [], gpuHistory: [],
-  inferHistory: [],     // [{t, ok, ms}] from sendBatch
+  inferHistory: [],     // [{t, ok, ms, serverId}] from sendBatch
   fleetFilter: "all",   // "all" | category id
   fleetState: "all",    // "all" | running | stopped | failed | starting
+  bench: {},            // per model id: { files: [{name,url,base64,status}], results: [] }
+  inflight: 0,          // bench requests currently in flight from this tab
 };
+function benchOf(id){ return state.bench[id] || (state.bench[id]={files:[],results:[]}); }
 
 const TOKEN_KEY = "mortred_supervisor_token";
 const $ = (id) => document.getElementById(id);
@@ -194,6 +197,29 @@ async function pollGpu() {
     updateHudCells(last);
   }
   drawGpuHero();
+  updateWorkbenchGpu();
+}
+
+/* compact GPU readout on the workbench — you watch the GPU where you send */
+function updateWorkbenchGpu(){
+  const box=$("wb-gpu");if(!box)return;
+  const s=state.gpuHistory;
+  const last=s.length?s[s.length-1]:null;
+  box.classList.toggle("hidden",!last);
+  if(!last)return;
+  const set=(id,txt,hot)=>{
+    const el=$(id);if(!el)return;el.textContent=txt;
+    el.parentElement.classList.toggle("hot",!!hot);
+  };
+  set("wg-util",last.util>=0?last.util+"%":"--",last.util>85);
+  set("wg-vram",last.mem_total_mib>0?Math.round(100*last.mem_used_mib/last.mem_total_mib)+"%":"--",
+      last.mem_total_mib>0&&last.mem_used_mib/last.mem_total_mib>0.85);
+  set("wg-temp",last.temp_c>=0?last.temp_c+"°C":"--",last.temp_c>80);
+  const cv=$("wg-spark");
+  if(cv){
+    const data=s.slice(-40).map(x=>x.util<0?0:x.util);
+    drawSparkline(cv,data.length>=2?data:null,cssVar("--acc"));
+  }
 }
 
 /* numeric tween so the HUD counts toward its new value */
@@ -384,42 +410,65 @@ function renderOverview(){
   renderFleetControls();
   const shown=state.servers.filter(s=>
     (state.fleetFilter==="all"||s.category===state.fleetFilter)&&
-    fleetStateOf(s)===state.fleetState);
-  const frag=document.createDocumentFragment();
-  for(const s of shown){
-    const st=dotClassOf(s);
-    const isRun=s.state==="running";
-    const tile=document.createElement("div");
-    tile.className="cartridge"+(isRun?" live":"")+(s.state==="failed"?" dead":"");
-    if(isRun){tile.style.setProperty("--cat-glow",catColor(s.category));}
+    (state.fleetState==="all"||fleetStateOf(s)===state.fleetState));
+  /* Keyed reconciliation: the 2s poll updates tiles in place instead of
+   * rebuilding the grid — no flicker, no hover/animation resets. */
+  const grid2=$("fleet-grid");
+  let tiles=grid2._tiles; if(!tiles){tiles=grid2._tiles=new Map();}
+  const want=new Set(shown.map(s=>s.id));
+  for(const [id,el] of tiles){ if(!want.has(id)){ el.remove(); tiles.delete(id);} }
+  for(const s of shown){ upsertCartridge(tiles,grid2,s); }
+  const orderKey=shown.map(s=>s.id).join(",");
+  if(grid2._order!==orderKey){
+    for(const s of shown){ const el=tiles.get(s.id); if(el)grid2.appendChild(el); }
+    grid2._order=orderKey;
+  }
+  const emptyHint=grid2.querySelector(".fleet-empty");
+  const needEmpty=!shown.length;
+  if(needEmpty&&!emptyHint){
+    const e=document.createElement("div");e.className="empty-hint fleet-empty";
+    e.textContent="// no models match the current filters";grid2.appendChild(e);
+  }else if(!needEmpty&&emptyHint){emptyHint.remove();}
+  renderGatewayBar();
+  drawFleetSparks();
+}
+
+function upsertCartridge(tiles,grid,s){
+  const st=dotClassOf(s);
+  const isRun=s.state==="running";
+  const sig=`${s.state}|${s.ready?1:0}|${s.restart_count}|${s.port}`;
+  let tile=tiles.get(s.id);
+  if(!tile){
+    tile=document.createElement("div");
+    tile.className="cartridge";
     tile.setAttribute("role","button");
     tile.setAttribute("tabindex","0");
-    tile.setAttribute("aria-label",`${s.id}, ${s.state}, port ${s.port}`);
     tile.innerHTML=
-      `${isRun?'<div class="accent-top"></div>':''}
+      `<div class="cartridge-body"></div>
        <i class="c-tl"></i><i class="c-br"></i>
-       <div class="cartridge-row">
-         <span class="st ${st}">${ST_GLYPH[st]}</span>
-         <span class="cartridge-name">${escapeHtml(s.id.toLowerCase())}</span>
-         ${s.restart_count>0?`<span class="badge restarts" title="restarts: ${s.restart_count}">↻${s.restart_count}</span>`:""}
-       </div>
-       <div class="cartridge-sub">${isRun?`<span class="uptime" data-id="${s.id}">${uptimeOf(s)||"booting"}</span>`:escapeHtml(s.state)}</div>
-       <div class="cartridge-port">:${s.port}</div>
-       <canvas class="cartridge-spark" data-id="${s.id}"></canvas>`;
+       <canvas class="cartridge-spark" data-id="${escapeHtml(s.id)}"></canvas>`;
     const open=()=>navigate("#/model/"+s.id);
     tile.onclick=open;
     tile.onkeydown=(ev)=>{if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();open();}};
-    frag.appendChild(tile);
+    tiles.set(s.id,tile);
+    grid.appendChild(tile);
+    tile._sig="";
   }
-  if(!shown.length){
-    const empty=document.createElement("div");
-    empty.className="empty-hint";
-    empty.textContent="// no models match the current filters";
-    frag.appendChild(empty);
-  }
-  grid.innerHTML="";grid.appendChild(frag);
-  renderGatewayBar();
-  drawFleetSparks();
+  tile.setAttribute("aria-label",`${s.id}, ${s.state}, port ${s.port}`);
+  tile.className="cartridge"+(isRun?" live":"")+(s.state==="failed"?" dead":"");
+  if(isRun){tile.style.setProperty("--cat-glow",catColor(s.category));}
+  else{tile.style.removeProperty("--cat-glow");}
+  if(tile._sig===sig)return;
+  tile._sig=sig;
+  tile.querySelector(".cartridge-body").innerHTML=
+    `${isRun?'<div class="accent-top"></div>':''}
+     <div class="cartridge-row">
+       <span class="st ${st}">${ST_GLYPH[st]}</span>
+       <span class="cartridge-name">${escapeHtml(s.id.toLowerCase())}</span>
+       ${s.restart_count>0?`<span class="badge restarts" title="restarts: ${s.restart_count}">↻${s.restart_count}</span>`:""}
+     </div>
+     <div class="cartridge-sub">${isRun?`<span class="uptime" data-id="${escapeHtml(s.id)}">${uptimeOf(s)||"booting"}</span>`:escapeHtml(s.state)}</div>
+     <div class="cartridge-port">:${s.port}</div>`;
 }
 
 /* coarse state group used by the summary chips */
@@ -435,39 +484,37 @@ function renderFleetControls(){
   if(!statesBox||!catsBox)return;
   const nBy={running:0,starting:0,stopped:0,failed:0};
   for(const s of state.servers)nBy[fleetStateOf(s)]++;
-  statesBox.innerHTML="";
-  const all=document.createElement("button");
-  all.type="button";
-  all.className="chip"+(state.fleetState==="all"?" on":"");
-  all.innerHTML=`all<span class="n">${state.servers.length}</span>`;
-  all.onclick=()=>{state.fleetState="all";renderOverview();};
-  statesBox.appendChild(all);
-  for(const [key,color] of [["running","var(--acc)"],["starting","var(--warn)"],["failed","var(--err)"],["stopped","var(--txt-dim)"]]){
-    const c=document.createElement("button");
-    c.type="button";
-    c.className="chip st-chip"+(state.fleetState===key?" on":"");
-    c.style.setProperty("--sc",color);
-    c.innerHTML=`${escapeHtml(key)}<span class="n">${nBy[key]}</span>`;
-    c.onclick=()=>{state.fleetState=key;renderOverview();};
-    statesBox.appendChild(c);
-  }
   const counts={};
   for(const s of state.servers)counts[s.category]=(counts[s.category]||0)+1;
-  catsBox.innerHTML="";
-  const allCat=document.createElement("button");
-  allCat.type="button";
-  allCat.className="chip"+(state.fleetFilter==="all"?" on":"");
-  allCat.innerHTML=`all<span class="n">${state.servers.length}</span>`;
-  allCat.onclick=()=>{state.fleetFilter="all";renderOverview();};
-  catsBox.appendChild(allCat);
-  for(const cat of Object.keys(counts).sort()){
+  // rebuild the chip rows only when their content actually changed
+  const sig=JSON.stringify([state.fleetState,state.fleetFilter,nBy,counts,state.servers.length]);
+  if(statesBox._sig===sig)return;
+  statesBox._sig=sig;
+  const mkChip=(label,n,on,onclick,extra)=>{
     const c=document.createElement("button");
     c.type="button";
-    c.className="chip"+(state.fleetFilter===cat?" on":"");
+    c.className="chip"+(extra||"")+(on?" on":"");
+    c.innerHTML=`${escapeHtml(label)}<span class="n">${n}</span>`;
+    c.onclick=onclick;
+    return c;
+  };
+  statesBox.innerHTML="";
+  statesBox.appendChild(mkChip("all",state.servers.length,state.fleetState==="all",
+    ()=>{state.fleetState="all";renderOverview();}));
+  for(const [key,color] of [["running","var(--acc)"],["starting","var(--warn)"],["failed","var(--err)"],["stopped","var(--txt-dim)"]]){
+    const c=mkChip(key,nBy[key],state.fleetState===key,
+      ()=>{state.fleetState=key;renderOverview();}," st-chip");
+    c.style.setProperty("--sc",color);
+    statesBox.appendChild(c);
+  }
+  catsBox.innerHTML="";
+  catsBox.appendChild(mkChip("all",state.servers.length,state.fleetFilter==="all",
+    ()=>{state.fleetFilter="all";renderOverview();}));
+  for(const cat of Object.keys(counts).sort()){
+    const c=mkChip(cat,counts[cat],state.fleetFilter===cat,
+      ()=>{state.fleetFilter=cat;renderOverview();});
     c.style.setProperty("--cat-glow",catColor(cat));
     if(state.fleetFilter===cat)c.style.color=catColor(cat);
-    c.innerHTML=`${escapeHtml(cat)}<span class="n">${counts[cat]}</span>`;
-    c.onclick=()=>{state.fleetFilter=cat;renderOverview();};
     catsBox.appendChild(c);
   }
 }
@@ -489,42 +536,55 @@ function drawFleetSparks(){
 
 function renderWorkbench(){
   const s=serverById(state.selectedId); if(!s)return;
-  const st=dotClassOf(s);
-  $("wb-breadcrumb").textContent="‹ fleet / "+s.id.toLowerCase();
-  $("wb-breadcrumb").onclick=()=>navigate("#/overview");
-  const pillColor=s.state==="running"?"var(--acc)":s.state==="failed"?"var(--err)":
-    (s.state==="stopped"?"var(--txt-dim)":"var(--warn)");
-  $("wb-title").innerHTML=`<span class="st ${st}">${ST_GLYPH[st]}</span> ${escapeHtml(s.id.toLowerCase())} <span class="state-pill" style="--sc:${pillColor}">${escapeHtml(s.state)}${s.ready?" · ready":""}</span>`;
-  $("wb-identity").innerHTML=
-    `<div class="id-row"><span class="id-k">port</span><span>:${s.port}</span></div>
-     <div class="id-row"><span class="id-k">uri</span><span>${escapeHtml(s.uri||"")}</span></div>
-     <div class="id-row"><span class="id-k">cat</span><span style="color:${catColor(s.category)}">${escapeHtml(s.category)}</span></div>
-     <div class="id-row"><span class="id-k">↻</span><span>${s.restart_count||0}</span></div>
-     <div class="id-row"><span class="id-k">up</span><span class="uptime" data-id="${s.id}">${uptimeOf(s)||"--"}</span></div>
-     <div class="id-row"><span class="id-k">pid</span><span>${s.pid>0?s.pid:"—"}</span></div>`;
-  const running=["running","starting","backoff"].includes(s.state);
-  $("wb-start").disabled=running;
-  $("wb-restart").disabled=!running;
-  $("wb-stop").disabled=!running;
-  $("wb-start").onclick=()=>controlServer(s.id,"start");
-  $("wb-restart").onclick=()=>controlServer(s.id,"restart");
-  $("wb-stop").onclick=()=>controlServer(s.id,"stop");
-  $("image-input-area").classList.remove("hidden");
-  const hint=$("empty-hint"); if(hint)hint.classList.add("hidden");
+  /* signature guard: the 2s poll re-renders constantly — only touch the DOM
+   * when this model's fields actually changed (kills the flicker) */
+  const sig=JSON.stringify([s.id,s.state,s.ready,s.restart_count,s.pid,s.port,s.uri,s.category]);
+  if(state._wbSig!==sig){
+    state._wbSig=sig;
+    const st=dotClassOf(s);
+    $("wb-breadcrumb").textContent="‹ fleet / "+s.id.toLowerCase();
+    $("wb-breadcrumb").onclick=()=>navigate("#/overview");
+    const pillColor=s.state==="running"?"var(--acc)":s.state==="failed"?"var(--err)":
+      (s.state==="stopped"?"var(--txt-dim)":"var(--warn)");
+    $("wb-title").innerHTML=`<span class="st ${st}">${ST_GLYPH[st]}</span> ${escapeHtml(s.id.toLowerCase())} <span class="state-pill" style="--sc:${pillColor}">${escapeHtml(s.state)}${s.ready?" · ready":""}</span>`;
+    $("wb-identity").innerHTML=
+      `<div class="id-row"><span class="id-k">port</span><span>:${s.port}</span></div>
+       <div class="id-row"><span class="id-k">uri</span><span>${escapeHtml(s.uri||"")}</span></div>
+       <div class="id-row"><span class="id-k">cat</span><span style="color:${catColor(s.category)}">${escapeHtml(s.category)}</span></div>
+       <div class="id-row"><span class="id-k">↻</span><span>${s.restart_count||0}</span></div>
+       <div class="id-row"><span class="id-k">up</span><span class="uptime" data-id="${s.id}">${uptimeOf(s)||"--"}</span></div>
+       <div class="id-row"><span class="id-k">pid</span><span>${s.pid>0?s.pid:"—"}</span></div>`;
+    const running=["running","starting","backoff"].includes(s.state);
+    $("wb-start").disabled=running;
+    $("wb-restart").disabled=!running;
+    $("wb-stop").disabled=!running;
+    $("wb-start").onclick=()=>controlServer(s.id,"start");
+    $("wb-restart").onclick=()=>controlServer(s.id,"restart");
+    $("wb-stop").onclick=()=>controlServer(s.id,"stop");
+    $("image-input-area").classList.remove("hidden");
+    const hint=$("empty-hint"); if(hint)hint.classList.add("hidden");
+    renderFileList();
+    renderResultsList(s.id);
+    updateSessionStats(s.id);
+  }
   state.logServerId=s.id;
   // reset log state only when switching models — refresh() re-renders every 2s
   // and must not wipe the live log buffer each tick
   if(!state.logs[s.id]){resetLogState(s.id);}
-  syncLogSelector(); renderFileList();
+  syncLogSelector();
   // fetch process info for gauges
   pollProcessInfo(s.id);
+  updateWorkbenchGpu();
 }
 
 async function pollProcessInfo(id){
   const r=await api(`/api/v1/servers/${encodeURIComponent(id)}/process`);
   const box=$("wb-process"); if(!box) return;
-  if(!r.ok||!r.data||!r.data.process){box.innerHTML="";return;}
+  if(!r.ok||!r.data||!r.data.process){if(box._sig!=="none"){box.innerHTML="";box._sig="none";}return;}
   const p=r.data.process;
+  const sig=`${p.rss_kb}|${p.threads}`;
+  if(box._sig===sig)return;
+  box._sig=sig;
   const rss=p.rss_kb>0?(p.rss_kb/1024).toFixed(1)+"M":"--";
   box.innerHTML=
     `<div class="id-row"><span class="id-k">rss</span><span>${rss}</span></div>
@@ -581,20 +641,26 @@ function loadImageAsBase64(f){
   });
 }
 async function addFiles(fl){
+  const bench=benchOf(state.selectedId);
   for(const f of fl){
     if(!f.type.startsWith("image/"))continue;
     const b64=await loadImageAsBase64(f);
-    state.files.push({name:f.name,url:base64ToSrc(b64),base64:b64});
+    bench.files.push({name:f.name,url:base64ToSrc(b64),base64:b64,status:"ready"});
   }
   renderFileList();
 }
 function renderFileList(){
-  const box=$("file-list");if(!box)return;box.innerHTML="";
-  for(const f of state.files){
-    const chip=document.createElement("div");chip.className="file-chip";
-    chip.innerHTML=`<img src="${f.url}"><span>${escapeHtml(f.name)}</span>`;
+  const box=$("file-list");if(!box)return;
+  const bench=benchOf(state.selectedId);
+  box.innerHTML="";
+  for(const f of bench.files){
+    const chip=document.createElement("div");
+    chip.className="file-chip"+(f.status?" "+f.status:"");
+    chip.innerHTML=`<img src="${f.url}"><span>${escapeHtml(f.name)}</span>`+
+      (f.status==="sending"?'<span class="chip-st">⋯</span>':
+       f.status==="failed"?'<span class="chip-st" title="send failed — stays queued for retry">✗</span>':"");
     const rm=document.createElement("span");rm.textContent="✕";rm.className="chip-rm";
-    rm.onclick=()=>{state.files=state.files.filter(x=>x!==f);renderFileList();};
+    rm.onclick=()=>{bench.files=bench.files.filter(x=>x!==f);renderFileList();};
     chip.appendChild(rm);box.appendChild(chip);
   }
 }
@@ -607,9 +673,34 @@ function topScore(p){
   if(Array.isArray(p)&&p.length&&typeof p[0].score==="number")return p[0].score;
   return null;
 }
+function percentile(sorted,q){
+  if(!sorted.length)return null;
+  const i=Math.min(sorted.length-1,Math.floor(q*(sorted.length-1)));
+  return sorted[i];
+}
+/* session stats: what this browser session has done against the model */
+function updateSessionStats(id){
+  const box=$("wb-stats");if(!box)return;
+  const hist=state.inferHistory.filter(x=>x.serverId===id);
+  const ok=hist.filter(x=>x.ok).length, fail=hist.length-ok;
+  const lat=hist.filter(x=>x.ok).map(x=>x.ms).sort((a,b)=>a-b);
+  const p50=percentile(lat,0.5),p95=percentile(lat,0.95);
+  const parts=[
+    `<span class="ws-k">sent</span><b>${hist.length}</b>`,
+    `<span class="ws-k">ok</span><b style="color:var(--acc)">${ok}</b>`,
+    `<span class="ws-k">fail</span><b style="color:${fail?"var(--err)":"var(--txt-dim)"}">${fail}</b>`,
+  ];
+  if(p50!=null)parts.push(`<span class="ws-k">p50</span><b>${p50}ms</b>`);
+  if(p95!=null)parts.push(`<span class="ws-k">p95</span><b>${p95}ms</b>`);
+  parts.push(`<span class="ws-k">in-flight</span><b style="color:${state.inflight?"var(--warn)":"var(--txt-dim)"}">${state.inflight}</b>`);
+  box.innerHTML=parts.join('<span class="ws-sep">·</span>');
+}
 
 async function sendBatch(){
-  const s=serverById(state.selectedId);if(!s||!state.files.length)return;
+  const s=serverById(state.selectedId);if(!s)return;
+  const bench=benchOf(s.id);
+  const queue=bench.files.filter(f=>f.status!=="sending");
+  if(!queue.length){showToast("nothing queued — upload images first","info");return;}
   const base=gatewayBaseUrl();if(!base){showToast("gateway unknown","error");return;}
   // pre-flight: tell the user exactly which URL will be hit and if it's reachable
   const inferUrl=`${base}/v1/models/${encodeURIComponent(s.id)}/infer`;
@@ -622,12 +713,17 @@ async function sendBatch(){
     riverPush("err",`pre-flight fail: ${base} (${detail})`,s.id);
     return;
   }
-  $("btn-cancel").classList.remove("hidden");setBatchProgress(0,state.files.length);
+  /* send semantics: each click sends the CURRENT queue; a file that succeeds
+   * leaves the queue (upload b after sending a sends b only), a file that
+   * fails stays queued for retry */
+  $("btn-cancel").classList.remove("hidden");setBatchProgress(0,queue.length);
   let aborted=false;state.batchAbort=()=>{aborted=true;};
   let done=0;
-  for(const f of state.files){
+  for(const f of queue){
     if(aborted)break;
+    f.status="sending";renderFileList();
     const reqId=uid(),t0=performance.now();
+    state.inflight++;updateSessionStats(s.id);
     try{
       const resp=await authorizedFetch(`${base}/v1/models/${encodeURIComponent(s.id)}/infer`,{
         method:"POST",headers:{"Content-Type":"application/json"},
@@ -637,15 +733,24 @@ async function sendBatch(){
       const body=await resp.json().catch(()=>null);
       state.inferHistory.push({t:Date.now(),serverId:s.id,ms,ok:resp.ok});
       if(state.inferHistory.length>600)state.inferHistory.shift();
-      if(resp.ok){addResultCard(s,f,body,reqId,ms);riverPush("ok",`${s.id} 200 ${ms}ms`,s.id);}
-      else{showToast(`HTTP ${resp.status}`,"error");riverPush("err",`${s.id} HTTP ${resp.status}`,s.id);}
+      if(resp.ok){
+        f.status="done";
+        bench.files=bench.files.filter(x=>x!==f); // success leaves the queue
+        addResult(s,f,body,reqId,ms);
+        riverPush("ok",`${s.id} 200 ${ms}ms`,s.id);
+      }else{
+        f.status="failed";
+        showToast(`HTTP ${resp.status}`,"error");riverPush("err",`${s.id} HTTP ${resp.status}`,s.id);
+      }
     }catch(e){
-      const url = `${base}/v1/models/${encodeURIComponent(s.id)}/infer`;
+      f.status="failed";
       const detail = e && e.message ? e.message : String(e);
-      showToast(`infer fail: ${detail}\n→ ${url}`, "error");
-      riverPush("err", `${s.id} transport: ${detail} (${url})`, s.id);
+      showToast(`infer fail: ${detail}\n→ ${inferUrl}`, "error");
+      riverPush("err", `${s.id} transport: ${detail}`, s.id);
     }
-    done++;setBatchProgress(done,state.files.length);
+    state.inflight--;updateSessionStats(s.id);
+    done++;setBatchProgress(done,queue.length);
+    renderFileList();
   }
   state.batchAbort=null;$("btn-cancel").classList.add("hidden");
   drawFleetSparks();
@@ -657,22 +762,49 @@ function setBatchProgress(d,t){
   $("batch-progress-text").textContent=`${d}/${t}`;
 }
 
-function addResultCard(server,input,result,reqId,elapsed){
+/* results are stored per model and rebuilt on switch — each model owns its bench */
+function addResult(server,input,result,reqId,elapsed){
+  const bench=benchOf(server.id);
+  bench.results.unshift({input,result,reqId,elapsed});
+  if(bench.results.length>20)bench.results.length=20;
+  if(state.selectedId===server.id){
+    const card=buildResultCard(server,input,result,reqId,elapsed);
+    $("results-list").prepend(card);
+  }
+}
+function renderResultsList(id){
+  const box=$("results-list");if(!box)return;
+  const server=serverById(id);if(!server)return;
+  box.innerHTML="";
+  for(const r of benchOf(id).results){
+    box.appendChild(buildResultCard(server,r.input,r.result,r.reqId,r.elapsed));
+  }
+}
+function buildResultCard(server,input,result,reqId,elapsed){
   const payload=unifiedPayload(result);
   const card=document.createElement("div");card.className="result-card";
   const score=topScore(payload);
   const detCount=Array.isArray(payload)?payload.length:0;
+  const kind=resultKind(payload);
   card.innerHTML=
     `<div class="head">
-       <span class="req-meta">${escapeHtml(input.name)} · ${elapsed}ms · ${detCount?detCount+" hits · ":""}${escapeHtml(reqId)}</span>
+       <span class="req-meta">${escapeHtml(input.name)} · ${elapsed}ms · ${detCount?detCount+" "+kind+" · ":""}${escapeHtml(reqId)}</span>
        <span class="req-meta">${score!=null?"top "+score.toFixed(3):""}</span>
      </div>`;
   const vizWrap=document.createElement("div");vizWrap.className="viz";card.appendChild(vizWrap);
   const raw=document.createElement("details");raw.className="raw-json";raw.innerHTML="<summary>raw</summary>";
   const pre=document.createElement("pre");pre.textContent=JSON.stringify(result,null,1);raw.appendChild(pre);
   card.appendChild(raw);
-  $("results-list").prepend(card);
   visualize(server,input,payload,vizWrap).catch(()=>{});
+  return card;
+}
+function resultKind(payload){
+  if(Array.isArray(payload)&&payload.length){
+    if(payload[0].bbox)return "hits";
+    if(payload[0].location)return "points";
+    if(payload[0].polygon)return "regions";
+  }
+  return "";
 }
 
 async function visualize(server,input,payload,vizWrap){
@@ -691,6 +823,21 @@ async function visualize(server,input,payload,vizWrap){
     vizWrap.appendChild(legend);
     return;
   }
+  // feature points (superpoint): [{score, location:[x,y], descriptor[]}]
+  if(Array.isArray(payload)&&payload.length&&Array.isArray(payload[0].location)){
+    const cv=document.createElement("canvas");cv.className="overlay";vizWrap.appendChild(cv);
+    drawFeaturePoints(cv,img.src,payload);
+    const legend=document.createElement("div");legend.className="det-legend";
+    legend.innerHTML=`<span class="det-chip" style="--h:150"><span class="det-dot"></span>${payload.length} points · top ${(payload[0].score!=null?payload[0].score.toFixed(2):"--")}</span>`;
+    vizWrap.appendChild(legend);
+    return;
+  }
+  // ocr text regions: [{score, bbox, polygon:[[x,y]×4]}]
+  if(Array.isArray(payload)&&payload.length&&Array.isArray(payload[0].polygon)){
+    const cv=document.createElement("canvas");cv.className="overlay";vizWrap.appendChild(cv);
+    drawOcr(cv,img.src,payload);
+    return;
+  }
   if(payload&&Array.isArray(payload.regions)){
     const cv=document.createElement("canvas");cv.className="overlay";vizWrap.appendChild(cv);
     drawOcr(cv,img.src,payload.regions);return;
@@ -706,6 +853,25 @@ async function visualize(server,input,payload,vizWrap){
   vizWrap.appendChild(img);
 }
 
+/* feature points (superpoint contract): glow dots sized by score */
+function drawFeaturePoints(canvas,imgUrl,points){
+  const img=new Image();
+  img.onload=()=>{
+    canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;
+    const ctx=canvas.getContext("2d");
+    ctx.drawImage(img,0,0);
+    const base=Math.max(1.2,img.naturalWidth/420);
+    for(const p of points){
+      const [x,y]=p.location;
+      const score=p.score!=null?p.score:0.5;
+      const r=base*(0.9+score*1.8);
+      ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);
+      ctx.fillStyle="#00e08c";ctx.shadowColor="#00e08c";ctx.shadowBlur=6;
+      ctx.fill();ctx.shadowBlur=0;
+    }
+  };
+  img.src=imgUrl;
+}
 function drawDetection(canvas,imgUrl,boxes){
   const img=new Image();
   img.onload=()=>{
@@ -737,11 +903,16 @@ function drawOcr(canvas,imgUrl,regions){
     const ctx=canvas.getContext("2d");ctx.drawImage(img,0,0);
     ctx.lineWidth=2;ctx.strokeStyle="#ffd166";
     for(const r of regions){
-      const pts=r.points||r.bbox_points||[];
-      if(pts.length===4){ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);
-        for(let i=1;i<4;i++)ctx.lineTo(pts[i][0],pts[i][1]);ctx.closePath();ctx.stroke();}
-      if(r.text){ctx.fillStyle="#ffd166";ctx.font="14px monospace";
-        ctx.fillText(r.text,pts[0]?pts[0][0]:4,pts[0]?pts[0][1]-4:14);}
+      // real contract: {polygon: [[x,y]×4]}; legacy: {points|bbox_points}
+      const pts=r.polygon||r.points||r.bbox_points||[];
+      if(pts.length>=3){
+        ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);
+        for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);
+        ctx.closePath();ctx.stroke();
+      }
+      const label=r.text||(r.score!=null?r.score.toFixed(2):"");
+      if(label){ctx.fillStyle="#ffd166";ctx.font="14px monospace";
+        ctx.fillText(label,pts[0]?pts[0][0]:4,pts[0]?pts[0][1]-4:14);}
     }
   };
   img.src=imgUrl;
@@ -765,9 +936,14 @@ function resetLogState(id){
   const el=$("log-content");if(el)el.textContent="";
 }
 function syncLogSelector(){
-  const sel=$("log-server");if(!sel)return;sel.innerHTML="";
-  for(const s of state.servers){
-    const opt=document.createElement("option");opt.value=s.id;opt.textContent=s.id;sel.appendChild(opt);
+  const sel=$("log-server");if(!sel)return;
+  const ids=state.servers.map(s=>s.id);
+  const sig=ids.join(",")+"|"+state.logServerId;
+  if(sel._sig===sig)return;
+  sel._sig=sig;
+  sel.innerHTML="";
+  for(const id of ids){
+    const opt=document.createElement("option");opt.value=id;opt.textContent=id;sel.appendChild(opt);
   }
   if(state.logServerId)sel.value=state.logServerId;
 }

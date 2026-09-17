@@ -67,6 +67,13 @@
     <div class="wb-head">
       <button id="wb-breadcrumb" class="btn small">‹ fleet</button>
       <span id="wb-title" class="wb-title"></span>
+      <div id="wb-stats" class="wb-stats"></div>
+      <div id="wb-gpu" class="wb-gpu hidden">
+        <span class="wg-cell"><b id="wg-util">--</b><i>util</i></span>
+        <span class="wg-cell"><b id="wg-vram">--</b><i>vram</i></span>
+        <span class="wg-cell"><b id="wg-temp">--</b><i>temp</i></span>
+        <canvas id="wg-spark" class="wg-spark"></canvas>
+      </div>
     </div>
     <div class="wb-grid">
       <aside class="card wb-identity-card">
