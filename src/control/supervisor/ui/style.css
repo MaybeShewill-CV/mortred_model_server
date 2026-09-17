@@ -12,10 +12,10 @@
   /* hairlines */
   --line: rgba(255, 255, 255, 0.07);
   --line-2: rgba(255, 255, 255, 0.13);
-  /* text (dim passes 4.5:1 on bg1) */
+  /* text (dim passes 5:1 on bg1) */
   --txt-hi: #e8f2ec;
   --txt: #a9bdb2;
-  --txt-dim: #6f857b;
+  --txt-dim: #75897f;
   /* accent + semantics */
   --acc: #00e08c;
   --acc-bright: #00ff9c;
@@ -41,9 +41,14 @@
   /* motion */
   --t-fast: 120ms ease;
   --t-blink: 1.2s steps(1);
-  /* elevation */
+  /* elevation ladder */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.22);
+  --shadow-2: 0 8px 28px rgba(0, 0, 0, 0.35);
   --shadow-pop: 0 24px 64px rgba(0, 0, 0, 0.55), 0 4px 16px rgba(0, 0, 0, 0.4);
-  --shadow-hover: 0 8px 28px rgba(0, 0, 0, 0.35);
+  --shadow-hover: var(--shadow-2);
+  /* rhythm */
+  --lh-tight: 1.35;
+  --lh-body: 1.5;
   --well-inset: inset 0 1px 4px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(0, 0, 0, 0.2);
 }
 
@@ -55,7 +60,7 @@ body {
   margin: 0;
   font-family: var(--sans);
   font-size: var(--fs-md);
-  line-height: 1.5;
+  line-height: var(--lh-body);
   background: var(--bg0);
   color: var(--txt);
   height: 100vh;
@@ -195,6 +200,7 @@ mark { background: rgba(255, 199, 87, 0.22); color: var(--warn); border-radius: 
 
 .btn {
   appearance: none;
+  box-shadow: var(--shadow-1);
   font-family: var(--sans);
   font-size: 12px;
   font-weight: 500;
@@ -227,7 +233,7 @@ mark { background: rgba(255, 199, 87, 0.22); color: var(--warn); border-radius: 
   border-radius: var(--r-lg);
   margin-bottom: 12px;
   padding: 14px 16px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  box-shadow: var(--shadow-1), inset 0 1px 0 rgba(255, 255, 255, 0.025);
 }
 
 .panel-head {
@@ -295,9 +301,23 @@ mark { background: rgba(255, 199, 87, 0.22); color: var(--warn); border-radius: 
   border-radius: var(--r-lg);
   background: var(--bg1);
   padding: 12px 14px;
+  box-shadow: var(--shadow-1);
 }
-.result-card .head { display: flex; justify-content: space-between; margin-bottom: 8px; }
-.result-card .req-meta { font-family: var(--mono); font-size: 11px; color: var(--txt-dim); }
+.result-card .head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+.result-card .head-main { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.result-card .req-name {
+  font-family: var(--mono); font-size: 12px; color: var(--txt-hi);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px;
+}
+.result-card .head-chips { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.chiplet {
+  font-family: var(--mono); font-size: 10.5px; color: var(--txt);
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 4px;
+  padding: 1px 7px;
+  font-variant-numeric: tabular-nums;
+}
+.chiplet.acc { color: var(--acc); border-color: rgba(0, 224, 140, 0.3); }
+.result-card .req-meta { font-family: var(--mono); font-size: 11px; color: var(--txt-dim); flex-shrink: 0; }
 .viz { margin: 8px 0; }
 .viz img { max-width: 100%; border-radius: var(--r-md); }
 canvas.overlay { max-width: 100%; border-radius: var(--r-md); }
@@ -362,9 +382,10 @@ body::after {
 .gpu-panel .panel-head { margin-bottom: 8px; }
 .gpu-head-right { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .gpu-meta {
-  font-family: var(--mono); font-size: 9.5px;
+  font-family: var(--mono); font-size: 10px;
   color: var(--txt-dim); letter-spacing: 0.08em; text-transform: uppercase;
   white-space: nowrap;
+  align-self: center;
 }
 .gpu-name {
   font-family: var(--mono);
@@ -522,6 +543,11 @@ body::after {
   letter-spacing: 0.03em;
 }
 .cartridge .cartridge-spark { width: 100%; height: 26px; margin-top: 9px; display: block; }
+.spark-tag {
+  font-family: var(--mono); font-size: 8.5px; color: var(--txt-dim);
+  text-transform: uppercase; letter-spacing: 0.1em;
+  margin-top: 3px; height: 11px; overflow: hidden; white-space: nowrap;
+}
 
 .cartridge.live {
   border-color: color-mix(in srgb, var(--cat-glow, #00e08c) 38%, transparent);
@@ -550,10 +576,11 @@ body::after {
 
 /* ---------------- OVERVIEW: telemetry band ---------------- */
 
-.telemetry-panel { padding: 10px 16px; }
+.telemetry-panel { padding: 8px 16px 10px; }
+.telemetry-panel .panel-head { margin-bottom: 6px; }
 .river-content {
-  overflow-y: auto; max-height: 150px;
-  font-family: var(--mono); font-size: 11.5px; line-height: 1.8;
+  overflow-y: auto; max-height: 128px;
+  font-family: var(--mono); font-size: 11.5px; line-height: 1.7;
 }
 .river-line { white-space: nowrap; }
 .river-t { color: var(--txt-dim); margin-right: 10px; font-variant-numeric: tabular-nums; }
@@ -651,7 +678,7 @@ body::after {
 #log-filter { width: 190px; }
 #log-content {
   flex: 1; margin: 0; padding: 10px 14px; overflow: auto;
-  font-family: var(--mono); font-size: 12px; line-height: 1.6;
+  font-family: var(--mono); font-size: 12.5px; line-height: var(--lh-body);
   white-space: pre-wrap; word-break: break-all; color: var(--txt);
   /* phosphor scanlines — the log pane is a CRT inside the console */
   background-image: repeating-linear-gradient(0deg,

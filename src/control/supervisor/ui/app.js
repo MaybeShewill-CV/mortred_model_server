@@ -114,6 +114,7 @@ function riverPush(kind, text, serverId) {
   const t = String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0")+":"+String(n.getSeconds()).padStart(2,"0");
   state.river.push({t, kind, text, serverId: serverId||null});
   if (state.river.length>200) state.river.shift();
+  const count=$("river-count"); if(count) count.textContent=state.river.length+" events";
   renderRiver();
 }
 function renderRiver() {
@@ -156,8 +157,25 @@ async function refresh() {
   }
   const liveN = state.servers.filter(s=>["running","starting","backoff"].includes(s.state)).length;
   document.title = (liveN>0?`●${liveN} live · `:"")+"Mortred Supervisor";
+  updateFavicon(liveN);
   bootSequence(liveN);
   renderCurrentView();
+}
+
+/* pulsing favicon: the console's heartbeat lives in the browser chrome */
+function updateFavicon(liveN){
+  const c=document.createElement("canvas");c.width=c.height=32;
+  const x=c.getContext("2d");
+  x.fillStyle="#07090b";x.fillRect(0,0,32,32);
+  const on=liveN>0;
+  const pulse=on?0.75+0.25*Math.abs(Math.sin(Date.now()/700)):1;
+  x.fillStyle=on?"#00e08c":"#6f857b";
+  x.shadowColor=x.fillStyle;x.shadowBlur=on?10:4;
+  x.beginPath();x.arc(16,16,(on?8.5:6)*pulse,0,Math.PI*2);x.fill();
+  if(on){x.shadowBlur=0;x.fillStyle="#04120b";x.beginPath();x.arc(16,16,3.4,0,Math.PI*2);x.fill();}
+  let link=document.querySelector("link[rel='icon']");
+  if(!link){link=document.createElement("link");link.rel="icon";document.head.appendChild(link);}
+  link.href=c.toDataURL("image/png");
 }
 
 /* one-shot typed boot line — the console comes alive on first link */
@@ -165,8 +183,14 @@ let bootDone = false;
 function bootSequence(liveN){
   if (bootDone) return;
   bootDone = true;
-  const el=$("boot-line");
-  const msg=`// mortred supervisor · link established · ${state.servers.length} models · ${liveN} live`;
+  // small delay so the parallel first GPU poll can join the boot line
+  setTimeout(()=>{
+    const el=$("boot-line");
+    const gpuTxt=state.gpuHistory.length?"gpu online":"gpu --";
+    typeBootLine(el,`// mortred supervisor · link established · ${state.servers.length} models · ${liveN} live · ${gpuTxt}`);
+  }, state.gpuHistory.length?0:700);
+}
+function typeBootLine(el,msg){
   const reduced=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const hide=()=>{ el.classList.add("fading"); setTimeout(()=>el.classList.add("hidden"),550); };
   if(reduced){ el.textContent=msg; setTimeout(hide,3200); return; }
@@ -302,8 +326,30 @@ function drawGpuHero(){
   }
 
   drawSeries(x=>norm(x.power_w<0?0:x.power_w,0,400),"rgba(255,158,100,0.45)",null,false,true);  // power (dim orange dashed)
-  drawSeries(x=>norm(x.mem_total_mib>0?x.mem_used_mib/x.mem_total_mib:0,0,1),cssVar("--warn"), "rgba(255,199,87,0.06)",false,false); // mem (amber)
-  drawSeries(x=>norm(x.util<0?0:x.util,0,100),cssVar("--acc"),"rgba(0,224,140,0.10)",true,false);     // util (green glow)
+  drawSeries(x=>norm(x.mem_total_mib>0?x.mem_used_mib/x.mem_total_mib:0,0,1),cssVar("--warn"),"rgba(255,199,87,0.06)",false,false); // mem (amber)
+  // util trace with phosphor afterglow: older segments decay like a scope trace
+  {
+    const get=x=>norm(x.util<0?0:x.util,0,100);
+    const acc=cssVar("--acc");
+    for(let i=1;i<s.length;i++){
+      const a=0.18+0.82*(i/s.length);
+      ctx.beginPath();
+      ctx.moveTo((i-1)*step,yOf(get(s[i-1])));
+      ctx.lineTo(i*step,yOf(get(s[i])));
+      ctx.strokeStyle=acc;ctx.globalAlpha=a;ctx.lineWidth=1.2;
+      ctx.shadowColor=acc;ctx.shadowBlur=i>s.length-6?8:0;
+      ctx.stroke();
+    }
+    ctx.globalAlpha=1;ctx.shadowBlur=0;
+    // fill under the newest portion only
+    ctx.beginPath();
+    const from=Math.max(0,s.length-15);
+    for(let i=from;i<s.length;i++){const y=yOf(get(s[i])); i===from?ctx.moveTo(i*step,y):ctx.lineTo(i*step,y);}
+    ctx.lineTo((s.length-1)*step,h);ctx.lineTo(from*step,h);ctx.closePath();
+    const g2=ctx.createLinearGradient(0,0,0,h);
+    g2.addColorStop(0,"rgba(0,224,140,0.12)");g2.addColorStop(1,"rgba(0,0,0,0)");
+    ctx.fillStyle=g2;ctx.fill();
+  }
 
   // util end-point marker
   const lastS=s[s.length-1];
@@ -446,7 +492,8 @@ function upsertCartridge(tiles,grid,s){
     tile.innerHTML=
       `<div class="cartridge-body"></div>
        <i class="c-tl"></i><i class="c-br"></i>
-       <canvas class="cartridge-spark" data-id="${escapeHtml(s.id)}"></canvas>`;
+       <canvas class="cartridge-spark" data-id="${escapeHtml(s.id)}"></canvas>
+       <div class="spark-tag"></div>`;
     const open=()=>navigate("#/model/"+s.id);
     tile.onclick=open;
     tile.onkeydown=(ev)=>{if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();open();}};
@@ -525,9 +572,14 @@ function drawFleetSparks(){
     const cv=document.querySelector(`canvas.cartridge-spark[data-id="${s.id}"]`);
     if(!cv)continue;
     // infer latency samples recorded by this browser session's test bench;
-    // cards without data get the designed idle baseline
+    // cards without data get the designed idle baseline + an honest "idle" tag
     const data=state.inferHistory.filter(x=>x.serverId===s.id).slice(-30).map(x=>x.ms);
     drawSparkline(cv,data.length>=2?data:null,catColor(s.category));
+    const tag=cv.parentElement&&cv.parentElement.querySelector(".spark-tag");
+    if(tag){
+      tag.textContent=data.length>=2?`session · ${data.length}`:"idle";
+      tag.classList.toggle("has-data",data.length>=2);
+    }
   }
 }
 
@@ -743,6 +795,9 @@ async function sendBatch(){
       }
     }catch(e){
       f.status="failed";
+      // transport-level failures count in the session stats too (ok:false)
+      state.inferHistory.push({t:Date.now(),serverId:s.id,ms:Math.round(performance.now()-t0),ok:false});
+      if(state.inferHistory.length>600)state.inferHistory.shift();
       const detail = e && e.message ? e.message : String(e);
       showToast(`infer fail: ${detail}\n→ ${inferUrl}`, "error");
       riverPush("err", `${s.id} transport: ${detail}`, s.id);
@@ -785,10 +840,18 @@ function buildResultCard(server,input,result,reqId,elapsed){
   const score=topScore(payload);
   const detCount=Array.isArray(payload)?payload.length:0;
   const kind=resultKind(payload);
+  /* two-line head: name + metric chiplets / req id — no more middot soup */
   card.innerHTML=
     `<div class="head">
-       <span class="req-meta">${escapeHtml(input.name)} · ${elapsed}ms · ${detCount?detCount+" "+kind+" · ":""}${escapeHtml(reqId)}</span>
-       <span class="req-meta">${score!=null?"top "+score.toFixed(3):""}</span>
+       <div class="head-main">
+         <span class="req-name">${escapeHtml(input.name)}</span>
+         <span class="head-chips">
+           <span class="chiplet">${elapsed}ms</span>
+           ${detCount?`<span class="chiplet">${detCount} ${kind}</span>`:""}
+           ${score!=null?`<span class="chiplet acc">top ${score.toFixed(3)}</span>`:""}
+         </span>
+       </div>
+       <span class="req-meta">req ${escapeHtml(reqId)}</span>
      </div>`;
   const vizWrap=document.createElement("div");vizWrap.className="viz";card.appendChild(vizWrap);
   const raw=document.createElement("details");raw.className="raw-json";raw.innerHTML="<summary>raw</summary>";
@@ -909,24 +972,31 @@ function drawDetection(canvas,imgUrl,boxes,isMasks){
     const ctx=canvas.getContext("2d");
     ctx.drawImage(img,0,0);
     ctx.lineWidth=Math.max(2,Math.round(img.naturalWidth/300));
-    ctx.font=Math.max(14,Math.round(img.naturalWidth/40))+"px monospace";
     for(const b of boxes){
       const[x1,y1,x2,y2]=b.bbox;
+      const bw=Math.max(1,x2-x1), bh=Math.max(1,y2-y1);
+      // label font adapts to box size — small boxes get smaller, never clipped labels
+      const fpx=Math.max(11,Math.min(Math.round(img.naturalWidth/40),Math.round(bw/3.5),Math.round(bh/2)));
+      ctx.font=fpx+"px monospace";
       const hue=isMasks?170:((b.class_id*47)%360);
       ctx.strokeStyle=isMasks?"#2dd4bf":`hsl(${hue} 90% 60%)`;
       ctx.shadowColor=ctx.strokeStyle;ctx.shadowBlur=8;
-      ctx.strokeRect(x1,y1,x2-x1,y2-y1);ctx.shadowBlur=0;
+      ctx.strokeRect(x1,y1,bw,bh);ctx.shadowBlur=0;
       let label;
       if(isMasks){
         label=`mask ${b.score!=null?(+b.score).toFixed(2):""}${b.area?` · ${b.area}px`:""}`;
       }else{
         label=`${b.category||b.class_id} ${b.score!=null?b.score.toFixed(2):""}`;
       }
-      const tw=ctx.measureText(label).width+10;
+      const tw=ctx.measureText(label).width+fpx*0.7;
+      const plateH=Math.round(fpx*1.4);
+      // place above when it fits in-canvas and the box is tall enough; else inside the top
+      const outside=y1-plateH-2>=0&&bh>=plateH*1.8;
+      const py=outside?y1-plateH-2:Math.min(y1+2,img.naturalHeight-plateH);
       ctx.fillStyle=isMasks?"#2dd4bf":`hsl(${hue} 90% 60%)`;
-      ctx.fillRect(x1,Math.max(0,y1-22),tw,20);
+      ctx.fillRect(x1,py,tw,plateH);
       ctx.fillStyle="#000";
-      ctx.fillText(label,x1+5,Math.max(15,y1-7));
+      ctx.fillText(label,x1+fpx*0.35,py+plateH-fpx*0.32);
       // face landmarks contract: landmarks [[x,y],…] drawn as amber dots
       if(Array.isArray(b.landmarks)&&b.landmarks.length){
         ctx.fillStyle="#ffd166";ctx.shadowColor="#ffd166";ctx.shadowBlur=4;
@@ -1065,7 +1135,8 @@ function renderPalette(query){
   for(const{it}of items){
     const row=document.createElement("div");row.className="palette-row";
     if(paletteStagger){ row.classList.add("stagger"); row.style.animationDelay=(idx++*14)+"ms"; }
-    row.innerHTML=`<span><span class="pi">${HINT_ICON[it.hint]||"·"}</span>${escapeHtml(it.label)}</span><span class="palette-hint">${it.hint}</span>`;
+    const icon = it.label.indexOf("stop ")===0 ? "■" : (HINT_ICON[it.hint]||"·");
+    row.innerHTML=`<span><span class="pi">${icon}</span>${escapeHtml(it.label)}</span><span class="palette-hint">${it.hint}</span>`;
     row.onclick=()=>{closePalette();it.act();};
     list.appendChild(row);
   }

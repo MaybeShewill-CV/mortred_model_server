@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#07090b">
+  <link rel="icon" href="data:,">
   <title>Mortred Supervisor</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -56,7 +57,7 @@
 
     <section class="card telemetry-panel">
       <div class="panel-head">
-        <span class="panel-title">telemetry</span>
+        <span class="panel-title">telemetry <span id="river-count" class="fleet-live"></span></span>
       </div>
       <div id="river-content" class="river-content"></div>
     </section>
@@ -99,7 +100,7 @@
             <button id="btn-send" class="btn primary">send</button>
             <button id="btn-cancel" class="btn danger hidden">cancel</button>
           </div>
-          <div id="drop-zone">drop here</div>
+          <div id="drop-zone">drop images here · upload / folder also work</div>
           <div id="file-list"></div>
           <div id="batch-progress" class="hidden">
             <div class="progress-bar"><div id="batch-progress-fill"></div></div>
