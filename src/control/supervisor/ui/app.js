@@ -467,8 +467,7 @@ function upsertCartridge(tiles,grid,s){
        <span class="cartridge-name">${escapeHtml(s.id.toLowerCase())}</span>
        ${s.restart_count>0?`<span class="badge restarts" title="restarts: ${s.restart_count}">↻${s.restart_count}</span>`:""}
      </div>
-     <div class="cartridge-sub">${isRun?`<span class="uptime" data-id="${escapeHtml(s.id)}">${uptimeOf(s)||"booting"}</span>`:escapeHtml(s.state)}</div>
-     <div class="cartridge-port">:${s.port}</div>`;
+     <div class="cartridge-sub">${isRun?`<span class="uptime" data-id="${escapeHtml(s.id)}">${uptimeOf(s)||"booting"}</span>`:escapeHtml(s.state)}<span class="cartridge-port">:${s.port}</span></div>`;
 }
 
 /* coarse state group used by the summary chips */
@@ -809,6 +808,37 @@ function resultKind(payload){
 
 async function visualize(server,input,payload,vizWrap){
   const img=new Image();img.src=input.url;await img.decode().catch(()=>{});
+  // classification contract: {class_id, category, scores[]} — an OBJECT, not an array
+  if(payload&&typeof payload==="object"&&!Array.isArray(payload)&&payload.category!==undefined&&Array.isArray(payload.scores)){
+    vizWrap.appendChild(img);
+    const box=document.createElement("div");box.className="cls-result";
+    const scores=(payload.scores||[]).slice(0,5);
+    const max=scores.length?scores[0]:1;
+    box.innerHTML=`<span class="cls-cat">${escapeHtml(payload.category)}</span>`+
+      scores.map(s=>`<span class="cls-score"><i style="width:${Math.max(4,Math.round(100*s/(max||1)))}%"></i><b>${(+s).toFixed(3)}</b></span>`).join("");
+    vizWrap.appendChild(box);
+    return;
+  }
+  // feature embedding contract: {dim, embedding[]} — show dim + norm, vector has no pixels
+  if(payload&&typeof payload==="object"&&!Array.isArray(payload)&&Array.isArray(payload.embedding)){
+    vizWrap.appendChild(img);
+    let norm=0;const v=payload.embedding;
+    for(let i=0;i<v.length;i+=1)norm+=v[i]*v[i];
+    const box=document.createElement("div");box.className="cls-result";
+    box.innerHTML=`<span class="cls-cat">embedding</span><span class="cls-dim">dim=${payload.dim!=null?payload.dim:v.length} · ‖v‖=${Math.sqrt(norm).toFixed(2)}</span>`;
+    vizWrap.appendChild(box);
+    return;
+  }
+  // SAM AMG contract: [{segmentation png, area, bbox?, predicted_iou, stability_score}]
+  // must be checked BEFORE the generic detection branch (items also carry bbox)
+  if(Array.isArray(payload)&&payload.length&&payload[0].segmentation!==undefined&&payload[0].predicted_iou!==undefined){
+    const cv=document.createElement("canvas");cv.className="overlay";vizWrap.appendChild(cv);
+    drawDetection(cv,img.src,payload.map(m=>({bbox:m.bbox,score:m.predicted_iou,category:"mask",stability:m.stability_score,area:m.area})),true);
+    const legend=document.createElement("div");legend.className="det-legend";
+    legend.innerHTML=`<span class="det-chip" style="--h:170"><span class="det-dot"></span>${payload.length} masks · iou top ${(payload[0].predicted_iou!=null?(+payload[0].predicted_iou).toFixed(2):"--")} · pngs in raw</span>`;
+    vizWrap.appendChild(legend);
+    return;
+  }
   if(Array.isArray(payload)&&payload.length&&typeof payload[0].bbox==="object"){
     const cv=document.createElement("canvas");cv.className="overlay";vizWrap.appendChild(cv);
     drawDetection(cv,img.src,payload);
@@ -872,7 +902,7 @@ function drawFeaturePoints(canvas,imgUrl,points){
   };
   img.src=imgUrl;
 }
-function drawDetection(canvas,imgUrl,boxes){
+function drawDetection(canvas,imgUrl,boxes,isMasks){
   const img=new Image();
   img.onload=()=>{
     canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;
@@ -882,16 +912,30 @@ function drawDetection(canvas,imgUrl,boxes){
     ctx.font=Math.max(14,Math.round(img.naturalWidth/40))+"px monospace";
     for(const b of boxes){
       const[x1,y1,x2,y2]=b.bbox;
-      const hue=(b.class_id*47)%360;
-      ctx.strokeStyle=`hsl(${hue} 90% 60%)`;
+      const hue=isMasks?170:((b.class_id*47)%360);
+      ctx.strokeStyle=isMasks?"#2dd4bf":`hsl(${hue} 90% 60%)`;
       ctx.shadowColor=ctx.strokeStyle;ctx.shadowBlur=8;
       ctx.strokeRect(x1,y1,x2-x1,y2-y1);ctx.shadowBlur=0;
-      const label=`${b.category||b.class_id} ${b.score!=null?b.score.toFixed(2):""}`;
+      let label;
+      if(isMasks){
+        label=`mask ${b.score!=null?(+b.score).toFixed(2):""}${b.area?` · ${b.area}px`:""}`;
+      }else{
+        label=`${b.category||b.class_id} ${b.score!=null?b.score.toFixed(2):""}`;
+      }
       const tw=ctx.measureText(label).width+10;
-      ctx.fillStyle=`hsl(${hue} 90% 60%)`;
+      ctx.fillStyle=isMasks?"#2dd4bf":`hsl(${hue} 90% 60%)`;
       ctx.fillRect(x1,Math.max(0,y1-22),tw,20);
       ctx.fillStyle="#000";
       ctx.fillText(label,x1+5,Math.max(15,y1-7));
+      // face landmarks contract: landmarks [[x,y],…] drawn as amber dots
+      if(Array.isArray(b.landmarks)&&b.landmarks.length){
+        ctx.fillStyle="#ffd166";ctx.shadowColor="#ffd166";ctx.shadowBlur=4;
+        for(const p of b.landmarks){
+          ctx.beginPath();ctx.arc(p[0],p[1],Math.max(2,img.naturalWidth/240),0,Math.PI*2);
+          ctx.fill();
+        }
+        ctx.shadowBlur=0;
+      }
     }
   };
   img.src=imgUrl;

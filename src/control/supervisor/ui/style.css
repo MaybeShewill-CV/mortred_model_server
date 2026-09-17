@@ -515,7 +515,7 @@ body::after {
 }
 .cartridge.dead .cartridge-sub { color: var(--err); }
 .cartridge .cartridge-port {
-  position: absolute; top: 11px; right: 12px;
+  margin-left: auto;
   font-family: var(--mono); font-size: 10px; color: var(--txt-dim);
   background: var(--bg2); border: 1px solid var(--line);
   border-radius: 4px; padding: 1px 6px;
@@ -665,6 +665,25 @@ body::after {
 
 /* detection legend */
 .det-legend { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+/* classification / embedding result blocks */
+.cls-result { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.cls-cat {
+  font-family: var(--mono); font-size: 15px; color: var(--acc);
+  border: 1px solid rgba(0, 224, 140, 0.35); background: rgba(0, 224, 140, 0.07);
+  border-radius: var(--r-sm); padding: 4px 12px;
+}
+.cls-dim { font-family: var(--mono); font-size: var(--fs-xs); color: var(--txt-dim); }
+.cls-score {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: var(--fs-xs); color: var(--txt);
+}
+.cls-score i {
+  display: inline-block; height: 6px; border-radius: 999px;
+  background: linear-gradient(90deg, var(--acc), rgba(0, 224, 140, 0.35));
+  min-width: 14px;
+}
+.cls-score b { color: var(--txt-dim); font-weight: 400; }
 .det-chip {
   display: inline-flex; align-items: center; gap: 5px;
   font-family: var(--mono); font-size: 11px; color: var(--txt);
