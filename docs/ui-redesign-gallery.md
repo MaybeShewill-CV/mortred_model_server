@@ -267,3 +267,44 @@ R2 的 9.06 含约 0.4 分自评通胀，主因：①测试台结果面从未被
 | 工作台（新卡头 + fail 计数） | ![r6 workbench](images/ui/r6-workbench.png) |
 | 示波器余晖特写 | ![r6 scope](images/ui/r6-scope.png) |
 
+---
+
+## Round 8 — 真实遥测 + Dossier + Display 排版（2026-09-17）
+
+### 本轮改动
+
+| 类别 | 改动 | 验证 |
+|---|---|---|
+| **C++ API** | 新增 `GET /api/v1/servers/<id>/metrics`：supervisor 代理模型服务器 loopback `/metrics`（复用 graceful-drain 的取数模式，text/plain 透传，运行中才可查） | clang 语法检查 0 error；WSL 重建后生效 |
+| 真实遥测 | 前端 Prometheus 解析器（counter 求和 / gauge / 直方图分位数线性插值），dossier 展示 **qps（增量计算，4s 节流）/ p50 / p95 / workers busy·idle / queue / waiting / done**——全部来自服务端真实指标（`prometheus_metrics.h` 契约名） | 实测 qps=1.20（精确对应 6req/5s）、p50=29ms/p95=96ms（直方图插值）；修复采样抖动 bug（双路轮询致 qps 尖峰 100） |
+| Dossier | workbench 侧栏重构为三段式档案：IDENTITY / CONTROL / SERVER TELEMETRY，微节标题体系 | 红队："three section headers… cohesive" |
+| Display 排版 | GPU 面板 hero 读数：util 32px 大字 + 32s 趋势箭头（▲/▼ + delta），VRAM/TEMP/PWR/CLK/FAN 紧凑行 | 实测 32px + "▼ 31% / 32s" |
+| 工艺 | chiplet 11px + gap 8（红队建议）；results 空态文案；**j/vim 式舰队键盘导航**（j/k 移焦 + Enter 进入） | 实测 j→首卡、jj→rt-detr |
+
+### 评分（R8）
+
+| 维度 | R6/7 | R8 | 依据 |
+|---|---|---|---|
+| 人格与记忆点 | 9.25 | **9.25** | 维持；hero 读数强化示波器叙事但未新增签名机制 |
+| 概念清晰度 | 9.00 | **9.25** | dossier 使 workbench 概念完整（身份+控制+遥测一体） |
+| 色彩系统 | 9.00 | **9.00** | 维持 |
+| 字体与排版 | 9.00 | **9.25** | display 级 hero 读数（32px+趋势）填补排版层级顶格；chiplet 修正 |
+| 表面与材质 | 9.00 | **9.00** | 维持 |
+| 密度与信息层级 | 9.00 | **9.25** | dossier 密度与分段层级提升 |
+| 状态可见性 | 9.50 | **9.75** | **真实服务端遥测**（qps/p50/p95/负载/排队/完成量）——当初问题 #5 的完整答案；扣：fleet 卡 sparkline 仍会话级 |
+| 动效与细节工艺 | 9.00 | **9.25** | j/k 导航、空态、节流修复；无已知未修缺陷 |
+| **加权总分** | 9.14 | **9.31** | **未达 9.5 → 循环继续** |
+
+### 距离 9.5（R9 清单）
+
+- fleet 卡 sparkline 切换到真实 per-model qps（聚合轮询或仅 running 卡按需取数）→ 状态 9.9、概念 +0.25
+- 概念：overview 空态引导 + GPU 面板头紧凑化
+- 人格：开机自检动画（startup self-check 序列，boot 行扩展）或 per-category 色彩能量条动画强化
+- 排版/表面：面板标题层级微调、噪点强度可调（CRT 联动）
+- 工艺：palette 最近命令记忆、focus 环遍历顺序审计
+
+| R8 截图 | |
+|---|---|
+| hero 读数总览 | ![r8 overview](images/ui/r8-overview-hero.png) |
+| dossier 工作台（真实遥测） | ![r8 workbench](images/ui/r8-workbench-dossier.png) |
+

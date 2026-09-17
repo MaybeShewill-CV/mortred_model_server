@@ -447,6 +447,56 @@ void SupervisorApp::handle_process_info(WFHttpTask* task, const std::string& id)
     reply_json(task, 200, serialize(d));
 }
 
+/*** proxy the model server's loopback /metrics so the console can show real
+ * per-model telemetry (qps, inference latency histogram, queue depth, workers) */
+void SupervisorApp::handle_server_metrics(WFHttpTask* task, const std::string& id) {
+    const auto* entry = catalog_.find(id);
+    if (entry == nullptr) {
+        reply_json(task, 404, json_error("unknown server id: " + id));
+        return;
+    }
+    const auto s = supervisor_->status(id);
+    if (s.pid < 0) {
+        reply_json(task, 409, json_error("server not running: " + id));
+        return;
+    }
+    const std::string url = "http://127.0.0.1:" + std::to_string(entry->port) + "/metrics";
+    std::string body;
+    int http_code = 0;
+    WFFacilities::WaitGroup wg(1);
+    auto* client = WFTaskFactory::create_http_task(
+        url, 0, 0, [&wg, &body, &http_code](WFHttpTask* t) {
+            if (t->get_state() == WFT_STATE_SUCCESS) {
+                http_code = std::atoi(t->get_resp()->get_status_code());
+                const void* data = nullptr;
+                size_t size = 0;
+                t->get_resp()->get_parsed_body(&data, &size);
+                if (data != nullptr && size > 0) {
+                    body.assign(static_cast<const char*>(data), size);
+                }
+            }
+            wg.done();
+        });
+    client->get_req()->set_method("GET");
+    std::string metrics_auth;
+    if (supervisor_ != nullptr && !supervisor_->internal_token().empty()) {
+        metrics_auth = "Bearer " + supervisor_->internal_token();
+        client->get_req()->add_header_pair("Authorization", metrics_auth.c_str());
+    }
+    client->set_receive_timeout(2500);
+    client->start();
+    wg.wait();
+    if (http_code != 200 || body.empty()) {
+        reply_json(task, 502, json_error("model /metrics unreachable (HTTP " +
+                                         std::to_string(http_code) + ")"));
+        return;
+    }
+    auto* resp = task->get_resp();
+    resp->set_status_code("200");
+    resp->add_header_pair("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
+    resp->append_output_body(body.data(), body.size());
+}
+
 void SupervisorApp::serve_static(WFHttpTask* task, const std::string& path) {
     std::string rel = (path == "/" || path.empty()) ? "index.html" : path.substr(1);
     if (rel.find("..") != std::string::npos) {
@@ -624,6 +674,10 @@ void SupervisorApp::process(WFHttpTask* task) {
         const std::string action = rest.substr(slash + 1);
         if (action == "process" && method == "GET") {
             handle_process_info(task, id);
+            return;
+        }
+        if (action == "metrics" && method == "GET") {
+            handle_server_metrics(task, id);
             return;
         }
         if (action == "logs") {

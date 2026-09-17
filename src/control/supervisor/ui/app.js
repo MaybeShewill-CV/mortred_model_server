@@ -264,24 +264,37 @@ function tweenValue(key, target, fmt, render){
 }
 
 function updateHudCells(last){
+  const s = state.gpuHistory;
+  // trend vs ~32s ago for the hero readout
+  const ref = s.length > 16 ? s[s.length - 17] : null;
+  const dUtil = ref && last.util >= 0 && ref.util >= 0 ? last.util - ref.util : null;
+  const deltaHtml = dUtil == null ? "" :
+    `<div class="hud-delta ${dUtil >= 0 ? "up" : "down"}">${dUtil >= 0 ? "▲" : "▼"} ${Math.abs(Math.round(dUtil))}% / 32s</div>`;
+  const hero = last.util==null||last.util<0
+    ? `<div class="hud-cell hero-cell"><div class="hud-val">--</div><div class="hud-k">util</div></div>`
+    : `<div class="hud-cell hero-cell${last.util>85?" hot":""}"><div class="hud-val" data-tw="util">--</div><div class="hud-k">util</div>${deltaHtml}</div>`;
   const cells = [
-    {label:"UTIL",  key:"util",   val:last.util,   fmt:v=>Math.round(v)+"%", hot:last.util>85},
+    {label:"VRAM", key:null, plain:last.mem_total_mib>0?fmtMib(last.mem_used_mib)+"/"+fmtMib(last.mem_total_mib):"--",
+      hot:last.mem_total_mib>0&&last.mem_used_mib/last.mem_total_mib>0.85},
     {label:"TEMP",  key:"temp",   val:last.temp_c, fmt:v=>Math.round(v)+"°C", hot:last.temp_c>80},
     {label:"PWR",   key:"pwr",    val:last.power_w,fmt:v=>Math.round(v)+"W",  hot:last.power_w>300},
     {label:"SM CLK",key:"clk",    val:last.clocks_sm_mhz, fmt:v=>Math.round(v)+"MHz", hot:false},
     {label:"FAN",   key:"fan",    val:last.fan_pct,fmt:v=>Math.round(v)+"%",  hot:false},
   ];
-  let html = cells.map(c=>{
+  let html = hero + cells.map(c=>{
+    if(c.plain!==undefined){
+      return `<div class="hud-cell${c.hot?" hot":""}"><div class="hud-val">${c.plain}</div><div class="hud-k">${c.label}</div></div>`;
+    }
     if(c.val==null||c.val<0){
       return `<div class="hud-cell"><div class="hud-val">--</div><div class="hud-k">${c.label}</div></div>`;
     }
     return `<div class="hud-cell${c.hot?" hot":""}"><div class="hud-val" data-tw="${c.key}">--</div><div class="hud-k">${c.label}</div></div>`;
   }).join("");
-  const vram = last.mem_total_mib>0
-    ? fmtMib(last.mem_used_mib)+"/"+fmtMib(last.mem_total_mib)
-    : "--";
-  html = `<div class="hud-cell${last.mem_total_mib>0&&last.mem_used_mib/last.mem_total_mib>0.85?" hot":""}"><div class="hud-val">${vram}</div><div class="hud-k">VRAM</div></div>`+html;
   $("gpu-metrics").innerHTML=html;
+  if(last.util!=null&&last.util>=0){
+    const el=document.querySelector('.hud-val[data-tw="util"]');
+    if(el)tweenValue("util",last.util,v=>Math.round(v)+"%",(str)=>el.textContent=str);
+  }
   for(const c of cells){
     if(c.val==null||c.val<0)continue;
     const el=document.querySelector(`.hud-val[data-tw="${c.key}"]`);
@@ -623,8 +636,9 @@ function renderWorkbench(){
   // and must not wipe the live log buffer each tick
   if(!state.logs[s.id]){resetLogState(s.id);}
   syncLogSelector();
-  // fetch process info for gauges
+  // fetch process info + server telemetry for the dossier
   pollProcessInfo(s.id);
+  pollServerMetrics(s.id);
   updateWorkbenchGpu();
 }
 
@@ -642,11 +656,91 @@ async function pollProcessInfo(id){
      <div class="id-row"><span class="id-k">thr</span><span>${p.threads>0?p.threads:"--"}</span></div>`;
 }
 
+/* ---------------- server telemetry (real /metrics via supervisor proxy) ---------------- */
+
+function promSum(text, name) {
+  // sum all samples of a counter regardless of labels
+  let sum = 0;
+  const re = new RegExp("^" + name + "(?:\\{[^}]*\\})?\\s+([0-9.eE+-]+)", "gm");
+  let m;
+  while ((m = re.exec(text)) !== null) sum += parseFloat(m[1]);
+  return sum;
+}
+function promGauge(text, name) {
+  const m = new RegExp("^" + name + "(?:\\{[^}]*\\})?\\s+([0-9.eE+-]+)", "m").exec(text);
+  return m ? parseFloat(m[1]) : null;
+}
+function promQuantile(text, histName, q) {
+  // histogram_bucket{...,le="N"} cumulative counts -> linear-interpolated quantile
+  const re = new RegExp("^" + histName + "_bucket\\{[^}]*le=\"([0-9.eE+]+)\"\\}\\s+([0-9.eE+-]+)", "gm");
+  const buckets = [];
+  let m;
+  while ((m = re.exec(text)) !== null) buckets.push([parseFloat(m[1]), parseFloat(m[2])]);
+  if (buckets.length < 2) return null;
+  buckets.sort((a, b) => a[0] - b[0]);
+  const total = buckets[buckets.length - 1][1];
+  if (total <= 0) return null;
+  const rank = q * total;
+  for (let i = 0; i < buckets.length; i++) {
+    if (buckets[i][1] >= rank) {
+      const prev = i === 0 ? [0, 0] : buckets[i - 1];
+      const span = buckets[i][1] - prev[1];
+      if (span <= 0) return buckets[i][0];
+      const frac = (rank - prev[1]) / span;
+      return Math.round(prev[0] + frac * (buckets[i][0] - prev[0]));
+    }
+  }
+  return null;
+}
+
+const metricsPrev = {};
+async function pollServerMetrics(id) {
+  const box = $("wb-servermetrics");
+  if (!box || state.selectedId !== id) return;
+  // throttle: called from both renderWorkbench (2s) and the 5s interval —
+  // back-to-back samples would make the qps delta spike
+  const now0 = Date.now();
+  if (metricsPrev[id] && now0 - metricsPrev[id].t < 4000) return;
+  let text = null, ok = false;
+  try {
+    const resp = await authorizedFetch(`/api/v1/servers/${encodeURIComponent(id)}/metrics`);
+    if (resp.ok) { text = await resp.text(); ok = typeof text === "string" && text.length > 0; }
+  } catch (e) { ok = false; }
+  if (!ok) {
+    if (box._sig !== "na") { box.innerHTML = '<div class="empty-hint">metrics n/a</div>'; box._sig = "na"; }
+    return;
+  }
+  const now = Date.now();
+  const inferTotal = promSum(text, "mortred_inference_requests_total");
+  const prev = metricsPrev[id];
+  let qps = null;
+  if (prev && now > prev.t && inferTotal >= prev.total) {
+    qps = (inferTotal - prev.total) / ((now - prev.t) / 1000);
+  }
+  metricsPrev[id] = { t: now, total: inferTotal };
+  const rows = [
+    ["qps", qps != null ? qps.toFixed(2) : "—"],
+    ["p50", (v => v != null ? v + "ms" : "—")(promQuantile(text, "mortred_inference_duration_ms", 0.5))],
+    ["p95", (v => v != null ? v + "ms" : "—")(promQuantile(text, "mortred_inference_duration_ms", 0.95))],
+    ["busy", (v => v != null ? v : "—")(promGauge(text, "mortred_workers_busy"))],
+    ["idle", (v => v != null ? v : "—")(promGauge(text, "mortred_workers_available"))],
+    ["queue", (v => v != null ? v : "—")(promGauge(text, "mortred_queue_depth"))],
+    ["waiting", (v => v != null ? v : "—")(promGauge(text, "mortred_waiting_jobs"))],
+    ["done", (v => v != null ? Math.round(v).toString() : "—")(promGauge(text, "mortred_finished_jobs_total"))],
+  ];
+  const sig = JSON.stringify(rows);
+  if (box._sig === sig) return;
+  box._sig = sig;
+  box.innerHTML = rows.map(([k, v]) =>
+    `<div class="id-row"><span class="id-k">${k}</span><span>${escapeHtml(String(v))}</span></div>`).join("");
+}
+
 function serverById(id){return state.servers.find(s=>s.id===id)||null;}
 
 setInterval(()=>{document.querySelectorAll(".uptime").forEach(el=>{
   const s=serverById(el.dataset.id);if(s)el.textContent=uptimeOf(s)||"--";});},1000);
 setInterval(()=>{if(state.selectedId)pollProcessInfo(state.selectedId);},5000);
+setInterval(()=>{if(state.selectedId)pollServerMetrics(state.selectedId);},5000);
 
 /* ---------------- gateway / control ---------------- */
 
@@ -830,6 +924,12 @@ function renderResultsList(id){
   const box=$("results-list");if(!box)return;
   const server=serverById(id);if(!server)return;
   box.innerHTML="";
+  if(!benchOf(id).results.length){
+    const e=document.createElement("div");e.className="empty-hint";
+    e.textContent="// no results yet — upload & send";
+    box.appendChild(e);
+    return;
+  }
   for(const r of benchOf(id).results){
     box.appendChild(buildResultCard(server,r.input,r.result,r.reqId,r.elapsed));
   }
@@ -1157,7 +1257,22 @@ function renderPalette(query){
     }else setTimeout(()=>renderPalette($("palette-input").value),0);
   };
 }
+/* j/k walks the fleet — vim-style, works with Enter from R1's card a11y */
 document.addEventListener("keydown",(ev)=>{
+  const inInput = document.activeElement && /input|textarea|select/i.test(document.activeElement.tagName);
+  if(!inInput && (ev.key==="j"||ev.key==="k")){
+    const view=$("view-overview");
+    if(!view||view.classList.contains("hidden"))return;
+    const cards=[...document.querySelectorAll(".cartridge")];
+    if(!cards.length)return;
+    ev.preventDefault();
+    const cur=cards.indexOf(document.activeElement);
+    const next=ev.key==="j"
+      ? cards[Math.min(cards.length-1,cur<0?0:cur+1)]
+      : cards[Math.max(0,cur<0?0:cur-1)];
+    if(next)next.focus();
+    return;
+  }
   if((ev.metaKey||ev.ctrlKey)&&ev.key.toLowerCase()==="k"){
     ev.preventDefault();
     $("palette").classList.contains("hidden")?openPalette():closePalette();

@@ -78,13 +78,23 @@
     </div>
     <div class="wb-grid">
       <aside class="card wb-identity-card">
-        <div class="panel-head"><span class="panel-title">identity</span></div>
-        <div id="wb-identity"></div>
-        <div id="wb-process"></div>
-        <div class="wb-controls">
-          <button id="wb-start" class="btn small">start</button>
-          <button id="wb-restart" class="btn small">rst</button>
-          <button id="wb-stop" class="btn small danger">stop</button>
+        <div class="panel-head"><span class="panel-title">dossier</span></div>
+        <div class="dossier-sec">
+          <div class="ds-head">identity</div>
+          <div id="wb-identity"></div>
+          <div id="wb-process"></div>
+        </div>
+        <div class="dossier-sec">
+          <div class="ds-head">control</div>
+          <div class="wb-controls">
+            <button id="wb-start" class="btn small">start</button>
+            <button id="wb-restart" class="btn small">rst</button>
+            <button id="wb-stop" class="btn small danger">stop</button>
+          </div>
+        </div>
+        <div class="dossier-sec">
+          <div class="ds-head">server telemetry</div>
+          <div id="wb-servermetrics"><div class="empty-hint">polling…</div></div>
         </div>
       </aside>
 

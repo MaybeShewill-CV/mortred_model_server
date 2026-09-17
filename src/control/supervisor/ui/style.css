@@ -309,9 +309,9 @@ mark { background: rgba(255, 199, 87, 0.22); color: var(--warn); border-radius: 
   font-family: var(--mono); font-size: 12px; color: var(--txt-hi);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px;
 }
-.result-card .head-chips { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.result-card .head-chips { display: inline-flex; gap: 8px; flex-wrap: wrap; }
 .chiplet {
-  font-family: var(--mono); font-size: 10.5px; color: var(--txt);
+  font-family: var(--mono); font-size: 11px; color: var(--txt);
   background: var(--bg2); border: 1px solid var(--line); border-radius: 4px;
   padding: 1px 7px;
   font-variant-numeric: tabular-nums;
@@ -409,6 +409,11 @@ body::after {
   border-color: var(--line-2);
   box-shadow: var(--shadow-hover);
 }
+.hud-cell.hero-cell { min-width: 148px; }
+.hud-cell.hero-cell .hud-val { font-size: 32px; letter-spacing: -0.02em; }
+.hud-delta { font-family: var(--mono); font-size: 10px; color: var(--txt-dim); margin-top: 1px; }
+.hud-delta.up { color: var(--acc); }
+.hud-delta.down { color: var(--info); }
 .hud-val {
   font-family: var(--mono);
   font-size: var(--fs-xl); color: var(--txt-hi);
@@ -597,6 +602,16 @@ body::after {
 }
 
 /* ---------------- WORKBENCH ---------------- */
+
+/* dossier: identity / control / telemetry in one cohesive column */
+.dossier-sec { margin-bottom: 14px; }
+.dossier-sec:last-child { margin-bottom: 0; }
+.ds-head {
+  font-family: var(--mono); font-size: 9px;
+  color: var(--txt-dim); text-transform: uppercase; letter-spacing: 0.16em;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 4px; margin-bottom: 7px;
+}
 
 .wb-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
 .wb-title { font-family: var(--mono); font-size: var(--fs-lg); color: var(--txt-hi); }

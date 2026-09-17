@@ -77,6 +77,7 @@ private:
     void handle_metrics(WFHttpTask* task);
     void handle_gpu(WFHttpTask* task);
     void handle_process_info(WFHttpTask* task, const std::string& id);
+    void handle_server_metrics(WFHttpTask* task, const std::string& id);
     void handle_graceful_restart(WFHttpTask* task, const std::string& server_id);
     void serve_static(WFHttpTask* task, const std::string& path);
     bool server_has_active_jobs(const std::string& server_id);
