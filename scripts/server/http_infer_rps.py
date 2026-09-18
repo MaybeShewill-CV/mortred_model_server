@@ -14,6 +14,13 @@ Usage:
       --image demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG \\
       --concurrency 8 --duration 30s --token SECRET
   python3 scripts/server/http_infer_rps.py --self-test
+
+Wire encodings (--raw selects the second):
+  json (default) - unified {"req_id","images":[base64]} envelope, one or more
+                   images per request (this tool sends exactly one).
+  raw            - the image bytes ARE the request body, Content-Type image/*
+                   or application/octet-stream; trace id rides X-Request-ID.
+                   ~25% smaller payload, no base64 codec on either side.
 """
 
 from __future__ import annotations
@@ -108,6 +115,7 @@ class LoadConfig:
     qps: float = 0.0
     timeout_s: float = 30.0
     token: str = ""
+    raw: bool = False
     follow_retry_after: bool = False
     ready_url: str = ""
     ready_timeout_s: float = 15.0
@@ -220,12 +228,38 @@ def _path_of(parsed: urllib.parse.ParseResult) -> str:
     return path
 
 
+def guess_image_media_type(path: Path) -> str:
+    """Content-Type for --raw: image/* when we can tell, octet-stream otherwise.
+    The server accepts both as the raw-body trigger."""
+    suffix = path.suffix.lower()
+    return {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".bmp": "image/bmp",
+        ".webp": "image/webp",
+    }.get(suffix, "application/octet-stream")
+
+
 def _build_headers(token: str, body_len: int) -> dict[str, str]:
     headers = {
         "Content-Type": "application/json; charset=utf-8",
         "Content-Length": str(body_len),
         "Connection": "keep-alive",
         "Accept": "application/json",
+    }
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    return headers
+
+
+def _build_raw_headers(token: str, body_len: int, media_type: str, req_id: bytes) -> dict[str, str]:
+    headers = {
+        "Content-Type": media_type,
+        "Content-Length": str(body_len),
+        "Connection": "keep-alive",
+        "Accept": "application/json",
+        "X-Request-ID": req_id.decode("ascii"),
     }
     if token:
         headers["Authorization"] = "Bearer " + token
@@ -254,7 +288,11 @@ def run_load(cfg: LoadConfig) -> LoadReport:
     mid = b'","images":["'
     suffix = b'"]}'
     sample_id = b"0000000000000000"
-    payload_bytes = len(prefix) + len(sample_id) + len(mid) + len(b64) + len(suffix)
+    payload_bytes = (
+        len(image_bytes) if cfg.raw
+        else len(prefix) + len(sample_id) + len(mid) + len(b64) + len(suffix)
+    )
+    media_type = guess_image_media_type(cfg.image_path)
 
     parsed = urllib.parse.urlparse(cfg.url)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
@@ -328,8 +366,12 @@ def run_load(cfg: LoadConfig) -> LoadReport:
                 break
             wait_rate()
             req_id = next_req_id()
-            body = prefix + req_id + mid + b64 + suffix
-            headers = _build_headers(cfg.token, len(body))
+            if cfg.raw:
+                body = image_bytes
+                headers = _build_raw_headers(cfg.token, len(body), media_type, req_id)
+            else:
+                body = prefix + req_id + mid + b64 + suffix
+                headers = _build_headers(cfg.token, len(body))
             started = time.perf_counter()
             status: int | None = None
             kind = "transport"
@@ -450,11 +492,15 @@ class _SelfTestHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802
         length = int(self.headers.get("Content-Length") or "0")
         body = self.rfile.read(length)
-        try:
-            doc = json.loads(body.decode("utf-8"))
-            ok = isinstance(doc.get("images"), list) and doc["images"]
-        except (UnicodeDecodeError, json.JSONDecodeError, TypeError):
-            ok = False
+        ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip()
+        if ctype.startswith("image/") or ctype == "application/octet-stream":
+            ok = length > 0 and (self.headers.get("X-Request-ID") or "") != ""
+        else:
+            try:
+                doc = json.loads(body.decode("utf-8"))
+                ok = isinstance(doc.get("images"), list) and doc["images"]
+            except (UnicodeDecodeError, json.JSONDecodeError, TypeError):
+                ok = False
         time.sleep(self.stall_s)
         if not ok:
             payload = b'{"status":50,"status_str":"bad"}'
@@ -505,6 +551,26 @@ def _self_test() -> int:
         if parse_duration("2m") != 120.0 or parse_duration("500ms") != 0.5:
             print("FAIL: parse_duration", file=sys.stderr)
             failed += 1
+        # raw encoding: image bytes as body, trace id on X-Request-ID
+        raw_report = run_load(
+            LoadConfig(
+                url=url,
+                image_path=image,
+                concurrency=2,
+                requests=20,
+                warmup_s=0.0,
+                timeout_s=5.0,
+                raw=True,
+                progress=False,
+            )
+        )
+        if raw_report.ok != 20 or raw_report.errors != 0:
+            print("FAIL: raw mode expected 20 ok, got %s" % raw_report.to_dict(), file=sys.stderr)
+            failed += 1
+        if raw_report.payload_bytes != image.stat().st_size:
+            print("FAIL: raw payload_bytes %d != image size %d"
+                  % (raw_report.payload_bytes, image.stat().st_size), file=sys.stderr)
+            failed += 1
     finally:
         server.shutdown()
         try:
@@ -534,6 +600,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--timeout", type=float, default=30.0, help="per-request socket timeout seconds")
     parser.add_argument("--token", default=os.environ.get("MORTRED_GATEWAY_AUTH_TOKEN", ""),
                         help="Authorization Bearer (default MORTRED_GATEWAY_AUTH_TOKEN)")
+    parser.add_argument("--raw", action="store_true",
+                        help="send the image bytes as the raw request body (Content-Type image/*) "
+                             "instead of the base64 JSON envelope; one image per request, "
+                             "trace id rides X-Request-ID")
     parser.add_argument("--follow-retry-after", action="store_true",
                         help="sleep Retry-After on HTTP 429 instead of immediately issuing the next POST")
     parser.add_argument("--ready-url", default="", help="GET this URL until 2xx before load (e.g. /ready)")
@@ -560,6 +630,7 @@ def main(argv: list[str] | None = None) -> int:
         qps=args.qps,
         timeout_s=args.timeout,
         token=args.token,
+        raw=args.raw,
         follow_retry_after=args.follow_retry_after,
         ready_url=args.ready_url,
         ready_timeout_s=args.ready_timeout,
