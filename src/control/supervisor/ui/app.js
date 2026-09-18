@@ -120,6 +120,12 @@ function clearCssVarCache() { for (const k in cssVarCache) delete cssVarCache[k]
 
 function fmtMib(m) { if (m == null || m < 0) return "--"; return m >= 1024 ? (m / 1024).toFixed(1) + " GiB" : m + " MiB"; }
 function fmtGiB(m) { return (m / 1024).toFixed(1); }
+/* window length never leaks floats like 4.8333333 min */
+function fmtWindow(seconds) {
+  if (seconds < 120) return seconds + " s";
+  const min = seconds / 60;
+  return (min >= 10 ? Math.round(min) : Math.round(min * 10) / 10) + " min";
+}
 
 function uptimeOf(s) {
   if (!s.started_at_ms || s.state !== "running") return null;
@@ -207,6 +213,7 @@ const state = {
   fleetFilter: "all", fleetState: "all",
   bench: {}, inflight: 0,
   rpsHist: [],
+  catalogReady: false,   // first successful catalog+status poll has landed
 };
 
 function benchOf(id) { return state.bench[id] || (state.bench[id] = { files: [], results: [] }); }
@@ -265,6 +272,7 @@ async function refresh() {
   }
   $("link-overlay").classList.add("hidden");
   setConn("ok", "connected");
+  state.catalogReady = true;
   const byId = {}; for (const s of (st.data.servers || [])) byId[s.id] = s;
   state.gateway = st.data.gateway || null;
   state.servers = (cat.data.servers || []).map((s) => Object.assign({}, s, byId[s.id] || {}));
@@ -345,7 +353,7 @@ async function pollGpu() {
   $("gpu-name").textContent = r.data.name || "GPU";
   const winS = Math.round(state.gpuHistory.length * 2);
   $("gpu-meta").textContent = state.gpuHistory.length
-    ? "1 gpu · last " + (winS >= 120 ? (winS / 60) + " min" : winS + " s") + " · 2 s poll · hover to inspect"
+    ? "1 gpu · last " + fmtWindow(winS) + " · 2 s poll · hover to inspect"
     : "";
   const last = state.gpuHistory.length ? state.gpuHistory[state.gpuHistory.length - 1] : null;
   if (last) { updateGpuChips(last); updateKpis(); updateGpuGauge(last); }
@@ -398,7 +406,7 @@ function updateWorkbenchGpu() {
   set("wg-util", last.util >= 0 ? last.util + "%" : "--", last.util > 85);
   set("wg-vram", last.mem_total_mib > 0 ? Math.round(100 * last.mem_used_mib / last.mem_total_mib) + "%" : "--",
     last.mem_total_mib > 0 && last.mem_used_mib / last.mem_total_mib > 0.85);
-  set("wg-temp", last.temp_c >= 0 ? last.temp_c + "°C" : "--", last.temp_c > 80);
+  set("wg-temp", last.temp_c >= 0 ? Math.round(last.temp_c) + "°C" : "--", last.temp_c > 80);
   const cv = $("wg-spark");
   if (cv) {
     const data = s.slice(-40).map((x) => x.util < 0 ? 0 : x.util);
@@ -615,7 +623,7 @@ function endValueLabel(ctx, w, y, text, color) {
 function wireGpuCrosshair() {
   const cv = $("gpu-canvas"); if (!cv) return;
   const hair = $("gpu-crosshair"), tip = $("gpu-tip");
-  const fmt = (v, u) => v == null || v < 0 ? "--" : v + u;
+  const fmt = (v, u) => v == null || v < 0 ? "--" : Math.round(v) + u;
   cv.addEventListener("mousemove", (ev) => {
     const s = state.gpuHistory; if (s.length < 2) return;
     const rect = cv.getBoundingClientRect();
@@ -696,7 +704,9 @@ function renderCurrentView() {
   if (r.view === "model" && serverById(r.id)) {
     state.selectedId = r.id; showView("workbench"); renderWorkbench();
   } else {
-    if (r.view === "model") showToast("Model not found: " + r.id, "info");
+    // deep links land here for the first ~2s before the catalog arrives —
+    // only report "not found" once we actually have a catalog to check against
+    if (r.view === "model" && state.catalogReady) showToast("Model not found: " + r.id, "info");
     state.selectedId = null; showView("overview"); renderOverview();
   }
 }
@@ -1122,20 +1132,34 @@ function loadImageAsBase64(f) {
     r.onerror = reject; r.readAsDataURL(f);
   });
 }
+/* folder picks (webkitdirectory) and some Linux/WSL drag paths hand us files
+ * with an EMPTY File.type — accept by extension too or the whole folder
+ * except one lucky MIME-carrying file gets silently dropped */
+const IMAGE_EXT = /\.(png|jpe?g|bmp|gif|webp|ppm|pgm|pbm|tif|tiff|avif)$/i;
+function isImageFile(f) {
+  if (f.type && f.type.startsWith("image/")) return true;
+  return IMAGE_EXT.test(f.name || "");
+}
 async function addFiles(fl) {
   const bench = benchOf(state.selectedId);
-  for (const f of fl) {
-    if (!f.type.startsWith("image/")) continue;
+  if (!bench) return;
+  const files = [...fl].filter(isImageFile);
+  for (const f of files) {
     const b64 = await loadImageAsBase64(f);
     bench.files.push({ name: f.name, url: base64ToSrc(b64), base64: b64, status: "ready" });
   }
   renderFileList();
+  if (files.length) showToast("Added " + files.length + (files.length === 1 ? " image" : " images") + " to the bench", "success");
+  else showToast("No images found in the selection", "info");
 }
+/* a whole folder can queue hundreds of chips — cap the wall, keep the queue */
+const FILE_CHIP_CAP = 12;
 function renderFileList() {
   const box = $("file-list"); if (!box) return;
   const bench = benchOf(state.selectedId);
   box.innerHTML = "";
-  for (const f of bench.files) {
+  const shown = bench.files.slice(0, FILE_CHIP_CAP);
+  for (const f of shown) {
     const chip = document.createElement("div");
     chip.className = "file-chip" + (f.status ? " " + f.status : "");
     chip.innerHTML = '<img src="' + f.url + '" alt=""><span class="fc-name">' + escapeHtml(f.name) + "</span>" +
@@ -1145,6 +1169,13 @@ function renderFileList() {
     rm.textContent = "✕"; rm.className = "chip-rm";
     rm.onclick = () => { bench.files = bench.files.filter((x) => x !== f); renderFileList(); };
     chip.appendChild(rm); box.appendChild(chip);
+  }
+  const rest = bench.files.length - shown.length;
+  if (rest > 0) {
+    const more = document.createElement("div");
+    more.className = "fc-more";
+    more.textContent = "+ " + rest + " more queued";
+    box.appendChild(more);
   }
 }
 function unifiedPayload(d) {
