@@ -1,187 +1,333 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en" data-theme="day">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
-  <meta name="theme-color" content="#07090b">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f6f7f9">
   <link rel="icon" href="data:,">
-  <title>Mortred Supervisor</title>
-  <link rel="stylesheet" href="style.css">
+  <title>Mortred Console</title>
+  <link rel="stylesheet" href="style.css?v=lumen12">
 </head>
 <body>
-  <header id="topbar">
-    <div class="brand">mortred::mc</div>
-    <div id="gateway-status" class="gateway-bar">gw …</div>
-    <span id="topbar-rps" class="topbar-rps hidden">Σ -- r/s</span>
-    <div id="conn-status" class="conn-unknown">connecting…</div>
-    <span id="palette-hint" class="kbd-hint" title="command palette"><kbd>⌘K</kbd></span>
-    <button id="btn-crt" class="btn small ghost" title="CRT scanline overlay">[S]</button>
-    <button id="btn-token" class="btn small ghost" title="API token">[T]</button>
-  </header>
-  <div id="boot-line" class="hidden"></div>
+  <div id="app" class="app">
 
-  <!-- ============ VIEW: OVERVIEW ============ -->
-  <div id="view-overview" class="view">
-    <section id="gpu-panel" class="card gpu-panel">
-      <div class="panel-head">
-        <span class="panel-title">gpu core</span>
-        <span class="gpu-head-right">
-          <span id="gpu-meta" class="gpu-meta"></span>
-          <span id="gpu-name" class="gpu-name">…</span>
+    <!-- ================= SIDEBAR ================= -->
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+            <circle cx="12" cy="12" r="8.5" stroke="#fff" stroke-width="2"/>
+            <circle cx="12" cy="12" r="3" fill="#fff"/>
+          </svg>
         </span>
+        <span class="brand-text"><b>Mortred</b><i>Console</i></span>
       </div>
-      <div id="gpu-metrics" class="gpu-metrics">— — —</div>
-      <div class="gpu-chart-wrap">
-        <canvas id="gpu-canvas" class="gpu-canvas"></canvas>
-        <div id="gpu-crosshair" class="gpu-crosshair hidden"></div>
-        <div id="gpu-tip" class="gpu-tip hidden"></div>
-      </div>
-      <div class="gpu-legend">
-        <span class="lg"><i class="sw sw-util"></i>util</span>
-        <span class="lg"><i class="sw sw-mem"></i>vram</span>
-        <span class="lg"><i class="sw sw-pwr"></i>power</span>
-      </div>
-    </section>
 
-    <section class="card fleet-panel">
-      <div class="panel-head">
-        <span class="panel-title">fleet_<span id="fleet-count">0</span> <span id="fleet-live" class="fleet-live"></span></span>
-      </div>
-      <div class="fleet-controls">
-        <div id="fleet-states" class="chip-row"></div>
-        <span class="chip-sep"></span>
-        <div id="fleet-filters" class="chip-row"></div>
-      </div>
-      <div id="fleet-grid" class="fleet-grid"></div>
-    </section>
+      <nav class="nav" aria-label="Sections">
+        <button class="nav-item" id="nav-overview" data-anchor="sec-kpi">
+          <span class="nav-ic" data-icon="grid"></span>Overview
+        </button>
+        <button class="nav-item" id="nav-fleet" data-anchor="sec-fleet">
+          <span class="nav-ic" data-icon="boxes"></span>Fleet
+          <span class="nav-count" id="nav-fleet-count"></span>
+        </button>
+        <button class="nav-item" id="nav-activity" data-anchor="sec-activity">
+          <span class="nav-ic" data-icon="pulse"></span>Activity
+          <span class="nav-count" id="nav-activity-count"></span>
+        </button>
+      </nav>
 
-    <section class="card telemetry-panel">
-      <div class="panel-head">
-        <span class="panel-title">telemetry <span id="river-count" class="fleet-live"></span></span>
-      </div>
-      <div id="river-content" class="river-content"></div>
-    </section>
-  </div>
+      <div class="side-spacer"></div>
 
-  <!-- ============ VIEW: MODEL WORKBENCH ============ -->
-  <div id="view-workbench" class="view hidden">
-    <div class="wb-head">
-      <button id="wb-breadcrumb" class="btn small">‹ fleet</button>
-      <span id="wb-title" class="wb-title"></span>
-      <div id="wb-stats" class="wb-stats"></div>
-      <div id="wb-gpu" class="wb-gpu hidden">
-        <span class="wg-cell"><b id="wg-util">--</b><i>util</i></span>
-        <span class="wg-cell"><b id="wg-vram">--</b><i>vram</i></span>
-        <span class="wg-cell"><b id="wg-temp">--</b><i>temp</i></span>
-        <canvas id="wg-spark" class="wg-spark"></canvas>
+      <div class="side-hints" aria-label="Keyboard shortcuts">
+        <div class="sh-row"><span>Navigate fleet</span><span><kbd>j</kbd> <kbd>k</kbd></span></div>
+        <div class="sh-row"><span>Command palette</span><kbd>⌘K</kbd></div>
       </div>
-    </div>
-    <div class="wb-grid">
-      <aside class="card wb-identity-card">
-        <div class="panel-head"><span class="panel-title">dossier</span></div>
-        <div class="dossier-sec">
-          <div class="ds-head">identity</div>
-          <div class="dossier-tray"><div id="wb-identity"></div><div id="wb-process"></div></div>
-        </div>
-        <div class="dossier-sec">
-          <div class="ds-head">control</div>
-          <div class="wb-controls">
-            <button id="wb-start" class="btn small">start</button>
-            <button id="wb-restart" class="btn small">rst</button>
-            <button id="wb-stop" class="btn small danger">stop</button>
+
+      <div class="side-status">
+        <div id="conn-pill" class="conn-pill unknown"><span class="conn-dot"></span><span id="conn-label">connecting…</span></div>
+        <div id="gateway-pill" class="gateway-pill">gateway —</div>
+        <div id="ver-pill" class="ver-pill">supervisor · —</div>
+      </div>
+
+      <div class="side-actions">
+        <button id="btn-theme" class="side-btn" title="Toggle theme">
+          <span class="sb-ic" data-icon="moon"></span><span class="sb-label">Theme</span>
+        </button>
+        <button id="btn-palette" class="side-btn" title="Command palette">
+          <span class="sb-ic" data-icon="command"></span><span class="sb-label">Commands</span><kbd id="palette-kbd" class="side-kbd">⌘K</kbd>
+        </button>
+        <button id="btn-token" class="side-btn" title="API token">
+          <span class="sb-ic" data-icon="key"></span><span class="sb-label">API token</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ================= MAIN ================= -->
+    <main class="main">
+
+      <!-- ============ VIEW: OVERVIEW ============ -->
+      <div id="view-overview" class="view">
+        <div class="hero-band">
+          <header class="page-head">
+            <div class="page-head-text">
+              <h1>Fleet overview</h1>
+              <p class="page-sub" id="ov-sub">Connecting to supervisor…</p>
+            </div>
+            <div class="page-head-side" id="ov-chips"></div>
+          </header>
+
+        <section id="sec-kpi" class="kpi-strip" aria-label="Key metrics">
+          <div class="kpi" id="kpi-live">
+            <div class="kpi-k">Live models</div>
+            <div class="kpi-v">
+              <span data-kpi="live"><span class="skel skel-num"></span></span><span class="kpi-u" data-kpi="live-sub"></span>
+              <svg class="live-ring" width="46" height="46" viewBox="0 0 46 46" aria-hidden="true">
+                <defs>
+                  <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color="#6366f1"/>
+                    <stop offset="1" stop-color="#22d3ee"/>
+                  </linearGradient>
+                </defs>
+                <circle class="ring-track" cx="23" cy="23" r="19" fill="none" stroke-width="4.5"/>
+                <circle class="ring-value" cx="23" cy="23" r="19" fill="none" stroke="url(#ringGrad)" stroke-width="4.5" stroke-linecap="round" transform="rotate(-90 23 23)"/>
+              </svg>
+            </div>
+            <div class="kpi-spark"><canvas data-kpi-spark="live"></canvas></div>
           </div>
-        </div>
-        <div class="dossier-sec">
-          <div class="ds-head">server telemetry</div>
-          <div class="dossier-tray"><div id="wb-servermetrics"><div class="empty-hint">polling…</div></div></div>
-        </div>
-      </aside>
-
-      <section class="card wb-bench-card">
-        <div class="panel-head"><span class="panel-title">test bench</span></div>
-        <div id="empty-hint" class="empty-hint">// select a model from the fleet</div>
-        <div id="image-input-area" class="hidden">
-          <div class="input-row">
-            <button id="btn-pick-file" class="btn">upload</button>
-            <button id="btn-pick-folder" class="btn">folder</button>
-            <input id="file-input" type="file" accept="image/*" multiple hidden>
-            <input id="folder-input" type="file" webkitdirectory hidden>
-            <button id="btn-send" class="btn primary">send</button>
-            <button id="btn-cancel" class="btn danger hidden">cancel</button>
+          <div class="kpi" id="kpi-rps">
+            <div class="kpi-k">Throughput</div>
+            <div class="kpi-v"><span data-kpi="rps"><span class="skel skel-num"></span></span><span class="kpi-u">req/s</span></div>
+            <div class="kpi-spark"><canvas data-kpi-spark="rps"></canvas></div>
           </div>
-          <div id="drop-zone">drop images here · upload / folder also work</div>
-          <div id="file-list"></div>
-          <div id="batch-progress" class="hidden">
-            <div class="progress-bar"><div id="batch-progress-fill"></div></div>
-            <span id="batch-progress-text"></span>
+          <div class="kpi" id="kpi-util">
+            <div class="kpi-k">GPU utilization</div>
+            <div class="kpi-v"><span data-kpi="util"><span class="skel skel-num"></span></span><span class="kpi-u">%</span></div>
+            <div class="kpi-spark"><canvas data-kpi-spark="util"></canvas></div>
           </div>
+          <div class="kpi" id="kpi-vram">
+            <div class="kpi-k">VRAM in use</div>
+            <div class="kpi-v"><span data-kpi="vram">—</span></div>
+            <div class="kpi-bar"><div class="kpi-bar-fill" id="kpi-vram-fill"></div></div>
+          </div>
+          </section>
         </div>
-        <div id="results">
-          <div class="panel-head"><span class="panel-title">results</span></div>
-          <div id="results-list"></div>
-        </div>
-      </section>
 
-      <section id="log-panel" class="wb-log-card">
-        <div id="log-toolbar">
-          <label>log</label>
-          <select id="log-server"></select>
-          <label class="inline"><input type="checkbox" id="log-follow" checked> follow</label>
-          <button id="btn-log-pause" class="btn small">pause</button>
-          <input id="log-filter" type="text" placeholder="filter…">
-          <button id="btn-log-clear" class="btn small">clear</button>
-          <span id="log-meta"></span>
+        <section id="sec-gpu" class="card gpu-card">
+          <div class="card-head">
+            <div class="card-title"><span class="ct-ic" data-icon="gpu"></span>GPU telemetry</div>
+            <div class="gpu-head-side">
+              <span id="gpu-meta" class="gpu-meta"></span>
+              <span id="gpu-name" class="chip-static mono">—</span>
+            </div>
+          </div>
+          <div class="gpu-chart-wrap">
+            <div class="gauge" aria-hidden="true">
+              <svg width="128" height="128" viewBox="0 0 128 128">
+                <circle class="gauge-track" cx="64" cy="64" r="54" fill="none" stroke-width="9"/>
+                <circle class="gauge-value" id="gauge-util" cx="64" cy="64" r="54" fill="none" stroke="url(#ringGrad)" stroke-width="9" stroke-linecap="round" transform="rotate(-90 64 64)"/>
+              </svg>
+              <div class="gauge-label"><b id="gauge-val"><span class="skel skel-num"></span></b><i>util</i></div>
+            </div>
+            <div class="gpu-plot">
+              <canvas id="gpu-canvas" class="gpu-canvas"></canvas>
+              <div id="gpu-crosshair" class="gpu-crosshair hidden"></div>
+              <div id="gpu-tip" class="gpu-tip hidden"></div>
+            </div>
+          </div>
+          <div class="gpu-foot">
+            <div class="gpu-legend">
+              <span class="lg"><i class="sw sw-util"></i>Utilization <b class="lg-v" id="lg-util">—</b></span>
+              <span class="lg"><i class="sw sw-mem"></i>VRAM <b class="lg-v" id="lg-mem">—</b></span>
+              <span class="lg"><i class="sw sw-pwr"></i>Power <b class="lg-v" id="lg-pwr">—</b></span>
+            </div>
+            <div id="gpu-chips" class="stat-chips"></div>
+          </div>
+        </section>
+
+        <section id="sec-fleet" class="fleet-sec">
+          <div class="sec-head">
+            <h2 class="sec-title">Model fleet</h2>
+            <span id="fleet-live" class="live-note"></span>
+          </div>
+          <div class="fleet-controls">
+            <div id="fleet-states" class="chip-row"></div>
+            <div id="fleet-filters" class="chip-row"></div>
+          </div>
+          <div id="fleet-grid" class="fleet-grid"></div>
+        </section>
+
+        <section id="sec-activity" class="card activity-card">
+          <div class="card-head">
+            <div class="card-title"><span class="ct-ic" data-icon="pulse"></span>Activity</div>
+            <span id="river-count" class="live-note"></span>
+          </div>
+          <div id="river-content" class="river-content"></div>
+        </section>
+      </div>
+
+      <!-- ============ VIEW: MODEL WORKBENCH ============ -->
+      <div id="view-workbench" class="view hidden">
+        <div class="hero-band wb-hero">
+        <header class="page-head wb-pagehead">
+          <button id="wb-back" class="back-btn"><span class="bk-ic" data-icon="chevron-left"></span>Fleet</button>
+          <div id="wb-title-wrap" class="wb-title-wrap">
+            <span id="wb-cat-icon" class="cat-icon lg"></span>
+            <div class="wb-title-text">
+              <h2 id="wb-title" class="wb-title">—</h2>
+              <div class="wb-sub"><span id="wb-pill" class="state-pill"></span><span id="wb-id" class="mono wb-id"></span></div>
+            </div>
+          </div>
+          <div id="wb-gpu" class="wb-gpu hidden">
+            <span class="wg-cell"><b id="wg-util">--</b><i>util</i></span>
+            <span class="wg-cell"><b id="wg-vram">--</b><i>vram</i></span>
+            <span class="wg-cell"><b id="wg-temp">--</b><i>temp</i></span>
+            <canvas id="wg-spark" class="wg-spark"></canvas>
+          </div>
+          <div class="wb-actions">
+            <button id="wb-start" class="btn brand"><span class="bt-ic" data-icon="play"></span>Start</button>
+            <button id="wb-restart" class="btn"><span class="bt-ic" data-icon="rotate"></span>Restart</button>
+            <button id="wb-stop" class="btn danger"><span class="bt-ic" data-icon="square"></span>Stop</button>
+          </div>
+        </header>
+
+        <section class="kpi-strip wb-stats-row" id="wb-stats-row">
+          <div class="kpi sm"><div class="kpi-k">Sent</div><div class="kpi-v"><span id="ws-sent">0</span></div></div>
+          <div class="kpi sm"><div class="kpi-k">Succeeded</div><div class="kpi-v"><span id="ws-ok" class="c-ok">0</span></div></div>
+          <div class="kpi sm"><div class="kpi-k">Failed</div><div class="kpi-v"><span id="ws-fail">0</span></div></div>
+          <div class="kpi sm"><div class="kpi-k">p50 latency</div><div class="kpi-v"><span id="ws-p50">—</span></div></div>
+          <div class="kpi sm"><div class="kpi-k">p95 latency</div><div class="kpi-v"><span id="ws-p95">—</span></div></div>
+          <div class="kpi sm"><div class="kpi-k">In-flight</div><div class="kpi-v"><span id="ws-inflight">0</span></div></div>
+        </section>
         </div>
-        <pre id="log-content"></pre>
-      </section>
-    </div>
+
+        <div class="wb-grid">
+          <aside class="card dossier-card">
+            <div class="card-head"><div class="card-title"><span class="ct-ic" data-icon="idcard"></span>Dossier</div></div>
+            <div class="dossier-sec">
+              <div class="ds-head">Identity</div>
+              <div class="id-list" id="wb-identity"></div>
+            </div>
+            <div class="dossier-sec">
+              <div class="ds-head">Process</div>
+              <div class="id-list" id="wb-process"></div>
+            </div>
+            <div class="dossier-sec">
+              <div class="ds-head">Server telemetry</div>
+              <div class="id-list" id="wb-servermetrics"><div class="empty-inline">polling…</div></div>
+            </div>
+          </aside>
+
+          <section class="card bench-card">
+            <div class="card-head">
+              <div class="card-title"><span class="ct-ic" data-icon="flask"></span>Test bench</div>
+              <span class="card-note" id="bench-note"></span>
+            </div>
+            <div id="bench-empty" class="bench-empty">
+              <span class="be-ic" data-icon="image"></span>
+              <div class="be-title">Test this model with your own images</div>
+              <div class="be-sub">Drop images anywhere in this card, or use the buttons below.</div>
+            </div>
+            <div id="image-input-area" class="hidden">
+              <div class="input-row">
+                <button id="btn-pick-file" class="btn"><span class="bt-ic" data-icon="upload"></span>Upload</button>
+                <button id="btn-pick-folder" class="btn"><span class="bt-ic" data-icon="folder"></span>Folder</button>
+                <input id="file-input" type="file" accept="image/*" multiple hidden>
+                <input id="folder-input" type="file" webkitdirectory hidden>
+                <span class="input-spacer"></span>
+                <button id="btn-cancel" class="btn danger hidden"><span class="bt-ic" data-icon="x"></span>Cancel</button>
+                <button id="btn-send" class="btn brand"><span class="bt-ic" data-icon="send"></span>Send</button>
+              </div>
+              <div id="drop-zone" class="drop-zone">
+                <span class="dz-ic" data-icon="upload-cloud"></span>
+                <div class="dz-title">Drop images here</div>
+                <div class="dz-sub">upload / folder buttons work too</div>
+              </div>
+              <div id="file-list" class="file-list"></div>
+              <div id="batch-progress" class="hidden">
+                <div class="progress-bar"><div id="batch-progress-fill"></div></div>
+                <span id="batch-progress-text" class="mono"></span>
+              </div>
+            </div>
+            <div id="results">
+              <div class="card-head"><div class="card-title dim"><span class="ct-ic" data-icon="layers"></span>Results</div></div>
+              <div id="results-list"></div>
+            </div>
+          </section>
+        </div>
+
+        <section id="log-panel" class="card log-card">
+          <div id="log-toolbar">
+            <span class="lt-title"><span class="ct-ic" data-icon="terminal"></span>Logs</span>
+            <select id="log-server"></select>
+            <label class="inline"><input type="checkbox" id="log-follow" checked> Follow</label>
+            <button id="btn-log-pause" class="btn sm">Pause</button>
+            <input id="log-filter" type="text" placeholder="Filter…">
+            <button id="btn-log-clear" class="btn sm">Clear</button>
+            <span id="log-meta" class="mono"></span>
+          </div>
+          <pre id="log-content"></pre>
+        </section>
+      </div>
+    </main>
   </div>
 
   <!-- ============ COMMAND PALETTE ============ -->
   <div id="palette" class="hidden">
     <div id="palette-backdrop"></div>
-    <div id="palette-box">
+    <div id="palette-box" role="dialog" aria-label="Command palette">
       <div class="palette-inputrow">
-        <span class="palette-glyph">❯</span>
-        <input id="palette-input" type="text" placeholder="start yolov8 / open ddpm / token…" autocomplete="off">
+        <span class="palette-glyph" data-icon="search"></span>
+        <input id="palette-input" type="text" placeholder="Jump to a model or run a command…" autocomplete="off">
+        <kbd class="side-kbd">esc</kbd>
       </div>
       <div id="palette-list"></div>
       <div class="palette-foot">
         <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
         <span><kbd>↵</kbd> select</span>
-        <span><kbd>esc</kbd> close</span>
       </div>
     </div>
   </div>
 
   <div id="toast-container"></div>
 
-  <!-- ============ LINK-DOWN OVERLAY ============ -->
-  <div id="link-overlay" class="hidden">
-    <div class="link-box">
-      <div class="link-glyph">⚠</div>
-      <div class="link-title">LINK DOWN</div>
-      <div class="link-sub">supervisor unreachable — reconnecting<span class="dots"></span></div>
-    </div>
-  </div>
-
-  <!-- ============ CRT OVERLAY (toggle: [S]) ============ -->
-  <div id="crt-overlay" class="hidden"></div>
-
-  <!-- ============ TOKEN DIALOG ============ -->
-  <div id="token-dialog" class="hidden">
-    <div id="token-backdrop" class="dialog-backdrop"></div>
-    <div class="dialog-box">
-      <div class="dialog-title">supervisor api token</div>
-      <input id="token-input" type="password" placeholder="paste token…" autocomplete="off" spellcheck="false">
+  <!-- ============ CONFIRM DIALOG (destructive actions) ============ -->
+  <div id="confirm-dialog" class="hidden">
+    <div id="confirm-backdrop" class="dialog-backdrop"></div>
+    <div class="dialog-box" role="alertdialog" aria-label="Confirm action">
+      <div class="dialog-title" id="confirm-title">Are you sure?</div>
+      <div class="dialog-sub" id="confirm-body"></div>
       <div class="dialog-actions">
-        <button id="token-cancel" class="btn small">cancel</button>
-        <button id="token-save" class="btn small primary">save</button>
+        <button id="confirm-cancel" class="btn">Cancel</button>
+        <button id="confirm-ok" class="btn danger">Confirm</button>
       </div>
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <!-- ============ LINK-DOWN OVERLAY ============ -->
+  <div id="link-overlay" class="hidden">
+    <div class="link-box">
+      <div class="link-spinner" aria-hidden="true"></div>
+      <div class="link-title">Reconnecting to supervisor</div>
+      <div class="link-sub">The console will resume automatically<span class="dots"></span></div>
+    </div>
+  </div>
+
+  <!-- ============ TOKEN DIALOG ============ -->
+  <div id="token-dialog" class="hidden">
+    <div id="token-backdrop" class="dialog-backdrop"></div>
+    <div class="dialog-box" role="dialog" aria-label="API token">
+      <div class="dialog-title">Supervisor API token</div>
+      <div class="dialog-sub">Required for management calls. Stored locally in this browser.</div>
+      <input id="token-input" type="password" placeholder="paste token…" autocomplete="off" spellcheck="false">
+      <div class="dialog-actions">
+        <button id="token-cancel" class="btn">Cancel</button>
+        <button id="token-save" class="btn brand">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=lumen12"></script>
 </body>
 </html>
