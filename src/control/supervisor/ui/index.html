@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#f6f7f9">
   <link rel="icon" href="data:,">
   <title>Mortred Console</title>
-  <link rel="stylesheet" href="style.css?v=lumen18">
+  <link rel="stylesheet" href="style.css?v=lumen20">
 </head>
 <body>
   <div id="app" class="app">
@@ -236,6 +236,11 @@
               <div class="be-title">Test this model with your own images</div>
               <div class="be-sub">Drop images anywhere in this card, or use the buttons below.</div>
             </div>
+            <div id="bench-offline" class="bench-empty hidden">
+              <span class="be-ic" data-icon="alert-circle"></span>
+              <div class="be-title">Start this model to use the test bench</div>
+              <div class="be-sub">The bench sends requests through the gateway — the model must be serving to answer them.</div>
+            </div>
             <div id="image-input-area" class="hidden">
               <div class="input-row">
                 <button id="btn-pick-file" class="btn"><span class="bt-ic" data-icon="upload"></span>Upload</button>
@@ -335,6 +340,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=lumen18"></script>
+  <script src="app.js?v=lumen20"></script>
 </body>
 </html>

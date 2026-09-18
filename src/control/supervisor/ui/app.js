@@ -794,7 +794,11 @@ function renderOverview() {
   const needEmpty = !shown.length;
   if (needEmpty && !emptyHint) {
     const e = document.createElement("div"); e.className = "fleet-empty";
-    e.textContent = "No models match the current filters"; grid.appendChild(e);
+    // an empty catalog and an over-narrow filter are different situations
+    e.textContent = state.servers.length === 0
+      ? "The supervisor reports an empty catalog — no models are configured"
+      : "No models match the current filters";
+    grid.appendChild(e);
   } else if (!needEmpty && emptyHint) { emptyHint.remove(); }
   drawFleetSparks();
   updateNavActive();
@@ -956,10 +960,19 @@ function renderWorkbench() {
     $("wb-start").onclick = () => controlServer(s.id, "start");
     $("wb-restart").onclick = () => controlServer(s.id, "restart");
     $("wb-stop").onclick = () => controlServer(s.id, "stop");
-    $("image-input-area").classList.remove("hidden");
+    // the bench is only usable while the model can answer: a stopped/failed
+    // model shows a designed offline state instead of an upload UI whose
+    // sends would all fail with a confusing gateway error
+    $("image-input-area").classList.toggle("hidden", !running);
     $("bench-empty").classList.add("hidden");
+    const offline = $("bench-offline");
+    if (offline) {
+      offline.classList.toggle("hidden", running);
+      const t = offline.querySelector(".be-title");
+      if (t) t.textContent = s.state === "failed" ? "Model crashed — restart it to test" : "Start this model to use the test bench";
+    }
     const note = $("bench-note");
-    if (note) note.textContent = "requests go through the gateway";
+    if (note) note.textContent = running ? "requests go through the gateway" : "model is not serving";
     renderFileList();
     renderResultsList(s.id);
     updateSessionStats(s.id);
@@ -1697,7 +1710,8 @@ function renderPalette(query) {
   }
   const firstRow = list.querySelector(".palette-row");
   if (firstRow) firstRow.classList.add("sel");
-  $("palette-input").onkeydown = (ev) => {
+  const input = $("palette-input");
+  input.onkeydown = (ev) => {
     const rows = [...list.querySelectorAll(".palette-row")];
     if (ev.key === "Escape") closePalette();
     else if (ev.key === "Enter") { if (rows[sel]) { closePalette(); items[sel].it.act(); } }
@@ -1706,8 +1720,10 @@ function renderPalette(query) {
       if (rows[sel]) rows[sel].classList.remove("sel");
       sel = ev.key === "ArrowDown" ? Math.min(rows.length - 1, sel + 1) : Math.max(0, sel - 1);
       if (rows[sel]) rows[sel].classList.add("sel");
-    } else setTimeout(() => renderPalette($("palette-input").value), 0);
+    }
   };
+  // filter on the input event too — keydown-only misses paste/IME/programmatic input
+  input.oninput = () => renderPalette(input.value);
 }
 
 /* ---------------- keyboard ---------------- */
