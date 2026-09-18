@@ -71,3 +71,5 @@ dist/
 src/common/mortred_version.h
 conf/local/
 conf/api_keys.toml
+
+.DS_Store
