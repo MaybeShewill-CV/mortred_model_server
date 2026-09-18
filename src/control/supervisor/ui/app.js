@@ -132,8 +132,10 @@ function fmtWindow(seconds) {
 function uptimeOf(s) {
   if (!s.started_at_ms || s.state !== "running") return null;
   const sec = Math.max(0, Math.floor((Date.now() - s.started_at_ms) / 1000));
-  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), ss = sec % 60;
-  return (h > 0 ? h + "h " : "") + String(m).padStart(2, "0") + "m " + String(ss).padStart(2, "0") + "s";
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+  if (h >= 48) return Math.floor(h / 24) + "d " + (h % 24) + "h";   // long-running: compact
+  if (h > 0) return h + "h " + String(m).padStart(2, "0") + "m";
+  return m + "m " + String(sec % 60).padStart(2, "0") + "s";
 }
 
 /* ---------------- theme ---------------- */
@@ -460,7 +462,7 @@ function updateKpis() {
   if (last && last.util != null && last.util >= 0) {
     const ref = g.length > 16 ? g[g.length - 17] : null;
     const d = ref && ref.util >= 0 ? last.util - ref.util : null;
-    tweenKpi("util", last.util, (v) => setKpi("util", Math.round(v) +
+    tweenKpi("util", last.util, (v) => setKpi("util", Math.round(v) + '<span class="kpi-u">%</span>' +
       (d == null ? "" : ' <span class="trend-pill ' + (d >= 0 ? "up" : "down") + '">' + (d >= 0 ? "▲" : "▼") + Math.abs(Math.round(d)) + "</span>")));
     const c = document.querySelector('canvas[data-kpi-spark="util"]');
     if (c) drawSparkline(c, g.slice(-40).map((x) => x.util < 0 ? 0 : x.util), cssVar("--brand"));
@@ -563,6 +565,7 @@ function drawGpuHero() {
     ctx.setLineDash([]);
   }
   // vram (violet)
+  let vramLabel = null;
   {
     const pts = s.map((x, i) => [i * step, yOf(norm(x.mem_total_mib > 0 ? x.mem_used_mib / x.mem_total_mib : 0, 0, 1))]);
     ctx.beginPath(); smoothPathThrough(ctx, pts);
@@ -571,10 +574,11 @@ function drawGpuHero() {
     ctx.stroke();
     const lastVram = s[s.length - 1];
     if (lastVram && lastVram.mem_total_mib > 0) {
-      endValueLabel(ctx, w, pts[pts.length - 1][1], Math.round(100 * lastVram.mem_used_mib / lastVram.mem_total_mib) + "%", cssVar("--chart-mem"));
+      vramLabel = { text: Math.round(100 * lastVram.mem_used_mib / lastVram.mem_total_mib) + "%", color: cssVar("--chart-mem"), y: pts[pts.length - 1][1] };
     }
   }
   // utilization (brand gradient, filled)
+  let utilLabel = null;
   {
     const pts = s.map((x, i) => [i * step, yOf(norm(x.util < 0 ? 0 : x.util, 0, 100))]);
     ctx.beginPath(); smoothPathThrough(ctx, pts);
@@ -609,16 +613,25 @@ function drawGpuHero() {
     ctx.strokeStyle = "rgba(34,211,238,0.35)"; ctx.lineWidth = 2; ctx.stroke();
     const lastUtil = s[s.length - 1];
     if (lastUtil && lastUtil.util >= 0) {
-      endValueLabel(ctx, w, e[1], Math.round(lastUtil.util) + "%", cssVar("--brand"));
+      utilLabel = { text: Math.round(lastUtil.util) + "%", color: cssVar("--brand"), y: e[1] };
     }
   }
+  // end-value labels: collision-aware — when the two series converge at the
+  // right edge their labels would stack on top of each other; offset instead
+  if (utilLabel && vramLabel && Math.abs(utilLabel.y - vramLabel.y) < 15) {
+    // util keeps the spot nearer its line; push vram below (above if clipped)
+    vramLabel.y = vramLabel.y + 15 <= h - 4 ? vramLabel.y + 15 : vramLabel.y - 15;
+  }
+  if (vramLabel) endValueLabel(ctx, w, vramLabel.y, vramLabel.text, vramLabel.color, h);
+  if (utilLabel) endValueLabel(ctx, w, utilLabel.y, utilLabel.text, utilLabel.color, h);
 }
 
-function endValueLabel(ctx, w, y, text, color) {
+function endValueLabel(ctx, w, y, text, color, maxBottom) {
   ctx.font = "650 10.5px " + SANS_STACK;
   ctx.textAlign = "right";
   ctx.fillStyle = color;
-  ctx.fillText(text, w - 6, Math.max(11, y - 7));
+  const ty = Math.min(Math.max(11, y - 7), maxBottom - 4);
+  ctx.fillText(text, w - 6, ty);
   ctx.textAlign = "left";
 }
 

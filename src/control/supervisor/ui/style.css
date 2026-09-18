@@ -494,6 +494,7 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
 
 .gpu-card { padding-bottom: 16px; }
 .gpu-head-side { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.gpu-head-side .chip-static { max-width: 320px; overflow: hidden; }
 .gpu-meta { font: 650 11.5px var(--sans); color: var(--ink-2); white-space: nowrap; }
 .chip-static {
   display: inline-flex; align-items: center;
@@ -725,7 +726,17 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
   font: 500 12px var(--sans);
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
+  min-width: 0;
 }
+/* long uptimes / restarts never push into the port chip: the label ellipsizes */
+.mc-state .st-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mc-state .badge, .mc-state .mc-port { flex-shrink: 0; }
 .st-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--ink-3); }
 .st-dot.running { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
 .st-dot.starting, .st-dot.backoff { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); animation: dot-breathe 1.6s ease-in-out infinite; }
@@ -994,7 +1005,7 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
   color: var(--ink-2);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  width: 74px;
+  width: 92px;
   flex-shrink: 0;
 }
 .id-row .id-v {
