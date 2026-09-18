@@ -18,6 +18,7 @@ const ICONS = {
   key: '<circle cx="7.5" cy="15.5" r="4"/><path d="m10.6 12.4 8.4-8.4M15 4.5 19.5 9M17.5 7l2.5 2.5"/>',
   "chevron-left": '<path d="m14 6-6 6 6 6"/>',
   "chevron-right": '<path d="m10 6 6 6-6 6"/>',
+  "chevron-down": '<path d="m6 9 6 6 6-6"/>',
   play: '<path d="M8 5.2v13.6L19 12 8 5.2z"/>',
   square: '<rect x="6" y="6" width="12" height="12" rx="2.5"/>',
   rotate: '<path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/>',
@@ -84,9 +85,10 @@ const CAT_META = {
 function catMeta(c) { return CAT_META[c] || CAT_META.other; }
 function catColor(c) { return catMeta(c).color; }
 
+/* maps state -> the .st-dot CSS modifier class (running/starting/backoff/…) */
 const STATE_SC = {
-  running: { v: "ok" }, starting: { v: "warn" }, backoff: { v: "warn" },
-  failed: { v: "err" }, stopped: { v: "ink" },
+  running: "running", starting: "starting", backoff: "backoff",
+  failed: "failed", stopped: "",
 };
 function stateVar(v) { return "var(--" + v + ")"; }
 function stateColors() {
@@ -726,6 +728,7 @@ function showView(n) {
 function wireNav() {
   document.querySelectorAll(".nav-item").forEach((btn) => {
     btn.onclick = () => {
+      setNavActive(btn.dataset.anchor); // instant feedback; scrollspy refines
       if (currentRoute().view !== "overview") { navigate("#/overview"); }
       requestAnimationFrame(() => {
         const sec = document.getElementById(btn.dataset.anchor);
@@ -733,27 +736,26 @@ function wireNav() {
       });
     };
   });
-  const view = $("view-overview");
-  view.addEventListener("scroll", updateNavActive);
+  // the page scrolls on the window, not on the view element
+  window.addEventListener("scroll", updateNavActive, { passive: true });
   window.addEventListener("resize", () => { drawAllCharts(); });
+}
+function setNavActive(anchor) {
+  document.querySelectorAll(".nav-item").forEach((b) => {
+    b.classList.toggle("active", b.dataset.anchor === anchor);
+  });
 }
 function updateNavActive() {
   const view = $("view-overview");
-  if (!view || view.classList.contains("hidden")) {
-    document.querySelectorAll(".nav-item").forEach((b) => b.classList.remove("active"));
-    return;
-  }
+  if (!view || view.classList.contains("hidden")) { setNavActive(null); return; }
+  // scrollspy: the active section is the LAST one whose top crossed the line
   const ids = ["sec-kpi", "sec-fleet", "sec-activity"];
-  let best = ids[0], bestTop = Infinity;
+  let best = ids[0];
   for (const id of ids) {
     const el = document.getElementById(id);
-    if (!el) continue;
-    const top = el.getBoundingClientRect().top;
-    if (top <= 120 && top < bestTop + 200) { best = id; bestTop = top; }
+    if (el && el.getBoundingClientRect().top <= 160) best = id;
   }
-  document.querySelectorAll(".nav-item").forEach((b) => {
-    b.classList.toggle("active", b.dataset.anchor === best);
-  });
+  setNavActive(best);
 }
 
 /* ---------------- OVERVIEW ---------------- */
@@ -822,7 +824,7 @@ function upsertModelCard(tiles, grid, s) {
   tile.querySelector(".cat-icon").innerHTML = icon(meta.icon, 18);
   tile.querySelector(".mc-name").textContent = s.name || s.id;
   tile.querySelector(".mc-id").textContent = s.id + (s.type ? " · " + String(s.type).toUpperCase() : "");
-  const dotCls = STATE_SC[s.state] ? STATE_SC[s.state].v : "ink";
+  const dotCls = STATE_SC[s.state] || "";
   tile.querySelector(".mc-state").innerHTML =
     '<span class="st-dot ' + dotCls + '"></span><span class="st-label">' +
     (isRun ? 'running · <span class="uptime" data-id="' + escapeHtml(s.id) + '">' + (uptimeOf(s) || "booting") + "</span>"
@@ -955,10 +957,56 @@ function renderWorkbench() {
   pollProcessInfo(s.id);
   pollServerMetrics(s.id);
   updateWorkbenchGpu();
+  // keep an open switcher in sync with the 2s poll (states/current marker)
+  if (!$("wb-switch-menu").classList.contains("hidden")) renderModelSwitcher();
 }
 
 function idRow(k, vHtml) {
   return '<div class="id-row"><span class="id-k">' + k + '</span><span style="min-width:0;flex:1">' + vHtml + "</span></div>";
+}
+
+/* ---------------- model switcher (workbench) ---------------- */
+
+/* jump between models without returning to the fleet grid */
+function openModelSwitcher() {
+  renderModelSwitcher();
+  $("wb-switch-menu").classList.remove("hidden");
+  $("wb-switch-btn").classList.add("on");
+}
+function closeModelSwitcher() {
+  $("wb-switch-menu").classList.add("hidden");
+  $("wb-switch-btn").classList.remove("on");
+}
+function renderModelSwitcher() {
+  const menu = $("wb-switch-menu");
+  const order = { running: 0, starting: 1, backoff: 1, stopped: 2, failed: 3 };
+  const list = [...state.servers].sort((a, b) =>
+    ((order[a.state] != null ? order[a.state] : 2) - (order[b.state] != null ? order[b.state] : 2)) ||
+    String(a.id).localeCompare(String(b.id)));
+  menu.innerHTML = list.map((s) => {
+    const meta = catMeta(s.category);
+    const dot = STATE_SC[s.state] || "";
+    return '<button class="sw-row' + (s.id === state.selectedId ? " cur" : "") + '" data-id="' + escapeHtml(s.id) + '">' +
+      '<span class="cat-icon xs" style="--cat:' + meta.color + '">' + icon(meta.icon, 14) + "</span>" +
+      '<span class="sw-name">' + escapeHtml(s.name || s.id) + "</span>" +
+      '<span class="sw-id">' + escapeHtml(s.id) + "</span>" +
+      '<span class="st-dot ' + dot + '"></span>' +
+      "</button>";
+  }).join("");
+  menu.querySelectorAll(".sw-row").forEach((row) => {
+    row.onclick = () => {
+      closeModelSwitcher();
+      navigate("#/model/" + row.dataset.id);
+    };
+  });
+}
+function cycleModel(dir) {
+  const r = currentRoute();
+  if (r.view !== "model" || !state.servers.length) return;
+  const ids = state.servers.map((s) => s.id);
+  const i = ids.indexOf(r.id);
+  const next = ids[(i + dir + ids.length) % ids.length];
+  if (next && next !== r.id) navigate("#/model/" + next);
 }
 
 async function pollProcessInfo(id) {
@@ -1653,7 +1701,23 @@ function renderPalette(query) {
 
 document.addEventListener("keydown", (ev) => {
   const inInput = document.activeElement && /input|textarea|select/i.test(document.activeElement.tagName);
-  if (!inInput && (ev.key === "j" || ev.key === "k")) {
+  // palette first: ⌘K/Ctrl+K must never be swallowed by single-key nav (the
+  // 'k' in the modifier combo used to fall into the j/k branch and return)
+  if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "k") {
+    ev.preventDefault();
+    $("palette").classList.contains("hidden") ? openPalette() : closePalette();
+    return;
+  }
+  if (ev.key === "Escape") {
+    if (!$("wb-switch-menu").classList.contains("hidden")) closeModelSwitcher();
+    if (!$("palette").classList.contains("hidden")) closePalette();
+    if (!$("token-dialog").classList.contains("hidden")) closeTokenDialog(null);
+    if (!$("confirm-dialog").classList.contains("hidden")) closeConfirm(false);
+    return;
+  }
+  if (inInput) return;
+  const noMod = !ev.metaKey && !ev.ctrlKey && !ev.altKey;
+  if (noMod && (ev.key === "j" || ev.key === "k")) {
     const view = $("view-overview");
     if (!view || view.classList.contains("hidden")) return;
     const cards = [...document.querySelectorAll(".model-card")];
@@ -1666,14 +1730,9 @@ document.addEventListener("keydown", (ev) => {
     if (next) next.focus();
     return;
   }
-  if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "k") {
-    ev.preventDefault();
-    $("palette").classList.contains("hidden") ? openPalette() : closePalette();
-  }
-  if (ev.key === "Escape") {
-    if (!$("palette").classList.contains("hidden")) closePalette();
-    if (!$("token-dialog").classList.contains("hidden")) closeTokenDialog(null);
-    if (!$("confirm-dialog").classList.contains("hidden")) closeConfirm(false);
+  // [ / ] cycle through the fleet without going back to the grid
+  if (noMod && (ev.key === "[" || ev.key === "]")) {
+    cycleModel(ev.key === "]" ? 1 : -1);
   }
 });
 
@@ -1686,6 +1745,15 @@ function wire() {
   wireGpuCrosshair();
 
   $("wb-back").onclick = () => navigate("#/overview");
+  $("wb-switch-btn").onclick = (ev) => {
+    ev.stopPropagation();
+    $("wb-switch-menu").classList.contains("hidden") ? openModelSwitcher() : closeModelSwitcher();
+  };
+  // close the switcher when clicking anywhere else
+  document.addEventListener("click", (ev) => {
+    if (!$("wb-switch-menu").classList.contains("hidden") &&
+        !ev.target.closest(".wb-switch")) closeModelSwitcher();
+  });
   $("btn-palette").onclick = () => { $("palette").classList.contains("hidden") ? openPalette() : closePalette(); };
   $("btn-token").onclick = async () => {
     const t = await askToken(getToken());

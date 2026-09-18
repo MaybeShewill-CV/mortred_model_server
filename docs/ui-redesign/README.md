@@ -30,6 +30,7 @@
 | [R4](R4-alive-and-trust.md) | 活力与信任（数字 tween / 健康环 / 版本徽章 / 骨架屏 / C++ version API） | 9.1 / 9.1 / 9.1 / 9.1 / 9.2 | 9.10 |
 | [R5](R5-hero-and-final.md) | Hero 带 + GPU 仪表环 + 危险操作确认 + 结果可视化 | **9.4 / 9.2 / 9.2 / 9.3 / 9.4** | **9.27** |
 | [R6](R6-detail-hardening.md) | 用户反馈缺陷修复（folder 上传丢图 / 时间浮点 / 深链误报） | 视觉不变 | ⑦⑥ 加固 |
+| [R7](R7-nav-and-shortcuts.md) | 导航与快捷键（⌘K 拦截 / scrollspy / 模型切换器 + `[` `]`） | 视觉不变 | ⑦② 加固 |
 
 ## 最终得分（R5 / 三视图独立盲评均值）
 

@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#f6f7f9">
   <link rel="icon" href="data:,">
   <title>Mortred Console</title>
-  <link rel="stylesheet" href="style.css?v=lumen14">
+  <link rel="stylesheet" href="style.css?v=lumen15">
 </head>
 <body>
   <div id="app" class="app">
@@ -43,6 +43,7 @@
       <div class="side-hints" aria-label="Keyboard shortcuts">
         <div class="sh-row"><span>Navigate fleet</span><span><kbd>j</kbd> <kbd>k</kbd></span></div>
         <div class="sh-row"><span>Command palette</span><kbd>⌘K</kbd></div>
+        <div class="sh-row"><span>Prev / next model</span><span><kbd>[</kbd> <kbd>]</kbd></span></div>
       </div>
 
       <div class="side-status">
@@ -184,6 +185,12 @@
             <span class="wg-cell"><b id="wg-vram">--</b><i>vram</i></span>
             <span class="wg-cell"><b id="wg-temp">--</b><i>temp</i></span>
             <canvas id="wg-spark" class="wg-spark"></canvas>
+          </div>
+          <div class="wb-switch">
+            <button id="wb-switch-btn" class="btn" title="Switch model ( [ / ] to cycle )" aria-haspopup="menu">
+              <span class="bt-ic" data-icon="grid"></span>Switch model<span class="bt-ic chev" data-icon="chevron-down"></span>
+            </button>
+            <div id="wb-switch-menu" class="switch-menu hidden" role="menu" aria-label="Models"></div>
           </div>
           <div class="wb-actions">
             <button id="wb-start" class="btn brand"><span class="bt-ic" data-icon="play"></span>Start</button>
@@ -328,6 +335,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=lumen14"></script>
+  <script src="app.js?v=lumen15"></script>
 </body>
 </html>
