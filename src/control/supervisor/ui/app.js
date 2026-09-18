@@ -454,8 +454,21 @@ function updateKpis() {
   const live = state.servers.filter((s) => ["running", "starting", "backoff"].includes(s.state));
   const failed = state.servers.filter((s) => s.state === "failed").length;
   tweenKpi("live", live.length, (v) => setKpi("live", Math.round(v)));
-  setKpi("live-sub", " of " + state.servers.length + (failed ? " · " + failed + " failed" : ""));
+  setKpi("live-sub", " of " + state.servers.length);
   drawLiveRing(live.length, state.servers.length);
+  // health chips under the hero numeral: only the states that need attention
+  const fhc = $("fh-chips");
+  if (fhc) {
+    const starting = state.servers.filter((x) => x.state === "starting" || x.state === "backoff").length;
+    const stopped = state.servers.filter((x) => x.state === "stopped").length;
+    const chips = [];
+    if (failed) chips.push('<span class="head-chip err"><b>' + failed + "</b>&nbsp;failed</span>");
+    if (starting) chips.push('<span class="head-chip" style="color:var(--warn);border-color:var(--warn-line);background:var(--warn-soft)"><b>' + starting + "</b>&nbsp;starting</span>");
+    if (stopped) chips.push('<span class="head-chip"><b>' + stopped + "</b>&nbsp;stopped</span>");
+    if (!chips.length) chips.push('<span class="head-chip"><span class="dot"></span>all healthy</span>');
+    const sig = chips.join("");
+    if (fhc._sig !== sig) { fhc.innerHTML = sig; fhc._sig = sig; }
+  }
 
   const g = state.gpuHistory;
   const last = g.length ? g[g.length - 1] : null;

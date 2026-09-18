@@ -207,7 +207,22 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
   text-align: left;
 }
 .nav-item:hover { background: var(--inset); color: var(--ink); }
-.nav-item.active { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
+.nav-item.active { background: var(--brand-soft); font-weight: 650; color: var(--brand); position: relative; }
+/* the active nav item joins the gradient signature: left tick + gradient text */
+.nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: -14px; top: 8px; bottom: 8px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--grad);
+}
+.nav-item.active .nav-ic {
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
 .nav-ic, .sb-ic { display: inline-flex; color: currentColor; }
 .nav-count {
   margin-left: auto;
@@ -248,14 +263,14 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
 @keyframes dot-breathe { 0%, 100% { box-shadow: 0 0 0 3px var(--ok-soft); } 50% { box-shadow: 0 0 0 5px var(--ok-soft); } }
 
 .gateway-pill {
-  font: 500 11px var(--mono);
+  font: 500 11.5px var(--mono);
   color: var(--ink-3);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .ver-pill {
-  font: 500 11px var(--sans);
+  font: 500 11.5px var(--sans);
   color: var(--ink-3);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -329,7 +344,9 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
   margin-bottom: 20px;
 }
 .hero-band .page-head { margin-bottom: 14px; }
-.hero-band .kpi-strip { margin-bottom: 0; }
+.hero-band .hero-grid { margin-bottom: 0; }
+/* workbench session stats keep their own responsive grid */
+.kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
 /* workbench hero: header + session stats share the same aurora band */
 .wb-hero { padding-bottom: 14px; }
 .wb-hero .wb-pagehead { margin-bottom: 14px; }
@@ -360,7 +377,7 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
 
 .head-chip {
   display: inline-flex; align-items: center; gap: 7px;
-  font: 600 12px var(--sans);
+  font: 600 12.5px var(--sans);
   color: var(--ink-2);
   background: var(--surface);
   border: 1px solid var(--line);
@@ -411,37 +428,92 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
   gap: 12px;
   margin-bottom: 14px;
 }
-.card-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font: 600 13.5px var(--sans);
-  color: var(--ink);
-  letter-spacing: -0.01em;
-}
-.card-title .ct-ic { color: var(--ink-3); display: inline-flex; }
-.card-title.dim { color: var(--ink-3); }
 .card-note { font-size: 12px; color: var(--ink-3); }
 
 .sec-head { display: flex; align-items: baseline; gap: 10px; margin: 26px 0 12px; }
-.sec-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--ink);
-}
 .live-note { font: 500 12px var(--sans); color: var(--ink-3); }
 .live-note b { color: var(--ok); font-variant-numeric: tabular-nums; }
 
-/* ---------------- KPI strip ---------------- */
+/* ---------------- unified eyebrow label system ----------------
+ * every section/micro label shares ONE voice (11.5px/700/uppercase/
+ * tracked + brand tick) so content — numerals and cards — is the
+ * only thing that owns visual weight */
+.eyebrow, .card-title, .sec-title, .kpi-k, .fleet-cap {
+  font: 700 11.5px var(--sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.eyebrow::before {
+  content: "";
+  width: 10px; height: 3px;
+  border-radius: 999px;
+  background: var(--grad);
+  display: inline-block;
+  margin-right: 7px;
+  vertical-align: 2px;
+}
+.card-title { display: inline-flex; align-items: center; gap: 8px; }
+.card-title .ct-ic { color: var(--ink-3); display: inline-flex; }
+.card-title.dim { color: var(--ink-3); }
+.sec-title { margin: 0; display: inline-flex; align-items: center; }
+.sec-title::before {
+  content: "";
+  width: 10px; height: 3px;
+  border-radius: 999px;
+  background: var(--grad);
+  margin-right: 8px;
+}
+.kpi-k::before {
+  content: "";
+  width: 8px; height: 3px;
+  border-radius: 999px;
+  background: var(--grad);
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: 2px;
+  opacity: 0.8;
+}
 
-.kpi-strip {
+/* ---------------- hero: primary anchor + secondary stats ---------------- */
+
+.hero-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
   gap: 14px;
   margin-bottom: 20px;
 }
+.hero-grid .kpi { margin-bottom: 0; }
+/* the fleet-health module is not a card: it IS the hero band's voice */
+.fleet-health {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.fh-main { display: flex; align-items: center; gap: 18px; }
+.live-ring { flex-shrink: 0; }
+.live-ring .ring-track { stroke: color-mix(in srgb, var(--ink-3) 22%, transparent); }
+.live-ring .ring-value {
+  transition: stroke-dashoffset 700ms cubic-bezier(0.2, 0.8, 0.3, 1);
+  filter: drop-shadow(0 2px 6px rgba(99, 102, 241, 0.35));
+}
+.fh-count { min-width: 0; }
+.fh-v {
+  font: 750 40px/1.05 var(--sans);
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.fh-total { font: 500 13px var(--sans); color: var(--ink-3); letter-spacing: 0.04em; }
+.fh-cap { font: 500 12px var(--sans); color: var(--ink-3); letter-spacing: 0.03em; margin-top: 3px; }
+.fh-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ---------------- KPI tiles (secondary stats) ---------------- */
+
 .kpi {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -455,12 +527,6 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
   transition: box-shadow var(--t), transform var(--t);
 }
 .kpi:hover { box-shadow: var(--shadow-2); transform: translateY(-1px); }
-.kpi-k {
-  font: 650 11px var(--sans);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-2);
-}
 .kpi-v {
   display: flex;
   align-items: baseline;
@@ -470,10 +536,10 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
-.kpi-u { font: 600 12px var(--sans); color: var(--ink-3); letter-spacing: 0; }
+.kpi-u { font: 500 11px var(--sans); color: var(--ink-3); letter-spacing: 0.05em; }
 /* trend reads as a small pill so it never fights the numeral's scale */
 .kpi-v .trend-pill {
-  font: 650 11px var(--sans);
+  font: 650 10.5px var(--sans);
   border-radius: 999px;
   padding: 2px 7px;
   align-self: center;
@@ -495,7 +561,7 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
 .gpu-card { padding-bottom: 16px; }
 .gpu-head-side { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .gpu-head-side .chip-static { max-width: 320px; overflow: hidden; }
-.gpu-meta { font: 650 11.5px var(--sans); color: var(--ink-2); white-space: nowrap; }
+.gpu-meta { font: 650 12px var(--sans); color: var(--ink-2); white-space: nowrap; }
 .chip-static {
   display: inline-flex; align-items: center;
   font: 500 11.5px var(--mono);
@@ -534,7 +600,7 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
   font-variant-numeric: tabular-nums;
 }
 .gauge-label i {
-  font: 650 10.5px var(--sans);
+  font: 650 11px var(--sans);
   font-style: normal;
   text-transform: uppercase;
   letter-spacing: 0.09em;
@@ -600,7 +666,7 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
-.stat-chip i { font: 650 10.5px var(--sans); font-style: normal; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); }
+.stat-chip i { font: 650 11px var(--sans); font-style: normal; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); }
 /* "hot" = approaching physical limits: amber warning, not red error */
 .stat-chip.hot { background: var(--warn-soft); border-color: var(--warn-line); color: var(--warn); }
 .stat-chip.hot i { color: var(--warn); }
@@ -611,18 +677,13 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
 /* ---------------- fleet ---------------- */
 
 .fleet-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 14px; }
-.fleet-cap {
-  font: 650 11px var(--sans);
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--ink-2);
-  margin-right: 2px;
-}
+.fleet-cap { margin-right: 2px; }
+.fleet-cap::before { content: none; }
 .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip-sep { width: 1px; height: 18px; background: var(--line-2); margin: 0 6px; }
 .chip {
   appearance: none;
-  font: 500 12.5px var(--sans);
+  font: 500 13px var(--sans);
   color: var(--ink-2);
   background: var(--surface);
   border: 1px solid var(--line);
@@ -696,8 +757,8 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
 }
 .cat-icon.lg { width: 46px; height: 46px; border-radius: 13px; }
 .mc-name {
-  font: 600 14.5px var(--sans);
-  letter-spacing: -0.01em;
+  font: 650 15px var(--sans);
+  letter-spacing: -0.012em;
   color: var(--ink);
   flex: 1;
   min-width: 0;
@@ -705,9 +766,9 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.mc-id { display: block; font: 500 11px var(--mono); color: var(--ink-3); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-id { display: block; font: 500 11.5px var(--mono); color: var(--ink-3); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .badge {
-  font: 600 10.5px var(--mono);
+  font: 600 11px var(--mono);
   color: var(--ink-3);
   border: 1px solid var(--line);
   border-radius: 5px;
@@ -723,7 +784,7 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
   display: flex;
   align-items: center;
   gap: 8px;
-  font: 500 12px var(--sans);
+  font: 500 12.5px var(--sans);
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
   min-width: 0;
@@ -753,27 +814,21 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
 }
 .model-card.dead .mc-state .st-label { color: var(--err); font-weight: 650; }
 
-/* the "live models" KPI carries a gradient health ring instead of a sparkline */
-#kpi-live .kpi-spark { display: none; }
-#kpi-live .kpi-u[data-kpi="live-sub"] { margin-top: 2px; }
-.live-ring { margin-left: auto; flex-shrink: 0; }
-.live-ring .ring-track { stroke: var(--inset); }
-.live-ring .ring-value {
-  transition: stroke-dashoffset 700ms cubic-bezier(0.2, 0.8, 0.3, 1);
-  filter: drop-shadow(0 1px 3px rgba(99, 102, 241, 0.35));
-}
 
 .mc-spark { height: 32px; }
 .mc-spark canvas { width: 100%; height: 100%; display: block; }
 .spark-tag {
-  font: 600 11px var(--sans);
+  font: 600 11.5px var(--sans);
   color: var(--ink-3);
   height: 16px;
   display: flex;
   align-items: center;
   gap: 6px;
 }
-.spark-tag.live { color: var(--ok); font-weight: 650; }
+.spark-tag.live { color: var(--cat, var(--ok)); font-weight: 650; }
+.spark-tag.live .tag-dot { animation: dot-breathe 2.2s ease-in-out infinite; box-shadow: 0 0 0 3px color-mix(in srgb, var(--cat, var(--ok)) 18%, transparent); }
+/* running uptime reads as live telemetry, not static metadata */
+.mc-state .st-label .uptime { font-weight: 650; color: var(--ink); font-variant-numeric: tabular-nums; }
 .spark-tag .tag-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 .spark-tag.idle-tag {
   color: var(--ink-3);
@@ -798,7 +853,7 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
 .river-content {
   max-height: 220px;
   overflow-y: auto;
-  font: 500 12.5px var(--mono);
+  font: 500 13px var(--mono);
   line-height: 1.9;
 }
 .river-line { white-space: nowrap; display: flex; align-items: baseline; gap: 10px; }
@@ -931,7 +986,7 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
 .wg-cell { display: inline-flex; align-items: baseline; gap: 5px; }
 .wg-cell b { font: 650 15px var(--sans); color: var(--ink); }
 .wg-cell.hot b { color: var(--warn); }
-.wg-cell i { font: 600 10px var(--sans); font-style: normal; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-3); }
+.wg-cell i { font: 600 10.5px var(--sans); font-style: normal; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-3); }
 .wg-spark { width: 110px; height: 28px; display: block; }
 
 .wb-actions { display: flex; gap: 8px; flex-shrink: 0; }
@@ -975,7 +1030,7 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
 .sw-row.cur { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
 .sw-row.cur::after { content: "current"; margin-left: auto; font: 600 10px var(--sans); text-transform: uppercase; letter-spacing: 0.07em; opacity: 0.7; }
 .sw-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sw-id { margin-left: auto; font: 500 11px var(--mono); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; max-width: 110px; }
+.sw-id { margin-left: auto; font: 500 11.5px var(--mono); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; max-width: 110px; }
 .sw-row.cur .sw-id { display: none; }
 .sw-row .st-dot { flex-shrink: 0; }
 
@@ -1019,11 +1074,11 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
   color: var(--ink-2);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  width: 92px;
+  width: 96px;
   flex-shrink: 0;
 }
 .id-row .id-v {
-  font: 500 12.5px var(--mono);
+  font: 500 13px var(--mono);
   color: var(--ink);
   overflow-wrap: anywhere;
   min-width: 0;
@@ -1142,7 +1197,7 @@ svg.ic, .bt-ic svg, .nav-ic svg, .sb-ic svg, .ct-ic svg, .cat-icon svg { display
 }
 .head-chips { display: inline-flex; gap: 6px; flex-wrap: wrap; }
 .chiplet {
-  font: 600 11.5px var(--sans);
+  font: 600 12px var(--sans);
   color: var(--ink-2);
   background: var(--surface);
   border: 1px solid var(--line);
@@ -1305,7 +1360,7 @@ mark { background: var(--warn-soft); color: var(--warn); border-radius: 3px; pad
 .palette-row.sel .pl-ic { color: var(--brand); }
 .palette-row .pl-main > .pl-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .palette-hint {
-  font: 600 10.5px var(--sans);
+  font: 600 11px var(--sans);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--ink-3);
@@ -1335,7 +1390,7 @@ mark { background: var(--warn-soft); color: var(--warn); border-radius: 3px; pad
   font: 500 11.5px var(--sans);
 }
 .palette-foot kbd, kbd {
-  font: 500 10.5px var(--mono);
+  font: 500 11px var(--mono);
   color: var(--ink-2);
   background: var(--inset);
   border: 1px solid var(--line);
@@ -1477,7 +1532,9 @@ body.boot .view > *:nth-child(5) { animation-delay: 200ms; }
   .side-actions { flex-direction: row; }
   .side-kbd, .sb-label { display: none; }
   .view { padding: 20px 16px 32px; }
-  .kpi-strip { grid-template-columns: repeat(2, 1fr); }
+  .kpi-strip { grid-template-columns: repeat(3, 1fr); }
+  .hero-grid { grid-template-columns: repeat(2, 1fr); }
+  .fleet-health { grid-column: 1 / -1; }
   .wb-grid { grid-template-columns: 1fr; }
   .dossier-card { position: static; }
 }

@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#f6f7f9">
   <link rel="icon" href="data:,">
   <title>Mortred Console</title>
-  <link rel="stylesheet" href="style.css?v=lumen20">
+  <link rel="stylesheet" href="style.css?v=lumen24">
 </head>
 <body>
   <div id="app" class="app">
@@ -79,39 +79,44 @@
             <div class="page-head-side" id="ov-chips"></div>
           </header>
 
-        <section id="sec-kpi" class="kpi-strip" aria-label="Key metrics">
-          <div class="kpi" id="kpi-live">
-            <div class="kpi-k">Live models</div>
-            <div class="kpi-v">
-              <span data-kpi="live"><span class="skel skel-num"></span></span><span class="kpi-u" data-kpi="live-sub"></span>
-              <svg class="live-ring" width="46" height="46" viewBox="0 0 46 46" aria-hidden="true">
-                <defs>
-                  <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0" stop-color="#6366f1"/>
-                    <stop offset="1" stop-color="#22d3ee"/>
-                  </linearGradient>
-                </defs>
-                <circle class="ring-track" cx="23" cy="23" r="19" fill="none" stroke-width="4.5"/>
-                <circle class="ring-value" cx="23" cy="23" r="19" fill="none" stroke="url(#ringGrad)" stroke-width="4.5" stroke-linecap="round" transform="rotate(-90 23 23)"/>
-              </svg>
+          <!-- hero: ONE primary anchor (fleet health) + secondary stats —
+               the eye lands on live count first, then reads right -->
+          <section id="sec-kpi" class="hero-grid" aria-label="Key metrics">
+            <div class="fleet-health" id="kpi-live">
+              <div class="eyebrow">Fleet health</div>
+              <div class="fh-main">
+                <svg class="live-ring" width="92" height="92" viewBox="0 0 46 46" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0" stop-color="#6366f1"/>
+                      <stop offset="1" stop-color="#22d3ee"/>
+                    </linearGradient>
+                  </defs>
+                  <circle class="ring-track" cx="23" cy="23" r="19" fill="none" stroke-width="4.5"/>
+                  <circle class="ring-value" cx="23" cy="23" r="19" fill="none" stroke="url(#ringGrad)" stroke-width="4.5" stroke-linecap="round" transform="rotate(-90 23 23)"/>
+                </svg>
+                <div class="fh-count">
+                  <div class="fh-v"><span data-kpi="live"><span class="skel skel-num"></span></span><span class="fh-total" data-kpi="live-sub"> of —</span></div>
+                  <div class="fh-cap">models live</div>
+                </div>
+              </div>
+              <div class="fh-chips" id="fh-chips"></div>
             </div>
-            <div class="kpi-spark"><canvas data-kpi-spark="live"></canvas></div>
-          </div>
-          <div class="kpi" id="kpi-rps">
-            <div class="kpi-k">Throughput</div>
-            <div class="kpi-v"><span data-kpi="rps"><span class="skel skel-num"></span></span><span class="kpi-u">req/s</span></div>
-            <div class="kpi-spark"><canvas data-kpi-spark="rps"></canvas></div>
-          </div>
-          <div class="kpi" id="kpi-util">
-            <div class="kpi-k">GPU utilization</div>
-            <div class="kpi-v"><span data-kpi="util"><span class="skel skel-num"></span></span></div>
-            <div class="kpi-spark"><canvas data-kpi-spark="util"></canvas></div>
-          </div>
-          <div class="kpi" id="kpi-vram">
-            <div class="kpi-k">VRAM in use</div>
-            <div class="kpi-v"><span data-kpi="vram">—</span></div>
-            <div class="kpi-bar"><div class="kpi-bar-fill" id="kpi-vram-fill"></div></div>
-          </div>
+            <div class="kpi" id="kpi-rps">
+              <div class="eyebrow">Throughput</div>
+              <div class="kpi-v"><span data-kpi="rps"><span class="skel skel-num"></span></span><span class="kpi-u">req/s</span></div>
+              <div class="kpi-spark"><canvas data-kpi-spark="rps"></canvas></div>
+            </div>
+            <div class="kpi" id="kpi-util">
+              <div class="eyebrow">GPU utilization</div>
+              <div class="kpi-v"><span data-kpi="util"><span class="skel skel-num"></span></span></div>
+              <div class="kpi-spark"><canvas data-kpi-spark="util"></canvas></div>
+            </div>
+            <div class="kpi" id="kpi-vram">
+              <div class="eyebrow">VRAM in use</div>
+              <div class="kpi-v"><span data-kpi="vram">—</span></div>
+              <div class="kpi-bar"><div class="kpi-bar-fill" id="kpi-vram-fill"></div></div>
+            </div>
           </section>
         </div>
 
@@ -200,12 +205,12 @@
         </header>
 
         <section class="kpi-strip wb-stats-row" id="wb-stats-row">
-          <div class="kpi sm"><div class="kpi-k">Sent</div><div class="kpi-v"><span id="ws-sent">0</span></div></div>
-          <div class="kpi sm"><div class="kpi-k">Succeeded</div><div class="kpi-v"><span id="ws-ok" class="c-ok">0</span></div></div>
-          <div class="kpi sm"><div class="kpi-k">Failed</div><div class="kpi-v"><span id="ws-fail">0</span></div></div>
-          <div class="kpi sm"><div class="kpi-k">p50 latency</div><div class="kpi-v"><span id="ws-p50">—</span></div></div>
-          <div class="kpi sm"><div class="kpi-k">p95 latency</div><div class="kpi-v"><span id="ws-p95">—</span></div></div>
-          <div class="kpi sm"><div class="kpi-k">In-flight</div><div class="kpi-v"><span id="ws-inflight">0</span></div></div>
+          <div class="kpi sm"><div class="eyebrow">Sent</div><div class="kpi-v"><span id="ws-sent">0</span></div></div>
+          <div class="kpi sm"><div class="eyebrow">Succeeded</div><div class="kpi-v"><span id="ws-ok" class="c-ok">0</span></div></div>
+          <div class="kpi sm"><div class="eyebrow">Failed</div><div class="kpi-v"><span id="ws-fail">0</span></div></div>
+          <div class="kpi sm"><div class="eyebrow">p50 latency</div><div class="kpi-v"><span id="ws-p50">—</span></div></div>
+          <div class="kpi sm"><div class="eyebrow">p95 latency</div><div class="kpi-v"><span id="ws-p95">—</span></div></div>
+          <div class="kpi sm"><div class="eyebrow">In-flight</div><div class="kpi-v"><span id="ws-inflight">0</span></div></div>
         </section>
         </div>
 
@@ -340,6 +345,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=lumen20"></script>
+  <script src="app.js?v=lumen22"></script>
 </body>
 </html>
