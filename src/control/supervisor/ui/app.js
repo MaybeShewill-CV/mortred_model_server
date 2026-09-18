@@ -212,7 +212,7 @@ async function api(path, options) {
 const state = {
   servers: [], gateway: null, selectedId: null,
   batchAbort: null, logs: {}, logServerId: null,
-  river: [], gpuHistory: [],
+  river: [], gpuHistory: [], gpuIntervalMs: 2000,
   inferHistory: [],
   fleetFilter: "all", fleetState: "all",
   bench: {}, inflight: 0,
@@ -342,6 +342,11 @@ function renderGateway() {
 
 /* ---------------- polling: gpu ---------------- */
 
+function gpuPollLabel() {
+  const ms = state.gpuIntervalMs;
+  return ms % 1000 === 0 ? (ms / 1000) + " s" : ms + " ms";
+}
+
 async function pollGpu() {
   const r = await api("/api/v1/gpu");
   const panel = $("sec-gpu"); if (!panel) return;
@@ -355,9 +360,10 @@ async function pollGpu() {
   panel.classList.remove("gpu-na");
   state.gpuHistory = r.data.samples || [];
   $("gpu-name").textContent = r.data.name || "GPU";
-  const winS = Math.round(state.gpuHistory.length * 2);
+  if (r.data.interval_ms && r.data.interval_ms > 0) state.gpuIntervalMs = r.data.interval_ms;
+  const winS = Math.round(state.gpuHistory.length * state.gpuIntervalMs / 1000);
   $("gpu-meta").textContent = state.gpuHistory.length
-    ? "1 gpu · last " + fmtWindow(winS) + " · 2 s poll · hover to inspect"
+    ? "1 gpu · last " + fmtWindow(winS) + " · " + gpuPollLabel() + " · hover to inspect"
     : "";
   const last = state.gpuHistory.length ? state.gpuHistory[state.gpuHistory.length - 1] : null;
   if (last) { updateGpuChips(last); updateKpis(); updateGpuGauge(last); }
@@ -1871,5 +1877,8 @@ renderCurrentView();
 refresh(); pollGpu(); pollFleetMetrics();
 setInterval(refresh, 2000);
 setInterval(pollFleetMetrics, 6000);
-setInterval(pollGpu, 2000);
+function scheduleGpuPoll() {
+  setTimeout(() => { pollGpu().finally(scheduleGpuPoll); }, Math.max(250, state.gpuIntervalMs));
+}
+scheduleGpuPoll();
 setInterval(pollLogs, 1000);

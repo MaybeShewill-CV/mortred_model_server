@@ -18,6 +18,10 @@ autostart_default = false
 # gateway starts first, then models with this width (1 = sequential, safest
 # for GPU memory; raise for CPU models)
 start_concurrency = 1
+# GPU telemetry sample cadence (nvidia-smi probe on a dedicated thread;
+# 0 = disable, max 60000). The console follows this interval automatically.
+# The sample ring keeps 300 points: 2000 ms -> 10 min window, 500 ms -> 2.5 min.
+gpu_sample_interval_ms = 500
 # managed process logs: <log_dir>/<server id>.log, rotated at this size
 log_dir = "logs"
 log_rotate_mb = 10
