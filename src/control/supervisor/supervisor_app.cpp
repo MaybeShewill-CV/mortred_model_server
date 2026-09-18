@@ -42,6 +42,7 @@
 
 #include "common/auth_token.h"
 #include "common/listen_policy.h"
+#include "common/mortred_version.h"
 #include "common/request_size_limit.h"
 #include "control/catalog.h"
 #include "control/control_config.h"
@@ -626,9 +627,10 @@ void SupervisorApp::process(WFHttpTask* task) {
         task->get_req()->get_request_uri() == nullptr ? "" : task->get_req()->get_request_uri();
 
     const bool is_api = path.rfind("/api/v1/", 0) == 0;
-    // health stays public (docker healthcheck / k8s probes); the rest of the
-    // management API requires the supervisor bearer token
-    if (is_api && path != "/api/v1/health" &&
+    // health and version stay public (docker healthcheck / k8s probes / console
+    // boot badge); the rest of the management API requires the supervisor
+    // bearer token
+    if (is_api && path != "/api/v1/health" && path != "/api/v1/version" &&
         !jinq::common::is_bearer_authorized(
             header_value(task->get_req(), "Authorization"), auth_token_)) {
         task->get_resp()->add_header_pair("WWW-Authenticate", "Bearer realm=\"Mortred\"");
@@ -638,6 +640,12 @@ void SupervisorApp::process(WFHttpTask* task) {
 
     if (path == "/api/v1/health") {
         reply_json(task, 200, "{\"ok\":true}");
+        return;
+    }
+    if (path == "/api/v1/version" && method == "GET") {
+        reply_json(task, 200,
+                   std::string("{\"component\":\"supervisor\",\"version\":\"") +
+                       MORTRED_VERSION + "\"}");
         return;
     }
     if (!is_api) {

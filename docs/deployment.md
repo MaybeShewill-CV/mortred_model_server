@@ -84,7 +84,7 @@ flowchart LR
 | Port | Process | Purpose | Auth |
 |---|---|---|---|
 | `8080` | mortred-gateway | inference `/mortred_ai_server_v1/...`, `/healthz`, `/metrics` | Bearer on infer/jobs; `/healthz` public; `/metrics` requires `MORTRED_METRICS_TOKEN` (including loopback) |
-| `8787` | mortred-supervisor | mgmt API `/api/v1/*`, web console | Bearer token |
+| `8787` | mortred-supervisor | mgmt API `/api/v1/*`, web console | Bearer token; `/api/v1/health` and `/api/v1/version` are public |
 | `9002+` | model servers | loopback only | internal token (including `GET /metrics`) |
 
 ---
@@ -240,6 +240,7 @@ The gpu track needs the NVIDIA Container Toolkit (`docker run --gpus all` works 
 
 ```bash
 curl -fs http://localhost:8787/api/v1/health        # supervisor health
+curl -fs http://localhost:8787/api/v1/version       # supervisor version badge (public, used by the web console)
 curl -fs http://localhost:8080/healthz               # gateway health (public)
 curl -fs -H "Authorization: Bearer $MORTRED_METRICS_TOKEN" \
     http://localhost:8080/metrics | head -5          # gateway metrics
