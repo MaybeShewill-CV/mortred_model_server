@@ -1,7 +1,7 @@
 [YOLOV8]
 [YOLOV8.backend]
 type = "tensorrt"
-model_file_path = "../weights/object_detection/yolov8/yolov8s.engine"
+model_file_path = "../weights/object_detection/yolov8/yolov8s.engine.static_bs1"
 device = "gpu"
 
 [YOLOV8.params]
