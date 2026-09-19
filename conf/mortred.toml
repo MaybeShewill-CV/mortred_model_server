@@ -48,8 +48,8 @@ upstream_recv_timeout_ms = 180000
 [gateway.rate_limit]
 enabled = false
 shadow = false
-rate_per_sec = 50
-burst = 100
+rate_per_sec = 100000
+burst = 200000
 trusted_proxies = "127.0.0.1,::1"
 
 # Per-server supervision overrides; <id> is the catalog model_section
