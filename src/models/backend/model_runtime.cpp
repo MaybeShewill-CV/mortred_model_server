@@ -288,30 +288,37 @@ RuntimeResult<NamedTensor> letterbox_bgr_f32_nchw(const cv::Mat &bgr, const cv::
     const int band_x1 = cols - geom.pad_right;
     const size_t plane_elems = static_cast<size_t>(rows) * static_cast<size_t>(cols);
     auto *const base = reinterpret_cast<float *>(named.tensor.buffer.data());
-    for (int plane_idx = 0; plane_idx < 3; ++plane_idx) {
-        // plane 0 = R reads BGR slot 2, plane 1 = G slot 1, plane 2 = B slot 0
-        const int bgr_slot = 2 - plane_idx;
-        float *plane = base + plane_idx * plane_elems;
-        for (int y = 0; y < rows; ++y) {
-            float *row = plane + static_cast<size_t>(y) * cols;
-            const bool in_band_y = y >= band_y0 && y < band_y1;
-            if (!in_band_y) {
-                for (int x = 0; x < cols; ++x) {
-                    row[x] = pad_f;
-                }
-                continue;
-            }
-            const auto *src = resized.ptr<const unsigned char>(y - band_y0);
-            int x = 0;
-            for (; x < band_x0; ++x) {
-                row[x] = pad_f;
-            }
-            for (; x < band_x1; ++x) {
-                row[x] = static_cast<float>(src[static_cast<size_t>(x - band_x0) * 3 + bgr_slot]) * scale_f;
-            }
-            for (; x < cols; ++x) {
-                row[x] = pad_f;
-            }
+    // one pass over the source row, writing the three plane rows at once:
+    // the source is read once (the plane-major three-pass variant reads it
+    // three times with stride-3 gathers)
+    for (int y = 0; y < rows; ++y) {
+        // plane 0 = R (BGR slot 2), plane 1 = G, plane 2 = B - the NCHW
+        // channel order the RGB conversion produced in the legacy chain
+        float *row_r = base + 0 * plane_elems + static_cast<size_t>(y) * cols;
+        float *row_g = base + 1 * plane_elems + static_cast<size_t>(y) * cols;
+        float *row_b = base + 2 * plane_elems + static_cast<size_t>(y) * cols;
+        if (y < band_y0 || y >= band_y1) {
+            std::fill(row_r, row_r + cols, pad_f);
+            std::fill(row_g, row_g + cols, pad_f);
+            std::fill(row_b, row_b + cols, pad_f);
+            continue;
+        }
+        const auto *src = resized.ptr<const unsigned char>(y - band_y0);
+        for (int x = 0; x < band_x0; ++x) {
+            row_r[x] = pad_f;
+            row_g[x] = pad_f;
+            row_b[x] = pad_f;
+        }
+        for (int x = band_x0; x < band_x1; ++x) {
+            const auto *px = src + static_cast<size_t>(x - band_x0) * 3;
+            row_r[x] = static_cast<float>(px[2]) * scale_f;
+            row_g[x] = static_cast<float>(px[1]) * scale_f;
+            row_b[x] = static_cast<float>(px[0]) * scale_f;
+        }
+        for (int x = band_x1; x < cols; ++x) {
+            row_r[x] = pad_f;
+            row_g[x] = pad_f;
+            row_b[x] = pad_f;
         }
     }
     return runtime_ok(std::move(named));

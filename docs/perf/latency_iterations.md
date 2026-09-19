@@ -98,6 +98,39 @@ C=16 分解（P50）：worker 排队 96.7→67.8、h2d 2.32→1.34、exec 9.95�
 
 距目标：P50 15.98（需 ≤13，还差 2.98）｜RPS 150.3 ✓ 已达标。剩余缺口全部指向 decode（6.19ms）→ 进入 W4。
 
+---
+
+## 迭代 4：W4 budget 档 JPEG 降分辨率解码（+融合核二档优化）
+
+改动：
+1. `cv_image_input.h`：`ImageInputLimits` 增加 `network_input`/`budget_upscale`；JPEG SOF 维度探测（含 EXIF 方向感知，min(N/W,N/H) 对 W/H 交换不变故档位选择恒安全）；`image_input` 解码统一路径支持 `IMREAD_REDUCED_COLOR_{2,4,8}`，可选出参回传**解码前全尺寸**；
+2. `backend_cv_model.h`：`prepare_inputs` 用全尺寸锚定 `context.source_size`（坐标留在原图坐标系）；`set_image_decode_hint` 钩子；
+3. `yolov8_detector.inl`：on_init 解析 `image_decode_mode`/`image_decode_budget_upscale`（默认 strict=关闭）；
+4. 配置 `yolov8_config.toml`：`image_decode_mode="budget"`、`budget_upscale=1.25`（bus.jpg 810×1080 → r=2 档，letterbox 上采样 1.185×）；
+5. 融合核二档：单遍源读三平面同写（读带宽 1/3）。**此重构曾引入平面顺序 bug（plane0 误写 B），被 golden 门禁当场抓获（坐标偏差 10.8px/分数 0.055），修复后回到 2.953px/0.0215**。
+
+**精度门禁（budget 档为非零容差，如设计）**：5 框→5 框，最大坐标偏差 2.953px（810×1080 的 0.27%，同时证明全尺寸坐标锚定正确——若锚错偏差会是数百 px），最大分数偏差 0.0215（budget 档已知代价）。
+
+**实测**（C=1×3 取中位，n=9637；C=16×1）：
+
+| # | 环节 | W3 P50 | **W4 P50** | Δ | 备注 |
+|---|---|---|---|---|---|
+| 5 | **decode** | 6.191 | **4.985** | **−1.21** | libjpeg-turbo（系统 libjpeg.so.8 已确认）缩放解码仅 1.27×——Huffman 级解码无法跳过，此为机器现实下限 |
+| 6 | **pre** | 1.534 | **1.244** | **−0.29** | 源图变小 + 单遍核 |
+| 7 | h2d | 0.726 | 0.740 | ~0 | |
+| 8 | exec | 4.034 | 3.636 | −0.40 | 晚间 GPU 争抢波动带 |
+| 9 | d2h | 0.782 | 0.803 | ~0 | |
+| 10 | post | 0.781 | 0.799 | ~0 | |
+|  | 模型 total | 14.708 | 13.125 | −1.58 | |
+|  | **客户端 P50 / RPS(C=1)** | 15.98 / 42.9 | **14.30 / 49.2** | −1.68 / +15% | 三轮 14.30/14.30/14.37 |
+|  | **RPS(C=16)** | 150.3 | **160.3** | +7% | P50 97.2→91.0 |
+
+距目标：P50 14.30（需 ≤13，还差 1.30）｜RPS 160.3 ✓（目标 120 的 134%）。
+
+**缺口分析（W4 后 C=1 P50 预算）**：壳 1.27 + 框架 0.19 + decode 4.99（turbo 下限）+ pre 1.24 + h2d 0.74 + exec 3.64（安静下限 ~2.7）+ d2h 0.80 + post 0.80 ≈ 14.3。剩余可控手段：micro-op 仅 ~0.4ms 不够；启动**迭代 5：fp16 输入 static engine 重建**（非 dynamic batch：输入 4.9MB→2.45MB，pre 写带宽减半 + h2d 减半 + exec 内 H2D 等待减半，预估 −0.9ms；需精度门禁）。
+
+
+
 
 
 

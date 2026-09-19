@@ -10,8 +10,10 @@
 
 #include <vector>
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
+#include <utility>
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -31,6 +33,14 @@ using jinq::common::StatusCode;
 struct ImageInputLimits {
     int64_t max_pixels = 16777216;
     int64_t max_side = 8192;
+    // W4 JPEG DCT-domain reduced decode. network_input empty = feature off
+    // (all models default). budget_upscale <= 1.0 = strict mode: reduction is
+    // only applied when the reduced image still covers the letterbox target
+    // (no upsampling). budget_upscale > 1.0 additionally allows one reduction
+    // notch whose letterbox upsampling stays within the factor - a numerical
+    // accuracy tradeoff that each model opts into via its params.
+    cv::Size network_input{};
+    float budget_upscale = 1.0f;
 };
 
 inline bool image_within_limits(const cv::Mat &image, const ImageInputLimits &limits, std::string *error) {
@@ -93,6 +103,122 @@ inline StatusCode status_for_image_load(const std::string &error) {
         return StatusCode::REQUEST_ENTITY_TOO_LARGE;
     }
     return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+}
+
+/*** minimal JPEG SOF dimension probe (post-rotation via EXIF orientation);
+ * returns false for anything that is not a parseable baseline JPEG, and the
+ * caller then falls back to a full decode */
+inline bool jpeg_full_dimensions(const std::vector<unsigned char> &bytes, cv::Size *size) {
+    if (bytes.size() < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8) {
+        return false;
+    }
+    int width = 0;
+    int height = 0;
+    int orientation = 1;
+    size_t pos = 2;
+    while (pos + 4 <= bytes.size()) {
+        if (bytes[pos] != 0xFF) {
+            ++pos;
+            continue;
+        }
+        const unsigned char marker = bytes[pos + 1];
+        if (marker == 0xFF) {
+            ++pos;
+            continue;
+        }
+        if (marker == 0xD8 || marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7)) {
+            pos += 2;
+            continue;
+        }
+        const size_t seg_len = (static_cast<size_t>(bytes[pos + 2]) << 8) | bytes[pos + 3];
+        if (seg_len < 2) {
+            return false;
+        }
+        if ((marker >= 0xC0 && marker <= 0xC3) || (marker >= 0xC5 && marker <= 0xC7) ||
+            (marker >= 0xC9 && marker <= 0xCB) || (marker >= 0xCD && marker <= 0xCF)) {
+            if (pos + 9 > bytes.size()) {
+                return false;
+            }
+            height = (bytes[pos + 5] << 8) | bytes[pos + 6];
+            width = (bytes[pos + 7] << 8) | bytes[pos + 8];
+        } else if (marker == 0xE1 && seg_len >= 16 && pos + 2 + 6 <= bytes.size() &&
+                   bytes[pos + 4] == 'E' && bytes[pos + 5] == 'x' && bytes[pos + 6] == 'i' &&
+                   bytes[pos + 7] == 'f') {
+            // TIFF header at pos+10; IFD0 entries follow the 8-byte header
+            const size_t tiff = pos + 10;
+            if (tiff + 8 <= pos + 2 + seg_len && tiff + 8 <= bytes.size()) {
+                const bool little = bytes[tiff] == 0x49 && bytes[tiff + 1] == 0x49;
+                const auto read16 = [&](size_t offset) -> int {
+                    const size_t at = tiff + offset;
+                    if (at + 2 > bytes.size()) {
+                        return 0;
+                    }
+                    return little ? (bytes[at] | (bytes[at + 1] << 8)) : ((bytes[at] << 8) | bytes[at + 1]);
+                };
+                const int entry_count = read16(4);
+                for (int entry = 0; entry < entry_count && entry < 64; ++entry) {
+                    const size_t base = 8 + static_cast<size_t>(entry) * 12;
+                    if (read16(base) == 0x0112) {
+                        orientation = read16(base + 8);
+                        break;
+                    }
+                }
+            }
+        }
+        if (width > 0 && height > 0) {
+            break;
+        }
+        pos += 2 + seg_len;
+    }
+    if (width <= 0 || height <= 0) {
+        return false;
+    }
+    if (orientation >= 5 && orientation <= 8) {
+        std::swap(width, height);
+    }
+    *size = cv::Size(width, height);
+    return true;
+}
+
+/*** reduction factor in {1,2,4,8} for the DCT-domain decode. min(N/W, N/H)
+ * is invariant under a W/H swap, so EXIF rotation cannot invalidate the
+ * strict-mode bound. Returns 1 (= off) whenever anything is not certain. */
+inline int jpeg_reduce_factor(const std::vector<unsigned char> &bytes, const ImageInputLimits &limits) {
+    if (limits.network_input.width <= 0 || limits.network_input.height <= 0) {
+        return 1;
+    }
+    cv::Size full;
+    if (!jpeg_full_dimensions(bytes, &full)) {
+        return 1;
+    }
+    const double s = std::min(static_cast<double>(limits.network_input.width) / static_cast<double>(full.width),
+                              static_cast<double>(limits.network_input.height) / static_cast<double>(full.height));
+    int factor = 1;
+    for (int candidate : {2, 4, 8}) {
+        if (static_cast<double>(candidate) <= 1.0 / s) {
+            factor = candidate;
+        }
+    }
+    if (limits.budget_upscale > 1.0f && factor < 8) {
+        const int bumped = factor * 2;
+        if (static_cast<double>(bumped) * s <= static_cast<double>(limits.budget_upscale)) {
+            factor = bumped;
+        }
+    }
+    return factor;
+}
+
+inline int imread_color_flag_for_reduce(int factor) {
+    switch (factor) {
+        case 2:
+            return cv::IMREAD_REDUCED_COLOR_2;
+        case 4:
+            return cv::IMREAD_REDUCED_COLOR_4;
+        case 8:
+            return cv::IMREAD_REDUCED_COLOR_8;
+        default:
+            return cv::IMREAD_COLOR;
+    }
 }
 
 /***
@@ -174,11 +300,17 @@ inline cv::Mat load_image(const io_define::common_io::base64_input &in, const Im
 
 /***
  * image_input -> cv::Mat: dispatches on the byte_source origin. base64 text
- * reuses the base64_input path unchanged; raw bytes are fed straight to
- * imdecode with no base64 inflation (binary body encoding).
+ * is decoded first, raw bytes are used as-is; both then share one decode
+ * path which may apply the W4 DCT-domain reduction when the limits carry a
+ * network hint. full_size (optional) receives the pre-reduction image size
+ * so request geometry stays in full-image coordinates.
  */
 inline cv::Mat load_image(const io_define::common_io::image_input &in, const ImageInputLimits &limits, StatusCode *status,
-                          std::string *error) {
+                          std::string *error, cv::Size *full_size = nullptr) {
+    if (full_size != nullptr) {
+        *full_size = cv::Size();
+    }
+    std::vector<unsigned char> bytes;
     if (in.image.origin == io_define::common_io::byte_source::origin_kind::raw_bytes) {
         if (in.image.data.empty()) {
             if (error != nullptr) {
@@ -189,32 +321,48 @@ inline cv::Mat load_image(const io_define::common_io::image_input &in, const Ima
             }
             return {};
         }
-        std::vector<unsigned char> bytes(in.image.data.begin(), in.image.data.end());
-        cv::Mat image = cv::imdecode(bytes, cv::IMREAD_COLOR);
-        if (image.empty()) {
+        bytes.assign(in.image.data.begin(), in.image.data.end());
+    } else {
+        const std::string decoded = jinq::common::base64::decode(in.image.data);
+        if (decoded.empty()) {
             if (error != nullptr) {
-                *error = "input image raw bytes are not a decodable image";
+                *error = "input image base64 data is empty or invalid";
             }
             if (status != nullptr) {
                 *status = StatusCode::MODEL_EMPTY_INPUT_IMAGE;
             }
             return {};
         }
-        if (!image_within_limits(image, limits, error)) {
-            if (status != nullptr) {
-                *status = status_for_image_load(error == nullptr ? "" : *error);
-            }
-            return {};
+        bytes.assign(decoded.begin(), decoded.end());
+    }
+    const int reduce = jpeg_reduce_factor(bytes, limits);
+    cv::Mat image = cv::imdecode(bytes, imread_color_flag_for_reduce(reduce));
+    if (image.empty()) {
+        if (error != nullptr) {
+            *error = "input image bytes are not a decodable image";
         }
-        cv::Mat ret = normalize_to_bgr8uc3(image, error);
-        if (ret.empty() && status != nullptr) {
+        if (status != nullptr) {
             *status = StatusCode::MODEL_EMPTY_INPUT_IMAGE;
         }
-        return ret;
+        return {};
     }
-    io_define::common_io::base64_input base64;
-    base64.input_image_content = in.image.data;
-    return load_image(base64, limits, status, error);
+    if (!image_within_limits(image, limits, error)) {
+        if (status != nullptr) {
+            *status = status_for_image_load(error == nullptr ? "" : *error);
+        }
+        return {};
+    }
+    if (reduce > 1 && full_size != nullptr) {
+        cv::Size full;
+        if (jpeg_full_dimensions(bytes, &full)) {
+            *full_size = full;
+        }
+    }
+    cv::Mat ret = normalize_to_bgr8uc3(image, error);
+    if (ret.empty() && status != nullptr) {
+        *status = StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
+    return ret;
 }
 
 inline cv::Mat load_image(const io_define::common_io::file_input &in) {

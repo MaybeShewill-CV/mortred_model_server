@@ -252,7 +252,15 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                 // nullptr keeps postprocess on its config defaults
                 prepared.context.params = input.params;
             }
-            const cv::Mat image = cv_input::load_image(input, _m_image_limits, &prepared.status, &prepared.error);
+            // full_size keeps request geometry anchored to the ORIGINAL
+            // image when the W4 reduced decode returned smaller pixels
+            cv::Size full_size;
+            cv::Mat image;
+            if constexpr (std::is_same<INPUT, io_define::common_io::image_input>::value) {
+                image = cv_input::load_image(input, _m_image_limits, &prepared.status, &prepared.error, &full_size);
+            } else {
+                image = cv_input::load_image(input, _m_image_limits, &prepared.status, &prepared.error);
+            }
             if (image.empty()) {
                 if (prepared.status == StatusCode::OK) {
                     prepared.status = StatusCode::MODEL_EMPTY_INPUT_IMAGE;
@@ -265,7 +273,7 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
             if (prepared.inputs.empty()) {
                 return PreparedInput::invalid(StatusCode::MODEL_EMPTY_INPUT_IMAGE, "model preprocess produced no input tensors");
             }
-            prepared.context.source_size = image.size();
+            prepared.context.source_size = full_size.area() > 0 ? full_size : image.size();
             prepared.context.network_size = detail::network_size_of(prepared.inputs);
             prepared.context.source_image = image;
         } else {
@@ -282,6 +290,18 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
     /*** config-aware image loader shared by standard and custom input paths */
     cv::Mat load_model_image(const INPUT &input, StatusCode *status = nullptr, std::string *error = nullptr) {
         return cv_input::load_image(input, _m_image_limits, status, error);
+    }
+
+    /***
+     * W4 opt-in for JPEG DCT-domain reduced decode. The network input size
+     * only exists after session creation, hence this post-init hook instead
+     * of an ImageInputLimits field parsed from params. budget_upscale <= 1
+     * is strict mode (reduction never upsamples); models accepting a small
+     * accuracy tradeoff pass e.g. 1.25.
+     */
+    void set_image_decode_hint(const cv::Size &network_input, float budget_upscale) {
+        _m_image_limits.network_input = network_input;
+        _m_image_limits.budget_upscale = budget_upscale;
     }
 
     /***

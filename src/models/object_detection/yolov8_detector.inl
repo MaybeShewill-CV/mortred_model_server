@@ -48,6 +48,25 @@ template <typename INPUT, typename OUTPUT> StatusCode YoloV8Detector<INPUT, OUTP
         LOG(ERROR) << "invalid yolov8 input size: " << (param_error.empty() ? "configured size mismatches model input" : param_error);
         return StatusCode::MODEL_INIT_FAILED;
     }
+    // W4 JPEG DCT-domain reduced decode: strict by default (never
+    // upsamples); "budget" allows one notch of letterbox upsampling within
+    // image_decode_budget_upscale (an accuracy tradeoff owned by this
+    // model's config, gated by the golden test in docs/perf)
+    float decode_upscale = 1.0f;
+    const auto decode_mode = params.contains("image_decode_mode")
+                                 ? params["image_decode_mode"].value<std::string>()
+                                 : std::optional<std::string>{};
+    if (decode_mode.has_value() && *decode_mode == "budget") {
+        decode_upscale = 1.25f;
+        if (params.contains("image_decode_budget_upscale")) {
+            const auto configured = params["image_decode_budget_upscale"].value<double>();
+            if (configured.has_value() && *configured > 1.0 && *configured <= 2.0) {
+                decode_upscale = static_cast<float>(*configured);
+            }
+        }
+        LOG(INFO) << "yolov8 reduced JPEG decode enabled (budget_upscale=" << decode_upscale << ")";
+    }
+    this->set_image_decode_hint(_m_input_size_host, decode_upscale);
     return StatusCode::OK;
 }
 
