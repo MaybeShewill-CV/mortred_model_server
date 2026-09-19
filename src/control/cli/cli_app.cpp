@@ -9,6 +9,7 @@
 // smoke tests post the data-plane envelope to mortred-gateway.
 
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -19,9 +20,11 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <numeric>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <workflow/WFFacilities.h>
@@ -30,6 +33,7 @@
 
 #include "common/base64.h"
 #include "common/request_envelope.h"
+#include "control/project_root.h"
 
 #include <rapidjson/document.h>
 
@@ -49,7 +53,8 @@ struct HttpResult {
 };
 
 HttpResult http_request(const Options& opt, const std::string& method, const std::string& path,
-                        const std::string& body, int timeout_ms = 300000) {
+                        const std::string& body, int timeout_ms = 300000,
+                        const char* content_type = "application/json; charset=utf-8") {
     HttpResult out;
     const std::string url = opt.addr + path;
     WFFacilities::WaitGroup wg(1);
@@ -72,7 +77,7 @@ HttpResult http_request(const Options& opt, const std::string& method, const std
     task->get_req()->set_method(method.c_str());
     if (!body.empty()) {
         task->get_req()->append_output_body(body.data(), body.size());
-        task->get_req()->add_header_pair("Content-Type", "application/json; charset=utf-8");
+        task->get_req()->add_header_pair("Content-Type", content_type);
     }
     if (!opt.token.empty()) {
         const std::string auth = "Bearer " + opt.token;
@@ -100,6 +105,8 @@ void usage() {
                  "  commands: status [id] | catalog | start <id> | stop <id> | restart <id>\n"
                  "            logs <id> [--offset N] [--limit N]\n"
                  "            infer <id> --image <path>\n"
+                 "            profile <id> --image <path> [--n N] [--warmup N] [--encoding raw|json]\n"
+                 "                     [--log-dir DIR] [--keep-flag]   (per-stage latency table)\n"
                  "            ps | down [--id a,b] [--all] [--yes]\n"
                  "            init [--profile cpu|gpu] | init-trust [--force] | init-edge --mode lan|acme|files\n"
                  "            doctor [--strict] | prepare [--pack FILE]\n"
@@ -474,6 +481,322 @@ int cmd_down(const Options& opt, const std::vector<std::string>& rest) {
 namespace mortred {
 namespace control {
 
+/* ------------- profile: per-stage latency of one model server ------------- */
+
+using StageMap = std::map<std::string, std::vector<double>>;
+
+const char* const k_stage_timing_flag = "/tmp/mortred_stage_timing";
+
+size_t count_log_lines(const std::string& path) {
+    std::ifstream in(path);
+    if (!in.is_open()) {
+        return 0;
+    }
+    size_t lines = 0;
+    std::string line;
+    while (std::getline(in, line)) {
+        ++lines;
+    }
+    return lines;
+}
+
+// parses "stage_trace svc=... id=... key=value ..." lines that appear after
+// line `from` (exclusive) in the log; numeric fields land in the map
+void parse_stage_window(const std::string& path, size_t from, StageMap* out, size_t* found) {
+    std::ifstream in(path);
+    if (!in.is_open()) {
+        return;
+    }
+    std::string line;
+    size_t at = 0;
+    *found = 0;
+    while (std::getline(in, line)) {
+        ++at;
+        if (at <= from || line.find("stage_trace") == std::string::npos) {
+            continue;
+        }
+        ++*found;
+        std::istringstream tokens(line);
+        std::string token;
+        while (tokens >> token) {
+            const size_t eq = token.find('=');
+            if (eq == std::string::npos) {
+                continue;
+            }
+            const std::string key = token.substr(0, eq);
+            if (key == "svc" || key == "id") {
+                continue;
+            }
+            try {
+                (*out)[key].push_back(std::stod(token.substr(eq + 1)));
+            } catch (const std::exception&) {
+                // non-numeric field - skip
+            }
+        }
+    }
+}
+
+double percentile(std::vector<double> samples, double q) {
+    if (samples.empty()) {
+        return 0.0;
+    }
+    std::sort(samples.begin(), samples.end());
+    const double index = static_cast<double>(samples.size() - 1) * q;
+    const size_t lo = static_cast<size_t>(std::floor(index));
+    const size_t hi = static_cast<size_t>(std::ceil(index));
+    const double frac = index - static_cast<double>(lo);
+    return samples[lo] * (1.0 - frac) + samples[hi] * frac;
+}
+
+double stage_p50(const StageMap& stages, const std::string& key) {
+    const auto it = stages.find(key);
+    return it == stages.end() ? -1.0 : percentile(it->second, 0.5);
+}
+
+double stage_mean(const StageMap& stages, const std::string& key) {
+    const auto it = stages.find(key);
+    if (it == stages.end() || it->second.empty()) {
+        return -1.0;
+    }
+    const double sum = std::accumulate(it->second.begin(), it->second.end(), 0.0);
+    return sum / static_cast<double>(it->second.size());
+}
+
+double sum_p50(const StageMap& stages, const std::vector<std::string>& keys) {
+    double total = 0.0;
+    for (const auto& key : keys) {
+        const double v = stage_p50(stages, key);
+        if (v > 0) {
+            total += v;
+        }
+    }
+    return total;
+}
+
+std::string fmt_ms(double v, int width = 8, int prec = 3) {
+    if (v < 0) {
+        return std::string(width, '-');
+    }
+    char buf[32];
+    std::snprintf(buf, sizeof buf, "%.*f", prec, v);
+    std::string s(buf);
+    return s.size() >= static_cast<size_t>(width) ? s : std::string(static_cast<size_t>(width) - s.size(), ' ') + s;
+}
+
+std::string image_media_type(const std::string& path) {
+    const size_t dot = path.rfind('.');
+    std::string ext = dot == std::string::npos ? "" : path.substr(dot + 1);
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    if (ext == "jpg" || ext == "jpeg") return "image/jpeg";
+    if (ext == "png") return "image/png";
+    if (ext == "bmp") return "image/bmp";
+    if (ext == "webp") return "image/webp";
+    return "application/octet-stream";
+}
+
+int cmd_profile(const Options& opt, const std::string& id, const std::string& image_path,
+                size_t requests, size_t warmup, const std::string& encoding, bool keep_flag,
+                const std::string& log_dir_override) {
+    const std::string bytes = read_file_bytes(image_path);
+    if (bytes.empty()) {
+        std::fprintf(stderr, "cannot read image file: %s\n", image_path.c_str());
+        return 2;
+    }
+    const HttpResult cat = http_request(opt, "GET", "/api/v1/catalog", "");
+    if (cat.status < 200 || cat.status >= 300) {
+        std::fprintf(stderr, "catalog unavailable (status %d)\n", cat.status);
+        return 1;
+    }
+    rapidjson::Document doc;
+    doc.Parse(cat.body.c_str());
+    bool found = false;
+    if (!doc.HasParseError() && doc.IsObject() && doc.HasMember("servers") && doc["servers"].IsArray()) {
+        for (const auto& server : doc["servers"].GetArray()) {
+            if (server.IsObject() && server.HasMember("id") && server["id"].IsString() &&
+                id == server["id"].GetString()) {
+                found = true;
+                break;
+            }
+        }
+    }
+    if (!found) {
+        std::fprintf(stderr, "unknown server id in catalog: %s\n", id.c_str());
+        return 1;
+    }
+
+    const std::string root = resolve_project_root();
+    std::string log_dir = log_dir_override.empty() ? "logs" : log_dir_override;
+    if (log_dir_override.empty()) {
+        // one-key scan of conf/mortred.toml for log_dir (default "logs")
+        std::ifstream conf(root + "/conf/mortred.toml");
+        std::string line;
+        while (std::getline(conf, line)) {
+            const size_t at = line.find("log_dir");
+            if (at != std::string::npos) {
+                const size_t q1 = line.find('"');
+                const size_t q2 = q1 == std::string::npos ? std::string::npos : line.find('"', q1 + 1);
+                if (q1 != std::string::npos && q2 != std::string::npos && q2 > q1 + 1) {
+                    log_dir = line.substr(q1 + 1, q2 - q1 - 1);
+                }
+                break;
+            }
+        }
+    }
+    const std::string model_log = root + "/" + log_dir + "/" + id + ".log";
+    const std::string gw_log = root + "/" + log_dir + "/__gateway.log";
+    if (!std::filesystem::exists(model_log)) {
+        std::fprintf(stderr, "model log not found: %s (override with --log-dir)\n", model_log.c_str());
+        return 1;
+    }
+
+    const bool flag_existed = std::filesystem::exists(k_stage_timing_flag);
+    if (!flag_existed) {
+        std::ofstream touch(k_stage_timing_flag);
+    }
+
+    Options gw_opt = opt;
+    gw_opt.addr = opt.gateway_addr;
+    const std::string path = "/v1/models/" + id + "/infer";
+    const bool raw = encoding == "raw";
+    const std::string body = raw ? bytes : [&bytes] {
+        jinq::common::envelope::Request envelope;
+        envelope.images.push_back(jinq::common::base64::encode(
+            reinterpret_cast<const unsigned char*>(bytes.data()), bytes.size()));
+        return jinq::common::envelope::encode(envelope);
+    }();
+    const std::string media_type = image_media_type(image_path);
+    const char* ctype = raw ? media_type.c_str() : "application/json; charset=utf-8";
+
+    auto send = [&]() { return http_request(gw_opt, "POST", path, body, 300000, ctype); };
+
+    int failures = 0;
+    for (size_t i = 0; i < warmup; ++i) {
+        const HttpResult r = send();
+        if (r.status < 200 || r.status >= 300) {
+            std::fprintf(stderr, "warmup request failed (status %d): %s\n", r.status, r.body.substr(0, 200).c_str());
+            if (!flag_existed) {
+                std::remove(k_stage_timing_flag);
+            }
+            return 1;
+        }
+    }
+
+    // snapshot AFTER warmup so warmup trace lines stay out of the window
+    const size_t model_from = count_log_lines(model_log);
+    const size_t gw_from = std::filesystem::exists(gw_log) ? count_log_lines(gw_log) : 0;
+
+    std::vector<double> latency_ms;
+    latency_ms.reserve(requests);
+    for (size_t i = 0; i < requests; ++i) {
+        const auto t0 = std::chrono::steady_clock::now();
+        const HttpResult r = send();
+        const auto t1 = std::chrono::steady_clock::now();
+        if (r.status < 200 || r.status >= 300) {
+            std::fprintf(stderr, "request %zu failed (status %d): %s\n", i, r.status, r.body.substr(0, 200).c_str());
+            ++failures;
+            if (failures > 3) {
+                if (!flag_existed) {
+                    std::remove(k_stage_timing_flag);
+                }
+                return 1;
+            }
+            continue;
+        }
+        latency_ms.push_back(std::chrono::duration<double, std::milli>(t1 - t0).count());
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(400));
+    if (!flag_existed && !keep_flag) {
+        std::remove(k_stage_timing_flag);
+    }
+
+    StageMap model, gw;
+    size_t model_traces = 0;
+    size_t gw_traces = 0;
+    parse_stage_window(model_log, model_from, &model, &model_traces);
+    parse_stage_window(gw_log, gw_from, &gw, &gw_traces);
+    if (model_traces == 0) {
+        std::fprintf(stderr,
+                     "no stage_trace lines found in %s - the running server binary lacks stage "
+                     "tracing (perf/stage-timing instrumentation)\n",
+                     model_log.c_str());
+        return 1;
+    }
+
+    const double client_p50 = percentile(latency_ms, 0.5);
+    const double client_sum = std::accumulate(latency_ms.begin(), latency_ms.end(), 0.0);
+    const double client_mean = latency_ms.empty() ? -1.0 : client_sum / static_cast<double>(latency_ms.size());
+    const double gw_total_p50 = stage_p50(gw, "total");
+    const double model_total_p50 = stage_p50(model, "total");
+    const double gw_total_mean = stage_mean(gw, "total");
+    const double model_total_mean = stage_mean(model, "total");
+    const double shell1_p50 = (gw_total_p50 > 0 && client_p50 > 0) ? client_p50 - gw_total_p50 : -1;
+    const double shell3_p50 = (gw_total_p50 > 0 && model_total_p50 > 0) ? gw_total_p50 - model_total_p50 : -1;
+    const double shell1_mean = (gw_total_mean > 0) ? client_mean - gw_total_mean : -1;
+    const double shell3_mean = (gw_total_mean > 0 && model_total_mean > 0) ? gw_total_mean - model_total_mean : -1;
+
+    auto pct_of = [&client_p50](double v) -> std::string {
+        if (client_p50 <= 0 || v < 0) {
+            return "    --";
+        }
+        char p[16];
+        std::snprintf(p, sizeof p, "%5.1f%%", v / client_p50 * 100.0);
+        return std::string(p);
+    };
+
+    struct Row {
+        std::string name;
+        double p50;
+        double mean;
+        std::string note;
+    };
+    char label[192];
+    std::snprintf(label, sizeof label, "2  网关处理（route %.3f + auth %.3f + fwd %.3f）", stage_p50(gw, "route"),
+                  stage_p50(gw, "auth"), stage_p50(gw, "fwd"));
+    const std::string label2(label);
+    std::snprintf(label, sizeof label,
+                  "4  模型框架与调度（envelope %.3f + admit %.3f + go %.3f + worker %.3f + reply %.3f + serialize %.3f）",
+                  stage_p50(model, "envelope"), stage_p50(model, "admit"), stage_p50(model, "go"),
+                  stage_p50(model, "worker"), stage_p50(model, "reply"), stage_p50(model, "serialize"));
+    const std::string label4(label);
+    const double row2 = sum_p50(gw, {"route", "auth", "fwd"});
+    const double row2_mean = stage_mean(gw, "route") + stage_mean(gw, "auth") + stage_mean(gw, "fwd");
+    const double row4 = sum_p50(model, {"envelope", "admit", "go", "worker", "reply", "serialize"});
+    const double row4_mean = stage_mean(model, "envelope") + stage_mean(model, "admit") + stage_mean(model, "go") +
+                             stage_mean(model, "worker") + stage_mean(model, "reply") + stage_mean(model, "serialize");
+    const std::vector<Row> rows = {
+        {"1  客户端 + socket① + 网关框架壳（残差）", shell1_p50, shell1_mean, "客户端−网关total"},
+        {label2, row2, row2_mean, ""},
+        {"3  socket② 往返 + 网关回调（残差）", shell3_p50, shell3_mean, "网关total−模型total"},
+        {label4, row4, row4_mean, ""},
+        {"5  decode（图片解码）", stage_p50(model, "decode"), stage_mean(model, "decode"), "libjpeg-turbo"},
+        {"6  pre（letterbox+归一化）", stage_p50(model, "pre"), stage_mean(model, "pre"), ""},
+        {"7  h2d（输入上传）", stage_p50(model, "h2d"), stage_mean(model, "h2d"), ""},
+        {"8  exec（GPU 推理+sync）", stage_p50(model, "exec"), stage_mean(model, "exec"), "共享GPU噪声敏感"},
+        {"9  d2h（输出回传）", stage_p50(model, "d2h"), stage_mean(model, "d2h"), ""},
+        {"10 post（解码+NMS+坐标还原）", stage_p50(model, "post"), stage_mean(model, "post"), ""},
+    };
+
+    std::printf("%smortred profile%s %s  n=%zu ok=%zu warmup=%zu encoding=%s image=%s\n", col_bold(),
+                col_off(), id.c_str(), requests, latency_ms.size(), warmup, encoding.c_str(),
+                image_path.c_str());
+    std::printf("%-4s %-70s %9s %9s %7s  %s\n", "#", "环节", "P50(ms)", "mean(ms)", "占比", "说明");
+    for (const auto& row : rows) {
+        std::printf("%-4s %-70s %9s %9s %7s  %s\n", "", row.name.c_str(), fmt_ms(row.p50, 9).c_str(),
+                    fmt_ms(row.mean, 9).c_str(), pct_of(row.p50).c_str(), row.note.c_str());
+    }
+    std::printf("%-4s %-70s %9s %9s %7s  %s\n", "", "客户端合计（实测）", fmt_ms(client_p50, 9, 2).c_str(),
+                fmt_ms(client_mean, 9, 2).c_str(), "100.0%", "");
+    std::printf("\ntraces: model=%zu gateway=%zu (requests=%zu)", model_traces, gw_traces, latency_ms.size());
+    if (model_traces != latency_ms.size() || gw_traces != latency_ms.size()) {
+        std::printf("  %s[warn] window polluted (concurrent traffic?)%s", col_warn(), col_off());
+    }
+    if (keep_flag || flag_existed) {
+        std::printf("  (trace flag left ON)");
+    }
+    std::printf("\n");
+    return failures == 0 ? 0 : 1;
+}
+
 int run_cli(int argc, char** argv) {
     Options opt;
     if (const char* env = std::getenv("MORTREDCTL_ADDR"); env != nullptr && *env != '\0') {
@@ -666,6 +989,42 @@ int run_cli(int argc, char** argv) {
         Options gateway_opt = opt;
         gateway_opt.addr = opt.gateway_addr;
         r = http_request(gateway_opt, "POST", "/v1/models/" + id + "/infer", body);
+    } else if (cmd == "profile") {
+        const std::string id = next("server id");
+        std::string image_path;
+        size_t requests = 200;
+        size_t warmup = 10;
+        std::string encoding = "raw";
+        bool keep_flag = false;
+        std::string log_dir;
+        while (index < args.size()) {
+            const std::string flag = next("flag");
+            if (flag == "--image") {
+                image_path = next("--image");
+            } else if (flag == "--n") {
+                requests = static_cast<size_t>(std::stoull(next("--n")));
+            } else if (flag == "--warmup") {
+                warmup = static_cast<size_t>(std::stoull(next("--warmup")));
+            } else if (flag == "--encoding") {
+                encoding = next("--encoding");
+                if (encoding != "raw" && encoding != "json") {
+                    std::fprintf(stderr, "--encoding must be raw|json\n");
+                    return 2;
+                }
+            } else if (flag == "--keep-flag") {
+                keep_flag = true;
+            } else if (flag == "--log-dir") {
+                log_dir = next("--log-dir");
+            } else {
+                std::fprintf(stderr, "unknown profile flag: %s\n", flag.c_str());
+                return 2;
+            }
+        }
+        if (image_path.empty()) {
+            std::fprintf(stderr, "profile requires --image <path>\n");
+            return 2;
+        }
+        return cmd_profile(opt, id, image_path, requests, warmup, encoding, keep_flag, log_dir);
     } else {
         std::fprintf(stderr, "unknown command: %s\n", cmd.c_str());
         usage();
