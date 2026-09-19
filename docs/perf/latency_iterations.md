@@ -168,6 +168,24 @@ C=16 分解（P50）：worker 排队 96.7→67.8、h2d 2.32→1.34、exec 9.95�
 
 迭代路径（C=1 P50 / C=16 RPS）：基线 19.03/79.5 → W1 融合预处理 16.43/102.9 → W2 pinned 传输 16.21/140.2 → W3 后处理顺序化 15.98/150.3 → W4 降分辨率解码 14.30/160.3 → W5 fp16 输入 12.89/202.1。
 
+---
+
+## 迭代 6（S1）：nvJPEG GPU 解码后端（含能力探测 + 生产形态性能竞速 + 逐请求回退）
+
+改动：
+1. `gpu_jpeg_decoder.{h,cpp}`（gpu profile）/ `_stub.cpp`（cpu profile）：进程级 nvjpeg 解码器，后端梯子 `HARDWARE(NVDEC/JPEG 引擎) → GPU_HYBRID(SM)`，启动时以带照片级噪声的 1MP 合成 JPEG 做能力探测 + **性能竞速**——GPU 全尺寸解码 vs CPU 生产路径（`IMREAD_REDUCED_COLOR_2` 降档解码，生产等价对手而非全解稻草人），GPU 需领先 ≥20% 才在 auto 模式胜出；竞速图像必须带真实照片级噪声（平滑梯度图压缩后太小，GPU 假性领先，实测教训）；
+2. `cv_image_input`：GPU 旁路（baseline JPEG + ≥0.5MP + 探针通过）→ EXIF 方向自应用 → 失败逐请求回退 CPU 路径；
+3. 配置 `image_decode_backend = "auto" | "cpu" | "gpu"`（auto=竞速裁决；gpu=强制仅测能力；默认 cpu）；
+4. `mortredctl profile`（同分支）提供验收测量。
+
+**本机（RTX 2070 SUPER）实测结论——诚实记录**：
+- 能力探针：消费卡无 NVDEC JPEG 引擎，HARDWARE 失败 → 回退 GPU_HYBRID（sm-nvjpeg），梯子按设计生效；
+- 强制 GPU 模式实测：decode 5.41ms vs CPU 降档路径 4.83ms——**单图 sm-nvjpeg 全解不敌 turbo 降档解**（此 nvjpeg 版本公开 API 无缩放解码；单图模式每调用开销高，批量化才摊薄）；
+- 竞速（修正为生产形态后）判负 → **auto 在本机自动选择 CPU 路径**：decode 4.828ms，与历史完全一致，零回归；
+- 精度门禁（GPU 模式下）：5 框、坐标差 0.316px、分数差 0.0029——**优于 CPU 降档路径的 2.95px/0.0215**（全分辨率解码消除了降档损失）。
+
+**S1 的价值定位**：本机为"能力就绪、auto 判 CPU"；同一二进制部署到带 JPEG 引擎的卡（T4/A100/L4 等）时，HARDWARE 探针 + 竞速会自动点亮硬解（预期 decode ~1ms 级且精度更优）。`image_decode_backend="gpu"` 供算力画像（CPU 饱和、GPU 空闲）时人工强制。
+
 约束遵守：全程未启用 dynamic batch（static bs1 engine，`max_batch_size=1` 未变）；每轮迭代有完整分段实测与历史对比（本文件）；精度门禁每轮执行（W1-W3 逐比特 0.0e+00，W4/W5 为配置门禁的非零容差：坐标 ≤2.95px/0.27%、分数 ≤0.0215，均记录在案）。两个 golden 抓虫记录：W4 内核平面顺序 bug、W5 标量转换退化——分段埋点 rig 均当场定位。
 
 

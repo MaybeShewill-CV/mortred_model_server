@@ -67,6 +67,14 @@ if(MORTRED_BUILD_PROFILE STREQUAL "cpu")
         ${OpenCV_LIBS}
         glog::glog
     )
+    # cpu profile: the nvjpeg decoder is a stub that reports unavailable, so
+    # the decode selector always lands on cv::imdecode
+    target_sources(
+        models
+        PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/backend/gpu_jpeg_decoder_stub.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/backend/gpu_jpeg_decoder.h
+    )
 else()
     # TensorRT 10 headers only (#include "NvInfer.h"). leftover TensorRT-8* fails configure.
     file(GLOB MORTRED_TRT8_INCLUDE_DIRS "${PROJECT_ROOT_DIR}/3rd_party/include/TensorRT-8*")
@@ -91,6 +99,8 @@ else()
         PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/backend/trt_session.cpp
         ${CMAKE_CURRENT_LIST_DIR}/backend/trt_session.h
+        ${CMAKE_CURRENT_LIST_DIR}/backend/gpu_jpeg_decoder.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/backend/gpu_jpeg_decoder.h
     )
     target_link_libraries(
         models
@@ -105,6 +115,7 @@ else()
         vendored::nvinfer_plugin
         vendored::nvonnxparser
         CUDA::cudart
+        CUDA::nvjpeg
         ${OpenCV_LIBS}
         glog::glog
     )

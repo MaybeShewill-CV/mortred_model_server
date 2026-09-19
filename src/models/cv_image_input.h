@@ -17,11 +17,15 @@
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <opencv2/imgproc.hpp>
+
+#include "glog/logging.h"
 
 #include "common/base64.h"
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
 #include "common/status_code.h"
+#include "models/backend/gpu_jpeg_decoder.h"
 #include "models/model_io_define.h"
 
 namespace jinq {
@@ -41,6 +45,12 @@ struct ImageInputLimits {
     // accuracy tradeoff that each model opts into via its params.
     cv::Size network_input{};
     float budget_upscale = 1.0f;
+    // perf iteration 6 (S1): GPU JPEG decode via nvjpeg. 0=off (default),
+    // 1=auto (use GPU only when the startup perf race beat cv::imdecode by
+    // >=20%), 2=force (capability-probe only). Per-request fallback to the
+    // CPU path covers progressive jpegs, small images and runtime failures.
+    int decode_gpu = 0;
+    int64_t decode_gpu_min_pixels = 1 << 19;
 };
 
 inline bool image_within_limits(const cv::Mat &image, const ImageInputLimits &limits, std::string *error) {
@@ -106,15 +116,19 @@ inline StatusCode status_for_image_load(const std::string &error) {
 }
 
 /*** minimal JPEG SOF dimension probe (post-rotation via EXIF orientation);
- * returns false for anything that is not a parseable baseline JPEG, and the
- * caller then falls back to a full decode */
-inline bool jpeg_full_dimensions(const std::vector<unsigned char> &bytes, cv::Size *size) {
+ * returns false for anything that is not a parseable JPEG, and the caller
+ * then falls back to a full decode. Optional out params expose the raw EXIF
+ * orientation (1-8, 1 = upright; the size is already swap-corrected) and
+ * whether the SOF marks a progressive scan (GPU decoder cannot take it). */
+inline bool jpeg_full_dimensions(const std::vector<unsigned char> &bytes, cv::Size *size, int *orientation_out = nullptr,
+                                 bool *progressive_out = nullptr) {
     if (bytes.size() < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8) {
         return false;
     }
     int width = 0;
     int height = 0;
     int orientation = 1;
+    bool progressive = false;
     size_t pos = 2;
     while (pos + 4 <= bytes.size()) {
         if (bytes[pos] != 0xFF) {
@@ -141,6 +155,7 @@ inline bool jpeg_full_dimensions(const std::vector<unsigned char> &bytes, cv::Si
             }
             height = (bytes[pos + 5] << 8) | bytes[pos + 6];
             width = (bytes[pos + 7] << 8) | bytes[pos + 8];
+            progressive = marker == 0xC2 || marker == 0xC6 || marker == 0xCA || marker == 0xCE;
         } else if (marker == 0xE1 && seg_len >= 16 && pos + 2 + 6 <= bytes.size() &&
                    bytes[pos + 4] == 'E' && bytes[pos + 5] == 'x' && bytes[pos + 6] == 'i' &&
                    bytes[pos + 7] == 'f') {
@@ -177,18 +192,21 @@ inline bool jpeg_full_dimensions(const std::vector<unsigned char> &bytes, cv::Si
         std::swap(width, height);
     }
     *size = cv::Size(width, height);
+    if (orientation_out != nullptr) {
+        *orientation_out = orientation;
+    }
+    if (progressive_out != nullptr) {
+        *progressive_out = progressive;
+    }
     return true;
 }
 
-/*** reduction factor in {1,2,4,8} for the DCT-domain decode. min(N/W, N/H)
- * is invariant under a W/H swap, so EXIF rotation cannot invalidate the
- * strict-mode bound. Returns 1 (= off) whenever anything is not certain. */
-inline int jpeg_reduce_factor(const std::vector<unsigned char> &bytes, const ImageInputLimits &limits) {
+/*** reduction factor in {1,2,4,8} for the DCT-domain decode, from a known
+ * full size. min(N/W, N/H) is invariant under a W/H swap, so EXIF rotation
+ * cannot invalidate the strict-mode bound. Returns 1 (= off) whenever the
+ * hint is unset. */
+inline int jpeg_reduce_factor_for(const cv::Size &full, const ImageInputLimits &limits) {
     if (limits.network_input.width <= 0 || limits.network_input.height <= 0) {
-        return 1;
-    }
-    cv::Size full;
-    if (!jpeg_full_dimensions(bytes, &full)) {
         return 1;
     }
     const double s = std::min(static_cast<double>(limits.network_input.width) / static_cast<double>(full.width),
@@ -206,6 +224,48 @@ inline int jpeg_reduce_factor(const std::vector<unsigned char> &bytes, const Ima
         }
     }
     return factor;
+}
+
+inline int jpeg_reduce_factor(const std::vector<unsigned char> &bytes, const ImageInputLimits &limits) {
+    cv::Size full;
+    if (!jpeg_full_dimensions(bytes, &full)) {
+        return 1;
+    }
+    return jpeg_reduce_factor_for(full, limits);
+}
+
+/*** applies the raw EXIF orientation the way cv::imdecode does internally;
+ * only the GPU decode path needs it (the swap-corrected size already comes
+ * from jpeg_full_dimensions) */
+inline void apply_exif_orientation(cv::Mat *image, int orientation) {
+    if (image == nullptr || image->empty() || orientation <= 1 || orientation > 8) {
+        return;
+    }
+    switch (orientation) {
+        case 2:
+            cv::flip(*image, *image, 1);
+            break;
+        case 3:
+            cv::rotate(*image, *image, cv::ROTATE_180);
+            break;
+        case 4:
+            cv::flip(*image, *image, 0);
+            break;
+        case 5:
+            cv::transpose(*image, *image);
+            break;
+        case 6:
+            cv::rotate(*image, *image, cv::ROTATE_90_CLOCKWISE);
+            break;
+        case 7:
+            cv::flip(*image, *image, -1);
+            cv::transpose(*image, *image);
+            break;
+        case 8:
+        default:
+            cv::rotate(*image, *image, cv::ROTATE_90_COUNTERCLOCKWISE);
+            break;
+    }
 }
 
 inline int imread_color_flag_for_reduce(int factor) {
@@ -336,6 +396,33 @@ inline cv::Mat load_image(const io_define::common_io::image_input &in, const Ima
         bytes.assign(decoded.begin(), decoded.end());
     }
     const int reduce = jpeg_reduce_factor(bytes, limits);
+    // perf iteration 6 (S1): GPU decode bypass - full-resolution nvjpeg
+    // decode (the fused letterbox kernel then resizes straight from the
+    // full frame). auto mode honors the startup perf race; force mode only
+    // checks capability. Any miss falls through to the CPU path.
+    const bool gpu_allowed = (limits.decode_gpu == 2 && backend::gpu_jpeg::available()) ||
+                             (limits.decode_gpu == 1 && backend::gpu_jpeg::recommended());
+    if (gpu_allowed) {
+        cv::Size full;
+        int orientation = 1;
+        bool progressive = false;
+        if (jpeg_full_dimensions(bytes, &full, &orientation, &progressive) && !progressive &&
+            static_cast<int64_t>(full.width) * static_cast<int64_t>(full.height) >= limits.decode_gpu_min_pixels) {
+            std::string gpu_error;
+            cv::Mat gpu_image = backend::gpu_jpeg::decode(bytes.data(), bytes.size(), &gpu_error);
+            if (!gpu_image.empty()) {
+                apply_exif_orientation(&gpu_image, orientation);
+                if (image_within_limits(gpu_image, limits, error)) {
+                    cv::Mat ret = normalize_to_bgr8uc3(gpu_image, error);
+                    if (!ret.empty()) {
+                        return ret;
+                    }
+                }
+            } else {
+                LOG_EVERY_N(WARNING, 100) << "gpu jpeg decode fell back to cpu: " << gpu_error;
+            }
+        }
+    }
     cv::Mat image = cv::imdecode(bytes, imread_color_flag_for_reduce(reduce));
     if (image.empty()) {
         if (error != nullptr) {

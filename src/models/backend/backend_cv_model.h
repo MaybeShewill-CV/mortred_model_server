@@ -297,11 +297,13 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
      * only exists after session creation, hence this post-init hook instead
      * of an ImageInputLimits field parsed from params. budget_upscale <= 1
      * is strict mode (reduction never upsamples); models accepting a small
-     * accuracy tradeoff pass e.g. 1.25.
+     * accuracy tradeoff pass e.g. 1.25. allow_gpu additionally opts into
+     * the S1 nvjpeg decode path (probe-gated with per-request CPU fallback).
      */
-    void set_image_decode_hint(const cv::Size &network_input, float budget_upscale) {
+    void set_image_decode_hint(const cv::Size &network_input, float budget_upscale, int gpu_decode_mode = 0) {
         _m_image_limits.network_input = network_input;
         _m_image_limits.budget_upscale = budget_upscale;
+        _m_image_limits.decode_gpu = gpu_decode_mode;
     }
 
     /***
