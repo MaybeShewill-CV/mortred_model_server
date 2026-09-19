@@ -241,6 +241,7 @@ StatusCode TrtSession::DeviceBuffer::ensure(size_t size_bytes) {
 }
 
 TrtSession::~TrtSession() {
+    release_pinned_staging();
     _m_device_buffers.clear();
     if (_m_stream != nullptr) {
         cudaStreamDestroy(_m_stream);
@@ -257,6 +258,54 @@ TrtSession::~TrtSession() {
         delete item.second;
     }
     _m_output_allocators.clear();
+}
+
+namespace {
+
+// grows (or lazily allocates) one pinned staging buffer; returns nullptr on
+// any cudaHostAlloc/cudaFreeHost failure so callers can fall back to pageable
+void* ensure_pinned_stage(void** memory, size_t* capacity, size_t bytes) {
+    if (*memory != nullptr && *capacity >= bytes) {
+        return *memory;
+    }
+    if (*memory != nullptr) {
+        cudaFreeHost(*memory);
+        *memory = nullptr;
+        *capacity = 0;
+    }
+    if (cudaHostAlloc(memory, bytes, cudaHostAllocDefault) != cudaSuccess) {
+        *memory = nullptr;
+        *capacity = 0;
+        return nullptr;
+    }
+    *capacity = bytes;
+    return *memory;
+}
+
+}  // namespace
+
+void* TrtSession::pinned_h2d_stage(size_t bytes) {
+    const std::lock_guard<std::mutex> guard(_m_pinned_mu);
+    return ensure_pinned_stage(&_m_pinned_h2d, &_m_pinned_h2d_bytes, bytes);
+}
+
+void* TrtSession::pinned_d2h_stage(size_t bytes) {
+    const std::lock_guard<std::mutex> guard(_m_pinned_mu);
+    return ensure_pinned_stage(&_m_pinned_d2h, &_m_pinned_d2h_bytes, bytes);
+}
+
+void TrtSession::release_pinned_staging() {
+    const std::lock_guard<std::mutex> guard(_m_pinned_mu);
+    if (_m_pinned_h2d != nullptr) {
+        cudaFreeHost(_m_pinned_h2d);
+        _m_pinned_h2d = nullptr;
+        _m_pinned_h2d_bytes = 0;
+    }
+    if (_m_pinned_d2h != nullptr) {
+        cudaFreeHost(_m_pinned_d2h);
+        _m_pinned_d2h = nullptr;
+        _m_pinned_d2h_bytes = 0;
+    }
 }
 
 StatusCode TrtSession::init(const BackendConfig& config, std::string* err) {
@@ -483,10 +532,11 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
         }
     }
 
-    // H2D + bind inputs (same session order)
+    // H2D + bind inputs (same session order). Pinned staging is sliced per
+    // input (disjoint ranges, so all asyncs may be in flight together).
+    size_t pinned_h2d_total = 0;
     for (size_t idx = 0; idx < ordered_inputs.size(); ++idx) {
         const auto& named = *ordered_inputs[idx];
-        auto& buffer = _m_device_buffers.at(named.name);
         size_t input_bytes = 0;
         if (!checked_shape_nbytes(named.tensor.shape, named.tensor.dtype, &input_bytes)) {
             LOG(ERROR) << "tensorrt input '" << named.name
@@ -494,12 +544,27 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
                        << shape_to_string(named.tensor.shape);
             return StatusCode::MODEL_RUN_SESSION_FAILED;
         }
+        pinned_h2d_total += input_bytes;
+    }
+    char* pinned_h2d = static_cast<char*>(pinned_h2d_stage(pinned_h2d_total));
+    size_t pinned_h2d_offset = 0;
+    for (size_t idx = 0; idx < ordered_inputs.size(); ++idx) {
+        const auto& named = *ordered_inputs[idx];
+        auto& buffer = _m_device_buffers.at(named.name);
+        size_t input_bytes = 0;
+        checked_shape_nbytes(named.tensor.shape, named.tensor.dtype, &input_bytes);
         const auto status = buffer.ensure(input_bytes);
         if (status != StatusCode::OK) {
             return status;
         }
+        const void* host_src = named.tensor.buffer.data();
+        if (pinned_h2d != nullptr && named.tensor.byte_size() == input_bytes) {
+            std::memcpy(pinned_h2d + pinned_h2d_offset, host_src, input_bytes);
+            host_src = pinned_h2d + pinned_h2d_offset;
+            pinned_h2d_offset += input_bytes;
+        }
         const auto cuda_status = cudaMemcpyAsync(
-            buffer.memory, named.tensor.buffer.data(), named.tensor.byte_size(),
+            buffer.memory, host_src, named.tensor.byte_size(),
             cudaMemcpyHostToDevice, _m_stream);
         if (cuda_status != cudaSuccess) {
             LOG(ERROR) << "tensorrt H2D copy failed for '" << named.name
@@ -611,6 +676,24 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
 
     outputs.clear();
     outputs.reserve(resolved_outputs.size());
+    // pinned D2H staging is only used when every output is static (shape
+    // resolved before the copies are issued, so the total size is known and
+    // one buffer can be sliced); dynamic outputs keep the pageable path
+    size_t pinned_d2h_total = 0;
+    if (_m_output_allocators.empty()) {
+        for (const auto& item : resolved_outputs) {
+            size_t bytes = 0;
+            if (item.memory != nullptr && checked_shape_nbytes(item.shape, item.info->dtype, &bytes)) {
+                pinned_d2h_total += bytes;
+            } else {
+                pinned_d2h_total = 0;
+                break;
+            }
+        }
+    }
+    char* pinned_d2h = pinned_d2h_total > 0 ? static_cast<char*>(pinned_d2h_stage(pinned_d2h_total)) : nullptr;
+    size_t pinned_d2h_offset = 0;
+    std::vector<std::pair<void*, size_t>> staged_d2h_copies;
     for (const auto& item : resolved_outputs) {
         if (item.memory == nullptr) {
             LOG(ERROR) << "tensorrt output '" << item.info->name
@@ -632,8 +715,14 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
             return StatusCode::MODEL_RUN_SESSION_FAILED;
         }
         named.tensor.buffer.resize(bytes);
+        void* host_dst = named.tensor.buffer.data();
+        if (pinned_d2h != nullptr) {
+            host_dst = pinned_d2h + pinned_d2h_offset;
+            staged_d2h_copies.emplace_back(named.tensor.buffer.data(), bytes);
+            pinned_d2h_offset += bytes;
+        }
         const auto cuda_status = cudaMemcpyAsync(
-            named.tensor.buffer.data(), item.memory, bytes, cudaMemcpyDeviceToHost, _m_stream);
+            host_dst, item.memory, bytes, cudaMemcpyDeviceToHost, _m_stream);
         if (cuda_status != cudaSuccess) {
             LOG(ERROR) << "tensorrt D2H copy failed for '" << info.name
                        << "': " << cudaGetErrorString(cuda_status);
@@ -645,6 +734,13 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
     if (final_sync != cudaSuccess) {
         LOG(ERROR) << "tensorrt stream sync failed: " << cudaGetErrorString(final_sync);
         return StatusCode::TRT_CUDA_ERROR;
+    }
+    if (!staged_d2h_copies.empty()) {
+        size_t staged_offset = 0;
+        for (const auto& entry : staged_d2h_copies) {
+            std::memcpy(entry.first, pinned_d2h + staged_offset, entry.second);
+            staged_offset += entry.second;
+        }
     }
     jinq::common::stage_timing::mark("d2h");
     return StatusCode::OK;

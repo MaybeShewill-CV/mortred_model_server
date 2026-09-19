@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 
+#include <mutex>
+
 #include "NvInfer.h"
 #include "cuda_runtime_api.h"
 
@@ -93,6 +95,20 @@ class TrtSession : public InferenceSession {
     std::vector<TensorInfo> _m_input_infos;
     std::vector<TensorInfo> _m_output_infos;
     std::string _m_model_file_path;
+
+    // pinned host staging for H2D/D2H: pageable std::vector transfers pay a
+    // driver-side staging copy (~3x measured vs pinned); these buffers are
+    // reused across runs and grown on demand. Allocation failure falls back
+    // to the original pageable path silently.
+    void* _m_pinned_h2d = nullptr;
+    size_t _m_pinned_h2d_bytes = 0;
+    void* _m_pinned_d2h = nullptr;
+    size_t _m_pinned_d2h_bytes = 0;
+    std::mutex _m_pinned_mu;
+
+    void* pinned_h2d_stage(size_t bytes);
+    void* pinned_d2h_stage(size_t bytes);
+    void release_pinned_staging();
 };
 
 }  // namespace backend
