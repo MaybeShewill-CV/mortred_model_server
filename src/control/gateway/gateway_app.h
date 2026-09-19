@@ -14,6 +14,7 @@
 
 #include <workflow/WFHttpServer.h>
 
+#include "common/stage_timing.h"
 #include "control/api_key_manager.h"
 #include "control/catalog.h"
 #include "control/control_config.h"
@@ -80,7 +81,8 @@ private:
     void process(WFHttpTask* task);
     bool check_ip_rate_limit(WFHttpTask* task, const std::string& method);
     void forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
-                          const std::string& method, const std::string& query);
+                          const std::string& method, const std::string& query,
+                          const std::shared_ptr<jinq::common::stage_timing::StageTrace>& trace);
     bool resolve_route(const std::string& path, ResolvedRoute* out) const;
     void maybe_add_cors(WFHttpTask* task) const;
     bool origin_allowed(const std::string& origin) const;

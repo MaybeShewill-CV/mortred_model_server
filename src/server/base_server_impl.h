@@ -33,6 +33,7 @@
 #include "common/file_path_util.h"
 #include "common/request_size_limit.h"
 #include "common/response_envelope.h"
+#include "common/stage_timing.h"
 #include "common/status_code.h"
 #include "common/time_stamp.h"
 #include "models/backend/param_spec.h"
@@ -381,6 +382,12 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
             return;
         }
         auto* req = task->get_req();
+        auto stage_trace = jinq::common::stage_timing::enabled()
+                               ? std::make_shared<jinq::common::stage_timing::StageTrace>()
+                               : nullptr;
+        if (stage_trace != nullptr) {
+            stage_trace->mark("srv_in");
+        }
         const std::string content_type = header_value_of(req, "content-type");
         std::string request_encoding = "json";
         jinq::server::ParsedRequest parsed;
@@ -400,6 +407,9 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
             return;
         }
         _m_metrics.inc_request_encoding(request_encoding);
+        if (stage_trace != nullptr) {
+            stage_trace->mark("envelope");
+        }
         if (declared_body_exceeds(header_value_of(req, "content-length"), _m_request_size_limit)) {
             _m_metrics.inc_http_requests(request_method, "413");
             reply_status(task, StatusCode::REQUEST_ENTITY_TOO_LARGE, _m_model_name);
@@ -457,6 +467,11 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         _m_waiting_jobs += n_items;
         _m_received_jobs += n_items;
         _m_metrics.inc_received_jobs(n_items);
+        task_req.trace = stage_trace;
+        if (stage_trace != nullptr) {
+            stage_trace->set_id(task_id);
+            stage_trace->mark("admit");
+        }
         schedule_sync_request(task, std::move(task_req), n_items);
         return;
     } else {
@@ -513,6 +528,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::schedule_sync_request(
     state->req = std::move(req);
     state->task_id = state->req.task_id;
     state->resp = http_task->get_resp();
+    state->trace = state->req.trace;
     state->waiter = make_sync_waiter_name(state->req.task_id);
     state->result.options = state->req.options;
     state->result.item_status.assign(n_items, StatusCode::MODEL_RUN_TIMEOUT);
@@ -565,6 +581,9 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::start_sync_item(
     std::shared_ptr<SyncState> state, size_t k) {
     auto work = std::make_shared<typename SyncState::ItemScratch>();
     auto* go = WFTaskFactory::create_go_task(_m_server_uri, [this, state, k, work]() {
+        if (state->trace != nullptr) {
+            state->trace->mark("go");
+        }
         if (state->replied.load(std::memory_order_acquire)) {
             return;
         }
@@ -580,6 +599,9 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::start_sync_item(
             _m_metrics.observe_queue_wait_ms(ck.wait_ms);
             state->worker = std::move(leased);
             state->has_worker.store(true, std::memory_order_release);
+            if (state->trace != nullptr) {
+                state->trace->mark("worker");
+            }
         }
         if (state->replied.load(std::memory_order_acquire) ||
             state->checkout_failed.load(std::memory_order_acquire) ||
@@ -591,7 +613,10 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::start_sync_item(
             return;
         }
         const auto t0 = Timestamp::now();
+        auto* prev_stage_trace =
+            jinq::common::stage_timing::StageTrace::swap_active(state->trace.get());
         work->status = run_one(state->worker, state->req, k, &work->output);
+        jinq::common::stage_timing::StageTrace::swap_active(prev_stage_trace);
         work->ran = true;
         work->run_ms = (Timestamp::now() - t0) * 1000.0;
     });
@@ -668,6 +693,9 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::reply_sync_request(
     if (state->replied.exchange(true, std::memory_order_acq_rel)) {
         return;
     }
+    if (state->trace != nullptr) {
+        state->trace->mark("reply");
+    }
     InferenceResult snap;
     if (state->batch_state) {
         snap = assemble_batch_slots(*state->batch_state);
@@ -698,6 +726,11 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::reply_sync_request(
         LOG(ERROR) << "worker run failed with status " << jinq::common::to_underlying(status);
     }
     reply_unified_json(state->resp, unified);
+
+    if (state->trace != nullptr) {
+        state->trace->mark("serialize");
+        LOG(INFO) << state->trace->to_log_line(_m_model_name.c_str());
+    }
 
     size_t ok_items = 0;
     for (const auto& item : unified.results) {

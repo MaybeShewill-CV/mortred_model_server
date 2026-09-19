@@ -39,6 +39,7 @@
 
 #include "common/auth_token.h"
 #include "common/listen_policy.h"
+#include "common/stage_timing.h"
 #include "common/process_stop.h"
 #include "control/api_key_manager.h"
 #include "control/catalog.h"
@@ -272,7 +273,8 @@ bool GatewayApp::resolve_route(const std::string& path, ResolvedRoute* out) cons
 }
 
 void GatewayApp::forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
-                                  const std::string& method, const std::string& query) {
+                                  const std::string& method, const std::string& query,
+                                  const std::shared_ptr<jinq::common::stage_timing::StageTrace>& stage_trace) {
     std::string body;
     if (method == "POST") {
         body = protocol::HttpUtil::decode_chunked_body(task->get_req());
@@ -288,7 +290,7 @@ void GatewayApp::forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
 
     auto* client = WFTaskFactory::create_http_task(
         url, 0, 0,
-        [this, task, model_id, method, t0, rewrite_job_urls](WFHttpTask* t) {
+        [this, task, model_id, method, t0, rewrite_job_urls, stage_trace](WFHttpTask* t) {
             auto* resp = task->get_resp();
             if (t->get_state() != WFT_STATE_SUCCESS) {
                 const int code = t->get_error() == ECONNREFUSED ? 503 : 502;
@@ -303,7 +305,14 @@ void GatewayApp::forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
                                 ? "model server not running or still loading; "
                                   "TensorRT ids need mortredctl prepare"
                                 : "upstream transport failure");
+                if (stage_trace != nullptr) {
+                    stage_trace->mark("upstream_fail");
+                    LOG(INFO) << stage_trace->to_log_line("gateway");
+                }
                 return;
+            }
+            if (stage_trace != nullptr) {
+                stage_trace->mark("upstream");
             }
             const std::string status(t->get_resp()->get_status_code());
             metrics_.inc_http_requests(method, status);
@@ -342,6 +351,9 @@ void GatewayApp::forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
             } else {
                 resp->append_output_body(data, size);
             }
+            if (stage_trace != nullptr) {
+                LOG(INFO) << stage_trace->to_log_line("gateway");
+            }
         });
     client->get_req()->set_method(method.c_str());
     if (method == "POST") {
@@ -376,6 +388,9 @@ void GatewayApp::forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
     }
     client->set_send_timeout(send_timeout);
     client->set_receive_timeout(recv_timeout);
+    if (stage_trace != nullptr) {
+        stage_trace->mark("fwd");
+    }
     series_of(task)->push_back(client);
 }
 
@@ -469,6 +484,13 @@ void GatewayApp::process(WFHttpTask* task) {
         return;
     }
 
+    auto stage_trace = jinq::common::stage_timing::enabled()
+                           ? std::make_shared<jinq::common::stage_timing::StageTrace>()
+                           : nullptr;
+    if (stage_trace != nullptr) {
+        stage_trace->mark("gw_in");
+    }
+
     if (!check_ip_rate_limit(task, method)) {
         return;
     }
@@ -478,6 +500,9 @@ void GatewayApp::process(WFHttpTask* task) {
         metrics_.inc_http_requests(method, "404");
         reply_error(task, 404, "no model route for this path");
         return;
+    }
+    if (stage_trace != nullptr) {
+        stage_trace->mark("route");
     }
     // external auth is enforced here, once, for every model endpoint
     const std::string auth_header = header_value(task->get_req(), "authorization");
@@ -533,6 +558,9 @@ void GatewayApp::process(WFHttpTask* task) {
     if (!key_name.empty()) {
         task->get_resp()->add_header_pair("X-Mortred-Key", key_name.c_str());
     }
+    if (stage_trace != nullptr) {
+        stage_trace->mark("auth");
+    }
     if (method != route.allowed_method) {
         metrics_.inc_http_requests(method, "405");
         task->get_resp()->add_header_pair("Allow", route.allowed_method.c_str());
@@ -541,7 +569,7 @@ void GatewayApp::process(WFHttpTask* task) {
     }
     const std::string query =
         route.append_query ? uri_query(task->get_req()->get_request_uri()) : "";
-    forward_to_model(task, route, method, query);
+    forward_to_model(task, route, method, query, stage_trace);
 }
 
 bool GatewayApp::init(const GatewayInitOptions& options) {

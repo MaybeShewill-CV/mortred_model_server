@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 
+#include "common/stage_timing.h"
 #include "common/status_code.h"
 #include "models/backend/param_spec.h"
 #include "models/io/common_input.h"
@@ -38,6 +39,8 @@ struct InferenceTask {
     std::vector<jinq::models::io_define::common_io::byte_source> items;
     std::shared_ptr<jinq::models::backend::ParamSet> params;
     jinq::server::OutputOptions options;
+    // perf/stage-timing: non-null only when this request is traced
+    std::shared_ptr<jinq::common::stage_timing::StageTrace> trace;
     std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::time_point::max();
 
     size_t item_count() const { return items.size(); }

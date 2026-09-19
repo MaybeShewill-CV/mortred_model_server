@@ -136,6 +136,8 @@ struct SyncRequestState {
     std::atomic<int64_t> worker_run_ms{0};
     WORKER worker{};
     std::shared_ptr<BatchRequestState<MODEL_OUTPUT>> batch_state;
+    // perf/stage-timing: rides in from InferenceTask, null when untraced
+    std::shared_ptr<jinq::common::stage_timing::StageTrace> trace;
 };
 
 }  // namespace server

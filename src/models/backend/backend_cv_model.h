@@ -20,6 +20,7 @@
 
 #include "glog/logging.h"
 
+#include "common/stage_timing.h"
 #include "common/status_code.h"
 #include "models/backend/backend_config.h"
 #include "models/backend/inference_context.h"
@@ -258,7 +259,9 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                 }
                 return PreparedInput::invalid(prepared.status, prepared.error.empty() ? "input image is empty" : prepared.error);
             }
+            jinq::common::stage_timing::mark("decode");
             prepared.inputs = preprocess(image);
+            jinq::common::stage_timing::mark("pre");
             if (prepared.inputs.empty()) {
                 return PreparedInput::invalid(StatusCode::MODEL_EMPTY_INPUT_IMAGE, "model preprocess produced no input tensors");
             }
@@ -534,10 +537,13 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
         }
         std::vector<backend::NamedTensor> outputs;
         const auto run_status = _m_session->run(prepared.inputs, outputs);
+        jinq::common::stage_timing::mark("sess");
         if (run_status != StatusCode::OK) {
             return run_status;
         }
-        return postprocess(outputs, prepared.context, output);
+        const StatusCode post_status = postprocess(outputs, prepared.context, output);
+        jinq::common::stage_timing::mark("post");
+        return post_status;
     }
 
   private:

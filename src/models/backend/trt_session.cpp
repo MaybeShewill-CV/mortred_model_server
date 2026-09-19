@@ -17,6 +17,7 @@
 #include "glog/logging.h"
 
 #include "common/file_path_util.h"
+#include "common/stage_timing.h"
 #include "models/backend/session_io.h"
 
 static_assert(NV_TENSORRT_MAJOR >= 10, "Mortred GPU line requires TensorRT 10 headers");
@@ -510,6 +511,10 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
             return StatusCode::MODEL_RUN_SESSION_FAILED;
         }
     }
+    // note: cudaMemcpyAsync only enqueues; the actual transfer surfaces in
+    // the first cudaStreamSynchronize below, so h2d measures launch cost and
+    // exec absorbs the real H2D transfer
+    jinq::common::stage_timing::mark("h2d");
 
     // Resolve and bind outputs whose shape is inferable from the inputs.
     // Runtime-data-dependent outputs are left to their IOutputAllocator.
@@ -566,6 +571,7 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
         LOG(ERROR) << "tensorrt stream sync failed: " << cudaGetErrorString(sync_status);
         return StatusCode::TRT_CUDA_ERROR;
     }
+    jinq::common::stage_timing::mark("exec");
 
     for (size_t idx = 0; idx < _m_output_infos.size(); ++idx) {
         const auto& info = _m_output_infos[idx];
@@ -640,6 +646,7 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
         LOG(ERROR) << "tensorrt stream sync failed: " << cudaGetErrorString(final_sync);
         return StatusCode::TRT_CUDA_ERROR;
     }
+    jinq::common::stage_timing::mark("d2h");
     return StatusCode::OK;
 }
 
