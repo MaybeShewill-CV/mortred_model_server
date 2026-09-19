@@ -43,7 +43,7 @@ class StageTrace {
     void mark(const char* name) {
         std::lock_guard<std::mutex> guard(marks_mu_);
         if (marks_.size() < k_max_marks) {
-            marks_.emplace_back(name, std::chrono::steady_clock::now());
+            marks_.push_back(Mark{name, std::chrono::steady_clock::now()});
         }
     }
 

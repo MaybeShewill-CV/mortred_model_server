@@ -307,7 +307,7 @@ void GatewayApp::forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
                                 : "upstream transport failure");
                 if (stage_trace != nullptr) {
                     stage_trace->mark("upstream_fail");
-                    LOG(INFO) << stage_trace->to_log_line("gateway");
+                    std::fprintf(stderr, "%s\n", stage_trace->to_log_line("gateway").c_str());
                 }
                 return;
             }
@@ -352,7 +352,7 @@ void GatewayApp::forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
                 resp->append_output_body(data, size);
             }
             if (stage_trace != nullptr) {
-                LOG(INFO) << stage_trace->to_log_line("gateway");
+                std::fprintf(stderr, "%s\n", stage_trace->to_log_line("gateway").c_str());
             }
         });
     client->get_req()->set_method(method.c_str());
