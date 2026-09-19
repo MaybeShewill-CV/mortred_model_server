@@ -253,6 +253,70 @@ RuntimeResult<NamedTensor> ImagePipeline::nchw(const std::string &name) const { 
 
 RuntimeResult<NamedTensor> ImagePipeline::nhwc(const std::string &name) const { return pack(name, false); }
 
+RuntimeResult<NamedTensor> letterbox_bgr_f32_nchw(const cv::Mat &bgr, const cv::Size &network,
+                                                  const std::string &tensor_name, std::uint8_t pad_value) {
+    if (bgr.empty() || bgr.type() != CV_8UC3) {
+        return {StatusCode::MODEL_EMPTY_INPUT_IMAGE, "letterbox_bgr_f32_nchw: expected a non-empty CV_8UC3 image", {}};
+    }
+    if (network.width <= 0 || network.height <= 0) {
+        return {StatusCode::MODEL_EMPTY_INPUT_IMAGE, "letterbox_bgr_f32_nchw: target size must be positive", {}};
+    }
+    if (tensor_name.empty()) {
+        return {StatusCode::MODEL_EMPTY_INPUT_IMAGE, "letterbox_bgr_f32_nchw: tensor name is empty", {}};
+    }
+    const LetterboxGeometry geom = compute_letterbox_geometry(bgr.size(), network);
+    if (geom.unpadded.width <= 0 || geom.unpadded.height <= 0) {
+        return {StatusCode::MODEL_EMPTY_INPUT_IMAGE, "letterbox_bgr_f32_nchw: computed unpadded size is invalid", {}};
+    }
+    cv::Mat resized;
+    if (bgr.size() != geom.unpadded) {
+        cv::resize(bgr, resized, geom.unpadded, 0.0, 0.0, cv::INTER_LINEAR);
+    } else {
+        resized = bgr;
+    }
+    NamedTensor named;
+    named.name = tensor_name;
+    named.tensor = Tensor::make<float>({1, 3, static_cast<int64_t>(network.height), static_cast<int64_t>(network.width)});
+    named.tensor.layout = TensorLayout::Nchw;
+    const float scale_f = 1.0f / 255.0f;
+    const float pad_f = static_cast<float>(pad_value) * scale_f;
+    const int rows = network.height;
+    const int cols = network.width;
+    const int band_y0 = geom.pad_y;
+    const int band_y1 = rows - geom.pad_bottom;
+    const int band_x0 = geom.pad_x;
+    const int band_x1 = cols - geom.pad_right;
+    const size_t plane_elems = static_cast<size_t>(rows) * static_cast<size_t>(cols);
+    auto *const base = reinterpret_cast<float *>(named.tensor.buffer.data());
+    for (int plane_idx = 0; plane_idx < 3; ++plane_idx) {
+        // plane 0 = R reads BGR slot 2, plane 1 = G slot 1, plane 2 = B slot 0
+        const int bgr_slot = 2 - plane_idx;
+        float *plane = base + plane_idx * plane_elems;
+        for (int y = 0; y < rows; ++y) {
+            float *row = plane + static_cast<size_t>(y) * cols;
+            const bool in_band_y = y >= band_y0 && y < band_y1;
+            if (!in_band_y) {
+                for (int x = 0; x < cols; ++x) {
+                    row[x] = pad_f;
+                }
+                continue;
+            }
+            const auto *src = resized.ptr<const unsigned char>(y - band_y0);
+            int x = 0;
+            for (; x < band_x0; ++x) {
+                row[x] = pad_f;
+            }
+            for (; x < band_x1; ++x) {
+                row[x] = static_cast<float>(src[static_cast<size_t>(x - band_x0) * 3 + bgr_slot]) * scale_f;
+            }
+            for (; x < cols; ++x) {
+                row[x] = pad_f;
+            }
+        }
+    }
+    return runtime_ok(std::move(named));
+}
+
 RuntimeResult<cv::Mat> ImagePipeline::mat() const {
     if (status_ != StatusCode::OK) {
         return {status_, error_, {}};

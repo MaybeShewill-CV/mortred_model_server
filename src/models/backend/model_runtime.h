@@ -74,6 +74,19 @@ class ImagePipeline {
     std::string error_;
 };
 
+/*** fused single-pass preprocess: BGR uint8 source -> letterbox -> RGB ->
+ * /255 -> NCHW f32 tensor, numerically identical to
+ * ImagePipeline(src).bgr_to_rgb().letterbox(size).to_float().scale(1/255).nchw(name)
+ * (cv::resize interpolates channels independently, so resizing in BGR order
+ * commutes with the channel swap; pad and image pixels go through the same
+ * single (float)px * (1/255f) multiply). Collapses five full-image
+ * intermediate Mats and the CHW double copy into one resize + one plane
+ * write. Fails on the same conditions the chain would (empty/non-CV_8UC3
+ * source, invalid geometry). */
+RuntimeResult<NamedTensor> letterbox_bgr_f32_nchw(const cv::Mat &bgr, const cv::Size &network,
+                                                  const std::string &tensor_name,
+                                                  std::uint8_t pad_value = 114);
+
 /*** fluent reader around the existing named-f32 output contract */
 class OutputReader {
   public:
