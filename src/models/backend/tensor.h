@@ -30,6 +30,7 @@ namespace backend {
  */
 enum class DType {
     F32,
+    F16,
     I32,
     I64,
     U8,
@@ -39,6 +40,8 @@ inline size_t dtype_size(const DType& dtype) {
     switch (dtype) {
         case DType::F32:
             return sizeof(float);
+        case DType::F16:
+            return sizeof(uint16_t);
         case DType::I32:
             return sizeof(int32_t);
         case DType::I64:
@@ -54,6 +57,8 @@ inline const char* dtype_to_string(const DType& dtype) {
     switch (dtype) {
         case DType::F32:
             return "f32";
+        case DType::F16:
+            return "f16";
         case DType::I32:
             return "i32";
         case DType::I64:

@@ -1,6 +1,7 @@
 #include "models/backend/model_runtime.h"
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <optional>
 #include <limits>
@@ -255,18 +256,108 @@ RuntimeResult<NamedTensor> ImagePipeline::nhwc(const std::string &name) const { 
 
 RuntimeResult<NamedTensor> letterbox_bgr_f32_nchw(const cv::Mat &bgr, const cv::Size &network,
                                                   const std::string &tensor_name, std::uint8_t pad_value) {
+    return letterbox_bgr_nchw(bgr, network, tensor_name, DType::F32, pad_value);
+}
+
+namespace {
+
+/*** float -> IEEE754 half, round-to-nearest-even; the kernel feeds [0,1]
+ * values so the subnormal branch is defensive only */
+inline std::uint16_t f32_to_f16_bits(float value) {
+    std::uint32_t bits = 0;
+    std::memcpy(&bits, &value, sizeof(bits));
+    const std::uint16_t sign = static_cast<std::uint16_t>((bits >> 16) & 0x8000u);
+    const std::uint32_t biased = (bits >> 23) & 0xFFu;
+    const std::uint32_t mantissa = bits & 0x7FFFFFu;
+    if (biased == 0xFFu) {
+        return static_cast<std::uint16_t>(sign | 0x7C00u | (mantissa != 0 ? 0x200u : 0));
+    }
+    int32_t exponent = static_cast<int32_t>(biased) - 127 + 15;
+    if (exponent >= 31) {
+        return static_cast<std::uint16_t>(sign | 0x7C00u);
+    }
+    if (exponent <= 0) {
+        if (exponent < -10) {
+            return sign;
+        }
+        const std::uint32_t implicit = mantissa | 0x800000u;
+        const int shift = 14 - exponent + 13;
+        const std::uint32_t kept = implicit >> shift;
+        const std::uint32_t rem = implicit & ((1u << shift) - 1u);
+        const std::uint32_t rounded =
+            kept + (((rem > (1u << (shift - 1))) || (rem == (1u << (shift - 1)) && (kept & 1u))) ? 1u : 0u);
+        return static_cast<std::uint16_t>(sign | rounded);
+    }
+    std::uint32_t kept = mantissa >> 13;
+    const std::uint32_t rem = mantissa & 0x1FFFu;
+    kept += ((rem > 0x1000u) || (rem == 0x1000u && (kept & 1u))) ? 1u : 0u;
+    if (kept == 0x400u) {
+        kept = 0;
+        ++exponent;
+    }
+    return static_cast<std::uint16_t>(sign | (static_cast<std::uint16_t>(exponent) << 10) | static_cast<std::uint16_t>(kept));
+}
+
+/*** one pass over the source rows, writing the three plane rows at once
+ * (the source is read once; plane 0 = R = BGR slot 2, 1 = G, 2 = B) */
+template <typename T, typename CONVERT>
+void fill_letterbox_planes(const cv::Mat &resized, const LetterboxGeometry &geom, int rows, int cols, T *base, T pad_value,
+                           CONVERT convert) {
+    const int band_y0 = geom.pad_y;
+    const int band_y1 = rows - geom.pad_bottom;
+    const int band_x0 = geom.pad_x;
+    const int band_x1 = cols - geom.pad_right;
+    const size_t plane_elems = static_cast<size_t>(rows) * static_cast<size_t>(cols);
+    for (int y = 0; y < rows; ++y) {
+        T *row_r = base + 0 * plane_elems + static_cast<size_t>(y) * cols;
+        T *row_g = base + 1 * plane_elems + static_cast<size_t>(y) * cols;
+        T *row_b = base + 2 * plane_elems + static_cast<size_t>(y) * cols;
+        if (y < band_y0 || y >= band_y1) {
+            std::fill(row_r, row_r + cols, pad_value);
+            std::fill(row_g, row_g + cols, pad_value);
+            std::fill(row_b, row_b + cols, pad_value);
+            continue;
+        }
+        const auto *src = resized.ptr<const unsigned char>(y - band_y0);
+        for (int x = 0; x < band_x0; ++x) {
+            row_r[x] = pad_value;
+            row_g[x] = pad_value;
+            row_b[x] = pad_value;
+        }
+        for (int x = band_x0; x < band_x1; ++x) {
+            const auto *px = src + static_cast<size_t>(x - band_x0) * 3;
+            row_r[x] = convert(px[2]);
+            row_g[x] = convert(px[1]);
+            row_b[x] = convert(px[0]);
+        }
+        for (int x = band_x1; x < cols; ++x) {
+            row_r[x] = pad_value;
+            row_g[x] = pad_value;
+            row_b[x] = pad_value;
+        }
+    }
+}
+
+}  // namespace
+
+RuntimeResult<NamedTensor> letterbox_bgr_nchw(const cv::Mat &bgr, const cv::Size &network, const std::string &tensor_name,
+                                              DType dtype, std::uint8_t pad_value) {
     if (bgr.empty() || bgr.type() != CV_8UC3) {
-        return {StatusCode::MODEL_EMPTY_INPUT_IMAGE, "letterbox_bgr_f32_nchw: expected a non-empty CV_8UC3 image", {}};
+        return {StatusCode::MODEL_EMPTY_INPUT_IMAGE, "letterbox_bgr_nchw: expected a non-empty CV_8UC3 image", {}};
     }
     if (network.width <= 0 || network.height <= 0) {
-        return {StatusCode::MODEL_EMPTY_INPUT_IMAGE, "letterbox_bgr_f32_nchw: target size must be positive", {}};
+        return {StatusCode::MODEL_EMPTY_INPUT_IMAGE, "letterbox_bgr_nchw: target size must be positive", {}};
     }
     if (tensor_name.empty()) {
-        return {StatusCode::MODEL_EMPTY_INPUT_IMAGE, "letterbox_bgr_f32_nchw: tensor name is empty", {}};
+        return {StatusCode::MODEL_EMPTY_INPUT_IMAGE, "letterbox_bgr_nchw: tensor name is empty", {}};
+    }
+    if (dtype != DType::F32 && dtype != DType::F16) {
+        return {StatusCode::MODEL_EMPTY_INPUT_IMAGE, "letterbox_bgr_nchw: unsupported output dtype " +
+                                                         std::string(dtype_to_string(dtype)), {}};
     }
     const LetterboxGeometry geom = compute_letterbox_geometry(bgr.size(), network);
     if (geom.unpadded.width <= 0 || geom.unpadded.height <= 0) {
-        return {StatusCode::MODEL_EMPTY_INPUT_IMAGE, "letterbox_bgr_f32_nchw: computed unpadded size is invalid", {}};
+        return {StatusCode::MODEL_EMPTY_INPUT_IMAGE, "letterbox_bgr_nchw: computed unpadded size is invalid", {}};
     }
     cv::Mat resized;
     if (bgr.size() != geom.unpadded) {
@@ -276,50 +367,29 @@ RuntimeResult<NamedTensor> letterbox_bgr_f32_nchw(const cv::Mat &bgr, const cv::
     }
     NamedTensor named;
     named.name = tensor_name;
-    named.tensor = Tensor::make<float>({1, 3, static_cast<int64_t>(network.height), static_cast<int64_t>(network.width)});
+    named.tensor = Tensor::make(dtype, {1, 3, static_cast<int64_t>(network.height), static_cast<int64_t>(network.width)});
     named.tensor.layout = TensorLayout::Nchw;
-    const float scale_f = 1.0f / 255.0f;
-    const float pad_f = static_cast<float>(pad_value) * scale_f;
     const int rows = network.height;
     const int cols = network.width;
-    const int band_y0 = geom.pad_y;
-    const int band_y1 = rows - geom.pad_bottom;
-    const int band_x0 = geom.pad_x;
-    const int band_x1 = cols - geom.pad_right;
-    const size_t plane_elems = static_cast<size_t>(rows) * static_cast<size_t>(cols);
-    auto *const base = reinterpret_cast<float *>(named.tensor.buffer.data());
-    // one pass over the source row, writing the three plane rows at once:
-    // the source is read once (the plane-major three-pass variant reads it
-    // three times with stride-3 gathers)
-    for (int y = 0; y < rows; ++y) {
-        // plane 0 = R (BGR slot 2), plane 1 = G, plane 2 = B - the NCHW
-        // channel order the RGB conversion produced in the legacy chain
-        float *row_r = base + 0 * plane_elems + static_cast<size_t>(y) * cols;
-        float *row_g = base + 1 * plane_elems + static_cast<size_t>(y) * cols;
-        float *row_b = base + 2 * plane_elems + static_cast<size_t>(y) * cols;
-        if (y < band_y0 || y >= band_y1) {
-            std::fill(row_r, row_r + cols, pad_f);
-            std::fill(row_g, row_g + cols, pad_f);
-            std::fill(row_b, row_b + cols, pad_f);
-            continue;
+    const float scale_f = 1.0f / 255.0f;
+    if (dtype == DType::F32) {
+        // identical expression to the legacy chain: (float)px * (1/255f)
+        const float pad_f = static_cast<float>(pad_value) * scale_f;
+        fill_letterbox_planes<float>(
+            resized, geom, rows, cols, reinterpret_cast<float *>(named.tensor.buffer.data()), pad_f,
+            [scale_f](unsigned char px) { return static_cast<float>(px) * scale_f; });
+    } else {
+        // px*(1/255) has only 257 distinct values (256 pixel levels + pad),
+        // so the fp16 conversion collapses into a one-shot LUT build and the
+        // inner loop keeps doing a single L1 table read + 2-byte store
+        std::array<std::uint16_t, 257> lut{};
+        for (int level = 0; level < 256; ++level) {
+            lut[static_cast<size_t>(level)] = f32_to_f16_bits(static_cast<float>(level) * scale_f);
         }
-        const auto *src = resized.ptr<const unsigned char>(y - band_y0);
-        for (int x = 0; x < band_x0; ++x) {
-            row_r[x] = pad_f;
-            row_g[x] = pad_f;
-            row_b[x] = pad_f;
-        }
-        for (int x = band_x0; x < band_x1; ++x) {
-            const auto *px = src + static_cast<size_t>(x - band_x0) * 3;
-            row_r[x] = static_cast<float>(px[2]) * scale_f;
-            row_g[x] = static_cast<float>(px[1]) * scale_f;
-            row_b[x] = static_cast<float>(px[0]) * scale_f;
-        }
-        for (int x = band_x1; x < cols; ++x) {
-            row_r[x] = pad_f;
-            row_g[x] = pad_f;
-            row_b[x] = pad_f;
-        }
+        lut[256] = f32_to_f16_bits(static_cast<float>(pad_value) * scale_f);
+        fill_letterbox_planes<std::uint16_t>(
+            resized, geom, rows, cols, reinterpret_cast<std::uint16_t *>(named.tensor.buffer.data()), lut[256],
+            [&lut](unsigned char px) { return lut[px]; });
     }
     return runtime_ok(std::move(named));
 }

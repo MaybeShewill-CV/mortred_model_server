@@ -87,6 +87,13 @@ RuntimeResult<NamedTensor> letterbox_bgr_f32_nchw(const cv::Mat &bgr, const cv::
                                                   const std::string &tensor_name,
                                                   std::uint8_t pad_value = 114);
 
+/*** same fused letterbox preprocess, emitting the tensor in the session's
+ * input dtype: F32 as above, or F16 (RNE conversion at write) for engines
+ * built with an fp16 input binding - halves the preprocess write bandwidth
+ * and the H2D transfer */
+RuntimeResult<NamedTensor> letterbox_bgr_nchw(const cv::Mat &bgr, const cv::Size &network, const std::string &tensor_name,
+                                              DType dtype, std::uint8_t pad_value = 114);
+
 /*** fluent reader around the existing named-f32 output contract */
 class OutputReader {
   public:

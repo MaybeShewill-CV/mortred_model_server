@@ -1,7 +1,10 @@
 [YOLOV8]
 [YOLOV8.backend]
 type = "tensorrt"
-model_file_path = "../weights/object_detection/yolov8/yolov8s.engine.static_bs1"
+# W5 (perf iteration 5): same static bs1 engine rebuilt with an fp16 input
+# binding - halves preprocess write bandwidth and the H2D transfer.
+# Fallback for A/B: yolov8s.engine.static_bs1 (fp32 input)
+model_file_path = "../weights/object_detection/yolov8/yolov8s.engine.static_bs1.fp16in"
 device = "gpu"
 
 [YOLOV8.params]

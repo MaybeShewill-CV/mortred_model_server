@@ -53,6 +53,9 @@ bool dtype_from_trt(const nvinfer1::DataType& dtype, DType* out, std::string* er
         case nvinfer1::DataType::kFLOAT:
             *out = DType::F32;
             return true;
+        case nvinfer1::DataType::kHALF:
+            *out = DType::F16;
+            return true;
         case nvinfer1::DataType::kINT32:
             *out = DType::I32;
             return true;

@@ -71,21 +71,24 @@ template <typename INPUT, typename OUTPUT> StatusCode YoloV8Detector<INPUT, OUTP
 }
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> YoloV8Detector<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
-    // letterbox / colour / normalize, emitted as f32 nchw - fused single-pass
-    // kernel first (numerically identical, 5x less memory traffic), fluent
-    // chain kept as the fallback for exotic inputs it rejects
-    const auto &input_name = this->session().inputs().front().name;
-    auto fused = jinq::models::backend::letterbox_bgr_f32_nchw(input_image, _m_input_size_host, input_name);
+    // letterbox / colour / normalize, emitted in the session's input dtype -
+    // fused single-pass kernel first (numerically identical for f32 engines,
+    // 5x less memory traffic), fluent chain kept as the f32 fallback
+    const auto &input_info = this->session().inputs().front();
+    auto fused = jinq::models::backend::letterbox_bgr_nchw(input_image, _m_input_size_host, input_info.name, input_info.dtype);
     if (fused.ok()) {
         return {std::move(fused.value)};
     }
     LOG(ERROR) << fused.error;
+    if (input_info.dtype != jinq::models::backend::DType::F32) {
+        return {};
+    }
     auto result = jinq::models::backend::ImagePipeline(input_image)
                       .bgr_to_rgb()
                       .letterbox(_m_input_size_host)
                       .to_float()
                       .scale(1.0f / 255.0f)
-                      .nchw(input_name);
+                      .nchw(input_info.name);
     if (!result.ok()) {
         LOG(ERROR) << result.error;
         return {};
