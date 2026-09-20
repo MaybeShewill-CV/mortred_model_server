@@ -560,7 +560,8 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
         // at CPU submission time only; GPU work pipelines into TRT's stream
         if constexpr (std::is_same<INPUT, io_define::common_io::image_input>::value) {
             if (_m_image_limits.decode_gpu != 0 && _m_session != nullptr &&
-                !_m_session->inputs().empty()) {
+                !_m_session->inputs().empty() &&
+                _m_backend_config.type == "tensorrt") {  // S2 device_data only handled by TrtSession
                 const auto& input_info = _m_session->inputs().front();
                 const int net_w = (int)input_info.shape[3];
                 const int net_h = (int)input_info.shape[2];
