@@ -11,6 +11,7 @@
 #include <cstring>
 #include <exception>
 #include <memory>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -24,6 +25,7 @@
 #include "common/status_code.h"
 #include "models/backend/backend_config.h"
 #include "models/backend/gpu_jpeg_decoder.h"
+#include "models/backend/gpu_preprocess_desc.h"
 #include "models/backend/inference_context.h"
 #include "models/backend/session.h"
 #include "models/backend/tensor.h"
@@ -310,6 +312,17 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
     }
 
     /***
+     * Register this model's GPU preprocessing descriptor for the
+     * zero-copy inference pipeline. Call from on_init(). When registered
+     * AND the backend is TensorRT AND input is raw JPEG AND width is
+     * 16-aligned, the GPU pipeline activates: JPEG decode + preprocess
+     * + TRT inference all on device, zero host round-trips.
+     * Unregistered models always use the normal (CPU preprocess) path. */
+    void set_gpu_preprocess(const backend::GpuPreprocessDescriptor &desc) {
+        _gpu_preprocess_desc = desc;
+    }
+
+    /***
      * Batch helpers for fixed-size NHWC image models: pack N preprocessed
      * CV_32FC3 HWC mats (identical H/W) into one [N,H,W,3] f32 input tensor.
      * Returns false on empty input or shape mismatch.
@@ -555,29 +568,33 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
         if (_m_session == nullptr) {
             return run_sessions(input, output);
         }
-        // GPU zero-copy inference path: JPEG decode + letterbox + fp16 NCHW all
-        // on GPU, submitted asynchronously — the decode/pre/h2d timing marks fire
-        // at CPU submission time only; GPU work pipelines into TRT's stream
+        // GPU zero-copy inference path: JPEG decode + model-declared preprocessing
+        // + TRT inference all on device. Uses GpuPreprocessDescriptor registered
+        // via set_gpu_preprocess(). Falls through to normal path on any miss.
         if constexpr (std::is_same<INPUT, io_define::common_io::image_input>::value) {
-            if (_m_image_limits.decode_gpu != 0 && _m_session != nullptr &&
+            if (_gpu_preprocess_desc.has_value() && _m_session != nullptr &&
                 !_m_session->inputs().empty() &&
-                _m_backend_config.type == "tensorrt") {  // device_data (GPU-resident input) only handled by TrtSession
+                _m_backend_config.type == "tensorrt") {  // device_data only handled by TrtSession
                 const auto& input_info = _m_session->inputs().front();
                 const int net_w = (int)input_info.shape[3];
                 const int net_h = (int)input_info.shape[2];
                 if (net_w > 0 && net_h > 0 &&
                     input.image.origin == io_define::common_io::byte_source::origin_kind::raw_bytes) {
                     std::string gpu_err;
-                    auto gpu_result = backend::gpu_jpeg::decode_and_letterbox_gpu(
+                    auto gpu_result = backend::gpu_jpeg::decode_and_preprocess(
                         reinterpret_cast<const unsigned char*>(input.image.data.data()),
-                        input.image.data.size(), net_w, net_h, &gpu_err);
+                        input.image.data.size(), net_w, net_h,
+                        *_gpu_preprocess_desc, &gpu_err);
                     jinq::common::stage_timing::mark("decode");
                     if (gpu_result.valid) {
                         backend::NamedTensor nt;
                         nt.name = input_info.name;
-                        nt.tensor.dtype = input_info.dtype;
-                        nt.tensor.shape = {1, 3, (int64_t)net_h, (int64_t)net_w};
-                        nt.tensor.layout = backend::TensorLayout::Nchw;
+                        nt.tensor.dtype = _gpu_preprocess_desc->output_dtype;
+                        nt.tensor.shape = {1,
+                                          _gpu_preprocess_desc->color == backend::GpuPreprocessDescriptor::Color::GRAY ? 1 : 3,
+                                          (int64_t)gpu_result.out_h, (int64_t)gpu_result.out_w};
+                        nt.tensor.layout = _gpu_preprocess_desc->output_nhwc
+                            ? backend::TensorLayout::Nhwc : backend::TensorLayout::Nchw;
                         nt.tensor.device_data = gpu_result.device_input;
                         jinq::common::stage_timing::mark("pre");
                         jinq::common::stage_timing::mark("h2d");
@@ -588,7 +605,7 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                             return run_status;
                         }
                         InferenceContext ctx;
-                        ctx.network_size = cv::Size(net_w, net_h);
+                        ctx.network_size = cv::Size(gpu_result.out_w, gpu_result.out_h);
                         ctx.source_size = cv::Size(gpu_result.src_w, gpu_result.src_h);
                         const StatusCode post_status = postprocess(outputs, ctx, output);
                         jinq::common::stage_timing::mark("post");
@@ -616,6 +633,7 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
   private:
     std::string _m_section_name;
     cv_input::ImageInputLimits _m_image_limits;
+    std::optional<backend::GpuPreprocessDescriptor> _gpu_preprocess_desc;
     backend::BackendConfig _m_backend_config;
     std::unique_ptr<backend::InferenceSession> _m_session;
     toml::table _m_model_section;

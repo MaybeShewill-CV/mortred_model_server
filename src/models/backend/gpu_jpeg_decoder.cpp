@@ -757,6 +757,177 @@ GpuPipelineResult decode_and_letterbox_gpu(
     return out;
 }
 
+// CUDA kernel launcher from the parameterized gpu_preprocess.cu
+#ifdef MORTRED_HAS_JPEGGPU
+extern "C" cudaError_t launch_preprocess(
+    const uint8_t* d_y, const uint8_t* d_cb, const uint8_t* d_cr,
+    int src_w, int src_h, int cb_w, int cb_h,
+    void* d_out, void* d_gray_out,
+    int out_w, int out_h,
+    int resize_type, int color_order, int rotation,
+    float norm_scale,
+    float mean0, float mean1, float mean2,
+    float std0, float std1, float std2,
+    float pad_val,
+    int output_is_fp16,
+    int output_is_nhwc,
+    int unpad_w, int unpad_h, int pad_x, int pad_y,
+    int crop_x, int crop_y,
+    cudaStream_t stream);
+#endif
+
+GpuPipelineResult decode_and_preprocess(
+    const unsigned char* data, size_t size,
+    int network_w, int network_h,
+    const GpuPreprocessDescriptor& desc,
+    std::string* err) {
+
+    GpuPipelineResult out;
+    if (err) err->clear();
+    if (!desc.valid()) {
+        if (err) *err = "invalid GpuPreprocessDescriptor";
+        return out;
+    }
+#ifdef MORTRED_HAS_JPEGGPU
+    if (!probe_once().capable || probe_once().selected != JPEGGPU) {
+        if (err) *err = "GPU zero-copy pipeline requires jpeggpu backend";
+        return out;
+    }
+
+    // Step 1: decode JPEG to device (async)
+    DevicePlanes dp = decode_to_device(data, size, err);
+    if (!dp.valid) return out;
+
+    // Step 2: compute geometry based on the descriptor's Resize type (CPU, fast)
+    int unpad_w = 0, unpad_h = 0, pad_x = 0, pad_y = 0, crop_x = 0, crop_y = 0;
+    int eff_out_w = network_w, eff_out_h = network_h;
+
+    switch (desc.resize) {
+    case GpuPreprocessDescriptor::Resize::LETTERBOX:
+    case GpuPreprocessDescriptor::Resize::KEEP_RATIO_PAD_ZERO:
+    case GpuPreprocessDescriptor::Resize::KEEP_RATIO_PAD_CENTER: {
+        const double ratio = std::min(
+            (double)network_h / (double)dp.y_h,
+            (double)network_w / (double)dp.y_w);
+        unpad_w = (int)std::round(dp.y_w * ratio);
+        unpad_h = (int)std::round(dp.y_h * ratio);
+        if (unpad_w > network_w) unpad_w = network_w;
+        if (unpad_h > network_h) unpad_h = network_h;
+        const double dw = ((double)network_w - unpad_w) / 2.0;
+        const double dh = ((double)network_h - unpad_h) / 2.0;
+        pad_x = std::max(0, (int)std::round(dw - 0.1));
+        pad_y = std::max(0, (int)std::round(dh - 0.1));
+        break;
+    }
+    case GpuPreprocessDescriptor::Resize::CENTER_CROP: {
+        // resize source to pre_crop_size, then crop center to network size
+        const int pre_w = desc.pre_crop_size.width > 0 ? desc.pre_crop_size.width : network_w;
+        const int pre_h = desc.pre_crop_size.height > 0 ? desc.pre_crop_size.height : network_h;
+        crop_x = std::max(0, (pre_w - network_w) / 2);
+        crop_y = std::max(0, (pre_h - network_h) / 2);
+        unpad_w = pre_w;
+        unpad_h = pre_h;
+        break;
+    }
+    case GpuPreprocessDescriptor::Resize::DIRECT_RESIZE: {
+        unpad_w = network_w;
+        unpad_h = network_h;
+        break;
+    }
+    case GpuPreprocessDescriptor::Resize::ALIGN_TO_MULTIPLE: {
+        eff_out_w = ((dp.y_w + desc.align_multiple - 1) / desc.align_multiple) * desc.align_multiple;
+        eff_out_h = ((dp.y_h + desc.align_multiple - 1) / desc.align_multiple) * desc.align_multiple;
+        unpad_w = eff_out_w;
+        unpad_h = eff_out_h;
+        break;
+    }
+    case GpuPreprocessDescriptor::Resize::NONE: {
+        eff_out_w = dp.y_w;
+        eff_out_h = dp.y_h;
+        unpad_w = eff_out_w;
+        unpad_h = eff_out_h;
+        break;
+    }
+    }
+
+    // Step 3: allocate output buffers on device
+    const int channels = (desc.color == GpuPreprocessDescriptor::Color::GRAY) ? 1 : 3;
+    const size_t elem_size = (desc.output_dtype == DType::F16) ? 2 : 4;
+    const size_t out_bytes = (size_t)eff_out_h * eff_out_w * channels * elem_size;
+    static void* d_output = nullptr;
+    static size_t d_output_size = 0;
+    if (d_output_size < out_bytes) {
+        if (d_output) cudaFree(d_output);
+        if (cudaMalloc(&d_output, out_bytes) != cudaSuccess) {
+            d_output = nullptr; d_output_size = 0;
+            if (err) *err = "output buffer alloc failed";
+            return out;
+        }
+        d_output_size = out_bytes;
+    }
+
+    // Optional gray secondary output
+    void* d_gray = nullptr;
+    if (desc.secondary_gray_output) {
+        const size_t gray_bytes = (size_t)eff_out_h * eff_out_w * elem_size;
+        static void* d_gray_buf = nullptr;
+        static size_t d_gray_size = 0;
+        if (d_gray_size < gray_bytes) {
+            if (d_gray_buf) cudaFree(d_gray_buf);
+            if (cudaMalloc(&d_gray_buf, gray_bytes) != cudaSuccess) {
+                d_gray_buf = nullptr; d_gray_size = 0;
+                if (err) *err = "gray output alloc failed";
+                return out;
+            }
+            d_gray_size = gray_bytes;
+        }
+        d_gray = d_gray_buf;
+    }
+
+    // Step 4: launch parameterized CUDA kernel (async, same stream)
+    const std::lock_guard<std::mutex> guard(decoder_mutex());
+    JpegGpuPlan& plan = jpeggpu_plan();
+    if (!plan.ok) {
+        if (err) *err = "plan not ready";
+        return out;
+    }
+    const int resize_type = static_cast<int>(desc.resize);
+    const int color_order = static_cast<int>(desc.color);
+    const int rotation = static_cast<int>(desc.rotation);
+    const float pad_val = (float)desc.pad_value;
+
+    const cudaError_t launch_err = launch_preprocess(
+        dp.dev_y, dp.dev_cb, dp.dev_cr,
+        dp.y_w, dp.y_h, dp.cb_w, dp.cb_h,
+        d_output, d_gray,
+        eff_out_w, eff_out_h,
+        resize_type, color_order, rotation,
+        desc.norm.scale,
+        desc.norm.mean[0], desc.norm.mean[1], desc.norm.mean[2],
+        desc.norm.std[0], desc.norm.std[1], desc.norm.std[2],
+        pad_val,
+        desc.output_dtype == DType::F16 ? 1 : 0,
+        desc.output_nhwc ? 1 : 0,
+        unpad_w, unpad_h, pad_x, pad_y,
+        crop_x, crop_y,
+        plan.stream);
+    if (launch_err != cudaSuccess) {
+        if (err) *err = std::string("CUDA kernel launch failed: ") + cudaGetErrorString(launch_err);
+        return out;
+    }
+
+    out.device_input = d_output;
+    out.device_gray = d_gray;
+    out.out_w = eff_out_w;
+    out.out_h = eff_out_h;
+    out.src_w = dp.y_w;
+    out.src_h = dp.y_h;
+    out.valid = true;
+    g_request_count[JPEGGPU].fetch_add(1);
+#endif
+    return out;
+}
+
 PlanarImage decode_planar(const unsigned char* data, size_t size, std::string* err) {
     PlanarImage out;
     if (err) err->clear();

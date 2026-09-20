@@ -66,6 +66,16 @@ template <typename INPUT, typename OUTPUT> StatusCode MobileNetv2<INPUT, OUTPUT>
             }
         }
     }
+    this->set_image_decode_hint(_m_input_tensor_size, 1.0f, 1);
+    this->set_gpu_preprocess({
+        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::CENTER_CROP,
+        .norm = {.scale = 1.0f / 255.0f, .mean = {0.485f,0.456f,0.406f}, .std = {0.229f,0.224f,0.225f}},
+        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
+        .pad_value = 114,
+        .output_dtype = jinq::models::backend::DType::F32,
+        .output_nhwc = true,
+    });
+
     return StatusCode::OK;
 }
 

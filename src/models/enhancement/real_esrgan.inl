@@ -33,6 +33,16 @@ template <typename INPUT, typename OUTPUT> StatusCode RealEsrGan<INPUT, OUTPUT>:
     _m_input_size_host.height = static_cast<int>(inputs.front().shape[1]);
     _m_input_size_host.width = static_cast<int>(inputs.front().shape[2]);
     // dynamic input (unset mnn dims): the size is resolved per run in preprocess
+    this->set_gpu_preprocess({
+        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::NONE,
+        .norm = {.scale = 1.0f / 255.0f},
+        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
+        .pad_value = 114,
+        .output_dtype = jinq::models::backend::DType::F32,
+        .output_nhwc = true,
+        .dynamic_size = true
+    });
+
     return StatusCode::OK;
 }
 

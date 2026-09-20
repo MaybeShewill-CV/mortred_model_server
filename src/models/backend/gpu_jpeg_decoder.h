@@ -14,6 +14,8 @@
 
 #include <opencv2/core.hpp>
 
+#include "models/backend/gpu_preprocess_desc.h"
+
 namespace jinq {
 namespace models {
 namespace backend {
@@ -80,7 +82,8 @@ PlanarImage fetch_from_device(const DevicePlanes& dp);
  * preprocess, no H2D. The GPU work is submitted asynchronously; the caller
  * only pays CPU API submission time. */
 struct GpuPipelineResult {
-    void* device_input = nullptr;  // fp16 NCHW [1,3,H,W] on device
+    void* device_input = nullptr;  // model input tensor on device (fp16/f32, NCHW/NHWC)
+    void* device_gray = nullptr;   // optional secondary grayscale output (EnlightenGAN)
     int out_w = 0, out_h = 0;
     int src_w = 0, src_h = 0;      // original image dims (for postprocess context)
     bool valid = false;
@@ -88,6 +91,16 @@ struct GpuPipelineResult {
 GpuPipelineResult decode_and_letterbox_gpu(
     const unsigned char* data, size_t size,
     int network_w, int network_h,
+    std::string* err);
+
+/*** Generic GPU zero-copy pipeline: JPEG decode + model-declared preprocessing,
+ * all on device. Accepts any model's GpuPreprocessDescriptor — no hardcoded
+ * letterbox assumptions. Supports all Resize modes, color spaces, normalization
+ * schemes, output dtypes/layouts, rotation, dynamic size, and dual output. */
+GpuPipelineResult decode_and_preprocess(
+    const unsigned char* data, size_t size,
+    int network_w, int network_h,
+    const GpuPreprocessDescriptor& desc,
     std::string* err);
 
 }  // namespace gpu_jpeg

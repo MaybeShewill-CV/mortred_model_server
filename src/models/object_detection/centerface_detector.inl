@@ -44,6 +44,16 @@ template <typename INPUT, typename OUTPUT> StatusCode CenterFaceDetector<INPUT, 
         LOG(ERROR) << "unexpected centerface input shape: " << input_info.to_string() << ", expected dynamic [N,3,H,W] (nchw)";
         return StatusCode::MODEL_INIT_FAILED;
     }
+    this->set_gpu_preprocess({
+        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::ALIGN_TO_MULTIPLE,
+        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
+        .pad_value = 114,
+        .output_dtype = jinq::models::backend::DType::F32,
+        .output_nhwc = false,
+        .align_multiple = 32,
+        .dynamic_size = true
+    });
+
     return StatusCode::OK;
 }
 
