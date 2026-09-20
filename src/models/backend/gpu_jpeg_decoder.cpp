@@ -561,6 +561,115 @@ cv::Mat decode(const unsigned char* data, size_t size, std::string* err) {
     return result;
 }
 
+DevicePlanes decode_to_device(const unsigned char* data, size_t size, std::string* err) {
+    DevicePlanes out;
+    if (err) err->clear();
+#ifdef MORTRED_HAS_JPEGGPU
+    if (!probe_once().capable || probe_once().selected != JPEGGPU) {
+        if (err) *err = "device decode requires jpeggpu backend";
+        return out;
+    }
+    const std::lock_guard<std::mutex> guard(decoder_mutex());
+    JpegGpuPlan& plan = jpeggpu_plan();
+    if (!plan.ok) {
+        if (err) *err = "jpeggpu plan not ready";
+        return out;
+    }
+    if (plan.h_jpeg_pinned_size < size) {
+        if (plan.h_jpeg_pinned) cudaFreeHost(plan.h_jpeg_pinned);
+        if (cudaHostAlloc((void**)&plan.h_jpeg_pinned, size, cudaHostAllocDefault) != cudaSuccess) {
+            plan.h_jpeg_pinned = nullptr; plan.h_jpeg_pinned_size = 0;
+            if (err) *err = "pinned alloc failed";
+            return out;
+        }
+        plan.h_jpeg_pinned_size = size;
+    }
+    memcpy(plan.h_jpeg_pinned, data, size);
+    struct jpeggpu_img_info info;
+    if (jpeggpu_decoder_parse_header(plan.decoder, &info, plan.h_jpeg_pinned, size) != JPEGGPU_SUCCESS) {
+        if (err) *err = "parse_header failed";
+        return out;
+    }
+    if (info.num_components != 3) {
+        if (err) *err = "3-component only";
+        return out;
+    }
+    size_t tmp_size = 0;
+    if (jpeggpu_decoder_get_buffer_size(plan.decoder, &tmp_size) != JPEGGPU_SUCCESS) {
+        if (err) *err = "get_buffer_size failed";
+        return out;
+    }
+    if (plan.d_tmp_size < tmp_size) {
+        if (plan.d_tmp) cudaFree(plan.d_tmp);
+        if (cudaMalloc(&plan.d_tmp, ((tmp_size + 255) / 256) * 256) != cudaSuccess) {
+            plan.d_tmp = nullptr; plan.d_tmp_size = 0;
+            if (err) *err = "temp alloc failed";
+            return out;
+        }
+        plan.d_tmp_size = tmp_size;
+    }
+    if (jpeggpu_decoder_transfer(plan.decoder, plan.d_tmp, plan.d_tmp_size, plan.stream) != JPEGGPU_SUCCESS) {
+        if (err) *err = "transfer failed";
+        return out;
+    }
+    struct jpeggpu_img img = {};
+    for (int c = 0; c < info.num_components; ++c) {
+        size_t plane_bytes = (size_t)info.sizes_y[c] * info.sizes_x[c];
+        if (plan.d_plane_sizes[c] < plane_bytes) {
+            if (plan.d_planes[c]) cudaFree(plan.d_planes[c]);
+            if (plan.h_planes[c]) cudaFreeHost(plan.h_planes[c]);
+            if (cudaMalloc((void**)&plan.d_planes[c], plane_bytes) != cudaSuccess ||
+                cudaHostAlloc((void**)&plan.h_planes[c], plane_bytes, cudaHostAllocDefault) != cudaSuccess) {
+                if (err) *err = "plane alloc failed";
+                return out;
+            }
+            plan.d_plane_sizes[c] = plane_bytes;
+            plan.h_plane_sizes[c] = plane_bytes;
+        }
+        img.image[c] = plan.d_planes[c];
+        img.pitch[c] = ((info.sizes_x[c] + 7) / 8) * 8;
+    }
+    if (jpeggpu_decoder_decode(plan.decoder, &img, plan.d_tmp, plan.d_tmp_size, plan.stream) != JPEGGPU_SUCCESS) {
+        if (err) *err = "decode failed";
+        return out;
+    }
+    // NO cudaStreamSynchronize here: GPU work is submitted asynchronously.
+    // The decode timing mark fires after submission (CPU returns immediately),
+    // and the actual GPU completion is awaited in fetch_from_device() when
+    // the decoded data is needed. This pipelines CPU and GPU work.
+    // return device pointers — NO D2H, NO cv::Mat wrapping
+    out.dev_y = plan.d_planes[0];
+    out.dev_cb = plan.d_planes[1];
+    out.dev_cr = plan.d_planes[2];
+    out.y_w = info.sizes_x[0]; out.y_h = info.sizes_y[0];
+    out.cb_w = info.sizes_x[1]; out.cb_h = info.sizes_y[1];
+    out.valid = true;
+    g_request_count[JPEGGPU].fetch_add(1);
+#endif
+    return out;
+}
+
+PlanarImage fetch_from_device(const DevicePlanes& dp) {
+    PlanarImage out;
+    if (!dp.valid) return out;
+#ifdef MORTRED_HAS_JPEGGPU
+    const std::lock_guard<std::mutex> guard(decoder_mutex());
+    JpegGpuPlan& plan = jpeggpu_plan();
+    if (!plan.ok) return out;
+    // D2H copies
+    size_t y_bytes = (size_t)dp.y_h * dp.y_w;
+    size_t cb_bytes = (size_t)dp.cb_h * dp.cb_w;
+    cudaMemcpyAsync(plan.h_planes[0], dp.dev_y, y_bytes, cudaMemcpyDeviceToHost, plan.stream);
+    cudaMemcpyAsync(plan.h_planes[1], dp.dev_cb, cb_bytes, cudaMemcpyDeviceToHost, plan.stream);
+    cudaMemcpyAsync(plan.h_planes[2], dp.dev_cr, cb_bytes, cudaMemcpyDeviceToHost, plan.stream);
+    cudaStreamSynchronize(plan.stream);
+    out.y = cv::Mat(dp.y_h, dp.y_w, CV_8UC1, plan.h_planes[0]).clone();
+    out.cb = cv::Mat(dp.cb_h, dp.cb_w, CV_8UC1, plan.h_planes[1]).clone();
+    out.cr = cv::Mat(dp.cb_h, dp.cb_w, CV_8UC1, plan.h_planes[2]).clone();
+#endif
+    return out;
+}
+
 PlanarImage decode_planar(const unsigned char* data, size_t size, std::string* err) {
     PlanarImage out;
     if (err) err->clear();

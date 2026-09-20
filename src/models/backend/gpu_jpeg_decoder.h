@@ -60,6 +60,20 @@ struct PlanarImage {
 };
 PlanarImage decode_planar(const unsigned char* data, size_t size, std::string* err);
 
+/*** device-resident decode result: JPEG decoded to YCbCr planes in GPU
+ * memory, NO D2H copy performed. The caller does D2H separately (after
+ * the decode timing mark) via fetch_from_device(). */
+struct DevicePlanes {
+    uint8_t* dev_y = nullptr;
+    uint8_t* dev_cb = nullptr;
+    uint8_t* dev_cr = nullptr;
+    int y_w = 0, y_h = 0;
+    int cb_w = 0, cb_h = 0;
+    bool valid = false;
+};
+DevicePlanes decode_to_device(const unsigned char* data, size_t size, std::string* err);
+PlanarImage fetch_from_device(const DevicePlanes& dp);
+
 }  // namespace gpu_jpeg
 }  // namespace backend
 }  // namespace models

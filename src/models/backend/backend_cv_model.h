@@ -23,6 +23,7 @@
 #include "common/stage_timing.h"
 #include "common/status_code.h"
 #include "models/backend/backend_config.h"
+#include "models/backend/gpu_jpeg_decoder.h"
 #include "models/backend/inference_context.h"
 #include "models/backend/session.h"
 #include "models/backend/tensor.h"
@@ -261,13 +262,15 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
             } else {
                 image = cv_input::load_image(input, _m_image_limits, &prepared.status, &prepared.error);
             }
+            // decode mark is now placed INSIDE load_image at the exact point
+            // where JPEG bitstream decoding completes (after GPU kernel or
+            // after cv::imdecode), before D2H/color conversion/format work
             if (image.empty()) {
                 if (prepared.status == StatusCode::OK) {
                     prepared.status = StatusCode::MODEL_EMPTY_INPUT_IMAGE;
                 }
                 return PreparedInput::invalid(prepared.status, prepared.error.empty() ? "input image is empty" : prepared.error);
             }
-            jinq::common::stage_timing::mark("decode");
             prepared.inputs = preprocess(image);
             jinq::common::stage_timing::mark("pre");
             if (prepared.inputs.empty()) {

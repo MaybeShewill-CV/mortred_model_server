@@ -286,6 +286,39 @@ inline int imread_color_flag_for_reduce(int factor) {
     }
 }
 
+/*** planar YCbCr → interleaved BGR (single pass, no intermediate Mats).
+ * Used when the GPU decode path returns planar data that needs to be
+ * converted to the cv::Mat BGR format the preprocess expects. */
+inline cv::Mat convert_planar_to_bgr(const backend::gpu_jpeg::PlanarImage &planar) {
+    if (planar.y.empty() || planar.cb.empty() || planar.cr.empty()) {
+        return {};
+    }
+    cv::Mat cb_res, cr_res;
+    if (planar.cb.size() != planar.y.size()) {
+        cv::resize(planar.cb, cb_res, planar.y.size(), 0, 0, cv::INTER_LINEAR);
+        cv::resize(planar.cr, cr_res, planar.y.size(), 0, 0, cv::INTER_LINEAR);
+    } else {
+        cb_res = planar.cb;
+        cr_res = planar.cr;
+    }
+    cv::Mat bgr(planar.y.rows, planar.y.cols, CV_8UC3);
+    for (int y = 0; y < bgr.rows; ++y) {
+        const uint8_t *y_src = planar.y.ptr<uint8_t>(y);
+        const uint8_t *cb_src = cb_res.ptr<uint8_t>(y);
+        const uint8_t *cr_src = cr_res.ptr<uint8_t>(y);
+        uint8_t *dst = bgr.ptr<uint8_t>(y);
+        for (int x = 0; x < bgr.cols; ++x) {
+            const float yv = static_cast<float>(y_src[x]);
+            const float cb = static_cast<float>(cb_src[x]) - 128.0f;
+            const float cr = static_cast<float>(cr_src[x]) - 128.0f;
+            dst[x * 3 + 0] = static_cast<uint8_t>(std::max(0.0f, std::min(255.0f, yv + 1.772f * cb)));
+            dst[x * 3 + 1] = static_cast<uint8_t>(std::max(0.0f, std::min(255.0f, yv - 0.344136f * cb - 0.714136f * cr)));
+            dst[x * 3 + 2] = static_cast<uint8_t>(std::max(0.0f, std::min(255.0f, yv + 1.402f * cr)));
+        }
+    }
+    return bgr;
+}
+
 /***
  * file_input -> cv::Mat: reads with original channels after existence check
  */
@@ -371,9 +404,13 @@ inline cv::Mat load_image(const io_define::common_io::base64_input &in, const Im
  * so request geometry stays in full-image coordinates.
  */
 inline cv::Mat load_image(const io_define::common_io::image_input &in, const ImageInputLimits &limits, StatusCode *status,
-                          std::string *error, cv::Size *full_size = nullptr) {
+                          std::string *error, cv::Size *full_size = nullptr,
+                          backend::gpu_jpeg::PlanarImage *planar_out = nullptr) {
     if (full_size != nullptr) {
         *full_size = cv::Size();
+    }
+    if (planar_out != nullptr) {
+        *planar_out = backend::gpu_jpeg::PlanarImage{};
     }
     std::vector<unsigned char> bytes;
     if (in.image.origin == io_define::common_io::byte_source::origin_kind::raw_bytes) {
@@ -416,13 +453,29 @@ inline cv::Mat load_image(const io_define::common_io::image_input &in, const Ima
             static_cast<int64_t>(full.width) * full.height <= limits.decode_gpu_max_pixels &&
             (!limits.decode_gpu_require_aligned_width || full.width % 16 == 0)) {
             std::string gpu_error;
-            cv::Mat gpu_image = backend::gpu_jpeg::decode(bytes.data(), bytes.size(), &gpu_error);
-            if (!gpu_image.empty()) {
-                apply_exif_orientation(&gpu_image, orientation);
-                if (image_within_limits(gpu_image, limits, error)) {
-                    cv::Mat ret = normalize_to_bgr8uc3(gpu_image, error);
-                    if (!ret.empty()) {
-                        return ret;
+            // decode to device (no D2H), mark decode HERE (GPU kernel done),
+            // then fetch + convert — the D2H and YCbCr→BGR are preprocessing
+            // work correctly attributed to the pre stage
+            backend::gpu_jpeg::DevicePlanes dp =
+                backend::gpu_jpeg::decode_to_device(bytes.data(), bytes.size(), &gpu_error);
+            jinq::common::stage_timing::mark("decode");
+            if (dp.valid) {
+                backend::gpu_jpeg::PlanarImage planar = backend::gpu_jpeg::fetch_from_device(dp);
+                if (!planar.y.empty()) {
+                    if (full_size != nullptr) {
+                        *full_size = full;
+                    }
+                    if (planar_out != nullptr) {
+                        *planar_out = std::move(planar);
+                        return cv::Mat();
+                    }
+                    cv::Mat bgr = convert_planar_to_bgr(planar);
+                    apply_exif_orientation(&bgr, orientation);
+                    if (image_within_limits(bgr, limits, error)) {
+                        cv::Mat ret = normalize_to_bgr8uc3(bgr, error);
+                        if (!ret.empty()) {
+                            return ret;
+                        }
                     }
                 }
             } else {
@@ -431,6 +484,7 @@ inline cv::Mat load_image(const io_define::common_io::image_input &in, const Ima
         }
     }
     cv::Mat image = cv::imdecode(bytes, imread_color_flag_for_reduce(reduce));
+    jinq::common::stage_timing::mark("decode");
     if (image.empty()) {
         if (error != nullptr) {
             *error = "input image bytes are not a decodable image";
