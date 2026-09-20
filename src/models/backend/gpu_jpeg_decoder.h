@@ -74,6 +74,22 @@ struct DevicePlanes {
 DevicePlanes decode_to_device(const unsigned char* data, size_t size, std::string* err);
 PlanarImage fetch_from_device(const DevicePlanes& dp);
 
+/*** S2 zero-copy: decode JPEG + letterbox + color convert + fp16 NCHW all on
+ * GPU in one pipeline. Returns a device pointer to the fp16 NCHW tensor that
+ * can be passed directly to TRT's input tensor address — no D2H, no CPU
+ * preprocess, no H2D. The GPU work is submitted asynchronously; the caller
+ * only pays CPU API submission time. */
+struct GpuPipelineResult {
+    void* device_input = nullptr;  // fp16 NCHW [1,3,H,W] on device
+    int out_w = 0, out_h = 0;
+    int src_w = 0, src_h = 0;      // original image dims (for postprocess context)
+    bool valid = false;
+};
+GpuPipelineResult decode_and_letterbox_gpu(
+    const unsigned char* data, size_t size,
+    int network_w, int network_h,
+    std::string* err);
+
 }  // namespace gpu_jpeg
 }  // namespace backend
 }  // namespace models

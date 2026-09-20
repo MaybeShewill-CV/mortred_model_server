@@ -8,11 +8,13 @@
 #include "models/backend/gpu_jpeg_decoder.h"
 
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <mutex>
 #include <vector>
 
 #include <cuda_runtime_api.h>
+#include <cuda_fp16.h>
 #include <nvjpeg.h>
 
 #include <opencv2/imgcodecs.hpp>
@@ -666,6 +668,91 @@ PlanarImage fetch_from_device(const DevicePlanes& dp) {
     out.y = cv::Mat(dp.y_h, dp.y_w, CV_8UC1, plan.h_planes[0]).clone();
     out.cb = cv::Mat(dp.cb_h, dp.cb_w, CV_8UC1, plan.h_planes[1]).clone();
     out.cr = cv::Mat(dp.cb_h, dp.cb_w, CV_8UC1, plan.h_planes[2]).clone();
+#endif
+    return out;
+}
+
+// CUDA kernel launcher from gpu_preprocess.cu
+#ifdef MORTRED_HAS_JPEGGPU
+extern "C" cudaError_t launch_letterbox_ycbcr_fp16(
+    const uint8_t* d_y, const uint8_t* d_cb, const uint8_t* d_cr,
+    int src_w, int src_h, int cb_w, int cb_h,
+    int unpad_w, int unpad_h,
+    __half* d_out, int out_w, int out_h,
+    int pad_x, int pad_y,
+    cudaStream_t stream);
+#endif
+
+GpuPipelineResult decode_and_letterbox_gpu(
+    const unsigned char* data, size_t size,
+    int network_w, int network_h,
+    std::string* err) {
+    GpuPipelineResult out;
+    if (err) err->clear();
+#ifdef MORTRED_HAS_JPEGGPU
+    if (!probe_once().capable || probe_once().selected != JPEGGPU) {
+        if (err) *err = "S2 pipeline requires jpeggpu backend";
+        return out;
+    }
+    // Step 1: decode to device (async, output in VRAM)
+    DevicePlanes dp = decode_to_device(data, size, err);
+    if (!dp.valid) return out;
+
+    // Step 2: letterbox geometry (CPU, sub-microsecond)
+    const double ratio = std::min(
+        (double)network_h / (double)dp.y_h,
+        (double)network_w / (double)dp.y_w);
+    int unpad_w = (int)std::round(dp.y_w * ratio);
+    int unpad_h = (int)std::round(dp.y_h * ratio);
+    if (unpad_w > network_w) unpad_w = network_w;
+    if (unpad_h > network_h) unpad_h = network_h;
+    const double dw = ((double)network_w - unpad_w) / 2.0;
+    const double dh = ((double)network_h - unpad_h) / 2.0;
+    const int pad_x = std::max(0, (int)std::round(dw - 0.1));
+    const int pad_y = std::max(0, (int)std::round(dh - 0.1));
+
+    // Step 3: allocate fp16 NCHW output on device
+    const size_t out_bytes = (size_t)network_h * network_w * 3 * 2;  // 3ch * fp16
+    static void* d_output = nullptr;
+    static size_t d_output_size = 0;
+    if (d_output_size < out_bytes) {
+        if (d_output) cudaFree(d_output);
+        if (cudaMalloc(&d_output, out_bytes) != cudaSuccess) {
+            d_output = nullptr; d_output_size = 0;
+            if (err) *err = "output buffer alloc failed";
+            return out;
+        }
+        d_output_size = out_bytes;
+    }
+
+    // Step 4: launch CUDA letterbox kernel on same stream (async)
+    const std::lock_guard<std::mutex> guard(decoder_mutex());
+    JpegGpuPlan& plan = jpeggpu_plan();
+    if (!plan.ok) {
+        if (err) *err = "plan not ready";
+        return out;
+    }
+    const cudaError_t launch_err = launch_letterbox_ycbcr_fp16(
+        dp.dev_y, dp.dev_cb, dp.dev_cr,
+        dp.y_w, dp.y_h, dp.cb_w, dp.cb_h,
+        unpad_w, unpad_h,
+        (__half*)d_output, network_w, network_h,
+        pad_x, pad_y,
+        plan.stream);
+    if (launch_err != cudaSuccess) {
+        if (err) *err = std::string("CUDA kernel launch failed: ") + cudaGetErrorString(launch_err);
+        return out;
+    }
+    // NO cudaStreamSynchronize — GPU work is pipelined; TRT will use the
+    // same stream and naturally wait for this kernel to complete
+
+    out.device_input = d_output;
+    out.out_w = network_w;
+    out.out_h = network_h;
+    out.src_w = dp.y_w;
+    out.src_h = dp.y_h;
+    out.valid = true;
+    g_request_count[JPEGGPU].fetch_add(1);
 #endif
     return out;
 }

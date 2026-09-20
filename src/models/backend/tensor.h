@@ -205,6 +205,9 @@ struct Tensor {
     std::vector<int64_t> shape;
     std::vector<uint8_t> buffer;
     TensorLayout layout = TensorLayout::Unknown;
+    // S2 zero-copy: if non-null, data lives in GPU memory at this address
+    // and `buffer` is empty. Sessions skip H2D and use this pointer directly.
+    void* device_data = nullptr;
 
     Tensor() = default;
     Tensor(const Tensor&) = default;

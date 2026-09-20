@@ -556,6 +556,14 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
         auto& buffer = _m_device_buffers.at(named.name);
         size_t input_bytes = 0;
         checked_shape_nbytes(named.tensor.shape, named.tensor.dtype, &input_bytes);
+        // S2 zero-copy: input already in GPU memory, bind directly
+        if (named.tensor.device_data != nullptr) {
+            if (!_m_context->setTensorAddress(named.name.c_str(), named.tensor.device_data)) {
+                LOG(ERROR) << "tensorrt set device input address failed: " << named.name;
+                return StatusCode::MODEL_RUN_SESSION_FAILED;
+            }
+            continue;
+        }
         const auto status = buffer.ensure(input_bytes);
         if (status != StatusCode::OK) {
             return status;
