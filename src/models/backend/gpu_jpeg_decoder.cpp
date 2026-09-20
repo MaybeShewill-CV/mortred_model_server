@@ -672,14 +672,23 @@ PlanarImage fetch_from_device(const DevicePlanes& dp) {
     return out;
 }
 
-// CUDA kernel launcher from gpu_preprocess.cu
+// CUDA kernel launcher from the parameterized gpu_preprocess.cu
+// (declared before all callers)
 #ifdef MORTRED_HAS_JPEGGPU
-extern "C" cudaError_t launch_letterbox_ycbcr_fp16(
+extern "C" cudaError_t launch_preprocess(
     const uint8_t* d_y, const uint8_t* d_cb, const uint8_t* d_cr,
     int src_w, int src_h, int cb_w, int cb_h,
-    int unpad_w, int unpad_h,
-    __half* d_out, int out_w, int out_h,
-    int pad_x, int pad_y,
+    void* d_out, void* d_gray_out,
+    int out_w, int out_h,
+    int resize_type, int color_order, int rotation,
+    float norm_scale,
+    float mean0, float mean1, float mean2,
+    float std0, float std1, float std2,
+    float pad_val,
+    int output_is_fp16,
+    int output_is_nhwc,
+    int unpad_w, int unpad_h, int pad_x, int pad_y,
+    int crop_x, int crop_y,
     cudaStream_t stream);
 #endif
 
@@ -732,12 +741,20 @@ GpuPipelineResult decode_and_letterbox_gpu(
         if (err) *err = "plan not ready";
         return out;
     }
-    const cudaError_t launch_err = launch_letterbox_ycbcr_fp16(
+    // Use the parameterized kernel with hardcoded YOLO-style params
+    // (this legacy function is only called by the old YOLOV8 fast path;
+    //  new code should use decode_and_preprocess with a descriptor)
+    const cudaError_t launch_err = launch_preprocess(
         dp.dev_y, dp.dev_cb, dp.dev_cr,
         dp.y_w, dp.y_h, dp.cb_w, dp.cb_h,
-        unpad_w, unpad_h,
-        (__half*)d_output, network_w, network_h,
-        pad_x, pad_y,
+        d_output, nullptr,
+        network_w, network_h,
+        0 /* LETTERBOX */, 0 /* RGB */, 0 /* no rotation */,
+        1.0f / 255.0f, 0, 0, 0, 1, 1, 1,
+        114.0f,
+        1 /* fp16 */, 0 /* NCHW */,
+        unpad_w, unpad_h, pad_x, pad_y,
+        0, 0,
         plan.stream);
     if (launch_err != cudaSuccess) {
         if (err) *err = std::string("CUDA kernel launch failed: ") + cudaGetErrorString(launch_err);
@@ -756,25 +773,6 @@ GpuPipelineResult decode_and_letterbox_gpu(
 #endif
     return out;
 }
-
-// CUDA kernel launcher from the parameterized gpu_preprocess.cu
-#ifdef MORTRED_HAS_JPEGGPU
-extern "C" cudaError_t launch_preprocess(
-    const uint8_t* d_y, const uint8_t* d_cb, const uint8_t* d_cr,
-    int src_w, int src_h, int cb_w, int cb_h,
-    void* d_out, void* d_gray_out,
-    int out_w, int out_h,
-    int resize_type, int color_order, int rotation,
-    float norm_scale,
-    float mean0, float mean1, float mean2,
-    float std0, float std1, float std2,
-    float pad_val,
-    int output_is_fp16,
-    int output_is_nhwc,
-    int unpad_w, int unpad_h, int pad_x, int pad_y,
-    int crop_x, int crop_y,
-    cudaStream_t stream);
-#endif
 
 GpuPipelineResult decode_and_preprocess(
     const unsigned char* data, size_t size,
