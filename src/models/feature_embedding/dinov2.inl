@@ -57,7 +57,7 @@ template <typename INPUT, typename OUTPUT> StatusCode Dinov2<INPUT, OUTPUT>::on_
     this->set_image_decode_hint(_m_input_tensor_size, 1.0f, 1);
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
-        .norm = {.scale = 1.0f / 255.0f, .mean = {0.481f,0.457f,0.408f}, .std = {0.268f,0.261f,0.275f}},
+        .norm = {.scale = 1.0f / 255.0f, .mean = {0.48145466f,0.4578275f,0.40821073f}, .std = {0.26862954f,0.26130258f,0.27577711f}},
         .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
         .pad_value = 114,
         .output_dtype = jinq::models::backend::DType::F32,

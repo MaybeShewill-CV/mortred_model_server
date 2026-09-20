@@ -576,40 +576,100 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                 !_m_session->inputs().empty() &&
                 _m_backend_config.type == "tensorrt") {  // device_data only handled by TrtSession
                 const auto& input_info = _m_session->inputs().front();
-                const int net_w = (int)input_info.shape[3];
-                const int net_h = (int)input_info.shape[2];
-                if (net_w > 0 && net_h > 0 &&
+                // engine dims follow the descriptor's declared layout; a
+                // static engine must carry the descriptor's dtype and channel
+                // count and a network-driven resize (ALIGN_TO_MULTIPLE/NONE
+                // derive their size from the decoded frame and cannot honor
+                // static dims). A dynamic engine only takes descriptors that
+                // declare dynamic_size and derive the output size themselves.
+                // A mismatch means the registration does not describe this
+                // engine — fall back rather than feed it wrong geometry.
+                const bool desc_nhwc = _gpu_preprocess_desc->output_nhwc;
+                const auto dim_at = [&](size_t i) { return input_info.shape.size() > i ? (int)input_info.shape[i] : -1; };
+                const int net_h = desc_nhwc ? dim_at(1) : dim_at(2);
+                const int net_w = desc_nhwc ? dim_at(2) : dim_at(3);
+                const int net_c = desc_nhwc ? dim_at(3) : dim_at(1);
+                const bool network_blind_resize =
+                    _gpu_preprocess_desc->resize == backend::GpuPreprocessDescriptor::Resize::ALIGN_TO_MULTIPLE ||
+                    _gpu_preprocess_desc->resize == backend::GpuPreprocessDescriptor::Resize::NONE;
+                const bool static_dims_ok = input_info.shape.size() == 4 && net_w > 0 && net_h > 0 &&
+                    net_c == (_gpu_preprocess_desc->color == backend::GpuPreprocessDescriptor::Color::GRAY ? 1 : 3) &&
+                    !network_blind_resize;
+                const bool dynamic_ok = _gpu_preprocess_desc->dynamic_size && input_info.dynamic;
+                // multi-input engines only fit when the descriptor supplies
+                // the second input (secondary_gray_output) — otherwise the
+                // run would leave a binding unset
+                const size_t session_input_count = _m_session->inputs().size();
+                const bool inputs_wired = session_input_count == 1 ||
+                    (session_input_count == 2 && _gpu_preprocess_desc->secondary_gray_output);
+                const bool dims_match_engine =
+                    input_info.dtype == _gpu_preprocess_desc->output_dtype &&
+                    (static_dims_ok || dynamic_ok) &&
+                    inputs_wired;
+                if (dims_match_engine &&
                     input.image.origin == io_define::common_io::byte_source::origin_kind::raw_bytes) {
+                    // jpeggpu correctness gates, mirroring the S1 decode guards:
+                    // the last partial MCU column is wrong for encoded widths
+                    // not a multiple of 16, progressive scans are unsupported,
+                    // and EXIF orientation != 1 would need the kernel's fixed
+                    // rotation to disagree with the frame's. Misses fall back
+                    // to the normal path instead of decoding wrong pixels.
+                    // (orientation <= 1 keeps full.width the encoded width.)
+                    cv::Size full;
+                    int orientation = 1;
+                    bool progressive = false;
+                    if (cv_input::jpeg_full_dimensions(input.image.data, &full, &orientation, &progressive) &&
+                        !progressive && orientation <= 1 && full.width % 16 == 0) {
                     std::string gpu_err;
                     auto gpu_result = backend::gpu_jpeg::decode_and_preprocess(
                         reinterpret_cast<const unsigned char*>(input.image.data.data()),
-                        input.image.data.size(), net_w, net_h,
+                        input.image.data.size(), net_w > 0 ? net_w : 0, net_h > 0 ? net_h : 0,
                         *_gpu_preprocess_desc, &gpu_err);
                     jinq::common::stage_timing::mark("decode");
                     if (gpu_result.valid) {
                         backend::NamedTensor nt;
                         nt.name = input_info.name;
                         nt.tensor.dtype = _gpu_preprocess_desc->output_dtype;
-                        nt.tensor.shape = {1,
-                                          _gpu_preprocess_desc->color == backend::GpuPreprocessDescriptor::Color::GRAY ? 1 : 3,
-                                          (int64_t)gpu_result.out_h, (int64_t)gpu_result.out_w};
+                        const int64_t out_c =
+                            _gpu_preprocess_desc->color == backend::GpuPreprocessDescriptor::Color::GRAY ? 1 : 3;
+                        // setInputShape consumes this directly, so it must
+                        // follow the declared layout, not just label it
+                        nt.tensor.shape = _gpu_preprocess_desc->output_nhwc
+                            ? std::vector<int64_t>{1, (int64_t)gpu_result.out_h, (int64_t)gpu_result.out_w, out_c}
+                            : std::vector<int64_t>{1, out_c, (int64_t)gpu_result.out_h, (int64_t)gpu_result.out_w};
                         nt.tensor.layout = _gpu_preprocess_desc->output_nhwc
                             ? backend::TensorLayout::Nhwc : backend::TensorLayout::Nchw;
                         nt.tensor.device_data = gpu_result.device_input;
                         jinq::common::stage_timing::mark("pre");
                         jinq::common::stage_timing::mark("h2d");
+                        std::vector<backend::NamedTensor> gpu_inputs{nt};
+                        if (session_input_count == 2 && _gpu_preprocess_desc->secondary_gray_output) {
+                            // EnlightenGAN-style second input: single-channel
+                            // luma map produced alongside the main tensor
+                            backend::NamedTensor gray_nt;
+                            gray_nt.name = _m_session->inputs()[1].name;
+                            gray_nt.tensor.dtype = _gpu_preprocess_desc->output_dtype;
+                            gray_nt.tensor.shape = {1, 1, (int64_t)gpu_result.out_h, (int64_t)gpu_result.out_w};
+                            gray_nt.tensor.layout = backend::TensorLayout::Nchw;
+                            gray_nt.tensor.device_data = gpu_result.device_gray;
+                            gpu_inputs.push_back(std::move(gray_nt));
+                        }
                         std::vector<backend::NamedTensor> outputs;
-                        const auto run_status = _m_session->run({nt}, outputs);
+                        const auto run_status = _m_session->run(gpu_inputs, outputs);
                         jinq::common::stage_timing::mark("sess");
                         if (run_status != StatusCode::OK) {
-                            return run_status;
+                            // a rejected zero-copy shape must not fail the
+                            // request: rerun through the normal path
+                            LOG_EVERY_N(WARNING, 100) << "gpu zero-copy session run rejected, falling back to cpu path";
+                        } else {
+                            InferenceContext ctx;
+                            ctx.network_size = cv::Size(gpu_result.out_w, gpu_result.out_h);
+                            ctx.source_size = cv::Size(gpu_result.src_w, gpu_result.src_h);
+                            const StatusCode post_status = postprocess(outputs, ctx, output);
+                            jinq::common::stage_timing::mark("post");
+                            return post_status;
                         }
-                        InferenceContext ctx;
-                        ctx.network_size = cv::Size(gpu_result.out_w, gpu_result.out_h);
-                        ctx.source_size = cv::Size(gpu_result.src_w, gpu_result.src_h);
-                        const StatusCode post_status = postprocess(outputs, ctx, output);
-                        jinq::common::stage_timing::mark("post");
-                        return post_status;
+                    }
                     }
                 }
             }

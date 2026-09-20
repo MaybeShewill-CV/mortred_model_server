@@ -69,11 +69,15 @@ template <typename INPUT, typename OUTPUT> StatusCode ResNet<INPUT, OUTPUT>::on_
     this->set_image_decode_hint(_m_input_tensor_size, 1.0f, 1);
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::CENTER_CROP,
-        .norm = {.scale = 1.0f / 255.0f, .mean = {0.485f,0.456f,0.406f}, .std = {0.229f,0.224f,0.225f}},
+        // CPU path subtracts caffe-style 0-255 means after to_float, no /255:
+        // keep the same units (scale 1) so both paths are numerically equal
+        .norm = {.scale = 1.0f, .mean = {123.68f,116.78f,103.94f}, .std = {58.395f,57.12f,57.375f}},
         .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
         .pad_value = 114,
         .output_dtype = jinq::models::backend::DType::F32,
         .output_nhwc = true,
+        // CPU: resize(256,256) first, then center-crop to the network size
+        .pre_crop_size = cv::Size(256, 256),
     });
 
     return StatusCode::OK;

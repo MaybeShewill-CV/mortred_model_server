@@ -54,6 +54,7 @@ template <typename INPUT, typename OUTPUT> StatusCode Metric3D<INPUT, OUTPUT>::o
         .norm = {.mean = {123.675f,116.28f,103.53f}, .std = {58.395f,57.12f,57.375f}},
         .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
         .pad_value = 114,
+        .pad_with_mean = true,
         .output_dtype = jinq::models::backend::DType::F32,
         .output_nhwc = false,
     });

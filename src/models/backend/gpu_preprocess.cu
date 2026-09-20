@@ -69,6 +69,20 @@ __device__ __forceinline__ float clamp_255(float v) {
     return fmaxf(0.0f, fminf(255.0f, v));
 }
 
+/*** write one GRAY pixel: the output buffer holds ONE plane (NCHW) or one
+ * value per pixel (NHWC) — never three planes like the color writers */
+template <bool IS_FP16, bool IS_NHWC>
+__device__ __forceinline__ void write_gray_pixel(
+    void* output, int w, int h, int out_w,
+    float gray)
+{
+    if constexpr (IS_FP16) {
+        ((__half*)output)[(size_t)h * out_w + w] = __float2half(gray);
+    } else {
+        ((float*)output)[(size_t)h * out_w + w] = gray;
+    }
+}
+
 /*** Core kernel: one thread per output pixel.
  * Output is passed as void* and cast internally by the template parameter.
  * All descriptor fields are scalar kernel params (GPU-friendly). */
@@ -90,6 +104,7 @@ __global__ void preprocess_ycbcr_kernel(
     float mean0, float mean1, float mean2,
     float std0, float std1, float std2,
     float pad_val,
+    int pad_zero_norm,                   // 1: pad with the mean (normalized 0)
     // geometry (pre-computed on host)
     int unpad_w, int unpad_h,
     int pad_x, int pad_y,
@@ -131,7 +146,8 @@ __global__ void preprocess_ycbcr_kernel(
         const int ly = h - pad_y;
         if (lx < 0 || lx >= unpad_w || ly < 0 || ly >= unpad_h) {
             is_pad = true;
-            pad_val = 0.0f;  // both variants pad with zero
+            // the raw pad value comes from the descriptor: 0 for PAD_ZERO
+            // (pad_value registered as 0), the model's pad_value for PAD_CENTER
         } else {
             sx = (lx * src_w) / unpad_w;
             sy = (ly * src_h) / unpad_h;
@@ -158,8 +174,21 @@ __global__ void preprocess_ycbcr_kernel(
 
     // ── Write padding if outside image area ──
     if (is_pad || sx < 0 || sx >= src_w || sy < 0 || sy >= src_h) {
-        const float pv = (pad_val * norm_scale - mean0) / std0;
-        write_pixel<IS_FP16, IS_NHWC>(output, w, h, out_w, out_h, pv, pv, pv);
+        if (color_order == COLOR_GRAY) {
+            // one-plane output: pad = the raw pad value in norm units
+            const float pv = pad_zero_norm != 0
+                ? 0.0f
+                : (pad_val * norm_scale - mean0) / std0;
+            write_gray_pixel<IS_FP16, IS_NHWC>(output, w, h, out_w, pv);
+            return;
+        }
+        // pad pixels go through the SAME per-channel normalization as image
+        // pixels (CPU paths normalize after zero/mean padding): mean padding
+        // reads exactly 0 on every channel
+        const float pv0 = pad_zero_norm != 0 ? 0.0f : (pad_val * norm_scale - mean0) / std0;
+        const float pv1 = pad_zero_norm != 0 ? 0.0f : (pad_val * norm_scale - mean1) / std1;
+        const float pv2 = pad_zero_norm != 0 ? 0.0f : (pad_val * norm_scale - mean2) / std2;
+        write_pixel<IS_FP16, IS_NHWC>(output, w, h, out_w, out_h, pv0, pv1, pv2);
         return;
     }
 
@@ -184,15 +213,19 @@ __global__ void preprocess_ycbcr_kernel(
     if (color_order == COLOR_BGR) {
         write_pixel<IS_FP16, IS_NHWC>(output, w, h, out_w, out_h, b, g, r);
     } else if (color_order == COLOR_GRAY) {
+        // luminance of the NORMALIZED channels; with scale=1/255, mean=0,
+        // std=1 this is gray/255, matching cvtColor(BGR2GRAY) + /255
         const float gray = 0.299f * r + 0.587f * g + 0.114f * b;
-        write_pixel<IS_FP16, IS_NHWC>(output, w, h, out_w, out_h, gray, gray, gray);
+        write_gray_pixel<IS_FP16, IS_NHWC>(output, w, h, out_w, gray);
     } else { // RGB
         write_pixel<IS_FP16, IS_NHWC>(output, w, h, out_w, out_h, r, g, b);
     }
 
-    // ── Step 6: optional grayscale secondary output ──
+    // ── Step 6: optional grayscale secondary output (EnlightenGAN's
+    // input_gray = 1 - luma of the [0,1] RGB, from the normalized channels:
+    // 1 - (0.299*(r+1) + 0.587*(g+1) + 0.114*(b+1)) * 0.5) ──
     if (gray_output != nullptr) {
-        const float gray = 0.299f * r + 0.587f * g + 0.114f * b;
+        const float gray = 1.0f - (0.299f * (r + 1.0f) + 0.587f * (g + 1.0f) + 0.114f * (b + 1.0f)) * 0.5f;
         if constexpr (IS_FP16) {
             ((__half*)gray_output)[(size_t)h * out_w + w] = __float2half(gray);
         } else {
@@ -212,6 +245,7 @@ extern "C" cudaError_t launch_preprocess(
     float mean0, float mean1, float mean2,
     float std0, float std1, float std2,
     float pad_val,
+    int pad_zero_norm,
     int output_is_fp16,
     int output_is_nhwc,
     int unpad_w, int unpad_h, int pad_x, int pad_y,
@@ -227,28 +261,28 @@ extern "C" cudaError_t launch_preprocess(
             d_out, d_gray_out, out_w, out_h,
             resize_type, color_order, rotation,
             norm_scale, mean0, mean1, mean2, std0, std1, std2,
-            pad_val, unpad_w, unpad_h, pad_x, pad_y, crop_x, crop_y);
+            pad_val, pad_zero_norm, unpad_w, unpad_h, pad_x, pad_y, crop_x, crop_y);
     } else if (output_is_fp16 && output_is_nhwc) {
         preprocess_ycbcr_kernel<true, true><<<grid, block, 0, stream>>>(
             d_y, d_cb, d_cr, src_w, src_h, cb_w, cb_h,
             d_out, d_gray_out, out_w, out_h,
             resize_type, color_order, rotation,
             norm_scale, mean0, mean1, mean2, std0, std1, std2,
-            pad_val, unpad_w, unpad_h, pad_x, pad_y, crop_x, crop_y);
+            pad_val, pad_zero_norm, unpad_w, unpad_h, pad_x, pad_y, crop_x, crop_y);
     } else if (!output_is_fp16 && !output_is_nhwc) {
         preprocess_ycbcr_kernel<false, false><<<grid, block, 0, stream>>>(
             d_y, d_cb, d_cr, src_w, src_h, cb_w, cb_h,
             d_out, d_gray_out, out_w, out_h,
             resize_type, color_order, rotation,
             norm_scale, mean0, mean1, mean2, std0, std1, std2,
-            pad_val, unpad_w, unpad_h, pad_x, pad_y, crop_x, crop_y);
+            pad_val, pad_zero_norm, unpad_w, unpad_h, pad_x, pad_y, crop_x, crop_y);
     } else {
         preprocess_ycbcr_kernel<false, true><<<grid, block, 0, stream>>>(
             d_y, d_cb, d_cr, src_w, src_h, cb_w, cb_h,
             d_out, d_gray_out, out_w, out_h,
             resize_type, color_order, rotation,
             norm_scale, mean0, mean1, mean2, std0, std1, std2,
-            pad_val, unpad_w, unpad_h, pad_x, pad_y, crop_x, crop_y);
+            pad_val, pad_zero_norm, unpad_w, unpad_h, pad_x, pad_y, crop_x, crop_y);
     }
     return cudaGetLastError();
 }

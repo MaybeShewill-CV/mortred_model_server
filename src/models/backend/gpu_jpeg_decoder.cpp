@@ -685,6 +685,7 @@ extern "C" cudaError_t launch_preprocess(
     float mean0, float mean1, float mean2,
     float std0, float std1, float std2,
     float pad_val,
+    int pad_zero_norm,
     int output_is_fp16,
     int output_is_nhwc,
     int unpad_w, int unpad_h, int pad_x, int pad_y,
@@ -752,6 +753,7 @@ GpuPipelineResult decode_and_letterbox_gpu(
         0 /* LETTERBOX */, 0 /* RGB */, 0 /* no rotation */,
         1.0f / 255.0f, 0, 0, 0, 1, 1, 1,
         114.0f,
+        0 /* no mean padding */,
         1 /* fp16 */, 0 /* NCHW */,
         unpad_w, unpad_h, pad_x, pad_y,
         0, 0,
@@ -802,7 +804,6 @@ GpuPipelineResult decode_and_preprocess(
 
     switch (desc.resize) {
     case GpuPreprocessDescriptor::Resize::LETTERBOX:
-    case GpuPreprocessDescriptor::Resize::KEEP_RATIO_PAD_ZERO:
     case GpuPreprocessDescriptor::Resize::KEEP_RATIO_PAD_CENTER: {
         const double ratio = std::min(
             (double)network_h / (double)dp.y_h,
@@ -815,6 +816,21 @@ GpuPipelineResult decode_and_preprocess(
         const double dh = ((double)network_h - unpad_h) / 2.0;
         pad_x = std::max(0, (int)std::round(dw - 0.1));
         pad_y = std::max(0, (int)std::round(dh - 0.1));
+        break;
+    }
+    case GpuPreprocessDescriptor::Resize::KEEP_RATIO_PAD_ZERO: {
+        // DepthAnything-style: the resized image anchors at the top-left and
+        // the zero pad lands on the right/bottom, matching the CPU path's
+        // Mat::zeros + copyTo(Rect(0,0,...)) and its top-left crop in post
+        const double ratio = std::min(
+            (double)network_h / (double)dp.y_h,
+            (double)network_w / (double)dp.y_w);
+        unpad_w = (int)std::round(dp.y_w * ratio);
+        unpad_h = (int)std::round(dp.y_h * ratio);
+        if (unpad_w > network_w) unpad_w = network_w;
+        if (unpad_h > network_h) unpad_h = network_h;
+        pad_x = 0;
+        pad_y = 0;
         break;
     }
     case GpuPreprocessDescriptor::Resize::CENTER_CROP: {
@@ -904,6 +920,7 @@ GpuPipelineResult decode_and_preprocess(
         desc.norm.mean[0], desc.norm.mean[1], desc.norm.mean[2],
         desc.norm.std[0], desc.norm.std[1], desc.norm.std[2],
         pad_val,
+        desc.pad_with_mean ? 1 : 0,
         desc.output_dtype == DType::F16 ? 1 : 0,
         desc.output_nhwc ? 1 : 0,
         unpad_w, unpad_h, pad_x, pad_y,

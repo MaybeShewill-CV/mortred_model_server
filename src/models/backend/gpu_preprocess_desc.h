@@ -53,6 +53,9 @@ struct GpuPreprocessDescriptor {
 
     // ── Padding value (LETTERBOX / KEEP_RATIO) ──
     uint8_t pad_value = 114;
+    // ── Pad pixels with the per-channel mean instead of pad_value: the
+    // normalized pad reads exactly 0 (Metric3D-style mean padding) ──
+    bool pad_with_mean = false;
 
     // ── Output format ──
     DType output_dtype = DType::F16;  // F16 or F32

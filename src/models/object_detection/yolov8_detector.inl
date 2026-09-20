@@ -88,6 +88,14 @@ template <typename INPUT, typename OUTPUT> StatusCode YoloV8Detector<INPUT, OUTP
                   << (jinq::models::backend::gpu_jpeg::recommended() ? "yes" : "no") << ")";
     }
     this->set_image_decode_hint(_m_input_size_host, decode_upscale, decode_gpu);
+    this->set_gpu_preprocess({
+        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::LETTERBOX,
+        .norm = {.scale = 1.0f / 255.0f},
+        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
+        .pad_value = 114,
+        .output_dtype = jinq::models::backend::DType::F16,
+        .output_nhwc = false,
+    });
     return StatusCode::OK;
 }
 

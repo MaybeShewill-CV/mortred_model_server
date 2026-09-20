@@ -124,9 +124,11 @@ inline StatusCode status_for_image_load(const std::string &error) {
  * returns false for anything that is not a parseable JPEG, and the caller
  * then falls back to a full decode. Optional out params expose the raw EXIF
  * orientation (1-8, 1 = upright; the size is already swap-corrected) and
- * whether the SOF marks a progressive scan (GPU decoder cannot take it). */
-inline bool jpeg_full_dimensions(const std::vector<unsigned char> &bytes, cv::Size *size, int *orientation_out = nullptr,
-                                 bool *progressive_out = nullptr) {
+ * whether the SOF marks a progressive scan (GPU decoder cannot take it).
+ * Works on any byte container (vector<unsigned char>, string, ...). */
+template <typename Bytes>
+inline bool jpeg_full_dimensions_impl(const Bytes &bytes, cv::Size *size, int *orientation_out,
+                                 bool *progressive_out) {
     if (bytes.size() < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8) {
         return false;
     }
@@ -204,6 +206,16 @@ inline bool jpeg_full_dimensions(const std::vector<unsigned char> &bytes, cv::Si
         *progressive_out = progressive;
     }
     return true;
+}
+
+inline bool jpeg_full_dimensions(const std::vector<unsigned char> &bytes, cv::Size *size, int *orientation_out = nullptr,
+                                 bool *progressive_out = nullptr) {
+    return jpeg_full_dimensions_impl(bytes, size, orientation_out, progressive_out);
+}
+
+inline bool jpeg_full_dimensions(const std::string &bytes, cv::Size *size, int *orientation_out = nullptr,
+                                 bool *progressive_out = nullptr) {
+    return jpeg_full_dimensions_impl(bytes, size, orientation_out, progressive_out);
 }
 
 /*** reduction factor in {1,2,4,8} for the DCT-domain decode, from a known
