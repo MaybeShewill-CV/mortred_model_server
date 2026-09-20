@@ -583,6 +583,40 @@ std::string fmt_ms(double v, int width = 8, int prec = 3) {
     return s.size() >= static_cast<size_t>(width) ? s : std::string(static_cast<size_t>(width) - s.size(), ' ') + s;
 }
 
+/*** terminal display width of a UTF-8 string: CJK codepoints occupy two
+ * columns but three bytes, so byte-based %-70s padding misaligns table
+ * columns that mix Chinese and ASCII */
+size_t display_width(const std::string& s) {
+    size_t width = 0;
+    size_t at = 0;
+    while (at < s.size()) {
+        const unsigned char lead = static_cast<unsigned char>(s[at]);
+        size_t bytes = 1;
+        uint32_t codepoint = lead;
+        if ((lead & 0xE0) == 0xC0) {
+            bytes = 2;
+            codepoint = lead & 0x1F;
+        } else if ((lead & 0xF0) == 0xE0) {
+            bytes = 3;
+            codepoint = lead & 0x0F;
+        } else if ((lead & 0xF8) == 0xF0) {
+            bytes = 4;
+            codepoint = lead & 0x07;
+        }
+        for (size_t i = 1; i < bytes && at + i < s.size(); ++i) {
+            codepoint = (codepoint << 6) | (static_cast<unsigned char>(s[at + i]) & 0x3F);
+        }
+        width += (codepoint >= 0x1100 && codepoint <= 0xFFFD) ? 2 : 1;
+        at += bytes;
+    }
+    return width;
+}
+
+std::string pad_display(const std::string& s, size_t target_width) {
+    const size_t current = display_width(s);
+    return current >= target_width ? s : s + std::string(target_width - current, ' ');
+}
+
 std::string image_media_type(const std::string& path) {
     const size_t dot = path.rfind('.');
     std::string ext = dot == std::string::npos ? "" : path.substr(dot + 1);
@@ -744,48 +778,52 @@ int cmd_profile(const Options& opt, const std::string& id, const std::string& im
     };
 
     struct Row {
+        const char* idx;
         std::string name;
         double p50;
         double mean;
         std::string note;
     };
     char label[192];
-    std::snprintf(label, sizeof label, "2  网关处理（route %.3f + auth %.3f + fwd %.3f）", stage_p50(gw, "route"),
+    std::snprintf(label, sizeof label, "route %.3f / auth %.3f / fwd %.3f", stage_p50(gw, "route"),
                   stage_p50(gw, "auth"), stage_p50(gw, "fwd"));
-    const std::string label2(label);
-    std::snprintf(label, sizeof label,
-                  "4  模型框架与调度（envelope %.3f + admit %.3f + go %.3f + worker %.3f + reply %.3f + serialize %.3f）",
+    const std::string note2(label);
+    std::snprintf(label, sizeof label, "env %.3f / admit %.3f / go %.3f / wkr %.3f / rpl %.3f / ser %.3f",
                   stage_p50(model, "envelope"), stage_p50(model, "admit"), stage_p50(model, "go"),
                   stage_p50(model, "worker"), stage_p50(model, "reply"), stage_p50(model, "serialize"));
-    const std::string label4(label);
+    const std::string note4(label);
     const double row2 = sum_p50(gw, {"route", "auth", "fwd"});
     const double row2_mean = stage_mean(gw, "route") + stage_mean(gw, "auth") + stage_mean(gw, "fwd");
     const double row4 = sum_p50(model, {"envelope", "admit", "go", "worker", "reply", "serialize"});
     const double row4_mean = stage_mean(model, "envelope") + stage_mean(model, "admit") + stage_mean(model, "go") +
                              stage_mean(model, "worker") + stage_mean(model, "reply") + stage_mean(model, "serialize");
     const std::vector<Row> rows = {
-        {"1  客户端 + socket① + 网关框架壳（残差）", shell1_p50, shell1_mean, "客户端−网关total"},
-        {label2, row2, row2_mean, ""},
-        {"3  socket② 往返 + 网关回调（残差）", shell3_p50, shell3_mean, "网关total−模型total"},
-        {label4, row4, row4_mean, ""},
-        {"5  decode（图片解码）", stage_p50(model, "decode"), stage_mean(model, "decode"), "libjpeg-turbo"},
-        {"6  pre（letterbox+归一化）", stage_p50(model, "pre"), stage_mean(model, "pre"), ""},
-        {"7  h2d（输入上传）", stage_p50(model, "h2d"), stage_mean(model, "h2d"), ""},
-        {"8  exec（GPU 推理+sync）", stage_p50(model, "exec"), stage_mean(model, "exec"), "共享GPU噪声敏感"},
-        {"9  d2h（输出回传）", stage_p50(model, "d2h"), stage_mean(model, "d2h"), ""},
-        {"10 post（解码+NMS+坐标还原）", stage_p50(model, "post"), stage_mean(model, "post"), ""},
+        {"1", "客户端 + socket① + 网关框架壳（残差）", shell1_p50, shell1_mean, "客户端−网关total"},
+        {"2", "网关处理（route+auth+fwd）", row2, row2_mean, note2},
+        {"3", "socket② 往返 + 网关回调（残差）", shell3_p50, shell3_mean, "网关total−模型total"},
+        {"4", "模型框架与调度", row4, row4_mean, note4},
+        {"5", "decode（图片解码）", stage_p50(model, "decode"), stage_mean(model, "decode"), "libjpeg-turbo"},
+        {"6", "pre（letterbox+归一化）", stage_p50(model, "pre"), stage_mean(model, "pre"), ""},
+        {"7", "h2d（输入上传）", stage_p50(model, "h2d"), stage_mean(model, "h2d"), ""},
+        {"8", "exec（GPU 推理+sync）", stage_p50(model, "exec"), stage_mean(model, "exec"), "共享GPU噪声敏感"},
+        {"9", "d2h（输出回传）", stage_p50(model, "d2h"), stage_mean(model, "d2h"), ""},
+        {"10", "post（解码+NMS+坐标还原）", stage_p50(model, "post"), stage_mean(model, "post"), ""},
     };
 
     std::printf("%smortred profile%s %s  n=%zu ok=%zu warmup=%zu encoding=%s image=%s\n", col_bold(),
                 col_off(), id.c_str(), requests, latency_ms.size(), warmup, encoding.c_str(),
                 image_path.c_str());
-    std::printf("%-4s %-70s %9s %9s %7s  %s\n", "#", "环节", "P50(ms)", "mean(ms)", "占比", "说明");
+    std::printf("%s %s %s %s %s  %s\n", pad_display("#", 4).c_str(), pad_display("环节", 52).c_str(),
+                pad_display("P50(ms)", 9).c_str(), pad_display("mean(ms)", 9).c_str(),
+                pad_display("占比", 7).c_str(), "说明");
     for (const auto& row : rows) {
-        std::printf("%-4s %-70s %9s %9s %7s  %s\n", "", row.name.c_str(), fmt_ms(row.p50, 9).c_str(),
-                    fmt_ms(row.mean, 9).c_str(), pct_of(row.p50).c_str(), row.note.c_str());
+        std::printf("%s %s %s %s %s  %s\n", pad_display(row.idx, 4).c_str(), pad_display(row.name, 52).c_str(),
+                    fmt_ms(row.p50, 9).c_str(), fmt_ms(row.mean, 9).c_str(), pad_display(pct_of(row.p50), 7).c_str(),
+                    row.note.c_str());
     }
-    std::printf("%-4s %-70s %9s %9s %7s  %s\n", "", "客户端合计（实测）", fmt_ms(client_p50, 9, 2).c_str(),
-                fmt_ms(client_mean, 9, 2).c_str(), "100.0%", "");
+    std::printf("%s %s %s %s %s  %s\n", pad_display("", 4).c_str(), pad_display("客户端合计（实测）", 52).c_str(),
+                fmt_ms(client_p50, 9, 2).c_str(), fmt_ms(client_mean, 9, 2).c_str(), pad_display("100.0%", 7).c_str(),
+                "");
     std::printf("\ntraces: model=%zu gateway=%zu (requests=%zu)", model_traces, gw_traces, latency_ms.size());
     if (model_traces != latency_ms.size() || gw_traces != latency_ms.size()) {
         std::printf("  %s[warn] window polluted (concurrent traffic?)%s", col_warn(), col_off());
