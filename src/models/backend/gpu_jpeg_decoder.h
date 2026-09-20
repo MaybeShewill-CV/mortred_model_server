@@ -8,6 +8,7 @@
 #ifndef MORTRED_MODELS_BACKEND_GPU_JPEG_DECODER_H
 #define MORTRED_MODELS_BACKEND_GPU_JPEG_DECODER_H
 
+#include <atomic>
 #include <cstddef>
 #include <string>
 
@@ -18,33 +19,46 @@ namespace models {
 namespace backend {
 namespace gpu_jpeg {
 
-/*** Process-wide nvJPEG decoder (perf iteration 6, S1). The real build lives
- * only in the gpu profile and picks the best backend by probing at first
- * use: NVJPEG_BACKEND_HARDWARE (dedicated NVDEC/JPEG engine), then
- * NVJPEG_BACKEND_GPU (SM decode), then unavailable. cpu-profile builds link
- * a stub that reports unavailable, so callers fall back to cv::imdecode and
- * nothing else changes.
- *
- * All entry points are thread-safe (one decode at a time under a mutex -
- * the decode itself is sub-millisecond GPU work). */
+/*** Backend identifiers for observability (three-layer visibility). */
+enum Backend {
+    JPEGGPU = 0,
+    NVJPEG_HW,
+    NVJPEG_SM,
+    CPU_REDUCED,
+    CPU_FULL,
+    FALLBACK,
+    BACKEND_COUNT
+};
 
-// true when a GPU backend exists AND the startup perf race against
-// cv::imdecode on a representative ~1MP jpeg was won by a >=20% margin -
-// i.e. "auto" mode should actually use the GPU on this machine
+/*** Global request counters per backend, readable by the metrics layer.
+ * Incremented by the decode layer on every request. */
+extern std::atomic<uint64_t> g_request_count[BACKEND_COUNT];
+
+/*** Name of the currently selected backend (set once at probe time). */
+const char* selected_backend_name();
+
+// true when a GPU backend exists AND the multi-image startup race was won
 bool recommended();
 
 // true when a GPU backend is merely capable (force mode may still use it)
 bool available();
 
-// "hw-nvjpeg" | "sm-nvjpeg" | "sm-nvjpeg(slow,race-lost)" | "unavailable"
-// | "not-built"
+// "jpeggpu" | "nvjpeg-hw" | "nvjpeg-sm" | "unavailable" | "not-built"
 const char* backend_name();
 
-/*** full-resolution decode returning a CV_8UC3 BGR Mat (EXIF orientation is
- * NOT applied here - the caller owns it, matching cv::imdecode semantics via
- * its own helper). Fails (empty Mat + err) for anything the GPU path cannot
- * take; callers then retry on the CPU path. */
+/*** full-resolution decode returning a CV_8UC3 BGR Mat. EXIF orientation
+ * is NOT applied here (the caller owns it). Fails (empty Mat + err) for
+ * anything the GPU path cannot take; callers then retry on the CPU path. */
 cv::Mat decode(const unsigned char* data, size_t size, std::string* err);
+
+/*** planar decode result: Y/Cb/Cr as separate CV_8UC1 Mats (jpeggpu native
+ * output format, no color conversion applied). Chroma planes may be
+ * subsampled (e.g. half size for 4:2:0). Use this + letterbox_ycbcr_nchw
+ * to skip the intermediate BGR Mat entirely. */
+struct PlanarImage {
+    cv::Mat y, cb, cr;  // empty = decode failed
+};
+PlanarImage decode_planar(const unsigned char* data, size_t size, std::string* err);
 
 }  // namespace gpu_jpeg
 }  // namespace backend

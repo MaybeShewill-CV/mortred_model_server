@@ -394,6 +394,110 @@ RuntimeResult<NamedTensor> letterbox_bgr_nchw(const cv::Mat &bgr, const cv::Size
     return runtime_ok(std::move(named));
 }
 
+RuntimeResult<NamedTensor> letterbox_ycbcr_nchw(const cv::Mat &y_plane, const cv::Mat &cb_plane, const cv::Mat &cr_plane,
+                                                const cv::Size &network, const std::string &tensor_name,
+                                                DType dtype, std::uint8_t pad_value) {
+    if (y_plane.empty() || cb_plane.empty() || cr_plane.empty() || y_plane.type() != CV_8UC1) {
+        return {StatusCode::MODEL_EMPTY_INPUT_IMAGE, "letterbox_ycbcr_nchw: expected non-empty CV_8UC1 Y plane", {}};
+    }
+    if (network.width <= 0 || network.height <= 0 || tensor_name.empty()) {
+        return {StatusCode::MODEL_EMPTY_INPUT_IMAGE, "letterbox_ycbcr_nchw: invalid target or name", {}};
+    }
+    if (dtype != DType::F32 && dtype != DType::F16) {
+        return {StatusCode::MODEL_EMPTY_INPUT_IMAGE, "letterbox_ycbcr_nchw: unsupported dtype", {}};
+    }
+    const LetterboxGeometry geom = compute_letterbox_geometry(y_plane.size(), network);
+    if (geom.unpadded.width <= 0 || geom.unpadded.height <= 0) {
+        return {StatusCode::MODEL_EMPTY_INPUT_IMAGE, "letterbox_ycbcr_nchw: invalid geometry", {}};
+    }
+    // pre-resize source to letterbox unpadded size (bilinear, same as BGR path)
+    cv::Mat y_res, cb_res, cr_res;
+    if (y_plane.size() != geom.unpadded) {
+        cv::resize(y_plane, y_res, geom.unpadded, 0, 0, cv::INTER_LINEAR);
+    } else {
+        y_res = y_plane;
+    }
+    if (cb_plane.size() != geom.unpadded) {
+        cv::resize(cb_plane, cb_res, geom.unpadded, 0, 0, cv::INTER_LINEAR);
+        cv::resize(cr_plane, cr_res, geom.unpadded, 0, 0, cv::INTER_LINEAR);
+    } else {
+        cb_res = cb_plane;
+        cr_res = cr_plane;
+    }
+    NamedTensor named;
+    named.name = tensor_name;
+    named.tensor = Tensor::make(dtype, {1, 3, (int64_t)network.height, (int64_t)network.width});
+    named.tensor.layout = TensorLayout::Nchw;
+    const int rows = network.height;
+    const int cols = network.width;
+    const float scale_f = 1.0f / 255.0f;
+    const int by0 = geom.pad_y, by1 = rows - geom.pad_bottom;
+    const int bx0 = geom.pad_x, bx1 = cols - geom.pad_right;
+
+    if (dtype == DType::F32) {
+        float* base = (float*)named.tensor.buffer.data();
+        const size_t plane = (size_t)rows * cols;
+        // BT.601 full-range: pad fills with the same value the BGR path uses
+        const float pad_f = (float)pad_value * scale_f;
+        for (int y = 0; y < rows; ++y) {
+            float* r_row = base + 0 * plane + (size_t)y * cols;
+            float* g_row = base + 1 * plane + (size_t)y * cols;
+            float* b_row = base + 2 * plane + (size_t)y * cols;
+            if (y < by0 || y >= by1) {
+                std::fill(r_row, r_row + cols, pad_f);
+                std::fill(g_row, g_row + cols, pad_f);
+                std::fill(b_row, b_row + cols, pad_f);
+                continue;
+            }
+            const uint8_t* y_src = y_res.ptr<uint8_t>(y - by0);
+            const uint8_t* cb_src = cb_res.ptr<uint8_t>(y - by0);
+            const uint8_t* cr_src = cr_res.ptr<uint8_t>(y - by0);
+            for (int x = 0; x < bx0; ++x) { r_row[x] = g_row[x] = b_row[x] = pad_f; }
+            for (int x = bx0; x < bx1; ++x) {
+                const int sx = x - bx0;
+                const float yv = (float)y_src[sx];
+                const float cb = (float)cb_src[sx] - 128.0f;
+                const float cr = (float)cr_src[sx] - 128.0f;
+                r_row[x] = (yv + 1.402f * cr) * scale_f;
+                g_row[x] = (yv - 0.344136f * cb - 0.714136f * cr) * scale_f;
+                b_row[x] = (yv + 1.772f * cb) * scale_f;
+            }
+            for (int x = bx1; x < cols; ++x) { r_row[x] = g_row[x] = b_row[x] = pad_f; }
+        }
+    } else {
+        // F16 path: compute in f32, convert at write
+        uint16_t* base = (uint16_t*)named.tensor.buffer.data();
+        const size_t plane = (size_t)rows * cols;
+        const uint16_t pad_h = f32_to_f16_bits((float)pad_value * scale_f);
+        for (int y = 0; y < rows; ++y) {
+            uint16_t* r_row = base + 0 * plane + (size_t)y * cols;
+            uint16_t* g_row = base + 1 * plane + (size_t)y * cols;
+            uint16_t* b_row = base + 2 * plane + (size_t)y * cols;
+            if (y < by0 || y >= by1) {
+                std::fill(r_row, r_row + cols, pad_h);
+                std::fill(g_row, g_row + cols, pad_h);
+                std::fill(b_row, b_row + cols, pad_h);
+                continue;
+            }
+            const uint8_t* y_src = y_res.ptr<uint8_t>(y - by0);
+            const uint8_t* cb_src = cb_res.ptr<uint8_t>(y - by0);
+            const uint8_t* cr_src = cr_res.ptr<uint8_t>(y - by0);
+            for (int x = 0; x < bx0; ++x) { r_row[x] = g_row[x] = b_row[x] = pad_h; }
+            for (int x = bx0; x < bx1; ++x) {
+                const int sx = x - bx0;
+                const float yv = (float)y_src[sx];
+                const float cb = (float)cb_src[sx] - 128.0f;
+                const float cr = (float)cr_src[sx] - 128.0f;
+                r_row[x] = f32_to_f16_bits((yv + 1.402f * cr) * scale_f);
+                g_row[x] = f32_to_f16_bits((yv - 0.344136f * cb - 0.714136f * cr) * scale_f);
+                b_row[x] = f32_to_f16_bits((yv + 1.772f * cb) * scale_f);
+            }
+            for (int x = bx1; x < cols; ++x) { r_row[x] = g_row[x] = b_row[x] = pad_h; }
+        }
+    }
+    return runtime_ok(std::move(named));
+}
+
 RuntimeResult<cv::Mat> ImagePipeline::mat() const {
     if (status_ != StatusCode::OK) {
         return {status_, error_, {}};

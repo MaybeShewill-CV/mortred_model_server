@@ -119,6 +119,17 @@ else()
         ${OpenCV_LIBS}
         glog::glog
     )
+    # jpeggpu: optional Huffman self-synchronizing parallel GPU decoder.
+    # Vendored into 3rd_party/ (libjpeggpu.a + include/jpeggpu/). When absent,
+    # the backend ladder skips it and falls through to nvjpeg.
+    if(EXISTS "${PROJECT_ROOT_DIR}/3rd_party/libs/libjpeggpu.a")
+        target_compile_definitions(models PRIVATE MORTRED_HAS_JPEGGPU=1)
+        target_include_directories(models SYSTEM PRIVATE "${PROJECT_ROOT_DIR}/3rd_party/include")
+        target_link_libraries(models PRIVATE "${PROJECT_ROOT_DIR}/3rd_party/libs/libjpeggpu.a")
+        message(STATUS "jpeggpu: found, GPU decode ladder extended (jpeggpu -> nvjpeg)")
+    else()
+        message(STATUS "jpeggpu: not found, nvjpeg-only ladder")
+    endif()
 endif()
 # Deprecation suppression applies only to targets needing old OpenCV APIs (replaces the old global suppression)
 target_compile_options(models PRIVATE -Wno-deprecated-declarations)

@@ -50,7 +50,12 @@ struct ImageInputLimits {
     // >=20%), 2=force (capability-probe only). Per-request fallback to the
     // CPU path covers progressive jpegs, small images and runtime failures.
     int decode_gpu = 0;
-    int64_t decode_gpu_min_pixels = 1 << 19;
+    int64_t decode_gpu_min_pixels = 1 << 19;   // 0.5MP: below this, CPU is always faster
+    int64_t decode_gpu_max_pixels = 8 << 20;   // 8MP: above this, CPU for safety
+    // jpeggpu partial-MCU bug: width must be MCU-aligned (multiple of 16 for
+    // 4:2:0) or the last column decodes incorrectly (verified 810/3000 fail,
+    // 640/1024/1920 pass). Restrict GPU path to aligned widths.
+    bool decode_gpu_require_aligned_width = true;
 };
 
 inline bool image_within_limits(const cv::Mat &image, const ImageInputLimits &limits, std::string *error) {
@@ -407,7 +412,9 @@ inline cv::Mat load_image(const io_define::common_io::image_input &in, const Ima
         int orientation = 1;
         bool progressive = false;
         if (jpeg_full_dimensions(bytes, &full, &orientation, &progressive) && !progressive &&
-            static_cast<int64_t>(full.width) * static_cast<int64_t>(full.height) >= limits.decode_gpu_min_pixels) {
+            static_cast<int64_t>(full.width) * full.height >= limits.decode_gpu_min_pixels &&
+            static_cast<int64_t>(full.width) * full.height <= limits.decode_gpu_max_pixels &&
+            (!limits.decode_gpu_require_aligned_width || full.width % 16 == 0)) {
             std::string gpu_error;
             cv::Mat gpu_image = backend::gpu_jpeg::decode(bytes.data(), bytes.size(), &gpu_error);
             if (!gpu_image.empty()) {
