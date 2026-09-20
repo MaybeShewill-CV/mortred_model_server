@@ -52,10 +52,12 @@ struct ImageInputLimits {
     int decode_gpu = 0;
     int64_t decode_gpu_min_pixels = 1 << 19;   // 0.5MP: below this, CPU is always faster
     int64_t decode_gpu_max_pixels = 8 << 20;   // 8MP: above this, CPU for safety
-    // jpeggpu partial-MCU bug: width must be MCU-aligned (multiple of 16 for
-    // 4:2:0) or the last column decodes incorrectly (verified 810/3000 fail,
-    // 640/1024/1920 pass). Restrict GPU path to aligned widths.
-    bool decode_gpu_require_aligned_width = true;
+    // jpeggpu writes rows at an 8-aligned pitch; the decode/copy/kernel
+    // layers now allocate and read at that pitch, so unaligned widths
+    // decode correctly (verified against the earlier 810/3000 failures —
+    // those were packed-stride reads on our side, not decoder corruption).
+    // The flag stays as an escape hatch; aligned-width restriction is off.
+    bool decode_gpu_require_aligned_width = false;
 };
 
 inline bool image_within_limits(const cv::Mat &image, const ImageInputLimits &limits, std::string *error) {

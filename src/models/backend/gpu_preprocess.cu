@@ -93,6 +93,7 @@ __global__ void preprocess_ycbcr_kernel(
     const uint8_t* __restrict__ cr_plane,
     int src_w, int src_h,
     int cb_w, int cb_h,
+    int y_stride, int cb_stride,   // row pitches (8-aligned; >= widths)
     void* output,                    // cast to __half* or float* by template
     void* gray_output,               // optional secondary grayscale (null = skip)
     int out_w, int out_h,
@@ -192,12 +193,14 @@ __global__ void preprocess_ycbcr_kernel(
         return;
     }
 
-    // ── Step 2: sample YCbCr (nearest-neighbor chroma upsampling) ──
-    const float yv = (float)y_plane[sy * src_w + sx];
+    // ── Step 2: sample YCbCr (nearest-neighbor chroma upsampling).
+    // Memory is pitched (align8), geometry uses the true widths — columns
+    // beyond src_w/cb_w are decoded MCU padding and never sampled ──
+    const float yv = (float)y_plane[(size_t)sy * y_stride + sx];
     const int cx = (sx * cb_w) / src_w;
     const int cy = (sy * cb_h) / src_h;
-    const float cb = (float)cb_plane[cy * cb_w + cx] - 128.0f;
-    const float cr = (float)cr_plane[cy * cb_w + cx] - 128.0f;
+    const float cb = (float)cb_plane[(size_t)cy * cb_stride + cx] - 128.0f;
+    const float cr = (float)cr_plane[(size_t)cy * cb_stride + cx] - 128.0f;
 
     // ── Step 3: YCbCr → RGB (BT.601 full-range) ──
     float r = clamp_255(yv + 1.402f * cr);
@@ -238,6 +241,7 @@ __global__ void preprocess_ycbcr_kernel(
 extern "C" cudaError_t launch_preprocess(
     const uint8_t* d_y, const uint8_t* d_cb, const uint8_t* d_cr,
     int src_w, int src_h, int cb_w, int cb_h,
+    int y_stride, int cb_stride,
     void* d_out, void* d_gray_out,
     int out_w, int out_h,
     int resize_type, int color_order, int rotation,
@@ -257,28 +261,28 @@ extern "C" cudaError_t launch_preprocess(
 
     if (output_is_fp16 && !output_is_nhwc) {
         preprocess_ycbcr_kernel<true, false><<<grid, block, 0, stream>>>(
-            d_y, d_cb, d_cr, src_w, src_h, cb_w, cb_h,
+            d_y, d_cb, d_cr, src_w, src_h, cb_w, cb_h, y_stride, cb_stride,
             d_out, d_gray_out, out_w, out_h,
             resize_type, color_order, rotation,
             norm_scale, mean0, mean1, mean2, std0, std1, std2,
             pad_val, pad_zero_norm, unpad_w, unpad_h, pad_x, pad_y, crop_x, crop_y);
     } else if (output_is_fp16 && output_is_nhwc) {
         preprocess_ycbcr_kernel<true, true><<<grid, block, 0, stream>>>(
-            d_y, d_cb, d_cr, src_w, src_h, cb_w, cb_h,
+            d_y, d_cb, d_cr, src_w, src_h, cb_w, cb_h, y_stride, cb_stride,
             d_out, d_gray_out, out_w, out_h,
             resize_type, color_order, rotation,
             norm_scale, mean0, mean1, mean2, std0, std1, std2,
             pad_val, pad_zero_norm, unpad_w, unpad_h, pad_x, pad_y, crop_x, crop_y);
     } else if (!output_is_fp16 && !output_is_nhwc) {
         preprocess_ycbcr_kernel<false, false><<<grid, block, 0, stream>>>(
-            d_y, d_cb, d_cr, src_w, src_h, cb_w, cb_h,
+            d_y, d_cb, d_cr, src_w, src_h, cb_w, cb_h, y_stride, cb_stride,
             d_out, d_gray_out, out_w, out_h,
             resize_type, color_order, rotation,
             norm_scale, mean0, mean1, mean2, std0, std1, std2,
             pad_val, pad_zero_norm, unpad_w, unpad_h, pad_x, pad_y, crop_x, crop_y);
     } else {
         preprocess_ycbcr_kernel<false, true><<<grid, block, 0, stream>>>(
-            d_y, d_cb, d_cr, src_w, src_h, cb_w, cb_h,
+            d_y, d_cb, d_cr, src_w, src_h, cb_w, cb_h, y_stride, cb_stride,
             d_out, d_gray_out, out_w, out_h,
             resize_type, color_order, rotation,
             norm_scale, mean0, mean1, mean2, std0, std1, std2,

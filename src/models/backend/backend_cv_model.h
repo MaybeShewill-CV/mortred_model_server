@@ -608,18 +608,19 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                     inputs_wired;
                 if (dims_match_engine &&
                     input.image.origin == io_define::common_io::byte_source::origin_kind::raw_bytes) {
-                    // jpeggpu correctness gates, mirroring the S1 decode guards:
-                    // the last partial MCU column is wrong for encoded widths
-                    // not a multiple of 16, progressive scans are unsupported,
-                    // and EXIF orientation != 1 would need the kernel's fixed
-                    // rotation to disagree with the frame's. Misses fall back
-                    // to the normal path instead of decoding wrong pixels.
+                    // jpeggpu correctness gates, mirroring the S1 decode
+                    // guards: progressive scans are unsupported, and EXIF
+                    // orientation != 1 would need the kernel's fixed
+                    // rotation to disagree with the frame's. Width needs
+                    // no alignment: planes are read at the decoder's
+                    // 8-aligned pitch and geometry uses the true width,
+                    // so partial-MCU tail columns are never sampled.
                     // (orientation <= 1 keeps full.width the encoded width.)
                     cv::Size full;
                     int orientation = 1;
                     bool progressive = false;
                     if (cv_input::jpeg_full_dimensions(input.image.data, &full, &orientation, &progressive) &&
-                        !progressive && orientation <= 1 && full.width % 16 == 0) {
+                        !progressive && orientation <= 1) {
                     std::string gpu_err;
                     auto gpu_result = backend::gpu_jpeg::decode_and_preprocess(
                         reinterpret_cast<const unsigned char*>(input.image.data.data()),

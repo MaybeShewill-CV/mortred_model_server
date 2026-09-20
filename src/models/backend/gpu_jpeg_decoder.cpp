@@ -131,10 +131,14 @@ struct JpegGpuPlan {
             return {};
         }
 
-        // allocate/reuse output planes
+        // allocate/reuse output planes. jpeggpu writes rows at an
+        // 8-byte-aligned pitch (full uint2 row segments), so the plane
+        // allocation must cover stride*height — a packed width*height
+        // buffer overflows its tail for widths not a multiple of 8
         struct jpeggpu_img img = {};
         for (int c = 0; c < info.num_components; ++c) {
-            size_t plane_bytes = (size_t)info.sizes_y[c] * info.sizes_x[c];
+            img.pitch[c] = ((info.sizes_x[c] + 7) / 8) * 8;
+            size_t plane_bytes = (size_t)info.sizes_y[c] * img.pitch[c];
             if (d_plane_sizes[c] < plane_bytes) {
                 if (d_planes[c]) cudaFree(d_planes[c]);
                 if (h_planes[c]) cudaFreeHost(h_planes[c]);
@@ -147,7 +151,6 @@ struct JpegGpuPlan {
                 h_plane_sizes[c] = plane_bytes;
             }
             img.image[c] = d_planes[c];
-            img.pitch[c] = ((info.sizes_x[c] + 7) / 8) * 8;
         }
 
         // GPU decode
@@ -156,24 +159,25 @@ struct JpegGpuPlan {
             return {};
         }
 
-        // D2H planes
+        // D2H planes (full pitched rows; Mats below expose the true width)
         for (int c = 0; c < info.num_components; ++c) {
-            size_t copy_bytes = (size_t)info.sizes_y[c] * info.sizes_x[c];
+            size_t copy_bytes = (size_t)info.sizes_y[c] * img.pitch[c];
             cudaMemcpyAsync(h_planes[c], d_planes[c], copy_bytes, cudaMemcpyDeviceToHost, stream);
         }
         cudaStreamSynchronize(stream);
 
-        // single-pass planar YCbCr → interleaved BGR (no intermediate Mats)
-        cv::Mat y_plane(info.sizes_y[0], info.sizes_x[0], CV_8UC1, h_planes[0]);
+        // single-pass planar YCbCr → interleaved BGR (no intermediate Mats);
+        // wrap with the pitched step so ptr() lands on each row correctly
+        cv::Mat y_plane(info.sizes_y[0], info.sizes_x[0], CV_8UC1, h_planes[0], img.pitch[0]);
         cv::Mat cb_plane, cr_plane;
         if (info.sizes_y[1] != info.sizes_y[0] || info.sizes_x[1] != info.sizes_x[0]) {
-            cb_plane = cv::Mat(info.sizes_y[1], info.sizes_x[1], CV_8UC1, h_planes[1]);
-            cr_plane = cv::Mat(info.sizes_y[2], info.sizes_x[2], CV_8UC1, h_planes[2]);
+            cb_plane = cv::Mat(info.sizes_y[1], info.sizes_x[1], CV_8UC1, h_planes[1], img.pitch[1]);
+            cr_plane = cv::Mat(info.sizes_y[2], info.sizes_x[2], CV_8UC1, h_planes[2], img.pitch[2]);
             cv::resize(cb_plane, cb_plane, y_plane.size(), 0, 0, cv::INTER_LINEAR);
             cv::resize(cr_plane, cr_plane, y_plane.size(), 0, 0, cv::INTER_LINEAR);
         } else {
-            cb_plane = cv::Mat(info.sizes_y[1], info.sizes_x[1], CV_8UC1, h_planes[1]);
-            cr_plane = cv::Mat(info.sizes_y[2], info.sizes_x[2], CV_8UC1, h_planes[2]);
+            cb_plane = cv::Mat(info.sizes_y[1], info.sizes_x[1], CV_8UC1, h_planes[1], img.pitch[1]);
+            cr_plane = cv::Mat(info.sizes_y[2], info.sizes_x[2], CV_8UC1, h_planes[2], img.pitch[2]);
         }
         cv::Mat bgr(y_plane.rows, y_plane.cols, CV_8UC3);
         for (int y = 0; y < bgr.rows; ++y) {
@@ -616,7 +620,10 @@ DevicePlanes decode_to_device(const unsigned char* data, size_t size, std::strin
     }
     struct jpeggpu_img img = {};
     for (int c = 0; c < info.num_components; ++c) {
-        size_t plane_bytes = (size_t)info.sizes_y[c] * info.sizes_x[c];
+        // jpeggpu writes full uint2 row segments at an 8-aligned pitch:
+        // allocate stride*height, never packed width*height
+        img.pitch[c] = ((info.sizes_x[c] + 7) / 8) * 8;
+        size_t plane_bytes = (size_t)info.sizes_y[c] * img.pitch[c];
         if (plan.d_plane_sizes[c] < plane_bytes) {
             if (plan.d_planes[c]) cudaFree(plan.d_planes[c]);
             if (plan.h_planes[c]) cudaFreeHost(plan.h_planes[c]);
@@ -629,7 +636,6 @@ DevicePlanes decode_to_device(const unsigned char* data, size_t size, std::strin
             plan.h_plane_sizes[c] = plane_bytes;
         }
         img.image[c] = plan.d_planes[c];
-        img.pitch[c] = ((info.sizes_x[c] + 7) / 8) * 8;
     }
     if (jpeggpu_decoder_decode(plan.decoder, &img, plan.d_tmp, plan.d_tmp_size, plan.stream) != JPEGGPU_SUCCESS) {
         if (err) *err = "decode failed";
@@ -645,6 +651,8 @@ DevicePlanes decode_to_device(const unsigned char* data, size_t size, std::strin
     out.dev_cr = plan.d_planes[2];
     out.y_w = info.sizes_x[0]; out.y_h = info.sizes_y[0];
     out.cb_w = info.sizes_x[1]; out.cb_h = info.sizes_y[1];
+    out.y_stride = img.pitch[0];
+    out.cb_stride = img.pitch[1];
     out.valid = true;
     g_request_count[JPEGGPU].fetch_add(1);
 #endif
@@ -658,16 +666,19 @@ PlanarImage fetch_from_device(const DevicePlanes& dp) {
     const std::lock_guard<std::mutex> guard(decoder_mutex());
     JpegGpuPlan& plan = jpeggpu_plan();
     if (!plan.ok) return out;
-    // D2H copies
-    size_t y_bytes = (size_t)dp.y_h * dp.y_w;
-    size_t cb_bytes = (size_t)dp.cb_h * dp.cb_w;
+    // D2H copies: full pitched rows (planes are stride*height on device);
+    // the Mat wraps carry the true width and the pitch as step
+    const size_t y_stride = dp.y_stride > 0 ? dp.y_stride : (size_t)dp.y_w;
+    const size_t cb_stride = dp.cb_stride > 0 ? dp.cb_stride : (size_t)dp.cb_w;
+    const size_t y_bytes = (size_t)dp.y_h * y_stride;
+    const size_t cb_bytes = (size_t)dp.cb_h * cb_stride;
     cudaMemcpyAsync(plan.h_planes[0], dp.dev_y, y_bytes, cudaMemcpyDeviceToHost, plan.stream);
     cudaMemcpyAsync(plan.h_planes[1], dp.dev_cb, cb_bytes, cudaMemcpyDeviceToHost, plan.stream);
     cudaMemcpyAsync(plan.h_planes[2], dp.dev_cr, cb_bytes, cudaMemcpyDeviceToHost, plan.stream);
     cudaStreamSynchronize(plan.stream);
-    out.y = cv::Mat(dp.y_h, dp.y_w, CV_8UC1, plan.h_planes[0]).clone();
-    out.cb = cv::Mat(dp.cb_h, dp.cb_w, CV_8UC1, plan.h_planes[1]).clone();
-    out.cr = cv::Mat(dp.cb_h, dp.cb_w, CV_8UC1, plan.h_planes[2]).clone();
+    out.y = cv::Mat(dp.y_h, dp.y_w, CV_8UC1, plan.h_planes[0], y_stride).clone();
+    out.cb = cv::Mat(dp.cb_h, dp.cb_w, CV_8UC1, plan.h_planes[1], cb_stride).clone();
+    out.cr = cv::Mat(dp.cb_h, dp.cb_w, CV_8UC1, plan.h_planes[2], cb_stride).clone();
 #endif
     return out;
 }
@@ -678,6 +689,7 @@ PlanarImage fetch_from_device(const DevicePlanes& dp) {
 extern "C" cudaError_t launch_preprocess(
     const uint8_t* d_y, const uint8_t* d_cb, const uint8_t* d_cr,
     int src_w, int src_h, int cb_w, int cb_h,
+    int y_stride, int cb_stride,
     void* d_out, void* d_gray_out,
     int out_w, int out_h,
     int resize_type, int color_order, int rotation,
@@ -748,6 +760,8 @@ GpuPipelineResult decode_and_letterbox_gpu(
     const cudaError_t launch_err = launch_preprocess(
         dp.dev_y, dp.dev_cb, dp.dev_cr,
         dp.y_w, dp.y_h, dp.cb_w, dp.cb_h,
+        (int)(dp.y_stride > 0 ? dp.y_stride : (size_t)dp.y_w),
+        (int)(dp.cb_stride > 0 ? dp.cb_stride : (size_t)dp.cb_w),
         d_output, nullptr,
         network_w, network_h,
         0 /* LETTERBOX */, 0 /* RGB */, 0 /* no rotation */,
@@ -913,6 +927,8 @@ GpuPipelineResult decode_and_preprocess(
     const cudaError_t launch_err = launch_preprocess(
         dp.dev_y, dp.dev_cb, dp.dev_cr,
         dp.y_w, dp.y_h, dp.cb_w, dp.cb_h,
+        (int)(dp.y_stride > 0 ? dp.y_stride : (size_t)dp.y_w),
+        (int)(dp.cb_stride > 0 ? dp.cb_stride : (size_t)dp.cb_w),
         d_output, d_gray,
         eff_out_w, eff_out_h,
         resize_type, color_order, rotation,
@@ -1002,7 +1018,10 @@ PlanarImage decode_planar(const unsigned char* data, size_t size, std::string* e
     }
     struct jpeggpu_img img = {};
     for (int c = 0; c < info.num_components; ++c) {
-        size_t plane_bytes = (size_t)info.sizes_y[c] * info.sizes_x[c];
+        // pitched allocation + pitched copy: the decoder writes 8-aligned
+        // row segments, and the Mats below keep the true (unpadded) width
+        img.pitch[c] = ((info.sizes_x[c] + 7) / 8) * 8;
+        size_t plane_bytes = (size_t)info.sizes_y[c] * img.pitch[c];
         if (plan.d_plane_sizes[c] < plane_bytes) {
             if (plan.d_planes[c]) cudaFree(plan.d_planes[c]);
             if (plan.h_planes[c]) cudaFreeHost(plan.h_planes[c]);
@@ -1015,21 +1034,20 @@ PlanarImage decode_planar(const unsigned char* data, size_t size, std::string* e
             plan.h_plane_sizes[c] = plane_bytes;
         }
         img.image[c] = plan.d_planes[c];
-        img.pitch[c] = ((info.sizes_x[c] + 7) / 8) * 8;
     }
     if (jpeggpu_decoder_decode(plan.decoder, &img, plan.d_tmp, plan.d_tmp_size, plan.stream) != JPEGGPU_SUCCESS) {
         if (err) *err = "decode failed";
         return out;
     }
     for (int c = 0; c < info.num_components; ++c) {
-        size_t copy_bytes = (size_t)info.sizes_y[c] * info.sizes_x[c];
+        size_t copy_bytes = (size_t)info.sizes_y[c] * img.pitch[c];
         cudaMemcpyAsync(plan.h_planes[c], plan.d_planes[c], copy_bytes, cudaMemcpyDeviceToHost, plan.stream);
     }
     cudaStreamSynchronize(plan.stream);
-    // return planar without BGR conversion
-    out.y  = cv::Mat(info.sizes_y[0], info.sizes_x[0], CV_8UC1, plan.h_planes[0]).clone();
-    out.cb = cv::Mat(info.sizes_y[1], info.sizes_x[1], CV_8UC1, plan.h_planes[1]).clone();
-    out.cr = cv::Mat(info.sizes_y[2], info.sizes_x[2], CV_8UC1, plan.h_planes[2]).clone();
+    // return planar without BGR conversion (clone compacts the pitched rows)
+    out.y  = cv::Mat(info.sizes_y[0], info.sizes_x[0], CV_8UC1, plan.h_planes[0], img.pitch[0]).clone();
+    out.cb = cv::Mat(info.sizes_y[1], info.sizes_x[1], CV_8UC1, plan.h_planes[1], img.pitch[1]).clone();
+    out.cr = cv::Mat(info.sizes_y[2], info.sizes_x[2], CV_8UC1, plan.h_planes[2], img.pitch[2]).clone();
     g_request_count[JPEGGPU].fetch_add(1);
 #endif
     return out;

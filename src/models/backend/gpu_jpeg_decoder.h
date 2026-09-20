@@ -64,13 +64,21 @@ PlanarImage decode_planar(const unsigned char* data, size_t size, std::string* e
 
 /*** device-resident decode result: JPEG decoded to YCbCr planes in GPU
  * memory, NO D2H copy performed. The caller does D2H separately (after
- * the decode timing mark) via fetch_from_device(). */
+ * the decode timing mark) via fetch_from_device().
+ *
+ * Strides: jpeggpu writes rows at an 8-byte-aligned pitch (its block
+ * writer stores full uint2 row segments), so plane memory is
+ * stride*y_h bytes with the tail columns beyond y_w/cb_w holding
+ * decoded MCU padding that no sampler should read. Geometry always
+ * uses the true widths; only memory addressing uses the strides. */
 struct DevicePlanes {
     uint8_t* dev_y = nullptr;
     uint8_t* dev_cb = nullptr;
     uint8_t* dev_cr = nullptr;
     int y_w = 0, y_h = 0;
     int cb_w = 0, cb_h = 0;
+    size_t y_stride = 0;   // luma row pitch (align8(y_w))
+    size_t cb_stride = 0;  // chroma row pitch (align8(cb_w); cr shares it)
     bool valid = false;
 };
 DevicePlanes decode_to_device(const unsigned char* data, size_t size, std::string* err);
