@@ -127,11 +127,19 @@ inline StatusCode status_for_image_load(const std::string &error) {
  * then falls back to a full decode. Optional out params expose the raw EXIF
  * orientation (1-8, 1 = upright; the size is already swap-corrected) and
  * whether the SOF marks a progressive scan (GPU decoder cannot take it).
- * Works on any byte container (vector<unsigned char>, string, ...). */
+ * Works on any byte container (vector<unsigned char>, string, ...).
+ *
+ * Every byte read goes through at(): std::string's element type is SIGNED
+ * char, and `bytes[i] != 0xFF` on a signed char is a compile-time constant
+ * (char can never hold 255) — without the cast the whole probe folds to
+ * `return false` at -O1+ and the GPU zero-copy gate silently dies. */
 template <typename Bytes>
 inline bool jpeg_full_dimensions_impl(const Bytes &bytes, cv::Size *size, int *orientation_out,
                                  bool *progressive_out) {
-    if (bytes.size() < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8) {
+    const auto at = [&bytes](size_t i) -> unsigned char {
+        return static_cast<unsigned char>(bytes[i]);
+    };
+    if (bytes.size() < 4 || at(0) != 0xFF || at(1) != 0xD8) {
         return false;
     }
     int width = 0;
@@ -140,11 +148,11 @@ inline bool jpeg_full_dimensions_impl(const Bytes &bytes, cv::Size *size, int *o
     bool progressive = false;
     size_t pos = 2;
     while (pos + 4 <= bytes.size()) {
-        if (bytes[pos] != 0xFF) {
+        if (at(pos) != 0xFF) {
             ++pos;
             continue;
         }
-        const unsigned char marker = bytes[pos + 1];
+        const unsigned char marker = at(pos + 1);
         if (marker == 0xFF) {
             ++pos;
             continue;
@@ -153,7 +161,7 @@ inline bool jpeg_full_dimensions_impl(const Bytes &bytes, cv::Size *size, int *o
             pos += 2;
             continue;
         }
-        const size_t seg_len = (static_cast<size_t>(bytes[pos + 2]) << 8) | bytes[pos + 3];
+        const size_t seg_len = (static_cast<size_t>(at(pos + 2)) << 8) | at(pos + 3);
         if (seg_len < 2) {
             return false;
         }
@@ -162,22 +170,22 @@ inline bool jpeg_full_dimensions_impl(const Bytes &bytes, cv::Size *size, int *o
             if (pos + 9 > bytes.size()) {
                 return false;
             }
-            height = (bytes[pos + 5] << 8) | bytes[pos + 6];
-            width = (bytes[pos + 7] << 8) | bytes[pos + 8];
+            height = (at(pos + 5) << 8) | at(pos + 6);
+            width = (at(pos + 7) << 8) | at(pos + 8);
             progressive = marker == 0xC2 || marker == 0xC6 || marker == 0xCA || marker == 0xCE;
         } else if (marker == 0xE1 && seg_len >= 16 && pos + 2 + 6 <= bytes.size() &&
-                   bytes[pos + 4] == 'E' && bytes[pos + 5] == 'x' && bytes[pos + 6] == 'i' &&
-                   bytes[pos + 7] == 'f') {
+                   at(pos + 4) == 'E' && at(pos + 5) == 'x' && at(pos + 6) == 'i' &&
+                   at(pos + 7) == 'f') {
             // TIFF header at pos+10; IFD0 entries follow the 8-byte header
             const size_t tiff = pos + 10;
             if (tiff + 8 <= pos + 2 + seg_len && tiff + 8 <= bytes.size()) {
-                const bool little = bytes[tiff] == 0x49 && bytes[tiff + 1] == 0x49;
+                const bool little = at(tiff) == 0x49 && at(tiff + 1) == 0x49;
                 const auto read16 = [&](size_t offset) -> int {
-                    const size_t at = tiff + offset;
-                    if (at + 2 > bytes.size()) {
+                    const size_t idx = tiff + offset;
+                    if (idx + 2 > bytes.size()) {
                         return 0;
                     }
-                    return little ? (bytes[at] | (bytes[at + 1] << 8)) : ((bytes[at] << 8) | bytes[at + 1]);
+                    return little ? (at(idx) | (at(idx + 1) << 8)) : ((at(idx) << 8) | at(idx + 1));
                 };
                 const int entry_count = read16(4);
                 for (int entry = 0; entry < entry_count && entry < 64; ++entry) {
