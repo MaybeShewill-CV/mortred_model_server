@@ -691,7 +691,7 @@ GpuPipelineResult decode_and_letterbox_gpu(
     if (err) err->clear();
 #ifdef MORTRED_HAS_JPEGGPU
     if (!probe_once().capable || probe_once().selected != JPEGGPU) {
-        if (err) *err = "S2 pipeline requires jpeggpu backend";
+        if (err) *err = "GPU zero-copy pipeline requires jpeggpu backend";
         return out;
     }
     // Step 1: decode to device (async, output in VRAM)

@@ -555,30 +555,30 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
         if (_m_session == nullptr) {
             return run_sessions(input, output);
         }
-        // S2 zero-copy fast path: JPEG decode + letterbox + fp16 NCHW all on
-        // GPU, submitted asynchronously — the decode/pre/h2d timing marks fire
+        // GPU zero-copy inference path: JPEG decode + letterbox + fp16 NCHW all
+        // on GPU, submitted asynchronously — the decode/pre/h2d timing marks fire
         // at CPU submission time only; GPU work pipelines into TRT's stream
         if constexpr (std::is_same<INPUT, io_define::common_io::image_input>::value) {
             if (_m_image_limits.decode_gpu != 0 && _m_session != nullptr &&
                 !_m_session->inputs().empty() &&
-                _m_backend_config.type == "tensorrt") {  // S2 device_data only handled by TrtSession
+                _m_backend_config.type == "tensorrt") {  // device_data (GPU-resident input) only handled by TrtSession
                 const auto& input_info = _m_session->inputs().front();
                 const int net_w = (int)input_info.shape[3];
                 const int net_h = (int)input_info.shape[2];
                 if (net_w > 0 && net_h > 0 &&
                     input.image.origin == io_define::common_io::byte_source::origin_kind::raw_bytes) {
-                    std::string s2_err;
-                    auto s2 = backend::gpu_jpeg::decode_and_letterbox_gpu(
+                    std::string gpu_err;
+                    auto gpu_result = backend::gpu_jpeg::decode_and_letterbox_gpu(
                         reinterpret_cast<const unsigned char*>(input.image.data.data()),
-                        input.image.data.size(), net_w, net_h, &s2_err);
+                        input.image.data.size(), net_w, net_h, &gpu_err);
                     jinq::common::stage_timing::mark("decode");
-                    if (s2.valid) {
+                    if (gpu_result.valid) {
                         backend::NamedTensor nt;
                         nt.name = input_info.name;
                         nt.tensor.dtype = input_info.dtype;
                         nt.tensor.shape = {1, 3, (int64_t)net_h, (int64_t)net_w};
                         nt.tensor.layout = backend::TensorLayout::Nchw;
-                        nt.tensor.device_data = s2.device_input;
+                        nt.tensor.device_data = gpu_result.device_input;
                         jinq::common::stage_timing::mark("pre");
                         jinq::common::stage_timing::mark("h2d");
                         std::vector<backend::NamedTensor> outputs;
@@ -589,7 +589,7 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                         }
                         InferenceContext ctx;
                         ctx.network_size = cv::Size(net_w, net_h);
-                        ctx.source_size = cv::Size(s2.src_w, s2.src_h);
+                        ctx.source_size = cv::Size(gpu_result.src_w, gpu_result.src_h);
                         const StatusCode post_status = postprocess(outputs, ctx, output);
                         jinq::common::stage_timing::mark("post");
                         return post_status;
