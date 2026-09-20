@@ -12,7 +12,7 @@
 #include "glog/logging.h"
 #include "models/backend/model_runtime.h"
 #include "models/object_detection/detector_common.h"
-#include "models/object_detection/yolo_cxcywh_decode.h"
+#include "models/object_detection/yolo_decode.h"
 
 namespace jinq {
 namespace models {

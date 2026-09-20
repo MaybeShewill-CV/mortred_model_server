@@ -7,9 +7,7 @@
 
 #include "models/model_io_define.h"
 #include "models/object_detection/detector_common.h"
-#include "models/object_detection/yolo_cxcywh_decode.h"
-#include "models/object_detection/yolov7_decode.h"
-#include "models/object_detection/yolov8_decode.h"
+#include "models/object_detection/yolo_decode.h"
 
 using jinq::common::StatusCode;
 using jinq::models::backend::DType;

@@ -11,7 +11,7 @@
 #include "models/backend/gpu_jpeg_decoder.h"
 #include "models/backend/model_runtime.h"
 #include "models/object_detection/detector_common.h"
-#include "models/object_detection/yolov8_decode.h"
+#include "models/object_detection/yolo_decode.h"
 
 namespace jinq {
 namespace models {

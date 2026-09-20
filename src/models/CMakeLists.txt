@@ -1,5 +1,4 @@
 # build models libs
-
 set(MODELS_LIB_SRC
     ${CMAKE_CURRENT_LIST_DIR}/base_model.h
     ${CMAKE_CURRENT_LIST_DIR}/backend/backend_config.h
@@ -17,9 +16,7 @@ set(MODELS_LIB_SRC
     ${CMAKE_CURRENT_LIST_DIR}/backend/session.cpp
     ${CMAKE_CURRENT_LIST_DIR}/backend/session.h
     ${CMAKE_CURRENT_LIST_DIR}/backend/request_geometry.h
-    ${CMAKE_CURRENT_LIST_DIR}/object_detection/yolo_cxcywh_decode.h
-    ${CMAKE_CURRENT_LIST_DIR}/object_detection/yolov7_decode.h
-    ${CMAKE_CURRENT_LIST_DIR}/object_detection/yolov8_decode.h
+    ${CMAKE_CURRENT_LIST_DIR}/object_detection/yolo_decode.h
     ${CMAKE_CURRENT_LIST_DIR}/backend/tensor.h
     ${CMAKE_CURRENT_LIST_DIR}/backend/tensor_contract.h
     ${CMAKE_CURRENT_LIST_DIR}/catalog/model_entry.h
