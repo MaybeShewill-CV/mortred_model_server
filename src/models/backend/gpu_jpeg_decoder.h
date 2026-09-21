@@ -44,32 +44,10 @@ std::string render_decode_metrics();
 /*** Name of the currently selected backend (set once at probe time). */
 const char* selected_backend_name();
 
-// true when a GPU backend exists AND the multi-image startup race was won
-bool recommended();
-
-// true when a GPU backend is merely capable (force mode may still use it)
-bool available();
-
-// "jpeggpu" | "nvjpeg-hw" | "nvjpeg-sm" | "unavailable" | "not-built"
-const char* backend_name();
-
-/*** full-resolution decode returning a CV_8UC3 BGR Mat. EXIF orientation
- * is NOT applied here (the caller owns it). Fails (empty Mat + err) for
- * anything the GPU path cannot take; callers then retry on the CPU path. */
-cv::Mat decode(const unsigned char* data, size_t size, std::string* err);
-
-/*** planar decode result: Y/Cb/Cr as separate CV_8UC1 Mats (jpeggpu native
- * output format, no color conversion applied). Chroma planes may be
- * subsampled (e.g. half size for 4:2:0). Use this + letterbox_ycbcr_nchw
- * to skip the intermediate BGR Mat entirely. */
-struct PlanarImage {
-    cv::Mat y, cb, cr;  // empty = decode failed
-};
-PlanarImage decode_planar(const unsigned char* data, size_t size, std::string* err);
-
 /*** device-resident decode result: JPEG decoded to YCbCr planes in GPU
- * memory, NO D2H copy performed. The caller does D2H separately (after
- * the decode timing mark) via fetch_from_device().
+ * memory. Only consumed internally by decode_and_preprocess (the zero-copy
+ * pipeline); no public D2H fetch anymore - the CPU fork path uses
+ * cv::imdecode directly.
  *
  * Strides: jpeggpu writes rows at an 8-byte-aligned pitch (its block
  * writer stores full uint2 row segments), so plane memory is
@@ -86,9 +64,6 @@ struct DevicePlanes {
     size_t cb_stride = 0;  // chroma row pitch (align8(cb_w); cr shares it)
     bool valid = false;
 };
-DevicePlanes decode_to_device(const unsigned char* data, size_t size, std::string* err);
-PlanarImage fetch_from_device(const DevicePlanes& dp);
-
 /*** GPU zero-copy pipeline: decode JPEG + letterbox + color convert + fp16 NCHW
  * all on GPU in one pass. Returns a device pointer to the fp16 NCHW tensor that
  * can be passed directly to TRT's input tensor address — no D2H, no CPU
@@ -111,11 +86,6 @@ struct GpuPipelineResult {
  * consumer's stream has finished reading them (TrtSession::run synchronizes
  * before returning, so calling right after session run is correct). */
 void release_pipeline_buffers(const GpuPipelineResult& r);
-GpuPipelineResult decode_and_letterbox_gpu(
-    const unsigned char* data, size_t size,
-    int network_w, int network_h,
-    std::string* err);
-
 /*** Generic GPU zero-copy pipeline: JPEG decode + model-declared preprocessing,
  * all on device. Accepts any model's GpuPreprocessDescriptor — no hardcoded
  * letterbox assumptions. Supports all Resize modes, color spaces, normalization

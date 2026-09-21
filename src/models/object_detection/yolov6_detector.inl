@@ -50,7 +50,7 @@ template <typename INPUT, typename OUTPUT> StatusCode YoloV6Detector<INPUT, OUTP
         LOG(ERROR) << "invalid yolov6 input size: " << (param_error.empty() ? "configured size mismatches model input" : param_error);
         return StatusCode::MODEL_INIT_FAILED;
     }
-    this->set_image_decode_hint(_m_input_size_host, 1.0f, 1);
+    this->set_image_decode_hint(_m_input_size_host, 1.0f);
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::LETTERBOX,
         .norm = {.scale = 1.0f / 255.0f},

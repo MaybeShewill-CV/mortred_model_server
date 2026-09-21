@@ -66,7 +66,7 @@ template <typename INPUT, typename OUTPUT> StatusCode DenseNet<INPUT, OUTPUT>::o
             }
         }
     }
-    this->set_image_decode_hint(_m_input_tensor_size, 1.0f, 1);
+    this->set_image_decode_hint(_m_input_tensor_size, 1.0f);
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::CENTER_CROP,
         // CPU path subtracts caffe-style 0-255 means after to_float, no /255:

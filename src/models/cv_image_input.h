@@ -45,19 +45,8 @@ struct ImageInputLimits {
     // accuracy tradeoff that each model opts into via its params.
     cv::Size network_input{};
     float budget_upscale = 1.0f;
-    // perf iteration 6 (S1): GPU JPEG decode via nvjpeg. 0=off (default),
-    // 1=auto (use GPU only when the startup perf race beat cv::imdecode by
-    // >=20%), 2=force (capability-probe only). Per-request fallback to the
-    // CPU path covers progressive jpegs, small images and runtime failures.
-    int decode_gpu = 0;
-    int64_t decode_gpu_min_pixels = 1 << 19;   // 0.5MP: below this, CPU is always faster
-    int64_t decode_gpu_max_pixels = 8 << 20;   // 8MP: above this, CPU for safety
-    // jpeggpu writes rows at an 8-aligned pitch; the decode/copy/kernel
-    // layers now allocate and read at that pitch, so unaligned widths
-    // decode correctly (verified against the earlier 810/3000 failures —
-    // those were packed-stride reads on our side, not decoder corruption).
-    // The flag stays as an escape hatch; aligned-width restriction is off.
-    bool decode_gpu_require_aligned_width = false;
+    // decode fork policy lives in BackendCvModel (image_decode_backend param:
+    // cpu | auto | gpu); this struct only carries W4 reduction facts.
 };
 
 inline bool image_within_limits(const cv::Mat &image, const ImageInputLimits &limits, std::string *error) {
@@ -120,6 +109,16 @@ inline StatusCode status_for_image_load(const std::string &error) {
         return StatusCode::REQUEST_ENTITY_TOO_LARGE;
     }
     return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+}
+
+/*** cv::imdecode flag for the W4 DCT-domain reduced decode */
+inline int imread_color_flag_for_reduce(int reduce) {
+    switch (reduce) {
+        case 2: return cv::IMREAD_REDUCED_COLOR_2;
+        case 4: return cv::IMREAD_REDUCED_COLOR_4;
+        case 8: return cv::IMREAD_REDUCED_COLOR_8;
+        default: return cv::IMREAD_COLOR;
+    }
 }
 
 /*** minimal JPEG SOF dimension probe (post-rotation via EXIF orientation);
@@ -253,7 +252,7 @@ inline int jpeg_reduce_factor_for(const cv::Size &full, const ImageInputLimits &
     return factor;
 }
 
-inline int jpeg_reduce_factor(const std::vector<unsigned char> &bytes, const ImageInputLimits &limits) {
+inline int jpeg_reduce_factor(const std::string &bytes, const ImageInputLimits &limits) {
     cv::Size full;
     if (!jpeg_full_dimensions(bytes, &full)) {
         return 1;
@@ -261,85 +260,9 @@ inline int jpeg_reduce_factor(const std::vector<unsigned char> &bytes, const Ima
     return jpeg_reduce_factor_for(full, limits);
 }
 
-/*** applies the raw EXIF orientation the way cv::imdecode does internally;
- * only the GPU decode path needs it (the swap-corrected size already comes
- * from jpeg_full_dimensions) */
-inline void apply_exif_orientation(cv::Mat *image, int orientation) {
-    if (image == nullptr || image->empty() || orientation <= 1 || orientation > 8) {
-        return;
-    }
-    switch (orientation) {
-        case 2:
-            cv::flip(*image, *image, 1);
-            break;
-        case 3:
-            cv::rotate(*image, *image, cv::ROTATE_180);
-            break;
-        case 4:
-            cv::flip(*image, *image, 0);
-            break;
-        case 5:
-            cv::transpose(*image, *image);
-            break;
-        case 6:
-            cv::rotate(*image, *image, cv::ROTATE_90_CLOCKWISE);
-            break;
-        case 7:
-            cv::flip(*image, *image, -1);
-            cv::transpose(*image, *image);
-            break;
-        case 8:
-        default:
-            cv::rotate(*image, *image, cv::ROTATE_90_COUNTERCLOCKWISE);
-            break;
-    }
-}
-
-inline int imread_color_flag_for_reduce(int factor) {
-    switch (factor) {
-        case 2:
-            return cv::IMREAD_REDUCED_COLOR_2;
-        case 4:
-            return cv::IMREAD_REDUCED_COLOR_4;
-        case 8:
-            return cv::IMREAD_REDUCED_COLOR_8;
-        default:
-            return cv::IMREAD_COLOR;
-    }
-}
-
 /*** planar YCbCr → interleaved BGR (single pass, no intermediate Mats).
  * Used when the GPU decode path returns planar data that needs to be
  * converted to the cv::Mat BGR format the preprocess expects. */
-inline cv::Mat convert_planar_to_bgr(const backend::gpu_jpeg::PlanarImage &planar) {
-    if (planar.y.empty() || planar.cb.empty() || planar.cr.empty()) {
-        return {};
-    }
-    cv::Mat cb_res, cr_res;
-    if (planar.cb.size() != planar.y.size()) {
-        cv::resize(planar.cb, cb_res, planar.y.size(), 0, 0, cv::INTER_LINEAR);
-        cv::resize(planar.cr, cr_res, planar.y.size(), 0, 0, cv::INTER_LINEAR);
-    } else {
-        cb_res = planar.cb;
-        cr_res = planar.cr;
-    }
-    cv::Mat bgr(planar.y.rows, planar.y.cols, CV_8UC3);
-    for (int y = 0; y < bgr.rows; ++y) {
-        const uint8_t *y_src = planar.y.ptr<uint8_t>(y);
-        const uint8_t *cb_src = cb_res.ptr<uint8_t>(y);
-        const uint8_t *cr_src = cr_res.ptr<uint8_t>(y);
-        uint8_t *dst = bgr.ptr<uint8_t>(y);
-        for (int x = 0; x < bgr.cols; ++x) {
-            const float yv = static_cast<float>(y_src[x]);
-            const float cb = static_cast<float>(cb_src[x]) - 128.0f;
-            const float cr = static_cast<float>(cr_src[x]) - 128.0f;
-            dst[x * 3 + 0] = static_cast<uint8_t>(std::max(0.0f, std::min(255.0f, yv + 1.772f * cb)));
-            dst[x * 3 + 1] = static_cast<uint8_t>(std::max(0.0f, std::min(255.0f, yv - 0.344136f * cb - 0.714136f * cr)));
-            dst[x * 3 + 2] = static_cast<uint8_t>(std::max(0.0f, std::min(255.0f, yv + 1.402f * cr)));
-        }
-    }
-    return bgr;
-}
 
 /***
  * file_input -> cv::Mat: reads with original channels after existence check
@@ -425,106 +348,31 @@ inline cv::Mat load_image(const io_define::common_io::base64_input &in, const Im
  * network hint. full_size (optional) receives the pre-reduction image size
  * so request geometry stays in full-image coordinates.
  */
+/*** image_input -> cv::Mat: the CPU decode path (fork path A). The bytes
+ * arrive already transport-decoded (base64 was resolved at bind_parsed_request;
+ * raw bodies arrive as-is), so this function is transport-agnostic by
+ * construction. May apply the W4 DCT-domain reduction when the limits carry
+ * a network hint; full_size (optional) receives the pre-reduction image size
+ * so request geometry stays in full-image coordinates. */
 inline cv::Mat load_image(const io_define::common_io::image_input &in, const ImageInputLimits &limits, StatusCode *status,
-                          std::string *error, cv::Size *full_size = nullptr,
-                          backend::gpu_jpeg::PlanarImage *planar_out = nullptr) {
+                          std::string *error, cv::Size *full_size = nullptr) {
     if (full_size != nullptr) {
         *full_size = cv::Size();
     }
-    if (planar_out != nullptr) {
-        *planar_out = backend::gpu_jpeg::PlanarImage{};
-    }
-    std::vector<unsigned char> bytes;
-    if (in.image.origin == io_define::common_io::byte_source::origin_kind::raw_bytes) {
-        if (in.image.data.empty()) {
-            if (error != nullptr) {
-                *error = "input image raw data is empty";
-            }
-            if (status != nullptr) {
-                *status = StatusCode::MODEL_EMPTY_INPUT_IMAGE;
-            }
-            return {};
+    const std::string &bytes = in.image.data;
+    if (bytes.empty()) {
+        if (error != nullptr) {
+            *error = "input image data is empty";
         }
-        bytes.assign(in.image.data.begin(), in.image.data.end());
-    } else {
-        const std::string decoded = jinq::common::base64::decode(in.image.data);
-        if (decoded.empty()) {
-            if (error != nullptr) {
-                *error = "input image base64 data is empty or invalid";
-            }
-            if (status != nullptr) {
-                *status = StatusCode::MODEL_EMPTY_INPUT_IMAGE;
-            }
-            return {};
+        if (status != nullptr) {
+            *status = StatusCode::MODEL_EMPTY_INPUT_IMAGE;
         }
-        bytes.assign(decoded.begin(), decoded.end());
+        return {};
     }
     const int reduce = jpeg_reduce_factor(bytes, limits);
-    // perf iteration 6 (S1): GPU decode bypass - full-resolution nvjpeg
-    // decode (the fused letterbox kernel then resizes straight from the
-    // full frame). auto mode honors the startup perf race; force mode only
-    // checks capability. Any miss falls through to the CPU path.
-    const bool gpu_allowed = (limits.decode_gpu == 2 && backend::gpu_jpeg::available()) ||
-                             (limits.decode_gpu == 1 && backend::gpu_jpeg::recommended());
-    if (!gpu_allowed && limits.decode_gpu != 0) {
-        // requested but not allowed: mode/race state (silent otherwise)
-        LOG_EVERY_N(INFO, 100) << "gpu jpeg decode skipped: mode="
-                               << (limits.decode_gpu == 2 ? "force" : "auto")
-                               << " available=" << (backend::gpu_jpeg::available() ? "yes" : "no")
-                               << " recommended=" << (backend::gpu_jpeg::recommended() ? "yes" : "no");
-    }
-    if (gpu_allowed) {
-        cv::Size full;
-        int orientation = 1;
-        bool progressive = false;
-        const bool dims_ok = jpeg_full_dimensions(bytes, &full, &orientation, &progressive);
-        const int64_t pixels = dims_ok ? static_cast<int64_t>(full.width) * full.height : 0;
-        const bool image_ok = dims_ok && !progressive &&
-            pixels >= limits.decode_gpu_min_pixels &&
-            pixels <= limits.decode_gpu_max_pixels &&
-            (!limits.decode_gpu_require_aligned_width || full.width % 16 == 0);
-        if (!image_ok) {
-            LOG_EVERY_N(INFO, 100) << "gpu jpeg decode gate rejected image: probe_ok=" << dims_ok
-                                   << " progressive=" << progressive
-                                   << " pixels=" << pixels
-                                   << " min=" << limits.decode_gpu_min_pixels
-                                   << " max=" << limits.decode_gpu_max_pixels
-                                   << " aligned_required=" << limits.decode_gpu_require_aligned_width;
-        }
-        if (image_ok) {
-            std::string gpu_error;
-            // decode to device (no D2H), mark decode HERE (GPU kernel done),
-            // then fetch + convert — the D2H and YCbCr→BGR are preprocessing
-            // work correctly attributed to the pre stage
-            backend::gpu_jpeg::DevicePlanes dp =
-                backend::gpu_jpeg::decode_to_device(bytes.data(), bytes.size(), &gpu_error);
-            jinq::common::stage_timing::mark("decode");
-            if (dp.valid) {
-                jinq::common::stage_timing::annotate("decoder", "jpeggpu-s1");
-                backend::gpu_jpeg::PlanarImage planar = backend::gpu_jpeg::fetch_from_device(dp);
-                if (!planar.y.empty()) {
-                    if (full_size != nullptr) {
-                        *full_size = full;
-                    }
-                    if (planar_out != nullptr) {
-                        *planar_out = std::move(planar);
-                        return cv::Mat();
-                    }
-                    cv::Mat bgr = convert_planar_to_bgr(planar);
-                    apply_exif_orientation(&bgr, orientation);
-                    if (image_within_limits(bgr, limits, error)) {
-                        cv::Mat ret = normalize_to_bgr8uc3(bgr, error);
-                        if (!ret.empty()) {
-                            return ret;
-                        }
-                    }
-                }
-            } else {
-                LOG_EVERY_N(WARNING, 100) << "gpu jpeg decode fell back to cpu: " << gpu_error;
-            }
-        }
-    }
-    cv::Mat image = cv::imdecode(bytes, imread_color_flag_for_reduce(reduce));
+    const cv::Mat byte_view(1, static_cast<int>(bytes.size()), CV_8UC1,
+                            const_cast<char *>(bytes.data()));
+    cv::Mat image = cv::imdecode(byte_view, imread_color_flag_for_reduce(reduce));
     jinq::common::stage_timing::mark("decode");
     jinq::common::stage_timing::annotate("decoder", reduce > 1 ? "libjpeg-turbo-reduced" : "libjpeg-turbo");
     backend::gpu_jpeg::g_request_count[reduce > 1 ? backend::gpu_jpeg::CPU_REDUCED : backend::gpu_jpeg::CPU_FULL]

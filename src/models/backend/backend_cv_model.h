@@ -170,6 +170,8 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
             return init_status;
         }
 
+        resolve_decode_routing();
+
         _m_successfully_initialized = true;
         return StatusCode::OK;
     }
@@ -303,23 +305,94 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
      * of an ImageInputLimits field parsed from params. budget_upscale <= 1
      * is strict mode (reduction never upsamples); models accepting a small
      * accuracy tradeoff pass e.g. 1.25. allow_gpu additionally opts into
-     * the S1 nvjpeg decode path (probe-gated with per-request CPU fallback).
+     * W4 reduced-decode hint: network size for the DCT reduction bound and
+     * the budget upscale factor. Decode-path policy moved to
+     * resolve_decode_routing (image_decode_backend param).
      */
-    void set_image_decode_hint(const cv::Size &network_input, float budget_upscale, int gpu_decode_mode = 0) {
+    void set_image_decode_hint(const cv::Size &network_input, float budget_upscale) {
         _m_image_limits.network_input = network_input;
         _m_image_limits.budget_upscale = budget_upscale;
-        _m_image_limits.decode_gpu = gpu_decode_mode;
     }
 
     /***
      * Register this model's GPU preprocessing descriptor for the
      * zero-copy inference pipeline. Call from on_init(). When registered
-     * AND the backend is TensorRT AND input is raw JPEG AND width is
-     * 16-aligned, the GPU pipeline activates: JPEG decode + preprocess
-     * + TRT inference all on device, zero host round-trips.
-     * Unregistered models always use the normal (CPU preprocess) path. */
+     * AND the backend is TensorRT AND the decode fork selects path B,
+     * JPEG decode + preprocess + TRT inference all run on device.
+     * Unregistered models always use the CPU path. */
     void set_gpu_preprocess(const backend::GpuPreprocessDescriptor &desc) {
         _gpu_preprocess_desc = desc;
+    }
+
+    /*** decode fork routing, resolved once after on_init():
+     * - mode from image_decode_backend (cpu | auto | gpu, default auto)
+     * - static thresholds from decode_gpu_min_cpu_ms / cpu_decode_us_per_kb
+     *   (pack-calibrated values when present; worker-count-aware defaults)
+     * - engine eligibility from the session inputs + registered descriptor
+     * See run_impl for the per-request decision. */
+    enum class DecodeMode { AUTO, CPU, GPU };
+
+    void resolve_decode_routing() {
+        _m_decode_mode = DecodeMode::AUTO;
+        if (_m_params.contains("image_decode_backend")) {
+            const auto mode = _m_params["image_decode_backend"].value<std::string>();
+            if (mode.has_value()) {
+                if (*mode == "cpu") {
+                    _m_decode_mode = DecodeMode::CPU;
+                } else if (*mode == "gpu") {
+                    _m_decode_mode = DecodeMode::GPU;
+                }
+            }
+        }
+        _m_cpu_us_per_kb = 11.0;
+        if (_m_params.contains("cpu_decode_us_per_kb")) {
+            const auto v = _m_params["cpu_decode_us_per_kb"].value<double>();
+            if (v.has_value() && *v > 0.5 && *v < 100.0) {
+                _m_cpu_us_per_kb = static_cast<float>(*v);
+            }
+        }
+        // throughput-oriented default: matches the measured 8-worker crossover
+        // (calibrate writes the machine-specific value over this)
+        _m_gpu_min_cpu_ms = 8.0;
+        if (_m_params.contains("decode_gpu_min_cpu_ms")) {
+            const auto v = _m_params["decode_gpu_min_cpu_ms"].value<double>();
+            if (v.has_value() && *v >= 0.0 && *v < 1000.0) {
+                _m_gpu_min_cpu_ms = static_cast<float>(*v);
+            }
+        }
+
+        // engine eligibility: everything that cannot vary per request
+        _m_gpu_path_eligible = false;
+        if (_gpu_preprocess_desc.has_value() && _m_session != nullptr &&
+            !_m_session->inputs().empty() &&
+            _m_backend_config.type == "tensorrt") {  // device_data only handled by TrtSession
+            const auto& input_info = _m_session->inputs().front();
+            const bool desc_nhwc = _gpu_preprocess_desc->output_nhwc;
+            const auto dim_at = [&input_info](size_t i) {
+                return input_info.shape.size() > i ? static_cast<int>(input_info.shape[i]) : -1;
+            };
+            const int net_h = desc_nhwc ? dim_at(1) : dim_at(2);
+            const int net_w = desc_nhwc ? dim_at(2) : dim_at(3);
+            const int net_c = desc_nhwc ? dim_at(3) : dim_at(1);
+            const bool network_blind_resize =
+                _gpu_preprocess_desc->resize == backend::GpuPreprocessDescriptor::Resize::ALIGN_TO_MULTIPLE ||
+                _gpu_preprocess_desc->resize == backend::GpuPreprocessDescriptor::Resize::NONE;
+            const bool static_dims_ok = input_info.shape.size() == 4 && net_w > 0 && net_h > 0 &&
+                net_c == (_gpu_preprocess_desc->color == backend::GpuPreprocessDescriptor::Color::GRAY ? 1 : 3) &&
+                !network_blind_resize;
+            const bool dynamic_ok = _gpu_preprocess_desc->dynamic_size && input_info.dynamic;
+            const size_t session_input_count = _m_session->inputs().size();
+            const bool inputs_wired = session_input_count == 1 ||
+                (session_input_count == 2 && _gpu_preprocess_desc->secondary_gray_output);
+            _m_gpu_path_eligible =
+                input_info.dtype == _gpu_preprocess_desc->output_dtype &&
+                (static_dims_ok || dynamic_ok) &&
+                inputs_wired;
+        }
+        LOG(INFO) << (std::string("decode fork [") + _m_section_name + "]: mode=" +
+                      (_m_decode_mode == DecodeMode::CPU ? "cpu" : _m_decode_mode == DecodeMode::GPU ? "gpu" : "auto") +
+                      " gpu_path_eligible=" + (_m_gpu_path_eligible ? "yes" : "no") +
+                      " min_cpu_ms=" + std::to_string(_m_gpu_min_cpu_ms)).c_str();
     }
 
     /***
@@ -572,55 +645,34 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
         // + TRT inference all on device. Uses GpuPreprocessDescriptor registered
         // via set_gpu_preprocess(). Falls through to normal path on any miss.
         if constexpr (std::is_same<INPUT, io_define::common_io::image_input>::value) {
-            if (_gpu_preprocess_desc.has_value() && _m_session != nullptr &&
-                !_m_session->inputs().empty() &&
-                _m_backend_config.type == "tensorrt") {  // device_data only handled by TrtSession
+            // decode fork: engine eligibility was resolved once at init
+            // (resolve_decode_routing); the per-request decision only checks
+            // the image's own facts and the calibrated threshold
+            if (_m_gpu_path_eligible) {
                 const auto& input_info = _m_session->inputs().front();
-                // engine dims follow the descriptor's declared layout; a
-                // static engine must carry the descriptor's dtype and channel
-                // count and a network-driven resize (ALIGN_TO_MULTIPLE/NONE
-                // derive their size from the decoded frame and cannot honor
-                // static dims). A dynamic engine only takes descriptors that
-                // declare dynamic_size and derive the output size themselves.
-                // A mismatch means the registration does not describe this
-                // engine — fall back rather than feed it wrong geometry.
-                const bool desc_nhwc = _gpu_preprocess_desc->output_nhwc;
-                const auto dim_at = [&](size_t i) { return input_info.shape.size() > i ? (int)input_info.shape[i] : -1; };
-                const int net_h = desc_nhwc ? dim_at(1) : dim_at(2);
-                const int net_w = desc_nhwc ? dim_at(2) : dim_at(3);
-                const int net_c = desc_nhwc ? dim_at(3) : dim_at(1);
-                const bool network_blind_resize =
-                    _gpu_preprocess_desc->resize == backend::GpuPreprocessDescriptor::Resize::ALIGN_TO_MULTIPLE ||
-                    _gpu_preprocess_desc->resize == backend::GpuPreprocessDescriptor::Resize::NONE;
-                const bool static_dims_ok = input_info.shape.size() == 4 && net_w > 0 && net_h > 0 &&
-                    net_c == (_gpu_preprocess_desc->color == backend::GpuPreprocessDescriptor::Color::GRAY ? 1 : 3) &&
-                    !network_blind_resize;
-                const bool dynamic_ok = _gpu_preprocess_desc->dynamic_size && input_info.dynamic;
-                // multi-input engines only fit when the descriptor supplies
-                // the second input (secondary_gray_output) — otherwise the
-                // run would leave a binding unset
-                const size_t session_input_count = _m_session->inputs().size();
-                const bool inputs_wired = session_input_count == 1 ||
-                    (session_input_count == 2 && _gpu_preprocess_desc->secondary_gray_output);
-                const bool dims_match_engine =
-                    input_info.dtype == _gpu_preprocess_desc->output_dtype &&
-                    (static_dims_ok || dynamic_ok) &&
-                    inputs_wired;
-                if (dims_match_engine &&
-                    input.image.origin == io_define::common_io::byte_source::origin_kind::raw_bytes) {
-                    // jpeggpu correctness gates, mirroring the S1 decode
-                    // guards: progressive scans are unsupported, and EXIF
-                    // orientation != 1 would need the kernel's fixed
-                    // rotation to disagree with the frame's. Width needs
-                    // no alignment: planes are read at the decoder's
-                    // 8-aligned pitch and geometry uses the true width,
-                    // so partial-MCU tail columns are never sampled.
-                    // (orientation <= 1 keeps full.width the encoded width.)
-                    cv::Size full;
-                    int orientation = 1;
-                    bool progressive = false;
-                    if (cv_input::jpeg_full_dimensions(input.image.data, &full, &orientation, &progressive) &&
-                        !progressive && orientation <= 1) {
+                // hard gates: path B is JPEG-only - progressive scans are
+                // unsupported and EXIF orientation != 1 would need the
+                // kernel's fixed rotation to disagree with the frame's.
+                // (orientation <= 1 keeps full.width the encoded width.)
+                cv::Size full;
+                int orientation = 1;
+                bool progressive = false;
+                const bool sof_ok = cv_input::jpeg_full_dimensions(input.image.data, &full, &orientation, &progressive);
+                bool use_gpu_path = sof_ok && !progressive && orientation <= 1;
+                if (use_gpu_path && _m_decode_mode == DecodeMode::AUTO) {
+                    // soft gate: estimated CPU decode cost vs the calibrated
+                    // crossover (throughput-oriented; pack calibrate refines)
+                    const double est_cpu_ms =
+                        static_cast<double>(_m_cpu_us_per_kb) *
+                        (static_cast<double>(input.image.data.size()) / 1024.0) / 1000.0;
+                    use_gpu_path = est_cpu_ms >= static_cast<double>(_m_gpu_min_cpu_ms);
+                }
+                if (use_gpu_path && _m_decode_mode != DecodeMode::CPU) {
+                    const auto dim_at = [&](size_t i) {
+                        return input_info.shape.size() > i ? static_cast<int>(input_info.shape[i]) : -1;
+                    };
+                    const int net_h = _gpu_preprocess_desc->output_nhwc ? dim_at(1) : dim_at(2);
+                    const int net_w = _gpu_preprocess_desc->output_nhwc ? dim_at(2) : dim_at(3);
                     std::string gpu_err;
                     auto gpu_result = backend::gpu_jpeg::decode_and_preprocess(
                         reinterpret_cast<const unsigned char*>(input.image.data.data()),
@@ -646,7 +698,7 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                         jinq::common::stage_timing::mark("pre");
                         jinq::common::stage_timing::mark("h2d");
                         std::vector<backend::NamedTensor> gpu_inputs{nt};
-                        if (session_input_count == 2 && _gpu_preprocess_desc->secondary_gray_output) {
+                        if (_m_session->inputs().size() == 2 && _gpu_preprocess_desc->secondary_gray_output) {
                             // EnlightenGAN-style second input: single-channel
                             // luma map produced alongside the main tensor
                             backend::NamedTensor gray_nt;
@@ -678,7 +730,6 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                             return post_status;
                         }
                     }
-                    }
                 }
             }
         }
@@ -702,6 +753,10 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
     std::string _m_section_name;
     cv_input::ImageInputLimits _m_image_limits;
     std::optional<backend::GpuPreprocessDescriptor> _gpu_preprocess_desc;
+    DecodeMode _m_decode_mode = DecodeMode::AUTO;
+    float _m_cpu_us_per_kb = 11.0f;
+    float _m_gpu_min_cpu_ms = 8.0f;
+    bool _m_gpu_path_eligible = false;
     backend::BackendConfig _m_backend_config;
     std::unique_ptr<backend::InferenceSession> _m_session;
     toml::table _m_model_section;

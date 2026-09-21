@@ -43,7 +43,7 @@ template <typename INPUT, typename OUTPUT> StatusCode PPMatting<INPUT, OUTPUT>::
         LOG(ERROR) << "ppmatting model exposes no output tensor";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    this->set_image_decode_hint(_m_input_size_host, 1.0f, 1);
+    this->set_image_decode_hint(_m_input_size_host, 1.0f);
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
         .norm = {.scale = 1.0f / 255.0f, .mean = {0.5f,0.5f,0.5f}, .std = {0.5f,0.5f,0.5f}},

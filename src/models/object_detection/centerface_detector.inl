@@ -46,7 +46,7 @@ template <typename INPUT, typename OUTPUT> StatusCode CenterFaceDetector<INPUT, 
     }
     // dynamic input: empty network size keeps the strict decode reduce bound
     // off; auto mode still lets the fallback path use GPU decode
-    this->set_image_decode_hint(cv::Size(), 1.0f, 1);
+    this->set_image_decode_hint(cv::Size(), 1.0f);
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::ALIGN_TO_MULTIPLE,
         .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,

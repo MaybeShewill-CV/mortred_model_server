@@ -34,7 +34,7 @@ template <typename INPUT, typename OUTPUT> StatusCode RealEsrGan<INPUT, OUTPUT>:
     _m_input_size_host.width = static_cast<int>(inputs.front().shape[2]);
     // dynamic input (unset mnn dims): the size is resolved per run in preprocess;
     // a non-positive size just disables the strict decode reduce bound
-    this->set_image_decode_hint(_m_input_size_host, 1.0f, 1);
+    this->set_image_decode_hint(_m_input_size_host, 1.0f);
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::NONE,
         .norm = {.scale = 1.0f / 255.0f},

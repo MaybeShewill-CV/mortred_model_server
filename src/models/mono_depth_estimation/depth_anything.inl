@@ -39,7 +39,7 @@ template <typename INPUT, typename OUTPUT> StatusCode DepthAnything<INPUT, OUTPU
     }
     _m_input_size_host.height = static_cast<int>(input_info.shape[2]);
     _m_input_size_host.width = static_cast<int>(input_info.shape[3]);
-    this->set_image_decode_hint(_m_input_size_host, 1.0f, 1);
+    this->set_image_decode_hint(_m_input_size_host, 1.0f);
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::KEEP_RATIO_PAD_ZERO,
         .norm = {.scale = 1.0f / 255.0f, .mean = {0.485f,0.456f,0.406f}, .std = {0.229f,0.224f,0.225f}},

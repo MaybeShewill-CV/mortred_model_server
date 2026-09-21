@@ -67,27 +67,9 @@ template <typename INPUT, typename OUTPUT> StatusCode YoloV8Detector<INPUT, OUTP
         }
         LOG(INFO) << "yolov8 reduced JPEG decode enabled (budget_upscale=" << decode_upscale << ")";
     }
-    // S1 GPU decode backend: "auto" uses nvjpeg only when the startup perf
-    // race beat cv::imdecode; "gpu" forces it (capability probe only);
-    // default "cpu" keeps the OpenCV path. Per-request CPU fallback applies
-    // in every mode.
-    int decode_gpu = 0;
-    const auto decode_backend = params.contains("image_decode_backend")
-                                    ? params["image_decode_backend"].value<std::string>()
-                                    : std::optional<std::string>{};
-    if (decode_backend.has_value()) {
-        if (*decode_backend == "gpu") {
-            decode_gpu = 2;
-        } else if (*decode_backend == "auto") {
-            decode_gpu = 1;
-        }
-    }
-    if (decode_gpu != 0) {
-        LOG(INFO) << "yolov8 gpu jpeg decode mode=" << (decode_gpu == 2 ? "force" : "auto")
-                  << " (probe: " << jinq::models::backend::gpu_jpeg::backend_name() << ", recommended="
-                  << (jinq::models::backend::gpu_jpeg::recommended() ? "yes" : "no") << ")";
-    }
-    this->set_image_decode_hint(_m_input_size_host, decode_upscale, decode_gpu);
+    // decode fork policy (image_decode_backend: cpu|auto|gpu) and its
+    // thresholds are resolved by the base class after on_init returns
+    this->set_image_decode_hint(_m_input_size_host, decode_upscale);
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::LETTERBOX,
         .norm = {.scale = 1.0f / 255.0f},

@@ -94,13 +94,7 @@ RuntimeResult<NamedTensor> letterbox_bgr_f32_nchw(const cv::Mat &bgr, const cv::
 RuntimeResult<NamedTensor> letterbox_bgr_nchw(const cv::Mat &bgr, const cv::Size &network, const std::string &tensor_name,
                                               DType dtype, std::uint8_t pad_value = 114);
 
-/*** fully fused planar YCbCr → letterbox → RGB → /255 → NCHW in ONE pass.
- * Takes the jpeggpu planar output (Y full-res, Cb/Cr possibly subsampled)
- * and produces the NCHW tensor directly - skips the intermediate BGR Mat,
- * the merge step, and the cvtColor step entirely. */
-RuntimeResult<NamedTensor> letterbox_ycbcr_nchw(const cv::Mat &y_plane, const cv::Mat &cb_plane, const cv::Mat &cr_plane,
-                                                const cv::Size &network, const std::string &tensor_name,
-                                                DType dtype, std::uint8_t pad_value = 114);
+
 
 /*** fluent reader around the existing named-f32 output contract */
 class OutputReader {

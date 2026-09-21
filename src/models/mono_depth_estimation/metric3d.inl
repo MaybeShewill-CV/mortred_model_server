@@ -48,7 +48,7 @@ template <typename INPUT, typename OUTPUT> StatusCode Metric3D<INPUT, OUTPUT>::o
     }
     _m_input_size_host.height = static_cast<int>(input_info.shape[2]);
     _m_input_size_host.width = static_cast<int>(input_info.shape[3]);
-    this->set_image_decode_hint(_m_input_size_host, 1.0f, 1);
+    this->set_image_decode_hint(_m_input_size_host, 1.0f);
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::KEEP_RATIO_PAD_CENTER,
         .norm = {.mean = {123.675f,116.28f,103.53f}, .std = {58.395f,57.12f,57.375f}},

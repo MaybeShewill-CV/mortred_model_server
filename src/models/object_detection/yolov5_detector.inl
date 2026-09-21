@@ -53,7 +53,7 @@ template <typename INPUT, typename OUTPUT> StatusCode YoloV5Detector<INPUT, OUTP
         LOG(ERROR) << "yolov5 model_input_image_size is " << configured_size << ", but model input is " << _m_input_size_host;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    this->set_image_decode_hint(_m_input_size_host, 1.0f, 1);  // strict decode, auto GPU
+    this->set_image_decode_hint(_m_input_size_host, 1.0f);  // strict decode, auto GPU
     this->set_gpu_preprocess({                                  // letterbox + /255 + RGB + F16 NCHW
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::LETTERBOX,
         .norm = {.scale = 1.0f / 255.0f},

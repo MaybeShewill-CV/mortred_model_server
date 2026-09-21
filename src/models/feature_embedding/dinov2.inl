@@ -54,7 +54,7 @@ template <typename INPUT, typename OUTPUT> StatusCode Dinov2<INPUT, OUTPUT>::on_
         }
         _m_default_pooling = value;
     }
-    this->set_image_decode_hint(_m_input_tensor_size, 1.0f, 1);
+    this->set_image_decode_hint(_m_input_tensor_size, 1.0f);
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
         .norm = {.scale = 1.0f / 255.0f, .mean = {0.48145466f,0.4578275f,0.40821073f}, .std = {0.26862954f,0.26130258f,0.27577711f}},

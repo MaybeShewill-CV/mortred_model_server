@@ -105,7 +105,7 @@ template <typename INPUT, typename OUTPUT> StatusCode EnlightenGan<INPUT, OUTPUT
         // each request in preprocess (aligned up to a multiple of 16)
         _m_input_dynamic = true;
     }
-    this->set_image_decode_hint(_m_input_size_host, 1.0f, 1);
+    this->set_image_decode_hint(_m_input_size_host, 1.0f);
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::ALIGN_TO_MULTIPLE,
         .norm = {.scale = 1.0f / 255.0f, .mean = {0.5f,0.5f,0.5f}, .std = {0.5f,0.5f,0.5f}},

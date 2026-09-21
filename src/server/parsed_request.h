@@ -20,6 +20,7 @@
 
 #include "rapidjson/document.h"
 
+#include "common/base64.h"
 #include "common/request_envelope.h"
 #include "common/status_code.h"
 #include "models/backend/param_spec.h"
@@ -122,10 +123,19 @@ inline ParsedRequest bind_parsed_request(DecodeResult<Request> decoded,
         return request;
     }
 
-    for (auto &image : decoded.value.images) {
+    // base64 is decoded HERE, at item birth: the wire encoding never leaves
+    // the server layer, workers and the decode fork only ever see image
+    // bytes (identical to the raw-body transport), and the cost lands on
+    // the handler thread pool instead of the worker critical path
+    for (size_t image_idx = 0; image_idx < decoded.value.images.size(); ++image_idx) {
+        auto &image = decoded.value.images[image_idx];
         byte_source item;
-        item.origin = byte_source::origin_kind::base64_text;
-        item.data = std::move(image);
+        item.data = jinq::common::base64::decode(image);
+        if (item.data.empty()) {
+            request.violations.push_back(
+                {"/images/" + std::to_string(image_idx), "image is not valid base64-encoded data"});
+            continue;
+        }
         request.items.push_back(std::move(item));
     }
 
