@@ -558,6 +558,12 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
         checked_shape_nbytes(named.tensor.shape, named.tensor.dtype, &input_bytes);
         // GPU zero-copy: input already in GPU memory, bind directly
         if (named.tensor.device_data != nullptr) {
+            // the producer wrote this buffer on ANOTHER stream (the jpeggpu
+            // decode stream): order this stream behind the recorded event
+            // before inference reads it
+            if (named.tensor.device_ready_event != nullptr) {
+                cudaStreamWaitEvent(_m_stream, (cudaEvent_t)named.tensor.device_ready_event, 0);
+            }
             if (!_m_context->setTensorAddress(named.name.c_str(), named.tensor.device_data)) {
                 LOG(ERROR) << "tensorrt set device input address failed: " << named.name;
                 return StatusCode::MODEL_RUN_SESSION_FAILED;

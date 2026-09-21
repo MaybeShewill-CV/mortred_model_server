@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <deque>
 #include <mutex>
 #include <sstream>
 #include <vector>
@@ -42,6 +43,52 @@ std::mutex& decoder_mutex() {
     return mu;
 }
 
+/*** Pool for zero-copy OUTPUT buffers. The old code reused one static
+ * buffer per size class — under concurrent workers request B's preprocess
+ * kernel could overwrite the tensor request A's TRT inference was still
+ * reading (different streams, no ordering). Buffers now leave the pool only
+ * while in flight and come back via release_pipeline_buffers(), which the
+ * caller invokes only after the consumer session has synchronized. The
+ * freelist is capped; excess buffers are cudaFree'd. */
+struct OutputBufferPool {
+    static constexpr size_t k_max_free = 16;
+    std::mutex mu;
+    std::deque<void*> ptrs;
+    std::deque<size_t> sizes;
+
+    void* acquire(size_t bytes) {
+        {
+            const std::lock_guard<std::mutex> guard(mu);
+            for (size_t i = 0; i < ptrs.size(); ++i) {
+                if (sizes[i] >= bytes) {
+                    void* p = ptrs[i];
+                    ptrs.erase(ptrs.begin() + static_cast<long>(i));
+                    sizes.erase(sizes.begin() + static_cast<long>(i));
+                    return p;
+                }
+            }
+        }
+        void* p = nullptr;
+        return cudaMalloc(&p, bytes) == cudaSuccess ? p : nullptr;
+    }
+
+    void give_back(void* p, size_t bytes) {
+        if (p == nullptr) return;
+        const std::lock_guard<std::mutex> guard(mu);
+        if (ptrs.size() >= k_max_free) {
+            cudaFree(p);
+            return;
+        }
+        ptrs.push_back(p);
+        sizes.push_back(bytes);
+    }
+};
+
+OutputBufferPool& output_pool() {
+    static OutputBufferPool pool;
+    return pool;
+}
+
 #ifdef MORTRED_HAS_JPEGGPU
 
 // ---------------------------------------------------------------------------
@@ -51,6 +98,7 @@ std::mutex& decoder_mutex() {
 struct JpegGpuPlan {
     jpeggpu_decoder_t decoder = nullptr;
     cudaStream_t stream = nullptr;
+    cudaEvent_t frame_ready_event = nullptr;  // recorded after each preprocess launch
     void* d_tmp = nullptr;
     size_t d_tmp_size = 0;
     uint8_t* d_planes[JPEGGPU_MAX_COMP] = {};
@@ -64,6 +112,7 @@ struct JpegGpuPlan {
     bool init() {
         if (jpeggpu_decoder_startup(&decoder) != JPEGGPU_SUCCESS) return false;
         if (cudaStreamCreate(&stream) != cudaSuccess) return false;
+        if (cudaEventCreateWithFlags(&frame_ready_event, cudaEventDisableTiming) != cudaSuccess) return false;
         ok = true;
         return true;
     }
@@ -71,6 +120,7 @@ struct JpegGpuPlan {
     void release() {
         if (decoder) jpeggpu_decoder_cleanup(decoder);
         if (stream) cudaStreamDestroy(stream);
+        if (frame_ready_event) cudaEventDestroy(frame_ready_event);
         if (d_tmp) cudaFree(d_tmp);
         for (int c = 0; c < JPEGGPU_MAX_COMP; ++c) {
             if (d_planes[c]) cudaFree(d_planes[c]);
@@ -901,44 +951,36 @@ GpuPipelineResult decode_and_preprocess(
     }
     }
 
-    // Step 3: allocate output buffers on device
+    // Step 3: acquire output buffers from the pool (NOT static reuse —
+    // concurrent workers must never share an in-flight output buffer)
     const int channels = (desc.color == GpuPreprocessDescriptor::Color::GRAY) ? 1 : 3;
     const size_t elem_size = (desc.output_dtype == DType::F16) ? 2 : 4;
     const size_t out_bytes = (size_t)eff_out_h * eff_out_w * channels * elem_size;
-    static void* d_output = nullptr;
-    static size_t d_output_size = 0;
-    if (d_output_size < out_bytes) {
-        if (d_output) cudaFree(d_output);
-        if (cudaMalloc(&d_output, out_bytes) != cudaSuccess) {
-            d_output = nullptr; d_output_size = 0;
-            if (err) *err = "output buffer alloc failed";
-            return out;
-        }
-        d_output_size = out_bytes;
+    void* d_output = output_pool().acquire(out_bytes);
+    if (d_output == nullptr) {
+        if (err) *err = "output buffer alloc failed";
+        return out;
     }
 
     // Optional gray secondary output
     void* d_gray = nullptr;
+    size_t gray_bytes = 0;
     if (desc.secondary_gray_output) {
-        const size_t gray_bytes = (size_t)eff_out_h * eff_out_w * elem_size;
-        static void* d_gray_buf = nullptr;
-        static size_t d_gray_size = 0;
-        if (d_gray_size < gray_bytes) {
-            if (d_gray_buf) cudaFree(d_gray_buf);
-            if (cudaMalloc(&d_gray_buf, gray_bytes) != cudaSuccess) {
-                d_gray_buf = nullptr; d_gray_size = 0;
-                if (err) *err = "gray output alloc failed";
-                return out;
-            }
-            d_gray_size = gray_bytes;
+        gray_bytes = (size_t)eff_out_h * eff_out_w * elem_size;
+        d_gray = output_pool().acquire(gray_bytes);
+        if (d_gray == nullptr) {
+            output_pool().give_back(d_output, out_bytes);
+            if (err) *err = "gray output alloc failed";
+            return out;
         }
-        d_gray = d_gray_buf;
     }
 
     // Step 4: launch parameterized CUDA kernel (async, same stream)
     const std::lock_guard<std::mutex> guard(decoder_mutex());
     JpegGpuPlan& plan = jpeggpu_plan();
     if (!plan.ok) {
+        output_pool().give_back(d_output, out_bytes);
+        if (d_gray) output_pool().give_back(d_gray, gray_bytes);
         if (err) *err = "plan not ready";
         return out;
     }
@@ -966,7 +1008,20 @@ GpuPipelineResult decode_and_preprocess(
         crop_x, crop_y,
         plan.stream);
     if (launch_err != cudaSuccess) {
+        output_pool().give_back(d_output, out_bytes);
+        if (d_gray) output_pool().give_back(d_gray, gray_bytes);
         if (err) *err = std::string("CUDA kernel launch failed: ") + cudaGetErrorString(launch_err);
+        return out;
+    }
+
+    // Order the consumer: everything on plan.stream up to here (H2D of the
+    // jpeg bytes, decode, preprocess) must complete before another stream
+    // reads the outputs. The consumer enqueues cudaStreamWaitEvent on this
+    // event before its inference.
+    if (cudaEventRecord(plan.frame_ready_event, plan.stream) != cudaSuccess) {
+        output_pool().give_back(d_output, out_bytes);
+        if (d_gray) output_pool().give_back(d_gray, gray_bytes);
+        if (err) *err = "frame ready event record failed";
         return out;
     }
 
@@ -976,10 +1031,24 @@ GpuPipelineResult decode_and_preprocess(
     out.out_h = eff_out_h;
     out.src_w = dp.y_w;
     out.src_h = dp.y_h;
+    out.ready_event = plan.frame_ready_event;
+    out.device_input_bytes = out_bytes;
+    out.device_gray_bytes = gray_bytes;
     out.valid = true;
     // decode_to_device already counted this decode
 #endif
     return out;
+}
+
+void release_pipeline_buffers(const GpuPipelineResult& r) {
+#ifdef MORTRED_HAS_JPEGGPU
+    if (r.device_input != nullptr) {
+        output_pool().give_back(r.device_input, r.device_input_bytes);
+    }
+    if (r.device_gray != nullptr) {
+        output_pool().give_back(r.device_gray, r.device_gray_bytes);
+    }
+#endif
 }
 
 PlanarImage decode_planar(const unsigned char* data, size_t size, std::string* err) {

@@ -99,8 +99,18 @@ struct GpuPipelineResult {
     void* device_gray = nullptr;   // optional secondary grayscale output (EnlightenGAN)
     int out_w = 0, out_h = 0;
     int src_w = 0, src_h = 0;      // original image dims (for postprocess context)
+    void* ready_event = nullptr;   // cudaEvent_t recorded on the decode stream after
+                                   // the preprocess kernel; consumers on another stream
+                                   // MUST wait on it before reading device_input/gray
+    size_t device_input_bytes = 0; // pool bookkeeping for release_pipeline_buffers
+    size_t device_gray_bytes = 0;
     bool valid = false;
 };
+
+/*** Return the pipeline buffers to the internal pool. Call ONLY after the
+ * consumer's stream has finished reading them (TrtSession::run synchronizes
+ * before returning, so calling right after session run is correct). */
+void release_pipeline_buffers(const GpuPipelineResult& r);
 GpuPipelineResult decode_and_letterbox_gpu(
     const unsigned char* data, size_t size,
     int network_w, int network_h,

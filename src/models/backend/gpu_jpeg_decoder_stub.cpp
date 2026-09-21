@@ -54,6 +54,10 @@ GpuPipelineResult decode_and_preprocess(
     return out;
 }
 
+void release_pipeline_buffers(const GpuPipelineResult& r) {
+    (void)r;
+}
+
 }  // namespace gpu_jpeg
 }  // namespace backend
 }  // namespace models

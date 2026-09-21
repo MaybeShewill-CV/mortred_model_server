@@ -208,6 +208,10 @@ struct Tensor {
     // GPU zero-copy: if non-null, data lives in GPU memory at this address
     // and `buffer` is empty. Sessions skip H2D and use this pointer directly.
     void* device_data = nullptr;
+    // cudaEvent_t recorded on the producing stream after the last write to
+    // device_data; consumer sessions MUST cudaStreamWaitEvent on it before
+    // reading — producer and consumer run on different streams.
+    void* device_ready_event = nullptr;
 
     Tensor() = default;
     Tensor(const Tensor&) = default;

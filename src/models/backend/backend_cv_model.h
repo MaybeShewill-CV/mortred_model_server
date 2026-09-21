@@ -642,6 +642,7 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                         nt.tensor.layout = _gpu_preprocess_desc->output_nhwc
                             ? backend::TensorLayout::Nhwc : backend::TensorLayout::Nchw;
                         nt.tensor.device_data = gpu_result.device_input;
+                        nt.tensor.device_ready_event = gpu_result.ready_event;
                         jinq::common::stage_timing::mark("pre");
                         jinq::common::stage_timing::mark("h2d");
                         std::vector<backend::NamedTensor> gpu_inputs{nt};
@@ -654,11 +655,16 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                             gray_nt.tensor.shape = {1, 1, (int64_t)gpu_result.out_h, (int64_t)gpu_result.out_w};
                             gray_nt.tensor.layout = backend::TensorLayout::Nchw;
                             gray_nt.tensor.device_data = gpu_result.device_gray;
+                            gray_nt.tensor.device_ready_event = gpu_result.ready_event;
                             gpu_inputs.push_back(std::move(gray_nt));
                         }
                         std::vector<backend::NamedTensor> outputs;
                         const auto run_status = _m_session->run(gpu_inputs, outputs);
                         jinq::common::stage_timing::mark("sess");
+                        // session->run synchronizes before returning, so the
+                        // input buffers are fully consumed here — back to the
+                        // pool (covers both the ok and the fallback branch)
+                        backend::gpu_jpeg::release_pipeline_buffers(gpu_result);
                         if (run_status != StatusCode::OK) {
                             // a rejected zero-copy shape must not fail the
                             // request: rerun through the normal path
