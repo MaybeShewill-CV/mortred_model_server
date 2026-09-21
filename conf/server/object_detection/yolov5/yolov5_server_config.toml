@@ -10,7 +10,9 @@ max_connections=500
 peer_resp_timeout=15
 # request size limit(MB)
 request_size_limit=64
-# bearer token for direct inference access (empty = disabled; required when host is non-loopback)
+# bearer token for direct inference access. There is NO anonymous mode: an empty
+# token rejects every request, so the supervisor injects MORTRED_AUTH_TOKEN at spawn
+# (calibrate injects a per-run token the same way); non-loopback hosts require it
 # auth_token=""
 # max requests per second per client ip (0 = unlimited)
 # rate_limit_qps=0

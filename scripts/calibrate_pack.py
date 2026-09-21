@@ -183,6 +183,16 @@ def pick_w_star(points: list[dict]) -> tuple[int, str]:
     last_good: dict | None = None
     note = "single_point"
     for point in points:
+        total = int(point.get("requests") or 0)
+        ok = int(point.get("ok") or 0)
+        if total > 0 and ok == 0:
+            raise SystemExit(
+                "calibration load had 0 successful requests (w=%s, %d errors, "
+                "p50=%sms): the server rejected everything - check its log at %s "
+                "(auth mismatch and a mis-served image are the usual causes)"
+                % (point.get("worker_nums"), total, point.get("p50_ms"), point.get("log"))
+            )
+    for point in points:
         if not point.get("started") or point.get("oom"):
             why = "oom_or_start_failed" if point.get("oom") else "start_failed"
             return (int(last_good["worker_nums"]) if last_good else 1, why)
@@ -431,6 +441,17 @@ def stop_proc(proc: subprocess.Popen[bytes] | None) -> None:
         proc.wait(timeout=2)
 
 
+def calib_auth_token() -> str:
+    # Per-run random token shared by every spawned calibration instance and
+    # the load driver. The server has no anonymous mode (an EMPTY configured
+    # token rejects every request), so the spawn MUST carry a token and the
+    # client MUST present the same one - ambient MORTRED_AUTH_TOKEN is never
+    # inherited (it would 401 the token-less history of this script).
+    import secrets
+
+    return secrets.token_urlsafe(24)
+
+
 def start_model(
     root: Path,
     binary: Path,
@@ -439,10 +460,12 @@ def start_model(
     workers: int,
     log_path: Path,
     extra_env: dict[str, str],
+    auth_token: str,
 ) -> subprocess.Popen[bytes]:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env.pop("MORTRED_LISTEN_PORT", None)
+    env["MORTRED_AUTH_TOKEN"] = auth_token
     env["MORTRED_LISTEN_HOST"] = "127.0.0.1"
     env["MORTRED_PROJECT_ROOT"] = str(root)
     env["MORTRED_WORKER_NUMS"] = str(workers)
@@ -510,6 +533,7 @@ def run_one_point(
     duration_s: float,
     concurrency: int,
     model_config: str,
+    auth_token: str,
 ) -> dict:
     model_id = entry["model_id"]
     log_path = root / "logs" / ("calibrate-%s-w%d.log" % (model_id, workers))
@@ -545,7 +569,7 @@ def run_one_point(
             ),
         }
     baseline = gpu_mem_device_mib()
-    proc = start_model(root, binary, model_id, found, workers, log_path, extra)
+    proc = start_model(root, binary, model_id, found, workers, log_path, extra, auth_token)
     ready_url = "http://127.0.0.1:%d/ready" % port
     infer_url = "http://127.0.0.1:%d%s" % (port, uri)
     point: dict = {
@@ -592,6 +616,7 @@ def run_one_point(
                 duration_s=duration_s,
                 warmup_s=min(1.0, duration_s / 5.0),
                 timeout_s=max(30.0, duration_s + 10.0),
+                token=auth_token,
                 progress=False,
             )
         )
@@ -637,6 +662,7 @@ def calibrate(
     binary = find_server_bin(root)
     if binary is None:
         raise SystemExit("mortred-model-server.out not found under _bin/ or bin/")
+    auth_token = calib_auth_token()
     ids = pack_ids(pack)
     if not ids:
         raise SystemExit("pack has no [pack.<ID>] tables: %s" % pack)
@@ -664,7 +690,7 @@ def calibrate(
             print("  w=%d ..." % w, flush=True)
             conc = max(4, min(16, 4 * w))
             point = run_one_point(
-                root, binary, entry, image, w, duration_s, conc, override
+                root, binary, entry, image, w, duration_s, conc, override, auth_token
             )
             points.append(point)
             print(
@@ -680,6 +706,13 @@ def calibrate(
                 flush=True,
             )
             if not point.get("started") or point.get("oom"):
+                break
+            if int(point.get("requests") or 0) > 0 and int(point.get("ok") or 0) == 0:
+                print(
+                    "    all %d requests errored (p50=%sms) - stopping the sweep, "
+                    "see %s" % (point["requests"], point.get("p50_ms"), point["log"]),
+                    flush=True,
+                )
                 break
         w_star, why = pick_w_star(points)
         suggested[model_id] = w_star
@@ -722,7 +755,7 @@ def calibrate(
                     "error": "port %d already in use (%s)" % (port, blocked),
                 }
                 continue
-            proc = start_model(root, binary, model_id, found, w, log_path, extra)
+            proc = start_model(root, binary, model_id, found, w, log_path, extra, auth_token)
             ready_url = "http://127.0.0.1:%d/ready" % port
             if not wait_http_ready(ready_url, 90.0, proc):
                 joint["per_model"][model_id] = {"started": False, "error": "not ready"}
