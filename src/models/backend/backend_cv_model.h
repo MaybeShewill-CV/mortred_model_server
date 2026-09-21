@@ -628,6 +628,7 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                         *_gpu_preprocess_desc, &gpu_err);
                     jinq::common::stage_timing::mark("decode");
                     if (gpu_result.valid) {
+                        jinq::common::stage_timing::annotate("decoder", "jpeggpu-zero-copy");
                         backend::NamedTensor nt;
                         nt.name = input_info.name;
                         nt.tensor.dtype = _gpu_preprocess_desc->output_dtype;

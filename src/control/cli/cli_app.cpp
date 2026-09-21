@@ -500,9 +500,13 @@ size_t count_log_lines(const std::string& path) {
     return lines;
 }
 
+using LabelCounts = std::map<std::string, std::map<std::string, size_t>>;
+
 // parses "stage_trace svc=... id=... key=value ..." lines that appear after
-// line `from` (exclusive) in the log; numeric fields land in the map
-void parse_stage_window(const std::string& path, size_t from, StageMap* out, size_t* found) {
+// line `from` (exclusive) in the log; numeric fields land in the stage map,
+// non-numeric fields (per-request path labels like decoder=...) into counts
+void parse_stage_window(const std::string& path, size_t from, StageMap* out, size_t* found,
+                        LabelCounts* labels = nullptr) {
     std::ifstream in(path);
     if (!in.is_open()) {
         return;
@@ -527,13 +531,46 @@ void parse_stage_window(const std::string& path, size_t from, StageMap* out, siz
             if (key == "svc" || key == "id") {
                 continue;
             }
+            const std::string value = token.substr(eq + 1);
             try {
-                (*out)[key].push_back(std::stod(token.substr(eq + 1)));
+                (*out)[key].push_back(std::stod(value));
             } catch (const std::exception&) {
-                // non-numeric field - skip
+                if (labels != nullptr) {
+                    (*labels)[key][value]++;
+                }
             }
         }
     }
+}
+
+/*** most frequent value of one label, formatted "value (n/total)" so a
+ * split (some requests fell back) stays visible */
+std::string majority_label(const LabelCounts& labels, const std::string& key, size_t total) {
+    const auto per_label = labels.find(key);
+    if (per_label == labels.end() || per_label->second.empty() || total == 0) {
+        return "";
+    }
+    std::string best;
+    size_t best_n = 0;
+    size_t all = 0;
+    for (const auto& kv : per_label->second) {
+        all += kv.second;
+        if (kv.second > best_n) {
+            best_n = kv.second;
+            best = kv.first;
+        }
+    }
+    if (all != total) {
+        // more than one value seen: show the split
+        std::string split = best + " " + std::to_string(best_n) + "/" + std::to_string(all);
+        for (const auto& kv : per_label->second) {
+            if (kv.first != best) {
+                split += " | " + kv.first + " " + std::to_string(kv.second);
+            }
+        }
+        return split;
+    }
+    return best + " (" + std::to_string(all) + "/" + std::to_string(total) + ")";
 }
 
 double percentile(std::vector<double> samples, double q) {
@@ -744,9 +781,10 @@ int cmd_profile(const Options& opt, const std::string& id, const std::string& im
     }
 
     StageMap model, gw;
+    LabelCounts model_labels;
     size_t model_traces = 0;
     size_t gw_traces = 0;
-    parse_stage_window(model_log, model_from, &model, &model_traces);
+    parse_stage_window(model_log, model_from, &model, &model_traces, &model_labels);
     parse_stage_window(gw_log, gw_from, &gw, &gw_traces);
     if (model_traces == 0) {
         std::fprintf(stderr,
@@ -802,7 +840,10 @@ int cmd_profile(const Options& opt, const std::string& id, const std::string& im
         {"2", "网关处理（route+auth+fwd）", row2, row2_mean, note2},
         {"3", "socket② 往返 + 网关回调（残差）", shell3_p50, shell3_mean, "网关total−模型total"},
         {"4", "模型框架与调度", row4, row4_mean, note4},
-        {"5", "decode（图片解码）", stage_p50(model, "decode"), stage_mean(model, "decode"), "libjpeg-turbo"},
+        {"5", "decode（图片解码）", stage_p50(model, "decode"), stage_mean(model, "decode"),
+         model_labels.count("decoder")
+             ? majority_label(model_labels, "decoder", model_traces)
+             : "解码器标签缺失（旧二进制？）"},
         {"6", "pre（letterbox+归一化）", stage_p50(model, "pre"), stage_mean(model, "pre"), ""},
         {"7", "h2d（输入上传）", stage_p50(model, "h2d"), stage_mean(model, "h2d"), ""},
         {"8", "exec（GPU 推理+sync）", stage_p50(model, "exec"), stage_mean(model, "exec"), "共享GPU噪声敏感"},

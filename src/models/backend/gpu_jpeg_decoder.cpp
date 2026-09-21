@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstring>
 #include <mutex>
+#include <sstream>
 #include <vector>
 
 #include <cuda_runtime_api.h>
@@ -524,6 +525,28 @@ const char* selected_backend_name() {
     return backend_name();
 }
 
+std::string render_decode_metrics() {
+    static const char* const k_names[BACKEND_COUNT] = {
+        "jpeggpu", "nvjpeg-hw", "nvjpeg-sm", "cpu-reduced", "cpu-full", "fallback"};
+    const ProbeResult& p = probe_once();
+    std::ostringstream ss;
+    ss << "# HELP mortred_jpeg_decode_total Images decoded per backend\n";
+    ss << "# TYPE mortred_jpeg_decode_total counter\n";
+    for (int b = 0; b < BACKEND_COUNT; ++b) {
+        const uint64_t n = g_request_count[b].load();
+        if (n == 0) {
+            continue;
+        }
+        ss << "mortred_jpeg_decode_total{backend=\"" << k_names[b] << "\"} " << n << "\n";
+    }
+    ss << "# HELP mortred_jpeg_decode_ladder Startup decode-ladder state\n";
+    ss << "# TYPE mortred_jpeg_decode_ladder gauge\n";
+    ss << "mortred_jpeg_decode_ladder{backend=\"" << backend_name()
+       << "\",race_won=\"" << (p.race_won ? "yes" : "no")
+       << "\"} 1\n";
+    return ss.str();
+}
+
 cv::Mat decode(const unsigned char* data, size_t size, std::string* err) {
     if (err) err->clear();
     if (!probe_once().capable) {
@@ -785,7 +808,7 @@ GpuPipelineResult decode_and_letterbox_gpu(
     out.src_w = dp.y_w;
     out.src_h = dp.y_h;
     out.valid = true;
-    g_request_count[JPEGGPU].fetch_add(1);
+    // decode_to_device already counted this decode
 #endif
     return out;
 }
@@ -954,7 +977,7 @@ GpuPipelineResult decode_and_preprocess(
     out.src_w = dp.y_w;
     out.src_h = dp.y_h;
     out.valid = true;
-    g_request_count[JPEGGPU].fetch_add(1);
+    // decode_to_device already counted this decode
 #endif
     return out;
 }

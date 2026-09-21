@@ -47,6 +47,22 @@ class StageTrace {
         }
     }
 
+    /*** free-form per-request label (e.g. decoder="jpeggpu-zero-copy"):
+     * unlike marks it carries no timing, it names the code path a stage
+     * actually took. Rendered as key=value tokens on the log line. */
+    void annotate(const char* key, const char* value) {
+        std::lock_guard<std::mutex> guard(marks_mu_);
+        for (auto& entry : annotations_) {
+            if (std::string(entry.first) == key) {
+                entry.second = value;
+                return;
+            }
+        }
+        if (annotations_.size() < k_max_marks) {
+            annotations_.emplace_back(key, value);
+        }
+    }
+
     void set_id(std::string id) { id_ = std::move(id); }
 
     std::string to_log_line(const char* svc) const {
@@ -70,6 +86,12 @@ class StageTrace {
             std::snprintf(buf, sizeof(buf), " total=%.3f", total);
             out += buf;
         }
+        for (const auto& entry : annotations_) {
+            out += " ";
+            out += entry.first;
+            out += "=";
+            out += entry.second;
+        }
         return out;
     }
 
@@ -90,6 +112,7 @@ class StageTrace {
     };
     mutable std::mutex marks_mu_;
     std::vector<Mark> marks_;
+    std::vector<std::pair<const char*, std::string>> annotations_;
     std::string id_;
     inline static thread_local StageTrace* tl_active_ = nullptr;
 };
@@ -98,6 +121,13 @@ inline void mark(const char* name) {
     StageTrace* trace = StageTrace::active();
     if (trace != nullptr) {
         trace->mark(name);
+    }
+}
+
+inline void annotate(const char* key, const char* value) {
+    StageTrace* trace = StageTrace::active();
+    if (trace != nullptr) {
+        trace->annotate(key, value);
     }
 }
 

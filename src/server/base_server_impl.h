@@ -36,6 +36,7 @@
 #include "common/stage_timing.h"
 #include "common/status_code.h"
 #include "common/time_stamp.h"
+#include "models/backend/gpu_jpeg_decoder.h"
 #include "models/backend/param_spec.h"
 #include "server/async_endpoints.h"
 #include "server/async_job_table.h"
@@ -362,7 +363,10 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         auto* resp = task->get_resp();
         resp->set_status_code("200");
         resp->add_header_pair("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
-        auto body = _m_metrics.render();
+        std::string body = _m_metrics.render();
+        // decode-path counters + ladder state, so "which decoder is actually
+        // running" is queryable instead of log archaeology
+        body += models::backend::gpu_jpeg::render_decode_metrics();
         resp->append_output_body(body.data(), body.size());
         return;
     }

@@ -466,14 +466,32 @@ inline cv::Mat load_image(const io_define::common_io::image_input &in, const Ima
     // checks capability. Any miss falls through to the CPU path.
     const bool gpu_allowed = (limits.decode_gpu == 2 && backend::gpu_jpeg::available()) ||
                              (limits.decode_gpu == 1 && backend::gpu_jpeg::recommended());
+    if (!gpu_allowed && limits.decode_gpu != 0) {
+        // requested but not allowed: mode/race state (silent otherwise)
+        LOG_EVERY_N(INFO, 100) << "gpu jpeg decode skipped: mode="
+                               << (limits.decode_gpu == 2 ? "force" : "auto")
+                               << " available=" << (backend::gpu_jpeg::available() ? "yes" : "no")
+                               << " recommended=" << (backend::gpu_jpeg::recommended() ? "yes" : "no");
+    }
     if (gpu_allowed) {
         cv::Size full;
         int orientation = 1;
         bool progressive = false;
-        if (jpeg_full_dimensions(bytes, &full, &orientation, &progressive) && !progressive &&
-            static_cast<int64_t>(full.width) * full.height >= limits.decode_gpu_min_pixels &&
-            static_cast<int64_t>(full.width) * full.height <= limits.decode_gpu_max_pixels &&
-            (!limits.decode_gpu_require_aligned_width || full.width % 16 == 0)) {
+        const bool dims_ok = jpeg_full_dimensions(bytes, &full, &orientation, &progressive);
+        const int64_t pixels = dims_ok ? static_cast<int64_t>(full.width) * full.height : 0;
+        const bool image_ok = dims_ok && !progressive &&
+            pixels >= limits.decode_gpu_min_pixels &&
+            pixels <= limits.decode_gpu_max_pixels &&
+            (!limits.decode_gpu_require_aligned_width || full.width % 16 == 0);
+        if (!image_ok) {
+            LOG_EVERY_N(INFO, 100) << "gpu jpeg decode gate rejected image: probe_ok=" << dims_ok
+                                   << " progressive=" << progressive
+                                   << " pixels=" << pixels
+                                   << " min=" << limits.decode_gpu_min_pixels
+                                   << " max=" << limits.decode_gpu_max_pixels
+                                   << " aligned_required=" << limits.decode_gpu_require_aligned_width;
+        }
+        if (image_ok) {
             std::string gpu_error;
             // decode to device (no D2H), mark decode HERE (GPU kernel done),
             // then fetch + convert — the D2H and YCbCr→BGR are preprocessing
@@ -482,6 +500,7 @@ inline cv::Mat load_image(const io_define::common_io::image_input &in, const Ima
                 backend::gpu_jpeg::decode_to_device(bytes.data(), bytes.size(), &gpu_error);
             jinq::common::stage_timing::mark("decode");
             if (dp.valid) {
+                jinq::common::stage_timing::annotate("decoder", "jpeggpu-s1");
                 backend::gpu_jpeg::PlanarImage planar = backend::gpu_jpeg::fetch_from_device(dp);
                 if (!planar.y.empty()) {
                     if (full_size != nullptr) {
@@ -507,6 +526,9 @@ inline cv::Mat load_image(const io_define::common_io::image_input &in, const Ima
     }
     cv::Mat image = cv::imdecode(bytes, imread_color_flag_for_reduce(reduce));
     jinq::common::stage_timing::mark("decode");
+    jinq::common::stage_timing::annotate("decoder", reduce > 1 ? "libjpeg-turbo-reduced" : "libjpeg-turbo");
+    backend::gpu_jpeg::g_request_count[reduce > 1 ? backend::gpu_jpeg::CPU_REDUCED : backend::gpu_jpeg::CPU_FULL]
+        .fetch_add(1);
     if (image.empty()) {
         if (error != nullptr) {
             *error = "input image bytes are not a decodable image";

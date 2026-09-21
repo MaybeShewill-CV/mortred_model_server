@@ -36,6 +36,11 @@ enum Backend {
  * Incremented by the decode layer on every request. */
 extern std::atomic<uint64_t> g_request_count[BACKEND_COUNT];
 
+/*** Prometheus text for /metrics: per-backend decode counters plus the
+ * ladder selection and race state as info gauges. Answers "is the jpeggpu
+ * path actually being taken" without reading logs. */
+std::string render_decode_metrics();
+
 /*** Name of the currently selected backend (set once at probe time). */
 const char* selected_backend_name();
 
