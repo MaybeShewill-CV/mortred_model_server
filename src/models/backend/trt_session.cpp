@@ -263,52 +263,27 @@ TrtSession::~TrtSession() {
     _m_output_allocators.clear();
 }
 
-namespace {
 
-// grows (or lazily allocates) one pinned staging buffer; returns nullptr on
-// any cudaHostAlloc/cudaFreeHost failure so callers can fall back to pageable
-void* ensure_pinned_stage(void** memory, size_t* capacity, size_t bytes) {
-    if (*memory != nullptr && *capacity >= bytes) {
-        return *memory;
-    }
-    if (*memory != nullptr) {
-        cudaFreeHost(*memory);
-        *memory = nullptr;
-        *capacity = 0;
-    }
-    if (cudaHostAlloc(memory, bytes, cudaHostAllocDefault) != cudaSuccess) {
-        *memory = nullptr;
-        *capacity = 0;
-        return nullptr;
-    }
-    *capacity = bytes;
-    return *memory;
-}
-
-}  // namespace
 
 void* TrtSession::pinned_h2d_stage(size_t bytes) {
-    const std::lock_guard<std::mutex> guard(_m_pinned_mu);
-    return ensure_pinned_stage(&_m_pinned_h2d, &_m_pinned_h2d_bytes, bytes);
+    return _m_pinned_h2d_pool.acquire(bytes);
+}
+
+void TrtSession::pinned_h2d_release(void* p, size_t bytes) {
+    _m_pinned_h2d_pool.release(p, bytes);
 }
 
 void* TrtSession::pinned_d2h_stage(size_t bytes) {
-    const std::lock_guard<std::mutex> guard(_m_pinned_mu);
-    return ensure_pinned_stage(&_m_pinned_d2h, &_m_pinned_d2h_bytes, bytes);
+    return _m_pinned_d2h_pool.acquire(bytes);
+}
+
+void TrtSession::pinned_d2h_release(void* p, size_t bytes) {
+    _m_pinned_d2h_pool.release(p, bytes);
 }
 
 void TrtSession::release_pinned_staging() {
-    const std::lock_guard<std::mutex> guard(_m_pinned_mu);
-    if (_m_pinned_h2d != nullptr) {
-        cudaFreeHost(_m_pinned_h2d);
-        _m_pinned_h2d = nullptr;
-        _m_pinned_h2d_bytes = 0;
-    }
-    if (_m_pinned_d2h != nullptr) {
-        cudaFreeHost(_m_pinned_d2h);
-        _m_pinned_d2h = nullptr;
-        _m_pinned_d2h_bytes = 0;
-    }
+    _m_pinned_h2d_pool.drain();
+    _m_pinned_d2h_pool.drain();
 }
 
 StatusCode TrtSession::init(const BackendConfig& config, std::string* err) {
@@ -549,7 +524,23 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
         }
         pinned_h2d_total += input_bytes;
     }
-    char* pinned_h2d = static_cast<char*>(pinned_h2d_stage(pinned_h2d_total));
+    // slot is owned for the whole request: the async H2D copies out of it
+    // only provably executed once the request's stream sync completes
+    char* pinned_h2d = pinned_h2d_total > 0 ? static_cast<char*>(pinned_h2d_stage(pinned_h2d_total)) : nullptr;
+    struct StagingSlotGuard {
+        TrtSession* session;
+        void* slot;
+        size_t bytes;
+        bool abandon = false;  // error path: queued copies may still be pending
+        ~StagingSlotGuard() {
+            if (session == nullptr || slot == nullptr) return;
+            if (abandon) {
+                cudaFreeHost(slot);
+            } else {
+                session->pinned_h2d_release(slot, bytes);
+            }
+        }
+    } h2d_slot_guard{this, pinned_h2d, pinned_h2d_total};
     size_t pinned_h2d_offset = 0;
     for (size_t idx = 0; idx < ordered_inputs.size(); ++idx) {
         const auto& named = *ordered_inputs[idx];
@@ -709,6 +700,16 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
         }
     }
     char* pinned_d2h = pinned_d2h_total > 0 ? static_cast<char*>(pinned_d2h_stage(pinned_d2h_total)) : nullptr;
+    struct D2HSlotGuard {
+        TrtSession* session;
+        void* slot;
+        size_t bytes;
+        ~D2HSlotGuard() {
+            if (session != nullptr && slot != nullptr) {
+                session->pinned_d2h_release(slot, bytes);
+            }
+        }
+    } d2h_slot_guard{this, pinned_d2h, pinned_d2h_total};
     size_t pinned_d2h_offset = 0;
     std::vector<std::pair<void*, size_t>> staged_d2h_copies;
     for (const auto& item : resolved_outputs) {

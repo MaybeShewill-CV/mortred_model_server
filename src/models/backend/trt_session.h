@@ -8,6 +8,7 @@
 #ifndef MORTRED_MODELS_BACKEND_TRT_SESSION_H
 #define MORTRED_MODELS_BACKEND_TRT_SESSION_H
 
+#include <deque>
 #include <map>
 #include <memory>
 #include <string>
@@ -28,6 +29,49 @@ namespace backend {
 using jinq::common::StatusCode;
 
 namespace trt_detail {
+
+/*** pooled pinned staging slots (see trt_session.cpp for the race this
+ * replaces): each run() owns its slot until the stream sync guarantees the
+ * queued async copies have executed. */
+struct PinnedSlotPool {
+    static constexpr size_t k_max_idle = 16;
+    std::mutex mu;
+    std::deque<std::pair<void*, size_t>> idle;
+
+    void* acquire(size_t bytes) {
+        {
+            const std::lock_guard<std::mutex> guard(mu);
+            for (size_t i = 0; i < idle.size(); ++i) {
+                if (idle[i].second >= bytes) {
+                    void* p = idle[i].first;
+                    idle.erase(idle.begin() + static_cast<long>(i));
+                    return p;
+                }
+            }
+        }
+        void* p = nullptr;
+        return cudaHostAlloc(&p, bytes, cudaHostAllocDefault) == cudaSuccess ? p : nullptr;
+    }
+
+    void release(void* p, size_t bytes) {
+        if (p == nullptr) return;
+        const std::lock_guard<std::mutex> guard(mu);
+        if (idle.size() >= k_max_idle) {
+            cudaFreeHost(p);
+            return;
+        }
+        idle.emplace_back(p, bytes);
+    }
+
+    void drain() {
+        const std::lock_guard<std::mutex> guard(mu);
+        for (auto& item : idle) {
+            if (item.first) cudaFreeHost(item.first);
+        }
+        idle.clear();
+    }
+};
+
 
 class SessionLogger : public nvinfer1::ILogger {
   public:
@@ -97,17 +141,16 @@ class TrtSession : public InferenceSession {
     std::string _m_model_file_path;
 
     // pinned host staging for H2D/D2H: pageable std::vector transfers pay a
-    // driver-side staging copy (~3x measured vs pinned); these buffers are
-    // reused across runs and grown on demand. Allocation failure falls back
-    // to the original pageable path silently.
-    void* _m_pinned_h2d = nullptr;
-    size_t _m_pinned_h2d_bytes = 0;
-    void* _m_pinned_d2h = nullptr;
-    size_t _m_pinned_d2h_bytes = 0;
-    std::mutex _m_pinned_mu;
+    // driver-side staging copy (~3x measured vs pinned). Slots come from
+    // per-request pools — the old single shared buffer raced under
+    // concurrent workers (host memcpy vs queued async copies).
+    trt_detail::PinnedSlotPool _m_pinned_h2d_pool;
+    trt_detail::PinnedSlotPool _m_pinned_d2h_pool;
 
     void* pinned_h2d_stage(size_t bytes);
+    void pinned_h2d_release(void* slot, size_t bytes);
     void* pinned_d2h_stage(size_t bytes);
+    void pinned_d2h_release(void* slot, size_t bytes);
     void release_pinned_staging();
 };
 
