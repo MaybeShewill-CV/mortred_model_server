@@ -2,7 +2,6 @@
 #define MORTRED_MODELS_OBJECT_DETECTION_DETECTOR_COMMON_H
 
 #include <cstring>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -15,6 +14,7 @@
 #include "models/backend/inference_context.h"
 #include "models/backend/model_runtime.h"
 #include "models/backend/request_geometry.h"
+#include "models/cv_image_input.h"
 #include "models/object_detection/detection_params.h"
 
 namespace jinq {
@@ -75,25 +75,8 @@ inline std::vector<T> finalize_detections(std::vector<T> detections, const Detec
     return finalize_detections(std::move(detections), effective);
 }
 
-/***
- * YOLO family JPEG DCT reduced-decode budget. Strict (1.0) unless
- * image_decode_mode=budget; optional image_decode_budget_upscale in (1, 2].
- */
 inline float parse_image_decode_upscale(const toml::table &params, const char *tag) {
-    float decode_upscale = 1.0f;
-    const auto decode_mode = params.contains("image_decode_mode") ? params["image_decode_mode"].value<std::string>()
-                                                                  : std::optional<std::string>{};
-    if (decode_mode.has_value() && *decode_mode == "budget") {
-        decode_upscale = 1.25f;
-        if (params.contains("image_decode_budget_upscale")) {
-            const auto configured = params["image_decode_budget_upscale"].value<double>();
-            if (configured.has_value() && *configured > 1.0 && *configured <= 2.0) {
-                decode_upscale = static_cast<float>(*configured);
-            }
-        }
-        LOG(INFO) << tag << " reduced JPEG decode enabled (budget_upscale=" << decode_upscale << ")";
-    }
-    return decode_upscale;
+    return cv_input::parse_image_decode_upscale(params, tag);
 }
 
 /*** letterbox + /255 + RGB + NCHW, matching the GPU YOLO descriptor. */

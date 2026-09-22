@@ -8,3 +8,6 @@ device = "gpu"
 focal_length = 0.0
 # intrinsic fx fy cx cy
 intrinsic = [0.0, 0.0, 0.0, 0.0]
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"

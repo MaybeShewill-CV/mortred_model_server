@@ -44,13 +44,13 @@ template <typename INPUT, typename OUTPUT> StatusCode SuperPoint<INPUT, OUTPUT>:
         LOG(ERROR) << "superpoint input size " << _m_input_size_host << " must be a multiple of the cell size " << _m_cell_size;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    this->set_image_decode_hint(_m_input_size_host, 1.0f);
+    this->set_image_decode_hint(_m_input_size_host, jinq::models::cv_input::parse_image_decode_upscale(params, "superpoint"));
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
         .norm = {.scale = 1.0f / 255.0f},
         .color = jinq::models::backend::GpuPreprocessDescriptor::Color::GRAY,
         .pad_value = 114,
-        .output_dtype = jinq::models::backend::DType::F32,
+        .output_dtype = input_info.dtype,
         .output_nhwc = false,
     });
 

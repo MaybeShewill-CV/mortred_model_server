@@ -27,7 +27,6 @@ using jinq::common::StatusCode;
 using jinq::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode PPMatting<INPUT, OUTPUT>::on_init(const toml::table &params) {
-    (void)params;
     const auto &input_info = this->session().inputs().front();
     if (input_info.shape.size() != 4 || input_info.shape[1] != 3) {
         LOG(ERROR) << "unexpected ppmatting input shape: " << input_info.to_string() << ", expected [N,3,H,W] (nchw)";
@@ -43,13 +42,13 @@ template <typename INPUT, typename OUTPUT> StatusCode PPMatting<INPUT, OUTPUT>::
         LOG(ERROR) << "ppmatting model exposes no output tensor";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    this->set_image_decode_hint(_m_input_size_host, 1.0f);
+    this->set_image_decode_hint(_m_input_size_host, jinq::models::cv_input::parse_image_decode_upscale(params, "ppmatting"));
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
-        .norm = {.scale = 1.0f / 255.0f, .mean = {0.5f,0.5f,0.5f}, .std = {0.5f,0.5f,0.5f}},
+        .norm = {.scale = 1.0f / 255.0f, .mean = {0.5f, 0.5f, 0.5f}, .std = {0.5f, 0.5f, 0.5f}},
         .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
         .pad_value = 114,
-        .output_dtype = jinq::models::backend::DType::F32,
+        .output_dtype = input_info.dtype,
         .output_nhwc = false,
     });
 

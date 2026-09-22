@@ -10,3 +10,8 @@ input_names = ["input_tensor"]
 output_names = ["final_output"]
 precision_mode = 0
 power_mode = 0
+
+[BISENETV2.params]
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"

@@ -12,8 +12,11 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
+
+#include "toml/toml.hpp"
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -24,6 +27,7 @@
 #include "common/base64.h"
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
+#include "common/stage_timing.h"
 #include "common/status_code.h"
 #include "models/backend/gpu_jpeg_decoder.h"
 #include "models/model_io_define.h"
@@ -48,6 +52,24 @@ struct ImageInputLimits {
     // decode fork policy lives in BackendCvModel (image_decode_backend param:
     // cpu | auto | gpu); this struct only carries W4 reduction facts.
 };
+
+/*** Strict (1.0) unless image_decode_mode=budget; optional upscale in (1, 2]. */
+inline float parse_image_decode_upscale(const toml::table &params, const char *tag) {
+    float decode_upscale = 1.0f;
+    const auto decode_mode = params.contains("image_decode_mode") ? params["image_decode_mode"].value<std::string>()
+                                                                  : std::optional<std::string>{};
+    if (decode_mode.has_value() && *decode_mode == "budget") {
+        decode_upscale = 1.25f;
+        if (params.contains("image_decode_budget_upscale")) {
+            const auto configured = params["image_decode_budget_upscale"].value<double>();
+            if (configured.has_value() && *configured > 1.0 && *configured <= 2.0) {
+                decode_upscale = static_cast<float>(*configured);
+            }
+        }
+        LOG(INFO) << tag << " reduced JPEG decode enabled (budget_upscale=" << decode_upscale << ")";
+    }
+    return decode_upscale;
+}
 
 inline bool image_within_limits(const cv::Mat &image, const ImageInputLimits &limits, std::string *error) {
     if (image.empty()) {

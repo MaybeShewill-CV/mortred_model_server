@@ -54,13 +54,13 @@ template <typename INPUT, typename OUTPUT> StatusCode Dinov2<INPUT, OUTPUT>::on_
         }
         _m_default_pooling = value;
     }
-    this->set_image_decode_hint(_m_input_tensor_size, 1.0f);
+    this->set_image_decode_hint(_m_input_tensor_size, jinq::models::cv_input::parse_image_decode_upscale(params, "dinov2"));
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
-        .norm = {.scale = 1.0f / 255.0f, .mean = {0.48145466f,0.4578275f,0.40821073f}, .std = {0.26862954f,0.26130258f,0.27577711f}},
+        .norm = {.scale = 1.0f / 255.0f, .mean = {0.48145466f, 0.4578275f, 0.40821073f}, .std = {0.26862954f, 0.26130258f, 0.27577711f}},
         .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
         .pad_value = 114,
-        .output_dtype = jinq::models::backend::DType::F32,
+        .output_dtype = input_info.value.dtype,
         .output_nhwc = false,
     });
 

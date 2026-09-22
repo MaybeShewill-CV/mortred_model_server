@@ -7,3 +7,6 @@ threads = 4
 input_layout = "nhwc"
 precision_mode = 0
 power_mode = 0
+
+[REALESRGAN.params]
+image_decode_backend = "auto"

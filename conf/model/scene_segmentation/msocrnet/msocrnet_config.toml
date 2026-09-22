@@ -8,3 +8,6 @@ threads = 4
 
 [MSOCRNET.params]
 model_input_image_size = [1024, 2048]
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"

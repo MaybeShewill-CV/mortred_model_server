@@ -57,6 +57,10 @@ inline int align_up_16(int value) {
 } // namespace
 
 template <typename INPUT, typename OUTPUT> StatusCode EnlightenGan<INPUT, OUTPUT>::on_init(const toml::table &params) {
+    if (params.contains("model_input_image_size")) {
+        LOG(ERROR) << "enlighten gan uses dynamic align-to-16 input; model_input_image_size is invalid";
+        return StatusCode::MODEL_INIT_FAILED;
+    }
     const auto &inputs = this->session().inputs();
     if (inputs.size() != 2 || this->session().outputs().size() != 1) {
         LOG(ERROR) << "unexpected enlighten gan io count, expected input_src/input_gray and output";
@@ -80,38 +84,14 @@ template <typename INPUT, typename OUTPUT> StatusCode EnlightenGan<INPUT, OUTPUT
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    _m_input_dynamic = false;
-    _m_input_size_host = {};
-    const auto src_height = input_src_info->shape[2];
-    const auto src_width = input_src_info->shape[3];
-    if (src_height > 0 && src_width > 0) {
-        // fixed-shape session: every request runs at the declared input size
-        _m_input_size_host.height = static_cast<int>(src_height);
-        _m_input_size_host.width = static_cast<int>(src_width);
-    } else if (params.contains("model_input_image_size")) {
-        // dynamic session input (unset dims): fall back to the size declared
-        // in the model config, mirroring the msocrnet/yolov* handling
-        const toml::array *size = params["model_input_image_size"].as_array();
-        if (size != nullptr && size->size() == 2) {
-            _m_input_size_host.height = static_cast<int>((*size)[0].value_or<int64_t>(0));
-            _m_input_size_host.width = static_cast<int>((*size)[1].value_or<int64_t>(0));
-        }
-        if (_m_input_size_host.area() <= 0) {
-            LOG(ERROR) << "invalid params.model_input_image_size for enlighten gan";
-            return StatusCode::MODEL_INIT_FAILED;
-        }
-    } else {
-        // dynamic session input with no declared size: the input size follows
-        // each request in preprocess (aligned up to a multiple of 16)
-        _m_input_dynamic = true;
-    }
-    this->set_image_decode_hint(_m_input_size_host, 1.0f);
+    // output H/W is ceil(src/16)*16; empty decode hint keeps JPEG reduce off
+    this->set_image_decode_hint(cv::Size(), 1.0f);
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::ALIGN_TO_MULTIPLE,
-        .norm = {.scale = 1.0f / 255.0f, .mean = {0.5f,0.5f,0.5f}, .std = {0.5f,0.5f,0.5f}},
+        .norm = {.scale = 1.0f / 255.0f, .mean = {0.5f, 0.5f, 0.5f}, .std = {0.5f, 0.5f, 0.5f}},
         .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
         .pad_value = 114,
-        .output_dtype = jinq::models::backend::DType::F32,
+        .output_dtype = input_src_info->dtype,
         .output_nhwc = false,
         .align_multiple = 16,
         .dynamic_size = true,
@@ -127,13 +107,7 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> EnlightenGan
         return {};
     }
 
-    // fixed-shape sessions always run at the declared size; only sessions
-    // without one follow the request, padded up to a multiple of 16
-    cv::Size network_size = _m_input_size_host;
-    if (_m_input_dynamic) {
-        network_size.height = align_up_16(input_image.size().height);
-        network_size.width = align_up_16(input_image.size().width);
-    }
+    const cv::Size network_size(align_up_16(input_image.size().width), align_up_16(input_image.size().height));
     if (network_size.area() <= 0) {
         LOG(ERROR) << "enlighten gan input size unresolved: " << network_size;
         return {};

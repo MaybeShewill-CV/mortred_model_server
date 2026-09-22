@@ -17,3 +17,6 @@ model_class_nums=80
 model_score_threshold=0.3
 model_nms_threshold=0.35
 model_keep_top_k=250
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"

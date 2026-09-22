@@ -40,13 +40,13 @@ template <typename INPUT, typename OUTPUT> StatusCode AttentiveGanDerain<INPUT, 
         LOG(ERROR) << "invalid attentive gan input size: " << _m_input_size_host;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    this->set_image_decode_hint(_m_input_size_host, 1.0f);
+    this->set_image_decode_hint(_m_input_size_host, jinq::models::cv_input::parse_image_decode_upscale(params, "attentivegan"));
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
-        .norm = {.scale = 1.0f / 127.5f, .mean = {1.0f,1.0f,1.0f}},
+        .norm = {.scale = 1.0f / 127.5f, .mean = {1.0f, 1.0f, 1.0f}},
         .color = jinq::models::backend::GpuPreprocessDescriptor::Color::BGR,
         .pad_value = 114,
-        .output_dtype = jinq::models::backend::DType::F32,
+        .output_dtype = inputs.front().dtype,
         .output_nhwc = true,
     });
 

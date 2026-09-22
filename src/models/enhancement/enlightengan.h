@@ -36,11 +36,6 @@ template <typename INPUT, typename OUTPUT> class EnlightenGan : public jinq::mod
                            const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     StatusCode on_init(const toml::table &params) override;
-
-    /*** declared network input size (fixed-shape sessions); the per-request
-     * size is resolved in preprocess only when _m_input_dynamic is set */
-    cv::Size _m_input_size_host;
-    bool _m_input_dynamic = false;
 };
 
 } // namespace enhancement

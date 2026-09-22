@@ -66,17 +66,16 @@ template <typename INPUT, typename OUTPUT> StatusCode MobileNetv2<INPUT, OUTPUT>
             }
         }
     }
-    this->set_image_decode_hint(_m_input_tensor_size, 1.0f);
+    this->set_image_decode_hint(cv::Size(256, 256), jinq::models::cv_input::parse_image_decode_upscale(params, "mobilenetv2"));
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::CENTER_CROP,
         // CPU path subtracts caffe-style 0-255 means after to_float, no /255:
         // keep the same units (scale 1) so both paths are numerically equal
-        .norm = {.scale = 1.0f, .mean = {123.68f,116.78f,103.94f}, .std = {58.395f,57.12f,57.375f}},
+        .norm = {.scale = 1.0f, .mean = {123.68f, 116.78f, 103.94f}, .std = {58.395f, 57.12f, 57.375f}},
         .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
         .pad_value = 114,
-        .output_dtype = jinq::models::backend::DType::F32,
+        .output_dtype = input_info.value.dtype,
         .output_nhwc = true,
-        // CPU: resize(256,256) first, then center-crop to the network size
         .pre_crop_size = cv::Size(256, 256),
     });
 

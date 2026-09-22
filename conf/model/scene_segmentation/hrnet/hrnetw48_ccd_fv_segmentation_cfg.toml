@@ -3,3 +3,8 @@
 type = "tensorrt"
 model_file_path = "../weights/scene_segmentation/hrnet/hrnetw48_ccd_fp32.engine"
 device = "gpu"
+
+[HRNET_SEGMENTATION.params]
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"

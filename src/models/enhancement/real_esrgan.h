@@ -36,8 +36,6 @@ template <typename INPUT, typename OUTPUT> class RealEsrGan : public jinq::model
                            const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     StatusCode on_init(const toml::table &params) override;
-
-    cv::Size _m_input_size_host;
 };
 
 } // namespace enhancement

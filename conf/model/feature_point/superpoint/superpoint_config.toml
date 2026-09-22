@@ -13,3 +13,6 @@ model_score_threshold = 0.015
 model_nms_threshold = 4.0
 max_track_length = 5
 nn_dis_thresh = 0.02
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"

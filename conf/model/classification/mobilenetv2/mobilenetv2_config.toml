@@ -10,4 +10,7 @@ power_mode = 0
 
 [MOBILENETV2.params]
 model_input_image_size = [224, 224]
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"
 class_name_file = "../conf/model/classification/imagenet_classes.txt"

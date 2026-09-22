@@ -15,3 +15,6 @@ power_mode = 0
 # Portrait matting commonly receives full-size phone photos; the golden input
 # is 3744x5616 (21.0 MP), above the repository-wide 16 MP DoS default.
 max_image_pixels = 25165824
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"

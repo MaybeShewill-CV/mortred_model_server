@@ -10,4 +10,4 @@ precision_mode = 0
 power_mode = 0
 
 [ENLIGHTENGAN.params]
-model_input_image_size = [256, 256]
+image_decode_backend = "auto"

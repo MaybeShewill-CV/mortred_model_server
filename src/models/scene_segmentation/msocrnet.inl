@@ -56,6 +56,15 @@ template <typename INPUT, typename OUTPUT> StatusCode MsOcrNet<INPUT, OUTPUT>::o
                       "params.model_input_image_size)";
         return StatusCode::MODEL_INIT_FAILED;
     }
+    this->set_image_decode_hint(_m_input_size_host, jinq::models::cv_input::parse_image_decode_upscale(params, "msocrnet"));
+    this->set_gpu_preprocess({
+        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
+        .norm = {.scale = 1.0f / 255.0f, .mean = {0.5f, 0.5f, 0.5f}, .std = {0.5f, 0.5f, 0.5f}},
+        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
+        .pad_value = 114,
+        .output_dtype = input_info.dtype,
+        .output_nhwc = _m_input_is_nhwc,
+    });
     return StatusCode::OK;
 }
 

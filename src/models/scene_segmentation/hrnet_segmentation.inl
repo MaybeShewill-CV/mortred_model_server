@@ -26,7 +26,6 @@ using jinq::common::StatusCode;
 using jinq::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode HRNetSegmentation<INPUT, OUTPUT>::on_init(const toml::table &params) {
-    (void)params;
     const auto &input_info = this->session().inputs().front();
     // dynamic batch (shape[0] == -1) is fine: only the spatial dims must be
     // concrete; a batch-profile engine reports input_info.dynamic on dim0 only
@@ -41,13 +40,13 @@ template <typename INPUT, typename OUTPUT> StatusCode HRNetSegmentation<INPUT, O
         LOG(ERROR) << "unexpected hrnet argmax output dtype: " << output_info.to_string();
         return StatusCode::MODEL_INIT_FAILED;
     }
-    this->set_image_decode_hint(_m_input_size_host, 1.0f);
+    this->set_image_decode_hint(_m_input_size_host, jinq::models::cv_input::parse_image_decode_upscale(params, "hrnet"));
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
-        .norm = {.scale = 1.0f / 255.0f, .mean = {0.5f,0.5f,0.5f}, .std = {0.5f,0.5f,0.5f}},
+        .norm = {.scale = 1.0f / 255.0f, .mean = {0.5f, 0.5f, 0.5f}, .std = {0.5f, 0.5f, 0.5f}},
         .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
         .pad_value = 114,
-        .output_dtype = jinq::models::backend::DType::F32,
+        .output_dtype = input_info.dtype,
         .output_nhwc = false,
     });
 

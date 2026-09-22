@@ -9,3 +9,6 @@ focal_length = 1000.0
 # intrinsic fx fy cx cy
 intrinsic = [1000.0, 1000.0, 256.0, 544.0]
 canonical_size = [512, 960]
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"

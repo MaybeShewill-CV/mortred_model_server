@@ -11,3 +11,6 @@ power_mode = 0
 [PP_MATTING.params]
 # Keep the same input policy as MODNet for full-size portrait photographs.
 max_image_pixels = 25165824
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"
