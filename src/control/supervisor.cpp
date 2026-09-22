@@ -417,6 +417,17 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err,
             if (inject_workers) {
                 ::setenv("MORTRED_WORKER_NUMS", worker_str.c_str(), 1);
             }
+            // machine-calibrated decode fork thresholds from the pack's [pack]
+            // table override model-config/library defaults (resolution: env >
+            // [params] > built-in)
+            if (_cfg.occupancy.cpu_decode_us_per_kb > 0.0) {
+                ::setenv("MORTRED_CPU_DECODE_US_PER_KB",
+                         std::to_string(_cfg.occupancy.cpu_decode_us_per_kb).c_str(), 1);
+            }
+            if (_cfg.occupancy.decode_gpu_min_cpu_ms > 0.0) {
+                ::setenv("MORTRED_DECODE_GPU_MIN_CPU_MS",
+                         std::to_string(_cfg.occupancy.decode_gpu_min_cpu_ms).c_str(), 1);
+            }
             if (!model_config_override.empty()) {
                 ::setenv("MORTRED_MODEL_CONFIG_FILE", model_config_override.c_str(), 1);
             }

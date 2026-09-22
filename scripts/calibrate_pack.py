@@ -178,6 +178,61 @@ def log_looks_oom(text: str) -> bool:
     return any(m in lower for m in OOM_MARKERS)
 
 
+def measure_decode_slope(
+    root: Path, binary: Path, entry: dict, image: Path, auth_token: str
+) -> tuple[float | None, str]:
+    """CPU decode cost slope (us per KB) measured ON the production path:
+    spawn a w=1 instance, enable the stage-trace flag, drive a few json
+    requests and take the median of the server's decode= stage (post-fork
+    that stage is pure libjpeg-turbo imdecode; base64 lives in envelope).
+    The flag's prior state is restored."""
+    import re as _re
+
+    model_id = entry["model_id"]
+    port = int(entry["port"])
+    uri = entry["uri"]
+    found = find_server_toml(root, model_id)
+    if found is None:
+        return None, "no conf/server mapping"
+    log_path = root / "logs" / ("calibrate-decode-slope.log")
+    flag = Path("/tmp/mortred_stage_timing")
+    had_flag = flag.exists()
+    proc = start_model(root, binary, model_id, found, 1, log_path, {}, auth_token)
+    try:
+        if not wait_http_ready("http://127.0.0.1:%d/ready" % port, 60.0, proc):
+            return None, "slope server not ready (see %s)" % log_path
+        if not had_flag:
+            flag.touch()
+        run_load(
+            LoadConfig(
+                url="http://127.0.0.1:%d%s" % (port, uri),
+                image_path=image,
+                concurrency=1,
+                duration_s=4.0,
+                warmup_s=1.0,
+                token=auth_token,
+                progress=False,
+            )
+        )
+    finally:
+        if not had_flag and flag.exists():
+            flag.unlink()
+        stop_proc(proc)
+    vals = []
+    for m in _re.finditer(r"decode=([0-9]+\.[0-9]+)", log_path.read_text(errors="ignore")):
+        vals.append(float(m.group(1)))
+    if len(vals) < 5:
+        return None, "only %d stage_trace decode samples" % len(vals)
+    vals.sort()
+    median_ms = vals[len(vals) // 2]
+    kb = image.stat().st_size / 1024.0
+    return median_ms * 1000.0 / kb, "stage_trace median %.2fms over %d req, %.1fKB image" % (
+        median_ms,
+        len(vals),
+        kb,
+    )
+
+
 def pick_w_star(points: list[dict]) -> tuple[int, str]:
     """Last good worker_nums. OOM / start fail / flat RPS keep the previous w."""
     last_good: dict | None = None
@@ -240,6 +295,8 @@ def _fmt_toml_value(value: object) -> str:
         return "true" if value else "false"
     if isinstance(value, int) and not isinstance(value, bool):
         return str(value)
+    if isinstance(value, float):
+        return repr(round(value, 3))
     text = str(value)
     return '"%s"' % text.replace("\\", "\\\\").replace('"', '\\"')
 
@@ -388,6 +445,14 @@ def occupancy_fields_from_report(
         total = _ceil_positive_mib(gpu.get("memory_total_mib"))
         if total is not None:
             pack_fields["gpu_memory_total_mib"] = total
+    dr = report.get("decode_routing")
+    if isinstance(dr, dict):
+        slope = dr.get("cpu_decode_us_per_kb")
+        if isinstance(slope, (int, float)) and 0.5 <= float(slope) <= 100.0:
+            pack_fields["cpu_decode_us_per_kb"] = round(float(slope), 2)
+        crossover = dr.get("decode_gpu_min_cpu_ms")
+        if isinstance(crossover, (int, float)) and 0.0 <= float(crossover) <= 1000.0:
+            pack_fields["decode_gpu_min_cpu_ms"] = round(float(crossover), 1)
     return id_fields, pack_fields
 
 
@@ -730,6 +795,47 @@ def calibrate(
         any(p.get("started") for p in row.get("points") or [])
         for row in report["models"]
     )
+
+    # machine-level decode fork thresholds: the CPU slope is measured on the
+    # production path via the first workable model; the crossover follows the
+    # busiest model's calibrated worker depth (empirical ~1ms per worker)
+    report["decode_routing"] = None
+    if any_started:
+        slope_model = next(
+            (
+                row
+                for row in report["models"]
+                if any(p.get("started") for p in row.get("points") or [])
+                and row.get("image")
+            ),
+            None,
+        )
+        if slope_model is not None:
+            entry = catalog_entry(root, slope_model["id"])
+            slope_us_per_kb, basis = measure_decode_slope(
+                root, binary, entry, root / slope_model["image"], auth_token
+            )
+            busiest_w = max(
+                (int(r.get("suggested_worker_nums") or 1) for r in report["models"]),
+                default=1,
+            )
+            report["decode_routing"] = {
+                "cpu_decode_us_per_kb": None if slope_us_per_kb is None else round(slope_us_per_kb, 2),
+                "decode_gpu_min_cpu_ms": float(max(2, busiest_w)),
+                "basis": basis,
+                "busiest_worker_nums": busiest_w,
+            }
+            print(
+                "== decode routing: slope=%s us/KB (%s), crossover=%.1fms (busiest w=%d)"
+                % (
+                    slope_us_per_kb,
+                    basis,
+                    float(max(2, busiest_w)),
+                    busiest_w,
+                ),
+                flush=True,
+            )
+
     if skip_joint or not any_started:
         return report
 

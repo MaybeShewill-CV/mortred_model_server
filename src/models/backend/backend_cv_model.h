@@ -344,12 +344,21 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                 }
             }
         }
+        // resolution: supervisor env (pack-calibrated) > model [params] > default
         _m_cpu_us_per_kb = 11.0;
         if (_m_params.contains("cpu_decode_us_per_kb")) {
             const auto v = _m_params["cpu_decode_us_per_kb"].value<double>();
             if (v.has_value() && *v > 0.5 && *v < 100.0) {
                 _m_cpu_us_per_kb = static_cast<float>(*v);
             }
+        }
+        if (const char* env = std::getenv("MORTRED_CPU_DECODE_US_PER_KB"); env != nullptr && *env != ' ') {
+            try {
+                const double v = std::stod(env);
+                if (v > 0.5 && v < 100.0) {
+                    _m_cpu_us_per_kb = static_cast<float>(v);
+                }
+            } catch (...) {}
         }
         // throughput-oriented default: matches the measured 8-worker crossover
         // (calibrate writes the machine-specific value over this)
@@ -359,6 +368,14 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
             if (v.has_value() && *v >= 0.0 && *v < 1000.0) {
                 _m_gpu_min_cpu_ms = static_cast<float>(*v);
             }
+        }
+        if (const char* env = std::getenv("MORTRED_DECODE_GPU_MIN_CPU_MS"); env != nullptr && *env != ' ') {
+            try {
+                const double v = std::stod(env);
+                if (v >= 0.0 && v < 1000.0) {
+                    _m_gpu_min_cpu_ms = static_cast<float>(v);
+                }
+            } catch (...) {}
         }
 
         // engine eligibility: everything that cannot vary per request
