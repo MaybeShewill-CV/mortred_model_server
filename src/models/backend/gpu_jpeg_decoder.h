@@ -10,9 +10,8 @@
 
 #include <atomic>
 #include <cstddef>
+#include <memory>
 #include <string>
-
-#include <opencv2/core.hpp>
 
 #include "models/backend/gpu_preprocess_desc.h"
 
@@ -21,11 +20,9 @@ namespace models {
 namespace backend {
 namespace gpu_jpeg {
 
-/*** Backend identifiers for observability (three-layer visibility). */
+/*** Decode backends that actually run. nvJPEG was removed with the old ladder. */
 enum Backend {
     JPEGGPU = 0,
-    NVJPEG_HW,
-    NVJPEG_SM,
     CPU_REDUCED,
     CPU_FULL,
     FALLBACK,
@@ -36,65 +33,52 @@ enum Backend {
  * Incremented by the decode layer on every request. */
 extern std::atomic<uint64_t> g_request_count[BACKEND_COUNT];
 
-/*** Prometheus text for /metrics: per-backend decode counters plus the
- * ladder selection and race state as info gauges. Answers "is the jpeggpu
- * path actually being taken" without reading logs. */
+/*** Prometheus text for /metrics. */
 std::string render_decode_metrics();
 
-/*** Name of the currently selected backend (set once at probe time). */
-const char* selected_backend_name();
-
-/*** device-resident decode result: JPEG decoded to YCbCr planes in GPU
- * memory. Only consumed internally by decode_and_preprocess (the zero-copy
- * pipeline); no public D2H fetch anymore - the CPU fork path uses
- * cv::imdecode directly.
- *
- * Strides: jpeggpu writes rows at an 8-byte-aligned pitch (its block
- * writer stores full uint2 row segments), so plane memory is
- * stride*y_h bytes with the tail columns beyond y_w/cb_w holding
- * decoded MCU padding that no sampler should read. Geometry always
- * uses the true widths; only memory addressing uses the strides. */
-struct DevicePlanes {
-    uint8_t* dev_y = nullptr;
-    uint8_t* dev_cb = nullptr;
-    uint8_t* dev_cr = nullptr;
-    int y_w = 0, y_h = 0;
-    int cb_w = 0, cb_h = 0;
-    size_t y_stride = 0;   // luma row pitch (align8(y_w))
-    size_t cb_stride = 0;  // chroma row pitch (align8(cb_w); cr shares it)
-    bool valid = false;
-};
-/*** GPU zero-copy pipeline: decode JPEG + letterbox + color convert + fp16 NCHW
- * all on GPU in one pass. Returns a device pointer to the fp16 NCHW tensor that
- * can be passed directly to TRT's input tensor address — no D2H, no CPU
- * preprocess, no H2D. The GPU work is submitted asynchronously; the caller
- * only pays CPU API submission time. */
+/*** Device tensor produced by one worker's slot. The pointers alias that
+ * slot's buffers. They stay valid until this same slot decodes again or
+ * closes, which the worker lease only allows after the consumer stream has
+ * synchronized (TrtSession::run does that before returning). */
 struct GpuPipelineResult {
-    void* device_input = nullptr;  // model input tensor on device (fp16/f32, NCHW/NHWC)
-    void* device_gray = nullptr;   // optional secondary grayscale output (EnlightenGAN)
+    void* device_input = nullptr;
+    void* device_gray = nullptr;
     int out_w = 0, out_h = 0;
-    int src_w = 0, src_h = 0;      // original image dims (for postprocess context)
-    void* ready_event = nullptr;   // cudaEvent_t recorded on the decode stream after
-                                   // the preprocess kernel; consumers on another stream
-                                   // MUST wait on it before reading device_input/gray
-    size_t device_input_bytes = 0; // pool bookkeeping for release_pipeline_buffers
-    size_t device_gray_bytes = 0;
+    int src_w = 0, src_h = 0;
+    void* ready_event = nullptr;
     bool valid = false;
 };
 
-/*** Return the pipeline buffers to the internal pool. Call ONLY after the
- * consumer's stream has finished reading them (TrtSession::run synchronizes
- * before returning, so calling right after session run is correct). */
-void release_pipeline_buffers(const GpuPipelineResult& r);
-/*** Generic GPU zero-copy pipeline: JPEG decode + model-declared preprocessing,
- * all on device. Accepts any model's GpuPreprocessDescriptor — no hardcoded
- * letterbox assumptions. Supports all Resize modes, color spaces, normalization
- * schemes, output dtypes/layouts, rotation, dynamic size, and dual output. */
-GpuPipelineResult decode_and_preprocess(
-    const unsigned char* data, size_t size,
-    int network_w, int network_h,
-    const GpuPreprocessDescriptor& desc,
-    std::string* err);
+/*** One jpeggpu decoder, stream, event and set of buffers. Owned by a single
+ * worker. The worker lease is the exclusion: run() does not overlap on the
+ * same slot, and the slot is reused only after the consumer synchronizes.
+ * No mutex. Not safe to share across workers. */
+class GpuDecodeSlot {
+  public:
+    GpuDecodeSlot();
+    ~GpuDecodeSlot();
+
+    GpuDecodeSlot(const GpuDecodeSlot&) = delete;
+    GpuDecodeSlot& operator=(const GpuDecodeSlot&) = delete;
+    GpuDecodeSlot(GpuDecodeSlot&&) = delete;
+    GpuDecodeSlot& operator=(GpuDecodeSlot&&) = delete;
+
+    /*** Probe jpeggpu on a temporary decoder, then keep a private one.
+     * Safe to call once from the worker's init thread. */
+    bool open();
+    void close();
+    bool ready() const;
+
+    GpuPipelineResult decode_and_preprocess(
+        const unsigned char* data, size_t size,
+        int network_w, int network_h,
+        const GpuPreprocessDescriptor& desc,
+        std::string* err);
+
+  private:
+    struct State;
+    std::unique_ptr<State> state_;
+};
 
 }  // namespace gpu_jpeg
 }  // namespace backend

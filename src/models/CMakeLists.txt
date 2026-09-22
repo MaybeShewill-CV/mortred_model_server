@@ -64,12 +64,13 @@ if(MORTRED_BUILD_PROFILE STREQUAL "cpu")
         ${OpenCV_LIBS}
         glog::glog
     )
-    # cpu profile: the nvjpeg decoder is a stub that reports unavailable, so
-    # the decode selector always lands on cv::imdecode
+    # cpu profile: same translation unit, without MORTRED_HAS_JPEGGPU.
+    # open() fails and /metrics reports not-built, so every request stays
+    # on cv::imdecode. CUDA and jpeggpu headers stay inside that macro.
     target_sources(
         models
         PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}/backend/gpu_jpeg_decoder_stub.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/backend/gpu_jpeg_decoder.cpp
         ${CMAKE_CURRENT_LIST_DIR}/backend/gpu_jpeg_decoder.h
     )
 else()
@@ -112,20 +113,19 @@ else()
         vendored::nvinfer_plugin
         vendored::nvonnxparser
         CUDA::cudart
-        CUDA::nvjpeg
         ${OpenCV_LIBS}
         glog::glog
     )
     # jpeggpu: optional Huffman self-synchronizing parallel GPU decoder.
     # Vendored into 3rd_party/ (libjpeggpu.a + include/jpeggpu/). When absent,
-    # the backend ladder skips it and falls through to nvjpeg.
+    # slot open fails and requests stay on cv::imdecode.
     if(EXISTS "${PROJECT_ROOT_DIR}/3rd_party/libs/libjpeggpu.a")
         target_compile_definitions(models PRIVATE MORTRED_HAS_JPEGGPU=1)
         target_include_directories(models SYSTEM PRIVATE "${PROJECT_ROOT_DIR}/3rd_party/include")
         target_link_libraries(models PRIVATE "${PROJECT_ROOT_DIR}/3rd_party/libs/libjpeggpu.a")
-        message(STATUS "jpeggpu: found, GPU decode ladder extended (jpeggpu -> nvjpeg)")
+        message(STATUS "jpeggpu: found")
     else()
-        message(STATUS "jpeggpu: not found, nvjpeg-only ladder")
+        message(STATUS "jpeggpu: not found, GPU JPEG decode disabled")
     endif()
     # GPU zero-copy: CUDA letterbox kernel (YCbCr device planes → fp16 NCHW device)
     if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/backend/gpu_preprocess.cu")

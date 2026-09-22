@@ -406,6 +406,15 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                 (static_dims_ok || dynamic_ok) &&
                 inputs_wired;
         }
+        // One private jpeggpu slot per worker. cpu mode never allocates one.
+        // A failed open disables only this worker's GPU path.
+        if (_m_gpu_path_eligible && _m_decode_mode != DecodeMode::CPU) {
+            if (!_m_gpu_slot.open()) {
+                LOG(WARNING) << "jpeggpu decoder open failed for [" << _m_section_name
+                             << "], gpu decode path disabled";
+                _m_gpu_path_eligible = false;
+            }
+        }
         LOG(INFO) << (std::string("decode fork [") + _m_section_name + "]: mode=" +
                       (_m_decode_mode == DecodeMode::CPU ? "cpu" : _m_decode_mode == DecodeMode::GPU ? "gpu" : "auto") +
                       " gpu_path_eligible=" + (_m_gpu_path_eligible ? "yes" : "no") +
@@ -691,7 +700,7 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                     const int net_h = _gpu_preprocess_desc->output_nhwc ? dim_at(1) : dim_at(2);
                     const int net_w = _gpu_preprocess_desc->output_nhwc ? dim_at(2) : dim_at(3);
                     std::string gpu_err;
-                    auto gpu_result = backend::gpu_jpeg::decode_and_preprocess(
+                    auto gpu_result = _m_gpu_slot.decode_and_preprocess(
                         reinterpret_cast<const unsigned char*>(input.image.data.data()),
                         input.image.data.size(), net_w > 0 ? net_w : 0, net_h > 0 ? net_h : 0,
                         *_gpu_preprocess_desc, &gpu_err);
@@ -730,10 +739,9 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                         std::vector<backend::NamedTensor> outputs;
                         const auto run_status = _m_session->run(gpu_inputs, outputs);
                         jinq::common::stage_timing::mark("sess");
-                        // session->run synchronizes before returning, so the
-                        // input buffers are fully consumed here — back to the
-                        // pool (covers both the ok and the fallback branch)
-                        backend::gpu_jpeg::release_pipeline_buffers(gpu_result);
+                        // session->run synchronizes before returning, so this
+                        // worker's slot buffers are idle and may be reused by
+                        // the next request that checks this worker out.
                         if (run_status != StatusCode::OK) {
                             // a rejected zero-copy shape must not fail the
                             // request: rerun through the normal path
@@ -774,6 +782,7 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
     float _m_cpu_us_per_kb = 11.0f;
     float _m_gpu_min_cpu_ms = 8.0f;
     bool _m_gpu_path_eligible = false;
+    gpu_jpeg::GpuDecodeSlot _m_gpu_slot;
     backend::BackendConfig _m_backend_config;
     std::unique_ptr<backend::InferenceSession> _m_session;
     toml::table _m_model_section;
