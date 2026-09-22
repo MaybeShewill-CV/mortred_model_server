@@ -28,7 +28,11 @@ A quick overview and examples for both serving and model benchmarking are provid
 
 You're welcomed to ask questions and help me to make it better!
 
-All models and detectors can be downloaded from my [Hugging Face Page](https://huggingface.co/MaybeShewill-CV/mortred_model_server).
+Weights: `python3 scripts/fetch_weights.py` from
+[Hugging Face](https://huggingface.co/MaybeShewill-CV/mortred_model_server).
+HF is the ONNX interchange store (some `.mnn` copies remain during cutover).
+Product configs stay `mnn` / `tensorrt`; build engines on this GPU with
+`mortredctl prepare`. Per-id contract: `conf/onnx_sources.json`.
 
 # `Contents of this document`
 

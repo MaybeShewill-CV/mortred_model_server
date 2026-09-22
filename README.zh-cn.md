@@ -18,7 +18,10 @@
 
 欢迎你反馈任何你发现的bug，本人还是一个c with struct 弱鸡 :upside_down_face:
 
-模型文件可以访问我的 [Hugging Face Page](https://huggingface.co/MaybeShewill-CV/mortred_model_server)
+权重用 `python3 scripts/fetch_weights.py` 从
+[Hugging Face](https://huggingface.co/MaybeShewill-CV/mortred_model_server) 拉取。
+HF 是 ONNX 交换格式仓库（切换期间仍有部分 MNN）。产品 conf 保持 `mnn` /
+`tensorrt`；engine 须本机 `mortredctl prepare`。合同见 `conf/onnx_sources.json`。
 
 整个项目的简要架构图如下
 

@@ -47,6 +47,26 @@ out-of-box path:
 Supported path: convert on the target machine for the current pack
 (`mortredctl prepare`, deployment §10). Zoo-wide auto-build stays opt-in.
 
+## Weight interchange (Hugging Face)
+
+Hugging Face (`MaybeShewill-CV/mortred_model_server`) is the **interchange**
+store, not a runtime-engine store. The long-term artifact is **ONNX**. Product
+`conf/model/**/*.toml` stay `type=mnn` or `type=tensorrt` (CI overlays such as
+`conf/ci/yolov8_onnx_hosted.toml` are the exception).
+
+Unsupported as a product path:
+
+- Treating a downloaded `.engine` as portable across GPU / TensorRT majors
+- Switching product tomls to `type=onnx` “because HF only has ONNX”
+- Reverse-engineering ONNX from `.mnn` / `.model` / `.engine`
+- Deleting CPU-profile `.mnn` files from HF before a local `convert_mnn` path
+  can materialize the paths those tomls already name
+
+Source of truth for per-id ONNX / contract / license: `conf/onnx_sources.json`.
+Fetch still uses `conf/weights_manifest.json`. During the cutover, HF still
+holds some `.mnn` / `.model` files; those are leftover runtime copies, not the
+target layout.
+
 ## cpu profile
 
 | Supported | Not supported on cpu |
@@ -67,4 +87,5 @@ Supported path: convert on the target machine for the current pack
 - **RTDETR**：脚手架，未进 HTTP catalog，勿当已上线检测器。
 - **GPU**：CUDA 12.x + **TensorRT 10.x only**（8/9 不支持）。
 - **Engine**：须在本机本卡用当前 TRT **重建**；禁止跨机拷贝当开箱路径。
+- **HF 权重**：长期只发 ONNX；产品 toml 不改成 `type=onnx`；禁止从 MNN/engine 反推。
 - **cpu profile**：无 TRT；`tensorrt` 配置会失败。

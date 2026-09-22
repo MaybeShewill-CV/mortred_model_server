@@ -122,7 +122,18 @@ run via ctest.
 Workflow `concurrency` includes `github.event_name` so a push to `main` does
 not cancel a running schedule.
 
+## ONNX cutover freeze (P0)
 
+The Hugging Face ONNX-as-interchange work **must not** silently refresh
+goldens. Source of truth for the hosted set remains
+`conf/ci_hosted_golden.json` (today: MobileNetV2 MNN, NanoDet MNN, YOLOv8 ONNX
+overlay, DBNet MNN, SuperPoint MNN, BiseNetV2 MNN). GPU smoke-8 stays the
+list in that file / `MORTRED_GPU_SMOKE_FILTER`.
+
+P1 only uploads existing ONNX and updates `conf/weights_manifest.json`. It
+does not change `test/golden/` or hosted cases. A later P2 overlay that
+cannot match these baselines must update golden **in the same PR** with a
+reason; “we exported a new ONNX” is not enough.
 
 ## Contract tiers (T0 / T1 / T2)
 

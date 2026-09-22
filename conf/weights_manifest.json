@@ -548,8 +548,8 @@
     },
     {
       "path": "weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.onnx",
-      "size": 390839536,
-      "sha256": "a11124f7dd06253752a40e22e32c8815e39eb1e67f8a04cd22ce67bdfd5fb19a",
+      "size": 390840520,
+      "sha256": "203b107304d3bf91b6b710d2f7f2ec84a82309b5e5c2dc552a6d6ef3bb0e5fb7",
       "hf_path": "mono_depth_estimation/depth_anything/depth_anything_vitb14.onnx",
       "on_hf": false,
       "profiles": [
@@ -568,8 +568,8 @@
     },
     {
       "path": "weights/mono_depth_estimation/depth_anything/depth_anything_vitl14.onnx",
-      "size": 1340387697,
-      "sha256": "4fa8c21385454406f1e2f12add116eadf8df18f8509de151a9213d826d5ceef2",
+      "size": 1340389545,
+      "sha256": "c78358caa87856c4da216e322a611abb7fc05be66e36db598e2e9177922cce7e",
       "hf_path": "mono_depth_estimation/depth_anything/depth_anything_vitl14.onnx",
       "on_hf": false,
       "profiles": [
@@ -1292,8 +1292,8 @@
     },
     {
       "path": "weights/scene_segmentation/hrnet/hrnetw48_ccd.onnx",
-      "size": 280747508,
-      "sha256": "98a9eaf66c91ffbaa52a85c33270a3b58e1c0847bcdc9c3c03c8cbb16df10436",
+      "size": 280747518,
+      "sha256": "9754829bf58bf6d80f6fac33d9db06d5dfacc278615287812d27db3624b08300",
       "hf_path": "scene_segmentation/hrnet/hrnetw48_ccd.onnx",
       "on_hf": false,
       "profiles": [

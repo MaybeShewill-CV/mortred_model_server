@@ -435,6 +435,15 @@ set is active at a time).
 
 ### 9.1 Mechanism
 
+Hugging Face is the **ONNX interchange** repo
+(`MaybeShewill-CV/mortred_model_server`). Product configs keep `type=mnn` or
+`type=tensorrt`. GPU engines are built on this machine (`mortredctl prepare` /
+`convert_trt_engines.sh`). CPU `.mnn` files stay the serving format until a
+local convert path exists; do not switch product tomls to ONNX for performance.
+
+Per-id source, IO contract, and license notes: `conf/onnx_sources.json`.
+Bytes and sha256: `conf/weights_manifest.json`.
+
 - Manifest: `conf/weights_manifest.json` - per file `path / size / sha256 / hf_path / profiles`;
 - Downloads: Hugging Face, resumable, **skipped when present with matching sha256**;
 - Verification: `--check` verifies without downloading.
