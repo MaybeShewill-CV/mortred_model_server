@@ -2,6 +2,7 @@
 #define MORTRED_MODELS_OBJECT_DETECTION_DETECTOR_COMMON_H
 
 #include <cstring>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -10,7 +11,9 @@
 #include "common/cv_utils.h"
 #include "common/status_code.h"
 #include "models/backend/f32_output.h"
+#include "models/backend/gpu_preprocess_desc.h"
 #include "models/backend/inference_context.h"
+#include "models/backend/model_runtime.h"
 #include "models/backend/request_geometry.h"
 #include "models/object_detection/detection_params.h"
 
@@ -70,6 +73,63 @@ inline std::vector<T> finalize_detections(std::vector<T> detections, const Detec
     effective.nms_threshold = context.params->get_f32("nms_threshold", params.nms_threshold);
     effective.keep_top_k = context.params->get_i32("top_k", params.keep_top_k);
     return finalize_detections(std::move(detections), effective);
+}
+
+/***
+ * YOLO family JPEG DCT reduced-decode budget. Strict (1.0) unless
+ * image_decode_mode=budget; optional image_decode_budget_upscale in (1, 2].
+ */
+inline float parse_image_decode_upscale(const toml::table &params, const char *tag) {
+    float decode_upscale = 1.0f;
+    const auto decode_mode = params.contains("image_decode_mode") ? params["image_decode_mode"].value<std::string>()
+                                                                  : std::optional<std::string>{};
+    if (decode_mode.has_value() && *decode_mode == "budget") {
+        decode_upscale = 1.25f;
+        if (params.contains("image_decode_budget_upscale")) {
+            const auto configured = params["image_decode_budget_upscale"].value<double>();
+            if (configured.has_value() && *configured > 1.0 && *configured <= 2.0) {
+                decode_upscale = static_cast<float>(*configured);
+            }
+        }
+        LOG(INFO) << tag << " reduced JPEG decode enabled (budget_upscale=" << decode_upscale << ")";
+    }
+    return decode_upscale;
+}
+
+/*** letterbox + /255 + RGB + NCHW, matching the GPU YOLO descriptor. */
+inline backend::GpuPreprocessDescriptor yolo_letterbox_gpu_preprocess(backend::DType output_dtype) {
+    return {
+        .resize = backend::GpuPreprocessDescriptor::Resize::LETTERBOX,
+        .norm = {.scale = 1.0f / 255.0f},
+        .color = backend::GpuPreprocessDescriptor::Color::RGB,
+        .pad_value = 114,
+        .output_dtype = output_dtype,
+        .output_nhwc = false,
+    };
+}
+
+/*** CPU letterbox in the session input dtype; F32 ImagePipeline is the fallback. */
+inline std::vector<backend::NamedTensor> yolo_letterbox_nchw(const cv::Mat &input_image, const cv::Size &network,
+                                                             const backend::TensorInfo &input_info) {
+    auto fused = backend::letterbox_bgr_nchw(input_image, network, input_info.name, input_info.dtype);
+    if (fused.ok()) {
+        return {std::move(fused.value)};
+    }
+    LOG(ERROR) << fused.error;
+    if (input_info.dtype != backend::DType::F32) {
+        return {};
+    }
+    auto result = backend::ImagePipeline(input_image)
+                      .bgr_to_rgb()
+                      .letterbox(network)
+                      .to_float()
+                      .scale(1.0f / 255.0f)
+                      .nchw(input_info.name);
+    if (!result.ok()) {
+        LOG(ERROR) << result.error;
+        return {};
+    }
+    return {std::move(result.value)};
 }
 
 /***

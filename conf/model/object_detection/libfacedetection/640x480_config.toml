@@ -11,6 +11,9 @@ output_names = ["loc", "conf"]
 
 [LIBFACE.params]
 model_input_image_size = [640, 480]
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"
 model_score_threshold = 0.75
 model_nms_threshold = 0.35
 model_keep_top_k = 250

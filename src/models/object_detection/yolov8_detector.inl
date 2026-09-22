@@ -8,7 +8,6 @@
 #include "yolov8_detector.h"
 
 #include "glog/logging.h"
-#include "models/backend/gpu_jpeg_decoder.h"
 #include "models/backend/model_runtime.h"
 #include "models/object_detection/detector_common.h"
 #include "models/object_detection/yolo_decode.h"
@@ -49,62 +48,13 @@ template <typename INPUT, typename OUTPUT> StatusCode YoloV8Detector<INPUT, OUTP
         LOG(ERROR) << "invalid yolov8 input size: " << (param_error.empty() ? "configured size mismatches model input" : param_error);
         return StatusCode::MODEL_INIT_FAILED;
     }
-    // W4 JPEG DCT-domain reduced decode: strict by default (never
-    // upsamples); "budget" allows one notch of letterbox upsampling within
-    // image_decode_budget_upscale (an accuracy tradeoff owned by this
-    // model's config, gated by the golden test in docs/perf)
-    float decode_upscale = 1.0f;
-    const auto decode_mode = params.contains("image_decode_mode")
-                                 ? params["image_decode_mode"].value<std::string>()
-                                 : std::optional<std::string>{};
-    if (decode_mode.has_value() && *decode_mode == "budget") {
-        decode_upscale = 1.25f;
-        if (params.contains("image_decode_budget_upscale")) {
-            const auto configured = params["image_decode_budget_upscale"].value<double>();
-            if (configured.has_value() && *configured > 1.0 && *configured <= 2.0) {
-                decode_upscale = static_cast<float>(*configured);
-            }
-        }
-        LOG(INFO) << "yolov8 reduced JPEG decode enabled (budget_upscale=" << decode_upscale << ")";
-    }
-    // decode fork policy (image_decode_backend: cpu|auto|gpu) and its
-    // thresholds are resolved by the base class after on_init returns
-    this->set_image_decode_hint(_m_input_size_host, decode_upscale);
-    this->set_gpu_preprocess({
-        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::LETTERBOX,
-        .norm = {.scale = 1.0f / 255.0f},
-        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
-        .pad_value = 114,
-        .output_dtype = jinq::models::backend::DType::F16,
-        .output_nhwc = false,
-    });
+    this->set_image_decode_hint(_m_input_size_host, parse_image_decode_upscale(params, "yolov8"));
+    this->set_gpu_preprocess(yolo_letterbox_gpu_preprocess(input_info.dtype));
     return StatusCode::OK;
 }
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> YoloV8Detector<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
-    // letterbox / colour / normalize, emitted in the session's input dtype -
-    // fused single-pass kernel first (numerically identical for f32 engines,
-    // 5x less memory traffic), fluent chain kept as the f32 fallback
-    const auto &input_info = this->session().inputs().front();
-    auto fused = jinq::models::backend::letterbox_bgr_nchw(input_image, _m_input_size_host, input_info.name, input_info.dtype);
-    if (fused.ok()) {
-        return {std::move(fused.value)};
-    }
-    LOG(ERROR) << fused.error;
-    if (input_info.dtype != jinq::models::backend::DType::F32) {
-        return {};
-    }
-    auto result = jinq::models::backend::ImagePipeline(input_image)
-                      .bgr_to_rgb()
-                      .letterbox(_m_input_size_host)
-                      .to_float()
-                      .scale(1.0f / 255.0f)
-                      .nchw(input_info.name);
-    if (!result.ok()) {
-        LOG(ERROR) << result.error;
-        return {};
-    }
-    return {std::move(result.value)};
+    return yolo_letterbox_nchw(input_image, _m_input_size_host, this->session().inputs().front());
 }
 
 template <typename INPUT, typename OUTPUT>

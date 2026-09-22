@@ -393,8 +393,18 @@ struct GpuDecodeSlot::State {
 
         const int src_w = info.sizes_x[0];
         const int src_h = info.sizes_y[0];
-        if (src_w <= 0 || src_h <= 0 || network_w <= 0 || network_h <= 0) {
+        const bool network_blind =
+            desc.resize == GpuPreprocessDescriptor::Resize::ALIGN_TO_MULTIPLE ||
+            desc.resize == GpuPreprocessDescriptor::Resize::NONE;
+        if (src_w <= 0 || src_h <= 0) {
             return fail("invalid image or network size");
+        }
+        if (!network_blind && (network_w <= 0 || network_h <= 0)) {
+            return fail("invalid image or network size");
+        }
+        if (desc.resize == GpuPreprocessDescriptor::Resize::ALIGN_TO_MULTIPLE &&
+            desc.align_multiple <= 0) {
+            return fail("invalid align_multiple");
         }
         const Geometry geom = compute_geometry(src_w, src_h, network_w, network_h, desc);
         const int channels = desc.color == GpuPreprocessDescriptor::Color::GRAY ? 1 : 3;

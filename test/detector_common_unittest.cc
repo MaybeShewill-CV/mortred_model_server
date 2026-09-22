@@ -8,6 +8,7 @@
 #include "models/model_io_define.h"
 #include "models/object_detection/detector_common.h"
 #include "models/object_detection/yolo_decode.h"
+#include "toml/toml.hpp"
 
 using jinq::common::StatusCode;
 using jinq::models::backend::DType;
@@ -383,4 +384,18 @@ TEST(DetectorCommon, YoloV8SyntheticDecodeFiltersNetworkArea) {
     ASSERT_EQ(candidates.size(), 1u);
     EXPECT_FLOAT_EQ(candidates[0].bbox.width, 3.0f);
     EXPECT_FLOAT_EQ(candidates[0].bbox.height, 3.0f);
+}
+
+TEST(DetectorCommon, ImageDecodeUpscaleIsStrictUnlessBudget) {
+    const auto empty = std::move(toml::parse("")).table();
+    EXPECT_FLOAT_EQ(jinq::models::object_detection::parse_image_decode_upscale(empty, "test"), 1.0f);
+
+    const auto budget = std::move(toml::parse("image_decode_mode = \"budget\"")).table();
+    EXPECT_FLOAT_EQ(jinq::models::object_detection::parse_image_decode_upscale(budget, "test"), 1.25f);
+
+    const auto custom = std::move(toml::parse("image_decode_mode = \"budget\"\nimage_decode_budget_upscale = 1.5")).table();
+    EXPECT_FLOAT_EQ(jinq::models::object_detection::parse_image_decode_upscale(custom, "test"), 1.5f);
+
+    const auto out_of_range = std::move(toml::parse("image_decode_mode = \"budget\"\nimage_decode_budget_upscale = 3.0")).table();
+    EXPECT_FLOAT_EQ(jinq::models::object_detection::parse_image_decode_upscale(out_of_range, "test"), 1.25f);
 }

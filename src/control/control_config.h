@@ -65,10 +65,6 @@ struct PackOccupancy {
     int gpu_reserve_pct = 15;
     std::string gpu_name;
     int gpu_memory_total_mib = 0;  // 0 = unset; skip joint budget
-    // machine-calibrated decode fork thresholds from [pack] (calibrate
-    // --write-pack); 0 = unset, model-config/library defaults apply
-    double cpu_decode_us_per_kb = 0.0;
-    double decode_gpu_min_cpu_ms = 0.0;
 };
 
 /***
@@ -88,6 +84,7 @@ struct ServerPolicy {
     int gpu_mem_mib = 0;
     int gpu_mem_at_workers = 0;  // 0 = unset
     std::string gpu_mem_source;
+    std::string decode_auto;  // empty | cpu | gpu; pack vote for image_decode_backend=auto
 };
 
 struct ControlConfig {

@@ -111,7 +111,8 @@ TEST_F(ControlConfigTest, pack_parses_occupancy_stamp_and_policy) {
         out << "[pack]\noccupancy_policy = \"enforce\"\ngpu_reserve_pct = 20\n"
             << "gpu_name = \"NVIDIA GeForce RTX 3080\"\ngpu_memory_total_mib = 10240\n"
             << "[pack.YOLOV8]\nworker_nums = 2\ngpu_mem_mib = 1842\n"
-            << "gpu_mem_source = \"nvml_pid\"\ngpu_mem_at_workers = 2\n";
+            << "gpu_mem_source = \"nvml_pid\"\ngpu_mem_at_workers = 2\n"
+            << "decode_auto = \"gpu\"\n";
     }
     ASSERT_TRUE(ControlConfig::apply_pack(pack.string(), {"YOLOV8"},
                                           fs::temp_directory_path().string(), &cfg, &err))
@@ -126,6 +127,24 @@ TEST_F(ControlConfigTest, pack_parses_occupancy_stamp_and_policy) {
     EXPECT_EQ(yolo.gpu_mem_mib, 1842);
     EXPECT_EQ(yolo.gpu_mem_at_workers, 2);
     EXPECT_EQ(yolo.gpu_mem_source, "nvml_pid");
+    EXPECT_EQ(yolo.decode_auto, "gpu");
+    std::error_code ec;
+    fs::remove(pack, ec);
+}
+
+TEST_F(ControlConfigTest, pack_rejects_invalid_decode_auto) {
+    write("[supervisor]\n");
+    ControlConfig cfg;
+    std::string err;
+    ASSERT_TRUE(ControlConfig::load(path_.string(), &cfg, &err)) << err;
+    const fs::path pack = fs::temp_directory_path() / "mortred_pack_bad_decode.toml";
+    {
+        std::ofstream out(pack);
+        out << "[pack.YOLOV8]\nworker_nums = 1\ndecode_auto = \"auto\"\n";
+    }
+    EXPECT_FALSE(ControlConfig::apply_pack(pack.string(), {"YOLOV8"},
+                                           fs::temp_directory_path().string(), &cfg, &err));
+    EXPECT_NE(err.find("decode_auto"), std::string::npos) << err;
     std::error_code ec;
     fs::remove(pack, ec);
 }

@@ -44,14 +44,13 @@ template <typename INPUT, typename OUTPUT> StatusCode CenterFaceDetector<INPUT, 
         LOG(ERROR) << "unexpected centerface input shape: " << input_info.to_string() << ", expected dynamic [N,3,H,W] (nchw)";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    // dynamic input: empty network size keeps the strict decode reduce bound
-    // off; auto mode still lets the fallback path use GPU decode
+    // output H/W is ceil(src/32)*32; empty decode hint keeps JPEG reduce off
     this->set_image_decode_hint(cv::Size(), 1.0f);
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::ALIGN_TO_MULTIPLE,
         .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
         .pad_value = 114,
-        .output_dtype = jinq::models::backend::DType::F32,
+        .output_dtype = input_info.dtype,
         .output_nhwc = false,
         .align_multiple = 32,
         .dynamic_size = true

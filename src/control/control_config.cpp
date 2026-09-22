@@ -102,28 +102,6 @@ bool parse_pack_occupancy(const mini_toml::Table& kv, PackOccupancy* out, std::s
     if (!read_int(kv, "gpu_memory_total_mib", &out->gpu_memory_total_mib, 1, 1048576, ctx, err)) {
         return false;
     }
-    for (const auto& [key, target] : std::vector<std::pair<std::string, double*>>{
-             {"cpu_decode_us_per_kb", &out->cpu_decode_us_per_kb},
-             {"decode_gpu_min_cpu_ms", &out->decode_gpu_min_cpu_ms}}) {
-        if (kv.count(key) == 0) {
-            continue;
-        }
-        try {
-            const double v = std::stod(kv.at(key));
-            if (v < 0.5 || v > 1000.0) {
-                if (err != nullptr) {
-                    *err = ctx + ": '" + key + "' must be in [0.5, 1000], got '" + kv.at(key) + "'";
-                }
-                return false;
-            }
-            *target = v;
-        } catch (const std::exception&) {
-            if (err != nullptr) {
-                *err = ctx + ": '" + key + "' must be a number, got '" + kv.at(key) + "'";
-            }
-            return false;
-        }
-    }
     return true;
 }
 
@@ -354,6 +332,17 @@ bool ControlConfig::apply_pack(const std::string& pack_path, const std::vector<s
                 return false;
             }
             p.gpu_mem_source = src;
+        }
+        if (kv.count("decode_auto") != 0) {
+            const std::string v = lower_copy(kv.at("decode_auto"));
+            if (v != "cpu" && v != "gpu") {
+                if (err != nullptr) {
+                    *err = "[" + section + "]: decode_auto must be cpu|gpu, got '" +
+                           kv.at("decode_auto") + "'";
+                }
+                return false;
+            }
+            p.decode_auto = v;
         }
     }
     if (!any) {

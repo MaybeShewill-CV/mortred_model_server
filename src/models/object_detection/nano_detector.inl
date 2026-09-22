@@ -53,13 +53,13 @@ template <typename INPUT, typename OUTPUT> StatusCode NanoDetector<INPUT, OUTPUT
         LOG(ERROR) << "invalid nanodet input size: " << (param_error.empty() ? "configured size mismatches model input" : param_error);
         return StatusCode::MODEL_INIT_FAILED;
     }
-    this->set_image_decode_hint(_m_input_size_host, 1.0f);
+    this->set_image_decode_hint(_m_input_size_host, parse_image_decode_upscale(params, "nanodet"));
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
-        .norm = {.scale = 1.0f / 255.0f, .mean = {0.406f,0.456f,0.485f}, .std = {0.225f,0.224f,0.229f}},
+        .norm = {.scale = 1.0f / 255.0f, .mean = {0.406f, 0.456f, 0.485f}, .std = {0.225f, 0.224f, 0.229f}},
         .color = jinq::models::backend::GpuPreprocessDescriptor::Color::BGR,
         .pad_value = 114,
-        .output_dtype = jinq::models::backend::DType::F32,
+        .output_dtype = input_info.dtype,
         .output_nhwc = false,
     });
 

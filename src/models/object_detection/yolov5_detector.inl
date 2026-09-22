@@ -53,31 +53,13 @@ template <typename INPUT, typename OUTPUT> StatusCode YoloV5Detector<INPUT, OUTP
         LOG(ERROR) << "yolov5 model_input_image_size is " << configured_size << ", but model input is " << _m_input_size_host;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    this->set_image_decode_hint(_m_input_size_host, 1.0f);  // strict decode, auto GPU
-    this->set_gpu_preprocess({                                  // letterbox + /255 + RGB + F16 NCHW
-        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::LETTERBOX,
-        .norm = {.scale = 1.0f / 255.0f},
-        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
-        .pad_value = 114,
-        .output_dtype = jinq::models::backend::DType::F16,
-        .output_nhwc = false,
-    });
+    this->set_image_decode_hint(_m_input_size_host, parse_image_decode_upscale(params, "yolov5"));
+    this->set_gpu_preprocess(yolo_letterbox_gpu_preprocess(input_info.dtype));
     return StatusCode::OK;
 }
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> YoloV5Detector<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
-    // letterbox / colour / normalize, emitted as f32 nchw
-    auto result = jinq::models::backend::ImagePipeline(input_image)
-                      .letterbox(_m_input_size_host)
-                      .bgr_to_rgb()
-                      .to_float()
-                      .scale(1.0f / 255.0f)
-                      .nchw(this->session().inputs().front().name);
-    if (!result.ok()) {
-        LOG(ERROR) << result.error;
-        return {};
-    }
-    return {std::move(result.value)};
+    return yolo_letterbox_nchw(input_image, _m_input_size_host, this->session().inputs().front());
 }
 
 template <typename INPUT, typename OUTPUT>

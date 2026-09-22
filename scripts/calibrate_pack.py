@@ -9,9 +9,9 @@ taken before spawn (gpu_mem_source=device_delta). Suggests w* from the RPS
 curve. A joint pass starts every id at its suggested w; it sums only real
 NVML per-process rows, otherwise reports one pack device delta.
 
-Optional --write-pack updates worker_nums and occupancy stamps on [pack.<ID>]
-(and GPU fingerprint on [pack]) in that pack file only. Git example packs
-should stay worker_nums=1 and must not commit gpu_mem_mib.
+Optional --write-pack updates worker_nums, occupancy stamps, and the per-model
+decode_auto vote (cpu|gpu) on [pack.<ID>] in that pack file only. Git example
+packs should stay worker_nums=1 and must not commit gpu_mem_mib.
 
 Usage:
   python3 scripts/calibrate_pack.py --pack conf/packs/demo.toml
@@ -29,12 +29,15 @@ import math
 import os
 import re
 import signal
+import shutil
 import socket
 import subprocess
 import sys
 import tempfile
 import threading
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -196,106 +199,236 @@ def wait_port_free(port: int, timeout_s: float = 15.0) -> None:
             _time.sleep(0.2)
 
 
-def probe_rps(
-    root: Path,
-    binary: Path,
-    entry: dict,
+DECODE_GRID_SIZES = (
+    (640, 480),
+    (1280, 720),
+    (1920, 1080),
+    (3840, 2160),
+)
+DECODE_GRID_QUALITIES = (50, 60, 80, 90)
+
+
+def generate_decode_grid(out_dir: Path) -> list[dict]:
+    """16 JPEGs: 4 resolutions x 4 qualities. Noise + mild blur, fixed seed."""
+    import cv2
+    import numpy as np
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    rng = np.random.RandomState(20260922)
+    fixtures: list[dict] = []
+    for width, height in DECODE_GRID_SIZES:
+        noise = rng.randint(0, 256, (height, width, 3), dtype=np.uint8)
+        frame = cv2.GaussianBlur(noise, (5, 5), 0)
+        for quality in DECODE_GRID_QUALITIES:
+            path = out_dir / ("decode_%dx%d_q%d.jpg" % (width, height, quality))
+            if not cv2.imwrite(str(path), frame, [int(cv2.IMWRITE_JPEG_QUALITY), int(quality)]):
+                raise RuntimeError("failed to write %s" % path)
+            fixtures.append(
+                {
+                    "path": path,
+                    "width": width,
+                    "height": height,
+                    "quality": quality,
+                    "bytes": path.stat().st_size,
+                }
+            )
+    if len(fixtures) != 16:
+        raise RuntimeError("decode grid must have 16 fixtures, got %d" % len(fixtures))
+    return fixtures
+
+
+def vote_decode_auto(cases: list[dict]) -> dict:
+    """Majority of valid CPU-vs-GPU RPS pairs. CPU wins a case only if strictly higher."""
+    cpu_wins = 0
+    gpu_wins = 0
+    for case in cases:
+        cpu = case.get("rps_cpu")
+        gpu = case.get("rps_gpu")
+        if not isinstance(cpu, (int, float)) or not isinstance(gpu, (int, float)):
+            continue
+        if float(cpu) > float(gpu):
+            cpu_wins += 1
+        else:
+            gpu_wins += 1
+    valid = cpu_wins + gpu_wins
+    if valid == 0 or cpu_wins > valid / 2.0:
+        winner = "cpu"
+    else:
+        winner = "gpu"
+    return {
+        "decode_auto": winner,
+        "cpu_wins": cpu_wins,
+        "gpu_wins": gpu_wins,
+        "valid": valid,
+    }
+
+
+def fetch_decode_counters(port: int, token: str) -> dict[str, int] | None:
+    req = urllib.request.Request(
+        "http://127.0.0.1:%d/metrics" % port,
+        headers={"Authorization": "Bearer %s" % token},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            text = resp.read().decode("utf-8", errors="replace")
+    except (OSError, urllib.error.URLError, TimeoutError):
+        return None
+    counts: dict[str, int] = {}
+    for match in re.finditer(r'mortred_jpeg_decode_total\{backend="([^"]+)"\} (\d+)', text):
+        counts[match.group(1)] = int(match.group(2))
+    return counts
+
+
+def _counter_delta(
+    before: dict[str, int] | None, after: dict[str, int] | None, keys: tuple[str, ...]
+) -> int | None:
+    if before is None or after is None:
+        return None
+    return sum(after.get(key, 0) - before.get(key, 0) for key in keys)
+
+
+def load_pinned_rps(
+    url: str,
     image: Path,
     workers: int,
-    auth_token: str,
     duration_s: float,
-    force_gpu_path: bool,
+    auth_token: str,
+    port: int,
+    expect_gpu: bool,
 ) -> tuple[float | None, str]:
-    """Spawn one instance at `workers` with the decode fork pinned to one path
-    (MORTRED_DECODE_GPU_MIN_CPU_MS ~0 forces GPU, a huge value forces CPU) and
-    return its steady-state rps. Used to derive the throughput crossover."""
-    model_id = entry["model_id"]
-    found = find_server_toml(root, model_id)
-    if found is None:
-        return None, "no conf/server mapping"
-    port = int(entry["port"])
-    uri = entry["uri"]
-    log_path = root / "logs" / ("calibrate-probe-%s-w%d-%s.log" % (model_id, workers, "gpu" if force_gpu_path else "cpu"))
-    extra: dict[str, str] = {
-        "MORTRED_DECODE_GPU_MIN_CPU_MS": "0.001" if force_gpu_path else "1000000",
-    }
-    proc = start_model(root, binary, model_id, found, workers, log_path, extra, auth_token)
-    try:
-        if not wait_http_ready("http://127.0.0.1:%d/ready" % port, 60.0, proc):
-            return None, "probe server not ready (see %s)" % log_path
-        report = run_load(
-            LoadConfig(
-                url="http://127.0.0.1:%d%s" % (port, uri),
-                image_path=image,
-                concurrency=max(4, min(16, 4 * workers)),
-                duration_s=duration_s,
-                warmup_s=min(1.0, duration_s / 5.0),
-                token=auth_token,
-                progress=False,
-            )
+    before = fetch_decode_counters(port, auth_token)
+    report = run_load(
+        LoadConfig(
+            url=url,
+            image_path=image,
+            concurrency=max(4, min(16, 2 * workers)),
+            duration_s=duration_s,
+            warmup_s=min(2.0, max(0.5, duration_s / 5.0)),
+            token=auth_token,
+            raw=True,
+            progress=False,
         )
-    finally:
-        stop_proc(proc)
-        wait_port_free(port)
+    )
+    after = fetch_decode_counters(port, auth_token)
     if report.ok <= 0 or report.rps <= 0:
-        return None, "probe load failed (ok=%s errors=%s)" % (report.ok, report.errors)
+        return None, "load failed ok=%s errors=%s" % (report.ok, report.errors)
+    if expect_gpu:
+        delta = _counter_delta(before, after, ("jpeggpu",))
+        if delta is not None and delta < max(1, report.ok // 2):
+            return None, "jpeggpu counter did not advance (delta=%s ok=%s)" % (delta, report.ok)
+    else:
+        delta = _counter_delta(before, after, ("cpu-reduced", "cpu-full"))
+        if delta is not None and delta < max(1, report.ok // 2):
+            return None, "cpu counter did not advance (delta=%s ok=%s)" % (delta, report.ok)
     return float(report.rps), "ok=%s" % report.ok
 
 
-def measure_decode_slope(
-    root: Path, binary: Path, entry: dict, image: Path, auth_token: str
-) -> tuple[float | None, str]:
-    """CPU decode cost slope (us per KB) measured ON the production path:
-    spawn a w=1 instance, enable the stage-trace flag, drive a few json
-    requests and take the median of the server's decode= stage (post-fork
-    that stage is pure libjpeg-turbo imdecode; base64 lives in envelope).
-    The flag's prior state is restored."""
-    import re as _re
+def log_has_jpeggpu_ready(log_path: Path) -> bool:
+    if not log_path.is_file():
+        return False
+    return "jpeggpu decoder ready" in log_path.read_text(encoding="utf-8", errors="replace")
 
+
+def run_decode_path_grid(
+    root: Path,
+    binary: Path,
+    entry: dict,
+    workers: int,
+    fixtures: list[dict],
+    duration_s: float,
+    auth_token: str,
+    pin: str,
+) -> tuple[list[float | None], str]:
     model_id = entry["model_id"]
-    port = int(entry["port"])
-    uri = entry["uri"]
     found = find_server_toml(root, model_id)
     if found is None:
-        return None, "no conf/server mapping"
-    log_path = root / "logs" / ("calibrate-decode-slope.log")
-    flag = Path("/tmp/mortred_stage_timing")
-    had_flag = flag.exists()
-    proc = start_model(root, binary, model_id, found, 1, log_path, {}, auth_token)
+        return [None] * len(fixtures), "no conf/server mapping"
+    port = int(entry["port"])
+    uri = entry["uri"]
+    log_path = root / "logs" / ("calibrate-decode-%s-%s.log" % (model_id, pin))
+    extra = {"MORTRED_IMAGE_DECODE_BACKEND": pin}
+    proc = start_model(root, binary, model_id, found, workers, log_path, extra, auth_token)
+    scores: list[float | None] = []
+    note = "ok"
     try:
         if not wait_http_ready("http://127.0.0.1:%d/ready" % port, 60.0, proc):
-            return None, "slope server not ready (see %s)" % log_path
-        if not had_flag:
-            flag.touch()
-        run_load(
-            LoadConfig(
-                url="http://127.0.0.1:%d%s" % (port, uri),
-                image_path=image,
-                concurrency=1,
-                duration_s=4.0,
-                warmup_s=1.0,
-                token=auth_token,
-                progress=False,
+            return [None] * len(fixtures), "probe server not ready (see %s)" % log_path
+        if pin == "gpu" and not log_has_jpeggpu_ready(log_path):
+            return [None] * len(fixtures), "gpu decoder not armed (see %s)" % log_path
+        url = "http://127.0.0.1:%d%s" % (port, uri)
+        for fixture in fixtures:
+            rps, why = load_pinned_rps(
+                url, fixture["path"], workers, duration_s, auth_token, port, pin == "gpu"
             )
-        )
+            scores.append(rps)
+            print(
+                "    %s %dx%d q%d rps=%s (%s)"
+                % (pin, fixture["width"], fixture["height"], fixture["quality"], rps, why),
+                flush=True,
+            )
+            if rps is None:
+                note = why
     finally:
-        if not had_flag and flag.exists():
-            flag.unlink()
         stop_proc(proc)
         wait_port_free(port)
-    vals = []
-    for m in _re.finditer(r"decode=([0-9]+\.[0-9]+)", log_path.read_text(errors="ignore")):
-        vals.append(float(m.group(1)))
-    if len(vals) < 5:
-        return None, "only %d stage_trace decode samples" % len(vals)
-    vals.sort()
-    median_ms = vals[len(vals) // 2]
-    kb = image.stat().st_size / 1024.0
-    return median_ms * 1000.0 / kb, "stage_trace median %.2fms over %d req, %.1fKB image" % (
-        median_ms,
-        len(vals),
-        kb,
+    return scores, note
+
+
+def calibrate_decode_vote(
+    root: Path,
+    binary: Path,
+    entry: dict,
+    workers: int,
+    duration_s: float,
+    auth_token: str,
+    grid_dir: Path,
+) -> dict:
+    try:
+        fixtures = generate_decode_grid(grid_dir)
+    except Exception as exc:
+        return {"decode_auto": "cpu", "error": "grid generate failed: %s" % exc}
+    print("  decode grid: 16 fixtures, w=%d, gpu then cpu" % workers, flush=True)
+    gpu_scores, gpu_note = run_decode_path_grid(
+        root, binary, entry, workers, fixtures, duration_s, auth_token, "gpu"
     )
+    if all(score is None for score in gpu_scores):
+        return {
+            "decode_auto": "cpu",
+            "cpu_wins": 0,
+            "gpu_wins": 0,
+            "valid": 0,
+            "error": gpu_note,
+            "gpu_note": gpu_note,
+        }
+    cpu_scores, cpu_note = run_decode_path_grid(
+        root, binary, entry, workers, fixtures, duration_s, auth_token, "cpu"
+    )
+    cases = []
+    for fixture, cpu_rps, gpu_rps in zip(fixtures, cpu_scores, gpu_scores):
+        winner = None
+        if isinstance(cpu_rps, (int, float)) and isinstance(gpu_rps, (int, float)):
+            winner = "cpu" if float(cpu_rps) > float(gpu_rps) else "gpu"
+        cases.append(
+            {
+                "width": fixture["width"],
+                "height": fixture["height"],
+                "quality": fixture["quality"],
+                "bytes": fixture["bytes"],
+                "rps_cpu": cpu_rps,
+                "rps_gpu": gpu_rps,
+                "winner": winner,
+            }
+        )
+    summary = vote_decode_auto(cases)
+    summary["cpu_note"] = cpu_note
+    summary["gpu_note"] = gpu_note
+    summary["cases"] = cases
+    print(
+        "  decode vote: cpu=%d gpu=%d valid=%d -> %s"
+        % (summary["cpu_wins"], summary["gpu_wins"], summary["valid"], summary["decode_auto"]),
+        flush=True,
+    )
+    return summary
 
 
 def pick_w_star(points: list[dict]) -> tuple[int, str]:
@@ -500,6 +633,11 @@ def occupancy_fields_from_report(
             src = match.get("gpu_mem_source")
             if isinstance(src, str) and src and src != "unavailable":
                 fields["gpu_mem_source"] = src
+        decode = row.get("decode")
+        if isinstance(decode, dict):
+            winner = decode.get("decode_auto")
+            if winner in ("cpu", "gpu"):
+                fields["decode_auto"] = winner
         id_fields[model_id] = fields
     pack_fields: dict[str, object] = {}
     gpu = report.get("gpu")
@@ -510,14 +648,6 @@ def occupancy_fields_from_report(
         total = _ceil_positive_mib(gpu.get("memory_total_mib"))
         if total is not None:
             pack_fields["gpu_memory_total_mib"] = total
-    dr = report.get("decode_routing")
-    if isinstance(dr, dict):
-        slope = dr.get("cpu_decode_us_per_kb")
-        if isinstance(slope, (int, float)) and 0.5 <= float(slope) <= 100.0:
-            pack_fields["cpu_decode_us_per_kb"] = round(float(slope), 2)
-        crossover = dr.get("decode_gpu_min_cpu_ms")
-        if isinstance(crossover, (int, float)) and 0.0 <= float(crossover) <= 1000.0:
-            pack_fields["decode_gpu_min_cpu_ms"] = round(float(crossover), 1)
     return id_fields, pack_fields
 
 
@@ -847,101 +977,28 @@ def calibrate(
                 break
         w_star, why = pick_w_star(points)
         suggested[model_id] = w_star
-        report["models"].append(
-            {
-                "id": model_id,
-                "image": str(image.relative_to(root)),
-                "points": points,
-                "suggested_worker_nums": w_star,
-                "reason": why,
-            }
-        )
+        row = {
+            "id": model_id,
+            "image": str(image.relative_to(root)),
+            "points": points,
+            "suggested_worker_nums": w_star,
+            "reason": why,
+        }
+        report["models"].append(row)
+        if any(p.get("started") for p in points):
+            print("== %s decode vote ==" % model_id, flush=True)
+            grid_dir = Path(tempfile.mkdtemp(prefix="mortred-decode-grid-"))
+            try:
+                row["decode"] = calibrate_decode_vote(
+                    root, binary, entry, w_star, duration_s, auth_token, grid_dir
+                )
+            finally:
+                shutil.rmtree(grid_dir, ignore_errors=True)
 
     any_started = any(
         any(p.get("started") for p in row.get("points") or [])
         for row in report["models"]
     )
-
-    # machine-level decode fork thresholds: the CPU slope is measured on the
-    # production path via the first workable model; the crossover follows the
-    # busiest model's calibrated worker depth (empirical ~1ms per worker)
-    report["decode_routing"] = None
-    if any_started:
-        slope_model = next(
-            (
-                row
-                for row in report["models"]
-                if any(p.get("started") for p in row.get("points") or [])
-                and row.get("image")
-            ),
-            None,
-        )
-        if slope_model is not None:
-            entry = catalog_entry(root, slope_model["id"])
-            slope_us_per_kb, basis = measure_decode_slope(
-                root, binary, entry, root / slope_model["image"], auth_token
-            )
-            busiest_w = max(
-                (int(r.get("suggested_worker_nums") or 1) for r in report["models"]),
-                default=1,
-            )
-            # Throughput crossover, derived from measured quantities instead of
-            # a per-worker coefficient: the GPU path only beats the CPU path
-            # once the CPU pool is the CPU path's binding constraint,
-            #   D + C = w * t_gpu_req        (C = other per-request CPU work)
-            # with C = w*1000/rps_cpu - D_demo, the crossover is
-            #   D* = w*1000/rps_gpu - C
-            # measured with a forced-GPU probe at the calibrated worker depth.
-            crossover = None
-            crossover_basis = "not measured"
-            if slope_us_per_kb is not None:
-                rps_cpu = slope_model.get("rps_at_w_star")
-                if not isinstance(rps_cpu, (int, float)) or rps_cpu <= 0:
-                    match = next(
-                        (
-                            p
-                            for p in slope_model.get("points") or []
-                            if p.get("started")
-                            and int(p.get("worker_nums") or 0) == busiest_w
-                        ),
-                        None,
-                    )
-                    rps_cpu = match.get("rps") if match is not None else None
-                if isinstance(rps_cpu, (int, float)) and rps_cpu > 0:
-                    image_kb = (root / slope_model["image"]).stat().st_size / 1024.0
-                    d_demo_ms = slope_us_per_kb * image_kb / 1000.0
-                    rps_gpu, gpu_basis = probe_rps(
-                        root, binary, entry, root / slope_model["image"], busiest_w,
-                        auth_token, duration_s, force_gpu_path=True,
-                    )
-                    if isinstance(rps_gpu, (int, float)) and rps_gpu > 0:
-                        cpu_pool_ms = busiest_w * 1000.0 / float(rps_cpu)
-                        gpu_req_ms = busiest_w * 1000.0 / float(rps_gpu)
-                        c_other = max(0.0, cpu_pool_ms - d_demo_ms)
-                        crossover = max(1.0, min(100.0, gpu_req_ms - c_other))
-                        crossover_basis = (
-                            "derived: w=%d rps_cpu=%.1f rps_gpu=%.1f D_demo=%.2fms "
-                            "C=%.2fms -> D*=%.1fms (%s)"
-                            % (busiest_w, rps_cpu, rps_gpu, d_demo_ms, c_other, crossover, gpu_basis)
-                        )
-                    else:
-                        crossover_basis = "gpu probe failed: %s" % gpu_basis
-            report["decode_routing"] = {
-                "cpu_decode_us_per_kb": None if slope_us_per_kb is None else round(slope_us_per_kb, 2),
-                "decode_gpu_min_cpu_ms": None if crossover is None else round(crossover, 1),
-                "basis": basis,
-                "crossover_basis": crossover_basis,
-                "busiest_worker_nums": busiest_w,
-            }
-            print(
-                "== decode routing: slope=%s us/KB (%s), crossover=%s"
-                % (
-                    slope_us_per_kb,
-                    basis,
-                    ("%.1fms" % crossover) if crossover is not None else "unmeasured",
-                ),
-                flush=True,
-            )
 
     if skip_joint or not any_started:
         return report
@@ -1051,6 +1108,24 @@ def self_test() -> int:
     if occupancy_from_device(800.0, 1024.0) != 0.0:
         print("self-test: occupancy_from_device clamp", file=sys.stderr)
         return 1
+    cpu_majority = vote_decode_auto(
+        [{"rps_cpu": 300.0, "rps_gpu": 200.0}] * 13
+        + [{"rps_cpu": 200.0, "rps_gpu": 300.0}] * 12
+    )
+    if cpu_majority["decode_auto"] != "cpu" or cpu_majority["cpu_wins"] != 13:
+        print("self-test: vote cpu majority", cpu_majority, file=sys.stderr)
+        return 1
+    gpu_majority = vote_decode_auto(
+        [{"rps_cpu": 200.0, "rps_gpu": 300.0}] * 13
+        + [{"rps_cpu": 300.0, "rps_gpu": 200.0}] * 12
+    )
+    if gpu_majority["decode_auto"] != "gpu" or gpu_majority["gpu_wins"] != 13:
+        print("self-test: vote gpu majority", gpu_majority, file=sys.stderr)
+        return 1
+    empty_vote = vote_decode_auto([{"rps_cpu": None, "rps_gpu": 1.0}] * 16)
+    if empty_vote["decode_auto"] != "cpu" or empty_vote["valid"] != 0:
+        print("self-test: vote empty", empty_vote, file=sys.stderr)
+        return 1
     from repo_toml import load_toml
 
     cfg = ROOT / "conf" / "server" / "classification" / "mobilenetv2" / "mobilenetv2_server_config.toml"
@@ -1119,6 +1194,7 @@ def self_test() -> int:
                         "gpu_mem_source": "nvml_pid",
                     }
                 ],
+                "decode": {"decode_auto": "gpu", "cpu_wins": 6, "gpu_wins": 10, "valid": 16},
             }
         ],
     }
@@ -1130,6 +1206,9 @@ def self_test() -> int:
         return 1
     if 'gpu_name = "Fake GPU"' not in occ_body or "gpu_memory_total_mib = 8193" not in occ_body:
         print("self-test: gpu fingerprint body", occ_body, file=sys.stderr)
+        return 1
+    if 'decode_auto = "gpu"' not in occ_body:
+        print("self-test: decode_auto stamp body", occ_body, file=sys.stderr)
         return 1
     try:
         write_pack_worker_nums(cfg, {"MOBILENETV2": 4})
@@ -1155,7 +1234,7 @@ def main() -> int:
     parser.add_argument(
         "--write-pack",
         action="store_true",
-        help="write suggested worker_nums and occupancy stamps into the pack file (never conf/server)",
+        help="write suggested worker_nums, occupancy stamps, and decode_auto into the pack file (never conf/server)",
     )
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()

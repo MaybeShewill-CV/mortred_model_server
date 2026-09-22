@@ -9,6 +9,7 @@ precision_mode = 0
 power_mode = 0
 
 [CENTER_FACE.params]
+image_decode_backend = "auto"
 model_score_threshold = 0.5
 model_nms_threshold = 0.5
 model_keep_top_k = 1000

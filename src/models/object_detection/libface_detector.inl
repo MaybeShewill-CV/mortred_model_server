@@ -48,12 +48,12 @@ template <typename INPUT, typename OUTPUT> StatusCode LibFaceDetector<INPUT, OUT
         LOG(ERROR) << "invalid libface input size: " << (param_error.empty() ? "configured size mismatches model input" : param_error);
         return StatusCode::MODEL_INIT_FAILED;
     }
-    this->set_image_decode_hint(_m_input_size_host, 1.0f);
+    this->set_image_decode_hint(_m_input_size_host, parse_image_decode_upscale(params, "libface"));
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
         .color = jinq::models::backend::GpuPreprocessDescriptor::Color::BGR,
         .pad_value = 114,
-        .output_dtype = jinq::models::backend::DType::F32,
+        .output_dtype = input_info.dtype,
         .output_nhwc = false,
     });
 

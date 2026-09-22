@@ -9,6 +9,7 @@
 #define MORTRED_MODELS_BACKEND_BACKEND_CV_MODEL_H
 
 #include <cstring>
+#include <cstdlib>
 #include <exception>
 #include <memory>
 #include <optional>
@@ -324,58 +325,44 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
         _gpu_preprocess_desc = desc;
     }
 
-    /*** decode fork routing, resolved once after on_init():
-     * - mode from image_decode_backend (cpu | auto | gpu, default auto)
-     * - static thresholds from decode_gpu_min_cpu_ms / cpu_decode_us_per_kb
-     *   (pack-calibrated values when present; worker-count-aware defaults)
-     * - engine eligibility from the session inputs + registered descriptor
-     * See run_impl for the per-request decision. */
+    /*** decode fork routing, resolved once after on_init().
+     * image_decode_backend is cpu | auto | gpu (default auto). auto uses the
+     * pack vote MORTRED_DECODE_AUTO (cpu|gpu); missing vote is cpu.
+     * MORTRED_IMAGE_DECODE_BACKEND pins the process (calibrate). The request
+     * path does not re-decide. */
     enum class DecodeMode { AUTO, CPU, GPU };
+
+    static DecodeMode decode_mode_from_token(const char* token, DecodeMode fallback) {
+        if (token == nullptr || token[0] == '\0') {
+            return fallback;
+        }
+        const std::string mode(token);
+        if (mode == "cpu") {
+            return DecodeMode::CPU;
+        }
+        if (mode == "gpu") {
+            return DecodeMode::GPU;
+        }
+        return fallback;
+    }
 
     void resolve_decode_routing() {
         _m_decode_mode = DecodeMode::AUTO;
         if (_m_params.contains("image_decode_backend")) {
             const auto mode = _m_params["image_decode_backend"].value<std::string>();
             if (mode.has_value()) {
-                if (*mode == "cpu") {
-                    _m_decode_mode = DecodeMode::CPU;
-                } else if (*mode == "gpu") {
-                    _m_decode_mode = DecodeMode::GPU;
-                }
+                _m_decode_mode = decode_mode_from_token(mode->c_str(), DecodeMode::AUTO);
             }
         }
-        // resolution: supervisor env (pack-calibrated) > model [params] > default
-        _m_cpu_us_per_kb = 11.0;
-        if (_m_params.contains("cpu_decode_us_per_kb")) {
-            const auto v = _m_params["cpu_decode_us_per_kb"].value<double>();
-            if (v.has_value() && *v > 0.5 && *v < 100.0) {
-                _m_cpu_us_per_kb = static_cast<float>(*v);
-            }
+        const DecodeMode configured = _m_decode_mode;
+        if (_m_decode_mode == DecodeMode::AUTO) {
+            _m_decode_mode = decode_mode_from_token(std::getenv("MORTRED_DECODE_AUTO"),
+                                                    DecodeMode::CPU);
         }
-        if (const char* env = std::getenv("MORTRED_CPU_DECODE_US_PER_KB"); env != nullptr && *env != ' ') {
-            try {
-                const double v = std::stod(env);
-                if (v > 0.5 && v < 100.0) {
-                    _m_cpu_us_per_kb = static_cast<float>(v);
-                }
-            } catch (...) {}
-        }
-        // throughput-oriented default: matches the measured 8-worker crossover
-        // (calibrate writes the machine-specific value over this)
-        _m_gpu_min_cpu_ms = 8.0;
-        if (_m_params.contains("decode_gpu_min_cpu_ms")) {
-            const auto v = _m_params["decode_gpu_min_cpu_ms"].value<double>();
-            if (v.has_value() && *v >= 0.0 && *v < 1000.0) {
-                _m_gpu_min_cpu_ms = static_cast<float>(*v);
-            }
-        }
-        if (const char* env = std::getenv("MORTRED_DECODE_GPU_MIN_CPU_MS"); env != nullptr && *env != ' ') {
-            try {
-                const double v = std::stod(env);
-                if (v >= 0.0 && v < 1000.0) {
-                    _m_gpu_min_cpu_ms = static_cast<float>(v);
-                }
-            } catch (...) {}
+        const DecodeMode pinned = decode_mode_from_token(
+            std::getenv("MORTRED_IMAGE_DECODE_BACKEND"), DecodeMode::AUTO);
+        if (pinned != DecodeMode::AUTO) {
+            _m_decode_mode = pinned;
         }
 
         // engine eligibility: everything that cannot vary per request
@@ -415,10 +402,11 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                 _m_gpu_path_eligible = false;
             }
         }
-        LOG(INFO) << (std::string("decode fork [") + _m_section_name + "]: mode=" +
-                      (_m_decode_mode == DecodeMode::CPU ? "cpu" : _m_decode_mode == DecodeMode::GPU ? "gpu" : "auto") +
-                      " gpu_path_eligible=" + (_m_gpu_path_eligible ? "yes" : "no") +
-                      " min_cpu_ms=" + std::to_string(_m_gpu_min_cpu_ms)).c_str();
+        LOG(INFO) << (std::string("decode fork [") + _m_section_name + "]: configured=" +
+                      (configured == DecodeMode::CPU ? "cpu" : configured == DecodeMode::GPU ? "gpu" : "auto") +
+                      " resolved=" +
+                      (_m_decode_mode == DecodeMode::CPU ? "cpu" : "gpu") +
+                      " gpu_path_eligible=" + (_m_gpu_path_eligible ? "yes" : "no")).c_str();
     }
 
     /***
@@ -671,10 +659,9 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
         // + TRT inference all on device. Uses GpuPreprocessDescriptor registered
         // via set_gpu_preprocess(). Falls through to normal path on any miss.
         if constexpr (std::is_same<INPUT, io_define::common_io::image_input>::value) {
-            // decode fork: engine eligibility was resolved once at init
-            // (resolve_decode_routing); the per-request decision only checks
-            // the image's own facts and the calibrated threshold
-            if (_m_gpu_path_eligible) {
+            // decode fork: the process path was resolved once at init
+            // (resolve_decode_routing). Per request only SOF hard gates remain.
+            if (_m_gpu_path_eligible && _m_decode_mode != DecodeMode::CPU) {
                 const auto& input_info = _m_session->inputs().front();
                 // hard gates: path B is JPEG-only - progressive scans are
                 // unsupported and EXIF orientation != 1 would need the
@@ -685,15 +672,7 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                 bool progressive = false;
                 const bool sof_ok = cv_input::jpeg_full_dimensions(input.image.data, &full, &orientation, &progressive);
                 bool use_gpu_path = sof_ok && !progressive && orientation <= 1;
-                if (use_gpu_path && _m_decode_mode == DecodeMode::AUTO) {
-                    // soft gate: estimated CPU decode cost vs the calibrated
-                    // crossover (throughput-oriented; pack calibrate refines)
-                    const double est_cpu_ms =
-                        static_cast<double>(_m_cpu_us_per_kb) *
-                        (static_cast<double>(input.image.data.size()) / 1024.0) / 1000.0;
-                    use_gpu_path = est_cpu_ms >= static_cast<double>(_m_gpu_min_cpu_ms);
-                }
-                if (use_gpu_path && _m_decode_mode != DecodeMode::CPU) {
+                if (use_gpu_path) {
                     const auto dim_at = [&](size_t i) {
                         return input_info.shape.size() > i ? static_cast<int>(input_info.shape[i]) : -1;
                     };
@@ -779,8 +758,6 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
     cv_input::ImageInputLimits _m_image_limits;
     std::optional<backend::GpuPreprocessDescriptor> _gpu_preprocess_desc;
     DecodeMode _m_decode_mode = DecodeMode::AUTO;
-    float _m_cpu_us_per_kb = 11.0f;
-    float _m_gpu_min_cpu_ms = 8.0f;
     bool _m_gpu_path_eligible = false;
     gpu_jpeg::GpuDecodeSlot _m_gpu_slot;
     backend::BackendConfig _m_backend_config;
