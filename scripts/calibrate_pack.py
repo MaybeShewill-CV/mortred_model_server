@@ -178,6 +178,70 @@ def log_looks_oom(text: str) -> bool:
     return any(m in lower for m in OOM_MARKERS)
 
 
+def wait_port_free(port: int, timeout_s: float = 15.0) -> None:
+    """A stopped listener's port can linger (graceful drain / TIME_WAIT);
+    the next spawn binds the same port, so wait it out instead of racing."""
+    import socket as _socket
+    import time as _time
+
+    deadline = _time.monotonic() + timeout_s
+    while _time.monotonic() < deadline:
+        s = _socket.socket()
+        try:
+            s.bind(("127.0.0.1", port))
+            s.close()
+            return
+        except OSError:
+            s.close()
+            _time.sleep(0.2)
+
+
+def probe_rps(
+    root: Path,
+    binary: Path,
+    entry: dict,
+    image: Path,
+    workers: int,
+    auth_token: str,
+    duration_s: float,
+    force_gpu_path: bool,
+) -> tuple[float | None, str]:
+    """Spawn one instance at `workers` with the decode fork pinned to one path
+    (MORTRED_DECODE_GPU_MIN_CPU_MS ~0 forces GPU, a huge value forces CPU) and
+    return its steady-state rps. Used to derive the throughput crossover."""
+    model_id = entry["model_id"]
+    found = find_server_toml(root, model_id)
+    if found is None:
+        return None, "no conf/server mapping"
+    port = int(entry["port"])
+    uri = entry["uri"]
+    log_path = root / "logs" / ("calibrate-probe-%s-w%d-%s.log" % (model_id, workers, "gpu" if force_gpu_path else "cpu"))
+    extra: dict[str, str] = {
+        "MORTRED_DECODE_GPU_MIN_CPU_MS": "0.001" if force_gpu_path else "1000000",
+    }
+    proc = start_model(root, binary, model_id, found, workers, log_path, extra, auth_token)
+    try:
+        if not wait_http_ready("http://127.0.0.1:%d/ready" % port, 60.0, proc):
+            return None, "probe server not ready (see %s)" % log_path
+        report = run_load(
+            LoadConfig(
+                url="http://127.0.0.1:%d%s" % (port, uri),
+                image_path=image,
+                concurrency=max(4, min(16, 4 * workers)),
+                duration_s=duration_s,
+                warmup_s=min(1.0, duration_s / 5.0),
+                token=auth_token,
+                progress=False,
+            )
+        )
+    finally:
+        stop_proc(proc)
+        wait_port_free(port)
+    if report.ok <= 0 or report.rps <= 0:
+        return None, "probe load failed (ok=%s errors=%s)" % (report.ok, report.errors)
+    return float(report.rps), "ok=%s" % report.ok
+
+
 def measure_decode_slope(
     root: Path, binary: Path, entry: dict, image: Path, auth_token: str
 ) -> tuple[float | None, str]:
@@ -218,6 +282,7 @@ def measure_decode_slope(
         if not had_flag and flag.exists():
             flag.unlink()
         stop_proc(proc)
+        wait_port_free(port)
     vals = []
     for m in _re.finditer(r"decode=([0-9]+\.[0-9]+)", log_path.read_text(errors="ignore")):
         vals.append(float(m.group(1)))
@@ -708,6 +773,7 @@ def run_one_point(
         return point
     finally:
         stop_proc(proc)
+        wait_port_free(port)
 
 
 def pack_model_config(pack: Path, model_id: str, root: Path) -> str:
@@ -819,19 +885,60 @@ def calibrate(
                 (int(r.get("suggested_worker_nums") or 1) for r in report["models"]),
                 default=1,
             )
+            # Throughput crossover, derived from measured quantities instead of
+            # a per-worker coefficient: the GPU path only beats the CPU path
+            # once the CPU pool is the CPU path's binding constraint,
+            #   D + C = w * t_gpu_req        (C = other per-request CPU work)
+            # with C = w*1000/rps_cpu - D_demo, the crossover is
+            #   D* = w*1000/rps_gpu - C
+            # measured with a forced-GPU probe at the calibrated worker depth.
+            crossover = None
+            crossover_basis = "not measured"
+            if slope_us_per_kb is not None:
+                rps_cpu = slope_model.get("rps_at_w_star")
+                if not isinstance(rps_cpu, (int, float)) or rps_cpu <= 0:
+                    match = next(
+                        (
+                            p
+                            for p in slope_model.get("points") or []
+                            if p.get("started")
+                            and int(p.get("worker_nums") or 0) == busiest_w
+                        ),
+                        None,
+                    )
+                    rps_cpu = match.get("rps") if match is not None else None
+                if isinstance(rps_cpu, (int, float)) and rps_cpu > 0:
+                    image_kb = (root / slope_model["image"]).stat().st_size / 1024.0
+                    d_demo_ms = slope_us_per_kb * image_kb / 1000.0
+                    rps_gpu, gpu_basis = probe_rps(
+                        root, binary, entry, root / slope_model["image"], busiest_w,
+                        auth_token, duration_s, force_gpu_path=True,
+                    )
+                    if isinstance(rps_gpu, (int, float)) and rps_gpu > 0:
+                        cpu_pool_ms = busiest_w * 1000.0 / float(rps_cpu)
+                        gpu_req_ms = busiest_w * 1000.0 / float(rps_gpu)
+                        c_other = max(0.0, cpu_pool_ms - d_demo_ms)
+                        crossover = max(1.0, min(100.0, gpu_req_ms - c_other))
+                        crossover_basis = (
+                            "derived: w=%d rps_cpu=%.1f rps_gpu=%.1f D_demo=%.2fms "
+                            "C=%.2fms -> D*=%.1fms (%s)"
+                            % (busiest_w, rps_cpu, rps_gpu, d_demo_ms, c_other, crossover, gpu_basis)
+                        )
+                    else:
+                        crossover_basis = "gpu probe failed: %s" % gpu_basis
             report["decode_routing"] = {
                 "cpu_decode_us_per_kb": None if slope_us_per_kb is None else round(slope_us_per_kb, 2),
-                "decode_gpu_min_cpu_ms": float(max(2, busiest_w)),
+                "decode_gpu_min_cpu_ms": None if crossover is None else round(crossover, 1),
                 "basis": basis,
+                "crossover_basis": crossover_basis,
                 "busiest_worker_nums": busiest_w,
             }
             print(
-                "== decode routing: slope=%s us/KB (%s), crossover=%.1fms (busiest w=%d)"
+                "== decode routing: slope=%s us/KB (%s), crossover=%s"
                 % (
                     slope_us_per_kb,
                     basis,
-                    float(max(2, busiest_w)),
-                    busiest_w,
+                    ("%.1fms" % crossover) if crossover is not None else "unmeasured",
                 ),
                 flush=True,
             )
@@ -866,6 +973,7 @@ def calibrate(
             if not wait_http_ready(ready_url, 90.0, proc):
                 joint["per_model"][model_id] = {"started": False, "error": "not ready"}
                 stop_proc(proc)
+                wait_port_free(port)
                 continue
             procs.append((model_id, proc))
             mem, src = gpu_mem_process(proc.pid)
@@ -902,6 +1010,7 @@ def calibrate(
     finally:
         for _, proc in procs:
             stop_proc(proc)
+        wait_port_free(port)
     return report
 
 
