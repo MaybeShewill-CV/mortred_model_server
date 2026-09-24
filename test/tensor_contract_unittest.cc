@@ -106,6 +106,9 @@ TEST(TensorContract, AcceptsMatchingNchwLayout) {
 
 TEST(TensorLayout, HostOutputLayoutByRank) {
     EXPECT_EQ(jinq::models::backend::host_output_layout({1, 3, 8, 8}), TensorLayout::Nchw);
+    EXPECT_EQ(jinq::models::backend::host_output_layout({1, 1, 120, 160}), TensorLayout::Nchw);
+    EXPECT_EQ(jinq::models::backend::host_output_layout({1, 224, 224, 3}), TensorLayout::Nhwc);
+    EXPECT_EQ(jinq::models::backend::host_output_layout({1, 1024, 2048, 3}), TensorLayout::Nhwc);
     EXPECT_EQ(jinq::models::backend::host_output_layout({1, 1000}), TensorLayout::Linear);
     EXPECT_EQ(jinq::models::backend::host_output_layout({1000}), TensorLayout::Linear);
     EXPECT_EQ(jinq::models::backend::host_output_layout({1, 84, 8400}), TensorLayout::Unknown);

@@ -81,6 +81,20 @@ TEST(ImagePipeline, ProducesNchwAndPreservesSourceImage) {
     EXPECT_FLOAT_EQ(cv::norm(source, source_copy, cv::NORM_INF), 0.0f);
 }
 
+TEST(ImagePipeline, PacksSessionDtypeF16) {
+    const cv::Mat source(1, 1, CV_8UC3, cv::Scalar(0, 0, 255));
+    TensorInfo info;
+    info.name = "data";
+    info.dtype = DType::F16;
+    info.shape = {1, 3, 1, 1};
+    auto result = ImagePipeline(source).bgr_to_rgb().to_float().nchw(info);
+    ASSERT_TRUE(result.ok()) << result.error;
+    EXPECT_EQ(result.value.name, "data");
+    EXPECT_EQ(result.value.tensor.dtype, DType::F16);
+    EXPECT_EQ(result.value.tensor.shape, std::vector<int64_t>({1, 3, 1, 1}));
+    EXPECT_EQ(result.value.tensor.buffer.size(), 6u);
+}
+
 TEST(ImagePipeline, ProducesNhwcAndSupportsMeanStd) {
     const cv::Mat source(2, 2, CV_8UC3, cv::Scalar(255, 0, 127));
     auto result =

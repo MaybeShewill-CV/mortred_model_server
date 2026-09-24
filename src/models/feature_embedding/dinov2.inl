@@ -25,7 +25,7 @@ using jinq::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode Dinov2<INPUT, OUTPUT>::on_init(const toml::table &params) {
     const auto input_info =
-        jinq::models::backend::SessionIoValidator(this->session()).input().f32().rank(4).nchw().channels(3).static_shape().validate();
+        jinq::models::backend::SessionIoValidator(this->session()).input().f32().allow_fp16().rank(4).nchw().channels(3).static_shape().validate();
     if (!input_info.ok()) {
         LOG(ERROR) << "unexpected feature embedding input shape: " << input_info.error << ", expected static [N,3,H,W] (nchw)";
         return StatusCode::MODEL_INIT_FAILED;
@@ -76,7 +76,7 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> Dinov2<INPUT
                       .scale(1.0f / 255.0f)
                       .subtract({0.48145466f, 0.4578275f, 0.40821073f})
                       .divide({0.26862954f, 0.26130258f, 0.27577711f})
-                      .nchw(this->session().inputs().front().name);
+                      .nchw(this->session().inputs().front());
     if (!result.ok()) {
         LOG(ERROR) << result.error;
         return {};

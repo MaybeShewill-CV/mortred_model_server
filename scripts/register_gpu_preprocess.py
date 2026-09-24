@@ -46,9 +46,10 @@ REGISTRATIONS = [
     # ── Phase 2: custom scale ──
     ("src/models/enhancement/attentive_gan_derain_net.inl", "_m_input_size_host",
      desc("DIRECT_RESIZE", ".scale = 1.0f / 127.5f, .mean = {1.0f,1.0f,1.0f}", "BGR", nhwc="true"), "AttentiveGAN"),
-    # ── Phase 2: no normalization ──
+    # LibFace: DIRECT_RESIZE_PAD_TO_MULTIPLE is registered in libface_detector.inl
     ("src/models/object_detection/libface_detector.inl", "_m_input_size_host",
-     desc("DIRECT_RESIZE", "", "BGR"), "LibFace"),
+     desc("DIRECT_RESIZE_PAD_TO_MULTIPLE", ".scale = 1.0f", "BGR", pad="0",
+          extra=".pre_crop_size = _m_input_size_host,\n        .align_multiple = 32,\n        .dynamic_size = true"), "LibFace"),
     # ── Phase 2: center_crop + ImageNet (classification) ──
     ("src/models/classification/mobilenetv2.inl", "_m_input_tensor_size",
      desc("CENTER_CROP", ".scale = 1.0f / 255.0f, .mean = {0.485f,0.456f,0.406f}, .std = {0.229f,0.224f,0.225f}", "RGB", nhwc="true"), "MobileNetV2"),

@@ -1,0 +1,20 @@
+# CI-only overlay: fork-hosted ONNX Runtime CPU proof for this product id.
+# Product serving stays the original conf/model/**/*.toml (mnn/tensorrt).
+# Do not point conf/server at this file.
+
+[DINOV2]
+[DINOV2.backend]
+type = "onnx"
+model_file_path = "../weights/classification/dinov2/dinov2_vitl14_pretrain.static_bs1.onnx"
+device = "cpu"
+threads = 4
+input_layout = "nchw"
+precision_mode = 0
+power_mode = 0
+
+[DINOV2.params]
+pooling = "cls"
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"
+# normalize = false

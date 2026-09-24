@@ -71,6 +71,7 @@ DEMO_IMAGE_BY_MODEL = {
     "densenet": "classification/ILSVRC2012_val_00000003.JPEG",
     "mobilenetv2": "classification/ILSVRC2012_val_00000003.JPEG",
     "resnet": "classification/ILSVRC2012_val_00000003.JPEG",
+    "dinov2": "classification/ILSVRC2012_val_00000003.JPEG",
 }
 
 # category-level fallback demo image
@@ -165,6 +166,12 @@ def resolve_server(arg: str, entries: list[dict]) -> tuple[dict | None, str | No
 
 
 def resolve_demo_image(entry: dict, root: Path) -> Path | None:
+    env = os.environ.get("MORTRED_DEMO_IMAGE", "").strip()
+    if env:
+        path = Path(env)
+        if not path.is_absolute():
+            path = root / path
+        return path if path.is_file() else None
     rel = DEMO_IMAGE_BY_MODEL.get(entry["norm_model"]) or DEMO_IMAGE_BY_CATEGORY.get(entry["category"])
     if not rel:
         return None

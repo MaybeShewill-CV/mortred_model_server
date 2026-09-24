@@ -31,8 +31,9 @@ You're welcomed to ask questions and help me to make it better!
 Weights: `python3 scripts/fetch_weights.py` from
 [Hugging Face](https://huggingface.co/MaybeShewill-CV/mortred_model_server).
 HF is the ONNX interchange store (some `.mnn` copies remain during cutover).
-Product configs stay `mnn` / `tensorrt`; build engines on this GPU with
-`mortredctl prepare`. Per-id contract: `conf/onnx_sources.json`.
+Product configs stay `mnn` / `tensorrt` except already-ONNX ids and LIBFACE
+(YuNet); build engines on this GPU with `mortredctl prepare`. Per-id contract:
+`conf/onnx_sources.json`. Dual-file export: [docs/onnx-interchange.md](./docs/onnx-interchange.md).
 
 # `Contents of this document`
 
@@ -196,6 +197,7 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 * [Model Developer Guide (add model / contract / golden / debug)](./docs/model-developer-guide.md) :fire::fire:
 * [How To Add New Server](./docs/how_to_add_new_server.md) :fire::fire:
 * [Inference CI (hosted MNN smoke vs maintainer GPU golden)](./docs/ci-golden-regression.md)
+* [ONNX interchange export (dual files, remaining gaps)](./docs/onnx-interchange.md)
 
 # `Model Zoo`
 

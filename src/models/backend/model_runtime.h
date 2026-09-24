@@ -63,7 +63,11 @@ class ImagePipeline {
     ImagePipeline &mean_std(const std::array<float, 3> &mean, const std::array<float, 3> &std);
 
     RuntimeResult<NamedTensor> nchw(const std::string &name) const;
+    RuntimeResult<NamedTensor> nchw(const std::string &name, DType dtype) const;
+    RuntimeResult<NamedTensor> nchw(const TensorInfo &input) const;
     RuntimeResult<NamedTensor> nhwc(const std::string &name) const;
+    RuntimeResult<NamedTensor> nhwc(const std::string &name, DType dtype) const;
+    RuntimeResult<NamedTensor> nhwc(const TensorInfo &input) const;
     RuntimeResult<cv::Mat> mat() const;
 
   private:
@@ -93,6 +97,9 @@ RuntimeResult<NamedTensor> letterbox_bgr_f32_nchw(const cv::Mat &bgr, const cv::
  * and the H2D transfer */
 RuntimeResult<NamedTensor> letterbox_bgr_nchw(const cv::Mat &bgr, const cv::Size &network, const std::string &tensor_name,
                                               DType dtype, std::uint8_t pad_value = 114);
+
+/*** Re-pack an F32 NamedTensor as F16 (RNE). Identity if dtype already matches. */
+RuntimeResult<NamedTensor> named_tensor_as(NamedTensor tensor, DType dtype);
 
 
 
@@ -155,6 +162,7 @@ class SessionIoValidator {
     SessionIoValidator &input(const std::string &name = {});
     SessionIoValidator &output(const std::string &name = {});
     SessionIoValidator &f32();
+    SessionIoValidator &allow_fp16();
     SessionIoValidator &dtype(DType value);
     SessionIoValidator &rank(size_t value);
     SessionIoValidator &shape(std::vector<int64_t> value);
@@ -171,6 +179,7 @@ class SessionIoValidator {
     bool use_output_ = false;
     std::string name_;
     DType dtype_ = DType::F32;
+    bool allow_fp16_ = false;
     size_t rank_ = 0;
     std::vector<int64_t> expected_shape_;
     bool has_layout_ = false;

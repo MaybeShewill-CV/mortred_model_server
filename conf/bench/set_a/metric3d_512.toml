@@ -1,0 +1,17 @@
+# Bench overlay: TensorRT static_bs1 engine. Not a product config.
+# id=metric3d_512 catalog=METRIC3D
+
+[METRIC3D]
+[METRIC3D.backend]
+type = "tensorrt"
+model_file_path = "../weights/mono_depth_estimation/metric3d/metric3d_750k_512x1088.engine.static_bs1.fp16"
+device = "gpu"
+
+[METRIC3D.params]
+focal_length = 1000.0
+# intrinsic fx fy cx cy
+intrinsic = [1000.0, 1000.0, 256.0, 544.0]
+canonical_size = [512, 960]
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"

@@ -16,6 +16,7 @@
 #   ./scripts/convert_trt_engines.sh --check-engines  # only verify existing engines (exist + non-empty)
 #   ./scripts/convert_trt_engines.sh --dry-run        # only print the commands that would run
 #   ./scripts/convert_trt_engines.sh --trtexec /path/to/trtexec
+#   ./scripts/convert_trt_engines.sh --manifest conf/trt_engines.set_a.json
 #   TRT_VERSION_MAJOR=10 ./scripts/convert_trt_engines.sh --dry-run   # when trtexec cannot be probed
 # Product line: TensorRT 10.x only (TRT_VERSION_MAJOR < 10 is refused).
 #
@@ -33,7 +34,8 @@ FORCE=0
 ONLY=""
 MODE="convert"
 STRICT=0
-# Match the old in-house converter's 6GB workspace; override with TRTEXEC_WORKSPACE
+# trtexec 10.3 --memPoolSize suffixes are B/K/M/G. "6GiB" is parsed as 6 bytes
+# because the trailing B is taken as Bytes. Override with TRTEXEC_WORKSPACE=6G.
 WORKSPACE_STR="${TRTEXEC_WORKSPACE:-6G}"
 
 usage() {
@@ -52,10 +54,15 @@ while [ $# -gt 0 ]; do
         --check-engines) MODE="check-engines"; shift ;;
         --dry-run) MODE="dry-run"; shift ;;
         --trtexec) TRTEXEC="$2"; shift 2 ;;
+        --manifest) MANIFEST="$2"; shift 2 ;;
         -h|--help) usage ;;
         *) fail "unknown argument: $1 (see --help)" ;;
     esac
 done
+
+if [[ "$MANIFEST" != /* ]]; then
+    MANIFEST="$ROOT/$MANIFEST"
+fi
 
 [ -f "$MANIFEST" ] || fail "manifest not found: $MANIFEST"
 
@@ -217,16 +224,15 @@ if [ "$TRT_MAJOR" -lt 10 ]; then
     fail "TensorRT major $TRT_MAJOR is not supported (product line is TensorRT 10.x only; leftover 8/9 are out of scope). Install the pinned stack: sudo ./scripts/install_deps.sh --nvidia"
 fi
 
-# trtexec 10.x's --memPoolSize parser only accepts KiB/MiB/GiB base-2 suffixes
-# (a bare number means MiB); the 8.x-style "6G" form fails to parse.
-ws_to_trt10_units() { # 6G -> 6GiB, 512m -> 512MiB, 1024 -> 1024, 6GiB -> 6GiB
+# trtexec 10.3 suffixes: B/K/M/G. Do not emit GiB/MiB — trailing B is Bytes.
+ws_to_trt10_units() { # 6G -> 6G, 512m -> 512M, 1024 -> 1024, 6GiB -> 6G
     local s="$1"
-    if [[ "$s" =~ ^([0-9]+([.][0-9]+)?)([KkMmGgTt])$ ]]; then
+    if [[ "$s" =~ ^([0-9]+([.][0-9]+)?)([KkMmGgTt])([iI][bB])?$ ]]; then
         case "${BASH_REMATCH[3]}" in
-            [Kk]) echo "${BASH_REMATCH[1]}KiB" ;;
-            [Mm]) echo "${BASH_REMATCH[1]}MiB" ;;
-            [Gg]) echo "${BASH_REMATCH[1]}GiB" ;;
-            [Tt]) echo "${BASH_REMATCH[1]}TiB" ;;
+            [Kk]) echo "${BASH_REMATCH[1]}K" ;;
+            [Mm]) echo "${BASH_REMATCH[1]}M" ;;
+            [Gg]) echo "${BASH_REMATCH[1]}G" ;;
+            [Tt]) echo "${BASH_REMATCH[1]}T" ;;
         esac
     else
         echo "$s"
@@ -336,7 +342,6 @@ PY
 }
 
 # Flags for TensorRT 10.x only (--buildOnly / bare --workspace are TRT 8).
-# Banner of trtexec 10.3 lists: --skipInference / KiB|MiB|GiB.
 WS_FLAG="--memPoolSize=workspace:$(ws_to_trt10_units "$WORKSPACE_STR")"
 BUILD_FLAG="--skipInference"
 

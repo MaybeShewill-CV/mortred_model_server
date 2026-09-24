@@ -55,7 +55,7 @@ def pack_ids(pack_path: Path) -> list[str]:
     return ids
 
 
-def pack_model_config(pack_path: Path, catalog_id: str, project_root: Path) -> Path | None:
+def _pack_table(pack_path: Path, catalog_id: str) -> dict | None:
     table = load_toml(pack_path)
     # tomllib nests pack.ID; fallback parser uses key "pack.ID"
     kv = None
@@ -63,15 +63,28 @@ def pack_model_config(pack_path: Path, catalog_id: str, project_root: Path) -> P
         kv = table["pack"][catalog_id]
     if kv is None:
         kv = table.get(f"pack.{catalog_id}")
-    if not isinstance(kv, dict):
+    return kv if isinstance(kv, dict) else None
+
+
+def _pack_path_field(pack_path: Path, catalog_id: str, project_root: Path, key: str) -> Path | None:
+    kv = _pack_table(pack_path, catalog_id)
+    if kv is None:
         return None
-    rel = _as_str(kv.get("model_config"))
+    rel = _as_str(kv.get(key))
     if not rel:
         return None
     path = Path(rel)
     if not path.is_absolute():
         path = project_root / path
     return path
+
+
+def pack_model_config(pack_path: Path, catalog_id: str, project_root: Path) -> Path | None:
+    return _pack_path_field(pack_path, catalog_id, project_root, "model_config")
+
+
+def pack_server_config(pack_path: Path, catalog_id: str, project_root: Path) -> Path | None:
+    return _pack_path_field(pack_path, catalog_id, project_root, "server_config")
 
 
 def find_server_toml(project_root: Path, catalog_id: str) -> Path | None:

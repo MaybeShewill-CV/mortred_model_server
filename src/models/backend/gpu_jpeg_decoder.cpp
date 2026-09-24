@@ -227,6 +227,16 @@ Geometry compute_geometry(int src_w, int src_h, int network_w, int network_h,
             g.unpad_w = src_w;
             g.unpad_h = src_h;
             break;
+        case GpuPreprocessDescriptor::Resize::DIRECT_RESIZE_PAD_TO_MULTIPLE: {
+            const int multiple = desc.align_multiple;
+            const int content_w = desc.pre_crop_size.width > 0 ? desc.pre_crop_size.width : src_w;
+            const int content_h = desc.pre_crop_size.height > 0 ? desc.pre_crop_size.height : src_h;
+            g.unpad_w = content_w;
+            g.unpad_h = content_h;
+            g.out_w = ((content_w + multiple - 1) / multiple) * multiple;
+            g.out_h = ((content_h + multiple - 1) / multiple) * multiple;
+            break;
+        }
     }
     return g;
 }
@@ -395,14 +405,16 @@ struct GpuDecodeSlot::State {
         const int src_h = info.sizes_y[0];
         const bool network_blind =
             desc.resize == GpuPreprocessDescriptor::Resize::ALIGN_TO_MULTIPLE ||
-            desc.resize == GpuPreprocessDescriptor::Resize::NONE;
+            desc.resize == GpuPreprocessDescriptor::Resize::NONE ||
+            desc.resize == GpuPreprocessDescriptor::Resize::DIRECT_RESIZE_PAD_TO_MULTIPLE;
         if (src_w <= 0 || src_h <= 0) {
             return fail("invalid image or network size");
         }
         if (!network_blind && (network_w <= 0 || network_h <= 0)) {
             return fail("invalid image or network size");
         }
-        if (desc.resize == GpuPreprocessDescriptor::Resize::ALIGN_TO_MULTIPLE &&
+        if ((desc.resize == GpuPreprocessDescriptor::Resize::ALIGN_TO_MULTIPLE ||
+             desc.resize == GpuPreprocessDescriptor::Resize::DIRECT_RESIZE_PAD_TO_MULTIPLE) &&
             desc.align_multiple <= 0) {
             return fail("invalid align_multiple");
         }

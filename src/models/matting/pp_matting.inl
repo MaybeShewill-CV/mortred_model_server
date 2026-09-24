@@ -64,7 +64,7 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> PPMatting<IN
                       .scale(1.0f / 255.0f)
                       .subtract({0.5f, 0.5f, 0.5f})
                       .divide({0.5f, 0.5f, 0.5f})
-                      .nchw(this->session().inputs().front().name);
+                      .nchw(this->session().inputs().front());
     if (!result.ok()) {
         LOG(ERROR) << result.error;
         return {};

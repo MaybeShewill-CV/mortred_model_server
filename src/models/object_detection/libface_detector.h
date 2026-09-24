@@ -33,13 +33,6 @@ template <typename INPUT, typename OUTPUT> class LibFaceDetector : public jinq::
     LibFaceDetector &operator=(const LibFaceDetector &transformer) = delete;
 
   protected:
-    struct FaceAnchor {
-        double cx = 0.0;
-        double cy = 0.0;
-        double s_kx = 0.0;
-        double s_ky = 0.0;
-    };
-
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
     StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
@@ -47,10 +40,10 @@ template <typename INPUT, typename OUTPUT> class LibFaceDetector : public jinq::
 
     StatusCode on_init(const toml::table &params) override;
 
-    std::vector<FaceAnchor> generate_prior_anchors() const;
-
     DetectionParams _m_detection_params;
-    // input node size
+    // Optional content size from model_input_image_size. Empty means native
+    // source size. Either path is then right/bottom padded to /32. Same size
+    // is GpuPreprocessDescriptor::pre_crop_size for Path B.
     cv::Size _m_input_size_host = cv::Size();
 };
 

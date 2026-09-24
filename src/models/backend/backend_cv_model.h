@@ -378,13 +378,20 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
             const int net_h = desc_nhwc ? dim_at(1) : dim_at(2);
             const int net_w = desc_nhwc ? dim_at(2) : dim_at(3);
             const int net_c = desc_nhwc ? dim_at(3) : dim_at(1);
+            const bool pad_to_multiple = _gpu_preprocess_desc->resize ==
+                backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE_PAD_TO_MULTIPLE;
             const bool network_blind_resize =
                 _gpu_preprocess_desc->resize == backend::GpuPreprocessDescriptor::Resize::ALIGN_TO_MULTIPLE ||
-                _gpu_preprocess_desc->resize == backend::GpuPreprocessDescriptor::Resize::NONE;
+                _gpu_preprocess_desc->resize == backend::GpuPreprocessDescriptor::Resize::NONE ||
+                pad_to_multiple;
             const bool static_dims_ok = input_info.shape.size() == 4 && net_w > 0 && net_h > 0 &&
                 net_c == (_gpu_preprocess_desc->color == backend::GpuPreprocessDescriptor::Color::GRAY ? 1 : 3) &&
                 !network_blind_resize;
-            const bool dynamic_ok = _gpu_preprocess_desc->dynamic_size && input_info.dynamic;
+            // PAD_TO_MULTIPLE output size is toml unpadded + /N, not the JPEG
+            // size. A later static TRT engine at that padded shape is eligible
+            // even when the session reports concrete H/W (dynamic=false).
+            const bool dynamic_ok = _gpu_preprocess_desc->dynamic_size &&
+                (input_info.dynamic || (pad_to_multiple && _gpu_preprocess_desc->pre_crop_size.area() > 0));
             const size_t session_input_count = _m_session->inputs().size();
             const bool inputs_wired = session_input_count == 1 ||
                 (session_input_count == 2 && _gpu_preprocess_desc->secondary_gray_output);

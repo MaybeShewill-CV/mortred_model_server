@@ -77,8 +77,8 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> MsOcrNet<INP
                         .scale(1.0f / 255.0f)
                         .subtract({0.5f, 0.5f, 0.5f})
                         .divide({0.5f, 0.5f, 0.5f});
-    const std::string input_name = this->session().inputs().front().name;
-    auto result = _m_input_is_nhwc ? pipeline.nhwc(input_name) : pipeline.nchw(input_name);
+    const auto &input_info = this->session().inputs().front();
+    auto result = _m_input_is_nhwc ? pipeline.nhwc(input_info) : pipeline.nchw(input_info);
     if (!result.ok()) {
         LOG(ERROR) << result.error;
         return {};

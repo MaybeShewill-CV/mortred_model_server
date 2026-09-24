@@ -1,0 +1,24 @@
+# CI-only overlay: fork-hosted ONNX Runtime CPU proof for this product id.
+# Product serving stays the original conf/model/**/*.toml (mnn/tensorrt).
+# Do not point conf/server at this file.
+
+[LIBFACE]
+[LIBFACE.backend]
+type = "onnx"
+model_file_path = "../weights/object_detection/libfacedetection/face_detection_yunet_2026may.static_bs1.onnx"
+device = "cpu"
+threads = 4
+precision_mode = 0
+power_mode = 0
+input_layout = "nchw"
+input_names = ["input"]
+output_names = ["cls_8", "cls_16", "cls_32", "obj_8", "obj_16", "obj_32", "bbox_8", "bbox_16", "bbox_32", "kps_8", "kps_16", "kps_32"]
+
+[LIBFACE.params]
+model_input_image_size = [320, 240]
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"
+model_score_threshold = 0.75
+model_nms_threshold = 0.35
+model_keep_top_k = 250

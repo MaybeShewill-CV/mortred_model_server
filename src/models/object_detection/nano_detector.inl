@@ -74,7 +74,7 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> NanoDetector
                       .scale(1.0f / 255.0f)
                       .subtract({0.406f, 0.456f, 0.485f})
                       .divide({0.225f, 0.224f, 0.229f})
-                      .nchw(this->session().inputs().front().name);
+                      .nchw(this->session().inputs().front());
     if (!result.ok()) {
         LOG(ERROR) << result.error;
         return {};

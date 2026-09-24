@@ -239,3 +239,5 @@ python3 scripts/check_consistency.py
 
 - Depth, LightGlue, and LDM still lack golden cases.
 - `enlightengan` stays off `ImagePipeline` (dual tensor / custom luma / alpha).
+- ONNX interchange remaining blocked graphs (SAM vit_l encoder, RTDETR scaffold):
+  [onnx-interchange.md](onnx-interchange.md).

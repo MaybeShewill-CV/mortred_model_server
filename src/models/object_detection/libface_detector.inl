@@ -8,7 +8,9 @@
 #include "libface_detector.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <string>
 
 #include "glog/logging.h"
 #include <opencv2/opencv.hpp>
@@ -25,6 +27,22 @@ using FaceOutput = jinq::models::io_define::object_detection::std_face_detection
 using jinq::common::StatusCode;
 using jinq::models::backend::NamedTensor;
 
+namespace {
+
+constexpr int kYuNetAlign = 32;
+constexpr std::array<int, 3> kYuNetStrides = {8, 16, 32};
+
+inline cv::Size align_to_divisor(const cv::Size &size, int divisor) {
+    if (divisor <= 0 || size.width <= 0 || size.height <= 0) {
+        return {};
+    }
+    return {((size.width + divisor - 1) / divisor) * divisor, ((size.height + divisor - 1) / divisor) * divisor};
+}
+
+inline float clamp01(float value) { return std::min(1.0f, std::max(0.0f, value)); }
+
+} // namespace
+
 template <typename INPUT, typename OUTPUT> StatusCode LibFaceDetector<INPUT, OUTPUT>::on_init(const toml::table &params) {
     _m_detection_params.score_threshold = 0.6f;
     _m_detection_params.nms_threshold = 0.3f;
@@ -40,63 +58,51 @@ template <typename INPUT, typename OUTPUT> StatusCode LibFaceDetector<INPUT, OUT
         LOG(ERROR) << "unexpected libface input shape: " << input_info.to_string() << ", expected [N,3,H,W] (nchw)";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    _m_input_size_host.height = static_cast<int>(input_info.shape[2]);
-    _m_input_size_host.width = static_cast<int>(input_info.shape[3]);
-    cv::Size configured_size;
-    if (!parse_model_input_size(params, &configured_size, &param_error) ||
-        (params.contains("model_input_image_size") && configured_size != _m_input_size_host)) {
-        LOG(ERROR) << "invalid libface input size: " << (param_error.empty() ? "configured size mismatches model input" : param_error);
+    if (!parse_model_input_size(params, &_m_input_size_host, &param_error)) {
+        LOG(ERROR) << "invalid libface input size: " << param_error;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    this->set_image_decode_hint(_m_input_size_host, parse_image_decode_upscale(params, "libface"));
+    if (_m_input_size_host.area() > 0) {
+        this->set_image_decode_hint(_m_input_size_host, parse_image_decode_upscale(params, "libface"));
+    } else {
+        this->set_image_decode_hint(cv::Size(), 1.0f);
+    }
+    // Stretch to toml [H,W] (or native size), then right/bottom zero-pad /32.
+    // Path B still needs type=tensorrt at serving time; onnx stays CPU decode.
     this->set_gpu_preprocess({
-        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
+        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE_PAD_TO_MULTIPLE,
+        .norm = {.scale = 1.0f},
         .color = jinq::models::backend::GpuPreprocessDescriptor::Color::BGR,
-        .pad_value = 114,
+        .pad_value = 0,
         .output_dtype = input_info.dtype,
         .output_nhwc = false,
+        .pre_crop_size = _m_input_size_host,
+        .align_multiple = kYuNetAlign,
+        .dynamic_size = true,
     });
 
     return StatusCode::OK;
 }
 
-template <typename INPUT, typename OUTPUT> auto LibFaceDetector<INPUT, OUTPUT>::generate_prior_anchors() const -> std::vector<FaceAnchor> {
-    const std::vector<std::vector<double>> min_sizes = {{10., 16., 24.}, {32., 48.}, {64., 96.}, {128., 192., 256.}};
-    const std::vector<double> steps = {8., 16., 32., 64.};
-
-    const auto in_h = _m_input_size_host.height;
-    const auto in_w = _m_input_size_host.width;
-    const std::vector<int> feature_map_2th = {static_cast<int>((in_h + 1) / 2 / 2), static_cast<int>((in_w + 1) / 2 / 2)};
-    const std::vector<int> feature_map_3th = {feature_map_2th[0] / 2, feature_map_2th[1] / 2};
-    const std::vector<int> feature_map_4th = {feature_map_3th[0] / 2, feature_map_3th[1] / 2};
-    const std::vector<int> feature_map_5th = {feature_map_4th[0] / 2, feature_map_4th[1] / 2};
-    const std::vector<int> feature_map_6th = {feature_map_5th[0] / 2, feature_map_5th[1] / 2};
-    const std::vector<std::vector<int>> feature_maps = {feature_map_3th, feature_map_4th, feature_map_5th, feature_map_6th};
-
-    std::vector<FaceAnchor> anchors;
-    for (size_t k = 0; k < feature_maps.size(); ++k) {
-        const auto &feature_map = feature_maps[k];
-        const auto &feature_min_sizes = min_sizes[k];
-        for (int i = 0; i < feature_map[0]; ++i) {
-            for (int j = 0; j < feature_map[1]; ++j) {
-                for (const auto min_size : feature_min_sizes) {
-                    FaceAnchor anchor;
-                    anchor.s_kx = min_size / in_w;
-                    anchor.s_ky = min_size / in_h;
-                    anchor.cx = (static_cast<double>(j) + 0.5) * steps[k] / in_w;
-                    anchor.cy = (static_cast<double>(i) + 0.5) * steps[k] / in_h;
-                    anchors.push_back(anchor);
-                }
-            }
-        }
-    }
-    return anchors;
-}
-
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> LibFaceDetector<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
-    // resize / colour / normalize, emitted as f32 nchw
-    auto result =
-        jinq::models::backend::ImagePipeline(input_image).resize(_m_input_size_host).to_float().nchw(this->session().inputs().front().name);
+    cv::Mat working;
+    if (_m_input_size_host.area() > 0) {
+        cv::resize(input_image, working, _m_input_size_host, 0.0, 0.0, cv::INTER_LINEAR);
+    } else {
+        working = input_image;
+    }
+    const cv::Size padded = align_to_divisor(working.size(), kYuNetAlign);
+    if (padded.area() <= 0) {
+        LOG(ERROR) << "libface failed to align input size " << working.size();
+        return {};
+    }
+    if (padded != working.size()) {
+        cv::Mat canvas;
+        cv::copyMakeBorder(working, canvas, 0, padded.height - working.rows, 0, padded.width - working.cols, cv::BORDER_CONSTANT,
+                           cv::Scalar(0, 0, 0));
+        working = std::move(canvas);
+    }
+    auto result = jinq::models::backend::ImagePipeline(working).to_float().nchw(this->session().inputs().front());
     if (!result.ok()) {
         LOG(ERROR) << result.error;
         return {};
@@ -107,90 +113,107 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> LibFaceDetec
 template <typename INPUT, typename OUTPUT>
 StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
                                                        const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
-    const auto *loc = jinq::models::backend::find_output(outputs, "loc");
-    const auto *conf = jinq::models::backend::find_output(outputs, "conf");
-    if (loc == nullptr || conf == nullptr) {
-        LOG(ERROR) << "libface outputs loc/conf missing";
-        return StatusCode::MODEL_EMPTY_OUTPUT;
-    }
-    std::string contract_error;
-    if (!jinq::models::backend::validate_output_tensor(*loc, {jinq::models::backend::DType::F32, 3, {1, -1, 14}}, &contract_error) ||
-        !jinq::models::backend::validate_output_tensor(*conf, {jinq::models::backend::DType::F32, 3, {1, loc->tensor.shape[1], 2}},
-                                                       &contract_error)) {
-        LOG(ERROR) << "libface output contract failed: " << contract_error;
+    const int pad_w = context.network_size.width;
+    const int pad_h = context.network_size.height;
+    if (pad_w <= 0 || pad_h <= 0 || pad_w % kYuNetAlign != 0 || pad_h % kYuNetAlign != 0) {
+        LOG(ERROR) << "libface network size must be a positive multiple of " << kYuNetAlign << ", got " << context.network_size;
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
 
-    const auto anchor_count = static_cast<size_t>(loc->tensor.shape[1]);
-    const float *loc_data = nullptr;
-    const float *conf_data = nullptr;
-    if (!jinq::models::backend::get_f32_data(loc->tensor, &loc_data, &contract_error) ||
-        !jinq::models::backend::get_f32_data(conf->tensor, &conf_data, &contract_error) ||
-        !jinq::models::backend::require_finite_f32(loc_data, loc->tensor.element_count(), loc->name, &contract_error) ||
-        !jinq::models::backend::require_finite_f32(conf_data, conf->tensor.element_count(), conf->name, &contract_error)) {
-        LOG(ERROR) << "libface output contract failed: " << contract_error;
-        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
-    }
-
-    // MNN rank-3 host output is row-major [N, anchors, channels].  A real
-    // 640x480-weight probe found 37 threshold hits with this interleaved view
-    // versus 8776 with the old channel-major view; only the former matches the
-    // five-box golden result after anchor decoding and NMS.
-
-    const auto priors = generate_prior_anchors();
-    if (priors.size() != anchor_count) {
-        LOG(ERROR) << "libface anchor count " << priors.size() << " mismatches output anchor count " << anchor_count;
-        return StatusCode::MODEL_EMPTY_OUTPUT;
-    }
-
-    GeometryScale geometry_scale;
-    std::string geometry_error;
-    if (!backend::make_geometry_scale(context, &geometry_scale, &geometry_error)) {
-        LOG(ERROR) << "libface " << geometry_error;
+    const cv::Size unpadded = _m_input_size_host.area() > 0 ? _m_input_size_host : context.source_size;
+    if (unpadded.width <= 0 || unpadded.height <= 0) {
+        LOG(ERROR) << "libface invalid unpadded size";
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
+    if (pad_w < unpadded.width || pad_h < unpadded.height) {
+        LOG(ERROR) << "libface padded network " << context.network_size << " is smaller than unpadded " << unpadded;
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
 
     std::vector<FaceBBox> decode_result;
-    for (size_t bbox_index = 0; bbox_index < anchor_count; ++bbox_index) {
-        const auto &prior = priors[bbox_index];
-        const auto raw_conf = conf_data[bbox_index * 2 + 1];
-        if (raw_conf <= _m_detection_params.score_threshold) {
-            continue;
+    for (const int stride : kYuNetStrides) {
+        const std::string stride_s = std::to_string(stride);
+        const auto *cls = jinq::models::backend::find_output(outputs, "cls_" + stride_s);
+        const auto *obj = jinq::models::backend::find_output(outputs, "obj_" + stride_s);
+        const auto *bbox = jinq::models::backend::find_output(outputs, "bbox_" + stride_s);
+        const auto *kps = jinq::models::backend::find_output(outputs, "kps_" + stride_s);
+        if (cls == nullptr || obj == nullptr || bbox == nullptr || kps == nullptr) {
+            LOG(ERROR) << "libface YuNet heads missing for stride " << stride;
+            return StatusCode::MODEL_EMPTY_OUTPUT;
         }
 
-        const auto raw_bbox_x = loc_data[bbox_index * 14];
-        const auto raw_bbox_y = loc_data[bbox_index * 14 + 1];
-        const auto raw_bbox_w = loc_data[bbox_index * 14 + 2];
-        const auto raw_bbox_h = loc_data[bbox_index * 14 + 3];
-        auto pred_bbox_x = prior.cx + raw_bbox_x * 0.1 * prior.s_kx;
-        auto pred_bbox_y = prior.cy + raw_bbox_y * 0.1 * prior.s_ky;
-        auto pred_bbox_w = prior.s_kx * std::exp(raw_bbox_w * 0.2);
-        auto pred_bbox_h = prior.s_ky * std::exp(raw_bbox_h * 0.2);
-        pred_bbox_x = (pred_bbox_x - pred_bbox_w / 2.0) * context.network_size.width;
-        pred_bbox_y = (pred_bbox_y - pred_bbox_h / 2.0) * context.network_size.height;
-        pred_bbox_w *= context.network_size.width;
-        pred_bbox_h *= context.network_size.height;
-
-        FaceBBox face_box;
-        face_box.score = raw_conf;
-        face_box.bbox = cv::Rect2f(static_cast<float>(pred_bbox_x), static_cast<float>(pred_bbox_y), static_cast<float>(pred_bbox_w),
-                                   static_cast<float>(pred_bbox_h));
-        for (size_t landmark_index = 4; landmark_index < 14; landmark_index += 2) {
-            const auto raw_landmark_x = loc_data[bbox_index * 14 + landmark_index];
-            const auto raw_landmark_y = loc_data[bbox_index * 14 + landmark_index + 1];
-            const auto pred_landmark_x = (prior.cx + raw_landmark_x * 0.1 * prior.s_kx) * context.network_size.width;
-            const auto pred_landmark_y = (prior.cy + raw_landmark_y * 0.1 * prior.s_ky) * context.network_size.height;
-            face_box.landmarks.emplace_back(static_cast<float>(pred_landmark_x), static_cast<float>(pred_landmark_y));
+        const int cols = pad_w / stride;
+        const int rows = pad_h / stride;
+        const int64_t anchors = static_cast<int64_t>(rows) * static_cast<int64_t>(cols);
+        std::string contract_error;
+        if (!jinq::models::backend::validate_output_tensor(*cls, {jinq::models::backend::DType::F32, 3, {1, anchors, 1}},
+                                                           &contract_error) ||
+            !jinq::models::backend::validate_output_tensor(*obj, {jinq::models::backend::DType::F32, 3, {1, anchors, 1}},
+                                                           &contract_error) ||
+            !jinq::models::backend::validate_output_tensor(*bbox, {jinq::models::backend::DType::F32, 3, {1, anchors, 4}},
+                                                           &contract_error) ||
+            !jinq::models::backend::validate_output_tensor(*kps, {jinq::models::backend::DType::F32, 3, {1, anchors, 10}},
+                                                           &contract_error)) {
+            LOG(ERROR) << "libface output contract failed at stride " << stride << ": " << contract_error;
+            return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
         }
-        face_box.class_id = 0;
-        decode_result.push_back(std::move(face_box));
+
+        const float *cls_data = nullptr;
+        const float *obj_data = nullptr;
+        const float *bbox_data = nullptr;
+        const float *kps_data = nullptr;
+        if (!jinq::models::backend::get_f32_data(cls->tensor, &cls_data, &contract_error) ||
+            !jinq::models::backend::get_f32_data(obj->tensor, &obj_data, &contract_error) ||
+            !jinq::models::backend::get_f32_data(bbox->tensor, &bbox_data, &contract_error) ||
+            !jinq::models::backend::get_f32_data(kps->tensor, &kps_data, &contract_error) ||
+            !jinq::models::backend::require_finite_f32(cls_data, cls->tensor.element_count(), cls->name, &contract_error) ||
+            !jinq::models::backend::require_finite_f32(obj_data, obj->tensor.element_count(), obj->name, &contract_error) ||
+            !jinq::models::backend::require_finite_f32(bbox_data, bbox->tensor.element_count(), bbox->name, &contract_error) ||
+            !jinq::models::backend::require_finite_f32(kps_data, kps->tensor.element_count(), kps->name, &contract_error)) {
+            LOG(ERROR) << "libface output contract failed at stride " << stride << ": " << contract_error;
+            return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+        }
+
+        const float stride_f = static_cast<float>(stride);
+        for (int row = 0; row < rows; ++row) {
+            for (int col = 0; col < cols; ++col) {
+                const size_t idx = static_cast<size_t>(row) * static_cast<size_t>(cols) + static_cast<size_t>(col);
+                const float score = std::sqrt(clamp01(cls_data[idx]) * clamp01(obj_data[idx]));
+                if (score < _m_detection_params.score_threshold) {
+                    continue;
+                }
+
+                const float cx = (static_cast<float>(col) + bbox_data[idx * 4 + 0]) * stride_f;
+                const float cy = (static_cast<float>(row) + bbox_data[idx * 4 + 1]) * stride_f;
+                const float width = std::exp(bbox_data[idx * 4 + 2]) * stride_f;
+                const float height = std::exp(bbox_data[idx * 4 + 3]) * stride_f;
+
+                FaceBBox face_box;
+                face_box.score = score;
+                face_box.bbox = cv::Rect2f(cx - width * 0.5f, cy - height * 0.5f, width, height);
+                face_box.landmarks.reserve(5);
+                for (int landmark = 0; landmark < 5; ++landmark) {
+                    const float px = (kps_data[idx * 10 + 2 * landmark] + static_cast<float>(col)) * stride_f;
+                    const float py = (kps_data[idx * 10 + 2 * landmark + 1] + static_cast<float>(row)) * stride_f;
+                    face_box.landmarks.emplace_back(px, py);
+                }
+                face_box.class_id = 0;
+                decode_result.push_back(std::move(face_box));
+            }
+        }
     }
 
     auto nms_result = finalize_detections(std::move(decode_result), _m_detection_params, context);
+    const float scale_x = static_cast<float>(context.source_size.width) / static_cast<float>(unpadded.width);
+    const float scale_y = static_cast<float>(context.source_size.height) / static_cast<float>(unpadded.height);
     for (auto &face_box : nms_result) {
-        face_box.bbox = backend::scale_bbox(face_box.bbox, geometry_scale);
+        face_box.bbox.x *= scale_x;
+        face_box.bbox.y *= scale_y;
+        face_box.bbox.width *= scale_x;
+        face_box.bbox.height *= scale_y;
         for (auto &landmark : face_box.landmarks) {
-            landmark = backend::scale_point(landmark, geometry_scale);
+            landmark.x *= scale_x;
+            landmark.y *= scale_y;
         }
         face_box.category = "face";
     }

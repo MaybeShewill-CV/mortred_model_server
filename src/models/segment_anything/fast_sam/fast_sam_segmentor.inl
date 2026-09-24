@@ -100,7 +100,7 @@ std::vector<NamedTensor> FastSamSegmentor<INPUT, OUTPUT>::preprocess(const cv::M
 
     // the keep-ratio geometry above stays hand-written (ImagePipeline has no
     // padding step); only the packing goes through the toolkit
-    auto packed = jinq::models::backend::ImagePipeline(result).nchw(this->session().inputs().front().name);
+    auto packed = jinq::models::backend::ImagePipeline(result).nchw(this->session().inputs().front());
     if (!packed.ok()) {
         LOG(ERROR) << packed.error;
         return {};

@@ -1,0 +1,30 @@
+# CI-only overlay: fork-hosted ONNX Runtime CPU proof for this product id.
+# Product serving stays the original conf/model/**/*.toml (mnn/tensorrt).
+# Do not point conf/server at this file.
+
+[OPENAI_CLIP]
+
+[OPENAI_CLIP.visual_backend]
+type = "onnx"
+model_file_path = "../weights/openai_clip/vit-b-32/visual.static_bs1.onnx"
+device = "cpu"
+threads = 4
+precision_mode = 0
+power_mode = 0
+input_names = ["input"]
+output_names = ["output"]
+
+[OPENAI_CLIP.text_backend]
+type = "onnx"
+model_file_path = "../weights/openai_clip/vit-b-32/textual.static_bs1.onnx"
+device = "cpu"
+threads = 4
+precision_mode = 0
+power_mode = 0
+input_names = ["input"]
+output_names = ["output"]
+
+[OPENAI_CLIP.params]
+vocab_file_path = "../weights/openai_clip/vit-b-32/bpe_simple_vocab_16e6.txt"
+context_length = 77
+truncate_context = true

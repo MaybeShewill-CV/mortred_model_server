@@ -62,7 +62,7 @@ std::vector<NamedTensor> AttentiveGanDerain<INPUT, OUTPUT>::preprocess(const cv:
                       .to_float()
                       .scale(1.0f / 127.5f)
                       .subtract({1.0f, 1.0f, 1.0f})
-                      .nhwc(this->session().inputs().front().name);
+                      .nhwc(this->session().inputs().front());
     if (!result.ok()) {
         LOG(ERROR) << result.error;
         return {};

@@ -101,6 +101,16 @@ inline const char* tensor_layout_to_string(const TensorLayout& layout) {
 
 inline TensorLayout host_output_layout(const std::vector<int64_t>& shape) {
     if (shape.size() == 4) {
+        // Channel-minor NHWC ([N,H,W,C] with C in 1..4 and H not a channel)
+        // must not be tagged NCHW: MobileNet/ResNet/DenseNet/BiSeNet engines
+        // are [1,224,224,3] / [1,H,W,3] and SessionIoValidator.nhwc() reads this tag.
+        const int64_t d1 = shape[1];
+        const int64_t d3 = shape[3];
+        const bool d1_is_c = d1 > 0 && d1 <= 4;
+        const bool d3_is_c = d3 > 0 && d3 <= 4;
+        if (d3_is_c && !d1_is_c) {
+            return TensorLayout::Nhwc;
+        }
         return TensorLayout::Nchw;
     }
     if (shape.size() == 1 || shape.size() == 2) {

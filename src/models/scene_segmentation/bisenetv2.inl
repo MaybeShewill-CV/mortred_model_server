@@ -27,7 +27,7 @@ using jinq::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode BiseNetV2<INPUT, OUTPUT>::on_init(const toml::table &params) {
     const auto input_info =
-        jinq::models::backend::SessionIoValidator(this->session()).input().f32().rank(4).nhwc().channels(3).static_shape().validate();
+        jinq::models::backend::SessionIoValidator(this->session()).input().f32().allow_fp16().rank(4).nhwc().channels(3).static_shape().validate();
     if (!input_info.ok()) {
         LOG(ERROR) << "unexpected bisenetv2 input shape: " << input_info.error << ", expected static [N,H,W,3] (nhwc)";
         return StatusCode::MODEL_INIT_FAILED;
@@ -65,19 +65,12 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> BiseNetV2<IN
     cv::subtract(tmp, cv::Scalar(0.5, 0.5, 0.5), tmp);
     cv::divide(tmp, cv::Scalar(0.5, 0.5, 0.5), tmp);
 
-    NamedTensor named;
-    named.name = this->session().inputs().front().name;
-    named.tensor = jinq::models::backend::Tensor::make<float>({1, _m_input_size_host.height, _m_input_size_host.width, 3});
-    const auto bytes = tmp.total() * tmp.elemSize();
-    if (bytes != named.tensor.byte_size()) {
-        LOG(ERROR) << "preprocessed image byte size " << bytes << " mismatches input tensor byte size " << named.tensor.byte_size();
+    auto result = jinq::models::backend::ImagePipeline(tmp).nhwc(this->session().inputs().front());
+    if (!result.ok()) {
+        LOG(ERROR) << result.error;
         return {};
     }
-    std::memcpy(named.tensor.buffer.data(), tmp.data, bytes);
-
-    std::vector<NamedTensor> inputs;
-    inputs.push_back(std::move(named));
-    return inputs;
+    return {std::move(result.value)};
 }
 
 template <typename INPUT, typename OUTPUT>

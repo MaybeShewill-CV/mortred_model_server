@@ -1,0 +1,16 @@
+# CI-only overlay: fork-hosted ONNX Runtime CPU proof for this product id.
+# Product serving stays the original conf/model/**/*.toml (mnn/tensorrt).
+# Do not point conf/server at this file.
+
+[REALESRGAN]
+[REALESRGAN.backend]
+type = "onnx"
+model_file_path = "../weights/enhancement/real_esrgan/realesr-general-x4v3.static_bs1.onnx"
+device = "cpu"
+threads = 4
+input_layout = "nhwc"
+precision_mode = 0
+power_mode = 0
+
+[REALESRGAN.params]
+image_decode_backend = "auto"

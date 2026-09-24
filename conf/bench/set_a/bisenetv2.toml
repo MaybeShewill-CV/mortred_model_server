@@ -1,0 +1,20 @@
+# Bench overlay: TensorRT static_bs1 engine. Not a product config.
+# id=bisenetv2 catalog=BISENETV2
+
+[BISENETV2]
+
+[BISENETV2.backend]
+type = "tensorrt"
+model_file_path = "../weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.engine.static_bs1.fp32"
+device = "gpu"
+threads = 4
+input_layout = "nhwc"
+input_names = ["input_tensor"]
+output_names = ["final_output"]
+precision_mode = 0
+power_mode = 0
+
+[BISENETV2.params]
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"

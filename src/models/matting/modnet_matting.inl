@@ -28,7 +28,7 @@ using jinq::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode ModNetMatting<INPUT, OUTPUT>::on_init(const toml::table &params) {
     const auto input_info =
-        jinq::models::backend::SessionIoValidator(this->session()).input().f32().rank(4).nchw().channels(3).static_shape().validate();
+        jinq::models::backend::SessionIoValidator(this->session()).input().f32().allow_fp16().rank(4).nchw().channels(3).static_shape().validate();
     if (!input_info.ok()) {
         LOG(ERROR) << "unexpected modnet input shape: " << input_info.error << ", expected static [N,3,H,W] (nchw)";
         return StatusCode::MODEL_INIT_FAILED;
@@ -61,7 +61,7 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> ModNetMattin
                       .scale(1.0f / 255.0f)
                       .subtract({0.5f, 0.5f, 0.5f})
                       .divide({0.5f, 0.5f, 0.5f})
-                      .nchw(this->session().inputs().front().name);
+                      .nchw(this->session().inputs().front());
     if (!result.ok()) {
         LOG(ERROR) << result.error;
         return {};

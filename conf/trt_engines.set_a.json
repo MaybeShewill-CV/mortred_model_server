@@ -1,0 +1,278 @@
+{
+  "_description": "Set A static_bs1 TensorRT convert manifest. Do not merge into conf/trt_engines.json.",
+  "engines": [
+    {
+      "model": "yolov8s",
+      "onnx": "weights/object_detection/yolov8/yolov8s.static_bs1.onnx",
+      "engine": "weights/object_detection/yolov8/yolov8s.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "yolov8n",
+      "onnx": "weights/object_detection/yolov8/yolov8n.static_bs1.onnx",
+      "engine": "weights/object_detection/yolov8/yolov8n.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "yolov8l",
+      "onnx": "weights/object_detection/yolov8/yolov8l.static_bs1.onnx",
+      "engine": "weights/object_detection/yolov8/yolov8l.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "yolov8x",
+      "onnx": "weights/object_detection/yolov8/yolov8x.static_bs1.onnx",
+      "engine": "weights/object_detection/yolov8/yolov8x.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "yolov6s",
+      "onnx": "weights/object_detection/yolov6/yolov6s.static_bs1.onnx",
+      "engine": "weights/object_detection/yolov6/yolov6s.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "yolov5l",
+      "onnx": "weights/object_detection/yolov5/yolov5l.static_bs1.onnx",
+      "engine": "weights/object_detection/yolov5/yolov5l.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "yolov7",
+      "onnx": "weights/object_detection/yolov7/yolov7.static_bs1.onnx",
+      "engine": "weights/object_detection/yolov7/yolov7.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "yolov7x",
+      "onnx": "weights/object_detection/yolov7/yolov7x.static_bs1.onnx",
+      "engine": "weights/object_detection/yolov7/yolov7x.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "nanodet_1x5",
+      "onnx": "weights/object_detection/nanodet/nanodet_plus_m_1x5.static_bs1.onnx",
+      "engine": "weights/object_detection/nanodet/nanodet_plus_m_1x5.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "nanodet_416",
+      "onnx": "weights/object_detection/nanodet/nanodet_plus_m_416.static_bs1.onnx",
+      "engine": "weights/object_detection/nanodet/nanodet_plus_m_416.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "mobilenetv2",
+      "onnx": "weights/classification/mobilenetv2/mobilenetv2.static_bs1.onnx",
+      "engine": "weights/classification/mobilenetv2/mobilenetv2.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "resnet",
+      "onnx": "weights/classification/resnet/resnet.static_bs1.onnx",
+      "engine": "weights/classification/resnet/resnet.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "densenet",
+      "onnx": "weights/classification/densenet/densenet.static_bs1.onnx",
+      "engine": "weights/classification/densenet/densenet.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "superpoint",
+      "onnx": "weights/feature_point/superpoint/superpoint_120x160.static_bs1.onnx",
+      "engine": "weights/feature_point/superpoint/superpoint_120x160.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "dbnet",
+      "onnx": "weights/ocr/db_text_detector/db_model_large.static_bs1.onnx",
+      "engine": "weights/ocr/db_text_detector/db_model_large.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "libface",
+      "onnx": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.static_bs1.onnx",
+      "engine": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": "conf/trt_profiles/set_a_libface.json"
+    },
+    {
+      "model": "centerface",
+      "onnx": "weights/object_detection/centerface_detection/centerface.static_bs1.onnx",
+      "engine": "weights/object_detection/centerface_detection/centerface.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": "conf/trt_profiles/set_a_centerface.json"
+    },
+    {
+      "model": "pphuman_mobile",
+      "onnx": "weights/scene_segmentation/pphuman_seg/pp_humanseg_192x192_mobile.static_bs1.onnx",
+      "engine": "weights/scene_segmentation/pphuman_seg/pp_humanseg_192x192_mobile.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "pphuman_lite",
+      "onnx": "weights/scene_segmentation/pphuman_seg/pp_humanseg_192x192_lite.static_bs1.onnx",
+      "engine": "weights/scene_segmentation/pphuman_seg/pp_humanseg_192x192_lite.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "pphuman_server",
+      "onnx": "weights/scene_segmentation/pphuman_seg/pp_humanseg_512x512_server.static_bs1.onnx",
+      "engine": "weights/scene_segmentation/pphuman_seg/pp_humanseg_512x512_server.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "bisenetv2",
+      "onnx": "weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.static_bs1.onnx",
+      "engine": "weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "modnet",
+      "onnx": "weights/matting/modnet/modnet_hrnet_w18.static_bs1.onnx",
+      "engine": "weights/matting/modnet/modnet_hrnet_w18.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "ppmatting_512",
+      "onnx": "weights/matting/ppmatting/ppmatting_hrnet_w18_human_512.static_bs1.onnx",
+      "engine": "weights/matting/ppmatting/ppmatting_hrnet_w18_human_512.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "ppmatting_1024",
+      "onnx": "weights/matting/ppmatting/ppmatting_hrnet_w18_human_1024.static_bs1.onnx",
+      "engine": "weights/matting/ppmatting/ppmatting_hrnet_w18_human_1024.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "ppmatting_resnet34",
+      "onnx": "weights/matting/ppmatting/pp_humanmatting-resnet34_vd.static_bs1.onnx",
+      "engine": "weights/matting/ppmatting/pp_humanmatting-resnet34_vd.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "ppmatting_v2",
+      "onnx": "weights/matting/ppmatting/ppmattingv2_stdc1_human_512.static_bs1.onnx",
+      "engine": "weights/matting/ppmatting/ppmattingv2_stdc1_human_512.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "attentive_gan",
+      "onnx": "weights/enhancement/attentive_gan_derain/attentive_gan_derain.static_bs1.onnx",
+      "engine": "weights/enhancement/attentive_gan_derain/attentive_gan_derain.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "enlightengan",
+      "onnx": "weights/enhancement/enlighten_gan/enlightengan.static_bs1.onnx",
+      "engine": "weights/enhancement/enlighten_gan/enlightengan.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": "conf/trt_profiles/set_a_enlightengan.json"
+    },
+    {
+      "model": "realesrgan",
+      "onnx": "weights/enhancement/real_esrgan/realesr-general-x4v3.static_bs1.onnx",
+      "engine": "weights/enhancement/real_esrgan/realesr-general-x4v3.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": "conf/trt_profiles/set_a_realesrgan.json"
+    },
+    {
+      "model": "dinov2_vits14",
+      "onnx": "weights/classification/dinov2/dinov2_vits14_pretrain.static_bs1.onnx",
+      "engine": "weights/classification/dinov2/dinov2_vits14_pretrain.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "dinov2_vitb14",
+      "onnx": "weights/classification/dinov2/dinov2_vitb14_pretrain.static_bs1.onnx",
+      "engine": "weights/classification/dinov2/dinov2_vitb14_pretrain.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "dinov2_vitl14",
+      "onnx": "weights/classification/dinov2/dinov2_vitl14_pretrain.static_bs1.onnx",
+      "engine": "weights/classification/dinov2/dinov2_vitl14_pretrain.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "depth_vits14",
+      "onnx": "weights/mono_depth_estimation/depth_anything/depth_anything_vits14.static_bs1.onnx",
+      "engine": "weights/mono_depth_estimation/depth_anything/depth_anything_vits14.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "depth_vitb14",
+      "onnx": "weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.static_bs1.onnx",
+      "engine": "weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "depth_vitl14",
+      "onnx": "weights/mono_depth_estimation/depth_anything/depth_anything_vitl14.static_bs1.onnx",
+      "engine": "weights/mono_depth_estimation/depth_anything/depth_anything_vitl14.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "metric3d_512",
+      "onnx": "weights/mono_depth_estimation/metric3d/metric3d_750k_512x1088.static_bs1.onnx",
+      "engine": "weights/mono_depth_estimation/metric3d/metric3d_750k_512x1088.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "metric3d_1088",
+      "onnx": "weights/mono_depth_estimation/metric3d/metric3d_750k_1088x1920.static_bs1.onnx",
+      "engine": "weights/mono_depth_estimation/metric3d/metric3d_750k_1088x1920.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "hrnet",
+      "onnx": "weights/scene_segmentation/hrnet/hrnetw48_ccd.static_bs1.onnx",
+      "engine": "weights/scene_segmentation/hrnet/hrnetw48_ccd.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    },
+    {
+      "model": "msocrnet",
+      "onnx": "weights/scene_segmentation/msocrnet/msocrnet_fp16.static_bs1.onnx",
+      "engine": "weights/scene_segmentation/msocrnet/msocrnet_fp16.engine.static_bs1.fp16",
+      "fp": 1,
+      "profile": null
+    }
+  ]
+}

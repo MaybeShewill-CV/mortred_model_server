@@ -125,7 +125,7 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> Metric3D<INP
 
     // geometry (keep-ratio resize + pad) stays hand-written: ImagePipeline
     // has no padding step; only the packing goes through the toolkit
-    auto result = jinq::models::backend::ImagePipeline(tmp).nchw(this->session().inputs().front().name);
+    auto result = jinq::models::backend::ImagePipeline(tmp).nchw(this->session().inputs().front());
     if (!result.ok()) {
         LOG(ERROR) << result.error;
         return {};

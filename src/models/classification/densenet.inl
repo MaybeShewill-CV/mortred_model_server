@@ -30,7 +30,7 @@ using jinq::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode DenseNet<INPUT, OUTPUT>::on_init(const toml::table &params) {
     const auto input_info =
-        jinq::models::backend::SessionIoValidator(this->session()).input().f32().rank(4).nhwc().channels(3).static_shape().validate();
+        jinq::models::backend::SessionIoValidator(this->session()).input().f32().allow_fp16().rank(4).nhwc().channels(3).static_shape().validate();
     if (!input_info.ok()) {
         LOG(ERROR) << "unexpected classification input shape: " << input_info.error << ", expected static [N,H,W,3] (nhwc)";
         return StatusCode::MODEL_INIT_FAILED;
@@ -95,18 +95,12 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> DenseNet<INP
     cv::subtract(tmp, cv::Scalar(123.68f, 116.78f, 103.94f), tmp);
     cv::divide(tmp, cv::Scalar(58.395f, 57.12f, 57.375f), tmp);
 
-    std::vector<NamedTensor> inputs;
-    NamedTensor named;
-    named.name = this->session().inputs().front().name;
-    named.tensor = jinq::models::backend::Tensor::make<float>({1, _m_input_tensor_size.height, _m_input_tensor_size.width, 3});
-    const auto bytes = tmp.total() * tmp.elemSize();
-    if (bytes != named.tensor.byte_size()) {
-        LOG(ERROR) << "preprocessed image byte size " << bytes << " mismatches tensor byte size " << named.tensor.byte_size();
+    auto result = jinq::models::backend::ImagePipeline(tmp).nhwc(this->session().inputs().front());
+    if (!result.ok()) {
+        LOG(ERROR) << result.error;
         return {};
     }
-    std::memcpy(named.tensor.buffer.data(), tmp.data, bytes);
-    inputs.push_back(std::move(named));
-    return inputs;
+    return {std::move(result.value)};
 }
 
 template <typename INPUT, typename OUTPUT>

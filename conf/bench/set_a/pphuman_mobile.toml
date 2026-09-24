@@ -1,0 +1,20 @@
+# Bench overlay: TensorRT static_bs1 engine. Not a product config.
+# id=pphuman_mobile catalog=PPHUMAN_SEG
+
+[PP_HUMANSEG]
+
+[PP_HUMANSEG.backend]
+type = "tensorrt"
+model_file_path = "../weights/scene_segmentation/pphuman_seg/pp_humanseg_192x192_mobile.engine.static_bs1.fp16"
+device = "gpu"
+threads = 4
+input_layout = "nchw"
+input_names = ["x"]
+output_names = ["softmax_0.tmp_0"]
+precision_mode = 0
+power_mode = 0
+
+[PP_HUMANSEG.params]
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"

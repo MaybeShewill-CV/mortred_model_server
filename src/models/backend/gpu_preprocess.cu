@@ -18,6 +18,7 @@
 #define RESIZE_KEEP_RATIO_PAD_CENTER  4
 #define RESIZE_ALIGN_TO_MULTIPLE      5
 #define RESIZE_NONE                   6
+#define RESIZE_DIRECT_RESIZE_PAD_TO_MULTIPLE 7  // must match GpuPreprocessDescriptor::Resize
 
 // ── Color orders (match GpuPreprocessDescriptor::Color) ──
 #define COLOR_RGB  0
@@ -142,7 +143,8 @@ __global__ void preprocess_ycbcr_kernel(
         break;
     }
     case RESIZE_KEEP_RATIO_PAD_ZERO:
-    case RESIZE_KEEP_RATIO_PAD_CENTER: {
+    case RESIZE_KEEP_RATIO_PAD_CENTER:
+    case RESIZE_DIRECT_RESIZE_PAD_TO_MULTIPLE: {
         const int lx = w - pad_x;
         const int ly = h - pad_y;
         if (lx < 0 || lx >= unpad_w || ly < 0 || ly >= unpad_h) {

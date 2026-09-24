@@ -1,0 +1,26 @@
+# CI-only overlay: fork-hosted ONNX Runtime CPU proof for this product id.
+# Product serving stays the original conf/model/**/*.toml (mnn/tensorrt).
+# Do not point conf/server at this file.
+
+[DB_TEXT]
+
+[DB_TEXT.backend]
+type = "onnx"
+model_file_path = "../weights/ocr/db_text_detector/db_model_large.static_bs1.onnx"
+device = "cpu"
+threads = 4
+input_layout = "nchw"
+input_names = ["x"]
+output_names = ["sigmoid_0.tmp_0"]
+precision_mode = 0
+power_mode = 0
+
+[DB_TEXT.params]
+model_input_image_size=[544, 960]
+model_class_nums=80
+model_score_threshold=0.3
+model_nms_threshold=0.35
+model_keep_top_k=250
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"

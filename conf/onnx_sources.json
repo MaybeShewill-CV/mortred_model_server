@@ -1,11 +1,18 @@
 {
   "repo": "MaybeShewill-CV/mortred_model_server",
   "revision": "main",
-  "description": "Per product-id ONNX interchange source, IO contract, and license. HF hosts ONNX (plus CLIP vocab). Product conf/model/**/*.toml stay type=mnn or type=tensorrt except existing diffusion/MSOCRNET/SAM-decoder overlays. Do not reverse MNN/.model/.engine. Bytes/sha256 live in conf/weights_manifest.json. Contracts dumped from product toml + on_init (not a live session); dynamic spatial dims stay -1.",
+  "description": "Per product-id ONNX interchange source, IO contract, and license. Dual-file rules and remaining gaps: docs/onnx-interchange.md. HF hosts ONNX (plus CLIP vocab) after all interchange files exist — P2 local files are not uploaded yet. Product conf/model/**/*.toml stay type=mnn or type=tensorrt except diffusion/MSOCRNET/SAM-decoder overlays and LIBFACE (YuNet 2026may type=onnx). Do not reverse MNN/.model/.engine. Bytes/sha256 live in conf/weights_manifest.json. Dual files: {stem}.static_bs1.onnx and {stem}.dyn.onnx.",
   "policy": {
     "hf_hosts": "onnx_interchange",
-    "product_backend": ["mnn", "tensorrt"],
-    "no_reverse_from": ["mnn", "model", "engine"],
+    "product_backend": [
+      "mnn",
+      "tensorrt"
+    ],
+    "no_reverse_from": [
+      "mnn",
+      "model",
+      "engine"
+    ],
     "cpu_mnn_stay_until": "convert_mnn",
     "p1_skip": [
       "weights/object_detection/yolov8/yolov8n.onnx",
@@ -32,18 +39,46 @@
       "config": "conf/model/classification/mobilenetv2/mobilenetv2_config.toml",
       "product_type": "mnn",
       "runtime_path": "weights/classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn",
-      "onnx_path": null,
-      "onnx_status": "missing",
+      "onnx_path": "weights/classification/mobilenetv2/mobilenetv2.static_bs1.onnx",
+      "onnx_status": "local",
       "p1_upload": false,
       "p2_wave": "B",
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "session.inputs().front()", "layout": "NHWC", "dtype": "F32", "shape": [1, 224, 224, 3], "dynamic": false}],
-        "outputs": [{"name": "outputs.front()", "dtype": "F32"}],
+        "inputs": [
+          {
+            "name": "session.inputs().front()",
+            "layout": "NHWC",
+            "dtype": "F32",
+            "shape": [
+              1,
+              224,
+              224,
+              3
+            ],
+            "dynamic": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "outputs.front()",
+            "dtype": "F32"
+          }
+        ],
         "preprocess": "resize 256 → CENTER_CROP 224 → RGB; caffe 0-255 mean/std {123.68,116.78,103.94}/{58.395,57.12,57.375}; JPEG budget hint 256",
         "notes": "Wrong export is NCHW ImageNet 0-1. Must stay NHWC."
       },
-      "license": {"redistribute": "p2_review", "notes": "ImageNet-pretrained MobileNetV2; sibling MNN already on this HF repo."}
+      "license": {
+        "redistribute": "p2_review",
+        "notes": "ImageNet-pretrained MobileNetV2; sibling MNN already on this HF repo."
+      },
+      "onnx_dyn_path": "weights/classification/mobilenetv2/mobilenetv2.dyn.onnx",
+      "onnx_source": {
+        "kind": "official_ckpt_export",
+        "ref": "torchvision.models.mobilenet_v2 MobileNet_V2_Weights.IMAGENET1K_V1",
+        "script": "scripts/export_onnx/export_classification.py",
+        "notes": "NHWC wrapper permute(0,3,1,2). Graph is F32 0-255-scale tensors; caffe mean/std stays in C++. Dual files .static_bs1 / .dyn."
+      }
     },
     {
       "id": "RESNET",
@@ -51,17 +86,45 @@
       "config": "conf/model/classification/resnet/resnet50_config.toml",
       "product_type": "mnn",
       "runtime_path": "weights/classification/resnet/resnet-50.mnn",
-      "onnx_path": null,
-      "onnx_status": "missing",
+      "onnx_path": "weights/classification/resnet/resnet.static_bs1.onnx",
+      "onnx_status": "local",
       "p1_upload": false,
       "p2_wave": "B",
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "session.inputs().front()", "layout": "NHWC", "dtype": "F32", "shape": [1, 224, 224, 3], "dynamic": false}],
-        "outputs": [{"name": "outputs.front()", "dtype": "F32"}],
+        "inputs": [
+          {
+            "name": "session.inputs().front()",
+            "layout": "NHWC",
+            "dtype": "F32",
+            "shape": [
+              1,
+              224,
+              224,
+              3
+            ],
+            "dynamic": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "outputs.front()",
+            "dtype": "F32"
+          }
+        ],
         "preprocess": "same as MOBILENETV2 (CENTER_CROP 256→224, caffe mean/std, RGB)"
       },
-      "license": {"redistribute": "p2_review", "notes": "Sibling MNN already on this HF repo."}
+      "license": {
+        "redistribute": "p2_review",
+        "notes": "Sibling MNN already on this HF repo."
+      },
+      "onnx_dyn_path": "weights/classification/resnet/resnet.dyn.onnx",
+      "onnx_source": {
+        "kind": "official_ckpt_export",
+        "ref": "torchvision.models.resnet50 ResNet50_Weights.IMAGENET1K_V1",
+        "script": "scripts/export_onnx/export_classification.py",
+        "notes": "Same NHWC wrap as MOBILENETV2."
+      }
     },
     {
       "id": "DENSENET",
@@ -69,17 +132,45 @@
       "config": "conf/model/classification/densenet/densenet121_config.toml",
       "product_type": "mnn",
       "runtime_path": "weights/classification/densenet/densenet-121.mnn",
-      "onnx_path": null,
-      "onnx_status": "missing",
+      "onnx_path": "weights/classification/densenet/densenet.static_bs1.onnx",
+      "onnx_status": "local",
       "p1_upload": false,
       "p2_wave": "B",
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "session.inputs().front()", "layout": "NHWC", "dtype": "F32", "shape": [1, 224, 224, 3], "dynamic": false}],
-        "outputs": [{"name": "outputs.front()", "dtype": "F32"}],
+        "inputs": [
+          {
+            "name": "session.inputs().front()",
+            "layout": "NHWC",
+            "dtype": "F32",
+            "shape": [
+              1,
+              224,
+              224,
+              3
+            ],
+            "dynamic": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "outputs.front()",
+            "dtype": "F32"
+          }
+        ],
         "preprocess": "same as MOBILENETV2"
       },
-      "license": {"redistribute": "p2_review", "notes": "Sibling MNN already on this HF repo."}
+      "license": {
+        "redistribute": "p2_review",
+        "notes": "Sibling MNN already on this HF repo."
+      },
+      "onnx_dyn_path": "weights/classification/densenet/densenet.dyn.onnx",
+      "onnx_source": {
+        "kind": "official_ckpt_export",
+        "ref": "torchvision.models.densenet121 DenseNet121_Weights.IMAGENET1K_V1",
+        "script": "scripts/export_onnx/export_classification.py",
+        "notes": "Same NHWC wrap as MOBILENETV2."
+      }
     },
     {
       "id": "YOLOV5",
@@ -87,17 +178,50 @@
       "config": "conf/model/object_detection/yolov5/yolov5_config.toml",
       "product_type": "mnn",
       "runtime_path": "weights/object_detection/yolov5/yolov5l.mnn",
-      "onnx_path": null,
-      "onnx_status": "missing",
+      "onnx_path": "weights/object_detection/yolov5/yolov5l.static_bs1.onnx",
+      "onnx_status": "local",
       "p1_upload": false,
       "p2_wave": "A",
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "session.inputs().front()", "layout": "NCHW", "dtype": "F32", "shape": [1, 3, 640, 640], "dynamic": false}],
-        "outputs": [{"name": "output", "dtype": "F32", "shape": [1, -1, 85]}],
+        "inputs": [
+          {
+            "name": "session.inputs().front()",
+            "layout": "NCHW",
+            "dtype": "F32",
+            "shape": [
+              1,
+              3,
+              640,
+              640
+            ],
+            "dynamic": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "dtype": "F32",
+            "shape": [
+              1,
+              -1,
+              85
+            ]
+          }
+        ],
         "preprocess": "YOLO letterbox RGB /255 pad 114; JPEG budget 640; NMS stays in C++"
       },
-      "license": {"redistribute": "review_before_redistribute", "notes": "Ultralytics/YOLO GPL-3.0. Sibling yolov5l.mnn already on this HF repo; still review before a new ONNX upload."}
+      "license": {
+        "redistribute": "review_before_redistribute",
+        "notes": "Ultralytics/YOLO GPL-3.0. Sibling yolov5l.mnn already on this HF repo; still review before a new ONNX upload."
+      },
+      "onnx_dyn_path": "weights/object_detection/yolov5/yolov5l.dyn.onnx",
+      "onnx_source": {
+        "kind": "official_ckpt_export",
+        "ref": "https://hf-mirror.com/ultralytics/yolov5/resolve/main/yolov5l.pt (v7.0) + ultralytics/yolov5 export.py",
+        "script": "scripts/export_onnx/ (yolov5 export.py; output0 renamed to output)",
+        "notes": "Output name output [1,25200,85]. Dyn pair deep-patched Reshape dim0. GPL-3.0; do not upload until license review."
+      }
     },
     {
       "id": "YOLOV6",
@@ -105,17 +229,50 @@
       "config": "conf/model/object_detection/yolov6/yolov6_config.toml",
       "product_type": "mnn",
       "runtime_path": "weights/object_detection/yolov6/yolov6s.mnn",
-      "onnx_path": null,
-      "onnx_status": "missing",
+      "onnx_path": "weights/object_detection/yolov6/yolov6s.static_bs1.onnx",
+      "onnx_status": "local",
       "p1_upload": false,
       "p2_wave": "A",
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "session.inputs().front()", "layout": "NCHW", "dtype": "F32", "shape": [1, 3, 640, 640], "dynamic": false}],
-        "outputs": [{"name": "outputs", "dtype": "F32", "shape": [1, -1, 85]}],
+        "inputs": [
+          {
+            "name": "session.inputs().front()",
+            "layout": "NCHW",
+            "dtype": "F32",
+            "shape": [
+              1,
+              3,
+              640,
+              640
+            ],
+            "dynamic": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "outputs",
+            "dtype": "F32",
+            "shape": [
+              1,
+              -1,
+              85
+            ]
+          }
+        ],
         "preprocess": "YOLO letterbox RGB /255; JPEG budget 640; NMS in C++"
       },
-      "license": {"redistribute": "review_before_redistribute", "notes": "Meituan YOLOv6 GPL-3.0. Sibling yolov6s.mnn already on this HF repo."}
+      "license": {
+        "redistribute": "review_before_redistribute",
+        "notes": "Meituan YOLOv6 GPL-3.0. Sibling yolov6s.mnn already on this HF repo."
+      },
+      "onnx_dyn_path": "weights/object_detection/yolov6/yolov6s.dyn.onnx",
+      "onnx_source": {
+        "kind": "official_onnx",
+        "ref": "Meituan YOLOv6 0.3.0 yolov6s.onnx (gh-proxy github.com/meituan/YOLOv6)",
+        "script": "scripts/export_onnx/adopt_official_onnx.py",
+        "notes": "Already named outputs [1,8400,85] (anchor-free). C++ accepts [1,-1,85]. GPL-3.0."
+      }
     },
     {
       "id": "YOLOV7",
@@ -123,20 +280,53 @@
       "config": "conf/model/object_detection/yolov7/yolov7_config.toml",
       "product_type": "mnn",
       "runtime_path": "weights/object_detection/yolov7/yolov7.mnn",
-      "onnx_path": "weights/object_detection/yolov7/yolov7.onnx",
+      "onnx_path": "weights/object_detection/yolov7/yolov7.static_bs1.onnx",
       "onnx_status": "hosted",
       "p1_upload": false,
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "session.inputs().front()", "layout": "NCHW", "dtype": "F32", "shape": [1, 3, 640, 640], "dynamic": false}],
+        "inputs": [
+          {
+            "name": "session.inputs().front()",
+            "layout": "NCHW",
+            "dtype": "F32",
+            "shape": [
+              1,
+              3,
+              640,
+              640
+            ],
+            "dynamic": false
+          }
+        ],
         "outputs": [
-          {"name": "output", "dtype": "F32"},
-          {"name": "518", "dtype": "F32"},
-          {"name": "532", "dtype": "F32"}
+          {
+            "name": "output",
+            "dtype": "F32"
+          },
+          {
+            "name": "518",
+            "dtype": "F32"
+          },
+          {
+            "name": "532",
+            "dtype": "F32"
+          }
         ],
         "preprocess": "YOLO letterbox RGB /255; JPEG budget 640; three heads; NMS in C++"
       },
-      "license": {"redistribute": "already_on_this_hf_repo", "notes": "yolov7.onnx already hosted. GPL-3.0."}
+      "license": {
+        "redistribute": "already_on_this_hf_repo",
+        "notes": "yolov7.onnx already hosted. GPL-3.0."
+      },
+      "onnx_source": {
+        "kind": "preexisting",
+        "ref": "weights/object_detection/yolov7/yolov7.onnx",
+        "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width.",
+        "legacy": "weights/object_detection/yolov7/yolov7.onnx"
+      },
+      "legacy_onnx_path": "weights/object_detection/yolov7/yolov7.onnx",
+      "onnx_dyn_path": "weights/object_detection/yolov7/yolov7.dyn.onnx"
     },
     {
       "id": "YOLOV8",
@@ -144,17 +334,51 @@
       "config": "conf/model/object_detection/yolov8/yolov8_config.toml",
       "product_type": "tensorrt",
       "runtime_path": "weights/object_detection/yolov8/yolov8s.engine.static_bs1.fp16in",
-      "onnx_path": "weights/object_detection/yolov8/yolov8s.onnx",
+      "onnx_path": "weights/object_detection/yolov8/yolov8s.static_bs1.onnx",
       "onnx_status": "hosted",
       "p1_upload": false,
       "trt_engines_id": "yolov8s",
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "session.inputs().front()", "layout": "NCHW", "dtype": "F32", "shape": [1, 3, 640, 640], "dynamic": false}],
-        "outputs": [{"name": "output0", "dtype": "F32", "shape": [1, 84, -1]}],
+        "inputs": [
+          {
+            "name": "session.inputs().front()",
+            "layout": "NCHW",
+            "dtype": "F32",
+            "shape": [
+              1,
+              3,
+              640,
+              640
+            ],
+            "dynamic": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output0",
+            "dtype": "F32",
+            "shape": [
+              1,
+              84,
+              -1
+            ]
+          }
+        ],
         "preprocess": "YOLO letterbox RGB /255 pad 114; JPEG budget 640; NMS in C++. Template for HF-onnx + product-engine."
       },
-      "license": {"redistribute": "already_on_this_hf_repo", "notes": "Ultralytics AGPL-3.0. yolov8s.onnx already hosted. Do not upload yolov8n/l/x (not product)."}
+      "license": {
+        "redistribute": "already_on_this_hf_repo",
+        "notes": "Ultralytics AGPL-3.0. yolov8s.onnx already hosted. Do not upload yolov8n/l/x (not product)."
+      },
+      "onnx_source": {
+        "kind": "preexisting",
+        "ref": "weights/object_detection/yolov8/yolov8s.onnx",
+        "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width.",
+        "legacy": "weights/object_detection/yolov8/yolov8s.onnx"
+      },
+      "legacy_onnx_path": "weights/object_detection/yolov8/yolov8s.onnx",
+      "onnx_dyn_path": "weights/object_detection/yolov8/yolov8s.dyn.onnx"
     },
     {
       "id": "NANODET",
@@ -162,55 +386,210 @@
       "config": "conf/model/object_detection/nano_det/nanodet_config.toml",
       "product_type": "mnn",
       "runtime_path": "weights/object_detection/nanodet/nanodet_plus_m_1x5.mnn",
-      "onnx_path": null,
-      "onnx_status": "missing",
+      "onnx_path": "weights/object_detection/nanodet/nanodet_plus_m_1x5.static_bs1.onnx",
+      "onnx_status": "local",
       "p1_upload": false,
       "p2_wave": "A",
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "session.inputs().front()", "layout": "NCHW", "dtype": "F32", "shape": [1, 3, 416, 416], "dynamic": false}],
-        "outputs": [{"name": "output", "dtype": "F32", "shape": [1, "num_points", "C+(reg_max+1)*4"]}],
+        "inputs": [
+          {
+            "name": "session.inputs().front()",
+            "layout": "NCHW",
+            "dtype": "F32",
+            "shape": [
+              1,
+              3,
+              416,
+              416
+            ],
+            "dynamic": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "dtype": "F32",
+            "shape": [
+              1,
+              "num_points",
+              "C+(reg_max+1)*4"
+            ]
+          }
+        ],
         "preprocess": "direct resize; JPEG budget 416; NMS in C++"
       },
-      "license": {"redistribute": "p2_review", "notes": "NanoDet-Plus Apache-2.0 typically. Sibling MNN already on this HF repo."}
+      "license": {
+        "redistribute": "p2_review",
+        "notes": "NanoDet-Plus Apache-2.0 typically. Sibling MNN already on this HF repo."
+      },
+      "onnx_dyn_path": "weights/object_detection/nanodet/nanodet_plus_m_1x5.dyn.onnx",
+      "onnx_source": {
+        "kind": "official_onnx",
+        "ref": "RangiLyu/nanodet official nanodet-plus-m-1.5x_416.onnx",
+        "script": "scripts/export_onnx/common.py fold_weight_inputs + set_batch_dim",
+        "notes": "Product 1x5 == plus-m-1.5x (9.5MB). Folded 260 leaked weight graph.inputs so only data remains. output [1,3598,112]. Extra sibling nanodet_plus_m_416 not product."
+      }
     },
     {
       "id": "LIBFACE",
       "variant": "320x240",
       "served": "http",
       "config": "conf/model/object_detection/libfacedetection/320x240_config.toml",
-      "product_type": "mnn",
-      "runtime_path": "weights/object_detection/libfacedetection/face_detection_320x240_model.model",
-      "onnx_path": null,
-      "onnx_status": "missing",
+      "product_type": "onnx",
+      "runtime_path": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.onnx",
+      "onnx_path": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.static_bs1.onnx",
+      "onnx_status": "local",
       "p1_upload": false,
       "p2_wave": "D",
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "input", "layout": "NCHW", "dtype": "F32", "shape": [1, 3, 320, 240], "dynamic": false}],
-        "outputs": [{"name": "loc"}, {"name": "conf"}],
-        "preprocess": "BGR unnormalized DIRECT_RESIZE; JPEG budget 320x240"
+        "inputs": [
+          {
+            "name": "input",
+            "layout": "NCHW",
+            "dtype": "F32",
+            "shape": [
+              1,
+              3,
+              "height",
+              "width"
+            ],
+            "dynamic": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "cls_8"
+          },
+          {
+            "name": "cls_16"
+          },
+          {
+            "name": "cls_32"
+          },
+          {
+            "name": "obj_8"
+          },
+          {
+            "name": "obj_16"
+          },
+          {
+            "name": "obj_32"
+          },
+          {
+            "name": "bbox_8"
+          },
+          {
+            "name": "bbox_16"
+          },
+          {
+            "name": "bbox_32"
+          },
+          {
+            "name": "kps_8"
+          },
+          {
+            "name": "kps_16"
+          },
+          {
+            "name": "kps_32"
+          }
+        ],
+        "preprocess": "BGR 0-255; optional DIRECT_RESIZE from toml then right/bottom pad to /32"
       },
-      "license": {"redistribute": "p2_review", "notes": "OpenCV YuNet / libfacedetection. Sibling .model already on this HF repo. Spatial size must stay 320×240."}
+      "license": {
+        "redistribute": "p2_review",
+        "notes": "OpenCV YuNet / libfacedetection. Sibling .model already on this HF repo. Spatial size must stay 320×240."
+      },
+      "onnx_source": {
+        "kind": "official_onnx",
+        "ref": "opencv/opencv_zoo models/face_detection_yunet/face_detection_yunet_2026may.onnx",
+        "script": "scripts/export_onnx/adopt_official_onnx.py + apply_reshape_batch_passthrough",
+        "notes": "Original 2026may kept for product toml. static_bs1 = N=1, H/W still dynamic. dyn opens batch and rewrites 12 Reshape [1,-1,C] to [0,-1,C]. vs original ORT maxabs=0, dyn N=2 matches. C++ resizes to toml [320,240] then pads to /32."
+      },
+      "onnx_dyn_path": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.dyn.onnx",
+      "legacy_onnx_path": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.onnx"
     },
     {
       "id": "LIBFACE",
       "variant": "640x480",
       "served": "http",
       "config": "conf/model/object_detection/libfacedetection/640x480_config.toml",
-      "product_type": "mnn",
-      "runtime_path": "weights/object_detection/libfacedetection/face_detection_640x480_model.model",
-      "onnx_path": null,
-      "onnx_status": "missing",
+      "product_type": "onnx",
+      "runtime_path": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.onnx",
+      "onnx_path": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.static_bs1.onnx",
+      "onnx_status": "local",
       "p1_upload": false,
       "p2_wave": "D",
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "input", "layout": "NCHW", "dtype": "F32", "shape": [1, 3, 640, 480], "dynamic": false}],
-        "outputs": [{"name": "loc"}, {"name": "conf"}],
-        "preprocess": "BGR unnormalized DIRECT_RESIZE; JPEG budget 640x480"
+        "inputs": [
+          {
+            "name": "input",
+            "layout": "NCHW",
+            "dtype": "F32",
+            "shape": [
+              1,
+              3,
+              "height",
+              "width"
+            ],
+            "dynamic": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "cls_8"
+          },
+          {
+            "name": "cls_16"
+          },
+          {
+            "name": "cls_32"
+          },
+          {
+            "name": "obj_8"
+          },
+          {
+            "name": "obj_16"
+          },
+          {
+            "name": "obj_32"
+          },
+          {
+            "name": "bbox_8"
+          },
+          {
+            "name": "bbox_16"
+          },
+          {
+            "name": "bbox_32"
+          },
+          {
+            "name": "kps_8"
+          },
+          {
+            "name": "kps_16"
+          },
+          {
+            "name": "kps_32"
+          }
+        ],
+        "preprocess": "BGR 0-255; DIRECT_RESIZE to 640x480 (already /32)"
       },
-      "license": {"redistribute": "p2_review", "notes": "Spatial size must stay 640×480."}
+      "license": {
+        "redistribute": "p2_review",
+        "notes": "Spatial size must stay 640×480."
+      },
+      "onnx_source": {
+        "kind": "official_onnx",
+        "ref": "same face_detection_yunet_2026may.onnx as 320x240",
+        "script": "scripts/export_onnx/adopt_official_onnx.py + apply_reshape_batch_passthrough",
+        "notes": "Same dual pair. C++ resizes to toml [640,480]. Golden still uses this config."
+      },
+      "onnx_dyn_path": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.dyn.onnx",
+      "legacy_onnx_path": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.onnx"
     },
     {
       "id": "CENTER_FACE",
@@ -218,21 +597,58 @@
       "config": "conf/model/object_detection/centerface/centerface_config.toml",
       "product_type": "mnn",
       "runtime_path": "weights/object_detection/centerface_detection/centerface.model",
-      "onnx_path": "weights/object_detection/centerface_detection/centerface.onnx",
+      "onnx_path": "weights/object_detection/centerface_detection/centerface.static_bs1.onnx",
       "onnx_status": "local",
       "p1_upload": true,
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "session.inputs().front()", "layout": "NCHW", "dtype": "F32", "shape": [1, 3, -1, -1], "dynamic": true, "align_multiple": 32}],
+        "inputs": [
+          {
+            "name": "session.inputs().front()",
+            "layout": "NCHW",
+            "dtype": "F32",
+            "shape": [
+              1,
+              3,
+              -1,
+              -1
+            ],
+            "dynamic": true,
+            "align_multiple": 32
+          }
+        ],
         "outputs": [
-          {"name": "537", "note": "heatmap [1,1,H/4,W/4]"},
-          {"name": "538", "note": "scale"},
-          {"name": "539", "note": "offset"},
-          {"name": "540", "note": "landmark"}
+          {
+            "name": "537",
+            "note": "heatmap [1,1,H/4,W/4]"
+          },
+          {
+            "name": "538",
+            "note": "scale"
+          },
+          {
+            "name": "539",
+            "note": "offset"
+          },
+          {
+            "name": "540",
+            "note": "landmark"
+          }
         ],
         "preprocess": "RGB, ALIGN_TO_MULTIPLE 32, no JPEG budget (empty hint). Forbidden: static 256 export."
       },
-      "license": {"redistribute": "p1_same_as_existing_runtime_weight", "notes": "Local centerface.onnx is the interchange twin of centerface.model. Spatial dims must stay dynamic."}
+      "license": {
+        "redistribute": "p1_same_as_existing_runtime_weight",
+        "notes": "Local centerface.onnx is the interchange twin of centerface.model. Spatial dims must stay dynamic."
+      },
+      "onnx_source": {
+        "kind": "preexisting",
+        "ref": "weights/object_detection/centerface_detection/centerface.onnx",
+        "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width.",
+        "legacy": "weights/object_detection/centerface_detection/centerface.onnx"
+      },
+      "legacy_onnx_path": "weights/object_detection/centerface_detection/centerface.onnx",
+      "onnx_dyn_path": "weights/object_detection/centerface_detection/centerface.dyn.onnx"
     },
     {
       "id": "RTDETR",
@@ -243,8 +659,14 @@
       "onnx_path": null,
       "onnx_status": "blocked",
       "p1_upload": false,
-      "contract": {"source": "scaffold", "notes": "MODEL_NOT_IMPLEMENTED; not in HTTP catalog."},
-      "license": {"redistribute": "n/a", "notes": "Do not upload until registered."}
+      "contract": {
+        "source": "scaffold",
+        "notes": "MODEL_NOT_IMPLEMENTED; not in HTTP catalog."
+      },
+      "license": {
+        "redistribute": "n/a",
+        "notes": "Do not upload until registered."
+      }
     },
     {
       "id": "DBNET",
@@ -252,17 +674,45 @@
       "config": "conf/model/ocr/db_text_detector/dbnet_config.toml",
       "product_type": "mnn",
       "runtime_path": "weights/ocr/db_text_detector/db_model_large.mnn",
-      "onnx_path": null,
-      "onnx_status": "missing",
+      "onnx_path": "weights/ocr/db_text_detector/db_model_large.static_bs1.onnx",
+      "onnx_status": "local",
       "p1_upload": false,
       "p2_wave": "C",
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "x", "layout": "NCHW", "dtype": "F32", "shape": [1, 3, 544, 960], "dynamic": false}],
-        "outputs": [{"name": "sigmoid_0.tmp_0", "dtype": "F32"}],
+        "inputs": [
+          {
+            "name": "x",
+            "layout": "NCHW",
+            "dtype": "F32",
+            "shape": [
+              1,
+              3,
+              544,
+              960
+            ],
+            "dynamic": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "sigmoid_0.tmp_0",
+            "dtype": "F32"
+          }
+        ],
         "preprocess": "JPEG budget 544×960. Missing output name → MODEL_INIT_FAILED; prefer renaming the graph."
       },
-      "license": {"redistribute": "p2_review", "notes": "PaddleOCR DBNet. Sibling MNN already on this HF repo."}
+      "license": {
+        "redistribute": "p2_review",
+        "notes": "PaddleOCR DBNet. Sibling MNN already on this HF repo."
+      },
+      "onnx_dyn_path": "weights/ocr/db_text_detector/db_model_large.dyn.onnx",
+      "onnx_source": {
+        "kind": "paddle2onnx",
+        "ref": "PaddleOCR ch_ppocr_server_v2.0_det_infer (bcebos) paddle2onnx opset 11",
+        "script": "scripts/export_onnx/freeze_spatial.py + write_pair_from_static",
+        "notes": "IO already x / sigmoid_0.tmp_0. Spatial frozen to product 544x960. Backbone family may differ from db_model_large.mnn; golden may drift."
+      }
     },
     {
       "id": "BISENETV2",
@@ -270,17 +720,52 @@
       "config": "conf/model/scene_segmentation/bisenetv2/bisenetv2_config.toml",
       "product_type": "mnn",
       "runtime_path": "weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.mnn",
-      "onnx_path": null,
-      "onnx_status": "missing",
+      "onnx_path": "weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.static_bs1.onnx",
+      "onnx_status": "local",
       "p1_upload": false,
       "p2_wave": "C",
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "input_tensor", "layout": "NHWC", "dtype": "F32", "shape": [1, -1, -1, 3], "dynamic": false, "spatial": "session_static"}],
-        "outputs": [{"name": "final_output"}],
+        "inputs": [
+          {
+            "name": "input_tensor",
+            "layout": "NHWC",
+            "dtype": "F32",
+            "shape": [
+              1,
+              512,
+              1024,
+              3
+            ],
+            "dynamic": false,
+            "spatial": "512x1024"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "final_output",
+            "layout": "HWC",
+            "dtype": "F32",
+            "shape": [
+              512,
+              1024,
+              19
+            ]
+          }
+        ],
         "preprocess": "(x/255-0.5)/0.5 RGB NHWC DIRECT_RESIZE; JPEG budget = network H×W"
       },
-      "license": {"redistribute": "p2_review", "notes": "Sibling MNN already on this HF repo."}
+      "license": {
+        "redistribute": "p2_review",
+        "notes": "Sibling MNN already on this HF repo."
+      },
+      "onnx_source": {
+        "kind": "official_ckpt_export",
+        "ref": "MaybeShewill-CV/bisenetv2-tensorflow cityscapes.ckpt (EMA) freeze softmax squeeze",
+        "script": "scripts/export_onnx/export_bisenetv2.py",
+        "notes": "Product MNN is this TF graph, not CoinCheung pth. input_tensor NHWC [1,512,1024,3] → final_output HWC softmax [512,1024,19]. Argmax vs product MNN agrees 1.0. Dyn only opens input batch; output is squeezed rank-3."
+      },
+      "onnx_dyn_path": "weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.dyn.onnx"
     },
     {
       "id": "PPHUMAN_SEG",
@@ -288,17 +773,44 @@
       "config": "conf/model/scene_segmentation/pphuman/pphuman_config.toml",
       "product_type": "mnn",
       "runtime_path": "weights/scene_segmentation/pphuman_seg/pp_humanseg_192x192_mobile.mnn",
-      "onnx_path": null,
-      "onnx_status": "missing",
+      "onnx_path": "weights/scene_segmentation/pphuman_seg/pp_humanseg_192x192_mobile.static_bs1.onnx",
+      "onnx_status": "local",
       "p1_upload": false,
       "p2_wave": "C",
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "x", "layout": "NCHW", "dtype": "F32", "shape": [1, 3, 192, 192], "dynamic": false}],
-        "outputs": [{"name": "softmax_0.tmp_0"}],
+        "inputs": [
+          {
+            "name": "x",
+            "layout": "NCHW",
+            "dtype": "F32",
+            "shape": [
+              1,
+              3,
+              192,
+              192
+            ],
+            "dynamic": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "softmax_0.tmp_0"
+          }
+        ],
         "preprocess": "static 192 NCHW; JPEG budget 192"
       },
-      "license": {"redistribute": "p2_review", "notes": "Paddle PP-HumanSeg. Sibling MNN already on this HF repo."}
+      "license": {
+        "redistribute": "p2_review",
+        "notes": "Paddle PP-HumanSeg. Sibling MNN already on this HF repo."
+      },
+      "onnx_dyn_path": "weights/scene_segmentation/pphuman_seg/pp_humanseg_192x192_mobile.dyn.onnx",
+      "onnx_source": {
+        "kind": "official_ckpt_export",
+        "ref": "local human_pp_humansegv2_mobile_192x192_pretrained/model.pdparams (PPLiteSeg STDC1)",
+        "script": "scripts/export_onnx/export_pphuman.py",
+        "notes": "Dygraph pdparams → jit softmax wrap → paddle2onnx opset 11, freeze 192. IO x / softmax_0.tmp_0 [1,2,192,192]. vs product MNN argmax agree 1.0 maxabs~2e-4. Sibling lite 192 and v1-server 512 also exported. Product toml stays type=mnn."
+      }
     },
     {
       "id": "HRNET",
@@ -306,17 +818,48 @@
       "config": "conf/model/scene_segmentation/hrnet/hrnetw48_ccd_fv_segmentation_cfg.toml",
       "product_type": "tensorrt",
       "runtime_path": "weights/scene_segmentation/hrnet/hrnetw48_ccd_fp32.engine",
-      "onnx_path": "weights/scene_segmentation/hrnet/hrnetw48_ccd.onnx",
+      "onnx_path": "weights/scene_segmentation/hrnet/hrnetw48_ccd.static_bs1.onnx",
       "onnx_status": "local",
       "p1_upload": true,
       "trt_engines_id": "hrnetw48_ccd_fp32",
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "session.inputs().front()", "layout": "NCHW", "dtype": "F32", "shape": [1, 3, "H", "W"], "dynamic": false, "spatial": "session_static"}],
-        "outputs": [{"name": "outputs.front()", "dtype": "I32", "note": "argmax"}],
+        "inputs": [
+          {
+            "name": "session.inputs().front()",
+            "layout": "NCHW",
+            "dtype": "F32",
+            "shape": [
+              1,
+              3,
+              "H",
+              "W"
+            ],
+            "dynamic": false,
+            "spatial": "session_static"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "outputs.front()",
+            "dtype": "I32",
+            "note": "argmax"
+          }
+        ],
         "preprocess": "RGB (x/255-0.5)/0.5 DIRECT_RESIZE; engine is FP32 (fp=0)"
       },
-      "license": {"redistribute": "p1_same_as_existing_runtime_weight", "notes": "Local ONNX is the trtexec source for the product FP32 engine."}
+      "license": {
+        "redistribute": "p1_same_as_existing_runtime_weight",
+        "notes": "Local ONNX is the trtexec source for the product FP32 engine."
+      },
+      "onnx_source": {
+        "kind": "preexisting",
+        "ref": "weights/scene_segmentation/hrnet/hrnetw48_ccd.onnx",
+        "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width.",
+        "legacy": "weights/scene_segmentation/hrnet/hrnetw48_ccd.onnx"
+      },
+      "legacy_onnx_path": "weights/scene_segmentation/hrnet/hrnetw48_ccd.onnx",
+      "onnx_dyn_path": "weights/scene_segmentation/hrnet/hrnetw48_ccd.dyn.onnx"
     },
     {
       "id": "MSOCRNET",
@@ -324,16 +867,39 @@
       "config": "conf/model/scene_segmentation/msocrnet/msocrnet_config.toml",
       "product_type": "onnx",
       "runtime_path": "weights/scene_segmentation/msocrnet/msocrnet_fp16.onnx",
-      "onnx_path": "weights/scene_segmentation/msocrnet/msocrnet_fp16.onnx",
+      "onnx_path": "weights/scene_segmentation/msocrnet/msocrnet_fp16.static_bs1.onnx",
       "onnx_status": "local",
       "p1_upload": true,
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "session.inputs().front()", "layout": "NCHW_or_NHWC", "shape": [1, 3, 1024, 2048], "note": "size fallback [1024,2048] when spatial dynamic"}],
+        "inputs": [
+          {
+            "name": "session.inputs().front()",
+            "layout": "NCHW_or_NHWC",
+            "shape": [
+              1,
+              3,
+              1024,
+              2048
+            ],
+            "note": "size fallback [1024,2048] when spatial dynamic"
+          }
+        ],
         "preprocess": "JPEG budget; GPU fork still needs static TRT spatial dims. Do not upload msocrnet.onnx / _dynamic / _repaired."
       },
-      "license": {"redistribute": "p1_same_as_existing_runtime_weight", "notes": "Product toml already points at this ONNX."},
-      "notes": "Existing product-type=onnx exception (bench-only)."
+      "license": {
+        "redistribute": "p1_same_as_existing_runtime_weight",
+        "notes": "Product toml already points at this ONNX."
+      },
+      "notes": "Existing product-type=onnx exception (bench-only).",
+      "onnx_source": {
+        "kind": "preexisting",
+        "ref": "weights/scene_segmentation/msocrnet/msocrnet_fp16.onnx",
+        "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width.",
+        "legacy": "weights/scene_segmentation/msocrnet/msocrnet_fp16.onnx"
+      },
+      "legacy_onnx_path": "weights/scene_segmentation/msocrnet/msocrnet_fp16.onnx",
+      "onnx_dyn_path": "weights/scene_segmentation/msocrnet/msocrnet_fp16.dyn.onnx"
     },
     {
       "id": "MODNET",
@@ -341,17 +907,45 @@
       "config": "conf/model/matting/modnet/modnet_config.toml",
       "product_type": "mnn",
       "runtime_path": "weights/matting/modnet/modnet_hrnet_w18.mnn",
-      "onnx_path": null,
-      "onnx_status": "missing",
+      "onnx_path": "weights/matting/modnet/modnet_hrnet_w18.static_bs1.onnx",
+      "onnx_status": "local",
       "p1_upload": false,
       "p2_wave": "D",
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "img", "layout": "NCHW", "dtype": "F32", "shape": [1, 3, "H", "W"], "dynamic": false, "spatial": "session_static"}],
-        "outputs": [{"name": "sigmoid_2.tmp_0"}],
+        "inputs": [
+          {
+            "name": "img",
+            "layout": "NCHW",
+            "dtype": "F32",
+            "shape": [
+              1,
+              3,
+              "H",
+              "W"
+            ],
+            "dynamic": false,
+            "spatial": "session_static"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "sigmoid_2.tmp_0"
+          }
+        ],
         "preprocess": "matte resized back to source_size"
       },
-      "license": {"redistribute": "p2_review", "notes": "Sibling MNN already on this HF repo."}
+      "license": {
+        "redistribute": "p2_review",
+        "notes": "Sibling MNN already on this HF repo."
+      },
+      "onnx_dyn_path": "weights/matting/modnet/modnet_hrnet_w18.dyn.onnx",
+      "onnx_source": {
+        "kind": "paddle2onnx",
+        "ref": "PaddleSeg modnet-hrnet_w18.zip",
+        "script": "paddle2onnx + freeze 512 + write_pair_from_static",
+        "notes": "img / sigmoid_2.tmp_0 frozen 512x512 (session requires static H/W)."
+      }
     },
     {
       "id": "PP_MATTING",
@@ -359,17 +953,44 @@
       "config": "conf/model/matting/ppmatting/ppmatting_config.toml",
       "product_type": "mnn",
       "runtime_path": "weights/matting/ppmatting/ppmatting_hrnet_w18_human_512.mnn",
-      "onnx_path": null,
-      "onnx_status": "missing",
+      "onnx_path": "weights/matting/ppmatting/ppmatting_hrnet_w18_human_512.static_bs1.onnx",
+      "onnx_status": "local",
       "p1_upload": false,
       "p2_wave": "D",
       "contract": {
-        "source": "on_init+toml",
-        "inputs": [{"name": "session.inputs().front()", "layout": "NCHW", "dtype": "F32", "shape": [1, 3, 512, 512], "dynamic": false}],
-        "outputs": [{"name": "outputs.front()"}],
-        "preprocess": "static 512 from filename; matte maps to source_size"
+        "source": "on_init+session",
+        "inputs": [
+          {
+            "name": "img",
+            "layout": "NCHW",
+            "dtype": "F32",
+            "shape": [
+              1,
+              3,
+              512,
+              512
+            ],
+            "dynamic": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "tmp_75"
+          }
+        ],
+        "preprocess": "static 512 from session; RGB /255 mean/std 0.5; matte maps to source_size"
       },
-      "license": {"redistribute": "p2_review", "notes": "Paddle PP-Matting. Sibling MNN already on this HF repo."}
+      "license": {
+        "redistribute": "p2_review",
+        "notes": "PaddleSeg PP-Matting. Product toml stays type=mnn. Sibling MNNs stay until convert_mnn."
+      },
+      "onnx_source": {
+        "kind": "paddle2onnx",
+        "ref": "PaddleSeg ppmatting-hrnet_w18-human_512.zip (bcebos); user also provided 1024/v2/resnet34 inference dirs",
+        "script": "scripts/export_onnx/export_ppmatting.py",
+        "notes": "Dynamic AdaptiveAvgPool ASPP (1/3/5) needs static feed before paddle2onnx 1.2.3. Freeze img to [1,3,512,512] via ProgramDesc InferShape (C++ on_init also requires area>0). IO img / tmp_75. vs Paddle maxabs~1e-6; vs product MNN corr~0.99993 meanabs~3e-4 (argmax fusion edge pixels). Sibling 1024 (same 512 freeze) and resnet34_vd 2048 also exported. v2-stdc1 is a different graph (sigmoid_5.tmp_0), not the HTTP product. Product toml stays type=mnn."
+      },
+      "onnx_dyn_path": "weights/matting/ppmatting/ppmatting_hrnet_w18_human_512.dyn.onnx"
     },
     {
       "id": "ENLIGHTEN_GAN",
@@ -377,20 +998,58 @@
       "config": "conf/model/enhancement/enlighten_gan/enlightengan.toml",
       "product_type": "mnn",
       "runtime_path": "weights/enhancement/enlighten_gan/enlightengan.model",
-      "onnx_path": null,
-      "onnx_status": "blocked",
+      "onnx_path": "weights/enhancement/enlighten_gan/enlightengan.static_bs1.onnx",
+      "onnx_status": "local",
       "p1_upload": false,
       "p2_wave": "F",
       "contract": {
         "source": "on_init+toml",
         "inputs": [
-          {"name": "input_src", "layout": "NCHW", "dtype": "F32", "shape": [1, 3, -1, -1], "dynamic": true, "align_multiple": 16},
-          {"name": "input_gray", "layout": "NCHW", "dtype": "F32", "shape": [1, 1, -1, -1], "dynamic": true, "align_multiple": 16}
+          {
+            "name": "input_src",
+            "layout": "NCHW",
+            "dtype": "F32",
+            "shape": [
+              1,
+              3,
+              -1,
+              -1
+            ],
+            "dynamic": true,
+            "align_multiple": 16
+          },
+          {
+            "name": "input_gray",
+            "layout": "NCHW",
+            "dtype": "F32",
+            "shape": [
+              1,
+              1,
+              -1,
+              -1
+            ],
+            "dynamic": true,
+            "align_multiple": 16
+          }
         ],
-        "outputs": [{"name": "output"}],
+        "outputs": [
+          {
+            "name": "output"
+          }
+        ],
         "preprocess": "ALIGN_TO_MULTIPLE 16, no JPEG budget. Forbidden: fixed 256 export."
       },
-      "license": {"redistribute": "p2_review", "notes": "Keep .model on HF until a matching dual-input dynamic ONNX exists. Do not reverse the .model."}
+      "license": {
+        "redistribute": "p2_review",
+        "notes": "Unet_resize_conv from local 200_net_G_A.pth. Product toml stays type=mnn. Original enlighten.onnx is a fused single-input wrapper, not the interchange file."
+      },
+      "onnx_source": {
+        "kind": "official_ckpt_export",
+        "ref": "local 200_net_G_A.pth Unet_resize_conv self_attention+skip+times_residual",
+        "script": "scripts/export_onnx/export_enlighten.py",
+        "notes": "Product C++ feeds NCHW input_src [1,3,H,W] + input_gray [1,1,H,W] already in [-1,1]/Rec.601 gray, H/W align-up-16. Local enlighten.onnx is the same Unet (weights maxabs 0) with 2x-1 + gray fused into a single `input` — wrong IO, not adopted. Dual files keep spatial dynamic; vs product MNN maxabs~3e-4 corr~1. Original enlighten.onnx kept. Do not freeze 256."
+      },
+      "onnx_dyn_path": "weights/enhancement/enlighten_gan/enlightengan.dyn.onnx"
     },
     {
       "id": "ATTENTIVE_GAN_DERAIN",
@@ -398,17 +1057,51 @@
       "config": "conf/model/enhancement/attentive_gan_derain/attentive_gan_derain_config.toml",
       "product_type": "mnn",
       "runtime_path": "weights/enhancement/attentive_gan_derain/attentive_gan_derain.model",
-      "onnx_path": null,
-      "onnx_status": "blocked",
+      "onnx_path": "weights/enhancement/attentive_gan_derain/attentive_gan_derain.static_bs1.onnx",
+      "onnx_status": "local",
       "p1_upload": false,
       "p2_wave": "F",
       "contract": {
-        "source": "on_init+toml",
-        "inputs": [{"name": "session.inputs().front()", "layout": "NHWC", "dtype": "F32", "shape": [1, 240, 320, 3], "dynamic": false}],
-        "outputs": [{"name": "outputs.front()"}],
-        "preprocess": "BGR x/127.5-1 DIRECT_RESIZE; JPEG budget 240×320; must stay static NHWC"
+        "source": "on_init+session",
+        "inputs": [
+          {
+            "name": "input_tensor",
+            "layout": "NHWC",
+            "dtype": "F32",
+            "shape": [
+              1,
+              240,
+              360,
+              3
+            ],
+            "dynamic": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "final_output",
+            "layout": "HWC",
+            "dtype": "F32",
+            "shape": [
+              240,
+              360,
+              3
+            ]
+          }
+        ],
+        "preprocess": "BGR x/127.5-1 DIRECT_RESIZE; JPEG budget 240×360 from session (toml [240,320] is stale); static NHWC"
       },
-      "license": {"redistribute": "p2_review", "notes": "Keep .model until official matching graph. Do not reverse."}
+      "license": {
+        "redistribute": "p2_review",
+        "notes": "Sibling .model already on this HF repo."
+      },
+      "onnx_source": {
+        "kind": "official_ckpt_export",
+        "ref": "MaybeShewill-CV/attentive-gan-derainnet derain_gan.ckpt-100000 freeze squeezed tanh skip_3",
+        "script": "scripts/export_onnx/export_attentive_gan.py",
+        "notes": "Product MNN is this TF graph at 240x360 (toml [240,320] is stale; C++ uses session shape). input_tensor NHWC [1,240,360,3] → final_output HWC [240,360,3]. Local attentive_gan_derain.pb is a text training GraphDef, not a frozen net. vs product MNN maxabs~1e-3 corr~1. Dyn only opens input batch; LSTM init constants stay N=1."
+      },
+      "onnx_dyn_path": "weights/enhancement/attentive_gan_derain/attentive_gan_derain.dyn.onnx"
     },
     {
       "id": "REAL_ESRGAN",
@@ -416,17 +1109,44 @@
       "config": "conf/model/enhancement/real_esrgan/real_esrgan.toml",
       "product_type": "mnn",
       "runtime_path": "weights/enhancement/real_esrgan/realesr-general-x4v3.model",
-      "onnx_path": null,
-      "onnx_status": "blocked",
+      "onnx_path": "weights/enhancement/real_esrgan/realesr-general-x4v3.static_bs1.onnx",
+      "onnx_status": "local",
       "p1_upload": false,
       "p2_wave": "F",
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "session.inputs().front()", "layout": "NHWC", "dtype": "F32", "shape": [1, -1, -1, 3], "dynamic": true}],
-        "outputs": [{"name": "outputs.front()"}],
+        "inputs": [
+          {
+            "name": "session.inputs().front()",
+            "layout": "NHWC",
+            "dtype": "F32",
+            "shape": [
+              1,
+              -1,
+              -1,
+              3
+            ],
+            "dynamic": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "outputs.front()"
+          }
+        ],
         "preprocess": "NONE at source resolution, RGB /255, no JPEG budget"
       },
-      "license": {"redistribute": "p2_review", "notes": "xinntao Real-ESRGAN. Keep .model until a NONE-dynamic NHWC ONNX matches."}
+      "license": {
+        "redistribute": "p2_review",
+        "notes": "xinntao Real-ESRGAN. Keep .model until a NONE-dynamic NHWC ONNX matches."
+      },
+      "onnx_dyn_path": "weights/enhancement/real_esrgan/realesr-general-x4v3.dyn.onnx",
+      "onnx_source": {
+        "kind": "official_ckpt_export",
+        "ref": "xinntao/Real-ESRGAN realesr-general-x4v3.pth (SRVGGNetCompact)",
+        "script": "scripts/export_onnx/export_realesrgan.py",
+        "notes": "NHWC RGB /255 in, NCHW out; dynamic H/W; static_bs1 keeps batch=1. Matches C++ contract."
+      }
     },
     {
       "id": "SUPERPOINT",
@@ -434,20 +1154,64 @@
       "config": "conf/model/feature_point/superpoint/superpoint_config.toml",
       "product_type": "mnn",
       "runtime_path": "weights/feature_point/superpoint/superpoint_120x160.mnn",
-      "onnx_path": null,
-      "onnx_status": "missing",
+      "onnx_path": "weights/feature_point/superpoint/superpoint_120x160.static_bs1.onnx",
+      "onnx_status": "local",
       "p1_upload": false,
       "p2_wave": "E",
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "session.inputs().front()", "layout": "NCHW", "dtype": "F32", "shape": [1, 1, 120, 160], "dynamic": false, "color": "GRAY"}],
+        "inputs": [
+          {
+            "name": "session.inputs().front()",
+            "layout": "NCHW",
+            "dtype": "F32",
+            "shape": [
+              1,
+              1,
+              120,
+              160
+            ],
+            "dynamic": false,
+            "color": "GRAY"
+          }
+        ],
         "outputs": [
-          {"name": "output_1", "dtype": "F32", "shape": [1, 65, 15, 20], "note": "65-ch heatmap, H/8 W/8"},
-          {"name": "output_2", "dtype": "F32", "shape": [1, 256, 15, 20], "note": "256-ch desc"}
+          {
+            "name": "output_1",
+            "dtype": "F32",
+            "shape": [
+              1,
+              65,
+              15,
+              20
+            ],
+            "note": "65-ch heatmap, H/8 W/8"
+          },
+          {
+            "name": "output_2",
+            "dtype": "F32",
+            "shape": [
+              1,
+              256,
+              15,
+              20
+            ],
+            "note": "256-ch desc"
+          }
         ],
         "preprocess": "GRAY /255 DIRECT_RESIZE; product is 120×160 only; other MNN sizes stay local"
       },
-      "license": {"redistribute": "p2_review", "notes": "MagicLeap SuperPoint. Sibling 120x160 MNN already on this HF repo."}
+      "license": {
+        "redistribute": "p2_review",
+        "notes": "MagicLeap SuperPoint. Sibling 120x160 MNN already on this HF repo."
+      },
+      "onnx_dyn_path": "weights/feature_point/superpoint/superpoint_120x160.dyn.onnx",
+      "onnx_source": {
+        "kind": "official_ckpt_export",
+        "ref": "MagicLeap superpoint_v1.pth",
+        "script": "scripts/export_onnx/export_superpoint.py",
+        "notes": "GRAY NCHW 120x160; output_1 65-ch; output_2 256-ch."
+      }
     },
     {
       "id": "LIGHTGLUE",
@@ -460,25 +1224,81 @@
         {
           "role": "extractor",
           "runtime_path": "weights/feature_point/lightglue/extractor.engine",
-          "onnx_path": "weights/feature_point/lightglue/extractor.onnx",
+          "onnx_path": "weights/feature_point/lightglue/extractor.static_bs1.onnx",
           "trt_engines_id": "lightglue_extractor",
-          "inputs": [{"name": "image"}],
-          "outputs": [{"name": "keypoints"}, {"name": "scores"}, {"name": "descriptors"}]
+          "inputs": [
+            {
+              "name": "image"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "keypoints"
+            },
+            {
+              "name": "scores"
+            },
+            {
+              "name": "descriptors"
+            }
+          ],
+          "legacy_onnx_path": "weights/feature_point/lightglue/extractor.onnx",
+          "onnx_dyn_path": "weights/feature_point/lightglue/extractor.dyn.onnx",
+          "onnx_source": {
+            "kind": "preexisting_adopted",
+            "legacy": "weights/feature_point/lightglue/extractor.onnx",
+            "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width."
+          }
         },
         {
           "role": "matcher",
           "runtime_path": "weights/feature_point/lightglue/matcher.engine",
-          "onnx_path": "weights/feature_point/lightglue/matcher.onnx",
+          "onnx_path": "weights/feature_point/lightglue/matcher.static_bs1.onnx",
           "trt_engines_id": "lightglue_matcher",
-          "inputs": [{"name": "kpts0"}, {"name": "kpts1"}, {"name": "desc0"}, {"name": "desc1"}],
-          "outputs": [{"name": "matches0"}, {"name": "mscores0"}]
+          "inputs": [
+            {
+              "name": "kpts0"
+            },
+            {
+              "name": "kpts1"
+            },
+            {
+              "name": "desc0"
+            },
+            {
+              "name": "desc1"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "matches0"
+            },
+            {
+              "name": "mscores0"
+            }
+          ],
+          "legacy_onnx_path": "weights/feature_point/lightglue/matcher.onnx",
+          "onnx_dyn_path": "weights/feature_point/lightglue/matcher.dyn.onnx",
+          "onnx_source": {
+            "kind": "preexisting_adopted",
+            "legacy": "weights/feature_point/lightglue/matcher.onnx",
+            "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width."
+          }
         }
       ],
       "contract": {
         "source": "toml",
         "notes": "Not an HTTP GPU-decode port. Do not upload superpoint_lightglue_end2end.onnx."
       },
-      "license": {"redistribute": "p1_same_as_existing_runtime_weight", "notes": "cvg/LightGlue Apache-2.0. Local ONNX already registered in trt_engines.json."}
+      "license": {
+        "redistribute": "p1_same_as_existing_runtime_weight",
+        "notes": "cvg/LightGlue Apache-2.0. Local ONNX already registered in trt_engines.json."
+      },
+      "onnx_source": {
+        "kind": "preexisting",
+        "ref": null,
+        "notes": "Present before P2; keep original filename (not dual-renamed)."
+      }
     },
     {
       "id": "DINOV2",
@@ -487,17 +1307,46 @@
       "config": "conf/model/feature_embedding/dinov2/dinov2_vits14_config.toml",
       "product_type": "mnn",
       "runtime_path": "weights/classification/dinov2/dinov2_vits14_pretrain.mnn",
-      "onnx_path": null,
-      "onnx_status": "missing",
+      "onnx_path": "weights/classification/dinov2/dinov2_vits14_pretrain.static_bs1.onnx",
+      "onnx_status": "local",
       "p1_upload": false,
       "p2_wave": "E",
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "session.inputs().front()", "layout": "NCHW", "dtype": "F32", "shape": [1, 3, "H", "W"], "dynamic": false, "spatial": "session_static"}],
-        "outputs": [{"name": "outputs.front()", "note": "rank-2 [1,D] cls-only or rank-3 [1,T,D] all-token"}],
+        "inputs": [
+          {
+            "name": "session.inputs().front()",
+            "layout": "NCHW",
+            "dtype": "F32",
+            "shape": [
+              1,
+              3,
+              "H",
+              "W"
+            ],
+            "dynamic": false,
+            "spatial": "session_static"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "outputs.front()",
+            "note": "rank-2 [1,D] cls-only or rank-3 [1,T,D] all-token"
+          }
+        ],
         "preprocess": "RGB CLIP mean/std {0.48145466,0.4578275,0.40821073}/{0.26862954,0.26130258,0.27577711} after /255"
       },
-      "license": {"redistribute": "p2_review", "notes": "Meta DINOv2 Apache-2.0. Sibling MNN already on this HF repo."}
+      "license": {
+        "redistribute": "p2_review",
+        "notes": "Meta DINOv2 Apache-2.0. Sibling MNN already on this HF repo."
+      },
+      "onnx_dyn_path": "weights/classification/dinov2/dinov2_vits14_pretrain.dyn.onnx",
+      "onnx_source": {
+        "kind": "official_ckpt_export",
+        "ref": "timm vit_small_patch14_dinov2.lvd142m (Meta LVD-142M, img_size=224 cls-only)",
+        "script": "scripts/export_onnx/export_dinov2_timm.py",
+        "notes": "Official Meta pos-embed is 518; this pair interpolates to 224. Output [1,384] rank-2 (pooling=cls). Apache-2.0."
+      }
     },
     {
       "id": "DINOV2",
@@ -506,12 +1355,23 @@
       "config": "conf/model/feature_embedding/dinov2/dinov2_vitb14_config.toml",
       "product_type": "mnn",
       "runtime_path": "weights/classification/dinov2/dinov2_vitb14_pretrain.mnn",
-      "onnx_path": null,
-      "onnx_status": "missing",
+      "onnx_path": "weights/classification/dinov2/dinov2_vitb14_pretrain.static_bs1.onnx",
+      "onnx_status": "local",
       "p1_upload": false,
       "p2_wave": "E",
-      "contract": {"source": "same as DINOV2 vits14"},
-      "license": {"redistribute": "p2_review"}
+      "contract": {
+        "source": "same as DINOV2 vits14"
+      },
+      "license": {
+        "redistribute": "p2_review"
+      },
+      "onnx_dyn_path": "weights/classification/dinov2/dinov2_vitb14_pretrain.dyn.onnx",
+      "onnx_source": {
+        "kind": "official_ckpt_export",
+        "ref": "timm vit_base_patch14_dinov2.lvd142m img_size=224 cls-only",
+        "script": "scripts/export_onnx/export_dinov2_timm.py",
+        "notes": "Output [1,768]. Same 224 interpolation note as vits14."
+      }
     },
     {
       "id": "DINOV2",
@@ -520,41 +1380,83 @@
       "config": "conf/model/feature_embedding/dinov2/dinov2_vitl14_config.toml",
       "product_type": "mnn",
       "runtime_path": "weights/classification/dinov2/dinov2_vitl14_pretrain.mnn",
-      "onnx_path": null,
-      "onnx_status": "missing",
+      "onnx_path": "weights/classification/dinov2/dinov2_vitl14_pretrain.static_bs1.onnx",
+      "onnx_status": "local",
       "p1_upload": false,
       "p2_wave": "E",
-      "contract": {"source": "same as DINOV2 vits14"},
-      "license": {"redistribute": "p2_review"}
+      "contract": {
+        "source": "same as DINOV2 vits14"
+      },
+      "license": {
+        "redistribute": "p2_review"
+      },
+      "onnx_dyn_path": "weights/classification/dinov2/dinov2_vitl14_pretrain.dyn.onnx",
+      "onnx_source": {
+        "kind": "official_ckpt_export",
+        "ref": "timm vit_large_patch14_dinov2.lvd142m img_size=224 cls-only",
+        "script": "scripts/export_onnx/export_dinov2_timm.py",
+        "notes": "Output [1,1024]. About 1.2 GB per file."
+      }
     },
     {
       "id": "OPENAI_CLIP",
       "served": "bench",
       "config": "conf/model/openai_clip/vit_b_32_config.toml",
       "product_type": "mnn",
-      "onnx_status": "missing",
+      "onnx_status": "local",
       "p1_upload": false,
       "p2_wave": "E",
       "graphs": [
         {
           "role": "visual",
           "runtime_path": "weights/openai_clip/vit-b-32/visual.mnn",
-          "inputs": [{"name": "input"}],
-          "outputs": [{"name": "output"}]
+          "inputs": [
+            {
+              "name": "input"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "output"
+            }
+          ],
+          "onnx_path": "weights/openai_clip/vit-b-32/visual.static_bs1.onnx",
+          "onnx_dyn_path": "weights/openai_clip/vit-b-32/visual.dyn.onnx"
         },
         {
           "role": "textual",
           "runtime_path": "weights/openai_clip/vit-b-32/textual.mnn",
-          "inputs": [{"name": "input"}],
-          "outputs": [{"name": "output"}]
+          "inputs": [
+            {
+              "name": "input"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "output"
+            }
+          ],
+          "onnx_path": "weights/openai_clip/vit-b-32/textual.static_bs1.onnx",
+          "onnx_dyn_path": "weights/openai_clip/vit-b-32/textual.dyn.onnx"
         }
       ],
-      "attachments": ["weights/openai_clip/vit-b-32/bpe_simple_vocab_16e6.txt"],
+      "attachments": [
+        "weights/openai_clip/vit-b-32/bpe_simple_vocab_16e6.txt"
+      ],
       "contract": {
         "source": "toml",
         "notes": "Two graphs, both input/output. Vocab stays on HF as a non-ONNX attachment. Not an HTTP GPU-decode port."
       },
-      "license": {"redistribute": "p2_review", "notes": "OpenAI CLIP. Sibling MNN + vocab already on this HF repo."}
+      "license": {
+        "redistribute": "p2_review",
+        "notes": "OpenAI CLIP. Sibling MNN + vocab already on this HF repo."
+      },
+      "onnx_source": {
+        "kind": "official_ckpt_export",
+        "ref": "OpenAI CLIP ViT-B/32 (clip.load)",
+        "script": "scripts/export_onnx/export_clip.py + I32 Cast wrap on text",
+        "notes": "visual F32 NCHW 224 L2-normed; textual INT32 [1,77] Cast to INT64 inside graph. Vocab stays non-ONNX."
+      }
     },
     {
       "id": "DEPTH_ANYTHING",
@@ -563,16 +1465,41 @@
       "config": "conf/model/mono_depth_estimation/depth_anything/vit_s.toml",
       "product_type": "tensorrt",
       "runtime_path": "weights/mono_depth_estimation/depth_anything/depth_anything_vits14.engine",
-      "onnx_path": "weights/mono_depth_estimation/depth_anything/depth_anything_vits14.onnx",
+      "onnx_path": "weights/mono_depth_estimation/depth_anything/depth_anything_vits14.static_bs1.onnx",
       "onnx_status": "hosted",
       "p1_upload": false,
       "trt_engines_id": "depth_anything_vits14",
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "session.inputs().front()", "layout": "NCHW", "dtype": "F32", "shape": [1, 3, "H", "W"], "dynamic": false, "spatial": "session_static"}],
+        "inputs": [
+          {
+            "name": "session.inputs().front()",
+            "layout": "NCHW",
+            "dtype": "F32",
+            "shape": [
+              1,
+              3,
+              "H",
+              "W"
+            ],
+            "dynamic": false,
+            "spatial": "session_static"
+          }
+        ],
         "preprocess": "KEEP_RATIO_PAD_ZERO BGR ImageNet {0.485,0.456,0.406}/{0.229,0.224,0.225} after /255"
       },
-      "license": {"redistribute": "already_on_this_hf_repo", "notes": "Depth Anything Apache-2.0. ONNX already hosted. Engine deletion is P4."}
+      "license": {
+        "redistribute": "already_on_this_hf_repo",
+        "notes": "Depth Anything Apache-2.0. ONNX already hosted. Engine deletion is P4."
+      },
+      "onnx_source": {
+        "kind": "preexisting",
+        "ref": "weights/mono_depth_estimation/depth_anything/depth_anything_vits14.onnx",
+        "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width.",
+        "legacy": "weights/mono_depth_estimation/depth_anything/depth_anything_vits14.onnx"
+      },
+      "legacy_onnx_path": "weights/mono_depth_estimation/depth_anything/depth_anything_vits14.onnx",
+      "onnx_dyn_path": "weights/mono_depth_estimation/depth_anything/depth_anything_vits14.dyn.onnx"
     },
     {
       "id": "DEPTH_ANYTHING",
@@ -581,12 +1508,24 @@
       "config": "conf/model/mono_depth_estimation/depth_anything/vit_b.toml",
       "product_type": "tensorrt",
       "runtime_path": "weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.engine",
-      "onnx_path": "weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.onnx",
+      "onnx_path": "weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.static_bs1.onnx",
       "onnx_status": "local",
       "p1_upload": true,
       "trt_engines_id": "depth_anything_vitb14",
-      "contract": {"source": "same as DEPTH_ANYTHING vits14"},
-      "license": {"redistribute": "p1_same_as_existing_runtime_weight"}
+      "contract": {
+        "source": "same as DEPTH_ANYTHING vits14"
+      },
+      "license": {
+        "redistribute": "p1_same_as_existing_runtime_weight"
+      },
+      "onnx_source": {
+        "kind": "preexisting",
+        "ref": "weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.onnx",
+        "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width.",
+        "legacy": "weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.onnx"
+      },
+      "legacy_onnx_path": "weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.onnx",
+      "onnx_dyn_path": "weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.dyn.onnx"
     },
     {
       "id": "DEPTH_ANYTHING",
@@ -595,12 +1534,25 @@
       "config": "conf/model/mono_depth_estimation/depth_anything/vit_l.toml",
       "product_type": "tensorrt",
       "runtime_path": "weights/mono_depth_estimation/depth_anything/depth_anything_vitl14.engine",
-      "onnx_path": "weights/mono_depth_estimation/depth_anything/depth_anything_vitl14.onnx",
+      "onnx_path": "weights/mono_depth_estimation/depth_anything/depth_anything_vitl14.static_bs1.onnx",
       "onnx_status": "local",
       "p1_upload": true,
       "trt_engines_id": "depth_anything_vitl14",
-      "contract": {"source": "same as DEPTH_ANYTHING vits14"},
-      "license": {"redistribute": "p1_same_as_existing_runtime_weight", "notes": "About 1.3 GB."}
+      "contract": {
+        "source": "same as DEPTH_ANYTHING vits14"
+      },
+      "license": {
+        "redistribute": "p1_same_as_existing_runtime_weight",
+        "notes": "About 1.3 GB."
+      },
+      "onnx_source": {
+        "kind": "preexisting",
+        "ref": "weights/mono_depth_estimation/depth_anything/depth_anything_vitl14.onnx",
+        "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width.",
+        "legacy": "weights/mono_depth_estimation/depth_anything/depth_anything_vitl14.onnx"
+      },
+      "legacy_onnx_path": "weights/mono_depth_estimation/depth_anything/depth_anything_vitl14.onnx",
+      "onnx_dyn_path": "weights/mono_depth_estimation/depth_anything/depth_anything_vitl14.dyn.onnx"
     },
     {
       "id": "METRIC3D",
@@ -609,16 +1561,39 @@
       "config": "conf/model/mono_depth_estimation/metric3d/metric3d_512x1088.toml",
       "product_type": "tensorrt",
       "runtime_path": "weights/mono_depth_estimation/metric3d/metric3d_750k_512x1088.engine",
-      "onnx_path": "weights/mono_depth_estimation/metric3d/metric3d_750k_512x1088.onnx",
+      "onnx_path": "weights/mono_depth_estimation/metric3d/metric3d_750k_512x1088.static_bs1.onnx",
       "onnx_status": "hosted",
       "p1_upload": false,
       "trt_engines_id": "metric3d_512x1088",
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "session.inputs().front()", "layout": "NCHW", "dtype": "F32", "shape": [1, 3, 512, 1088], "dynamic": false}],
+        "inputs": [
+          {
+            "name": "session.inputs().front()",
+            "layout": "NCHW",
+            "dtype": "F32",
+            "shape": [
+              1,
+              3,
+              512,
+              1088
+            ],
+            "dynamic": false
+          }
+        ],
         "preprocess": "KEEP_RATIO_PAD_CENTER RGB 0-255 mean {123.675,116.28,103.53} std {58.395,57.12,57.375} pad_with_mean"
       },
-      "license": {"redistribute": "already_on_this_hf_repo"}
+      "license": {
+        "redistribute": "already_on_this_hf_repo"
+      },
+      "onnx_source": {
+        "kind": "preexisting",
+        "ref": "weights/mono_depth_estimation/metric3d/metric3d_750k_512x1088.onnx",
+        "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width.",
+        "legacy": "weights/mono_depth_estimation/metric3d/metric3d_750k_512x1088.onnx"
+      },
+      "legacy_onnx_path": "weights/mono_depth_estimation/metric3d/metric3d_750k_512x1088.onnx",
+      "onnx_dyn_path": "weights/mono_depth_estimation/metric3d/metric3d_750k_512x1088.dyn.onnx"
     },
     {
       "id": "METRIC3D",
@@ -627,16 +1602,39 @@
       "config": "conf/model/mono_depth_estimation/metric3d/metric3d_1088x1920.toml",
       "product_type": "tensorrt",
       "runtime_path": "weights/mono_depth_estimation/metric3d/metric3d_750k_1088x1920.engine",
-      "onnx_path": "weights/mono_depth_estimation/metric3d/metric3d_750k_1088x1920.onnx",
+      "onnx_path": "weights/mono_depth_estimation/metric3d/metric3d_750k_1088x1920.static_bs1.onnx",
       "onnx_status": "local",
       "p1_upload": true,
       "trt_engines_id": "metric3d_1088x1920",
       "contract": {
         "source": "on_init+toml",
-        "inputs": [{"name": "session.inputs().front()", "layout": "NCHW", "dtype": "F32", "shape": [1, 3, 1088, 1920], "dynamic": false}],
+        "inputs": [
+          {
+            "name": "session.inputs().front()",
+            "layout": "NCHW",
+            "dtype": "F32",
+            "shape": [
+              1,
+              3,
+              1088,
+              1920
+            ],
+            "dynamic": false
+          }
+        ],
         "preprocess": "same Metric3D KEEP_RATIO_PAD_CENTER RGB 0-255 mean pad"
       },
-      "license": {"redistribute": "p1_same_as_existing_runtime_weight"}
+      "license": {
+        "redistribute": "p1_same_as_existing_runtime_weight"
+      },
+      "onnx_source": {
+        "kind": "preexisting",
+        "ref": "weights/mono_depth_estimation/metric3d/metric3d_750k_1088x1920.onnx",
+        "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width.",
+        "legacy": "weights/mono_depth_estimation/metric3d/metric3d_750k_1088x1920.onnx"
+      },
+      "legacy_onnx_path": "weights/mono_depth_estimation/metric3d/metric3d_750k_1088x1920.onnx",
+      "onnx_dyn_path": "weights/mono_depth_estimation/metric3d/metric3d_750k_1088x1920.dyn.onnx"
     },
     {
       "id": "SAM_AMG",
@@ -649,25 +1647,47 @@
         {
           "role": "encoder",
           "runtime_path": "weights/sam/mobile_sam/sm61/mobile_sam_encoder.engine",
-          "onnx_path": "weights/sam/mobile_sam/mobile_sam_encoder.onnx",
+          "onnx_path": "weights/sam/mobile_sam/mobile_sam_encoder.static_bs1.onnx",
           "onnx_status": "hosted",
-          "trt_engines_id": "mobile_sam_encoder"
+          "trt_engines_id": "mobile_sam_encoder",
+          "legacy_onnx_path": "weights/sam/mobile_sam/mobile_sam_encoder.onnx",
+          "onnx_dyn_path": "weights/sam/mobile_sam/mobile_sam_encoder.dyn.onnx",
+          "onnx_source": {
+            "kind": "preexisting_adopted",
+            "legacy": "weights/sam/mobile_sam/mobile_sam_encoder.onnx",
+            "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width."
+          }
         },
         {
           "role": "amg_decoder",
           "runtime_path": "weights/sam/mobile_sam/sm61/mobile_sam_amg_decoder.engine",
-          "onnx_path": "weights/sam/mobile_sam/sm86/mobile_sam_amg_decoder.onnx",
+          "onnx_path": "weights/sam/mobile_sam/sm86/mobile_sam_amg_decoder.static_bs1.onnx",
           "onnx_status": "local",
           "p1_upload": false,
           "trt_engines_id": "mobile_sam_amg_decoder",
-          "notes": "sm61 has no matching onnx; trt_engines.json temporarily uses sm86. Not in P1 upload list."
+          "notes": "sm61 has no matching onnx; trt_engines.json temporarily uses sm86. Not in P1 upload list.",
+          "legacy_onnx_path": "weights/sam/mobile_sam/sm86/mobile_sam_amg_decoder.onnx",
+          "onnx_dyn_path": "weights/sam/mobile_sam/sm86/mobile_sam_amg_decoder.dyn.onnx",
+          "onnx_source": {
+            "kind": "preexisting_adopted",
+            "legacy": "weights/sam/mobile_sam/sm86/mobile_sam_amg_decoder.onnx",
+            "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width."
+          }
         }
       ],
       "contract": {
         "source": "toml",
         "notes": "HTTP SAM is SAM_AMG (MobileSAM). Not a JPEG GPU-decode port."
       },
-      "license": {"redistribute": "already_on_this_hf_repo", "notes": "encoder/decoder onnx hosted; sm86 engines deleted in P4 after onnx stay hosted."}
+      "license": {
+        "redistribute": "already_on_this_hf_repo",
+        "notes": "encoder/decoder onnx hosted; sm86 engines deleted in P4 after onnx stay hosted."
+      },
+      "onnx_source": {
+        "kind": "preexisting",
+        "ref": null,
+        "notes": "Present before P2; keep original filename (not dual-renamed)."
+      }
     },
     {
       "id": "SAM_PREDICTOR",
@@ -684,20 +1704,46 @@
           "runtime_path": "weights/sam/vit_l/sam_vit_l_encoder.mnn",
           "onnx_path": null,
           "onnx_status": "blocked",
-          "inputs": [{"name": "input_image"}],
-          "outputs": [{"name": "image_embeddings"}]
+          "inputs": [
+            {
+              "name": "input_image"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "image_embeddings"
+            }
+          ],
+          "onnx_source": {
+            "kind": "none",
+            "notes": "No matching official encoder ONNX adopted; do not reverse the ~1.2GB MNN."
+          }
         },
         {
           "role": "decoder",
           "runtime_path": "weights/sam/vit_l/sam_vit_l_decoder.onnx",
           "product_type": "onnx",
-          "onnx_path": "weights/sam/vit_l/sam_vit_l_decoder.onnx",
+          "onnx_path": "weights/sam/vit_l/sam_vit_l_decoder.static_bs1.onnx",
           "onnx_status": "local",
           "p1_upload": false,
-          "notes": "Decoder already ONNX locally; not in the P1 12-file list. Upload with encoder in P2.f."
+          "notes": "Decoder already ONNX locally; not in the P1 12-file list. Upload with encoder in P2.f.",
+          "legacy_onnx_path": "weights/sam/vit_l/sam_vit_l_decoder.onnx",
+          "onnx_dyn_path": "weights/sam/vit_l/sam_vit_l_decoder.dyn.onnx",
+          "onnx_source": {
+            "kind": "preexisting_adopted",
+            "legacy": "weights/sam/vit_l/sam_vit_l_decoder.onnx",
+            "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width."
+          }
         }
       ],
-      "license": {"redistribute": "p2_review", "notes": "Meta SAM. Encoder ~1.2GB MNN; do not reverse."}
+      "license": {
+        "redistribute": "p2_review",
+        "notes": "Meta SAM. Encoder ~1.2GB MNN; do not reverse."
+      },
+      "onnx_source": {
+        "kind": "partial",
+        "notes": "Decoder already local ONNX; encoder still blocked."
+      }
     },
     {
       "id": "SAM_PREDICTOR",
@@ -711,17 +1757,38 @@
         {
           "role": "encoder",
           "runtime_path": "weights/sam/mobile_sam/sm61/mobile_sam_encoder.engine",
-          "onnx_path": "weights/sam/mobile_sam/mobile_sam_encoder.onnx",
-          "trt_engines_id": "mobile_sam_encoder"
+          "onnx_path": "weights/sam/mobile_sam/mobile_sam_encoder.static_bs1.onnx",
+          "trt_engines_id": "mobile_sam_encoder",
+          "legacy_onnx_path": "weights/sam/mobile_sam/mobile_sam_encoder.onnx",
+          "onnx_dyn_path": "weights/sam/mobile_sam/mobile_sam_encoder.dyn.onnx",
+          "onnx_source": {
+            "kind": "preexisting_adopted",
+            "legacy": "weights/sam/mobile_sam/mobile_sam_encoder.onnx",
+            "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width."
+          }
         },
         {
           "role": "decoder",
           "runtime_path": "weights/sam/mobile_sam/sm61/mobile_sam_decoder.engine",
-          "onnx_path": "weights/sam/mobile_sam/mobile_sam_decoder.onnx",
-          "trt_engines_id": "mobile_sam_decoder"
+          "onnx_path": "weights/sam/mobile_sam/mobile_sam_decoder.static_bs1.onnx",
+          "trt_engines_id": "mobile_sam_decoder",
+          "legacy_onnx_path": "weights/sam/mobile_sam/mobile_sam_decoder.onnx",
+          "onnx_dyn_path": "weights/sam/mobile_sam/mobile_sam_decoder.dyn.onnx",
+          "onnx_source": {
+            "kind": "preexisting_adopted",
+            "legacy": "weights/sam/mobile_sam/mobile_sam_decoder.onnx",
+            "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width."
+          }
         }
       ],
-      "license": {"redistribute": "already_on_this_hf_repo"}
+      "license": {
+        "redistribute": "already_on_this_hf_repo"
+      },
+      "onnx_source": {
+        "kind": "preexisting",
+        "ref": null,
+        "notes": "Present before P2; keep original filename (not dual-renamed)."
+      }
     },
     {
       "id": "SAM_PREDICTOR",
@@ -735,17 +1802,38 @@
         {
           "role": "encoder",
           "runtime_path": "weights/sam/nano_sam/sm61/nano_sam_encoder_fp16.engine",
-          "onnx_path": "weights/sam/nano_sam/nano_sam_encoder.onnx",
-          "trt_engines_id": "nano_sam_encoder_fp16"
+          "onnx_path": "weights/sam/nano_sam/nano_sam_encoder.static_bs1.onnx",
+          "trt_engines_id": "nano_sam_encoder_fp16",
+          "legacy_onnx_path": "weights/sam/nano_sam/nano_sam_encoder.onnx",
+          "onnx_dyn_path": "weights/sam/nano_sam/nano_sam_encoder.dyn.onnx",
+          "onnx_source": {
+            "kind": "preexisting_adopted",
+            "legacy": "weights/sam/nano_sam/nano_sam_encoder.onnx",
+            "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width."
+          }
         },
         {
           "role": "decoder",
           "runtime_path": "weights/sam/nano_sam/sm61/nano_sam_decoder.engine",
-          "onnx_path": "weights/sam/nano_sam/nano_sam_decoder.onnx",
-          "trt_engines_id": "nano_sam_decoder"
+          "onnx_path": "weights/sam/nano_sam/nano_sam_decoder.static_bs1.onnx",
+          "trt_engines_id": "nano_sam_decoder",
+          "legacy_onnx_path": "weights/sam/nano_sam/nano_sam_decoder.onnx",
+          "onnx_dyn_path": "weights/sam/nano_sam/nano_sam_decoder.dyn.onnx",
+          "onnx_source": {
+            "kind": "preexisting_adopted",
+            "legacy": "weights/sam/nano_sam/nano_sam_decoder.onnx",
+            "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width."
+          }
         }
       ],
-      "license": {"redistribute": "p1_same_as_existing_runtime_weight"}
+      "license": {
+        "redistribute": "p1_same_as_existing_runtime_weight"
+      },
+      "onnx_source": {
+        "kind": "preexisting",
+        "ref": null,
+        "notes": "Present before P2; keep original filename (not dual-renamed)."
+      }
     },
     {
       "id": "FAST_SAM",
@@ -754,15 +1842,33 @@
       "config": "conf/model/segment_anything/fast_sam_s_config.toml",
       "product_type": "mnn",
       "runtime_path": "weights/sam/fastsam_s/FastSAM-s.mnn",
-      "onnx_path": "weights/sam/fastsam_s/FastSAM-s.onnx",
+      "onnx_path": "weights/sam/fastsam_s/FastSAM-s.static_bs1.onnx",
       "onnx_status": "local",
       "p1_upload": true,
       "contract": {
         "source": "on_init",
-        "outputs": [{"name": "output0"}, {"name": "output1"}],
+        "outputs": [
+          {
+            "name": "output0"
+          },
+          {
+            "name": "output1"
+          }
+        ],
         "notes": "Optional later trt_engines.json registration. AGPL like YOLO."
       },
-      "license": {"redistribute": "review_before_redistribute", "notes": "CASIA-IVA-Lab FastSAM AGPL-3.0. P1 still uploads because this is the local interchange twin of the product MNN (same policy as other P1 files). YOLO n/l/x stay skipped because they are not product."}
+      "license": {
+        "redistribute": "review_before_redistribute",
+        "notes": "CASIA-IVA-Lab FastSAM AGPL-3.0. P1 still uploads because this is the local interchange twin of the product MNN (same policy as other P1 files). YOLO n/l/x stay skipped because they are not product."
+      },
+      "onnx_source": {
+        "kind": "preexisting",
+        "ref": "weights/sam/fastsam_s/FastSAM-s.onnx",
+        "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width.",
+        "legacy": "weights/sam/fastsam_s/FastSAM-s.onnx"
+      },
+      "legacy_onnx_path": "weights/sam/fastsam_s/FastSAM-s.onnx",
+      "onnx_dyn_path": "weights/sam/fastsam_s/FastSAM-s.dyn.onnx"
     },
     {
       "id": "FAST_SAM",
@@ -771,11 +1877,23 @@
       "config": "conf/model/segment_anything/fast_sam_x_config.toml",
       "product_type": "mnn",
       "runtime_path": "weights/sam/fastsam_x/FastSAM-x.mnn",
-      "onnx_path": "weights/sam/fastsam_x/FastSAM-x.onnx",
+      "onnx_path": "weights/sam/fastsam_x/FastSAM-x.static_bs1.onnx",
       "onnx_status": "local",
       "p1_upload": true,
-      "contract": {"source": "same as FAST_SAM s"},
-      "license": {"redistribute": "review_before_redistribute"}
+      "contract": {
+        "source": "same as FAST_SAM s"
+      },
+      "license": {
+        "redistribute": "review_before_redistribute"
+      },
+      "onnx_source": {
+        "kind": "preexisting",
+        "ref": "weights/sam/fastsam_x/FastSAM-x.onnx",
+        "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width.",
+        "legacy": "weights/sam/fastsam_x/FastSAM-x.onnx"
+      },
+      "legacy_onnx_path": "weights/sam/fastsam_x/FastSAM-x.onnx",
+      "onnx_dyn_path": "weights/sam/fastsam_x/FastSAM-x.dyn.onnx"
     },
     {
       "id": "DDPM",
@@ -783,12 +1901,25 @@
       "config": "conf/model/diffusion/ddpm/ddpm_celeba-hq.toml",
       "product_type": "onnx",
       "runtime_path": "weights/diffusion/ddpm/ddpm_unet_celeba-hq-128x128.onnx",
-      "onnx_path": "weights/diffusion/ddpm/ddpm_unet_celeba-hq-128x128.onnx",
+      "onnx_path": "weights/diffusion/ddpm/ddpm_unet_celeba-hq-128x128.static_bs1.onnx",
       "onnx_status": "hosted",
       "p1_upload": false,
       "trt_engines_id": "ddpm_unet_celeba_hq_128",
-      "contract": {"source": "toml", "notes": "Existing product-type=onnx exception (diffusion)."},
-      "license": {"redistribute": "already_on_this_hf_repo"}
+      "contract": {
+        "source": "toml",
+        "notes": "Existing product-type=onnx exception (diffusion)."
+      },
+      "license": {
+        "redistribute": "already_on_this_hf_repo"
+      },
+      "onnx_source": {
+        "kind": "preexisting",
+        "ref": "weights/diffusion/ddpm/ddpm_unet_celeba-hq-128x128.onnx",
+        "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width.",
+        "legacy": "weights/diffusion/ddpm/ddpm_unet_celeba-hq-128x128.onnx"
+      },
+      "legacy_onnx_path": "weights/diffusion/ddpm/ddpm_unet_celeba-hq-128x128.onnx",
+      "onnx_dyn_path": "weights/diffusion/ddpm/ddpm_unet_celeba-hq-128x128.dyn.onnx"
     },
     {
       "id": "DDIM",
@@ -796,11 +1927,21 @@
       "config": "conf/model/diffusion/ddpm/ddim_celeba-hq.toml",
       "product_type": "onnx",
       "runtime_path": "weights/diffusion/ddpm/ddpm_unet_celeba-hq-256x256.onnx",
-      "onnx_path": "weights/diffusion/ddpm/ddpm_unet_celeba-hq-256x256.onnx",
+      "onnx_path": "weights/diffusion/ddpm/ddpm_unet_celeba-hq-256x256.static_bs1.onnx",
       "onnx_status": "hosted",
       "p1_upload": false,
       "trt_engines_id": "ddpm_unet_celeba_hq_256",
-      "license": {"redistribute": "already_on_this_hf_repo"}
+      "license": {
+        "redistribute": "already_on_this_hf_repo"
+      },
+      "onnx_source": {
+        "kind": "preexisting",
+        "ref": "weights/diffusion/ddpm/ddpm_unet_celeba-hq-256x256.onnx",
+        "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width.",
+        "legacy": "weights/diffusion/ddpm/ddpm_unet_celeba-hq-256x256.onnx"
+      },
+      "legacy_onnx_path": "weights/diffusion/ddpm/ddpm_unet_celeba-hq-256x256.onnx",
+      "onnx_dyn_path": "weights/diffusion/ddpm/ddpm_unet_celeba-hq-256x256.dyn.onnx"
     },
     {
       "id": "CLS_COND_DDIM",
@@ -808,11 +1949,21 @@
       "config": "conf/model/diffusion/ddpm/cls_cond_ddim_netease-album-cover.toml",
       "product_type": "onnx",
       "runtime_path": "weights/diffusion/ddpm/cls_cond_ddpm_netease_album_cover_128x128.onnx",
-      "onnx_path": "weights/diffusion/ddpm/cls_cond_ddpm_netease_album_cover_128x128.onnx",
+      "onnx_path": "weights/diffusion/ddpm/cls_cond_ddpm_netease_album_cover_128x128.static_bs1.onnx",
       "onnx_status": "hosted",
       "p1_upload": false,
       "trt_engines_id": "cls_cond_ddpm_netease_album_cover",
-      "license": {"redistribute": "already_on_this_hf_repo"}
+      "license": {
+        "redistribute": "already_on_this_hf_repo"
+      },
+      "onnx_source": {
+        "kind": "preexisting",
+        "ref": "weights/diffusion/ddpm/cls_cond_ddpm_netease_album_cover_128x128.onnx",
+        "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width.",
+        "legacy": "weights/diffusion/ddpm/cls_cond_ddpm_netease_album_cover_128x128.onnx"
+      },
+      "legacy_onnx_path": "weights/diffusion/ddpm/cls_cond_ddpm_netease_album_cover_128x128.onnx",
+      "onnx_dyn_path": "weights/diffusion/ddpm/cls_cond_ddpm_netease_album_cover_128x128.dyn.onnx"
     },
     {
       "id": "LDM",
@@ -825,18 +1976,40 @@
         {
           "role": "unet",
           "runtime_path": "weights/diffusion/ldm/latent_ddpm_celeba-hq.engine",
-          "onnx_path": "weights/diffusion/ldm/latent_ddpm_celeba-hq.onnx",
-          "trt_engines_id": "latent_ddpm_celeba_hq"
+          "onnx_path": "weights/diffusion/ldm/latent_ddpm_celeba-hq.static_bs1.onnx",
+          "trt_engines_id": "latent_ddpm_celeba_hq",
+          "legacy_onnx_path": "weights/diffusion/ldm/latent_ddpm_celeba-hq.onnx",
+          "onnx_dyn_path": "weights/diffusion/ldm/latent_ddpm_celeba-hq.dyn.onnx",
+          "onnx_source": {
+            "kind": "preexisting_adopted",
+            "legacy": "weights/diffusion/ldm/latent_ddpm_celeba-hq.onnx",
+            "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width."
+          }
         },
         {
           "role": "autoencoder",
           "config": "conf/model/diffusion/ldm/autoencoder_kl.toml",
           "runtime_path": "weights/diffusion/ldm/autoencoder_kl_decoder.engine",
-          "onnx_path": "weights/diffusion/ldm/autoencoder_kl_decoder.onnx",
-          "trt_engines_id": "autoencoder_kl_decoder"
+          "onnx_path": "weights/diffusion/ldm/autoencoder_kl_decoder.static_bs1.onnx",
+          "trt_engines_id": "autoencoder_kl_decoder",
+          "legacy_onnx_path": "weights/diffusion/ldm/autoencoder_kl_decoder.onnx",
+          "onnx_dyn_path": "weights/diffusion/ldm/autoencoder_kl_decoder.dyn.onnx",
+          "onnx_source": {
+            "kind": "preexisting_adopted",
+            "legacy": "weights/diffusion/ldm/autoencoder_kl_decoder.onnx",
+            "notes": "Adopted from the existing ONNX: original file kept for product toml / trt_engines.json / HF names. Dual interchange is {stem}.static_bs1.onnx (batch=1) and {stem}.dyn.onnx (symbolic batch). Spatial dims unchanged except CenterFace, whose dummy 32×32 was opened to height/width."
+          }
         }
       ],
-      "license": {"redistribute": "already_on_this_hf_repo", "notes": "Engines still on HF; delete in P4."}
+      "license": {
+        "redistribute": "already_on_this_hf_repo",
+        "notes": "Engines still on HF; delete in P4."
+      },
+      "onnx_source": {
+        "kind": "preexisting",
+        "ref": null,
+        "notes": "Present before P2; keep original filename (not dual-renamed)."
+      }
     }
   ]
 }

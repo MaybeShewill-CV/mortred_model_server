@@ -31,6 +31,42 @@ bool set_error(StatusCode &status, std::string &destination, const RuntimeStatus
 
 bool valid_size(const cv::Size &size) { return size.width > 0 && size.height > 0; }
 
+/*** float -> IEEE754 half, round-to-nearest-even */
+inline std::uint16_t f32_to_f16_bits(float value) {
+    std::uint32_t bits = 0;
+    std::memcpy(&bits, &value, sizeof(bits));
+    const std::uint16_t sign = static_cast<std::uint16_t>((bits >> 16) & 0x8000u);
+    const std::uint32_t biased = (bits >> 23) & 0xFFu;
+    const std::uint32_t mantissa = bits & 0x7FFFFFu;
+    if (biased == 0xFFu) {
+        return static_cast<std::uint16_t>(sign | 0x7C00u | (mantissa != 0 ? 0x200u : 0));
+    }
+    int32_t exponent = static_cast<int32_t>(biased) - 127 + 15;
+    if (exponent >= 31) {
+        return static_cast<std::uint16_t>(sign | 0x7C00u);
+    }
+    if (exponent <= 0) {
+        if (exponent < -10) {
+            return sign;
+        }
+        const std::uint32_t implicit = mantissa | 0x800000u;
+        const int shift = 14 - exponent + 13;
+        const std::uint32_t kept = implicit >> shift;
+        const std::uint32_t rem = implicit & ((1u << shift) - 1u);
+        const std::uint32_t rounded =
+            kept + (((rem > (1u << (shift - 1))) || (rem == (1u << (shift - 1)) && (kept & 1u))) ? 1u : 0u);
+        return static_cast<std::uint16_t>(sign | rounded);
+    }
+    std::uint32_t kept = mantissa >> 13;
+    const std::uint32_t rem = mantissa & 0x1FFFu;
+    kept += ((rem > 0x1000u) || (rem == 0x1000u && (kept & 1u))) ? 1u : 0u;
+    if (kept == 0x400u) {
+        kept = 0;
+        ++exponent;
+    }
+    return static_cast<std::uint16_t>(sign | (static_cast<std::uint16_t>(exponent) << 10) | static_cast<std::uint16_t>(kept));
+}
+
 } // namespace
 
 ImagePipeline::ImagePipeline(const cv::Mat &image) : image_(image.clone()) {
@@ -250,9 +286,29 @@ RuntimeResult<NamedTensor> ImagePipeline::pack(const std::string &name, bool nch
     return runtime_ok(std::move(named));
 }
 
-RuntimeResult<NamedTensor> ImagePipeline::nchw(const std::string &name) const { return pack(name, true); }
+RuntimeResult<NamedTensor> ImagePipeline::nchw(const std::string &name) const { return nchw(name, DType::F32); }
 
-RuntimeResult<NamedTensor> ImagePipeline::nhwc(const std::string &name) const { return pack(name, false); }
+RuntimeResult<NamedTensor> ImagePipeline::nchw(const std::string &name, DType dtype) const {
+    auto packed = pack(name, true);
+    if (!packed.ok()) {
+        return packed;
+    }
+    return named_tensor_as(std::move(packed.value), dtype);
+}
+
+RuntimeResult<NamedTensor> ImagePipeline::nchw(const TensorInfo &input) const { return nchw(input.name, input.dtype); }
+
+RuntimeResult<NamedTensor> ImagePipeline::nhwc(const std::string &name) const { return nhwc(name, DType::F32); }
+
+RuntimeResult<NamedTensor> ImagePipeline::nhwc(const std::string &name, DType dtype) const {
+    auto packed = pack(name, false);
+    if (!packed.ok()) {
+        return packed;
+    }
+    return named_tensor_as(std::move(packed.value), dtype);
+}
+
+RuntimeResult<NamedTensor> ImagePipeline::nhwc(const TensorInfo &input) const { return nhwc(input.name, input.dtype); }
 
 RuntimeResult<NamedTensor> letterbox_bgr_f32_nchw(const cv::Mat &bgr, const cv::Size &network,
                                                   const std::string &tensor_name, std::uint8_t pad_value) {
@@ -260,43 +316,6 @@ RuntimeResult<NamedTensor> letterbox_bgr_f32_nchw(const cv::Mat &bgr, const cv::
 }
 
 namespace {
-
-/*** float -> IEEE754 half, round-to-nearest-even; the kernel feeds [0,1]
- * values so the subnormal branch is defensive only */
-inline std::uint16_t f32_to_f16_bits(float value) {
-    std::uint32_t bits = 0;
-    std::memcpy(&bits, &value, sizeof(bits));
-    const std::uint16_t sign = static_cast<std::uint16_t>((bits >> 16) & 0x8000u);
-    const std::uint32_t biased = (bits >> 23) & 0xFFu;
-    const std::uint32_t mantissa = bits & 0x7FFFFFu;
-    if (biased == 0xFFu) {
-        return static_cast<std::uint16_t>(sign | 0x7C00u | (mantissa != 0 ? 0x200u : 0));
-    }
-    int32_t exponent = static_cast<int32_t>(biased) - 127 + 15;
-    if (exponent >= 31) {
-        return static_cast<std::uint16_t>(sign | 0x7C00u);
-    }
-    if (exponent <= 0) {
-        if (exponent < -10) {
-            return sign;
-        }
-        const std::uint32_t implicit = mantissa | 0x800000u;
-        const int shift = 14 - exponent + 13;
-        const std::uint32_t kept = implicit >> shift;
-        const std::uint32_t rem = implicit & ((1u << shift) - 1u);
-        const std::uint32_t rounded =
-            kept + (((rem > (1u << (shift - 1))) || (rem == (1u << (shift - 1)) && (kept & 1u))) ? 1u : 0u);
-        return static_cast<std::uint16_t>(sign | rounded);
-    }
-    std::uint32_t kept = mantissa >> 13;
-    const std::uint32_t rem = mantissa & 0x1FFFu;
-    kept += ((rem > 0x1000u) || (rem == 0x1000u && (kept & 1u))) ? 1u : 0u;
-    if (kept == 0x400u) {
-        kept = 0;
-        ++exponent;
-    }
-    return static_cast<std::uint16_t>(sign | (static_cast<std::uint16_t>(exponent) << 10) | static_cast<std::uint16_t>(kept));
-}
 
 /*** one pass over the source rows, writing the three plane rows at once
  * (the source is read once; plane 0 = R = BGR slot 2, 1 = G, 2 = B) */
@@ -393,6 +412,32 @@ RuntimeResult<NamedTensor> letterbox_bgr_nchw(const cv::Mat &bgr, const cv::Size
     }
     return runtime_ok(std::move(named));
 }
+
+RuntimeResult<NamedTensor> named_tensor_as(NamedTensor tensor, DType dtype) {
+    if (tensor.tensor.dtype == dtype) {
+        return runtime_ok(std::move(tensor));
+    }
+    if (tensor.tensor.dtype != DType::F32 || dtype != DType::F16) {
+        return {StatusCode::MODEL_EMPTY_INPUT_IMAGE,
+                std::string("named_tensor_as: cannot cast ") + dtype_to_string(tensor.tensor.dtype) + " to " +
+                    dtype_to_string(dtype),
+                {}};
+    }
+    Tensor out = Tensor::make(DType::F16, tensor.tensor.shape);
+    out.layout = tensor.tensor.layout;
+    const int64_t count = tensor.tensor.element_count();
+    if (count < 0) {
+        return {StatusCode::MODEL_EMPTY_INPUT_IMAGE, "named_tensor_as: invalid element count", {}};
+    }
+    const auto *src = reinterpret_cast<const float *>(tensor.tensor.buffer.data());
+    auto *dst = reinterpret_cast<std::uint16_t *>(out.buffer.data());
+    for (int64_t i = 0; i < count; ++i) {
+        dst[static_cast<size_t>(i)] = f32_to_f16_bits(src[static_cast<size_t>(i)]);
+    }
+    tensor.tensor = std::move(out);
+    return runtime_ok(std::move(tensor));
+}
+
 RuntimeResult<cv::Mat> ImagePipeline::mat() const {
     if (status_ != StatusCode::OK) {
         return {status_, error_, {}};
@@ -634,6 +679,11 @@ SessionIoValidator &SessionIoValidator::dtype(DType value) {
 
 SessionIoValidator &SessionIoValidator::f32() { return dtype(DType::F32); }
 
+SessionIoValidator &SessionIoValidator::allow_fp16() {
+    allow_fp16_ = true;
+    return *this;
+}
+
 SessionIoValidator &SessionIoValidator::rank(size_t value) {
     rank_ = value;
     return *this;
@@ -685,7 +735,10 @@ RuntimeResult<TensorInfo> SessionIoValidator::validate() const {
     const auto &info = *found;
     const std::string description = info.to_string();
     if (info.dtype != dtype_) {
-        return {StatusCode::MODEL_INIT_FAILED, "unexpected session io dtype: " + description, {}};
+        const bool fp16_ok = allow_fp16_ && dtype_ == DType::F32 && info.dtype == DType::F16;
+        if (!fp16_ok) {
+            return {StatusCode::MODEL_INIT_FAILED, "unexpected session io dtype: " + description, {}};
+        }
     }
     if (rank_ != 0 && info.shape.size() != rank_) {
         return {StatusCode::MODEL_INIT_FAILED, "unexpected session io rank: " + description, {}};

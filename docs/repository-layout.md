@@ -91,15 +91,19 @@ Worker_nums calibration is `scripts/calibrate_pack.py` (`mortredctl calibrate`):
 
 ```text
 conf/
-├── ci/          # CI-only overlays (not product serving; e.g. YOLOv8 ONNX hosted golden)
-├── model/       # model inference configuration (TOML syntax)
-└── server/      # model server configuration
+├── ci/                 # CI-only overlays (not product serving; e.g. YOLOv8 ONNX hosted golden)
+├── model/              # model inference configuration (TOML syntax)
+├── server/             # model server configuration
+├── onnx_sources.json   # per-id ONNX interchange source / IO contract / license
+└── weights_manifest.json
 ```
 
 Every server config should reference a model config through `model_config_file_path`.
 Every server config should declare `model = "<catalog id>"` and
 `server_exe = "mortred-model-server.out"` so the supervisor/gateway catalog
 (`Catalog` in `src/control/`) can spawn `mortred-model-server.out --model <id>`.
+
+Dual-file ONNX export rules: [onnx-interchange.md](onnx-interchange.md).
 
 ## Stale artifacts policy
 

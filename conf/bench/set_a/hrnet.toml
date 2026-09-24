@@ -1,0 +1,13 @@
+# Bench overlay: TensorRT static_bs1 engine. Not a product config.
+# id=hrnet catalog=HRNET
+
+[HRNET_SEGMENTATION]
+[HRNET_SEGMENTATION.backend]
+type = "tensorrt"
+model_file_path = "../weights/scene_segmentation/hrnet/hrnetw48_ccd.engine.static_bs1.fp16"
+device = "gpu"
+
+[HRNET_SEGMENTATION.params]
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"

@@ -35,7 +35,8 @@ struct GpuPreprocessDescriptor {
         KEEP_RATIO_PAD_ZERO,    // keep-ratio + right/bottom zero pad (DepthAnything)
         KEEP_RATIO_PAD_CENTER,  // keep-ratio + center pad (Metric3D)
         ALIGN_TO_MULTIPLE,      // align up to multiple (CenterFace /32, EnlightenGAN /16)
-        NONE                    // pass through at source resolution (Real-ESRGAN)
+        NONE,                   // pass through at source resolution (Real-ESRGAN)
+        DIRECT_RESIZE_PAD_TO_MULTIPLE // stretch to pre_crop_size (or source), then right/bottom pad to align_multiple (LibFace / YuNet)
     };
     Resize resize = Resize::NONE;
 
@@ -61,10 +62,12 @@ struct GpuPreprocessDescriptor {
     DType output_dtype = DType::F16;  // F16 or F32
     bool output_nhwc = false;          // false = NCHW, true = NHWC
 
-    // ── CENTER_CROP: resize to this size first, then crop to network size ──
+    // ── CENTER_CROP: resize to this size first, then crop to network size.
+    // DIRECT_RESIZE_PAD_TO_MULTIPLE: unpadded content size (width, height).
+    // Empty means pad the native JPEG size (no stretch). ──
     cv::Size pre_crop_size = {};
 
-    // ── ALIGN_TO_MULTIPLE: the alignment value ──
+    // ── ALIGN_TO_MULTIPLE / DIRECT_RESIZE_PAD_TO_MULTIPLE: the alignment value ──
     int align_multiple = 32;
 
     // ── Rotation (composable with any Resize) ──
@@ -81,6 +84,9 @@ struct GpuPreprocessDescriptor {
         return output_dtype == DType::F16 || output_dtype == DType::F32;
     }
 };
+
+static_assert(static_cast<int>(GpuPreprocessDescriptor::Resize::DIRECT_RESIZE_PAD_TO_MULTIPLE) == 7,
+              "gpu_preprocess.cu RESIZE_* macros must stay in enum order");
 
 } // namespace backend
 } // namespace models

@@ -1,0 +1,20 @@
+# CI-only overlay: fork-hosted ONNX Runtime CPU proof for this product id.
+# Product serving stays the original conf/model/**/*.toml (mnn/tensorrt).
+# Do not point conf/server at this file.
+
+[MOBILENETV2]
+[MOBILENETV2.backend]
+type = "onnx"
+model_file_path = "../weights/classification/mobilenetv2/mobilenetv2.static_bs1.onnx"
+device = "cpu"
+threads = 4
+input_layout = "nhwc"
+precision_mode = 0
+power_mode = 0
+
+[MOBILENETV2.params]
+model_input_image_size = [224, 224]
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"
+class_name_file = "../conf/model/classification/imagenet_classes.txt"

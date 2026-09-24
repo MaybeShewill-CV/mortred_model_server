@@ -4,7 +4,8 @@ Weights are **not** in git. GitHub holds code, `conf/weights_manifest.json`
 (path + sha256), `conf/ci_hosted_golden.json` (which goldens which path must
 run), and `test/golden/` expectations. Bytes live on Hugging Face
 (`MaybeShewill-CV/mortred_model_server`) and, for CUDA/TensorRT, on the
-maintainer GPU runner at `/opt/mortred-cache/weights`.
+maintainer GPU runner at `/opt/mortred-cache/weights`. Dual-file ONNX export
+and remaining gaps: [onnx-interchange.md](onnx-interchange.md).
 
 A green check must not be read as “every model still works on every
 contribution path.” Use the table.
@@ -124,7 +125,8 @@ not cancel a running schedule.
 
 ## ONNX cutover freeze (P0)
 
-The Hugging Face ONNX-as-interchange work **must not** silently refresh
+The Hugging Face ONNX-as-interchange work ([onnx-interchange.md](onnx-interchange.md))
+**must not** silently refresh
 goldens. Source of truth for the hosted set remains
 `conf/ci_hosted_golden.json` (today: MobileNetV2 MNN, NanoDet MNN, YOLOv8 ONNX
 overlay, DBNet MNN, SuperPoint MNN, BiseNetV2 MNN). GPU smoke-8 stays the

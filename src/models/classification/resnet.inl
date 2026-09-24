@@ -30,7 +30,7 @@ using jinq::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode ResNet<INPUT, OUTPUT>::on_init(const toml::table &params) {
     const auto input_info =
-        jinq::models::backend::SessionIoValidator(this->session()).input().f32().rank(4).nhwc().channels(3).static_shape().validate();
+        jinq::models::backend::SessionIoValidator(this->session()).input().f32().allow_fp16().rank(4).nhwc().channels(3).static_shape().validate();
     if (!input_info.ok()) {
         LOG(ERROR) << "unexpected classification input shape: " << input_info.error << ", expected static [N,H,W,3] (nhwc)";
         return StatusCode::MODEL_INIT_FAILED;
@@ -101,7 +101,7 @@ template <typename INPUT, typename OUTPUT> cv::Mat ResNet<INPUT, OUTPUT>::prepro
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> ResNet<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
     const cv::Mat tmp = preprocess_mat(input_image);
-    auto result = jinq::models::backend::ImagePipeline(tmp).nhwc(this->session().inputs().front().name);
+    auto result = jinq::models::backend::ImagePipeline(tmp).nhwc(this->session().inputs().front());
     if (!result.ok()) {
         LOG(ERROR) << result.error;
         return {};

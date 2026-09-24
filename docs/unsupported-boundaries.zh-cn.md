@@ -4,6 +4,7 @@
 源码 / CMake 为准；CHANGELOG 仅参考。
 
 开箱与运维：[deployment.zh-cn.md](deployment.zh-cn.md)（`mortredctl next`）。
+ONNX 导出与缺口：[onnx-interchange.zh-cn.md](onnx-interchange.zh-cn.md)。
 
 | 边界 | 不支持 / 勿期待 |
 |---|---|
@@ -12,7 +13,7 @@
 | MOT | 无 MOT HTTP 服务 |
 | GPU 栈 | 非 CUDA 12.x；**TensorRT 8/9**（钉 **10.x**） |
 | Engine | 跨机 / 跨 TRT 大版本拷贝 `.engine` 当开箱；跳过本机 `mortredctl prepare` |
-| HF 权重 | 把 HF 当运行时 engine/MNN 商店；产品 toml 改成 `type=onnx`；从 MNN 反推 ONNX |
+| HF 权重 | 把 HF 当运行时 engine/MNN 商店；为了「HF 上是 ONNX」把产品 toml 改成 `type=onnx`（LIBFACE YuNet 与已有 ONNX id 除外）；从 MNN 反推 ONNX |
 | cpu profile | 编进 TensorRT；`type=tensorrt` 配置能跑通 |
 
 清单里旧称「TRT&lt;9」已过时：源码硬前置是 **TensorRT 10**，不是「≥9」。

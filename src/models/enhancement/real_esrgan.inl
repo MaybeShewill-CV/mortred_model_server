@@ -60,7 +60,7 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> RealEsrGan<I
     } else {
         pipeline.bgr_to_rgb();
     }
-    auto result = pipeline.to_float().scale(1.0f / 255.0f).nhwc(this->session().inputs().front().name);
+    auto result = pipeline.to_float().scale(1.0f / 255.0f).nhwc(this->session().inputs().front());
     if (!result.ok()) {
         LOG(ERROR) << result.error;
         return {};

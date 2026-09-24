@@ -417,12 +417,14 @@ export MORTRED_PROFILE=cpu     # supervisor 与 gateway 都读它；缺省 = gpu
 ### 9.1 机制
 
 Hugging Face 是 **ONNX 交换格式**仓库（`MaybeShewill-CV/mortred_model_server`）。
-产品 conf 保持 `type=mnn` 或 `type=tensorrt`。GPU engine 必须在本机生成
-（`mortredctl prepare` / `convert_trt_engines.sh`）。CPU 在本地 convert_mnn
-就绪前仍用 MNN 作运行时，不要为了「HF 上是 ONNX」去改产品 toml。
+产品 conf 保持 `type=mnn` 或 `type=tensorrt`，例外是本来就是 ONNX 的 id
+（diffusion、MSOCRNET、SAM decoder）以及切到 YuNet 2026may 之后的 **LIBFACE**。
+GPU engine 必须在本机生成（`mortredctl prepare` / `convert_trt_engines.sh`）。
+CPU 在本地 convert_mnn 就绪前仍用 MNN 作运行时，不要为了「HF 上是 ONNX」去改产品 toml。
 
 每个模型的源路径、IO 合同、许可证见 `conf/onnx_sources.json`；字节与 sha256
-见 `conf/weights_manifest.json`。
+见 `conf/weights_manifest.json`。双文件导出规则和缺口清单：
+[onnx-interchange.zh-cn.md](onnx-interchange.zh-cn.md)。
 
 - 清单：`conf/weights_manifest.json`——每个文件带 `path / size / sha256 / hf_path / profiles`；
 - 下载：HF 仓库，断点续传，**已存在且 sha256 匹配则跳过**；

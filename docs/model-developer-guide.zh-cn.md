@@ -65,3 +65,5 @@ cmake --preset full && cmake --build --preset full
 scripts/run_tests.sh build/full -R model_golden_test --output-on-failure
 python3 scripts/check_consistency.py
 ```
+
+ONNX 交换格式导出与缺口：[onnx-interchange.zh-cn.md](onnx-interchange.zh-cn.md)。

@@ -74,7 +74,7 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> SuperPoint<I
                       .bgr_to_gray()
                       .to_float()
                       .scale(1.0f / 255.0f)
-                      .nchw(this->session().inputs().front().name);
+                      .nchw(this->session().inputs().front());
     if (!result.ok()) {
         LOG(ERROR) << result.error;
         return {};

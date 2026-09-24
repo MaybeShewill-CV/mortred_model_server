@@ -8,6 +8,8 @@
 #include "yolov7_detector.h"
 
 #include <algorithm>
+#include <sstream>
+#include <vector>
 
 #include "glog/logging.h"
 #include "models/backend/model_runtime.h"
@@ -62,15 +64,34 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> YoloV7Detect
 template <typename INPUT, typename OUTPUT>
 StatusCode YoloV7Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
                                                       const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
-    // yolov7.mnn exports three raw output heads [1, 3, H, W, 85]:
-    //   "output" -> 80x80 (stride 8), "518" -> 40x40 (stride 16),
-    //   "532" -> 20x20 (stride 32)
-    const std::array<const NamedTensor *, 3> heads = {jinq::models::backend::find_output(outputs, "output"),
-                                                      jinq::models::backend::find_output(outputs, "518"),
-                                                      jinq::models::backend::find_output(outputs, "532")};
+    // Three raw heads [1, 3, H, W, C]. Official yolov7.mnn names them
+    // output/518/532 (80/40/20). yolov7x ONNX uses output/598/612 for the
+    // same grids, so bind by descending spatial size when those names are absent.
+    std::array<const NamedTensor *, 3> heads = {jinq::models::backend::find_output(outputs, "output"),
+                                                jinq::models::backend::find_output(outputs, "518"),
+                                                jinq::models::backend::find_output(outputs, "532")};
     if (std::any_of(heads.begin(), heads.end(), [](const NamedTensor *head) { return head == nullptr; })) {
-        LOG(ERROR) << "yolov7 output heads 'output', '518' or '532' are missing";
-        return StatusCode::MODEL_EMPTY_OUTPUT;
+        std::vector<const NamedTensor *> ranked;
+        ranked.reserve(outputs.size());
+        for (const auto &item : outputs) {
+            const auto &shape = item.tensor.shape;
+            if (shape.size() == 5 && shape[0] == 1 && shape[1] == 3 && shape[2] > 0 && shape[3] > 0 && shape[4] > 0) {
+                ranked.push_back(&item);
+            }
+        }
+        std::sort(ranked.begin(), ranked.end(), [](const NamedTensor *a, const NamedTensor *b) {
+            return a->tensor.shape[2] > b->tensor.shape[2];
+        });
+        if (ranked.size() == 3) {
+            heads = {ranked[0], ranked[1], ranked[2]};
+        } else {
+            std::ostringstream names;
+            for (const auto &item : outputs) {
+                names << " " << item.name;
+            }
+            LOG(ERROR) << "yolov7 expected 3 heads [1,3,H,W,C]; got " << outputs.size() << " tensors:" << names.str();
+            return StatusCode::MODEL_EMPTY_OUTPUT;
+        }
     }
 
     const int strides[3] = {8, 16, 32};

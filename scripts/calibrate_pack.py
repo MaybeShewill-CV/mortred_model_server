@@ -45,7 +45,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "scripts" / "server"))
 
 from http_infer_rps import LoadConfig, parse_duration, run_load  # noqa: E402
-from pack_trt import find_server_toml, pack_ids, server_listen  # noqa: E402
+from pack_trt import find_server_toml, pack_ids, pack_server_config, server_listen  # noqa: E402
 from test_server import build_catalog, resolve_demo_image, resolve_server  # noqa: E402
 
 OOM_MARKERS = ("out of memory", "cuda oom", "cudnn_status_alloc_failed", "std::bad_alloc")
@@ -338,20 +338,24 @@ def run_decode_path_grid(
     duration_s: float,
     auth_token: str,
     pin: str,
+    model_config: str = "",
+    server_toml: Path | None = None,
 ) -> tuple[list[float | None], str]:
     model_id = entry["model_id"]
-    found = find_server_toml(root, model_id)
+    found = server_toml if server_toml is not None else find_server_toml(root, model_id)
     if found is None:
         return [None] * len(fixtures), "no conf/server mapping"
     port = int(entry["port"])
     uri = entry["uri"]
     log_path = root / "logs" / ("calibrate-decode-%s-%s.log" % (model_id, pin))
     extra = {"MORTRED_IMAGE_DECODE_BACKEND": pin}
+    if model_config:
+        extra["MORTRED_MODEL_CONFIG_FILE"] = model_config
     proc = start_model(root, binary, model_id, found, workers, log_path, extra, auth_token)
     scores: list[float | None] = []
     note = "ok"
     try:
-        if not wait_http_ready("http://127.0.0.1:%d/ready" % port, 60.0, proc):
+        if not wait_http_ready("http://127.0.0.1:%d/ready" % port, 120.0, proc):
             return [None] * len(fixtures), "probe server not ready (see %s)" % log_path
         if pin == "gpu" and not log_has_jpeggpu_ready(log_path):
             return [None] * len(fixtures), "gpu decoder not armed (see %s)" % log_path
@@ -382,6 +386,8 @@ def calibrate_decode_vote(
     duration_s: float,
     auth_token: str,
     grid_dir: Path,
+    model_config: str = "",
+    server_toml: Path | None = None,
 ) -> dict:
     try:
         fixtures = generate_decode_grid(grid_dir)
@@ -389,7 +395,7 @@ def calibrate_decode_vote(
         return {"decode_auto": "cpu", "error": "grid generate failed: %s" % exc}
     print("  decode grid: 16 fixtures, w=%d, gpu then cpu" % workers, flush=True)
     gpu_scores, gpu_note = run_decode_path_grid(
-        root, binary, entry, workers, fixtures, duration_s, auth_token, "gpu"
+        root, binary, entry, workers, fixtures, duration_s, auth_token, "gpu", model_config, server_toml
     )
     if all(score is None for score in gpu_scores):
         return {
@@ -401,7 +407,7 @@ def calibrate_decode_vote(
             "gpu_note": gpu_note,
         }
     cpu_scores, cpu_note = run_decode_path_grid(
-        root, binary, entry, workers, fixtures, duration_s, auth_token, "cpu"
+        root, binary, entry, workers, fixtures, duration_s, auth_token, "cpu", model_config, server_toml
     )
     cases = []
     for fixture, cpu_rps, gpu_rps in zip(fixtures, cpu_scores, gpu_scores):
@@ -690,15 +696,64 @@ def find_server_bin(root: Path) -> Path | None:
     return None
 
 
-def stop_proc(proc: subprocess.Popen[bytes] | None) -> None:
-    if proc is None or proc.poll() is not None:
-        return
-    proc.send_signal(signal.SIGINT)
+def _close_popen_stdio(proc: subprocess.Popen[bytes]) -> None:
+    for stream in (proc.stdout, proc.stderr, proc.stdin):
+        if stream is None:
+            continue
+        try:
+            stream.close()
+        except OSError:
+            pass
+
+
+def _wait_quiet(proc: subprocess.Popen[bytes], timeout_s: float) -> bool:
     try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        proc.wait(timeout=2)
+        proc.wait(timeout=timeout_s)
+        return True
+    except Exception:
+        return False
+
+
+def stop_proc(proc: subprocess.Popen[bytes] | None) -> None:
+    """Never raise: HTTP/calibrate drivers must survive a stuck server."""
+    try:
+        if proc is None:
+            return
+        if proc.poll() is not None:
+            _close_popen_stdio(proc)
+            return
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except OSError:
+            try:
+                proc.terminate()
+            except OSError:
+                _close_popen_stdio(proc)
+                return
+        if _wait_quiet(proc, 8.0):
+            _close_popen_stdio(proc)
+            return
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except OSError:
+            try:
+                proc.kill()
+            except OSError:
+                pass
+        if not _wait_quiet(proc, 5.0):
+            subprocess.run(["killall", "-9", "-q", "mortred-model-server.out"], check=False)
+            _wait_quiet(proc, 3.0)
+        _close_popen_stdio(proc)
+    except BaseException:
+        try:
+            subprocess.run(["killall", "-9", "-q", "mortred-model-server.out"], check=False)
+        except Exception:
+            pass
+        try:
+            if proc is not None:
+                _close_popen_stdio(proc)
+        except Exception:
+            pass
 
 
 def calib_auth_token() -> str:
@@ -736,6 +791,18 @@ def start_model(
     )
     env.update(extra_env)
     handle = log_path.open("wb")
+    handle.write(
+        (
+            "spawn model=%s server_toml=%s model_config=%s workers=%s\n"
+            % (
+                model_id,
+                server_toml,
+                extra_env.get("MORTRED_MODEL_CONFIG_FILE", ""),
+                workers,
+            )
+        ).encode()
+    )
+    handle.flush()
     return subprocess.Popen(
         [str(binary), "--model", model_id, str(server_toml)],
         cwd=str(binary.parent),
@@ -794,13 +861,14 @@ def run_one_point(
     concurrency: int,
     model_config: str,
     auth_token: str,
+    server_toml: Path | None = None,
 ) -> dict:
     model_id = entry["model_id"]
     log_path = root / "logs" / ("calibrate-%s-w%d.log" % (model_id, workers))
     extra = {}
     if model_config:
         extra["MORTRED_MODEL_CONFIG_FILE"] = model_config
-    found = find_server_toml(root, model_id)
+    found = server_toml if server_toml is not None else find_server_toml(root, model_id)
     if found is None:
         return {
             "worker_nums": workers,
@@ -913,6 +981,13 @@ def pack_model_config(pack: Path, model_id: str, root: Path) -> str:
     return str(path) if path is not None else ""
 
 
+def resolve_pack_server(root: Path, pack: Path, model_id: str) -> Path | None:
+    path = pack_server_config(pack, model_id, root)
+    if path is not None and path.is_file():
+        return path
+    return find_server_toml(root, model_id)
+
+
 def calibrate(
     root: Path,
     pack: Path,
@@ -946,12 +1021,18 @@ def calibrate(
             continue
         print("== %s image=%s ==" % (model_id, image.relative_to(root)), flush=True)
         override = pack_model_config(pack, model_id, root)
+        server_toml = resolve_pack_server(root, pack, model_id)
+        print(
+            "  model_config=%s server=%s"
+            % (override or "(product)", server_toml),
+            flush=True,
+        )
         points: list[dict] = []
         for w in workers:
             print("  w=%d ..." % w, flush=True)
             conc = max(4, min(16, 4 * w))
             point = run_one_point(
-                root, binary, entry, image, w, duration_s, conc, override, auth_token
+                root, binary, entry, image, w, duration_s, conc, override, auth_token, server_toml
             )
             points.append(point)
             print(
@@ -990,8 +1071,17 @@ def calibrate(
             grid_dir = Path(tempfile.mkdtemp(prefix="mortred-decode-grid-"))
             try:
                 row["decode"] = calibrate_decode_vote(
-                    root, binary, entry, w_star, duration_s, auth_token, grid_dir
+                    root, binary, entry, w_star, duration_s, auth_token, grid_dir, override, server_toml
                 )
+            except Exception as exc:
+                row["decode"] = {
+                    "decode_auto": "cpu",
+                    "cpu_wins": 0,
+                    "gpu_wins": 0,
+                    "valid": 0,
+                    "error": "decode vote failed: %s" % exc,
+                }
+                print("  decode vote failed: %s" % exc, flush=True)
             finally:
                 shutil.rmtree(grid_dir, ignore_errors=True)
 
@@ -1009,7 +1099,7 @@ def calibrate(
     baseline = gpu_mem_device_mib()
     try:
         for model_id, w in suggested.items():
-            found = find_server_toml(root, model_id)
+            found = resolve_pack_server(root, pack, model_id)
             if found is None:
                 continue
             log_path = root / "logs" / ("calibrate-joint-%s.log" % model_id)
@@ -1230,6 +1320,11 @@ def main() -> int:
     parser.add_argument("--workers", default="1,2,4", help="comma-separated worker_nums sweep")
     parser.add_argument("--duration", default="8s")
     parser.add_argument("--output", type=Path, help="write JSON report")
+    parser.add_argument(
+        "--from-json",
+        type=Path,
+        help="load an existing calibrate JSON instead of running the sweep",
+    )
     parser.add_argument("--skip-joint", action="store_true")
     parser.add_argument(
         "--write-pack",
@@ -1247,7 +1342,11 @@ def main() -> int:
     if not workers or min(workers) < 1:
         parser.error("workers must be >= 1")
     duration_s = parse_duration(args.duration)
-    report = calibrate(args.project_root, pack, workers, duration_s, args.skip_joint)
+    if args.from_json:
+        src = args.from_json if args.from_json.is_absolute() else args.project_root / args.from_json
+        report = json.loads(src.read_text(encoding="utf-8"))
+    else:
+        report = calibrate(args.project_root, pack, workers, duration_s, args.skip_joint)
     if args.write_pack:
         try:
             id_fields, pack_fields = occupancy_fields_from_report(report)

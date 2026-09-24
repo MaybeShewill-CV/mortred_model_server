@@ -148,7 +148,7 @@ StatusCode OpenAiClip<INPUT, OUTPUT>::encode_image(const cv::Mat &input_image, s
                      .scale(1.0f / 255.0f)
                      .subtract({0.48145466f, 0.4578275f, 0.40821073f})
                      .divide({0.26862954f, 0.26130258f, 0.27577711f})
-                     .nchw(input_info.name);
+                     .nchw(input_info);
     if (!input.ok()) {
         LOG(ERROR) << "openai clip visual preprocess failed: " << input.error;
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;

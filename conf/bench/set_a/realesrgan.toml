@@ -1,0 +1,15 @@
+# Bench overlay: TensorRT static_bs1 engine. Not a product config.
+# id=realesrgan catalog=REAL_ESRGAN
+
+[REALESRGAN]
+[REALESRGAN.backend]
+type = "tensorrt"
+model_file_path = "../weights/enhancement/real_esrgan/realesr-general-x4v3.engine.static_bs1.fp32"
+device = "gpu"
+threads = 4
+input_layout = "nhwc"
+precision_mode = 0
+power_mode = 0
+
+[REALESRGAN.params]
+image_decode_backend = "auto"

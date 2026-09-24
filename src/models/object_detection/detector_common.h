@@ -107,7 +107,7 @@ inline std::vector<backend::NamedTensor> yolo_letterbox_nchw(const cv::Mat &inpu
                       .letterbox(network)
                       .to_float()
                       .scale(1.0f / 255.0f)
-                      .nchw(input_info.name);
+                      .nchw(input_info);
     if (!result.ok()) {
         LOG(ERROR) << result.error;
         return {};

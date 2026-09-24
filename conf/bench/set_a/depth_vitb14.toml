@@ -1,0 +1,16 @@
+# Bench overlay: TensorRT static_bs1 engine. Not a product config.
+# id=depth_vitb14 catalog=DEPTH_ANYTHING
+
+[DEPTH_ANYTHING]
+[DEPTH_ANYTHING.backend]
+type = "tensorrt"
+model_file_path = "../weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.engine.static_bs1.fp16"
+device = "gpu"
+
+[DEPTH_ANYTHING.params]
+focal_length = 0.0
+# intrinsic fx fy cx cy
+intrinsic = [0.0, 0.0, 0.0, 0.0]
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"

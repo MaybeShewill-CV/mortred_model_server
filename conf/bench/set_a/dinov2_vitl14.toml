@@ -1,0 +1,19 @@
+# Bench overlay: TensorRT static_bs1 engine. Not a product config.
+# id=dinov2_vitl14 catalog=DINOV2
+
+[DINOV2]
+[DINOV2.backend]
+type = "tensorrt"
+model_file_path = "../weights/classification/dinov2/dinov2_vitl14_pretrain.engine.static_bs1.fp16"
+device = "gpu"
+threads = 4
+input_layout = "nchw"
+precision_mode = 0
+power_mode = 0
+
+[DINOV2.params]
+pooling = "cls"
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"
+# normalize = false

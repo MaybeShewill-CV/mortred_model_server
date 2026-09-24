@@ -74,8 +74,9 @@ class InferenceSession {
      * run one inference. Input tensors are validated against the model io
      * (name / dtype / concrete shape); dynamic shapes are set per run. Output
      * buffers are reused inside the session, the returned tensors own a host
-     * copy with the concrete run-time shapes. Rank-4 outputs are tagged NCHW;
-     * rank-1/2 are Linear. Rank-3 stays Unknown.
+     * copy with the concrete run-time shapes. Rank-4 tensors are NCHW when C
+     * is dim1 ([N,C,H,W]) and NHWC when C is dim3 ([N,H,W,C]); rank-1/2 are
+     * Linear. Rank-3 stays Unknown.
      *
      * inputs()/outputs() follow [MODEL.backend] input_names and output_names
      * when those vectors are non-empty (subset + configured order). Empty

@@ -21,7 +21,9 @@
 权重用 `python3 scripts/fetch_weights.py` 从
 [Hugging Face](https://huggingface.co/MaybeShewill-CV/mortred_model_server) 拉取。
 HF 是 ONNX 交换格式仓库（切换期间仍有部分 MNN）。产品 conf 保持 `mnn` /
-`tensorrt`；engine 须本机 `mortredctl prepare`。合同见 `conf/onnx_sources.json`。
+`tensorrt`（本来就是 ONNX 的 id 以及 LIBFACE YuNet 除外）；engine 须本机
+`mortredctl prepare`。合同见 `conf/onnx_sources.json`。双文件导出：
+[docs/onnx-interchange.zh-cn.md](./docs/onnx-interchange.zh-cn.md)。
 
 整个项目的简要架构图如下
 
@@ -289,6 +291,7 @@ python3 scripts/server/test_server.py --server mobilenetv2 --mode single --times
 * [模型开发者指南（加模型 / 契约 / golden / 调试）](./docs/model-developer-guide.zh-cn.md) :fire::fire:
 * [快速添加新的DL服务](./docs/how_to_add_new_server.zh-cn.md) :fire::fire:
 * [推理 CI（托管 MNN 冒烟 vs 维护者 GPU golden）](./docs/ci-golden-regression.md)
+* [ONNX 交换格式导出（双文件、缺口清单）](./docs/onnx-interchange.zh-cn.md)
 
 # `网络服务器配置说明`
 

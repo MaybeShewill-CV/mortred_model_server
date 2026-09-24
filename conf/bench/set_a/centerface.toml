@@ -1,0 +1,18 @@
+# Bench overlay: TensorRT static_bs1 engine. Not a product config.
+# id=centerface catalog=CENTER_FACE
+
+[CENTER_FACE]
+[CENTER_FACE.backend]
+type = "tensorrt"
+model_file_path = "../weights/object_detection/centerface_detection/centerface.engine.static_bs1.fp16"
+device = "gpu"
+threads = 4
+input_layout = "nchw"
+precision_mode = 0
+power_mode = 0
+
+[CENTER_FACE.params]
+image_decode_backend = "auto"
+model_score_threshold = 0.5
+model_nms_threshold = 0.5
+model_keep_top_k = 1000

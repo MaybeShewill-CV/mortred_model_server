@@ -69,7 +69,7 @@ std::vector<NamedTensor> CenterFaceDetector<INPUT, OUTPUT>::preprocess(const cv:
                       .bgr_to_rgb()
                       .resize(cv::Size(width_resized, height_resized))
                       .to_float()
-                      .nchw(this->session().inputs().front().name);
+                      .nchw(this->session().inputs().front());
     if (!result.ok()) {
         LOG(ERROR) << result.error;
         return {};

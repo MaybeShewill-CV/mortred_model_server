@@ -97,7 +97,7 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> DBTextDetect
                       .scale(1.0f / 255.0f)
                       .subtract({0.485f, 0.456f, 0.406f})
                       .divide({0.229f, 0.224f, 0.225f})
-                      .nchw(_m_input_name);
+                      .nchw(this->session().inputs().front());
     if (!result.ok()) {
         LOG(ERROR) << result.error;
         return {};
