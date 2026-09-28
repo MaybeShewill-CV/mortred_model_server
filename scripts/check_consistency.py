@@ -24,9 +24,11 @@ Verifies a few high-signal invariants:
 9. Every `*_SERVER` section declares `model=` matching the non-`_SERVER` table,
    `server_exe` is `mortred-model-server.out`, and the `model` set matches the
    HTTP subset of the C++ factory catalogs.
-10. Every TensorRT `model_file_path` on an HTTP catalog model's
-    `[*.backend] type="tensorrt"` table is declared in conf/trt_engines.json.
-    Scaffold configs (`TODO(new_model)` or not in the HTTP catalog) are skipped.
+10. Every product `*.engine.static_bs1.*` TensorRT path on an HTTP catalog
+    model's `[*.backend] type="tensorrt"` table is declared in
+    conf/product_static_bs1.json (legacy conf/trt_engines.json is not the
+    product OOB source of truth). Scaffold configs (`TODO(new_model)` or not
+    in the HTTP catalog) are skipped.
 11. templates/model/tasks.json stays in sync with the real sources, so the
     scaffolder can never drift away from the C++ catalogs (catalog header,
     response filler, io namespace, output type, model directory).
@@ -491,17 +493,54 @@ def _http_catalog_model_tomls() -> dict[Path, str]:
 
 
 def check_trt_engine_manifest() -> list[str]:
-    """TensorRT backends used by HTTP catalog models must be in trt_engines.json."""
+    """Product static_bs1 TensorRT paths must match product_static_bs1.json.
+
+    Legacy conf/trt_engines.json is not the product OOB source of truth; product
+    engines must not be required to appear there.
+    """
     errors: list[str] = []
-    manifest_path = ROOT / "conf" / "trt_engines.json"
-    if not manifest_path.exists():
-        return errors
+    product_path = ROOT / "conf" / "product_static_bs1.json"
+    if not product_path.exists():
+        return ["missing conf/product_static_bs1.json"]
     try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        product = json.loads(product_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as exc:
-        errors.append(f"conf/trt_engines.json is not valid JSON: {exc}")
+        errors.append(f"conf/product_static_bs1.json is not valid JSON: {exc}")
         return errors
-    declared = {e.get("engine") for e in manifest.get("engines", [])}
+    declared = {
+        str(row.get("engine") or "").strip()
+        for row in product.get("models", [])
+        if str(row.get("engine") or "").strip()
+    }
+    set_a_path = ROOT / "conf" / "trt_engines.set_a.json"
+    if set_a_path.exists():
+        try:
+            set_a = json.loads(set_a_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            errors.append(f"conf/trt_engines.set_a.json is not valid JSON: {exc}")
+            set_a = None
+        if set_a is not None:
+            set_a_engines = {
+                str(e.get("engine") or "").strip()
+                for e in set_a.get("engines", [])
+                if str(e.get("engine") or "").strip()
+            }
+            if set_a_engines != declared:
+                only_product = sorted(declared - set_a_engines)
+                only_set_a = sorted(set_a_engines - declared)
+                if only_product:
+                    errors.append(
+                        "conf/trt_engines.set_a.json missing product engines: "
+                        + ", ".join(only_product[:5])
+                        + ("..." if len(only_product) > 5 else "")
+                    )
+                if only_set_a:
+                    errors.append(
+                        "conf/trt_engines.set_a.json has engines not in "
+                        "product_static_bs1.json: "
+                        + ", ".join(only_set_a[:5])
+                        + ("..." if len(only_set_a) > 5 else "")
+                    )
     for cfg, model_id in sorted(_http_catalog_model_tomls().items(), key=lambda kv: kv[0].as_posix()):
         try:
             text = cfg.read_text(encoding="utf-8")
@@ -525,10 +564,14 @@ def check_trt_engine_manifest() -> list[str]:
                 rel = resolved.relative_to(ROOT).as_posix()
             except ValueError:
                 continue
+            # Product delivery paths must be in product_static_bs1; legacy bare
+            # *.engine paths are outside this gate (not forced into trt_engines.json).
+            if ".engine.static_bs1." not in rel and rel not in declared:
+                continue
             if rel not in declared:
                 errors.append(
                     f"{rel_cfg} [{sec or model_id}] type=tensorrt engine {rel} "
-                    "missing from conf/trt_engines.json"
+                    "missing from conf/product_static_bs1.json"
                 )
     return errors
 

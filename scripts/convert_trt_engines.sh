@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # convert_trt_engines.sh - use external trtexec (TensorRT official CLI) to generate
-# hardware-adapted TensorRT engines from conf/trt_engines.json.
+# hardware-adapted TensorRT engines from a JSON manifest.
+#
+# Default manifest is conf/trt_engines.json (legacy zoo). That default is NOT the
+# product OOB delivery entry. Product GPU engines use conf/product_static_bs1.json
+# via `mortredctl prepare` / prepare_pack.sh, which writes a product manifest and
+# calls this script with --manifest. Pass --manifest explicitly for any non-default
+# list (e.g. conf/trt_engines.set_a.json). CPU profile builds must not invoke this.
 #
 # Background: the .engine files config expects depend on the user's GPU arch / TRT version,
 # so they must be built locally (engines in the shipped weights may mismatch the current TRT).
@@ -8,7 +14,7 @@
 # mismatched files. The in-house converter has been removed.
 #
 # Usage (run from the repo root):
-#   ./scripts/convert_trt_engines.sh                  # convert missing engines
+#   ./scripts/convert_trt_engines.sh                  # convert missing engines (legacy default)
 #   ./scripts/convert_trt_engines.sh --force          # reconvert all (overwrite existing)
 #   ./scripts/convert_trt_engines.sh --list           # print manifest (no trtexec needed)
 #   ./scripts/convert_trt_engines.sh --only yolov8    # convert only entries whose path contains yolov8
@@ -39,7 +45,7 @@ STRICT=0
 WORKSPACE_STR="${TRTEXEC_WORKSPACE:-6G}"
 
 usage() {
-    sed -n '2,21p' "$0"
+    sed -n '2,31p' "$0"
     exit 0
 }
 

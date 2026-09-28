@@ -333,7 +333,7 @@
       "served": "http",
       "config": "conf/model/object_detection/yolov8/yolov8s.toml",
       "product_type": "tensorrt",
-      "runtime_path": "weights/object_detection/yolov8/yolov8s.engine.static_bs1.fp16in",
+      "runtime_path": "weights/object_detection/yolov8/yolov8s.engine.static_bs1.fp16",
       "onnx_path": "weights/object_detection/yolov8/yolov8s.static_bs1.onnx",
       "onnx_status": "hosted",
       "p1_upload": false,

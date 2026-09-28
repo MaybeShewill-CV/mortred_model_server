@@ -527,6 +527,50 @@ RETIRED_CATALOG_IDS = {
 }
 
 
+def check_set_a_manifest(rows: list[dict]) -> list[str]:
+    """conf/trt_engines.set_a.json must match the product-table trtexec manifest."""
+    path = ROOT / "conf" / "trt_engines.set_a.json"
+    if not path.is_file():
+        return [f"missing {path.relative_to(ROOT)}"]
+    try:
+        on_disk = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        return [f"conf/trt_engines.set_a.json is not valid JSON: {exc}"]
+    want = {
+        (e["model"], e["onnx"], e["engine"], e["fp"], e.get("profile"))
+        for e in trt_manifest(rows)["engines"]
+    }
+    got = {
+        (
+            str(e.get("model") or "").strip(),
+            str(e.get("onnx") or "").strip(),
+            str(e.get("engine") or "").strip(),
+            e.get("fp"),
+            e.get("profile"),
+        )
+        for e in on_disk.get("engines", [])
+    }
+    errors: list[str] = []
+    if want != got:
+        only_want = sorted(want - got)
+        only_got = sorted(got - want)
+        if only_want:
+            sample = ", ".join(f"{m}/{eng}" for m, _o, eng, _fp, _p in only_want[:5])
+            errors.append(
+                "conf/trt_engines.set_a.json missing product manifest rows: "
+                + sample
+                + ("..." if len(only_want) > 5 else "")
+            )
+        if only_got:
+            sample = ", ".join(f"{m}/{eng}" for m, _o, eng, _fp, _p in only_got[:5])
+            errors.append(
+                "conf/trt_engines.set_a.json has rows not in product manifest: "
+                + sample
+                + ("..." if len(only_got) > 5 else "")
+            )
+    return errors
+
+
 def validate_product_files(rows: list[dict]) -> list[str]:
     errors: list[str] = []
     nhwc = {row["id"] for row in rows if row["layout"] == "nhwc"}
@@ -739,7 +783,11 @@ def main() -> int:
         if on_disk != fresh:
             print("conf/product_static_bs1.json drifted from scripts/product_static_bs1.py", file=sys.stderr)
             return 1
-        disk_errors = validate_rows(on_disk["models"]) + validate_product_files(on_disk["models"])
+        disk_errors = (
+            validate_rows(on_disk["models"])
+            + validate_product_files(on_disk["models"])
+            + check_set_a_manifest(on_disk["models"])
+        )
         if disk_errors:
             for err in disk_errors:
                 print(err, file=sys.stderr)
