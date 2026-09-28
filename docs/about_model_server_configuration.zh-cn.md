@@ -42,12 +42,9 @@ Listen / timeout / worker 参数写在对应的 `conf/server/**/*.toml` 里。Wo
 ```toml
 # 等待队列上限：超过后立即返回 429 + Retry-After（0 = 不限制）
 max_queue_depth=32
-# 动态批处理：收集并发请求打包成一次 [N,...] 推理（默认 1 = 关闭）
-# 适用于 HTTP 单 session 图像模型（分类/检测/分割/OCR/抠图/增强/深度/
-# SuperPoint）。FastSAM / CLIP / LightGlue 是 bench-only，不走 HTTP 批处理。
-# 引擎支持动态 batch（MNN）即获得真批收益；TRT 静态 batch=1 引擎会逐条回退。
-# 多 session 模型（LightGlue / SAM prompt / CLIP）与 diffusion 采样器不适用批处理。
-max_batch_size=8
+# 产品 server 保持关闭凑批。大于 1 会把并发请求打成一次推理；
+# static batch-1 的 TensorRT engine 不走这条路径。
+max_batch_size=1
 # 批收集窗口毫秒数：首条请求到达后最多等待这么久凑批
 max_batch_delay_ms=5
 ```

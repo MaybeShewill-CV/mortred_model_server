@@ -1,0 +1,13 @@
+[MSOCRNET]
+[MSOCRNET.backend]
+type = "tensorrt"
+model_file_path = "../weights/scene_segmentation/msocrnet/msocrnet_fp16.engine.static_bs1.fp16"
+device = "gpu"
+threads = 4
+input_layout = "nchw"
+
+[MSOCRNET.params]
+model_input_image_size = [1024, 2048]
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"

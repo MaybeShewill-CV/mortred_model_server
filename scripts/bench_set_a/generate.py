@@ -142,9 +142,8 @@ def write_server_overlay(row: dict, overlay_rel: str) -> str:
         text,
         count=1,
     )
-    # Set A HTTP/calibrate is batch=1 vs trtexec. Product classification
-    # servers ship max_batch_size=8; that packing is rejected by static_bs1
-    # engines and serializes work onto one worker.
+    # Product and Set A HTTP servers keep max_batch_size=1. Static batch-1
+    # TensorRT engines do not run a packed batch.
     if re.search(r"^\s*max_batch_size\s*=", text, re.M):
         text = re.sub(
             r"^(\s*max_batch_size\s*=\s*)\S+",

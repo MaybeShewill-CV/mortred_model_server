@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write CI-only ONNX overlays from product tomls. Product type stays mnn."""
+"""Write CI-only ONNX overlays. Product gpu configs are TensorRT; these files stay ORT CPU."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -15,91 +15,91 @@ HEADER = """# CI-only overlay: fork-hosted ONNX Runtime CPU proof for this produ
 
 JOBS = [
     (
-        "conf/model/classification/mobilenetv2/mobilenetv2_config.toml",
+        "conf/model/classification/mobilenetv2/mobilenetv2.toml",
         "conf/ci/mobilenetv2_onnx_hosted.toml",
         "../weights/classification/mobilenetv2/mobilenetv2.static_bs1.onnx",
         1,
     ),
     (
-        "conf/model/classification/resnet/resnet50_config.toml",
+        "conf/model/classification/resnet/resnet.toml",
         "conf/ci/resnet_onnx_hosted.toml",
         "../weights/classification/resnet/resnet.static_bs1.onnx",
         1,
     ),
     (
-        "conf/model/classification/densenet/densenet121_config.toml",
+        "conf/model/classification/densenet/densenet.toml",
         "conf/ci/densenet_onnx_hosted.toml",
         "../weights/classification/densenet/densenet.static_bs1.onnx",
         1,
     ),
     (
-        "conf/model/object_detection/yolov5/yolov5_config.toml",
+        "conf/model/object_detection/yolov5/yolov5l.toml",
         "conf/ci/yolov5_onnx_hosted.toml",
         "../weights/object_detection/yolov5/yolov5l.static_bs1.onnx",
         1,
     ),
     (
-        "conf/model/object_detection/libfacedetection/320x240_config.toml",
+        "conf/model/object_detection/libfacedetection/libface.toml",
         "conf/ci/libface_onnx_hosted.toml",
         "../weights/object_detection/libfacedetection/face_detection_yunet_2026may.static_bs1.onnx",
         1,
     ),
     (
-        "conf/model/object_detection/yolov6/yolov6_config.toml",
+        "conf/model/object_detection/yolov6/yolov6s.toml",
         "conf/ci/yolov6_onnx_hosted.toml",
         "../weights/object_detection/yolov6/yolov6s.static_bs1.onnx",
         1,
     ),
     (
-        "conf/model/object_detection/nano_det/nanodet_config.toml",
+        "conf/model/object_detection/nano_det/nanodet_1x5.toml",
         "conf/ci/nanodet_onnx_hosted.toml",
         "../weights/object_detection/nanodet/nanodet_plus_m_1x5.static_bs1.onnx",
         1,
     ),
     (
-        "conf/model/ocr/db_text_detector/dbnet_config.toml",
+        "conf/model/ocr/db_text_detector/dbnet.toml",
         "conf/ci/dbnet_onnx_hosted.toml",
         "../weights/ocr/db_text_detector/db_model_large.static_bs1.onnx",
         1,
     ),
     (
-        "conf/model/scene_segmentation/pphuman/pphuman_config.toml",
+        "conf/model/scene_segmentation/pphuman/pphuman_mobile.toml",
         "conf/ci/pphuman_onnx_hosted.toml",
         "../weights/scene_segmentation/pphuman_seg/pp_humanseg_192x192_mobile.static_bs1.onnx",
         1,
     ),
     (
-        "conf/model/scene_segmentation/bisenetv2/bisenetv2_config.toml",
+        "conf/model/scene_segmentation/bisenetv2/bisenetv2.toml",
         "conf/ci/bisenetv2_onnx_hosted.toml",
         "../weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.static_bs1.onnx",
         1,
     ),
     (
-        "conf/model/matting/modnet/modnet_config.toml",
+        "conf/model/matting/modnet/modnet.toml",
         "conf/ci/modnet_onnx_hosted.toml",
         "../weights/matting/modnet/modnet_hrnet_w18.static_bs1.onnx",
         1,
     ),
     (
-        "conf/model/matting/ppmatting/ppmatting_config.toml",
+        "conf/model/matting/ppmatting/ppmatting_512.toml",
         "conf/ci/ppmatting_onnx_hosted.toml",
         "../weights/matting/ppmatting/ppmatting_hrnet_w18_human_512.static_bs1.onnx",
         1,
     ),
     (
-        "conf/model/feature_point/superpoint/superpoint_config.toml",
+        "conf/model/feature_point/superpoint/superpoint.toml",
         "conf/ci/superpoint_onnx_hosted.toml",
         "../weights/feature_point/superpoint/superpoint_120x160.static_bs1.onnx",
         1,
     ),
     (
-        "conf/model/enhancement/real_esrgan/real_esrgan.toml",
+        "conf/model/enhancement/real_esrgan/realesrgan.toml",
         "conf/ci/realesrgan_onnx_hosted.toml",
         "../weights/enhancement/real_esrgan/realesr-general-x4v3.static_bs1.onnx",
         1,
     ),
     (
-        "conf/model/enhancement/attentive_gan_derain/attentive_gan_derain_config.toml",
+        "conf/model/enhancement/attentive_gan_derain/attentive_gan.toml",
         "conf/ci/attentive_gan_onnx_hosted.toml",
         "../weights/enhancement/attentive_gan_derain/attentive_gan_derain.static_bs1.onnx",
         1,
@@ -111,19 +111,19 @@ JOBS = [
         1,
     ),
     (
-        "conf/model/feature_embedding/dinov2/dinov2_vits14_config.toml",
+        "conf/model/feature_embedding/dinov2/dinov2_vits14.toml",
         "conf/ci/dinov2_vits14_onnx_hosted.toml",
         "../weights/classification/dinov2/dinov2_vits14_pretrain.static_bs1.onnx",
         1,
     ),
     (
-        "conf/model/feature_embedding/dinov2/dinov2_vitb14_config.toml",
+        "conf/model/feature_embedding/dinov2/dinov2_vitb14.toml",
         "conf/ci/dinov2_vitb14_onnx_hosted.toml",
         "../weights/classification/dinov2/dinov2_vitb14_pretrain.static_bs1.onnx",
         1,
     ),
     (
-        "conf/model/feature_embedding/dinov2/dinov2_vitl14_config.toml",
+        "conf/model/feature_embedding/dinov2/dinov2_vitl14.toml",
         "conf/ci/dinov2_vitl14_onnx_hosted.toml",
         "../weights/classification/dinov2/dinov2_vitl14_pretrain.static_bs1.onnx",
         1,

@@ -115,7 +115,7 @@ trt                   -> backend.type = "tensorrt"
 ## 测试说明
 
 `model_golden_test` 会把 `../` 前缀路径改写为仓库根路径，并将
-`backend.device` 强制为 `cpu`。产品 TensorRT 配置（例如 `yolov8_config.toml`）
+`backend.device` 强制为 `cpu`。产品 TensorRT 配置（例如 `yolov8s.toml`）
 在 CPU 上是配置错误（`type=tensorrt` 禁止 `device=cpu`）。Fork hosted CI 用
 `conf/ci/yolov8_onnx_hosted.toml` 证明 YOLOv8 decode，不是 serving 的 `.engine`。
 TensorRT golden 仍走维护者 GPU 路径。DDPM HTTP 出图由

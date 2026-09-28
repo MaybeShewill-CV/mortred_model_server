@@ -72,20 +72,21 @@ void project_http(std::vector<ProductEntry> *out, std::set<std::string> *seen, c
         if (product.benchmark) {
             auto model_hooks = hooks;
             product.run_benchmark = [captured, model_hooks, family](int argc, char **argv) mutable {
+                const std::string &weight = captured.family.empty() ? captured.model_section : captured.family;
                 if (family == std::string("enhancement")) {
-                    if (captured.model_section == "ENLIGHTEN_GAN") {
+                    if (weight == "enlightengan") {
                         model_hooks.default_image =
                             "../demo_data/model_test_input/enhancement/low_light/lol_test_1.png";
-                    } else if (captured.model_section == "REAL_ESRGAN") {
+                    } else if (weight == "realesrgan") {
                         model_hooks.default_image =
                             "../demo_data/model_test_input/enhancement/real_esr/test.jpg";
                     }
                 }
                 if (family == std::string("scene_segmentation")) {
-                    if (captured.model_section == "PPHUMAN_SEG") {
+                    if (weight == "pphuman") {
                         model_hooks.default_image =
                             "../demo_data/model_test_input/scene_segmentation/human_image.jpg";
-                    } else if (captured.model_section == "HRNET") {
+                    } else if (weight == "hrnet") {
                         model_hooks.default_image =
                             "../demo_data/model_test_input/scene_segmentation/00000_266092.jpg";
                     }

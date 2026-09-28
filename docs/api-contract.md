@@ -202,8 +202,8 @@ When `max_queue_depth > 0` and the waiting queue is full, the model server
 rejects immediately with `429` and a `Retry-After` header (estimated drain
 time from queue depth, run-time EWMA and worker count, clamped to 1-60s). The
 gateway forwards both verbatim. New optional server keys: `max_queue_depth`
-(0 = unlimited), `max_batch_size` (default 1; >1 enables dynamic batching with
-a `max_batch_delay_ms` collection window), plus the
+(0 = unlimited), `max_batch_size` (product servers set 1; a value above 1
+collects requests for `max_batch_delay_ms`), plus the
 `mortred_queue_rejected_total` / `mortred_batch_size` /
 `mortred_batch_window_wait_ms` metrics.
 

@@ -41,12 +41,13 @@ using Entry = jinq::factory::cv_catalog::CvModelEntry<Output>;
 
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
-        Entry{"ENLIGHTEN_GAN", "enlighten gan", "ENLIGHTEN_GAN_SERVER", &create_enlightengan_enhancementor<ImageInput, Output>,
-              &jinq::server::response::fill_enhancement, {}},
-        Entry{"ATTENTIVE_GAN_DERAIN", "attentive gan derain", "ATTENTIVE_GAN_DERAIN_SERVER",
-              &create_attentivegan_enhancementor<ImageInput, Output>, &jinq::server::response::fill_enhancement, {}},
-        Entry{"REAL_ESRGAN", "real esr-gan", "REAL_ESRGAN_SERVER", &create_realesrgan_enhancementor<ImageInput, Output>,
-              &jinq::server::response::fill_enhancement, {}},
+        Entry{"attentive_gan", "AttentiveGAN derain", "ATTENTIVE_GAN_DERAIN_SERVER",
+              &create_attentivegan_enhancementor<ImageInput, Output>, &jinq::server::response::fill_enhancement, {},
+              "attentive_gan"},
+        Entry{"enlightengan", "EnlightenGAN", "ENLIGHTEN_GAN_SERVER", &create_enlightengan_enhancementor<ImageInput, Output>,
+              &jinq::server::response::fill_enhancement, {}, "enlightengan"},
+        Entry{"realesrgan", "Real-ESRGAN", "REAL_ESRGAN_SERVER", &create_realesrgan_enhancementor<ImageInput, Output>,
+              &jinq::server::response::fill_enhancement, {}, "realesrgan"},
     };
     return entries;
 }

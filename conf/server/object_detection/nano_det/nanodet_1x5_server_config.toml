@@ -1,0 +1,27 @@
+[NANODET_DETECTION_SERVER]
+model="nanodet_1x5"
+# port
+port=9052
+# host
+host="localhost"
+# max connection
+max_connections=500
+# peer resp timeout seconds
+peer_resp_timeout=15
+# request size limit(MB)
+request_size_limit=64
+compute_threads=-1
+# handler threads nums
+handler_threads=50
+# model worker nums
+worker_nums=1
+# milliseconds
+model_run_timeout=1000
+max_queue_depth=32
+max_batch_size=1
+# server url
+server_uri="/mortred_ai_server_v1/obj_detection/nanodet_1x5"
+server_exe="mortred-model-server.out"
+
+[nanodet_1x5]
+model_config_file_path="../conf/model/object_detection/nano_det/nanodet_1x5.toml"

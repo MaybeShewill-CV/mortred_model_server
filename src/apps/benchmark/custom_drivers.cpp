@@ -542,7 +542,7 @@ int run_byte_track_benchmark(int argc, char **argv) {
     }
 
     YoloV5Detector<mat_input, std_object_detection_output> detector;
-    cfg_parsed = toml::parse_file("../conf/model/object_detection/yolov5/yolov5_config.toml");
+    cfg_parsed = toml::parse_file("../conf/model/object_detection/yolov5/yolov5l.toml");
     if (!cfg_parsed) {
         LOG(ERROR) << "parse toml config file failed, error: " << std::string(cfg_parsed.error().description());
         return -1;

@@ -22,6 +22,9 @@ template <typename OUTPUT> struct CvModelEntry : public jinq::models::catalog::S
     jinq::server::CvWorkerFactory<OUTPUT> make_worker;
     jinq::server::CvResponseFiller<OUTPUT> fill_response = nullptr;
     std::vector<jinq::models::backend::ParamSpec> param_specs;
+    // Weight family (yolov8, dinov2, …). Catalog id is model_section and is
+    // lowercase. Empty means this row is not part of the static_bs1 split.
+    std::string family;
 };
 
 template <typename OUTPUT>

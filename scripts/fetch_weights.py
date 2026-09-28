@@ -9,7 +9,9 @@ conf/weights_manifest.json declares the repo, revision and every file
 skipping files that already exist with a matching sha256 (resumable).
 
 Usage (run from the repo root):
-  python3 scripts/fetch_weights.py                    # download all missing weights
+  python3 scripts/fetch_weights.py --kind onnx         # 39 product static_bs1 ONNX files
+  python3 scripts/fetch_weights.py                    # runtime weights; .engine files are skipped
+  python3 scripts/fetch_weights.py --kind engine      # portable engines are not the out-of-box path
   python3 scripts/fetch_weights.py --only yolov8      # only files whose path contains yolov8
   python3 scripts/fetch_weights.py --only a.mnn --only b.onnx   # repeatable --only (OR)
   python3 scripts/fetch_weights.py --check            # only verify existing files, no download
@@ -54,6 +56,17 @@ def load_manifest(path: Path) -> dict:
 
 def resolve_url(repo: str, revision: str, hf_path: str) -> str:
     return f"https://huggingface.co/{repo}/resolve/{revision}/{hf_path}"
+
+
+def file_kind(item: dict) -> str:
+    """onnx = the 39 product static_bs1 graphs. engine = not an out-of-box download.
+    Everything else is runtime (mnn / legacy onnx / vocab)."""
+    kind = str(item.get("kind") or "").strip()
+    if kind in ("onnx", "engine", "runtime"):
+        return kind
+    if item["path"].endswith(".engine"):
+        return "engine"
+    return "runtime"
 
 
 def hf_path_of(item: dict) -> str:
@@ -132,6 +145,9 @@ def main() -> int:
     )
     parser.add_argument("--profile", type=str, default="", choices=["", "cpu", "gpu"],
                         help="only process files whose manifest profiles tag contains this value")
+    parser.add_argument("--kind", type=str, default="", choices=["", "onnx", "runtime", "engine"],
+                        help="onnx = 39 product static_bs1 graphs; runtime = mnn/legacy; "
+                             "engine = not the out-of-box path. Default skips engines.")
     parser.add_argument("--manifest", type=str, default=str(DEFAULT_MANIFEST))
     args = parser.parse_args()
 
@@ -152,6 +168,10 @@ def main() -> int:
     if args.profile:
         # legacy manifests without a profiles tag are treated as gpu-only
         selected = [f for f in selected if args.profile in f.get("profiles", ["gpu"])]
+    if args.kind:
+        selected = [f for f in selected if file_kind(f) == args.kind]
+    else:
+        selected = [f for f in selected if file_kind(f) != "engine"]
     if only_filters and not selected:
         print("[ERROR] --only matched no files in the manifest", file=sys.stderr)
         return 1

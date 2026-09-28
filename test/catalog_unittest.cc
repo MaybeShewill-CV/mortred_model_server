@@ -169,7 +169,7 @@ TEST_F(CatalogTest, parses_model_identity_and_default_exe) {
                  "server_uri=\"/mortred_ai_server_v1/obj_detection/yolov8\"\n"
                  "\n"
                  "[YOLOV8]\n"
-                 "model_config_file_path=\"../conf/model/object_detection/yolov8/yolov8_config.toml\"\n");
+                 "model_config_file_path=\"../conf/model/object_detection/yolov8/yolov8s.toml\"\n");
     Catalog catalog;
     std::string err;
     ASSERT_TRUE(catalog.init(root_.string(), &err)) << err;
@@ -280,8 +280,12 @@ TEST(CatalogRealTree, boots_gpu_profile) {
     Catalog catalog;
     std::string err;
     ASSERT_TRUE(catalog.init(fs::current_path().string(), &err, "gpu")) << err;
-    EXPECT_NE(catalog.find("YOLOV8"), nullptr);
-    EXPECT_NE(catalog.find("MOBILENETV2"), nullptr);
+    EXPECT_EQ(catalog.find("YOLOV8"), nullptr);
+    EXPECT_EQ(catalog.find("YOLOV8S"), nullptr);
+    const auto* yolov8s = catalog.find("yolov8s");
+    ASSERT_NE(yolov8s, nullptr);
+    EXPECT_EQ(yolov8s->uri, "/mortred_ai_server_v1/obj_detection/yolov8s");
+    EXPECT_NE(catalog.find("mobilenetv2"), nullptr);
 }
 
 TEST(CatalogRealTree, boots_cpu_profile) {
@@ -289,8 +293,9 @@ TEST(CatalogRealTree, boots_cpu_profile) {
     Catalog catalog;
     std::string err;
     ASSERT_TRUE(catalog.init(fs::current_path().string(), &err, "cpu")) << err;
-    EXPECT_NE(catalog.find("MOBILENETV2"), nullptr);
-    EXPECT_NE(catalog.find("RESNET"), nullptr);
+    EXPECT_EQ(catalog.find("MOBILENETV2"), nullptr);
+    EXPECT_NE(catalog.find("mobilenetv2"), nullptr);
+    EXPECT_NE(catalog.find("resnet"), nullptr);
 }
 
 int main(int argc, char** argv) {

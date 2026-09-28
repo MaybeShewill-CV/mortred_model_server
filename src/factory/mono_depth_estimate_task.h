@@ -34,10 +34,19 @@ using Entry = jinq::factory::cv_catalog::CvModelEntry<Output>;
 
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
-        Entry{"METRIC3D", "metric3d estimation", "METRIC3D_ESTIMATION_SERVER", &create_metric3d_estimator<ImageInput, Output>,
-              &jinq::server::response::fill_depth_estimation, {}},
-        Entry{"DEPTH_ANYTHING", "depth anything estimation", "DEPTH_ANYTHING_ESTIMATION_SERVER",
-              &create_depth_anything_estimator<ImageInput, Output>, &jinq::server::response::fill_depth_estimation, {}},
+        Entry{"depth_vits14", "Depth Anything ViT-S/14", "DEPTH_ANYTHING_ESTIMATION_SERVER",
+              &create_depth_anything_estimator<ImageInput, Output>, &jinq::server::response::fill_depth_estimation, {},
+              "depth_anything"},
+        Entry{"depth_vitb14", "Depth Anything ViT-B/14", "DEPTH_ANYTHING_ESTIMATION_SERVER",
+              &create_depth_anything_estimator<ImageInput, Output>, &jinq::server::response::fill_depth_estimation, {},
+              "depth_anything"},
+        Entry{"depth_vitl14", "Depth Anything ViT-L/14", "DEPTH_ANYTHING_ESTIMATION_SERVER",
+              &create_depth_anything_estimator<ImageInput, Output>, &jinq::server::response::fill_depth_estimation, {},
+              "depth_anything"},
+        Entry{"metric3d_512", "Metric3D 512x1088", "METRIC3D_ESTIMATION_SERVER", &create_metric3d_estimator<ImageInput, Output>,
+              &jinq::server::response::fill_depth_estimation, {}, "metric3d"},
+        Entry{"metric3d_1088", "Metric3D 1088x1920", "METRIC3D_ESTIMATION_SERVER", &create_metric3d_estimator<ImageInput, Output>,
+              &jinq::server::response::fill_depth_estimation, {}, "metric3d"},
     };
     return entries;
 }

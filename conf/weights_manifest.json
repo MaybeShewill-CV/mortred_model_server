@@ -1,7 +1,7 @@
 {
   "repo": "MaybeShewill-CV/mortred_model_server",
   "revision": "main",
-  "description": "weights 基线清单（sha256 锁定）；hf_path/on_hf 标注 HF 仓库可达性。由 scripts/gen_weights_manifest.py 生成 profiles: per-file deployment profile tags (cpu/gpu).",
+  "description": "weights baseline manifest (sha256 locked). kind=onnx is the 39 product static_bs1 graphs. .engine files are not the out-of-box download. Generated fields also come from scripts/gen_weights_manifest.py.",
   "files": [
     {
       "path": "weights/classification/densenet/densenet-121.mnn",
@@ -14,6 +14,17 @@
       ]
     },
     {
+      "path": "weights/classification/densenet/densenet.static_bs1.onnx",
+      "size": 32318002,
+      "sha256": "9a014e1b9013cbb75a62b49b4f53733db64b167dbb77ec7ef39d5833f77f43c8",
+      "hf_path": "classification/densenet/densenet.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
       "path": "weights/classification/dinov2/dinov2_vitb14_pretrain.mnn",
       "size": 346487792,
       "sha256": "8dabbaf90dac273a9dc4c32ee0d6848eb8a79e941a456a80009dd86804662f64",
@@ -22,6 +33,17 @@
       "profiles": [
         "gpu"
       ]
+    },
+    {
+      "path": "weights/classification/dinov2/dinov2_vitb14_pretrain.static_bs1.onnx",
+      "size": 343011643,
+      "sha256": "3d0bb5047137182658ca312b7c88e8f0e66dd6a00efaad49efeeba086722a58e",
+      "hf_path": "classification/dinov2/dinov2_vitb14_pretrain.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
     },
     {
       "path": "weights/classification/dinov2/dinov2_vitl14_pretrain.mnn",
@@ -34,6 +56,17 @@
       ]
     },
     {
+      "path": "weights/classification/dinov2/dinov2_vitl14_pretrain.static_bs1.onnx",
+      "size": 1213134417,
+      "sha256": "2129c3806af506bdaf566ffb2d2dcf3434c84aa238dc5d7f94a94a5b2c473306",
+      "hf_path": "classification/dinov2/dinov2_vitl14_pretrain.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
       "path": "weights/classification/dinov2/dinov2_vits14_pretrain.mnn",
       "size": 88393716,
       "sha256": "1633270bda84616e46a6b0d27adc3deae2907aeba17abcbacdba043f2281f639",
@@ -42,6 +75,28 @@
       "profiles": [
         "gpu"
       ]
+    },
+    {
+      "path": "weights/classification/dinov2/dinov2_vits14_pretrain.static_bs1.onnx",
+      "size": 86627082,
+      "sha256": "7e3231a8ac0b23aff42884867133fbcab1dbd0836a6fa5a971aad60d0a668c74",
+      "hf_path": "classification/dinov2/dinov2_vits14_pretrain.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
+      "path": "weights/classification/mobilenetv2/mobilenetv2.static_bs1.onnx",
+      "size": 13994438,
+      "sha256": "b84e0f14c995b2436c95063d4479ceed28602ce23664943a33ddd533188c1cdf",
+      "hf_path": "classification/mobilenetv2/mobilenetv2.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
     },
     {
       "path": "weights/classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn",
@@ -64,6 +119,17 @@
         "cpu",
         "gpu"
       ]
+    },
+    {
+      "path": "weights/classification/resnet/resnet.static_bs1.onnx",
+      "size": 102147996,
+      "sha256": "83915f2e75a969f1571ab4476974ddae3899aea42d954318a8357e3cc0465034",
+      "hf_path": "classification/resnet/resnet.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
     },
     {
       "path": "weights/diffusion/ddpm/cls_cond_ddpm_netease_album_cover_128x128.onnx",
@@ -166,6 +232,17 @@
       ]
     },
     {
+      "path": "weights/enhancement/attentive_gan_derain/attentive_gan_derain.static_bs1.onnx",
+      "size": 25078049,
+      "sha256": "dc0054dc55212d1fb61ab6d70f32810255249abc630e8791bbab5d6369e4ea41",
+      "hf_path": "enhancement/attentive_gan_derain/attentive_gan_derain.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
       "path": "weights/enhancement/enlighten_gan/enlightengan.model",
       "size": 34565916,
       "sha256": "7d8b150d0a76f4fb7e218df22957369cc239a2a677d1932ef41f06ce6437cbf4",
@@ -176,6 +253,17 @@
       ]
     },
     {
+      "path": "weights/enhancement/enlighten_gan/enlightengan.static_bs1.onnx",
+      "size": 34587766,
+      "sha256": "f69ca5a261475cf1d28278d8382964c05f9c9eeb431b3d493b50e3443a447cc9",
+      "hf_path": "enhancement/enlighten_gan/enlightengan.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
       "path": "weights/enhancement/real_esrgan/realesr-general-x4v3.model",
       "size": 4862284,
       "sha256": "bb9f76178c4532b80d1a43fc67fae0db7caf90f56edd9ac9b7109366a6b05a85",
@@ -184,6 +272,17 @@
       "profiles": [
         "gpu"
       ]
+    },
+    {
+      "path": "weights/enhancement/real_esrgan/realesr-general-x4v3.static_bs1.onnx",
+      "size": 4867906,
+      "sha256": "d077428fcad6d331aa75dbfe10893826e9760fffd3b03f0c884c6fb20a78ba89",
+      "hf_path": "enhancement/real_esrgan/realesr-general-x4v3.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
     },
     {
       "path": "weights/feature_point/lightglue/extractor.engine",
@@ -245,6 +344,17 @@
         "cpu",
         "gpu"
       ]
+    },
+    {
+      "path": "weights/feature_point/superpoint/superpoint_120x160.static_bs1.onnx",
+      "size": 5208191,
+      "sha256": "0806317ce524cf55a238610721ba791d0005ea951259220d2b1f5ed23a185720",
+      "hf_path": "feature_point/superpoint/superpoint_120x160.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
     },
     {
       "path": "weights/feature_point/superpoint/superpoint_240x320.mnn",
@@ -317,16 +427,6 @@
       ]
     },
     {
-      "path": "weights/llm/llama/Llama-3.2-1B/llama-3.2-1B-Q4_K_M.gguf",
-      "size": 807690240,
-      "sha256": "2c6bd382fdaabbf023c72c24b7ab460ad48d36453e94008ca01f0fd7dde619ee",
-      "hf_path": "llm/llama/Llama-3.2-1B/llama-3.2-1B-Q4_K_M.gguf",
-      "on_hf": false,
-      "profiles": [
-        "gpu"
-      ]
-    },
-    {
       "path": "weights/llm/llama/Llama-3.2-1B-Instruct/llama-3.2-1B-instruct-Q4_K_M.gguf",
       "size": 807694176,
       "sha256": "10e104ece1be2916d268ebb2141a62b86c3f405771c90d0434735676c8b0b47d",
@@ -337,10 +437,10 @@
       ]
     },
     {
-      "path": "weights/llm/llama/Llama-3.2-3B/llama-3.2-3B-Q4_K_M.gguf",
-      "size": 2019373504,
-      "sha256": "b06bebc4666460b17af28a76c4c45a45d2d8d6817f1afc12f717412c606c513f",
-      "hf_path": "llm/llama/Llama-3.2-3B/llama-3.2-3B-Q4_K_M.gguf",
+      "path": "weights/llm/llama/Llama-3.2-1B/llama-3.2-1B-Q4_K_M.gguf",
+      "size": 807690240,
+      "sha256": "2c6bd382fdaabbf023c72c24b7ab460ad48d36453e94008ca01f0fd7dde619ee",
+      "hf_path": "llm/llama/Llama-3.2-1B/llama-3.2-1B-Q4_K_M.gguf",
       "on_hf": false,
       "profiles": [
         "gpu"
@@ -351,6 +451,16 @@
       "size": 2019377440,
       "sha256": "460b241edf4365a5c77389a41373bfca8cd385f2c230d90a088b2f0a7dfb67ff",
       "hf_path": "llm/llama/Llama-3.2-3B-Instruct/llama-3.2-3B-instruct-Q4_K_M.gguf",
+      "on_hf": false,
+      "profiles": [
+        "gpu"
+      ]
+    },
+    {
+      "path": "weights/llm/llama/Llama-3.2-3B/llama-3.2-3B-Q4_K_M.gguf",
+      "size": 2019373504,
+      "sha256": "b06bebc4666460b17af28a76c4c45a45d2d8d6817f1afc12f717412c606c513f",
+      "hf_path": "llm/llama/Llama-3.2-3B/llama-3.2-3B-Q4_K_M.gguf",
       "on_hf": false,
       "profiles": [
         "gpu"
@@ -457,20 +567,20 @@
       ]
     },
     {
-      "path": "weights/llm/qwen/Qwen2.5-3B-Instruct/qwen-2.5-3B-instruct-fp16.gguf",
-      "size": 6178317216,
-      "sha256": "25908e409af8c952a17c8fda44b90e699565a90436431574f44c25d140aa5032",
-      "hf_path": "llm/qwen/Qwen2.5-3B-Instruct/qwen-2.5-3B-instruct-fp16.gguf",
+      "path": "weights/llm/qwen/Qwen2.5-3B-Instruct/qwen-2.5-3B-instruct-Q4_K_M.gguf",
+      "size": 1929903008,
+      "sha256": "203e7699b6029b67571541295816fb33907ce81bcbf4e31e3602a2bee65905f3",
+      "hf_path": "llm/qwen/Qwen2.5-3B-Instruct/qwen-2.5-3B-instruct-Q4_K_M.gguf",
       "on_hf": false,
       "profiles": [
         "gpu"
       ]
     },
     {
-      "path": "weights/llm/qwen/Qwen2.5-3B-Instruct/qwen-2.5-3B-instruct-Q4_K_M.gguf",
-      "size": 1929903008,
-      "sha256": "203e7699b6029b67571541295816fb33907ce81bcbf4e31e3602a2bee65905f3",
-      "hf_path": "llm/qwen/Qwen2.5-3B-Instruct/qwen-2.5-3B-instruct-Q4_K_M.gguf",
+      "path": "weights/llm/qwen/Qwen2.5-3B-Instruct/qwen-2.5-3B-instruct-fp16.gguf",
+      "size": 6178317216,
+      "sha256": "25908e409af8c952a17c8fda44b90e699565a90436431574f44c25d140aa5032",
+      "hf_path": "llm/qwen/Qwen2.5-3B-Instruct/qwen-2.5-3B-instruct-fp16.gguf",
       "on_hf": false,
       "profiles": [
         "gpu"
@@ -497,6 +607,17 @@
       ]
     },
     {
+      "path": "weights/matting/modnet/modnet_hrnet_w18.static_bs1.onnx",
+      "size": 40980691,
+      "sha256": "196eb5700194ac8acd3d0958d89924fcc0bfed45c69d276a5aa05ff817da8d9c",
+      "hf_path": "matting/modnet/modnet_hrnet_w18.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
       "path": "weights/matting/modnet/modnet_mobilenetv2.mnn",
       "size": 25963476,
       "sha256": "ebec80a5c679dbaba2c29df2be5d0a5c1d4231923629c8bb4a024730593df331",
@@ -517,6 +638,17 @@
       ]
     },
     {
+      "path": "weights/matting/ppmatting/pp_humanmatting-resnet34_vd.static_bs1.onnx",
+      "size": 255807057,
+      "sha256": "919ab158d820e763028bac632391ef7af3b4048309308f47c693f3aa54f7a271",
+      "hf_path": "matting/ppmatting/pp_humanmatting-resnet34_vd.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
       "path": "weights/matting/ppmatting/ppmatting_hrnet_w18_human_1024.mnn",
       "size": 97843320,
       "sha256": "ea6118ce3cae17523f05db9ed674b3e8971693e326b321ceade425dc272bebf0",
@@ -527,6 +659,17 @@
       ]
     },
     {
+      "path": "weights/matting/ppmatting/ppmatting_hrnet_w18_human_1024.static_bs1.onnx",
+      "size": 98289824,
+      "sha256": "5ecd8708b9542e8ccdfff71ddc89591d1a9548f7072d194e3371d319aa11a2a6",
+      "hf_path": "matting/ppmatting/ppmatting_hrnet_w18_human_1024.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
       "path": "weights/matting/ppmatting/ppmatting_hrnet_w18_human_512.mnn",
       "size": 97843320,
       "sha256": "c466ab15b49cf5d1f07683cc5665c87ca653fcd43d5fec10421821093e669696",
@@ -535,6 +678,28 @@
       "profiles": [
         "gpu"
       ]
+    },
+    {
+      "path": "weights/matting/ppmatting/ppmatting_hrnet_w18_human_512.static_bs1.onnx",
+      "size": 98289824,
+      "sha256": "7689f8b5a6ac786f68cdd390bd92d0c6c526eeaea92f6676f986f3f81fe908a9",
+      "hf_path": "matting/ppmatting/ppmatting_hrnet_w18_human_512.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
+      "path": "weights/matting/ppmatting/ppmattingv2_stdc1_human_512.static_bs1.onnx",
+      "size": 35948801,
+      "sha256": "840a19f8209498d1401db238b333ff4eb917ba1a6d61b24c9a4daf4a3676d095",
+      "hf_path": "matting/ppmatting/ppmattingv2_stdc1_human_512.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
     },
     {
       "path": "weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.engine",
@@ -557,6 +722,17 @@
       ]
     },
     {
+      "path": "weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.static_bs1.onnx",
+      "size": 390839536,
+      "sha256": "a11124f7dd06253752a40e22e32c8815e39eb1e67f8a04cd22ce67bdfd5fb19a",
+      "hf_path": "mono_depth_estimation/depth_anything/depth_anything_vitb14.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
       "path": "weights/mono_depth_estimation/depth_anything/depth_anything_vitl14.engine",
       "size": 1384617140,
       "sha256": "0481d608baee02d4742e4be4c02885e504dcce78a333c08b278f60ed720d6ab8",
@@ -577,6 +753,17 @@
       ]
     },
     {
+      "path": "weights/mono_depth_estimation/depth_anything/depth_anything_vitl14.static_bs1.onnx",
+      "size": 1340387697,
+      "sha256": "4fa8c21385454406f1e2f12add116eadf8df18f8509de151a9213d826d5ceef2",
+      "hf_path": "mono_depth_estimation/depth_anything/depth_anything_vitl14.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
       "path": "weights/mono_depth_estimation/depth_anything/depth_anything_vits14.engine",
       "size": 102660492,
       "sha256": "5b851f91b3dcc579158e2a85bf573be1b4439b94205840059cd7018a1e02ae7d",
@@ -595,6 +782,17 @@
       "profiles": [
         "gpu"
       ]
+    },
+    {
+      "path": "weights/mono_depth_estimation/depth_anything/depth_anything_vits14.static_bs1.onnx",
+      "size": 100983418,
+      "sha256": "bfef6b523ff080ab016ce354d9bf0ac4387e25193cca15d4f4771d896334ae80",
+      "hf_path": "mono_depth_estimation/depth_anything/depth_anything_vits14.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
     },
     {
       "path": "weights/mono_depth_estimation/metric3d/metric3d_750k_1088x1920.engine",
@@ -627,6 +825,17 @@
       ]
     },
     {
+      "path": "weights/mono_depth_estimation/metric3d/metric3d_750k_1088x1920.static_bs1.onnx",
+      "size": 815655232,
+      "sha256": "d54ad607ad569b7d9668a1da87a4160548d106c789771f6d4f35efae90ba026c",
+      "hf_path": "mono_depth_estimation/metric3d/metric3d_750k_1088x1920.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
       "path": "weights/mono_depth_estimation/metric3d/metric3d_750k_512x1088.engine",
       "size": 830528588,
       "sha256": "7f1660c5bc33eb51c2813c62fec0ed1f8eaef63d58a561888359e00f4b79ee27",
@@ -657,6 +866,17 @@
       ]
     },
     {
+      "path": "weights/mono_depth_estimation/metric3d/metric3d_750k_512x1088.static_bs1.onnx",
+      "size": 815530692,
+      "sha256": "f0a3cc3e6e8ff8210af322ad6cc728ba39215f39ae76167f5731e747d1f6fff7",
+      "hf_path": "mono_depth_estimation/metric3d/metric3d_750k_512x1088.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
       "path": "weights/object_detection/centerface_detection/centerface.model",
       "size": 7292452,
       "sha256": "9a5745f2c01c72224ccf8894a24b165de3aeba0a7e2714ced643954f4b4089c1",
@@ -675,6 +895,17 @@
       "profiles": [
         "gpu"
       ]
+    },
+    {
+      "path": "weights/object_detection/centerface_detection/centerface.static_bs1.onnx",
+      "size": 7513289,
+      "sha256": "2cd9cccb4d6d0c06a483b94d16ed4796bd492fdfc26605c31a0118ef3874d30f",
+      "hf_path": "object_detection/centerface_detection/centerface.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
     },
     {
       "path": "weights/object_detection/libfacedetection/face_detection_320x240_model.model",
@@ -697,6 +928,17 @@
       ]
     },
     {
+      "path": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.static_bs1.onnx",
+      "size": 229738,
+      "sha256": "ebafce4e3c118d6554634be5c27ab333b4c047a9a8c3faf1d7cf93101c22f0f0",
+      "hf_path": "object_detection/libfacedetection/face_detection_yunet_2026may.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
       "path": "weights/object_detection/nanodet/nanodet_plus_m_1x5.mnn",
       "size": 9881532,
       "sha256": "9dcebb8ddb60e822df1f5e710897cd6943f8d5603a44600a24ccf118d87bc333",
@@ -708,6 +950,28 @@
       ]
     },
     {
+      "path": "weights/object_detection/nanodet/nanodet_plus_m_1x5.static_bs1.onnx",
+      "size": 9886200,
+      "sha256": "ba1bd1ee436ef92af68f297851854b092995957fe2f4abbc23ac7d1ef5b603a0",
+      "hf_path": "object_detection/nanodet/nanodet_plus_m_1x5.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
+      "path": "weights/object_detection/nanodet/nanodet_plus_m_416.static_bs1.onnx",
+      "size": 4786923,
+      "sha256": "ba89e0af46b91cb4538417c61fb4dd697b825adc351b3595377dfc66a3518abd",
+      "hf_path": "object_detection/nanodet/nanodet_plus_m_416.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
       "path": "weights/object_detection/yolov5/yolov5l.mnn",
       "size": 186592528,
       "sha256": "937c67321ed85d2c70d1bad9cacda6d3dc2582dbf27015f084e21dc1a8d76f6f",
@@ -716,6 +980,17 @@
       "profiles": [
         "gpu"
       ]
+    },
+    {
+      "path": "weights/object_detection/yolov5/yolov5l.static_bs1.onnx",
+      "size": 186659980,
+      "sha256": "5c311e06684c15329b91f85d6754bdc3612f364937bd0d6a482beefce516ede5",
+      "hf_path": "object_detection/yolov5/yolov5l.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
     },
     {
       "path": "weights/object_detection/yolov5/yolov5m.mnn",
@@ -798,6 +1073,17 @@
       ]
     },
     {
+      "path": "weights/object_detection/yolov6/yolov6s.static_bs1.onnx",
+      "size": 74320101,
+      "sha256": "e00eff8953ac88bbbbc85c306dc18850e5a6b545864f5ab8e2c4e7b824f072bf",
+      "hf_path": "object_detection/yolov6/yolov6s.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
       "path": "weights/object_detection/yolov7/yolov7.mnn",
       "size": 147662320,
       "sha256": "63d2ba6d50b45b1542e4b0ca6ad313ef0b1c2f06b9f1e7cebf6a14aaaf9f774e",
@@ -816,6 +1102,17 @@
       "profiles": [
         "gpu"
       ]
+    },
+    {
+      "path": "weights/object_detection/yolov7/yolov7.static_bs1.onnx",
+      "size": 147672761,
+      "sha256": "d263722c02951a31f2e93649debcdf83b254b086fab4b4d927145d9c6009f78c",
+      "hf_path": "object_detection/yolov7/yolov7.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
     },
     {
       "path": "weights/object_detection/yolov7/yolov7x.mnn",
@@ -838,6 +1135,17 @@
       ]
     },
     {
+      "path": "weights/object_detection/yolov7/yolov7x.static_bs1.onnx",
+      "size": 285306489,
+      "sha256": "fcc4de18c1aef501acff066394736a1fc2bb43a394c58f2affa52872a66fdea9",
+      "hf_path": "object_detection/yolov7/yolov7x.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
       "path": "weights/object_detection/yolov8/yolov8l.onnx",
       "size": 174869004,
       "sha256": "0011c5293437f0948a15d352fd21a3d4f2bd2fa74dd76f1e36defb598aaf8519",
@@ -848,6 +1156,17 @@
       ]
     },
     {
+      "path": "weights/object_detection/yolov8/yolov8l.static_bs1.onnx",
+      "size": 174869004,
+      "sha256": "0011c5293437f0948a15d352fd21a3d4f2bd2fa74dd76f1e36defb598aaf8519",
+      "hf_path": "object_detection/yolov8/yolov8l.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
       "path": "weights/object_detection/yolov8/yolov8n.onnx",
       "size": 12768391,
       "sha256": "a78645a1617f8f90b2247f0b5131534d59e7baafae6beea9f02bc72bdaf0463e",
@@ -856,6 +1175,17 @@
       "profiles": [
         "gpu"
       ]
+    },
+    {
+      "path": "weights/object_detection/yolov8/yolov8n.static_bs1.onnx",
+      "size": 12768391,
+      "sha256": "a78645a1617f8f90b2247f0b5131534d59e7baafae6beea9f02bc72bdaf0463e",
+      "hf_path": "object_detection/yolov8/yolov8n.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
     },
     {
       "path": "weights/object_detection/yolov8/yolov8s.engine",
@@ -879,6 +1209,17 @@
       ]
     },
     {
+      "path": "weights/object_detection/yolov8/yolov8s.static_bs1.onnx",
+      "size": 44787110,
+      "sha256": "48a131d647eeea9a38a77b264ca596222e84fb6bc95a36001789ff947fc51ad7",
+      "hf_path": "object_detection/yolov8/yolov8s.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
       "path": "weights/object_detection/yolov8/yolov8s_new.engine",
       "size": 56430276,
       "sha256": "429996dab44b8041cdab990620b51059ac1f96658424d76e3534214b45cf8dc7",
@@ -899,6 +1240,17 @@
       ]
     },
     {
+      "path": "weights/object_detection/yolov8/yolov8x.static_bs1.onnx",
+      "size": 272998287,
+      "sha256": "5d19d8c804b53ba6bbb9ec407712f7746e1afcc2e01046521680128457d99a1e",
+      "hf_path": "object_detection/yolov8/yolov8x.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
       "path": "weights/ocr/db_text_detector/db_model_large.mnn",
       "size": 48795392,
       "sha256": "dd59c7d4b18d9269831a325d1f934dde8f40b56c3c0765e3e24d3f3e2688978b",
@@ -908,6 +1260,17 @@
         "cpu",
         "gpu"
       ]
+    },
+    {
+      "path": "weights/ocr/db_text_detector/db_model_large.static_bs1.onnx",
+      "size": 48866519,
+      "sha256": "196b194daba448ece4b429a9a57765e1c790c0992db0a30927b545780885e860",
+      "hf_path": "ocr/db_text_detector/db_model_large.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
     },
     {
       "path": "weights/openai_clip/vit-b-32/bpe_simple_vocab_16e6.txt",
@@ -1281,6 +1644,17 @@
       ]
     },
     {
+      "path": "weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.static_bs1.onnx",
+      "size": 9884538,
+      "sha256": "707cb0608bd80bf787e3a89014475aa05d897401456ff658c57bcab669c6f977",
+      "hf_path": "scene_segmentation/bisenetv2/bisenetv2_cityscapes.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
       "path": "weights/scene_segmentation/hrnet/hrnetw48_ccd.mnn",
       "size": 279847892,
       "sha256": "478982962198f3c07b5688ad76105e60be8c7a3c57f75b6bac9a8236c210a84e",
@@ -1299,6 +1673,17 @@
       "profiles": [
         "gpu"
       ]
+    },
+    {
+      "path": "weights/scene_segmentation/hrnet/hrnetw48_ccd.static_bs1.onnx",
+      "size": 280747508,
+      "sha256": "98a9eaf66c91ffbaa52a85c33270a3b58e1c0847bcdc9c3c03c8cbb16df10436",
+      "hf_path": "scene_segmentation/hrnet/hrnetw48_ccd.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
     },
     {
       "path": "weights/scene_segmentation/hrnet/hrnetw48_ccd_fp16.engine",
@@ -1381,6 +1766,17 @@
       ]
     },
     {
+      "path": "weights/scene_segmentation/msocrnet/msocrnet_fp16.static_bs1.onnx",
+      "size": 145623681,
+      "sha256": "d35a322f19eda8434df4944e52c1f141055db15cd9852076062ca29579c61879",
+      "hf_path": "scene_segmentation/msocrnet/msocrnet_fp16.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
       "path": "weights/scene_segmentation/msocrnet/msocrnet_repaired.onnx",
       "size": 290551741,
       "sha256": "fb85014cc531a333d492b2933fd48c73a682fa7363c44d0fa20380b917fa7f3f",
@@ -1401,6 +1797,17 @@
       ]
     },
     {
+      "path": "weights/scene_segmentation/pphuman_seg/pp_humanseg_192x192_lite.static_bs1.onnx",
+      "size": 12220577,
+      "sha256": "cb291f8c48afa4407bced4d333e8acfeb48cb4d89bc8e57b5eb3eeaa6c6e0bb3",
+      "hf_path": "scene_segmentation/pphuman_seg/pp_humanseg_192x192_lite.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
       "path": "weights/scene_segmentation/pphuman_seg/pp_humanseg_192x192_mobile.mnn",
       "size": 30082308,
       "sha256": "936c6435626dd11c6878e7a8c7f544dc98c831a3d708bcc5e807bc5be42923c0",
@@ -1411,6 +1818,17 @@
       ]
     },
     {
+      "path": "weights/scene_segmentation/pphuman_seg/pp_humanseg_192x192_mobile.static_bs1.onnx",
+      "size": 30168805,
+      "sha256": "c6d4463cd3099218f5b9d2fa5d49d7318af5de442ab57d7114d8dff396289596",
+      "hf_path": "scene_segmentation/pphuman_seg/pp_humanseg_192x192_mobile.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
+    },
+    {
       "path": "weights/scene_segmentation/pphuman_seg/pp_humanseg_512x512_server.mnn",
       "size": 106736112,
       "sha256": "18b672fb1f8da7674943a14a7ca574125b099c70843dffd8e2e144f3dd51032a",
@@ -1419,6 +1837,17 @@
       "profiles": [
         "gpu"
       ]
+    },
+    {
+      "path": "weights/scene_segmentation/pphuman_seg/pp_humanseg_512x512_server.static_bs1.onnx",
+      "size": 107224098,
+      "sha256": "6ab6818a1e0a4fdd3ab1c5f769d2166557af8278917fac21ab50c11416971762",
+      "hf_path": "scene_segmentation/pphuman_seg/pp_humanseg_512x512_server.static_bs1.onnx",
+      "on_hf": true,
+      "profiles": [
+        "gpu"
+      ],
+      "kind": "onnx"
     }
   ]
 }

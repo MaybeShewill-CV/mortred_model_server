@@ -1,5 +1,3 @@
-# Bench overlay: TensorRT static_bs1 engine. Not a product config.
-# id=pphuman_lite catalog=PPHUMAN_SEG
 
 [PP_HUMANSEG]
 

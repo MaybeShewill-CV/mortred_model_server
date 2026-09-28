@@ -8,6 +8,7 @@ request_size_limit=64
 compute_threads=-1
 handler_threads=10
 worker_nums=1
+max_batch_size=1
 server_uri="/mortred_ai_server_v1/diffusion/ldm"
 server_exe="mortred-model-server.out"
 async_enabled=true

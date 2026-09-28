@@ -1,5 +1,3 @@
-# Bench overlay: TensorRT static_bs1 engine. Not a product config.
-# id=mobilenetv2 catalog=MOBILENETV2
 
 [MOBILENETV2]
 [MOBILENETV2.backend]

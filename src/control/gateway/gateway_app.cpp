@@ -237,6 +237,8 @@ bool GatewayApp::resolve_route(const std::string& path, ResolvedRoute* out) cons
         }
         const std::string id = rest.substr(0, slash);
         const std::string suffix = rest.substr(slash);
+        // Exact catalog id. /v1/models/YOLOV8/infer and /v1/models/YOLOV8S/infer
+        // do not alias yolov8s; there is no case fold and no redirect.
         const auto* entry = catalog_.find(id);
         if (entry == nullptr) {
             return false;

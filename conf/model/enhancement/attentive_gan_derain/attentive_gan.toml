@@ -1,0 +1,15 @@
+[ATTENTIVEGANDERAIN]
+[ATTENTIVEGANDERAIN.backend]
+type = "tensorrt"
+model_file_path = "../weights/enhancement/attentive_gan_derain/attentive_gan_derain.engine.static_bs1.fp32"
+device = "gpu"
+threads = 4
+input_layout = "nhwc"
+precision_mode = 0
+power_mode = 0
+
+[ATTENTIVEGANDERAIN.params]
+model_input_image_size = [240, 320]
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"

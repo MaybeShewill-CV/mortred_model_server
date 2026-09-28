@@ -1,0 +1,16 @@
+[RESNET]
+[RESNET.backend]
+type = "mnn"
+model_file_path = "../weights/classification/resnet/resnet-50.mnn"
+device = "cpu"
+threads = 4
+input_layout = "nhwc"
+precision_mode = 2
+power_mode = 0
+
+[RESNET.params]
+model_input_image_size = [224, 224]
+image_decode_mode = "budget"
+image_decode_budget_upscale = 1.25
+image_decode_backend = "auto"
+class_name_file = "../conf/model/classification/imagenet_classes.txt"

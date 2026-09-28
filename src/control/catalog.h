@@ -38,7 +38,7 @@ inline constexpr const char* kUnifiedServerExe = "mortred-model-server.out";
  * Server registry built from conf/server TOML configs. Single source of
  * truth shared by the supervisor and the gateway: every [*_SERVER] section
  * must declare port + server_uri. Product servers identify themselves with
- * `model = "YOLOV8"` (id = model, default exe mortred-model-server.out).
+ * `model = "yolov8s"` (id = model, default exe mortred-model-server.out).
  * Test fakes omit `model` and keep an explicit server_exe; id is the exe stem.
  * Load fails on unreadable TOML, duplicate ids, duplicate ports or duplicate
  * routing URIs.

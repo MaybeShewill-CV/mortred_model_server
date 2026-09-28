@@ -50,14 +50,14 @@ using namespace jinq::test::golden;
 
 // ============ golden 用例（保持迁移前的声明顺序） ============
 
-GOLDEN_CLASSIFICATION_CASE(mobilenetv2_classification, "conf/model/classification/mobilenetv2/mobilenetv2_config.toml",
+GOLDEN_CLASSIFICATION_CASE(mobilenetv2_classification, "conf/model/classification/mobilenetv2/mobilenetv2_cpu.toml",
                            "demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG",
                            jinq::factory::classification::create_mobilenetv2_classifier, std_classification_output);
 
 TEST(model_golden, mobilenetv2_batch_matches_single) {
     // batch=N must be numerically equivalent to N single runs (the batched
     // [N,H,W,3] session run is the whole point of the batching upgrade)
-    std::string conf = "conf/model/classification/mobilenetv2/mobilenetv2_config.toml";
+    std::string conf = "conf/model/classification/mobilenetv2/mobilenetv2_cpu.toml";
     if (!weights_available(conf))
         MORTRED_SKIP_OR_FAIL_WEIGHTS("weights not available");
     auto cfg = load_model_cfg(conf);
@@ -90,7 +90,7 @@ TEST(model_golden, mobilenetv2_mixed_batch_isolates_failed_items) {
     // ORIGINAL slot, silently cross-wiring results whenever one item failed
     // preprocessing (or failing the whole batch). The generic run_image_batch
     // must keep the valid items aligned with their single-run results.
-    std::string conf = "conf/model/classification/mobilenetv2/mobilenetv2_config.toml";
+    std::string conf = "conf/model/classification/mobilenetv2/mobilenetv2_cpu.toml";
     if (!weights_available(conf))
         MORTRED_SKIP_OR_FAIL_WEIGHTS("weights not available");
     auto cfg = load_model_cfg(conf);
@@ -126,14 +126,14 @@ TEST(model_golden, mobilenetv2_mixed_batch_isolates_failed_items) {
     }
 }
 
-GOLDEN_CLASSIFICATION_CASE(resnet50_classification, "conf/model/classification/resnet/resnet50_config.toml",
+GOLDEN_CLASSIFICATION_CASE(resnet50_classification, "conf/model/classification/resnet/resnet_cpu.toml",
                            "demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG",
                            jinq::factory::classification::create_resnet_classifier, std_classification_output);
 
 TEST(model_golden, densenet_batch_matches_single) {
     // generic smart-batch path (BackendCvModel::run_batch): packed [N,...]
     // run must be numerically equivalent to N single runs
-    std::string conf = "conf/model/classification/densenet/densenet121_config.toml";
+    std::string conf = "conf/ci/densenet_onnx_hosted.toml";
     if (!weights_available(conf))
         MORTRED_SKIP_OR_FAIL_WEIGHTS("weights not available");
     auto cfg = load_model_cfg(conf);
@@ -157,31 +157,31 @@ TEST(model_golden, densenet_batch_matches_single) {
     }
 }
 
-GOLDEN_CLASSIFICATION_CASE(densenet121_classification, "conf/model/classification/densenet/densenet121_config.toml",
+GOLDEN_CLASSIFICATION_CASE(densenet121_classification, "conf/ci/densenet_onnx_hosted.toml",
                            "demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG",
                            jinq::factory::classification::create_densenet_classifier, std_classification_output);
 
-GOLDEN_FEATURE_EMBEDDING_CASE(dinov2_feature_embedding, "conf/model/feature_embedding/dinov2/dinov2_vitb14_config.toml",
+GOLDEN_FEATURE_EMBEDDING_CASE(dinov2_feature_embedding, "conf/ci/dinov2_vitb14_onnx_hosted.toml",
                               "demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG",
                               jinq::factory::feature_embedding::create_dinov2_feature_extractor, std_feature_embedding_output);
 
-GOLDEN_OBJECT_DETECTION_CASE(nanodet_detection, "conf/model/object_detection/nano_det/nanodet_config.toml",
+GOLDEN_OBJECT_DETECTION_CASE(nanodet_detection, "conf/ci/nanodet_onnx_hosted.toml",
                              "demo_data/model_test_input/object_detection/bus.jpg",
                              jinq::factory::object_detection::create_nanodet_detector, std_object_detection_output);
 
-GOLDEN_OBJECT_DETECTION_CASE(yolov5_detection, "conf/model/object_detection/yolov5/yolov5_config.toml",
+GOLDEN_OBJECT_DETECTION_CASE(yolov5_detection, "conf/ci/yolov5_onnx_hosted.toml",
                              "demo_data/model_test_input/object_detection/bus.jpg", jinq::factory::object_detection::create_yolov5_detector,
                              std_object_detection_output);
 
-GOLDEN_OBJECT_DETECTION_CASE(yolov6_detection, "conf/model/object_detection/yolov6/yolov6_config.toml",
+GOLDEN_OBJECT_DETECTION_CASE(yolov6_detection, "conf/ci/yolov6_onnx_hosted.toml",
                              "demo_data/model_test_input/object_detection/bus.jpg", jinq::factory::object_detection::create_yolov6_detector,
                              std_object_detection_output);
 
-GOLDEN_OBJECT_DETECTION_CASE(yolov7_detection, "conf/model/object_detection/yolov7/yolov7_config.toml",
+GOLDEN_OBJECT_DETECTION_CASE(yolov7_detection, "conf/ci/yolov7_cpu_golden.toml",
                              "demo_data/model_test_input/object_detection/bus.jpg", jinq::factory::object_detection::create_yolov7_detector,
                              std_object_detection_output);
 
-GOLDEN_OBJECT_DETECTION_CASE(yolov8_detection, "conf/model/object_detection/yolov8/yolov8_config.toml",
+GOLDEN_OBJECT_DETECTION_CASE(yolov8_detection, "conf/ci/yolov8_onnx_hosted.toml",
                              "demo_data/model_test_input/object_detection/bus.jpg", jinq::factory::object_detection::create_yolov8_detector,
                              std_object_detection_output);
 
@@ -190,7 +190,7 @@ GOLDEN_OBJECT_DETECTION_CASE(yolov8_onnx_detection, "conf/ci/yolov8_onnx_hosted.
                              std_object_detection_output);
 
 TEST(model_golden, yolov8_mixed_size_batch_matches_single_runs) {
-    std::string conf = "conf/model/object_detection/yolov8/yolov8_config.toml";
+    std::string conf = "conf/ci/yolov8_onnx_hosted.toml";
     if (!weights_available(conf))
         MORTRED_SKIP_OR_FAIL_WEIGHTS("weights not available");
     auto cfg = load_model_cfg(conf);
@@ -224,7 +224,7 @@ TEST(model_golden, yolov8_mixed_size_batch_matches_single_runs) {
     expect_equivalent_detections("yolov8 batch item 1", singles[1], batch_outputs[1]);
 }
 
-GOLDEN_FACE_DETECTION_CASE(centerface_detection, "conf/model/object_detection/centerface/centerface_config.toml",
+GOLDEN_FACE_DETECTION_CASE(centerface_detection, "conf/ci/centerface_cpu_golden.toml",
                            "demo_data/model_test_input/object_detection/face_w_mask.jpg",
                            jinq::factory::object_detection::create_centerface_detector, std_face_detection_output);
 
@@ -232,40 +232,40 @@ GOLDEN_FACE_DETECTION_CASE(libface_detection, "conf/model/object_detection/libfa
                            "demo_data/model_test_input/object_detection/face_wo_mask.jpg",
                            jinq::factory::object_detection::create_libface_detector, std_face_detection_output);
 
-GOLDEN_SCENE_SEGMENTATION_CASE(bisenetv2_segmentation, "conf/model/scene_segmentation/bisenetv2/bisenetv2_config.toml",
+GOLDEN_SCENE_SEGMENTATION_CASE(bisenetv2_segmentation, "conf/ci/bisenetv2_onnx_hosted.toml",
                                "demo_data/model_test_input/scene_segmentation/cityscapes_test.png",
                                jinq::factory::scene_segmentation::create_bisenetv2_segmentor, std_scene_segmentation_output);
 
-GOLDEN_SCENE_SEGMENTATION_CASE(pphuman_segmentation, "conf/model/scene_segmentation/pphuman/pphuman_config.toml",
+GOLDEN_SCENE_SEGMENTATION_CASE(pphuman_segmentation, "conf/ci/pphuman_onnx_hosted.toml",
                                "demo_data/model_test_input/scene_segmentation/human_image.jpg",
                                jinq::factory::scene_segmentation::create_pphuman_segmentor, std_scene_segmentation_output);
 
-GOLDEN_TEXT_REGION_CASE(dbnet_text_detection, "conf/model/ocr/db_text_detector/dbnet_config.toml",
+GOLDEN_TEXT_REGION_CASE(dbnet_text_detection, "conf/ci/dbnet_onnx_hosted.toml",
                         "demo_data/model_test_input/ocr/railway_ticket.png", jinq::factory::ocr::create_dbtext_detector,
                         std_text_regions_output);
 
-GOLDEN_MATTING_CASE(modnet_matting, "conf/model/matting/modnet/modnet_config.toml", "demo_data/model_test_input/matting/matting_test.jpg",
+GOLDEN_MATTING_CASE(modnet_matting, "conf/ci/modnet_onnx_hosted.toml", "demo_data/model_test_input/matting/matting_test.jpg",
                     jinq::factory::matting::create_modnet_segmentor, std_matting_output);
 
-GOLDEN_MATTING_CASE(ppmatting_matting, "conf/model/matting/ppmatting/ppmatting_config.toml",
+GOLDEN_MATTING_CASE(ppmatting_matting, "conf/ci/ppmatting_onnx_hosted.toml",
                     "demo_data/model_test_input/matting/matting_test.jpg", jinq::factory::matting::create_ppmatting_segmentor,
                     std_matting_output);
 
-GOLDEN_ENHANCEMENT_CASE(enlightengan_enhancement, "conf/model/enhancement/enlighten_gan/enlightengan.toml",
+GOLDEN_ENHANCEMENT_CASE(enlightengan_enhancement, "conf/ci/enlightengan_onnx_hosted.toml",
                         "demo_data/model_test_input/enhancement/low_light/lol_test_1.png",
                         jinq::factory::enhancement::create_enlightengan_enhancementor, std_enhancement_output);
 
-GOLDEN_ENHANCEMENT_CASE(attentivegan_enhancement, "conf/model/enhancement/attentive_gan_derain/attentive_gan_derain_config.toml",
+GOLDEN_ENHANCEMENT_CASE(attentivegan_enhancement, "conf/ci/attentive_gan_onnx_hosted.toml",
                         "demo_data/model_test_input/enhancement/derain/test_1.png",
                         jinq::factory::enhancement::create_attentivegan_enhancementor, std_enhancement_output);
 
-GOLDEN_ENHANCEMENT_CASE(realesrgan_enhancement, "conf/model/enhancement/real_esrgan/real_esrgan.toml",
+GOLDEN_ENHANCEMENT_CASE(realesrgan_enhancement, "conf/ci/realesrgan_onnx_hosted.toml",
                         // colour input: a grayscale image cannot detect a BGR/RGB
                         // channel-order regression, because R == G == B there
                         "demo_data/model_test_input/enhancement/real_esr/test.JPG",
                         jinq::factory::enhancement::create_realesrgan_enhancementor, std_enhancement_output);
 
-GOLDEN_KEYPOINT_CASE(superpoint_feature_point, "conf/model/feature_point/superpoint/superpoint_config.toml",
+GOLDEN_KEYPOINT_CASE(superpoint_feature_point, "conf/ci/superpoint_onnx_hosted.toml",
                      "demo_data/model_test_input/feature_point/test.png", jinq::factory::feature_point::create_superpoint_extractor,
                      std_feature_point_output);
 

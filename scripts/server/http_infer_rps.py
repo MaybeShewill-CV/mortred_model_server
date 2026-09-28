@@ -41,6 +41,8 @@ from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[2]
+
 # ---------------------------------------------------------------------------
 # time / percentile helpers
 # ---------------------------------------------------------------------------
@@ -571,6 +573,19 @@ def _self_test() -> int:
             print("FAIL: raw payload_bytes %d != image size %d"
                   % (raw_report.payload_bytes, image.stat().st_size), file=sys.stderr)
             failed += 1
+        try:
+            build_model_target("YOLOV8", "", ROOT)
+            print("FAIL: uppercase model id must be rejected", file=sys.stderr)
+            failed += 1
+        except SystemExit:
+            pass
+        url_s, image_s = build_model_target("yolov8s", "", ROOT)
+        if url_s != "http://127.0.0.1:8080/v1/models/yolov8s/infer":
+            print("FAIL: yolov8s gateway url %s" % url_s, file=sys.stderr)
+            failed += 1
+        if not str(image_s).endswith("object_detection/bus.jpg"):
+            print("FAIL: yolov8s demo image %s" % image_s, file=sys.stderr)
+            failed += 1
     finally:
         server.shutdown()
         try:
@@ -584,10 +599,38 @@ def _self_test() -> int:
     return 0
 
 
+def build_model_target(model_id: str, image: str, root: Path,
+                        gateway: str = "http://127.0.0.1:8080") -> tuple[str, Path]:
+    """Gateway URL for a lowercase product id, plus its demo image when --image is empty."""
+    if any(ch.isupper() for ch in model_id):
+        raise SystemExit(
+            "catalog ids are lowercase (/v1/models/%s/infer). %r is not a catalog id"
+            % (model_id.lower(), model_id)
+        )
+    table_path = root / "conf" / "product_static_bs1.json"
+    rows = json.loads(table_path.read_text(encoding="utf-8")).get("models", [])
+    by_id = {row["id"]: row for row in rows}
+    if model_id not in by_id:
+        names = ", ".join(sorted(by_id))
+        raise SystemExit("unknown model %r. product ids: %s" % (model_id, names))
+    url = gateway.rstrip("/") + "/v1/models/%s/infer" % model_id
+    if image:
+        path = Path(image)
+        if not path.is_absolute():
+            path = root / path
+    else:
+        path = root / by_id[model_id]["demo"]
+    return url, path
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--url", default="", help="absolute POST URL (model uri or /v1/models/ID/infer)")
-    parser.add_argument("--image", default="", help="input image path")
+    parser.add_argument("--url", default="", help="absolute POST URL (model uri or /v1/models/id/infer)")
+    parser.add_argument("--model", default="",
+                        help="lowercase product id; sets the gateway URL http://127.0.0.1:8080/v1/models/<id>/infer")
+    parser.add_argument("--gateway", default="http://127.0.0.1:8080",
+                        help="gateway origin used with --model")
+    parser.add_argument("--image", default="", help="input image path (default: the id's demo image)")
     parser.add_argument("-c", "--concurrency", type=int, default=8,
                         help="closed-loop worker threads (keep-alive connections)")
     parser.add_argument("-d", "--duration", default="",
@@ -614,6 +657,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.self_test:
         return _self_test()
+    if args.model:
+        try:
+            built_url, built_image = build_model_target(args.model, args.image, ROOT, args.gateway)
+        except SystemExit as exc:
+            print(exc, file=sys.stderr)
+            return 1
+        args.url = built_url
+        args.image = str(built_image)
+        if not args.ready_url:
+            args.ready_url = args.gateway.rstrip("/") + "/healthz"
     if not args.url or not args.image:
         parser.error("--url and --image are required unless --self-test")
     duration_s = parse_duration(args.duration) if args.duration else 0.0

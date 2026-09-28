@@ -426,15 +426,18 @@ CPU 在本地 convert_mnn 就绪前仍用 MNN 作运行时，不要为了「HF �
 见 `conf/weights_manifest.json`。双文件导出规则和缺口清单：
 [onnx-interchange.zh-cn.md](onnx-interchange.zh-cn.md)。
 
-- 清单：`conf/weights_manifest.json`——每个文件带 `path / size / sha256 / hf_path / profiles`；
+- 清单：`conf/weights_manifest.json`——每个文件带 `path / size / sha256 / hf_path / profiles / kind`；
 - 下载：HF 仓库，断点续传，**已存在且 sha256 匹配则跳过**；
+- 产品互换文件用 `python3 scripts/fetch_weights.py --kind onnx`（39 个 `static_bs1` 图）。`.engine` 默认不下载，要显式 `--kind engine`；engine 在本机 `prepare` 生成。
 - 校验：`--check` 只验不拉。
 
 ### 9.2 常用命令
 
 ```bash
-python3 scripts/fetch_weights.py --profile cpu     # 拉精选子集（约 1 GB）
-python3 scripts/fetch_weights.py --profile gpu     # 拉全量（数十 GB）
+python3 scripts/fetch_weights.py --kind onnx       # 39 个产品 static_bs1 ONNX
+python3 scripts/fetch_weights.py --profile cpu     # 拉精选运行时子集（约 1 GB）
+python3 scripts/fetch_weights.py --profile gpu     # 运行时权重；不拉 .engine
+python3 scripts/fetch_weights.py --kind engine     # 显式拉 engine，不是开箱路径
 python3 scripts/fetch_weights.py --only yolov8     # 只拉路径含 yolov8 的
 python3 scripts/fetch_weights.py --check           # 校验本地完整性
 python3 scripts/fetch_weights.py --dry-run         # 只打印将下载什么
@@ -473,7 +476,7 @@ worker_nums = 1
 # 机器本地副本，例如 /etc/mortred/pack.toml
 [pack.YOLOV8]
 worker_nums = 4
-# model_config = "conf/model/object_detection/yolov8/yolov8_config.toml"  # 可选变体
+# model_config = "conf/model/object_detection/yolov8/yolov8s.toml"  # 可选变体
 ```
 
 未知 id 会让 supervisor 启动失败。把 `MORTRED_PACK` 指到机器上的 pack（compose

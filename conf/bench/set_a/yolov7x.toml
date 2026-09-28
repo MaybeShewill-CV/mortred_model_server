@@ -1,5 +1,3 @@
-# Bench overlay: TensorRT static_bs1 engine. Not a product config.
-# id=yolov7x catalog=YOLOV7
 
 
 [YOLOV7]

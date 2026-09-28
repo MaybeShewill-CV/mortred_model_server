@@ -51,13 +51,13 @@ inline const std::vector<jinq::models::backend::ParamSpec> &classification_param
 
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
-        Entry{"MOBILENETV2", "Mobilenetv2 classification", "MOBILENETV2_CLASSIFICATION_SERVER",
+        Entry{"mobilenetv2", "Mobilenetv2 classification", "MOBILENETV2_CLASSIFICATION_SERVER",
               &create_mobilenetv2_classifier<ImageInput, Output>, &jinq::server::response::fill_classification,
-              classification_param_specs()},
-        Entry{"RESNET", "Resnet classification", "RESNET_CLASSIFICATION_SERVER", &create_resnet_classifier<ImageInput, Output>,
-              &jinq::server::response::fill_classification, classification_param_specs()},
-        Entry{"DENSENET", "densenet classification", "DENSENET_CLASSIFICATION_SERVER", &create_densenet_classifier<ImageInput, Output>,
-              &jinq::server::response::fill_classification, classification_param_specs()},
+              classification_param_specs(), "mobilenetv2"},
+        Entry{"resnet", "Resnet classification", "RESNET_CLASSIFICATION_SERVER", &create_resnet_classifier<ImageInput, Output>,
+              &jinq::server::response::fill_classification, classification_param_specs(), "resnet"},
+        Entry{"densenet", "Densenet classification", "DENSENET_CLASSIFICATION_SERVER", &create_densenet_classifier<ImageInput, Output>,
+              &jinq::server::response::fill_classification, classification_param_specs(), "densenet"},
     };
     return entries;
 }

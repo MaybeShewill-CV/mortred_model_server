@@ -191,7 +191,7 @@ DDPM `timesteps` 等模型参数放在 `params` 里，不要放在根上。生�
 worker 数量估算排水时间，钳制在 1-60 秒）。网关将两者原样转发。
 
 新增可选服务端配置键：`max_queue_depth`（0 = 不限制）、`max_batch_size`
-（默认 1；大于 1 时在 `max_batch_delay_ms` 窗口内凑批），以及
+（产品 server 写 1；大于 1 时在 `max_batch_delay_ms` 窗口内凑批），以及
 `mortred_queue_rejected_total` / `mortred_batch_size` /
 `mortred_batch_window_wait_ms` 指标。
 

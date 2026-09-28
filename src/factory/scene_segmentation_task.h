@@ -49,12 +49,18 @@ using Entry = jinq::factory::cv_catalog::CvModelEntry<Output>;
 
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
-        Entry{"BISENETV2", "bisenetv2 segmentation", "BISENETV2_SERVER", &create_bisenetv2_segmentor<ImageInput, Output>,
-              &jinq::server::response::fill_scene_segmentation, {}},
-        Entry{"PPHUMAN_SEG", "pphuman segmentation", "PPHUMAN_SEG_SERVER", &create_pphuman_segmentor<ImageInput, Output>,
-              &jinq::server::response::fill_scene_segmentation, {}},
-        Entry{"HRNET", "hrnet segmentation", "HRNET_SERVER", &create_hrnet_segmentor<ImageInput, Output>,
-              &jinq::server::response::fill_scene_segmentation, {}},
+        Entry{"bisenetv2", "BiSeNetV2 segmentation", "BISENETV2_SERVER", &create_bisenetv2_segmentor<ImageInput, Output>,
+              &jinq::server::response::fill_scene_segmentation, {}, "bisenetv2"},
+        Entry{"pphuman_mobile", "PP-HumanSeg mobile segmentation", "PPHUMAN_SEG_SERVER",
+              &create_pphuman_segmentor<ImageInput, Output>, &jinq::server::response::fill_scene_segmentation, {}, "pphuman"},
+        Entry{"pphuman_lite", "PP-HumanSeg lite segmentation", "PPHUMAN_SEG_SERVER", &create_pphuman_segmentor<ImageInput, Output>,
+              &jinq::server::response::fill_scene_segmentation, {}, "pphuman"},
+        Entry{"pphuman_server", "PP-HumanSeg server segmentation", "PPHUMAN_SEG_SERVER",
+              &create_pphuman_segmentor<ImageInput, Output>, &jinq::server::response::fill_scene_segmentation, {}, "pphuman"},
+        Entry{"hrnet", "HRNet segmentation", "HRNET_SERVER", &create_hrnet_segmentor<ImageInput, Output>,
+              &jinq::server::response::fill_scene_segmentation, {}, "hrnet"},
+        Entry{"msocrnet", "MSOCRNet segmentation", "MSOCRNET_SERVER", &create_msocrnet_segmentor<ImageInput, Output>,
+              &jinq::server::response::fill_scene_segmentation, {}, "msocrnet"},
     };
     return entries;
 }
@@ -62,9 +68,7 @@ inline const std::vector<Entry> &catalog() {
 using BenchEntry = jinq::factory::model_catalog::ModelCatalogEntry<ImageInput, Output>;
 
 inline const std::vector<BenchEntry> &bench_catalog() {
-    static const std::vector<BenchEntry> entries = {
-        BenchEntry{"MSOCRNET", "MsOcrNet scene segmentation", &create_msocrnet_segmentor<ImageInput, Output>},
-    };
+    static const std::vector<BenchEntry> entries;
     return entries;
 }
 

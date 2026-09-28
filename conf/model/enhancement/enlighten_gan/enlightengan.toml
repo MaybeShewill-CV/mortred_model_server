@@ -1,7 +1,7 @@
 [ENLIGHTENGAN]
 [ENLIGHTENGAN.backend]
-type = "mnn"
-model_file_path = "../weights/enhancement/enlighten_gan/enlightengan.model"
+type = "tensorrt"
+model_file_path = "../weights/enhancement/enlighten_gan/enlightengan.engine.static_bs1.fp16"
 device = "gpu"
 threads = 4
 output_names = ["output"]

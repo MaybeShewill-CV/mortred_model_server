@@ -47,7 +47,7 @@ python3 scripts/server/test_server.py --server mobilenetv2 --mode single --times
 
 ```bash
 ./mortred-model-server.out --model YOLOV5 \
-  ../conf/server/object_detection/yolov5/yolov5_server_config.toml
+  ../conf/server/object_detection/yolov5/yolov5l_server_config.toml
 ```
 
 切换 yolov5s/m/… 改模型 TOML（[about_model_configuration.zh-cn.md](about_model_configuration.zh-cn.md)）。
@@ -79,7 +79,7 @@ python3 scripts/server/test_server.py --server bisenetv2 --mode single
 
 ```bash
 ./mortred-model-server.out --model ATTENTIVE_GAN_DERAIN \
-  ../conf/server/enhancement/attentive_gan_derain/attentive_gan_server_cfg.toml
+  ../conf/server/enhancement/attentive_gan_derain/attentive_gan_server_config.toml
 ```
 
 ```bash
@@ -94,7 +94,7 @@ python3 scripts/server/test_server.py --server attentive_gan --mode single
 
 ```bash
 ./mortred-model-server.out --model SUPERPOINT \
-  ../conf/server/feature_point/superpoint/superpoint_server_cfg.toml
+  ../conf/server/feature_point/superpoint/superpoint_server_config.toml
 ```
 
 ```bash

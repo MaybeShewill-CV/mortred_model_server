@@ -1,38 +1,15 @@
-# mortred control-plane configuration (supervisor + gateway).
-# Supervision policy lives HERE, not in the per-model server configs.
-# Secret values (tokens) should come from environment variables, not this file:
-#   MORTRED_API_TOKEN, MORTRED_GATEWAY_AUTH_TOKEN
 
 [supervisor]
 # management REST API + embedded UI
 api_host = "127.0.0.1"
 api_port = 8787
-# autostart eligible model servers when the supervisor starts (env
-# MORTRED_AUTOSTART=true|false overrides; containers default to true).
-# When a pack is applied (MORTRED_PACK overrides [supervisor].pack_file), only
-# [pack.<ID>] members autostart; autostart_default applies only if no pack is set.
 autostart_default = false
-# machine-local pack (relative to project root). Applied at supervisor start.
-# MORTRED_PACK env overrides this. Empty + no env = no pack.
-# pack_file = "conf/packs/demo.toml"
-# gateway starts first, then models with this width (1 = sequential, safest
-# for GPU memory; raise for CPU models)
 start_concurrency = 1
-# GPU telemetry sample cadence (nvidia-smi probe on a dedicated thread;
-# 0 = disable, max 60000). The console follows this interval automatically.
-# The sample ring keeps 300 points: 2000 ms -> 10 min window, 500 ms -> 2.5 min.
 gpu_sample_interval_ms = 500
-# managed process logs: <log_dir>/<server id>.log, rotated at this size
 log_dir = "logs"
 log_rotate_mb = 10
-# process layout (source tree defaults; the container/install tree injects
-# APP_BIN_DIR/APP_LIB_DIR/APP_LIBS_DIR = bin/lib/lib)
-# bin_dir = "_bin"
-# lib_dir = "_lib"
-# libs_dir = "3rd_party/libs"
 
 [gateway]
-# the single external inference entry; model servers stay loopback-only
 host = "127.0.0.1"
 port = 8080
 request_size_limit_mb = 64
@@ -40,11 +17,6 @@ max_connections = 1000
 upstream_send_timeout_ms = 180000
 upstream_recv_timeout_ms = 180000
 
-# Edge per-IP rate limiting (gateway L1). Ships disabled; MORTRED_RATE_LIMIT
-# env (off|shadow|enforce) overrides for docker/compose. shadow = meter and
-# count, never reject - the rollout observation mode. trusted_proxies lists
-# EXACT addresses whose Forwarded/X-Forwarded-For headers are honored
-# (comma separated; loopback default = init-edge nginx in host network).
 [gateway.rate_limit]
 enabled = false
 shadow = false
@@ -52,10 +24,3 @@ rate_per_sec = 100000
 burst = 200000
 trusted_proxies = "127.0.0.1,::1"
 
-# Per-server supervision overrides; <id> is the catalog model_section
-# (e.g. YOLOV8). Absent keys fall back to the defaults above.
-#
-# [servers.YOLOV8]
-# enabled = true
-# autostart = true
-# restart_policy = "on-failure"   # on-failure | always | no

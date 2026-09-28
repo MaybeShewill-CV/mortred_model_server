@@ -64,7 +64,7 @@ Prefer the catalog path. The legacy `server_uri` still works with the same body.
 
 ```bash
 IMG=$(base64 -w0 image.jpg)
-curl -X POST http://localhost:8080/v1/models/YOLOV8/infer \
+curl -X POST http://localhost:8080/v1/models/yolov8s/infer \
   -H "Authorization: Bearer $MORTRED_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"images":["'"$IMG"'"],"req_id":"my-request-1"}'
@@ -109,7 +109,7 @@ with open("image.jpg", "rb") as f:
     img_b64 = base64.b64encode(f.read()).decode()
 
 # Inference
-resp = requests.post(f"{GATEWAY}/v1/models/YOLOV8/infer",
+resp = requests.post(f"{GATEWAY}/v1/models/yolov8s/infer",
                      headers=headers,
                      json={"images": [img_b64], "req_id": "demo"})
 print(resp.json())
@@ -365,7 +365,7 @@ curl -X POST -H "Authorization: Bearer $MORTRED_API_TOKEN" \
 ```
 
 ```bash
-curl -X POST http://localhost:8080/v1/models/YOLOV8/infer \
+curl -X POST http://localhost:8080/v1/models/yolov8s/infer \
   -H "Authorization: Bearer YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{"images":["base64..."],"req_id":"demo"}'

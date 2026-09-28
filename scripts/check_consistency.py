@@ -980,6 +980,46 @@ def check_golden_zero_drift() -> list[str]:
     ]
 
 
+def check_static_bs1_product() -> list[str]:
+    """Phase 4-7 contract: 39 TRT ids, batch=1, lowercase catalog, onnx kind."""
+    errors: list[str] = []
+    script = ROOT / "scripts" / "product_static_bs1.py"
+    result = subprocess.run(
+        [sys.executable, str(script), "--check"],
+        cwd=str(ROOT), capture_output=True, text=True, timeout=60,
+    )
+    if result.returncode != 0:
+        detail = (result.stdout + result.stderr).strip() or f"exit {result.returncode}"
+        errors.append("product_static_bs1.py --check failed: " + detail)
+    for folder in ("conf/server", "conf/bench"):
+        base = ROOT / folder
+        if not base.is_dir():
+            continue
+        for path in base.rglob("*.toml"):
+            if folder == "conf/bench" and not path.name.endswith(".server.toml"):
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+            if re.search(r"max_batch_size\s*=\s*8\b", text):
+                errors.append(f"{path.relative_to(ROOT)}: max_batch_size=8")
+            if folder == "conf/server" and not re.search(r"max_batch_size\s*=\s*1\b", text):
+                errors.append(f"{path.relative_to(ROOT)}: missing max_batch_size=1")
+    manifest = json.loads((ROOT / "conf" / "weights_manifest.json").read_text(encoding="utf-8"))
+    product = json.loads((ROOT / "conf" / "product_static_bs1.json").read_text(encoding="utf-8"))
+    want = {row["onnx"] for row in product["models"]}
+    got = {item["path"] for item in manifest.get("files", []) if item.get("kind") == "onnx"}
+    if got != want:
+        errors.append("weights_manifest kind=onnx does not match the 39 product graphs")
+    off = [item["path"] for item in manifest.get("files", []) if item.get("kind") == "onnx" and not item.get("on_hf")]
+    dry = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "fetch_weights.py"), "--kind", "onnx", "--dry-run"],
+        cwd=str(ROOT), capture_output=True, text=True, timeout=60,
+    )
+    if dry.returncode != 0:
+        detail = (dry.stdout + dry.stderr).strip() or f"exit {dry.returncode}"
+        errors.append("fetch_weights.py --kind onnx --dry-run failed: " + detail)
+    return errors
+
+
 def main() -> int:
     args = parse_args()
     errors: list[str] = []
@@ -1005,6 +1045,7 @@ def main() -> int:
     errors.extend(check_demo_pack())
     errors.extend(check_example_packs_worker_nums())
     errors.extend(check_gpu_line_pins())
+    errors.extend(check_static_bs1_product())
     try:
         pack_trt = subprocess.run(
             [sys.executable, str(ROOT / "scripts" / "pack_trt.py"), "--self-test"],

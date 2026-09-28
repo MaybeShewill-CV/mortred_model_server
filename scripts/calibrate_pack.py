@@ -522,6 +522,10 @@ def write_pack_fields(
     """Upsert keys on [pack] / [pack.<ID>]. Refuses conf/server paths."""
     if _under(pack, ROOT / "conf" / "server"):
         raise ValueError("refusing to write conf/server; pass a pack toml")
+    if _under(pack, ROOT / "conf" / "packs"):
+        raise ValueError(
+            "refusing to write git example pack %s; copy it to a machine-local file" % pack
+        )
     cleaned_ids: dict[str, dict[str, object]] = {}
     for catalog_id, fields in id_fields.items():
         kept = {k: v for k, v in fields.items() if v is not None}
@@ -1300,6 +1304,12 @@ def self_test() -> int:
     if 'decode_auto = "gpu"' not in occ_body:
         print("self-test: decode_auto stamp body", occ_body, file=sys.stderr)
         return 1
+    try:
+        write_pack_worker_nums(ROOT / "conf" / "packs" / "demo.toml", {"mobilenetv2": 4})
+        print("self-test: should refuse conf/packs", file=sys.stderr)
+        return 1
+    except ValueError:
+        pass
     try:
         write_pack_worker_nums(cfg, {"MOBILENETV2": 4})
         print("self-test: should refuse conf/server", file=sys.stderr)

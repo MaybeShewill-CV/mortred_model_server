@@ -447,15 +447,18 @@ Per-id source, IO contract, and license notes: `conf/onnx_sources.json`.
 Bytes and sha256: `conf/weights_manifest.json`. Dual-file export rules and
 the remaining-gap list: [onnx-interchange.md](onnx-interchange.md).
 
-- Manifest: `conf/weights_manifest.json` - per file `path / size / sha256 / hf_path / profiles`;
+- Manifest: `conf/weights_manifest.json` - per file `path / size / sha256 / hf_path / profiles / kind`;
 - Downloads: Hugging Face, resumable, **skipped when present with matching sha256**;
+- Product interchange is `python3 scripts/fetch_weights.py --kind onnx` (39 `static_bs1` graphs). `.engine` files are skipped unless `--kind engine`; build them on this GPU with `prepare`.
 - Verification: `--check` verifies without downloading.
 
 ### 9.2 Commands
 
 ```bash
-python3 scripts/fetch_weights.py --profile cpu     # curated subset (~1 GB)
-python3 scripts/fetch_weights.py --profile gpu     # full set (tens of GB)
+python3 scripts/fetch_weights.py --kind onnx       # 39 product static_bs1 ONNX graphs
+python3 scripts/fetch_weights.py --profile cpu     # curated runtime subset (~1 GB)
+python3 scripts/fetch_weights.py --profile gpu     # runtime weights; .engine files are skipped
+python3 scripts/fetch_weights.py --kind engine     # explicit engine download; not the out-of-box path
 python3 scripts/fetch_weights.py --only yolov8     # paths containing yolov8
 python3 scripts/fetch_weights.py --check           # verify local integrity
 python3 scripts/fetch_weights.py --dry-run         # print what would happen
@@ -496,7 +499,7 @@ worker_nums = 1
 # machine-local copy, e.g. /etc/mortred/pack.toml
 [pack.YOLOV8]
 worker_nums = 4
-# model_config = "conf/model/object_detection/yolov8/yolov8_config.toml"  # optional variant
+# model_config = "conf/model/object_detection/yolov8/yolov8s.toml"  # optional variant
 ```
 
 Unknown ids fail supervisor start. Point `MORTRED_PACK` at the machine file

@@ -71,17 +71,16 @@ cleanup() {
 }
 trap cleanup EXIT
 python3 - "$ROOT" "$CI_BOOT_DIR" <<'PY'
-import pathlib, re, sys
+import pathlib, sys
 root = pathlib.Path(sys.argv[1])
 out = pathlib.Path(sys.argv[2])
-src = root / "conf/model/classification/mobilenetv2/mobilenetv2_config.toml"
+src = root / "conf/model/classification/mobilenetv2/mobilenetv2_cpu.toml"
 text = src.read_text(encoding="utf-8")
-patched, n = re.subn(r'(device\s*=\s*")gpu(")', r"\1cpu\2", text, count=1)
-if n != 1:
-    raise SystemExit("failed to rewrite backend.device gpu -> cpu in %s" % src)
-(out / "mobilenetv2_config.toml").write_text(patched, encoding="utf-8")
+if 'type = "mnn"' not in text or 'device = "cpu"' not in text:
+    raise SystemExit("cpu mobilenet config must stay MNN on cpu: %s" % src)
+(out / "mobilenetv2_config.toml").write_text(text, encoding="utf-8")
 (out / "ci_pack.toml").write_text(
-    "[pack.MOBILENETV2]\n"
+    "[pack.mobilenetv2]\n"
     "worker_nums = 1\n"
     'model_config = "/tmp/ci_mobilenetv2.toml"\n',
     encoding="utf-8",

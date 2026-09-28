@@ -234,20 +234,22 @@ def pack_trt_engines(pack_path: Path, project_root: Path) -> list[tuple[str, Pat
 
 
 def convert_filters(engines: list[Path], project_root: Path, manifest: Path) -> list[str]:
-    declared = []
+    """Exact repo-relative engine paths. Substring matches are rejected so
+    yolov8s.engine cannot select yolov8s.engine.static_bs1.fp16."""
+    declared = set()
     if manifest.is_file():
         data = json.loads(manifest.read_text(encoding="utf-8"))
-        declared = [e.get("engine", "") for e in data.get("engines", [])]
+        declared = {e.get("engine", "") for e in data.get("engines", []) if e.get("engine")}
     filters: list[str] = []
     for engine in engines:
         try:
             rel = engine.resolve().relative_to(project_root.resolve()).as_posix()
         except ValueError:
-            rel = engine.name
-        hit = next((d for d in declared if d and (d in rel or Path(d).name == engine.name)), "")
-        token = Path(hit).name if hit else engine.name
-        if token and token not in filters:
-            filters.append(token)
+            rel = engine.as_posix().lstrip("./")
+        if rel not in declared:
+            continue
+        if rel not in filters:
+            filters.append(rel)
     return filters
 
 
@@ -313,6 +315,25 @@ def _self_test_body() -> int:
         )
         if pack_tensorrt_ids(root / "conf" / "packs" / "p.toml", root) != ["X"]:
             print("self-test: pack_tensorrt_ids", file=sys.stderr)
+            return 1
+        manifest = root / "conf" / "trt_engines.json"
+        manifest.write_text(
+            json.dumps({"engines": [
+                {"engine": "weights/yolov8s.engine"},
+                {"engine": "weights/yolov8s.engine.static_bs1.fp16"},
+            ]}),
+            encoding="utf-8",
+        )
+        broad = root / "weights" / "yolov8s.engine"
+        broad.write_bytes(b"legacy")
+        exact = root / "weights" / "yolov8s.engine.static_bs1.fp16"
+        exact.write_bytes(b"static")
+        hit = convert_filters([exact], root, manifest)
+        if hit != ["weights/yolov8s.engine.static_bs1.fp16"]:
+            print("self-test: exact engine path required, got %s" % hit, file=sys.stderr)
+            return 1
+        if convert_filters([broad], root, manifest) != ["weights/yolov8s.engine"]:
+            print("self-test: legacy engine must stay a distinct exact path", file=sys.stderr)
             return 1
     print("pack_trt.py self-test passed")
     return 0

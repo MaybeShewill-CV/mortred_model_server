@@ -7,7 +7,7 @@
         "gtest": "model_golden.mobilenetv2_classification",
         "family": "classification",
         "catalog_id": "MOBILENETV2",
-        "config": "conf/model/classification/mobilenetv2/mobilenetv2_config.toml",
+        "config": "conf/model/classification/mobilenetv2/mobilenetv2.toml",
         "weights": [
           "weights/classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn"
         ]
@@ -16,7 +16,7 @@
         "gtest": "model_golden.nanodet_detection",
         "family": "object_detection",
         "catalog_id": "NANODET",
-        "config": "conf/model/object_detection/nano_det/nanodet_config.toml",
+        "config": "conf/model/object_detection/nano_det/nanodet_1x5.toml",
         "weights": [
           "weights/object_detection/nanodet/nanodet_plus_m_1x5.mnn"
         ]
@@ -34,7 +34,7 @@
         "gtest": "model_golden.dbnet_text_detection",
         "family": "ocr",
         "catalog_id": "DBNET",
-        "config": "conf/model/ocr/db_text_detector/dbnet_config.toml",
+        "config": "conf/model/ocr/db_text_detector/dbnet.toml",
         "weights": [
           "weights/ocr/db_text_detector/db_model_large.mnn"
         ]
@@ -43,7 +43,7 @@
         "gtest": "model_golden.superpoint_feature_point",
         "family": "feature_point",
         "catalog_id": "SUPERPOINT",
-        "config": "conf/model/feature_point/superpoint/superpoint_config.toml",
+        "config": "conf/model/feature_point/superpoint/superpoint.toml",
         "weights": [
           "weights/feature_point/superpoint/superpoint_120x160.mnn"
         ]
@@ -52,7 +52,7 @@
         "gtest": "model_golden.bisenetv2_segmentation",
         "family": "scene_segmentation",
         "catalog_id": "BISENETV2",
-        "config": "conf/model/scene_segmentation/bisenetv2/bisenetv2_config.toml",
+        "config": "conf/model/scene_segmentation/bisenetv2/bisenetv2.toml",
         "weights": [
           "weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.mnn"
         ]

@@ -1,5 +1,3 @@
-# Bench overlay: TensorRT static_bs1 engine. Not a product config.
-# id=dinov2_vitl14 catalog=DINOV2
 
 [DINOV2]
 [DINOV2.backend]

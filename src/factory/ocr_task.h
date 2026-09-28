@@ -36,8 +36,8 @@ inline const std::vector<jinq::models::backend::ParamSpec> &ocr_param_specs() {
 
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
-        Entry{"DBNET", "dbnet", "DBNET_SERVER", &create_dbtext_detector<ImageInput, Output>, &jinq::server::response::fill_text_regions,
-              ocr_param_specs()},
+        Entry{"dbnet", "DBNet text detection", "DBNET_SERVER", &create_dbtext_detector<ImageInput, Output>,
+              &jinq::server::response::fill_text_regions, ocr_param_specs(), "dbnet"},
     };
     return entries;
 }

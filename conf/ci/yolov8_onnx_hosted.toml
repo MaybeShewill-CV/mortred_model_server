@@ -1,6 +1,3 @@
-# CI-only overlay: fork-hosted YOLOv8 proof on ONNX Runtime CPU.
-# Product serving stays conf/model/object_detection/yolov8/yolov8_config.toml (TensorRT).
-# Do not point conf/server YOLOV8 at this file.
 
 [YOLOV8]
 [YOLOV8.backend]

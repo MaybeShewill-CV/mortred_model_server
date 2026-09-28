@@ -46,6 +46,14 @@ CPU_WEIGHTS = {
 }
 
 
+def product_onnx_paths() -> set[str]:
+    table = ROOT / "conf" / "product_static_bs1.json"
+    if not table.is_file():
+        return set()
+    data = json.loads(table.read_text(encoding="utf-8"))
+    return {row["onnx"] for row in data.get("models", []) if row.get("onnx")}
+
+
 def sha256_of(path: Path, chunk: int = 1024 * 1024) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -96,6 +104,7 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001
             print(f"[warn] HF API query failed, on_hf set to true: {exc}")
 
+    product_onnx = product_onnx_paths()
     files = []
     for p in sorted(WEIGHTS_DIR.rglob("*")):
         if not p.is_file():
@@ -118,6 +127,10 @@ def main() -> int:
             # both, everything else is gpu-only (drives fetch --profile)
             "profiles": ["cpu", "gpu"] if rel in CPU_WEIGHTS else ["gpu"],
         }
+        if rel in product_onnx:
+            entry["kind"] = "onnx"
+        elif rel.endswith(".engine"):
+            entry["kind"] = "engine"
         files.append(entry)
         print(f"  {rel}  {size}  {sha[:12]}…  hf={'Y' if entry['on_hf'] else 'N'}")
 

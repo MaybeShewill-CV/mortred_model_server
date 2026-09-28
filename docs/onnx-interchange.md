@@ -22,8 +22,7 @@ fetch: [deployment.md](deployment.md) §9. Out of scope: [unsupported-boundaries
   - **LIBFACE** after the YuNet 2026may cutover (`type=onnx`, 12-head decode)
 - CI-only overlays under `conf/ci/*_onnx_hosted.toml` prove ORT CPU. Do not
   point `conf/server` at those files.
-- HF upload is deferred until every product graph that should ship is ready.
-  `p1_upload` in `onnx_sources.json` stays false for the P2 locals.
+- HF upload of the 39 product `*.static_bs1.onnx` graphs is the `fetch_weights.py --kind onnx` set (`kind=onnx` in `conf/weights_manifest.json`). `.engine` files are not that download. `on_hf` stays false until those bytes are uploaded to `MaybeShewill-CV/mortred_model_server`.
 
 ## How to export or adopt
 

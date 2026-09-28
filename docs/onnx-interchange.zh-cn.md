@@ -18,8 +18,7 @@ Hugging Face（`MaybeShewill-CV/mortred_model_server`）是 **ONNX 交换格式*
   - 本来就是 ONNX 的：diffusion（DDPM / DDIM / CLS_COND_DDIM / LDM）、MSOCRNET、SAM decoder
   - **LIBFACE** 已切到 YuNet 2026may（`type=onnx`，12 头解码）
 - `conf/ci/*_onnx_hosted.toml` 只给 CI 证 ORT CPU，不要把 `conf/server` 指过去。
-- HF 上传仍推迟，等该上的产品图都齐。`onnx_sources.json` 里 P2 本地文件的
-  `p1_upload` 保持 false。
+- 39 个产品 `*.static_bs1.onnx` 是 `fetch_weights.py --kind onnx` 的集合（`conf/weights_manifest.json` 里 `kind=onnx`）。`.engine` 不是这条下载。这些文件还没传到 `MaybeShewill-CV/mortred_model_server` 时，`on_hf` 保持 false。
 
 ## 怎么导出 / 收养
 

@@ -1,0 +1,27 @@
+[ATTENTIVE_GAN_DERAIN_SERVER]
+model="attentive_gan"
+# port
+port=9010
+# host
+host="localhost"
+# max connection
+max_connections=500
+# peer resp timeout seconds
+peer_resp_timeout=15
+# request size limit(MB)
+request_size_limit=64
+compute_threads=-1
+# handler threads nums
+handler_threads=50
+# model worker nums
+worker_nums=1
+# milliseconds
+model_run_timeout=10000
+max_queue_depth=32
+max_batch_size=1
+# server url
+server_uri="/mortred_ai_server_v1/enhancement/attentive_gan"
+server_exe="mortred-model-server.out"
+
+[attentive_gan]
+model_config_file_path="../conf/model/enhancement/attentive_gan_derain/attentive_gan.toml"

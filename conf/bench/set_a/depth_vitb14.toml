@@ -1,5 +1,3 @@
-# Bench overlay: TensorRT static_bs1 engine. Not a product config.
-# id=depth_vitb14 catalog=DEPTH_ANYTHING
 
 [DEPTH_ANYTHING]
 [DEPTH_ANYTHING.backend]

@@ -47,8 +47,9 @@ inline const std::vector<jinq::models::backend::ParamSpec> &feature_point_param_
 
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
-        Entry{"SUPERPOINT", "Superpoint feature point detection", "SUPERPOINT_FP_SERVER", &create_superpoint_extractor<ImageInput, Output>,
-              &jinq::server::response::fill_feature_points, feature_point_param_specs()},
+        Entry{"superpoint", "SuperPoint feature detection", "SUPERPOINT_FP_SERVER",
+              &create_superpoint_extractor<ImageInput, Output>, &jinq::server::response::fill_feature_points,
+              feature_point_param_specs(), "superpoint"},
     };
     return entries;
 }

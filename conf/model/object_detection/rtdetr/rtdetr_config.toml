@@ -6,6 +6,3 @@ model_file_path = "../weights/object_detection/rtdetr/rtdetr.engine"
 device = "gpu"
 
 [RTDETR.params]
-# TODO(new_model): declare the model specific keys here and read them in
-# RtdetrDetector::on_init(). Unknown keys can be rejected with
-# ParamReader::allow_only_keys().

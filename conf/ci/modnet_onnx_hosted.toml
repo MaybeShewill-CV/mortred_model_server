@@ -1,6 +1,3 @@
-# CI-only overlay: fork-hosted ONNX Runtime CPU proof for this product id.
-# Product serving stays the original conf/model/**/*.toml (mnn/tensorrt).
-# Do not point conf/server at this file.
 
 [MODNET_MATTING]
 
@@ -16,8 +13,6 @@ precision_mode = 0
 power_mode = 0
 
 [MODNET_MATTING.params]
-# Portrait matting commonly receives full-size phone photos; the golden input
-# is 3744x5616 (21.0 MP), above the repository-wide 16 MP DoS default.
 max_image_pixels = 25165824
 image_decode_mode = "budget"
 image_decode_budget_upscale = 1.25

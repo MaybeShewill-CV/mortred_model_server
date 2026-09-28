@@ -1,5 +1,3 @@
-# Bench server overlay: model_config_file_path is the set-A overlay.
-# Not a product config. id=pphuman_server catalog=PPHUMAN_SEG
 
 [PPHUMAN_SEG_SERVER]
 model="PPHUMAN_SEG"
@@ -13,13 +11,6 @@ max_connections=500
 peer_resp_timeout=15
 # request size limit(MB)
 request_size_limit=64
-# bearer token for direct inference access. There is NO anonymous mode: an empty
-# token rejects every request, so the supervisor injects MORTRED_AUTH_TOKEN at spawn
-# (calibrate injects a per-run token the same way); non-loopback hosts require it
-# auth_token=""
-# max requests per second per client ip (0 = unlimited)
-# rate_limit_qps=0
-# compute threads nums
 compute_threads=-1
 # handler threads nums
 handler_threads=50
@@ -27,11 +18,10 @@ handler_threads=50
 worker_nums=1
 # milliseconds
 model_run_timeout=3000
-# max queued requests before the server answers 429 (overload protection)
 max_queue_depth=32
+max_batch_size=1
 # server url
 server_uri="/mortred_ai_server_v1/scene_segmentation/pphuman_seg"
-# explicit server executable used by the web console catalog
 server_exe="mortred-model-server.out"
 
 [PPHUMAN_SEG]

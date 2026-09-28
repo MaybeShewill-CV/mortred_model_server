@@ -85,27 +85,39 @@ inline const std::vector<jinq::models::backend::ParamSpec> &detection_param_spec
 
 inline const std::vector<ObjectEntry> &catalog() {
     static const std::vector<ObjectEntry> entries = {
-        ObjectEntry{"YOLOV5", "Yolov5 object detection", "YOLOV5_DETECTION_SERVER", &create_yolov5_detector<ImageInput, ObjectOutput>,
-                    &jinq::server::response::fill_object_detection, detection_param_specs()},
-        ObjectEntry{"YOLOV6", "Yolov6 object detection", "YOLOV6_DETECTION_SERVER", &create_yolov6_detector<ImageInput, ObjectOutput>,
-                    &jinq::server::response::fill_object_detection, detection_param_specs()},
-        ObjectEntry{"NANODET", "nanodet object detection", "NANODET_DETECTION_SERVER", &create_nanodet_detector<ImageInput, ObjectOutput>,
-                    &jinq::server::response::fill_object_detection, detection_param_specs()},
-        ObjectEntry{"YOLOV7", "Yolov7 object detection", "YOLOV7_DETECTION_SERVER", &create_yolov7_detector<ImageInput, ObjectOutput>,
-                    &jinq::server::response::fill_object_detection, detection_param_specs()},
-        ObjectEntry{"YOLOV8", "Yolov8 object detection", "YOLOV8_DETECTION_SERVER", &create_yolov8_detector<ImageInput, ObjectOutput>,
-                    &jinq::server::response::fill_object_detection, detection_param_specs()},
+        ObjectEntry{"yolov5l", "YOLOv5l object detection", "YOLOV5_DETECTION_SERVER", &create_yolov5_detector<ImageInput, ObjectOutput>,
+                    &jinq::server::response::fill_object_detection, detection_param_specs(), "yolov5"},
+        ObjectEntry{"yolov6s", "YOLOv6s object detection", "YOLOV6_DETECTION_SERVER", &create_yolov6_detector<ImageInput, ObjectOutput>,
+                    &jinq::server::response::fill_object_detection, detection_param_specs(), "yolov6"},
+        ObjectEntry{"nanodet_1x5", "NanoDet 1.5x object detection", "NANODET_DETECTION_SERVER",
+                    &create_nanodet_detector<ImageInput, ObjectOutput>, &jinq::server::response::fill_object_detection,
+                    detection_param_specs(), "nanodet"},
+        ObjectEntry{"nanodet_416", "NanoDet 416 object detection", "NANODET_DETECTION_SERVER",
+                    &create_nanodet_detector<ImageInput, ObjectOutput>, &jinq::server::response::fill_object_detection,
+                    detection_param_specs(), "nanodet"},
+        ObjectEntry{"yolov7", "YOLOv7 object detection", "YOLOV7_DETECTION_SERVER", &create_yolov7_detector<ImageInput, ObjectOutput>,
+                    &jinq::server::response::fill_object_detection, detection_param_specs(), "yolov7"},
+        ObjectEntry{"yolov7x", "YOLOv7x object detection", "YOLOV7_DETECTION_SERVER", &create_yolov7_detector<ImageInput, ObjectOutput>,
+                    &jinq::server::response::fill_object_detection, detection_param_specs(), "yolov7"},
+        ObjectEntry{"yolov8n", "YOLOv8n object detection", "YOLOV8_DETECTION_SERVER", &create_yolov8_detector<ImageInput, ObjectOutput>,
+                    &jinq::server::response::fill_object_detection, detection_param_specs(), "yolov8"},
+        ObjectEntry{"yolov8s", "YOLOv8s object detection", "YOLOV8_DETECTION_SERVER", &create_yolov8_detector<ImageInput, ObjectOutput>,
+                    &jinq::server::response::fill_object_detection, detection_param_specs(), "yolov8"},
+        ObjectEntry{"yolov8l", "YOLOv8l object detection", "YOLOV8_DETECTION_SERVER", &create_yolov8_detector<ImageInput, ObjectOutput>,
+                    &jinq::server::response::fill_object_detection, detection_param_specs(), "yolov8"},
+        ObjectEntry{"yolov8x", "YOLOv8x object detection", "YOLOV8_DETECTION_SERVER", &create_yolov8_detector<ImageInput, ObjectOutput>,
+                    &jinq::server::response::fill_object_detection, detection_param_specs(), "yolov8"},
     };
     return entries;
 }
 
 inline const std::vector<FaceEntry> &face_catalog() {
     static const std::vector<FaceEntry> entries = {
-        FaceEntry{"LIBFACE", "libface face detection", "LIBFACE_DETECTION_SERVER", &create_libface_detector<ImageInput, FaceOutput>,
-                  &jinq::server::response::fill_face_detection, detection_param_specs()},
-        FaceEntry{"CENTER_FACE", "center face detection", "CENTER_FACE_DETECTION_SERVER",
+        FaceEntry{"libface", "YuNet face detection", "LIBFACE_DETECTION_SERVER", &create_libface_detector<ImageInput, FaceOutput>,
+                  &jinq::server::response::fill_face_detection, detection_param_specs(), "libface"},
+        FaceEntry{"centerface", "CenterFace detection", "CENTER_FACE_DETECTION_SERVER",
                   &create_centerface_detector<ImageInput, FaceOutput>, &jinq::server::response::fill_face_detection,
-                  detection_param_specs()},
+                  detection_param_specs(), "centerface"},
     };
     return entries;
 }

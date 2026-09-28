@@ -41,14 +41,9 @@ Tune listen/timeout/worker settings in the matching `conf/server/**/*.toml`. Wor
 ```toml
 # max queued requests before the server answers 429 + Retry-After (0 = unlimited)
 max_queue_depth=32
-# dynamic batching: collect concurrent requests into one packed [N,...] run
-# (default 1 = off). Works for HTTP single-session image models
-# (classification/detection/segmentation/OCR/matting/enhancement/depth/
-# SuperPoint). FastSAM / CLIP / LightGlue are bench-only and not HTTP-batched.
-# Engines with dynamic batch (MNN) gain real throughput; TRT engines built
-# with a static batch-1 profile fall back to per-item runs. Multi-session
-# models (LightGlue / SAM prompt / CLIP) and diffusion samplers are not batchable.
-max_batch_size=8
+# Product servers keep batch collection off. A value above 1 packs concurrent
+# requests into one run; static batch-1 TensorRT engines do not use that path.
+max_batch_size=1
 # batch collection window in ms: how long the first request waits for peers
 max_batch_delay_ms=5
 ```

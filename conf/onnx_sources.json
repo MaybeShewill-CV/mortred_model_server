@@ -36,7 +36,7 @@
     {
       "id": "MOBILENETV2",
       "served": "http",
-      "config": "conf/model/classification/mobilenetv2/mobilenetv2_config.toml",
+      "config": "conf/model/classification/mobilenetv2/mobilenetv2.toml",
       "product_type": "mnn",
       "runtime_path": "weights/classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn",
       "onnx_path": "weights/classification/mobilenetv2/mobilenetv2.static_bs1.onnx",
@@ -83,7 +83,7 @@
     {
       "id": "RESNET",
       "served": "http",
-      "config": "conf/model/classification/resnet/resnet50_config.toml",
+      "config": "conf/model/classification/resnet/resnet.toml",
       "product_type": "mnn",
       "runtime_path": "weights/classification/resnet/resnet-50.mnn",
       "onnx_path": "weights/classification/resnet/resnet.static_bs1.onnx",
@@ -129,7 +129,7 @@
     {
       "id": "DENSENET",
       "served": "http",
-      "config": "conf/model/classification/densenet/densenet121_config.toml",
+      "config": "conf/model/classification/densenet/densenet.toml",
       "product_type": "mnn",
       "runtime_path": "weights/classification/densenet/densenet-121.mnn",
       "onnx_path": "weights/classification/densenet/densenet.static_bs1.onnx",
@@ -175,7 +175,7 @@
     {
       "id": "YOLOV5",
       "served": "http",
-      "config": "conf/model/object_detection/yolov5/yolov5_config.toml",
+      "config": "conf/model/object_detection/yolov5/yolov5l.toml",
       "product_type": "mnn",
       "runtime_path": "weights/object_detection/yolov5/yolov5l.mnn",
       "onnx_path": "weights/object_detection/yolov5/yolov5l.static_bs1.onnx",
@@ -226,7 +226,7 @@
     {
       "id": "YOLOV6",
       "served": "http",
-      "config": "conf/model/object_detection/yolov6/yolov6_config.toml",
+      "config": "conf/model/object_detection/yolov6/yolov6s.toml",
       "product_type": "mnn",
       "runtime_path": "weights/object_detection/yolov6/yolov6s.mnn",
       "onnx_path": "weights/object_detection/yolov6/yolov6s.static_bs1.onnx",
@@ -277,7 +277,7 @@
     {
       "id": "YOLOV7",
       "served": "http",
-      "config": "conf/model/object_detection/yolov7/yolov7_config.toml",
+      "config": "conf/model/object_detection/yolov7/yolov7.toml",
       "product_type": "mnn",
       "runtime_path": "weights/object_detection/yolov7/yolov7.mnn",
       "onnx_path": "weights/object_detection/yolov7/yolov7.static_bs1.onnx",
@@ -331,7 +331,7 @@
     {
       "id": "YOLOV8",
       "served": "http",
-      "config": "conf/model/object_detection/yolov8/yolov8_config.toml",
+      "config": "conf/model/object_detection/yolov8/yolov8s.toml",
       "product_type": "tensorrt",
       "runtime_path": "weights/object_detection/yolov8/yolov8s.engine.static_bs1.fp16in",
       "onnx_path": "weights/object_detection/yolov8/yolov8s.static_bs1.onnx",
@@ -369,7 +369,7 @@
       },
       "license": {
         "redistribute": "already_on_this_hf_repo",
-        "notes": "Ultralytics AGPL-3.0. yolov8s.onnx already hosted. Do not upload yolov8n/l/x (not product)."
+        "notes": "Ultralytics AGPL-3.0. Product interchange is yolov8{n,s,l,x}.static_bs1.onnx. Legacy yolov8n/l/x.onnx stays off the product fetch."
       },
       "onnx_source": {
         "kind": "preexisting",
@@ -383,7 +383,7 @@
     {
       "id": "NANODET",
       "served": "http",
-      "config": "conf/model/object_detection/nano_det/nanodet_config.toml",
+      "config": "conf/model/object_detection/nano_det/nanodet_1x5.toml",
       "product_type": "mnn",
       "runtime_path": "weights/object_detection/nanodet/nanodet_plus_m_1x5.mnn",
       "onnx_path": "weights/object_detection/nanodet/nanodet_plus_m_1x5.static_bs1.onnx",
@@ -435,7 +435,7 @@
       "id": "LIBFACE",
       "variant": "320x240",
       "served": "http",
-      "config": "conf/model/object_detection/libfacedetection/320x240_config.toml",
+      "config": "conf/model/object_detection/libfacedetection/libface.toml",
       "product_type": "onnx",
       "runtime_path": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.onnx",
       "onnx_path": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.static_bs1.onnx",
@@ -594,7 +594,7 @@
     {
       "id": "CENTER_FACE",
       "served": "http",
-      "config": "conf/model/object_detection/centerface/centerface_config.toml",
+      "config": "conf/model/object_detection/centerface/centerface.toml",
       "product_type": "mnn",
       "runtime_path": "weights/object_detection/centerface_detection/centerface.model",
       "onnx_path": "weights/object_detection/centerface_detection/centerface.static_bs1.onnx",
@@ -671,7 +671,7 @@
     {
       "id": "DBNET",
       "served": "http",
-      "config": "conf/model/ocr/db_text_detector/dbnet_config.toml",
+      "config": "conf/model/ocr/db_text_detector/dbnet.toml",
       "product_type": "mnn",
       "runtime_path": "weights/ocr/db_text_detector/db_model_large.mnn",
       "onnx_path": "weights/ocr/db_text_detector/db_model_large.static_bs1.onnx",
@@ -717,7 +717,7 @@
     {
       "id": "BISENETV2",
       "served": "http",
-      "config": "conf/model/scene_segmentation/bisenetv2/bisenetv2_config.toml",
+      "config": "conf/model/scene_segmentation/bisenetv2/bisenetv2.toml",
       "product_type": "mnn",
       "runtime_path": "weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.mnn",
       "onnx_path": "weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.static_bs1.onnx",
@@ -770,7 +770,7 @@
     {
       "id": "PPHUMAN_SEG",
       "served": "http",
-      "config": "conf/model/scene_segmentation/pphuman/pphuman_config.toml",
+      "config": "conf/model/scene_segmentation/pphuman/pphuman_mobile.toml",
       "product_type": "mnn",
       "runtime_path": "weights/scene_segmentation/pphuman_seg/pp_humanseg_192x192_mobile.mnn",
       "onnx_path": "weights/scene_segmentation/pphuman_seg/pp_humanseg_192x192_mobile.static_bs1.onnx",
@@ -815,7 +815,7 @@
     {
       "id": "HRNET",
       "served": "http",
-      "config": "conf/model/scene_segmentation/hrnet/hrnetw48_ccd_fv_segmentation_cfg.toml",
+      "config": "conf/model/scene_segmentation/hrnet/hrnet.toml",
       "product_type": "tensorrt",
       "runtime_path": "weights/scene_segmentation/hrnet/hrnetw48_ccd_fp32.engine",
       "onnx_path": "weights/scene_segmentation/hrnet/hrnetw48_ccd.static_bs1.onnx",
@@ -864,7 +864,7 @@
     {
       "id": "MSOCRNET",
       "served": "bench",
-      "config": "conf/model/scene_segmentation/msocrnet/msocrnet_config.toml",
+      "config": "conf/model/scene_segmentation/msocrnet/msocrnet.toml",
       "product_type": "onnx",
       "runtime_path": "weights/scene_segmentation/msocrnet/msocrnet_fp16.onnx",
       "onnx_path": "weights/scene_segmentation/msocrnet/msocrnet_fp16.static_bs1.onnx",
@@ -904,7 +904,7 @@
     {
       "id": "MODNET",
       "served": "http",
-      "config": "conf/model/matting/modnet/modnet_config.toml",
+      "config": "conf/model/matting/modnet/modnet.toml",
       "product_type": "mnn",
       "runtime_path": "weights/matting/modnet/modnet_hrnet_w18.mnn",
       "onnx_path": "weights/matting/modnet/modnet_hrnet_w18.static_bs1.onnx",
@@ -950,7 +950,7 @@
     {
       "id": "PP_MATTING",
       "served": "http",
-      "config": "conf/model/matting/ppmatting/ppmatting_config.toml",
+      "config": "conf/model/matting/ppmatting/ppmatting_512.toml",
       "product_type": "mnn",
       "runtime_path": "weights/matting/ppmatting/ppmatting_hrnet_w18_human_512.mnn",
       "onnx_path": "weights/matting/ppmatting/ppmatting_hrnet_w18_human_512.static_bs1.onnx",
@@ -1054,7 +1054,7 @@
     {
       "id": "ATTENTIVE_GAN_DERAIN",
       "served": "http",
-      "config": "conf/model/enhancement/attentive_gan_derain/attentive_gan_derain_config.toml",
+      "config": "conf/model/enhancement/attentive_gan_derain/attentive_gan.toml",
       "product_type": "mnn",
       "runtime_path": "weights/enhancement/attentive_gan_derain/attentive_gan_derain.model",
       "onnx_path": "weights/enhancement/attentive_gan_derain/attentive_gan_derain.static_bs1.onnx",
@@ -1106,7 +1106,7 @@
     {
       "id": "REAL_ESRGAN",
       "served": "http",
-      "config": "conf/model/enhancement/real_esrgan/real_esrgan.toml",
+      "config": "conf/model/enhancement/real_esrgan/realesrgan.toml",
       "product_type": "mnn",
       "runtime_path": "weights/enhancement/real_esrgan/realesr-general-x4v3.model",
       "onnx_path": "weights/enhancement/real_esrgan/realesr-general-x4v3.static_bs1.onnx",
@@ -1151,7 +1151,7 @@
     {
       "id": "SUPERPOINT",
       "served": "http",
-      "config": "conf/model/feature_point/superpoint/superpoint_config.toml",
+      "config": "conf/model/feature_point/superpoint/superpoint.toml",
       "product_type": "mnn",
       "runtime_path": "weights/feature_point/superpoint/superpoint_120x160.mnn",
       "onnx_path": "weights/feature_point/superpoint/superpoint_120x160.static_bs1.onnx",
@@ -1304,7 +1304,7 @@
       "id": "DINOV2",
       "variant": "vits14",
       "served": "http",
-      "config": "conf/model/feature_embedding/dinov2/dinov2_vits14_config.toml",
+      "config": "conf/model/feature_embedding/dinov2/dinov2_vits14.toml",
       "product_type": "mnn",
       "runtime_path": "weights/classification/dinov2/dinov2_vits14_pretrain.mnn",
       "onnx_path": "weights/classification/dinov2/dinov2_vits14_pretrain.static_bs1.onnx",
@@ -1352,7 +1352,7 @@
       "id": "DINOV2",
       "variant": "vitb14",
       "served": "http",
-      "config": "conf/model/feature_embedding/dinov2/dinov2_vitb14_config.toml",
+      "config": "conf/model/feature_embedding/dinov2/dinov2_vitb14.toml",
       "product_type": "mnn",
       "runtime_path": "weights/classification/dinov2/dinov2_vitb14_pretrain.mnn",
       "onnx_path": "weights/classification/dinov2/dinov2_vitb14_pretrain.static_bs1.onnx",
@@ -1377,7 +1377,7 @@
       "id": "DINOV2",
       "variant": "vitl14",
       "served": "http",
-      "config": "conf/model/feature_embedding/dinov2/dinov2_vitl14_config.toml",
+      "config": "conf/model/feature_embedding/dinov2/dinov2_vitl14.toml",
       "product_type": "mnn",
       "runtime_path": "weights/classification/dinov2/dinov2_vitl14_pretrain.mnn",
       "onnx_path": "weights/classification/dinov2/dinov2_vitl14_pretrain.static_bs1.onnx",
@@ -1462,7 +1462,7 @@
       "id": "DEPTH_ANYTHING",
       "variant": "vits14",
       "served": "http",
-      "config": "conf/model/mono_depth_estimation/depth_anything/vit_s.toml",
+      "config": "conf/model/mono_depth_estimation/depth_anything/depth_vits14.toml",
       "product_type": "tensorrt",
       "runtime_path": "weights/mono_depth_estimation/depth_anything/depth_anything_vits14.engine",
       "onnx_path": "weights/mono_depth_estimation/depth_anything/depth_anything_vits14.static_bs1.onnx",
@@ -1505,7 +1505,7 @@
       "id": "DEPTH_ANYTHING",
       "variant": "vitb14",
       "served": "http",
-      "config": "conf/model/mono_depth_estimation/depth_anything/vit_b.toml",
+      "config": "conf/model/mono_depth_estimation/depth_anything/depth_vitb14.toml",
       "product_type": "tensorrt",
       "runtime_path": "weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.engine",
       "onnx_path": "weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.static_bs1.onnx",
@@ -1531,7 +1531,7 @@
       "id": "DEPTH_ANYTHING",
       "variant": "vitl14",
       "served": "http",
-      "config": "conf/model/mono_depth_estimation/depth_anything/vit_l.toml",
+      "config": "conf/model/mono_depth_estimation/depth_anything/depth_vitl14.toml",
       "product_type": "tensorrt",
       "runtime_path": "weights/mono_depth_estimation/depth_anything/depth_anything_vitl14.engine",
       "onnx_path": "weights/mono_depth_estimation/depth_anything/depth_anything_vitl14.static_bs1.onnx",
@@ -1558,7 +1558,7 @@
       "id": "METRIC3D",
       "variant": "512x1088",
       "served": "http",
-      "config": "conf/model/mono_depth_estimation/metric3d/metric3d_512x1088.toml",
+      "config": "conf/model/mono_depth_estimation/metric3d/metric3d_512.toml",
       "product_type": "tensorrt",
       "runtime_path": "weights/mono_depth_estimation/metric3d/metric3d_750k_512x1088.engine",
       "onnx_path": "weights/mono_depth_estimation/metric3d/metric3d_750k_512x1088.static_bs1.onnx",
@@ -1599,7 +1599,7 @@
       "id": "METRIC3D",
       "variant": "1088x1920",
       "served": "http",
-      "config": "conf/model/mono_depth_estimation/metric3d/metric3d_1088x1920.toml",
+      "config": "conf/model/mono_depth_estimation/metric3d/metric3d_1088.toml",
       "product_type": "tensorrt",
       "runtime_path": "weights/mono_depth_estimation/metric3d/metric3d_750k_1088x1920.engine",
       "onnx_path": "weights/mono_depth_estimation/metric3d/metric3d_750k_1088x1920.static_bs1.onnx",

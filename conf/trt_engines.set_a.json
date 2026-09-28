@@ -74,22 +74,22 @@
     {
       "model": "mobilenetv2",
       "onnx": "weights/classification/mobilenetv2/mobilenetv2.static_bs1.onnx",
-      "engine": "weights/classification/mobilenetv2/mobilenetv2.engine.static_bs1.fp16",
-      "fp": 1,
+      "engine": "weights/classification/mobilenetv2/mobilenetv2.engine.static_bs1.fp32",
+      "fp": 0,
       "profile": null
     },
     {
       "model": "resnet",
       "onnx": "weights/classification/resnet/resnet.static_bs1.onnx",
-      "engine": "weights/classification/resnet/resnet.engine.static_bs1.fp16",
-      "fp": 1,
+      "engine": "weights/classification/resnet/resnet.engine.static_bs1.fp32",
+      "fp": 0,
       "profile": null
     },
     {
       "model": "densenet",
       "onnx": "weights/classification/densenet/densenet.static_bs1.onnx",
-      "engine": "weights/classification/densenet/densenet.engine.static_bs1.fp16",
-      "fp": 1,
+      "engine": "weights/classification/densenet/densenet.engine.static_bs1.fp32",
+      "fp": 0,
       "profile": null
     },
     {
@@ -144,8 +144,8 @@
     {
       "model": "bisenetv2",
       "onnx": "weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.static_bs1.onnx",
-      "engine": "weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.engine.static_bs1.fp16",
-      "fp": 1,
+      "engine": "weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.engine.static_bs1.fp32",
+      "fp": 0,
       "profile": null
     },
     {
@@ -186,8 +186,8 @@
     {
       "model": "attentive_gan",
       "onnx": "weights/enhancement/attentive_gan_derain/attentive_gan_derain.static_bs1.onnx",
-      "engine": "weights/enhancement/attentive_gan_derain/attentive_gan_derain.engine.static_bs1.fp16",
-      "fp": 1,
+      "engine": "weights/enhancement/attentive_gan_derain/attentive_gan_derain.engine.static_bs1.fp32",
+      "fp": 0,
       "profile": null
     },
     {
@@ -200,8 +200,8 @@
     {
       "model": "realesrgan",
       "onnx": "weights/enhancement/real_esrgan/realesr-general-x4v3.static_bs1.onnx",
-      "engine": "weights/enhancement/real_esrgan/realesr-general-x4v3.engine.static_bs1.fp16",
-      "fp": 1,
+      "engine": "weights/enhancement/real_esrgan/realesr-general-x4v3.engine.static_bs1.fp32",
+      "fp": 0,
       "profile": "conf/trt_profiles/set_a_realesrgan.json"
     },
     {

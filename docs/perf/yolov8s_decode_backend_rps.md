@@ -98,7 +98,7 @@ W4）；全分辨率 GPU 解码的坐标差大约 0.32 px。这次只比吞吐�
 1. 用本分支的 gpu profile 编出 `mortred-model-server.out`，经 supervisor 拉起。
    确认进程环境里 `MORTRED_WORKER_NUMS=8`。server toml 写的 `worker_nums=1`
    会被 pack 覆盖。
-2. 改 `conf/model/object_detection/yolov8/yolov8_config.toml` 的
+2. 改 `conf/model/object_detection/yolov8/yolov8s.toml` 的
    `image_decode_backend`。GPU 两列写 `gpu`，CPU 两列写 `cpu`。
    `image_decode_mode` 保持 `budget`。改完重启模型进程：
 

@@ -51,7 +51,7 @@ Response: top-k scores under `results[0].data` (see API contract).
 
 ```bash
 ./mortred-model-server.out --model YOLOV5 \
-  ../conf/server/object_detection/yolov5/yolov5_server_config.toml
+  ../conf/server/object_detection/yolov5/yolov5l_server_config.toml
 ```
 
 Switch yolov5s/m/… via the model TOML ([about_model_configuration.md](about_model_configuration.md)).
@@ -87,7 +87,7 @@ Screenshot: `resources/images/start_a_bisenetv2_server.png`.
 
 ```bash
 ./mortred-model-server.out --model ATTENTIVE_GAN_DERAIN \
-  ../conf/server/enhancement/attentive_gan_derain/attentive_gan_server_cfg.toml
+  ../conf/server/enhancement/attentive_gan_derain/attentive_gan_server_config.toml
 ```
 
 ```bash
@@ -104,7 +104,7 @@ Screenshot: `resources/images/start_a_derain_server.png`.
 
 ```bash
 ./mortred-model-server.out --model SUPERPOINT \
-  ../conf/server/feature_point/superpoint/superpoint_server_cfg.toml
+  ../conf/server/feature_point/superpoint/superpoint_server_config.toml
 ```
 
 ```bash

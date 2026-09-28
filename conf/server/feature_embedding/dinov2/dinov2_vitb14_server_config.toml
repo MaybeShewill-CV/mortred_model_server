@@ -1,0 +1,28 @@
+[DINOV2_FEATURE_EMBEDDING_SERVER]
+model="dinov2_vitb14"
+# port
+port=9080
+# host
+host="localhost"
+# max connection
+max_connections=500
+# peer resp timeout seconds
+peer_resp_timeout=15
+# request size limit(MB)
+request_size_limit=64
+compute_threads=-1
+# handler threads nums
+handler_threads=50
+# model worker nums
+worker_nums=1
+# milliseconds
+model_run_timeout=500
+max_queue_depth=32
+max_batch_size=1
+max_batch_delay_ms=5
+# server url
+server_uri="/mortred_ai_server_v1/feature_embedding/dinov2_vitb14"
+server_exe="mortred-model-server.out"
+
+[dinov2_vitb14]
+model_config_file_path="../conf/model/feature_embedding/dinov2/dinov2_vitb14.toml"

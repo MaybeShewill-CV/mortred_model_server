@@ -224,7 +224,7 @@ mortredctl prepare --pack conf/packs/yolov8.toml
 
 ```bash
 cd $PROJECT_ROOT_DIR/_bin
-./mortred-model-benchmark.out --model MOBILENETV2 ../conf/model/classification/mobilenetv2/mobilenetv2_config.toml
+./mortred-model-benchmark.out --model MOBILENETV2 ../conf/model/classification/mobilenetv2/mobilenetv2.toml
 ```
 
 如果没有任何错误的话（应该不会有:dog:），你可以看到如下的测试结果，包含使用的模型，模型预测耗时、fps等信息
@@ -302,22 +302,24 @@ python3 scripts/server/test_server.py --server mobilenetv2 --mode single --times
 
 HTTP 可服务（`mortred-model-server.out --list` / catalog id）：
 
+HTTP catalog id 为小写。`YOLOV8`、`PPHUMAN_SEG` 等旧名已删除，推理路径是 `/v1/models/yolov8s/infer`。`msocrnet` 已进入 HTTP。`SAM_AMG` 与扩散模型 id 保持原样。
+
 | 任务 | Catalog id |
 |---|---|
-| 分类 | `MOBILENETV2` `RESNET` `DENSENET` |
-| 检测 | `YOLOV5` `YOLOV6` `YOLOV7` `YOLOV8` `NANODET` |
-| 人脸 | `LIBFACE` `CENTER_FACE` |
-| OCR | `DBNET` |
-| 分割 | `BISENETV2` `PPHUMAN_SEG` `HRNET` |
-| 抠图 | `MODNET` `PP_MATTING` |
-| 增强 | `ENLIGHTEN_GAN` `ATTENTIVE_GAN_DERAIN` `REAL_ESRGAN` |
-| 特征点 | `SUPERPOINT` |
-| 嵌入 | `DINOV2` |
-| 深度 | `METRIC3D` `DEPTH_ANYTHING` |
+| 分类 | `mobilenetv2` `resnet` `densenet` |
+| 检测 | `yolov5l` `yolov6s` `yolov7` `yolov7x` `yolov8n` `yolov8s` `yolov8l` `yolov8x` `nanodet_1x5` `nanodet_416` |
+| 人脸 | `libface` `centerface` |
+| OCR | `dbnet` |
+| 分割 | `bisenetv2` `pphuman_mobile` `pphuman_lite` `pphuman_server` `hrnet` `msocrnet` |
+| 抠图 | `modnet` `ppmatting_512` `ppmatting_1024` `ppmatting_resnet34` `ppmatting_v2` |
+| 增强 | `enlightengan` `attentive_gan` `realesrgan` |
+| 特征点 | `superpoint` |
+| 嵌入 | `dinov2_vits14` `dinov2_vitb14` `dinov2_vitl14` |
+| 深度 | `depth_vits14` `depth_vitb14` `depth_vitl14` `metric3d_512` `metric3d_1088` |
 | SAM | `SAM_AMG` |
 | 扩散 | `DDPM` `DDIM` `CLS_COND_DDIM` `LDM` |
 
-Bench-only（无 HTTP catalog）：`OPENAI_CLIP`、`LIGHTGLUE`、`SAM_PREDICTOR`、`FAST_SAM`、`MSOCRNET`。
+Bench-only（无 HTTP catalog）：`OPENAI_CLIP`、`LIGHTGLUE`、`SAM_PREDICTOR`、`FAST_SAM`。
 
 Scaffold、未实现、不在 HTTP catalog：`RTDETR`。无 MOT。
 

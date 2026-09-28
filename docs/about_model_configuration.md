@@ -70,7 +70,7 @@ into `[SECTION.params]` with unchanged names and semantics.
 
 `model_golden_test` rewrites `../`-prefixed paths relative to the repo root and
 forces `backend.device = "cpu"` so cpu-only CI stays deterministic. That rewrite
-makes product TensorRT configs (for example `yolov8_config.toml`) a
+makes product TensorRT configs (for example `yolov8s.toml`) a
 configuration error on CPU (`type=tensorrt` forbids `device=cpu`). Hosted fork
 CI proves YOLOv8 decode via the overlay `conf/ci/yolov8_onnx_hosted.toml`, not
 the serving `.engine`. TensorRT goldens stay on the maintainer GPU path.

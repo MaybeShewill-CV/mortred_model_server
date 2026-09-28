@@ -1,5 +1,3 @@
-# Bench overlay: TensorRT static_bs1 engine. Not a product config.
-# id=nanodet_416 catalog=NANODET
 
 
 [NanoDet]

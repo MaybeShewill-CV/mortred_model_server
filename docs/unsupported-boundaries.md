@@ -10,7 +10,7 @@ First-hour + full ops: [deployment.md](deployment.md) (`mortredctl next`).
 
 | Supported | Not supported |
 |---|---|
-| Linux x64 (Ubuntu 20.04 / 22.04 documented) | Windows, macOS, other CPU ISAs as a product track |
+| Linux x64, Ubuntu 20.04 / 22.04, including WSL2 Ubuntu | Windows native, macOS, other CPU ISAs |
 
 Build scripts, packs, `mortredctl`, and release tarballs assume Linux. Do not
 expect a supported Windows/macOS binary line.
@@ -85,7 +85,7 @@ target layout.
 
 ## 不支持边界（摘要）
 
-- **仅 Linux x64**；无 Windows / macOS 产品线。
+- **Linux x64**：原生 Ubuntu 与 WSL2 Ubuntu 使用同一套命令和二进制。无 Windows 原生 / macOS 产品线。
 - **RTDETR**：脚手架，未进 HTTP catalog，勿当已上线检测器。
 - **GPU**：CUDA 12.x + **TensorRT 10.x only**（8/9 不支持）。
 - **Engine**：须在本机本卡用当前 TRT **重建**；禁止跨机拷贝当开箱路径。

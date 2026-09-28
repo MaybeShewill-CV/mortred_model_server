@@ -34,9 +34,16 @@ using Entry = jinq::factory::cv_catalog::CvModelEntry<Output>;
 
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
-        Entry{"PP_MATTING", "pp matting", "PP_MATTING_SERVER", &create_ppmatting_segmentor<ImageInput, Output>,
-              &jinq::server::response::fill_matting, {}},
-        Entry{"MODNET", "modnet", "MODNET_SERVER", &create_modnet_segmentor<ImageInput, Output>, &jinq::server::response::fill_matting, {}},
+        Entry{"modnet", "MODNet matting", "MODNET_SERVER", &create_modnet_segmentor<ImageInput, Output>,
+              &jinq::server::response::fill_matting, {}, "modnet"},
+        Entry{"ppmatting_512", "PP-Matting 512", "PP_MATTING_SERVER", &create_ppmatting_segmentor<ImageInput, Output>,
+              &jinq::server::response::fill_matting, {}, "ppmatting"},
+        Entry{"ppmatting_1024", "PP-Matting 1024", "PP_MATTING_SERVER", &create_ppmatting_segmentor<ImageInput, Output>,
+              &jinq::server::response::fill_matting, {}, "ppmatting"},
+        Entry{"ppmatting_resnet34", "PP-Matting ResNet34", "PP_MATTING_SERVER", &create_ppmatting_segmentor<ImageInput, Output>,
+              &jinq::server::response::fill_matting, {}, "ppmatting"},
+        Entry{"ppmatting_v2", "PP-Matting v2", "PP_MATTING_SERVER", &create_ppmatting_segmentor<ImageInput, Output>,
+              &jinq::server::response::fill_matting, {}, "ppmatting"},
     };
     return entries;
 }

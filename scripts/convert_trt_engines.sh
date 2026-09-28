@@ -97,8 +97,14 @@ def dims(v):
 
 for e in manifest.get("engines", []):
     path = e.get("engine", "")
-    if only and only.lower() not in path.lower():
-        continue
+    if only:
+        # A path token must match the engine field exactly. A bare name
+        # (no slash) stays a case-insensitive substring for the legacy CLI.
+        if "/" in only:
+            if path != only:
+                continue
+        elif only.lower() not in path.lower():
+            continue
     flags = ""
     if e.get("profile"):
         prof = json.loads((root / e["profile"]).read_text(encoding="utf-8-sig"))
@@ -352,7 +358,7 @@ for line in "${ENTRIES[@]}"; do
     onnx_path="$ROOT/$onnx"
     engine_path="$ROOT/$engine"
     if [ ! -f "$onnx_path" ]; then
-        echo "[skip] $model: onnx missing $onnx (run ./scripts/fetch_weights.py --only $model first)"
+        echo "[skip] $model: onnx missing $onnx (run ./scripts/fetch_weights.py --kind onnx --only $model first)"
         missing_onnx=$((missing_onnx+1))
         continue
     fi
@@ -437,5 +443,5 @@ if [ "$failed" -gt 0 ]; then
     echo "== tip: add --strict to stop at the first failure; if dynamic-input models fail, add a profile under conf/trt_profiles/ and record it in conf/trt_engines.json"
     exit 1
 fi
-[ "$missing_onnx" -eq 0 ] || echo "== tip: missing onnx files: run scripts/fetch_weights.py to download them"
+[ "$missing_onnx" -eq 0 ] || echo "== tip: missing onnx files: run scripts/fetch_weights.py --kind onnx"
 exit 0

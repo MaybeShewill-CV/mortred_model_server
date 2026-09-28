@@ -71,7 +71,7 @@ fail-closed.
 
 Local developers without weights keep `GTEST_SKIP` (env unset).
 
-YOLOv8 HTTP serving still uses `conf/model/object_detection/yolov8/yolov8_config.toml`
+YOLOv8 HTTP serving still uses `conf/model/object_detection/yolov8/yolov8s.toml`
 (TensorRT). Fork-hosted detection coverage is **NanoDet MNN** plus the
 **YOLOv8 ONNX overlay** (`conf/ci/yolov8_onnx_hosted.toml`, `yolov8s.onnx`).
 That overlay is not a product serving config: `conf/server` must keep

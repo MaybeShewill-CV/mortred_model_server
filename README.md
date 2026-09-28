@@ -120,9 +120,18 @@ mortredctl doctor --strict            # engines, occupancy stamps, and security 
 mortredctl status | catalog           # runtime introspection
 ```
 
-GPU note: convert **pack** TensorRT engines on this machine with
-`mortredctl prepare` (not the whole zoo). `MORTRED_AUTO_BUILD_ENGINES=true`
-still converts every engine and stays opt-in. See [docs/deployment.md](docs/deployment.md) §10.
+After `cmake --build --preset full`, the control binary is
+`_bin/mortredctl.out` (not `mortredctl` on `PATH`). Source-tree start:
+
+```bash
+export PATH="$PWD/_bin:$PATH"
+export LD_LIBRARY_PATH="$PWD/_lib:$PWD/3rd_party/libs:${LD_LIBRARY_PATH:-}"
+mortredctl next
+```
+
+WSL2 Ubuntu and native Ubuntu use these same commands. On WSL2, `libcuda`
+comes from `/usr/lib/wsl/lib` via `LD_LIBRARY_PATH` when the loader does not
+find it on its own. Do not use a second CUDA code path.
 
 ### Building from source
 
@@ -203,24 +212,36 @@ All models loop several times to avoid the influence of gpu's warmup and only mo
 
 HTTP-served (`mortred-model-server.out --list` / catalog id):
 
+HTTP catalog ids are lowercase. Old names such as `YOLOV8` and `PPHUMAN_SEG` are gone; use `/v1/models/yolov8s/infer`. One weight file is one id. `msocrnet` is HTTP. `SAM_AMG` and the diffusion ids stay as they are.
+
 | Task | Catalog id |
 |---|---|
-| Classification | `MOBILENETV2` `RESNET` `DENSENET` |
-| Detection | `YOLOV5` `YOLOV6` `YOLOV7` `YOLOV8` `NANODET` |
-| Face | `LIBFACE` `CENTER_FACE` |
-| OCR | `DBNET` |
-| Segmentation | `BISENETV2` `PPHUMAN_SEG` `HRNET` |
-| Matting | `MODNET` `PP_MATTING` |
-| Enhancement | `ENLIGHTEN_GAN` `ATTENTIVE_GAN_DERAIN` `REAL_ESRGAN` |
-| Feature points | `SUPERPOINT` |
-| Embedding | `DINOV2` |
-| Depth | `METRIC3D` `DEPTH_ANYTHING` |
+| Classification | `mobilenetv2` `resnet` `densenet` |
+| Detection | `yolov5l` `yolov6s` `yolov7` `yolov7x` `yolov8n` `yolov8s` `yolov8l` `yolov8x` `nanodet_1x5` `nanodet_416` |
+| Face | `libface` `centerface` |
+| OCR | `dbnet` |
+| Segmentation | `bisenetv2` `pphuman_mobile` `pphuman_lite` `pphuman_server` `hrnet` `msocrnet` |
+| Matting | `modnet` `ppmatting_512` `ppmatting_1024` `ppmatting_resnet34` `ppmatting_v2` |
+| Enhancement | `enlightengan` `attentive_gan` `realesrgan` |
+| Feature points | `superpoint` |
+| Embedding | `dinov2_vits14` `dinov2_vitb14` `dinov2_vitl14` |
+| Depth | `depth_vits14` `depth_vitb14` `depth_vitl14` `metric3d_512` `metric3d_1088` |
 | SAM | `SAM_AMG` |
 | Diffusion | `DDPM` `DDIM` `CLS_COND_DDIM` `LDM` |
 
-Bench-only (no HTTP catalog): `OPENAI_CLIP`, `LIGHTGLUE`, `SAM_PREDICTOR`, `FAST_SAM`, `MSOCRNET`.
+Bench-only (no HTTP catalog): `OPENAI_CLIP`, `LIGHTGLUE`, `SAM_PREDICTOR`, `FAST_SAM`.
 
 Scaffold / not served: `RTDETR`. There is no MOT.
+
+Product ONNX fetch, then a machine pack, then prepare and calibrate:
+
+```bash
+python3 scripts/fetch_weights.py --kind onnx
+cp conf/packs/yolov8.toml /tmp/pack.toml
+mortredctl prepare --pack /tmp/pack.toml
+mortredctl calibrate --pack /tmp/pack.toml --write-pack
+python3 scripts/server/http_infer_rps.py --model yolov8s -c 8 -d 30s --raw
+```
 
 **Unsupported boundaries** (Linux-only, RTDETR scaffold, TensorRT 10.x only,
 engines must rebuild on this GPU): [docs/unsupported-boundaries.md](docs/unsupported-boundaries.md) / [中文摘要](docs/unsupported-boundaries.zh-cn.md).

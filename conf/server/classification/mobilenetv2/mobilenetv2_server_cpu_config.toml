@@ -1,7 +1,5 @@
 [MOBILENETV2_CLASSIFICATION_SERVER]
-model="MOBILENETV2"
-# deployment profile filter: this entry only appears when MORTRED_PROFILE=cpu.
-# Same model toml as gpu; set device="cpu" in that file on CPU boxes.
+model="mobilenetv2"
 profile="cpu"
 port=9002
 host="localhost"
@@ -13,10 +11,10 @@ handler_threads=50
 worker_nums=1
 model_run_timeout=500
 max_queue_depth=32
-max_batch_size=8
+max_batch_size=1
 max_batch_delay_ms=5
 server_uri="/mortred_ai_server_v1/classification/mobilenetv2"
 server_exe="mortred-model-server.out"
 
-[MOBILENETV2]
-model_config_file_path="../conf/model/classification/mobilenetv2/mobilenetv2_config.toml"
+[mobilenetv2]
+model_config_file_path="../conf/model/classification/mobilenetv2/mobilenetv2_cpu.toml"

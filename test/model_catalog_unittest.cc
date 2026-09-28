@@ -204,25 +204,29 @@ TEST_F(ModelCatalogTest, ServerConfigSectionsAndModelFilesExist) {
 
 TEST_F(ModelCatalogTest, CatalogCoversEveryServedModel) {
     EXPECT_EQ(jinq::factory::classification::catalog().size(), 3U);
-    EXPECT_EQ(jinq::factory::object_detection::catalog().size(), 5U);
+    EXPECT_EQ(jinq::factory::object_detection::catalog().size(), 10U);
     EXPECT_EQ(jinq::factory::object_detection::face_catalog().size(), 2U);
-    EXPECT_EQ(jinq::factory::scene_segmentation::catalog().size(), 3U);
+    EXPECT_EQ(jinq::factory::scene_segmentation::catalog().size(), 6U);
     EXPECT_EQ(jinq::factory::ocr::catalog().size(), 1U);
-    EXPECT_EQ(jinq::factory::matting::catalog().size(), 2U);
+    EXPECT_EQ(jinq::factory::matting::catalog().size(), 5U);
     EXPECT_EQ(jinq::factory::enhancement::catalog().size(), 3U);
-    EXPECT_EQ(jinq::factory::feature_embedding::catalog().size(), 1U);
+    EXPECT_EQ(jinq::factory::feature_embedding::catalog().size(), 3U);
     EXPECT_EQ(jinq::factory::feature_point::catalog().size(), 1U);
-    EXPECT_EQ(jinq::factory::mono_depth_estimation::catalog().size(), 2U);
+    EXPECT_EQ(jinq::factory::mono_depth_estimation::catalog().size(), 5U);
     EXPECT_EQ(jinq::factory::diffusion::catalog().size(), 4U);
     EXPECT_EQ(jinq::factory::segment_anything::amg_catalog().size(), 1U);
-    EXPECT_EQ(served_entries_.size(), 28U);
+    EXPECT_EQ(served_entries_.size(), 44U);
 }
 
 TEST_F(ModelCatalogTest, FeatureEmbeddingEntryDeclaresParamSpecs) {
     const auto &entries = jinq::factory::feature_embedding::catalog();
-    ASSERT_EQ(entries.size(), 1U);
-    const auto &entry = entries.front();
-    EXPECT_EQ(entry.model_section, "DINOV2");
+    ASSERT_EQ(entries.size(), 3U);
+    const auto found = std::find_if(entries.begin(), entries.end(), [](const auto &entry) {
+        return entry.model_section == "dinov2_vitb14";
+    });
+    ASSERT_NE(found, entries.end());
+    const auto &entry = *found;
+    EXPECT_EQ(entry.family, "dinov2");
     EXPECT_EQ(entry.server_section, "DINOV2_FEATURE_EMBEDDING_SERVER");
 
     ASSERT_EQ(entry.param_specs.size(), 2U);

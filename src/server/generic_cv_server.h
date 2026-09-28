@@ -59,7 +59,7 @@ using CvResponseFiller = void (*)(rapidjson::Document::AllocatorType&,
 template<typename MODEL_OUTPUT>
 struct CvServerSpec {
     std::string server_section;        // e.g. "YOLOV8_DETECTION_SERVER"
-    std::string model_section;         // e.g. "YOLOV8" (holds model_config_file_path)
+    std::string model_section;         // catalog id, e.g. "yolov8s" (holds model_config_file_path)
     std::string display_name;          // e.g. "Yolov8 object detection"
     CvWorkerFactory<MODEL_OUTPUT> make_worker;
     CvResponseFiller<MODEL_OUTPUT> fill_response;

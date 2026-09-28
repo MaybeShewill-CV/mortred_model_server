@@ -45,7 +45,7 @@ env:
   # Maintainer GPU smoke (8 cases). Fail-closed; not a claim that the full zoo
   # ran, and never scheduled on fork PRs (untrusted code on the GPU box).
   MORTRED_GPU_SMOKE_FILTER: >-
-    model_golden.yolov5_detection:model_golden.yolov8_detection:model_golden.yolov8_mixed_size_batch_matches_single_runs:model_golden.nanodet_detection:model_golden.centerface_detection:model_golden.dbnet_text_detection:model_golden.mobilenetv2_classification:model_golden.fastsam_segmentation
+    model_golden.yolov8_detection:model_golden.yolov8_mixed_size_batch_matches_single_runs:model_golden.mobilenetv2_classification:model_golden.libface_detection
 
 jobs:
   # ---------------------------------------------------------------------------

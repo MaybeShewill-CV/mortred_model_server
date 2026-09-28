@@ -45,6 +45,7 @@ PY=python3
 command -v python3 >/dev/null 2>&1 || PY=python
 
 echo "== prepare pack: $PACK =="
+"$PY" "$ROOT/scripts/product_static_bs1.py" --check-pack "$PACK"
 LIST="$("$PY" "$ROOT/scripts/pack_trt.py" --project-root "$ROOT" --pack "$PACK" --list)"
 if [ -z "$LIST" ] || [ "$LIST" = "# no TensorRT backends in pack" ]; then
     echo "  no TensorRT backends in this pack; skip convert and /ready"
@@ -52,7 +53,10 @@ if [ -z "$LIST" ] || [ "$LIST" = "# no TensorRT backends in pack" ]; then
 fi
 echo "$LIST"
 
-FILTERS="$("$PY" "$ROOT/scripts/pack_trt.py" --project-root "$ROOT" --pack "$PACK" --convert-filters)"
+MANIFEST="$(mktemp)"
+trap 'rm -f "$MANIFEST"' EXIT
+"$PY" "$ROOT/scripts/product_static_bs1.py" --write-manifest "$MANIFEST"
+FILTERS="$("$PY" "$ROOT/scripts/product_static_bs1.py" --project-root "$ROOT" --pack "$PACK" --convert-filters)"
 CONVERT_ARGS=()
 [ "$FORCE" -eq 1 ] && CONVERT_ARGS+=(--force)
 CONVERT_ARGS+=(--strict)
@@ -60,7 +64,7 @@ if [ -n "$FILTERS" ]; then
     while IFS= read -r token; do
         [ -z "$token" ] && continue
         echo "== convert --only $token =="
-        bash "$ROOT/scripts/convert_trt_engines.sh" --only "$token" "${CONVERT_ARGS[@]}"
+        bash "$ROOT/scripts/convert_trt_engines.sh" --manifest "$MANIFEST" --only "$token" "${CONVERT_ARGS[@]}"
     done <<<"$FILTERS"
 fi
 
@@ -78,10 +82,14 @@ if [ -x "$SERVER_BIN" ] && command -v ldd >/dev/null 2>&1; then
     fi
 fi
 
+PREPARE_TOKEN="${MORTRED_AUTH_TOKEN:-prepare-ready-$$}"
+
 wait_ready() {
     local port="$1" tries=0
     while [ "$tries" -lt 90 ]; do
-        if command -v curl >/dev/null 2>&1 && curl -sf --max-time 1 "http://127.0.0.1:${port}/ready" >/dev/null 2>&1; then
+        if command -v curl >/dev/null 2>&1 && curl -sf --max-time 1 \
+            -H "Authorization: Bearer ${PREPARE_TOKEN}" \
+            "http://127.0.0.1:${port}/ready" >/dev/null 2>&1; then
             return 0
         fi
         sleep 2
@@ -133,6 +141,7 @@ stop_probe() {
 
 cleanup() {
     local pid
+    rm -f "${MANIFEST:-}"
     for pid in "${PIDS[@]:-}"; do
         stop_probe "$pid"
     done
@@ -166,6 +175,7 @@ PY
         cd "$bin_dir" || exit 127
         exec env MORTRED_WORKER_NUMS=1 MORTRED_PROJECT_ROOT="$ROOT" \
             MORTRED_LISTEN_HOST=127.0.0.1 \
+            MORTRED_AUTH_TOKEN="$PREPARE_TOKEN" \
             "$SERVER_BIN" --model "$model_id" "$server_toml"
     ) >"$probe_log" 2>&1 &
     pid=$!

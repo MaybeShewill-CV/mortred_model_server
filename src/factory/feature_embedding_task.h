@@ -53,9 +53,15 @@ inline const std::vector<jinq::models::backend::ParamSpec> &feature_embedding_pa
 
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
-        Entry{"DINOV2", "DINOv2 image feature embedding", "DINOV2_FEATURE_EMBEDDING_SERVER",
+        Entry{"dinov2_vits14", "DINOv2 ViT-S/14 feature embedding", "DINOV2_FEATURE_EMBEDDING_SERVER",
               &create_dinov2_feature_extractor<ImageInput, Output>, &jinq::server::response::fill_feature_embedding,
-              feature_embedding_param_specs()},
+              feature_embedding_param_specs(), "dinov2"},
+        Entry{"dinov2_vitb14", "DINOv2 ViT-B/14 feature embedding", "DINOV2_FEATURE_EMBEDDING_SERVER",
+              &create_dinov2_feature_extractor<ImageInput, Output>, &jinq::server::response::fill_feature_embedding,
+              feature_embedding_param_specs(), "dinov2"},
+        Entry{"dinov2_vitl14", "DINOv2 ViT-L/14 feature embedding", "DINOV2_FEATURE_EMBEDDING_SERVER",
+              &create_dinov2_feature_extractor<ImageInput, Output>, &jinq::server::response::fill_feature_embedding,
+              feature_embedding_param_specs(), "dinov2"},
     };
     return entries;
 }
