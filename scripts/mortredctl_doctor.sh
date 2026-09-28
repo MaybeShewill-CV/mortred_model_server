@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # mortredctl_doctor.sh - live deployment acceptance (invoked by
-# `mortredctl doctor`). Prints security warnings (never fail unless
-# --strict), then wraps verify_deployment.sh --live; falls back to --basic
-# when the supervisor is not reachable so the output still tells the operator
-# WHAT is wrong instead of an empty failure.
+# `mortredctl doctor`). Pack occupancy + pack TRT gates fail-closed by
+# default (name the missing engine/stamp). Security warnings never fail
+# unless --strict. Then wraps verify_deployment.sh --live; falls back to
+# --basic when the supervisor is not reachable so the output still tells
+# the operator WHAT is wrong instead of an empty failure.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -15,8 +16,8 @@ for arg in "$@"; do
         --strict) STRICT_ARGS=(--strict) ;;
         -h|--help)
             echo "usage: mortredctl doctor [--strict]"
-            echo "  --strict  fail on security warnings, missing pack TRT engines,"
-            echo "            missing occupancy stamps, or occupancy_policy=off / ENFORCE=0"
+            echo "  (default) fail on missing pack TRT engines or occupancy stamps"
+            echo "  --strict  also fail on security warnings, or occupancy_policy=off / ENFORCE=0"
             exit 0
             ;;
     esac
@@ -48,30 +49,41 @@ echo "  [ok] no libasan on mortred-model-server.out (or binary not present)"
 
 echo "== pack occupancy / identity ($PACK) =="
 if [ -f "$PACK" ]; then
-    if python3 "$ROOT/scripts/pack_occupancy.py" --project-root "$ROOT" --pack "$PACK" --check; then
+    set +e
+    OCC_OUT="$(python3 "$ROOT/scripts/pack_occupancy.py" --project-root "$ROOT" --pack "$PACK" --check 2>&1)"
+    OCC_RC=$?
+    set -e
+    if [ "$OCC_RC" -eq 0 ]; then
         echo "  [ok] occupancy stamps present or pack has no TensorRT backends"
     else
-        echo "  [WARN] pack occupancy gate failed; stop supervisor, then calibrate"
+        printf '%s\n' "$OCC_OUT"
+        echo "  [FAIL] pack occupancy gate failed; stop supervisor, then calibrate"
         echo "next: mortredctl calibrate --pack $PACK --write-pack"
         GATE_FAIL=1
     fi
 else
-    echo "  [WARN] pack file not found: $PACK"
+    echo "  [FAIL] pack file not found: $PACK"
+    GATE_FAIL=1
 fi
 
 echo "== pack TensorRT files ($PACK) =="
 if [ -f "$PACK" ]; then
-    if python3 "$ROOT/scripts/pack_trt.py" --project-root "$ROOT" --pack "$PACK" --check; then
+    set +e
+    TRT_OUT="$(python3 "$ROOT/scripts/pack_trt.py" --project-root "$ROOT" --pack "$PACK" --check 2>&1)"
+    TRT_RC=$?
+    set -e
+    if [ "$TRT_RC" -eq 0 ]; then
         echo "  [ok] pack TRT engines present or pack has no TensorRT backends"
     else
-        echo "  [WARN] pack TensorRT engine missing/empty"
+        printf '%s\n' "$TRT_OUT"
+        echo "  [FAIL] pack TensorRT engine missing/empty"
         echo "next: mortredctl prepare --pack $PACK"
         GATE_FAIL=1
     fi
 fi
 
-if [ ${#STRICT_ARGS[@]} -gt 0 ] && [ "$GATE_FAIL" -ne 0 ]; then
-    echo "[FAIL] mortredctl doctor --strict: pack TRT engines or occupancy stamps missing (or occupancy disabled)"
+if [ "$GATE_FAIL" -ne 0 ]; then
+    echo "[FAIL] mortredctl doctor: pack TRT engines or occupancy stamps missing"
     echo "next: mortredctl next"
     exit 1
 fi
