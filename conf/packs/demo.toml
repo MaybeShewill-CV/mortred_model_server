@@ -1,3 +1,4 @@
 
 [pack.mobilenetv2]
 worker_nums = 1
+model_config = "conf/model/classification/mobilenetv2/mobilenetv2_cpu.toml"
