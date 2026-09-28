@@ -623,6 +623,32 @@ LogBuffer* ProcessSupervisor::logs(const std::string& id) {
     return child == nullptr ? nullptr : child->log.get();
 }
 
+ProcessSupervisor::AutostartGate ProcessSupervisor::autostart_gate() const {
+    std::lock_guard<std::mutex> lock(_mu);
+    return _autostart_gate;
+}
+
+void ProcessSupervisor::mark_gateway_autostart_blocked_locked(const std::string& reason,
+                                                             bool permanent_fail) {
+    _autostart_gate.blocked = true;
+    _autostart_gate.models_skipped = true;
+    _autostart_gate.reason = reason;
+    Child* gateway = find_locked(kGatewayId);
+    if (gateway == nullptr) {
+        return;
+    }
+    if (gateway->error.empty()) {
+        gateway->error = reason;
+    }
+    if (permanent_fail && gateway->engine.state() != SupervisedState::kFailed) {
+        gateway->wanted = false;
+        gateway->engine.note_permanent_failure();
+    }
+    if (gateway->log != nullptr) {
+        gateway->log->append("[supervisor] autostart blocked: " + reason);
+    }
+}
+
 int ProcessSupervisor::probe_port_of(const Child& child) const {
     return child.is_gateway ? _cfg.gateway.port : child.entry.port;
 }
@@ -919,16 +945,39 @@ void ProcessSupervisor::autostart_all(int gateway_deadline_ms, int models_deadli
         models_deadline_ms = 60000;
     }
 
-    // gateway first: routing must exist before clients can reach models
+    {
+        std::lock_guard<std::mutex> lock(_mu);
+        _autostart_gate = AutostartGate{};
+    }
+
+    // gateway first: routing must exist before clients can reach models.
+    // Any gateway-phase failure blocks this autostart wave (zero model spawns).
+    bool skip_models = false;
     {
         const std::string gateway_bin =
             (std::filesystem::path(_project_root) / _cfg.supervisor.bin_dir / "mortred-gateway.out")
                 .string();
-        if (std::filesystem::exists(gateway_bin)) {
+        if (!std::filesystem::exists(gateway_bin)) {
+            const std::string reason = "gateway binary missing: " + gateway_bin;
+            {
+                std::lock_guard<std::mutex> lock(_mu);
+                mark_gateway_autostart_blocked_locked(reason, /*permanent_fail=*/true);
+            }
+            std::fprintf(stderr, "mortred-supervisor: autostart blocked: %s\n", reason.c_str());
+            skip_models = true;
+        } else {
             std::string err;
             if (!start_server(kGatewayId, &err)) {
+                const std::string reason =
+                    err.empty() ? std::string("gateway start failed") : err;
+                {
+                    std::lock_guard<std::mutex> lock(_mu);
+                    // permanent scrape/TRT failures already marked failed; still record gate
+                    mark_gateway_autostart_blocked_locked(reason, /*permanent_fail=*/true);
+                }
                 std::fprintf(stderr, "mortred-supervisor: autostart gateway failed: %s\n",
-                             err.c_str());
+                             reason.c_str());
+                skip_models = true;
             } else {
                 const int64_t deadline = monotonic_ms() + gateway_deadline_ms;
                 while (monotonic_ms() < deadline && !_shutdown_requested.load()) {
@@ -940,13 +989,29 @@ void ProcessSupervisor::autostart_all(int gateway_deadline_ms, int models_deadli
                 }
                 const Status s = status(kGatewayId);
                 if (s.state != "running") {
+                    std::ostringstream oss;
+                    oss << "gateway not ready within deadline (" << gateway_deadline_ms
+                        << " ms); state=" << s.state << " pid=" << s.pid;
+                    if (!s.error.empty()) {
+                        oss << " error=" << s.error;
+                    }
+                    const std::string reason = oss.str();
+                    {
+                        std::lock_guard<std::mutex> lock(_mu);
+                        mark_gateway_autostart_blocked_locked(reason, /*permanent_fail=*/false);
+                    }
                     std::fprintf(stderr,
                                  "mortred-supervisor: autostart gateway deadline (%d ms) "
                                  "elapsed (state=%s pid=%d error=%s)\n",
                                  gateway_deadline_ms, s.state.c_str(), s.pid, s.error.c_str());
+                    skip_models = true;
                 }
             }
         }
+    }
+
+    if (skip_models) {
+        return;
     }
 
     // models with concurrency width; a slot frees on ready or terminal state
