@@ -1,11 +1,9 @@
 # Mortred Model Server - mortred-supervisor systemd unit (host deployment)
 #
-# 安装:
-#   sudo cmake --install build --prefix /opt/mortred   # 或手工安装到 /opt/mortred
-#   sudo useradd -r -s /usr/sbin/nologin mortred
-#   sudo mkdir -p /etc/mortred && sudo chown mortred:mortred /etc/mortred
-#   sudo cp deploy/mortred-supervisor.service /etc/systemd/system/
-#   sudo systemctl daemon-reload && sudo systemctl enable --now mortred-supervisor
+# 安装 (enable, 不 start):
+#   sudo mortredctl install-host --from-tarball-root <unpack>
+#   # 或: sudo bash scripts/mortredctl_install-host.sh --from-tarball-root <unpack>
+#   # 解压后 sudo ./install.sh 走同一核（无 --with-edge）
 #
 # 敏感配置（token 等）放 /etc/mortred/supervisor.env（chmod 600）:
 #   mortredctl init-trust && sudo cp conf/local/trust.env /etc/mortred/supervisor.env
