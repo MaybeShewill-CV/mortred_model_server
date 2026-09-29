@@ -314,6 +314,16 @@ foreach(src ${TEST_LIST})
     endif()
 endforeach()
 
+# P0-1 fail-closed black box. Script owns PASS/FAIL/SKIP and exits 0 when
+# FAILS=0 (AC8 skip does not fail the process). No valgrind label so the
+# default check target (ctest -LE valgrind) runs it. RUN_SERIAL: the script
+# rewrites stub scripts under scripts/ and restores them on exit.
+add_test(
+    NAME p0_1_engine_fail_closed
+    COMMAND bash ${PROJECT_ROOT_DIR}/scripts/test_p0_1_engine_fail_closed.sh
+    WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
+set_tests_properties(p0_1_engine_fail_closed PROPERTIES RUN_SERIAL TRUE)
+
 # Manual GCRA performance baseline (PR-1 acceptance reference; NOT a CI test)
 add_executable(rate_limit_gcra_bench EXCLUDE_FROM_ALL rate_limit_gcra_bench.cc)
 # common carries the mortred_common_includes INTERFACE (src/ include root)
