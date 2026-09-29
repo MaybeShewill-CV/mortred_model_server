@@ -43,9 +43,9 @@ Any change to status codes, endpoints or response schemas must update
 Model inference endpoints require an `Authorization` header when the server is
 configured with `auth_token`:
 
-```http
+~~~http
 Authorization: Bearer <token>
-```
+~~~
 
 - Missing or invalid token: `401` + `WWW-Authenticate: Bearer realm="Mortred"`.
 - Request gate order on model ports (SME-07): public `/healthz` `/ready` `/openapi.json` first (no `rate_limit_qps`); then Bearer auth (**401** if missing/invalid); then per-IP `rate_limit_qps` (**429**). Unauthenticated traffic does not consume the IP QPS budget.
@@ -114,8 +114,69 @@ On a contract violation (HTTP 422):
 
 Read HTTP status first, then top-level `status`, then each `results[i].status`.
 `results[i].data` is `null` when that item failed. Ignore unknown response
-fields. Per-task payloads live under `results[].data` and are defined in
-`docs/openapi.json` `components.schemas` (`src/server/response_serializers.h`).
+fields. Per-task payloads live under `results[].data`. Human-readable shapes
+are below; the full schema remains in `docs/openapi.json` `components.schemas`
+(`src/server/response_serializers.h`).
+
+### Per-task `results[].data`
+
+Recommended inference path through the gateway is
+`POST /v1/models/{id}/infer` (catalog `{id}` examples: `yolov8s`,
+`mobilenetv2`, `pphuman_server`, `dbnet`). Legacy `{server_uri}` paths such as
+`/mortred_ai_server_v1/...` are still accepted on `:8080` but are not the
+recommended client entry.
+
+Each block below is the value of one `results[i].data` (not the outer
+envelope). Detection and OCR detection are top-level JSON arrays.
+
+Classification (`mobilenetv2`):
+
+```json
+{
+  "class_id": 281,
+  "category": "tabby cat",
+  "scores": [0.02, 0.91, 0.03]
+}
+```
+
+Detection (`yolov8s`) — top-level array; items have `bbox` `[x1,y1,x2,y2]`
+and `detail_infos`, no `polygon`:
+
+```json
+[
+  {
+    "class_id": 0,
+    "score": 0.93,
+    "category": "person",
+    "bbox": [12.0, 40.0, 210.5, 480.0],
+    "detail_infos": {}
+  }
+]
+```
+
+Segmentation (`pphuman_server`) — top-level object with `image` and
+`colorized_mask` (not matting, which only returns `image`):
+
+```json
+{
+  "image": "<base64-mask>",
+  "colorized_mask": "<base64-colorized-mask>"
+}
+```
+
+OCR text detection (`dbnet`) — top-level array; items have `polygon` and no
+`text` key (detection regions only, not recognition):
+
+```json
+[
+  {
+    "score": 0.97,
+    "bbox": [100.0, 200.0, 340.0, 260.0],
+    "polygon": [[100.0, 200.0], [340.0, 200.0], [340.0, 260.0], [100.0, 260.0]],
+    "detail_infos": {}
+  }
+]
+```
 
 ## HTTP status mapping
 
@@ -150,11 +211,11 @@ may still use empty `results[]`.
 
 ## Common headers
 
-```http
+~~~http
 Content-Type: application/json; charset=utf-8
 X-Request-ID: <task_id>
 Cache-Control: no-store
-```
+~~~
 
 ## Common endpoints
 

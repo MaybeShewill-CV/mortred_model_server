@@ -55,7 +55,7 @@ flowchart LR
         M3["...更多模型进程"]
     end
 
-    C -->|"POST /mortred_ai_server_v1/..."| GW
+    C -->|"POST /v1/models/{id}/infer"| GW
     GW -->|"internal token"| M1
     GW --> M2
     GW --> M3
@@ -78,7 +78,7 @@ flowchart LR
 
 | 端口 | 进程 | 用途 | 鉴权 |
 |---|---|---|---|
-| `8080` | mortred-gateway | 推理入口 `/mortred_ai_server_v1/...`、`/healthz`、`/metrics` | infer/jobs 要 Bearer；`/healthz` 公开；`/metrics` 一律要 `MORTRED_METRICS_TOKEN`（含环回） |
+| `8080` | mortred-gateway | 推荐推理入口 `POST /v1/models/{id}/infer`；遗留 `{server_uri}`（如 `/mortred_ai_server_v1/...`）仍接受；`/healthz`、`/metrics` | infer/jobs 要 Bearer；`/healthz` 公开；`/metrics` 一律要 `MORTRED_METRICS_TOKEN`（含环回） |
 | `8787` | mortred-supervisor | 管理 API `/api/v1/*`、Web 控制台 | Bearer token |
 | `9002+` | 各模型进程 | 仅 loopback | internal token（含已注入时的 `GET /metrics`） |
 

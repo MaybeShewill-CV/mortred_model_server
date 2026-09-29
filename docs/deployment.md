@@ -60,7 +60,7 @@ flowchart LR
         M3["...more model servers"]
     end
 
-    C -->|"POST /mortred_ai_server_v1/..."| GW
+    C -->|"POST /v1/models/{id}/infer"| GW
     GW -->|"internal token"| M1
     GW --> M2
     GW --> M3
@@ -83,7 +83,7 @@ flowchart LR
 
 | Port | Process | Purpose | Auth |
 |---|---|---|---|
-| `8080` | mortred-gateway | inference `/mortred_ai_server_v1/...`, `/healthz`, `/metrics` | Bearer on infer/jobs; `/healthz` public; `/metrics` requires `MORTRED_METRICS_TOKEN` (including loopback) |
+| `8080` | mortred-gateway | recommended inference `POST /v1/models/{id}/infer`; legacy `{server_uri}` (e.g. `/mortred_ai_server_v1/...`) still accepted; `/healthz`, `/metrics` | Bearer on infer/jobs; `/healthz` public; `/metrics` requires `MORTRED_METRICS_TOKEN` (including loopback) |
 | `8787` | mortred-supervisor | mgmt API `/api/v1/*`, web console | Bearer token; `/api/v1/health` and `/api/v1/version` are public |
 | `9002+` | model servers | loopback only | internal token (including `GET /metrics`) |
 
