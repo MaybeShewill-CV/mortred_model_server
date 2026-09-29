@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # tarball_install.sh - installer INSIDE the release tarball (run as root from
-# the unpacked tarball root). Idempotent.
+# the unpacked tarball root). Idempotent. Calls the shared host-install core
+# (same as `mortredctl install-host` without --with-edge).
 #
 #   mkdir unpack && tar -xzf mortred_model_server-<version>-<profile>-linux-x64.tar.gz -C unpack
 #   cd unpack && sudo ./install.sh
@@ -16,6 +17,19 @@ set -euo pipefail
 [ "$(id -u)" -eq 0 ] || { echo "[ERROR] run as root: sudo ./install.sh" >&2; exit 1; }
 
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SRC/install_host_common.sh" ]; then
+    # repo: scripts/tarball_install.sh next to the shared core
+    # shellcheck source=install_host_common.sh
+    . "$SRC/install_host_common.sh"
+elif [ -f "$SRC/opt/mortred/scripts/install_host_common.sh" ]; then
+    # unpacked tarball: install.sh at archive root
+    # shellcheck source=install_host_common.sh
+    . "$SRC/opt/mortred/scripts/install_host_common.sh"
+else
+    echo "[ERROR] install_host_common.sh not found next to install.sh or under opt/mortred/scripts" >&2
+    exit 1
+fi
+
 PREFIX="/opt/mortred"
 PROFILE="$(cat "$SRC/opt/mortred/PROFILE" 2>/dev/null || echo gpu)"
 
@@ -50,32 +64,13 @@ if [ "$PROFILE" = "gpu" ]; then
 fi
 
 echo "== [2/4] install tree -> $PREFIX =="
-id -u mortred >/dev/null 2>&1 || useradd -r -s /usr/sbin/nologin mortred
-mkdir -p "$PREFIX"
-cp -a "$SRC/opt/mortred/." "$PREFIX/"
-mkdir -p /etc/mortred
-chown -R mortred:mortred "$PREFIX"
+mortred_install_host_ensure_user
+mortred_install_host_copy_tree "$PREFIX" "$SRC/opt/mortred"
 
 echo "== [3/4] systemd unit =="
-if [ "$PROFILE" = "cpu" ]; then
-    # cpu deployments must not depend on a GPU being present
-    sed -i '\|^Environment=MORTRED_PROFILE=|d; s|^\[Service\]|[Service]\nEnvironment=MORTRED_PROFILE=cpu|' \
-        "$SRC/deploy/mortred-supervisor.service"
-fi
-cp "$SRC/deploy/mortred-supervisor.service" /etc/systemd/system/
-if [ ! -f /etc/mortred/supervisor.env ]; then
-    cat > /etc/mortred/supervisor.env <<'EOF'
-# REQUIRED (gateway/supervisor refuse to start without all three, distinct):
-# MORTRED_API_TOKEN=<management token>
-# MORTRED_GATEWAY_AUTH_TOKEN=<inference token>
-# MORTRED_METRICS_TOKEN=<metrics scrape token>
-# Generate (overwrites this placeholder):
-#   sudo /opt/mortred/bin/mortredctl.out init-trust --force --out /etc/mortred/supervisor.env
-EOF
-    chmod 600 /etc/mortred/supervisor.env
-fi
-systemctl daemon-reload
-systemctl enable mortred-supervisor
+mortred_install_host_env
+mortred_install_host_supervisor_unit "$PREFIX" "$SRC/deploy/mortred-supervisor.service" "$PROFILE"
+mortred_install_host_enable_supervisor
 
 echo "== [4/4] next steps =="
 cat <<EOF

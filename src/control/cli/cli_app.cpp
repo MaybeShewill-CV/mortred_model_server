@@ -109,6 +109,7 @@ void usage() {
                  "                     [--log-dir DIR] [--keep-flag]   (per-stage latency table)\n"
                  "            ps | down [--id a,b] [--all] [--yes]\n"
                  "            init [--profile cpu|gpu] | init-trust [--force] | init-edge --mode lan|acme|files\n"
+                 "            install-host [--prefix DIR] [--from-tarball-root DIR|--from-build DIR] [--with-edge]\n"
                  "            doctor [--strict] | prepare [--pack FILE]\n"
                  "            calibrate [--pack FILE] [--write-pack] | next | upgrade [version]\n"
                  "  env: MORTREDCTL_ADDR (default http://127.0.0.1:8787), MORTREDCTL_TOKEN,\n"
@@ -936,7 +937,7 @@ int run_cli(int argc, char** argv) {
     // (single source of truth shared with bootstrap.sh and the docs)
     if (cmd == "init" || cmd == "doctor" || cmd == "upgrade" || cmd == "prepare" ||
         cmd == "calibrate" || cmd == "init-trust" || cmd == "init-edge" ||
-        cmd == "next") {
+        cmd == "install-host" || cmd == "next") {
         const std::string root = []() {
             if (const char* env = std::getenv("MORTRED_PROJECT_ROOT"); env != nullptr && *env != '\0') {
                 return std::string(env);
