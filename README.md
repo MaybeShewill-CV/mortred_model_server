@@ -219,7 +219,7 @@ HTTP catalog ids are lowercase. Old names such as `YOLOV8` and `PPHUMAN_SEG` are
 | Classification | `mobilenetv2` `resnet` `densenet` |
 | Detection | `yolov5l` `yolov6s` `yolov7` `yolov7x` `yolov8n` `yolov8s` `yolov8l` `yolov8x` `nanodet_1x5` `nanodet_416` |
 | Face | `libface` `centerface` |
-| OCR | `dbnet` |
+| OCR (text detection only; no recognition / recognizer) | `dbnet` |
 | Segmentation | `bisenetv2` `pphuman_mobile` `pphuman_lite` `pphuman_server` `hrnet` `msocrnet` |
 | Matting | `modnet` `ppmatting_512` `ppmatting_1024` `ppmatting_resnet34` `ppmatting_v2` |
 | Enhancement | `enlightengan` `attentive_gan` `realesrgan` |
