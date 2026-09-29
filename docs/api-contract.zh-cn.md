@@ -25,10 +25,10 @@ token 相同）时启动。模型端口仅绑定环回地址、不得对外暴�
 `POST /api/v1/servers/{id}/start|stop|restart` 成功返回 **200** + `{"ok":true}`，失败返回 **500** + `{"ok":false,"error":...}`（与 `graceful_restart` 一致）。客户端可依赖 HTTP 状态或 body 的 `ok`。
 （health/catalog/status/生命周期/日志/metrics）与内嵌 Web UI；
 `mortredctl` 是它的命令行客户端。**推理冒烟**（控制台发送按钮和
-`mortredctl infer`）把数据面信封 POST 到网关的
-`/v1/models/{id}/infer`，Bearer 与管理 API 相同（`MORTRED_API_TOKEN`）。
+`mortredctl infer`）把数据面信封 POST 到网关的推荐路径
+`POST /v1/models/{id}/infer`，Bearer 与管理 API 相同（`MORTRED_API_TOKEN`）。
 监督进程只做管理（catalog / 启停 / 日志 / UI）。推理和异步 jobs
-走网关。`:8080` 上的遗留 `{server_uri}` 仍然可用。
+走网关。`:8080` 上的遗留 `{server_uri}`（如 `/mortred_ai_server_v1/...`）仍然可用，但不是推荐入口。
 
 状态码、端点或响应结构变更必须同时更新 `docs/openapi.json`
 （用 `python scripts/gen_openapi.py` 重新生成）。
@@ -38,9 +38,9 @@ token 相同）时启动。模型端口仅绑定环回地址、不得对外暴�
 当服务器配置了 `auth_token` 时，模型推理端点要求携带 `Authorization`
 请求头：
 
-```http
+~~~http
 Authorization: Bearer <token>
-```
+~~~
 
 - 缺失或错误的 token：`401` + `WWW-Authenticate: Bearer realm="Mortred"`。
 - 模型端口请求门顺序（SME-07）：公开 `/healthz` `/ready` `/openapi.json`（不受 `rate_limit_qps`）；再 Bearer 鉴权（失败 **401**）；再按 IP 的 `rate_limit_qps`（**429**）。未鉴权流量不消耗该 IP 的 QPS 配额。
@@ -107,8 +107,66 @@ Authorization: Bearer <token>
 
 先看 HTTP 状态，再看顶层 `status`，再逐项看 `results[i].status`。该项失败时
 `results[i].data` 为 `null`。忽略未知响应字段。各任务载荷在 `results[].data`
-下，定义见 `docs/openapi.json` `components.schemas`
+下。人读示例如下；完整 schema 仍见 `docs/openapi.json` `components.schemas`
 （`src/server/response_serializers.h`）。
+
+### 按任务的 `results[].data`
+
+经 gateway 的推荐推理路径是 `POST /v1/models/{id}/infer`（catalog `{id}`
+示例：`yolov8s`、`mobilenetv2`、`pphuman_server`、`dbnet`）。`:8080` 上的遗留
+`{server_uri}`（如 `/mortred_ai_server_v1/...`）仍可接受，但不是推荐客户端入口。
+
+下列每段均为单个 `results[i].data` 的值（不是外层信封）。检测与 OCR 检测为
+顶层 JSON 数组。
+
+分类（`mobilenetv2`）：
+
+```json
+{
+  "class_id": 281,
+  "category": "tabby cat",
+  "scores": [0.02, 0.91, 0.03]
+}
+```
+
+检测（`yolov8s`）— 顶层数组；元素含 `bbox` `[x1,y1,x2,y2]` 与
+`detail_infos`，不含 `polygon`：
+
+```json
+[
+  {
+    "class_id": 0,
+    "score": 0.93,
+    "category": "person",
+    "bbox": [12.0, 40.0, 210.5, 480.0],
+    "detail_infos": {}
+  }
+]
+```
+
+分割（`pphuman_server`）— 顶层对象，含 `image` 与 `colorized_mask`
+（不是抠图；抠图只有 `image`）：
+
+```json
+{
+  "image": "<base64-mask>",
+  "colorized_mask": "<base64-colorized-mask>"
+}
+```
+
+OCR 文字检测（`dbnet`）— 顶层数组；元素含 `polygon`，不得出现键 `text`
+（仅检测区域，不含识别文本）：
+
+```json
+[
+  {
+    "score": 0.97,
+    "bbox": [100.0, 200.0, 340.0, 260.0],
+    "polygon": [[100.0, 200.0], [340.0, 200.0], [340.0, 260.0], [100.0, 260.0]],
+    "detail_infos": {}
+  }
+]
+```
 
 ## HTTP 状态码映射
 
@@ -140,11 +198,11 @@ JSON 字段名是 **`status`**（不是 `code`）。映射见 `src/server/http_s
 
 ## 通用响应头
 
-```http
+~~~http
 Content-Type: application/json; charset=utf-8
 X-Request-ID: <task_id>
 Cache-Control: no-store
-```
+~~~
 
 ## 通用端点
 
