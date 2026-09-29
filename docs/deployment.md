@@ -105,7 +105,7 @@ flowchart TD
 |---|---|---|
 | **Backends** | MNN-CUDA / ORT-CUDA / TensorRT | MNN-CPU / ORT-CPU (TensorRT compiled out) |
 | **Hardware** | NVIDIA GPU + driver, CUDA 12 + TensorRT 10 | any x64 machine |
-| **Models** | HTTP catalog (classification / detection / OCR text detection via `dbnet` only—no recognition / seg / matting / enhancement / SuperPoint / depth / DINOv2 / SAM AMG / diffusion). Bench-only: CLIP, LightGlue, FastSAM, SAM prompt, MsOcrNet. No MOT. RT-DETR is unimplemented. | curated: mobilenetv2, resnet50 |
+| **Models** | HTTP catalog (classification / detection / OCR (`dbnet` text detection only, no recognition) / seg / matting / enhancement / SuperPoint / depth / DINOv2 / SAM AMG / diffusion). Bench-only: CLIP, LightGlue, FastSAM, SAM prompt, MsOcrNet. No MOT. RT-DETR is unimplemented. | curated: mobilenetv2, resnet50 |
 | **Weight size** | full manifest (tens of GB) | curated subset (~1 GB) |
 | **Engine conversion** | pack engines on this GPU (§10.2); zoo-wide convert is opt-in | not needed |
 
