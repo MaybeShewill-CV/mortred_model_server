@@ -309,7 +309,7 @@ HTTP catalog id 为小写。`YOLOV8`、`PPHUMAN_SEG` 等旧名已删除，推理
 | 分类 | `mobilenetv2` `resnet` `densenet` |
 | 检测 | `yolov5l` `yolov6s` `yolov7` `yolov7x` `yolov8n` `yolov8s` `yolov8l` `yolov8x` `nanodet_1x5` `nanodet_416` |
 | 人脸 | `libface` `centerface` |
-| OCR | `dbnet` |
+| OCR（仅文字检测；不支持文字识别 / recognizer） | `dbnet` |
 | 分割 | `bisenetv2` `pphuman_mobile` `pphuman_lite` `pphuman_server` `hrnet` `msocrnet` |
 | 抠图 | `modnet` `ppmatting_512` `ppmatting_1024` `ppmatting_resnet34` `ppmatting_v2` |
 | 增强 | `enlightengan` `attentive_gan` `realesrgan` |

@@ -100,7 +100,7 @@ flowchart TD
 |---|---|---|
 | **推理后端** | MNN-CUDA / ORT-CUDA / TensorRT | MNN-CPU / ORT-CPU（TensorRT 编译排除） |
 | **硬件要求** | NVIDIA GPU + 驱动，CUDA 12 + TensorRT 10 | 任意 x64 机器 |
-| **可用模型** | HTTP catalog（分类/检测/OCR/分割/抠图/增强/SuperPoint/深度/DINOv2/SAM AMG/扩散）。bench-only：CLIP、LightGlue、FastSAM、SAM prompt、MsOcrNet。无 MOT。RT-DETR 未实现。 | 精选集：mobilenetv2、resnet50 |
+| **可用模型** | HTTP catalog（分类/检测/OCR（仅 `dbnet` 文字检测，无识别）/分割/抠图/增强/SuperPoint/深度/DINOv2/SAM AMG/扩散）。bench-only：CLIP、LightGlue、FastSAM、SAM prompt、MsOcrNet。无 MOT。RT-DETR 未实现。 | 精选集：mobilenetv2、resnet50 |
 | **权重体积** | 全量 manifest（数十 GB） | 精选子集（约 1 GB） |
 | **Engine 转换** | 本机为本 pack 转 engine（§10.2）；全量 zoo 转换仍是可选项 | 不需要 |
 

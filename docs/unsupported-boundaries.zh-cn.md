@@ -9,6 +9,7 @@ ONNX 导出与缺口：[onnx-interchange.zh-cn.md](onnx-interchange.zh-cn.md)。
 | 边界 | 不支持 / 勿期待 |
 |---|---|
 | OS | Windows、macOS（产品线仅 **Linux x64**） |
+| OCR HTTP | 仅 `dbnet` **文字检测**；不支持文字识别 / recognizer / 识别文本字段。勿当端到端 OCR |
 | RTDETR | 脚手架，`MODEL_NOT_IMPLEMENTED`，**未注册** HTTP catalog |
 | MOT | 无 MOT HTTP 服务 |
 | GPU 栈 | 非 CUDA 12.x；**TensorRT 8/9**（钉 **10.x**） |
