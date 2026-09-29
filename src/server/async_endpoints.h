@@ -30,6 +30,7 @@
 #include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
+#include "glog/logging.h"
 #include "workflow/HttpMessage.h"
 #include "workflow/HttpUtil.h"
 #include "workflow/WFTaskFactory.h"
@@ -124,12 +125,40 @@ public:
         _inflight.fetch_sub(1, std::memory_order_acq_rel);
     }
 
-    void drain() {
+    /*** Wait until compute and wait inflight are zero. Optional deadline ends
+     * the wait early with a `drain timeout` log and remaining counts; default
+     * is unbounded (time_point::max). */
+    void drain(std::chrono::steady_clock::time_point deadline =
+                   std::chrono::steady_clock::time_point::max()) {
         constexpr int k_poll_ms = 5;
         while (_inflight.load(std::memory_order_acquire) != 0 ||
                _wait_inflight.load(std::memory_order_acquire) != 0) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(k_poll_ms));
+            const auto now = std::chrono::steady_clock::now();
+            if (now >= deadline) {
+                LOG(WARNING) << "async endpoints drain timeout, inflight="
+                             << _inflight.load(std::memory_order_relaxed)
+                             << " wait_inflight="
+                             << _wait_inflight.load(std::memory_order_relaxed);
+                return;
+            }
+            auto sleep_ms = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+            if (sleep_ms.count() > k_poll_ms) {
+                sleep_ms = std::chrono::milliseconds(k_poll_ms);
+            }
+            if (sleep_ms.count() <= 0) {
+                LOG(WARNING) << "async endpoints drain timeout, inflight="
+                             << _inflight.load(std::memory_order_relaxed)
+                             << " wait_inflight="
+                             << _wait_inflight.load(std::memory_order_relaxed);
+                return;
+            }
+            std::this_thread::sleep_for(sleep_ms);
         }
+    }
+
+    // Unit-test seam: leave outstanding compute without the HTTP submit path.
+    void add_inflight_for_test(int n = 1) {
+        _inflight.fetch_add(n, std::memory_order_acq_rel);
     }
 
 private:

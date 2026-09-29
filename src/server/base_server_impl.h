@@ -71,19 +71,19 @@ public:
      * exactly one worker; metrics/EWMA are written before that enqueue, so
      * this wait is enough to keep _m_metrics and the pool EWMA alive. After
      * HTTP has replied, a detached go may still hold the lease until its
-     * SUCCESS callback checkin). The wait is
-     * deliberately unbounded — a hung model keeps its worker forever and the
-     * destructor blocks; that is handled by the outer process manager (e.g.
-     * mortred-supervisor's SIGINT -> SIGKILL fallback), not here. Model and
-     * gateway mains arm ProcessStop so SIGINT/SIGTERM reach server->stop()
-     * and this drain; a hung model is still SIGKILL'd after kStopGraceMs.
-     * The drain only runs when init succeeded: the worker watermark is
-     * committed at the end of a successful init, so a partially-filled queue
-     * from a failed init would otherwise spin forever — on failure the queue
-     * destructor releases the remaining workers itself. Residual note: a go
-     * task popped by the executor but preempted before its first queue access
-     * is not observable through the queue; this microsecond-level window is
-     * mitigated by stop()/wait_finish() preceding destruction in all callers.
+     * SUCCESS callback checkin). Async and worker drains share one steady_clock
+     * deadline with a total budget of kDrainTimeoutMs; on timeout each drain
+     * returns after logging `drain timeout` and the remaining count. A hung
+     * model past that budget is still SIGKILL'd after kStopGraceMs by the
+     * outer process manager. Model and gateway mains arm ProcessStop so
+     * SIGINT/SIGTERM reach server->stop() and this drain. The drain only runs
+     * when init succeeded: the worker watermark is committed at the end of a
+     * successful init, so a partially-filled queue from a failed init would
+     * otherwise spin forever — on failure the queue destructor releases the
+     * remaining workers itself. Residual note: a go task popped by the
+     * executor but preempted before its first queue access is not observable
+     * through the queue; this microsecond-level window is mitigated by
+     * stop()/wait_finish() preceding destruction in all callers.
      */
     virtual ~BaseAiServerImpl() {
         // stop the batch runner first: it may hold a worker, and queued
@@ -92,8 +92,10 @@ public:
         if (!_m_successfully_initialized) {
             return;
         }
-        _m_async_eps.drain();
-        _m_workers.drain();
+        const auto deadline = std::chrono::steady_clock::now() +
+                              std::chrono::milliseconds(kDrainTimeoutMs);
+        _m_async_eps.drain(deadline);
+        _m_workers.drain(deadline);
     }
 
     BaseAiServerImpl() = default;

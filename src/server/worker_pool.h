@@ -33,6 +33,9 @@ namespace jinq {
 namespace server {
 using jinq::common::Timestamp;
 
+// Shared production budget for destructor drain (async + worker share one deadline).
+inline constexpr int kDrainTimeoutMs = 3000;
+
 enum class StuckWorkerAction { LOG, EXIT };
 
 inline int64_t worker_monotonic_ms() {
@@ -122,13 +125,34 @@ public:
         return _watermark;
     }
 
-    void drain() {
+    /*** Wait until every leased worker is back. Optional deadline ends the wait
+     * early with a `drain timeout` log and the still-out count; default is
+     * unbounded (time_point::max). */
+    void drain(std::chrono::steady_clock::time_point deadline =
+                   std::chrono::steady_clock::time_point::max()) {
         if (_watermark == 0) {
             return;
         }
         constexpr int k_poll_ms = 5;
         while (available_approx() != _watermark) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(k_poll_ms));
+            const auto now = std::chrono::steady_clock::now();
+            if (now >= deadline) {
+                const size_t remaining =
+                    _watermark > available_approx() ? _watermark - available_approx() : 0;
+                LOG(WARNING) << "worker pool drain timeout, remaining=" << remaining;
+                return;
+            }
+            auto sleep_ms = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+            if (sleep_ms.count() > k_poll_ms) {
+                sleep_ms = std::chrono::milliseconds(k_poll_ms);
+            }
+            if (sleep_ms.count() <= 0) {
+                const size_t remaining =
+                    _watermark > available_approx() ? _watermark - available_approx() : 0;
+                LOG(WARNING) << "worker pool drain timeout, remaining=" << remaining;
+                return;
+            }
+            std::this_thread::sleep_for(sleep_ms);
         }
     }
 

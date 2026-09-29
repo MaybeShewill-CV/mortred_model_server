@@ -7,10 +7,12 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <string>
 #include <thread>
 
 #include <gtest/gtest.h>
 
+#include "glog/logging.h"
 #include "server/worker_pool.h"
 
 using jinq::server::StuckWorkerAction;
@@ -83,7 +85,29 @@ TEST(worker_pool, unbounded_wait_and_ewma) {
     producer.join();
 }
 
+TEST(worker_pool, drain_timeout_returns_with_remaining_log) {
+    WorkerPool<IntWorker> pool;
+    pool.adopt(std::make_unique<int>(1));
+    pool.commit_watermark(1);
+    IntWorker held;
+    ASSERT_TRUE(pool.checkout(held, std::chrono::milliseconds(50)).ok);
+
+    FLAGS_logtostderr = true;
+    testing::internal::CaptureStderr();
+    const auto start = std::chrono::steady_clock::now();
+    pool.drain(start + std::chrono::milliseconds(200));
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    const std::string log = testing::internal::GetCapturedStderr();
+
+    EXPECT_LT(elapsed, std::chrono::seconds(2));
+    EXPECT_NE(log.find("drain timeout"), std::string::npos) << log;
+    EXPECT_NE(log.find("remaining=1"), std::string::npos) << log;
+    pool.checkin(std::move(held));
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
+    google::InitGoogleLogging(argv[0]);
+    google::LogToStderr();
     return RUN_ALL_TESTS();
 }
