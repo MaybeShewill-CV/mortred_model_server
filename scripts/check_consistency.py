@@ -45,7 +45,10 @@ Verifies a few high-signal invariants:
 17. `scripts/pack_trt.py --self-test` covers pack TRT engine discovery.
 18. `scripts/calibrate_pack.py --self-test` covers w* selection (no GPU).
 19. `scripts/pack_occupancy.py --self-test` covers occupancy stamp checks (no GPU).
-20. Git example packs must not commit `gpu_mem_mib` occupancy stamps.
+20. Git example packs may commit only seed occupancy stamps
+    (`gpu_mem_source="seed"`, positive `gpu_mem_mib`, `gpu_mem_at_workers`
+    matching `worker_nums`, no `gpu_name` / `gpu_memory_total_mib`); other
+    `gpu_mem_mib` values remain forbidden.
 21. The GPU line (CMake / GPU Dockerfile / install_deps / tarball_install /
     setup_full_deps) must not pin CUDA 11, TensorRT 8, ORT 1.18, or gpu_cuda13.
 22. `scripts/golden_drift_check.py --check` matches `test/golden_baseline.json`
@@ -928,37 +931,101 @@ def check_demo_pack() -> list[str]:
     return errors
 
 
+def _pack_toml_sections(text: str) -> dict[str, dict[str, str]]:
+    """Parse [pack] / [pack.<id>] key=value tables (string values, comments stripped)."""
+    sections: dict[str, dict[str, str]] = {}
+    current: str | None = None
+    for line in text.splitlines():
+        t = line.strip()
+        if not t or t.startswith("#"):
+            continue
+        if t.startswith("[") and t.endswith("]"):
+            if t == "[pack]":
+                current = ""
+                sections.setdefault("", {})
+            elif t.startswith("[pack.") and t.endswith("]"):
+                current = t[6:-1].strip()
+                sections.setdefault(current, {})
+            else:
+                current = None
+            continue
+        if current is None or "=" not in t:
+            continue
+        key, _, raw = t.partition("=")
+        key = key.strip()
+        raw = raw.split("#", 1)[0].strip()
+        if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in ("\"", "'"):
+            raw = raw[1:-1]
+        sections[current][key] = raw
+    return sections
+
+
+def _seed_occupancy_ok(kv: dict[str, str], workers: int | None) -> bool:
+    """True when gpu_mem_* is the git-allowed seed form (no machine fingerprint)."""
+    if "gpu_name" in kv or "gpu_memory_total_mib" in kv:
+        return False
+    if kv.get("gpu_mem_source") != "seed":
+        return False
+    try:
+        mib = int(kv["gpu_mem_mib"])
+    except (KeyError, ValueError):
+        return False
+    if mib <= 0:
+        return False
+    try:
+        at = int(kv["gpu_mem_at_workers"])
+    except (KeyError, ValueError):
+        return False
+    if workers is None or at != workers:
+        return False
+    return True
+
+
 def check_example_packs_worker_nums() -> list[str]:
-    """Shipped example packs keep worker_nums=1; machine calibration is local."""
+    """Shipped example packs keep worker_nums=1; only seed occupancy stamps allowed."""
     errors: list[str] = []
     packs = ROOT / "conf" / "packs"
     if not packs.is_dir():
         return ["missing conf/packs/"]
     for pack in sorted(packs.glob("*.toml")):
-        current = None
-        for line in pack.read_text(encoding="utf-8").splitlines():
-            t = line.strip()
-            if t.startswith("[pack.") and t.endswith("]"):
-                current = t[6:-1].strip()
+        rel = pack.relative_to(ROOT)
+        sections = _pack_toml_sections(pack.read_text(encoding="utf-8"))
+        global_kv = sections.get("", {})
+        for bad in ("gpu_name", "gpu_memory_total_mib"):
+            if bad in global_kv:
+                errors.append(
+                    "%s: [pack] %s is machine-local; do not commit occupancy stamps"
+                    % (rel, bad)
+                )
+        for pid, kv in sections.items():
+            if pid == "":
                 continue
-            if current and t.startswith("worker_nums"):
-                _, _, raw = t.partition("=")
-                raw = raw.split("#", 1)[0].strip()
+            workers: int | None = None
+            if "worker_nums" in kv:
                 try:
-                    w = int(raw)
+                    workers = int(kv["worker_nums"])
                 except ValueError:
-                    errors.append("%s: invalid worker_nums in [%s]" % (pack.name, current))
+                    errors.append("%s: invalid worker_nums in [%s]" % (pack.name, pid))
+                else:
+                    if workers != 1:
+                        errors.append(
+                            "%s: [pack.%s] worker_nums=%d (git examples must stay 1; "
+                            "calibrate --write-pack is machine-local)"
+                            % (rel, pid, workers)
+                        )
+            if "gpu_mem_mib" in kv:
+                if _seed_occupancy_ok(kv, workers) and (
+                    "gpu_name" not in global_kv and "gpu_memory_total_mib" not in global_kv
+                ):
                     continue
-                if w != 1:
-                    errors.append(
-                        "%s: [pack.%s] worker_nums=%d (git examples must stay 1; "
-                        "calibrate --write-pack is machine-local)"
-                        % (pack.relative_to(ROOT), current, w)
-                    )
-            if current and t.startswith("gpu_mem_mib"):
                 errors.append(
                     "%s: [pack.%s] gpu_mem_mib is machine-local; do not commit occupancy stamps"
-                    % (pack.relative_to(ROOT), current)
+                    % (rel, pid)
+                )
+            elif "gpu_name" in kv or "gpu_memory_total_mib" in kv:
+                errors.append(
+                    "%s: [pack.%s] gpu fingerprint is machine-local; "
+                    "do not commit occupancy stamps" % (rel, pid)
                 )
     return errors
 

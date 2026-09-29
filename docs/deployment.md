@@ -489,6 +489,25 @@ Compose and the container entrypoint set `MORTRED_AUTOSTART=true` **and**
 one process per catalog id; `conf/server` `worker_nums` stays `1`. Pack
 `worker_nums` / `model_config` override the child via env.
 
+**GPU pack chain (copy → prepare → calibrate `--write-pack` → doctor → start):**
+
+```bash
+cp conf/packs/gpu_yolo_metric3d.toml /tmp/machine-pack.toml
+mortredctl prepare --pack /tmp/machine-pack.toml
+mortredctl calibrate --pack /tmp/machine-pack.toml --write-pack
+export MORTRED_PACK=/tmp/machine-pack.toml
+mortredctl doctor
+# then start the supervisor / compose stack with that MORTRED_PACK
+```
+
+Git TensorRT packs (`yolov8.toml`, `metric3d.toml`, `gpu_yolo_metric3d.toml`)
+ship **seed** occupancy (`gpu_mem_source="seed"`). Seed MiB is a reusable
+starting sample only — it **must** be overwritten on each host by
+`calibrate --write-pack`. Do not commit calibrated `worker_nums`, non-seed
+`gpu_mem_mib`, or `[pack]` `gpu_name` / `gpu_memory_total_mib`. Demo pack stays
+MNN CPU and needs no stamp. `--write-pack` refuses to write `conf/packs/`
+directly; always copy first.
+
 ### 10.1 Pack file
 
 ```toml
@@ -496,54 +515,56 @@ one process per catalog id; `conf/server` `worker_nums` stays `1`. Pack
 [pack.MOBILENETV2]
 worker_nums = 1
 
-# machine-local copy, e.g. /etc/mortred/pack.toml
-[pack.YOLOV8]
+# machine-local copy after calibrate --write-pack, e.g. /tmp/machine-pack.toml
+[pack.yolov8s]
 worker_nums = 4
+gpu_mem_mib = 2100
+gpu_mem_at_workers = 4
+gpu_mem_source = "nvml_pid"
 # model_config = "conf/model/object_detection/yolov8/yolov8s.toml"  # optional variant
 ```
 
 Unknown ids fail supervisor start. Point `MORTRED_PACK` at the machine file
-(compose env, systemd `supervisor.env`, or the process environment). Do not
-commit calibrated `worker_nums` or `gpu_mem_mib` in the git example packs.
+(compose env, systemd `supervisor.env`, or the process environment).
 
 ### 10.2 Prepare pack TensorRT engines (GPU)
 
 Engines are bound to **this GPU + this TensorRT**. Convert only what the pack
-uses:
+uses (step 2 of the chain above):
 
 ```bash
-mortredctl prepare --pack /path/to/machine-pack.toml       # or: scripts/prepare_pack.sh
-mortredctl doctor --strict                                 # missing pack engines or occupancy stamps fail
+mortredctl prepare --pack /tmp/machine-pack.toml       # or: scripts/prepare_pack.sh
 ```
 
 The supervisor **refuses to spawn** a TensorRT id whose engine file is missing
 or empty (status `failed`, no crash-loop). `/ready` is real loadability, not
-just a nonempty file. After prepare, TensorRT ids still need an occupancy
-stamp (§10.3) before spawn.
+just a nonempty file. After prepare, TensorRT ids still need a host occupancy
+stamp (§10.3) before spawn — seed in git is not enough.
 
-Demo pack is MobilenetV2 (no TensorRT). A YOLOV8 pack needs prepare on the
-target GPU. `MORTRED_AUTO_BUILD_ENGINES=true` still converts the **whole zoo**
-and stays **off** by default.
+Demo pack is MobilenetV2 (no TensorRT). A YOLOV8 / Metric3D pack needs prepare
+on the target GPU. `MORTRED_AUTO_BUILD_ENGINES=true` still converts the
+**whole zoo** and stays **off** by default.
 
 ### 10.3 Calibrate `worker_nums` and occupancy stamps
 
 Stop supervisor / leftover `mortred-model-server` first. The script starts its
 own server on the catalog port (YOLOV8 = 9056); a busy port is `start_failed`,
-not OOM. Copy the git example pack to a machine-local file before `--write-pack`.
+not OOM. Copy the git example pack to a machine-local file before `--write-pack`
+(step 1), then calibrate (step 3):
 
 ```bash
 ss -ltnp | grep 9056 || true
-python3 scripts/calibrate_pack.py --pack /path/to/machine-pack.toml \
+python3 scripts/calibrate_pack.py --pack /tmp/machine-pack.toml \
     --workers 1,2,4,8 --duration 8s --output logs/calibrate-yolov8.json
 # persist w* + gpu_mem_mib + GPU fingerprint into that pack only (never conf/server):
-python3 scripts/calibrate_pack.py --pack /path/to/machine-pack.toml --write-pack
+mortredctl calibrate --pack /tmp/machine-pack.toml --write-pack
 ```
 
 JSON `gpu_mem_mib_*` is process occupancy (`nvml_pid` / `nvml_name`) or a
 pre-spawn **device delta** on WSL — not whole-card `memory.used`. `--write-pack`
-writes `gpu_mem_mib`, `gpu_mem_source`, `gpu_mem_at_workers`, and `[pack]`
-`gpu_name` / `gpu_memory_total_mib`. Restart the supervisor afterwards so pack
-`worker_nums` is injected.
+overwrites seed (or any prior stamp) with `gpu_mem_mib`, `gpu_mem_source`,
+`gpu_mem_at_workers`, and `[pack]` `gpu_name` / `gpu_memory_total_mib` on the
+**machine copy only**.
 
 The supervisor **refuses to spawn** a TensorRT id in an active pack that has no
 `gpu_mem_mib` stamp, or whose `worker_nums` does not match `gpu_mem_at_workers`
@@ -554,6 +575,16 @@ when the total is present. `occupancy_policy=off` or `MORTRED_OCCUPANCY_ENFORCE=
 skips the spawn gate (unsafe, same class as `MORTRED_EXPOSE=unsafe`);
 `mortredctl doctor --strict` still fails. Invalid `occupancy_policy` refuses
 pack apply.
+
+### 10.3.1 Doctor then start
+
+After calibrate, run doctor (step 4) then start with the same pack (step 5):
+
+```bash
+export MORTRED_PACK=/tmp/machine-pack.toml
+mortredctl doctor          # or: mortredctl doctor --strict
+# start supervisor / compose so MORTRED_PACK injects worker_nums
+```
 
 ### 10.4 Zoo-wide convert (optional)
 

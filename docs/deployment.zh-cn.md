@@ -466,6 +466,24 @@ Compose 和容器入口会设 `MORTRED_AUTOSTART=true` **以及** `MORTRED_PACK`
 `conf/server/` 整树。仍然是一模型一进程；git 里 `conf/server` 的 `worker_nums`
 保持 `1`。Pack 的 `worker_nums` / `model_config` 通过环境变量覆盖子进程。
 
+**GPU pack 链路（copy → prepare → calibrate `--write-pack` → doctor → start）：**
+
+```bash
+cp conf/packs/gpu_yolo_metric3d.toml /tmp/machine-pack.toml
+mortredctl prepare --pack /tmp/machine-pack.toml
+mortredctl calibrate --pack /tmp/machine-pack.toml --write-pack
+export MORTRED_PACK=/tmp/machine-pack.toml
+mortredctl doctor
+# 随后用该 MORTRED_PACK 启动 supervisor / compose
+```
+
+仓库里的 TensorRT pack（`yolov8.toml`、`metric3d.toml`、`gpu_yolo_metric3d.toml`）
+带 **seed** 占用样本（`gpu_mem_source="seed"`）。Seed MiB 只是可复用的起始样本，
+换机 **必须** 用 `calibrate --write-pack` 覆盖。不要把校准后的 `worker_nums`、
+非 seed 的 `gpu_mem_mib`，或 `[pack]` 的 `gpu_name` / `gpu_memory_total_mib`
+提交进仓库。demo pack 仍是 MNN CPU，不需要 stamp。`--write-pack` 拒绝直接写
+`conf/packs/`，必须先拷贝。
+
 ### 10.1 Pack 文件
 
 ```toml
@@ -473,51 +491,51 @@ Compose 和容器入口会设 `MORTRED_AUTOSTART=true` **以及** `MORTRED_PACK`
 [pack.MOBILENETV2]
 worker_nums = 1
 
-# 机器本地副本，例如 /etc/mortred/pack.toml
-[pack.YOLOV8]
+# calibrate --write-pack 之后的机器本地副本，例如 /tmp/machine-pack.toml
+[pack.yolov8s]
 worker_nums = 4
+gpu_mem_mib = 2100
+gpu_mem_at_workers = 4
+gpu_mem_source = "nvml_pid"
 # model_config = "conf/model/object_detection/yolov8/yolov8s.toml"  # 可选变体
 ```
 
 未知 id 会让 supervisor 启动失败。把 `MORTRED_PACK` 指到机器上的 pack（compose
-环境变量、systemd `supervisor.env`、或进程环境）。不要把校准后的
-`worker_nums` 或 `gpu_mem_mib` 提交进仓库示例 pack。
+环境变量、systemd `supervisor.env`、或进程环境）。
 
 ### 10.2 为本 pack 准备 TensorRT engine（GPU）
 
-Engine 绑定 **这张卡 + 这套 TensorRT**。只转 pack 用到的：
+Engine 绑定 **这张卡 + 这套 TensorRT**。只转 pack 用到的（上链第 2 步）：
 
 ```bash
-mortredctl prepare --pack /path/to/machine-pack.toml       # 或 scripts/prepare_pack.sh
-mortredctl doctor --strict                                 # pack engine 或占用 stamp 缺失则失败
+mortredctl prepare --pack /tmp/machine-pack.toml       # 或 scripts/prepare_pack.sh
 ```
 
 supervisor **拒绝 spawn** engine 文件缺失或为空的 TensorRT id（状态 `failed`，
 不 crash-loop）。`/ready` 才是真正能加载，不只是文件非空。prepare 之后 TensorRT
-id 仍需要占用 stamp（§10.3）才能 spawn。
+id 仍需要本机占用 stamp（§10.3）才能 spawn——git 里的 seed 不够。
 
-demo pack 是 MobilenetV2（无 TensorRT）。YOLOV8 pack 必须在目标 GPU 上
+demo pack 是 MobilenetV2（无 TensorRT）。YOLOV8 / Metric3D pack 必须在目标 GPU 上
 prepare。`MORTRED_AUTO_BUILD_ENGINES=true` 仍会转 **整个 zoo**，且 **默认关闭**。
 
 ### 10.3 校准 `worker_nums` 与占用 stamp
 
 先停 supervisor / 残留的 `mortred-model-server`。脚本会自己在目录端口上起服
 （YOLOV8 = 9056）；端口占用是 `start_failed`，不是 OOM。`--write-pack` 前先把
-仓库示例 pack 拷到机器本地文件。
+仓库示例 pack 拷到机器本地文件（第 1 步），再校准（第 3 步）：
 
 ```bash
 ss -ltnp | grep 9056 || true
-python3 scripts/calibrate_pack.py --pack /path/to/machine-pack.toml \
+python3 scripts/calibrate_pack.py --pack /tmp/machine-pack.toml \
     --workers 1,2,4,8 --duration 8s --output logs/calibrate-yolov8.json
 # 只把 w*、gpu_mem_mib、GPU 指纹写进这个 pack（永不写 conf/server）：
-python3 scripts/calibrate_pack.py --pack /path/to/machine-pack.toml --write-pack
+mortredctl calibrate --pack /tmp/machine-pack.toml --write-pack
 ```
 
 JSON 里 `gpu_mem_mib_*` 是进程占用（`nvml_pid` / `nvml_name`），WSL 上往往是
-spawn 前的 **整卡 delta**，不是整卡 `memory.used`。`--write-pack` 会写入
-`gpu_mem_mib`、`gpu_mem_source`、`gpu_mem_at_workers`，以及 `[pack]` 的
-`gpu_name` / `gpu_memory_total_mib`。之后重启 supervisor，pack 的
-`worker_nums` 才会注入。
+spawn 前的 **整卡 delta**，不是整卡 `memory.used`。`--write-pack` 会在**机器副本**
+上覆盖 seed（或旧 stamp），写入 `gpu_mem_mib`、`gpu_mem_source`、
+`gpu_mem_at_workers`，以及 `[pack]` 的 `gpu_name` / `gpu_memory_total_mib`。
 
 supervisor **拒绝 spawn** 已启用 pack 里没有 `gpu_mem_mib` stamp、或
 `worker_nums` 与 `gpu_mem_at_workers` 不一致的 TensorRT id（状态 `failed`，
@@ -528,6 +546,16 @@ supervisor **拒绝 spawn** 已启用 pack 里没有 `gpu_mem_mib` stamp、或
 `occupancy_policy=off` 或 `MORTRED_OCCUPANCY_ENFORCE=0` 会跳过 spawn 闸（与
 `MORTRED_EXPOSE=unsafe` 同类）；`mortredctl doctor --strict` 仍失败。非法
 `occupancy_policy` 会让 pack 无法 apply。
+
+### 10.3.1 Doctor 再 start
+
+校准后跑 doctor（第 4 步），再用同一 pack 启动（第 5 步）：
+
+```bash
+export MORTRED_PACK=/tmp/machine-pack.toml
+mortredctl doctor          # 或：mortredctl doctor --strict
+# 启动 supervisor / compose，让 MORTRED_PACK 注入 worker_nums
+```
 
 ### 10.4 全量 zoo 转换（可选）
 
