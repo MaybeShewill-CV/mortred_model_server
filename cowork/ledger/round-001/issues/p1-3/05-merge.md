@@ -4,9 +4,7 @@
 - 分支: cowork/r01-p1-3-install-host
 - 工作树: /tmp/mortred-cowork-r01-p1-3
 - 问题分支提交: d9bc3db639208c935015e85e0509e094face776b
-- QA 结论: blocked
-- 重跑: `--help` 退出码 0；`systemctl is-system-running` 为 offline
-- 命令: 未执行 merge
-- merge commit: 无
-
-未合入。AC1–AC4 需要一次真实的 systemd enable，当前环境做不到。
+- QA 结论: pass
+- 重跑: 与 `05-qa.md` 命令表一致。安装退出码 0，`systemctl is-enabled mortred-supervisor` 退出码 0（enabled），非 root 退出码 1，重复安装退出码 0，`--with-edge` 退出码 1，`is-active` 退出码 3（inactive）
+- 命令: `/mnt/c/Windows/System32/wsl.exe -u root -- bash /tmp/mortred-cowork-r01-p1-3/scripts/mortredctl_install-host.sh --from-tarball-root /tmp/p13-unpack`
+- merge commit: 985682ee
