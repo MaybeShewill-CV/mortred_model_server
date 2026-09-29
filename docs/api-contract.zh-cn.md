@@ -113,7 +113,7 @@ Authorization: Bearer <token>
 ### 按任务的 `results[].data`
 
 经 gateway 的推荐推理路径是 `POST /v1/models/{id}/infer`（catalog `{id}`
-示例：`yolov8s`、`mobilenetv2`、`pphuman_server`、`dbnet`）。`:8080` 上的遗留
+示例：`yolov8s`、`mobilenetv2`）。`:8080` 上的遗留
 `{server_uri}`（如 `/mortred_ai_server_v1/...`）仍可接受，但不是推荐客户端入口。
 
 下列每段均为单个 `results[i].data` 的值（不是外层信封）。检测与 OCR 检测为
@@ -166,6 +166,30 @@ OCR 文字检测（`dbnet`）— 顶层数组；元素含 `polygon`，不得出�
     "detail_infos": {}
   }
 ]
+```
+
+抠图（`modnet`）— 顶层对象；唯一的键是 `image`（base64 抠图结果）。这不是分割，没有 `colorized_mask`：
+
+```json
+{
+  "image": "<base64-matting-result>"
+}
+```
+
+增强（`realesrgan`）— 顶层对象；唯一的键是 `image`（base64 增强图）：
+
+```json
+{
+  "image": "<base64-enhanced-image>"
+}
+```
+
+深度（`metric3d_512`）— 顶层对象；唯一的键是 `image`（base64 着色深度图）：
+
+```json
+{
+  "image": "<base64-colorized-depth-map>"
+}
 ```
 
 ## HTTP 状态码映射
