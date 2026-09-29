@@ -661,6 +661,33 @@ void ProcessSupervisor::mark_models_failed_locked(const std::string& reason) {
     }
 }
 
+void ProcessSupervisor::fail_missing_server_uri_locked(Child* child) {
+    if (child == nullptr || child->is_gateway) {
+        return;
+    }
+    if (child->engine.state() == SupervisedState::kFailed &&
+        child->error.find("server_uri") != std::string::npos) {
+        return;
+    }
+    // Point at missing server_uri and that HTTP /ready was never attempted.
+    const std::string reason = "missing server_uri; HTTP readiness probe skipped";
+    child->error = reason;
+    child->ready = false;
+    child->wanted = false;
+    child->backoff_due_ms = 0;
+    child->engine.note_permanent_failure();
+    if (child->log != nullptr) {
+        child->log->append("[supervisor] " + reason);
+    }
+    if (_autostart_models_active.load()) {
+        mark_models_failed_locked("model failed: " + child->id + ": " + reason);
+    }
+    // Drop the process without stopping=true so note_exit keeps Failed.
+    if (child->pid > 0) {
+        ::kill(child->pid, SIGKILL);
+    }
+}
+
 int ProcessSupervisor::probe_port_of(const Child& child) const {
     return child.is_gateway ? _cfg.gateway.port : child.entry.port;
 }
@@ -678,6 +705,14 @@ bool ProcessSupervisor::probe_path_of(const Child& child, std::string* path) con
 }
 
 void ProcessSupervisor::probe_readiness(Child* child, int64_t now_ms) {
+    // Empty server_uri cannot form a /ready probe: fail immediately (P1-2).
+    // Hot path: no HTTP round-trip, no image/preprocess work — config gate only.
+    if (!child->is_gateway && child->entry.uri.empty()) {
+        std::lock_guard<std::mutex> lock(_mu);
+        fail_missing_server_uri_locked(child);
+        return;
+    }
+
     std::string path;
     const int port = probe_port_of(*child);
     if (port <= 0 || !probe_path_of(*child, &path)) {
@@ -1041,11 +1076,24 @@ void ProcessSupervisor::autostart_all(int gateway_deadline_ms, int models_deadli
     if (queue.empty()) {
         return;
     }
+    _autostart_models_active.store(true);
+    struct ClearModelsActive {
+        std::atomic<bool>& flag;
+        ~ClearModelsActive() {
+            flag.store(false);
+        }
+    } clear_models_active{_autostart_models_active};
+
     const size_t width = static_cast<size_t>(std::max(1, _cfg.supervisor.start_concurrency));
     auto unresolved_count = [this, &queue](size_t launched) {
         size_t n = 0;
         for (size_t i = 0; i < launched && i < queue.size(); ++i) {
             const Status s = status(queue[i]);
+            // failed is terminal for this wave (e.g. empty server_uri); do not
+            // wait for models deadline.
+            if (s.state == "failed") {
+                continue;
+            }
             if (s.pid >= 0 && s.state != "running") {
                 ++n;
             }
@@ -1067,7 +1115,7 @@ void ProcessSupervisor::autostart_all(int gateway_deadline_ms, int models_deadli
                          models_deadline_ms);
             for (size_t i = 0; i < launched && i < queue.size(); ++i) {
                 const Status s = status(queue[i]);
-                if (s.pid >= 0 && s.state != "running") {
+                if (s.pid >= 0 && s.state != "running" && s.state != "failed") {
                     oss << " " << queue[i];
                     std::fprintf(stderr, "  - %s state=%s pid=%d error=%s\n", queue[i].c_str(),
                                  s.state.c_str(), s.pid, s.error.c_str());

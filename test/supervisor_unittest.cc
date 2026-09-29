@@ -494,6 +494,47 @@ TEST_F(SupervisorTest, autostart_skips_models_when_gateway_deadline_missed) {
     EXPECT_LE(sup->status("fake_model_server").pid, 0);
 }
 
+TEST_F(SupervisorTest, empty_server_uri_fails_readiness_immediately) {
+    // P1-2 AC1–AC3: catalog still rejects empty server_uri; unittest injects
+    // empty uri after a successful load so the probe path is observable.
+    ASSERT_FALSE(catalog_.entries().empty());
+    const_cast<mortred::control::ServerEntry&>(catalog_.entries()[0]).uri.clear();
+    ASSERT_TRUE(catalog_.entries()[0].uri.empty());
+
+    install_gateway_stub("ready");
+    ControlConfig cfg = base_cfg();
+    cfg.supervisor.autostart_default = true;
+    auto sup = std::make_unique<ProcessSupervisor>(
+        root_.string(), cfg, (root_ / "conf" / "mortred.toml").string());
+    sup->set_gateway_trust("scrape-token", "infer-token", "admin-token");
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    // models_deadline_ms far longer than the 2s AC1 bound — must not rely on it.
+    constexpr int kModelsDeadlineMs = 60000;
+    const auto t0 = std::chrono::steady_clock::now();
+    sup->autostart_all(/*gateway_deadline_ms=*/3000, /*models_deadline_ms=*/kModelsDeadlineMs);
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - t0)
+                        .count();
+    EXPECT_LT(ms, 2000) << "empty server_uri must fail readiness within 2s, took " << ms
+                        << "ms (models_deadline_ms=" << kModelsDeadlineMs << ")";
+
+    const auto s = sup->status("fake_model_server");
+    EXPECT_EQ(s.state, "failed") << "error=" << s.error;
+    EXPECT_NE(s.state, "starting");
+    EXPECT_NE(s.error.find("server_uri"), std::string::npos) << s.error;
+    EXPECT_TRUE(s.error.find("readiness") != std::string::npos ||
+                s.error.find("probe") != std::string::npos)
+        << s.error;
+
+    const auto gate = sup->autostart_gate();
+    EXPECT_FALSE(gate.blocked);
+    EXPECT_FALSE(gate.models_skipped);
+    EXPECT_TRUE(gate.models_failed);
+    EXPECT_NE(gate.reason.find("server_uri"), std::string::npos) << gate.reason;
+}
+
 TEST_F(SupervisorTest, autostart_healthy_models_not_failed) {
     // P1-1 AC4: gateway + models reach running within deadlines → models_failed false.
     write_fake_config("ready", 0);
