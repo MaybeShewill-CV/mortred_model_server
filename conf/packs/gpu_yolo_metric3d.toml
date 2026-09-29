@@ -1,0 +1,24 @@
+# Multi-id TensorRT pack with seed occupancy samples (gpu_mem_source=seed).
+# Seed MiB must be overwritten on this host by calibrate --write-pack — never treat
+# git values as a machine calibration. Seed MiB is the conservative fixture used by
+# scripts/pack_occupancy.py --self-test and test/occupancy_gate_unittest.cc (1800),
+# not a live nvidia-smi reading. Do not commit gpu_name / gpu_memory_total_mib.
+#
+# Re-machine (copy → prepare → calibrate --write-pack → doctor):
+#   cp conf/packs/gpu_yolo_metric3d.toml /tmp/machine-pack.toml
+#   mortredctl prepare --pack /tmp/machine-pack.toml
+#   mortredctl calibrate --pack /tmp/machine-pack.toml --write-pack
+#   export MORTRED_PACK=/tmp/machine-pack.toml
+#   mortredctl doctor
+
+[pack.yolov8s]
+worker_nums = 1
+gpu_mem_mib = 1800
+gpu_mem_at_workers = 1
+gpu_mem_source = "seed"
+
+[pack.metric3d_512]
+worker_nums = 1
+gpu_mem_mib = 1800
+gpu_mem_at_workers = 1
+gpu_mem_source = "seed"

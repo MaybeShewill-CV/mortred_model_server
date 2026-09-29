@@ -1,3 +1,11 @@
+# Seed occupancy for TensorRT id yolov8s (gpu_mem_source=seed).
+# Must be overwritten on each machine by: mortredctl calibrate --pack <copy> --write-pack
+# Do not commit gpu_name / gpu_memory_total_mib or non-seed gpu_mem_source.
+# Seed MiB is the conservative fixture used by scripts/pack_occupancy.py --self-test
+# and test/occupancy_gate_unittest.cc (1800), not a live nvidia-smi reading.
 
 [pack.yolov8s]
 worker_nums = 1
+gpu_mem_mib = 1800
+gpu_mem_at_workers = 1
+gpu_mem_source = "seed"
