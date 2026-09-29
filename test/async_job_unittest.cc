@@ -23,8 +23,27 @@
 #include <thread>
 #include <vector>
 
+#include "glog/logging.h"
+#include "models/base_model.h"
 #include "models/io/common_input.h"
+#include "server/async_endpoints.h"
 #include "server/async_job_table.h"
+#include "server/base_server_impl.h"
+#include "server/worker_pool.h"
+
+// tests-only builds do not link libmodels; BaseAiServerImpl::serve_process
+// references this symbol via the vtable, so provide a local stub.
+namespace jinq {
+namespace models {
+namespace backend {
+namespace gpu_jpeg {
+std::string render_decode_metrics() {
+    return {};
+}
+}  // namespace gpu_jpeg
+}  // namespace backend
+}  // namespace models
+}  // namespace jinq
 
 namespace {
 
@@ -303,7 +322,102 @@ TEST(async_job_table, missing_job_operations_return_not_found) {
     EXPECT_FALSE(table.timeout("nope", "x"));
 }
 
+TEST(async_endpoints, drain_timeout_returns_with_inflight_log) {
+    jinq::server::AsyncJobEndpoints<TrivialOutput> eps;
+    eps.add_inflight_for_test(1);
+
+    FLAGS_logtostderr = true;
+    testing::internal::CaptureStderr();
+    const auto start = std::chrono::steady_clock::now();
+    eps.drain(start + std::chrono::milliseconds(200));
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    const std::string log = testing::internal::GetCapturedStderr();
+
+    EXPECT_LT(elapsed, std::chrono::seconds(2));
+    EXPECT_NE(log.find("drain timeout"), std::string::npos) << log;
+    EXPECT_NE(log.find("inflight=1"), std::string::npos) << log;
+}
+
+TEST(async_endpoints, shared_deadline_budget_under_350ms) {
+    jinq::server::AsyncJobEndpoints<TrivialOutput> eps;
+    eps.add_inflight_for_test(1);
+
+    using IntWorker = std::unique_ptr<int>;
+    jinq::server::WorkerPool<IntWorker> pool;
+    pool.adopt(std::make_unique<int>(1));
+    pool.commit_watermark(1);
+    IntWorker held;
+    ASSERT_TRUE(pool.checkout(held, std::chrono::milliseconds(50)).ok);
+
+    FLAGS_logtostderr = true;
+    testing::internal::CaptureStderr();
+    const auto start = std::chrono::steady_clock::now();
+    const auto deadline = start + std::chrono::milliseconds(200);
+    eps.drain(deadline);
+    pool.drain(deadline);
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    testing::internal::GetCapturedStderr();
+
+    EXPECT_LT(elapsed, std::chrono::seconds(2));
+    EXPECT_LT(elapsed, std::chrono::milliseconds(350));
+    pool.checkin(std::move(held));
+}
+
+namespace {
+
+using jinq::models::BaseAiModel;
+using jinq::models::io_define::common_io::base64_input;
+
+class DrainStubModel : public BaseAiModel<base64_input, TrivialOutput> {
+public:
+    StatusCode init(const toml::table&) override {
+        return StatusCode::OK;
+    }
+
+    StatusCode run_impl(const base64_input&, TrivialOutput& out) override {
+        out.value = 1;
+        return StatusCode::OK;
+    }
+
+    bool is_successfully_initialized() const override {
+        return true;
+    }
+};
+
+class NeverInitServer
+    : public jinq::server::BaseAiServerImpl<std::unique_ptr<DrainStubModel>, TrivialOutput> {
+public:
+    StatusCode init(const toml::table&) override {
+        return StatusCode::SERVER_INIT_FAILED;
+    }
+
+protected:
+    void fill_response_data(rapidjson::Document::AllocatorType&,
+                            rapidjson::Document&,
+                            const TrivialOutput&,
+                            const jinq::server::OutputOptions&) override {}
+};
+
+}  // namespace
+
+TEST(async_endpoints, failed_init_destructor_skips_drain) {
+    FLAGS_logtostderr = true;
+    testing::internal::CaptureStderr();
+    const auto start = std::chrono::steady_clock::now();
+    {
+        NeverInitServer server;
+        EXPECT_FALSE(server.is_successfully_initialized());
+    }
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    const std::string log = testing::internal::GetCapturedStderr();
+
+    EXPECT_LT(elapsed, std::chrono::seconds(2));
+    EXPECT_EQ(log.find("drain timeout"), std::string::npos) << log;
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
+    google::InitGoogleLogging(argv[0]);
+    google::LogToStderr();
     return RUN_ALL_TESTS();
 }
