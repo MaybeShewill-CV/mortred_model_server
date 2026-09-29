@@ -2,4 +2,4 @@
 
 | 来源 | 问题 | 依据 |
 | --- | --- | --- |
-| QA 残余风险 | 无 supervisor 时 `mortredctl doctor` 在 engine/stamp 已通过后仍因 live 检查退出 1 | `05-qa.md` AC8 |
+| P1-4 RD | A4 自测正则会把 ` ```http ` 的闭合围栏误当成 JSON 围栏 | `04-rd.md`；技术负责人已同意改用 `~~~http` |
