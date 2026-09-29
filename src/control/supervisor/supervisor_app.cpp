@@ -244,6 +244,15 @@ void SupervisorApp::handle_status(WFHttpTask* task) {
         servers.PushBack(obj, a);
     }
     d.AddMember("servers", servers, a);
+
+    const auto gate = supervisor_->autostart_gate();
+    rapidjson::Value autostart(rapidjson::kObjectType);
+    autostart.AddMember("blocked", gate.blocked, a);
+    autostart.AddMember("models_skipped", gate.models_skipped, a);
+    autostart.AddMember("reason",
+                        rapidjson::Value(gate.reason.c_str(), gate.reason.size(), a), a);
+    d.AddMember("autostart", autostart, a);
+
     reply_json(task, 200, serialize(d));
 }
 
@@ -810,6 +819,8 @@ bool SupervisorApp::init(const SupervisorInitOptions& options) {
                      pack.string().c_str(), pack_n);
     }
 
+    // Scrape token failures must not kill the management plane: keep listen /
+    // status reachable and let autostart_all mark __gateway failed + skip models.
     const std::filesystem::path gateway_bin =
         std::filesystem::path(root_) / cfg_.supervisor.bin_dir / "mortred-gateway.out";
     std::error_code gw_ec;
@@ -819,17 +830,16 @@ bool SupervisorApp::init(const SupervisorInitOptions& options) {
         if (!scrape.ok) {
             if (options.metrics_token.empty()) {
                 std::fprintf(stderr,
-                             "mortred-supervisor: refusing to start without MORTRED_METRICS_TOKEN "
-                             "(gateway GET /metrics is never public, including loopback; set a "
-                             "scrape Bearer distinct from the inference and management tokens). "
-                             "Generate with: mortredctl init-trust\n");
+                             "mortred-supervisor: MORTRED_METRICS_TOKEN unset; management API will "
+                             "start but autostart will fail __gateway permanently and skip models "
+                             "(gateway GET /metrics is never public). Generate with: "
+                             "mortredctl init-trust\n");
             } else {
                 std::fprintf(stderr,
-                             "mortred-supervisor: refusing to start: MORTRED_METRICS_TOKEN matches "
-                             "an inference or management token; Prometheus would then hold that "
-                             "privilege\n");
+                             "mortred-supervisor: MORTRED_METRICS_TOKEN matches an inference or "
+                             "management token; management API will start but autostart will fail "
+                             "__gateway permanently and skip models\n");
             }
-            return false;
         }
     }
 
@@ -879,6 +889,28 @@ void SupervisorApp::stop_listen() {
         supervisor_->request_shutdown();
         supervisor_->wait_shutdown();
     }
+}
+
+void SupervisorApp::run_autostart(int gateway_deadline_ms, int models_deadline_ms) {
+    if (supervisor_ != nullptr) {
+        supervisor_->autostart_all(gateway_deadline_ms, models_deadline_ms);
+    }
+}
+
+ProcessSupervisor::Status SupervisorApp::server_status(const std::string& id) const {
+    if (supervisor_ == nullptr) {
+        ProcessSupervisor::Status s;
+        s.state = "unknown";
+        return s;
+    }
+    return supervisor_->status(id);
+}
+
+ProcessSupervisor::AutostartGate SupervisorApp::autostart_gate() const {
+    if (supervisor_ == nullptr) {
+        return {};
+    }
+    return supervisor_->autostart_gate();
 }
 
 int SupervisorApp::run() {

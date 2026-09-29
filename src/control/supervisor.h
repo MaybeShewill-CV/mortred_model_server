@@ -52,6 +52,13 @@ class ProcessSupervisor {
         std::string error;
     };
 
+    /*** Snapshot of the most recent autostart_all gateway gate (read-only). */
+    struct AutostartGate {
+        bool blocked = false;         // gateway phase failed / not ready
+        bool models_skipped = false;  // this wave spawned zero models
+        std::string reason;           // human-readable; scrape / deadline / missing binary
+    };
+
     /*** block SIGCHLD/SIGINT/SIGTERM process-wide (call first thing in main) */
     static void block_supervision_signals();
 
@@ -82,10 +89,12 @@ class ProcessSupervisor {
     Status status(const std::string& id) const;
     std::vector<std::pair<std::string, Status>> statuses() const;
     LogBuffer* logs(const std::string& id);
+    AutostartGate autostart_gate() const;
 
     /*** gateway first (wait for /healthz), then autostart-eligible models.
      *  Both phases honor deadlines so a stuck child cannot block supervisor
-     *  startup forever. Failures and deadline expiry go to stderr. */
+     *  startup forever. Gateway binary missing, start failure, or deadline
+     *  without running skips the model wave; reason is on status()/autostart_gate(). */
     void autostart_all(int gateway_deadline_ms = 15000, int models_deadline_ms = 60000);
 
     /*** signal-thread entry: request the ordered shutdown sequence */
@@ -154,6 +163,7 @@ class ProcessSupervisor {
     bool probe_path_of(const Child& child, std::string* path) const;
     int probe_port_of(const Child& child) const;
     void log_line(const std::string& id, const std::string& line);
+    void mark_gateway_autostart_blocked_locked(const std::string& reason, bool permanent_fail);
 
     std::string _project_root;
     ControlConfig _cfg;
@@ -162,6 +172,7 @@ class ProcessSupervisor {
     std::string _gateway_metrics_token;
     std::string _gateway_infer_token;
     std::string _gateway_admin_token;
+    AutostartGate _autostart_gate;
 
     mutable std::mutex _mu;
     std::condition_variable _cv;

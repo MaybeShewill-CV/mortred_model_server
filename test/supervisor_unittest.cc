@@ -117,6 +117,35 @@ class SupervisorTest : public ::testing::Test {
             root_.string(), cfg, (root_ / "conf" / "mortred.toml").string());
     }
 
+    // Gateway child is spawned with no argv; wrap fake_model_server so /healthz
+    // answers on MORTRED_GATEWAY_PORT (ready) or sleep forever (never ready).
+    void install_gateway_stub(const std::string& mode) {
+        const fs::path stub = root_ / "bin" / "mortred-gateway.out";
+        std::ofstream out(stub);
+        if (mode == "never-ready") {
+            out << "#!/bin/bash\nexec sleep 3600\n";
+        } else {
+            out << "#!/bin/bash\n"
+                << "exec \"" << (root_ / "bin" / "fake_model_server.out").string()
+                << "\" --port \"${MORTRED_GATEWAY_PORT:-8080}\" --mode ready\n";
+        }
+        out.close();
+        fs::permissions(stub, fs::perms::owner_all | fs::perms::group_read |
+                                  fs::perms::group_exec | fs::perms::others_read |
+                                  fs::perms::others_exec);
+    }
+
+    ControlConfig base_cfg() {
+        ControlConfig cfg;
+        cfg.supervisor.bin_dir = "bin";
+        cfg.supervisor.lib_dir = "lib";
+        cfg.supervisor.libs_dir = "lib";
+        cfg.supervisor.log_dir = "logs";
+        cfg.supervisor.log_rotate_mb = 1;
+        cfg.gateway.port = free_test_port() + 1;
+        return cfg;
+    }
+
     static bool wait_for(const std::function<bool()>& pred, int timeout_ms) {
         const auto deadline = std::chrono::steady_clock::now() +
                               std::chrono::milliseconds(timeout_ms);
@@ -304,42 +333,37 @@ TEST_F(SupervisorTest, restarts_do_not_leak_log_pipe_fds) {
 
 TEST_F(SupervisorTest, autostart_models_respects_deadline) {
     // P1-B3: never-ready children used to pin autostart_all forever.
+    // Gateway must be ready first or the model wave is skipped (P0-2).
     write_fake_config("never-ready", 0);
     catalog_ = Catalog{};
     write_catalog();
+    install_gateway_stub("ready");
 
-    ControlConfig cfg;
-    cfg.supervisor.bin_dir = "bin";
-    cfg.supervisor.lib_dir = "lib";
-    cfg.supervisor.libs_dir = "lib";
-    cfg.supervisor.log_dir = "logs";
-    cfg.supervisor.log_rotate_mb = 1;
+    ControlConfig cfg = base_cfg();
     cfg.supervisor.autostart_default = true;
     auto sup = std::make_unique<ProcessSupervisor>(
         root_.string(), cfg, (root_ / "conf" / "mortred.toml").string());
+    sup->set_gateway_trust("scrape-token", "infer-token", "admin-token");
     sup->set_catalog(catalog_);
     ASSERT_TRUE(sup->start_threads());
 
     const auto t0 = std::chrono::steady_clock::now();
-    sup->autostart_all(/*gateway_deadline_ms=*/1000, /*models_deadline_ms=*/800);
+    sup->autostart_all(/*gateway_deadline_ms=*/3000, /*models_deadline_ms=*/800);
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::steady_clock::now() - t0)
                         .count();
     EXPECT_LT(ms, 5000) << "autostart_all must return after models deadline, took " << ms
                         << "ms";
+    EXPECT_FALSE(sup->autostart_gate().models_skipped);
     const auto s = sup->status("fake_model_server");
     EXPECT_NE(s.state, "running");
     EXPECT_GT(s.pid, 0) << "never-ready child should still be alive at deadline";
 }
 
 TEST_F(SupervisorTest, autostart_reports_start_failure_without_hanging) {
+    // Missing gateway binary blocks the wave immediately (no model deadline wait).
     fs::remove(root_ / "bin" / "fake_model_server.out");
-    ControlConfig cfg;
-    cfg.supervisor.bin_dir = "bin";
-    cfg.supervisor.lib_dir = "lib";
-    cfg.supervisor.libs_dir = "lib";
-    cfg.supervisor.log_dir = "logs";
-    cfg.supervisor.log_rotate_mb = 1;
+    ControlConfig cfg = base_cfg();
     cfg.supervisor.autostart_default = true;
     auto sup = std::make_unique<ProcessSupervisor>(
         root_.string(), cfg, (root_ / "conf" / "mortred.toml").string());
@@ -354,6 +378,65 @@ TEST_F(SupervisorTest, autostart_reports_start_failure_without_hanging) {
                         std::chrono::steady_clock::now() - t0)
                         .count();
     EXPECT_LT(ms, 3000) << "failed autostart must not block on model deadline";
+    const auto gate = sup->autostart_gate();
+    EXPECT_TRUE(gate.blocked);
+    EXPECT_TRUE(gate.models_skipped);
+    EXPECT_NE(gate.reason.find("binary missing"), std::string::npos) << gate.reason;
+    EXPECT_LE(sup->status("fake_model_server").pid, 0);
+}
+
+TEST_F(SupervisorTest, autostart_skips_models_when_scrape_token_missing) {
+    install_gateway_stub("ready");
+    ControlConfig cfg = base_cfg();
+    cfg.supervisor.autostart_default = true;
+    auto sup = std::make_unique<ProcessSupervisor>(
+        root_.string(), cfg, (root_ / "conf" / "mortred.toml").string());
+    // empty metrics → permanent scrape failure
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    sup->autostart_all(/*gateway_deadline_ms=*/1000, /*models_deadline_ms=*/2000);
+
+    const auto gw = sup->status(kGatewayId);
+    EXPECT_EQ(gw.state, "failed");
+    EXPECT_NE(gw.error.find("gateway scrape token rejected:"), std::string::npos) << gw.error;
+    const auto gate = sup->autostart_gate();
+    EXPECT_TRUE(gate.blocked);
+    EXPECT_TRUE(gate.models_skipped);
+    EXPECT_NE(gate.reason.find("scrape"), std::string::npos) << gate.reason;
+    EXPECT_LE(sup->status("fake_model_server").pid, 0);
+    EXPECT_NE(sup->status("fake_model_server").state, "starting");
+    EXPECT_NE(sup->status("fake_model_server").state, "running");
+}
+
+TEST_F(SupervisorTest, autostart_skips_models_when_gateway_deadline_missed) {
+    install_gateway_stub("never-ready");
+    ControlConfig cfg = base_cfg();
+    cfg.supervisor.autostart_default = true;
+    auto sup = std::make_unique<ProcessSupervisor>(
+        root_.string(), cfg, (root_ / "conf" / "mortred.toml").string());
+    sup->set_gateway_trust("scrape-token", "infer-token", "admin-token");
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    const auto t0 = std::chrono::steady_clock::now();
+    sup->autostart_all(/*gateway_deadline_ms=*/600, /*models_deadline_ms=*/5000);
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - t0)
+                        .count();
+    EXPECT_LT(ms, 3000) << "must return after gateway deadline without starting models";
+
+    const auto gate = sup->autostart_gate();
+    EXPECT_TRUE(gate.blocked);
+    EXPECT_TRUE(gate.models_skipped);
+    EXPECT_TRUE(gate.reason.find("deadline") != std::string::npos ||
+                gate.reason.find("not ready") != std::string::npos)
+        << gate.reason;
+    const auto gw = sup->status(kGatewayId);
+    EXPECT_TRUE(gw.error.find("deadline") != std::string::npos ||
+                gw.error.find("not ready") != std::string::npos)
+        << gw.error;
+    EXPECT_LE(sup->status("fake_model_server").pid, 0);
 }
 
 TEST_F(SupervisorTest, rapid_restarts_do_not_double_join_readers) {

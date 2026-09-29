@@ -61,10 +61,14 @@ public:
 
     // test surface: init runs every fail-closed startup check and brings the
     // ProcessSupervisor up (no autostart, no child-env export); listen /
-    // stop_listen bracket a non-blocking serve window
+    // stop_listen bracket a non-blocking serve window. run_autostart / status
+    // helpers let tests exercise the gateway-gate path without the run() loop.
     bool init(const SupervisorInitOptions& options);
     bool listen();
     void stop_listen();
+    void run_autostart(int gateway_deadline_ms = 15000, int models_deadline_ms = 60000);
+    ProcessSupervisor::Status server_status(const std::string& id) const;
+    ProcessSupervisor::AutostartGate autostart_gate() const;
 
 private:
     void process(WFHttpTask* task);

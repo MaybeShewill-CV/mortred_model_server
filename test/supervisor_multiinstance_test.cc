@@ -324,6 +324,8 @@ TEST(SupervisorAppInit, scrape_not_required_without_gateway_binary) {
 }
 
 TEST(SupervisorAppInit, scrape_required_when_gateway_binary_present) {
+    // P0-2: bad scrape must not kill the management plane. init/listen succeed;
+    // autostart marks __gateway failed and skips models.
     const fs::path root =
         fs::temp_directory_path() / ("mortred_sup_init_scrape_" + std::to_string(::getpid()));
     std::error_code ec;
@@ -331,37 +333,62 @@ TEST(SupervisorAppInit, scrape_required_when_gateway_binary_present) {
     fs::create_directories(root / "conf" / "server", ec);
     fs::create_directories(root / "_bin", ec);
     std::ofstream mortred(root / "conf" / "mortred.toml");
-    mortred << "[supervisor]\n";
+    mortred << "[supervisor]\nautostart_default = true\n";
     mortred.close();
     std::ofstream server(root / "conf" / "server" / "ONLY.toml");
-    server << "[ONLY_SERVER]\nmodel=\"ONLY\"\nport=1\nserver_uri=\"/only\"\n"
+    server << "[ONLY_SERVER]\nmodel=\"ONLY\"\nport=" << find_free_port()
+           << "\nserver_uri=\"/only\"\n"
            << "server_exe=\"fake_model_server.out\"\n";
     server.close();
     std::ofstream gw(root / "_bin" / "mortred-gateway.out");
-    gw << "stub\n";
+    gw << "#!/bin/bash\nexec sleep 3600\n";
     gw.close();
+    fs::permissions(root / "_bin" / "mortred-gateway.out",
+                    fs::perms::owner_all | fs::perms::group_exec | fs::perms::others_exec);
 
     mortred::control::SupervisorInitOptions opt;
     opt.project_root = root.string();
     opt.api_host = "127.0.0.1";
     opt.api_port = find_free_port();
     opt.api_token = "mgmt-token";
-    opt.autostart_default = 0;
+    opt.bin_dir = "_bin";
+    opt.autostart_default = 1;
 
     {
         mortred::control::SupervisorApp app;
-        EXPECT_FALSE(app.init(opt));
+        EXPECT_TRUE(app.init(opt));
+        EXPECT_TRUE(app.listen());
+        app.run_autostart(/*gateway_deadline_ms=*/500, /*models_deadline_ms=*/500);
+        const auto gw_st = app.server_status(mortred::control::kGatewayId);
+        EXPECT_EQ(gw_st.state, "failed") << gw_st.error;
+        EXPECT_NE(gw_st.error.find("gateway scrape token rejected:"), std::string::npos)
+            << gw_st.error;
+        const auto gate = app.autostart_gate();
+        EXPECT_TRUE(gate.blocked);
+        EXPECT_TRUE(gate.models_skipped);
+        EXPECT_LE(app.server_status("ONLY").pid, 0);
+        app.stop_listen();
     }
     {
         mortred::control::SupervisorApp app;
         opt.metrics_token = "mgmt-token";
         opt.gateway_auth_token = "infer-token";
-        EXPECT_FALSE(app.init(opt));
+        opt.api_port = find_free_port();
+        EXPECT_TRUE(app.init(opt));
+        EXPECT_TRUE(app.listen());
+        app.run_autostart(/*gateway_deadline_ms=*/500, /*models_deadline_ms=*/500);
+        EXPECT_EQ(app.server_status(mortred::control::kGatewayId).state, "failed");
+        EXPECT_NE(app.server_status(mortred::control::kGatewayId).error.find("matches"),
+                  std::string::npos);
+        EXPECT_TRUE(app.autostart_gate().models_skipped);
+        EXPECT_LE(app.server_status("ONLY").pid, 0);
+        app.stop_listen();
     }
     {
         mortred::control::SupervisorApp app;
         opt.metrics_token = "scrape-token";
         opt.gateway_auth_token = "infer-token";
+        opt.api_port = find_free_port();
         EXPECT_TRUE(app.init(opt));
         app.stop_listen();
     }
