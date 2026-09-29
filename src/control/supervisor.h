@@ -56,6 +56,7 @@ class ProcessSupervisor {
     struct AutostartGate {
         bool blocked = false;         // gateway phase failed / not ready
         bool models_skipped = false;  // this wave spawned zero models
+        bool models_failed = false;   // model wave spawn fail / models deadline (not skip)
         std::string reason;           // human-readable; scrape / deadline / missing binary
     };
 
@@ -164,6 +165,7 @@ class ProcessSupervisor {
     int probe_port_of(const Child& child) const;
     void log_line(const std::string& id, const std::string& line);
     void mark_gateway_autostart_blocked_locked(const std::string& reason, bool permanent_fail);
+    void mark_models_failed_locked(const std::string& reason);
 
     std::string _project_root;
     ControlConfig _cfg;

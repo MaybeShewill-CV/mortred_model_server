@@ -334,6 +334,7 @@ TEST_F(SupervisorTest, restarts_do_not_leak_log_pipe_fds) {
 TEST_F(SupervisorTest, autostart_models_respects_deadline) {
     // P1-B3: never-ready children used to pin autostart_all forever.
     // Gateway must be ready first or the model wave is skipped (P0-2).
+    // P1-1 AC1: models deadline leaves models_failed with deadline + id in reason.
     write_fake_config("never-ready", 0);
     catalog_ = Catalog{};
     write_catalog();
@@ -354,7 +355,12 @@ TEST_F(SupervisorTest, autostart_models_respects_deadline) {
                         .count();
     EXPECT_LT(ms, 5000) << "autostart_all must return after models deadline, took " << ms
                         << "ms";
-    EXPECT_FALSE(sup->autostart_gate().models_skipped);
+    const auto gate = sup->autostart_gate();
+    EXPECT_FALSE(gate.blocked);
+    EXPECT_FALSE(gate.models_skipped);
+    EXPECT_TRUE(gate.models_failed);
+    EXPECT_NE(gate.reason.find("deadline"), std::string::npos) << gate.reason;
+    EXPECT_NE(gate.reason.find("fake_model_server"), std::string::npos) << gate.reason;
     const auto s = sup->status("fake_model_server");
     EXPECT_NE(s.state, "running");
     EXPECT_GT(s.pid, 0) << "never-ready child should still be alive at deadline";
@@ -381,11 +387,58 @@ TEST_F(SupervisorTest, autostart_reports_start_failure_without_hanging) {
     const auto gate = sup->autostart_gate();
     EXPECT_TRUE(gate.blocked);
     EXPECT_TRUE(gate.models_skipped);
+    EXPECT_FALSE(gate.models_failed);
     EXPECT_NE(gate.reason.find("binary missing"), std::string::npos) << gate.reason;
     EXPECT_LE(sup->status("fake_model_server").pid, 0);
 }
 
+TEST_F(SupervisorTest, autostart_models_failed_on_spawn_failure) {
+    // P1-1 AC2: gateway admitted, model start_server fails → models_failed, not skipped.
+    install_gateway_stub("ready");
+    // Point the catalog at a missing exe while keeping fake_model_server.out for the
+    // gateway stub (absolute path baked into mortred-gateway.out). Id becomes the
+    // missing exe stem (catalog rule for fakes without model=).
+    {
+        std::ofstream out(root_ / "conf" / "server" / "test" / "fake.toml");
+        out << "[FAKE_SERVER]\n"
+            << "port=" << port_ << "\n"
+            << "host=\"localhost\"\n"
+            << "server_uri=\"/mortred_ai_server_v1/test/fake\"\n"
+            << "server_exe=\"missing_model.out\"\n"
+            << "fake_port=" << port_ << "\n"
+            << "fake_mode=\"ready\"\n"
+            << "fake_exit_after_ms=0\n"
+            << "fake_exit_code=0\n";
+    }
+    catalog_ = Catalog{};
+    write_catalog();
+
+    ControlConfig cfg = base_cfg();
+    cfg.supervisor.autostart_default = true;
+    auto sup = std::make_unique<ProcessSupervisor>(
+        root_.string(), cfg, (root_ / "conf" / "mortred.toml").string());
+    sup->set_gateway_trust("scrape-token", "infer-token", "admin-token");
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    const auto t0 = std::chrono::steady_clock::now();
+    sup->autostart_all(/*gateway_deadline_ms=*/3000, /*models_deadline_ms=*/2000);
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - t0)
+                        .count();
+    EXPECT_LT(ms, 4000) << "spawn failure must not hang on models deadline";
+
+    const auto gate = sup->autostart_gate();
+    EXPECT_FALSE(gate.blocked);
+    EXPECT_FALSE(gate.models_skipped);
+    EXPECT_TRUE(gate.models_failed);
+    EXPECT_NE(gate.reason.find("missing_model"), std::string::npos) << gate.reason;
+    EXPECT_NE(gate.reason.find("failed"), std::string::npos) << gate.reason;
+    EXPECT_LE(sup->status("missing_model").pid, 0);
+}
+
 TEST_F(SupervisorTest, autostart_skips_models_when_scrape_token_missing) {
+    // P1-1 AC3: empty scrape stays fail-closed; models_failed must stay false.
     install_gateway_stub("ready");
     ControlConfig cfg = base_cfg();
     cfg.supervisor.autostart_default = true;
@@ -403,6 +456,7 @@ TEST_F(SupervisorTest, autostart_skips_models_when_scrape_token_missing) {
     const auto gate = sup->autostart_gate();
     EXPECT_TRUE(gate.blocked);
     EXPECT_TRUE(gate.models_skipped);
+    EXPECT_FALSE(gate.models_failed);
     EXPECT_NE(gate.reason.find("scrape"), std::string::npos) << gate.reason;
     EXPECT_LE(sup->status("fake_model_server").pid, 0);
     EXPECT_NE(sup->status("fake_model_server").state, "starting");
@@ -429,6 +483,7 @@ TEST_F(SupervisorTest, autostart_skips_models_when_gateway_deadline_missed) {
     const auto gate = sup->autostart_gate();
     EXPECT_TRUE(gate.blocked);
     EXPECT_TRUE(gate.models_skipped);
+    EXPECT_FALSE(gate.models_failed);
     EXPECT_TRUE(gate.reason.find("deadline") != std::string::npos ||
                 gate.reason.find("not ready") != std::string::npos)
         << gate.reason;
@@ -437,6 +492,32 @@ TEST_F(SupervisorTest, autostart_skips_models_when_gateway_deadline_missed) {
                 gw.error.find("not ready") != std::string::npos)
         << gw.error;
     EXPECT_LE(sup->status("fake_model_server").pid, 0);
+}
+
+TEST_F(SupervisorTest, autostart_healthy_models_not_failed) {
+    // P1-1 AC4: gateway + models reach running within deadlines → models_failed false.
+    write_fake_config("ready", 0);
+    catalog_ = Catalog{};
+    write_catalog();
+    install_gateway_stub("ready");
+
+    ControlConfig cfg = base_cfg();
+    cfg.supervisor.autostart_default = true;
+    auto sup = std::make_unique<ProcessSupervisor>(
+        root_.string(), cfg, (root_ / "conf" / "mortred.toml").string());
+    sup->set_gateway_trust("scrape-token", "infer-token", "admin-token");
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    sup->autostart_all(/*gateway_deadline_ms=*/3000, /*models_deadline_ms=*/5000);
+
+    const auto gate = sup->autostart_gate();
+    EXPECT_FALSE(gate.blocked);
+    EXPECT_FALSE(gate.models_skipped);
+    EXPECT_FALSE(gate.models_failed);
+    EXPECT_TRUE(gate.reason.empty()) << gate.reason;
+    expect_ready(sup.get());
+    EXPECT_EQ(sup->status(kGatewayId).state, "running");
 }
 
 TEST_F(SupervisorTest, rapid_restarts_do_not_double_join_readers) {

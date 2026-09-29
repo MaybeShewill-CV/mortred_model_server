@@ -123,15 +123,17 @@ d = json.loads(os.environ["STATUS_JSON"])
 gate = d.get("autostart") or {}
 gw = d.get("gateway") or {}
 blocked = bool(gate.get("blocked")) or bool(gate.get("models_skipped"))
+models_failed = bool(gate.get("models_failed"))
 reason = (gate.get("reason") or "").strip()
 gw_err = (gw.get("error") or "").strip()
 gw_state = (gw.get("state") or "").strip()
 text = reason or gw_err
-fail = blocked or gw_state == "failed" or (
+fail = blocked or models_failed or gw_state == "failed" or (
     text and ("scrape" in text.lower() or "deadline" in text.lower()
               or "binary missing" in text.lower() or "not ready" in text.lower())
 )
 print("blocked=%s" % ("1" if blocked else "0"))
+print("models_failed=%s" % ("1" if models_failed else "0"))
 print("gw_state=%s" % gw_state)
 print("reason=%s" % text)
 sys.exit(1 if fail else 0)
@@ -142,7 +144,12 @@ PY
     printf '%s\n' "$GATE_EVAL" | sed 's/^/  /'
     if [ "$GATE_RC" -ne 0 ]; then
         REASON_LINE="$(printf '%s\n' "$GATE_EVAL" | sed -n 's/^reason=//p' | head -1)"
-        echo "  [FAIL] gateway/autostart blocked; models were not started in this wave"
+        MODELS_FAILED_LINE="$(printf '%s\n' "$GATE_EVAL" | sed -n 's/^models_failed=//p' | head -1)"
+        if [ "$MODELS_FAILED_LINE" = "1" ]; then
+            echo "  [FAIL] model wave failed after gateway was admitted"
+        else
+            echo "  [FAIL] gateway/autostart blocked; models were not started in this wave"
+        fi
         if [ -n "$REASON_LINE" ]; then
             echo "  reason: $REASON_LINE"
         fi

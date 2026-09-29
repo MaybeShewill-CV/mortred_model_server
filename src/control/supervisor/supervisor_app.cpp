@@ -249,6 +249,7 @@ void SupervisorApp::handle_status(WFHttpTask* task) {
     rapidjson::Value autostart(rapidjson::kObjectType);
     autostart.AddMember("blocked", gate.blocked, a);
     autostart.AddMember("models_skipped", gate.models_skipped, a);
+    autostart.AddMember("models_failed", gate.models_failed, a);
     autostart.AddMember("reason",
                         rapidjson::Value(gate.reason.c_str(), gate.reason.size(), a), a);
     d.AddMember("autostart", autostart, a);
