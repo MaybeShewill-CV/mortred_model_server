@@ -632,6 +632,7 @@ void ProcessSupervisor::mark_gateway_autostart_blocked_locked(const std::string&
                                                              bool permanent_fail) {
     _autostart_gate.blocked = true;
     _autostart_gate.models_skipped = true;
+    _autostart_gate.models_failed = false;
     _autostart_gate.reason = reason;
     Child* gateway = find_locked(kGatewayId);
     if (gateway == nullptr) {
@@ -646,6 +647,17 @@ void ProcessSupervisor::mark_gateway_autostart_blocked_locked(const std::string&
     }
     if (gateway->log != nullptr) {
         gateway->log->append("[supervisor] autostart blocked: " + reason);
+    }
+}
+
+void ProcessSupervisor::mark_models_failed_locked(const std::string& reason) {
+    // Gateway already cleared this wave; model-wave failure must not look like a skip.
+    _autostart_gate.models_failed = true;
+    _autostart_gate.models_skipped = false;
+    if (_autostart_gate.reason.empty()) {
+        _autostart_gate.reason = reason;
+    } else {
+        _autostart_gate.reason += "; " + reason;
     }
 }
 
@@ -1047,6 +1059,8 @@ void ProcessSupervisor::autostart_all(int gateway_deadline_ms, int models_deadli
             return;
         }
         if (monotonic_ms() >= deadline) {
+            std::ostringstream oss;
+            oss << "models not ready within deadline (" << models_deadline_ms << " ms):";
             std::fprintf(stderr,
                          "mortred-supervisor: autostart models deadline (%d ms) elapsed "
                          "with unresolved children:\n",
@@ -1054,9 +1068,14 @@ void ProcessSupervisor::autostart_all(int gateway_deadline_ms, int models_deadli
             for (size_t i = 0; i < launched && i < queue.size(); ++i) {
                 const Status s = status(queue[i]);
                 if (s.pid >= 0 && s.state != "running") {
+                    oss << " " << queue[i];
                     std::fprintf(stderr, "  - %s state=%s pid=%d error=%s\n", queue[i].c_str(),
                                  s.state.c_str(), s.pid, s.error.c_str());
                 }
+            }
+            {
+                std::lock_guard<std::mutex> lock(_mu);
+                mark_models_failed_locked(oss.str());
             }
             return;
         }
@@ -1064,6 +1083,15 @@ void ProcessSupervisor::autostart_all(int gateway_deadline_ms, int models_deadli
             const std::string& id = queue[launched++];
             std::string err;
             if (!start_server(id, &err)) {
+                std::ostringstream oss;
+                oss << "model start failed: " << id;
+                if (!err.empty()) {
+                    oss << ": " << err;
+                }
+                {
+                    std::lock_guard<std::mutex> lock(_mu);
+                    mark_models_failed_locked(oss.str());
+                }
                 std::fprintf(stderr, "mortred-supervisor: autostart %s failed: %s\n", id.c_str(),
                              err.c_str());
             }
