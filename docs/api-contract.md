@@ -122,7 +122,7 @@ are below; the full schema remains in `docs/openapi.json` `components.schemas`
 
 Recommended inference path through the gateway is
 `POST /v1/models/{id}/infer` (catalog `{id}` examples: `yolov8s`,
-`mobilenetv2`, `pphuman_server`, `dbnet`). Legacy `{server_uri}` paths such as
+`mobilenetv2`). Legacy `{server_uri}` paths such as
 `/mortred_ai_server_v1/...` are still accepted on `:8080` but are not the
 recommended client entry.
 
@@ -176,6 +176,33 @@ OCR text detection (`dbnet`) — top-level array; items have `polygon` and no
     "detail_infos": {}
   }
 ]
+```
+
+Matting (`modnet`) — top-level object; the only key is `image` (base64 matting
+result). This is not segmentation and has no `colorized_mask`:
+
+```json
+{
+  "image": "<base64-matting-result>"
+}
+```
+
+Enhancement (`realesrgan`) — top-level object; the only key is `image` (base64
+enhanced image):
+
+```json
+{
+  "image": "<base64-enhanced-image>"
+}
+```
+
+Depth (`metric3d_512`) — top-level object; the only key is `image` (base64
+colorized depth map):
+
+```json
+{
+  "image": "<base64-colorized-depth-map>"
+}
 ```
 
 ## HTTP status mapping
