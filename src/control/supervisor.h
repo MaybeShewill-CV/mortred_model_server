@@ -166,6 +166,8 @@ class ProcessSupervisor {
     void log_line(const std::string& id, const std::string& line);
     void mark_gateway_autostart_blocked_locked(const std::string& reason, bool permanent_fail);
     void mark_models_failed_locked(const std::string& reason);
+    /*** Non-gateway empty server_uri: permanent fail + optional models_failed. */
+    void fail_missing_server_uri_locked(Child* child);
 
     std::string _project_root;
     ControlConfig _cfg;
@@ -175,6 +177,8 @@ class ProcessSupervisor {
     std::string _gateway_infer_token;
     std::string _gateway_admin_token;
     AutostartGate _autostart_gate;
+    /*** True while autostart_all is in the model wave (not gateway phase). */
+    std::atomic<bool> _autostart_models_active{false};
 
     mutable std::mutex _mu;
     std::condition_variable _cv;
