@@ -39,7 +39,7 @@ cowork/ledger/round-NNN/07-score-check.md
 # Ledger
 
 - 基线分支: sub-agent-co-work
-- 轮次上限: 5
+- 轮次上限: 10
 - 当前轮次:
 - 当前步骤:
 - 当前问题:
