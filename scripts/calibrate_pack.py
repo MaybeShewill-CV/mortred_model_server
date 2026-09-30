@@ -1298,18 +1298,27 @@ def self_test() -> int:
     if "gpu_mem_mib = 1801" not in occ_body or "gpu_mem_at_workers = 2" not in occ_body:
         print("self-test: occupancy stamp body", occ_body, file=sys.stderr)
         return 1
+    if 'gpu_mem_source = "nvml_pid"' not in occ_body or 'gpu_mem_source = "seed"' in occ_body:
+        print("self-test: occupancy source must be positive non-seed", occ_body, file=sys.stderr)
+        return 1
     if 'gpu_name = "Fake GPU"' not in occ_body or "gpu_memory_total_mib = 8193" not in occ_body:
         print("self-test: gpu fingerprint body", occ_body, file=sys.stderr)
         return 1
     if 'decode_auto = "gpu"' not in occ_body:
         print("self-test: decode_auto stamp body", occ_body, file=sys.stderr)
         return 1
+    example_pack = ROOT / "conf" / "packs" / "yolov8.toml"
+    example_before = example_pack.read_text(encoding="utf-8") if example_pack.is_file() else ""
     try:
         write_pack_worker_nums(ROOT / "conf" / "packs" / "demo.toml", {"mobilenetv2": 4})
         print("self-test: should refuse conf/packs", file=sys.stderr)
         return 1
     except ValueError:
         pass
+    if example_pack.is_file() and example_pack.read_text(encoding="utf-8") != example_before:
+        print("self-test: conf/packs/yolov8.toml mutated", file=sys.stderr)
+        return 1
+
     try:
         write_pack_worker_nums(cfg, {"MOBILENETV2": 4})
         print("self-test: should refuse conf/server", file=sys.stderr)

@@ -56,6 +56,11 @@ struct OccupancyCheckInput {
     bool has_gpu_mem_mib = false;
     int gpu_mem_mib = 0;
     int gpu_mem_at_workers = 0;
+    // Optional operator-supplied process occupancy (MiB). When set, spawn fails
+    // if |declared - measured| exceeds max(64, declared/100). Supervisor does
+    // not sample this; production wiring is pack_occupancy.py --measured-json.
+    bool has_measured_gpu_mem_mib = false;
+    int measured_gpu_mem_mib = 0;
     std::vector<OccupancySibling> running_siblings;
     LiveGpuSnapshot live;
 };
@@ -102,6 +107,21 @@ inline std::string occupancy_gate_error(const std::string& detail, const std::st
 
 inline bool is_occupancy_gate_error(const std::string& err) {
     return err.find("occupancy gate:") != std::string::npos;
+}
+
+// Declared stamp vs measured process occupancy. Same rule as
+// scripts/pack_occupancy.py --check --measured-json.
+inline int occupancy_declared_measured_tol_mib(int declared_mib) {
+    if (declared_mib <= 0) {
+        return 64;
+    }
+    return std::max(64, declared_mib / 100);
+}
+
+inline std::string occupancy_declared_measured_detail(const std::string& catalog_id,
+                                                      int declared_mib, int measured_mib) {
+    return "declared gpu_mem_mib=" + std::to_string(declared_mib) +
+           " disagrees with measured " + std::to_string(measured_mib) + " for " + catalog_id;
 }
 
 // Probe nvidia-smi with a hard deadline. A hung driver/tool must not block
@@ -256,6 +276,16 @@ inline bool occupancy_ready_for_spawn(const OccupancyCheckInput& in, std::string
     };
     if (in.candidate_is_tensorrt && (!in.has_gpu_mem_mib || in.gpu_mem_mib <= 0)) {
         return fail("stamp missing for " + in.candidate_id + " (gpu_mem_mib>0 required for TensorRT)");
+    }
+    if (in.has_measured_gpu_mem_mib && in.has_gpu_mem_mib && in.gpu_mem_mib > 0) {
+        const int tol = occupancy_declared_measured_tol_mib(in.gpu_mem_mib);
+        const int delta = in.gpu_mem_mib > in.measured_gpu_mem_mib
+                              ? in.gpu_mem_mib - in.measured_gpu_mem_mib
+                              : in.measured_gpu_mem_mib - in.gpu_mem_mib;
+        if (delta > tol) {
+            return fail(occupancy_declared_measured_detail(in.candidate_id, in.gpu_mem_mib,
+                                                           in.measured_gpu_mem_mib));
+        }
     }
     if (in.gpu_mem_at_workers > 0) {
         const int effective_w = in.worker_nums > 0 ? in.worker_nums : 1;
