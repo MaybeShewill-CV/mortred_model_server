@@ -84,8 +84,9 @@ TEST(ObjectDetectionOutputContract, YoloV8AcceptsValidOutputAndMapsGeometry) {
     EXPECT_NEAR(result[0].score, 0.9f, 1e-6);
     EXPECT_NEAR(result[0].bbox.x, 15.0f, 1e-5);
     EXPECT_NEAR(result[0].bbox.y, 15.0f, 1e-5);
-    EXPECT_NEAR(result[0].bbox.width, 10.0f, 1e-5);
-    EXPECT_NEAR(result[0].bbox.height, 10.0f, 1e-5);
+    // source is 20x20; the unmapped box is clamped to that edge, so 10 becomes 5
+    EXPECT_NEAR(result[0].bbox.width, 5.0f, 1e-5);
+    EXPECT_NEAR(result[0].bbox.height, 5.0f, 1e-5);
 }
 
 TEST(ObjectDetectionOutputContract, YoloV8RejectsMalformedOutput) {
@@ -108,6 +109,19 @@ TEST(ObjectDetectionOutputContract, YoloV8RejectsMalformedOutput) {
 
     auto nan_output = output_tensor(DType::F32, {1, 84, 1}, one_candidate_yolov8(std::numeric_limits<float>::quiet_NaN()));
     check({nan_output});
+}
+
+TEST(ObjectDetectionOutputContract, YoloV8RejectsInfinity) {
+    TestYoloV8Detector detector;
+    detector._m_detection_params.class_nums = 80;
+    detector._m_detection_params.score_threshold = 0.25f;
+    std_object_detection_output result;
+    const auto status = detector.postprocess(
+        {output_tensor(DType::F32, {1, 84, 1}, one_candidate_yolov8(std::numeric_limits<float>::infinity()))},
+        test_context(), result);
+    EXPECT_EQ(status, StatusCode::MODEL_OUTPUT_CONTRACT_FAILED);
+    EXPECT_NE(status, StatusCode::MODEL_EMPTY_OUTPUT);
+    EXPECT_TRUE(result.empty());
 }
 
 TEST(ObjectDetectionOutputContract, RequestParamThresholdSweepIsMonotone) {
