@@ -99,7 +99,7 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::postprocess(const std::vector<Named
     const auto *mask_data = tensor.template data<int32_t>();
     if (tensor.element_count() < static_cast<int64_t>(context.network_size.area())) {
         LOG(ERROR) << "hrnet mask smaller than the input map: " << jinq::models::backend::shape_to_string(tensor.shape);
-        return StatusCode::MODEL_EMPTY_OUTPUT;
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
 
     cv::Mat result_image(context.network_size, CV_32SC1, const_cast<int32_t *>(reinterpret_cast<const int32_t *>(mask_data)));
