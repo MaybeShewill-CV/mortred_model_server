@@ -413,6 +413,33 @@ TEST(async_endpoints, failed_init_destructor_skips_drain) {
 
     EXPECT_LT(elapsed, std::chrono::seconds(2));
     EXPECT_EQ(log.find("drain timeout"), std::string::npos) << log;
+    EXPECT_EQ(log.find("server members destroying after drain"), std::string::npos) << log;
+}
+
+TEST(async_endpoints, initialized_destructor_logs_timeout_then_destroy) {
+    class ArmedServer : public NeverInitServer {
+    public:
+        void arm_without_returning_worker() {
+            commit_workers(1);
+        }
+    };
+
+    FLAGS_logtostderr = true;
+    testing::internal::CaptureStderr();
+    const auto start = std::chrono::steady_clock::now();
+    {
+        ArmedServer server;
+        server.arm_without_returning_worker();
+    }
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    const std::string log = testing::internal::GetCapturedStderr();
+
+    const auto timeout_at = log.find("drain timeout");
+    const auto destroy_at = log.find("server members destroying after drain");
+    EXPECT_LT(elapsed, std::chrono::seconds(5));
+    EXPECT_NE(timeout_at, std::string::npos) << log;
+    EXPECT_NE(destroy_at, std::string::npos) << log;
+    EXPECT_LT(timeout_at, destroy_at) << log;
 }
 
 int main(int argc, char** argv) {
