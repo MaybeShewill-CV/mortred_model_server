@@ -96,6 +96,7 @@ public:
                               std::chrono::milliseconds(kDrainTimeoutMs);
         _m_async_eps.drain(deadline);
         _m_workers.drain(deadline);
+        LOG(WARNING) << "server members destroying after drain";
     }
 
     BaseAiServerImpl() = default;
