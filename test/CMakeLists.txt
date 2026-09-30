@@ -123,6 +123,7 @@ if(MORTRED_BUILD_FULL)
     list(APPEND TEST_LIST msocrnet_output_contract_unittest)
     list(APPEND TEST_LIST superpoint_output_contract_unittest)
     list(APPEND TEST_LIST enlightengan_output_contract_unittest)
+    list(APPEND TEST_LIST realesrgan_output_contract_unittest)
     list(APPEND TEST_LIST mono_depth_output_contract_unittest)
     # scaffold canary: proves scripts/new_model.py templates still compile
     list(APPEND TEST_LIST rtdetr_detector_output_contract_unittest)
@@ -220,6 +221,8 @@ foreach(src ${TEST_LIST})
         set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn)
     elseif(${src} STREQUAL "enlightengan_output_contract_unittest")
         set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn)
+    elseif(${src} STREQUAL "realesrgan_output_contract_unittest")
+        set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn)
     elseif(${src} STREQUAL "mono_depth_output_contract_unittest")
         set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn)
     elseif(${src} STREQUAL "rtdetr_detector_output_contract_unittest")
@@ -313,6 +316,16 @@ foreach(src ${TEST_LIST})
         set_tests_properties(${src} PROPERTIES LABELS "sanitizer")
     endif()
 endforeach()
+
+# ctest -R matches the CTest name, not the gtest suite. Alias the FULL
+# binary so `-R RealEsrGanOutputContract` selects this contract suite.
+if(TARGET realesrgan_output_contract_unittest)
+    add_test(
+        NAME RealEsrGanOutputContract
+        COMMAND $<TARGET_FILE:realesrgan_output_contract_unittest> --gtest_filter=RealEsrGanOutputContract.*
+        WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
+    add_dependencies(check realesrgan_output_contract_unittest)
+endif()
 
 # P0-1 fail-closed black box. Script owns PASS/FAIL/SKIP and exits 0 when
 # FAILS=0 (AC8 skip does not fail the process). No valgrind label so the
