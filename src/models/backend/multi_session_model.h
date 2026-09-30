@@ -159,7 +159,20 @@ template <typename Derived, typename INPUT, typename OUTPUT> class MultiSessionM
 
     /*** creates and validates every declared session; resets all on failure ***/
     StatusCode init_sessions() {
-        for (const auto &spec : Derived::sessions()) {
+        const auto specs = Derived::sessions();
+        // Pre-check every declared backend_key before creating any session:
+        // missing table, or key present but not this session's backend table,
+        // must fail closed with the declared key literal in the detail.
+        const auto &section = this->model_section();
+        for (const auto &spec : specs) {
+            if (!section.contains(spec.backend_key) || section[spec.backend_key].as_table() == nullptr) {
+                LOG(ERROR) << "declared backend key [" << spec.backend_key << "] missing or not a table for session ["
+                           << spec.name << "]";
+                reset_sessions();
+                return StatusCode::MODEL_INIT_FAILED;
+            }
+        }
+        for (const auto &spec : specs) {
             auto created = create_session(spec);
             if (created == nullptr) {
                 LOG(ERROR) << "create session [" << spec.name << "] from [" << spec.backend_key << "] failed";

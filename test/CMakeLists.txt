@@ -369,6 +369,20 @@ if(TARGET openai_clip_output_contract_unittest)
         WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
     add_dependencies(check openai_clip_output_contract_unittest)
 endif()
+if(TARGET multi_session_model_unittest)
+    add_test(
+        NAME MultiSessionModel
+        COMMAND $<TARGET_FILE:multi_session_model_unittest> --gtest_filter=MultiSessionModel.*
+        WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
+    add_dependencies(check multi_session_model_unittest)
+endif()
+if(TARGET diffusion_param_unittest)
+    add_test(
+        NAME DiffusionParam
+        COMMAND $<TARGET_FILE:diffusion_param_unittest> --gtest_filter=DiffusionParam.*
+        WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
+    add_dependencies(check diffusion_param_unittest)
+endif()
 if(TARGET hrnet_output_contract_unittest)
     add_test(
         NAME HRNetOutputContract
