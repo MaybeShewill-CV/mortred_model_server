@@ -352,6 +352,7 @@
       "hf_path": "feature_point/superpoint/superpoint_120x160.static_bs1.onnx",
       "on_hf": true,
       "profiles": [
+        "cpu",
         "gpu"
       ],
       "kind": "onnx"
@@ -956,6 +957,7 @@
       "hf_path": "object_detection/nanodet/nanodet_plus_m_1x5.static_bs1.onnx",
       "on_hf": true,
       "profiles": [
+        "cpu",
         "gpu"
       ],
       "kind": "onnx"
@@ -1268,6 +1270,7 @@
       "hf_path": "ocr/db_text_detector/db_model_large.static_bs1.onnx",
       "on_hf": true,
       "profiles": [
+        "cpu",
         "gpu"
       ],
       "kind": "onnx"
@@ -1650,6 +1653,7 @@
       "hf_path": "scene_segmentation/bisenetv2/bisenetv2_cityscapes.static_bs1.onnx",
       "on_hf": true,
       "profiles": [
+        "cpu",
         "gpu"
       ],
       "kind": "onnx"

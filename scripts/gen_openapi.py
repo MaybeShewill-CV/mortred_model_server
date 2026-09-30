@@ -54,7 +54,13 @@ def dump_hash(dump: dict) -> str:
 
 
 def server_sections() -> list[tuple[str, str, str]]:
-    """Return [(server_section, server_uri, category)] from conf/server/*.toml."""
+    """Return [(server_section, server_uri, category)], one row per server_uri.
+
+    Several catalog ids share one *_SERVER section (yolov8n/s/l/x). Paths in
+    the OpenAPI document are those URIs, so collapsing on the section name
+    drops every id after the first. CPU and GPU variants of one id share a
+    URI; the first file wins.
+    """
     found: dict[str, tuple[str, str]] = {}
     conf_server = ROOT / "conf" / "server"
     if not conf_server.exists():
@@ -71,8 +77,8 @@ def server_sections() -> list[tuple[str, str, str]]:
             if not isinstance(uri, str) or not uri:
                 continue
             category = cfg.parent.relative_to(conf_server).parts[0]
-            found.setdefault(section_name, (uri, category))
-    return sorted((name, uri, category) for name, (uri, category) in found.items())
+            found.setdefault(uri, (section_name, category))
+    return sorted((section, uri, category) for uri, (section, category) in found.items())
 
 
 def dump_entries_by_section(dump: dict) -> dict[str, dict]:

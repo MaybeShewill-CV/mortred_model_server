@@ -389,7 +389,7 @@ def check_server_config_structure() -> list[str]:
 
 
 _HTTP_ENTRY_RE = re.compile(
-    r'\{\s*"([A-Z][A-Z0-9_]*)"\s*,\s*"[^"]*"\s*,\s*"[A-Z][A-Z0-9_]*_SERVER"'
+    r'\{\s*"([A-Za-z][A-Za-z0-9_]*)"\s*,\s*"[^"]*"\s*,\s*"[A-Z][A-Z0-9_]*_SERVER"'
 )
 _UNIFIED_SERVER_EXE = "mortred-model-server.out"
 

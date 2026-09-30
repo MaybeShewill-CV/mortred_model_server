@@ -6,8 +6,8 @@
       {
         "gtest": "model_golden.mobilenetv2_classification",
         "family": "classification",
-        "catalog_id": "MOBILENETV2",
-        "config": "conf/model/classification/mobilenetv2/mobilenetv2.toml",
+        "catalog_id": "mobilenetv2",
+        "config": "conf/model/classification/mobilenetv2/mobilenetv2_cpu.toml",
         "weights": [
           "weights/classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn"
         ]
@@ -15,16 +15,16 @@
       {
         "gtest": "model_golden.nanodet_detection",
         "family": "object_detection",
-        "catalog_id": "NANODET",
-        "config": "conf/model/object_detection/nano_det/nanodet_1x5.toml",
+        "catalog_id": "nanodet_1x5",
+        "config": "conf/ci/nanodet_onnx_hosted.toml",
         "weights": [
-          "weights/object_detection/nanodet/nanodet_plus_m_1x5.mnn"
+          "weights/object_detection/nanodet/nanodet_plus_m_1x5.static_bs1.onnx"
         ]
       },
       {
         "gtest": "model_golden.yolov8_onnx_detection",
         "family": "object_detection",
-        "catalog_id": "YOLOV8",
+        "catalog_id": "yolov8s",
         "config": "conf/ci/yolov8_onnx_hosted.toml",
         "weights": [
           "weights/object_detection/yolov8/yolov8s.onnx"
@@ -33,28 +33,28 @@
       {
         "gtest": "model_golden.dbnet_text_detection",
         "family": "ocr",
-        "catalog_id": "DBNET",
-        "config": "conf/model/ocr/db_text_detector/dbnet.toml",
+        "catalog_id": "dbnet",
+        "config": "conf/ci/dbnet_onnx_hosted.toml",
         "weights": [
-          "weights/ocr/db_text_detector/db_model_large.mnn"
+          "weights/ocr/db_text_detector/db_model_large.static_bs1.onnx"
         ]
       },
       {
         "gtest": "model_golden.superpoint_feature_point",
         "family": "feature_point",
-        "catalog_id": "SUPERPOINT",
-        "config": "conf/model/feature_point/superpoint/superpoint.toml",
+        "catalog_id": "superpoint",
+        "config": "conf/ci/superpoint_onnx_hosted.toml",
         "weights": [
-          "weights/feature_point/superpoint/superpoint_120x160.mnn"
+          "weights/feature_point/superpoint/superpoint_120x160.static_bs1.onnx"
         ]
       },
       {
         "gtest": "model_golden.bisenetv2_segmentation",
         "family": "scene_segmentation",
-        "catalog_id": "BISENETV2",
-        "config": "conf/model/scene_segmentation/bisenetv2/bisenetv2.toml",
+        "catalog_id": "bisenetv2",
+        "config": "conf/ci/bisenetv2_onnx_hosted.toml",
         "weights": [
-          "weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.mnn"
+          "weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.static_bs1.onnx"
         ]
       }
     ]
@@ -62,75 +62,71 @@
   "gpu_smoke": {
     "cases": [
       {
-        "gtest": "model_golden.yolov5_detection",
-        "family": "object_detection",
-        "catalog_id": "YOLOV5"
-      },
-      {
         "gtest": "model_golden.yolov8_detection",
         "family": "object_detection",
-        "catalog_id": "YOLOV8"
+        "catalog_id": "yolov8s"
       },
       {
         "gtest": "model_golden.yolov8_mixed_size_batch_matches_single_runs",
         "family": "object_detection",
-        "catalog_id": "YOLOV8"
-      },
-      {
-        "gtest": "model_golden.nanodet_detection",
-        "family": "object_detection",
-        "catalog_id": "NANODET"
-      },
-      {
-        "gtest": "model_golden.centerface_detection",
-        "family": "face_detection",
-        "catalog_id": "CENTER_FACE"
-      },
-      {
-        "gtest": "model_golden.dbnet_text_detection",
-        "family": "ocr",
-        "catalog_id": "DBNET"
+        "catalog_id": "yolov8s"
       },
       {
         "gtest": "model_golden.mobilenetv2_classification",
         "family": "classification",
-        "catalog_id": "MOBILENETV2"
+        "catalog_id": "mobilenetv2"
       },
       {
-        "gtest": "model_golden.fastsam_segmentation",
-        "family": "sam",
-        "catalog_id": null
+        "gtest": "model_golden.libface_detection",
+        "family": "face_detection",
+        "catalog_id": "libface"
       }
     ]
   },
   "catalog_tiers": {
-    "MOBILENETV2": "hosted",
-    "NANODET": "hosted",
-    "DBNET": "hosted",
-    "SUPERPOINT": "hosted",
-    "BISENETV2": "hosted",
-    "YOLOV5": "gpu-smoke",
-    "YOLOV8": "hosted",
-    "CENTER_FACE": "gpu-smoke",
-    "RESNET": "nightly",
-    "DENSENET": "nightly",
-    "YOLOV6": "nightly",
-    "YOLOV7": "nightly",
-    "LIBFACE": "nightly",
-    "PPHUMAN_SEG": "nightly",
-    "HRNET": "nightly",
-    "PP_MATTING": "nightly",
-    "MODNET": "nightly",
-    "DINOV2": "nightly",
-    "ENLIGHTEN_GAN": "nightly",
-    "ATTENTIVE_GAN_DERAIN": "nightly",
-    "REAL_ESRGAN": "nightly",
-    "SAM_AMG": "nightly",
-    "METRIC3D": "nightly",
-    "DEPTH_ANYTHING": "nightly",
-    "DDPM": "nightly",
-    "DDIM": "nightly",
+    "mobilenetv2": "hosted",
+    "nanodet_1x5": "hosted",
+    "yolov8s": "hosted",
+    "dbnet": "hosted",
+    "superpoint": "hosted",
+    "bisenetv2": "hosted",
+    "libface": "gpu-smoke",
+    "attentive_gan": "nightly",
+    "centerface": "nightly",
     "CLS_COND_DDIM": "nightly",
-    "LDM": "nightly"
+    "DDIM": "nightly",
+    "DDPM": "nightly",
+    "densenet": "nightly",
+    "depth_vitb14": "nightly",
+    "depth_vitl14": "nightly",
+    "depth_vits14": "nightly",
+    "dinov2_vitb14": "nightly",
+    "dinov2_vitl14": "nightly",
+    "dinov2_vits14": "nightly",
+    "enlightengan": "nightly",
+    "hrnet": "nightly",
+    "LDM": "nightly",
+    "metric3d_1088": "nightly",
+    "metric3d_512": "nightly",
+    "modnet": "nightly",
+    "msocrnet": "nightly",
+    "nanodet_416": "nightly",
+    "pphuman_lite": "nightly",
+    "pphuman_mobile": "nightly",
+    "pphuman_server": "nightly",
+    "ppmatting_1024": "nightly",
+    "ppmatting_512": "nightly",
+    "ppmatting_resnet34": "nightly",
+    "ppmatting_v2": "nightly",
+    "realesrgan": "nightly",
+    "resnet": "nightly",
+    "SAM_AMG": "nightly",
+    "yolov5l": "nightly",
+    "yolov6s": "nightly",
+    "yolov7": "nightly",
+    "yolov7x": "nightly",
+    "yolov8l": "nightly",
+    "yolov8n": "nightly",
+    "yolov8x": "nightly"
   }
 }

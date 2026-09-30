@@ -97,7 +97,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         }
       }
     },
-    "/mortred_ai_server_v1/enhancement/attentive_gan_derain": {
+    "/mortred_ai_server_v1/enhancement/attentive_gan": {
       "post": {
         "summary": "attentive gan derain",
         "tags": [
@@ -371,7 +371,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         }
       }
     },
-    "/mortred_ai_server_v1/obj_detection/center_face": {
+    "/mortred_ai_server_v1/obj_detection/centerface": {
       "post": {
         "summary": "center face detection",
         "tags": [
@@ -645,7 +645,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         }
       }
     },
-    "/mortred_ai_server_v1/ocr/dbtext": {
+    "/mortred_ai_server_v1/ocr/dbnet": {
       "post": {
         "summary": "dbnet",
         "tags": [
@@ -1193,7 +1193,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         }
       }
     },
-    "/mortred_ai_server_v1/mono_depth_estimation/depth_anything": {
+    "/mortred_ai_server_v1/mono_depth_estimation/depth_vitb14": {
       "post": {
         "summary": "depth anything estimation",
         "tags": [
@@ -1330,7 +1330,281 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         }
       }
     },
-    "/mortred_ai_server_v1/feature_embedding/dinov2": {
+    "/mortred_ai_server_v1/mono_depth_estimation/depth_vitl14": {
+      "post": {
+        "summary": "depth anything estimation",
+        "tags": [
+          "mono_depth_estimation"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_DEPTH_ANYTHING_ESTIMATION_SERVER"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/DepthResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/mono_depth_estimation/depth_vits14": {
+      "post": {
+        "summary": "depth anything estimation",
+        "tags": [
+          "mono_depth_estimation"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_DEPTH_ANYTHING_ESTIMATION_SERVER"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/DepthResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/feature_embedding/dinov2_vitb14": {
       "post": {
         "summary": "DINOv2 image feature embedding",
         "tags": [
@@ -1467,7 +1741,281 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         }
       }
     },
-    "/mortred_ai_server_v1/enhancement/enlighten_gan": {
+    "/mortred_ai_server_v1/feature_embedding/dinov2_vitl14": {
+      "post": {
+        "summary": "DINOv2 image feature embedding",
+        "tags": [
+          "feature_embedding"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_DINOV2_FEATURE_EMBEDDING_SERVER"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/EnvelopeData"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/feature_embedding/dinov2_vits14": {
+      "post": {
+        "summary": "DINOv2 image feature embedding",
+        "tags": [
+          "feature_embedding"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_DINOV2_FEATURE_EMBEDDING_SERVER"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/EnvelopeData"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/enhancement/enlightengan": {
       "post": {
         "summary": "enlighten gan",
         "tags": [
@@ -2015,7 +2563,144 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         }
       }
     },
-    "/mortred_ai_server_v1/mono_depth_estimation/metric3d": {
+    "/mortred_ai_server_v1/mono_depth_estimation/metric3d_1088": {
+      "post": {
+        "summary": "metric3d estimation",
+        "tags": [
+          "mono_depth_estimation"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_METRIC3D_ESTIMATION_SERVER"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/DepthResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/mono_depth_estimation/metric3d_512": {
       "post": {
         "summary": "metric3d estimation",
         "tags": [
@@ -2426,7 +3111,144 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         }
       }
     },
-    "/mortred_ai_server_v1/obj_detection/nanodet": {
+    "/mortred_ai_server_v1/scene_segmentation/msocrnet": {
+      "post": {
+        "summary": "MSOCRNET_SERVER inference",
+        "tags": [
+          "unknown"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_MSOCRNET_SERVER"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/EnvelopeData"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/obj_detection/nanodet_1x5": {
       "post": {
         "summary": "nanodet object detection",
         "tags": [
@@ -2563,7 +3385,144 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         }
       }
     },
-    "/mortred_ai_server_v1/scene_segmentation/pphuman_seg": {
+    "/mortred_ai_server_v1/obj_detection/nanodet_416": {
+      "post": {
+        "summary": "nanodet object detection",
+        "tags": [
+          "object_detection"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_NANODET_DETECTION_SERVER"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/DetectionResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/scene_segmentation/pphuman_lite": {
       "post": {
         "summary": "pphuman segmentation",
         "tags": [
@@ -2700,7 +3659,281 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         }
       }
     },
-    "/mortred_ai_server_v1/matting/pp_matting": {
+    "/mortred_ai_server_v1/scene_segmentation/pphuman_mobile": {
+      "post": {
+        "summary": "pphuman segmentation",
+        "tags": [
+          "scene_segmentation"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_PPHUMAN_SEG_SERVER"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/SegmentationResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/scene_segmentation/pphuman_server": {
+      "post": {
+        "summary": "pphuman segmentation",
+        "tags": [
+          "scene_segmentation"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_PPHUMAN_SEG_SERVER"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/SegmentationResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/matting/ppmatting_1024": {
       "post": {
         "summary": "pp matting",
         "tags": [
@@ -2837,7 +4070,418 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         }
       }
     },
-    "/mortred_ai_server_v1/enhancement/real_esrgan": {
+    "/mortred_ai_server_v1/matting/ppmatting_512": {
+      "post": {
+        "summary": "pp matting",
+        "tags": [
+          "matting"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_PP_MATTING_SERVER"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/MattingResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/matting/ppmatting_resnet34": {
+      "post": {
+        "summary": "pp matting",
+        "tags": [
+          "matting"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_PP_MATTING_SERVER"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/MattingResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/matting/ppmatting_v2": {
+      "post": {
+        "summary": "pp matting",
+        "tags": [
+          "matting"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_PP_MATTING_SERVER"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/MattingResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/enhancement/realesrgan": {
       "post": {
         "summary": "real esr-gan",
         "tags": [
@@ -3385,7 +5029,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         }
       }
     },
-    "/mortred_ai_server_v1/obj_detection/yolov5": {
+    "/mortred_ai_server_v1/obj_detection/yolov5l": {
       "post": {
         "summary": "Yolov5 object detection",
         "tags": [
@@ -3522,7 +5166,7 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         }
       }
     },
-    "/mortred_ai_server_v1/obj_detection/yolov6": {
+    "/mortred_ai_server_v1/obj_detection/yolov6s": {
       "post": {
         "summary": "Yolov6 object detection",
         "tags": [
@@ -3796,7 +5440,555 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         }
       }
     },
-    "/mortred_ai_server_v1/obj_detection/yolov8": {
+    "/mortred_ai_server_v1/obj_detection/yolov7x": {
+      "post": {
+        "summary": "Yolov7 object detection",
+        "tags": [
+          "object_detection"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_YOLOV7_DETECTION_SERVER"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/DetectionResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/obj_detection/yolov8l": {
+      "post": {
+        "summary": "Yolov8 object detection",
+        "tags": [
+          "object_detection"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_YOLOV8_DETECTION_SERVER"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/DetectionResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/obj_detection/yolov8n": {
+      "post": {
+        "summary": "Yolov8 object detection",
+        "tags": [
+          "object_detection"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_YOLOV8_DETECTION_SERVER"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/DetectionResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/obj_detection/yolov8s": {
+      "post": {
+        "summary": "Yolov8 object detection",
+        "tags": [
+          "object_detection"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request_YOLOV8_DETECTION_SERVER"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Trace id (raw encoding only; JSON uses req_id)"
+          },
+          {
+            "name": "X-Mortred-Params",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"score_threshold\":0.35}"
+          },
+          {
+            "name": "X-Mortred-Options",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Compact JSON object, e.g. {\"encoding\":\"jpeg\"}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unified envelope; results[] is index-aligned with images[] (always length N). Mid-request deadline: HTTP 200 + status 68 + partial=true when any item completed; HTTP 504 with N timeout slots when none did.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UnifiedResponse"
+                    },
+                    {
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/ResponseItem"
+                              },
+                              {
+                                "properties": {
+                                  "data": {
+                                    "$ref": "#/components/schemas/DetectionResult"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        }
+      }
+    },
+    "/mortred_ai_server_v1/obj_detection/yolov8x": {
       "post": {
         "summary": "Yolov8 object detection",
         "tags": [
@@ -4610,6 +6802,37 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
         "description": "Request-level parameter overrides (strict: unknown keys -> 422)"
       },
       "Request_MODNET_SERVER": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "req_id": {
+            "type": "string",
+            "description": "Optional trace id echoed as task_id"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Base64 encoded image"
+            },
+            "minItems": 1,
+            "description": "One result entry per image (index-aligned results[])"
+          },
+          "options": {
+            "$ref": "#/components/schemas/OutputOptions"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+            "description": "This model declares no request-level parameters"
+          }
+        }
+      },
+      "Request_MSOCRNET_SERVER": {
         "type": "object",
         "required": [
           "images"
