@@ -38,13 +38,18 @@ class LightGlue : public jinq::models::backend::MultiSessionModel<LightGlue<INPU
     LightGlue(const LightGlue &transformer) = delete;
     LightGlue &operator=(const LightGlue &transformer) = delete;
 
-  private:
+  protected:
     struct FeaturePoints {
         std::vector<float> keypoints;
         std::vector<float> normalized_keypoints;
         std::vector<float> descriptors;
     };
 
+    StatusCode classify_extractor_outputs(const std::vector<jinq::models::backend::NamedTensor> &outputs) const;
+    StatusCode classify_matcher_outputs(const std::vector<jinq::models::backend::NamedTensor> &outputs) const;
+    StatusCode classify_feature_layout(const FeaturePoints &src_features, const FeaturePoints &dst_features) const;
+
+  private:
     StatusCode on_init(const toml::table &params) override;
 
     StatusCode run_sessions(const INPUT &input, OUTPUT &output) override;

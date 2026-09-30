@@ -69,6 +69,65 @@ const NamedTensor *LightGlue<INPUT, OUTPUT>::find_output(const std::vector<Named
     return nullptr;
 }
 
+template <typename INPUT, typename OUTPUT>
+StatusCode LightGlue<INPUT, OUTPUT>::classify_extractor_outputs(const std::vector<NamedTensor> &outputs) const {
+    const auto *keypoints = find_output(outputs, "keypoints");
+    const auto *scores = find_output(outputs, "scores");
+    const auto *descriptors = find_output(outputs, "descriptors");
+    if (keypoints == nullptr || scores == nullptr || descriptors == nullptr) {
+        LOG(ERROR) << "lightglue extractor outputs keypoints/scores/descriptors missing";
+        return StatusCode::MODEL_EMPTY_OUTPUT;
+    }
+    if (keypoints->tensor.dtype != jinq::models::backend::DType::I32 || scores->tensor.dtype != jinq::models::backend::DType::F32 ||
+        descriptors->tensor.dtype != jinq::models::backend::DType::F32) {
+        LOG(ERROR) << "lightglue extractor output dtypes are unexpected";
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+    }
+    const auto score_count = static_cast<size_t>(scores->tensor.element_count());
+    if (score_count == 0 || keypoints->tensor.element_count() != static_cast<int64_t>(score_count * 2) ||
+        descriptors->tensor.element_count() != static_cast<int64_t>(score_count * 256)) {
+        LOG(ERROR) << "lightglue extractor output sizes mismatch: scores " << score_count << ", keypoints "
+                   << keypoints->tensor.element_count() << ", descriptors " << descriptors->tensor.element_count();
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+    }
+    return StatusCode::OK;
+}
+
+template <typename INPUT, typename OUTPUT>
+StatusCode LightGlue<INPUT, OUTPUT>::classify_feature_layout(const FeaturePoints &src_features, const FeaturePoints &dst_features) const {
+    const auto src_count = src_features.keypoints.size() / 2;
+    const auto dst_count = dst_features.keypoints.size() / 2;
+    if (src_features.descriptors.size() != src_count * 256 || dst_features.descriptors.size() != dst_count * 256 ||
+        src_features.normalized_keypoints.size() != src_features.keypoints.size() ||
+        dst_features.normalized_keypoints.size() != dst_features.keypoints.size()) {
+        LOG(ERROR) << "lightglue selected feature keypoints/descriptors mismatch";
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+    }
+    return StatusCode::OK;
+}
+
+template <typename INPUT, typename OUTPUT>
+StatusCode LightGlue<INPUT, OUTPUT>::classify_matcher_outputs(const std::vector<NamedTensor> &outputs) const {
+    const auto *match_indices = find_output(outputs, "matches0");
+    const auto *match_scores = find_output(outputs, "mscores0");
+    if (match_indices == nullptr || match_scores == nullptr) {
+        LOG(ERROR) << "lightglue matcher outputs matches0/mscores0 missing";
+        return StatusCode::MODEL_EMPTY_OUTPUT;
+    }
+    if (match_indices->tensor.dtype != jinq::models::backend::DType::I32 ||
+        match_scores->tensor.dtype != jinq::models::backend::DType::F32) {
+        LOG(ERROR) << "lightglue matcher output dtypes are unexpected";
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+    }
+    const auto score_count = static_cast<size_t>(match_scores->tensor.element_count());
+    if (match_indices->tensor.element_count() != static_cast<int64_t>(score_count * 2)) {
+        LOG(ERROR) << "lightglue matcher output sizes mismatch: matches " << match_indices->tensor.element_count() << ", scores "
+                   << score_count;
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+    }
+    return StatusCode::OK;
+}
+
 template <typename INPUT, typename OUTPUT> cv::Mat LightGlue<INPUT, OUTPUT>::preprocess_image(const cv::Mat &input_image) const {
     if (input_image.empty() || input_image.channels() != 3) {
         LOG(ERROR) << "lightglue input must be a non-empty 3-channel image";
@@ -119,26 +178,14 @@ StatusCode LightGlue<INPUT, OUTPUT>::extract_feature_points(const cv::Mat &input
         return run_status;
     }
 
+    const auto contract_status = classify_extractor_outputs(outputs);
+    if (contract_status != StatusCode::OK) {
+        return contract_status;
+    }
     const auto *keypoints = find_output(outputs, "keypoints");
     const auto *scores = find_output(outputs, "scores");
     const auto *descriptors = find_output(outputs, "descriptors");
-    if (keypoints == nullptr || scores == nullptr || descriptors == nullptr) {
-        LOG(ERROR) << "lightglue extractor outputs keypoints/scores/descriptors missing";
-        return StatusCode::MODEL_EMPTY_OUTPUT;
-    }
-    if (keypoints->tensor.dtype != jinq::models::backend::DType::I32 || scores->tensor.dtype != jinq::models::backend::DType::F32 ||
-        descriptors->tensor.dtype != jinq::models::backend::DType::F32) {
-        LOG(ERROR) << "lightglue extractor output dtypes are unexpected";
-        return StatusCode::MODEL_EMPTY_OUTPUT;
-    }
-
     const auto score_count = static_cast<size_t>(scores->tensor.element_count());
-    if (score_count == 0 || keypoints->tensor.element_count() != static_cast<int64_t>(score_count * 2) ||
-        descriptors->tensor.element_count() != static_cast<int64_t>(score_count * 256)) {
-        LOG(ERROR) << "lightglue extractor output sizes mismatch: scores " << score_count << ", keypoints "
-                   << keypoints->tensor.element_count() << ", descriptors " << descriptors->tensor.element_count();
-        return StatusCode::MODEL_EMPTY_OUTPUT;
-    }
 
     const auto *score_data = scores->tensor.template data<float>();
     const auto *keypoint_data = keypoints->tensor.template data<int32_t>();
@@ -169,11 +216,9 @@ StatusCode LightGlue<INPUT, OUTPUT>::match_feature_points(const FeaturePoints &s
     matches.clear();
     const auto src_count = src_features.keypoints.size() / 2;
     const auto dst_count = dst_features.keypoints.size() / 2;
-    if (src_features.descriptors.size() != src_count * 256 || dst_features.descriptors.size() != dst_count * 256 ||
-        src_features.normalized_keypoints.size() != src_features.keypoints.size() ||
-        dst_features.normalized_keypoints.size() != dst_features.keypoints.size()) {
-        LOG(ERROR) << "lightglue selected feature keypoints/descriptors mismatch";
-        return StatusCode::MODEL_EMPTY_OUTPUT;
+    const auto layout_status = classify_feature_layout(src_features, dst_features);
+    if (layout_status != StatusCode::OK) {
+        return layout_status;
     }
     if (src_count == 0 || dst_count == 0) {
         return StatusCode::OK;
@@ -210,23 +255,13 @@ StatusCode LightGlue<INPUT, OUTPUT>::match_feature_points(const FeaturePoints &s
         return run_status;
     }
 
+    const auto contract_status = classify_matcher_outputs(outputs);
+    if (contract_status != StatusCode::OK) {
+        return contract_status;
+    }
     const auto *match_indices = find_output(outputs, "matches0");
     const auto *match_scores = find_output(outputs, "mscores0");
-    if (match_indices == nullptr || match_scores == nullptr) {
-        LOG(ERROR) << "lightglue matcher outputs matches0/mscores0 missing";
-        return StatusCode::MODEL_EMPTY_OUTPUT;
-    }
-    if (match_indices->tensor.dtype != jinq::models::backend::DType::I32 ||
-        match_scores->tensor.dtype != jinq::models::backend::DType::F32) {
-        LOG(ERROR) << "lightglue matcher output dtypes are unexpected";
-        return StatusCode::MODEL_EMPTY_OUTPUT;
-    }
     const auto score_count = static_cast<size_t>(match_scores->tensor.element_count());
-    if (match_indices->tensor.element_count() != static_cast<int64_t>(score_count * 2)) {
-        LOG(ERROR) << "lightglue matcher output sizes mismatch: matches " << match_indices->tensor.element_count() << ", scores "
-                   << score_count;
-        return StatusCode::MODEL_EMPTY_OUTPUT;
-    }
 
     const auto *index_data = match_indices->tensor.template data<int32_t>();
     const auto *score_data = match_scores->tensor.template data<float>();

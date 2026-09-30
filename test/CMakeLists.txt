@@ -125,6 +125,8 @@ if(MORTRED_BUILD_FULL)
     list(APPEND TEST_LIST enlightengan_output_contract_unittest)
     list(APPEND TEST_LIST realesrgan_output_contract_unittest)
     list(APPEND TEST_LIST attentive_gan_output_contract_unittest)
+    list(APPEND TEST_LIST lightglue_output_contract_unittest)
+    list(APPEND TEST_LIST openai_clip_output_contract_unittest)
     list(APPEND TEST_LIST hrnet_output_contract_unittest)
     list(APPEND TEST_LIST mono_depth_output_contract_unittest)
     # scaffold canary: proves scripts/new_model.py templates still compile
@@ -226,6 +228,10 @@ foreach(src ${TEST_LIST})
     elseif(${src} STREQUAL "realesrgan_output_contract_unittest")
         set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn)
     elseif(${src} STREQUAL "attentive_gan_output_contract_unittest")
+        set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn)
+    elseif(${src} STREQUAL "lightglue_output_contract_unittest")
+        set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn)
+    elseif(${src} STREQUAL "openai_clip_output_contract_unittest")
         set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn)
     elseif(${src} STREQUAL "hrnet_output_contract_unittest")
         set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn)
@@ -338,6 +344,20 @@ if(TARGET attentive_gan_output_contract_unittest)
         COMMAND $<TARGET_FILE:attentive_gan_output_contract_unittest> --gtest_filter=AttentiveGanOutputContract.*
         WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
     add_dependencies(check attentive_gan_output_contract_unittest)
+endif()
+if(TARGET lightglue_output_contract_unittest)
+    add_test(
+        NAME LightGlueOutputContract
+        COMMAND $<TARGET_FILE:lightglue_output_contract_unittest> --gtest_filter=LightGlueOutputContract.*
+        WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
+    add_dependencies(check lightglue_output_contract_unittest)
+endif()
+if(TARGET openai_clip_output_contract_unittest)
+    add_test(
+        NAME OpenAiClipOutputContract
+        COMMAND $<TARGET_FILE:openai_clip_output_contract_unittest> --gtest_filter=OpenAiClipOutputContract.*
+        WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
+    add_dependencies(check openai_clip_output_contract_unittest)
 endif()
 if(TARGET hrnet_output_contract_unittest)
     add_test(
