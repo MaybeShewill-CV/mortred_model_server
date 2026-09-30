@@ -52,6 +52,9 @@ class OpenAiClip : public jinq::models::backend::MultiSessionModel<OpenAiClip<IN
 
     StatusCode imgs2text(const std::vector<cv::Mat> &input_images, const std::string &input_text, std::vector<float> &simi_scores);
 
+  protected:
+    static StatusCode embedding_shape_status(const std::vector<float> &lhs, const std::vector<float> &rhs);
+
   private:
     using ClipInput = jinq::models::io_define::clip::clip_input;
     using ClipOutput = jinq::models::io_define::clip::clip_output;

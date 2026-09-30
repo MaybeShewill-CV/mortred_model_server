@@ -113,6 +113,15 @@ bool OpenAiClip<INPUT, OUTPUT>::embeddings_compatible(const std::vector<float> &
 }
 
 template <typename INPUT, typename OUTPUT>
+StatusCode OpenAiClip<INPUT, OUTPUT>::embedding_shape_status(const std::vector<float> &lhs, const std::vector<float> &rhs) {
+    if (!embeddings_compatible(lhs, rhs)) {
+        LOG(ERROR) << "openai clip text/visual embedding shapes are incompatible";
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+    }
+    return StatusCode::OK;
+}
+
+template <typename INPUT, typename OUTPUT>
 void OpenAiClip<INPUT, OUTPUT>::tokenize(const std::string &input_text, std::vector<int32_t> &token_ids) const {
     token_ids.clear();
     std::vector<int32_t> text_tokens;
@@ -248,9 +257,12 @@ StatusCode OpenAiClip<INPUT, OUTPUT>::texts2img(const std::vector<std::string> &
         if (status != StatusCode::OK) {
             return status;
         }
-        if (!normalize_embedding(text_embedding) || !embeddings_compatible(text_embedding, visual_embedding)) {
-            LOG(ERROR) << "openai clip text/visual embedding shapes are incompatible";
+        if (!normalize_embedding(text_embedding)) {
             return StatusCode::MODEL_EMPTY_OUTPUT;
+        }
+        const auto shape_status = embedding_shape_status(text_embedding, visual_embedding);
+        if (shape_status != StatusCode::OK) {
+            return shape_status;
         }
         const auto cosine = std::inner_product(text_embedding.begin(), text_embedding.end(), visual_embedding.begin(), 0.0f);
         logits.push_back(std::min(100.0f * cosine, k_clip_logit_cap));
@@ -295,9 +307,12 @@ StatusCode OpenAiClip<INPUT, OUTPUT>::imgs2text(const std::vector<cv::Mat> &inpu
         if (status != StatusCode::OK) {
             return status;
         }
-        if (!normalize_embedding(visual_embedding) || !embeddings_compatible(visual_embedding, text_embedding)) {
-            LOG(ERROR) << "openai clip text/visual embedding shapes are incompatible";
+        if (!normalize_embedding(visual_embedding)) {
             return StatusCode::MODEL_EMPTY_OUTPUT;
+        }
+        const auto shape_status = embedding_shape_status(visual_embedding, text_embedding);
+        if (shape_status != StatusCode::OK) {
+            return shape_status;
         }
         const auto cosine = std::inner_product(text_embedding.begin(), text_embedding.end(), visual_embedding.begin(), 0.0f);
         logits.push_back(std::min(100.0f * cosine, k_clip_logit_cap));
