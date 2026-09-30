@@ -111,7 +111,7 @@ StatusCode AttentiveGanDerain<INPUT, OUTPUT>::postprocess(const std::vector<Name
         hwc_storage = jinq::common::CvUtils::convert_to_hwc_vec<float>(
             nchw, 3, output_size.height, output_size.width);
         if (hwc_storage.empty()) {
-            return StatusCode::MODEL_EMPTY_OUTPUT;
+            return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
         }
         hwc_ptr = hwc_storage.data();
     } else if (tensor.shape.size() == 3) {
@@ -126,7 +126,7 @@ StatusCode AttentiveGanDerain<INPUT, OUTPUT>::postprocess(const std::vector<Name
     if (hwc_ptr == nullptr || output_size.area() <= 0 ||
         tensor.element_count() != 3 * output_size.area()) {
         LOG(ERROR) << "invalid attentive gan output shape: " << jinq::models::backend::shape_to_string(tensor.shape);
-        return StatusCode::MODEL_EMPTY_OUTPUT;
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
 
     cv::Mat output_feats(output_size, CV_32FC3, const_cast<float *>(hwc_ptr));

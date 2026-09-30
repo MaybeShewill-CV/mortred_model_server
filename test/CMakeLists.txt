@@ -124,6 +124,8 @@ if(MORTRED_BUILD_FULL)
     list(APPEND TEST_LIST superpoint_output_contract_unittest)
     list(APPEND TEST_LIST enlightengan_output_contract_unittest)
     list(APPEND TEST_LIST realesrgan_output_contract_unittest)
+    list(APPEND TEST_LIST attentive_gan_output_contract_unittest)
+    list(APPEND TEST_LIST hrnet_output_contract_unittest)
     list(APPEND TEST_LIST mono_depth_output_contract_unittest)
     # scaffold canary: proves scripts/new_model.py templates still compile
     list(APPEND TEST_LIST rtdetr_detector_output_contract_unittest)
@@ -222,6 +224,10 @@ foreach(src ${TEST_LIST})
     elseif(${src} STREQUAL "enlightengan_output_contract_unittest")
         set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn)
     elseif(${src} STREQUAL "realesrgan_output_contract_unittest")
+        set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn)
+    elseif(${src} STREQUAL "attentive_gan_output_contract_unittest")
+        set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn)
+    elseif(${src} STREQUAL "hrnet_output_contract_unittest")
         set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn)
     elseif(${src} STREQUAL "mono_depth_output_contract_unittest")
         set(EXTRA_LIBS models glog::glog ${OpenCV_LIBS} vendored::mnn)
@@ -325,6 +331,20 @@ if(TARGET realesrgan_output_contract_unittest)
         COMMAND $<TARGET_FILE:realesrgan_output_contract_unittest> --gtest_filter=RealEsrGanOutputContract.*
         WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
     add_dependencies(check realesrgan_output_contract_unittest)
+endif()
+if(TARGET attentive_gan_output_contract_unittest)
+    add_test(
+        NAME AttentiveGanOutputContract
+        COMMAND $<TARGET_FILE:attentive_gan_output_contract_unittest> --gtest_filter=AttentiveGanOutputContract.*
+        WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
+    add_dependencies(check attentive_gan_output_contract_unittest)
+endif()
+if(TARGET hrnet_output_contract_unittest)
+    add_test(
+        NAME HRNetOutputContract
+        COMMAND $<TARGET_FILE:hrnet_output_contract_unittest> --gtest_filter=HRNetOutputContract.*
+        WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
+    add_dependencies(check hrnet_output_contract_unittest)
 endif()
 
 # P0-1 fail-closed black box. Script owns PASS/FAIL/SKIP and exits 0 when

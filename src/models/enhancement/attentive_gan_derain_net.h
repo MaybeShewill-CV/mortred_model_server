@@ -29,11 +29,12 @@ template <typename INPUT, typename OUTPUT> class AttentiveGanDerain : public jin
     AttentiveGanDerain(const AttentiveGanDerain &transformer) = delete;
     AttentiveGanDerain &operator=(const AttentiveGanDerain &transformer) = delete;
 
-  private:
-    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
-
+  protected:
     StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
                            const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
+
+  private:
+    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
     StatusCode on_init(const toml::table &params) override;
 
