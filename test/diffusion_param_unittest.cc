@@ -14,6 +14,7 @@
 
 #include <string>
 
+#include "glog/logging.h"
 #include "factory/diffusion_model_adapter.h"
 #include "models/backend/param_spec.h"
 #include "toml/toml.hpp"
@@ -133,6 +134,19 @@ using LdmAdapter = TestAdapter<FakeSampler<std_ldm_input, std_ldm_output>, std_l
 TEST(DiffusionParam, EmptyTomlFailsInit) {
     DdpmAdapter adapter;
     EXPECT_EQ(adapter.init(toml::table{}), StatusCode::MODEL_INIT_FAILED);
+    EXPECT_FALSE(adapter.is_successfully_initialized());
+}
+
+TEST(DiffusionParam, MissingDdpmSamplerSectionFailsNamed) {
+    DdpmAdapter adapter;
+    FLAGS_logtostderr = true;
+    testing::internal::CaptureStderr();
+    const auto status = adapter.init(toml::table{});
+    const std::string log = testing::internal::GetCapturedStderr();
+    EXPECT_EQ(status, StatusCode::MODEL_INIT_FAILED);
+    EXPECT_NE(status, StatusCode::MODEL_EMPTY_OUTPUT);
+    EXPECT_NE(status, StatusCode::MODEL_OUTPUT_CONTRACT_FAILED);
+    EXPECT_NE(log.find("DDPM_SAMPLER"), std::string::npos) << log;
     EXPECT_FALSE(adapter.is_successfully_initialized());
 }
 
