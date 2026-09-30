@@ -82,22 +82,62 @@ contracts → multiple typed catalogs (`catalog()` / `face_catalog()` in
 
 ## Path 1: add a classification model in ten minutes
 
+Official copy sample (classification). Do **not** pass `--dry-run` or
+`--apply-catalog` for the scaffold acceptance path — catalog registration stays
+manual until hooks are real.
+
 ```bash
-python scripts/new_model.py --list-tasks
-python scripts/new_model.py --task classification \
-    --name efficientnet --class EfficientNet \
-    --backend mnn --dry-run
-python scripts/new_model.py --task classification \
-    --name efficientnet --class EfficientNet \
-    --backend mnn
+python3 scripts/new_model.py --list-tasks
+python3 scripts/new_model.py --task classification \
+    --name p1_1_cls_probe --class P11ClsProbe --backend mnn
 ```
 
-Produces header / `.inl` / TOML / output-contract unittest (and prints catalog +
-CMake snippets it does not auto-apply). Unimplemented hooks return
-`MODEL_NOT_IMPLEMENTED` so a half-finished model cannot be served.
-`src/models/object_detection/rtdetr_detector.*` is the checked-in scaffold canary.
+Produces header / `.inl` / model+server TOML / output-contract unittest / docs
+stub, and prints catalog + CMake snippets it does **not** auto-apply.
+Unimplemented hooks return `MODEL_NOT_IMPLEMENTED` so a half-finished model
+cannot be served. `src/models/object_detection/rtdetr_detector.*` remains the
+checked-in object-detection scaffold canary (never registered in factory /
+`--list`).
 
-Fill hooks like [mobilenetv2.inl](../src/models/classification/mobilenetv2.inl):
+### Still manual after generate
+
+1. Catalog `Entry` + creator in `src/factory/classification_task.h` (only when
+   hooks are implemented and you intend to ship).
+2. Contract-test target in `test/CMakeLists.txt` (`list(APPEND TEST_LIST …)` and
+   the matching `EXTRA_LIBS` `elseif`).
+3. Real weights under `weights/classification/<name>/`, then golden case +
+   replace the scaffold expectation in the contract unittest.
+4. Implement `preprocess` / `postprocess` / `on_init` (see below).
+
+### Black-box acceptance (probe must stay off catalog)
+
+Fixed probe identity: `--task classification --name p1_1_cls_probe --class
+P11ClsProbe --backend mnn`. One-shot (preferred):
+
+```bash
+python3 scripts/verify_cls_scaffold_probe.py
+```
+
+Step-by-step equivalent (cleanup required; do not leave the probe in the tree):
+
+```bash
+python3 scripts/new_model.py --task classification \
+    --name p1_1_cls_probe --class P11ClsProbe --backend mnn
+# temporarily register p11_cls_probe_output_contract_unittest in test/CMakeLists.txt
+cmake --preset full
+cmake --build build/full --target p11_cls_probe_output_contract_unittest \
+    mortred-model-server.out -j$(nproc)
+./_bin/p11_cls_probe_output_contract_unittest
+# expect exit 0; unfilled hooks are MODEL_NOT_IMPLEMENTED
+./_bin/mortred-model-server.out --list
+# output must NOT contain p1_1_cls_probe / P1_1_CLS_PROBE
+# delete generated files; restore test/CMakeLists.txt; confirm classification_task.h
+# has no probe Entry
+python3 scripts/check_consistency.py
+```
+
+Fill hooks like [mobilenetv2.inl](../src/models/classification/mobilenetv2.inl)
+only when turning a real model into product:
 
 ```cpp
 const auto info = SessionIoValidator(session())
@@ -114,8 +154,9 @@ auto view = OutputReader(outputs, outputs.front().name)
                 .f32().shape({1, -1}).finite().read();
 ```
 
-Paste the scaffolder's catalog row into `src/factory/classification_task.h` and
-the test target into `test/CMakeLists.txt`.
+For a shipped model, paste the scaffolder's catalog row into
+`src/factory/classification_task.h` and the test target into
+`test/CMakeLists.txt`. Never commit the `p1_1_cls_probe` acceptance artifacts.
 
 ---
 
