@@ -390,6 +390,13 @@ if(TARGET hrnet_output_contract_unittest)
         WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
     add_dependencies(check hrnet_output_contract_unittest)
 endif()
+if(TARGET model_golden_test)
+    add_test(
+        NAME Yolov8TrtDetection
+        COMMAND $<TARGET_FILE:model_golden_test> --gtest_filter=Yolov8TrtDetection.*
+        WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
+    add_dependencies(check model_golden_test)
+endif()
 
 # P0-1 fail-closed black box. Script owns PASS/FAIL/SKIP and exits 0 when
 # FAILS=0 (AC8 skip does not fail the process). No valgrind label so the
