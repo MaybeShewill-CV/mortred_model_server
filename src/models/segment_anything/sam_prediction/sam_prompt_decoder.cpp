@@ -221,11 +221,12 @@ class SamPromptDecoder::Impl {
             return run_status;
         }
 
-        const auto *iou = find_output(outputs, "iou_predictions");
-        if (iou == nullptr) {
-            LOG(ERROR) << "sam decoder iou_predictions output missing";
-            return StatusCode::MODEL_EMPTY_OUTPUT;
+        const auto contract_status = SamPromptDecoder::classify_decoder_outputs(outputs);
+        if (contract_status != StatusCode::OK) {
+            return contract_status;
         }
+
+        const auto *iou = find_output(outputs, "iou_predictions");
         const auto *iou_data = iou->tensor.template data<float>();
         const auto iou_count = static_cast<int>(iou->tensor.element_count());
         const auto best_mask_idx = static_cast<int>(std::distance(iou_data, std::max_element(iou_data, iou_data + iou_count)));
@@ -235,17 +236,13 @@ class SamPromptDecoder::Impl {
             return decode_full_mask(full_masks->tensor, best_mask_idx, out_mask);
         }
         const auto *low_res_masks = find_output(outputs, "low_res_masks");
-        if (low_res_masks != nullptr) {
-            return decode_low_res_mask(low_res_masks->tensor, best_mask_idx, out_mask);
-        }
-        LOG(ERROR) << "sam decoder masks/low_res_masks output missing";
-        return StatusCode::MODEL_EMPTY_OUTPUT;
+        return decode_low_res_mask(low_res_masks->tensor, best_mask_idx, out_mask);
     }
 
     StatusCode decode_full_mask(const Tensor &tensor, int mask_idx, cv::Mat &out_mask) const {
-        if (tensor.shape.size() != 4 && tensor.shape.size() != 3) {
-            LOG(ERROR) << "invalid sam decoder full mask shape: " << jinq::models::backend::shape_to_string(tensor.shape);
-            return StatusCode::MODEL_EMPTY_OUTPUT;
+        const auto contract_status = SamPromptDecoder::classify_full_mask_tensor(tensor);
+        if (contract_status != StatusCode::OK) {
+            return contract_status;
         }
         const auto height = static_cast<int>(tensor.shape[tensor.shape.size() - 2]);
         const auto width = static_cast<int>(tensor.shape.back());
@@ -264,9 +261,9 @@ class SamPromptDecoder::Impl {
     }
 
     StatusCode decode_low_res_mask(const Tensor &tensor, int mask_idx, cv::Mat &out_mask) const {
-        if (tensor.shape.size() != 4) {
-            LOG(ERROR) << "invalid sam decoder low-res mask shape: " << jinq::models::backend::shape_to_string(tensor.shape);
-            return StatusCode::MODEL_EMPTY_OUTPUT;
+        const auto contract_status = SamPromptDecoder::classify_low_res_mask_tensor(tensor);
+        if (contract_status != StatusCode::OK) {
+            return contract_status;
         }
         const auto height = static_cast<int>(tensor.shape[2]);
         const auto width = static_cast<int>(tensor.shape[3]);
@@ -304,6 +301,49 @@ class SamPromptDecoder::Impl {
     bool _m_has_orig_size_input = false;
     bool _m_successfully_initialized = false;
 };
+
+namespace {
+
+const NamedTensor *find_named_output(const std::vector<NamedTensor> &outputs, const std::string &name) {
+    const auto iter = std::find_if(outputs.begin(), outputs.end(), [&name](const NamedTensor &item) { return item.name == name; });
+    return iter == outputs.end() ? nullptr : &*iter;
+}
+
+} // namespace
+
+StatusCode SamPromptDecoder::classify_full_mask_tensor(const Tensor &tensor) {
+    if (tensor.shape.size() != 4 && tensor.shape.size() != 3) {
+        LOG(ERROR) << "invalid sam decoder full mask shape: " << jinq::models::backend::shape_to_string(tensor.shape);
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+    }
+    return StatusCode::OK;
+}
+
+StatusCode SamPromptDecoder::classify_low_res_mask_tensor(const Tensor &tensor) {
+    if (tensor.shape.size() != 4) {
+        LOG(ERROR) << "invalid sam decoder low-res mask shape: " << jinq::models::backend::shape_to_string(tensor.shape);
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+    }
+    return StatusCode::OK;
+}
+
+StatusCode SamPromptDecoder::classify_decoder_outputs(const std::vector<NamedTensor> &outputs) {
+    const auto *iou = find_named_output(outputs, "iou_predictions");
+    if (iou == nullptr) {
+        LOG(ERROR) << "sam decoder iou_predictions output missing";
+        return StatusCode::MODEL_EMPTY_OUTPUT;
+    }
+    const auto *full_masks = find_named_output(outputs, "masks");
+    const auto *low_res_masks = find_named_output(outputs, "low_res_masks");
+    if (full_masks == nullptr && low_res_masks == nullptr) {
+        LOG(ERROR) << "sam decoder masks/low_res_masks output missing";
+        return StatusCode::MODEL_EMPTY_OUTPUT;
+    }
+    if (full_masks != nullptr) {
+        return classify_full_mask_tensor(full_masks->tensor);
+    }
+    return classify_low_res_mask_tensor(low_res_masks->tensor);
+}
 
 SamPromptDecoder::SamPromptDecoder(jinq::models::backend::InferenceSession *session) : _m_pimpl(std::make_unique<Impl>(session)) {}
 

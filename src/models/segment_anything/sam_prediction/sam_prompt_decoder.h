@@ -16,6 +16,7 @@
 
 #include "common/status_code.h"
 #include "models/backend/session.h"
+#include "models/backend/tensor.h"
 
 namespace jinq {
 namespace models {
@@ -48,6 +49,14 @@ class SamPromptDecoder {
                       std::vector<cv::Mat> &predicted_masks);
 
     bool is_successfully_initialized() const;
+
+  protected:
+    /*** Missing iou or both mask outputs → MODEL_EMPTY_OUTPUT; present but bad rank → CONTRACT. */
+    static StatusCode classify_decoder_outputs(const std::vector<jinq::models::backend::NamedTensor> &outputs);
+
+    static StatusCode classify_full_mask_tensor(const jinq::models::backend::Tensor &tensor);
+
+    static StatusCode classify_low_res_mask_tensor(const jinq::models::backend::Tensor &tensor);
 
   private:
     class Impl;
