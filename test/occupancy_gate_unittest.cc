@@ -182,6 +182,46 @@ TEST_F(OccupancyGateTest, error_prefix) {
     EXPECT_FALSE(is_occupancy_gate_error("fork() failed"));
 }
 
+TEST_F(OccupancyGateTest, declared_measured_mismatch_fails_with_calibrate_hint) {
+    OccupancyCheckInput in = trt_base();
+    in.has_gpu_mem_mib = true;
+    in.gpu_mem_mib = 1800;
+    in.gpu_mem_at_workers = 1;
+    in.has_measured_gpu_mem_mib = true;
+    // tol = max(64, 1800/100) = 64; delta 200 > 64
+    in.measured_gpu_mem_mib = 2000;
+    std::string err;
+    EXPECT_FALSE(occupancy_ready_for_spawn(in, &err));
+    EXPECT_TRUE(is_occupancy_gate_error(err)) << err;
+    EXPECT_EQ(err.find("occupancy gate:"), 0u) << err;
+    EXPECT_NE(err.find("1800"), std::string::npos) << err;
+    EXPECT_NE(err.find("2000"), std::string::npos) << err;
+    EXPECT_NE(err.find("mortredctl calibrate"), std::string::npos) << err;
+    EXPECT_NE(err.find("--write-pack"), std::string::npos) << err;
+}
+
+TEST_F(OccupancyGateTest, declared_measured_within_tolerance_passes) {
+    OccupancyCheckInput in = trt_base();
+    in.has_gpu_mem_mib = true;
+    in.gpu_mem_mib = 1800;
+    in.gpu_mem_at_workers = 1;
+    in.has_measured_gpu_mem_mib = true;
+    // tol = 64; delta 64 is not > 64
+    in.measured_gpu_mem_mib = 1864;
+    std::string err;
+    EXPECT_TRUE(occupancy_ready_for_spawn(in, &err)) << err;
+}
+
+TEST_F(OccupancyGateTest, no_measured_skips_declared_measured_check) {
+    OccupancyCheckInput in = trt_base();
+    in.has_gpu_mem_mib = true;
+    in.gpu_mem_mib = 1800;
+    in.gpu_mem_at_workers = 1;
+    in.has_measured_gpu_mem_mib = false;
+    std::string err;
+    EXPECT_TRUE(occupancy_ready_for_spawn(in, &err)) << err;
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
