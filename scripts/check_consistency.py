@@ -1157,6 +1157,18 @@ def main() -> int:
     errors.extend(check_gpu_line_pins())
     errors.extend(check_static_bs1_product())
     try:
+        legacy_align = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "check_legacy_yolov8s_engine_align.py")],
+            cwd=str(ROOT), capture_output=True, text=True, timeout=60,
+        )
+        if legacy_align.returncode != 0:
+            detail = (legacy_align.stdout + legacy_align.stderr).strip() or (
+                f"exit {legacy_align.returncode}"
+            )
+            errors.append("legacy engine align check failed: " + detail)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        errors.append(f"check_legacy_yolov8s_engine_align.py could not run: {exc}")
+    try:
         pack_trt = subprocess.run(
             [sys.executable, str(ROOT / "scripts" / "pack_trt.py"), "--self-test"],
             cwd=str(ROOT), capture_output=True, text=True, timeout=60,
