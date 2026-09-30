@@ -86,13 +86,13 @@ StatusCode RealEsrGan<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>
     // wrapper reordered it to hwc, do the same here
     if (tensor.shape.size() != 4 || tensor.shape[0] != 1 || tensor.shape[1] != 3) {
         LOG(ERROR) << "unexpected real esrgan output shape: " << jinq::models::backend::shape_to_string(tensor.shape);
-        return StatusCode::MODEL_EMPTY_OUTPUT;
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
     const auto output_h = static_cast<int>(tensor.shape[2]);
     const auto output_w = static_cast<int>(tensor.shape[3]);
     if (output_w <= 0 || output_h <= 0 || tensor.element_count() != 3 * output_w * output_h) {
         LOG(ERROR) << "invalid real esrgan output shape: " << jinq::models::backend::shape_to_string(tensor.shape);
-        return StatusCode::MODEL_EMPTY_OUTPUT;
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
 
     const auto *host_data = output_view.data;
