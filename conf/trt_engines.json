@@ -87,8 +87,8 @@
     },
     {
       "model": "yolov8s",
-      "onnx": "weights/object_detection/yolov8/yolov8s.onnx",
-      "engine": "weights/object_detection/yolov8/yolov8s.engine",
+      "onnx": "weights/object_detection/yolov8/yolov8s.static_bs1.onnx",
+      "engine": "weights/object_detection/yolov8/yolov8s.engine.static_bs1.fp16",
       "fp": 1,
       "profile": "conf/trt_profiles/yolov8s.json"
     },
