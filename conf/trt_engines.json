@@ -1,5 +1,5 @@
 {
-  "_description": "TRT engine 重建清单：engine 是 config 期望的路径（相对仓库根），onnx 是转换源，fp 为精度模式（0=FP32, 1=FP16），profile 为动态 shape 的 optimization profile JSON（相对仓库根）。由 scripts/convert_trt_engines.sh 消费；缺失的 onnx 先用 scripts/fetch_weights.py 下载。",
+  "_description": "TRT engine \u91cd\u5efa\u6e05\u5355\uff1aengine \u662f config \u671f\u671b\u7684\u8def\u5f84\uff08\u76f8\u5bf9\u4ed3\u5e93\u6839\uff09\uff0connx \u662f\u8f6c\u6362\u6e90\uff0cfp \u4e3a\u7cbe\u5ea6\u6a21\u5f0f\uff080=FP32, 1=FP16\uff09\uff0cprofile \u4e3a\u52a8\u6001 shape \u7684 optimization profile JSON\uff08\u76f8\u5bf9\u4ed3\u5e93\u6839\uff09\u3002\u7531 scripts/convert_trt_engines.sh \u6d88\u8d39\uff1b\u7f3a\u5931\u7684 onnx \u5148\u7528 scripts/fetch_weights.py \u4e0b\u8f7d\u3002",
   "engines": [
     {
       "model": "cls_cond_ddpm_netease_album_cover",
@@ -52,36 +52,36 @@
     },
     {
       "model": "depth_anything_vitb14",
-      "onnx": "weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.onnx",
-      "engine": "weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.engine",
+      "onnx": "weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.static_bs1.onnx",
+      "engine": "weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.engine.static_bs1.fp16",
       "fp": 1,
       "profile": "conf/trt_profiles/depth_anything_vitb14.json"
     },
     {
       "model": "depth_anything_vitl14",
-      "onnx": "weights/mono_depth_estimation/depth_anything/depth_anything_vitl14.onnx",
-      "engine": "weights/mono_depth_estimation/depth_anything/depth_anything_vitl14.engine",
+      "onnx": "weights/mono_depth_estimation/depth_anything/depth_anything_vitl14.static_bs1.onnx",
+      "engine": "weights/mono_depth_estimation/depth_anything/depth_anything_vitl14.engine.static_bs1.fp16",
       "fp": 1,
       "profile": "conf/trt_profiles/depth_anything_vitl14.json"
     },
     {
       "model": "depth_anything_vits14",
-      "onnx": "weights/mono_depth_estimation/depth_anything/depth_anything_vits14.onnx",
-      "engine": "weights/mono_depth_estimation/depth_anything/depth_anything_vits14.engine",
+      "onnx": "weights/mono_depth_estimation/depth_anything/depth_anything_vits14.static_bs1.onnx",
+      "engine": "weights/mono_depth_estimation/depth_anything/depth_anything_vits14.engine.static_bs1.fp16",
       "fp": 1,
       "profile": "conf/trt_profiles/depth_anything_vits14.json"
     },
     {
       "model": "metric3d_1088x1920",
-      "onnx": "weights/mono_depth_estimation/metric3d/metric3d_750k_1088x1920.onnx",
-      "engine": "weights/mono_depth_estimation/metric3d/metric3d_750k_1088x1920.engine",
+      "onnx": "weights/mono_depth_estimation/metric3d/metric3d_750k_1088x1920.static_bs1.onnx",
+      "engine": "weights/mono_depth_estimation/metric3d/metric3d_750k_1088x1920.engine.static_bs1.fp16",
       "fp": 1,
       "profile": "conf/trt_profiles/metric3d_1088x1920.json"
     },
     {
       "model": "metric3d_512x1088",
-      "onnx": "weights/mono_depth_estimation/metric3d/metric3d_750k_512x1088.onnx",
-      "engine": "weights/mono_depth_estimation/metric3d/metric3d_750k_512x1088.engine",
+      "onnx": "weights/mono_depth_estimation/metric3d/metric3d_750k_512x1088.static_bs1.onnx",
+      "engine": "weights/mono_depth_estimation/metric3d/metric3d_750k_512x1088.engine.static_bs1.fp16",
       "fp": 1,
       "profile": "conf/trt_profiles/metric3d_512x1088.json"
     },
@@ -94,8 +94,8 @@
     },
     {
       "model": "hrnetw48_ccd_fp32",
-      "onnx": "weights/scene_segmentation/hrnet/hrnetw48_ccd.onnx",
-      "engine": "weights/scene_segmentation/hrnet/hrnetw48_ccd_fp32.engine",
+      "onnx": "weights/scene_segmentation/hrnet/hrnetw48_ccd.static_bs1.onnx",
+      "engine": "weights/scene_segmentation/hrnet/hrnetw48_ccd.engine.static_bs1.fp16",
       "fp": 0,
       "profile": "conf/trt_profiles/hrnetw48_ccd_fp32.json"
     },
@@ -119,7 +119,7 @@
       "engine": "weights/sam/mobile_sam/sm61/mobile_sam_amg_decoder.engine",
       "fp": 1,
       "profile": null,
-      "note": "sm61 无 onnx 源，暂用 sm86 源；如 shape 不符请改用匹配的 onnx"
+      "note": "sm61 \u65e0 onnx \u6e90\uff0c\u6682\u7528 sm86 \u6e90\uff1b\u5982 shape \u4e0d\u7b26\u8bf7\u6539\u7528\u5339\u914d\u7684 onnx"
     },
     {
       "model": "nano_sam_encoder_fp16",
