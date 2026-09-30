@@ -16,6 +16,7 @@
 
 #include "common/status_code.h"
 #include "models/backend/session.h"
+#include "models/backend/tensor.h"
 
 namespace jinq {
 namespace models {
@@ -42,6 +43,10 @@ class SamVitEncoder {
     std::vector<int> get_encoder_input_shape() const;
 
     bool is_successfully_initialized() const;
+
+  protected:
+    /*** Empty output vector → MODEL_EMPTY_OUTPUT; non-empty dtype/size miss → MODEL_OUTPUT_CONTRACT_FAILED. */
+    static StatusCode classify_encoder_outputs(const std::vector<jinq::models::backend::NamedTensor> &outputs);
 
   private:
     class Impl;

@@ -85,10 +85,9 @@ class SamVitEncoder::Impl {
         if (run_status != StatusCode::OK) {
             return run_status;
         }
-        if (outputs.empty() || outputs.front().tensor.dtype != jinq::models::backend::DType::F32 ||
-            outputs.front().tensor.element_count() <= 0) {
-            LOG(ERROR) << "sam encoder output is invalid";
-            return StatusCode::MODEL_EMPTY_OUTPUT;
+        const auto contract_status = SamVitEncoder::classify_encoder_outputs(outputs);
+        if (contract_status != StatusCode::OK) {
+            return contract_status;
         }
 
         const auto *data = outputs.front().tensor.template data<float>();
@@ -133,6 +132,19 @@ class SamVitEncoder::Impl {
     cv::Size _m_input_size_host;
     bool _m_successfully_initialized = false;
 };
+
+StatusCode SamVitEncoder::classify_encoder_outputs(const std::vector<NamedTensor> &outputs) {
+    if (outputs.empty()) {
+        LOG(ERROR) << "sam encoder output is invalid";
+        return StatusCode::MODEL_EMPTY_OUTPUT;
+    }
+    if (outputs.front().tensor.dtype != jinq::models::backend::DType::F32 ||
+        outputs.front().tensor.element_count() <= 0) {
+        LOG(ERROR) << "sam encoder output is invalid";
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+    }
+    return StatusCode::OK;
+}
 
 SamVitEncoder::SamVitEncoder(backend::InferenceSession *session) : _m_pimpl(std::make_unique<Impl>(session)) {}
 
