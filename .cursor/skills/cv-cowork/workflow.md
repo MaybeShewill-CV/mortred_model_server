@@ -39,7 +39,7 @@ cowork/ledger/round-NNN/07-score-check.md
 # Ledger
 
 - 基线分支: sub-agent-co-work
-- 轮次上限: 10
+- 轮次上限: 无
 - 当前轮次:
 - 当前步骤:
 - 当前问题:
@@ -47,7 +47,7 @@ cowork/ledger/round-NNN/07-score-check.md
 - 状态: running | stopped | done
 
 ## 轮次
-| 轮次 | 核算综合分 | 未关闭 P0 | 未关闭 P1 | 结果 |
+| 轮次 | 核算综合分 | 未关闭 P0 | 未关闭 P1 | 未关闭劣势 | 结果 |
 ```
 
 ## 提示词
@@ -71,6 +71,7 @@ cowork/ledger/round-NNN/07-score-check.md
 - 上限规则: 无 | P0 上限 7.9 | P1 上限 8.9
 - 相对本轮起点:
 - 出口: 继续 | 结束
+- 劣势集合: 相对本轮起点减少 | 没有减少
 - 与角色自算: 一致 | 不一致
 ```
 
@@ -79,7 +80,7 @@ cowork/ledger/round-NNN/07-score-check.md
 三方签字通过后，调度者把列表正文和签字抄成 `02-p0-p1-final.md`：
 
 ```markdown
-# P0 与 P1
+# 交付队列
 
 - 轮次:
 - 版本:
@@ -89,12 +90,14 @@ cowork/ledger/round-NNN/07-score-check.md
 | id | 问题 | 场景 | 现在的行为 | 改完后能观察到的变化 | 依据 |
 ## P1
 | id | 问题 | 场景 | 现在的行为 | 改完后能观察到的变化 | 依据 |
+## 劣势
+| id | 问题 | 场景 | 现在的行为 | 改完后能观察到的变化 | 依据 |
 ## 附录
 ## 签字
 | 角色 | 结论 | 针对版本 | 记录 |
 ```
 
-P0 和 P1 两节都是「无」时，不进入实现。
+文件名仍是 `02-p0-p1-final.md`。P0、P1、劣势三节都是「无」时，不进入实现。
 
 ## 通过的方案
 
