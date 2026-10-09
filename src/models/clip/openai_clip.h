@@ -55,6 +55,9 @@ class OpenAiClip : public jinq::models::backend::MultiSessionModel<OpenAiClip<IN
   protected:
     static StatusCode embedding_shape_status(const std::vector<float> &lhs, const std::vector<float> &rhs);
 
+    StatusCode classify_embedding_output(const std::vector<jinq::models::backend::NamedTensor> &outputs,
+                                         std::vector<float> &embedding) const;
+
   private:
     using ClipInput = jinq::models::io_define::clip::clip_input;
     using ClipOutput = jinq::models::io_define::clip::clip_output;

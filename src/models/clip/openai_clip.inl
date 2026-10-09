@@ -122,6 +122,19 @@ StatusCode OpenAiClip<INPUT, OUTPUT>::embedding_shape_status(const std::vector<f
 }
 
 template <typename INPUT, typename OUTPUT>
+StatusCode OpenAiClip<INPUT, OUTPUT>::classify_embedding_output(const std::vector<NamedTensor> &outputs,
+                                                                std::vector<float> &embedding) const {
+    embedding.clear();
+    auto output_view = jinq::models::backend::OutputReader(outputs, "output").f32().shape({1, -1}).finite().read();
+    if (!output_view.ok()) {
+        return output_view.status;
+    }
+    const auto &view = output_view.value;
+    embedding.assign(view.data, view.data + view.tensor->element_count());
+    return StatusCode::OK;
+}
+
+template <typename INPUT, typename OUTPUT>
 void OpenAiClip<INPUT, OUTPUT>::tokenize(const std::string &input_text, std::vector<int32_t> &token_ids) const {
     token_ids.clear();
     std::vector<int32_t> text_tokens;
@@ -170,13 +183,7 @@ StatusCode OpenAiClip<INPUT, OUTPUT>::encode_image(const cv::Mat &input_image, s
     if (run_status != StatusCode::OK) {
         return run_status;
     }
-    auto output_view = jinq::models::backend::OutputReader(outputs, "output").f32().shape({1, -1}).read();
-    if (!output_view.ok()) {
-        return output_view.status;
-    }
-    const auto &view = output_view.value;
-    image_embeddings.assign(view.data, view.data + view.tensor->element_count());
-    return StatusCode::OK;
+    return classify_embedding_output(outputs, image_embeddings);
 }
 
 template <typename INPUT, typename OUTPUT>
@@ -206,13 +213,7 @@ StatusCode OpenAiClip<INPUT, OUTPUT>::encode_text(const std::string &input_text,
     if (run_status != StatusCode::OK) {
         return run_status;
     }
-    auto output_view = jinq::models::backend::OutputReader(outputs, "output").f32().shape({1, -1}).read();
-    if (!output_view.ok()) {
-        return output_view.status;
-    }
-    const auto &view = output_view.value;
-    text_embeddings.assign(view.data, view.data + view.tensor->element_count());
-    return StatusCode::OK;
+    return classify_embedding_output(outputs, text_embeddings);
 }
 
 template <typename INPUT, typename OUTPUT>

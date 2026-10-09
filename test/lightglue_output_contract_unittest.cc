@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 #include "models/backend/tensor.h"
@@ -31,6 +32,44 @@ NamedTensor make_tensor(const std::string &name, Tensor tensor) {
     named.name = name;
     named.tensor = std::move(tensor);
     return named;
+}
+
+Tensor legal_keypoints() { return Tensor::make<int32_t>({2}); }
+
+Tensor legal_scores() {
+    auto tensor = Tensor::make<float>({1});
+    tensor.data<float>()[0] = 1.0f;
+    return tensor;
+}
+
+Tensor legal_descriptors() { return Tensor::make<float>({256}); }
+
+std::vector<NamedTensor> extractor_outputs(Tensor keypoints, Tensor scores, Tensor descriptors) {
+    return {
+        make_tensor("keypoints", std::move(keypoints)),
+        make_tensor("scores", std::move(scores)),
+        make_tensor("descriptors", std::move(descriptors)),
+    };
+}
+
+Tensor legal_matches() { return Tensor::make<int32_t>({2}); }
+
+Tensor legal_match_scores() {
+    auto tensor = Tensor::make<float>({1});
+    tensor.data<float>()[0] = 1.0f;
+    return tensor;
+}
+
+std::vector<NamedTensor> matcher_outputs(Tensor matches, Tensor scores) {
+    return {
+        make_tensor("matches0", std::move(matches)),
+        make_tensor("mscores0", std::move(scores)),
+    };
+}
+
+void expect_contract_failed(StatusCode status) {
+    EXPECT_EQ(status, StatusCode::MODEL_OUTPUT_CONTRACT_FAILED);
+    EXPECT_NE(status, StatusCode::MODEL_EMPTY_OUTPUT);
 }
 
 } // namespace
@@ -82,4 +121,78 @@ TEST(LightGlueOutputContract, FeatureLayoutMismatchReturnsContractFailed) {
     const auto status = model.classify_feature_layout(src, dst);
     EXPECT_EQ(status, StatusCode::MODEL_OUTPUT_CONTRACT_FAILED);
     EXPECT_NE(status, StatusCode::MODEL_EMPTY_OUTPUT);
+}
+
+TEST(LightGlueOutputContract, ExtractorScoresWrongDtype) {
+    TestModel model;
+    const auto status =
+        model.classify_extractor_outputs(extractor_outputs(legal_keypoints(), Tensor::make<int32_t>({1}), legal_descriptors()));
+    expect_contract_failed(status);
+}
+
+TEST(LightGlueOutputContract, ExtractorDescriptorsWrongDtype) {
+    TestModel model;
+    const auto status =
+        model.classify_extractor_outputs(extractor_outputs(legal_keypoints(), legal_scores(), Tensor::make<int32_t>({256})));
+    expect_contract_failed(status);
+}
+
+TEST(LightGlueOutputContract, ExtractorScoresNan) {
+    TestModel model;
+    auto scores = legal_scores();
+    scores.data<float>()[0] = std::numeric_limits<float>::quiet_NaN();
+    const auto status = model.classify_extractor_outputs(extractor_outputs(legal_keypoints(), std::move(scores), legal_descriptors()));
+    expect_contract_failed(status);
+}
+
+TEST(LightGlueOutputContract, ExtractorDescriptorsNan) {
+    TestModel model;
+    auto descriptors = legal_descriptors();
+    descriptors.data<float>()[0] = std::numeric_limits<float>::quiet_NaN();
+    const auto status = model.classify_extractor_outputs(extractor_outputs(legal_keypoints(), legal_scores(), std::move(descriptors)));
+    expect_contract_failed(status);
+}
+
+TEST(LightGlueOutputContract, ExtractorScoresPositiveInf) {
+    TestModel model;
+    auto scores = legal_scores();
+    scores.data<float>()[0] = std::numeric_limits<float>::infinity();
+    const auto status = model.classify_extractor_outputs(extractor_outputs(legal_keypoints(), std::move(scores), legal_descriptors()));
+    expect_contract_failed(status);
+}
+
+TEST(LightGlueOutputContract, ExtractorDescriptorsPositiveInf) {
+    TestModel model;
+    auto descriptors = legal_descriptors();
+    descriptors.data<float>()[0] = std::numeric_limits<float>::infinity();
+    const auto status = model.classify_extractor_outputs(extractor_outputs(legal_keypoints(), legal_scores(), std::move(descriptors)));
+    expect_contract_failed(status);
+}
+
+TEST(LightGlueOutputContract, MatcherMatchesWrongDtype) {
+    TestModel model;
+    const auto status = model.classify_matcher_outputs(matcher_outputs(Tensor::make<float>({2}), legal_match_scores()));
+    expect_contract_failed(status);
+}
+
+TEST(LightGlueOutputContract, MatcherScoresWrongDtype) {
+    TestModel model;
+    const auto status = model.classify_matcher_outputs(matcher_outputs(legal_matches(), Tensor::make<int32_t>({1})));
+    expect_contract_failed(status);
+}
+
+TEST(LightGlueOutputContract, MatcherScoresNan) {
+    TestModel model;
+    auto scores = legal_match_scores();
+    scores.data<float>()[0] = std::numeric_limits<float>::quiet_NaN();
+    const auto status = model.classify_matcher_outputs(matcher_outputs(legal_matches(), std::move(scores)));
+    expect_contract_failed(status);
+}
+
+TEST(LightGlueOutputContract, MatcherScoresPositiveInf) {
+    TestModel model;
+    auto scores = legal_match_scores();
+    scores.data<float>()[0] = std::numeric_limits<float>::infinity();
+    const auto status = model.classify_matcher_outputs(matcher_outputs(legal_matches(), std::move(scores)));
+    expect_contract_failed(status);
 }

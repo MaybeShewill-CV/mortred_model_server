@@ -90,6 +90,14 @@ StatusCode LightGlue<INPUT, OUTPUT>::classify_extractor_outputs(const std::vecto
                    << keypoints->tensor.element_count() << ", descriptors " << descriptors->tensor.element_count();
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
+    std::string finite_error;
+    if (!jinq::models::backend::require_finite_f32(scores->tensor.template data<float>(), score_count, scores->name, &finite_error) ||
+        !jinq::models::backend::require_finite_f32(descriptors->tensor.template data<float>(),
+                                                   static_cast<size_t>(descriptors->tensor.element_count()), descriptors->name,
+                                                   &finite_error)) {
+        LOG(ERROR) << "lightglue extractor output contract failed: " << finite_error;
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+    }
     return StatusCode::OK;
 }
 
@@ -123,6 +131,12 @@ StatusCode LightGlue<INPUT, OUTPUT>::classify_matcher_outputs(const std::vector<
     if (match_indices->tensor.element_count() != static_cast<int64_t>(score_count * 2)) {
         LOG(ERROR) << "lightglue matcher output sizes mismatch: matches " << match_indices->tensor.element_count() << ", scores "
                    << score_count;
+        return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
+    }
+    std::string finite_error;
+    if (!jinq::models::backend::require_finite_f32(match_scores->tensor.template data<float>(), score_count, match_scores->name,
+                                                   &finite_error)) {
+        LOG(ERROR) << "lightglue matcher output contract failed: " << finite_error;
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
     return StatusCode::OK;
