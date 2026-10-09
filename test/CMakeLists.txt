@@ -395,6 +395,12 @@ if(TARGET model_golden_test)
         NAME Yolov8TrtDetection
         COMMAND $<TARGET_FILE:model_golden_test> --gtest_filter=Yolov8TrtDetection.*
         WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
+    # ctest -R matches the CTest name. The CPU case lives inside model_golden_test,
+    # so list it under a name that contains yolov8_detection.
+    add_test(
+        NAME yolov8_detection
+        COMMAND $<TARGET_FILE:model_golden_test> --gtest_filter=model_golden.yolov8_detection
+        WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
     add_dependencies(check model_golden_test)
 endif()
 
