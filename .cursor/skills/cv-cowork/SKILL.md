@@ -1,10 +1,11 @@
 ---
 name: cv-cowork
 description: >-
-  Runs the Mortred landing-score state machine until every admitted module
-  weakness is closed and nothing is suspended. Closed items are written off,
-  blocked items are suspended, and the signed queue carries forward. Use when
-  the user invokes /cv-cowork or asks to run the sub-agent cowork loop.
+  Runs the Mortred landing-score state machine until the rubric's two-bar
+  checklist is met, every admitted weakness is closed, and nothing is
+  suspended. Closed items are written off, blocked items are suspended, and
+  the signed queue carries forward. Use when the user invokes /cv-cowork or
+  asks to run the sub-agent cowork loop.
 disable-model-invocation: true
 ---
 
@@ -36,7 +37,7 @@ disable-model-invocation: true
 
 九份模块记录齐了之后，用 rubric 的权重计算原始分：各模块（分数 × 权重）之和 / 100，保留一位小数。权重只取 rubric。还有未关闭且未挂起的 P0 时，综合分不超过 7.9；还有这种 P1、没有这种 P0 时，不超过 8.9。挂起项不触发上限。把结果写入 `01-score-check.md` 或 `07-score-check.md`。角色自算分不一致时，在核算文件里写明，状态机采用核算文件。模块记录存在未读路径且分数高于 8.0 时，退回该模块，不进入综合分。劣势条目缺少出处、现在的行为或一次黑盒可判定的变化时，退回该条，不进入第 2 步。已关闭 id 的原句仍留在有效劣势里时，退回该记录。通过准入却没有出现在 P0、P1、劣势队列或挂起集里的，退回，不进入第 2 步。
 
-出口由核算文件决定，不采用角色正文里的出口说法。`done`：九份模块的有效劣势都是「无」，且挂起集为空。`awaiting-env`：非挂起劣势都是「无」，挂起集非空。综合分只作记录。没有未关闭准入项时，劣势写「无」，分数可以低于 9.0。
+出口由核算文件决定，不采用角色正文里的出口说法。核算文件必须按 rubric 的「双目标验收」逐行写「已满足 / 未满足 / 挂起」。`done`：每一行都是「已满足」，九份模块的有效劣势都是「无」，且挂起集为空。`awaiting-env`：没有「未满足」，非挂起劣势都是「无」，但仍有「挂起」。综合分只作记录。没有未关闭准入项时，劣势写「无」，分数可以低于 9.0。双目标有未满足行时，不得把劣势写成「无」。
 
 ## 循环
 
@@ -54,9 +55,9 @@ disable-model-invocation: true
 
 把索引状态写成 `stopped`、`done` 或 `awaiting-env`，并把核算文件和尚未通过的原文交给用户：
 
-- 有效劣势都是「无」，且挂起集为空。状态写 `done`。
-- 非挂起劣势都是「无」，挂起集非空。状态写 `awaiting-env`。环境恢复后只重跑挂起项的第 5 步，通过则合入并销账。
-- 本轮有非挂起项合入或移入不计毛病，但销账后非挂起劣势集合一条都没减少。状态写 `stopped`。
+- 双目标每一行都是「已满足」，有效劣势都是「无」，且挂起集为空。状态写 `done`。
+- 没有「未满足」，非挂起劣势都是「无」，挂起集非空。状态写 `awaiting-env`。环境恢复后只重跑挂起项的第 5 步，通过则合入并销账。
+- 本轮有非挂起项合入或移入不计毛病，但销账后非挂起劣势集合一条都没减少，且没有任何双目标行从「未满足」变成「已满足」。状态写 `stopped`。
 - 表决、签字、偏离、自测或 `fail` 回修超出上面的次数，基线工作区被角色改脏，重跑结果和报告不一致，或 merge 冲突。`blocked` 不在此列。
 - 当前轮次已经是 20，并且本轮该做的销账已经写完。不得进入第 21 轮。状态写 `stopped`。
 
