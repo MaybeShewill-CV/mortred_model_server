@@ -379,6 +379,63 @@ TEST(model_golden, ddpm_celeba_hq_fewstep) {
     EXPECT_EQ(image.channels(), 3);
 }
 
+#ifdef MORTRED_HAS_TRT
+// Product yolov8s TRT path: load the product toml (path fix only, no force_cpu),
+// run bus.jpg, and require every golden box with score >= 0.5 to match a unique
+// prediction of the same class_id with IoU >= 0.5. Score near-equality is not
+// required. Missing engine may SKIP; once the engine is present, FAIL on fail.
+TEST(Yolov8TrtDetection, MatchesCpuGoldenBoxes) {
+    const std::string conf = "conf/model/object_detection/yolov8/yolov8s.toml";
+    if (!weights_available(conf)) {
+        MORTRED_SKIP_OR_FAIL_WEIGHTS("tensorrt engine not available");
+    }
+
+    auto cfg_parsed = toml::parse_file(conf);
+    ASSERT_TRUE(static_cast<bool>(cfg_parsed)) << "parse failed: " << conf;
+    auto cfg = std::move(cfg_parsed).table();
+    fix_toml_paths(cfg);
+
+    auto model = jinq::factory::object_detection::create_yolov8_detector<mat_input, std_object_detection_output>();
+    ASSERT_NE(model, nullptr);
+    ASSERT_EQ(model->init(cfg), StatusCode::OK);
+    const cv::Mat image = read_input_image("demo_data/model_test_input/object_detection/bus.jpg");
+    ASSERT_FALSE(image.empty());
+
+    std_object_detection_output output;
+    ASSERT_EQ(model->run(mat_input{image}, output), StatusCode::OK);
+
+    rapidjson::Document golden = load_golden_json("yolov8_detection");
+    ASSERT_TRUE(golden.IsObject() && golden.HasMember("boxes") && golden["boxes"].IsArray());
+    const auto &golden_boxes = golden["boxes"].GetArray();
+
+    std::vector<bool> used(output.size(), false);
+    for (rapidjson::SizeType gi = 0; gi < golden_boxes.Size(); ++gi) {
+        const auto &g = golden_boxes[gi];
+        if (g["score"].GetFloat() < 0.5f) {
+            continue;
+        }
+        const int class_id = g["class_id"].GetInt();
+        const cv::Rect2f gbox(g["x"].GetFloat(), g["y"].GetFloat(), g["w"].GetFloat(), g["h"].GetFloat());
+
+        int best = -1;
+        float best_iou = 0.0f;
+        for (size_t pi = 0; pi < output.size(); ++pi) {
+            if (used[pi] || output[pi].class_id != class_id) {
+                continue;
+            }
+            const float iou = CvUtils::calc_iou(output[pi].bbox, gbox);
+            if (iou > best_iou) {
+                best_iou = iou;
+                best = static_cast<int>(pi);
+            }
+        }
+        ASSERT_GE(best, 0) << "no unused same-class prediction for golden box " << gi;
+        EXPECT_GE(best_iou, k_box_iou_thresh) << "IoU below threshold for golden box " << gi;
+        used[static_cast<size_t>(best)] = true;
+    }
+}
+#endif // MORTRED_HAS_TRT
+
 namespace {
 
 bool skip_message_has(const testing::TestResult &result, const char *needle) {
