@@ -158,29 +158,21 @@ ctest --test-dir build --output-on-failure
 
 #### 路径 B：full build
 
+只执行 gpu 或 cpu 其中一档
+gpu 档使用 --all、--nvidia、--check 与 preset full。cpu 档使用 --cpu --all、--cpu --check 与 preset full-cpu。
+preset full 写到 build/full。preset full-cpu 写到 build/full-cpu。
+默认可执行文件输出到 `$PROJECT_ROOT_DIR/_bin`，动态库输出到 `$PROJECT_ROOT_DIR/_lib`。
+configure preset full-cpu 已设 MORTRED_BUILD_PROFILE=cpu
+
 ```bash
-# 1. 校验/补齐 vendored 第三方依赖
-#    （MNN / WORKFLOW / ONNXRUNTIME / TensorRT + CUDA）。
-#    缺失时按提示设置对应的 *_ROOT_DIR 环境变量后重试。
-./scripts/setup_full_deps.sh
-
-# 2. 配置并构建
-mkdir build && cd build
-cmake ..            # 可选：追加 -DCMAKE_TOOLCHAIN_FILE=... 以同时使用 vcpkg
-make -j10
+./scripts/install_deps.sh --check          # 查看当前 3rd_party 完整性
+./scripts/install_deps.sh --all            # gpu 线（CUDA 12 / TensorRT 10.3）
+./scripts/install_deps.sh --cpu --all      # cpu 线：MNN-CPU + ORT-CPU，完全不装 NVIDIA/TRT
+sudo ./scripts/install_deps.sh --nvidia    # gpu 线的 CUDA/TRT/cuDNN（需 root，其余步骤无需）
+./scripts/install_deps.sh --cpu --check  # cpu 线：查看当前依赖完整性
+cmake --preset full && cmake --build --preset full            # gpu 全量
+cmake --preset full-cpu && cmake --build --preset full-cpu    # cpu 全量
 ```
-
-默认可执行文件输出到 `$PROJECT_ROOT_DIR/_bin`，动态库输出到 `$PROJECT_ROOT_DIR/_lib`；
-两者均可用 `-DMORTRED_BIN_OUTPUT_DIR=...` 与 `-DMORTRED_LIB_OUTPUT_DIR=...` 覆盖。
-
-常用 CMake 选项：
-
-| 选项 | 默认值 | 说明 |
-| --- | --- | --- |
-| `MORTRED_BUILD_FULL` | `ON` | 构建全部模型/服务/工具（需要 CUDA 与 vendored 引擎）；置 `OFF` 进入 tests-only 模式。 |
-| `MORTRED_ENABLE_WERROR` | `OFF` | 将编译器警告视为错误（`-Wall -Wextra -Werror`），供 CI 质量门禁使用。 |
-| `MORTRED_BIN_OUTPUT_DIR` | `$PROJECT_ROOT_DIR/_bin` | 可执行文件输出目录。 |
-| `MORTRED_LIB_OUTPUT_DIR` | `$PROJECT_ROOT_DIR/_lib` | 动态库输出目录。 |
 
 项目提供了 CMake Presets（见 `CMakePresets.json`）：
 
