@@ -28,9 +28,11 @@ cowork/ledger/round-NNN/issues/<issue-id>/04-rd.md
 cowork/ledger/round-NNN/issues/<issue-id>/04-deviation-sign.md
 cowork/ledger/round-NNN/issues/<issue-id>/05-qa.md
 cowork/ledger/round-NNN/issues/<issue-id>/05-merge.md
+cowork/ledger/round-NNN/issues/<issue-id>/05-suspend.md
 cowork/ledger/round-NNN/07-modules/<module-id>.md
 cowork/ledger/round-NNN/07-score.md
 cowork/ledger/round-NNN/07-score-check.md
+cowork/ledger/round-NNN/08-writeoff.md
 ```
 
 `index.md` 里的综合分使用核算文件的加权综合分：
@@ -39,12 +41,14 @@ cowork/ledger/round-NNN/07-score-check.md
 # Ledger
 
 - 基线分支: sub-agent-co-work
-- 轮次上限: 无
+- 轮次上限: 20
 - 当前轮次:
 - 当前步骤:
 - 当前问题:
+- 挂起:
+- 已销账:
 - 本轮起点综合分:
-- 状态: running | stopped | done
+- 状态: running | stopped | done | awaiting-env
 
 ## 轮次
 | 轮次 | 核算综合分 | 未关闭 P0 | 未关闭 P1 | 未关闭劣势 | 结果 |
@@ -54,7 +58,7 @@ cowork/ledger/round-NNN/07-score-check.md
 
 每次启动都带上：本步编号、轮次、要返回的模板名、`cowork/ledger/rubric.md` 的绝对路径、要读的账本文件绝对路径。第 4、5 步带上工作树绝对路径，并写明只修改这个工作树。第 3 步写明不要修改仓库。
 
-第 1 步和第 7 步的每个模块调用都带上 `cv-cto` 里该模块的必读路径。综合分调用附上九份模块记录的路径。第 7 步再附上 merge 记录、`discovered.md` 和 diff 路径摘要。
+第 1 步的每个模块调用都带上 `cv-cto` 里该模块的必读路径。综合分调用附上九份模块记录的路径。第 7 步只要求 `销账` 模板，附上已合入 id、各自绑定的劣势原句、挂起项、`discovered.md` 和 diff 路径摘要。已有冻结队列的轮次不重打分，从第一条未关闭且未挂起的问题继续。
 
 第 2 步的表决、列表修订、签字分成三次调用。第 3 步的方案正文和签字分成不同调用。
 
@@ -70,8 +74,9 @@ cowork/ledger/round-NNN/07-score-check.md
 - 加权综合分:
 - 上限规则: 无 | P0 上限 7.9 | P1 上限 8.9
 - 相对本轮起点:
-- 出口: 继续 | 结束
+- 出口: 继续 | 结束 | 待环境
 - 劣势集合: 相对本轮起点减少 | 没有减少
+- 挂起:
 - 与角色自算: 一致 | 不一致
 ```
 
@@ -97,7 +102,7 @@ cowork/ledger/round-NNN/07-score-check.md
 | 角色 | 结论 | 针对版本 | 记录 |
 ```
 
-文件名仍是 `02-p0-p1-final.md`。P0、P1、劣势三节都是「无」时，不进入实现。
+文件名仍是 `02-p0-p1-final.md`。P0、P1、劣势三节都是「无」且挂起集为空时，不进入实现。已签字且未关闭、未挂起的 id 在下一轮原样保留，不再表决。
 
 ## 通过的方案
 
@@ -136,3 +141,45 @@ cowork/ledger/round-NNN/07-score-check.md
 - 命令:
 - merge commit:
 ```
+
+## 挂起记录
+
+QA 结论为 `blocked` 时由调度者书写。不合入，继续下一条。
+
+```markdown
+# 挂起
+
+- 问题:
+- 方案版本:
+- 分支:
+- 工作树:
+- 问题分支提交:
+- QA 结论: blocked
+- 缺的环境:
+- 恢复条件:
+- 未跑的验收:
+- 重跑:
+```
+
+## 销账记录
+
+由调度者按 `cv-cto` 的销账模板核对后书写。已关闭 id 的原句不得留在「留下的劣势」里。
+
+```markdown
+# 销账
+
+- 轮次:
+- 已关闭:
+- 挂起:
+- 非挂起劣势: 相对本轮起点减少 | 没有减少
+
+## 删除的原句
+| id | 模块 | 原句 |
+## 留下的劣势
+| id | 模块 | 原句 | 状态 |
+## 附录
+## 新准入
+```
+
+`状态` 取 `未做` 或 `挂起`。没有留下的劣势时，该节写「无」。
+

@@ -220,7 +220,7 @@ MORTRED_UPDATE_GOLDEN=1 <build>/bin/model_golden_test \
     --gtest_filter='model_golden.efficientnet_classification'
 ```
 
-Missing weights → case skips (expected on CPU-only boxes).
+Missing weights → case skips (单条缺权重仍可以跳过); when every selected case is missing weights, the process exits 77 and prints NUMERICAL_NOT_RUN.
 
 ---
 
