@@ -1122,7 +1122,30 @@ void ProcessSupervisor::autostart_all(int gateway_deadline_ms, int models_deadli
                 }
             }
             {
+                // Same critical section as the gate write. Judge by lock state:
+                // only a launched non-gateway child still starting becomes
+                // failed. Leave running and not-yet-launched stopped children
+                // alone. Do not signal; ordered shutdown still owns SIGINT,
+                // kStopGraceMs, then SIGKILL.
                 std::lock_guard<std::mutex> lock(_mu);
+                for (size_t i = 0; i < launched && i < queue.size(); ++i) {
+                    Child* child = find_locked(queue[i]);
+                    if (child == nullptr || child->is_gateway || child->pid <= 0 ||
+                        child->engine.state() != SupervisedState::kStarting) {
+                        continue;
+                    }
+                    child->engine.note_permanent_failure();
+                    child->wanted = false;
+                    child->ready = false;
+                    child->backoff_due_ms = 0;
+                    const std::string sentence = "not ready within deadline: " + child->id;
+                    if (child->error.empty()) {
+                        child->error = sentence;
+                    }
+                    if (child->log != nullptr) {
+                        child->log->append("[supervisor] " + sentence);
+                    }
+                }
                 mark_models_failed_locked(oss.str());
             }
             return;

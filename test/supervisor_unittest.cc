@@ -362,8 +362,64 @@ TEST_F(SupervisorTest, autostart_models_respects_deadline) {
     EXPECT_NE(gate.reason.find("deadline"), std::string::npos) << gate.reason;
     EXPECT_NE(gate.reason.find("fake_model_server"), std::string::npos) << gate.reason;
     const auto s = sup->status("fake_model_server");
+    EXPECT_EQ(s.state, "failed");
+    EXPECT_NE(s.state, "starting");
     EXPECT_NE(s.state, "running");
+    EXPECT_NE(s.error.find("deadline"), std::string::npos) << s.error;
+    EXPECT_NE(s.error.find("fake_model_server"), std::string::npos) << s.error;
     EXPECT_GT(s.pid, 0) << "never-ready child should still be alive at deadline";
+    const int pid_at_return = s.pid;
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    const auto later = sup->status("fake_model_server");
+    EXPECT_EQ(later.state, "failed");
+    EXPECT_EQ(later.pid, pid_at_return);
+}
+
+TEST_F(SupervisorTest, autostart_running_sibling_stays_running_on_peer_deadline) {
+    // Two model children in one wave. ready_sibling reaches running before the
+    // models deadline; fake_model_server never becomes ready and trips it.
+    write_fake_config("never-ready", 0);
+    const int sibling_port = port_ + 2;
+    {
+        std::ofstream out(root_ / "conf" / "server" / "test" / "ready_sibling.toml");
+        out << "[FAKE_SERVER]\n"
+            << "port=" << sibling_port << "\n"
+            << "host=\"localhost\"\n"
+            << "server_uri=\"/mortred_ai_server_v1/test/ready_sibling\"\n"
+            << "server_exe=\"ready_sibling.out\"\n"
+            << "fake_port=" << sibling_port << "\n"
+            << "fake_mode=\"ready\"\n"
+            << "fake_exit_after_ms=0\n"
+            << "fake_exit_code=0\n";
+    }
+    fs::copy_file(root_ / "bin" / "fake_model_server.out", root_ / "bin" / "ready_sibling.out",
+                  fs::copy_options::overwrite_existing, ec_);
+    ASSERT_FALSE(ec_) << ec_.message();
+    fs::permissions(root_ / "bin" / "ready_sibling.out",
+                    fs::perms::owner_all | fs::perms::group_read | fs::perms::group_exec |
+                        fs::perms::others_read | fs::perms::others_exec);
+    catalog_ = Catalog{};
+    write_catalog();
+    install_gateway_stub("ready");
+
+    ControlConfig cfg = base_cfg();
+    cfg.supervisor.autostart_default = true;
+    cfg.supervisor.start_concurrency = 2;
+    auto sup = std::make_unique<ProcessSupervisor>(
+        root_.string(), cfg, (root_ / "conf" / "mortred.toml").string());
+    sup->set_gateway_trust("scrape-token", "infer-token", "admin-token");
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    sup->autostart_all(/*gateway_deadline_ms=*/3000, /*models_deadline_ms=*/2000);
+
+    EXPECT_EQ(sup->status("ready_sibling").state, "running");
+    const auto gate = sup->autostart_gate();
+    EXPECT_TRUE(gate.models_failed);
+    EXPECT_FALSE(gate.models_skipped);
+    EXPECT_NE(gate.reason.find("deadline"), std::string::npos) << gate.reason;
+    EXPECT_NE(gate.reason.find("fake_model_server"), std::string::npos) << gate.reason;
 }
 
 TEST_F(SupervisorTest, autostart_reports_start_failure_without_hanging) {
