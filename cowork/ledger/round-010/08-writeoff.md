@@ -1,11 +1,11 @@
 # 销账
 
 - 轮次: 10
-- 已关闭: P0-1、P1-1、P1-2、P1-3、P1-4、P1-6、D-1
+- 已关闭: P0-1、P1-1、P1-2、P1-3、P1-4、P1-6、D-1、D-2
 - 挂起: P1-5
 - 非挂起劣势: 相对本轮起点减少
 
-第 1 步的模块记录和 `02-p0-p1-final.md` 保留作本轮起点，不改写。有效劣势以本文件为准。本次按 2026-10-08 口径销账，不重新打分。P1-6 与 D-1 已合入，本步从有效劣势删除。
+第 1 步的模块记录和 `02-p0-p1-final.md` 保留作本轮起点，不改写。有效劣势以本文件为准。本次按 2026-10-08 口径销账，不重新打分。P1-6、D-1 与 D-2 已合入，并从有效劣势删除。
 
 ## 删除的原句
 | id | 模块 | 原句 |
@@ -17,12 +17,12 @@
 | P1-4 | conf、src-control | pack 覆盖偏样板，occupancy 依赖声明的 `gpu_mem_mib` |
 | P1-6 | ci | 默认 PR 下 GPU/TRT 不是 fail-closed |
 | D-1 | src-control | models deadline 到期后 child 可能仍停在 starting |
+| D-2 | conf | attentive_gan.toml 输入尺寸仍 stale |
 
 ## 留下的劣势
 | id | 模块 | 原句 | 状态 |
 | --- | --- | --- | --- |
 | P1-5 | test | 无与 CPU golden 同级的 GPU/TRT 数值黑盒 | 挂起 |
-| D-2 | conf | attentive_gan.toml 输入尺寸仍 stale | 未做 |
 | D-3 | test | 缺权重时 golden 默认仍 SKIP | 未做 |
 | D-4 | test | LightGlue / CLIP 未接完整 dtype/NaN/Inf 矩阵 | 未做 |
 | D-5 | docs | deployment.md §15 FAQ 结构损坏 | 未做 |
@@ -35,7 +35,9 @@ P1-6 合入 `a9e6284bae832996c0d0c52ec39bd69da1d6fe05`。关闭范围：`cpu=suc
 
 D-1 合入 `8f3a0d101070737f63694024e94eab968f2c80f4`。关闭范围：deadline 返回后未就绪 child 的 `state` 为 `failed`。deadline 分支不发信号。外层 SIGKILL 仍属不计毛病。
 
-src-models、ops、src-server-apps、src-factory-common、src-control、ci 没有留下的劣势。
+D-2 合入 `03d604d766da55792494c5dadfc8998dbc671a76`。关闭范围：三份 attentive_gan toml 的 `model_input_image_size` 改为 `[240, 360]`，并删掉同一句 stale 注记。preprocess 仍用乘号 `240×360`。不改推理路径。
+
+src-models、ops、src-server-apps、src-factory-common、src-control、conf、ci 没有留下的劣势。
 
 ## 新准入
 无
