@@ -71,6 +71,8 @@ def render(
     ]
     if gpu_smoke is not None:
         lines.append(f"gpu-smoke (PR gate, not full T2):          {label(gpu_smoke)}")
+        if gpu_smoke == "skipped":
+            lines.append("This result is not a TensorRT or CUDA proof.")
     if t2 == "not_run":
         lines.append(
             "NOTE: T2 did NOT run this workflow. A green check here is NOT a full-zoo claim."
@@ -103,6 +105,13 @@ def _self_test() -> int:
         return 1
     if "gpu-smoke" not in text or "SKIPPED" not in text:
         print("[FAIL] expected gpu-smoke SKIPPED", file=sys.stderr)
+        return 1
+    if "This result is not a TensorRT or CUDA proof." not in text:
+        print("[FAIL] expected non-TRT disclaimer when gpu-smoke is skipped", file=sys.stderr)
+        return 1
+    ran = render("unknown", "ran", "not_run", gpu_smoke="ran")
+    if "This result is not a TensorRT or CUDA proof." in ran:
+        print("[FAIL] non-TRT disclaimer must not appear when gpu-smoke ran", file=sys.stderr)
         return 1
     import tempfile
 

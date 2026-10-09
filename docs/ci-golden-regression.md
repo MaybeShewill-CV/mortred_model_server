@@ -21,8 +21,7 @@ contribution path.” Use the table.
 The required GitHub check should be **`inference paths`** (job `inference-paths`),
 not `gpu golden smoke` by itself. GPU jobs skip when the repository variable
 `MORTRED_HAS_GPU_RUNNER` is unset (no self-hosted runner registered) and on
-fork PRs. The wrapper treats that skip as success only when `cpu-profile`
-succeeded. Do not set `inference paths` required while GPU jobs are still
+fork PRs. When MORTRED_HAS_GPU_RUNNER is unset, the wrapper exits 2 and prints NOT_A_TRT_PROOF. This result is not a TensorRT or CUDA proof. Do not set `inference paths` required while GPU jobs are still
 *queued* waiting for a missing runner.
 
 `container boot (cpu compose)` is a **separate** Docker-runtime check. It is
