@@ -16,13 +16,13 @@
 | 编号 | 状态: 已满足 / 未满足 / 挂起 | 证据或队列 id |
 | --- | --- | --- |
 | H1 | 未满足 | P1-7。`mobilenetv2`、`yolov8s`、`pphuman_server`、`dbnet`、`modnet`、`realesrgan`、`metric3d_512` 在 `docs/api-contract.md` 已有与 schema 一致的示例，不在缺示例名单里。其余 32 个 id 仍缺。 |
-| H2 | 未满足 | P1-8。`yolov8s` 已关闭的同类 IoU 门只覆盖 `yolov8s`。 |
+| H2 | 未满足 | P1-8、P1-11、P1-12。`yolov8s` 已关闭的同类 IoU 门只覆盖 `yolov8s`。 |
 | H3 | 未满足 | P1-9 |
 | H4 | 未满足 | P0-2。不设 `MORTRED_PACK` 时，39 个 id 含 `yolov8s` 与 `metric3d_512`。 |
 | C1 | 未满足 | P1-10 |
 | C4 | 已满足 | `01-modules/ci.md`：`gen_openapi.py --check` 与 `check_contract_sync.py` 仍在。`gpu=skipped` 时 `inference-paths` 退出码 2 并打印 `NOT_A_TRT_PROOF`，不打印 `TRT_PROOF=yes`。 |
 | S1 | 未满足 | P0-3。已关闭的 SAM 原句不在此条。 |
-| S2 | 未满足 | D-7 |
+| S2 | 未满足 | D-12 |
 | S3 | 未满足 | D-8 |
 | S4 | 未满足 | D-9。模型进程在 `allow()` 之前返回 401。未满足的是网关在鉴权前扣配额。 |
 | S6 | 未满足 | D-10。`nvidia-smi` 整次失败且输出为空时已标 offline，不在此条。 |
