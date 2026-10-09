@@ -738,6 +738,51 @@ def convert_filters_for_pack(pack: Path, project_root: Path) -> list[str]:
     return filters
 
 
+def _read_product_models() -> list[dict]:
+    """Read conf/product_static_bs1.json. Does not emit or rewrite the table."""
+    try:
+        table = load_table()
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"cannot read {TABLE_PATH}: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
+    models = table.get("models")
+    if not isinstance(models, list):
+        print("product_static_bs1.json models is not a list", file=sys.stderr)
+        raise SystemExit(1)
+    return models
+
+
+def lookup_product_engine(catalog_id: str) -> int:
+    """Print the JSON engine path for one id. Read-only."""
+    for row in _read_product_models():
+        if row.get("id") == catalog_id:
+            engine = row.get("engine") or ""
+            if not engine:
+                print(f"{catalog_id}: empty engine", file=sys.stderr)
+                return 1
+            print(engine)
+            return 0
+    print(f"unknown product id: {catalog_id}", file=sys.stderr)
+    return 1
+
+
+def print_missing_product_engines() -> int:
+    """Print id<TAB>engine for missing or zero-byte product engines. Read-only."""
+    for row in _read_product_models():
+        catalog_id = str(row.get("id") or "")
+        engine = str(row.get("engine") or "")
+        if not catalog_id or not engine:
+            continue
+        path = ROOT / engine
+        try:
+            missing = (not path.is_file()) or path.stat().st_size == 0
+        except OSError:
+            missing = True
+        if missing:
+            print(f"{catalog_id}\t{engine}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--emit", action="store_true", help="write conf/product_static_bs1.json")
@@ -750,10 +795,25 @@ def main() -> int:
     parser.add_argument("--convert-filters", action="store_true")
     parser.add_argument("--project-root", type=Path, default=ROOT)
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument(
+        "--lookup-id",
+        default=None,
+        help="print the product engine path for this id (read-only)",
+    )
+    parser.add_argument(
+        "--missing-product-engines",
+        action="store_true",
+        help="print id and engine for missing or empty product engines (read-only)",
+    )
     args = parser.parse_args()
 
     if args.self_test:
         return self_test()
+    # Read-only queries return before --emit / --apply-models / --apply-servers.
+    if args.lookup_id is not None:
+        return lookup_product_engine(args.lookup_id)
+    if args.missing_product_engines:
+        return print_missing_product_engines()
 
     rows = model_rows()
     errors = validate_rows(rows)
