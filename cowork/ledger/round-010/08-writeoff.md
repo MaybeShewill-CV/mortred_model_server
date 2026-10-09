@@ -1,11 +1,11 @@
 # 销账
 
 - 轮次: 10
-- 已关闭: P0-1、P1-1、P1-2、P1-3、P1-4、P1-5、P1-6、D-1、D-2、D-3、D-4、D-5
+- 已关闭: P0-1、P1-1、P1-2、P1-3、P1-4、P1-5、P1-6、D-1、D-2、D-3、D-4、D-5、D-6
 - 挂起: 无
 - 非挂起劣势: 相对本轮起点减少
 
-第 1 步的模块记录和 `02-p0-p1-final.md` 保留作本轮起点，不改写。有效劣势以本文件为准。本次按 2026-10-08 口径销账，不重新打分。D-5 已合入，并从有效劣势删除。角色原文在 `issues/d-5/07-cto.md`。
+第 1 步的模块记录和 `02-p0-p1-final.md` 保留作本轮起点，不改写。有效劣势以本文件为准。本次按既有口径销账，不重新打分。D-6 已合入，并从有效劣势删除。角色原文在 `issues/d-6/07-cto.md`。九个模块留下的劣势都是无。
 
 ## 删除的原句
 | id | 模块 | 原句 |
@@ -22,11 +22,10 @@
 | P1-5 | test | 无与 CPU golden 同级的 GPU/TRT 数值黑盒 |
 | D-4 | test | LightGlue / CLIP 未接完整 dtype/NaN/Inf 矩阵 |
 | D-5 | docs | deployment.md §15 FAQ 结构损坏 |
+| D-6 | docs | 中文 README 路径 B 与现行 full 构建入口不一致 |
 
 ## 留下的劣势
-| id | 模块 | 原句 | 状态 |
-| --- | --- | --- | --- |
-| D-6 | docs | 中文 README 路径 B 与现行 full 构建入口不一致 | 未做 |
+无
 
 ## 附录
 P1-1 的关闭范围是已合入的可复制模板。任意新架构零 C++ 不另开。P1-5 合入 `1f267ea20c125f40e674242a5908a2583a18e331`。关闭范围：产品 yolov8s 的 TRT 检测框门，同类且 IoU ≥ 0.5。CPU 用例 ctest 名 `yolov8_detection` 仍登记 `conf/ci/yolov8_onnx_hosted.toml`。其余家族的 TRT 数值门不另开。
@@ -43,7 +42,9 @@ D-4 合入 `b183893685b835f4db76f80c2bbe03635136f994`。关闭范围：LightGlue
 
 D-5 合入 `37533364646240c995eb612666a925278974d398`。关闭范围：§15 第六条 FAQ 闭合后的无 summary 段落和多余 `</details>` 已删除。六条既有 FAQ 与 §9.4 不动。
 
-src-models、ops、src-server-apps、src-factory-common、src-control、conf、ci、test 没有留下的劣势。docs 留下 D-6。
+D-6 合入 `67ebfa2e2df031ac16355d070345f361e2fea800`。关闭范围：路径 B 使用 `install_deps.sh` 与 `cmake --preset full` / `full-cpu`，切片里不再出现 `setup_full_deps.sh` 和手写 `cmake ..`。gpu 与 cpu 仍是两档，要求只执行其中一档。同义句「路径 B 已与现行 full 构建入口对齐」只留本附录。
+
+src-models、ops、src-server-apps、src-factory-common、src-control、conf、ci、test、docs 没有留下的劣势。
 
 ## 新准入
 无
