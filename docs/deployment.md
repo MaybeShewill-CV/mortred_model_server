@@ -871,10 +871,6 @@ Git `conf/server` stays `worker_nums=1`. Put concurrency on the machine pack
 file, then restart the supervisor (§10.3).
 </details>
 
-Fetch on any machine with python, copy the whole `weights/` directory over, and
-run `fetch_weights.py --check` on the target (verification also needs python3;
-in a fully python-less environment, verify before copying).
-</details>
 
 ---
 
