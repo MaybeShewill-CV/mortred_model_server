@@ -1,10 +1,10 @@
 /************************************************
  * Fail-closed weight gating for CI inference jobs.
  *
- * Local / tests-only builds keep GTEST_SKIP when weights are missing so a
- * laptop without the HF tree stays green. Jobs that claim to run inference
- * set MORTRED_CI_REQUIRE_WEIGHTS=1 (any value other than empty / "0" /
- * "false") and the same site becomes GTEST_FAIL.
+ * Local / tests-only builds keep GTEST_SKIP when weights are missing.
+ * Jobs that claim to run inference set MORTRED_CI_REQUIRE_WEIGHTS=1
+ * (any value other than empty / "0" / "false") and the same site
+ * becomes GTEST_FAIL.
  *
  * MORTRED_UPDATE_GOLDEN skips are unrelated: they must stay skips.
  ************************************************/

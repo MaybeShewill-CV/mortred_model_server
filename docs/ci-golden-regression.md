@@ -68,7 +68,7 @@ The earlier `cmake --build --target check` step still allows skip-as-pass for
 the rest of the zoo (local-style). Only the explicit hosted step is
 fail-closed.
 
-Local developers without weights keep `GTEST_SKIP` (env unset).
+Local developers without weights: 单条缺权重仍可以跳过 (case skips); when every selected case is missing weights, `model_golden_test` exits 77 and prints `NUMERICAL_NOT_RUN`.
 
 YOLOv8 HTTP serving still uses `conf/model/object_detection/yolov8/yolov8s.toml`
 (TensorRT). Fork-hosted detection coverage is **NanoDet MNN** plus the
