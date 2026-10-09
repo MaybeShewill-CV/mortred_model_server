@@ -268,7 +268,7 @@ PATCH = {
             "kind": "official_ckpt_export",
             "ref": "MaybeShewill-CV/attentive-gan-derainnet derain_gan.ckpt-100000 freeze squeezed tanh skip_3",
             "script": "scripts/export_onnx/export_attentive_gan.py",
-            "notes": "Product MNN is this TF graph at 240x360 (toml [240,320] is stale; C++ uses session shape). input_tensor NHWC [1,240,360,3] → final_output HWC [240,360,3]. Local attentive_gan_derain.pb is a text training GraphDef, not a frozen net. vs product MNN maxabs~1e-3 corr~1. Dyn only opens input batch; LSTM init constants stay N=1.",
+            "notes": "Product MNN is this TF graph at 240x360 (C++ uses session shape). input_tensor NHWC [1,240,360,3] → final_output HWC [240,360,3]. Local attentive_gan_derain.pb is a text training GraphDef, not a frozen net. vs product MNN maxabs~1e-3 corr~1. Dyn only opens input batch; LSTM init constants stay N=1.",
         },
     },
     ("REAL_ESRGAN", None): {
