@@ -954,9 +954,14 @@ jobs:
               neg="${neg}:-${p}"
             fi
           done
+          rest_code=0
           ./build-gpu/bin/model_golden_test \
             --gtest_filter="${neg}" \
-            --gtest_output=xml:"${RUNNER_TEMP}/gtest/gpu-rest.xml"
+            --gtest_output=xml:"${RUNNER_TEMP}/gtest/gpu-rest.xml" \
+            || rest_code=$?
+          if [ "$rest_code" -ne 0 ] && [ "$rest_code" -ne 77 ]; then
+            exit "$rest_code"
+          fi
           python3 scripts/ci_assert_gtest_xml.py "${RUNNER_TEMP}/gtest/gpu-rest.xml" \
             --allow-skips \
             --inventory-out "${RUNNER_TEMP}/gtest/gpu-rest-skips.json"

@@ -15,9 +15,11 @@
  *   - CLIP：文本 + 图像双塔输入。
  *   - DDPM few-step：生成式工人是 image_input 适配器，不用读图宏。
  *
- * 行为约定与迁移前完全一致：
- *   - 权重缺失时 GTEST_SKIP（本地 / 无 GPU 环境可跑）；
- *     CI 推理 job 设 MORTRED_CI_REQUIRE_WEIGHTS=1 时改为 FAIL；
+ * 行为约定：
+ *   - 单条缺权重仍 GTEST_SKIP，原文仍是 weights not available；
+ *     选中用例全部因此没有做数值比对时，进程退出码 77，
+ *     标准输出恰好一行 NUMERICAL_NOT_RUN；
+ *     CI 推理 job 设 MORTRED_CI_REQUIRE_WEIGHTS=1 时改为 FAIL，进程退出码 1；
  *   - MORTRED_UPDATE_GOLDEN=1 重新生成基线；
  *   - 配置里的 ../ 前缀被剥掉、backend 强制 cpu；
  *   - 用例名不变，--gtest_filter 行为不变。
@@ -25,6 +27,8 @@
 
 #include "model_golden_registry.h"
 
+#include <cstring>
+#include <iostream>
 #include <vector>
 
 #include "factory/classification_task.h"
@@ -373,4 +377,87 @@ TEST(model_golden, ddpm_celeba_hq_fewstep) {
     EXPECT_EQ(image.cols, 128);
     EXPECT_EQ(image.rows, 128);
     EXPECT_EQ(image.channels(), 3);
+}
+
+namespace {
+
+bool skip_message_has(const testing::TestResult &result, const char *needle) {
+    const int part_count = result.total_part_count();
+    for (int i = 0; i < part_count; ++i) {
+        const testing::TestPartResult &part = result.GetTestPartResult(i);
+        if (!part.skipped()) {
+            continue;
+        }
+        const char *message = part.message();
+        if (message != nullptr && std::strstr(message, needle) != nullptr) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Called only after RUN_ALL_TESTS() returns, so gtest has already written
+// --gtest_output xml. Exit 77 is the all-missing-weights case; it is not a
+// failure and it is not a numerical pass.
+int golden_process_exit(int gtest_result) {
+    if (testing::GTEST_FLAG(list_tests)) {
+        return gtest_result;
+    }
+
+    const testing::UnitTest *unit = testing::UnitTest::GetInstance();
+    int selected = 0;
+    int failed = 0;
+    int weight_skips = 0;
+    int numerical_done = 0;
+
+    const int suite_count = unit->total_test_suite_count();
+    for (int suite_index = 0; suite_index < suite_count; ++suite_index) {
+        const testing::TestSuite *suite = unit->GetTestSuite(suite_index);
+        const int test_count = suite->total_test_count();
+        for (int test_index = 0; test_index < test_count; ++test_index) {
+            const testing::TestInfo *info = suite->GetTestInfo(test_index);
+            if (!info->should_run()) {
+                continue;
+            }
+            ++selected;
+            const testing::TestResult *result = info->result();
+            if (result->Failed()) {
+                ++failed;
+                continue;
+            }
+            if (result->Skipped()) {
+                if (skip_message_has(*result, "weights not available")) {
+                    ++weight_skips;
+                }
+                continue;
+            }
+            if (result->Passed()) {
+                ++numerical_done;
+            }
+        }
+    }
+
+    if (selected == 0) {
+        return gtest_result;
+    }
+    if (failed > 0) {
+        return 1;
+    }
+    if (weight_skips == selected) {
+        std::cout << "NUMERICAL_NOT_RUN" << std::endl;
+        return 77;
+    }
+    if (numerical_done == selected) {
+        std::cout << "NUMERICAL_PASSED" << std::endl;
+        return 0;
+    }
+    return 0;
+}
+
+} // namespace
+
+int main(int argc, char **argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    const int gtest_result = RUN_ALL_TESTS();
+    return golden_process_exit(gtest_result);
 }
