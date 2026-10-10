@@ -38,6 +38,7 @@
 #include "factory/feature_embedding_task.h"
 #include "factory/feature_point_task.h"
 #include "factory/matting_task.h"
+#include "factory/mono_depth_estimate_task.h"
 #include "factory/obj_detection_task.h"
 #include "factory/ocr_task.h"
 #include "factory/sam_task.h"
@@ -272,6 +273,82 @@ GOLDEN_ENHANCEMENT_CASE(realesrgan_enhancement, "conf/ci/realesrgan_onnx_hosted.
 GOLDEN_KEYPOINT_CASE(superpoint_feature_point, "conf/ci/superpoint_onnx_hosted.toml",
                      "demo_data/model_test_input/feature_point/test.png", jinq::factory::feature_point::create_superpoint_extractor,
                      std_feature_point_output);
+
+// P1-8: one CPU case per catalog id. Detection and embedding keep the existing
+// box and cosine comparators. The four segmentation ids, three matting ids, and
+// five depth ids use the overlap / relative-error comparators below; they do
+// not replace the fingerprint cases above.
+GOLDEN_OBJECT_DETECTION_CASE(nanodet_416, "conf/ci/nanodet_416_onnx_hosted.toml",
+                             "demo_data/model_test_input/object_detection/bus.jpg",
+                             jinq::factory::object_detection::create_nanodet_detector, std_object_detection_output);
+
+GOLDEN_OBJECT_DETECTION_CASE(yolov7x, "conf/ci/yolov7x_onnx_hosted.toml", "demo_data/model_test_input/object_detection/bus.jpg",
+                             jinq::factory::object_detection::create_yolov7_detector, std_object_detection_output);
+
+GOLDEN_OBJECT_DETECTION_CASE(yolov8n, "conf/ci/yolov8n_onnx_hosted.toml", "demo_data/model_test_input/object_detection/bus.jpg",
+                             jinq::factory::object_detection::create_yolov8_detector, std_object_detection_output);
+
+GOLDEN_OBJECT_DETECTION_CASE(yolov8l, "conf/ci/yolov8l_onnx_hosted.toml", "demo_data/model_test_input/object_detection/bus.jpg",
+                             jinq::factory::object_detection::create_yolov8_detector, std_object_detection_output);
+
+GOLDEN_OBJECT_DETECTION_CASE(yolov8x, "conf/ci/yolov8x_onnx_hosted.toml", "demo_data/model_test_input/object_detection/bus.jpg",
+                             jinq::factory::object_detection::create_yolov8_detector, std_object_detection_output);
+
+GOLDEN_SCENE_SEGMENTATION_OVERLAP_CASE(pphuman_lite, "conf/ci/pphuman_lite_onnx_hosted.toml",
+                                       "demo_data/model_test_input/scene_segmentation/human_image.jpg",
+                                       jinq::factory::scene_segmentation::create_pphuman_segmentor, std_scene_segmentation_output);
+
+GOLDEN_SCENE_SEGMENTATION_OVERLAP_CASE(pphuman_server, "conf/ci/pphuman_server_onnx_hosted.toml",
+                                       "demo_data/model_test_input/scene_segmentation/human_image.jpg",
+                                       jinq::factory::scene_segmentation::create_pphuman_segmentor, std_scene_segmentation_output);
+
+GOLDEN_SCENE_SEGMENTATION_OVERLAP_CASE(hrnet, "conf/ci/hrnet_onnx_hosted.toml",
+                                       "demo_data/model_test_input/scene_segmentation/cityscapes_test.png",
+                                       jinq::factory::scene_segmentation::create_hrnet_segmentor, std_scene_segmentation_output);
+
+GOLDEN_SCENE_SEGMENTATION_OVERLAP_CASE(msocrnet, "conf/ci/msocrnet_onnx_hosted.toml",
+                                       "demo_data/model_test_input/ocr/railway_ticket.png",
+                                       jinq::factory::scene_segmentation::create_msocrnet_segmentor, std_scene_segmentation_output);
+
+GOLDEN_FEATURE_EMBEDDING_CASE(dinov2_vits14, "conf/ci/dinov2_vits14_onnx_hosted.toml",
+                              "demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG",
+                              jinq::factory::feature_embedding::create_dinov2_feature_extractor, std_feature_embedding_output);
+
+GOLDEN_FEATURE_EMBEDDING_CASE(dinov2_vitl14, "conf/ci/dinov2_vitl14_onnx_hosted.toml",
+                              "demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG",
+                              jinq::factory::feature_embedding::create_dinov2_feature_extractor, std_feature_embedding_output);
+
+GOLDEN_MATTING_OVERLAP_CASE(ppmatting_1024, "conf/ci/ppmatting_1024_onnx_hosted.toml",
+                            "demo_data/model_test_input/matting/matting_test.jpg",
+                            jinq::factory::matting::create_ppmatting_segmentor, std_matting_output);
+
+GOLDEN_MATTING_OVERLAP_CASE(ppmatting_resnet34, "conf/ci/ppmatting_resnet34_onnx_hosted.toml",
+                            "demo_data/model_test_input/matting/matting_test.jpg",
+                            jinq::factory::matting::create_ppmatting_segmentor, std_matting_output);
+
+GOLDEN_MATTING_OVERLAP_CASE(ppmatting_v2, "conf/ci/ppmatting_v2_onnx_hosted.toml",
+                            "demo_data/model_test_input/matting/matting_test.jpg",
+                            jinq::factory::matting::create_ppmatting_segmentor, std_matting_output);
+
+GOLDEN_DEPTH_CASE(depth_vits14, "conf/ci/depth_vits14_onnx_hosted.toml",
+                  "demo_data/model_test_input/mono_depth_estimation/0000000005.png",
+                  jinq::factory::mono_depth_estimation::create_depth_anything_estimator, std_mde_output);
+
+GOLDEN_DEPTH_CASE(depth_vitb14, "conf/ci/depth_vitb14_onnx_hosted.toml",
+                  "demo_data/model_test_input/mono_depth_estimation/0000000005.png",
+                  jinq::factory::mono_depth_estimation::create_depth_anything_estimator, std_mde_output);
+
+GOLDEN_DEPTH_CASE(depth_vitl14, "conf/ci/depth_vitl14_onnx_hosted.toml",
+                  "demo_data/model_test_input/mono_depth_estimation/0000000005.png",
+                  jinq::factory::mono_depth_estimation::create_depth_anything_estimator, std_mde_output);
+
+GOLDEN_DEPTH_CASE(metric3d_512, "conf/ci/metric3d_512_onnx_hosted.toml",
+                  "demo_data/model_test_input/mono_depth_estimation/0000000005.png",
+                  jinq::factory::mono_depth_estimation::create_metric3d_estimator, std_mde_output);
+
+GOLDEN_DEPTH_CASE(metric3d_1088, "conf/ci/metric3d_1088_onnx_hosted.toml",
+                  "demo_data/model_test_input/mono_depth_estimation/0000000005.png",
+                  jinq::factory::mono_depth_estimation::create_metric3d_estimator, std_mde_output);
 
 GOLDEN_RAW_MAT_CASE(fastsam_segmentation, "conf/model/segment_anything/fast_sam_s_config.toml", "demo_data/model_test_input/sam/truck.jpg",
                     jinq::factory::segment_anything::create_fast_sam_segmentor, cv::Mat);

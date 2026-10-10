@@ -23,6 +23,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -30,6 +32,8 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <glog/logging.h>
@@ -55,6 +59,7 @@
 #include "models/io/matting.h"
 #include "models/io/object_detection.h"
 #include "models/io/ocr.h"
+#include "models/io/mono_depth_estimation.h"
 #include "models/io/scene_segmentation.h"
 
 namespace jinq {
@@ -76,6 +81,7 @@ using jinq::models::io_define::object_detection::face_bbox;
 using jinq::models::io_define::object_detection::std_face_detection_output;
 using jinq::models::io_define::object_detection::std_object_detection_output;
 using jinq::models::io_define::ocr::std_text_regions_output;
+using jinq::models::io_define::mono_depth_estimation::std_mde_output;
 using jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
 
 constexpr double k_score_tol = 1e-3;
@@ -84,6 +90,10 @@ constexpr float k_box_iou_thresh = 0.5f;
 constexpr double k_fingerprint_diff = 1.0;
 constexpr double k_keypoint_match_dist = 3.0;
 constexpr double k_embedding_cos_thresh = 0.999;
+constexpr double k_mask_overlap_thresh = 0.90;
+constexpr int k_matting_foreground_min = 128;
+constexpr double k_depth_rel_thresh = 0.02;
+constexpr double k_depth_abs_floor = 1e-6;
 
 bool update_golden_mode() {
     const char *env = std::getenv("MORTRED_UPDATE_GOLDEN");
@@ -478,6 +488,322 @@ bool weights_available(const std::string &conf_rel_path) {
     return true;
 }
 
+/*** integer class maps and alpha maps used by the P1-8 overlap cases.
+ * Fingerprint comparators above stay in place for the older cases. ***/
+
+bool integer_single_channel(const cv::Mat &mat) {
+    if (mat.empty() || mat.channels() != 1) {
+        return false;
+    }
+    switch (mat.depth()) {
+    case CV_8U:
+    case CV_8S:
+    case CV_16U:
+    case CV_16S:
+    case CV_32S:
+        return true;
+    default:
+        return false;
+    }
+}
+
+int64_t integer_pixel(const cv::Mat &mat, int row, int col) {
+    switch (mat.depth()) {
+    case CV_8U:
+        return mat.ptr<uint8_t>(row)[col];
+    case CV_8S:
+        return mat.ptr<int8_t>(row)[col];
+    case CV_16U:
+        return mat.ptr<uint16_t>(row)[col];
+    case CV_16S:
+        return mat.ptr<int16_t>(row)[col];
+    case CV_32S:
+        return mat.ptr<int32_t>(row)[col];
+    default:
+        return 0;
+    }
+}
+
+void write_integer_map_golden(const std::string &name, const cv::Mat &mat) {
+    const std::string path = golden_path(name, ".json");
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path());
+    std::ofstream out(path, std::ios::binary);
+    ASSERT_TRUE(out.is_open()) << path;
+    out << "{\"height\":" << mat.rows << ",\"width\":" << mat.cols << ",\"values\":[";
+    bool first = true;
+    for (int row = 0; row < mat.rows; ++row) {
+        for (int col = 0; col < mat.cols; ++col) {
+            if (!first) {
+                out << ',';
+            }
+            first = false;
+            out << integer_pixel(mat, row, col);
+        }
+    }
+    out << "]}";
+    ASSERT_TRUE(static_cast<bool>(out)) << "failed to write " << path;
+}
+
+void write_depth_map_golden(const std::string &name, const cv::Mat &mat) {
+    const std::string path = golden_path(name, ".json");
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path());
+    std::ofstream out(path, std::ios::binary);
+    ASSERT_TRUE(out.is_open()) << path;
+    out << "{\"height\":" << mat.rows << ",\"width\":" << mat.cols << ",\"values\":[";
+    bool first = true;
+    for (int row = 0; row < mat.rows; ++row) {
+        const float *row_data = mat.ptr<float>(row);
+        for (int col = 0; col < mat.cols; ++col) {
+            if (!first) {
+                out << ',';
+            }
+            first = false;
+            char buf[64];
+            const int written = std::snprintf(buf, sizeof(buf), "%.9g", static_cast<double>(row_data[col]));
+            ASSERT_GT(written, 0);
+            ASSERT_LT(written, static_cast<int>(sizeof(buf)));
+            out << buf;
+        }
+    }
+    out << "]}";
+    ASSERT_TRUE(static_cast<bool>(out)) << "failed to write " << path;
+}
+
+rapidjson::Document load_golden_json_precise(const std::string &name) {
+    rapidjson::Document doc;
+    std::ifstream in(golden_path(name, ".json"), std::ios::binary);
+    if (!in.is_open()) {
+        return doc;
+    }
+    std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    doc.Parse<rapidjson::kParseFullPrecisionFlag>(text.c_str());
+    return doc;
+}
+
+bool json_integer(const rapidjson::Value &value, int64_t *out) {
+    if (!value.IsInt64()) {
+        return false;
+    }
+    *out = value.GetInt64();
+    return true;
+}
+
+bool load_integer_map_golden(const std::string &name, int *height, int *width, std::vector<int64_t> *values) {
+    const rapidjson::Document doc = load_golden_json_precise(name);
+    if (!doc.IsObject() || !doc.HasMember("height") || !doc.HasMember("width") || !doc.HasMember("values") || !doc["height"].IsInt() ||
+        !doc["width"].IsInt() || !doc["values"].IsArray()) {
+        return false;
+    }
+    *height = doc["height"].GetInt();
+    *width = doc["width"].GetInt();
+    if (*height < 0 || *width < 0) {
+        return false;
+    }
+    const auto &arr = doc["values"].GetArray();
+    const int64_t count = static_cast<int64_t>(*height) * static_cast<int64_t>(*width);
+    if (static_cast<int64_t>(arr.Size()) != count) {
+        return false;
+    }
+    values->clear();
+    values->reserve(static_cast<size_t>(count));
+    for (const auto &item : arr) {
+        int64_t pixel = 0;
+        if (!json_integer(item, &pixel)) {
+            return false;
+        }
+        values->push_back(pixel);
+    }
+    return true;
+}
+
+void expect_class_mask_overlap(const std::string &name, const cv::Mat &mat) {
+    if (update_golden_mode()) {
+        ASSERT_TRUE(integer_single_channel(mat)) << "segmentation is not an integer single-channel map for " << name;
+        std::unordered_set<int64_t> classes;
+        for (int row = 0; row < mat.rows; ++row) {
+            for (int col = 0; col < mat.cols; ++col) {
+                classes.insert(integer_pixel(mat, row, col));
+            }
+        }
+        ASSERT_GE(classes.size(), 2u) << "golden has fewer than two class values for " << name;
+        write_integer_map_golden(name, mat);
+        GTEST_SKIP() << "golden updated: " << name;
+    }
+
+    int height = 0;
+    int width = 0;
+    std::vector<int64_t> golden_values;
+    ASSERT_TRUE(load_integer_map_golden(name, &height, &width, &golden_values))
+        << "golden missing, run with MORTRED_UPDATE_GOLDEN=1: " << name;
+    ASSERT_TRUE(integer_single_channel(mat)) << "segmentation is not an integer single-channel map for " << name;
+    ASSERT_EQ(mat.rows, height) << "mask size mismatch for " << name;
+    ASSERT_EQ(mat.cols, width) << "mask size mismatch for " << name;
+
+    struct ClassCount {
+        int64_t intersection = 0;
+        int64_t union_count = 0;
+        bool in_golden = false;
+    };
+    std::unordered_map<int64_t, ClassCount> counts;
+    for (int row = 0; row < height; ++row) {
+        for (int col = 0; col < width; ++col) {
+            const int64_t golden_class = golden_values[static_cast<size_t>(row) * static_cast<size_t>(width) + static_cast<size_t>(col)];
+            const int64_t current_class = integer_pixel(mat, row, col);
+            if (golden_class == current_class) {
+                ClassCount &entry = counts[golden_class];
+                entry.in_golden = true;
+                ++entry.intersection;
+                ++entry.union_count;
+            } else {
+                {
+                    ClassCount &entry = counts[golden_class];
+                    entry.in_golden = true;
+                    ++entry.union_count;
+                }
+                {
+                    ClassCount &entry = counts[current_class];
+                    ++entry.union_count;
+                }
+            }
+        }
+    }
+
+    int class_count = 0;
+    double iou_sum = 0.0;
+    for (const auto &item : counts) {
+        if (!item.second.in_golden) {
+            continue;
+        }
+        ++class_count;
+        ASSERT_GT(item.second.union_count, 0) << "mask size mismatch for " << name;
+        iou_sum += static_cast<double>(item.second.intersection) / static_cast<double>(item.second.union_count);
+    }
+    ASSERT_GE(class_count, 2) << "golden has fewer than two class values for " << name;
+    const double mean_iou = iou_sum / static_cast<double>(class_count);
+    EXPECT_GE(mean_iou, k_mask_overlap_thresh) << "mask overlap " << mean_iou << " < 0.90 for " << name;
+}
+
+void expect_matting_foreground_overlap(const std::string &name, const cv::Mat &mat) {
+    if (update_golden_mode()) {
+        ASSERT_TRUE(integer_single_channel(mat)) << "matting is not an integer single-channel alpha for " << name;
+        int64_t foreground = 0;
+        for (int row = 0; row < mat.rows; ++row) {
+            for (int col = 0; col < mat.cols; ++col) {
+                if (integer_pixel(mat, row, col) >= k_matting_foreground_min) {
+                    ++foreground;
+                }
+            }
+        }
+        ASSERT_GT(foreground, 0) << "golden foreground is empty for " << name;
+        write_integer_map_golden(name, mat);
+        GTEST_SKIP() << "golden updated: " << name;
+    }
+
+    int height = 0;
+    int width = 0;
+    std::vector<int64_t> golden_values;
+    ASSERT_TRUE(load_integer_map_golden(name, &height, &width, &golden_values))
+        << "golden missing, run with MORTRED_UPDATE_GOLDEN=1: " << name;
+    ASSERT_TRUE(integer_single_channel(mat)) << "matting is not an integer single-channel alpha for " << name;
+    ASSERT_EQ(mat.rows, height) << "mask size mismatch for " << name;
+    ASSERT_EQ(mat.cols, width) << "mask size mismatch for " << name;
+
+    int64_t golden_foreground = 0;
+    int64_t intersection = 0;
+    int64_t union_count = 0;
+    for (int row = 0; row < height; ++row) {
+        for (int col = 0; col < width; ++col) {
+            const int64_t golden_alpha = golden_values[static_cast<size_t>(row) * static_cast<size_t>(width) + static_cast<size_t>(col)];
+            const bool golden_fg = golden_alpha >= k_matting_foreground_min;
+            const bool current_fg = integer_pixel(mat, row, col) >= k_matting_foreground_min;
+            if (golden_fg) {
+                ++golden_foreground;
+            }
+            if (golden_fg && current_fg) {
+                ++intersection;
+            }
+            if (golden_fg || current_fg) {
+                ++union_count;
+            }
+        }
+    }
+    ASSERT_GT(golden_foreground, 0) << "golden foreground is empty for " << name;
+    ASSERT_GT(union_count, 0) << "golden foreground is empty for " << name;
+    const double iou = static_cast<double>(intersection) / static_cast<double>(union_count);
+    EXPECT_GE(iou, k_mask_overlap_thresh) << "mask overlap " << iou << " < 0.90 for " << name;
+}
+
+void expect_depth_relative_error(const std::string &name, const cv::Mat &mat) {
+    if (update_golden_mode()) {
+        ASSERT_EQ(mat.type(), CV_32FC1) << "depth map is not a float single-channel map for " << name;
+        ASSERT_GT(mat.total(), 0u) << "depth map has no finite pixels for " << name;
+        bool significant = false;
+        for (int row = 0; row < mat.rows; ++row) {
+            const float *row_data = mat.ptr<float>(row);
+            for (int col = 0; col < mat.cols; ++col) {
+                ASSERT_TRUE(std::isfinite(row_data[col])) << "non-finite depth value for " << name;
+                if (std::fabs(row_data[col]) > k_depth_abs_floor) {
+                    significant = true;
+                }
+            }
+        }
+        ASSERT_TRUE(significant) << "golden depth has no pixel with absolute value above 1e-6 for " << name;
+        write_depth_map_golden(name, mat);
+        GTEST_SKIP() << "golden updated: " << name;
+    }
+
+    const rapidjson::Document golden = load_golden_json_precise(name);
+    ASSERT_TRUE(golden.IsObject() && golden.HasMember("height") && golden.HasMember("width") && golden.HasMember("values") &&
+                golden["height"].IsInt() && golden["width"].IsInt() && golden["values"].IsArray())
+        << "golden missing, run with MORTRED_UPDATE_GOLDEN=1: " << name;
+    const int height = golden["height"].GetInt();
+    const int width = golden["width"].GetInt();
+    const auto &values = golden["values"].GetArray();
+    const int64_t count = static_cast<int64_t>(height) * static_cast<int64_t>(width);
+    ASSERT_GE(height, 0);
+    ASSERT_GE(width, 0);
+    ASSERT_EQ(static_cast<int64_t>(values.Size()), count) << "depth size mismatch for " << name;
+    ASSERT_EQ(mat.type(), CV_32FC1) << "depth map is not a float single-channel map for " << name;
+    ASSERT_EQ(mat.rows, height) << "depth size mismatch for " << name;
+    ASSERT_EQ(mat.cols, width) << "depth size mismatch for " << name;
+
+    bool non_finite = false;
+    bool significant = false;
+    double error_sum = 0.0;
+    int64_t finite_count = 0;
+    for (int row = 0; row < height; ++row) {
+        const float *row_data = mat.ptr<float>(row);
+        for (int col = 0; col < width; ++col) {
+            const rapidjson::SizeType index = static_cast<rapidjson::SizeType>(static_cast<int64_t>(row) * width + col);
+            const auto &item = values[index];
+            if (!item.IsNumber()) {
+                non_finite = true;
+                break;
+            }
+            const double golden_depth = item.GetDouble();
+            const double current_depth = row_data[col];
+            if (!std::isfinite(golden_depth) || !std::isfinite(current_depth)) {
+                non_finite = true;
+                break;
+            }
+            if (std::fabs(golden_depth) > k_depth_abs_floor) {
+                significant = true;
+            }
+            const double denom = std::max(std::fabs(golden_depth), k_depth_abs_floor);
+            error_sum += std::fabs(current_depth - golden_depth) / denom;
+            ++finite_count;
+        }
+        if (non_finite) {
+            break;
+        }
+    }
+    ASSERT_FALSE(non_finite) << "non-finite depth value for " << name;
+    ASSERT_GT(finite_count, 0) << "depth map has no finite pixels for " << name;
+    ASSERT_TRUE(significant) << "golden depth has no pixel with absolute value above 1e-6 for " << name;
+    const double mean_error = error_sum / static_cast<double>(finite_count);
+    EXPECT_LE(mean_error, k_depth_rel_thresh) << "depth error " << mean_error << " > 0.02 for " << name;
+}
+
 /*** typed comparators: one line per task output contract ***/
 
 inline void compare_classification(const std::string &name, const std_classification_output &out) { expect_scores(name, out); }
@@ -495,6 +821,16 @@ inline void compare_scene_segmentation(const std::string &name, const std_scene_
 }
 
 inline void compare_matting(const std::string &name, const std_matting_output &out) { expect_fingerprint(name, out.matting_result); }
+
+inline void compare_scene_segmentation_overlap(const std::string &name, const std_scene_segmentation_output &out) {
+    expect_class_mask_overlap(name, out.segmentation_result);
+}
+
+inline void compare_matting_overlap(const std::string &name, const std_matting_output &out) {
+    expect_matting_foreground_overlap(name, out.matting_result);
+}
+
+inline void compare_mono_depth(const std::string &name, const std_mde_output &out) { expect_depth_relative_error(name, out.depth_map); }
 
 inline void compare_enhancement(const std::string &name, const std_enhancement_output &out) {
     expect_fingerprint(name, out.enhancement_result);
@@ -577,5 +913,14 @@ void run_case(const char *name, const char *config, const char *image, GoldenCre
 
 #define GOLDEN_RAW_MAT_CASE(name, config, image, creator, output_type)                                                                     \
     MORTRED_GOLDEN_CASE(name, config, image, creator, output_type, compare_raw_mat)
+
+#define GOLDEN_SCENE_SEGMENTATION_OVERLAP_CASE(name, config, image, creator, output_type)                                                  \
+    MORTRED_GOLDEN_CASE(name, config, image, creator, output_type, compare_scene_segmentation_overlap)
+
+#define GOLDEN_MATTING_OVERLAP_CASE(name, config, image, creator, output_type)                                                             \
+    MORTRED_GOLDEN_CASE(name, config, image, creator, output_type, compare_matting_overlap)
+
+#define GOLDEN_DEPTH_CASE(name, config, image, creator, output_type)                                                                       \
+    MORTRED_GOLDEN_CASE(name, config, image, creator, output_type, compare_mono_depth)
 
 #endif // MORTRED_TEST_MODEL_GOLDEN_REGISTRY_H
