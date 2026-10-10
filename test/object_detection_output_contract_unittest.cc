@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <iostream>
 #include <limits>
 #include <string>
 #include <vector>
@@ -10,7 +11,12 @@
 #include "models/backend/tensor.h"
 #include "models/model_io_define.h"
 #include "models/object_detection/yolov5_detector.h"
+#include "models/object_detection/yolov7_detector.h"
 #include "models/object_detection/yolov8_detector.h"
+#include "rapidjson/document.h"
+#include "server/http_status.h"
+#include "server/item_exec.h"
+#include "server/response_serializers.h"
 
 using jinq::common::StatusCode;
 using jinq::models::backend::DType;
@@ -18,6 +24,7 @@ using jinq::models::backend::NamedTensor;
 using jinq::models::io_define::common_io::mat_input;
 using jinq::models::io_define::object_detection::std_object_detection_output;
 using jinq::models::object_detection::YoloV5Detector;
+using jinq::models::object_detection::YoloV7Detector;
 using jinq::models::object_detection::YoloV8Detector;
 
 namespace {
@@ -33,6 +40,119 @@ class TestYoloV5Detector : public YoloV5Detector<mat_input, std_object_detection
     using YoloV5Detector<mat_input, std_object_detection_output>::postprocess;
     using YoloV5Detector<mat_input, std_object_detection_output>::_m_detection_params;
 };
+
+class TestYoloV7Detector : public YoloV7Detector<mat_input, std_object_detection_output> {
+  public:
+    using YoloV7Detector<mat_input, std_object_detection_output>::postprocess;
+    using YoloV7Detector<mat_input, std_object_detection_output>::_m_detection_params;
+};
+
+struct YoloV7Wire {
+    int http = 0;
+    int status = -1;
+    std::string status_str;
+    std::string model_name;
+    bool partial = true;
+    size_t result_count = 0;
+    int item_status = -1;
+    bool data_is_null = false;
+    bool data_is_array = false;
+};
+
+jinq::models::backend::InferenceContext test_context();
+
+NamedTensor yolov7_shaped_head(const std::string &name, int64_t height, int64_t width, int64_t channels) {
+    NamedTensor output;
+    output.name = name;
+    output.tensor.dtype = DType::F32;
+    output.tensor.shape = {1, 3, height, width, channels};
+    const auto elements = static_cast<size_t>(1 * 3 * height * width * channels);
+    output.tensor.buffer.assign(elements * sizeof(float), 0);
+    return output;
+}
+
+YoloV7Wire yolov7_post_to_wire(const char *model_name, const std::vector<NamedTensor> &outputs) {
+    TestYoloV7Detector detector;
+    detector._m_detection_params.class_nums = 80;
+    std_object_detection_output decoded;
+    const StatusCode post_status = detector.postprocess(outputs, test_context(), decoded);
+
+    jinq::server::InferenceResult<std_object_detection_output> result;
+    result.item_status.assign(1, post_status);
+    result.item_outputs.assign(1, std::move(decoded));
+    jinq::server::aggregate_item_statuses(&result);
+
+    const auto unified = jinq::server::inference_result_to_unified(
+        "p0-3", model_name, result, &jinq::server::response::fill_object_detection);
+    YoloV7Wire wire;
+    wire.http = jinq::server::http_status_of(static_cast<StatusCode>(unified.status));
+    const std::string body = jinq::common::envelope::encode(unified);
+
+    rapidjson::Document doc;
+    doc.Parse(body.data(), body.size());
+    EXPECT_FALSE(doc.HasParseError());
+    EXPECT_TRUE(doc.IsObject());
+    if (!doc.IsObject()) {
+        return wire;
+    }
+    if (doc.HasMember("status") && doc["status"].IsInt()) {
+        wire.status = doc["status"].GetInt();
+    }
+    if (doc.HasMember("status_str") && doc["status_str"].IsString()) {
+        wire.status_str.assign(doc["status_str"].GetString(), doc["status_str"].GetStringLength());
+    }
+    if (doc.HasMember("model") && doc["model"].IsObject()) {
+        const auto &model = doc["model"];
+        if (model.HasMember("name") && model["name"].IsString()) {
+            wire.model_name.assign(model["name"].GetString(), model["name"].GetStringLength());
+        }
+    }
+    if (doc.HasMember("partial") && doc["partial"].IsBool()) {
+        wire.partial = doc["partial"].GetBool();
+    }
+    if (doc.HasMember("results") && doc["results"].IsArray()) {
+        const auto &results = doc["results"];
+        wire.result_count = results.Size();
+        if (results.Size() == 1 && results[0].IsObject()) {
+            if (results[0].HasMember("status") && results[0]["status"].IsInt()) {
+                wire.item_status = results[0]["status"].GetInt();
+            }
+            if (results[0].HasMember("data")) {
+                wire.data_is_null = results[0]["data"].IsNull();
+                wire.data_is_array = results[0]["data"].IsArray();
+            }
+        }
+    }
+    EXPECT_EQ(wire.status, jinq::common::to_underlying(post_status));
+    EXPECT_EQ(wire.status, unified.status);
+    return wire;
+}
+
+void expect_yolov7_wire(const YoloV7Wire &wire, const char *model_name, int http, int status, const char *status_str,
+                        bool data_null) {
+    EXPECT_EQ(wire.http, http);
+    EXPECT_EQ(wire.status, status);
+    EXPECT_EQ(wire.status_str, status_str);
+    EXPECT_EQ(wire.model_name, model_name);
+    EXPECT_FALSE(wire.partial);
+    EXPECT_EQ(wire.result_count, 1u);
+    EXPECT_EQ(wire.item_status, status);
+    if (data_null) {
+        EXPECT_TRUE(wire.data_is_null);
+    } else {
+        EXPECT_FALSE(wire.data_is_null);
+        EXPECT_TRUE(wire.data_is_array);
+    }
+}
+
+bool yolov7_wire_matches(const YoloV7Wire &wire, int http, int status, const char *status_str) {
+    return wire.http == http && wire.status == status && wire.status_str == status_str;
+}
+
+void print_yolov7_acceptance(int acceptance, const char *model_names, int http, int status, const char *status_str) {
+    std::cout << "验收 " << acceptance << " " << model_names << " HTTP " << http << " status " << status << " " << status_str
+              << std::endl;
+}
 
 NamedTensor output_tensor(DType dtype, const std::vector<int64_t> &shape, std::vector<float> values,
                           const std::string &name = "output0") {
@@ -201,4 +321,85 @@ TEST(ObjectDetectionOutputContract, YoloV5FiltersMinBoxAreaInNetworkPixels) {
     std_object_detection_output result;
     ASSERT_EQ(detector.postprocess({output_tensor(DType::F32, {1, 1, 7}, row, "output")}, test_context(), result), StatusCode::OK);
     EXPECT_TRUE(result.empty());
+}
+
+TEST(YoloV7OutputContract, Acceptance1NoMatchingHead) {
+    const std::vector<NamedTensor> outputs = {output_tensor(DType::F32, {1, 84, 1}, std::vector<float>(84, 0.0f), "output0")};
+    const auto wire = yolov7_post_to_wire("yolov7", outputs);
+    expect_yolov7_wire(wire, "yolov7", 500, 6, "model output contract failed", true);
+    if (yolov7_wire_matches(wire, 500, 6, "model output contract failed")) {
+        print_yolov7_acceptance(1, "yolov7", 500, 6, "model output contract failed");
+    }
+}
+
+TEST(YoloV7OutputContract, Acceptance2NoMatchingHead) {
+    const std::vector<NamedTensor> outputs = {output_tensor(DType::F32, {1, 84, 1}, std::vector<float>(84, 0.0f), "output0")};
+    const auto wire = yolov7_post_to_wire("yolov7x", outputs);
+    expect_yolov7_wire(wire, "yolov7x", 500, 6, "model output contract failed", true);
+    if (yolov7_wire_matches(wire, 500, 6, "model output contract failed")) {
+        print_yolov7_acceptance(2, "yolov7x", 500, 6, "model output contract failed");
+    }
+}
+
+TEST(YoloV7OutputContract, Acceptance3OneHead) {
+    const std::vector<NamedTensor> outputs = {yolov7_shaped_head("h0", 8, 8, 1)};
+    const auto yolov7 = yolov7_post_to_wire("yolov7", outputs);
+    const auto yolov7x = yolov7_post_to_wire("yolov7x", outputs);
+    expect_yolov7_wire(yolov7, "yolov7", 500, 6, "model output contract failed", true);
+    expect_yolov7_wire(yolov7x, "yolov7x", 500, 6, "model output contract failed", true);
+    if (yolov7_wire_matches(yolov7, 500, 6, "model output contract failed") &&
+        yolov7_wire_matches(yolov7x, 500, 6, "model output contract failed")) {
+        print_yolov7_acceptance(3, "yolov7 yolov7x", 500, 6, "model output contract failed");
+    }
+}
+
+TEST(YoloV7OutputContract, Acceptance4TwoHeads) {
+    const std::vector<NamedTensor> outputs = {yolov7_shaped_head("h0", 8, 8, 1), yolov7_shaped_head("h1", 4, 4, 1)};
+    const auto yolov7 = yolov7_post_to_wire("yolov7", outputs);
+    const auto yolov7x = yolov7_post_to_wire("yolov7x", outputs);
+    expect_yolov7_wire(yolov7, "yolov7", 500, 6, "model output contract failed", true);
+    expect_yolov7_wire(yolov7x, "yolov7x", 500, 6, "model output contract failed", true);
+    if (yolov7_wire_matches(yolov7, 500, 6, "model output contract failed") &&
+        yolov7_wire_matches(yolov7x, 500, 6, "model output contract failed")) {
+        print_yolov7_acceptance(4, "yolov7 yolov7x", 500, 6, "model output contract failed");
+    }
+}
+
+TEST(YoloV7OutputContract, Acceptance5MoreThanThreeHeads) {
+    const std::vector<NamedTensor> outputs = {yolov7_shaped_head("h0", 8, 8, 1), yolov7_shaped_head("h1", 4, 4, 1),
+                                              yolov7_shaped_head("h2", 2, 2, 1), yolov7_shaped_head("h3", 1, 1, 1)};
+    const auto yolov7 = yolov7_post_to_wire("yolov7", outputs);
+    const auto yolov7x = yolov7_post_to_wire("yolov7x", outputs);
+    expect_yolov7_wire(yolov7, "yolov7", 500, 6, "model output contract failed", true);
+    expect_yolov7_wire(yolov7x, "yolov7x", 500, 6, "model output contract failed", true);
+    if (yolov7_wire_matches(yolov7, 500, 6, "model output contract failed") &&
+        yolov7_wire_matches(yolov7x, 500, 6, "model output contract failed")) {
+        print_yolov7_acceptance(5, "yolov7 yolov7x", 500, 6, "model output contract failed");
+    }
+}
+
+TEST(YoloV7OutputContract, Acceptance6EmptyVector) {
+    const std::vector<NamedTensor> outputs;
+    const auto yolov7 = yolov7_post_to_wire("yolov7", outputs);
+    const auto yolov7x = yolov7_post_to_wire("yolov7x", outputs);
+    expect_yolov7_wire(yolov7, "yolov7", 500, 5, "model output empty", true);
+    expect_yolov7_wire(yolov7x, "yolov7x", 500, 5, "model output empty", true);
+    EXPECT_NE(yolov7.status, 6);
+    EXPECT_NE(yolov7x.status, 6);
+    if (yolov7_wire_matches(yolov7, 500, 5, "model output empty") && yolov7_wire_matches(yolov7x, 500, 5, "model output empty")) {
+        print_yolov7_acceptance(6, "yolov7 yolov7x", 500, 5, "model output empty");
+    }
+}
+
+TEST(YoloV7OutputContract, Acceptance7ThreeHeadsDecode) {
+    const int channels = 80 + 5;
+    const std::vector<NamedTensor> outputs = {yolov7_shaped_head("output", 4, 4, channels), yolov7_shaped_head("598", 2, 2, channels),
+                                              yolov7_shaped_head("612", 1, 1, channels)};
+    const auto yolov7 = yolov7_post_to_wire("yolov7", outputs);
+    const auto yolov7x = yolov7_post_to_wire("yolov7x", outputs);
+    expect_yolov7_wire(yolov7, "yolov7", 200, 0, "OK", false);
+    expect_yolov7_wire(yolov7x, "yolov7x", 200, 0, "OK", false);
+    if (yolov7_wire_matches(yolov7, 200, 0, "OK") && yolov7_wire_matches(yolov7x, 200, 0, "OK")) {
+        print_yolov7_acceptance(7, "yolov7 yolov7x", 200, 0, "OK");
+    }
 }

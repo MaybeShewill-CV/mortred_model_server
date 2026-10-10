@@ -90,7 +90,10 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
                 names << " " << item.name;
             }
             LOG(ERROR) << "yolov7 expected 3 heads [1,3,H,W,C]; got " << outputs.size() << " tensors:" << names.str();
-            return StatusCode::MODEL_EMPTY_OUTPUT;
+            if (outputs.empty()) {
+                return StatusCode::MODEL_EMPTY_OUTPUT;
+            }
+            return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
         }
     }
 
