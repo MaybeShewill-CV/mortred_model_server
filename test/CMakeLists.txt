@@ -402,6 +402,13 @@ if(TARGET hrnet_output_contract_unittest)
         WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
     add_dependencies(check hrnet_output_contract_unittest)
 endif()
+if(TARGET object_detection_output_contract_unittest)
+    add_test(
+        NAME YoloV7OutputContract
+        COMMAND $<TARGET_FILE:object_detection_output_contract_unittest> --gtest_filter=YoloV7OutputContract.*
+        WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
+    add_dependencies(check object_detection_output_contract_unittest)
+endif()
 if(TARGET model_golden_test)
     add_test(
         NAME Yolov8TrtDetection
