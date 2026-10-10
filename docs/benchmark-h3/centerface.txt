@@ -1,0 +1,4 @@
+NVIDIA GeForce RTX 2070 SUPER, 8192 MiB, 616.92
+2026-10-10
+3rd_party/bin/trtexec --loadEngine=weights/object_detection/centerface_detection/centerface.engine.static_bs1.fp16 --warmUp=500 --duration=15 --avgRuns=100 --useSpinWait --fp16 --shapes=input.1:1x3x640x640
+[10/10/2026-15:32:12] [I] Throughput: 762.144 qps

@@ -21,7 +21,7 @@ FP32_IDS = {
 }
 SHAPES = {
     "libface": "input:1x3x480x640",
-    "centerface": "input:1x3x640x640",
+    "centerface": "input.1:1x3x640x640",
     "enlightengan": "input_src:1x3x256x256,input_gray:1x1x256x256",
     "realesrgan": "input:1x256x256x3",
 }

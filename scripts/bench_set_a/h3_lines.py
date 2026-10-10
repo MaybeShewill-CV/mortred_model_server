@@ -35,7 +35,7 @@ SPECS: tuple[tuple[str, str, str], ...] = (
     ("yolov8l", "weights/object_detection/yolov8/yolov8l.engine.static_bs1.fp16", ""),
     ("yolov8x", "weights/object_detection/yolov8/yolov8x.engine.static_bs1.fp16", ""),
     ("libface", "weights/object_detection/libfacedetection/face_detection_yunet_2026may.engine.static_bs1.fp16", "input:1x3x480x640"),
-    ("centerface", "weights/object_detection/centerface_detection/centerface.engine.static_bs1.fp16", "input:1x3x640x640"),
+    ("centerface", "weights/object_detection/centerface_detection/centerface.engine.static_bs1.fp16", "input.1:1x3x640x640"),
     ("bisenetv2", "weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.engine.static_bs1.fp32", ""),
     ("pphuman_mobile", "weights/scene_segmentation/pphuman_seg/pp_humanseg_192x192_mobile.engine.static_bs1.fp16", ""),
     ("pphuman_lite", "weights/scene_segmentation/pphuman_seg/pp_humanseg_192x192_lite.engine.static_bs1.fp16", ""),

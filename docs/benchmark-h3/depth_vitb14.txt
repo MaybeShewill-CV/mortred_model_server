@@ -1,0 +1,4 @@
+NVIDIA GeForce RTX 2070 SUPER, 8192 MiB, 616.92
+2026-10-10
+3rd_party/bin/trtexec --loadEngine=weights/mono_depth_estimation/depth_anything/depth_anything_vitb14.engine.static_bs1.fp16 --warmUp=500 --duration=15 --avgRuns=100 --useSpinWait --fp16
+[10/10/2026-15:43:02] [I] Throughput: 53.9435 qps
