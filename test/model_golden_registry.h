@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -30,6 +31,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <glog/logging.h>
@@ -84,6 +86,8 @@ constexpr float k_box_iou_thresh = 0.5f;
 constexpr double k_fingerprint_diff = 1.0;
 constexpr double k_keypoint_match_dist = 3.0;
 constexpr double k_embedding_cos_thresh = 0.999;
+constexpr double k_mask_overlap = 0.90;
+constexpr int k_matting_foreground = 128;
 
 bool update_golden_mode() {
     const char *env = std::getenv("MORTRED_UPDATE_GOLDEN");
@@ -490,11 +494,193 @@ inline void compare_object_detection(const std::string &name, const std_object_d
 
 inline void compare_face_detection(const std::string &name, const std_face_detection_output &out) { expect_boxes(name, out, true); }
 
-inline void compare_scene_segmentation(const std::string &name, const std_scene_segmentation_output &out) {
-    expect_fingerprint(name, out.segmentation_result);
+struct mask_golden {
+    int height = 0;
+    int width = 0;
+    std::vector<int> values;
+};
+
+enum class mask_load_status { ok, missing, invalid };
+
+int mask_pixel(const cv::Mat &mat, int row, int col) {
+    if (mat.type() == CV_8UC1) {
+        return static_cast<int>(mat.ptr<uint8_t>(row)[col]);
+    }
+    return static_cast<int>(mat.ptr<int32_t>(row)[col]);
 }
 
-inline void compare_matting(const std::string &name, const std_matting_output &out) { expect_fingerprint(name, out.matting_result); }
+void write_mask_golden(const std::string &name, const cv::Mat &mat) {
+    rapidjson::Document doc;
+    doc.SetObject();
+    rapidjson::Document::AllocatorType &allocator = doc.GetAllocator();
+    doc.AddMember("height", mat.rows, allocator);
+    doc.AddMember("width", mat.cols, allocator);
+    rapidjson::Value values(rapidjson::kArrayType);
+    const size_t count = static_cast<size_t>(mat.rows) * static_cast<size_t>(mat.cols);
+    values.Reserve(static_cast<rapidjson::SizeType>(count), allocator);
+    for (int row = 0; row < mat.rows; ++row) {
+        for (int col = 0; col < mat.cols; ++col) {
+            values.PushBack(mask_pixel(mat, row, col), allocator);
+        }
+    }
+    doc.AddMember("values", values, allocator);
+    write_golden_text(name, ".json", serialize_json(doc));
+}
+
+mask_load_status load_mask_golden(const std::string &name, mask_golden &out) {
+    const std::string path = golden_path(name, ".json");
+    std::ifstream in(path);
+    if (!in.is_open()) {
+        return mask_load_status::missing;
+    }
+    std::stringstream buffer;
+    buffer << in.rdbuf();
+    const std::string text = buffer.str();
+    rapidjson::Document doc;
+    doc.Parse(text.c_str());
+    if (doc.HasParseError() || !doc.IsObject() || !doc.HasMember("height") || !doc.HasMember("width") || !doc.HasMember("values")) {
+        return mask_load_status::invalid;
+    }
+    const rapidjson::Value &height = doc["height"];
+    const rapidjson::Value &width = doc["width"];
+    const rapidjson::Value &values = doc["values"];
+    if (!height.IsInt() || !width.IsInt() || !values.IsArray() || height.GetInt() < 0 || width.GetInt() < 0) {
+        return mask_load_status::invalid;
+    }
+    const int64_t expect = static_cast<int64_t>(height.GetInt()) * static_cast<int64_t>(width.GetInt());
+    if (expect != static_cast<int64_t>(values.Size())) {
+        return mask_load_status::invalid;
+    }
+    out.height = height.GetInt();
+    out.width = width.GetInt();
+    out.values.clear();
+    out.values.reserve(static_cast<size_t>(expect));
+    for (const auto &item : values.GetArray()) {
+        if (!item.IsInt()) {
+            return mask_load_status::invalid;
+        }
+        out.values.push_back(item.GetInt());
+    }
+    return mask_load_status::ok;
+}
+
+bool take_mask_golden(const std::string &name, mask_golden &out) {
+    const mask_load_status status = load_mask_golden(name, out);
+    if (status == mask_load_status::missing) {
+        ADD_FAILURE() << "golden missing, run with MORTRED_UPDATE_GOLDEN=1: " << golden_path(name, ".json");
+        return false;
+    }
+    if (status != mask_load_status::ok) {
+        ADD_FAILURE() << "golden json is invalid for " << name;
+        return false;
+    }
+    return true;
+}
+
+void fail_mask_overlap(const std::string &name, double overlap) {
+    FAIL() << "mask overlap " << overlap << " < 0.90 for " << name;
+}
+
+void expect_segmentation_overlap(const std::string &name, const cv::Mat &mat) {
+    if (mat.type() != CV_32SC1) {
+        FAIL() << "segmentation result type is not CV_32SC1 for " << name;
+    }
+    if (update_golden_mode()) {
+        write_mask_golden(name, mat);
+        GTEST_SKIP() << "golden updated: " << golden_path(name, ".json");
+    }
+    mask_golden golden;
+    if (!take_mask_golden(name, golden)) {
+        return;
+    }
+    if (golden.height != mat.rows || golden.width != mat.cols) {
+        FAIL() << "golden size differs for " << name;
+    }
+    std::unordered_map<int, int64_t> golden_count;
+    for (int value : golden.values) {
+        golden_count[value] += 1;
+    }
+    if (golden_count.size() < 2) {
+        FAIL() << "segmentation golden has fewer than two class values for " << name;
+    }
+    std::unordered_map<int, int64_t> prediction_count;
+    std::unordered_map<int, int64_t> intersection;
+    for (int row = 0; row < mat.rows; ++row) {
+        const int32_t *row_ptr = mat.ptr<int32_t>(row);
+        for (int col = 0; col < mat.cols; ++col) {
+            const int predicted = static_cast<int>(row_ptr[col]);
+            const int expected = golden.values[static_cast<size_t>(row) * static_cast<size_t>(mat.cols) + static_cast<size_t>(col)];
+            prediction_count[predicted] += 1;
+            if (predicted == expected) {
+                intersection[expected] += 1;
+            }
+        }
+    }
+    double sum = 0.0;
+    for (const auto &item : golden_count) {
+        const int64_t inter = intersection[item.first];
+        const int64_t predicted = prediction_count[item.first];
+        const int64_t uni = item.second + predicted - inter;
+        sum += static_cast<double>(inter) / static_cast<double>(uni);
+    }
+    const double overlap = sum / static_cast<double>(golden_count.size());
+    if (overlap < k_mask_overlap) {
+        fail_mask_overlap(name, overlap);
+    }
+}
+
+void expect_matting_overlap(const std::string &name, const cv::Mat &mat) {
+    if (mat.type() != CV_8UC1 && mat.type() != CV_32SC1) {
+        FAIL() << "matting result type is not CV_8UC1 or CV_32SC1 for " << name;
+    }
+    if (update_golden_mode()) {
+        write_mask_golden(name, mat);
+        GTEST_SKIP() << "golden updated: " << golden_path(name, ".json");
+    }
+    mask_golden golden;
+    if (!take_mask_golden(name, golden)) {
+        return;
+    }
+    if (golden.height != mat.rows || golden.width != mat.cols) {
+        FAIL() << "golden size differs for " << name;
+    }
+    int64_t golden_foreground = 0;
+    int64_t predicted_foreground = 0;
+    int64_t intersection = 0;
+    for (int row = 0; row < mat.rows; ++row) {
+        for (int col = 0; col < mat.cols; ++col) {
+            const int expected = golden.values[static_cast<size_t>(row) * static_cast<size_t>(mat.cols) + static_cast<size_t>(col)];
+            const int predicted = mask_pixel(mat, row, col);
+            const bool golden_on = expected >= k_matting_foreground;
+            const bool predicted_on = predicted >= k_matting_foreground;
+            if (golden_on) {
+                ++golden_foreground;
+            }
+            if (predicted_on) {
+                ++predicted_foreground;
+            }
+            if (golden_on && predicted_on) {
+                ++intersection;
+            }
+        }
+    }
+    if (golden_foreground < 2) {
+        FAIL() << "matting golden foreground count is below 2 for " << name;
+    }
+    const int64_t uni = golden_foreground + predicted_foreground - intersection;
+    const double overlap = static_cast<double>(intersection) / static_cast<double>(uni);
+    if (overlap < k_mask_overlap) {
+        fail_mask_overlap(name, overlap);
+    }
+}
+
+inline void compare_scene_segmentation(const std::string &name, const std_scene_segmentation_output &out) {
+    expect_segmentation_overlap(name, out.segmentation_result);
+}
+
+inline void compare_matting(const std::string &name, const std_matting_output &out) {
+    expect_matting_overlap(name, out.matting_result);
+}
 
 inline void compare_enhancement(const std::string &name, const std_enhancement_output &out) {
     expect_fingerprint(name, out.enhancement_result);
