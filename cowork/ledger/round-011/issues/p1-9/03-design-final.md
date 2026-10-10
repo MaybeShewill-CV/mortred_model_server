@@ -1,12 +1,12 @@
 # 技术方案
 
 - 问题: P1-9
-- 版本: v2
+- 版本: v3
 - 对应列表: v3
 
 ## 边界
 
-上一版审查条件已写入验收 2。本方案只覆盖冻结句 H3：`docs/benchmark-set-a.md` 里，范围内 39 个 catalog id 各自有一行，同一行里同时有硬件、可直接执行的复现命令、指标和日期。
+上一版审查条件已写入验收 2。本方案只覆盖冻结句 H3：`docs/benchmark-set-a.md` 里，范围内 39 个 catalog id 各自有一行，同一行里同时有硬件、可直接执行的复现命令、指标和日期。centerface 的命令含 `--shapes=input.1:1x3x640x640`。
 
 这 39 个 id 按冻结句的顺序是：`mobilenetv2`、`resnet`、`densenet`、`yolov5l`、`yolov6s`、`nanodet_1x5`、`nanodet_416`、`yolov7`、`yolov7x`、`yolov8n`、`yolov8s`、`yolov8l`、`yolov8x`、`libface`、`centerface`、`bisenetv2`、`pphuman_mobile`、`pphuman_lite`、`pphuman_server`、`hrnet`、`msocrnet`、`dbnet`、`attentive_gan`、`enlightengan`、`realesrgan`、`superpoint`、`dinov2_vits14`、`dinov2_vitb14`、`dinov2_vitl14`、`modnet`、`ppmatting_512`、`ppmatting_1024`、`ppmatting_resnet34`、`ppmatting_v2`、`depth_vits14`、`depth_vitb14`、`depth_vitl14`、`metric3d_512`、`metric3d_1088`。
 
@@ -79,7 +79,7 @@ HTTP 契约和 tensor 契约不变。表 5 是文档行，列名固定为 `id`�
 | `yolov8l` | `weights/object_detection/yolov8/yolov8l.engine.static_bs1.fp16` | |
 | `yolov8x` | `weights/object_detection/yolov8/yolov8x.engine.static_bs1.fp16` | |
 | `libface` | `weights/object_detection/libfacedetection/face_detection_yunet_2026may.engine.static_bs1.fp16` | `input:1x3x480x640` |
-| `centerface` | `weights/object_detection/centerface_detection/centerface.engine.static_bs1.fp16` | `input:1x3x640x640` |
+| `centerface` | `weights/object_detection/centerface_detection/centerface.engine.static_bs1.fp16` | `input.1:1x3x640x640` |
 | `bisenetv2` | `weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.engine.static_bs1.fp32` | |
 | `pphuman_mobile` | `weights/scene_segmentation/pphuman_seg/pp_humanseg_192x192_mobile.engine.static_bs1.fp16` | |
 | `pphuman_lite` | `weights/scene_segmentation/pphuman_seg/pp_humanseg_192x192_lite.engine.static_bs1.fp16` | |
@@ -105,7 +105,7 @@ HTTP 契约和 tensor 契约不变。表 5 是文档行，列名固定为 `id`�
 | `metric3d_512` | `weights/mono_depth_estimation/metric3d/metric3d_750k_512x1088.engine.static_bs1.fp16` | |
 | `metric3d_1088` | `weights/mono_depth_estimation/metric3d/metric3d_750k_1088x1920.engine.static_bs1.fp16` | |
 
-四个动态 id 的 shapes 沿用现有 Set A profile 的 opt。`libface` 的 engine 与 `conf/model/object_detection/libfacedetection/libface.toml` 的 `model_file_path` 同一文件。
+四条 shapes 的尺寸仍是现有 Set A profile 的 opt；centerface 的张量名用本机这份 engine 的输入名 input.1，另外三条仍用 profile 里的 name。`libface` 的 engine 与 `conf/model/object_detection/libfacedetection/libface.toml` 的 `model_file_path` 同一文件。
 
 ## 性能与资源
 
@@ -125,7 +125,7 @@ HTTP 契约和 tensor 契约不变。表 5 是文档行，列名固定为 `id`�
 
 ## 测试义务
 
-QA 对照边界名单读表 5 和 39 个记录文件，逐条核对验收标准 1 到 8。重点看四条 YOLOv8 的 engine 路径各不相同，`libface` 只有一行，`msocrnet` 的指标来自记录文件里的 `Throughput:` 行。
+QA 对照边界名单读表 5 和 39 个记录文件，逐条核对验收标准 1 到 8。重点看四条 YOLOv8 的 engine 路径各不相同，`libface` 只有一行，`msocrnet` 的指标来自记录文件里的 `Throughput:` 行。centerface 的命令含 `--shapes=input.1:1x3x640x640`。
 
 白盒确认 `h3_lines.py` 的指标只取自它刚刚启动的那个进程的标准输出里最后一条 `Throughput:`；退出码非 0、没有该行、硬件探测失败或 engine 不在时，不写表 5。确认它不读取表 2 的单元格，也不读取 `logs/bench` 的 json 来填指标。确认 `run.py` 重写英文文档时原样接回已有表 5，中文副本没有表 5。
 
@@ -155,14 +155,15 @@ QA 对照边界名单读表 5 和 39 个记录文件，逐条核对验收标准 
 ## 签字
 | 角色 | 结论 | 条件 | 方案版本 | 记录 |
 | --- | --- | --- | --- | --- |
-| 产品经理 | 不同意 | 第三段须只含数字和句点，且第一组数字至少三位 | v2 | `cowork/ledger/round-011/issues/p1-9/03-discussion/v2-sign-pm.md` |
-| 研发 | 同意 | 无 | v2 | `cowork/ledger/round-011/issues/p1-9/03-discussion/v2-sign-rd.md` |
-| 技术负责人 | 同意 | 无 | v2 | `cowork/ledger/round-011/issues/p1-9/03-discussion/v2-sign-tech-lead.md` |
-| 用户 | 决定执行 | 无 | v2 | 2026-10-10 对话 |
+| 产品经理 | 同意 | 无 | v3 | `cowork/ledger/round-011/issues/p1-9/03-discussion/v3-sign-pm.md` |
+| 研发 | 同意 | 无 | v3 | `cowork/ledger/round-011/issues/p1-9/03-discussion/v3-sign-rd.md` |
+| 技术负责人 | 同意 | 无 | v3 | `cowork/ledger/round-011/issues/p1-9/03-discussion/v3-sign-tech-lead.md` |
 
-## 用户决定
+## 修订
+QA 结论 fail 之后允许的一次修订。三份签字的方案版本都是 v3，结论都是同意，条件都是无。相对用户 2026-10-10 选定的 v2，只把 centerface 的 shapes 从 `input:1x3x640x640` 改为 `input.1:1x3x640x640`。
+
+## 先前的用户决定
 - 日期: 2026-10-10
 - 选用版本: v2
 - 决定原文: 39 个 id 各一行。硬件按英文逗号分成恰好三段：GPU 名称、含 MiB 或 GiB 的显存、驱动版本。现有「机器」节表头不能通过。指标只取本次 trtexec 输出里的 Throughput。
 - 未选用: v1 的可观察行为是硬件只要非空，整格不是 `name, memory.total` 这个表头模板，也不含 `N/A`。产品经理 v2 条件原文：验收 2 的三段里，只有第二段含 `MiB` 或 `GiB`。第三段去掉首尾空白后只含数字和英文句点，至少一个句点且句点不在首尾，从左数第一组数字至少三位。`NVIDIA GeForce RTX 2070 SUPER, 8192 MiB, 6924 MiB` 不能通过。`NVIDIA GeForce RTX 2070 SUPER, 8192 MiB, 7.5` 不能通过。用户选定的是 v2 正文，这些条件不写入验收标准。
-
