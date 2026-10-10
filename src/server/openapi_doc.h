@@ -114,6 +114,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_ATTENTIVE_GAN_DERAIN_SERVER"
+              },
+              "example": {
+                "req_id": "attentive_gan",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -197,6 +203,25 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "attentive_gan",
+                  "model": {
+                    "name": "attentive_gan",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "image": "<base64-enhanced-image>"
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -251,6 +276,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_BISENETV2_SERVER"
+              },
+              "example": {
+                "req_id": "bisenetv2",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -334,6 +365,26 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "bisenetv2",
+                  "model": {
+                    "name": "bisenetv2",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "image": "<base64-mask>",
+                        "colorized_mask": "<base64-colorized-mask>"
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -388,6 +439,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_CENTER_FACE_DETECTION_SERVER"
+              },
+              "example": {
+                "req_id": "centerface",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -471,6 +528,58 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "centerface",
+                  "model": {
+                    "name": "centerface",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": [
+                        {
+                          "class_id": 0,
+                          "score": 0.93,
+                          "category": "person",
+                          "bbox": [
+                            12.0,
+                            40.0,
+                            210.5,
+                            480.0
+                          ],
+                          "detail_infos": {},
+                          "landmarks": [
+                            [
+                              12.0,
+                              40.0
+                            ],
+                            [
+                              40.0,
+                              42.0
+                            ],
+                            [
+                              26.0,
+                              55.0
+                            ],
+                            [
+                              16.0,
+                              70.0
+                            ],
+                            [
+                              36.0,
+                              70.0
+                            ]
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -662,6 +771,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_DBNET_SERVER"
+              },
+              "example": {
+                "req_id": "dbnet",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -745,6 +860,52 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "dbnet",
+                  "model": {
+                    "name": "dbnet",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": [
+                        {
+                          "score": 0.97,
+                          "bbox": [
+                            100.0,
+                            200.0,
+                            340.0,
+                            260.0
+                          ],
+                          "polygon": [
+                            [
+                              100.0,
+                              200.0
+                            ],
+                            [
+                              340.0,
+                              200.0
+                            ],
+                            [
+                              340.0,
+                              260.0
+                            ],
+                            [
+                              100.0,
+                              260.0
+                            ]
+                          ],
+                          "detail_infos": {}
+                        }
+                      ]
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -1073,6 +1234,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_DENSENET_CLASSIFICATION_SERVER"
+              },
+              "example": {
+                "req_id": "densenet",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -1156,6 +1323,31 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "densenet",
+                  "model": {
+                    "name": "densenet",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "class_id": 281,
+                        "category": "tabby cat",
+                        "scores": [
+                          0.02,
+                          0.91,
+                          0.03
+                        ]
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -1210,6 +1402,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_DEPTH_ANYTHING_ESTIMATION_SERVER"
+              },
+              "example": {
+                "req_id": "depth_vitb14",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -1293,6 +1491,25 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "depth_vitb14",
+                  "model": {
+                    "name": "depth_vitb14",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "image": "<base64-colorized-depth-map>"
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -1347,6 +1564,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_DEPTH_ANYTHING_ESTIMATION_SERVER"
+              },
+              "example": {
+                "req_id": "depth_vitl14",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -1430,6 +1653,25 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "depth_vitl14",
+                  "model": {
+                    "name": "depth_vitl14",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "image": "<base64-colorized-depth-map>"
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -1484,6 +1726,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_DEPTH_ANYTHING_ESTIMATION_SERVER"
+              },
+              "example": {
+                "req_id": "depth_vits14",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -1567,6 +1815,25 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "depth_vits14",
+                  "model": {
+                    "name": "depth_vits14",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "image": "<base64-colorized-depth-map>"
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -1621,6 +1888,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_DINOV2_FEATURE_EMBEDDING_SERVER"
+              },
+              "example": {
+                "req_id": "dinov2_vitb14",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -1704,6 +1977,30 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "dinov2_vitb14",
+                  "model": {
+                    "name": "dinov2_vitb14",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "dim": 3,
+                        "embedding": [
+                          0.02,
+                          0.91,
+                          0.03
+                        ]
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -1758,6 +2055,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_DINOV2_FEATURE_EMBEDDING_SERVER"
+              },
+              "example": {
+                "req_id": "dinov2_vitl14",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -1841,6 +2144,30 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "dinov2_vitl14",
+                  "model": {
+                    "name": "dinov2_vitl14",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "dim": 3,
+                        "embedding": [
+                          0.02,
+                          0.91,
+                          0.03
+                        ]
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -1895,6 +2222,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_DINOV2_FEATURE_EMBEDDING_SERVER"
+              },
+              "example": {
+                "req_id": "dinov2_vits14",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -1978,6 +2311,30 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "dinov2_vits14",
+                  "model": {
+                    "name": "dinov2_vits14",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "dim": 3,
+                        "embedding": [
+                          0.02,
+                          0.91,
+                          0.03
+                        ]
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -2032,6 +2389,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_ENLIGHTEN_GAN_SERVER"
+              },
+              "example": {
+                "req_id": "enlightengan",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -2115,6 +2478,25 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "enlightengan",
+                  "model": {
+                    "name": "enlightengan",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "image": "<base64-enhanced-image>"
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -2169,6 +2551,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_HRNET_SERVER"
+              },
+              "example": {
+                "req_id": "hrnet",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -2252,6 +2640,26 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "hrnet",
+                  "model": {
+                    "name": "hrnet",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "image": "<base64-mask>",
+                        "colorized_mask": "<base64-colorized-mask>"
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -2443,6 +2851,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_LIBFACE_DETECTION_SERVER"
+              },
+              "example": {
+                "req_id": "libface",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -2526,6 +2940,58 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "libface",
+                  "model": {
+                    "name": "libface",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": [
+                        {
+                          "class_id": 0,
+                          "score": 0.93,
+                          "category": "person",
+                          "bbox": [
+                            12.0,
+                            40.0,
+                            210.5,
+                            480.0
+                          ],
+                          "detail_infos": {},
+                          "landmarks": [
+                            [
+                              12.0,
+                              40.0
+                            ],
+                            [
+                              40.0,
+                              42.0
+                            ],
+                            [
+                              26.0,
+                              55.0
+                            ],
+                            [
+                              16.0,
+                              70.0
+                            ],
+                            [
+                              36.0,
+                              70.0
+                            ]
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -2580,6 +3046,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_METRIC3D_ESTIMATION_SERVER"
+              },
+              "example": {
+                "req_id": "metric3d_1088",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -2663,6 +3135,25 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "metric3d_1088",
+                  "model": {
+                    "name": "metric3d_1088",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "image": "<base64-colorized-depth-map>"
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -2717,6 +3208,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_METRIC3D_ESTIMATION_SERVER"
+              },
+              "example": {
+                "req_id": "metric3d_512",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -2800,6 +3297,25 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "metric3d_512",
+                  "model": {
+                    "name": "metric3d_512",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "image": "<base64-colorized-depth-map>"
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -2854,6 +3370,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_MOBILENETV2_CLASSIFICATION_SERVER"
+              },
+              "example": {
+                "req_id": "mobilenetv2",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -2937,6 +3459,31 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "mobilenetv2",
+                  "model": {
+                    "name": "mobilenetv2",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "class_id": 281,
+                        "category": "tabby cat",
+                        "scores": [
+                          0.02,
+                          0.91,
+                          0.03
+                        ]
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -2991,6 +3538,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_MODNET_SERVER"
+              },
+              "example": {
+                "req_id": "modnet",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -3074,6 +3627,25 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "modnet",
+                  "model": {
+                    "name": "modnet",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "image": "<base64-matting-result>"
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -3128,6 +3700,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_MSOCRNET_SERVER"
+              },
+              "example": {
+                "req_id": "msocrnet",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -3211,6 +3789,26 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "msocrnet",
+                  "model": {
+                    "name": "msocrnet",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "image": "<base64-mask>",
+                        "colorized_mask": "<base64-colorized-mask>"
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -3265,6 +3863,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_NANODET_DETECTION_SERVER"
+              },
+              "example": {
+                "req_id": "nanodet_1x5",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -3348,6 +3952,36 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "nanodet_1x5",
+                  "model": {
+                    "name": "nanodet_1x5",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": [
+                        {
+                          "class_id": 0,
+                          "score": 0.93,
+                          "category": "person",
+                          "bbox": [
+                            12.0,
+                            40.0,
+                            210.5,
+                            480.0
+                          ],
+                          "detail_infos": {}
+                        }
+                      ]
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -3402,6 +4036,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_NANODET_DETECTION_SERVER"
+              },
+              "example": {
+                "req_id": "nanodet_416",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -3485,6 +4125,36 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "nanodet_416",
+                  "model": {
+                    "name": "nanodet_416",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": [
+                        {
+                          "class_id": 0,
+                          "score": 0.93,
+                          "category": "person",
+                          "bbox": [
+                            12.0,
+                            40.0,
+                            210.5,
+                            480.0
+                          ],
+                          "detail_infos": {}
+                        }
+                      ]
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -3539,6 +4209,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_PPHUMAN_SEG_SERVER"
+              },
+              "example": {
+                "req_id": "pphuman_lite",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -3622,6 +4298,26 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "pphuman_lite",
+                  "model": {
+                    "name": "pphuman_lite",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "image": "<base64-mask>",
+                        "colorized_mask": "<base64-colorized-mask>"
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -3676,6 +4372,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_PPHUMAN_SEG_SERVER"
+              },
+              "example": {
+                "req_id": "pphuman_mobile",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -3759,6 +4461,26 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "pphuman_mobile",
+                  "model": {
+                    "name": "pphuman_mobile",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "image": "<base64-mask>",
+                        "colorized_mask": "<base64-colorized-mask>"
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -3813,6 +4535,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_PPHUMAN_SEG_SERVER"
+              },
+              "example": {
+                "req_id": "pphuman_server",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -3896,6 +4624,26 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "pphuman_server",
+                  "model": {
+                    "name": "pphuman_server",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "image": "<base64-mask>",
+                        "colorized_mask": "<base64-colorized-mask>"
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -3950,6 +4698,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_PP_MATTING_SERVER"
+              },
+              "example": {
+                "req_id": "ppmatting_1024",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -4033,6 +4787,25 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "ppmatting_1024",
+                  "model": {
+                    "name": "ppmatting_1024",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "image": "<base64-matting-result>"
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -4087,6 +4860,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_PP_MATTING_SERVER"
+              },
+              "example": {
+                "req_id": "ppmatting_512",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -4170,6 +4949,25 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "ppmatting_512",
+                  "model": {
+                    "name": "ppmatting_512",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "image": "<base64-matting-result>"
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -4224,6 +5022,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_PP_MATTING_SERVER"
+              },
+              "example": {
+                "req_id": "ppmatting_resnet34",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -4307,6 +5111,25 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "ppmatting_resnet34",
+                  "model": {
+                    "name": "ppmatting_resnet34",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "image": "<base64-matting-result>"
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -4361,6 +5184,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_PP_MATTING_SERVER"
+              },
+              "example": {
+                "req_id": "ppmatting_v2",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -4444,6 +5273,25 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "ppmatting_v2",
+                  "model": {
+                    "name": "ppmatting_v2",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "image": "<base64-matting-result>"
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -4498,6 +5346,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_REAL_ESRGAN_SERVER"
+              },
+              "example": {
+                "req_id": "realesrgan",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -4581,6 +5435,25 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "realesrgan",
+                  "model": {
+                    "name": "realesrgan",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "image": "<base64-enhanced-image>"
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -4635,6 +5508,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_RESNET_CLASSIFICATION_SERVER"
+              },
+              "example": {
+                "req_id": "resnet",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -4718,6 +5597,31 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "resnet",
+                  "model": {
+                    "name": "resnet",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": {
+                        "class_id": 281,
+                        "category": "tabby cat",
+                        "scores": [
+                          0.02,
+                          0.91,
+                          0.03
+                        ]
+                      }
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -4909,6 +5813,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_SUPERPOINT_FP_SERVER"
+              },
+              "example": {
+                "req_id": "superpoint",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -4992,6 +5902,36 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "superpoint",
+                  "model": {
+                    "name": "superpoint",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": [
+                        {
+                          "score": 0.93,
+                          "location": [
+                            12.0,
+                            40.0
+                          ],
+                          "descriptor": [
+                            0.02,
+                            0.91,
+                            0.03
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -5046,6 +5986,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_YOLOV5_DETECTION_SERVER"
+              },
+              "example": {
+                "req_id": "yolov5l",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -5129,6 +6075,36 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "yolov5l",
+                  "model": {
+                    "name": "yolov5l",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": [
+                        {
+                          "class_id": 0,
+                          "score": 0.93,
+                          "category": "person",
+                          "bbox": [
+                            12.0,
+                            40.0,
+                            210.5,
+                            480.0
+                          ],
+                          "detail_infos": {}
+                        }
+                      ]
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -5183,6 +6159,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_YOLOV6_DETECTION_SERVER"
+              },
+              "example": {
+                "req_id": "yolov6s",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -5266,6 +6248,36 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "yolov6s",
+                  "model": {
+                    "name": "yolov6s",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": [
+                        {
+                          "class_id": 0,
+                          "score": 0.93,
+                          "category": "person",
+                          "bbox": [
+                            12.0,
+                            40.0,
+                            210.5,
+                            480.0
+                          ],
+                          "detail_infos": {}
+                        }
+                      ]
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -5320,6 +6332,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_YOLOV7_DETECTION_SERVER"
+              },
+              "example": {
+                "req_id": "yolov7",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -5403,6 +6421,36 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "yolov7",
+                  "model": {
+                    "name": "yolov7",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": [
+                        {
+                          "class_id": 0,
+                          "score": 0.93,
+                          "category": "person",
+                          "bbox": [
+                            12.0,
+                            40.0,
+                            210.5,
+                            480.0
+                          ],
+                          "detail_infos": {}
+                        }
+                      ]
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -5457,6 +6505,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_YOLOV7_DETECTION_SERVER"
+              },
+              "example": {
+                "req_id": "yolov7x",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -5540,6 +6594,36 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "yolov7x",
+                  "model": {
+                    "name": "yolov7x",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": [
+                        {
+                          "class_id": 0,
+                          "score": 0.93,
+                          "category": "person",
+                          "bbox": [
+                            12.0,
+                            40.0,
+                            210.5,
+                            480.0
+                          ],
+                          "detail_infos": {}
+                        }
+                      ]
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -5594,6 +6678,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_YOLOV8_DETECTION_SERVER"
+              },
+              "example": {
+                "req_id": "yolov8l",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -5677,6 +6767,36 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "yolov8l",
+                  "model": {
+                    "name": "yolov8l",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": [
+                        {
+                          "class_id": 0,
+                          "score": 0.93,
+                          "category": "person",
+                          "bbox": [
+                            12.0,
+                            40.0,
+                            210.5,
+                            480.0
+                          ],
+                          "detail_infos": {}
+                        }
+                      ]
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -5731,6 +6851,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_YOLOV8_DETECTION_SERVER"
+              },
+              "example": {
+                "req_id": "yolov8n",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -5814,6 +6940,36 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "yolov8n",
+                  "model": {
+                    "name": "yolov8n",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": [
+                        {
+                          "class_id": 0,
+                          "score": 0.93,
+                          "category": "person",
+                          "bbox": [
+                            12.0,
+                            40.0,
+                            210.5,
+                            480.0
+                          ],
+                          "detail_infos": {}
+                        }
+                      ]
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -5868,6 +7024,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_YOLOV8_DETECTION_SERVER"
+              },
+              "example": {
+                "req_id": "yolov8s",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -5951,6 +7113,36 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "yolov8s",
+                  "model": {
+                    "name": "yolov8s",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": [
+                        {
+                          "class_id": 0,
+                          "score": 0.93,
+                          "category": "person",
+                          "bbox": [
+                            12.0,
+                            40.0,
+                            210.5,
+                            480.0
+                          ],
+                          "detail_infos": {}
+                        }
+                      ]
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
@@ -6005,6 +7197,12 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/Request_YOLOV8_DETECTION_SERVER"
+              },
+              "example": {
+                "req_id": "yolov8x",
+                "images": [
+                  "base64 encoded image"
+                ]
               }
             },
             "image/png": {
@@ -6088,6 +7286,36 @@ inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(
                       }
                     }
                   ]
+                },
+                "example": {
+                  "status": 0,
+                  "status_str": "OK",
+                  "task_id": "yolov8x",
+                  "model": {
+                    "name": "yolov8x",
+                    "version": ""
+                  },
+                  "results": [
+                    {
+                      "status": 0,
+                      "data": [
+                        {
+                          "class_id": 0,
+                          "score": 0.93,
+                          "category": "person",
+                          "bbox": [
+                            12.0,
+                            40.0,
+                            210.5,
+                            480.0
+                          ],
+                          "detail_infos": {}
+                        }
+                      ]
+                    }
+                  ],
+                  "server_time_ms": 41.2,
+                  "partial": false
                 }
               }
             }
