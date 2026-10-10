@@ -10,13 +10,13 @@
 - 挂起: P0-2（工作树缺 39 个产品 onnx，且工作树看不见 trtexec。未跑验收 6、7、8、12）。P1-8（msocrnet 在约 19GiB 的 WSL 上被 OOM 杀掉，没有黄金；工作树没有 full 构建的 model_golden_test。未跑验收 3 的 msocrnet 与 19 条同进程过滤，以及验收 11 的 full 列表）
 - 与角色自算: 一致
 
-模块分保持 `01-modules/` 的记录。加权仍是 776/100 = 7.76，保留一位小数为 7.8。P0-3 与 P1-10 已关闭。未关闭的 P0 只剩挂起的 P0-2，不触发 P0 上限。未关闭且未挂起的 P1 仍是 P1-11 与 P1-12，上限 8.9，不改变 7.8。
+模块分保持 `01-modules/` 的记录。加权仍是 776/100 = 7.76，保留一位小数为 7.8。P0-3、P1-10 与 P1-11 已关闭。未关闭的 P0 只剩挂起的 P0-2，不触发 P0 上限。未关闭且未挂起的 P1 仍是 P1-12，上限 8.9，不改变 7.8。
 
 ## 双目标
 | 编号 | 状态: 已满足 / 未满足 / 挂起 | 证据或队列 id |
 | --- | --- | --- |
 | H1 | 已满足 | P1-7 合入 `8f6143544431ba6f7b9d64584cf7d1f6ff92fb28`。39 个 catalog path 各自有请求 example 和 200 example，并按该 path schema 校验。`yolov8n`、`yolov8l`、`yolov8x` 的 `model.name` 分别是这三个 id。 |
-| H2 | 未满足 | P1-8、P1-11、P1-12。`yolov8s` 已关闭的同类 IoU 门只覆盖 `yolov8s`。 |
+| H2 | 未满足 | P1-8（挂起）、P1-12。P1-11 合入 `8552c0e7fdc224d16926911166d60eee6a797cab`，只关闭 `bisenetv2`、`pphuman_mobile`、`modnet`、`ppmatting_512` 的 fingerprint 原句。`yolov8s` 已关闭的同类 IoU 门只覆盖 `yolov8s`。 |
 | H3 | 已满足 | P1-9 合入 `5e39fdc28308254fa5c4c9feabbeb4a7d6ce730c`。表 5 有 39 行，每行同时有硬件、可执行命令、`trtexec_rps` 和日期。centerface 命令含 `--shapes=input.1:1x3x640x640`。 |
 | H4 | 未满足 | P0-2（挂起，未合入）。不设 `MORTRED_PACK` 时，39 个 id 含 `yolov8s` 与 `metric3d_512`。 |
 | C1 | 已满足 | P1-10 合入 `b17f70c502f76cb50325cae00c94def5e4888f50`。英文源码构建第一个 bash 围栏与中文路径 B 抽出的 GPU 集合都等于 `./scripts/install_deps.sh --all`、`sudo ./scripts/install_deps.sh --nvidia`、`./scripts/install_deps.sh --check`、`cmake --preset full && cmake --build --preset full`。两边仍有 `cmake --preset full` 与 `cmake --preset full-cpu`。 |
