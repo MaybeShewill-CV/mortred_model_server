@@ -29,6 +29,8 @@
 | D-12 | src-control | S2：一次拉起后，检查失败并点名 fork 与 exec 之间的调用 | 未做 |
 
 ## 附录
+同义句：范围内 id 没有与 `docs/openapi.json` 一致的请求和响应示例。`docs/api-contract.md` 的 7 个人读片段不是 OpenAPI 示例。
+
 同义句：`yolov7` 与 `yolov7x` 在输出张量非空、头不匹配时仍报成空输出。`yolov7`/`yolov7x` 的非空头不匹配会被看成空输出。已关闭的 SAM 原句不在此条，不重开。
 
 QA 残余风险不进入队列：验收 7 用有限全零头证明框数为 0 时顶层 `status` 为 0，且 `data` 为 JSON 数组；方案已要求这个结果。三个名字对齐之后的 dtype、通道、buffer 和非有限值失败，方案写明保持契约失败。这两句没有新的一次黑盒可判定的变化。
