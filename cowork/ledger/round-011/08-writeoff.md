@@ -1,7 +1,7 @@
 # 销账
 
 - 轮次: 11
-- 已关闭: P0-3
+- 已关闭: P0-3、P1-7
 - 挂起: P0-2（工作树缺 39 个产品 onnx，且工作树看不见 trtexec。未跑验收 6、7、8、12）
 - 非挂起劣势: 相对本轮起点减少
 
@@ -11,12 +11,12 @@
 | id | 模块 | 原句 |
 | --- | --- | --- |
 | P0-3 | src-server-apps | S1：`yolov7` 与 `yolov7x` 在输出张量非空、但既没有 `output`/`518`/`532`，也凑不齐 3 个 `[1,3,H,W,C]` 头时，仍报成空输出。 |
+| P1-7 | src-server-apps、docs | H1：范围内每个 HTTP catalog id 都没有一条与 `docs/openapi.json` 一致的请求和响应示例。docs 原句是以下 32 个 id 没有这样的示例。 |
 
 ## 留下的劣势
 | id | 模块 | 原句 | 状态 |
 | --- | --- | --- | --- |
 | P0-2 | conf、ops | H4：不设 `MORTRED_PACK` 时，范围内全部 39 个 id 的产品 engine 缺失，`mortredctl doctor --strict` 仍退出 0，失败输出没有 `next:` | 挂起 |
-| P1-7 | src-server-apps、docs | H1：范围内 id 没有与 `docs/openapi.json` 一致的请求和响应示例 | 未做 |
 | P1-8 | test | H2：点名的 id 没有 CPU 数值用例 | 未做 |
 | P1-9 | docs | H3：范围内 39 个 id 都没有一行同时写出硬件、复现命令、指标和日期 | 未做 |
 | P1-10 | docs | C1：中文和英文 README 的 GPU 源码构建命令不一致 | 未做 |

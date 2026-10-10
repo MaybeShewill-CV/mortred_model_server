@@ -15,7 +15,7 @@
 ## 双目标
 | 编号 | 状态: 已满足 / 未满足 / 挂起 | 证据或队列 id |
 | --- | --- | --- |
-| H1 | 未满足 | P1-7。`mobilenetv2`、`yolov8s`、`pphuman_server`、`dbnet`、`modnet`、`realesrgan`、`metric3d_512` 在 `docs/api-contract.md` 已有与 schema 一致的示例，不在缺示例名单里。其余 32 个 id 仍缺。 |
+| H1 | 已满足 | P1-7 合入 `8f6143544431ba6f7b9d64584cf7d1f6ff92fb28`。39 个 catalog path 各自有请求 example 和 200 example，并按该 path schema 校验。`yolov8n`、`yolov8l`、`yolov8x` 的 `model.name` 分别是这三个 id。 |
 | H2 | 未满足 | P1-8、P1-11、P1-12。`yolov8s` 已关闭的同类 IoU 门只覆盖 `yolov8s`。 |
 | H3 | 未满足 | P1-9 |
 | H4 | 未满足 | P0-2（挂起，未合入）。不设 `MORTRED_PACK` 时，39 个 id 含 `yolov8s` 与 `metric3d_512`。 |
