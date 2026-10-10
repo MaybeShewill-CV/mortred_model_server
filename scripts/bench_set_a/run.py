@@ -622,6 +622,26 @@ def http_one(row: dict) -> dict:
     return result
 
 
+def preserved_table5(path: Path) -> str:
+    """Return an existing table 5 through EOF, unchanged. Empty when absent."""
+    if not path.is_file():
+        return ""
+    text = path.read_text(encoding="utf-8")
+    mark = "## 表 5 — 一行基准"
+    idx = text.find(mark)
+    if idx < 0:
+        return ""
+    return text[idx:]
+
+
+def attach_table5(body: str, section: str) -> str:
+    """Append a previously captured table 5. The Chinese copy stays on body alone."""
+    if not section:
+        return body
+    kept = section if section.endswith("\n") else section + "\n"
+    return body + "\n" + kept
+
+
 def write_docs(converts: dict, profiles: dict, calibs: dict, https: dict) -> None:
     host = {}
     hp = LOG / "host.json"
@@ -792,7 +812,9 @@ def write_docs(converts: dict, profiles: dict, calibs: dict, https: dict) -> Non
     if gap_lines:
         lines += ["", "## Gaps（失败/非 HTTP，来自 convert JSON）", ""] + gap_lines
     body = "\n".join(lines) + "\n"
-    (ROOT / "docs" / "benchmark-set-a.md").write_text(body, encoding="utf-8")
+    doc_path = ROOT / "docs" / "benchmark-set-a.md"
+    en = attach_table5(body, preserved_table5(doc_path))
+    doc_path.write_text(en, encoding="utf-8")
     zh = body.replace("# A 集合 TensorRT 静态 batch=1 基准", "# A 集合 TensorRT 静态 batch=1 基准（中文）")
     (ROOT / "docs" / "benchmark-set-a.zh-cn.md").write_text(zh, encoding="utf-8")
     log("wrote docs/benchmark-set-a.md")

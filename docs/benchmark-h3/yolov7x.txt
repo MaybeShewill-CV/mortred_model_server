@@ -1,0 +1,4 @@
+NVIDIA GeForce RTX 2070 SUPER, 8192 MiB, 616.92
+2026-10-10
+3rd_party/bin/trtexec --loadEngine=weights/object_detection/yolov7/yolov7x.engine.static_bs1.fp16 --warmUp=500 --duration=15 --avgRuns=100 --useSpinWait --fp16
+[10/10/2026-15:30:33] [I] Throughput: 120.149 qps
