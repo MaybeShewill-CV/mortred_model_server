@@ -245,9 +245,16 @@ int cmd_ps(const Options& opt) {
             std::snprintf(mem, sizeof mem, "%.1fG/%.1fG (%lld%%)",
                           mem_u / 1024.0, mem_t / 1024.0, mem_u * 100 / mem_t);
         }
-        std::printf("  GPU         %s●%s %s  util %lld%%  vram %s  temp %lld°C  pwr %lldW\n",
+        const long long util = json_i64(last, "util", -1);
+        char util_cell[32];
+        if (util == -1) {
+            std::snprintf(util_cell, sizeof util_cell, "n/a");
+        } else {
+            std::snprintf(util_cell, sizeof util_cell, "%lld%%", util);
+        }
+        std::printf("  GPU         %s●%s %s  util %s  vram %s  temp %lld°C  pwr %lldW\n",
                     col_ok(), col_off(), json_str(gpu_doc, "name", "?").c_str(),
-                    json_i64(last, "util", -1), mem,
+                    util_cell, mem,
                     json_i64(last, "temp_c", -1), json_i64(last, "power_w", -1));
     }
 

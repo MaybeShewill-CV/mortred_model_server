@@ -162,7 +162,10 @@ class GpuSampler {
     }
 
     // Parse the CSV line after the name field into a GpuSample.
-    static GpuSample parse_sample(const std::string& csv, int name_len) {
+    // When at least 11 columns are present, util_col receives the trimmed
+    // utilization column (fields[1]) so the caller can match it exactly.
+    static GpuSample parse_sample(const std::string& csv, int name_len,
+                                   std::string* util_col = nullptr) {
         GpuSample s;
         s.t_unix_ms = unix_ms();
         std::vector<std::string> fields;
@@ -178,6 +181,7 @@ class GpuSampler {
         }
         // fields[0] = name (skipped), then the 10 queried metrics
         if (fields.size() >= 11) {
+            if (util_col != nullptr) *util_col = fields[1];
             s.util = parse_i32_or(fields[1], -1);
             s.mem_used_mib = parse_i32_or(fields[2], -1);
             s.mem_total_mib = parse_i32_or(fields[3], -1);
@@ -199,18 +203,25 @@ class GpuSampler {
             std::string name;
             const std::string csv = probe_nvidia_smi(3000, &name);
             if (!csv.empty()) {
-                const GpuSample sample = parse_sample(csv, 0);
+                std::string util_col;
+                const GpuSample sample = parse_sample(csv, 0, &util_col);
+                const bool util_na = util_col == "N/A" || util_col == "[N/A]";
                 {
                     std::lock_guard<std::mutex> lock(mu_);
-                    available_ = true;
+                    available_ = !util_na;
                     if (!name.empty()) gpu_name_ = name;
                     ring_.push_back(sample);
                     while (ring_.size() > capacity_) ring_.pop_front();
                 }
                 backoff_ms = interval_ms_;
                 if (first) {
-                    std::fprintf(stderr, "mortred-supervisor: gpu sampler online (%s)\n",
-                                 name.c_str());
+                    if (util_na) {
+                        std::fprintf(stderr,
+                                     "mortred-supervisor: gpu sampler offline (utilization N/A)\n");
+                    } else {
+                        std::fprintf(stderr, "mortred-supervisor: gpu sampler online (%s)\n",
+                                     name.c_str());
+                    }
                     first = false;
                 }
             } else {
