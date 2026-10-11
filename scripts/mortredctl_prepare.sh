@@ -15,11 +15,15 @@ mortredctl prepare — pack-scoped TensorRT prepare (local engines).
 
 Usage:
   mortredctl prepare [--pack FILE] [--force] [--skip-ready] [--require-ready]
+  mortredctl prepare --id ID [--force]
 
-The entry checks that the pack file exists, then runs prepare_pack.sh.
+--id converts that one product static_bs1 engine on this machine.
+It cannot be combined with --pack. Without --id, prepare converts the current pack.
 EOF
 }
 
+SAW_PACK=0
+ID=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --pack)
@@ -27,7 +31,16 @@ while [ $# -gt 0 ]; do
                 echo "[ERROR] step: args missing value for --pack" >&2
                 exit 1
             fi
+            SAW_PACK=1
             PACK="$2"
+            shift 2
+            ;;
+        --id)
+            if [ $# -lt 2 ]; then
+                echo "[ERROR] step: args missing value for --id" >&2
+                exit 1
+            fi
+            ID="$2"
             shift 2
             ;;
         --force|--skip-ready|--require-ready)
@@ -44,7 +57,16 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-if [ ! -f "$PACK" ]; then
+if [ -n "$ID" ]; then
+    if [ "$SAW_PACK" -eq 1 ]; then
+        echo "[ERROR] step: --id and --pack cannot be combined" >&2
+        exit 1
+    fi
+    if ! python3 "$ROOT/scripts/product_static_bs1.py" --lookup-id "$ID" >/dev/null 2>&1; then
+        echo "[ERROR] step: unknown product id: $ID" >&2
+        exit 1
+    fi
+elif [ ! -f "$PACK" ]; then
     echo "[ERROR] step: pack-file missing: $PACK" >&2
     exit 1
 fi

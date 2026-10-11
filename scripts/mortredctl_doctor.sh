@@ -17,6 +17,7 @@ for arg in "$@"; do
         -h|--help)
             echo "usage: mortredctl doctor [--strict]"
             echo "  (default) fail on missing pack TRT engines or occupancy stamps"
+            echo "  unset MORTRED_PACK also fails when a product static_bs1 engine is missing or empty"
             echo "  --strict  also fail on security warnings, or occupancy_policy=off / ENFORCE=0"
             exit 0
             ;;
@@ -79,6 +80,31 @@ if [ -f "$PACK" ]; then
         echo "  [FAIL] pack TensorRT engine missing/empty"
         echo "next: mortredctl prepare --pack $PACK"
         GATE_FAIL=1
+    fi
+fi
+
+# Product engines are a separate gate from the default demo pack. Only when
+# MORTRED_PACK is unset: a selected pack still checks that pack alone.
+if [ -z "${MORTRED_PACK:-}" ]; then
+    echo "== product TensorRT engines (MORTRED_PACK unset) =="
+    set +e
+    MISS_OUT="$(python3 "$ROOT/scripts/product_static_bs1.py" --missing-product-engines)"
+    MISS_RC=$?
+    set -e
+    if [ "$MISS_RC" -ne 0 ]; then
+        echo "  [FAIL] cannot read product engine table"
+        GATE_FAIL=1
+    elif [ -z "$MISS_OUT" ]; then
+        echo "  [ok] product static_bs1 engines present"
+    else
+        while IFS=$'\t' read -r mid meng || [ -n "${mid:-}" ]; do
+            mid="${mid%$'\r'}"
+            meng="${meng%$'\r'}"
+            [ -z "${mid:-}" ] && continue
+            echo "  [FAIL] ${mid}: missing or empty ${meng}"
+            echo "next: mortredctl prepare --id ${mid}"
+            GATE_FAIL=1
+        done <<<"$MISS_OUT"
     fi
 fi
 
