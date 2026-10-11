@@ -7,7 +7,7 @@
 - 相对本轮起点: 7.8 到 7.8。销账不改分数。
 - 出口: awaiting-env
 - 劣势集合: 相对本轮起点减少
-- 挂起: P1-8（2026-10-11 再跑 `model_golden.msocrnet` 仍被杀掉，退出码 137，驻留约 18.5GiB，没有黄金；工作树没有 full 构建的 model_golden_test。未跑验收 3 的 msocrnet 与 19 条同进程过滤，以及验收 11 的 full 列表）。D-8（本机和 WSL 都没有可执行的 docker。未跑验收 1。未合入）
+- 挂起: P1-8（2026-10-11 `model_golden.msocrnet` 仍被杀掉，退出码 137，没有黄金。full 列表已跑过且退出码 0，`Yolov8TrtDetection` 仍在。未跑验收 3 的 msocrnet 与 19 条同进程过滤）。D-8（本机和 WSL 都没有可执行的 docker。未跑验收 1。未合入）
 - 与角色自算: 一致
 
 模块分保持第 11 轮记录。加权仍是 776/100 = 7.76，保留一位小数为 7.8。P0-2、P1-12、D-9、D-10、D-11 与 D-12 已关闭。非挂起劣势为无。未关闭的 P0 没有。未关闭的 P1 只剩挂起的 P1-8。挂起项不触发上限。H4 已满足。H2 与 S3 仍挂起。S1、S2、S4、S6 已满足。本机和 WSL 都没有可执行的 docker。WSL 可见内存约 19GiB，`msocrnet` 仍跑不了。环境恢复后只重跑挂起项的未跑验收。
@@ -16,7 +16,7 @@
 | 编号 | 状态: 已满足 / 未满足 / 挂起 | 证据或队列 id |
 | --- | --- | --- |
 | H1 | 已满足 | P1-7 合入 `8f6143544431ba6f7b9d64584cf7d1f6ff92fb28`。39 个 catalog path 各自有请求 example 和 200 example，并按该 path schema 校验。`yolov8n`、`yolov8l`、`yolov8x` 的 `model.name` 分别是这三个 id。 |
-| H2 | 挂起 | 只剩 P1-8。2026-10-11 再跑 `model_golden.msocrnet` 仍被杀掉，退出码 137，驻留约 18.5GiB，`test/golden/msocrnet.json` 没有生成。工作树没有 full 构建的 model_golden_test。未跑验收 3 的 msocrnet 与 19 条同进程过滤，以及验收 11 的 full 列表。P1-12 已关闭除 `yolov8s` 以外的同规则 TRT 比较。 |
+| H2 | 挂起 | 只剩 P1-8。2026-10-11 `model_golden.msocrnet` 仍被杀掉，退出码 137，`test/golden/msocrnet.json` 没有生成。`./build/full/test/model_golden_test --gtest_list_tests` 退出码 0，套件是 `model_golden.` 与 `Yolov8TrtDetection.`。未跑验收 3 的 msocrnet 与 19 条同进程过滤。P1-12 已关闭除 `yolov8s` 以外的同规则 TRT 比较。 |
 | H3 | 已满足 | P1-9 合入 `5e39fdc28308254fa5c4c9feabbeb4a7d6ce730c`。表 5 有 39 行，每行同时有硬件、可执行命令、`trtexec_rps` 和日期。centerface 命令含 `--shapes=input.1:1x3x640x640`。 |
 | H4 | 已满足 | P0-2 合入 `6389504638dccc00dbae60987c1c4b7fcfb55350`。不设置 `MORTRED_PACK` 时，冻结名单 39 个 id 各执行 `mortredctl prepare --id <id>`，退出码都是 0，表内 engine 存在且大小大于 0。 |
 | C1 | 已满足 | P1-10 合入 `b17f70c502f76cb50325cae00c94def5e4888f50`。英文源码构建第一个 bash 围栏与中文路径 B 抽出的 GPU 集合都等于 `./scripts/install_deps.sh --all`、`sudo ./scripts/install_deps.sh --nvidia`、`./scripts/install_deps.sh --check`、`cmake --preset full && cmake --build --preset full`。两边仍有 `cmake --preset full` 与 `cmake --preset full-cpu`。 |
