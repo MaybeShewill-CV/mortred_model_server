@@ -1,0 +1,4 @@
+NVIDIA GeForce RTX 2070 SUPER, 8192 MiB, 616.92
+2026-10-10
+3rd_party/bin/trtexec --loadEngine=weights/enhancement/attentive_gan_derain/attentive_gan_derain.engine.static_bs1.fp32 --warmUp=500 --duration=15 --avgRuns=100 --useSpinWait
+[10/10/2026-15:39:20] [I] Throughput: 29.1618 qps

@@ -457,6 +457,8 @@ TEST(model_golden, ddpm_celeba_hq_fewstep) {
 }
 
 #ifdef MORTRED_HAS_TRT
+#include "factory/mono_depth_estimate_task.h"
+
 // Product yolov8s TRT path: load the product toml (path fix only, no force_cpu),
 // run bus.jpg, and require every golden box with score >= 0.5 to match a unique
 // prediction of the same class_id with IoU >= 0.5. Score near-equality is not
@@ -511,6 +513,141 @@ TEST(Yolov8TrtDetection, MatchesCpuGoldenBoxes) {
         used[static_cast<size_t>(best)] = true;
     }
 }
+
+// Product tensorrt toml, one id per test. Path strip only; device stays gpu.
+#define TRT_PRODUCT_GOLDEN(id, config, image, creator, output_type, compare_fn, golden_stem, protect_cpu_golden)                         \
+    TEST(TrtProductGolden, id) {                                                                                                         \
+        run_trt_product_case<output_type>(#id, config, image, &creator<mat_input, output_type>, compare_fn, golden_stem,                 \
+                                          protect_cpu_golden);                                                                           \
+    }
+
+TRT_PRODUCT_GOLDEN(mobilenetv2, "conf/model/classification/mobilenetv2/mobilenetv2.toml",
+                   "demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG",
+                   jinq::factory::classification::create_mobilenetv2_classifier, std_classification_output, compare_classification,
+                   "mobilenetv2_classification", true)
+TRT_PRODUCT_GOLDEN(resnet, "conf/model/classification/resnet/resnet.toml",
+                   "demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG",
+                   jinq::factory::classification::create_resnet_classifier, std_classification_output, compare_classification,
+                   "resnet50_classification", true)
+TRT_PRODUCT_GOLDEN(densenet, "conf/model/classification/densenet/densenet.toml",
+                   "demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG",
+                   jinq::factory::classification::create_densenet_classifier, std_classification_output, compare_classification,
+                   "densenet121_classification", true)
+TRT_PRODUCT_GOLDEN(yolov5l, "conf/model/object_detection/yolov5/yolov5l.toml", "demo_data/model_test_input/object_detection/bus.jpg",
+                   jinq::factory::object_detection::create_yolov5_detector, std_object_detection_output, compare_object_detection,
+                   "yolov5_detection", true)
+TRT_PRODUCT_GOLDEN(yolov6s, "conf/model/object_detection/yolov6/yolov6s.toml", "demo_data/model_test_input/object_detection/bus.jpg",
+                   jinq::factory::object_detection::create_yolov6_detector, std_object_detection_output, compare_object_detection,
+                   "yolov6_detection", true)
+TRT_PRODUCT_GOLDEN(nanodet_1x5, "conf/model/object_detection/nano_det/nanodet_1x5.toml",
+                   "demo_data/model_test_input/object_detection/bus.jpg", jinq::factory::object_detection::create_nanodet_detector,
+                   std_object_detection_output, compare_object_detection, "nanodet_detection", true)
+TRT_PRODUCT_GOLDEN(nanodet_416, "conf/model/object_detection/nano_det/nanodet_416.toml",
+                   "demo_data/model_test_input/object_detection/bus.jpg", jinq::factory::object_detection::create_nanodet_detector,
+                   std_object_detection_output, compare_trt_detection, "trt_nanodet_416", false)
+TRT_PRODUCT_GOLDEN(yolov7, "conf/model/object_detection/yolov7/yolov7.toml", "demo_data/model_test_input/object_detection/bus.jpg",
+                   jinq::factory::object_detection::create_yolov7_detector, std_object_detection_output, compare_object_detection,
+                   "yolov7_detection", true)
+TRT_PRODUCT_GOLDEN(yolov7x, "conf/model/object_detection/yolov7/yolov7x.toml", "demo_data/model_test_input/object_detection/bus.jpg",
+                   jinq::factory::object_detection::create_yolov7_detector, std_object_detection_output, compare_trt_detection, "trt_yolov7x",
+                   false)
+TRT_PRODUCT_GOLDEN(yolov8n, "conf/model/object_detection/yolov8/yolov8n.toml", "demo_data/model_test_input/object_detection/bus.jpg",
+                   jinq::factory::object_detection::create_yolov8_detector, std_object_detection_output, compare_trt_detection, "trt_yolov8n",
+                   false)
+TRT_PRODUCT_GOLDEN(yolov8l, "conf/model/object_detection/yolov8/yolov8l.toml", "demo_data/model_test_input/object_detection/bus.jpg",
+                   jinq::factory::object_detection::create_yolov8_detector, std_object_detection_output, compare_trt_detection, "trt_yolov8l",
+                   false)
+TRT_PRODUCT_GOLDEN(yolov8x, "conf/model/object_detection/yolov8/yolov8x.toml", "demo_data/model_test_input/object_detection/bus.jpg",
+                   jinq::factory::object_detection::create_yolov8_detector, std_object_detection_output, compare_trt_detection, "trt_yolov8x",
+                   false)
+TRT_PRODUCT_GOLDEN(libface, "conf/model/object_detection/libfacedetection/libface.toml",
+                   "demo_data/model_test_input/object_detection/face_wo_mask.jpg", jinq::factory::object_detection::create_libface_detector,
+                   std_face_detection_output, compare_face_detection, "libface_detection", true)
+TRT_PRODUCT_GOLDEN(centerface, "conf/model/object_detection/centerface/centerface.toml",
+                   "demo_data/model_test_input/object_detection/face_w_mask.jpg", jinq::factory::object_detection::create_centerface_detector,
+                   std_face_detection_output, compare_face_detection, "centerface_detection", true)
+TRT_PRODUCT_GOLDEN(bisenetv2, "conf/model/scene_segmentation/bisenetv2/bisenetv2.toml",
+                   "demo_data/model_test_input/scene_segmentation/cityscapes_test.png",
+                   jinq::factory::scene_segmentation::create_bisenetv2_segmentor, std_scene_segmentation_output, compare_scene_segmentation,
+                   "bisenetv2_segmentation", true)
+TRT_PRODUCT_GOLDEN(pphuman_mobile, "conf/model/scene_segmentation/pphuman/pphuman_mobile.toml",
+                   "demo_data/model_test_input/scene_segmentation/human_image.jpg",
+                   jinq::factory::scene_segmentation::create_pphuman_segmentor, std_scene_segmentation_output, compare_scene_segmentation,
+                   "pphuman_segmentation", true)
+TRT_PRODUCT_GOLDEN(pphuman_lite, "conf/model/scene_segmentation/pphuman/pphuman_lite.toml",
+                   "demo_data/model_test_input/scene_segmentation/human_image.jpg",
+                   jinq::factory::scene_segmentation::create_pphuman_segmentor, std_scene_segmentation_output, compare_scene_segmentation,
+                   "trt_pphuman_lite", false)
+TRT_PRODUCT_GOLDEN(pphuman_server, "conf/model/scene_segmentation/pphuman/pphuman_server.toml",
+                   "demo_data/model_test_input/scene_segmentation/human_image.jpg",
+                   jinq::factory::scene_segmentation::create_pphuman_segmentor, std_scene_segmentation_output, compare_scene_segmentation,
+                   "trt_pphuman_server", false)
+TRT_PRODUCT_GOLDEN(hrnet, "conf/model/scene_segmentation/hrnet/hrnet.toml",
+                   "demo_data/model_test_input/scene_segmentation/cityscapes_test.png",
+                   jinq::factory::scene_segmentation::create_hrnet_segmentor, std_scene_segmentation_output, compare_scene_segmentation,
+                   "trt_hrnet", false)
+TRT_PRODUCT_GOLDEN(msocrnet, "conf/model/scene_segmentation/msocrnet/msocrnet.toml",
+                   "demo_data/model_test_input/scene_segmentation/cityscapes_test.png",
+                   jinq::factory::scene_segmentation::create_msocrnet_segmentor, std_scene_segmentation_output, compare_scene_segmentation,
+                   "trt_msocrnet", false)
+TRT_PRODUCT_GOLDEN(dbnet, "conf/model/ocr/db_text_detector/dbnet.toml", "demo_data/model_test_input/ocr/railway_ticket.png",
+                   jinq::factory::ocr::create_dbtext_detector, std_text_regions_output, compare_text_regions, "dbnet_text_detection", true)
+TRT_PRODUCT_GOLDEN(attentive_gan, "conf/model/enhancement/attentive_gan_derain/attentive_gan.toml",
+                   "demo_data/model_test_input/enhancement/derain/test_1.png", jinq::factory::enhancement::create_attentivegan_enhancementor,
+                   std_enhancement_output, compare_enhancement, "attentivegan_enhancement", true)
+TRT_PRODUCT_GOLDEN(enlightengan, "conf/model/enhancement/enlighten_gan/enlightengan.toml",
+                   "demo_data/model_test_input/enhancement/low_light/lol_test_1.png",
+                   jinq::factory::enhancement::create_enlightengan_enhancementor, std_enhancement_output, compare_enhancement,
+                   "enlightengan_enhancement", true)
+TRT_PRODUCT_GOLDEN(realesrgan, "conf/model/enhancement/real_esrgan/realesrgan.toml",
+                   "demo_data/model_test_input/enhancement/real_esr/test.JPG", jinq::factory::enhancement::create_realesrgan_enhancementor,
+                   std_enhancement_output, compare_enhancement, "realesrgan_enhancement", true)
+TRT_PRODUCT_GOLDEN(superpoint, "conf/model/feature_point/superpoint/superpoint.toml", "demo_data/model_test_input/feature_point/test.png",
+                   jinq::factory::feature_point::create_superpoint_extractor, std_feature_point_output, compare_keypoints,
+                   "superpoint_feature_point", true)
+TRT_PRODUCT_GOLDEN(dinov2_vits14, "conf/model/feature_embedding/dinov2/dinov2_vits14.toml",
+                   "demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG",
+                   jinq::factory::feature_embedding::create_dinov2_feature_extractor, std_feature_embedding_output, compare_trt_embedding,
+                   "trt_dinov2_vits14", false)
+TRT_PRODUCT_GOLDEN(dinov2_vitb14, "conf/model/feature_embedding/dinov2/dinov2_vitb14.toml",
+                   "demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG",
+                   jinq::factory::feature_embedding::create_dinov2_feature_extractor, std_feature_embedding_output, compare_feature_embedding,
+                   "dinov2_feature_embedding", true)
+TRT_PRODUCT_GOLDEN(dinov2_vitl14, "conf/model/feature_embedding/dinov2/dinov2_vitl14.toml",
+                   "demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG",
+                   jinq::factory::feature_embedding::create_dinov2_feature_extractor, std_feature_embedding_output, compare_trt_embedding,
+                   "trt_dinov2_vitl14", false)
+TRT_PRODUCT_GOLDEN(modnet, "conf/model/matting/modnet/modnet.toml", "demo_data/model_test_input/matting/matting_test.jpg",
+                   jinq::factory::matting::create_modnet_segmentor, std_matting_output, compare_matting, "modnet_matting", true)
+TRT_PRODUCT_GOLDEN(ppmatting_512, "conf/model/matting/ppmatting/ppmatting_512.toml", "demo_data/model_test_input/matting/matting_test.jpg",
+                   jinq::factory::matting::create_ppmatting_segmentor, std_matting_output, compare_matting, "ppmatting_matting", true)
+TRT_PRODUCT_GOLDEN(ppmatting_1024, "conf/model/matting/ppmatting/ppmatting_1024.toml", "demo_data/model_test_input/matting/matting_test.jpg",
+                   jinq::factory::matting::create_ppmatting_segmentor, std_matting_output, compare_matting, "trt_ppmatting_1024", false)
+TRT_PRODUCT_GOLDEN(ppmatting_resnet34, "conf/model/matting/ppmatting/ppmatting_resnet34.toml",
+                   "demo_data/model_test_input/matting/matting_test.jpg", jinq::factory::matting::create_ppmatting_segmentor, std_matting_output,
+                   compare_matting, "trt_ppmatting_resnet34", false)
+TRT_PRODUCT_GOLDEN(ppmatting_v2, "conf/model/matting/ppmatting/ppmatting_v2.toml", "demo_data/model_test_input/matting/matting_test.jpg",
+                   jinq::factory::matting::create_ppmatting_segmentor, std_matting_output, compare_matting, "trt_ppmatting_v2", false)
+TRT_PRODUCT_GOLDEN(depth_vits14, "conf/model/mono_depth_estimation/depth_anything/depth_vits14.toml",
+                   "demo_data/model_test_input/mono_depth_estimation/0000000005.png",
+                   jinq::factory::mono_depth_estimation::create_depth_anything_estimator, std_mde_output, compare_trt_depth, "trt_depth_vits14",
+                   false)
+TRT_PRODUCT_GOLDEN(depth_vitb14, "conf/model/mono_depth_estimation/depth_anything/depth_vitb14.toml",
+                   "demo_data/model_test_input/mono_depth_estimation/0000000005.png",
+                   jinq::factory::mono_depth_estimation::create_depth_anything_estimator, std_mde_output, compare_trt_depth, "trt_depth_vitb14",
+                   false)
+TRT_PRODUCT_GOLDEN(depth_vitl14, "conf/model/mono_depth_estimation/depth_anything/depth_vitl14.toml",
+                   "demo_data/model_test_input/mono_depth_estimation/0000000005.png",
+                   jinq::factory::mono_depth_estimation::create_depth_anything_estimator, std_mde_output, compare_trt_depth, "trt_depth_vitl14",
+                   false)
+TRT_PRODUCT_GOLDEN(metric3d_512, "conf/model/mono_depth_estimation/metric3d/metric3d_512.toml",
+                   "demo_data/model_test_input/mono_depth_estimation/0000000005.png",
+                   jinq::factory::mono_depth_estimation::create_metric3d_estimator, std_mde_output, compare_trt_depth, "trt_metric3d_512", false)
+TRT_PRODUCT_GOLDEN(metric3d_1088, "conf/model/mono_depth_estimation/metric3d/metric3d_1088.toml",
+                   "demo_data/model_test_input/mono_depth_estimation/0000000005.png",
+                   jinq::factory::mono_depth_estimation::create_metric3d_estimator, std_mde_output, compare_trt_depth, "trt_metric3d_1088", false)
+
+#undef TRT_PRODUCT_GOLDEN
 #endif // MORTRED_HAS_TRT
 
 namespace {

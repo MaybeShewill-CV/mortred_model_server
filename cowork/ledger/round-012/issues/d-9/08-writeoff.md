@@ -1,0 +1,33 @@
+# 销账
+
+- 轮次: 12
+- 已关闭: D-9
+- 挂起: P0-2（工作树缺 39 个产品 onnx，且工作树看不见 trtexec。未跑验收 6、7、8、12）。P1-8（msocrnet 在约 19GiB 的 WSL 上被 OOM 杀掉，没有黄金；工作树没有 full 构建的 model_golden_test。未跑验收 3 的 msocrnet 与 19 条同进程过滤，以及验收 11 的 full 列表）。D-8（本机和 WSL 都没有可执行的 docker。未跑验收 1。未合入）
+- 非挂起劣势: 相对本轮起点减少
+
+## 删除的原句
+| id | 模块 | 原句 |
+| --- | --- | --- |
+| D-9 | src-control | S4：推理请求在鉴权失败时仍消耗限流配额 |
+
+## 留下的劣势
+| id | 模块 | 原句 | 状态 |
+| --- | --- | --- | --- |
+| P0-2 | conf、ops | H4：不设 `MORTRED_PACK` 时，范围内全部 39 个 id 的产品 engine 缺失，`mortredctl doctor --strict` 仍退出 0，失败输出没有 `next:` | 挂起 |
+| P1-8 | test | H2：点名的 id 没有 CPU 数值用例 | 挂起 |
+| D-8 | ops | S3：默认发布镜像以 root 运行，边界文档没有写明必须 root 的原因 | 挂起 |
+| D-10 | src-control | S6：`nvidia-smi` 读数为 N/A 时，监督侧仍把该采样当成有效 GPU 利用率 | 未做 |
+| D-11 | docs | `deployment.md` 把 cpu 目录写成 `resnet50`，并把 `msocrnet` 写成 Bench-only | 未做 |
+| D-12 | src-control | S2：一次拉起后，检查失败并点名 fork 与 exec 之间的调用 | 未做 |
+
+## 附录
+同义句：推理请求在鉴权失败时仍消耗限流配额。关闭范围只含这条。S4 改为已满足。merge commit `b51e2e6e81ab8ac086ab39b33395cbe73ec28cc6`，问题分支提交 `31f66caf369fc3e199c3a455017ee646c78ffc77`。QA 结论 pass。调度者重跑验收 1、验收 2、验收 3 和回归，退出码都是 0，标准错误为空，标准输出与方案原文一致。偏离为无。diff 只有 `src/control/gateway/gateway_app.cpp` 与 `src/control/api_key_manager.h`。
+
+H2 仍未满足，因为 P1-8 仍挂起。H4 仍未满足，因为 P0-2 仍挂起。S2 仍是 D-12。S3 仍是 D-8，状态挂起。S6 仍是 D-10。D-11 不是双目标行，仍留下。
+
+已关闭原句不重开：P0-1、P0-3、P1-1 至 P1-7、P1-9、P1-10、P1-11、P1-12、D-1 至 D-6。P1-5 只含 `yolov8s`。P1-11 只含 `bisenetv2`、`pphuman_mobile`、`modnet`、`ppmatting_512` 的 CPU 全分辨率掩码重合。`centerface` 的 engine 输入名 `input.1` 不重开。D-9 的 CRLF 临时副本处理不新开。
+
+模块分保持第 11 轮记录，未重算。
+
+## 新准入
+无

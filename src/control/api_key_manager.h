@@ -100,8 +100,23 @@ class ApiKeyManager {
      * gateway answer 401 for "sent too fast", which no client can act on.
      * The returned shared_ptr keeps the key alive across a concurrent
      * reload() that swaps the whole set (P0-2).
+     * rate_window_count increments only for scopes key_may_infer accepts
+     * (inference, admin, all). Other scopes do not take a slot.
      */
     AuthResult authenticate(const std::string& authorization_header);
+
+    /***
+     * Bearer lookup without the per-key window. Gateway process calls this,
+     * then accepts scope, then consume_rate_limit.
+     */
+    AuthResult identify(const std::string& authorization_header);
+
+    /***
+     * Take one per-key window slot. Does not increment rate_window_count
+     * unless scope is inference, admin, or all. A full window on an
+     * accepted scope is RATE_LIMITED with retry_after_ms and a null key.
+     */
+    AuthResult consume_rate_limit(const std::shared_ptr<const ApiKey>& key);
 
     /*** check scope (key ownership is held by the shared_ptr) */
     static bool has_scope(const std::shared_ptr<const ApiKey>& key,
@@ -173,8 +188,7 @@ inline bool ApiKeyManager::reload() {
     return load(config_path_);
 }
 
-inline AuthResult ApiKeyManager::authenticate(
-    const std::string& authorization_header) {
+inline AuthResult ApiKeyManager::identify(const std::string& authorization_header) {
     AuthResult out;
     // extract Bearer token
     const std::string prefix = "bearer ";
@@ -216,8 +230,18 @@ inline AuthResult ApiKeyManager::authenticate(
         key = it->second;
     }
 
-    // rate limit (the local shared_ptr keeps the key alive here)
     key->total_requests.fetch_add(1);
+    out.reason = AuthReason::OK;
+    out.key = std::move(key);
+    return out;
+}
+
+inline AuthResult ApiKeyManager::consume_rate_limit(const std::shared_ptr<const ApiKey>& key) {
+    AuthResult out;
+    if (!key) {
+        out.reason = AuthReason::UNKNOWN;
+        return out;
+    }
     if (!allow_rate_limit(key.get())) {
         key->total_rejected.fetch_add(1);
         out.reason = AuthReason::RATE_LIMITED;
@@ -237,8 +261,17 @@ inline AuthResult ApiKeyManager::authenticate(
         return out;
     }
     out.reason = AuthReason::OK;
-    out.key = std::move(key);
+    out.key = key;
     return out;
+}
+
+inline AuthResult ApiKeyManager::authenticate(
+    const std::string& authorization_header) {
+    AuthResult out = identify(authorization_header);
+    if (out.reason != AuthReason::OK || !out.key) {
+        return out;
+    }
+    return consume_rate_limit(out.key);
 }
 
 inline bool ApiKeyManager::has_scope(const std::shared_ptr<const ApiKey>& key,
@@ -250,7 +283,12 @@ inline bool ApiKeyManager::has_scope(const std::shared_ptr<const ApiKey>& key,
 }
 
 inline bool ApiKeyManager::allow_rate_limit(const ApiKey* key) {
-    if (key->rate_limit_qps <= 0) {
+    if (key == nullptr || key->rate_limit_qps <= 0) {
+        return true;
+    }
+    // Same scopes key_may_infer accepts. A rejected scope must not take a
+    // slot: the gateway answers the existing 401 and leaves the window.
+    if (key->scope != "all" && key->scope != "inference" && key->scope != "admin") {
         return true;
     }
     std::lock_guard<std::mutex> lock(key->rate_mu);

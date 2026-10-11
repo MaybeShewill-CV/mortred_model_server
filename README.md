@@ -141,6 +141,7 @@ Cpu source build: `install_deps.sh --cpu --all && --cpu --check`, then
 ```bash
 # dependencies (version matrix + sha256 pinned + idempotent stamps)
 ./scripts/install_deps.sh --all              # gpu line (CUDA 12 / TensorRT 10.3)
+sudo ./scripts/install_deps.sh --nvidia     # needs root; non-root --all exits 3 until this line installs CUDA 12 / TensorRT 10.x / cuDNN
 ./scripts/install_deps.sh --cpu --all        # cpu line (no NVIDIA/TRT at all)
 ./scripts/install_deps.sh --check            # gpu: verify 3rd_party before cmake
 ./scripts/install_deps.sh --cpu --check      # cpu: same

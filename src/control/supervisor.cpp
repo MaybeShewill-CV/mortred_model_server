@@ -7,9 +7,9 @@
 
 #include "control/supervisor.h"
 
-#include <dirent.h>
 #include <signal.h>
 #include <sys/prctl.h>
+#include <sys/resource.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -23,11 +23,14 @@
 #include <filesystem>
 #include <random>
 #include <sstream>
+#include <vector>
 
 #include "control/occupancy_gate.h"
 #include "control/ready_probe.h"
 #include "control/trust_tokens.h"
 #include "control/trt_spawn_gate.h"
+
+extern "C" char** environ;
 
 namespace mortred {
 namespace control {
@@ -39,21 +42,16 @@ constexpr int kStartingProbeIntervalMs = 500;
 constexpr int kRunningProbeIntervalMs = 10000;
 constexpr int kProbeTimeoutMs = 1000;
 
-void close_all_fds_except_stdio() {
-    DIR* d = opendir("/proc/self/fd");
-    if (d == nullptr) {
-        return;
-    }
-    const int dir_fd = dirfd(d);
-    struct dirent* e = nullptr;
-    while ((e = readdir(d)) != nullptr) {
-        char* end = nullptr;
-        const long fd = std::strtol(e->d_name, &end, 10);
-        if (*end == '\0' && fd > 2 && fd != dir_fd) {
-            ::close(static_cast<int>(fd));
+void override_env_entry(std::vector<std::string>& block, const char* key,
+                        const std::string& value) {
+    const std::string prefix = std::string(key) + "=";
+    for (std::string& entry : block) {
+        if (entry.compare(0, prefix.size(), prefix) == 0) {
+            entry = prefix + value;
+            return;
         }
     }
-    closedir(d);
+    block.emplace_back(prefix + value);
 }
 
 void read_pipe_loop(int fd, LogBuffer* buffer) {
@@ -360,6 +358,80 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err,
         child->is_gateway ? std::string() : child->policy.model_config;
     const std::string decode_auto =
         child->is_gateway ? std::string() : child->policy.decode_auto;
+    const std::string gateway_port_str = std::to_string(gateway_port);
+
+    int max_fd = 1024;
+    struct rlimit nofile_limit {};
+    if (::getrlimit(RLIMIT_NOFILE, &nofile_limit) == 0) {
+        const rlim_t cur = nofile_limit.rlim_cur;
+        if (cur >= static_cast<rlim_t>(3) && cur <= static_cast<rlim_t>(1048576)) {
+            max_fd = static_cast<int>(cur);
+        }
+    }
+
+    std::vector<std::string> env_storage;
+    if (environ != nullptr) {
+        for (char** ep = environ; *ep != nullptr; ++ep) {
+            env_storage.emplace_back(*ep);
+        }
+    }
+    override_env_entry(env_storage, "LD_LIBRARY_PATH", ld_path);
+    override_env_entry(env_storage, "MORTRED_PROJECT_ROOT", project_root);
+    override_env_entry(env_storage, "MORTRED_CONTROL_CONFIG", control_config);
+    if (is_gateway) {
+        override_env_entry(env_storage, "MORTRED_INTERNAL_TOKEN", internal_token);
+        override_env_entry(env_storage, "MORTRED_GATEWAY_HOST", gateway_host);
+        override_env_entry(env_storage, "MORTRED_GATEWAY_PORT", gateway_port_str);
+        if (!gateway_metrics_token.empty()) {
+            override_env_entry(env_storage, "MORTRED_METRICS_TOKEN", gateway_metrics_token);
+        }
+        if (!gateway_infer_token.empty()) {
+            override_env_entry(env_storage, "MORTRED_GATEWAY_AUTH_TOKEN", gateway_infer_token);
+        }
+        if (!gateway_admin_token.empty()) {
+            override_env_entry(env_storage, "MORTRED_API_TOKEN", gateway_admin_token);
+        }
+    } else {
+        // managed children are loopback-only and protected by the internal
+        // token regardless of what their TOML declares
+        override_env_entry(env_storage, "MORTRED_LISTEN_HOST", "127.0.0.1");
+        override_env_entry(env_storage, "MORTRED_AUTH_TOKEN", internal_token);
+        if (inject_workers) {
+            override_env_entry(env_storage, "MORTRED_WORKER_NUMS", worker_str);
+        }
+        if (!decode_auto.empty()) {
+            override_env_entry(env_storage, "MORTRED_DECODE_AUTO", decode_auto);
+        }
+        if (!model_config_override.empty()) {
+            override_env_entry(env_storage, "MORTRED_MODEL_CONFIG_FILE", model_config_override);
+        }
+    }
+
+    const std::string model_flag = "--model";
+    char* child_argv[5] = {};
+    int argi = 0;
+    child_argv[argi++] = const_cast<char*>(exe_name.c_str());
+    if (config_arg.empty()) {
+        // executable name only
+    } else if (!model_arg.empty()) {
+        child_argv[argi++] = const_cast<char*>(model_flag.c_str());
+        child_argv[argi++] = const_cast<char*>(model_arg.c_str());
+        child_argv[argi++] = const_cast<char*>(config_arg.c_str());
+        override_env_entry(env_storage, "MORTRED_MODEL", model_arg);
+    } else {
+        child_argv[argi++] = const_cast<char*>(config_arg.c_str());
+    }
+    child_argv[argi] = nullptr;
+
+    std::vector<char*> env_ptrs;
+    env_ptrs.reserve(env_storage.size() + 1);
+    for (std::string& entry : env_storage) {
+        env_ptrs.push_back(entry.data());
+    }
+    env_ptrs.push_back(nullptr);
+    const char* child_exe = exe_path.c_str();
+    const char* child_bin_dir = bin_dir.c_str();
+    char** child_envp = env_ptrs.data();
 
     const pid_t pid = ::fork();
     if (pid < 0) {
@@ -379,66 +451,31 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err,
         ::close(out_pipe[1]);
         ::close(err_pipe[0]);
         ::close(err_pipe[1]);
-        close_all_fds_except_stdio();
+        for (int fd = 3; fd < max_fd; ++fd) {
+            ::close(fd);
+        }
         // die with the supervisor (graceful SIGINT path) instead of orphaning
         ::prctl(PR_SET_PDEATHSIG, SIGINT);
         if (::getppid() != parent_pid) {
             ::_exit(0);
         }
         // nohup-style parents leave SIGINT/SIGQUIT ignored; reset for exec
-        ::signal(SIGINT, SIG_DFL);
-        ::signal(SIGQUIT, SIG_DFL);
+        struct sigaction sa {};
+        ::sigemptyset(&sa.sa_mask);
+        sa.sa_handler = SIG_DFL;
+        sa.sa_flags = 0;
+        ::sigaction(SIGINT, &sa, nullptr);
+        ::sigaction(SIGQUIT, &sa, nullptr);
         // the supervisor blocks SIGCHLD/SIGINT/SIGTERM process-wide and the
         // child INHERITS that mask: without unblocking, SIG_DFL alone leaves
         // stop signals (and PDEATHSIG) pending forever and the child unkillable
         sigset_t empty_set;
         ::sigemptyset(&empty_set);
         ::sigprocmask(SIG_SETMASK, &empty_set, nullptr);
-        ::setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
-        ::setenv("MORTRED_PROJECT_ROOT", project_root.c_str(), 1);
-        ::setenv("MORTRED_CONTROL_CONFIG", control_config.c_str(), 1);
-        if (is_gateway) {
-            ::setenv("MORTRED_INTERNAL_TOKEN", internal_token.c_str(), 1);
-            ::setenv("MORTRED_GATEWAY_HOST", gateway_host.c_str(), 1);
-            std::string port_str = std::to_string(gateway_port);
-            ::setenv("MORTRED_GATEWAY_PORT", port_str.c_str(), 1);
-            if (!gateway_metrics_token.empty()) {
-                ::setenv("MORTRED_METRICS_TOKEN", gateway_metrics_token.c_str(), 1);
-            }
-            if (!gateway_infer_token.empty()) {
-                ::setenv("MORTRED_GATEWAY_AUTH_TOKEN", gateway_infer_token.c_str(), 1);
-            }
-            if (!gateway_admin_token.empty()) {
-                ::setenv("MORTRED_API_TOKEN", gateway_admin_token.c_str(), 1);
-            }
-        } else {
-            // managed children are loopback-only and protected by the internal
-            // token regardless of what their TOML declares
-            ::setenv("MORTRED_LISTEN_HOST", "127.0.0.1", 1);
-            ::setenv("MORTRED_AUTH_TOKEN", internal_token.c_str(), 1);
-            if (inject_workers) {
-                ::setenv("MORTRED_WORKER_NUMS", worker_str.c_str(), 1);
-            }
-            if (!decode_auto.empty()) {
-                ::setenv("MORTRED_DECODE_AUTO", decode_auto.c_str(), 1);
-            }
-            if (!model_config_override.empty()) {
-                ::setenv("MORTRED_MODEL_CONFIG_FILE", model_config_override.c_str(), 1);
-            }
-        }
-        if (::chdir(bin_dir.c_str()) != 0) {
+        if (::chdir(child_bin_dir) != 0) {
             ::_exit(127);
         }
-        if (config_arg.empty()) {
-            ::execl(exe_path.c_str(), exe_name.c_str(), static_cast<char*>(nullptr));
-        } else if (!model_arg.empty()) {
-            ::setenv("MORTRED_MODEL", model_arg.c_str(), 1);
-            ::execl(exe_path.c_str(), exe_name.c_str(), "--model", model_arg.c_str(),
-                    config_arg.c_str(), static_cast<char*>(nullptr));
-        } else {
-            ::execl(exe_path.c_str(), exe_name.c_str(), config_arg.c_str(),
-                    static_cast<char*>(nullptr));
-        }
+        ::execve(child_exe, child_argv, child_envp);
         ::_exit(127);
     }
 

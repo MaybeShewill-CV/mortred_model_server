@@ -396,15 +396,19 @@ void GatewayApp::forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
     series_of(task)->push_back(client);
 }
 
-/*** L1 per-source metering (PR-3b). Runs BEFORE route resolution and auth:
- * anonymous floods must be shed before any per-request work beyond the
- * cheap health/metrics probes above. Ordering inside process():
+/*** L1 per-source metering (PR-3b). Runs BEFORE route resolution and auth.
+ * init turns counting on only after [gateway.rate_limit] and
+ * MORTRED_RATE_LIMIT (off / shadow / enforce). enabled and shadow both
+ * false: return before admit, write no 429, and leave no per-source
+ * budget for this request. rate_per_sec and burst stay in config and
+ * apply only while counting. Ordering inside process():
  *   OPTIONS -> /healthz -> /metrics -> [THIS] -> route -> auth(L2) -> forward
  * 429 carries Retry-After (exact GCRA budget, rounded up to whole seconds)
- * and the IETF draft RateLimit-Limit/Remaining/Reset triple. Shadow mode
- * counts but never rejects. Returns true when the request may proceed. */
+ * and the IETF draft RateLimit-Limit/Remaining/Reset triple. Enforce uses
+ * the configured rate_per_sec and burst. Shadow mode counts but never
+ * rejects. Returns true when the request may proceed. */
 bool GatewayApp::check_ip_rate_limit(WFHttpTask* task, const std::string& method) {
-    if (ip_limiter_ == nullptr || method == "OPTIONS") {
+    if (!rate_limit_enabled_ || ip_limiter_ == nullptr || method == "OPTIONS") {
         return true;
     }
     // peer address from the TCP endpoint (same shape as the model-server
@@ -514,21 +518,24 @@ void GatewayApp::process(WFHttpTask* task) {
     // try multi-key auth first (P0-4)
     if (api_keys_.key_count() > 0) {
         // shared_ptr ownership: safe across a concurrent reload() that swaps
-        // the whole key set (P0-2)
-        const auto auth = api_keys_.authenticate(auth_header);
-        if (auth.reason == AuthReason::RATE_LIMITED) {
-            // a VALID key that is merely throttled: 429 + Retry-After, never
-            // 401, and never a fallthrough to the static-token path (the
-            // client presented working credentials)
-            metrics_.inc_http_requests(method, "429");
-            const int retry_s = (auth.retry_after_ms + 999) / 1000;
-            task->get_resp()->add_header_pair("Retry-After",
-                                              std::to_string(retry_s).c_str());
-            reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED,
-                                "api key rate limit exceeded");
-            return;
-        }
+        // the whole key set (P0-2). The per-key window increments only after
+        // key_may_infer is already true, so a scope that cannot infer keeps
+        // the existing 401 and does not take a rate_window_count slot.
+        const auto auth = api_keys_.identify(auth_header);
         if (key_may_infer(auth.key)) {
+            const auto limited = api_keys_.consume_rate_limit(auth.key);
+            if (limited.reason == AuthReason::RATE_LIMITED) {
+                // a VALID key that is merely throttled: 429 + Retry-After, never
+                // 401, and never a fallthrough to the static-token path (the
+                // client presented working credentials)
+                metrics_.inc_http_requests(method, "429");
+                const int retry_s = (limited.retry_after_ms + 999) / 1000;
+                task->get_resp()->add_header_pair("Retry-After",
+                                                  std::to_string(retry_s).c_str());
+                reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED,
+                                    "api key rate limit exceeded");
+                return;
+            }
             authorized = true;
             key_name = auth.key->name;
         }
@@ -612,11 +619,14 @@ bool GatewayApp::init(const GatewayInitOptions& options) {
     rate_limit_rate_ = rl.rate_per_sec;
     trusted_proxies_ = mortred::control::ratelimit::TrustedProxies::parse(
         split_csv(rl.trusted_proxies));
-    ip_limiter_ = std::make_unique<mortred::control::ratelimit::ShardedIpLimiter>(
-        mortred::control::ratelimit::GcraPolicy{
-            static_cast<uint32_t>(rl.rate_per_sec), static_cast<uint32_t>(rl.burst)},
-        static_cast<size_t>(rl.max_tracked));
+    // Count only when enabled or shadow is on, including after
+    // MORTRED_RATE_LIMIT=off has cleared both flags. rate_per_sec and burst
+    // stay on the config and are not applied while the limiter is unset.
     if (rate_limit_enabled_) {
+        ip_limiter_ = std::make_unique<mortred::control::ratelimit::ShardedIpLimiter>(
+            mortred::control::ratelimit::GcraPolicy{
+                static_cast<uint32_t>(rl.rate_per_sec), static_cast<uint32_t>(rl.burst)},
+            static_cast<size_t>(rl.max_tracked));
         std::fprintf(stderr,
                      "mortred-gateway: per-IP rate limiting %s: %d/s burst %d, %zu trusted "
                      "proxies\n",

@@ -8,6 +8,7 @@
 # Usage:
 #   ./scripts/prepare_pack.sh
 #   ./scripts/prepare_pack.sh --pack conf/packs/demo.toml
+#   ./scripts/prepare_pack.sh --id yolov8s     # one product engine; no pack list, no /ready
 #   ./scripts/prepare_pack.sh --force          # reconvert even if present
 #   ./scripts/prepare_pack.sh --skip-ready     # convert + nonempty only
 #   ./scripts/prepare_pack.sh --require-ready  # fail if the server binary is missing
@@ -18,17 +19,53 @@ PACK="${MORTRED_PACK:-$ROOT/conf/packs/demo.toml}"
 FORCE=0
 SKIP_READY=0
 REQUIRE_READY=0
+ID=""
+SAW_PACK=0
 
 usage() {
-    sed -n '2,16p' "$0"
+    sed -n '2,14p' "$0"
     exit 0
 }
 
 fail() { echo "[ERROR] $*" >&2; echo "next: mortredctl next" >&2; exit 1; }
 
+prepare_one_id() {
+    local id="$1"
+    local engine rc
+    local -a convert_args
+    set +e
+    engine="$("$PY" "$ROOT/scripts/product_static_bs1.py" --lookup-id "$id")"
+    rc=$?
+    set -e
+    engine="${engine//$'\r'/}"
+    if [ "$rc" -ne 0 ] || [ -z "$engine" ]; then
+        fail "unknown product id: $id"
+    fi
+    MANIFEST="$(mktemp)"
+    trap 'rm -f "$MANIFEST"' EXIT
+    echo "== prepare id: $id =="
+    "$PY" "$ROOT/scripts/product_static_bs1.py" --write-manifest "$MANIFEST"
+    convert_args=(--strict)
+    [ "$FORCE" -eq 1 ] && convert_args+=(--force)
+    echo "== convert --only $engine =="
+    bash "$ROOT/scripts/convert_trt_engines.sh" --manifest "$MANIFEST" --only "$engine" "${convert_args[@]}"
+    if [ ! -s "$ROOT/$engine" ]; then
+        fail "product engine missing or empty: $engine"
+    fi
+    echo "  [ok] $id $engine"
+    exit 0
+}
+
 while [ $# -gt 0 ]; do
     case "$1" in
-        --pack) PACK="$2"; shift 2 ;;
+        --pack) SAW_PACK=1; PACK="$2"; shift 2 ;;
+        --id)
+            if [ $# -lt 2 ]; then
+                fail "missing value for --id"
+            fi
+            ID="$2"
+            shift 2
+            ;;
         --force) FORCE=1; shift ;;
         --skip-ready) SKIP_READY=1; shift ;;
         --require-ready) REQUIRE_READY=1; shift ;;
@@ -37,12 +74,19 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+PY=python3
+command -v python3 >/dev/null 2>&1 || PY=python
+
+if [ -n "$ID" ]; then
+    if [ "$SAW_PACK" -eq 1 ]; then
+        fail "--id and --pack cannot be combined"
+    fi
+    prepare_one_id "$ID"
+fi
+
 if [ ! -f "$PACK" ]; then
     fail "pack not found: $PACK"
 fi
-
-PY=python3
-command -v python3 >/dev/null 2>&1 || PY=python
 
 echo "== prepare pack: $PACK =="
 "$PY" "$ROOT/scripts/product_static_bs1.py" --check-pack "$PACK"
