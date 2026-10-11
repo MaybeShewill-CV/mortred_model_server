@@ -10,7 +10,7 @@
 - 挂起: P0-2（工作树缺 39 个产品 onnx，且工作树看不见 trtexec。未跑验收 6、7、8、12）。P1-8（msocrnet 在约 19GiB 的 WSL 上被 OOM 杀掉，没有黄金；工作树没有 full 构建的 model_golden_test。未跑验收 3 的 msocrnet 与 19 条同进程过滤，以及验收 11 的 full 列表）。D-8（本机和 WSL 都没有可执行的 docker。未跑验收 1。未合入）
 - 与角色自算: 一致
 
-模块分保持第 11 轮记录。加权仍是 776/100 = 7.76，保留一位小数为 7.8。P1-12 与 D-9 已关闭。未关闭的 P0 只剩挂起的 P0-2。未关闭的 P1 只剩挂起的 P1-8。两者都不触发上限。H2 仍未满足。S4 已满足。下一条是 D-10。D-8 挂起，跳过。
+模块分保持第 11 轮记录。加权仍是 776/100 = 7.76，保留一位小数为 7.8。P1-12、D-9 与 D-10 已关闭。未关闭的 P0 只剩挂起的 P0-2。未关闭的 P1 只剩挂起的 P1-8。两者都不触发上限。H2 仍未满足。S4 与 S6 已满足。下一条是 D-11。D-8 挂起，跳过。
 
 ## 双目标
 | 编号 | 状态: 已满足 / 未满足 / 挂起 | 证据或队列 id |
@@ -25,6 +25,6 @@
 | S2 | 未满足 | D-12 |
 | S3 | 未满足 | D-8 |
 | S4 | 已满足 | D-9 合入 `b51e2e6e81ab8ac086ab39b33395cbe73ec28cc6`。`enabled = false` 且 `shadow = false` 时，无 Bearer 的 401 之后，紧接着的合法推理是 503 与 `service not ready`；同一秒内两次合法推理都是这条 503；scope 为 `none` 的 key 连续两次都是 401。 |
-| S6 | 未满足 | D-10。`nvidia-smi` 整次失败且输出为空时已标 offline，不在此条。 |
+| S6 | 已满足 | D-10 合入 `9877ac70a6cda2ce88cfef1c09670789e21f6300`。utilization 列为 `N/A` 或 `[N/A]` 的这一次探测，`available` 为 false，stderr 是 `gpu sampler offline (utilization N/A)`，`mortredctl ps` 印 `util n/a`。空输出仍是原来的 `gpu sampler offline (no nvidia-smi / no GPU)`。 |
 
 D-11 不是双目标行，留在劣势队列。
