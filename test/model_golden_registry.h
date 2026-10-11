@@ -28,6 +28,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -55,6 +56,7 @@
 #include "models/io/feature_embedding.h"
 #include "models/io/feature_point.h"
 #include "models/io/matting.h"
+#include "models/io/mono_depth_estimation.h"
 #include "models/io/object_detection.h"
 #include "models/io/ocr.h"
 #include "models/io/scene_segmentation.h"
@@ -73,6 +75,7 @@ using jinq::models::io_define::enhancement::std_enhancement_output;
 using jinq::models::io_define::feature_embedding::std_feature_embedding_output;
 using jinq::models::io_define::feature_point::std_feature_point_output;
 using jinq::models::io_define::matting::std_matting_output;
+using jinq::models::io_define::mono_depth_estimation::std_mde_output;
 using jinq::models::io_define::object_detection::bbox;
 using jinq::models::io_define::object_detection::face_bbox;
 using jinq::models::io_define::object_detection::std_face_detection_output;
@@ -88,6 +91,7 @@ constexpr double k_keypoint_match_dist = 3.0;
 constexpr double k_embedding_cos_thresh = 0.999;
 constexpr double k_mask_overlap = 0.90;
 constexpr int k_matting_foreground = 128;
+constexpr double k_depth_rel_error = 0.02;
 
 bool update_golden_mode() {
     const char *env = std::getenv("MORTRED_UPDATE_GOLDEN");
@@ -148,6 +152,61 @@ toml::table load_model_cfg(const std::string &conf_rel_path) {
     fix_toml_paths(cfg);
     force_cpu_backend(cfg);
     return cfg;
+}
+
+// Product toml: strip ../ only. Leaves backend.type and backend.device as written.
+toml::table load_product_cfg(const std::string &conf_rel_path) {
+    auto cfg_parsed = toml::parse_file(conf_rel_path);
+    if (!cfg_parsed) {
+        LOG(ERROR) << "parse model config file failed: " << conf_rel_path << ", error: " << std::string(cfg_parsed.error().description());
+        return toml::table{};
+    }
+    auto cfg = std::move(cfg_parsed).table();
+    fix_toml_paths(cfg);
+    return cfg;
+}
+
+void find_product_backend(const toml::node &node, std::string &type, std::string &device, std::string &model_file_path, bool &found) {
+    if (found) {
+        return;
+    }
+    const auto *table = node.as_table();
+    if (table == nullptr) {
+        if (const auto *array = node.as_array()) {
+            for (const auto &item : *array) {
+                find_product_backend(item, type, device, model_file_path, found);
+                if (found) {
+                    return;
+                }
+            }
+        }
+        return;
+    }
+    for (const auto &item : *table) {
+        if (item.first == "backend" && item.second.is_table()) {
+            const auto &backend = *item.second.as_table();
+            for (const auto &field : backend) {
+                if (!field.second.is_string()) {
+                    continue;
+                }
+                if (field.first == "type") {
+                    type = field.second.value_or<std::string>("");
+                } else if (field.first == "device") {
+                    device = field.second.value_or<std::string>("");
+                } else if (field.first == "model_file_path") {
+                    model_file_path = field.second.value_or<std::string>("");
+                }
+            }
+            found = true;
+            return;
+        }
+    }
+    for (const auto &item : *table) {
+        find_product_backend(item.second, type, device, model_file_path, found);
+        if (found) {
+            return;
+        }
+    }
 }
 
 cv::Mat read_input_image(const std::string &path) { return cv::imread(path, cv::IMREAD_COLOR); }
@@ -330,6 +389,52 @@ template <typename BoxT> void expect_boxes(const std::string &name, const std::v
     }
 }
 
+// Same pairing as expect_boxes, without landmarks. Failure text includes the
+// numeric thresholds that expect_boxes does not print.
+void expect_trt_detection_boxes(const std::string &name, const std_object_detection_output &boxes) {
+    rapidjson::Document golden = load_golden_json(name);
+    if (update_golden_mode()) {
+        rapidjson::Document doc;
+        doc.SetObject();
+        rapidjson::Document::AllocatorType &a = doc.GetAllocator();
+        rapidjson::Value arr(rapidjson::kArrayType);
+        for (const auto &box : boxes) {
+            arr.PushBack(serialize_box(box, a), a);
+        }
+        doc.AddMember("boxes", arr, a);
+        write_golden_text(name, ".json", serialize_json(doc));
+        GTEST_SKIP() << "golden updated: " << golden_path(name, ".json");
+    }
+    ASSERT_TRUE(golden.IsObject() && golden.HasMember("boxes") && golden["boxes"].IsArray())
+        << "golden missing, run with MORTRED_UPDATE_GOLDEN=1: " << name;
+
+    const auto &golden_boxes = golden["boxes"].GetArray();
+    ASSERT_EQ(boxes.size(), golden_boxes.Size()) << "detection count changed for " << name;
+
+    std::vector<bool> matched(golden_boxes.Size(), false);
+    for (const auto &box : boxes) {
+        int best = -1;
+        float best_iou = 0.0f;
+        for (rapidjson::SizeType i = 0; i < golden_boxes.Size(); ++i) {
+            if (matched[i])
+                continue;
+            const auto &g = golden_boxes[i];
+            cv::Rect2f gbox(g["x"].GetFloat(), g["y"].GetFloat(), g["w"].GetFloat(), g["h"].GetFloat());
+            float iou = CvUtils::calc_iou(box.bbox, gbox);
+            if (iou > best_iou) {
+                best_iou = iou;
+                best = static_cast<int>(i);
+            }
+        }
+        ASSERT_GE(best, 0) << "unmatched detection for " << name;
+        EXPECT_GE(best_iou, k_box_iou_thresh) << "low IoU below 0.5 for " << name;
+        const auto &g = golden_boxes[best];
+        EXPECT_NEAR(box.score, g["score"].GetFloat(), k_det_score_tol) << "score difference exceeds 0.01 for " << name;
+        EXPECT_EQ(box.class_id, g["class_id"].GetInt()) << "class_id mismatch for " << name;
+        matched[best] = true;
+    }
+}
+
 template <typename BoxT>
 void expect_equivalent_detections(const std::string &name, const std::vector<BoxT> &expected, const std::vector<BoxT> &actual) {
     ASSERT_EQ(expected.size(), actual.size()) << name;
@@ -452,6 +557,37 @@ void expect_embeddings(const std::string &name, const std::vector<float> &embedd
     EXPECT_GE(cosine, k_embedding_cos_thresh) << "embedding cosine similarity low for " << name;
 }
 
+// Same cosine rule as expect_embeddings. The failure text also prints 0.999.
+void expect_trt_embeddings(const std::string &name, const std::vector<float> &embeddings) {
+    rapidjson::Document golden = load_golden_json(name);
+    if (update_golden_mode()) {
+        rapidjson::Document doc;
+        doc.SetObject();
+        rapidjson::Document::AllocatorType &a = doc.GetAllocator();
+        rapidjson::Value arr(rapidjson::kArrayType);
+        for (float e : embeddings)
+            arr.PushBack(e, a);
+        doc.AddMember("embeddings", arr, a);
+        write_golden_text(name, ".json", serialize_json(doc));
+        GTEST_SKIP() << "golden updated: " << golden_path(name, ".json");
+    }
+    ASSERT_TRUE(golden.IsObject() && golden.HasMember("embeddings") && golden["embeddings"].IsArray())
+        << "golden missing, run with MORTRED_UPDATE_GOLDEN=1: " << name;
+
+    const auto &arr = golden["embeddings"].GetArray();
+    ASSERT_EQ(embeddings.size(), arr.Size());
+    double dot = 0.0, norm_a = 0.0, norm_b = 0.0;
+    rapidjson::SizeType i = 0;
+    for (const auto &e : arr) {
+        dot += embeddings[i] * e.GetFloat();
+        norm_a += embeddings[i] * embeddings[i];
+        norm_b += e.GetFloat() * e.GetFloat();
+        ++i;
+    }
+    double cosine = dot / (std::sqrt(norm_a) * std::sqrt(norm_b) + 1e-9);
+    EXPECT_GE(cosine, k_embedding_cos_thresh) << "embedding cosine similarity low for " << name << " 0.999";
+}
+
 bool weights_available(const std::string &conf_rel_path) {
     auto cfg_parsed = toml::parse_file(conf_rel_path);
     if (!cfg_parsed) {
@@ -490,7 +626,13 @@ inline void compare_feature_embedding(const std::string &name, const std_feature
     expect_embeddings(name, out.embedding);
 }
 
+inline void compare_trt_embedding(const std::string &name, const std_feature_embedding_output &out) {
+    expect_trt_embeddings(name, out.embedding);
+}
+
 inline void compare_object_detection(const std::string &name, const std_object_detection_output &out) { expect_boxes(name, out, false); }
+
+inline void compare_trt_detection(const std::string &name, const std_object_detection_output &out) { expect_trt_detection_boxes(name, out); }
 
 inline void compare_face_detection(const std::string &name, const std_face_detection_output &out) { expect_boxes(name, out, true); }
 
@@ -674,6 +816,125 @@ void expect_matting_overlap(const std::string &name, const cv::Mat &mat) {
     }
 }
 
+bool depth_map_pixels_finite(const cv::Mat &depth_map, bool &has_signal) {
+    has_signal = false;
+    if (depth_map.type() != CV_32FC1 || depth_map.rows <= 0 || depth_map.cols <= 0) {
+        return false;
+    }
+    for (int row = 0; row < depth_map.rows; ++row) {
+        const float *row_ptr = depth_map.ptr<float>(row);
+        for (int col = 0; col < depth_map.cols; ++col) {
+            const float value = row_ptr[col];
+            if (!std::isfinite(value)) {
+                return false;
+            }
+            if (std::fabs(value) > 1e-6f) {
+                has_signal = true;
+            }
+        }
+    }
+    return true;
+}
+
+void write_depth_golden(const std::string &name, const cv::Mat &depth_map) {
+    rapidjson::Document doc;
+    doc.SetObject();
+    rapidjson::Document::AllocatorType &allocator = doc.GetAllocator();
+    doc.AddMember("height", depth_map.rows, allocator);
+    doc.AddMember("width", depth_map.cols, allocator);
+    rapidjson::Value values(rapidjson::kArrayType);
+    const size_t count = static_cast<size_t>(depth_map.rows) * static_cast<size_t>(depth_map.cols);
+    values.Reserve(static_cast<rapidjson::SizeType>(count), allocator);
+    for (int row = 0; row < depth_map.rows; ++row) {
+        const float *row_ptr = depth_map.ptr<float>(row);
+        for (int col = 0; col < depth_map.cols; ++col) {
+            values.PushBack(static_cast<double>(row_ptr[col]), allocator);
+        }
+    }
+    doc.AddMember("values", values, allocator);
+    write_golden_text(name, ".json", serialize_json(doc));
+}
+
+// Full-resolution depth_map only. Mean relative error is
+// mean(|current - golden| / max(|golden|, 1e-6)).
+void expect_depth_relative_error(const std::string &name, const cv::Mat &depth_map) {
+    bool current_signal = false;
+    if (depth_map.type() != CV_32FC1 || depth_map.rows <= 0 || depth_map.cols <= 0) {
+        FAIL() << "depth_map is not a non-empty single-channel float for " << name;
+    }
+    if (!depth_map_pixels_finite(depth_map, current_signal)) {
+        FAIL() << "non-finite depth value for " << name;
+    }
+    if (update_golden_mode()) {
+        if (!current_signal) {
+            FAIL() << "depth map has no pixel with absolute value above 1e-6 for " << name;
+        }
+        write_depth_golden(name, depth_map);
+        GTEST_SKIP() << "golden updated: " << golden_path(name, ".json");
+    }
+
+    const std::string path = golden_path(name, ".json");
+    std::ifstream in(path);
+    if (!in.is_open()) {
+        FAIL() << "golden missing, run with MORTRED_UPDATE_GOLDEN=1: " << path;
+    }
+    std::stringstream buffer;
+    buffer << in.rdbuf();
+    rapidjson::Document doc;
+    doc.Parse(buffer.str().c_str());
+    if (doc.HasParseError() || !doc.IsObject() || !doc.HasMember("height") || !doc.HasMember("width") || !doc.HasMember("values")) {
+        FAIL() << "golden json is invalid for " << name;
+    }
+    const rapidjson::Value &height = doc["height"];
+    const rapidjson::Value &width = doc["width"];
+    const rapidjson::Value &values = doc["values"];
+    if (!height.IsInt() || !width.IsInt() || !values.IsArray() || height.GetInt() <= 0 || width.GetInt() <= 0) {
+        FAIL() << "golden json is invalid for " << name;
+    }
+    if (height.GetInt() != depth_map.rows || width.GetInt() != depth_map.cols) {
+        FAIL() << "depth size differs for " << name;
+    }
+    const int64_t expect = static_cast<int64_t>(height.GetInt()) * static_cast<int64_t>(width.GetInt());
+    if (expect != static_cast<int64_t>(values.Size())) {
+        FAIL() << "depth golden length differs for " << name;
+    }
+
+    bool golden_signal = false;
+    double sum = 0.0;
+    int64_t count = 0;
+    for (int row = 0; row < depth_map.rows; ++row) {
+        const float *row_ptr = depth_map.ptr<float>(row);
+        for (int col = 0; col < depth_map.cols; ++col) {
+            const rapidjson::Value &item = values[static_cast<rapidjson::SizeType>(count)];
+            if (!item.IsNumber()) {
+                FAIL() << "depth golden value is not a number for " << name;
+            }
+            const double golden = item.GetDouble();
+            const double current = static_cast<double>(row_ptr[col]);
+            if (!std::isfinite(golden) || !std::isfinite(current)) {
+                FAIL() << "non-finite depth value for " << name;
+            }
+            if (std::fabs(golden) > 1e-6) {
+                golden_signal = true;
+            }
+            sum += std::fabs(current - golden) / std::max(std::fabs(golden), 1e-6);
+            ++count;
+        }
+    }
+    if (count <= 0) {
+        FAIL() << "no finite depth pixel for " << name;
+    }
+    if (!golden_signal) {
+        FAIL() << "depth golden has no pixel with absolute value above 1e-6 for " << name;
+    }
+    const double mean = sum / static_cast<double>(count);
+    if (!(mean <= k_depth_rel_error)) {
+        FAIL() << "depth error " << mean << " > 0.02 for " << name;
+    }
+}
+
+inline void compare_trt_depth(const std::string &name, const std_mde_output &out) { expect_depth_relative_error(name, out.depth_map); }
+
 inline void compare_scene_segmentation(const std::string &name, const std_scene_segmentation_output &out) {
     expect_segmentation_overlap(name, out.segmentation_result);
 }
@@ -714,6 +975,38 @@ void run_case(const char *name, const char *config, const char *image, GoldenCre
     ASSERT_EQ(model->run(mat_input{input_image}, output), StatusCode::OK) << name;
     SCOPED_TRACE(name);
     compare(name, output);
+}
+
+// Product tensorrt case: path strip only, backend left as written in the toml.
+template <typename OUTPUT>
+void run_trt_product_case(const char *id, const char *config, const char *image, GoldenCreator<OUTPUT> creator,
+                          GoldenCompare<OUTPUT> compare, const char *golden_stem, bool protect_cpu_golden) {
+    const std::string conf(config);
+    if (!weights_available(conf)) {
+        MORTRED_SKIP_OR_FAIL_WEIGHTS("weights not available");
+    }
+    toml::table cfg = load_product_cfg(conf);
+    std::string type;
+    std::string device;
+    std::string model_file_path;
+    bool found = false;
+    find_product_backend(cfg, type, device, model_file_path, found);
+    ASSERT_TRUE(found) << id << " backend missing in " << conf;
+    ASSERT_EQ(type, "tensorrt") << id;
+    ASSERT_EQ(device, "gpu") << id;
+    ASSERT_FALSE(model_file_path.empty()) << id;
+    std::cout << "product toml " << conf << " type=tensorrt device=gpu model_file_path=" << model_file_path << std::endl;
+    if (protect_cpu_golden && update_golden_mode()) {
+        FAIL() << "refusing to overwrite cpu golden";
+    }
+    auto model = creator();
+    ASSERT_NE(model, nullptr) << id;
+    ASSERT_EQ(model->init(cfg), StatusCode::OK) << id;
+    const cv::Mat input_image = read_input_image(image);
+    ASSERT_FALSE(input_image.empty()) << id << ": " << image;
+    OUTPUT output;
+    ASSERT_EQ(model->run(mat_input{input_image}, output), StatusCode::OK) << id;
+    compare(golden_stem, output);
 }
 
 } // namespace golden
