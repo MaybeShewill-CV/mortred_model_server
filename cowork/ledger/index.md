@@ -5,7 +5,7 @@
 - 当前轮次: 12
 - 当前步骤: 7
 - 当前问题: 挂起集
-- 挂起: P1-8（msocrnet 在约 19GiB 的 WSL 上被 OOM 杀掉，没有黄金；工作树没有 full 构建的 model_golden_test。未跑验收 3 的 msocrnet 与 19 条同进程过滤，以及验收 11 的 full 列表）。D-8（本机和 WSL 都没有可执行的 docker。未跑验收 1）
+- 挂起: P1-8（2026-10-11 再跑 `model_golden.msocrnet` 仍被杀掉，退出码 137，驻留约 18.5GiB，没有黄金；工作树没有 full 构建的 model_golden_test。未跑验收 3 的 msocrnet 与 19 条同进程过滤，以及验收 11 的 full 列表）。D-8（本机和 WSL 都没有可执行的 docker。未跑验收 1）
 - 已销账: P0-1、P0-2、P0-3、P1-1、P1-2、P1-3、P1-4、P1-5、P1-6、P1-7、P1-9、P1-10、P1-11、P1-12、D-1、D-2、D-3、D-4、D-5、D-6、D-9、D-10、D-11、D-12
 - 本轮起点综合分: 7.8
 - 现行口径: 2026-10-09 十类任务每个 id 的最高标准，含人脸检测 libface/centerface，YOLOv8 含 n/s/l/x
