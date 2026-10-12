@@ -21,6 +21,11 @@ token 相同）时启动。模型端口仅绑定环回地址、不得对外暴�
 （`mortredctl init-edge`）。fail-closed 拒绝无鉴权监听、缺少 metrics token、
 以及未设 `MORTRED_EXPOSE=docker` 或 `unsafe` 的通配绑定。
 
+一次成功推理之后，网关 `GET /metrics` 带有
+`mortred_gateway_stage_duration_ms`，五个 stage 为 `gw_in`、`route`、`auth`、
+`fwd`、`upstream`。`server_time_ms` 仍在推理响应正文里。`GET /metrics` 的
+scrape 鉴权不变，含环回一律要 `MORTRED_METRICS_TOKEN`。
+
 监督器（supervisor，`:8787`）在 `/api/v1/` 下提供管理 REST API
 `POST /api/v1/servers/{id}/start|stop|restart` 成功返回 **200** + `{"ok":true}`，失败返回 **500** + `{"ok":false,"error":...}`（与 `graceful_restart` 一致）。客户端可依赖 HTTP 状态或 body 的 `ok`。
 （health/catalog/status/生命周期/日志/metrics）与内嵌 Web UI；

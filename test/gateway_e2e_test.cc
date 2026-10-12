@@ -223,11 +223,98 @@ class GatewayE2ETest : public ::testing::Test {
         fs::remove_all(root_, ec);
     }
 
+    bool restart_fake(const std::vector<std::string>& extra_args) {
+        stop(fake_pid_);
+        fake_pid_ = -1;
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        const char* fake_bin = std::getenv("MORTRED_FAKE_BIN");
+        if (fake_bin == nullptr) {
+            fake_bin = MORTRED_FAKE_BIN_DEFAULT;
+        }
+        if (fake_bin == nullptr || fake_bin[0] == '\0') {
+            return false;
+        }
+        std::vector<std::string> args = {"--port", std::to_string(model_port_)};
+        args.insert(args.end(), extra_args.begin(), extra_args.end());
+        fake_pid_ = spawn(fake_bin, args, {});
+        if (fake_pid_ <= 0) {
+            return false;
+        }
+        for (int i = 0; i < 50; ++i) {
+            if (mortred::control::endpoint_ready(model_port_, "/ready", 500)) {
+                return true;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        return false;
+    }
+
     fs::path root_;
     int model_port_ = 0;
     int gateway_port_ = 0;
     pid_t fake_pid_ = -1;
     pid_t gateway_pid_ = -1;
+};
+
+const char* k_stage_names[] = {"gw_in", "route", "auth", "fwd", "upstream"};
+const fs::path k_stage_flag{"/tmp/mortred_stage_timing"};
+
+bool read_server_time_ms(const std::string& body, double* out) {
+    const std::string key = "\"server_time_ms\":";
+    const auto pos = body.find(key);
+    if (pos == std::string::npos || out == nullptr) {
+        return false;
+    }
+    char* end = nullptr;
+    const double value = std::strtod(body.c_str() + pos + key.size(), &end);
+    if (end == body.c_str() + pos + key.size()) {
+        return false;
+    }
+    *out = value;
+    return true;
+}
+
+bool read_stage_sample(const std::string& body, const char* stage, double* count, double* sum) {
+    const std::string count_key =
+        std::string("mortred_gateway_stage_duration_ms_count{model=\"gateway\",stage=\"") + stage +
+        "\"} ";
+    const std::string sum_key =
+        std::string("mortred_gateway_stage_duration_ms_sum{model=\"gateway\",stage=\"") + stage +
+        "\"} ";
+    const auto count_pos = body.find(count_key);
+    const auto sum_pos = body.find(sum_key);
+    if (count_pos == std::string::npos || sum_pos == std::string::npos) {
+        return false;
+    }
+    if (count != nullptr) {
+        *count = std::strtod(body.c_str() + count_pos + count_key.size(), nullptr);
+    }
+    if (sum != nullptr) {
+        *sum = std::strtod(body.c_str() + sum_pos + sum_key.size(), nullptr);
+    }
+    return true;
+}
+
+int count_substr(const std::string& text, const std::string& needle) {
+    int found = 0;
+    for (std::size_t pos = 0; (pos = text.find(needle, pos)) != std::string::npos; pos += needle.size()) {
+        ++found;
+    }
+    return found;
+}
+
+class StageFlagFile {
+  public:
+    StageFlagFile() {
+        std::ofstream out(k_stage_flag);
+        out << "1\n";
+    }
+    ~StageFlagFile() {
+        std::error_code ec;
+        fs::remove(k_stage_flag, ec);
+    }
+    StageFlagFile(const StageFlagFile&) = delete;
+    StageFlagFile& operator=(const StageFlagFile&) = delete;
 };
 
 }  // namespace
@@ -443,6 +530,116 @@ TEST_F(GatewayE2ETest, metrics_endpoint_renders) {
     const auto r = send_request(gateway_port_, "GET", "/metrics", "", "scrape-token");
     EXPECT_EQ(r.status, 200);
     EXPECT_NE(r.body.find("mortred_http_requests_total"), std::string::npos);
+}
+
+TEST_F(GatewayE2ETest, StageMetricsVisibleWithoutFlag) {
+    ASSERT_FALSE(fs::exists(k_stage_flag));
+    ASSERT_TRUE(restart_fake({"--mode", "envelope", "--server-time-ms", "100000"}));
+    const auto ready = send_request(model_port_, "GET", "/ready", "");
+    EXPECT_EQ(ready.status, 200);
+    EXPECT_NE(ready.body.find("ok"), std::string::npos) << ready.body;
+
+    const auto infer = send_request(gateway_port_, "POST", "/v1/models/FAKE/infer", "{}", "ext-token");
+    ASSERT_EQ(infer.status, 200) << infer.body;
+    double server_time_ms = -1.0;
+    ASSERT_TRUE(read_server_time_ms(infer.body, &server_time_ms)) << infer.body;
+    EXPECT_DOUBLE_EQ(server_time_ms, 100000.0);
+
+    const auto metrics = send_request(gateway_port_, "GET", "/metrics", "", "scrape-token");
+    ASSERT_EQ(metrics.status, 200);
+    EXPECT_NE(metrics.body.find("mortred_http_request_duration_ms"), std::string::npos);
+    std::size_t previous = 0;
+    for (const char* name : k_stage_names) {
+        double count = -1.0;
+        double sum = 0.0;
+        ASSERT_TRUE(read_stage_sample(metrics.body, name, &count, &sum)) << name << "\n" << metrics.body;
+        EXPECT_DOUBLE_EQ(count, 1.0) << name;
+        const std::string count_key =
+            std::string("mortred_gateway_stage_duration_ms_count{model=\"gateway\",stage=\"") + name +
+            "\"} ";
+        const auto pos = metrics.body.find(count_key);
+        EXPECT_GT(pos, previous) << name;
+        previous = pos;
+    }
+    EXPECT_EQ(metrics.body.find("mortred_gateway_stage_dominant"), std::string::npos) << metrics.body;
+    EXPECT_FALSE(fs::exists(k_stage_flag));
+}
+
+TEST_F(GatewayE2ETest, StageMetricsDominantNamesTheLargestStage) {
+    ASSERT_TRUE(restart_fake({"--mode", "envelope", "--server-time-ms", "0.125"}));
+    const auto infer = send_request(gateway_port_, "POST", "/v1/models/FAKE/infer", "{}", "ext-token");
+    ASSERT_EQ(infer.status, 200) << infer.body;
+    double server_time_ms = -1.0;
+    ASSERT_TRUE(read_server_time_ms(infer.body, &server_time_ms)) << infer.body;
+    EXPECT_DOUBLE_EQ(server_time_ms, 0.125);
+
+    const auto metrics = send_request(gateway_port_, "GET", "/metrics", "", "scrape-token");
+    ASSERT_EQ(metrics.status, 200);
+    double sums[5] = {};
+    double gateway_p50 = 0.0;
+    for (int i = 0; i < 5; ++i) {
+        double count = -1.0;
+        ASSERT_TRUE(read_stage_sample(metrics.body, k_stage_names[i], &count, &sums[i])) << metrics.body;
+        EXPECT_DOUBLE_EQ(count, 1.0) << k_stage_names[i];
+        gateway_p50 += sums[i];
+    }
+    ASSERT_GT(gateway_p50, 0.5 * server_time_ms);
+    int winner = 0;
+    for (int i = 1; i < 5; ++i) {
+        if (sums[i] > sums[winner] || sums[i] == sums[winner]) {
+            winner = i;
+        }
+    }
+    const std::string marker = "mortred_gateway_stage_dominant";
+    EXPECT_EQ(count_substr(metrics.body, marker), 3) << metrics.body;
+    EXPECT_NE(metrics.body.find(
+                  "# HELP mortred_gateway_stage_dominant Time is mainly spent in this gateway stage"),
+              std::string::npos)
+        << metrics.body;
+    EXPECT_NE(metrics.body.find("# TYPE mortred_gateway_stage_dominant gauge"), std::string::npos)
+        << metrics.body;
+    const std::string gauge = marker + "{model=\"gateway\",stage=\"" + k_stage_names[winner] + "\"} 1";
+    EXPECT_NE(metrics.body.find(gauge), std::string::npos) << gauge << "\n" << metrics.body;
+}
+
+TEST_F(GatewayE2ETest, StageMetricsSkippedOnUnknownRoute) {
+    const auto missed = send_request(gateway_port_, "POST", "/no/such/route", "{}", "ext-token");
+    EXPECT_EQ(missed.status, 404);
+    const auto metrics = send_request(gateway_port_, "GET", "/metrics", "", "scrape-token");
+    ASSERT_EQ(metrics.status, 200);
+    EXPECT_EQ(metrics.body.find("mortred_gateway_stage_duration_ms"), std::string::npos) << metrics.body;
+}
+
+TEST_F(GatewayE2ETest, StageMetricsSkippedOnJobPost) {
+    const auto job = send_request(gateway_port_, "POST", "/v1/models/FAKE/jobs", "{}", "ext-token");
+    EXPECT_EQ(job.status, 202) << job.body;
+    const auto metrics = send_request(gateway_port_, "GET", "/metrics", "", "scrape-token");
+    ASSERT_EQ(metrics.status, 200);
+    for (const char* name : k_stage_names) {
+        double count = 0.0;
+        const bool present = read_stage_sample(metrics.body, name, &count, nullptr);
+        if (present) {
+            EXPECT_DOUBLE_EQ(count, 0.0) << name;
+        }
+    }
+    EXPECT_EQ(metrics.body.find("mortred_gateway_stage_duration_ms_count{model=\"gateway\",stage=\"gw_in\"} 1"),
+              std::string::npos);
+    EXPECT_EQ(metrics.body.find("mortred_gateway_stage_duration_ms"), std::string::npos) << metrics.body;
+}
+
+TEST_F(GatewayE2ETest, StageMetricsRecordedWhenFlagFileExists) {
+    StageFlagFile flag;
+    ASSERT_TRUE(fs::exists(k_stage_flag));
+    ASSERT_TRUE(restart_fake({"--mode", "envelope", "--server-time-ms", "100000"}));
+    const auto infer = send_request(gateway_port_, "POST", "/v1/models/FAKE/infer", "{}", "ext-token");
+    ASSERT_EQ(infer.status, 200) << infer.body;
+    const auto metrics = send_request(gateway_port_, "GET", "/metrics", "", "scrape-token");
+    ASSERT_EQ(metrics.status, 200);
+    for (const char* name : k_stage_names) {
+        double count = -1.0;
+        ASSERT_TRUE(read_stage_sample(metrics.body, name, &count, nullptr)) << metrics.body;
+        EXPECT_DOUBLE_EQ(count, 1.0) << name;
+    }
 }
 
 // ---- auth-mode e2e coverage -----------------------------------------------

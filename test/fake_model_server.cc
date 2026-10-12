@@ -8,7 +8,9 @@
 // Deterministic model-server stand-in for supervision / gateway tests.
 // Behaviour comes from the config file (the supervisor always passes the
 // server config as argv[1]) and can be overridden by flags:
-//   --port N --mode ready|never-ready|exit-now --exit-after-ms N --exit-code N
+//   --port N --mode ready|never-ready|exit-now|overloaded|envelope
+//   --exit-after-ms N --exit-code N
+//   --server-time-ms N   required with --mode envelope
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -20,6 +22,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -86,7 +89,7 @@ std::string json_escape(const std::string& s) {
     return out;
 }
 
-void handle_client(int fd, const std::string& mode) {
+void handle_client(int fd, const std::string& mode, double server_time_ms) {
     std::string req;
     char buf[2048];
     while (req.find("\r\n\r\n") == std::string::npos) {
@@ -138,6 +141,14 @@ void handle_client(int fd, const std::string& mode) {
     } else if (path == "/ready" && mode == "never-ready") {
         status = "503 Service Unavailable";
         body = "{\"code\":65}";
+    } else if (mode == "envelope" && method == "POST") {
+        char number[64];
+        std::snprintf(number, sizeof(number), "%.17g", server_time_ms);
+        status = "200 OK";
+        body = std::string("{\"status\":0,\"status_str\":\"OK\",\"task_id\":\"fake\",") +
+               "\"model\":{\"name\":\"FAKE\",\"version\":\"\"}," +
+               "\"results\":[{\"status\":0,\"data\":{\"fake\":true}}]," +
+               "\"server_time_ms\":" + number + ",\"partial\":false}";
     } else if (method == "GET") {
         body = "ok";
     }
@@ -200,6 +211,8 @@ int main(int argc, char** argv) {
     std::string mode = "ready";
     int exit_after_ms = -1;
     int exit_code = 0;
+    bool server_time_set = false;
+    double server_time_ms = 0.0;
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -211,6 +224,15 @@ int main(int argc, char** argv) {
             exit_after_ms = std::atoi(argv[++i]);
         } else if (arg == "--exit-code" && i + 1 < argc) {
             exit_code = std::atoi(argv[++i]);
+        } else if (arg == "--server-time-ms" && i + 1 < argc) {
+            const char* text = argv[++i];
+            char* end = nullptr;
+            server_time_ms = std::strtod(text, &end);
+            if (text[0] == '\0' || end == text || *end != '\0' || !std::isfinite(server_time_ms)) {
+                std::fprintf(stderr, "fake_model_server: invalid --server-time-ms\n");
+                return 2;
+            }
+            server_time_set = true;
         } else if (arg == "--model" && i + 1 < argc) {
             ++i;
         } else if (!arg.empty() && arg[0] != '-') {
@@ -233,6 +255,10 @@ int main(int argc, char** argv) {
     }
     if (cfg.count("fake_exit_code") != 0 && exit_code == 0) {
         exit_code = std::atoi(cfg["fake_exit_code"].c_str());
+    }
+    if (mode == "envelope" && !server_time_set) {
+        std::fprintf(stderr, "fake_model_server: --mode envelope requires --server-time-ms\n");
+        return 2;
     }
     if (port <= 0) {
         std::fprintf(stderr, "fake_model_server: invalid port %d\n", port);
@@ -275,7 +301,7 @@ int main(int argc, char** argv) {
             }
             continue;
         }
-        handle_client(client, mode);
+        handle_client(client, mode, server_time_ms);
     }
     return exit_code;
 }
