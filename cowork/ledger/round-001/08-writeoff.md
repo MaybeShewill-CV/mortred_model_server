@@ -1,13 +1,13 @@
 # 关闭记录
 
 - 轮次: 1
-- 已关闭: P0-1、P1-1
+- 已关闭: P0-1、P1-1、P1-2
 - 阻塞: 无
 - 未阻塞的开放项: 相对本轮起点减少
 
-核对 `07-close.md`。已关闭陈述没有留在仍开放的问题里。P0-1 的 libface 高宽不一致只出现在已关闭栏。P1-1 的「不创建 `/tmp/mortred_stage_timing` 就读不到 gateway 阶段」只出现在已关闭栏和附录。仍开放栏里的 PF4 指的是同一次压测报告还没有引用这些读数，对应 P2-11，不是已经关闭的那句。P2-8 没有重新入列。新入列为无。九个模块分数与 `01-modules` 正文一致。
+核对 `07-close.md` 与 `07-close-p12.md`。P0-1、P1-1、P1-2 的原陈述都没有留在仍开放的问题里。P2-8 没有重新入列。新入列为无。九个模块分数与 `01-modules` 正文一致。
 
-本轮起点未关闭且未阻塞的 id 共 13 条。关闭 2 条后剩 11 条。
+本轮起点未关闭且未阻塞的 id 共 13 条。关闭 3 条后剩 10 条。
 
 ## 已关闭的问题陈述
 | id | 模块 | 问题陈述 |
@@ -15,11 +15,11 @@
 | P0-1 | src-models | 驻留集中的 `libface` 对一张合法 JPEG 完不成成功推理。产品 toml、TensorRT profile 与引擎剖面的高宽不一致。 |
 | P0-1 | conf | 产品 toml、TensorRT profile 与引擎剖面三处高宽不一致。 |
 | P1-1 | src-control | 不创建 `/tmp/mortred_stage_timing` 时，gateway `/metrics` 读不到阶段耗时（PF4）。 |
+| P1-2 | docs | 按文档给已有家族加一个模型时，步骤与当前 `catalog()`、`mortred-model-server.out --list` 使用的 id 不一致（EX1）。 |
 
 ## 仍开放的问题
 | id | 模块 | 问题陈述 | 状态 |
 | --- | --- | --- | --- |
-| P1-2 | docs | 按文档给已有家族加一个模型时，步骤与当前 `catalog()` 使用的 id 不一致（EX1）。 | 未做 |
 | P2-1 | src-server-apps | `max_batch_size=1` 时外部看不到 `mortred_batch_size` 样本为 1（PF3）。 | 未做 |
 | P2-2 | src-control | 打开限流后，鉴权失败仍消耗来源 IP 的配额（ST2）。 | 未做 |
 | P2-3 | src-control | `fork` 返回之后、随后的 `exec` 之前，库函数跟踪里出现 `prctl`、`execvp` 或 `setenv`（ST5）。 | 未做 |
