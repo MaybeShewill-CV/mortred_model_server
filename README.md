@@ -60,7 +60,7 @@ repeatedly (tokens → loopback listen → start → GPU pack calibrate if neede
 > |---|---|---|
 > | backends | MNN-CUDA / ORT-CUDA / TensorRT | MNN-CPU / ORT-CPU |
 > | hardware | NVIDIA GPU + CUDA 12 / TensorRT 10 | any x64 machine |
-> | models | full zoo | curated set (mobilenetv2, resnet50) |
+> | models | full zoo | curated set (mobilenetv2, resnet) |
 >
 > Three entries, one core (`mortredctl`): pick whichever fits; they all end at
 > the same `mortredctl doctor` acceptance gate.
