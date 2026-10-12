@@ -3,11 +3,11 @@
 - 基线分支: sub-agent-co-work
 - 轮次上限: 20
 - 当前轮次: 1
-- 当前步骤: 1
-- 当前问题: 无
+- 当前步骤: 5
+- 当前问题: P0-1
 - 阻塞: 无
 - 已关闭: 无
-- 本轮起点加权分: 无
+- 本轮起点加权分: 7.1
 - 记录目录: cowork/ledger/round-001/
 - 运行环境: 本机 WSL Ubuntu（/mnt/g/Codex/mortred_model_server）
 - 状态: running
