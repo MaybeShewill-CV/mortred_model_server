@@ -52,7 +52,7 @@ HF 是 ONNX 交换格式仓库（切换期间仍有部分 MNN）。产品 conf �
 > |---|---|---|
 > | 后端 | MNN-CUDA / ORT-CUDA / TensorRT | MNN-CPU / ORT-CPU |
 > | 硬件 | NVIDIA GPU + CUDA 12 / TensorRT 10 | 任意 x64 |
-> | 模型 | HTTP catalog 全量 | 精选（mobilenetv2、resnet50） |
+> | 模型 | HTTP catalog 全量 | 精选（mobilenetv2、resnet） |
 >
 > 三个入口，同一套 `mortredctl`：选一条即可，终点都是 `mortredctl doctor`。
 > 完整运维手册见 [docs/deployment.zh-cn.md](docs/deployment.zh-cn.md)。
@@ -216,7 +216,7 @@ mortredctl prepare --pack conf/packs/yolov8.toml
 
 ```bash
 cd $PROJECT_ROOT_DIR/_bin
-./mortred-model-benchmark.out --model MOBILENETV2 ../conf/model/classification/mobilenetv2/mobilenetv2.toml
+./mortred-model-benchmark.out --model mobilenetv2 ../conf/model/classification/mobilenetv2/mobilenetv2.toml
 ```
 
 如果没有任何错误的话（应该不会有:dog:），你可以看到如下的测试结果，包含使用的模型，模型预测耗时、fps等信息
@@ -231,7 +231,7 @@ cd $PROJECT_ROOT_DIR/_bin
 
 ```bash
 cd $PROJECT_ROOT_DIR/_bin
-./mortred-model-server.out --model MOBILENETV2 ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.toml
+./mortred-model-server.out --model mobilenetv2 ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.toml
 ```
 
 按照默认的配置文件（`conf/server/classification/mobilenetv2/mobilenetv2_server_config.toml`），服务端口为`9002`，`worker_nums=1` 个模型 worker 等待被调用。项目中含有一个简单的python客户端来测试该服务，使用方法如下

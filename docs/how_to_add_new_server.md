@@ -28,10 +28,10 @@ Open the task header of the model's family (`src/factory/classification_task.h` 
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
         // ...existing models...
-        Entry{"DENSENET", "densenet classification", "DENSENET_CLASSIFICATION_SERVER",
+        Entry{"densenet", "densenet classification", "DENSENET_CLASSIFICATION_SERVER",
               &create_densenet_classifier<ImageInput, Output>,
               &jinq::server::response::fill_classification,
-              classification_param_specs()},
+              classification_param_specs(), "densenet"},
     };
     return entries;
 }
@@ -54,13 +54,13 @@ Do **not** add a per-model `src/apps/server/*.cpp` or `add_mortred_app` line.
 catalog row is enough for:
 
 ```
-mortred-model-server.out --model DENSENET /path/to/densenet_server_config.toml
-mortred-model-benchmark.out --model DENSENET /path/to/densenet_config.toml [image]
+mortred-model-server.out --model densenet /path/to/densenet_server_config.toml
+mortred-model-benchmark.out --model densenet /path/to/densenet_config.toml [image]
 ```
 
 Then:
 
-1. add a config under `conf/server/<task>/<model>/` with `model = "DENSENET"` and
+1. add a config under `conf/server/<task>/<model>/` with `model = "densenet"` and
    `server_exe = "mortred-model-server.out"` (copy a sibling and adjust
    `server_uri`, `port`, `worker_nums`);
 2. `python3 scripts/check_consistency.py` must stay green (catalog id ↔ conf `model=`,
