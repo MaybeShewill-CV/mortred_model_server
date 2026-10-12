@@ -393,6 +393,21 @@ for line in "${ENTRIES[@]}"; do
             flags=""
         fi
     fi
+    # TensorRT 10.3's fused ViT does not match ONNX Runtime on dinov2_vitb14.
+    # The copy is trtexec's input only; the stored ONNX stays the CPU golden source.
+    trt_onnx_tmp=""
+    if [ "$model" = "dinov2_vitb14" ] && [ "$MODE" != "dry-run" ]; then
+        trt_onnx_tmp="$(mktemp /tmp/mortred-dinov2-vitb14.XXXXXX.onnx)"
+        echo "[info] $model: marking block attention and residual tensors as engine outputs"
+        if ! python3 "$ROOT/scripts/export_onnx/materialize_dinov2_trt_outputs.py" "$onnx_path" "$trt_onnx_tmp"; then
+            rm -f "$trt_onnx_tmp"
+            echo "[FAIL] $model: could not prepare the TensorRT ONNX"
+            failed=$((failed+1)); failed_models+=("$model")
+            [ "$STRICT" -eq 1 ] && exit 1
+            continue
+        fi
+        onnx_path="$trt_onnx_tmp"
+    fi
     # flags are derived from the profile (space-separated --minShapes/--optShapes/--maxShapes)
     # shellcheck disable=SC2206
     args=(--onnx="$onnx_path" --saveEngine="$engine_path" "$BUILD_FLAG")
@@ -436,6 +451,9 @@ for line in "${ENTRIES[@]}"; do
         echo "[FAIL] $model: trtexec failed${rc:+ (exit code $rc)}"
         echo "$out" | tail -n 15
         [ "$STRICT" -eq 1 ] && exit 1
+    fi
+    if [ -n "$trt_onnx_tmp" ]; then
+        rm -f "$trt_onnx_tmp"
     fi
 done
 

@@ -3,7 +3,7 @@
 
 Source of truth is conf/product_static_bs1.json, emitted by --emit.
 Gateway paths are /v1/models/<id>/infer. Old uppercase ids are not aliases.
-libface_320 and libface_640 are one id, libface.
+libface is one catalog id at 640x480. libface_320 is not a product size.
 """
 
 from __future__ import annotations
@@ -373,7 +373,7 @@ def trt_manifest(rows: list[dict]) -> dict:
 
 def bench_source(row: dict) -> Path | None:
     if row["id"] == "libface":
-        return ROOT / "conf/bench/set_a/libface_320.toml"
+        return ROOT / "conf/bench/set_a/libface_640.toml"
     if row["id"] == "msocrnet":
         return None
     return ROOT / "conf/bench/set_a" / f"{row['id']}.toml"
@@ -597,8 +597,8 @@ def validate_product_files(rows: list[dict]) -> list[str]:
             errors.append(f"{row['id']}: server does not point at {row['model_config']}")
         if row["id"] == "libface" and "kps_32" not in text:
             errors.append("libface missing 12-head output_names")
-        if row["id"] == "libface" and "model_input_image_size = [320, 240]" not in text:
-            errors.append("libface params are not 320x240")
+        if row["id"] == "libface" and "model_input_image_size = [640, 480]" not in text:
+            errors.append("libface params are not 640x480")
     fp32_ids = {row["id"] for row in rows if row["fp"] == "fp32"}
     if fp32_ids != nhwc:
         errors.append(f"fp32 ids {sorted(fp32_ids)} must be the nhwc set {sorted(nhwc)}")

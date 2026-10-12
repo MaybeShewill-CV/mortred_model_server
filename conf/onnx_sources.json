@@ -433,86 +433,6 @@
     },
     {
       "id": "LIBFACE",
-      "variant": "320x240",
-      "served": "http",
-      "config": "conf/model/object_detection/libfacedetection/libface.toml",
-      "product_type": "onnx",
-      "runtime_path": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.onnx",
-      "onnx_path": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.static_bs1.onnx",
-      "onnx_status": "local",
-      "p1_upload": false,
-      "p2_wave": "D",
-      "contract": {
-        "source": "on_init+toml",
-        "inputs": [
-          {
-            "name": "input",
-            "layout": "NCHW",
-            "dtype": "F32",
-            "shape": [
-              1,
-              3,
-              "height",
-              "width"
-            ],
-            "dynamic": true
-          }
-        ],
-        "outputs": [
-          {
-            "name": "cls_8"
-          },
-          {
-            "name": "cls_16"
-          },
-          {
-            "name": "cls_32"
-          },
-          {
-            "name": "obj_8"
-          },
-          {
-            "name": "obj_16"
-          },
-          {
-            "name": "obj_32"
-          },
-          {
-            "name": "bbox_8"
-          },
-          {
-            "name": "bbox_16"
-          },
-          {
-            "name": "bbox_32"
-          },
-          {
-            "name": "kps_8"
-          },
-          {
-            "name": "kps_16"
-          },
-          {
-            "name": "kps_32"
-          }
-        ],
-        "preprocess": "BGR 0-255; optional DIRECT_RESIZE from toml then right/bottom pad to /32"
-      },
-      "license": {
-        "redistribute": "p2_review",
-        "notes": "OpenCV YuNet / libfacedetection. Sibling .model already on this HF repo. Spatial size must stay 320×240."
-      },
-      "onnx_source": {
-        "kind": "official_onnx",
-        "ref": "opencv/opencv_zoo models/face_detection_yunet/face_detection_yunet_2026may.onnx",
-        "script": "scripts/export_onnx/adopt_official_onnx.py + apply_reshape_batch_passthrough",
-        "notes": "Original 2026may kept for product toml. static_bs1 = N=1, H/W still dynamic. dyn opens batch and rewrites 12 Reshape [1,-1,C] to [0,-1,C]. vs original ORT maxabs=0, dyn N=2 matches. C++ resizes to toml [320,240] then pads to /32."
-      },
-      "onnx_dyn_path": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.dyn.onnx",
-      "legacy_onnx_path": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.onnx"
-    },
-    {
-      "id": "LIBFACE",
       "variant": "640x480",
       "served": "http",
       "config": "conf/model/object_detection/libfacedetection/640x480_config.toml",
@@ -584,9 +504,9 @@
       },
       "onnx_source": {
         "kind": "official_onnx",
-        "ref": "same face_detection_yunet_2026may.onnx as 320x240",
+        "ref": "opencv/opencv_zoo models/face_detection_yunet/face_detection_yunet_2026may.onnx",
         "script": "scripts/export_onnx/adopt_official_onnx.py + apply_reshape_batch_passthrough",
-        "notes": "Same dual pair. C++ resizes to toml [640,480]. Golden still uses this config."
+        "notes": "static_bs1 = N=1, H/W still dynamic. Product resizes to toml [640,480], already a multiple of 32."
       },
       "onnx_dyn_path": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.dyn.onnx",
       "legacy_onnx_path": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.onnx"

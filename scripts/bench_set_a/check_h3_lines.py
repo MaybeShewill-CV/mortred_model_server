@@ -113,8 +113,10 @@ def check_text(text: str) -> list[str]:
         if pos <= cursor:
             problems.append("prefix out of order: %s" % anchor)
         cursor = pos
-    if "libface_320" not in prefix or "libface_640" not in prefix:
-        problems.append("prefix lost libface_320 or libface_640")
+    if "libface_320" in prefix:
+        problems.append("prefix still has libface_320")
+    if "libface_640" not in prefix:
+        problems.append("prefix lost libface_640")
     if "libface_320" in section or "libface_640" in section:
         problems.append("table 5 contains libface_320 or libface_640")
     lines = section.splitlines()

@@ -30,8 +30,7 @@
 | densenet | DENSENET | fp32 | weights/classification/densenet/densenet.engine.static_bs1.fp32 | exists |
 | superpoint | SUPERPOINT | fp16 | weights/feature_point/superpoint/superpoint_120x160.engine.static_bs1.fp16 | ok |
 | dbnet | DBNET | fp16 | weights/ocr/db_text_detector/db_model_large.engine.static_bs1.fp16 | ok |
-| libface_320 | LIBFACE | fp16 | weights/object_detection/libfacedetection/face_detection_yunet_2026may.engine.static_bs1.fp16 | ok |
-| libface_640 | LIBFACE | (same engine libface) | — | — |
+| libface_640 | LIBFACE | fp16 | weights/object_detection/libfacedetection/face_detection_yunet_2026may.engine.static_bs1.fp16 | ok |
 | centerface | CENTER_FACE | fp16 | weights/object_detection/centerface_detection/centerface.engine.static_bs1.fp16 | ok |
 | pphuman_mobile | PPHUMAN_SEG | fp16 | weights/scene_segmentation/pphuman_seg/pp_humanseg_192x192_mobile.engine.static_bs1.fp16 | ok |
 | pphuman_lite | PPHUMAN_SEG | fp16 | weights/scene_segmentation/pphuman_seg/pp_humanseg_192x192_lite.engine.static_bs1.fp16 | ok |
@@ -121,7 +120,6 @@
 | densenet | ok | 2 | gpu | 158.57 | logs/bench/set_a/calibrate/densenet.json |
 | superpoint | ok | 4 | gpu | 1318.22 | logs/bench/set_a/calibrate/superpoint.json |
 | dbnet | ok | 4 | gpu | 130.95 | logs/bench/set_a/calibrate/dbnet.json |
-| libface_320 | ok | 2 | gpu | 517.85 | logs/bench/set_a/calibrate/libface_320.json |
 | libface_640 | ok | 4 | gpu | 237.02 | logs/bench/set_a/calibrate/libface_640.json |
 | centerface | ok | 4 | gpu | 570.02 | logs/bench/set_a/calibrate/centerface.json |
 | pphuman_mobile | ok | 4 | gpu | 413.80 | logs/bench/set_a/calibrate/pphuman_mobile.json |
@@ -166,7 +164,6 @@
 | densenet | 2 | 8 | 139.28 | 123.64 | 122.95 | 128.79 | yes |
 | superpoint | 4 | 16 | 1546.24 | 17.46 | 1011.81 | 26.64 | yes |
 | dbnet | 4 | 16 | 141.31 | 140.16 | 272.86 | 59.41 | yes |
-| libface_320 | 2 | 8 | 491.17 | 23.35 | 503.88 | 19.81 | yes |
 | libface_640 | 4 | 16 | 208.64 | 126.64 | 358.99 | 71.75 | yes |
 | centerface | 4 | 16 | 604.14 | 42.36 | 462.30 | 53.83 | yes |
 | pphuman_mobile | 4 | 16 | 435.63 | 55.13 | 410.07 | 56.28 | yes |

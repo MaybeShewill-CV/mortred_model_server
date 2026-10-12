@@ -81,48 +81,6 @@ PATCH = {
             "notes": "Product 1x5 == plus-m-1.5x (9.5MB). Folded 260 leaked weight graph.inputs so only data remains. output [1,3598,112]. Extra sibling nanodet_plus_m_416 not product.",
         },
     },
-    ("LIBFACE", "320x240"): {
-        "product_type": "onnx",
-        "runtime_path": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.onnx",
-        "onnx_path": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.static_bs1.onnx",
-        "onnx_dyn_path": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.dyn.onnx",
-        "legacy_onnx_path": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.onnx",
-        "onnx_status": "local",
-        "p1_upload": False,
-        "contract": {
-            "source": "on_init+toml",
-            "inputs": [
-                {
-                    "name": "input",
-                    "layout": "NCHW",
-                    "dtype": "F32",
-                    "shape": [1, 3, "height", "width"],
-                    "dynamic": True,
-                }
-            ],
-            "outputs": [
-                {"name": "cls_8"},
-                {"name": "cls_16"},
-                {"name": "cls_32"},
-                {"name": "obj_8"},
-                {"name": "obj_16"},
-                {"name": "obj_32"},
-                {"name": "bbox_8"},
-                {"name": "bbox_16"},
-                {"name": "bbox_32"},
-                {"name": "kps_8"},
-                {"name": "kps_16"},
-                {"name": "kps_32"},
-            ],
-            "preprocess": "BGR 0-255; optional DIRECT_RESIZE from toml then right/bottom pad to /32",
-        },
-        "onnx_source": {
-            "kind": "official_onnx",
-            "ref": "opencv/opencv_zoo models/face_detection_yunet/face_detection_yunet_2026may.onnx",
-            "script": "scripts/export_onnx/adopt_official_onnx.py + apply_reshape_batch_passthrough",
-            "notes": "Original 2026may kept for product toml. static_bs1 = N=1, H/W still dynamic. dyn opens batch and rewrites 12 Reshape [1,-1,C] to [0,-1,C]. vs original ORT maxabs=0, dyn N=2 matches. C++ resizes to toml [320,240] then pads to /32.",
-        },
-    },
     ("LIBFACE", "640x480"): {
         "product_type": "onnx",
         "runtime_path": "weights/object_detection/libfacedetection/face_detection_yunet_2026may.onnx",
@@ -160,7 +118,7 @@ PATCH = {
         },
         "onnx_source": {
             "kind": "official_onnx",
-            "ref": "same face_detection_yunet_2026may.onnx as 320x240",
+            "ref": "opencv/opencv_zoo models/face_detection_yunet/face_detection_yunet_2026may.onnx",
             "script": "scripts/export_onnx/adopt_official_onnx.py + apply_reshape_batch_passthrough",
             "notes": "Same dual pair. C++ resizes to toml [640,480]. Golden still uses this config.",
         },

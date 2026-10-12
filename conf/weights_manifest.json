@@ -909,16 +909,6 @@
       "kind": "onnx"
     },
     {
-      "path": "weights/object_detection/libfacedetection/face_detection_320x240_model.model",
-      "size": 9295112,
-      "sha256": "6c0300e1a06f092cbb95b5ea5404ceb1965de4af7e7307988cffc9f5a8e18013",
-      "hf_path": "object_detection/libfacedetection/face_detection_320x240_model.model",
-      "on_hf": true,
-      "profiles": [
-        "gpu"
-      ]
-    },
-    {
       "path": "weights/object_detection/libfacedetection/face_detection_640x480_model.model",
       "size": 9362344,
       "sha256": "d7e5c10f4550bc67a86f1d8fa312ddd44bfbc831add48e982571aaff9576dc9b",

@@ -2,8 +2,8 @@
 [YOLOV7]
 
 [YOLOV7.backend]
-type = "mnn"
-model_file_path = "../weights/object_detection/yolov7/yolov7.mnn"
+type = "onnx"
+model_file_path = "../weights/object_detection/yolov7/yolov7.static_bs1.onnx"
 device = "cpu"
 threads = 4
 input_layout = "nchw"

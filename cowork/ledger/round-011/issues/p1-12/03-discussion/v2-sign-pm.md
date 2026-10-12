@@ -1,7 +1,0 @@
-# 第3步签字
-
-- 问题: P1-12
-- 方案版本: v2
-- 结论: 不同意
-- 条件: 验收 16 改为：不删除文件，png 仍能按颜色图打开。`attentive_gan`、`enlightengan`、`realesrgan` 分别改 `test/golden/attentivegan_enhancement.png`、`test/golden/enlightengan_enhancement.png`、`test/golden/realesrgan_enhancement.png`，宽高不变，每个像素的每个通道都加上 `2`，加完大于 `255` 的通道改为 `0`。一个进程一个过滤名 `<bin> --gtest_filter=TrtProductGolden.<id>`。退出码 1，输出含对应的 `fingerprint drift for attentivegan_enhancement`、`fingerprint drift for enlightengan_enhancement` 或 `fingerprint drift for realesrgan_enhancement`，不含 `NUMERICAL_PASSED`。按原字节恢复后再跑同一条过滤，退出码 0，输出含 `NUMERICAL_PASSED`。验收 17 改为：黄金是 `test/golden/superpoint_feature_point.json`。一个进程一个过滤名 `<bin> --gtest_filter=TrtProductGolden.superpoint`。不改 `points` 的个数，把每个点的 `x` 和 `y` 都加上 `1000`。退出码 1，输出含 `keypoint match ratio low for superpoint_feature_point`，不含 `keypoint count changed`，不含 `NUMERICAL_PASSED`。按原字节恢复后再跑同一条过滤，退出码 0，输出含 `NUMERICAL_PASSED`。这两句替换「v1 产品经理条件原文」和编号 16、17 里的涂纯色、与原点距离两句。
-- 理由: 冻结句要求这 38 个 id 各自加载产品 toml、且不把 backend 改成 cpu，失败条件与该 id 的 CPU 规则相同；`yolov8s` 已关闭的只比 IoU 的门不写入这条完成。验收 1 至 15、18 至 20 都有编号，能凭命令、黄金文件、退出码和输出文字判定。验收 4、5 的 `product toml` 行能看见 `type=tensorrt`、`device=gpu`，且不含 `device=cpu`。验收 16 只写整图涂成另一种纯色，没有写每个通道和改前差多少；涂得太近时均值绝对差可以仍不超过 `1`，正确实现也会退出码 0，看不到 `fingerprint drift`。验收 17 只写把每个点移到与原点距离大于 `3.0`。`test/golden/superpoint_feature_point.json` 里的点已经离坐标原点很远，只挪一点点仍满足这句话，匹配距离仍可以不超过 `3.0`，退出码可以是 0，看不到 `keypoint match ratio low for superpoint_feature_point`。不要求补 P1-8 的 CPU 用例，不跑 `msocrnet` 推理。

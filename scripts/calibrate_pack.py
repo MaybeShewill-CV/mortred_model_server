@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Calibrate worker_nums for a machine pack. Never writes conf/server.
 
-For each pack id, sweep worker_nums, POST with http_infer_rps, and sample GPU
+For each pack id, sweep worker_nums, POST with http_infer_rps --raw, and sample GPU
 memory for that server process (NVML compute-apps by pid, else a unique
 mortred-model-server name). Whole-card memory.used is never treated as the
 model; if WSL has no process row, occupancy is device.used minus a sample
@@ -949,6 +949,7 @@ def run_one_point(
                 warmup_s=min(1.0, duration_s / 5.0),
                 timeout_s=max(30.0, duration_s + 10.0),
                 token=auth_token,
+                raw=True,
                 progress=False,
             )
         )

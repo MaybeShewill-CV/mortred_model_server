@@ -1,7 +1,7 @@
 [MOBILENETV2]
 [MOBILENETV2.backend]
-type = "mnn"
-model_file_path = "../weights/classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn"
+type = "onnx"
+model_file_path = "../weights/classification/mobilenetv2/mobilenetv2.static_bs1.onnx"
 device = "cpu"
 threads = 4
 input_layout = "nhwc"

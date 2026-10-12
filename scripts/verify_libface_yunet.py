@@ -9,7 +9,7 @@ Mirrors src/models/object_detection/libface_detector.inl:
 Examples (from repo root, inside WSL):
 
   python3 scripts/verify_libface_yunet.py
-  python3 scripts/verify_libface_yunet.py --size 320x240 --size 640x480
+  python3 scripts/verify_libface_yunet.py --size 640x480
   python3 scripts/verify_libface_yunet.py --native
 
 C++ golden (after a WSL cmake build), still uses 640x480_config.toml:
@@ -207,7 +207,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--onnx", type=Path, default=DEFAULT_ONNX)
     parser.add_argument("--image", type=Path, default=DEFAULT_IMAGE)
-    parser.add_argument("--size", action="append", default=[], help="HxW, repeatable. Default: 320x240 and 640x480")
+    parser.add_argument("--size", action="append", default=[], help="HxW, repeatable. Default: 640x480")
     parser.add_argument("--native", action="store_true", help="also run at the source resolution (OpenCV demo path)")
     parser.add_argument("--score", type=float, default=0.75)
     parser.add_argument("--nms", type=float, default=0.35)
@@ -223,7 +223,7 @@ def main() -> int:
         return 1
 
     jobs: list[tuple[str, tuple[int, int] | None]] = []
-    sizes = args.size or ["320x240", "640x480"]
+    sizes = args.size or ["640x480"]
     for item in sizes:
         width, height = parse_size(item)
         jobs.append((item, (width, height)))

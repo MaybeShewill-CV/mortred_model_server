@@ -2,7 +2,7 @@
 """A-set catalog: convert/profile/HTTP order for the Set A TRT benchmark."""
 from __future__ import annotations
 
-# Execution order matches the agreed plan. libface converts once; HTTP is two rows.
+# Execution order matches the agreed plan. libface converts once and benches at 640x480.
 # msocrnet is convert+profile only (no HTTP catalog).
 
 
@@ -100,10 +100,6 @@ MODELS: list[dict] = [
     M(15, "dbnet", "weights/ocr/db_text_detector/db_model_large.static_bs1.onnx", "DBNET",
       "conf/model/ocr/db_text_detector/dbnet.toml",
       "conf/server/ocr/dbnet/dbnet_server_config.toml", OCR),
-    M(16, "libface_320", "weights/object_detection/libfacedetection/face_detection_yunet_2026may.static_bs1.onnx",
-      "LIBFACE", "conf/model/object_detection/libfacedetection/libface.toml",
-      "conf/server/object_detection/libface_det/libface_server_config.toml", FACE,
-      spatial="dynamic", convert_id="libface"),
     M(17, "libface_640", "weights/object_detection/libfacedetection/face_detection_yunet_2026may.static_bs1.onnx",
       "LIBFACE", "conf/model/object_detection/libfacedetection/640x480_config.toml",
       "conf/server/object_detection/libface_det/libface_server_config.toml", FACE,

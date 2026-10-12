@@ -1,11 +1,11 @@
 [RESNET]
 [RESNET.backend]
-type = "mnn"
-model_file_path = "../weights/classification/resnet/resnet-50.mnn"
+type = "onnx"
+model_file_path = "../weights/classification/resnet/resnet.static_bs1.onnx"
 device = "cpu"
 threads = 4
 input_layout = "nhwc"
-precision_mode = 2
+precision_mode = 0
 power_mode = 0
 
 [RESNET.params]

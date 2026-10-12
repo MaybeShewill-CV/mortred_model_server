@@ -233,7 +233,7 @@ GOLDEN_FACE_DETECTION_CASE(centerface_detection, "conf/ci/centerface_cpu_golden.
                            "demo_data/model_test_input/object_detection/face_w_mask.jpg",
                            jinq::factory::object_detection::create_centerface_detector, std_face_detection_output);
 
-GOLDEN_FACE_DETECTION_CASE(libface_detection, "conf/model/object_detection/libfacedetection/640x480_config.toml",
+GOLDEN_FACE_DETECTION_CASE(libface_detection, "conf/ci/libface_onnx_hosted.toml",
                            "demo_data/model_test_input/object_detection/face_wo_mask.jpg",
                            jinq::factory::object_detection::create_libface_detector, std_face_detection_output);
 
