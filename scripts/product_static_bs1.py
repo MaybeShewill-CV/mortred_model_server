@@ -597,7 +597,7 @@ def validate_product_files(rows: list[dict]) -> list[str]:
             errors.append(f"{row['id']}: server does not point at {row['model_config']}")
         if row["id"] == "libface" and "kps_32" not in text:
             errors.append("libface missing 12-head output_names")
-        if row["id"] == "libface" and "model_input_image_size = [640, 480]" not in text:
+        if row["id"] == "libface" and "model_input_image_size = [480, 640]" not in text:
             errors.append("libface params are not 640x480")
     fp32_ids = {row["id"] for row in rows if row["fp"] == "fp32"}
     if fp32_ids != nhwc:

@@ -11,7 +11,7 @@ input_names = ["input"]
 output_names = ["cls_8", "cls_16", "cls_32", "obj_8", "obj_16", "obj_32", "bbox_8", "bbox_16", "bbox_32", "kps_8", "kps_16", "kps_32"]
 
 [LIBFACE.params]
-model_input_image_size = [640, 480]
+model_input_image_size = [480, 640]
 image_decode_mode = "budget"
 image_decode_budget_upscale = 1.25
 image_decode_backend = "auto"
