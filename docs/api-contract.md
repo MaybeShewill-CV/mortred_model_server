@@ -25,6 +25,12 @@ plain HTTP; TLS is terminated by Nginx on the host network
 auth, a missing metrics token, and a wildcard bind unless
 `MORTRED_EXPOSE=docker` or `unsafe`.
 
+After one successful inference, gateway `GET /metrics` carries
+`mortred_gateway_stage_duration_ms` for the five stages `gw_in`, `route`,
+`auth`, `fwd`, and `upstream`. `server_time_ms` stays in the inference
+response body. Scrape authentication for `GET /metrics` is unchanged and
+still requires `MORTRED_METRICS_TOKEN`, including loopback.
+
 The supervisor (`:8787`) exposes the management REST API under `/api/v1/`
 (health/catalog/status/lifecycle/logs/metrics) and the embedded web UI;
 `POST /api/v1/servers/{id}/start|stop|restart` returns **200** with `{"ok":true}` on success and **500** with `{"ok":false,"error":...}` on failure (same contract as `graceful_restart`). Clients may rely on the HTTP status or the body `ok` field.

@@ -119,6 +119,27 @@ histogram_quantile(0.95, sum(rate(mortred_http_request_duration_ms_bucket[5m])) 
   / sum(rate(mortred_http_requests_total[5m])) by (model)
 ```
 
+### 网关阶段
+
+这两条序列只在网关。一次成功推理之后就能从网关 `GET /metrics` 读到，不创建
+`/tmp/mortred_stage_timing` 也能读到。该 flag 文件仍然只决定要不要把原有的
+stderr `stage_trace` 打出来。模型进程的 `/metrics` 不带这些名字。
+
+`mortred_gateway_stage_duration_ms` 是直方图。标签只有 `model="gateway"` 和
+`stage`。`stage` 取 `gw_in`、`route`、`auth`、`fwd`、`upstream`，并按这个顺序
+输出，不按 catalog id 拆开。某一阶段的 `_count` 为 1 时，该段 p50 就是该段
+`_sum`。gateway 阶段 p50 是五段 p50 之和。比较式用同一次推理响应里的
+`server_time_ms`：五段之和严格大于它的一半（`G > 0.5 * S`）时，同一次正文写明
+时间主要花在哪一段。并列时按 `gw_in`、`route`、`auth`、`fwd`、`upstream` 取
+靠后的名字。
+
+`mortred_gateway_stage_dominant` 就是这时追加的 gauge，值固定为 1，表示段落
+名字，不是毫秒。比较式不成立时，正文里不出现
+`mortred_gateway_stage_dominant`。样本多于 1 条且不超过 4096 时，每段 p50
+是原始样本的中位数（奇数取正中，偶数取正中两个的算术平均）。累计超过 4096
+条配对之后不再输出这个主导段。直方图的 `_count` 和 `_sum` 仍是进程启动以来的
+累计值。
+
 ### 推理（7 个）— "模型本身表现"
 
 | 指标 | 类型 | 说明 |

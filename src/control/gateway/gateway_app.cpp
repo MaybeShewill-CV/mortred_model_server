@@ -19,11 +19,13 @@
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -121,6 +123,60 @@ std::string rewrite_jobs_public_url(const std::string& value, const std::string&
         return "/v1/models/" + id + value;
     }
     return value;
+}
+
+constexpr int k_stage_count = 5;
+constexpr int k_bucket_count = 17;
+constexpr const char* k_stage_names[k_stage_count] = {
+    "gw_in", "route", "auth", "fwd", "upstream"};
+constexpr double k_bucket_bounds[k_bucket_count] = {
+    0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 25, 50, 100, 250, 500, 1000, 2000, 5000, 10000};
+constexpr const char* k_bucket_les[k_bucket_count] = {
+    "0.05", "0.1", "0.25", "0.5", "1", "2", "5", "10", "25", "50",
+    "100", "250", "500", "1000", "2000", "5000", "10000"};
+
+double elapsed_ms(std::chrono::steady_clock::time_point end,
+                  std::chrono::steady_clock::time_point begin) {
+    return std::chrono::duration<double, std::milli>(end - begin).count();
+}
+
+std::string format_metric_double(double value) {
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), "%.17g", value);
+    return buf;
+}
+
+double median_of(std::vector<double> values) {
+    if (values.empty()) {
+        return 0.0;
+    }
+    std::sort(values.begin(), values.end());
+    const size_t n = values.size();
+    if ((n % 2) == 1) {
+        return values[n / 2];
+    }
+    return (values[n / 2 - 1] + values[n / 2]) / 2.0;
+}
+
+/*** Top-level server_time_ms only. The copy is parsed so the bytes forwarded
+ * to the client stay untouched. */
+bool read_top_level_server_time_ms(const void* data, size_t size, double* out) {
+    if (data == nullptr || size == 0 || out == nullptr) {
+        return false;
+    }
+    const std::string copy(static_cast<const char*>(data), size);
+    rapidjson::Document doc;
+    doc.Parse(copy.data(), copy.size());
+    if (doc.HasParseError() || !doc.IsObject() || !doc.HasMember("server_time_ms") ||
+        !doc["server_time_ms"].IsNumber()) {
+        return false;
+    }
+    const double value = doc["server_time_ms"].GetDouble();
+    if (!std::isfinite(value) || value < 0.0) {
+        return false;
+    }
+    *out = value;
+    return true;
 }
 
 std::string rewrite_job_url_fields(const char* data, size_t size, const std::string& id) {
@@ -276,7 +332,15 @@ bool GatewayApp::resolve_route(const std::string& path, ResolvedRoute* out) cons
 
 void GatewayApp::forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
                                   const std::string& method, const std::string& query,
-                                  const std::shared_ptr<jinq::common::stage_timing::StageTrace>& stage_trace) {
+                                  const std::shared_ptr<jinq::common::stage_timing::StageTrace>& stage_trace,
+                                  const StageClocks& clocks) {
+    struct ForwardClock {
+        StageClocks clocks;
+        std::chrono::steady_clock::time_point fwd{};
+    };
+    auto timing = std::make_shared<ForwardClock>();
+    timing->clocks = clocks;
+
     std::string body;
     if (method == "POST") {
         body = protocol::HttpUtil::decode_chunked_body(task->get_req());
@@ -292,7 +356,7 @@ void GatewayApp::forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
 
     auto* client = WFTaskFactory::create_http_task(
         url, 0, 0,
-        [this, task, model_id, method, t0, rewrite_job_urls, stage_trace](WFHttpTask* t) {
+        [this, task, model_id, method, t0, rewrite_job_urls, stage_trace, timing](WFHttpTask* t) {
             auto* resp = task->get_resp();
             if (t->get_state() != WFT_STATE_SUCCESS) {
                 const int code = t->get_error() == ECONNREFUSED ? 503 : 502;
@@ -313,6 +377,7 @@ void GatewayApp::forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
                 }
                 return;
             }
+            const auto t_upstream = std::chrono::steady_clock::now();
             if (stage_trace != nullptr) {
                 stage_trace->mark("upstream");
             }
@@ -346,6 +411,8 @@ void GatewayApp::forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
             const void* data = nullptr;
             size_t size = 0;
             t->get_resp()->get_parsed_body(&data, &size);
+            note_upstream_stage(timing->clocks, timing->fwd, t_upstream, rewrite_job_urls, status,
+                                data, size);
             if (rewrite_job_urls && data != nullptr && size > 0) {
                 const std::string rewritten = rewrite_job_url_fields(
                     static_cast<const char*>(data), size, model_id);
@@ -390,10 +457,113 @@ void GatewayApp::forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
     }
     client->set_send_timeout(send_timeout);
     client->set_receive_timeout(recv_timeout);
+    timing->fwd = std::chrono::steady_clock::now();
     if (stage_trace != nullptr) {
         stage_trace->mark("fwd");
     }
     series_of(task)->push_back(client);
+}
+
+void GatewayApp::note_upstream_stage(const StageClocks& clocks,
+                                     std::chrono::steady_clock::time_point t_fwd,
+                                     std::chrono::steady_clock::time_point t_upstream,
+                                     bool job_route, const std::string& status,
+                                     const void* data, size_t size) {
+    if (job_route || status != "200" || data == nullptr || size == 0) {
+        return;
+    }
+    double server_time_ms = 0.0;
+    if (!read_top_level_server_time_ms(data, size, &server_time_ms)) {
+        return;
+    }
+    const double stage_ms[k_stage_count] = {
+        elapsed_ms(clocks.gw_in, clocks.enter),
+        elapsed_ms(clocks.route, clocks.gw_in),
+        elapsed_ms(clocks.auth, clocks.route),
+        elapsed_ms(t_fwd, clocks.auth),
+        elapsed_ms(t_upstream, t_fwd),
+    };
+    record_stage_sample(stage_ms, server_time_ms);
+}
+
+void GatewayApp::record_stage_sample(const double stage_ms[5], double server_time_ms) {
+    static_assert(k_stage_count == 5, "five gateway stages");
+    static_assert(k_stage_bucket_count == k_bucket_count, "stage histogram buckets");
+    std::lock_guard<std::mutex> lock(stage_mu_);
+    if (stage_samples_.size() == k_stage_sample_cap) {
+        stage_samples_.pop_front();
+    }
+    StageSample sample;
+    sample.server_time_ms = server_time_ms;
+    for (int i = 0; i < k_stage_count; ++i) {
+        sample.ms[i] = stage_ms[i];
+        stage_sum_[i] += stage_ms[i];
+        for (int bucket = 0; bucket < k_stage_bucket_count; ++bucket) {
+            if (stage_ms[i] <= k_bucket_bounds[bucket]) {
+                ++stage_bucket_[i][bucket];
+            }
+        }
+    }
+    stage_samples_.push_back(sample);
+    ++stage_observed_;
+}
+
+std::string GatewayApp::render_stage_metrics() const {
+    std::lock_guard<std::mutex> lock(stage_mu_);
+    if (stage_observed_ == 0) {
+        return "";
+    }
+    std::ostringstream ss;
+    ss << "# HELP mortred_gateway_stage_duration_ms Gateway stage duration in milliseconds\n";
+    ss << "# TYPE mortred_gateway_stage_duration_ms histogram\n";
+    for (int i = 0; i < k_stage_count; ++i) {
+        for (int bucket = 0; bucket < k_stage_bucket_count; ++bucket) {
+            ss << "mortred_gateway_stage_duration_ms_bucket{model=\"gateway\",stage=\""
+               << k_stage_names[i] << "\",le=\"" << k_bucket_les[bucket] << "\"} "
+               << stage_bucket_[i][bucket] << "\n";
+        }
+        ss << "mortred_gateway_stage_duration_ms_bucket{model=\"gateway\",stage=\""
+           << k_stage_names[i] << "\",le=\"+Inf\"} " << stage_observed_ << "\n";
+        ss << "mortred_gateway_stage_duration_ms_sum{model=\"gateway\",stage=\""
+           << k_stage_names[i] << "\"} " << format_metric_double(stage_sum_[i]) << "\n";
+        ss << "mortred_gateway_stage_duration_ms_count{model=\"gateway\",stage=\""
+           << k_stage_names[i] << "\"} " << stage_observed_ << "\n";
+    }
+    if (stage_observed_ <= k_stage_sample_cap) {
+        double stage_p50[k_stage_count];
+        for (int i = 0; i < k_stage_count; ++i) {
+            std::vector<double> values;
+            values.reserve(stage_samples_.size());
+            for (const auto& sample : stage_samples_) {
+                values.push_back(sample.ms[i]);
+            }
+            stage_p50[i] = median_of(std::move(values));
+        }
+        std::vector<double> server_times;
+        server_times.reserve(stage_samples_.size());
+        for (const auto& sample : stage_samples_) {
+            server_times.push_back(sample.server_time_ms);
+        }
+        const double server_p50 = median_of(std::move(server_times));
+        double gateway_p50 = 0.0;
+        for (int i = 0; i < k_stage_count; ++i) {
+            gateway_p50 += stage_p50[i];
+        }
+        if (gateway_p50 > 0.5 * server_p50) {
+            int winner = 0;
+            for (int i = 1; i < k_stage_count; ++i) {
+                // Equal p50 keeps the later name: gw_in, route, auth, fwd, upstream.
+                if (stage_p50[i] >= stage_p50[winner]) {
+                    winner = i;
+                }
+            }
+            ss << "# HELP mortred_gateway_stage_dominant Time is mainly spent in this gateway stage\n";
+            ss << "# TYPE mortred_gateway_stage_dominant gauge\n";
+            ss << "mortred_gateway_stage_dominant{model=\"gateway\",stage=\""
+               << k_stage_names[winner] << "\"} 1\n";
+        }
+    }
+    return ss.str();
 }
 
 /*** L1 per-source metering (PR-3b). Runs BEFORE route resolution and auth.
@@ -455,6 +625,7 @@ bool GatewayApp::check_ip_rate_limit(WFHttpTask* task, const std::string& method
 }
 
 void GatewayApp::process(WFHttpTask* task) {
+    const auto t_enter = std::chrono::steady_clock::now();
     const std::string path = uri_path(task->get_req()->get_request_uri());
     // workflow leaves method null when the request line is malformed; uri_path
     // already folds a null uri into "", do the same for the method
@@ -486,13 +657,20 @@ void GatewayApp::process(WFHttpTask* task) {
         resp->set_status_code("200");
         resp->add_header_pair("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
         const auto body = metrics_.render();
+        const auto stages = render_stage_metrics();
         resp->append_output_body(body.data(), body.size());
+        if (!stages.empty()) {
+            resp->append_output_body(stages.data(), stages.size());
+        }
         return;
     }
 
     auto stage_trace = jinq::common::stage_timing::enabled()
                            ? std::make_shared<jinq::common::stage_timing::StageTrace>()
                            : nullptr;
+    StageClocks clocks;
+    clocks.enter = t_enter;
+    clocks.gw_in = std::chrono::steady_clock::now();
     if (stage_trace != nullptr) {
         stage_trace->mark("gw_in");
     }
@@ -507,6 +685,7 @@ void GatewayApp::process(WFHttpTask* task) {
         reply_error(task, 404, "no model route for this path");
         return;
     }
+    clocks.route = std::chrono::steady_clock::now();
     if (stage_trace != nullptr) {
         stage_trace->mark("route");
     }
@@ -567,6 +746,7 @@ void GatewayApp::process(WFHttpTask* task) {
     if (!key_name.empty()) {
         task->get_resp()->add_header_pair("X-Mortred-Key", key_name.c_str());
     }
+    clocks.auth = std::chrono::steady_clock::now();
     if (stage_trace != nullptr) {
         stage_trace->mark("auth");
     }
@@ -578,7 +758,7 @@ void GatewayApp::process(WFHttpTask* task) {
     }
     const std::string query =
         route.append_query ? uri_query(task->get_req()->get_request_uri()) : "";
-    forward_to_model(task, route, method, query, stage_trace);
+    forward_to_model(task, route, method, query, stage_trace, clocks);
 }
 
 bool GatewayApp::init(const GatewayInitOptions& options) {

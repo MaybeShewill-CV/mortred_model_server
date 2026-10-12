@@ -122,6 +122,31 @@ histogram_quantile(0.95, sum(rate(mortred_http_request_duration_ms_bucket[5m])) 
   / sum(rate(mortred_http_requests_total[5m])) by (model)
 ```
 
+### Gateway stages
+
+These two series are gateway-only. After one successful inference they are
+on gateway `GET /metrics`, and they can be read without creating
+`/tmp/mortred_stage_timing`. That flag file still only turns on the existing
+stderr `stage_trace` lines. Model-process `/metrics` does not carry these
+names.
+
+`mortred_gateway_stage_duration_ms` is a histogram. Labels are
+`model="gateway"` and `stage`. `stage` is `gw_in`, `route`, `auth`, `fwd`,
+or `upstream`, emitted in that order. The series is not split by catalog id.
+When a stage `_count` is 1, that stage's p50 is its `_sum`. The gateway-stage
+p50 is the sum of the five stage p50s. Compare it with the `server_time_ms`
+from the same inference response: the gauge is written only when that sum is
+strictly greater than half of `server_time_ms` (`G > 0.5 * S`). On a tie, the
+later name in `gw_in`, `route`, `auth`, `fwd`, `upstream` wins.
+
+`mortred_gateway_stage_dominant` is that gauge. Its value is 1 and names the
+stage; it is not a millisecond reading. When the comparison does not hold,
+the scrape body does not contain `mortred_gateway_stage_dominant`. With more
+than one sample, and at most 4096, each p50 is the median of the raw samples
+(the middle value when the count is odd; the arithmetic mean of the two
+middle values when even). Past 4096 paired samples the dominant gauge is left
+out. Histogram `_count` and `_sum` stay cumulative.
+
 ### Inference (7) — "Model performance"
 
 | Metric | Type | Description |

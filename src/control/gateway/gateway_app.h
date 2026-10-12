@@ -8,7 +8,11 @@
 #ifndef MORTRED_CONTROL_GATEWAY_APP_H
 #define MORTRED_CONTROL_GATEWAY_APP_H
 
+#include <chrono>
+#include <cstdint>
+#include <deque>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -78,11 +82,32 @@ public:
     const ControlConfig& config() const { return cfg_; }
 
 private:
+    // Clocks for the gateway stage histogram. fwd and upstream are taken
+    // inside forward_to_model, on the same marks as stage_trace.
+    struct StageClocks {
+        std::chrono::steady_clock::time_point enter{};
+        std::chrono::steady_clock::time_point gw_in{};
+        std::chrono::steady_clock::time_point route{};
+        std::chrono::steady_clock::time_point auth{};
+    };
+    struct StageSample {
+        double ms[5]{};
+        double server_time_ms = 0.0;
+    };
+
     void process(WFHttpTask* task);
     bool check_ip_rate_limit(WFHttpTask* task, const std::string& method);
     void forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
                           const std::string& method, const std::string& query,
-                          const std::shared_ptr<jinq::common::stage_timing::StageTrace>& trace);
+                          const std::shared_ptr<jinq::common::stage_timing::StageTrace>& trace,
+                          const StageClocks& clocks);
+    void note_upstream_stage(const StageClocks& clocks,
+                             std::chrono::steady_clock::time_point t_fwd,
+                             std::chrono::steady_clock::time_point t_upstream,
+                             bool job_route, const std::string& status,
+                             const void* data, size_t size);
+    void record_stage_sample(const double stage_ms[5], double server_time_ms);
+    std::string render_stage_metrics() const;
     bool resolve_route(const std::string& path, ResolvedRoute* out) const;
     void maybe_add_cors(WFHttpTask* task) const;
     bool origin_allowed(const std::string& origin) const;
@@ -107,6 +132,16 @@ private:
     std::string internal_token_;
     std::vector<std::string> cors_origins_;
     std::unique_ptr<WFHttpServer> server_;
+    // Paired gateway-stage samples. The histogram sums stay cumulative; the
+    // deque keeps at most the newest 4096 rows for the median.
+    static constexpr int k_stage_count = 5;
+    static constexpr int k_stage_bucket_count = 17;
+    static constexpr std::size_t k_stage_sample_cap = 4096;
+    mutable std::mutex stage_mu_;
+    std::deque<StageSample> stage_samples_;
+    std::uint64_t stage_observed_ = 0;
+    double stage_sum_[k_stage_count]{};
+    std::uint64_t stage_bucket_[k_stage_count][k_stage_bucket_count]{};
 };
 
 /*** data-plane reverse proxy entry (called by the thin main in src/apps) */
