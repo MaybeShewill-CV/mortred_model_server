@@ -96,7 +96,14 @@ private:
     };
 
     void process(WFHttpTask* task);
-    bool check_ip_rate_limit(WFHttpTask* task, const std::string& method);
+    // `admitted` is set only when this call's admit was allowed. process()
+    // releases that one interval on a 401 that returns before forward.
+    struct IpRateGate {
+        bool proceed = true;
+        bool admitted = false;
+        mortred::control::ratelimit::SubjectKey subject{};
+    };
+    IpRateGate check_ip_rate_limit(WFHttpTask* task, const std::string& method);
     void forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
                           const std::string& method, const std::string& query,
                           const std::shared_ptr<jinq::common::stage_timing::StageTrace>& trace,

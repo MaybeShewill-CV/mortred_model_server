@@ -39,6 +39,9 @@
 //     must not become a new outage) and is counted.
 //   - A degenerate configuration (max_tracked == 0) fails open for every new
 //     source instead of rejecting everything; counted separately.
+//   - release() subtracts one emission interval from an existing cell under
+//     that cell's shard lock. It does not insert, erase, or zero TAT. A
+//     missing key is a no-op. gcra_admit's allow/reject formula is unchanged.
 
 #ifndef MORTRED_CONTROL_RATE_LIMIT_GCRA_H
 #define MORTRED_CONTROL_RATE_LIMIT_GCRA_H
@@ -212,6 +215,24 @@ class ShardedIpLimiter {
             fail_opens_.fetch_add(1, std::memory_order_relaxed);
             return {true, 0};
         }
+    }
+
+    /*** Undo one earlier allowed admission: TAT -= one emission interval.
+     * Does not create a cell, delete a cell, or reset TAT to zero. Earlier
+     * admissions on the same cell stay in the remaining TAT. */
+    void release(const SubjectKey& key) {
+        if (!policy_.enabled()) {
+            return;
+        }
+        const int64_t interval = policy_.interval_ms();
+        const size_t shard_idx = SubjectHash{}(key) % kShards;
+        Shard& shard = shards_[shard_idx];
+        std::lock_guard<std::mutex> lock(shard.mu);
+        const auto it = shard.map.find(key);
+        if (it == shard.map.end()) {
+            return;
+        }
+        it->second.tat_ms.fetch_sub(interval, std::memory_order_relaxed);
     }
 
     Stats stats() const {

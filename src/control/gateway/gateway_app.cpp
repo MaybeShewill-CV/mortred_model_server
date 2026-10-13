@@ -576,10 +576,13 @@ std::string GatewayApp::render_stage_metrics() const {
  * 429 carries Retry-After (exact GCRA budget, rounded up to whole seconds)
  * and the IETF draft RateLimit-Limit/Remaining/Reset triple. Enforce uses
  * the configured rate_per_sec and burst. Shadow mode counts but never
- * rejects. Returns true when the request may proceed. */
-bool GatewayApp::check_ip_rate_limit(WFHttpTask* task, const std::string& method) {
+ * rejects. proceed is false only when enforce already wrote the 429.
+ * An allowed admit is not released here: process() does that on the
+ * pre-forward 401 path, for both enforce and shadow. */
+GatewayApp::IpRateGate GatewayApp::check_ip_rate_limit(WFHttpTask* task, const std::string& method) {
+    IpRateGate gate;
     if (!rate_limit_enabled_ || ip_limiter_ == nullptr || method == "OPTIONS") {
-        return true;
+        return gate;
     }
     // peer address from the TCP endpoint (same shape as the model-server
     // peer_ip_of; workflow gives sockaddr storage directly)
@@ -596,21 +599,22 @@ bool GatewayApp::check_ip_rate_limit(WFHttpTask* task, const std::string& method
         }
     }
     const bool used_header = false;
-    const auto subject = mortred::control::ratelimit::derive_subject(
+    gate.subject = mortred::control::ratelimit::derive_subject(
         ip_buf, trusted_proxies_,
         header_value(task->get_req(), "forwarded"),
         header_value(task->get_req(), "x-forwarded-for"));
     const int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                std::chrono::steady_clock::now().time_since_epoch())
                                .count();
-    const auto decision = ip_limiter_->admit(subject, now_ms);
+    const auto decision = ip_limiter_->admit(gate.subject, now_ms);
     if (decision.allowed) {
-        return true;
+        gate.admitted = true;
+        return gate;
     }
     const int retry_s = (decision.retry_after_ms + 999) / 1000;
     if (rate_limit_shadow_) {
         metrics_.inc_http_requests(method, "shadow429");
-        return true;
+        return gate;
     }
     metrics_.inc_http_requests(method, "429");
     auto* resp = task->get_resp();
@@ -621,7 +625,8 @@ bool GatewayApp::check_ip_rate_limit(WFHttpTask* task, const std::string& method
     resp->add_header_pair("RateLimit-Reset", std::to_string(retry_s).c_str());
     reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED,
                         "per-source rate limit exceeded");
-    return false;
+    gate.proceed = false;
+    return gate;
 }
 
 void GatewayApp::process(WFHttpTask* task) {
@@ -675,7 +680,8 @@ void GatewayApp::process(WFHttpTask* task) {
         stage_trace->mark("gw_in");
     }
 
-    if (!check_ip_rate_limit(task, method)) {
+    const IpRateGate ip_gate = check_ip_rate_limit(task, method);
+    if (!ip_gate.proceed) {
         return;
     }
 
@@ -737,6 +743,11 @@ void GatewayApp::process(WFHttpTask* task) {
     }
 
     if (!authorized) {
+        // Allowed admit, 401 before forward: give back one emission interval.
+        // Enforce and shadow share this path. 404/405/502/503 and key 429 do not.
+        if (ip_gate.admitted && ip_limiter_ != nullptr) {
+            ip_limiter_->release(ip_gate.subject);
+        }
         metrics_.inc_http_requests(method, "401");
         task->get_resp()->add_header_pair("WWW-Authenticate", "Bearer realm=\"Mortred\"");
         reply_error(task, 401, "unauthorized");

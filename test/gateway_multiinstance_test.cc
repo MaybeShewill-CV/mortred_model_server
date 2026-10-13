@@ -313,9 +313,10 @@ TEST_F(GatewayMultiInstanceTest, rate_limited_key_gets_429_not_401) {
 
 TEST_F(GatewayMultiInstanceTest, ip_rate_limit_sheds_and_reports_retry_after) {
     // PR-3b L1: enabled limiter, burst=3 rate=3/s. All requests come from
-    // 127.0.0.1 (trusted) WITHOUT XFF -> subject = the peer itself. The
-    // first 3 pass L1 (then 401 at auth: no token), the rest are 429 with
-    // an exact Retry-After and the RateLimit-* triple.
+    // 127.0.0.1 WITHOUT XFF -> subject = the peer itself. Missing
+    // Authorization is 401 and does not spend the bucket. The inference
+    // token then spends it: 3 reach the dead upstream (503) and 5 are 429
+    // with Retry-After and the RateLimit-* triple.
     Instance d;
     d.root = base_dir_ / "d";
     d.model_id = "MODEL_D";
@@ -340,17 +341,31 @@ TEST_F(GatewayMultiInstanceTest, ip_rate_limit_sheds_and_reports_retry_after) {
     ASSERT_TRUE(d.app.init(opt));
     ASSERT_TRUE(d.app.listen());
 
-    int passed_l1 = 0;  // 401 = L1 passed, auth rejected (no token)
-    int rejected_l1 = 0;
-    int retry_header_seen = 0;
-    int ratelimit_headers_seen = 0;
+    int unauth_401 = 0;
+    int unauth_429 = 0;
     for (int i = 0; i < 8; ++i) {
         const auto resp =
             send_request(d.gateway_port, "POST", "/v1/models/MODEL_D/infer");
         if (resp.status == 401) {
-            ++passed_l1;
+            ++unauth_401;
         } else if (resp.status == 429) {
-            ++rejected_l1;
+            ++unauth_429;
+        }
+    }
+    EXPECT_EQ(unauth_401, 8);
+    EXPECT_EQ(unauth_429, 0);
+
+    int status_503 = 0;
+    int status_429 = 0;
+    int retry_header_seen = 0;
+    int ratelimit_headers_seen = 0;
+    for (int i = 0; i < 8; ++i) {
+        const auto resp = send_request(d.gateway_port, "POST",
+                                       "/v1/models/MODEL_D/infer", "infer-d");
+        if (resp.status == 503) {
+            ++status_503;
+        } else if (resp.status == 429) {
+            ++status_429;
             if (resp.raw.find("\r\nRetry-After:") != std::string::npos) {
                 ++retry_header_seen;
             }
@@ -362,11 +377,104 @@ TEST_F(GatewayMultiInstanceTest, ip_rate_limit_sheds_and_reports_retry_after) {
         }
     }
     // burst=3 admits 3; a window flip (T=334ms, loop ~10ms) cannot happen in
-    // 8 loopback requests, so exactly 3 pass
-    EXPECT_EQ(passed_l1, 3);
-    EXPECT_EQ(rejected_l1, 5);
+    // 8 loopback requests, so exactly 3 authenticated requests pass L1
+    EXPECT_EQ(status_503, 3);
+    EXPECT_EQ(status_429, 5);
     EXPECT_EQ(retry_header_seen, 5);
     EXPECT_EQ(ratelimit_headers_seen, 5);
+
+    d.app.stop_listen();
+}
+
+TEST_F(GatewayMultiInstanceTest, wrong_token_preserves_full_burst) {
+    // Wrong Bearer is 401 and does not spend the peer bucket. The inference
+    // token then has the full burst: 3 dead-upstream 503s, then 429.
+    Instance d;
+    d.root = base_dir_ / "d6";
+    d.model_id = "MODEL_D";
+    d.gateway_port = find_free_port();
+    ASSERT_GT(d.gateway_port, 0);
+    write_instance_config(d, find_free_port());
+    {
+        std::ofstream rl(d.root / "conf" / "mortred.toml", std::ios::app);
+        rl << "\n[gateway.rate_limit]\n"
+           << "enabled = true\n"
+           << "rate_per_sec = 1\n"
+           << "burst = 3\n"
+           << "trusted_proxies = \"\"\n";
+    }
+    mortred::control::GatewayInitOptions opt;
+    opt.project_root = d.root.string();
+    opt.metrics_token = "scrape-d";
+    opt.auth_token = "infer-d";
+    opt.internal_token = "internal-d";
+    opt.host = "127.0.0.1";
+    opt.port = d.gateway_port;
+    ASSERT_TRUE(d.app.init(opt));
+    ASSERT_TRUE(d.app.listen());
+
+    for (int i = 0; i < 3; ++i) {
+        const auto resp = send_request(d.gateway_port, "POST",
+                                       "/v1/models/MODEL_D/infer", "wrong-d");
+        EXPECT_EQ(resp.status, 401) << i;
+    }
+    for (int i = 0; i < 3; ++i) {
+        const auto resp = send_request(d.gateway_port, "POST",
+                                       "/v1/models/MODEL_D/infer", "infer-d");
+        EXPECT_EQ(resp.status, 503) << i;
+    }
+    const auto shed = send_request(d.gateway_port, "POST",
+                                   "/v1/models/MODEL_D/infer", "infer-d");
+    EXPECT_EQ(shed.status, 429);
+    EXPECT_NE(shed.raw.find("\r\nRetry-After:"), std::string::npos);
+
+    d.app.stop_listen();
+}
+
+TEST_F(GatewayMultiInstanceTest, wrong_token_does_not_restore_spent_admission) {
+    // A spent authenticated admission stays spent. Later 401s do not put it back.
+    Instance d;
+    d.root = base_dir_ / "d7";
+    d.model_id = "MODEL_D";
+    d.gateway_port = find_free_port();
+    ASSERT_GT(d.gateway_port, 0);
+    write_instance_config(d, find_free_port());
+    {
+        std::ofstream rl(d.root / "conf" / "mortred.toml", std::ios::app);
+        rl << "\n[gateway.rate_limit]\n"
+           << "enabled = true\n"
+           << "rate_per_sec = 1\n"
+           << "burst = 3\n"
+           << "trusted_proxies = \"\"\n";
+    }
+    mortred::control::GatewayInitOptions opt;
+    opt.project_root = d.root.string();
+    opt.metrics_token = "scrape-d";
+    opt.auth_token = "infer-d";
+    opt.internal_token = "internal-d";
+    opt.host = "127.0.0.1";
+    opt.port = d.gateway_port;
+    ASSERT_TRUE(d.app.init(opt));
+    ASSERT_TRUE(d.app.listen());
+
+    EXPECT_EQ(send_request(d.gateway_port, "POST", "/v1/models/MODEL_D/infer",
+                           "infer-d")
+                  .status,
+              503);
+    for (int i = 0; i < 3; ++i) {
+        const auto resp = send_request(d.gateway_port, "POST",
+                                       "/v1/models/MODEL_D/infer", "wrong-d");
+        EXPECT_EQ(resp.status, 401) << i;
+    }
+    for (int i = 0; i < 2; ++i) {
+        const auto resp = send_request(d.gateway_port, "POST",
+                                       "/v1/models/MODEL_D/infer", "infer-d");
+        EXPECT_EQ(resp.status, 503) << i;
+    }
+    const auto shed = send_request(d.gateway_port, "POST",
+                                   "/v1/models/MODEL_D/infer", "infer-d");
+    EXPECT_EQ(shed.status, 429);
+    EXPECT_NE(shed.raw.find("\r\nRetry-After:"), std::string::npos);
 
     d.app.stop_listen();
 }
@@ -399,28 +507,28 @@ TEST_F(GatewayMultiInstanceTest, xff_from_trusted_peer_buckets_by_client) {
     ASSERT_TRUE(d.app.init(opt));
     ASSERT_TRUE(d.app.listen());
 
-    // same client 4x -> 3 pass (401), 4th is 429
-    int four01 = 0;
-    int four29 = 0;
+    // same client 4x with the inference token -> 3 dead-upstream 503s, 4th is 429
+    int status_503 = 0;
+    int status_429 = 0;
     for (int i = 0; i < 4; ++i) {
         const auto resp = send_request(d.gateway_port, "POST",
-                                       "/v1/models/MODEL_D/infer", "",
+                                       "/v1/models/MODEL_D/infer", "infer-d",
                                        {"X-Forwarded-For: 9.9.9.9"});
-        if (resp.status == 401) {
-            ++four01;
+        if (resp.status == 503) {
+            ++status_503;
         } else if (resp.status == 429) {
-            ++four29;
+            ++status_429;
         }
     }
-    EXPECT_EQ(four01, 3);
-    EXPECT_EQ(four29, 1);
-    // three DIFFERENT clients, one request each: all pass (fresh buckets)
+    EXPECT_EQ(status_503, 3);
+    EXPECT_EQ(status_429, 1);
+    // three DIFFERENT clients, one authenticated request each: all 503
     int distinct_pass = 0;
     for (const char* client : {"1.1.1.1", "2.2.2.2", "3.3.3.3"}) {
         const std::string xff = std::string("X-Forwarded-For: ") + client;
-        const auto resp =
-            send_request(d.gateway_port, "POST", "/v1/models/MODEL_D/infer", "", {xff});
-        if (resp.status == 401) {
+        const auto resp = send_request(d.gateway_port, "POST",
+                                       "/v1/models/MODEL_D/infer", "infer-d", {xff});
+        if (resp.status == 503) {
             ++distinct_pass;
         }
     }
@@ -458,21 +566,21 @@ TEST_F(GatewayMultiInstanceTest, xff_from_untrusted_peer_is_ignored) {
 
     const char* rotation[] = {"1.1.1.1", "2.2.2.2", "3.3.3.3",
                               "4.4.4.4", "5.5.5.5", "6.6.6.6"};
-    int four01 = 0;
-    int four29 = 0;
+    int status_503 = 0;
+    int status_429 = 0;
     for (int i = 0; i < 6; ++i) {
         const std::string xff = std::string("X-Forwarded-For: ") + rotation[i];
-        const auto resp =
-            send_request(d.gateway_port, "POST", "/v1/models/MODEL_D/infer", "", {xff});
-        if (resp.status == 401) {
-            ++four01;
+        const auto resp = send_request(d.gateway_port, "POST",
+                                       "/v1/models/MODEL_D/infer", "infer-d", {xff});
+        if (resp.status == 503) {
+            ++status_503;
         } else if (resp.status == 429) {
-            ++four29;
+            ++status_429;
         }
     }
     // 6 distinct SPOOFED identities, one real bucket: 3 pass, 3 rejected
-    EXPECT_EQ(four01, 3);
-    EXPECT_EQ(four29, 3);
+    EXPECT_EQ(status_503, 3);
+    EXPECT_EQ(status_429, 3);
 
     d.app.stop_listen();
 }
