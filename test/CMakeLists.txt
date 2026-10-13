@@ -441,6 +441,14 @@ add_test(
     COMMAND python3 scripts/resident_pair_record.py --check
     WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
 
+# P2-6 stop order rules. --check only: no supervisor, gateway, or model
+# processes and no live json. No valgrind label, so the default check
+# target (ctest -LE valgrind) runs it. The live run is not registered.
+add_test(
+    NAME stop_order_record_rules
+    COMMAND python3 scripts/stop_order_record.py --check
+    WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
+
 # Manual GCRA performance baseline (PR-1 acceptance reference; NOT a CI test)
 add_executable(rate_limit_gcra_bench EXCLUDE_FROM_ALL rate_limit_gcra_bench.cc)
 # common carries the mortred_common_includes INTERFACE (src/ include root)
