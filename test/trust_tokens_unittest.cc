@@ -10,10 +10,14 @@
 #include "control/trust_tokens.h"
 
 using mortred::control::is_scrape_token_error;
+using mortred::control::kAdminTokenMissing;
+using mortred::control::kInferAdminIdentical;
+using mortred::control::kInferTokenMissing;
 using mortred::control::kScrapeTokenCollision;
 using mortred::control::kScrapeTokenMissing;
 using mortred::control::scrape_token_spawn_error;
 using mortred::control::scrape_token_usable;
+using mortred::control::tokens_usable_for_listen;
 
 TEST(TrustTokens, missing_metrics_is_not_usable) {
     const auto st = scrape_token_usable("", "infer", "admin");
@@ -53,4 +57,31 @@ TEST(TrustTokens, empty_admin_does_not_collide) {
 TEST(TrustTokens, spawn_error_prefix_is_stable) {
     EXPECT_FALSE(is_scrape_token_error("executable not found: /tmp/x"));
     EXPECT_FALSE(is_scrape_token_error("TensorRT engine missing or empty: x"));
+}
+
+TEST(TrustTokens, missing_infer_is_not_usable_for_listen) {
+    const auto st = tokens_usable_for_listen("metrics", "", "admin");
+    EXPECT_FALSE(st.ok);
+    EXPECT_STREQ(st.reason, kInferTokenMissing);
+    const auto both = tokens_usable_for_listen("metrics", "", "");
+    EXPECT_FALSE(both.ok);
+    EXPECT_STREQ(both.reason, kInferTokenMissing);
+}
+
+TEST(TrustTokens, missing_admin_is_not_usable_for_listen) {
+    const auto st = tokens_usable_for_listen("metrics", "infer", "");
+    EXPECT_FALSE(st.ok);
+    EXPECT_STREQ(st.reason, kAdminTokenMissing);
+}
+
+TEST(TrustTokens, identical_infer_and_admin_is_not_usable_for_listen) {
+    const auto st = tokens_usable_for_listen("metrics", "same", "same");
+    EXPECT_FALSE(st.ok);
+    EXPECT_STREQ(st.reason, kInferAdminIdentical);
+}
+
+TEST(TrustTokens, distinct_three_are_usable_for_listen) {
+    const auto st = tokens_usable_for_listen("metrics", "infer", "admin");
+    EXPECT_TRUE(st.ok);
+    EXPECT_STREQ(st.reason, "");
 }

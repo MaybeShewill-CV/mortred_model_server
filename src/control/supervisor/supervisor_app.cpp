@@ -826,20 +826,21 @@ bool SupervisorApp::init(const SupervisorInitOptions& options) {
         std::filesystem::path(root_) / cfg_.supervisor.bin_dir / "mortred-gateway.out";
     std::error_code gw_ec;
     if (std::filesystem::exists(gateway_bin, gw_ec)) {
-        const auto scrape = scrape_token_usable(options.metrics_token, options.gateway_auth_token,
-                                                auth_token_);
-        if (!scrape.ok) {
-            if (options.metrics_token.empty()) {
+        const auto listen = tokens_usable_for_listen(options.metrics_token,
+                                                     options.gateway_auth_token, auth_token_);
+        if (!listen.ok) {
+            if (std::strcmp(listen.reason, kScrapeTokenMissing) == 0) {
                 std::fprintf(stderr,
-                             "mortred-supervisor: MORTRED_METRICS_TOKEN unset; management API will "
+                             "mortred-supervisor: %s; management API will "
                              "start but autostart will fail __gateway permanently and skip models "
                              "(gateway GET /metrics is never public). Generate with: "
-                             "mortredctl init-trust\n");
+                             "mortredctl init-trust\n",
+                             listen.reason);
             } else {
                 std::fprintf(stderr,
-                             "mortred-supervisor: MORTRED_METRICS_TOKEN matches an inference or "
-                             "management token; management API will start but autostart will fail "
-                             "__gateway permanently and skip models\n");
+                             "mortred-supervisor: %s; management API will start but autostart will "
+                             "fail __gateway permanently and skip models\n",
+                             listen.reason);
             }
         }
     }

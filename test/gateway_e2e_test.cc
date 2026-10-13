@@ -201,6 +201,7 @@ class GatewayE2ETest : public ::testing::Test {
         gateway_pid_ = spawn(gateway_env, {},
                              {{"MORTRED_PROJECT_ROOT", root_.string()},
                               {"MORTRED_GATEWAY_AUTH_TOKEN", "ext-token"},
+                              {"MORTRED_API_TOKEN", "admin-token"},
                               {"MORTRED_METRICS_TOKEN", "scrape-token"},
                               {"MORTRED_INTERNAL_TOKEN", "int-token"},
                               {"MORTRED_GATEWAY_HOST", "127.0.0.1"},
@@ -781,7 +782,8 @@ int GatewayAuthTest::seq_ = 0;
 TEST_F(GatewayAuthTest, KeysOnlyLoopbackRejectsAnonymousRequests) {
     // regression for the fail-open: with api_keys configured and NO static
     // token, an empty-token fallback must NOT authorize anonymous requests
-    ASSERT_TRUE(StartGateway("127.0.0.1", "", keys_toml(valid_key_)));
+    ASSERT_TRUE(StartGateway("127.0.0.1", "ext-token", keys_toml(valid_key_),
+                             {{"MORTRED_API_TOKEN", "mgmt-token"}}));
 
     auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}");
     EXPECT_EQ(r.status, 401) << "anonymous request must be denied with keys-only auth";
@@ -791,7 +793,8 @@ TEST_F(GatewayAuthTest, KeysOnlyLoopbackRejectsAnonymousRequests) {
 }
 
 TEST_F(GatewayAuthTest, KeysOnlyLoopbackAcceptsValidKey) {
-    ASSERT_TRUE(StartGateway("127.0.0.1", "", keys_toml(valid_key_)));
+    ASSERT_TRUE(StartGateway("127.0.0.1", "ext-token", keys_toml(valid_key_),
+                             {{"MORTRED_API_TOKEN", "mgmt-token"}}));
     const auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}", valid_key_);
     EXPECT_EQ(r.status, 200);
 }
@@ -799,7 +802,8 @@ TEST_F(GatewayAuthTest, KeysOnlyLoopbackAcceptsValidKey) {
 TEST_F(GatewayAuthTest, StaticTokenFallbackStillWorksWhenConfigured) {
     // legacy compatibility preserved: with BOTH auth mechanisms configured, a
     // request carrying the static token passes even when the key lookup fails
-    ASSERT_TRUE(StartGateway("127.0.0.1", "ext-token", keys_toml(valid_key_)));
+    ASSERT_TRUE(StartGateway("127.0.0.1", "ext-token", keys_toml(valid_key_),
+                             {{"MORTRED_API_TOKEN", "mgmt-token"}}));
 
     auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}", "ext-token");
     EXPECT_EQ(r.status, 200) << "static token fallback must survive with keys configured";
@@ -815,8 +819,9 @@ TEST_F(GatewayAuthTest, NonLoopbackKeysOnlyStartsAndEnforcesKeys) {
     // a non-loopback listener with API keys (no static token) is a legitimate
     // deployment: it must start, and keys must be enforced. scrape token is
     // required on non-loopback so GET /metrics is not public.
-    ASSERT_TRUE(StartGateway("0.0.0.0", "", keys_toml(valid_key_),
-                             {{"MORTRED_METRICS_TOKEN", "scrape-token"}}));
+    ASSERT_TRUE(StartGateway("0.0.0.0", "ext-token", keys_toml(valid_key_),
+                             {{"MORTRED_METRICS_TOKEN", "scrape-token"},
+                              {"MORTRED_API_TOKEN", "mgmt-token"}}));
 
     auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}");
     EXPECT_EQ(r.status, 401);
@@ -835,7 +840,8 @@ TEST_F(GatewayAuthTest, EmptyApiKeysWithoutTokenRefusesToStart) {
 }
 
 TEST_F(GatewayAuthTest, EmptyApiKeysWithTokenFallsBackToStaticToken) {
-    ASSERT_TRUE(StartGateway("127.0.0.1", "ext-token", "# copied example, no [keys.*]\n"));
+    ASSERT_TRUE(StartGateway("127.0.0.1", "ext-token", "# copied example, no [keys.*]\n",
+                             {{"MORTRED_API_TOKEN", "mgmt-token"}}));
     auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}", "ext-token");
     EXPECT_EQ(r.status, 200);
 }
@@ -849,7 +855,8 @@ TEST_F(GatewayAuthTest, BrokenApiKeysWithoutTokenRefusesToStart) {
 TEST_F(GatewayAuthTest, BrokenApiKeysWithTokenFallsBackToStaticToken) {
     // with a static token configured the gateway may start, but the parse
     // failure must be loud and only the token must authenticate
-    ASSERT_TRUE(StartGateway("127.0.0.1", "ext-token", "this is not [valid toml"));
+    ASSERT_TRUE(StartGateway("127.0.0.1", "ext-token", "this is not [valid toml",
+                             {{"MORTRED_API_TOKEN", "mgmt-token"}}));
 
     auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}");
     EXPECT_EQ(r.status, 401);
@@ -862,7 +869,8 @@ TEST_F(GatewayAuthTest, BrokenApiKeysWithTokenFallsBackToStaticToken) {
 }
 
 TEST_F(GatewayAuthTest, AdminApiTokenIsAccepted) {
-    ASSERT_TRUE(StartGateway("127.0.0.1", "", "", {{"MORTRED_API_TOKEN", "mgmt-token"}}));
+    ASSERT_TRUE(StartGateway("127.0.0.1", "ext-token", "",
+                             {{"MORTRED_API_TOKEN", "mgmt-token"}}));
     auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}", "mgmt-token");
     EXPECT_EQ(r.status, 200);
     r = send_request(gateway_port_, "POST", kAuthRoute, "{}", "wrong");
@@ -870,13 +878,14 @@ TEST_F(GatewayAuthTest, AdminApiTokenIsAccepted) {
 }
 
 TEST_F(GatewayAuthTest, AdminScopeKeyMayInfer) {
-    ASSERT_TRUE(StartGateway("127.0.0.1", "", keys_toml(valid_key_, "ops", "admin")));
+    ASSERT_TRUE(StartGateway("127.0.0.1", "ext-token", keys_toml(valid_key_, "ops", "admin"),
+                             {{"MORTRED_API_TOKEN", "mgmt-token"}}));
     const auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}", valid_key_);
     EXPECT_EQ(r.status, 200);
 }
 
 TEST_F(GatewayAuthTest, NonLoopbackWithOnlyApiTokenStarts) {
-    ASSERT_TRUE(StartGateway("0.0.0.0", "", "",
+    ASSERT_TRUE(StartGateway("0.0.0.0", "ext-token", "",
                              {{"MORTRED_API_TOKEN", "mgmt-token"},
                               {"MORTRED_METRICS_TOKEN", "scrape-token"}}));
     auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}");
@@ -892,7 +901,8 @@ TEST_F(GatewayAuthTest, MetricsTokenUnsetRefusesToStart) {
 
 TEST_F(GatewayAuthTest, MetricsTokenRejectsAnonymousAndWrongBearer) {
     ASSERT_TRUE(StartGateway("127.0.0.1", "ext-token", "",
-                             {{"MORTRED_METRICS_TOKEN", "scrape-token"}}));
+                             {{"MORTRED_METRICS_TOKEN", "scrape-token"},
+                              {"MORTRED_API_TOKEN", "mgmt-token"}}));
     auto r = send_request(gateway_port_, "GET", "/metrics", "");
     EXPECT_EQ(r.status, 401);
     ASSERT_NE(r.headers.find("www-authenticate"), r.headers.end());
@@ -906,7 +916,8 @@ TEST_F(GatewayAuthTest, MetricsTokenRejectsAnonymousAndWrongBearer) {
 
 TEST_F(GatewayAuthTest, MetricsTokenAcceptsScrapeBearer) {
     ASSERT_TRUE(StartGateway("127.0.0.1", "ext-token", "",
-                             {{"MORTRED_METRICS_TOKEN", "scrape-token"}}));
+                             {{"MORTRED_METRICS_TOKEN", "scrape-token"},
+                              {"MORTRED_API_TOKEN", "mgmt-token"}}));
     auto r = send_request(gateway_port_, "GET", "/metrics", "", "scrape-token");
     EXPECT_EQ(r.status, 200);
     EXPECT_NE(r.body.find("mortred_http_requests_total"), std::string::npos);
@@ -934,7 +945,8 @@ TEST_F(GatewayAuthTest, MetricsTokenMatchingInferenceRefusesToStart) {
 
 TEST_F(GatewayAuthTest, NonLoopbackWithDistinctMetricsTokenStarts) {
     ASSERT_TRUE(StartGateway("0.0.0.0", "ext-token", "",
-                             {{"MORTRED_METRICS_TOKEN", "scrape-token"}}));
+                             {{"MORTRED_METRICS_TOKEN", "scrape-token"},
+                              {"MORTRED_API_TOKEN", "mgmt-token"}}));
     auto r = send_request(gateway_port_, "GET", "/metrics", "");
     EXPECT_EQ(r.status, 401);
     r = send_request(gateway_port_, "GET", "/metrics", "", "scrape-token");

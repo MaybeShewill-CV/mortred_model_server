@@ -249,11 +249,11 @@ void ProcessSupervisor::apply_exit_decision(Child* child,
 bool ProcessSupervisor::spawn_locked(Child* child, std::string* err,
                                          std::unique_lock<std::mutex>& lock) {
     if (child->is_gateway) {
-        const auto scrape = scrape_token_usable(_gateway_metrics_token, _gateway_infer_token,
-                                                _gateway_admin_token);
-        if (!scrape.ok) {
+        const auto listen = tokens_usable_for_listen(_gateway_metrics_token, _gateway_infer_token,
+                                                     _gateway_admin_token);
+        if (!listen.ok) {
             if (err != nullptr) {
-                *err = scrape_token_spawn_error(scrape);
+                *err = scrape_token_spawn_error(listen);
             }
             return false;
         }

@@ -167,6 +167,7 @@ class GatewayMultiInstanceTest : public ::testing::Test {
         mortred::control::GatewayInitOptions opt_a;
         opt_a.project_root = a_.root.string();
         opt_a.auth_token = a_.infer_token;
+        opt_a.admin_token = "admin-a";
         opt_a.metrics_token = a_.scrape_token;
         opt_a.internal_token = "internal-a";
         opt_a.host = "127.0.0.1";
@@ -177,6 +178,7 @@ class GatewayMultiInstanceTest : public ::testing::Test {
         mortred::control::GatewayInitOptions opt_b;
         opt_b.project_root = b_.root.string();
         opt_b.auth_token = b_.infer_token;
+        opt_b.admin_token = "admin-b";
         opt_b.metrics_token = b_.scrape_token;
         opt_b.internal_token = "internal-b";
         opt_b.host = "127.0.0.1";
@@ -257,6 +259,8 @@ TEST_F(GatewayMultiInstanceTest, rate_limited_key_gets_429_not_401) {
     mortred::control::GatewayInitOptions opt;
     opt.project_root = c.root.string();
     opt.metrics_token = "scrape-c";
+    opt.auth_token = "infer-c";
+    opt.admin_token = "admin-c";
     opt.internal_token = "internal-c";
     opt.host = "127.0.0.1";
     opt.port = c.gateway_port;
@@ -335,6 +339,7 @@ TEST_F(GatewayMultiInstanceTest, ip_rate_limit_sheds_and_reports_retry_after) {
     opt.project_root = d.root.string();
     opt.metrics_token = "scrape-d";
     opt.auth_token = "infer-d";
+    opt.admin_token = "admin-d";
     opt.internal_token = "internal-d";
     opt.host = "127.0.0.1";
     opt.port = d.gateway_port;
@@ -407,6 +412,7 @@ TEST_F(GatewayMultiInstanceTest, wrong_token_preserves_full_burst) {
     opt.project_root = d.root.string();
     opt.metrics_token = "scrape-d";
     opt.auth_token = "infer-d";
+    opt.admin_token = "admin-d";
     opt.internal_token = "internal-d";
     opt.host = "127.0.0.1";
     opt.port = d.gateway_port;
@@ -451,6 +457,7 @@ TEST_F(GatewayMultiInstanceTest, wrong_token_does_not_restore_spent_admission) {
     opt.project_root = d.root.string();
     opt.metrics_token = "scrape-d";
     opt.auth_token = "infer-d";
+    opt.admin_token = "admin-d";
     opt.internal_token = "internal-d";
     opt.host = "127.0.0.1";
     opt.port = d.gateway_port;
@@ -501,6 +508,7 @@ TEST_F(GatewayMultiInstanceTest, xff_from_trusted_peer_buckets_by_client) {
     opt.project_root = d.root.string();
     opt.metrics_token = "scrape-d";
     opt.auth_token = "infer-d";
+    opt.admin_token = "admin-d";
     opt.internal_token = "internal-d";
     opt.host = "127.0.0.1";
     opt.port = d.gateway_port;
@@ -558,6 +566,7 @@ TEST_F(GatewayMultiInstanceTest, xff_from_untrusted_peer_is_ignored) {
     opt.project_root = d.root.string();
     opt.metrics_token = "scrape-d";
     opt.auth_token = "infer-d";
+    opt.admin_token = "admin-d";
     opt.internal_token = "internal-d";
     opt.host = "127.0.0.1";
     opt.port = d.gateway_port;
@@ -606,6 +615,7 @@ TEST_F(GatewayMultiInstanceTest, shadow_mode_never_rejects) {
     opt.project_root = d.root.string();
     opt.metrics_token = "scrape-d";
     opt.auth_token = "infer-d";
+    opt.admin_token = "admin-d";
     opt.internal_token = "internal-d";
     opt.host = "127.0.0.1";
     opt.port = d.gateway_port;
@@ -648,6 +658,7 @@ TEST_F(GatewayMultiInstanceTest, healthz_is_exempt_from_ip_limit) {
     opt.project_root = d.root.string();
     opt.metrics_token = "scrape-d";
     opt.auth_token = "infer-d";
+    opt.admin_token = "admin-d";
     opt.internal_token = "internal-d";
     opt.host = "127.0.0.1";
     opt.port = d.gateway_port;
