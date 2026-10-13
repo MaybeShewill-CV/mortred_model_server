@@ -30,6 +30,8 @@ template <typename INPUT, typename OUTPUT> class RealEsrGan : public jinq::model
     RealEsrGan &operator=(const RealEsrGan &transformer) = delete;
 
   protected:
+    jinq::models::backend::PreparedInput prepare_inputs(const INPUT &input) override;
+
     std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
     StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
