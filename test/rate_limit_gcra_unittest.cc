@@ -205,6 +205,31 @@ TEST(ShardedLimiter, DisabledPolicyTracksNothing) {
     EXPECT_EQ(stats.rejects, 0u);
 }
 
+TEST(ShardedLimiter, release_undoes_one_admission_and_keeps_earlier_ones) {
+    // rate 10/s, burst 5, clock fixed at 0. Two allows, one release, four
+    // more allows, then reject. Release on a key that was never admitted
+    // does not create a cell; that key still has a full burst of 5.
+    ShardedIpLimiter limiter(kRate10Burst5, 1024);
+    const SubjectKey spent = key4(0x0a000001);
+    EXPECT_TRUE(limiter.admit(spent, 0).allowed);
+    EXPECT_TRUE(limiter.admit(spent, 0).allowed);
+    limiter.release(spent);
+    for (int i = 0; i < 4; ++i) {
+        EXPECT_TRUE(limiter.admit(spent, 0).allowed) << "after release #" << i;
+    }
+    EXPECT_FALSE(limiter.admit(spent, 0).allowed);
+    EXPECT_EQ(limiter.stats().tracked, 1u);
+
+    const SubjectKey fresh = key4(0x0a000002);
+    limiter.release(fresh);
+    EXPECT_EQ(limiter.stats().tracked, 1u);
+    for (int i = 0; i < 5; ++i) {
+        EXPECT_TRUE(limiter.admit(fresh, 0).allowed) << "fresh #" << i;
+    }
+    EXPECT_FALSE(limiter.admit(fresh, 0).allowed);
+    EXPECT_EQ(limiter.stats().tracked, 2u);
+}
+
 TEST(ShardedLimiter, PerKeyBehaviorMatchesFreeFunction) {
     ShardedIpLimiter limiter(kRate10Burst5, 1024);
     std::atomic<int64_t> tat{0};
