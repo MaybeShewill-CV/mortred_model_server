@@ -1,13 +1,13 @@
 # 关闭记录
 
 - 轮次: 1
-- 已关闭: P0-1、P1-1、P1-2、P2-1、P2-2、P2-3、P2-4、P2-5、P2-6
+- 已关闭: P0-1、P1-1、P1-2、P2-1、P2-2、P2-3、P2-4、P2-5、P2-6、P2-7
 - 阻塞: 无
 - 未阻塞的开放项: 相对本轮起点减少
 
-核对 `07-close.md`、`07-close-p12.md`、`07-close-p21.md`、`07-close-p22.md`、`07-close-p23.md`、`07-close-p24.md`、`07-close-p25.md` 与 `07-close-p26.md`。P0-1、P1-1、P1-2、P2-1、P2-2、P2-3、P2-4、P2-5、P2-6 的原陈述都没有留在仍开放的问题里。P2-8 没有重新入列。新入列为无。九个模块分数与 `01-modules` 正文一致。
+核对 `07-close.md`、`07-close-p12.md`、`07-close-p21.md`、`07-close-p22.md`、`07-close-p23.md`、`07-close-p24.md`、`07-close-p25.md`、`07-close-p26.md` 与 `07-close-p27.md`。P0-1、P1-1、P1-2、P2-1、P2-2、P2-3、P2-4、P2-5、P2-6、P2-7 的原陈述都没有留在仍开放的问题里。P2-8 没有重新入列。新入列为无。九个模块分数与 `01-modules` 正文一致。
 
-本轮起点未关闭且未阻塞的 id 共 13 条。关闭 9 条后剩 4 条。
+本轮起点未关闭且未阻塞的 id 共 13 条。关闭 10 条后剩 3 条。
 
 ## 已关闭的问题陈述
 | id | 模块 | 问题陈述 |
@@ -22,11 +22,11 @@
 | P2-4 | ops、test | 没有 `yolov8s` 与 `libface` 同时 ready 时对两者并发请求且两者都成功的记录（TP2）。 |
 | P2-5 | src-control、ops | 推理 token 或管理 token 缺失，或二者相同，gateway 仍会启动（OP4）。 |
 | P2-6 | ops | 停止信号没有收成只发给 supervisor 主进程（OP5）。 |
+| P2-7 | src-models | 解码后宽或高不是 256 的合法 JPEG 调用 `realesrgan` 时，返回的不是写明 256×256 的输入错误。 |
 
 ## 仍开放的问题
 | id | 模块 | 问题陈述 | 状态 |
 | --- | --- | --- | --- |
-| P2-7 | src-models | 解码后宽或高不是 256 的合法 JPEG 调用 `realesrgan` 时，返回的不是写明 256×256 的输入错误。 | 未做 |
 | P2-9 | test | `python3 scripts/golden_drift_check.py --check` 不能以 0 退出。 | 未做 |
 | P2-10 | docs | 中文 README 第一小时命令块没有 `mortredctl next`。 | 未做 |
 | P2-11 | src-server-apps、conf、ops、test、docs | 覆盖集九个 TensorRT id 没有一张按本次性能约束完成的 calibrate 与 `--raw` HTTP 报告清单（PF1、PF2、PF5、TP1；压测报告尚未引用 gateway 阶段与 `server_time_ms`，PF4 的报告半边仍在此）。 | 未做 |
@@ -43,7 +43,7 @@ P2-2 已关闭。合入 `b44f9cb2afd06269f446c9e4dfe0e04a202dcbd0`。打开同�
 
 P2-8 留在锁定队列附录，不重新入列。
 
-P2-7 的通过结果是输入错误并写明 256×256。成功返回 `1×256×256×3` 不作为通过。
+P2-7 已关闭。合入 `1df0997e561983bc2ddce217e379f10132d38f28`。一张解码后 320×240 的合法 JPEG 调用已拉起的 `realesrgan`，HTTP 400，`status` 8，`status_str` 全文为「尺寸须为 256×256」。成功返回 `1×256×256×3` 不作为通过。正好 256×256 未发成功请求，以及引擎被记成动态剖面，留在 `discovered.md` 附录，不新入列。
 
 P2-5 已关闭。合入 `525dd8353a3c5056a209d8a6c60e5b0d13cad96d`。推理 token 缺失、管理 token 缺失，或二者相同而 metrics token 不同时，gateway 退出码 1 且不监听。三个彼此不同的短 token 可以监听，`GET /healthz` 为 200，正文为 `ok`。外部脚本不启动 supervisor，留在 `discovered.md` 附录，不新入列。
 
