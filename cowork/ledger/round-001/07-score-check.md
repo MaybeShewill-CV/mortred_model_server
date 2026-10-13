@@ -10,9 +10,9 @@
 - 阻塞: 无
 - 与角色自评: 一致
 
-原始分 = (15×6.0 + 20×7.3 + 15×7.6 + 10×9.0 + 5×6.0 + 15×6.5 + 10×6.8 + 5×6.5 + 5×9.0) / 100 = 713.0 / 100 = 7.1。P0-1、P1-1、P1-2、P2-1、P2-2、P2-3、P2-4、P2-5、P2-6、P2-7、P2-9 已关闭。未关闭且未阻塞的 P0 和 P1 都没有了，不再套 7.9 或 8.9。加权分保持 7.1。模块分数沿用 `01-modules` 正文。test 正文仍是 6.8。
+原始分 = (15×6.0 + 20×7.3 + 15×7.6 + 10×9.0 + 5×6.0 + 15×6.5 + 10×6.8 + 5×6.5 + 5×9.0) / 100 = 713.0 / 100 = 7.1。P0-1、P1-1、P1-2、P2-1、P2-2、P2-3、P2-4、P2-5、P2-6、P2-7、P2-9、P2-10 已关闭。未关闭且未阻塞的 P0 和 P1 都没有了，不再套 7.9 或 8.9。加权分保持 7.1。模块分数沿用 `01-modules` 正文。test 正文仍是 6.8。
 
-已关闭 11 条。未关闭且未阻塞的 id 从 13 条减到 2 条。EX1、PF3、ST2、ST5、TP2、OP4、OP5 已满足。P2-9 已合入 `f79e11ae6ceb167095ccd73483cb654f2032e57c`。`python3 scripts/golden_drift_check.py --check` 退出码 0，标准输出 `zero drift: 49 cases and 62 golden files unchanged`。`case_names` 含 `dinov2_vits14` 与 `metric3d_512`，两个 json 键与文件字节 SHA-256 一致。完成标准表没有因 P2-9 改行。PF4 继续未满足并挂在 P2-11。
+已关闭 12 条。未关闭且未阻塞的 id 从 13 条减到 1 条。EX1、PF3、ST2、ST5、TP2、OP4、OP5 已满足。P2-10 已合入 `471dc4826b51da604f2550bd42b19975bfe4aee4`。中文 README「第一小时：mortredctl」的 bash 块在 `mortredctl doctor` 之前有 `mortredctl next`，其后仍能读到 `mortredctl doctor` 与 `mortredctl doctor --strict`。UX2 仍由英文 README 与 `docs/deployment.md` 满足。完成标准表没有因 P2-10 改行。PF1、PF2、PF5、TP1 继续未满足并挂在 P2-11。PF4 继续未满足并挂在 P2-11。
 
 ## 完成标准
 | 编号 | 状态: 已满足 / 未满足 / 阻塞 | 证据或队列 id |
