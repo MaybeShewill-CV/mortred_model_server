@@ -10,9 +10,9 @@
 - 阻塞: 无
 - 与角色自评: 一致
 
-原始分 = (15×6.0 + 20×7.3 + 15×7.6 + 10×9.0 + 5×6.0 + 15×6.5 + 10×6.8 + 5×6.5 + 5×9.0) / 100 = 713.0 / 100 = 7.1。P0-1、P1-1、P1-2、P2-1 已关闭。未关闭且未阻塞的 P0 和 P1 都没有了，不再套 7.9 或 8.9。加权分保持 7.1。模块分数沿用 `01-modules` 正文。test 正文仍是 6.8。
+原始分 = (15×6.0 + 20×7.3 + 15×7.6 + 10×9.0 + 5×6.0 + 15×6.5 + 10×6.8 + 5×6.5 + 5×9.0) / 100 = 713.0 / 100 = 7.1。P0-1、P1-1、P1-2、P2-1、P2-2 已关闭。未关闭且未阻塞的 P0 和 P1 都没有了，不再套 7.9 或 8.9。加权分保持 7.1。模块分数沿用 `01-modules` 正文。test 正文仍是 6.8。
 
-已关闭 4 条。未关闭且未阻塞的 id 从 13 条减到 9 条。EX1 从「未满足」变为「已满足」。PF3 从「未满足」变为「已满足」：合入 `d5c9dffc522802a7e29292c7d8bd90f71fcaa837`，`yolov8s` 一次提交 2 张合法图片后 `results` 长度为 2，`mortred_batch_size` 的样本都是 1，count 与 sum 都是 2。PF4 的单次读数已经能在不创建 `/tmp/mortred_stage_timing` 时看到，但该行要求的是同一次压测报告，报告仍不存在，所以 PF4 继续未满足并挂在 P2-11。
+已关闭 5 条。未关闭且未阻塞的 id 从 13 条减到 8 条。EX1 与 PF3 已满足。ST2 从「未满足」变为「已满足」：合入 `b44f9cb2afd06269f446c9e4dfe0e04a202dcbd0`。打开同一限流开关后，3 次错误 token 为 401，紧接着 3 次合法推理为 200，再一次才是 429。PF4 的单次读数已经能在不创建 `/tmp/mortred_stage_timing` 时看到，但该行要求的是同一次压测报告，报告仍不存在，所以 PF4 继续未满足并挂在 P2-11。
 
 ## 完成标准
 | 编号 | 状态: 已满足 / 未满足 / 阻塞 | 证据或队列 id |
@@ -24,7 +24,7 @@
 | PF5 | 未满足 | P2-11 |
 | AV1 | 已满足 | `conf/model/classification/mobilenetv2/mobilenetv2_cpu.toml` 为 `type=onnx`。缺少 HTTP RPS 不使本行未满足。本次没有观察到该配置拉起失败，或失败被报成成功 |
 | ST1 | 已满足 | `test/server_e2e_contract_test.cc`：未知字段与 `img_data` 为 422，模型失败时 `results[].data` 为 null |
-| ST2 | 未满足 | P2-2 |
+| ST2 | 已满足 | P2-2 已合入 `b44f9cb2afd06269f446c9e4dfe0e04a202dcbd0`。`enabled=true` 与 `MORTRED_RATE_LIMIT=enforce` 下，同一 IP 先 3 次错误 token 为 401，紧接着 3 次合法推理为 200，再一次才是 429。重跑退出码 0 |
 | ST3 | 已满足 | `test/server_e2e_contract_test.cc` 的 `queue_limit_returns_429_with_retry_after`：队列打满返回 429 和 `Retry-After`，占槽请求仍成功 |
 | ST4 | 已满足 | `test/gateway_e2e_test.cc` 的 `dead_upstream_maps_to_503`：上游拒绝连接时 gateway 返回 503 |
 | ST5 | 未满足 | P2-3 |

@@ -1,13 +1,13 @@
 # 关闭记录
 
 - 轮次: 1
-- 已关闭: P0-1、P1-1、P1-2、P2-1
+- 已关闭: P0-1、P1-1、P1-2、P2-1、P2-2
 - 阻塞: 无
 - 未阻塞的开放项: 相对本轮起点减少
 
-核对 `07-close.md`、`07-close-p12.md` 与 `07-close-p21.md`。P0-1、P1-1、P1-2、P2-1 的原陈述都没有留在仍开放的问题里。P2-8 没有重新入列。新入列为无。九个模块分数与 `01-modules` 正文一致。
+核对 `07-close.md`、`07-close-p12.md`、`07-close-p21.md` 与 `07-close-p22.md`。P0-1、P1-1、P1-2、P2-1、P2-2 的原陈述都没有留在仍开放的问题里。P2-8 没有重新入列。新入列为无。九个模块分数与 `01-modules` 正文一致。
 
-本轮起点未关闭且未阻塞的 id 共 13 条。关闭 4 条后剩 9 条。
+本轮起点未关闭且未阻塞的 id 共 13 条。关闭 5 条后剩 8 条。
 
 ## 已关闭的问题陈述
 | id | 模块 | 问题陈述 |
@@ -17,11 +17,11 @@
 | P1-1 | src-control | 不创建 `/tmp/mortred_stage_timing` 时，gateway `/metrics` 读不到阶段耗时（PF4）。 |
 | P1-2 | docs | 按文档给已有家族加一个模型时，步骤与当前 `catalog()`、`mortred-model-server.out --list` 使用的 id 不一致（EX1）。 |
 | P2-1 | src-server-apps | 覆盖集 `max_batch_size=1` 的路径不记录 batch 观测，外部看不到执行 batch 为 1（PF3）。 |
+| P2-2 | src-control | 打开限流后，鉴权失败仍消耗来源 IP 的配额（ST2）。 |
 
 ## 仍开放的问题
 | id | 模块 | 问题陈述 | 状态 |
 | --- | --- | --- | --- |
-| P2-2 | src-control | 打开限流后，鉴权失败仍消耗来源 IP 的配额（ST2）。 | 未做 |
 | P2-3 | src-control | `fork` 返回之后、随后的 `exec` 之前，库函数跟踪里出现 `prctl`、`execvp` 或 `setenv`（ST5）。 | 未做 |
 | P2-4 | ops、test | 没有 `yolov8s` 与 `libface` 同时 ready 时对两者并发请求且两者都成功的记录（TP2）。 | 未做 |
 | P2-5 | src-control、ops | 推理 token 或管理 token 缺失，或二者相同，gateway 仍会启动（OP4）。 | 未做 |
@@ -38,6 +38,8 @@ P0-1 在 src-models 与 conf 的两条陈述是同一条已关闭问题。
 P1-1 只关闭「不创建 flag 文件就读不到 gateway 阶段」。同一次压测报告仍缺失，留在 P2-11。
 
 P2-1 已关闭。合入 `d5c9dffc522802a7e29292c7d8bd90f71fcaa837`。`yolov8s` 提交 2 张合法图片后 `results` 长度为 2；随后 `/metrics` 里 `mortred_batch_size` 的样本都是 1，count 与 sum 都是 2。其余八个覆盖集 id 未单独验收，不新入列。
+
+P2-2 已关闭。合入 `b44f9cb2afd06269f446c9e4dfe0e04a202dcbd0`。打开同一限流开关后，错误 token 打满 burst，同一 IP 紧接着的合法推理仍然成功。401 不改变该来源的剩余配额。shadow 没有单独量剩余配额，以及 admit 到归还之间的暂扣，留在 `discovered.md` 附录，不新入列。
 
 P2-8 留在锁定队列附录，不重新入列。
 
