@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """Record SIGTERM stop order for one yolov8s + libface supervisor.
 
---check and the live run share unit_ok() and the exit-order judgment.
---check does not start processes and does not create the live json.
-The last four --check lines are fixed sentences.
-The live run keeps one unread gateway TCP session until the models_gone
-sample so the existing server stop can still be seen at 50 ms.
+--check reads the unit file and a fixed sample trace. It does not start
+processes, call strace, or create the live json.
+The live run starts supervisor under strace in a new session, sends SIGTERM
+only to that supervisor pid, and records kill/wait order from the trace.
 """
 
 from __future__ import annotations
 
-import copy
 import http.client
 import json
 import os
+import re
+import select
 import signal
 import socket
 import subprocess
@@ -25,18 +25,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SERVICE_PATH = ROOT / "deploy" / "mortred-supervisor.service"
 RECORD_PATH = ROOT / "logs" / "stop_order_yolov8s_libface.json"
+STRACE_BIN = "/usr/bin/strace"
+SETSID_BIN = "/usr/bin/setsid"
 
 YOLO_ID = "yolov8s"
 FACE_ID = "libface"
 GATEWAY_ID = "__gateway"
+PID_KEYS = ("yolov8s", "libface", "gateway")
 
 STATUS_PORT = 8787
 PORTS = (8787, 8080, 9051, 9056)
-GATEWAY_PORT = 8080
 # Existing autostart budgets. Do not extend them.
 READY_BUDGET_S = 15 + 60
 STOP_WAIT_S = 30
-SAMPLE_INTERVAL_S = 0.05
+READY_POLL_S = 0.2
 
 TOKEN_KEYS = (
     "MORTRED_API_TOKEN",
@@ -63,9 +65,9 @@ CHECK_LINES = (
     "KillMode=process 为通过",
     "KillSignal=SIGTERM 为通过",
     "TimeoutStopSec=120 为通过",
-    "模型先退出且当时 gateway 与 supervisor 仍在为通过",
-    "gateway 先于任一模型消失为不通过",
-    "模型消失时 supervisor 已退出为不通过",
+    "模型 SIGINT 并等待之后才向 gateway 发 SIGINT 为通过",
+    "gateway 的 SIGINT 早于任一模型退出为不通过",
+    "未等到两个模型退出就向 gateway 发 SIGINT 为不通过",
     "gateway 退出后模型 pid 再次出现为不通过",
 )
 CHECK_STDOUT = "".join(line + "\n" for line in CHECK_LINES)
@@ -78,19 +80,44 @@ RECORD_KEYS = {
     "pack",
     "pids",
     "ppid",
-    "models_gone",
-    "gateway_gone",
-    "after_supervisor",
+    "established_to_8080",
+    "events",
+    "after_gateway",
 }
-PID_KEYS = ("yolov8s", "libface", "gateway")
-SAMPLE_KEYS = (
-    "sample_index",
-    "supervisor_alive",
-    "gateway_alive",
-    "yolov8s_alive",
-    "libface_alive",
+AFTER_KEYS = ("gateway_alive", "yolov8s_alive", "libface_alive")
+KILL_CALLS = {"kill", "tgkill", "tkill", "rt_sigqueueinfo"}
+WAIT_CALLS = {"wait4", "waitpid"}
+LOOPBACK_8080 = "0100007F:1F90"
+
+_PREFIX_RE = re.compile(
+    r"^(?:\[pid\s+(\d+)\]\s+|(\d+)\s+)(\d+):(\d{2}):(\d{2})\.(\d+)\s+(.*)$"
 )
-ALIVE_KEYS = SAMPLE_KEYS[1:]
+_COMPLETE_RE = re.compile(r"^(\w+)\((.*)\)\s*=\s*(-?\d+)\b")
+_UNFINISHED_RE = re.compile(r"^(\w+)\((.*)\s*<unfinished \.\.\.>\s*$")
+_RESUMED_RE = re.compile(
+    r"^<\.\.\.\s+(\w+)\s+resumed>\s*(.*)\)\s*=\s*(-?\d+)\b"
+)
+
+# strace -f prints the caller thread id. The fixed sample uses one thread id
+# that is not the supervisor pid, matching the monitor thread that calls kill.
+_SAMPLE_PIDS = {"yolov8s": 11, "libface": 22, "gateway": 33}
+_SAMPLE_TIDS = {100, 101}
+_GOOD_TRACE = "\n".join(
+    (
+        "999 00:00:01.000000 kill(11, SIGINT) = 0",
+        "101 00:00:01.000000 kill(11, SIGINT) = 0",
+        "101 00:00:01.000100 kill(22, 2) = 0",
+        "101 00:00:01.000200 kill(11, SIGTERM) = 0",
+        "101 00:00:01.010000 wait4(-1, NULL, WNOHANG, NULL) = 0",
+        "101 00:00:01.100000 wait4(11,  <unfinished ...>",
+        "101 00:00:01.150000 <... wait4 resumed>[{WIFSIGNALED(s) && WTERMSIG(s) == SIGINT}], WNOHANG, NULL) = 11",
+        "101 00:00:01.160000 wait4(-1, [{WIFEXITED(s) && WEXITSTATUS(s) == 0}], WNOHANG, NULL) = 22",
+        "101 00:00:01.200000 kill(33, SIGINT) = 0",
+        "101 00:00:01.300000 waitpid(33, [{WIFEXITED(s) && WEXITSTATUS(s) == 0}], WNOHANG) = 33",
+        "11 00:00:01.000050 --- SIGINT {si_signo=SIGINT, si_code=SI_USER, si_pid=100, si_uid=1000} ---",
+        "101 00:00:01.310000 +++ exited with 0 +++",
+    )
+) + "\n"
 
 
 def is_json_int(value) -> bool:
@@ -101,7 +128,7 @@ def unit_ok(text: str) -> bool:
     """[Service] before [Install] has one exact KillMode=process line."""
     if not isinstance(text, str):
         return False
-    if "ExecStop=" in text or "SendSIGKILL=" in text or "FinalKillSignal=" in text:
+    if "ExecStop=" in text:
         return False
     lines = text.splitlines()
     if lines.count("[Service]") != 1 or lines.count("[Install]") != 1:
@@ -146,130 +173,10 @@ def unit_rules_hold(real_text: str) -> bool:
         valid.replace("KillMode=process\n", "KillMode=process\nKillMode=process\n"),
         valid.replace("KillMode=process\n", ""),
         valid + "ExecStop=/bin/true\n",
-        valid + "SendSIGKILL=no\n",
-        valid + "FinalKillSignal=SIGKILL\n",
         "[Install]\nKillMode=process\n[Service]\n"
         "TimeoutStopSec=120\nKillSignal=SIGTERM\n",
     )
     return all(not unit_ok(item) for item in rejected)
-
-
-def sample_well_formed(sample) -> bool:
-    if not isinstance(sample, dict) or set(sample) != set(SAMPLE_KEYS):
-        return False
-    if not is_json_int(sample.get("sample_index")) or sample["sample_index"] < 0:
-        return False
-    for key in ALIVE_KEYS:
-        if type(sample.get(key)) is not bool:
-            return False
-    return True
-
-
-def milestones_ok(models_gone, gateway_gone, after) -> bool:
-    if not all(sample_well_formed(item) for item in (models_gone, gateway_gone, after)):
-        return False
-    if models_gone["yolov8s_alive"] or models_gone["libface_alive"]:
-        return False
-    if not models_gone["gateway_alive"] or not models_gone["supervisor_alive"]:
-        return False
-    if (
-        gateway_gone["gateway_alive"]
-        or gateway_gone["yolov8s_alive"]
-        or gateway_gone["libface_alive"]
-    ):
-        return False
-    if gateway_gone["sample_index"] <= models_gone["sample_index"]:
-        return False
-    if (
-        after["supervisor_alive"]
-        or after["gateway_alive"]
-        or after["yolov8s_alive"]
-        or after["libface_alive"]
-    ):
-        return False
-    if after["sample_index"] <= gateway_gone["sample_index"]:
-        return False
-    return True
-
-
-def _parse_samples(samples):
-    if not isinstance(samples, list) or not samples:
-        return None
-    parsed = []
-    expected = None
-    for sample in samples:
-        if not sample_well_formed(sample):
-            return None
-        index = sample["sample_index"]
-        if expected is None:
-            expected = index
-        elif index != expected:
-            return None
-        expected = index + 1
-        parsed.append(sample)
-    return parsed
-
-
-def _copy_sample(sample: dict) -> dict:
-    return {key: sample[key] for key in SAMPLE_KEYS}
-
-
-def _finish(models_gone, gateway_gone, after):
-    if not milestones_ok(models_gone, gateway_gone, after):
-        return "fail", None
-    return "pass", (
-        _copy_sample(models_gone),
-        _copy_sample(gateway_gone),
-        _copy_sample(after),
-    )
-
-
-def classify_order(samples):
-    """Walk 50 ms samples. Return pass plus three objects, or a failure tag.
-
-    pending means the trace has not reached a decision yet.
-    """
-    parsed = _parse_samples(samples)
-    if parsed is None:
-        return "fail", None
-    models_gone = None
-    gateway_gone = None
-    for sample in parsed:
-        yolo = sample["yolov8s_alive"]
-        face = sample["libface_alive"]
-        gateway = sample["gateway_alive"]
-        supervisor = sample["supervisor_alive"]
-        both_dead = (not yolo) and (not face)
-        if models_gone is None:
-            if not gateway:
-                return "gateway_first", None
-            if ((not yolo) or (not face)) and (not supervisor):
-                return "supervisor_gone", None
-            if both_dead and supervisor:
-                models_gone = sample
-            continue
-        if yolo or face:
-            if gateway_gone is None:
-                return "fail", None
-            return "model_reappeared", None
-        if gateway_gone is None:
-            if not gateway:
-                gateway_gone = sample
-            continue
-        if gateway_gone["supervisor_alive"] is False:
-            if sample["sample_index"] != gateway_gone["sample_index"] + 1:
-                return "fail", None
-            if yolo or face:
-                return "model_reappeared", None
-            if supervisor or gateway:
-                return "fail", None
-            return _finish(models_gone, gateway_gone, sample)
-        if (not supervisor) and (not gateway):
-            return _finish(models_gone, gateway_gone, sample)
-        if supervisor and (not gateway):
-            continue
-        return "fail", None
-    return "pending", None
 
 
 def one_server(status: dict, model_id: str):
@@ -332,11 +239,230 @@ def pack_ok(text) -> bool:
     return names == ["yolov8s", "libface"] or names == ["libface", "yolov8s"]
 
 
+def _ts_us(hour: str, minute: str, second: str, frac: str) -> int:
+    if len(frac) > 6:
+        usec = int(frac[:6])
+    else:
+        usec = int(frac) * (10 ** (6 - len(frac)))
+    return ((int(hour) * 60 + int(minute)) * 60 + int(second)) * 1000000 + usec
+
+
+def _split_top(args: str):
+    parts = []
+    buf = []
+    depth = 0
+    for ch in args:
+        if ch == "," and depth == 0:
+            parts.append("".join(buf).strip())
+            buf = []
+            continue
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth = max(0, depth - 1)
+        buf.append(ch)
+    tail = "".join(buf).strip()
+    if tail:
+        parts.append(tail)
+    return parts
+
+
+def _first_int(text: str):
+    match = re.match(r"-?\d+", text.strip())
+    if match is None:
+        return None
+    return int(match.group(0))
+
+
+def _is_sigint(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped:
+        return False
+    token = stripped.split()[0].rstrip(",")
+    return token in {"SIGINT", "2", "0x2", "0X2"}
+
+
+def _kill_target_signal(name: str, args: str):
+    parts = _split_top(args)
+    if name == "kill" and len(parts) >= 2:
+        return [_first_int(parts[0])], parts[1]
+    if name == "tkill" and len(parts) >= 2:
+        return [_first_int(parts[0])], parts[1]
+    if name == "tgkill" and len(parts) >= 3:
+        return [_first_int(parts[0]), _first_int(parts[1])], parts[2]
+    if name == "rt_sigqueueinfo" and len(parts) >= 2:
+        return [_first_int(parts[0])], parts[1]
+    return [], ""
+
+
+def _event(pid_key: str, op: str, ts_us: int, sig: str | None = None) -> dict:
+    item = {"pid_key": pid_key, "op": op, "ts_us": ts_us}
+    if op == "kill":
+        item = {
+            "pid_key": pid_key,
+            "op": op,
+            "signal": sig,
+            "ts_us": ts_us,
+        }
+    return item
+
+
+def _emit(name, args, ret, caller, ts_us, supervisor_tids, key_by_pid, out):
+    if caller not in supervisor_tids and name in KILL_CALLS:
+        return
+    if name in KILL_CALLS:
+        if ret != 0:
+            return
+        targets, sig = _kill_target_signal(name, args)
+        if not _is_sigint(sig):
+            return
+        seen = set()
+        for target in targets:
+            key = key_by_pid.get(target)
+            if key is None or key in seen:
+                continue
+            seen.add(key)
+            out.append(_event(key, "kill", ts_us, "SIGINT"))
+        return
+    if name in WAIT_CALLS and ret in key_by_pid:
+        out.append(_event(key_by_pid[ret], "wait", ts_us))
+
+
+def parse_trace(text: str, supervisor_tids, pids: dict) -> list | None:
+    """Keep supervisor kill calls and waits whose return pid is one of the three."""
+    if not isinstance(text, str):
+        return None
+    if not isinstance(supervisor_tids, set) or not supervisor_tids:
+        return None
+    key_by_pid = {}
+    for key in PID_KEYS:
+        pid = pids.get(key)
+        if not is_json_int(pid) or pid <= 0 or pid in key_by_pid:
+            return None
+        key_by_pid[pid] = key
+    events = []
+    pending = {}
+    for raw in text.splitlines():
+        match = _PREFIX_RE.match(raw.strip())
+        if match is None:
+            continue
+        caller_text = match.group(1) or match.group(2)
+        caller = int(caller_text)
+        ts_us = _ts_us(match.group(3), match.group(4), match.group(5), match.group(6))
+        body = match.group(7)
+        if body.startswith("---") or body.startswith("+++"):
+            continue
+        resumed = _RESUMED_RE.match(body)
+        if resumed is not None:
+            name = resumed.group(1)
+            args = pending.pop((caller, name), resumed.group(2))
+            ret = int(resumed.group(3))
+            _emit(name, args, ret, caller, ts_us, supervisor_tids, key_by_pid, events)
+            continue
+        unfinished = _UNFINISHED_RE.match(body)
+        if unfinished is not None:
+            pending[(caller, unfinished.group(1))] = unfinished.group(2).strip()
+            continue
+        complete = _COMPLETE_RE.match(body)
+        if complete is None:
+            continue
+        _emit(
+            complete.group(1),
+            complete.group(2),
+            int(complete.group(3)),
+            caller,
+            ts_us,
+            supervisor_tids,
+            key_by_pid,
+            events,
+        )
+    return events
+
+
+def choose_events(events):
+    """One SIGINT kill and a later wait per model, then a later gateway SIGINT."""
+    if not isinstance(events, list):
+        return None
+    grouped = {key: {"kill": [], "wait": []} for key in PID_KEYS}
+    for item in events:
+        if not isinstance(item, dict):
+            return None
+        key = item.get("pid_key")
+        op = item.get("op")
+        ts_us = item.get("ts_us")
+        if key not in grouped or op not in {"kill", "wait"}:
+            return None
+        if not is_json_int(ts_us):
+            return None
+        if op == "kill":
+            if item.get("signal") != "SIGINT":
+                return None
+            if set(item) != {"pid_key", "op", "signal", "ts_us"}:
+                return None
+        elif set(item) != {"pid_key", "op", "ts_us"}:
+            return None
+        grouped[key][op].append(item)
+    chosen = []
+    model_waits = {}
+    for key in (YOLO_ID, FACE_ID):
+        kills = grouped[key]["kill"]
+        if not kills:
+            return None
+        kill = min(kills, key=lambda item: item["ts_us"])
+        later = [item for item in grouped[key]["wait"] if item["ts_us"] > kill["ts_us"]]
+        if not later:
+            return None
+        wait = min(later, key=lambda item: item["ts_us"])
+        chosen.append(kill)
+        chosen.append(wait)
+        model_waits[key] = wait
+    gate_kills = [
+        item
+        for item in grouped["gateway"]["kill"]
+        if item["ts_us"] > model_waits[YOLO_ID]["ts_us"]
+        and item["ts_us"] > model_waits[FACE_ID]["ts_us"]
+    ]
+    if not gate_kills:
+        return None
+    gate_kill = min(gate_kills, key=lambda item: item["ts_us"])
+    chosen.append(gate_kill)
+    later_gate = [
+        item for item in grouped["gateway"]["wait"] if item["ts_us"] > gate_kill["ts_us"]
+    ]
+    if later_gate:
+        chosen.append(min(later_gate, key=lambda item: item["ts_us"]))
+    chosen.sort(key=lambda item: (item["ts_us"], 0 if item["op"] == "kill" else 1, item["pid_key"]))
+    return chosen
+
+
+def count_established(text: str) -> int | None:
+    """Count established IPv4 sockets whose local address is 127.0.0.1:8080."""
+    if not isinstance(text, str):
+        return None
+    count = 0
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) < 4:
+            continue
+        if parts[1].upper() == LOOPBACK_8080 and parts[3].upper() == "01":
+            count += 1
+    return count
+
+
 def _pid_map_ok(value, supervisor_pid: int) -> bool:
     if not isinstance(value, dict) or set(value) != set(PID_KEYS):
         return False
     for key in PID_KEYS:
         if not is_json_int(value.get(key)) or value[key] != supervisor_pid:
+            return False
+    return True
+
+
+def _after_ok(value) -> bool:
+    if not isinstance(value, dict) or set(value) != set(AFTER_KEYS):
+        return False
+    for key in AFTER_KEYS:
+        if value.get(key) is not False:
             return False
     return True
 
@@ -353,11 +479,12 @@ def judge_record(record) -> bool:
         return False
     if signal_pid <= 0 or signal_pid != supervisor_pid:
         return False
-    if not milestones_ok(
-        record.get("models_gone"),
-        record.get("gateway_gone"),
-        record.get("after_supervisor"),
-    ):
+    established = record.get("established_to_8080")
+    if not is_json_int(established) or established != 0:
+        return False
+    if choose_events(record.get("events")) is None:
+        return False
+    if not _after_ok(record.get("after_gateway")):
         return False
     if not pack_ok(record.get("pack")):
         return False
@@ -382,24 +509,13 @@ def judge_record(record) -> bool:
     return True
 
 
-def _alive(index, supervisor, gateway, yolo, face):
-    return {
-        "sample_index": index,
-        "supervisor_alive": supervisor,
-        "gateway_alive": gateway,
-        "yolov8s_alive": yolo,
-        "libface_alive": face,
-    }
+def _trace_with_gateway_at(clock: str) -> str:
+    return _GOOD_TRACE.replace("00:00:01.200000 kill(33, SIGINT)", "%s kill(33, SIGINT)" % clock)
 
 
-def _synthetic_record(models_gone, gateway_gone, after):
+def _synthetic_record(events):
     before = {
-        "gateway": {
-            "id": GATEWAY_ID,
-            "state": "running",
-            "pid": 33,
-            "ready": True,
-        },
+        "gateway": {"id": GATEWAY_ID, "state": "running", "pid": 33, "ready": True},
         "servers": [
             {"id": YOLO_ID, "state": "running", "pid": 11, "ready": True},
             {"id": FACE_ID, "state": "running", "pid": 22, "ready": True},
@@ -414,10 +530,33 @@ def _synthetic_record(models_gone, gateway_gone, after):
         "pack": PACK_TEXT,
         "pids": {"yolov8s": 11, "libface": 22, "gateway": 33},
         "ppid": {"yolov8s": 100, "libface": 100, "gateway": 100},
-        "models_gone": models_gone,
-        "gateway_gone": gateway_gone,
-        "after_supervisor": after,
+        "established_to_8080": 0,
+        "events": events,
+        "after_gateway": {
+            "gateway_alive": False,
+            "yolov8s_alive": False,
+            "libface_alive": False,
+        },
     }
+
+
+def _tcp_rules_hold() -> bool:
+    listen_only = (
+        "  sl  local_address rem_address   st\n"
+        "   0: 0100007F:1F90 00000000:0000 0A 00000000:00000000\n"
+        "   1: 0100007F:226F 0100007F:1F90 01 00000000:00000000\n"
+    )
+    one_established = (
+        listen_only
+        + "   2: 0100007F:1F90 0100007F:C000 01 00000000:00000000\n"
+    )
+    if count_established(listen_only) != 0:
+        return False
+    if count_established(one_established) != 1:
+        return False
+    if count_established("") != 0:
+        return False
+    return True
 
 
 def order_rules_hold() -> bool:
@@ -427,123 +566,74 @@ def order_rules_hold() -> bool:
         return False
     if pack_ok(PACK_TEXT.replace("worker_nums = 1", "decode_auto = true", 1)):
         return False
-
-    later = [
-        _alive(0, True, True, True, True),
-        _alive(1, True, True, False, True),
-        _alive(2, True, True, False, False),
-        _alive(3, True, True, False, False),
-        _alive(4, True, False, False, False),
-        _alive(5, True, False, False, False),
-        _alive(6, False, False, False, False),
-    ]
-    outcome, miles = classify_order(later)
-    if outcome != "pass" or miles is None:
+    if not _tcp_rules_hold():
         return False
-    if [item["sample_index"] for item in miles] != [2, 4, 6]:
+    good = parse_trace(_GOOD_TRACE, set(_SAMPLE_TIDS), _SAMPLE_PIDS)
+    chosen = choose_events(good)
+    if chosen is None or not judge_record(_synthetic_record(chosen)):
         return False
-    if not judge_record(_synthetic_record(*miles)):
+    kill_callers = []
+    for item in chosen:
+        if item["op"] == "kill" and item["pid_key"] in {YOLO_ID, FACE_ID}:
+            kill_callers.append(item["ts_us"])
+    if len(kill_callers) != 2:
         return False
-
-    same = [
-        _alive(0, True, True, True, True),
-        _alive(1, True, True, False, False),
-        _alive(2, False, False, False, False),
-        _alive(3, False, False, False, False),
-    ]
-    outcome, miles = classify_order(same)
-    if outcome != "pass" or miles is None:
+    # A trace whose only SIGINT kills come from outside the supervisor is not an order.
+    outsider = parse_trace(_GOOD_TRACE, {999}, _SAMPLE_PIDS)
+    if choose_events(outsider) is not None:
         return False
-    if [item["sample_index"] for item in miles] != [1, 2, 3]:
+    early = parse_trace(_trace_with_gateway_at("00:00:01.000050"), set(_SAMPLE_TIDS), _SAMPLE_PIDS)
+    if choose_events(early) is not None:
         return False
-
-    if classify_order([_alive(0, True, True, True, True)])[0] != "pending":
+    one_model = parse_trace(
+        _trace_with_gateway_at("00:00:01.155000"), set(_SAMPLE_TIDS), _SAMPLE_PIDS
+    )
+    if choose_events(one_model) is not None:
         return False
-    gateway_first = [
-        _alive(0, True, True, True, True),
-        _alive(1, True, False, True, True),
-    ]
-    if classify_order(gateway_first)[0] != "gateway_first":
+    same_time = parse_trace(
+        _trace_with_gateway_at("00:00:01.160000"), set(_SAMPLE_TIDS), _SAMPLE_PIDS
+    )
+    if choose_events(same_time) is not None:
         return False
-    gateway_before_one = [
-        _alive(0, True, True, True, True),
-        _alive(1, True, True, False, True),
-        _alive(2, True, False, False, True),
-    ]
-    if classify_order(gateway_before_one)[0] != "gateway_first":
+    tgkill_trace = (
+        "101 00:00:01.000000 tgkill(11, 11, SIGINT) = 0\n"
+        "101 00:00:01.000100 tkill(22, SIGINT) = 0\n"
+        "101 00:00:01.150000 wait4(-1, [{WIFEXITED(s) && WEXITSTATUS(s) == 0}], 0, NULL) = 11\n"
+        "101 00:00:01.160000 wait4(-1, [{WIFEXITED(s) && WEXITSTATUS(s) == 0}], 0, NULL) = 22\n"
+        "101 00:00:01.200000 rt_sigqueueinfo(33, SIGINT, {si_signo=SIGINT}) = 0\n"
+        "101 00:00:01.300000 wait4(-1, [{WIFEXITED(s) && WEXITSTATUS(s) == 0}], 0, NULL) = 33\n"
+    )
+    if choose_events(parse_trace(tgkill_trace, set(_SAMPLE_TIDS), _SAMPLE_PIDS)) is None:
         return False
-    supervisor_gone = [
-        _alive(0, True, True, True, True),
-        _alive(1, False, True, True, True),
-        _alive(2, False, True, False, False),
-    ]
-    if classify_order(supervisor_gone)[0] != "supervisor_gone":
-        return False
-    supervisor_same = [
-        _alive(0, True, True, True, True),
-        _alive(1, False, True, False, True),
-    ]
-    if classify_order(supervisor_same)[0] != "supervisor_gone":
-        return False
-    reappear = [
-        _alive(0, True, True, False, False),
-        _alive(1, True, False, False, False),
-        _alive(2, True, False, True, False),
-    ]
-    if classify_order(reappear)[0] != "model_reappeared":
-        return False
-    reappear_next = [
-        _alive(0, True, True, False, False),
-        _alive(1, False, False, False, False),
-        _alive(2, False, False, True, False),
-    ]
-    if classify_order(reappear_next)[0] != "model_reappeared":
-        return False
-    reappear_then_die = [
-        _alive(0, True, True, False, False),
-        _alive(1, True, False, False, False),
-        _alive(2, True, False, True, False),
-        _alive(3, True, False, False, False),
-        _alive(4, False, False, False, False),
-    ]
-    if classify_order(reappear_then_die)[0] != "model_reappeared":
-        return False
-
-    dirty = _alive(0, True, True, False, False)
-    dirty["pid"] = 11
-    if classify_order([dirty])[0] != "fail":
-        return False
-
-    good = _synthetic_record(*classify_order(later)[1])
-    bad_supervisor = copy.deepcopy(good)
-    bad_supervisor["models_gone"] = _copy_sample(bad_supervisor["models_gone"])
-    bad_supervisor["models_gone"]["supervisor_alive"] = False
-    bad_gateway = copy.deepcopy(good)
-    bad_gateway["gateway_gone"] = _copy_sample(bad_gateway["gateway_gone"])
-    bad_gateway["gateway_gone"]["yolov8s_alive"] = True
-    bad_after = copy.deepcopy(good)
-    bad_after["after_supervisor"] = _copy_sample(bad_after["after_supervisor"])
-    bad_after["after_supervisor"]["libface_alive"] = True
-    bad_signal = copy.deepcopy(good)
+    record = _synthetic_record(chosen)
+    alive = _synthetic_record(chosen)
+    alive["after_gateway"] = dict(record["after_gateway"])
+    alive["after_gateway"]["yolov8s_alive"] = True
+    connected = _synthetic_record(chosen)
+    connected["established_to_8080"] = 1
+    bad_signal = _synthetic_record(chosen)
     bad_signal["signal"] = "SIGINT"
-    bad_pid = copy.deepcopy(good)
+    bad_pid = _synthetic_record(chosen)
     bad_pid["signal_pid"] = bad_pid["supervisor_pid"] + 1
-    bad_ppid = copy.deepcopy(good)
+    bad_ppid = _synthetic_record(chosen)
     bad_ppid["ppid"] = {"yolov8s": 100, "libface": 100, "gateway": 101}
-    bad_ready = copy.deepcopy(good)
+    bad_ready = _synthetic_record(chosen)
+    bad_ready["before"] = {
+        "gateway": dict(record["before"]["gateway"]),
+        "servers": [dict(item) for item in record["before"]["servers"]],
+    }
     bad_ready["before"]["servers"][0]["ready"] = False
-    bad_word = copy.deepcopy(good)
-    bad_word["before"] = dict(good["before"])
+    bad_word = _synthetic_record(chosen)
+    bad_word["before"] = dict(record["before"])
     bad_word["before"]["note"] = "systemctl"
-    with_pid = copy.deepcopy(good)
-    with_pid["models_gone"] = dict(good["models_gone"])
-    with_pid["models_gone"]["pid"] = 11
+    with_pid = _synthetic_record(chosen)
+    with_pid["after_gateway"] = dict(record["after_gateway"])
+    with_pid["after_gateway"]["pid"] = 11
     if any(
         judge_record(item)
         for item in (
-            bad_supervisor,
-            bad_gateway,
-            bad_after,
+            alive,
+            connected,
             bad_signal,
             bad_pid,
             bad_ppid,
@@ -576,6 +666,7 @@ def _fail(message: str) -> int:
 
 
 def port_in_use(port: int) -> bool:
+    # bind only. This does not connect, including not to 127.0.0.1:8080.
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         sock.bind(("127.0.0.1", port))
@@ -688,83 +779,6 @@ def pid_alive(pid: int) -> bool:
     return (Path("/proc") / str(pid)).exists()
 
 
-def close_hold(state: dict) -> None:
-    sock = state.get("hold")
-    state["hold"] = None
-    if sock is None:
-        return
-    try:
-        sock.close()
-    except OSError:
-        pass
-
-
-def _socket_inodes(pid: int):
-    inodes = set()
-    base = Path("/proc") / str(pid) / "fd"
-    try:
-        names = list(base.iterdir())
-    except OSError:
-        return inodes
-    for item in names:
-        try:
-            target = os.readlink(item)
-        except OSError:
-            continue
-        if target.startswith("socket:[") and target.endswith("]"):
-            inodes.add(target[len("socket:[") : -1])
-    return inodes
-
-
-def gateway_has_peer(pid: int, listen_port: int, client_port: int) -> bool:
-    """True when pid owns the established socket for this client port."""
-    inodes = _socket_inodes(pid)
-    if not inodes:
-        return False
-    listen_hex = "%04X" % listen_port
-    client_hex = "%04X" % client_port
-    try:
-        lines = Path("/proc/net/tcp").read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return False
-    for line in lines[1:]:
-        parts = line.split()
-        if len(parts) < 10 or parts[3] != "01" or parts[9] not in inodes:
-            continue
-        local, remote = parts[1], parts[2]
-        if local.endswith(":" + listen_hex) and remote.endswith(":" + client_hex):
-            return True
-    return False
-
-
-def open_gateway_hold(gateway_pid: int):
-    """Accepted unread TCP session. No request bytes and no signal.
-
-    Idle gateway stop() returns in a few milliseconds, inside one 50 ms
-    sample. stop() waits while this session is open, then returns after
-    the session is closed.
-    """
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        sock.settimeout(2)
-        sock.connect(("127.0.0.1", GATEWAY_PORT))
-        client_port = sock.getsockname()[1]
-        sock.settimeout(None)
-    except OSError:
-        sock.close()
-        return None
-    seen = False
-    for _ in range(20):
-        if gateway_has_peer(gateway_pid, GATEWAY_PORT, client_port):
-            seen = True
-            break
-        time.sleep(0.01)
-    if not seen:
-        sock.close()
-        return None
-    return sock
-
-
 def read_ppid(pid: int):
     path = Path("/proc") / str(pid) / "status"
     try:
@@ -781,6 +795,98 @@ def read_ppid(pid: int):
                 return value
         return None
     return None
+
+
+def read_sid(pid: int):
+    path = Path("/proc") / str(pid) / "stat"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    end = text.rfind(")")
+    if end < 0:
+        return None
+    fields = text[end + 2 :].split()
+    if len(fields) < 4 or not fields[3].isdigit():
+        return None
+    return int(fields[3])
+
+
+def read_tids(pid: int):
+    task_dir = Path("/proc") / str(pid) / "task"
+    tids = set()
+    try:
+        for entry in task_dir.iterdir():
+            if entry.name.isdigit():
+                tids.add(int(entry.name))
+    except OSError:
+        return None
+    tids.add(pid)
+    return tids
+
+
+def read_exe(pid: int) -> str:
+    try:
+        return os.readlink("/proc/%d/exe" % pid)
+    except OSError:
+        return ""
+
+
+def child_pids(pid: int):
+    path = Path("/proc") / str(pid) / "task" / str(pid) / "children"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    found = []
+    for part in text.split():
+        if part.isdigit():
+            found.append(int(part))
+    return found
+
+
+def find_traced_supervisor(strace_pid: int, binary: Path):
+    expected = os.path.realpath(str(binary))
+    base = os.path.basename(expected)
+    for child in child_pids(strace_pid):
+        exe = read_exe(child)
+        if exe == expected or exe.endswith("/" + base):
+            return child
+    return None
+
+
+def read_established_file() -> int | None:
+    path = Path("/proc/net/tcp")
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    return count_established(text)
+
+
+def wait_for_exit(pid: int, timeout_s: float) -> bool:
+    if not pid_alive(pid):
+        return True
+    try:
+        fd = os.pidfd_open(pid)
+    except (AttributeError, OSError):
+        return not pid_alive(pid)
+    try:
+        poller = select.poll()
+        poller.register(fd, select.POLLIN)
+        hit = poller.poll(int(timeout_s * 1000))
+        return bool(hit) or not pid_alive(pid)
+    finally:
+        os.close(fd)
+
+
+def signal_supervisor(pid: int) -> bool:
+    # This pid only. Not the process group and not a child pid.
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except OSError:
+        return False
+    return True
 
 
 def redact(text: str, tokens: dict) -> str:
@@ -844,48 +950,34 @@ def write_record(record: dict, tokens: dict) -> bool:
     return True
 
 
-def signal_supervisor(pid: int) -> bool:
-    # This pid only. Not the process group and not a child pid.
-    try:
-        os.kill(pid, signal.SIGTERM)
-    except OSError:
-        return False
-    return True
+def _describe_events(events) -> str:
+    if not isinstance(events, list):
+        return "no events"
+    lines = []
+    for item in events:
+        if not isinstance(item, dict):
+            continue
+        if item.get("op") == "kill":
+            lines.append(
+                "%s kill %s %s"
+                % (item.get("pid_key"), item.get("signal"), item.get("ts_us"))
+            )
+        else:
+            lines.append("%s wait %s" % (item.get("pid_key"), item.get("ts_us")))
+    return "\n".join(lines)
 
 
-def collect_samples(state, proc, supervisor_pid, yolo_pid, face_pid, gateway_pid, deadline):
-    samples = []
-    index = 0
-    next_tick = time.monotonic()
-    outcome = "pending"
-    milestones = None
-    while time.monotonic() < deadline:
-        proc.poll()
-        sample = {
-            "sample_index": index,
-            "supervisor_alive": pid_alive(supervisor_pid),
-            "gateway_alive": pid_alive(gateway_pid),
-            "yolov8s_alive": pid_alive(yolo_pid),
-            "libface_alive": pid_alive(face_pid),
-        }
-        samples.append(sample)
-        if (
-            state.get("hold") is not None
-            and (not sample["yolov8s_alive"])
-            and (not sample["libface_alive"])
-            and sample["gateway_alive"]
-            and sample["supervisor_alive"]
-        ):
-            close_hold(state)
-        outcome, milestones = classify_order(samples)
-        if outcome != "pending":
+def _relevant_trace(text: str) -> str:
+    kept = []
+    for line in text.splitlines():
+        if not any(name in line for name in ("kill(", "tgkill(", "tkill(", "rt_sigqueueinfo(", "wait4(", "waitpid(")):
+            continue
+        if "wait" in line and (line.rstrip().endswith("= 0") or " = -1 " in line):
+            continue
+        kept.append(line)
+        if len(kept) >= 80:
             break
-        index += 1
-        next_tick += SAMPLE_INTERVAL_S
-        delay = next_tick - time.monotonic()
-        if delay > 0:
-            time.sleep(delay)
-    return outcome, milestones, samples
+    return "\n".join(kept)
 
 
 def _run_live(state: dict) -> int:
@@ -897,6 +989,10 @@ def _run_live(state: dict) -> int:
         return _fail("unit file does not match the stop contract\n")
     if not pack_ok(PACK_TEXT):
         return _fail("temporary pack text does not match\n")
+    if not os.path.isfile(STRACE_BIN) or not os.access(STRACE_BIN, os.X_OK):
+        return _fail("strace not found\n")
+    if not os.path.isfile(SETSID_BIN) or not os.access(SETSID_BIN, os.X_OK):
+        return _fail("setsid not found\n")
     binary = find_supervisor()
     if binary is None:
         return _fail("mortred-supervisor.out not found\n")
@@ -917,11 +1013,23 @@ def _run_live(state: dict) -> int:
     pack_text = pack_path.read_text(encoding="utf-8")
     if pack_text != PACK_TEXT or not pack_ok(pack_text):
         return _fail("temporary pack text does not match\n")
+    trace_path = str(Path(tmpdir) / "strace.txt")
+    state["trace_path"] = trace_path
 
     log_fp = open(Path(tmpdir) / "supervisor.log", "wb")
     state["log_fp"] = log_fp
     proc = subprocess.Popen(
-        [str(binary)],
+        [
+            STRACE_BIN,
+            "-f",
+            "-tt",
+            "-e",
+            "trace=kill,tgkill,tkill,rt_sigqueueinfo,wait4,waitpid",
+            "-o",
+            trace_path,
+            SETSID_BIN,
+            str(binary),
+        ],
         cwd=str(ROOT),
         env=child_env(pack_path, tokens),
         stdin=subprocess.DEVNULL,
@@ -933,97 +1041,105 @@ def _run_live(state: dict) -> int:
 
     deadline = time.monotonic() + READY_BUDGET_S
     before = None
+    supervisor_pid = None
     while time.monotonic() < deadline:
         if proc.poll() is not None:
             return _fail("supervisor exited before both models were ready\n")
-        doc = fetch_status(tokens["MORTRED_API_TOKEN"])
-        if doc is not None and trio_ready(doc) is not None:
-            before = doc
-            break
-        time.sleep(0.2)
-    if before is None:
+        if supervisor_pid is None:
+            supervisor_pid = find_traced_supervisor(proc.pid, binary)
+            if supervisor_pid is not None:
+                state["supervisor_pid"] = supervisor_pid
+        if supervisor_pid is not None:
+            doc = fetch_status(tokens["MORTRED_API_TOKEN"])
+            if doc is not None and trio_ready(doc) is not None:
+                before = doc
+                break
+        time.sleep(READY_POLL_S)
+    if before is None or supervisor_pid is None:
         return _fail("yolov8s and libface were not both ready\n")
 
+    if read_sid(supervisor_pid) != supervisor_pid:
+        return _fail("supervisor is not in a new session\n")
     found = trio_ready(before)
     yolo, face, gateway = found
     yolo_pid = yolo["pid"]
     face_pid = face["pid"]
     gateway_pid = gateway["pid"]
-    supervisor_pid = proc.pid
     if not is_json_int(supervisor_pid) or supervisor_pid <= 0:
         return _fail("supervisor pid is not a positive integer\n")
+    pids = {
+        "yolov8s": yolo_pid,
+        "libface": face_pid,
+        "gateway": gateway_pid,
+    }
     ppid = {}
-    for name, pid in (
-        ("yolov8s", yolo_pid),
-        ("libface", face_pid),
-        ("gateway", gateway_pid),
-    ):
+    for name, pid in pids.items():
         parent = read_ppid(pid)
         if parent != supervisor_pid:
             return _fail("child ppid does not match supervisor\n")
         ppid[name] = parent
+    tids = read_tids(supervisor_pid)
+    if not tids or supervisor_pid not in tids:
+        return _fail("supervisor threads were not read\n")
 
-    hold = open_gateway_hold(gateway_pid)
-    if hold is None:
-        return _fail("gateway did not accept an open session\n")
-    state["hold"] = hold
-
+    established = read_established_file()
+    if established is None:
+        return _fail("could not read established connections\n")
     if not signal_supervisor(supervisor_pid):
         return _fail("could not signal supervisor\n")
     state["signaled"] = True
-    signal_started = time.monotonic()
-    stop_deadline = signal_started + STOP_WAIT_S
-    outcome, milestones, samples = collect_samples(
-        state, proc, supervisor_pid, yolo_pid, face_pid, gateway_pid, stop_deadline
-    )
-    if outcome != "pass" or milestones is None:
-        tail = samples[-40:]
-        lines = [
-            "%d %d %d %d %d"
-            % (
-                item["sample_index"],
-                int(item["supervisor_alive"]),
-                int(item["gateway_alive"]),
-                int(item["yolov8s_alive"]),
-                int(item["libface_alive"]),
-            )
-            for item in tail
-        ]
+    if not wait_for_exit(supervisor_pid, STOP_WAIT_S):
+        return _fail("supervisor did not exit\n")
+    remaining = STOP_WAIT_S
+    try:
+        proc.wait(timeout=remaining)
+    except subprocess.TimeoutExpired:
+        return _fail("strace did not exit\n")
+
+    try:
+        trace_text = Path(trace_path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return _fail("strace output unreadable\n")
+    events = parse_trace(trace_text, tids, pids)
+    chosen = choose_events(events)
+    if chosen is None:
         sys.stderr.buffer.write(
-            ("stop order outcome %s\n%s\n" % (outcome, "\n".join(lines))).encode("utf-8")
+            ("stop order events\n%s\n%s\n" % (_describe_events(events), _relevant_trace(trace_text))).encode(
+                "utf-8"
+            )
         )
         return _fail("stop order did not pass\n")
-    if proc.poll() is None:
-        remaining = stop_deadline - time.monotonic()
-        if remaining <= 0:
-            return _fail("supervisor did not exit\n")
-        try:
-            proc.wait(timeout=remaining)
-        except subprocess.TimeoutExpired:
-            return _fail("supervisor did not exit\n")
-
-    models_gone, gateway_gone, after = milestones
+    gate_kill = [
+        item for item in chosen if item["pid_key"] == "gateway" and item["op"] == "kill"
+    ]
+    gate_wait = [
+        item
+        for item in chosen
+        if item["pid_key"] == "gateway" and item["op"] == "wait" and item["ts_us"] > gate_kill[0]["ts_us"]
+    ]
+    if not gate_wait:
+        return _fail("gateway wait was not in the trace\n")
+    after_gateway = {
+        "gateway_alive": pid_alive(gateway_pid),
+        "yolov8s_alive": pid_alive(yolo_pid),
+        "libface_alive": pid_alive(face_pid),
+    }
     record = {
         "signal": "SIGTERM",
         "signal_pid": supervisor_pid,
         "supervisor_pid": supervisor_pid,
         "before": before,
         "pack": pack_text,
-        "pids": {
-            "yolov8s": yolo_pid,
-            "libface": face_pid,
-            "gateway": gateway_pid,
-        },
-        "ppid": {
-            "yolov8s": ppid["yolov8s"],
-            "libface": ppid["libface"],
-            "gateway": ppid["gateway"],
-        },
-        "models_gone": models_gone,
-        "gateway_gone": gateway_gone,
-        "after_supervisor": after,
+        "pids": pids,
+        "ppid": ppid,
+        "established_to_8080": established,
+        "events": chosen,
+        "after_gateway": after_gateway,
     }
     if not judge_record(record):
+        sys.stderr.buffer.write(
+            ("stop order events\n%s\n" % _describe_events(chosen)).encode("utf-8")
+        )
         return _fail("stop order record did not pass\n")
     if not write_record(record, tokens):
         return _fail("refusing to write stop order record\n")
@@ -1032,18 +1148,37 @@ def _run_live(state: dict) -> int:
 
 def stop_process(state: dict) -> bool:
     proc = state.get("proc")
+    supervisor_pid = state.get("supervisor_pid")
+    if supervisor_pid is None and proc is not None and proc.poll() is None:
+        kids = child_pids(proc.pid)
+        if kids:
+            supervisor_pid = kids[0]
+            state["supervisor_pid"] = supervisor_pid
+    if supervisor_pid and pid_alive(supervisor_pid):
+        if not state.get("signaled"):
+            if not signal_supervisor(supervisor_pid):
+                return False
+            state["signaled"] = True
+        if not wait_for_exit(supervisor_pid, STOP_WAIT_S):
+            try:
+                os.kill(supervisor_pid, signal.SIGKILL)
+            except OSError:
+                return False
+            if not wait_for_exit(supervisor_pid, 5):
+                return False
+            return False
     if proc is None:
         return True
     if proc.poll() is not None:
         return True
-    if not state.get("signaled"):
-        if not signal_supervisor(proc.pid):
-            return False
-        state["signaled"] = True
     try:
         proc.wait(timeout=STOP_WAIT_S)
     except subprocess.TimeoutExpired:
-        return False
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            return False
     return True
 
 
@@ -1078,7 +1213,8 @@ def run_live() -> int:
         "log_fp": None,
         "signaled": False,
         "tokens": {},
-        "hold": None,
+        "supervisor_pid": None,
+        "trace_path": None,
     }
     code = 1
     try:
@@ -1087,7 +1223,6 @@ def run_live() -> int:
         sys.stderr.buffer.write(b"stop order run failed\n")
         code = 1
     finally:
-        close_hold(state)
         if code != 0:
             note_log(state, state.get("tokens") or {})
         process_stopped = stop_process(state)
