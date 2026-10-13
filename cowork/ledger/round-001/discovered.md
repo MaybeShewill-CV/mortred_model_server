@@ -13,3 +13,5 @@ P1-1 外部验收的五段 `_count` 都是 1，没有覆盖累计超过 4096 条
 P1-2 指南示例的 display name 仍是 `densenet classification`，源码注册行是 `Densenet classification`。方案写明 display name 不是完成条件。中文 README 第一小时没有 `mortredctl next` 已是 P2-10，不重复入列。
 
 P2-1 外部验收只打了 `yolov8s`、N=2。方案写明其余八个 id 共用这段同步路径，不各做一次外部验收。一次外部验收确认不了每个 id，不插入当前队列。
+
+P2-2 的 shadow 外部序列没有单独量剩余配额，只复跑了原断言：8 次无 Authorization 为 401、0 次 429。admit 成功到归还完成之间的暂扣，验收在收到上一次响应之后才发下一次，序列看不到。方案已规定 shadow 与 enforce 都归还这种 401，并且验收序列是串行的。一次外部验收确认不了这两句，不插入当前队列。
