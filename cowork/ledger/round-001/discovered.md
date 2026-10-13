@@ -24,3 +24,5 @@ P2-5 外部脚本按方案不启动 supervisor。`__gateway` 永久失败和管�
 
 P2-6 没有执行 `ctest -R stop_order_record_rules`。worktree 没有已配置的 CTest 构建目录，也没有重新编译 C++。第 1 条已经执行同一命令 `python3 scripts/stop_order_record.py --check`，退出码 0，没有写 json，也没有拉起模型。方案写明无 GPU 的 CI 跑过这条规则不能写成 OP5 已满足。一次外部验收确认不了 CTest 注册是否被默认 check 调度，不插入当前队列。
 
+P2-7 没有发送正好 256×256 的成功请求。方案规定成功增强图不作为通过。TensorRT 把已有引擎 `realesr-general-x4v3.engine.static_bs1.fp32` 记成 H/W 动态，profile 为 min 64、opt 256、max 640。验收标准 5 只核对 toml 与基准文件中的字符串，这两处已通过，该 toml 不在本次 diff 里。一次外部验收确认不了引擎剖面是否仍是静态 256，不插入当前队列。
+
