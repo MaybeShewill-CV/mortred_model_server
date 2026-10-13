@@ -40,6 +40,7 @@ LimitNOFILE=65536
 # ordered shutdown (models first, gateway last) may take a while
 TimeoutStopSec=120
 KillSignal=SIGTERM
+KillMode=process
 NoNewPrivileges=true
 OOMPolicy=continue
 
