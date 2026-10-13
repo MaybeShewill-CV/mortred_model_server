@@ -1,0 +1,7 @@
+# 第3步确认
+
+- 问题: P2-4
+- 方案版本: v1
+- 结论: 不同意
+- 条件: `before` 与 `after` 各是同一次 `GET /api/v1/status` 的响应正文，并各带一个写在正文之外的采样整数。`yolov8s` 与 `libface` 只取 `servers` 里 `id` 为这两个值的对象。gateway 只取键 `gateway`，其 `id` 为 `__gateway`。这三处的 `ready`、`state`、`pid` 按标准 3 和 7 判定。`servers` 里其余 catalog id 以及 `__gateway` 不算第三个 id。第三个 id 只查 pack 全文，不得出现第三个 `[pack.` 节。两条请求各记下路径、HTTP 状态、响应 JSON，以及与采样整数同一单调时钟的开始整数和结束整数。两条开始整数都大于 `before` 的采样整数，并且每条开始整数小于另一条结束整数。参与比较的是这五个整数，状态对象里的 `started_at_ms` 仍是进程启动时间。成功只看该条响应 JSON：HTTP 状态为 200，根上 `status` 为 0，`results` 长度为 1，`results[0].status` 为 0。跑 `--check` 之前 `logs/resident_pair_yolov8s_libface.json` 不存在，结束后仍不存在。`--check` 的标准输出逐行写出样例结果：时间重叠且两边成功为通过；时间不重叠为不通过；`before` 里一边 `ready` 不为 true 为不通过；`after` 的 pid 与 `before` 不一致为不通过；任一条 HTTP 不是 200、响应根上 `status` 不是 0 或 `results[0].status` 不是 0 为不通过；pack 全文出现第三个 `[pack.` 节为不通过。该命令退出码为 0。
+- 理由: 验收标准 1 至 7 已编号。标准 2 的退出码，以及 HTTP 200、根上 `status` 为 0、`results` 长度为 1、`results[0].status` 为 0，沿用现有 `POST /v1/models/{id}/infer` 信封，一次就能判定。标准 3、4、5 一次打开这份 json 确认不了。现有 `GET /api/v1/status` 把 gateway 放在键 `gateway` 下，`id` 为 `__gateway`，模型在 `servers` 里，每个状态对象已有 `started_at_ms`。同一份正确记录的 `servers` 还会带上其余 catalog id。标准 3 的 `gateway` 既可以是这个键，也可以是 `id` 等于 `gateway`。标准 4 的「没有第三个 id」既可以只约束 pack 全文，也可以把 `servers` 里的其他 id 和 `__gateway` 算进去；后一种会把正确记录判失败。标准 5 要比较的采样时间、开始和结束没有字段名，和已有的 `started_at_ms` 对不上同一种时钟。标准 1 只看退出码 0，看不到样例覆盖了哪些判定；这个 json 若事先已在，也看不出 `--check` 有没有创建它。
