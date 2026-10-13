@@ -101,7 +101,7 @@
 
 ## 表 3 — 标定（非发布 RPS）
 
-`--workers 1,2,4,8,16 --duration 15s --skip-joint`
+这些行来自当时的选点：`--workers 1,2,4,8,16 --duration 15s --skip-joint`，并发高于 worker 数。它们不是当前 `scripts/calibrate_pack.py` 的结果。当前标定的并发等于该档 worker 数，默认时长 30 秒，并按错误率、p99、排队和 RPS 涨幅停扫。
 
 | id | status | w* | decode_auto | rps@w* | report |
 |---|---|---:|---|---:|---|

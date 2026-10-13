@@ -1,21 +1,24 @@
 #!/usr/bin/env python3
 """Calibrate worker_nums for a machine pack. Never writes conf/server.
 
-For each pack id, sweep worker_nums, POST with http_infer_rps --raw, and sample GPU
-memory for that server process (NVML compute-apps by pid, else a unique
-mortred-model-server name). Whole-card memory.used is never treated as the
-model; if WSL has no process row, occupancy is device.used minus a sample
-taken before spawn (gpu_mem_source=device_delta). Suggests w* from the RPS
-curve. A joint pass starts every id at its suggested w; it sums only real
-NVML per-process rows, otherwise reports one pack device delta.
+For each pack id, sweep worker_nums at concurrency equal to that worker count,
+POST with http_infer_rps --raw, and sample GPU memory for that server process
+(NVML compute-apps by pid, else a unique mortred-model-server name). Whole-card
+memory.used is never treated as the model; if WSL has no process row, occupancy
+is device.used minus a sample taken before spawn (gpu_mem_source=device_delta).
+w* is the last worker count that still passes the error, p99, and queue gates
+and gains at least 10% RPS. With two or more eligible ids, a joint pass may
+lower a worker count so the set fits in the memory budget. It does not run a
+joint load.
 
-Optional --write-pack updates worker_nums, occupancy stamps, and the per-model
-decode_auto vote (cpu|gpu) on [pack.<ID>] in that pack file only. Git example
-packs should stay worker_nums=1 and must not commit gpu_mem_mib.
+Optional --write-pack updates final worker_nums, occupancy stamps, and the
+per-model decode_auto vote (cpu|gpu) on [pack.<ID>] in that pack file only.
+Runs shorter than 30s are not written. Git example packs should stay
+worker_nums=1 and must not commit gpu_mem_mib.
 
 Usage:
-  python3 scripts/calibrate_pack.py --pack conf/packs/demo.toml
-  python3 scripts/calibrate_pack.py --pack conf/packs/yolov8.toml \\
+  python3 scripts/calibrate_pack.py --pack /etc/mortred/pack.toml
+  python3 scripts/calibrate_pack.py --pack /tmp/machine-pack.toml \\
       --workers 1,2,4 --duration 8s --output logs/calibrate-yolov8.json
   python3 scripts/calibrate_pack.py --pack /etc/mortred/pack.toml --write-pack
   python3 scripts/calibrate_pack.py --self-test
@@ -46,9 +49,30 @@ sys.path.insert(0, str(ROOT / "scripts" / "server"))
 
 from http_infer_rps import LoadConfig, parse_duration, run_load  # noqa: E402
 from pack_trt import find_server_toml, pack_ids, pack_server_config, server_listen  # noqa: E402
+from repo_toml import load_toml  # noqa: E402
 from test_server import build_catalog, resolve_demo_image, resolve_server  # noqa: E402
 
 OOM_MARKERS = ("out of memory", "cuda oom", "cudnn_status_alloc_failed", "std::bad_alloc")
+CALIBRATOR_VERSION = "v4"
+RELEASE_DURATION_S = 30.0
+DECODE_VOTE_DURATION_S = 10.0
+LIGHT_THROUGHPUT_QPS = 500.0
+LIGHT_SWEEP = [1, 2, 4, 8, 16]
+OTHER_SWEEP = [1, 2, 4, 8]
+SCALE_NOTES = {"single_point", "approx_linear", "partial_scale"}
+# Seed latency budgets in milliseconds. Not a measured SLO.
+P99_CAP_MS = {
+    "mobilenetv2": 40.0,
+    "yolov8s": 50.0,
+    "libface": 40.0,
+    "pphuman_mobile": 40.0,
+    "dbnet": 60.0,
+    "dinov2_vits14": 50.0,
+    "superpoint": 25.0,
+    "realesrgan": 200.0,
+    "metric3d_512": 150.0,
+}
+_THROUGHPUT_RE = re.compile(r"Throughput:\s*([0-9]+(?:\.[0-9]+)?)\s*qps", re.IGNORECASE)
 
 
 def gpu_inventory() -> dict | None:
@@ -301,7 +325,7 @@ def load_pinned_rps(
         LoadConfig(
             url=url,
             image_path=image,
-            concurrency=max(4, min(16, 2 * workers)),
+            concurrency=max(1, workers),
             duration_s=duration_s,
             warmup_s=min(2.0, max(0.5, duration_s / 5.0)),
             token=auth_token,
@@ -437,41 +461,253 @@ def calibrate_decode_vote(
     return summary
 
 
-def pick_w_star(points: list[dict]) -> tuple[int, str]:
-    """Last good worker_nums. OOM / start fail / flat RPS keep the previous w."""
+def is_release_duration(duration_s: float) -> bool:
+    return duration_s + 1e-9 >= RELEASE_DURATION_S
+
+
+def benchmark_throughput_qps(root: Path, model_id: str) -> float | None:
+    path = root / "docs" / "benchmark-h3" / ("%s.txt" % model_id)
+    if not path.is_file():
+        return None
+    match = _THROUGHPUT_RE.search(path.read_text(encoding="utf-8", errors="replace"))
+    if not match:
+        return None
+    return float(match.group(1))
+
+
+def default_worker_sweep(root: Path, model_id: str) -> list[int]:
+    qps = benchmark_throughput_qps(root, model_id)
+    if qps is not None and qps >= LIGHT_THROUGHPUT_QPS:
+        return list(LIGHT_SWEEP)
+    return list(OTHER_SWEEP)
+
+
+def parse_worker_list(value: object) -> list[int] | None:
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple)):
+        nums = [int(item) for item in value]
+    else:
+        text = str(value).strip()
+        if not text:
+            return None
+        nums = [int(item) for item in text.split(",") if item.strip()]
+    if not nums or min(nums) < 1:
+        raise SystemExit("worker list must be integers >= 1, got %r" % (value,))
+    return nums
+
+
+def pack_table(pack: Path, catalog_id: str | None = None) -> dict:
+    table = load_toml(pack)
+    pack_body = table.get("pack")
+    if catalog_id is None:
+        if isinstance(pack_body, dict):
+            return pack_body
+        return {}
+    if isinstance(pack_body, dict) and isinstance(pack_body.get(catalog_id), dict):
+        return pack_body[catalog_id]
+    dotted = table.get("pack.%s" % catalog_id)
+    return dotted if isinstance(dotted, dict) else {}
+
+
+def workers_for_id(
+    root: Path,
+    model_id: str,
+    cli_workers: list[int] | None,
+    pack: Path | None,
+) -> list[int]:
+    if cli_workers:
+        return list(cli_workers)
+    if pack is not None:
+        parsed = parse_worker_list(pack_table(pack, model_id).get("worker_sweep"))
+        if parsed:
+            return parsed
+    return default_worker_sweep(root, model_id)
+
+
+def p99_cap_ms(model_id: str, pack: Path | None) -> float | None:
+    if pack is not None:
+        raw = pack_table(pack, model_id).get("p99_ms_cap")
+        if raw is not None and str(raw).strip() != "":
+            return float(raw)
+    cap = P99_CAP_MS.get(model_id.lower())
+    return None if cap is None else float(cap)
+
+
+def joint_budget_mib(pack: Path, gpu: dict | None) -> float | None:
+    raw = pack_table(pack).get("gpu_memory_budget_mib")
+    if isinstance(pack_table(pack).get("gpu_memory_budget_mib"), dict):
+        raw = None
+    if raw is not None and not isinstance(raw, dict) and str(raw).strip() != "":
+        return float(raw)
+    total = None if not isinstance(gpu, dict) else gpu.get("memory_total_mib")
+    if isinstance(total, (int, float)) and float(total) > 0:
+        return 0.85 * float(total)
+    return None
+
+
+def run_post_sweep(report: dict, joint_fn, decode_fn) -> dict:
+    """Joint residency is decided before the decode vote."""
+    joint_fn(report)
+    decode_fn(report)
+    return report
+
+
+def fetch_metrics_text(port: int, token: str) -> str | None:
+    req = urllib.request.Request(
+        "http://127.0.0.1:%d/metrics" % port,
+        headers={"Authorization": "Bearer %s" % token},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return resp.read().decode("utf-8", errors="replace")
+    except (OSError, urllib.error.URLError, TimeoutError):
+        return None
+
+
+def _metric_series(text: str, name: str, model: str) -> dict | None:
+    bucket_re = re.compile(
+        r'%s_bucket\{model="%s",le="([^"]+)"\} ([0-9.eE+-]+)'
+        % (re.escape(name), re.escape(model))
+    )
+    count_re = re.compile(
+        r'%s_count\{model="%s"\} ([0-9.eE+-]+)' % (re.escape(name), re.escape(model))
+    )
+    buckets: list[tuple[float, float]] = []
+    for match in bucket_re.finditer(text):
+        if match.group(1) == "+Inf":
+            continue
+        buckets.append((float(match.group(1)), float(match.group(2))))
+    count_match = count_re.search(text)
+    if not buckets and count_match is None:
+        return None
+    buckets.sort()
+    count = float(count_match.group(1)) if count_match else (buckets[-1][1] if buckets else 0.0)
+    return {"buckets": buckets, "count": count}
+
+
+def _hist_delta(before: dict | None, after: dict | None) -> dict | None:
+    if before is None or after is None:
+        return None
+    previous = {le: count for le, count in before["buckets"]}
+    buckets = [
+        (le, max(0.0, count - previous.get(le, 0.0))) for le, count in after["buckets"]
+    ]
+    return {"buckets": buckets, "count": max(0.0, after["count"] - before["count"])}
+
+
+def histogram_p50(hist: dict | None) -> float | None:
+    if not hist or hist["count"] <= 0:
+        return None
+    target = 0.5 * float(hist["count"])
+    prev_le = 0.0
+    prev_count = 0.0
+    for le, count in hist["buckets"]:
+        if count >= target:
+            width = count - prev_count
+            if width <= 0:
+                return float(le)
+            return prev_le + (target - prev_count) / width * (float(le) - prev_le)
+        prev_le = float(le)
+        prev_count = count
+    return prev_le
+
+
+def _point_rates(point: dict) -> tuple[int, int, int]:
+    total = int(point.get("requests") or 0)
+    ok = int(point.get("ok") or 0)
+    if "errors" in point and point.get("errors") is not None:
+        errors = int(point.get("errors") or 0)
+    else:
+        errors = max(0, total - ok)
+    overload = int(point.get("overload") or 0)
+    return total, errors, overload
+
+
+def assess_point(
+    point: dict, last_good: dict | None, p99_cap: float | None
+) -> tuple[str | None, str | None]:
+    """Return (stop_reason, scale_note). A stop_reason rejects this point."""
+    if not point.get("started") or point.get("oom"):
+        why = "oom_or_start_failed" if point.get("oom") else "start_failed"
+        return why, None
+    total, errors, overload = _point_rates(point)
+    if total <= 0:
+        return "error_rate", None
+    non_429 = max(0, errors - overload)
+    if non_429 / total >= 0.01:
+        return "error_rate", None
+    if overload / total >= 0.01:
+        return "overload", None
+    if p99_cap is not None:
+        p99 = point.get("p99_ms")
+        if p99 is None or float(p99) > float(p99_cap):
+            return "latency_budget", None
+    if point.get("metrics_missing"):
+        return "metrics_missing", None
+    queue_p50 = point.get("queue_p50_ms")
+    infer_p50 = point.get("inference_p50_ms")
+    if queue_p50 is not None and infer_p50 is not None and float(queue_p50) > float(infer_p50):
+        return "queue_dominates", None
+    if last_good is not None:
+        prev_rps = max(float(last_good.get("rps") or 0.0), 1e-6)
+        gain = float(point.get("rps") or 0.0) / prev_rps
+        w_ratio = float(point["worker_nums"]) / float(last_good["worker_nums"])
+        if gain < 1.10:
+            return "rps_gain_below_10pct", None
+        if gain < 0.5 * w_ratio:
+            return "saturating", None
+        note = "approx_linear" if gain >= 0.8 * w_ratio else "partial_scale"
+        return None, note
+    return None, "single_point"
+
+
+def pick_w_star(
+    points: list[dict], p99_cap: float | None = None
+) -> tuple[int, str, bool, list[int]]:
+    """Last point that passed every gate.
+
+    Returns worker_nums, reason, eligible, and the worker counts that passed.
+    The first point failing a gate is not eligible and does not become w*.
+    """
     last_good: dict | None = None
     note = "single_point"
+    passed: list[int] = []
     for point in points:
-        total = int(point.get("requests") or 0)
-        ok = int(point.get("ok") or 0)
-        if total > 0 and ok == 0:
-            raise SystemExit(
-                "calibration load had 0 successful requests (w=%s, %d errors, "
-                "p50=%sms): the server rejected everything - check its log at %s "
-                "(auth mismatch and a mis-served image are the usual causes)"
-                % (point.get("worker_nums"), total, point.get("p50_ms"), point.get("log"))
-            )
-    for point in points:
-        if not point.get("started") or point.get("oom"):
-            why = "oom_or_start_failed" if point.get("oom") else "start_failed"
-            return (int(last_good["worker_nums"]) if last_good else 1, why)
-        ok = int(point.get("ok") or 0)
-        total = int(point.get("requests") or 0)
-        if total > 0 and ok / total < 0.9:
-            return (int(last_good["worker_nums"]) if last_good else int(point["worker_nums"]),
-                    "error_rate")
-        if last_good is not None:
-            prev_rps = max(float(last_good.get("rps") or 0.0), 1e-6)
-            rps = float(point.get("rps") or 0.0)
-            gain = rps / prev_rps
-            w_ratio = float(point["worker_nums"]) / float(last_good["worker_nums"])
-            if gain < 1.10:
-                return int(last_good["worker_nums"]), "rps_gain_below_10pct"
-            if gain < 0.5 * w_ratio:
-                return int(last_good["worker_nums"]), "saturating"
-            note = "approx_linear" if gain >= 0.8 * w_ratio else "partial_scale"
+        stop, scale = assess_point(point, last_good, p99_cap)
+        if stop:
+            if last_good is None:
+                return int(point.get("worker_nums") or 1), stop, False, passed
+            return int(last_good["worker_nums"]), stop, True, passed
+        note = scale or note
         last_good = point
-    return int(last_good["worker_nums"]) if last_good else 1, note
+        passed.append(int(point["worker_nums"]))
+    if last_good is None:
+        return 1, "start_failed", False, passed
+    return int(last_good["worker_nums"]), note, True, passed
+
+
+def pick_demotion(
+    sizes: dict[str, float],
+    current: dict[str, int],
+    grids: dict[str, list[int]],
+    passed: dict[str, set[int]],
+) -> tuple[str, int] | None:
+    """Drop the largest resident one grid step, onto a worker count that passed."""
+    ranked = sorted(sizes, key=lambda model_id: (-float(sizes.get(model_id) or 0.0), model_id))
+    for model_id in ranked:
+        grid = list(grids.get(model_id) or [])
+        w = int(current[model_id])
+        if w not in grid:
+            continue
+        index = grid.index(w)
+        if index <= 0:
+            continue
+        target = int(grid[index - 1])
+        if target not in passed.get(model_id, set()):
+            continue
+        return model_id, target
+    return None
 
 
 def _under(path: Path, root: Path) -> bool:
@@ -613,21 +849,32 @@ def write_pack_worker_nums(pack: Path, updates: dict[str, int]) -> list[dict]:
     return write_pack_fields(pack, {k: {"worker_nums": v} for k, v in updates.items()})
 
 
+def _chosen_worker_nums(row: dict) -> int | None:
+    w = row.get("final_worker_nums")
+    if not isinstance(w, int):
+        w = row.get("suggested_worker_nums")
+    if isinstance(w, int) and 1 <= w <= 256:
+        return w
+    return None
+
+
 def occupancy_fields_from_report(
     report: dict,
 ) -> tuple[dict[str, dict[str, object]], dict[str, object]]:
     id_fields: dict[str, dict[str, object]] = {}
+    if report.get("release_measurement") is False:
+        return {}, {}
     for row in report.get("models") or []:
         model_id = row.get("id")
         if not isinstance(model_id, str) or not model_id:
             continue
-        if row.get("reason") == "start_failed":
+        if row.get("eligible") is False or row.get("reason") == "start_failed":
             continue
         points = row.get("points") or []
         if not any(p.get("started") for p in points):
             continue
-        w = row.get("suggested_worker_nums")
-        if not isinstance(w, int) or not 1 <= w <= 256:
+        w = _chosen_worker_nums(row)
+        if w is None:
             continue
         fields: dict[str, object] = {"worker_nums": w, "gpu_mem_at_workers": w}
         match = next(
@@ -663,17 +910,19 @@ def occupancy_fields_from_report(
 
 def pack_writes_from_report(report: dict) -> dict[str, int]:
     updates: dict[str, int] = {}
+    if report.get("release_measurement") is False:
+        return updates
     for row in report.get("models") or []:
         model_id = row.get("id")
         if not isinstance(model_id, str) or not model_id:
             continue
-        if row.get("reason") == "start_failed":
+        if row.get("eligible") is False or row.get("reason") == "start_failed":
             continue
         points = row.get("points") or []
         if not any(p.get("started") for p in points):
             continue
-        w = row.get("suggested_worker_nums")
-        if isinstance(w, int) and 1 <= w <= 256:
+        w = _chosen_worker_nums(row)
+        if w is not None:
             updates[model_id] = w
     return updates
 
@@ -939,7 +1188,8 @@ def run_one_point(
             target=sample_mem_during, args=(proc.pid, baseline, stop, samples), daemon=True
         )
         sampler.start()
-        conc = max(1, concurrency)
+        conc = max(1, int(concurrency))
+        before_metrics = fetch_metrics_text(port, auth_token)
         report = run_load(
             LoadConfig(
                 url=infer_url,
@@ -953,6 +1203,7 @@ def run_one_point(
                 progress=False,
             )
         )
+        after_metrics = fetch_metrics_text(port, auth_token)
         stop.set()
         sampler.join(timeout=2)
         if samples:
@@ -963,14 +1214,37 @@ def run_one_point(
                 point["gpu_mem_source"] = "device_delta"
         else:
             peak = ready_mem
+        overload = int((report.by_class or {}).get("overload", 0))
+        total = int(report.requests)
+        non_429 = max(0, int(report.errors) - overload)
+        queue_delta = _hist_delta(
+            _metric_series(before_metrics or "", "mortred_queue_wait_duration_ms", model_id),
+            _metric_series(after_metrics or "", "mortred_queue_wait_duration_ms", model_id),
+        )
+        infer_delta = _hist_delta(
+            _metric_series(before_metrics or "", "mortred_inference_duration_ms", model_id),
+            _metric_series(after_metrics or "", "mortred_inference_duration_ms", model_id),
+        )
+        queue_p50 = histogram_p50(queue_delta)
+        infer_p50 = histogram_p50(infer_delta)
         point["gpu_mem_mib_peak"] = peak
         point["rps"] = round(report.rps, 3)
         point["ok"] = report.ok
         point["errors"] = report.errors
-        point["requests"] = report.requests
+        point["requests"] = total
+        point["overload"] = overload
+        point["error_rate"] = round((non_429 / total) if total else 0.0, 6)
+        point["overload_rate"] = round((overload / total) if total else 0.0, 6)
         point["p50_ms"] = round(report.latency_ms.get("p50") or 0.0, 3)
         point["p99_ms"] = round(report.latency_ms.get("p99") or 0.0, 3)
+        point["queue_p50_ms"] = None if queue_p50 is None else round(queue_p50, 3)
+        point["inference_p50_ms"] = None if infer_p50 is None else round(infer_p50, 3)
         point["concurrency"] = conc
+        queue_count = 0.0 if queue_delta is None else float(queue_delta["count"])
+        infer_count = 0.0 if infer_delta is None else float(infer_delta["count"])
+        point["metrics_missing"] = bool(
+            report.ok > 0 and (queue_count < report.ok / 2.0 or infer_count < report.ok / 2.0)
+        )
         text = log_path.read_text(encoding="utf-8", errors="replace") if log_path.is_file() else ""
         point["oom"] = log_looks_oom(text)
         return point
@@ -993,10 +1267,135 @@ def resolve_pack_server(root: Path, pack: Path, model_id: str) -> Path | None:
     return find_server_toml(root, model_id)
 
 
+def _sweep_memory(row: dict, workers: int) -> float:
+    for point in row.get("points") or []:
+        if int(point.get("worker_nums") or 0) == workers and isinstance(
+            point.get("gpu_mem_mib_peak"), (int, float)
+        ):
+            return float(point["gpu_mem_mib_peak"])
+    return 0.0
+
+
+def measure_joint_once(
+    root: Path,
+    binary: Path,
+    pack: Path,
+    auth_token: str,
+    worker_map: dict[str, int],
+) -> dict:
+    """Start eligible ids together and read memory. Does not send inference load."""
+    procs: list[tuple[str, subprocess.Popen[bytes], int]] = []
+    per_model: dict[str, dict] = {}
+    port_blocked = False
+    oom = False
+    start_failed = False
+    baseline = gpu_mem_device_mib()
+    try:
+        for model_id, workers in worker_map.items():
+            found = resolve_pack_server(root, pack, model_id)
+            if found is None:
+                per_model[model_id] = {"started": False, "error": "no conf/server mapping"}
+                start_failed = True
+                break
+            log_path = root / "logs" / ("calibrate-joint-%s.log" % model_id)
+            override = pack_model_config(pack, model_id, root)
+            extra = {}
+            if override:
+                extra["MORTRED_MODEL_CONFIG_FILE"] = override
+            port, _uri = server_listen(found)
+            blocked = listen_port_blocked(port)
+            if blocked:
+                per_model[model_id] = {
+                    "started": False,
+                    "port_blocked": True,
+                    "error": "port %d already in use (%s)" % (port, blocked),
+                }
+                port_blocked = True
+                break
+            proc = start_model(root, binary, model_id, found, workers, log_path, extra, auth_token)
+            ready_url = "http://127.0.0.1:%d/ready" % port
+            if not wait_http_ready(ready_url, 90.0, proc):
+                text = log_path.read_text(encoding="utf-8", errors="replace") if log_path.is_file() else ""
+                is_oom = log_looks_oom(text)
+                per_model[model_id] = {
+                    "started": False,
+                    "oom": is_oom,
+                    "error": "not ready",
+                }
+                oom = oom or is_oom
+                start_failed = start_failed or not is_oom
+                stop_proc(proc)
+                wait_port_free(port)
+                break
+            procs.append((model_id, proc, port))
+            mem, src = gpu_mem_process(proc.pid)
+            per_model[model_id] = {
+                "started": True,
+                "pid": proc.pid,
+                "gpu_mem_mib": mem,
+                "gpu_mem_source": src,
+            }
+        nvml_sum = 0.0
+        nvml_n = 0
+        for row in per_model.values():
+            if str(row.get("gpu_mem_source") or "").startswith("nvml_") and isinstance(
+                row.get("gpu_mem_mib"), (int, float)
+            ):
+                nvml_sum += float(row["gpu_mem_mib"])
+                nvml_n += 1
+        started = [row for row in per_model.values() if row.get("started")]
+        result: dict = {
+            "per_model": per_model,
+            "port_blocked": port_blocked,
+            "oom": oom,
+            "start_failed": start_failed,
+            "gpu_mem_mib_sum": None,
+            "gpu_mem_pack_delta_mib": None,
+        }
+        if started and nvml_n == len(started) and nvml_n == len(worker_map):
+            result["gpu_mem_mib_sum"] = nvml_sum
+        else:
+            after = gpu_mem_device_mib()
+            if baseline is not None and after is not None:
+                result["gpu_mem_pack_delta_mib"] = max(0.0, after - baseline)
+            result["gpu_mem_note"] = (
+                "per-model NVML pid rows unavailable; pack_delta is "
+                "device.used now minus device.used before the joint spawn, "
+                "not a sum of isolated model footprints"
+            )
+        return result
+    finally:
+        for _model_id, proc, port in procs:
+            stop_proc(proc)
+            wait_port_free(port)
+
+
+def _joint_sizes(rows: dict[str, dict], measured: dict, current: dict[str, int]) -> dict[str, float]:
+    sizes: dict[str, float] = {}
+    per_model = measured.get("per_model") or {}
+    for model_id, workers in current.items():
+        live = (per_model.get(model_id) or {}).get("gpu_mem_mib")
+        if isinstance(live, (int, float)):
+            sizes[model_id] = float(live)
+        else:
+            sizes[model_id] = _sweep_memory(rows[model_id], workers)
+    return sizes
+
+
+def _used_mib(measured: dict) -> float | None:
+    total = measured.get("gpu_mem_mib_sum")
+    if isinstance(total, (int, float)):
+        return float(total)
+    delta = measured.get("gpu_mem_pack_delta_mib")
+    if isinstance(delta, (int, float)):
+        return float(delta)
+    return None
+
+
 def calibrate(
     root: Path,
     pack: Path,
-    workers: list[int],
+    cli_workers: list[int] | None,
     duration_s: float,
     skip_joint: bool,
 ) -> dict:
@@ -1007,76 +1406,196 @@ def calibrate(
     ids = pack_ids(pack)
     if not ids:
         raise SystemExit("pack has no [pack.<ID>] tables: %s" % pack)
+    gpu = gpu_inventory()
     report: dict = {
         "pack": str(pack),
-        "gpu": gpu_inventory(),
+        "gpu": gpu,
         "duration_s": duration_s,
-        "workers_swept": workers,
+        "calibrator_version": CALIBRATOR_VERSION,
+        "release_measurement": is_release_duration(duration_s),
+        "workers_swept": cli_workers,
         "wrote_conf_server": False,
         "wrote_pack": False,
         "models": [],
         "joint": None,
     }
-    suggested: dict[str, int] = {}
+    by_id: dict[str, dict] = {}
     for model_id in ids:
         entry = catalog_entry(root, model_id)
         image = resolve_demo_image(entry, root)
         if image is None:
-            report["models"].append({"id": model_id, "error": "no demo image"})
+            report["models"].append({"id": model_id, "error": "no demo image", "eligible": False})
             continue
-        print("== %s image=%s ==" % (model_id, image.relative_to(root)), flush=True)
+        sweep = workers_for_id(root, model_id, cli_workers, pack)
+        cap = p99_cap_ms(model_id, pack)
+        print("== %s image=%s sweep=%s ==" % (model_id, image.relative_to(root), sweep), flush=True)
         override = pack_model_config(pack, model_id, root)
         server_toml = resolve_pack_server(root, pack, model_id)
         print(
-            "  model_config=%s server=%s"
-            % (override or "(product)", server_toml),
+            "  model_config=%s server=%s p99_cap_ms=%s"
+            % (override or "(product)", server_toml, cap),
             flush=True,
         )
         points: list[dict] = []
-        for w in workers:
-            print("  w=%d ..." % w, flush=True)
-            conc = max(4, min(16, 4 * w))
+        for w in sweep:
+            print("  w=%d concurrency=%d ..." % (w, w), flush=True)
             point = run_one_point(
-                root, binary, entry, image, w, duration_s, conc, override, auth_token, server_toml
+                root, binary, entry, image, w, duration_s, w, override, auth_token, server_toml
             )
             points.append(point)
             print(
-                "    started=%s rps=%s p99=%s mem_peak=%s source=%s oom=%s"
+                "    started=%s rps=%s p99=%s queue_p50=%s infer_p50=%s mem_peak=%s oom=%s"
                 % (
                     point.get("started"),
                     point.get("rps"),
                     point.get("p99_ms"),
+                    point.get("queue_p50_ms"),
+                    point.get("inference_p50_ms"),
                     point.get("gpu_mem_mib_peak"),
-                    point.get("gpu_mem_source"),
                     point.get("oom"),
                 ),
                 flush=True,
             )
-            if not point.get("started") or point.get("oom"):
+            _w, why, _eligible, _passed = pick_w_star(points, cap)
+            if why not in SCALE_NOTES:
+                print("    stop %s" % why, flush=True)
                 break
-            if int(point.get("requests") or 0) > 0 and int(point.get("ok") or 0) == 0:
-                print(
-                    "    all %d requests errored (p50=%sms) - stopping the sweep, "
-                    "see %s" % (point["requests"], point.get("p50_ms"), point["log"]),
-                    flush=True,
-                )
-                break
-        w_star, why = pick_w_star(points)
-        suggested[model_id] = w_star
+        w_star, why, eligible, passed = pick_w_star(points, cap)
         row = {
             "id": model_id,
             "image": str(image.relative_to(root)),
             "points": points,
+            "workers_swept": sweep,
+            "p99_cap_ms": cap,
             "suggested_worker_nums": w_star,
+            "final_worker_nums": w_star,
+            "passed_worker_nums": passed,
+            "eligible": eligible,
             "reason": why,
         }
         report["models"].append(row)
-        if any(p.get("started") for p in points):
-            print("== %s decode vote ==" % model_id, flush=True)
+        by_id[model_id] = row
+
+    def apply_joint(state: dict) -> None:
+        eligible_rows = [row for row in state["models"] if row.get("eligible") and row.get("id") in by_id]
+        for row in state["models"]:
+            if row.get("final_worker_nums") is None and row.get("suggested_worker_nums") is not None:
+                row["final_worker_nums"] = row["suggested_worker_nums"]
+        if skip_joint:
+            state["joint"] = {
+                "joint_ok": True,
+                "joint_adjusted": False,
+                "attempts": [],
+                "skipped": True,
+            }
+            return
+        if len(eligible_rows) < 2:
+            state["joint"] = {
+                "joint_ok": True,
+                "joint_adjusted": False,
+                "attempts": [],
+                "note": "single_or_none",
+            }
+            return
+        budget = joint_budget_mib(pack, state.get("gpu") if isinstance(state.get("gpu"), dict) else None)
+        current = {row["id"]: int(row["suggested_worker_nums"]) for row in eligible_rows}
+        grids = {row["id"]: list(row["workers_swept"]) for row in eligible_rows}
+        passed = {row["id"]: set(int(w) for w in row["passed_worker_nums"]) for row in eligible_rows}
+        attempts: list[dict] = []
+        joint_adjusted = False
+        joint_ok = False
+        outcome = "round_limit"
+        measured: dict = {}
+        for round_index in range(len(eligible_rows)):
+            measured = measure_joint_once(root, binary, pack, auth_token, current)
+            used = _used_mib(measured)
+            over_budget = budget is not None and used is not None and used > budget
+            over = bool(measured.get("oom")) or over_budget
+            attempt = {
+                "worker_nums": dict(current),
+                "gpu_mem_mib_sum": measured.get("gpu_mem_mib_sum"),
+                "gpu_mem_pack_delta_mib": measured.get("gpu_mem_pack_delta_mib"),
+                "oom": bool(measured.get("oom")),
+                "port_blocked": bool(measured.get("port_blocked")),
+                "over_budget": over_budget,
+            }
+            if measured.get("port_blocked"):
+                attempt["demoted"] = None
+                attempts.append(attempt)
+                outcome = "port_blocked"
+                break
+            if measured.get("start_failed") and not measured.get("oom"):
+                attempt["demoted"] = None
+                attempts.append(attempt)
+                outcome = "start_failed"
+                break
+            if not over:
+                attempt["demoted"] = None
+                attempts.append(attempt)
+                joint_ok = True
+                outcome = "fit"
+                break
+            if round_index + 1 >= len(eligible_rows):
+                attempt["demoted"] = None
+                attempts.append(attempt)
+                outcome = "round_limit"
+                for row in eligible_rows:
+                    row["eligible"] = False
+                break
+            step = pick_demotion(
+                _joint_sizes(by_id, measured, current), current, grids, passed
+            )
+            if step is None:
+                attempt["demoted"] = None
+                attempts.append(attempt)
+                outcome = "no_lower_step"
+                for row in eligible_rows:
+                    row["eligible"] = False
+                break
+            model_id, target = step
+            attempt["demoted"] = {"id": model_id, "to": target}
+            attempts.append(attempt)
+            current[model_id] = target
+            joint_adjusted = True
+        if joint_ok:
+            for row in eligible_rows:
+                row["final_worker_nums"] = current[row["id"]]
+        state["joint"] = {
+            "joint_ok": joint_ok,
+            "joint_adjusted": joint_adjusted,
+            "attempts": attempts,
+            "outcome": outcome,
+            "budget_mib": budget,
+            "worker_nums": dict(current),
+            "per_model": measured.get("per_model") or {},
+        }
+        if measured.get("gpu_mem_note"):
+            state["joint"]["gpu_mem_note"] = measured["gpu_mem_note"]
+
+    def apply_decode(state: dict) -> None:
+        for row in state["models"]:
+            model_id = row.get("id")
+            if not row.get("eligible") or model_id not in by_id:
+                continue
+            if not any(point.get("started") for point in row.get("points") or []):
+                continue
+            entry = catalog_entry(root, model_id)
+            final_w = int(row["final_worker_nums"])
+            override = pack_model_config(pack, model_id, root)
+            server_toml = resolve_pack_server(root, pack, model_id)
+            print("== %s decode vote at w=%d ==" % (model_id, final_w), flush=True)
             grid_dir = Path(tempfile.mkdtemp(prefix="mortred-decode-grid-"))
             try:
                 row["decode"] = calibrate_decode_vote(
-                    root, binary, entry, w_star, duration_s, auth_token, grid_dir, override, server_toml
+                    root,
+                    binary,
+                    entry,
+                    final_w,
+                    DECODE_VOTE_DURATION_S,
+                    auth_token,
+                    grid_dir,
+                    override,
+                    server_toml,
                 )
             except Exception as exc:
                 row["decode"] = {
@@ -1090,106 +1609,128 @@ def calibrate(
             finally:
                 shutil.rmtree(grid_dir, ignore_errors=True)
 
-    any_started = any(
-        any(p.get("started") for p in row.get("points") or [])
-        for row in report["models"]
-    )
-
-    if skip_joint or not any_started:
-        return report
-
-    print("== joint residency at suggested w ==")
-    procs: list[tuple[str, subprocess.Popen[bytes]]] = []
-    joint: dict = {"worker_nums": dict(suggested), "per_model": {}}
-    baseline = gpu_mem_device_mib()
-    try:
-        for model_id, w in suggested.items():
-            found = resolve_pack_server(root, pack, model_id)
-            if found is None:
-                continue
-            log_path = root / "logs" / ("calibrate-joint-%s.log" % model_id)
-            override = pack_model_config(pack, model_id, root)
-            extra = {}
-            if override:
-                extra["MORTRED_MODEL_CONFIG_FILE"] = override
-            port, _uri = server_listen(found)
-            blocked = listen_port_blocked(port)
-            if blocked:
-                joint["per_model"][model_id] = {
-                    "started": False,
-                    "error": "port %d already in use (%s)" % (port, blocked),
-                }
-                continue
-            proc = start_model(root, binary, model_id, found, w, log_path, extra, auth_token)
-            ready_url = "http://127.0.0.1:%d/ready" % port
-            if not wait_http_ready(ready_url, 90.0, proc):
-                joint["per_model"][model_id] = {"started": False, "error": "not ready"}
-                stop_proc(proc)
-                wait_port_free(port)
-                continue
-            procs.append((model_id, proc))
-            mem, src = gpu_mem_process(proc.pid)
-            row = {
-                "started": True,
-                "pid": proc.pid,
-                "gpu_mem_mib": mem,
-                "gpu_mem_source": src,
-            }
-            joint["per_model"][model_id] = row
-        nvml_sum = 0.0
-        nvml_n = 0
-        for row in joint["per_model"].values():
-            if row.get("gpu_mem_source", "").startswith("nvml_") and isinstance(
-                row.get("gpu_mem_mib"), (int, float)
-            ):
-                nvml_sum += float(row["gpu_mem_mib"])
-                nvml_n += 1
-        started = [r for r in joint["per_model"].values() if r.get("started")]
-        if started and nvml_n == len(started):
-            joint["gpu_mem_mib_sum"] = nvml_sum
-        else:
-            joint["gpu_mem_mib_sum"] = None
-            after = gpu_mem_device_mib()
-            joint["gpu_mem_device_used_mib"] = after
-            if baseline is not None and after is not None:
-                joint["gpu_mem_pack_delta_mib"] = max(0.0, after - baseline)
-            joint["gpu_mem_note"] = (
-                "per-model NVML pid rows unavailable; pack_delta is "
-                "device.used now minus device.used before the joint spawn, "
-                "not a sum of isolated model footprints"
-            )
-        report["joint"] = joint
-    finally:
-        for _, proc in procs:
-            stop_proc(proc)
-        wait_port_free(port)
+    run_post_sweep(report, apply_joint, apply_decode)
     return report
 
 
+def _qualified_point(workers: int, rps: float, **overrides: object) -> dict:
+    point = {
+        "worker_nums": workers,
+        "started": True,
+        "oom": False,
+        "ok": 100,
+        "requests": 100,
+        "errors": 0,
+        "overload": 0,
+        "rps": rps,
+        "p99_ms": 20.0,
+        "queue_p50_ms": 1.0,
+        "inference_p50_ms": 10.0,
+        "metrics_missing": False,
+    }
+    point.update(overrides)
+    return point
+
+
 def self_test() -> int:
-    points = [
-        {"worker_nums": 1, "started": True, "oom": False, "ok": 100, "requests": 100, "rps": 10.0},
-        {"worker_nums": 2, "started": True, "oom": False, "ok": 100, "requests": 100, "rps": 19.0},
-        {"worker_nums": 4, "started": True, "oom": False, "ok": 100, "requests": 100, "rps": 20.0},
+    points = [_qualified_point(1, 10.0), _qualified_point(2, 19.0), _qualified_point(4, 20.0)]
+    w, why, eligible, _passed = pick_w_star(points, 100.0)
+    if w != 2 or why != "rps_gain_below_10pct" or not eligible:
+        print("self-test: expected w*=2 rps_gain_below_10pct, got", w, why, eligible, file=sys.stderr)
+        return 1
+    latency_pts = [
+        _qualified_point(1, 10.0, p99_ms=20.0),
+        _qualified_point(2, 19.0, p99_ms=25.0),
+        _qualified_point(4, 40.0, p99_ms=80.0),
     ]
-    w, why = pick_w_star(points)
-    if w != 2 or why != "rps_gain_below_10pct":
-        print("self-test: expected w*=2 saturating, got", w, why, file=sys.stderr)
+    w, why, eligible, _passed = pick_w_star(latency_pts, 50.0)
+    if w != 2 or why != "latency_budget" or not eligible:
+        print("self-test: expected latency stop at 2, got", w, why, eligible, file=sys.stderr)
+        return 1
+    queue_pts = [
+        _qualified_point(1, 10.0),
+        _qualified_point(2, 19.0),
+        _qualified_point(4, 40.0, queue_p50_ms=30.0, inference_p50_ms=10.0),
+    ]
+    w, why, eligible, _passed = pick_w_star(queue_pts, 100.0)
+    if w != 2 or why != "queue_dominates" or not eligible:
+        print("self-test: expected queue_dominates at 2, got", w, why, eligible, file=sys.stderr)
+        return 1
+    error_pts = [_qualified_point(1, 10.0, ok=98, errors=2, overload=0)]
+    w, why, eligible, _passed = pick_w_star(error_pts, 100.0)
+    if w != 1 or why != "error_rate" or eligible:
+        print("self-test: expected error_rate, got", w, why, eligible, file=sys.stderr)
+        return 1
+    overload_pts = [_qualified_point(1, 10.0, ok=98, errors=2, overload=2)]
+    w, why, eligible, _passed = pick_w_star(overload_pts, 100.0)
+    if w != 1 or why != "overload" or eligible:
+        print("self-test: expected overload, not error_rate, got", w, why, eligible, file=sys.stderr)
+        return 1
+    only_w1 = [_qualified_point(1, 10.0, p99_ms=80.0)]
+    w, why, eligible, _passed = pick_w_star(only_w1, 50.0)
+    if w != 1 or why != "latency_budget" or eligible:
+        print("self-test: expected ineligible w=1, got", w, why, eligible, file=sys.stderr)
         return 1
     oom_pts = [
-        {"worker_nums": 1, "started": True, "oom": False, "ok": 50, "requests": 50, "rps": 5.0},
+        _qualified_point(1, 5.0, ok=50, requests=50),
         {"worker_nums": 2, "started": False, "oom": True, "ok": 0, "requests": 0, "rps": 0.0},
     ]
-    w, why = pick_w_star(oom_pts)
-    if w != 1 or why != "oom_or_start_failed":
-        print("self-test: expected w*=1 on oom, got", w, why, file=sys.stderr)
+    w, why, eligible, _passed = pick_w_star(oom_pts)
+    if w != 1 or why != "oom_or_start_failed" or not eligible:
+        print("self-test: expected w*=1 on oom, got", w, why, eligible, file=sys.stderr)
         return 1
     fail_pts = [
         {"worker_nums": 1, "started": False, "oom": False, "ok": 0, "requests": 0, "rps": 0.0},
     ]
-    w, why = pick_w_star(fail_pts)
-    if w != 1 or why != "start_failed":
-        print("self-test: expected start_failed, got", w, why, file=sys.stderr)
+    w, why, eligible, _passed = pick_w_star(fail_pts)
+    if w != 1 or why != "start_failed" or eligible:
+        print("self-test: expected start_failed, got", w, why, eligible, file=sys.stderr)
+        return 1
+    huge = [
+        _qualified_point(1, 10.0, gpu_mem_mib_peak=7000.0),
+        _qualified_point(2, 19.0, gpu_mem_mib_peak=7500.0),
+        _qualified_point(4, 20.0, gpu_mem_mib_peak=7900.0),
+    ]
+    w, why, _eligible, _passed = pick_w_star(huge, 100.0)
+    if w != 2 or why != "rps_gain_below_10pct":
+        print("self-test: memory ratio must not stop the sweep, got", w, why, file=sys.stderr)
+        return 1
+    if 16 not in default_worker_sweep(ROOT, "superpoint"):
+        print("self-test: superpoint sweep missing 16", default_worker_sweep(ROOT, "superpoint"), file=sys.stderr)
+        return 1
+    if default_worker_sweep(ROOT, "no-such-model") != OTHER_SWEEP:
+        print("self-test: missing benchmark sweep", default_worker_sweep(ROOT, "no-such-model"), file=sys.stderr)
+        return 1
+    if workers_for_id(ROOT, "superpoint", [1, 2, 4], None) != [1, 2, 4]:
+        print("self-test: CLI workers did not override", file=sys.stderr)
+        return 1
+    if not is_release_duration(30.0) or is_release_duration(8.0):
+        print("self-test: release duration", file=sys.stderr)
+        return 1
+    demoted = pick_demotion(
+        {"big": 3000.0, "small": 1000.0},
+        {"big": 4, "small": 4},
+        {"big": [1, 2, 4], "small": [1, 2, 4]},
+        {"big": {1, 2, 4}, "small": {1, 2, 4}},
+    )
+    if demoted != ("big", 2):
+        print("self-test: pick_demotion", demoted, file=sys.stderr)
+        return 1
+    if (
+        pick_demotion(
+            {"big": 3000.0, "small": 1000.0},
+            {"big": 1, "small": 1},
+            {"big": [1, 2, 4], "small": [1, 2, 4]},
+            {"big": {1}, "small": {1}},
+        )
+        is not None
+    ):
+        print("self-test: lowest grid must not demote", file=sys.stderr)
+        return 1
+    phases: list[str] = []
+    run_post_sweep({}, lambda _state: phases.append("joint"), lambda _state: phases.append("decode"))
+    if phases != ["joint", "decode"]:
+        print("self-test: phase order", phases, file=sys.stderr)
         return 1
     if log_looks_oom("CUDA out of memory") is False:
         print("self-test: oom marker missed", file=sys.stderr)
@@ -1329,6 +1870,102 @@ def self_test() -> int:
     if int(load_toml(cfg)["MOBILENETV2_CLASSIFICATION_SERVER"].get("worker_nums") or 0) != 1:
         print("self-test: conf/server worker_nums mutated", file=sys.stderr)
         return 1
+    blocked = Path(tempfile.mkdtemp()) / "blocked.toml"
+    blocked.write_text("[pack.YOLOV8]\nworker_nums = 1\n", encoding="utf-8")
+    blocked_before = blocked.read_text(encoding="utf-8")
+    blocked_fields, blocked_pack = occupancy_fields_from_report(
+        {
+            "models": [
+                {
+                    "id": "YOLOV8",
+                    "eligible": False,
+                    "suggested_worker_nums": 1,
+                    "final_worker_nums": 1,
+                    "reason": "latency_budget",
+                    "points": [{"started": True, "worker_nums": 1}],
+                }
+            ]
+        }
+    )
+    if blocked_fields or blocked_pack:
+        print("self-test: ineligible row produced pack fields", blocked_fields, file=sys.stderr)
+        return 1
+    write_pack_fields(blocked, blocked_fields, blocked_pack)
+    if blocked.read_text(encoding="utf-8") != blocked_before:
+        print("self-test: ineligible write changed pack", file=sys.stderr)
+        return 1
+    short = occupancy_fields_from_report(
+        {
+            "release_measurement": False,
+            "models": [
+                {
+                    "id": "YOLOV8",
+                    "eligible": True,
+                    "suggested_worker_nums": 4,
+                    "points": [{"started": True, "worker_nums": 4}],
+                }
+            ],
+        }
+    )
+    if short != ({}, {}):
+        print("self-test: short run wrote fields", short, file=sys.stderr)
+        return 1
+    final_report = {
+        "models": [
+            {
+                "id": "BIG",
+                "eligible": True,
+                "suggested_worker_nums": 4,
+                "final_worker_nums": 2,
+                "reason": "rps_gain_below_10pct",
+                "points": [
+                    {
+                        "started": True,
+                        "worker_nums": 2,
+                        "gpu_mem_mib_peak": 1000,
+                        "gpu_mem_source": "nvml_pid",
+                    }
+                ],
+            },
+            {
+                "id": "SMALL",
+                "eligible": True,
+                "suggested_worker_nums": 4,
+                "final_worker_nums": 4,
+                "reason": "approx_linear",
+                "points": [{"started": True, "worker_nums": 4}],
+            },
+        ]
+    }
+    if pack_writes_from_report(final_report) != {"BIG": 2, "SMALL": 4}:
+        print("self-test: final worker write", pack_writes_from_report(final_report), file=sys.stderr)
+        return 1
+    final_pack = Path(tempfile.mkdtemp()) / "final.toml"
+    final_pack.write_text(
+        "[pack.BIG]\nworker_nums = 1\n\n[pack.SMALL]\nworker_nums = 1\n",
+        encoding="utf-8",
+    )
+    id_fields, _pack_fields = occupancy_fields_from_report(final_report)
+    write_pack_fields(final_pack, id_fields, {})
+    final_body = final_pack.read_text(encoding="utf-8")
+    if "worker_nums = 2" not in final_body or "worker_nums = 4" not in final_body:
+        print("self-test: demoted pack body", final_body, file=sys.stderr)
+        return 1
+    if pack_writes_from_report(
+        {
+            "models": [
+                {
+                    "id": "BIG",
+                    "eligible": False,
+                    "suggested_worker_nums": 1,
+                    "final_worker_nums": 1,
+                    "points": [{"started": True, "worker_nums": 1}],
+                }
+            ]
+        }
+    ):
+        print("self-test: unfit joint wrote workers", file=sys.stderr)
+        return 1
     print("calibrate_pack.py self-test passed")
     return 0
 
@@ -1337,8 +1974,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pack", type=Path, help="machine pack toml")
     parser.add_argument("--project-root", type=Path, default=ROOT)
-    parser.add_argument("--workers", default="1,2,4", help="comma-separated worker_nums sweep")
-    parser.add_argument("--duration", default="8s")
+    parser.add_argument(
+        "--workers",
+        default="",
+        help="comma-separated worker_nums for every id; empty uses the per-id default grid",
+    )
+    parser.add_argument("--duration", default="30s")
     parser.add_argument("--output", type=Path, help="write JSON report")
     parser.add_argument(
         "--from-json",
@@ -1349,7 +1990,7 @@ def main() -> int:
     parser.add_argument(
         "--write-pack",
         action="store_true",
-        help="write suggested worker_nums, occupancy stamps, and decode_auto into the pack file (never conf/server)",
+        help="write final worker_nums, occupancy stamps, and decode_auto into the pack file (never conf/server; skipped when duration < 30s)",
     )
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
@@ -1358,16 +1999,18 @@ def main() -> int:
     if args.pack is None:
         parser.error("--pack is required unless --self-test")
     pack = args.pack if args.pack.is_absolute() else args.project_root / args.pack
-    workers = [int(x) for x in args.workers.split(",") if x.strip()]
-    if not workers or min(workers) < 1:
-        parser.error("workers must be >= 1")
+    cli_workers = parse_worker_list(args.workers)
     duration_s = parse_duration(args.duration)
     if args.from_json:
         src = args.from_json if args.from_json.is_absolute() else args.project_root / args.from_json
         report = json.loads(src.read_text(encoding="utf-8"))
     else:
-        report = calibrate(args.project_root, pack, workers, duration_s, args.skip_joint)
-    if args.write_pack:
+        report = calibrate(args.project_root, pack, cli_workers, duration_s, args.skip_joint)
+    if args.write_pack and report.get("release_measurement") is False:
+        report["wrote_pack"] = False
+        report["pack_writes"] = []
+        print("duration < 30s; not writing pack", file=sys.stderr)
+    elif args.write_pack:
         try:
             id_fields, pack_fields = occupancy_fields_from_report(report)
             applied = write_pack_fields(pack, id_fields, pack_fields)

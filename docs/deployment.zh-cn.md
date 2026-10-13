@@ -527,10 +527,19 @@ prepare。`MORTRED_AUTO_BUILD_ENGINES=true` 仍会转 **整个 zoo**，且 **默
 ```bash
 ss -ltnp | grep 9056 || true
 python3 scripts/calibrate_pack.py --pack /tmp/machine-pack.toml \
-    --workers 1,2,4,8 --duration 8s --output logs/calibrate-yolov8.json
-# 只把 w*、gpu_mem_mib、GPU 指纹写进这个 pack（永不写 conf/server）：
-mortredctl calibrate --pack /tmp/machine-pack.toml --write-pack
+    --output logs/calibrate-yolov8.json --write-pack
 ```
+
+默认时长 30 秒。更短的 `--duration` 会使 `release_measurement=false`，
+`--write-pack` 不写回。不传 `--workers` 时按 id 选网格：`docs/benchmark-h3/<id>.txt`
+的 Throughput ≥ 500 qps 扫 `1,2,4,8,16`，其余扫 `1,2,4,8`。`[pack.<id>] worker_sweep`
+覆盖该网格，`--workers` 再覆盖二者。每一档的并发等于该档 worker 数。某一档起不来、
+OOM、非 429 错误率或 429 比例达到 1%、p99 超过 `[pack.<id>] p99_ms_cap`（或内置
+seed 上限）、读不到排队与推理直方图、排队 p50 大于推理 p50，或 RPS 涨幅不足 10%，
+扫描就停。`worker_nums=1` 自己没过门的 id 保持 `eligible=false`，不写入。两个及以上
+合格 id 共驻时只量显存。预算是 `[pack] gpu_memory_budget_mib`，否则为卡容量的 85%。
+超预算或 OOM 时，把显存最大的 id 沿网格降到已经过门的低一档；端口占用不降档。
+`--write-pack` 写入的是这个 `final_worker_nums`。
 
 JSON 里 `gpu_mem_mib_*` 是进程占用（`nvml_pid` / `nvml_name`），WSL 上往往是
 spawn 前的 **整卡 delta**，不是整卡 `memory.used`。`--write-pack` 会在**机器副本**

@@ -555,10 +555,24 @@ not OOM. Copy the git example pack to a machine-local file before `--write-pack`
 ```bash
 ss -ltnp | grep 9056 || true
 python3 scripts/calibrate_pack.py --pack /tmp/machine-pack.toml \
-    --workers 1,2,4,8 --duration 8s --output logs/calibrate-yolov8.json
-# persist w* + gpu_mem_mib + GPU fingerprint into that pack only (never conf/server):
-mortredctl calibrate --pack /tmp/machine-pack.toml --write-pack
+    --output logs/calibrate-yolov8.json --write-pack
 ```
+
+The default duration is 30s. A shorter `--duration` sets
+`release_measurement=false` and `--write-pack` does not persist. Omit
+`--workers` to use the per-id grid: Throughput ≥ 500 qps in
+`docs/benchmark-h3/<id>.txt` sweeps `1,2,4,8,16`; every other id sweeps
+`1,2,4,8`. `[pack.<id>] worker_sweep` overrides that grid; `--workers` overrides
+both. Each point runs at concurrency equal to that worker count. The sweep
+stops when a point fails to start, OOMs, has a non-429 error rate or a 429
+rate of at least 1%, exceeds `[pack.<id>] p99_ms_cap` (or the built-in seed
+cap), cannot read queue and inference histograms, has queue p50 above inference
+p50, or gains under 10% RPS. An id that fails at `worker_nums=1` stays
+`eligible=false` and is not written. With two or more eligible ids, the joint
+pass only measures memory. The budget is `[pack] gpu_memory_budget_mib`, or
+85% of the card. Over budget or OOM demotes the largest id one grid step onto
+a worker count that already passed; a busy port does not demote. `--write-pack`
+stores that `final_worker_nums`.
 
 JSON `gpu_mem_mib_*` is process occupancy (`nvml_pid` / `nvml_name`) or a
 pre-spawn **device delta** on WSL — not whole-card `memory.used`. `--write-pack`
