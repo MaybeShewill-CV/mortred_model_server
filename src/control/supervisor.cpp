@@ -10,6 +10,7 @@
 #include <signal.h>
 #include <sys/prctl.h>
 #include <sys/resource.h>
+#include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -454,8 +455,9 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err,
         for (int fd = 3; fd < max_fd; ++fd) {
             ::close(fd);
         }
-        // die with the supervisor (graceful SIGINT path) instead of orphaning
-        ::prctl(PR_SET_PDEATHSIG, SIGINT);
+        // die with the supervisor (graceful SIGINT path) instead of orphaning.
+        // syscall, not libc prctl: this stays after the fd close and before execve.
+        ::syscall(SYS_prctl, PR_SET_PDEATHSIG, SIGINT);
         if (::getppid() != parent_pid) {
             ::_exit(0);
         }

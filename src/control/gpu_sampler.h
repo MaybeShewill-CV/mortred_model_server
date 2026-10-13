@@ -35,6 +35,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "control/occupancy_gate.h"
+
 namespace mortred {
 namespace control {
 
@@ -103,6 +105,9 @@ class GpuSampler {
     // Probe nvidia-smi with a hard deadline (poll-based, non-blocking read).
     // Returns the raw CSV stdout line, or "" on failure/timeout.
     static std::string probe_nvidia_smi(int timeout_ms, std::string* gpu_name_out) {
+        std::string smi_path;
+        if (!resolve_nvidia_smi_path(&smi_path)) return "";
+        char* smi_file = smi_path.data();
         int fds[2];
         if (::pipe(fds) != 0) return "";
         const pid_t pid = ::fork();
@@ -113,13 +118,12 @@ class GpuSampler {
             ::close(fds[1]);
             const int devnull = ::open("/dev/null", O_WRONLY);
             if (devnull >= 0) { ::dup2(devnull, STDERR_FILENO); ::close(devnull); }
-            char a0[] = "nvidia-smi";
             char a1[] = "--query-gpu=name,utilization.gpu,memory.used,memory.total,"
                         "temperature.gpu,power.draw,clocks.sm,clocks.mem,fan.speed,"
                         "pcie.link.gen.current,pcie.link.width.current";
             char a2[] = "--format=csv,noheader,nounits";
-            char* argv[] = {a0, a1, a2, nullptr};
-            ::execvp(argv[0], argv);
+            char* argv[] = {smi_file, a1, a2, nullptr};
+            ::execve(smi_file, argv, ::environ);
             ::_exit(127);
         }
         ::close(fds[1]);
