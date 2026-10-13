@@ -10,9 +10,9 @@
 - 阻塞: 无
 - 与角色自评: 一致
 
-原始分 = (15×6.0 + 20×7.3 + 15×7.6 + 10×9.0 + 5×6.0 + 15×6.5 + 10×6.8 + 5×6.5 + 5×9.0) / 100 = 713.0 / 100 = 7.1。P0-1、P1-1、P1-2、P2-1、P2-2、P2-3 已关闭。未关闭且未阻塞的 P0 和 P1 都没有了，不再套 7.9 或 8.9。加权分保持 7.1。模块分数沿用 `01-modules` 正文。test 正文仍是 6.8。
+原始分 = (15×6.0 + 20×7.3 + 15×7.6 + 10×9.0 + 5×6.0 + 15×6.5 + 10×6.8 + 5×6.5 + 5×9.0) / 100 = 713.0 / 100 = 7.1。P0-1、P1-1、P1-2、P2-1、P2-2、P2-3、P2-4 已关闭。未关闭且未阻塞的 P0 和 P1 都没有了，不再套 7.9 或 8.9。加权分保持 7.1。模块分数沿用 `01-modules` 正文。test 正文仍是 6.8。
 
-已关闭 6 条。未关闭且未阻塞的 id 从 13 条减到 7 条。EX1、PF3、ST2 已满足。ST5 从「未满足」变为「已满足」：合入 `6031d5fdbe66b217762f25ba51f9a9027cfb8e6e`。同一次启动里，libface 的库函数跟踪终点是绝对路径 `execve`，`inh=closed`，终点前没有 `prctl`、`execvp`、`setenv`，进程为 running，采样日志为 `gpu sampler online`。PF4 的单次读数已经能在不创建 `/tmp/mortred_stage_timing` 时看到，但该行要求的是同一次压测报告，报告仍不存在，所以 PF4 继续未满足并挂在 P2-11。
+已关闭 7 条。未关闭且未阻塞的 id 从 13 条减到 6 条。EX1、PF3、ST2、ST5 已满足。TP2 从「未满足」变为「已满足」：合入 `eddcc454a20293ccbfbef0717cb6453032109cb5`。同一份记录里 `yolov8s` 与 `libface` 同时 ready，两条请求时间重叠且都成功。PF4 的单次读数已经能在不创建 `/tmp/mortred_stage_timing` 时看到，但该行要求的是同一次压测报告，报告仍不存在，所以 PF4 继续未满足并挂在 P2-11。
 
 ## 完成标准
 | 编号 | 状态: 已满足 / 未满足 / 阻塞 | 证据或队列 id |
@@ -30,7 +30,7 @@
 | ST5 | 已满足 | P2-3 已合入 `6031d5fdbe66b217762f25ba51f9a9027cfb8e6e`。同一次启动里，libface 直接子进程在关掉 fd 3 及以上之后写下绝对路径 `execve`，`inh=closed`，终点前没有 `prctl`、`execvp`、`setenv`。进程 `state=running`。采样日志为 `gpu sampler online`。重跑退出码 0 |
 | ST6 | 已满足 | `src/control/gpu_sampler.h`：`nvidia-smi` 失败或 utilization 为 N/A 时 `available` 为 false，利用率记为 -1，日志写 offline |
 | TP1 | 未满足 | P2-11 |
-| TP2 | 未满足 | P2-4 |
+| TP2 | 已满足 | P2-4 已合入 `eddcc454a20293ccbfbef0717cb6453032109cb5`。同一份记录里 `yolov8s` 与 `libface` 同时 ready，两条请求时间重叠且都成功。重跑 `--check`、实跑与判定脚本退出码都是 0 |
 | TP3 | 已满足 | `scripts/mortredctl_doctor.sh` 与 `scripts/pack_occupancy.py`：缺 engine、缺占用戳或占用门闩关闭时非 0 退出，并打印下一条命令 |
 | UX1 | 已满足 | `README.md`、`README.zh-cn.md`、`docs/deployment.md` 与 `CMakePresets.json` 的 `full` / `full-cpu` 命令一致 |
 | UX2 | 已满足 | `README.md` 与 `docs/deployment.md` 从 `mortredctl next` 走到 `doctor --strict`；`scripts/mortredctl_next.sh` 的最后一条是该命令 |
