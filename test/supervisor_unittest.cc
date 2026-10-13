@@ -728,6 +728,50 @@ TEST_F(SupervisorTest, gateway_colliding_scrape_token_is_permanent_failure) {
     EXPECT_EQ(sup->status(kGatewayId).state, "failed");
 }
 
+TEST_F(SupervisorTest, gateway_missing_infer_token_is_permanent_failure) {
+    auto sup = make_supervisor();
+    sup->set_gateway_trust("scrape-token", "", "admin-token");
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    std::string err;
+    EXPECT_FALSE(sup->start_server(kGatewayId, &err));
+    EXPECT_NE(err.find("MORTRED_GATEWAY_AUTH_TOKEN is unset"), std::string::npos) << err;
+    const auto s = sup->status(kGatewayId);
+    EXPECT_EQ(s.state, "failed") << s.error;
+    EXPECT_NE(s.state, "backoff");
+}
+
+TEST_F(SupervisorTest, gateway_missing_admin_token_is_permanent_failure) {
+    auto sup = make_supervisor();
+    sup->set_gateway_trust("scrape-token", "infer-token", "");
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    std::string err;
+    EXPECT_FALSE(sup->start_server(kGatewayId, &err));
+    EXPECT_NE(err.find("MORTRED_API_TOKEN is unset"), std::string::npos) << err;
+    const auto s = sup->status(kGatewayId);
+    EXPECT_EQ(s.state, "failed") << s.error;
+    EXPECT_NE(s.state, "backoff");
+}
+
+TEST_F(SupervisorTest, gateway_identical_infer_and_admin_is_permanent_failure) {
+    auto sup = make_supervisor();
+    sup->set_gateway_trust("scrape-token", "same-token", "same-token");
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    std::string err;
+    EXPECT_FALSE(sup->start_server(kGatewayId, &err));
+    EXPECT_NE(err.find("MORTRED_GATEWAY_AUTH_TOKEN and MORTRED_API_TOKEN are identical"),
+              std::string::npos)
+        << err;
+    const auto s = sup->status(kGatewayId);
+    EXPECT_EQ(s.state, "failed") << s.error;
+    EXPECT_NE(s.state, "backoff");
+}
+
 int main(int argc, char** argv) {
     // supervision signals must be blocked before any thread exists
     ProcessSupervisor::block_supervision_signals();

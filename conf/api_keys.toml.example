@@ -1,13 +1,13 @@
+# The gateway listens only when MORTRED_GATEWAY_AUTH_TOKEN, MORTRED_API_TOKEN,
+# and MORTRED_METRICS_TOKEN are all set and pairwise different. This key file
+# cannot stand in for a missing inference token or management token.
+#
 # Example only. Copy to conf/api_keys.toml on the machine (mode 600) after
 # replacing every hash with at least one real [keys.*] entry. A comment-only
 # copy is not authentication. The runtime file is gitignored; this example is
 # not loaded by the gateway.
 #
 # echo -n "your-secret-key" | sha256sum
-#
-# Default development auth is mortredctl init-trust (env tokens), not this file.
-# Auth: a valid key file is enough for inference. Empty
-# MORTRED_GATEWAY_AUTH_TOKEN does not authorize anyone once keys exist.
 
 # [keys.client-a]
 # hash = "<sha256 hex of the Bearer secret>"

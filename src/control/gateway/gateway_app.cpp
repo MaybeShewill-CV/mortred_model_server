@@ -825,9 +825,7 @@ bool GatewayApp::init(const GatewayInitOptions& options) {
                      rl.rate_per_sec, rl.burst, trusted_proxies_.entries.size());
     }
 
-    // fail-closed: every listen needs inference/management auth. Broken or
-    // empty api_keys.toml is fatal when no static token can take over.
-    bool api_keys_loaded = false;
+    // A loaded key file does not replace a missing inference or management token.
     bool api_keys_parse_failed = false;
     bool api_keys_empty_file = false;
     {
@@ -845,7 +843,6 @@ bool GatewayApp::init(const GatewayInitOptions& options) {
                              "(empty key file is not auth)\n",
                              api_keys_path.c_str());
             } else {
-                api_keys_loaded = true;
                 std::fprintf(stderr, "mortred-gateway: loaded %zu API keys from %s\n",
                              api_keys_.key_count(), api_keys_path.c_str());
             }
@@ -862,24 +859,20 @@ bool GatewayApp::init(const GatewayInitOptions& options) {
                      jinq::common::mortred_expose_mode().c_str());
         return false;
     }
-    const bool has_static_token = !auth_token_.empty() || !admin_token_.empty();
-    if (!has_static_token && !api_keys_loaded) {
-        if (api_keys_empty_file) {
+    const auto listen = tokens_usable_for_listen(metrics_token_, auth_token_, admin_token_);
+    if (!listen.ok) {
+        if (std::strcmp(listen.reason, kScrapeTokenMissing) == 0) {
             std::fprintf(stderr,
-                         "mortred-gateway: refusing to start: conf/api_keys.toml has no keys "
-                         "(empty key file is not auth). Set MORTRED_GATEWAY_AUTH_TOKEN / "
-                         "MORTRED_API_TOKEN, or add at least one [keys.*] hash. "
-                         "Loopback is not an anonymous mode.\n");
-        } else if (api_keys_parse_failed) {
+                         "mortred-gateway: refusing to start without MORTRED_METRICS_TOKEN "
+                         "(GET /metrics is never public, including loopback; set a scrape Bearer "
+                         "distinct from the inference and management tokens). "
+                         "Generate with: mortredctl init-trust\n");
+        } else if (std::strcmp(listen.reason, kScrapeTokenCollision) == 0) {
             std::fprintf(stderr,
-                         "mortred-gateway: refusing to start: conf/api_keys.toml exists but failed "
-                         "to parse, and no MORTRED_GATEWAY_AUTH_TOKEN or MORTRED_API_TOKEN "
-                         "fallback is configured\n");
+                         "mortred-gateway: refusing to start: MORTRED_METRICS_TOKEN matches an "
+                         "inference or management token; Prometheus would then hold that privilege\n");
         } else {
-            std::fprintf(stderr,
-                         "mortred-gateway: refusing to start without external auth "
-                         "(set MORTRED_GATEWAY_AUTH_TOKEN, MORTRED_API_TOKEN, or provide a valid "
-                         "conf/api_keys.toml). Loopback is not an anonymous mode.\n");
+            std::fprintf(stderr, "mortred-gateway: refusing to start: %s\n", listen.reason);
         }
         return false;
     }
@@ -891,21 +884,6 @@ bool GatewayApp::init(const GatewayInitOptions& options) {
         std::fprintf(stderr,
                      "mortred-gateway: WARNING: conf/api_keys.toml has no keys; continuing "
                      "with static-token auth only\n");
-    }
-    const auto scrape = scrape_token_usable(metrics_token_, auth_token_, admin_token_);
-    if (!scrape.ok) {
-        if (metrics_token_.empty()) {
-            std::fprintf(stderr,
-                         "mortred-gateway: refusing to start without MORTRED_METRICS_TOKEN "
-                         "(GET /metrics is never public, including loopback; set a scrape Bearer "
-                         "distinct from the inference and management tokens). "
-                         "Generate with: mortredctl init-trust\n");
-        } else {
-            std::fprintf(stderr,
-                         "mortred-gateway: refusing to start: MORTRED_METRICS_TOKEN matches an "
-                         "inference or management token; Prometheus would then hold that privilege\n");
-        }
-        return false;
     }
 
     std::string runtime_profile = options.profile;
