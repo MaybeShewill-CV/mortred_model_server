@@ -256,5 +256,6 @@ TEST_F(OccupancyGateTest, query_nvidia_smi_times_out_on_hang) {
     fs::remove_all(dir);
 
     EXPECT_FALSE(snap.available);
+    EXPECT_GE(ms, 250) << "probe returned without running the PATH script, took " << ms << "ms";
     EXPECT_LT(ms, 2000) << "probe must return within timeout, took " << ms << "ms";
 }

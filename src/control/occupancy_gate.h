@@ -18,6 +18,7 @@
 #include <cctype>
 #include <cerrno>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
 #include <signal.h>
 #include <poll.h>
@@ -27,6 +28,10 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <vector>
+
+// libc environ. nvidia-smi children pass this pointer to execve; they do not
+// build an environment block after fork.
+extern "C" char** environ;
 
 namespace mortred {
 namespace control {
@@ -124,6 +129,107 @@ inline std::string occupancy_declared_measured_detail(const std::string& catalog
            " disagrees with measured " + std::to_string(measured_mib) + " for " + catalog_id;
 }
 
+// Parent-side PATH search shared by both nvidia-smi probes. Order matches
+// this machine's glibc execvp: unset PATH uses confstr(_CS_PATH) (the same
+// directories as glibc's CS_PATH), an empty PATH field is the current
+// directory, and the first access(X_OK) success wins. A relative hit is
+// turned into an absolute path here. The caller owns *out. No shared buffer,
+// so the sampler thread and the spawn thread can resolve at the same time.
+// Not found: false, and the caller must not fork.
+inline bool resolve_nvidia_smi_path(std::string* out) {
+    if (out == nullptr) {
+        return false;
+    }
+    out->clear();
+    constexpr const char* kFile = "nvidia-smi";
+
+    std::string path;
+    const char* env_path = std::getenv("PATH");
+    if (env_path == nullptr) {
+        const std::size_t n = ::confstr(_CS_PATH, nullptr, 0);
+        if (n == 0) {
+            return false;
+        }
+        path.assign(n, '\0');
+        if (::confstr(_CS_PATH, path.data(), path.size()) == 0) {
+            return false;
+        }
+        const std::size_t nul = path.find('\0');
+        if (nul != std::string::npos) {
+            path.resize(nul);
+        }
+    } else {
+        path.assign(env_path);
+    }
+
+    std::string cwd;
+    const auto ensure_cwd = [&cwd]() -> bool {
+        if (!cwd.empty()) {
+            return true;
+        }
+        std::string buf(256, '\0');
+        for (;;) {
+            if (::getcwd(buf.data(), buf.size()) != nullptr) {
+                const std::size_t nul = buf.find('\0');
+                if (nul != std::string::npos) {
+                    buf.resize(nul);
+                }
+                if (buf.empty() || buf.front() != '/') {
+                    return false;
+                }
+                cwd = std::move(buf);
+                return true;
+            }
+            if (errno != ERANGE || buf.size() >= (static_cast<std::size_t>(1) << 20)) {
+                return false;
+            }
+            buf.resize(buf.size() * 2, '\0');
+        }
+    };
+
+    std::size_t begin = 0;
+    for (;;) {
+        const std::size_t colon = path.find(':', begin);
+        const std::size_t end = colon == std::string::npos ? path.size() : colon;
+        const std::string dir = path.substr(begin, end - begin);
+        std::string candidate;
+        if (dir.empty()) {
+            // glibc execvp overwrites the joining slash, leaving the bare name.
+            candidate = kFile;
+        } else {
+            candidate.reserve(dir.size() + 1 + std::strlen(kFile));
+            candidate = dir;
+            candidate.push_back('/');
+            candidate += kFile;
+        }
+        if (::access(candidate.c_str(), X_OK) == 0) {
+            if (candidate.front() != '/') {
+                if (!ensure_cwd()) {
+                    return false;
+                }
+                std::string absolute;
+                absolute.reserve(cwd.size() + 1 + candidate.size());
+                absolute = cwd;
+                if (absolute.back() != '/') {
+                    absolute.push_back('/');
+                }
+                absolute += candidate;
+                candidate = std::move(absolute);
+            }
+            if (candidate.empty() || candidate.front() != '/') {
+                return false;
+            }
+            *out = std::move(candidate);
+            return true;
+        }
+        if (colon == std::string::npos) {
+            break;
+        }
+        begin = colon + 1;
+    }
+    return false;
+}
+
 // Probe nvidia-smi with a hard deadline. A hung driver/tool must not block
 // supervisor spawn forever; on timeout/failure returns available=false so
 // fingerprint/free-VRAM checks are skipped (stamp budget still applies).
@@ -132,10 +238,15 @@ inline LiveGpuSnapshot query_nvidia_smi(int timeout_ms = 3000) {
     if (timeout_ms <= 0) {
         timeout_ms = 3000;
     }
+    std::string smi_path;
+    if (!resolve_nvidia_smi_path(&smi_path)) {
+        return snap;
+    }
     int fds[2];
     if (::pipe(fds) != 0) {
         return snap;
     }
+    char* smi_file = smi_path.data();
     const pid_t pid = ::fork();
     if (pid < 0) {
         ::close(fds[0]);
@@ -153,11 +264,10 @@ inline LiveGpuSnapshot query_nvidia_smi(int timeout_ms = 3000) {
             ::dup2(devnull, STDERR_FILENO);
             ::close(devnull);
         }
-        char arg0[] = "nvidia-smi";
         char arg1[] = "--query-gpu=name,memory.total,memory.free";
         char arg2[] = "--format=csv,noheader,nounits";
-        char* argv[] = {arg0, arg1, arg2, nullptr};
-        ::execvp(argv[0], argv);
+        char* argv[] = {smi_file, arg1, arg2, nullptr};
+        ::execve(smi_file, argv, ::environ);
         ::_exit(127);
     }
     ::close(fds[1]);
