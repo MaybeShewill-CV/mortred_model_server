@@ -28,10 +28,25 @@
 #include <gtest/gtest.h>
 #include <rapidjson/document.h>
 
+#include "common/base64.h"
 #include "models/base_model.h"
 #include "models/io/common_input.h"
 #include "server/abstract_server.h"
 #include "server/base_server_impl.h"
+
+// This binary links common, not libmodels. serve_process still calls the
+// jpeg metrics hook, same as async_job_unittest.
+namespace jinq {
+namespace models {
+namespace backend {
+namespace gpu_jpeg {
+std::string render_decode_metrics() {
+    return {};
+}
+}  // namespace gpu_jpeg
+}  // namespace backend
+}  // namespace models
+}  // namespace jinq
 
 using jinq::common::StatusCode;
 using jinq::models::BaseAiModel;
@@ -168,6 +183,12 @@ struct HttpResp {
     std::map<std::string, std::string> headers;
     std::string body;
 };
+
+// JSON images are decoded before the worker runs, so a fixture that wants
+// the model to see `raw` has to send its base64 form.
+std::string wire_b64(const std::string& raw) {
+    return jinq::common::base64::encode(raw);
+}
 
 std::string to_lower(std::string s) {
     std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) {
@@ -420,7 +441,7 @@ void expect_process_envelope(const rapidjson::Document& doc, int status) {
 TEST(server_e2e_contract, success_returns_200_with_envelope_and_headers) {
     ServerHandle handle = start_server();
     const std::string body =
-        "{\"images\":[\"aGVsbG8=\"],\"req_id\":\"req-1\"}";
+        "{\"images\":[\"" + wire_b64(std::string(8, 'h')) + "\"],\"req_id\":\"req-1\"}";
     auto resp = send_request(handle.port, "POST", "/test/model", body, k_json_auth_headers);
 
     EXPECT_EQ(resp.status, 200);
@@ -507,7 +528,7 @@ TEST(server_e2e_contract, multi_image_results_align_with_items) {
     const std::string long_payload(21, 'b');
     auto resp = send_request(
         handle.port, "POST", "/test/model",
-        "{\"images\":[\"" + short_payload + "\",\"" + long_payload +
+        "{\"images\":[\"" + wire_b64(short_payload) + "\",\"" + wire_b64(long_payload) +
             "\"],\"req_id\":\"multi\"}",
         k_json_auth_headers);
 
@@ -524,7 +545,8 @@ TEST(server_e2e_contract, multi_image_failure_is_isolated_per_item) {
     ServerHandle handle = start_server();
     auto resp = send_request(
         handle.port, "POST", "/test/model",
-        "{\"images\":[\"aaaaaaaa\",\"fail-me\",\"ccccccccccccccccccccccccccc\"],"
+        "{\"images\":[\"" + wire_b64(std::string(8, 'a')) + "\",\"" + wire_b64("fail-me") +
+            "\",\"" + wire_b64(std::string(27, 'c')) + "\"],"
         "\"req_id\":\"iso\"}",
         k_json_auth_headers);
 
@@ -545,7 +567,9 @@ TEST(server_e2e_contract, multi_image_failure_is_isolated_per_item) {
 TEST(server_e2e_contract, request_item_limit_returns_413) {
     ServerHandle handle = start_server("max_request_items=2\n");
     auto resp = send_request(handle.port, "POST", "/test/model",
-                             "{\"images\":[\"a\",\"b\",\"c\"]}", k_json_auth_headers);
+                             "{\"images\":[\"" + wire_b64("a") + "\",\"" + wire_b64("b") + "\",\"" +
+                                 wire_b64("c") + "\"]}",
+                             k_json_auth_headers);
     EXPECT_EQ(resp.status, 413);
     auto doc = parse_body(resp.body);
     EXPECT_EQ(doc["status"].GetInt(), 67);
@@ -578,15 +602,13 @@ TEST(server_e2e_contract, raw_body_encoding_returns_the_same_envelope) {
 TEST(server_e2e_contract, raw_and_json_encodings_produce_identical_results) {
     ServerHandle handle = start_server();
     const std::string payload(31, 'x');
-    const std::string b64 = "eHh4";  // "xxx" - content only matters by length here
-    (void)b64;
 
     auto raw = send_request(handle.port, "POST", "/test/model", payload,
                             {{"Content-Type", "image/jpeg"},
                              {"Authorization", "Bearer test-secret"},
                              {"X-Request-ID", "same"}});
     auto json = send_request(handle.port, "POST", "/test/model",
-                             "{\"images\":[\"" + std::string(31, 'x') + "\"],\"req_id\":\"same\"}",
+                             "{\"images\":[\"" + wire_b64(payload) + "\"],\"req_id\":\"same\"}",
                              k_json_auth_headers);
     ASSERT_EQ(raw.status, 200);
     ASSERT_EQ(json.status, 200);
@@ -849,6 +871,54 @@ double metrics_value(const std::string& body, const std::string& key) {
     return -1.0;
 }
 
+// Bucket sample whose `le` label is exactly `le` (so le="16" is not le="1").
+double metrics_bucket_le(const std::string& body, const std::string& metric,
+                         const std::string& le) {
+    const std::string prefix = metric + "{";
+    size_t pos = 0;
+    while ((pos = body.find(prefix, pos)) != std::string::npos) {
+        if (pos > 0 && body[pos - 1] != '\n') {
+            pos += prefix.size();
+            continue;
+        }
+        const size_t brace = body.find('}', pos);
+        if (brace == std::string::npos) {
+            break;
+        }
+        const std::string labels =
+            body.substr(pos + prefix.size(), brace - (pos + prefix.size()));
+        std::string le_value;
+        size_t start = 0;
+        while (start <= labels.size()) {
+            const size_t comma = labels.find(',', start);
+            const std::string part = labels.substr(
+                start, comma == std::string::npos ? std::string::npos : comma - start);
+            const size_t eq = part.find('=');
+            if (eq != std::string::npos && part.substr(0, eq) == "le") {
+                const std::string raw = part.substr(eq + 1);
+                if (raw.size() >= 2 && raw.front() == '"' && raw.back() == '"') {
+                    le_value = raw.substr(1, raw.size() - 2);
+                }
+            }
+            if (comma == std::string::npos) {
+                break;
+            }
+            start = comma + 1;
+        }
+        if (le_value == le) {
+            const size_t value_pos = body.find(' ', brace);
+            if (value_pos == std::string::npos) {
+                break;
+            }
+            return std::atof(body.c_str() + value_pos + 1);
+        }
+        pos = brace + 1;
+    }
+    ADD_FAILURE() << "histogram bucket not found: " << metric << " le=\"" << le << "\"\n"
+                  << body;
+    return -1.0;
+}
+
 }  // namespace
 
 TEST(server_e2e_contract, queue_limit_returns_429_with_retry_after) {
@@ -895,7 +965,7 @@ TEST(server_e2e_contract, batch_collects_and_distributes_per_request_results) {
         // mixup in the batch distribution would be visible in the response
         const std::string payload(static_cast<size_t>(10 + i * 7), 'a');
         const std::string body =
-            "{\"images\":[\"" + payload + "\"],\"req_id\":\"batch-" + std::to_string(i) + "\"}";
+            "{\"images\":[\"" + wire_b64(payload) + "\"],\"req_id\":\"batch-" + std::to_string(i) + "\"}";
         senders.emplace_back([&handle, &responses, i, body]() {
             responses[i] =
                 send_request(handle.port, "POST", "/test/model", body, k_json_auth_headers);
@@ -924,6 +994,77 @@ TEST(server_e2e_contract, batch_collects_and_distributes_per_request_results) {
     EXPECT_LT(batch_count, 4.0) << "no coalescing happened: 4 batches of size 1";
     EXPECT_GE(metrics_value(metrics.body, "mortred_batch_window_wait_ms_count"), 1.0)
         << metrics.body;
+}
+
+TEST(server_e2e_contract, batch_size_one_counts_each_executed_image) {
+    ServerHandle handle = start_server();
+    auto before = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    ASSERT_EQ(before.status, 200);
+    EXPECT_EQ(before.body.find("mortred_batch_size_count{"), std::string::npos) << before.body;
+
+    auto resp = send_request(handle.port, "POST", "/test/model",
+                             "{\"images\":[\"aGVsbG8=\",\"aGVsbG8=\"]}", k_json_auth_headers);
+    ASSERT_EQ(resp.status, 200) << resp.body;
+    auto doc = parse_body(resp.body);
+    ASSERT_FALSE(doc.HasParseError());
+    ASSERT_TRUE(doc["results"].IsArray());
+    ASSERT_EQ(doc["results"].Size(), 2u);
+    EXPECT_EQ(doc["results"][0]["status"].GetInt(), 0);
+    EXPECT_EQ(doc["results"][1]["status"].GetInt(), 0);
+
+    auto after = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    ASSERT_EQ(after.status, 200);
+    EXPECT_EQ(metrics_value(after.body, "mortred_batch_size_count"), 2.0);
+    EXPECT_EQ(metrics_value(after.body, "mortred_batch_size_sum"), 2.0);
+    EXPECT_EQ(metrics_bucket_le(after.body, "mortred_batch_size_bucket", "1"), 2.0);
+    EXPECT_EQ(after.body.find("mortred_batch_window_wait_ms_count{"), std::string::npos)
+        << after.body;
+}
+
+TEST(server_e2e_contract, batch_size_one_omits_item_still_inside_run) {
+    ServerHandle handle = start_server("model_run_timeout=100\nfake_delay_ms=1000\n");
+    auto resp = send_request(handle.port, "POST", "/test/model",
+                             "{\"images\":[\"aGVsbG8=\",\"aGVsbG8=\"]}", k_json_auth_headers);
+    EXPECT_EQ(resp.status, 504);
+    auto doc = parse_body(resp.body);
+    ASSERT_FALSE(doc.HasParseError());
+    ASSERT_TRUE(doc["results"].IsArray());
+    ASSERT_EQ(doc["results"].Size(), 2u);
+
+    auto early = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    ASSERT_EQ(early.status, 200);
+    EXPECT_EQ(early.body.find("mortred_batch_size_count{"), std::string::npos) << early.body;
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    std::string settled;
+    while (std::chrono::steady_clock::now() < deadline) {
+        auto metrics = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+        ASSERT_EQ(metrics.status, 200);
+        const std::string key = "mortred_inference_duration_ms_count";
+        if (metrics.body.find(key + "{") != std::string::npos) {
+            const double duration_count = metrics_value(metrics.body, key);
+            if (duration_count == 1.0) {
+                settled = std::move(metrics.body);
+                break;
+            }
+            if (duration_count > 1.0) {
+                FAIL() << "inference duration count left 1: " << duration_count << "\n"
+                       << metrics.body;
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    ASSERT_FALSE(settled.empty()) << "inference duration count did not reach 1 within 3s";
+    EXPECT_EQ(metrics_value(settled, "mortred_batch_size_count"), 1.0);
+    EXPECT_EQ(metrics_value(settled, "mortred_batch_size_sum"), 1.0);
+    EXPECT_EQ(metrics_bucket_le(settled, "mortred_batch_size_bucket", "1"), 1.0);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    auto later = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    ASSERT_EQ(later.status, 200);
+    EXPECT_EQ(metrics_value(later.body, "mortred_batch_size_count"), 1.0);
+    EXPECT_EQ(metrics_value(later.body, "mortred_batch_size_sum"), 1.0);
+    EXPECT_EQ(metrics_bucket_le(later.body, "mortred_batch_size_bucket", "1"), 1.0);
 }
 
 TEST(server_e2e_contract, batch_timeout_returns_504) {
@@ -1026,7 +1167,8 @@ TEST(server_e2e_contract, async_lifecycle_pending_to_done_to_result) {
     ServerHandle handle = start_server("async_enabled=true\nfake_delay_ms=200\n");
     const auto submit =
         send_request(handle.port, "POST", "/jobs",
-                     "{\"images\":[\"aGVsbG8=\"],\"req_id\":\"async-2\"}", k_json_auth_headers);
+                     "{\"images\":[\"" + wire_b64(std::string(8, 'h')) + "\"],\"req_id\":\"async-2\"}",
+                     k_json_auth_headers);
     ASSERT_EQ(submit.status, 202);
     auto submit_doc = parse_body(submit.body);
     const std::string job_id = submit_doc["job_id"].GetString();
@@ -1219,18 +1361,19 @@ TEST(server_e2e_contract, batch_item_failure_isolated) {
     const std::string payload_c(31, 'c');
     std::thread sender_a([&handle, &resp_a, &payload_a]() {
         resp_a = send_request(handle.port, "POST", "/test/model",
-                              "{\"images\":[\"" + payload_a + "\"],\"req_id\":\"a\"}",
+                              "{\"images\":[\"" + wire_b64(payload_a) + "\"],\"req_id\":\"a\"}",
                               k_json_auth_headers);
     });
     std::thread sender_c([&handle, &resp_c, &payload_c]() {
         resp_c = send_request(handle.port, "POST", "/test/model",
-                              "{\"images\":[\"" + payload_c + "\"],\"req_id\":\"c\"}",
+                              "{\"images\":[\"" + wire_b64(payload_c) + "\"],\"req_id\":\"c\"}",
                               k_json_auth_headers);
     });
     // the "fail-me" item rides in the same collection window
     const auto resp_b =
         send_request(handle.port, "POST", "/test/model",
-                     "{\"images\":[\"fail-me\"],\"req_id\":\"b\"}", k_json_auth_headers);
+                     "{\"images\":[\"" + wire_b64("fail-me") + "\"],\"req_id\":\"b\"}",
+                     k_json_auth_headers);
     sender_a.join();
     sender_c.join();
 
