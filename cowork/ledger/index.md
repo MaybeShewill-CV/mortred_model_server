@@ -10,8 +10,8 @@
 - 本轮起点加权分: 7.1
 - 记录目录: cowork/ledger/round-001/
 - 运行环境: 本机 WSL Ubuntu（/mnt/g/Codex/mortred_model_server）
-- 状态: stopped
-- 停止原因: P2-6 方案 v2 的 50 毫秒采样看不到「两个模型已退出、gateway 与 supervisor 仍在」。空 TCP 连接被实现偏差确认拒绝。去掉连接后实跑退出码 1，未再提交。实现偏差退回已经用完。
+- 状态: running
+- 用户决定: P2-6 按信号顺序继续。一次外部跟踪里，supervisor 先向两个模型发 SIGINT 并等到它们退出，再向 gateway 发 SIGINT。不跳到其他问题。
 
 ## 轮次
 
