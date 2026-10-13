@@ -644,6 +644,10 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::on_sync_item_done(
         }
         _m_metrics.observe_inference_duration_ms(work->run_ms);
         _m_workers.observe_run_ms(static_cast<int64_t>(work->run_ms));
+        // max_batch_size<=1 stays on this path. One observation of 1 per
+        // image whose run_one has returned; `observed` keeps later branches
+        // from recording the same image again.
+        _m_metrics.observe_batch_size(1);
         observed = true;
     };
     const auto finish_and_count = [this, state, &observe_run]() {
