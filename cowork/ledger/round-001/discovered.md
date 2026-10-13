@@ -21,3 +21,6 @@ P2-3 的跟踪只挂钩 libc 的 prctl、execvp、setenv、execve。syscall(SYS_
 P2-4 没有执行 `ctest -R resident_pair_record_rules`。worktree 没有已配置的 CTest 构建目录，也没有重新编译 C++。第 1 条已经执行同一命令 `python3 scripts/resident_pair_record.py --check`，退出码 0，没有写 json，也没有拉起模型。方案写明无 GPU 的 CI 跑过这条规则不能写成 TP2 已满足。一次外部验收确认不了 CTest 注册是否被默认 check 调度，不插入当前队列。
 
 P2-5 外部脚本按方案不启动 supervisor。`__gateway` 永久失败和管理面继续监听只在 `supervisor_unittest` 里看到。一次外部验收确认不了管理面进程，不插入当前队列。
+
+P2-6 没有执行 `ctest -R stop_order_record_rules`。worktree 没有已配置的 CTest 构建目录，也没有重新编译 C++。第 1 条已经执行同一命令 `python3 scripts/stop_order_record.py --check`，退出码 0，没有写 json，也没有拉起模型。方案写明无 GPU 的 CI 跑过这条规则不能写成 OP5 已满足。一次外部验收确认不了 CTest 注册是否被默认 check 调度，不插入当前队列。
+
