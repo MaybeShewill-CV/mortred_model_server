@@ -46,6 +46,43 @@ template <typename INPUT, typename OUTPUT> StatusCode RealEsrGan<INPUT, OUTPUT>:
     return StatusCode::OK;
 }
 
+template <typename INPUT, typename OUTPUT>
+jinq::models::backend::PreparedInput RealEsrGan<INPUT, OUTPUT>::prepare_inputs(const INPUT &input) {
+    jinq::models::backend::PreparedInput prepared;
+    if constexpr (std::is_same<INPUT, jinq::models::io_define::common_io::image_input>::value) {
+        prepared.context.params = input.params;
+    }
+    cv::Mat image = this->load_model_image(input, &prepared.status, &prepared.error);
+    if (image.empty()) {
+        if (prepared.status == StatusCode::OK) {
+            prepared.status = StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+        }
+        return jinq::models::backend::PreparedInput::invalid(prepared.status,
+                                                             prepared.error.empty() ? "input image is empty" : prepared.error);
+    }
+
+    // Channel mismatches keep the existing empty-tensor status. Any other
+    // decoded working image whose height or width is not 256, including a
+    // side below 10, is rejected here, before NHWC packing and the session.
+    const bool channels_ok = image.channels() == 3 || image.channels() == 4;
+    if (channels_ok && (image.rows != 256 || image.cols != 256)) {
+        LOG(ERROR) << "real esrgan input size rejected: " << image.size();
+        return jinq::models::backend::PreparedInput::invalid(
+            StatusCode::MODEL_INPUT_SIZE_REJECTED, jinq::common::status_code_to_str(StatusCode::MODEL_INPUT_SIZE_REJECTED));
+    }
+
+    prepared.inputs = preprocess(image);
+    jinq::common::stage_timing::mark("pre");
+    if (prepared.inputs.empty()) {
+        return jinq::models::backend::PreparedInput::invalid(StatusCode::MODEL_EMPTY_INPUT_IMAGE,
+                                                             "model preprocess produced no input tensors");
+    }
+    prepared.context.source_size = image.size();
+    prepared.context.network_size = image.size();
+    prepared.context.source_image = image;
+    return prepared;
+}
+
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> RealEsrGan<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
     if (input_image.size().height < 10 || input_image.size().width < 10 || (input_image.channels() != 3 && input_image.channels() != 4)) {
         LOG(ERROR) << "invalid real esrgan image size or channels: " << input_image.size() << ", channels=" << input_image.channels();

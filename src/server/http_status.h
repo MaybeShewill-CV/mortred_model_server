@@ -23,6 +23,7 @@ inline int http_status_of(StatusCode code) {
 
     case StatusCode::JSON_DECODE_ERROR:
     case StatusCode::MODEL_EMPTY_INPUT_IMAGE:
+    case StatusCode::MODEL_INPUT_SIZE_REJECTED:
         return 400;
 
     case StatusCode::UNSUPPORTED_MEDIA_TYPE:
