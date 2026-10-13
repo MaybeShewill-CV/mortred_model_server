@@ -10,9 +10,9 @@
 - 阻塞: 无
 - 与角色自评: 一致
 
-原始分 = (15×6.0 + 20×7.3 + 15×7.6 + 10×9.0 + 5×6.0 + 15×6.5 + 10×6.8 + 5×6.5 + 5×9.0) / 100 = 713.0 / 100 = 7.1。P0-1、P1-1、P1-2、P2-1、P2-2、P2-3、P2-4 已关闭。未关闭且未阻塞的 P0 和 P1 都没有了，不再套 7.9 或 8.9。加权分保持 7.1。模块分数沿用 `01-modules` 正文。test 正文仍是 6.8。
+原始分 = (15×6.0 + 20×7.3 + 15×7.6 + 10×9.0 + 5×6.0 + 15×6.5 + 10×6.8 + 5×6.5 + 5×9.0) / 100 = 713.0 / 100 = 7.1。P0-1、P1-1、P1-2、P2-1、P2-2、P2-3、P2-4、P2-5 已关闭。未关闭且未阻塞的 P0 和 P1 都没有了，不再套 7.9 或 8.9。加权分保持 7.1。模块分数沿用 `01-modules` 正文。test 正文仍是 6.8。
 
-已关闭 7 条。未关闭且未阻塞的 id 从 13 条减到 6 条。EX1、PF3、ST2、ST5 已满足。TP2 从「未满足」变为「已满足」：合入 `eddcc454a20293ccbfbef0717cb6453032109cb5`。同一份记录里 `yolov8s` 与 `libface` 同时 ready，两条请求时间重叠且都成功。PF4 的单次读数已经能在不创建 `/tmp/mortred_stage_timing` 时看到，但该行要求的是同一次压测报告，报告仍不存在，所以 PF4 继续未满足并挂在 P2-11。
+已关闭 8 条。未关闭且未阻塞的 id 从 13 条减到 5 条。EX1、PF3、ST2、ST5、TP2 已满足。OP4 从「未满足」变为「已满足」：合入 `525dd8353a3c5056a209d8a6c60e5b0d13cad96d`。推理 token 缺失、管理 token 缺失，或二者相同而 metrics token 不同时，gateway 退出码 1 且不监听。三个彼此不同的短 token 可以监听，`GET /healthz` 为 200，正文为 `ok`。PF4 的单次读数已经能在不创建 `/tmp/mortred_stage_timing` 时看到，但该行要求的是同一次压测报告，报告仍不存在，所以 PF4 继续未满足并挂在 P2-11。
 
 ## 完成标准
 | 编号 | 状态: 已满足 / 未满足 / 阻塞 | 证据或队列 id |
@@ -39,7 +39,7 @@
 | OP1 | 已满足 | `scripts/mortredctl_prepare.sh` 接受 `prepare --id`，`scripts/prepare_pack.sh` 按产品清单转换该 id 的 static batch=1 engine |
 | OP2 | 已满足 | `src/control/supervisor/supervisor_app.cpp` 的状态接口按 id 返回 `state`，并在有退出信息时写入 `last_exit_status` |
 | OP3 | 已满足 | `restart_server` 只停再起这一个 id |
-| OP4 | 未满足 | P2-5 |
+| OP4 | 已满足 | P2-5 已合入 `525dd8353a3c5056a209d8a6c60e5b0d13cad96d`。推理 token 缺失、管理 token 缺失，或二者相同而 metrics token 不同时，gateway 退出码 1 且不监听。三个彼此不同的短 token 可以监听，`GET /healthz` 为 200，正文为 `ok`。重跑白盒与外部脚本退出码都是 0 |
 | OP5 | 未满足 | P2-6 |
 | EX1 | 已满足 | P1-2 已合入 `259c11a006826f6a65b6ad24caded3c6c6a12d1d`。`docs/how_to_add_new_server.md` 示例 id、family 与 `model =` 为 `densenet`，并写明不为每个模型新增服务器二进制。`README.zh-cn.md` 的 `--model` 为 `mobilenetv2`。两份 README 的 cpu 精选为 `resnet`。`docs/model-developer-guide.md` 使用 `catalog()` 与 `mortred-model-server.out --list`，没有要求单独的服务器二进制 |
 | EX2 | 已满足 | `src/apps/product_index.cpp` 从 `catalog()` 投影；`src/control/gateway/gateway_app.cpp` 按 id 查找转发，没有按模型写死的路由 |

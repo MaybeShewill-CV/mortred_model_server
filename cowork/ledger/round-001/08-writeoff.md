@@ -1,13 +1,13 @@
 # 关闭记录
 
 - 轮次: 1
-- 已关闭: P0-1、P1-1、P1-2、P2-1、P2-2、P2-3、P2-4
+- 已关闭: P0-1、P1-1、P1-2、P2-1、P2-2、P2-3、P2-4、P2-5
 - 阻塞: 无
 - 未阻塞的开放项: 相对本轮起点减少
 
-核对 `07-close.md`、`07-close-p12.md`、`07-close-p21.md`、`07-close-p22.md`、`07-close-p23.md` 与 `07-close-p24.md`。P0-1、P1-1、P1-2、P2-1、P2-2、P2-3、P2-4 的原陈述都没有留在仍开放的问题里。P2-8 没有重新入列。新入列为无。九个模块分数与 `01-modules` 正文一致。
+核对 `07-close.md`、`07-close-p12.md`、`07-close-p21.md`、`07-close-p22.md`、`07-close-p23.md`、`07-close-p24.md` 与 `07-close-p25.md`。P0-1、P1-1、P1-2、P2-1、P2-2、P2-3、P2-4、P2-5 的原陈述都没有留在仍开放的问题里。P2-8 没有重新入列。新入列为无。九个模块分数与 `01-modules` 正文一致。
 
-本轮起点未关闭且未阻塞的 id 共 13 条。关闭 7 条后剩 6 条。
+本轮起点未关闭且未阻塞的 id 共 13 条。关闭 8 条后剩 5 条。
 
 ## 已关闭的问题陈述
 | id | 模块 | 问题陈述 |
@@ -20,11 +20,11 @@
 | P2-2 | src-control | 打开限流后，鉴权失败仍消耗来源 IP 的配额（ST2）。 |
 | P2-3 | src-control | `fork` 返回之后、随后的 `exec` 之前，库函数跟踪里出现 `prctl`、`execvp` 或 `setenv`（ST5）。 |
 | P2-4 | ops、test | 没有 `yolov8s` 与 `libface` 同时 ready 时对两者并发请求且两者都成功的记录（TP2）。 |
+| P2-5 | src-control、ops | 推理 token 或管理 token 缺失，或二者相同，gateway 仍会启动（OP4）。 |
 
 ## 仍开放的问题
 | id | 模块 | 问题陈述 | 状态 |
 | --- | --- | --- | --- |
-| P2-5 | src-control、ops | 推理 token 或管理 token 缺失，或二者相同，gateway 仍会启动（OP4）。 | 未做 |
 | P2-6 | ops | 停止信号没有收成只发给 supervisor 主进程（OP5）。 | 未做 |
 | P2-7 | src-models | 解码后宽或高不是 256 的合法 JPEG 调用 `realesrgan` 时，返回的不是写明 256×256 的输入错误。 | 未做 |
 | P2-9 | test | `python3 scripts/golden_drift_check.py --check` 不能以 0 退出。 | 未做 |
@@ -44,6 +44,8 @@ P2-2 已关闭。合入 `b44f9cb2afd06269f446c9e4dfe0e04a202dcbd0`。打开同�
 P2-8 留在锁定队列附录，不重新入列。
 
 P2-7 的通过结果是输入错误并写明 256×256。成功返回 `1×256×256×3` 不作为通过。
+
+P2-5 已关闭。合入 `525dd8353a3c5056a209d8a6c60e5b0d13cad96d`。推理 token 缺失、管理 token 缺失，或二者相同而 metrics token 不同时，gateway 退出码 1 且不监听。三个彼此不同的短 token 可以监听，`GET /healthz` 为 200，正文为 `ok`。外部脚本不启动 supervisor，留在 `discovered.md` 附录，不新入列。
 
 P2-4 已关闭。合入 `eddcc454a20293ccbfbef0717cb6453032109cb5`。同一份记录里 `yolov8s` 与 `libface` 同时 ready，两条请求时间重叠且都成功。没有执行 `ctest -R resident_pair_record_rules`，留在 `discovered.md` 附录，不新入列。
 
