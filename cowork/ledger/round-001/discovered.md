@@ -26,3 +26,5 @@ P2-6 没有执行 `ctest -R stop_order_record_rules`。worktree 没有已配置�
 
 P2-7 没有发送正好 256×256 的成功请求。方案规定成功增强图不作为通过。TensorRT 把已有引擎 `realesr-general-x4v3.engine.static_bs1.fp32` 记成 H/W 动态，profile 为 min 64、opt 256、max 640。验收标准 5 只核对 toml 与基准文件中的字符串，这两处已通过，该 toml 不在本次 diff 里。一次外部验收确认不了引擎剖面是否仍是静态 256，不插入当前队列。
 
+P2-9 没有重新跑推理。方案规定 golden 数值与当前权重是否仍一致不在通过条件内。标准 4 没有改文件去制造不一致。一次外部验收确认不了权重是否仍与 golden 数值一致，不插入当前队列。
+
