@@ -225,3 +225,11 @@ v2 未经这两处读数修订的句子未被选中：进程起来之后就把�
 - 选用: 用已经另存的 `demo_data/model_test_input/ocr/coco_text_test.jpg` 作为 `dbnet` 的测试图，保留清单里已写入的四行，从 `dbnet` 继续。不再开第三版确认。状态改为 running，继续第 4 步。
 - 决定原文: 继续执行。`dbnet` 的 calibrate 和官方压测都使用这张另存的 JPEG。不改 `railway_ticket.png`，不改解码路径，不改 16 张投票网格。`mobilenetv2`、`yolov8s`、`libface`、`pphuman_mobile` 四行保留，不重跑。从 `dbnet` 起跑完剩余 id。
 - 未选用: 继续用 `railway_ticket.png`；清空前四行后从头重跑；把一次探测请求的 7 个框写进清单。那一次探测只说明这张 JPEG 能走出 `jpeggpu`，不能代替 60 秒官方压测。
+
+## 用户决定（再跑 superpoint）
+
+- 日期: 2026-10-14
+- 选用: 保留清单已有 6 行，从 `superpoint` 再跑一次。`P99_CAP_MS["superpoint"]` 仍是 25.0。不改 `pick_w_star`，不改 `assess_point`，不改 demo `demo_data/model_test_input/feature_point/test.png`，不手填。状态改为 running，继续第 4 步。
+- 决定原文: 再做一次 superpoint 模型。
+- 做法: 执行 `python3 scripts/coverage_http_report.py --from superpoint`。该入口要求清单正好是 `mobilenetv2`、`yolov8s`、`libface`、`pphuman_mobile`、`dbnet`、`dinov2_vits14`，并保留这些行。`superpoint` 写出 `worker_nums` 与 `decode_auto` 后，同一命令按原方案继续 `realesrgan`、`metric3d_512`。`superpoint` 再次因 `latency_budget` 写不出 `decode_auto` 时停住，不跑后面的 id，不改 25ms 上限，不手填。
+- 未选用: 提高 25ms 上限；更换 `superpoint` 的 demo；手填这一行；跳过 `superpoint`；清空前 6 行后从头重跑。
