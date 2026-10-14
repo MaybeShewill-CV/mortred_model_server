@@ -10,8 +10,8 @@
 - 本轮起点加权分: 7.1
 - 记录目录: cowork/ledger/round-001/
 - 运行环境: 本机 WSL Ubuntu（/mnt/g/Codex/mortred_model_server）
-- 状态: running
-- 续跑: 用户要求再做一次 `superpoint`。保留已有 6 行，从 `superpoint` 按原约束重跑。不改 25ms 上限，不改 `pick_w_star`，不改 demo，不手填。
+- 状态: stopped
+- 停止原因: P2-11 第 4 条未通过。再跑 `superpoint` 后技术负责人同意停住：p99=32.085ms，仍高于 25ms，`pick_w_star` 停在 `latency_budget`，pack 没有写出 `decode_auto`。这不是第 4 条通过，没有合入。清单仍为 6 行。
 
 ## 轮次
 
