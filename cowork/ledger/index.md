@@ -10,7 +10,7 @@
 - 本轮起点加权分: 7.1
 - 记录目录: cowork/ledger/round-001/
 - 运行环境: 本机 WSL Ubuntu（/mnt/g/Codex/mortred_model_server）
-- 状态: stopped
+- 状态: running
 
 ## 轮次
 
