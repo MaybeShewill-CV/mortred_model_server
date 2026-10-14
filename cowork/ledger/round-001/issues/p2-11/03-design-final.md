@@ -37,9 +37,9 @@ P2-8 留在附录，不恢复。P0-1、P1-1、TP2（P2-4）已关闭，不重做
 每个 id 的顺序固定为四步。
 
 1. `mortredctl prepare --id <id>`。引擎保持现有 static shape、batch=1。已有引擎时沿用现有 prepare 的跳过规则。
-2. 在仓库外写一份只含 `[pack.<id>]` 的临时 pack，初值 `worker_nums = 1`，不写 `model_config`。然后执行 `mortredctl calibrate --pack <该文件> --write-pack --duration 60s`。60 秒不低于 v4 的 30 秒写 pack 门槛，结论才会写入 pack。不传 `--from-json`，不传 `--workers`。worker 数扫描的并发等于该点 `worker_nums` 的两倍，warmup 为 5 秒，测量时长用这次传入的 60 秒。JPEG 解码投票仍走 `--raw`，时长仍是现有 10 秒。脚本不增加 base64 路径。`pphuman_mobile` 这次 calibrate 设置 `MORTRED_DEMO_IMAGE=demo_data/model_test_input/scene_segmentation/face_w_mask.jpg`。
+2. 在仓库外写一份只含 `[pack.<id>]` 的临时 pack，初值 `worker_nums = 1`，不写 `model_config`。然后执行 `mortredctl calibrate --pack <该文件> --write-pack --duration 60s`。60 秒不低于 v4 的 30 秒写 pack 门槛，结论才会写入 pack。不传 `--from-json`，不传 `--workers`。worker 数扫描的并发等于该点 `worker_nums` 的两倍，warmup 为 5 秒，测量时长用这次传入的 60 秒。JPEG 解码投票仍走 `--raw`，时长仍是现有 10 秒。脚本不增加 base64 路径。`pphuman_mobile` 这次 calibrate 设置 `MORTRED_DEMO_IMAGE=demo_data/model_test_input/scene_segmentation/face_w_mask.jpg`。`dbnet` 这次 calibrate 设置 `MORTRED_DEMO_IMAGE=demo_data/model_test_input/ocr/coco_text_test.jpg`。
 3. 从写回的 `[pack.<id>]` 读出 `worker_nums` 和 `decode_auto`。`decode_auto` 必须是 `cpu` 或 `gpu`。再只把这一份 pack 交给 supervisor（`MORTRED_PACK`）。`conf/mortred.toml` 的 `autostart_default = false` 保持不变，因此这次只拉起 gateway 和这一个模型。进程起来之后，读该进程环境里的 `MORTRED_WORKER_NUMS` 与 `MORTRED_DECODE_AUTO`。这两项在拉起后即可读，分别等于该 `worker_nums` 与该 `decode_auto`。这一步不读 worker gauge，不把它们的和写成进程中的 worker 数。
-4. 官方压测开始前，刮一次该模型进程的 `/metrics`。这次只作为排队直方图、推理直方图和 `mortred_jpeg_decode_total` 的增量基线。基线里没有的序列按 0。这次刮取上的 worker gauge 即使是 0，也不写入清单的进程 worker 数。然后对 gateway 跑 `scripts/server/http_infer_rps.py --raw`，`--model <id>`，`-c` 等于已部署 `worker_nums` 的两倍，`-d 60s`，`--warmup 5s`，不设 `--qps`。`pphuman_mobile` 增加 `--image demo_data/model_test_input/scene_segmentation/face_w_mask.jpg`。测量窗的 `wall_s` 不少于 60。成功 RPS 用该次脚本的 rps：测量窗内 HTTP 200 的次数除以墙钟。现有映射里 HTTP 200 对应状态 OK。压测已经产生完成响应、并且这次拉起的模型进程还在时，再刮一次 `/metrics`。进程中的 worker 数是这一次的 `mortred_workers_available{model="<server_uri>"}` 与 `mortred_workers_busy{model="<server_uri>"}` 之和，等于该 `worker_nums`。两只直方图的 count 增量，以及 `mortred_jpeg_decode_total` 的各 `backend` 增量，都是这一次减去基线；基线没有的序列按 0。然后才停止这次拉起的进程。
+4. 官方压测开始前，刮一次该模型进程的 `/metrics`。这次只作为排队直方图、推理直方图和 `mortred_jpeg_decode_total` 的增量基线。基线里没有的序列按 0。这次刮取上的 worker gauge 即使是 0，也不写入清单的进程 worker 数。然后对 gateway 跑 `scripts/server/http_infer_rps.py --raw`，`--model <id>`，`-c` 等于已部署 `worker_nums` 的两倍，`-d 60s`，`--warmup 5s`，不设 `--qps`。`pphuman_mobile` 增加 `--image demo_data/model_test_input/scene_segmentation/face_w_mask.jpg`。`dbnet` 增加 `--image demo_data/model_test_input/ocr/coco_text_test.jpg`。测量窗的 `wall_s` 不少于 60。成功 RPS 用该次脚本的 rps：测量窗内 HTTP 200 的次数除以墙钟。现有映射里 HTTP 200 对应状态 OK。压测已经产生完成响应、并且这次拉起的模型进程还在时，再刮一次 `/metrics`。进程中的 worker 数是这一次的 `mortred_workers_available{model="<server_uri>"}` 与 `mortred_workers_busy{model="<server_uri>"}` 之和，等于该 `worker_nums`。两只直方图的 count 增量，以及 `mortred_jpeg_decode_total` 的各 `backend` 增量，都是这一次减去基线；基线没有的序列按 0。然后才停止这次拉起的进程。
 
 标签只改 `scripts/calibrate_pack.py` 的 `run_one_point`。该函数已经用 `server_listen` 取出 `uri`。四次调用 `_metric_series` 时，第三个参数改为这个 `uri`，不再传目录 id。`_metric_series` 的正则不改，继续只匹配 `{model="<第三个参数>",le="..."}` 的 bucket，以及 `{model="<第三个参数>"}` 的 `_count`。第三个参数是上面列出的 `server_uri`。排队直方图名仍是 `mortred_queue_wait_duration_ms`，推理直方图名仍是 `mortred_inference_duration_ms`。
 
@@ -47,7 +47,7 @@ P2-8 留在附录，不恢复。P0-1、P1-1、TP2（P2-4）已关闭，不重做
 
 `assess_point`、`pick_w_star` 的停止条件保持 `365b5dcd` 已提交的原样，不把那些内部门槛写进清单勾销。某个 id 因这些已提交条件没有写出 `worker_nums` 与 `decode_auto` 时，该行不勾销。除允许空白的 `libface` 外，脚本以非 0 退出，并且不把 `docs/perf/coverage_set_http_rps.md` 留成可勾销清单。`eligible` 为真时，解码投票仍按 v4 现有路径运行。
 
-`realesrgan` 的 calibrate 子进程和这次官方压测使用同一张合法 JPEG：无方向标记、彩色、解码后宽 256、高 256。文件放在已忽略的 `logs/p2-11-realesrgan-256.jpg`，只在这个 id 的子进程里设置 `MORTRED_DEMO_IMAGE` 指向它，使 v4 的 `resolve_demo_image` 和 `Path.relative_to` 都能用。`pphuman_mobile` 的 calibrate 子进程和官方压测使用 `demo_data/model_test_input/scene_segmentation/face_w_mask.jpg`，同样只在这个 id 设置 `MORTRED_DEMO_IMAGE`，官方压测再传 `--image` 指向同一文件。其余 id 不设置这个变量，继续用各自现有 demo。v4 的 16 张解码投票网格保持原样。
+`realesrgan` 的 calibrate 子进程和这次官方压测使用同一张合法 JPEG：无方向标记、彩色、解码后宽 256、高 256。文件放在已忽略的 `logs/p2-11-realesrgan-256.jpg`，只在这个 id 的子进程里设置 `MORTRED_DEMO_IMAGE` 指向它，使 v4 的 `resolve_demo_image` 和 `Path.relative_to` 都能用。`pphuman_mobile` 的 calibrate 子进程和官方压测使用 `demo_data/model_test_input/scene_segmentation/face_w_mask.jpg`，同样只在这个 id 设置 `MORTRED_DEMO_IMAGE`，官方压测再传 `--image` 指向同一文件。`dbnet` 的 calibrate 子进程和官方压测使用 `demo_data/model_test_input/ocr/coco_text_test.jpg`，只在这个 id 设置 `MORTRED_DEMO_IMAGE`，官方压测再传 `--image` 指向同一文件。该文件是 `SOF0` 一次扫描 JPEG，宽 746、高 530，109127 字节。不改 `railway_ticket.png`。其余 id 不设置这个变量，继续用各自现有 demo。v4 的 16 张解码投票网格保持原样。
 
 官方压测打 `http://127.0.0.1:8080/v1/models/<id>/infer`，Bearer 用现有推理 token。模型进程 `/metrics` 的 Bearer 用 supervisor 注入该子进程的 `MORTRED_AUTH_TOKEN`，只留在内存里。gateway `/metrics` 用现有 metrics token。三个 token 都不写入清单，也不提交。
 
@@ -218,3 +218,10 @@ v2 未经这两处读数修订的句子未被选中：进程起来之后就把�
 - 选用: 在已选定方案上改测量参数和 `pphuman_mobile` 的测试图，删掉上次执行产物后从头重跑。不再开第三版确认。状态改为 running，从第 4 步重新实现。
 - 决定原文: 删除 P2-11 执行过程中产生的一切中间记录，重新从头开始执行 P2-11。pphuman_mobile 的测试图像换成 `demo_data/model_test_input/scene_segmentation/face_w_mask.jpg`。calibrate 的 worker 数扫描和官方压测的并发数是该点 `worker_nums` 的两倍，duration 为 60 秒，warmup 为 5 秒。
 - 未选用: 继续用 `human_image.jpg`；并发等于 `worker_nums`；测量 30 秒；`--warmup 0s`；把 16 张解码投票网格改成 60 秒。上次因渐进 JPEG 停住的偏差确认不再作为重跑的约束。
+
+## 用户决定（继续）
+
+- 日期: 2026-10-14
+- 选用: 用已经另存的 `demo_data/model_test_input/ocr/coco_text_test.jpg` 作为 `dbnet` 的测试图，保留清单里已写入的四行，从 `dbnet` 继续。不再开第三版确认。状态改为 running，继续第 4 步。
+- 决定原文: 继续执行。`dbnet` 的 calibrate 和官方压测都使用这张另存的 JPEG。不改 `railway_ticket.png`，不改解码路径，不改 16 张投票网格。`mobilenetv2`、`yolov8s`、`libface`、`pphuman_mobile` 四行保留，不重跑。从 `dbnet` 起跑完剩余 id。
+- 未选用: 继续用 `railway_ticket.png`；清空前四行后从头重跑；把一次探测请求的 7 个框写进清单。那一次探测只说明这张 JPEG 能走出 `jpeggpu`，不能代替 60 秒官方压测。
