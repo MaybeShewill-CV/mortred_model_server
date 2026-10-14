@@ -10,7 +10,8 @@
 - 本轮起点加权分: 7.1
 - 记录目录: cowork/ledger/round-001/
 - 运行环境: 本机 WSL Ubuntu（/mnt/g/Codex/mortred_model_server）
-- 状态: running
+- 状态: stopped
+- 停止原因: P2-11 第 4 条未通过。技术负责人接受停住：`dbnet` 的官方图是 PNG，在本版限制内产生不了 `jpeggpu` 增量。这不是第 4 条通过，没有合入。
 
 ## 轮次
 

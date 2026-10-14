@@ -18,3 +18,10 @@
 - 方案版本: 用户选定（以 v2 为底，2026-10-14 重跑）
 - 结论: 不同意
 - 理由: 这一处偏差不能接受。方案第 4 条的通过结果是退出码 0，并且 `docs/perf/coverage_set_http_rps.md` 存在；除允许空白的 `libface` 外，各行满足验收标准 1 至 3。dbnet 的 calibrate 已写出 `worker_nums=2`、`decode_auto=gpu`。官方压测 `wall_s=60.104`、warmup 5 秒、并发 4（已部署 worker 数的两倍）、HTTP 200、成功 RPS 88.93，测量参数与本版一致。契约要求此时 `backend="jpeggpu"` 的增量大于 0，并且严格大于 `cpu-reduced` 与 `cpu-full` 之和。官方图是现有 demo `demo_data/model_test_input/ocr/railway_ticket.png`。现有 GPU 路径只接受 JPEG SOF，这张 PNG 落到 CPU `imdecode`，`cpu-full` 增加而 `jpeggpu` 不增加。评分标准写明实际路径和 `decode_auto` 不一致的报告不算数。该行不能勾销。失败行不写入、已写入行保留、脚本以非 0 退出，是后面的 id 失败时的处理；`--check` 仍要求只有 `libface` 空白且其余八行齐全才通过。当前四行清单和退出码 1 不能代替第 4 条的通过。评分标准里 PF1、TP1，以及尚无已记录值时的 PF5，都要能打开这张按本次约束完成的报告。`pphuman_mobile` 使用 `face_w_mask.jpg` 且落点为 gpu，解码路径和 16 张投票网格未改，这三项符合本版。要求研发改回本方案版本的交付：第 4 条退出码 0，清单存在，并且 dbnet 的落点满足上述契约。方案版本不改。不得改 `railway_ticket.png`，不得改解码路径，不得改 16 张投票网格，不得手填该行，不得放宽落点检查。`superpoint` 与 `metric3d_512` 尚未运行，不在这一处偏差里，不据此改方案版本。
+
+# 实现偏差确认
+
+- 问题: P2-11
+- 方案版本: 用户选定（以 v2 为底，2026-10-14 重跑）
+- 结论: 同意
+- 理由: 接受这一处停住。停住不是第 4 条通过。第 4 条的通过结果仍是退出码 0，并且 `docs/perf/coverage_set_http_rps.md` 里除允许空白的 `libface` 外八行齐全、满足验收标准 1 至 3。当前清单只有 `mobilenetv2`、`yolov8s`、`libface`、`pphuman_mobile` 四行，自测未执行，没有提交。这四行不能代替第 4 条。评分标准里 PF1、TP1，以及尚无已记录值时的 PF5，仍要能打开那张按本次约束完成的报告。`dbnet` 的现有 demo 是 `demo_data/model_test_input/ocr/railway_ticket.png`。`jpeg_full_dimensions` 只在 `FF D8` 时返回真；`use_gpu_path` 还要求这次 SOF 非渐进且方向不超过 1。`jpeggpu` 只在 GPU JPEG 解码成功后增加。这张 PNG 进不了该门，`jpeg_reduce_factor` 对非 JPEG 返回 1，请求落到 `cv::imdecode`，增加的是 `cpu-full`。上次确认已经记下该行 `worker_nums=2`、`decode_auto=gpu`。gpu 契约要求 `jpeggpu` 增量大于 0，并且严格大于 `cpu-reduced` 与 `cpu-full` 之和。评分标准写明实际路径和 `decode_auto` 不一致的报告不算数。本版允许的改动不改变这张 PNG 的官方 `--raw` 字节。上次禁止改 `railway_ticket.png`、改解码路径、改 16 张投票网格、手填该行、放宽落点检查，仍然有效。投票网格是另外 16 张 JPEG，时长仍是 10 秒。在这些限制里，官方压测产生不了 `jpeggpu` 增量，第 4 条到不了退出码 0。研发没有改代码，没有续跑，没有清空已有四行，没有提交。方案版本不改。`superpoint` 与 `metric3d_512` 尚未运行，不在这一处偏差里。
