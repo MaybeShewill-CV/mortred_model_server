@@ -233,3 +233,11 @@ v2 未经这两处读数修订的句子未被选中：进程起来之后就把�
 - 决定原文: 再做一次 superpoint 模型。
 - 做法: 执行 `python3 scripts/coverage_http_report.py --from superpoint`。该入口要求清单正好是 `mobilenetv2`、`yolov8s`、`libface`、`pphuman_mobile`、`dbnet`、`dinov2_vits14`，并保留这些行。`superpoint` 写出 `worker_nums` 与 `decode_auto` 后，同一命令按原方案继续 `realesrgan`、`metric3d_512`。`superpoint` 再次因 `latency_budget` 写不出 `decode_auto` 时停住，不跑后面的 id，不改 25ms 上限，不手填。
 - 未选用: 提高 25ms 上限；更换 `superpoint` 的 demo；手填这一行；跳过 `superpoint`；清空前 6 行后从头重跑。
+
+## 用户决定（superpoint 上限 40）
+
+- 日期: 2026-10-15
+- 选用: 只把 `P99_CAP_MS["superpoint"]` 从 25.0 改为 40.0。不改 `pick_w_star`，不改 `assess_point` 的判定结构，不改 demo `demo_data/model_test_input/feature_point/test.png`，不改并发、60 秒和 5 秒 warmup。不改 `realesrgan` 的 200.0，不改 `metric3d_512` 的 150.0。保留清单已有 6 行，从 `superpoint` 续跑。状态改为 running，继续第 4 步。
+- 决定原文: 按照你的意见继续推进 cowork 工作。
+- 做法: 在问题 worktree 的 `scripts/calibrate_pack.py` 里把 `P99_CAP_MS["superpoint"]` 改为 40.0。其余种子不动。然后执行 `python3 scripts/coverage_http_report.py --from superpoint`。该入口保留 `mobilenetv2`、`yolov8s`、`libface`、`pphuman_mobile`、`dbnet`、`dinov2_vits14`。`superpoint` 写出 `worker_nums` 与 `decode_auto` 后，同一命令继续 `realesrgan`、`metric3d_512`。后面的 id 若因各自已有种子上限停在 `latency_budget`，停住，不提前放宽那两个上限，不手填。
+- 未选用: 保持 25.0；改成 35；改 `pick_w_star` 让 w=1 超限仍写入；更换 demo；重写 NMS 或描述子序列化；提前放宽 `realesrgan` 和 `metric3d_512`。

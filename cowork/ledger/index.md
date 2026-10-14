@@ -10,8 +10,8 @@
 - 本轮起点加权分: 7.1
 - 记录目录: cowork/ledger/round-001/
 - 运行环境: 本机 WSL Ubuntu（/mnt/g/Codex/mortred_model_server）
-- 状态: stopped
-- 停止原因: P2-11 第 4 条未通过。再跑 `superpoint` 后技术负责人同意停住：p99=32.085ms，仍高于 25ms，`pick_w_star` 停在 `latency_budget`，pack 没有写出 `decode_auto`。这不是第 4 条通过，没有合入。清单仍为 6 行。
+- 状态: running
+- 续跑: 用户选定把 `P99_CAP_MS["superpoint"]` 从 25.0 改为 40.0，保留已有 6 行，从 `superpoint` 续跑。不改 `pick_w_star`，不改 demo，不改 `realesrgan` 的 200 和 `metric3d_512` 的 150。
 
 ## 轮次
 
