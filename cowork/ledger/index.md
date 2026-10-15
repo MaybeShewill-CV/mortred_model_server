@@ -10,8 +10,8 @@
 - 本轮起点加权分: 7.1
 - 记录目录: cowork/ledger/round-001/
 - 运行环境: 本机 WSL Ubuntu（/mnt/g/Codex/mortred_model_server）
-- 状态: stopped
-- 停止原因: P2-11 第 4 条未通过。技术负责人同意停住：`superpoint` 已写入清单；`realesrgan` 在 w=1、p99=306.621ms 时被已有上限 200.0 判为 `latency_budget`，pack 没有写出 `decode_auto`。`metric3d_512` 没有跑。这不是第 4 条通过，没有合入。清单现为 7 行。
+- 状态: running
+- 续跑: 用户决定把 `P99_CAP_MS["realesrgan"]` 改为 400.0。保留清单 7 行，从 `realesrgan` 继续。`metric3d_512` 使用另存的 `demo_data/model_test_input/mono_depth_estimation/0000000005.jpg`（SOF0，1242×375，147444 字节）。`P99_CAP_MS["metric3d_512"]` 仍是 150.0。
 
 ## 轮次
 

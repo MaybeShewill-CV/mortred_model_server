@@ -249,3 +249,11 @@ v2 未经这两处读数修订的句子未被选中：进程起来之后就把�
 - 决定原文: 重新输出一张jpeg，superpoint测试重新使用这个jpeg。
 - 做法: 这张 JPEG 由现有 `test.png` 的同一批像素重新编码。文件是 `SOF0` 一次扫描 JPEG，无 EXIF、无方向标记，宽 640、高 480，55892 字节，首两字节 `FF D8`。只在 `superpoint` 的 calibrate 子进程设置 `MORTRED_DEMO_IMAGE=demo_data/model_test_input/feature_point/test.jpg`，官方压测再传 `--image` 指向同一文件。不改 `test.png`。然后执行 `python3 scripts/coverage_http_report.py --from superpoint`。该入口保留 `mobilenetv2`、`yolov8s`、`libface`、`pphuman_mobile`、`dbnet`、`dinov2_vits14`。`superpoint` 写出 `worker_nums` 与 `decode_auto` 后，同一命令继续 `realesrgan`、`metric3d_512`。后面的 id 若因各自已有种子上限停在 `latency_budget`，停住，不提前放宽那两个上限，不手填。
 - 未选用: 继续把 `test.png` 的 PNG 字节当作官方 `--raw` 请求体；改写 `test.png` 文件本身；改解码路径；改 16 张投票网格；手填 `decode_auto`；放宽落点检查；改 40.0、200.0 或 150.0；清空前 6 行后从头重跑。
+
+## 用户决定（realesrgan 上限 400 与 metric3d JPEG）
+
+- 日期: 2026-10-15
+- 选用: 只把 `P99_CAP_MS["realesrgan"]` 从 200.0 改为 400.0。`metric3d_512` 的 calibrate 和官方压测改用另存的 `demo_data/model_test_input/mono_depth_estimation/0000000005.jpg`。`P99_CAP_MS["metric3d_512"]` 仍是 150.0，`P99_CAP_MS["superpoint"]` 仍是 40.0。不改 `pick_w_star`，不改 `assess_point` 的判定结构，不改并发、60 秒和 5 秒 warmup，不改解码路径，不改 16 张投票网格，不手填，不放宽落点。不改 `0000000005.png` 的字节。保留清单已有 7 行，从 `realesrgan` 续跑。不再开第三版确认。状态改为 running，继续第 4 步。
+- 决定原文: 按你的建议方案继续完成这一轮工作。
+- 做法: 在问题 worktree 的 `scripts/calibrate_pack.py` 里把 `P99_CAP_MS["realesrgan"]` 改为 400.0。`superpoint` 保持 40.0，`metric3d_512` 保持 150.0。`0000000005.jpg` 由现有 `demo_data/model_test_input/mono_depth_estimation/0000000005.png` 的同一批像素重新编码，是 `SOF0` 一次扫描 JPEG，无 EXIF、无方向标记，宽 1242、高 375，147444 字节，首两字节 `FF D8`。不改这张 PNG。只在 `metric3d_512` 的 calibrate 子进程设置 `MORTRED_DEMO_IMAGE=demo_data/model_test_input/mono_depth_estimation/0000000005.jpg`，官方压测再传 `--image` 指向同一文件。然后执行 `python3 scripts/coverage_http_report.py --from realesrgan`。该入口保留 `mobilenetv2`、`yolov8s`、`libface`、`pphuman_mobile`、`dbnet`、`dinov2_vits14`、`superpoint`。`realesrgan` 写出 `worker_nums` 与 `decode_auto` 后，同一命令继续 `metric3d_512`。`metric3d_512` 若因已有 150.0 停在 `latency_budget`，停住，不提前放宽这个上限，不手填。
+- 未选用: 保持 200.0；把上限改成 350；改 `pick_w_star` 让 w=1 超限仍写入；重写 Real-ESRGAN 的后处理；提前把 `metric3d_512` 的 150.0 放宽；继续用 `0000000005.png` 的 PNG 字节；改写这张 PNG；清空前 7 行后从头重跑。
