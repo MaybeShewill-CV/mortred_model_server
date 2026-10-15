@@ -32,7 +32,7 @@ python3 scripts/server/test_server.py --server <alias> --mode single --times 3
 ## Classification (`MOBILENETV2`)
 
 ```bash
-./mortred-model-server.out --model MOBILENETV2 \
+./mortred-model-server.out --model mobilenetv2 \
   ../conf/server/classification/mobilenetv2/mobilenetv2_server_config.toml
 ```
 
@@ -103,7 +103,7 @@ Screenshot: `resources/images/start_a_derain_server.png`.
 ## Feature point (`SUPERPOINT`)
 
 ```bash
-./mortred-model-server.out --model SUPERPOINT \
+./mortred-model-server.out --model superpoint \
   ../conf/server/feature_point/superpoint/superpoint_server_config.toml
 ```
 
