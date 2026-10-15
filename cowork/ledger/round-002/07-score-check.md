@@ -4,13 +4,13 @@
 - 原始分: 8.9
 - 加权分: 8.9
 - 上限规则: 无
-- 相对本轮起点: 第 2 轮起点 8.9。关闭 P2-17 不重算模块分。
+- 相对本轮起点: 第 2 轮起点 8.9。关闭 P2-19 不重算模块分。
 - 终态: 继续
 - 开放项: 相对本轮起点减少
 - 阻塞: 无
 - 与角色自评: 一致
 
-原始分仍是 (15×9.0 + 20×9.4 + 15×9.0 + 10×9.2 + 5×9.0 + 15×8.8 + 10×8.8 + 5×7.4 + 5×8.0) / 100 = 8.9。没有未关闭且未阻塞的 P0 或 P1，不套上限。P2-17 已从开放项删除。仍开放 P2-19、P2-20、P2-21。完成标准 27 行都是已满足，开放项不是空，终态不是结束。
+原始分仍是 (15×9.0 + 20×9.4 + 15×9.0 + 10×9.2 + 5×9.0 + 15×8.8 + 10×8.8 + 5×7.4 + 5×8.0) / 100 = 8.9。没有未关闭且未阻塞的 P0 或 P1，不套上限。P2-19 已从开放项删除。仍开放 P2-20、P2-21。完成标准 27 行都是已满足，开放项不是空，终态不是结束。
 
 ## 完成标准
 
@@ -19,7 +19,7 @@
 | PF1 | 已满足 | `docs/perf/coverage_set_http_rps.md` 九行都有硬件、日期、pack 的 `worker_nums` 与 `decode_auto`、`--raw` 命令、成功 RPS、p50、p99、错误率 0，以及 `docs/benchmark-h3/<id>.txt` 的 Throughput 和比值。`-c` 等于该行 `worker_nums` 的两倍 |
 | PF2 | 已满足 | 同一份清单九行的排队计数与推理计数分开，模型标签是该 id 的 `server_uri` |
 | PF3 | 已满足 | 九份覆盖集 server toml 的 `max_batch_size=1`。`on_sync_item_done` 对每张执行完的图记 1。`test/server_e2e_contract_test.cc` 的 `batch_size_one_counts_each_executed_image` 与 `multi_image_failure_is_isolated_per_item` |
-| PF4 | 已满足 | 同一份清单九行都有 gateway 五段 p50 和 `server_time_ms_p50`，五段之和大于模型 p50 的一半，并写了 `dominant_stage=upstream`。`scripts/coverage_http_report.py` 用五段直方图 p50 写出 `dominant_stage`。P2-19 是超过 4096 次后 `/metrics` 不再写 `mortred_gateway_stage_dominant`，不把这一行改成未满足 |
+| PF4 | 已满足 | 同一份清单九行都有 gateway 五段 p50 和 `server_time_ms_p50`，五段之和大于模型 p50 的一半，并写了 `dominant_stage=upstream`。`scripts/coverage_http_report.py` 用五段直方图 p50 写出 `dominant_stage`。P2-19 已关闭：超过 4096 次后 `/metrics` 仍写 `mortred_gateway_stage_dominant`，不把这一行改成未满足 |
 | PF5 | 已满足 | 已有记录值在 `docs/perf/coverage_set_http_rps.md`。没有看到同命令复测的成功 RPS 低于该值 85%，或 p99 高于该值 150% |
 | AV1 | 已满足 | 覆盖集九个产品 toml 是 `type=tensorrt`。cpu 侧 `mobilenetv2_cpu.toml` 是 `type=onnx`，不把缺少 HTTP RPS 写成未满足。这次没有把未跑的拉起写成故障 |
 | ST1 | 已满足 | 未知字段 422，空图不成功，错误 token 401，失败项 `data` 为 null。`test/server_e2e_contract_test.cc`、`test/request_envelope_unittest.cc` |
