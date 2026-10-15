@@ -15,7 +15,7 @@ cd $PROJECT_ROOT/_bin
 ./mortred-model-server.out --model <CATALOG_ID> <path-to-server-toml>
 ```
 
-Shipped configs default to `worker_nums=1`. Raise it only if you have GPU headroom.
+Shipped `conf/server` keeps `worker_nums=1`. Put calibrated concurrency on the machine pack (`[pack.<ID>] worker_nums`) and inject via `MORTRED_PACK` (see [deployment.md](deployment.md)).
 
 Demo client (stdlib only; no `requests` / locust):
 

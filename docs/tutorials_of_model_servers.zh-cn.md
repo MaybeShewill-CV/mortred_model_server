@@ -14,7 +14,7 @@ cd $PROJECT_ROOT/_bin
 ./mortred-model-server.out --model <CATALOG_ID> <path-to-server-toml>
 ```
 
-仓库自带配置默认 `worker_nums=1`，仅在显存足够时再加大。
+仓库 `conf/server` 保持 `worker_nums=1`。校准后的并发写在机器 pack 的 `[pack.<ID>] worker_nums`，由 `MORTRED_PACK` 注入（见 [deployment.zh-cn.md](deployment.zh-cn.md)）。
 
 演示客户端（标准库即可）：
 
