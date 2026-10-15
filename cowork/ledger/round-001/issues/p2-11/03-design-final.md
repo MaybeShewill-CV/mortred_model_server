@@ -257,3 +257,11 @@ v2 未经这两处读数修订的句子未被选中：进程起来之后就把�
 - 决定原文: 按你的建议方案继续完成这一轮工作。
 - 做法: 在问题 worktree 的 `scripts/calibrate_pack.py` 里把 `P99_CAP_MS["realesrgan"]` 改为 400.0。`superpoint` 保持 40.0，`metric3d_512` 保持 150.0。`0000000005.jpg` 由现有 `demo_data/model_test_input/mono_depth_estimation/0000000005.png` 的同一批像素重新编码，是 `SOF0` 一次扫描 JPEG，无 EXIF、无方向标记，宽 1242、高 375，147444 字节，首两字节 `FF D8`。不改这张 PNG。只在 `metric3d_512` 的 calibrate 子进程设置 `MORTRED_DEMO_IMAGE=demo_data/model_test_input/mono_depth_estimation/0000000005.jpg`，官方压测再传 `--image` 指向同一文件。然后执行 `python3 scripts/coverage_http_report.py --from realesrgan`。该入口保留 `mobilenetv2`、`yolov8s`、`libface`、`pphuman_mobile`、`dbnet`、`dinov2_vits14`、`superpoint`。`realesrgan` 写出 `worker_nums` 与 `decode_auto` 后，同一命令继续 `metric3d_512`。`metric3d_512` 若因已有 150.0 停在 `latency_budget`，停住，不提前放宽这个上限，不手填。
 - 未选用: 保持 200.0；把上限改成 350；改 `pick_w_star` 让 w=1 超限仍写入；重写 Real-ESRGAN 的后处理；提前把 `metric3d_512` 的 150.0 放宽；继续用 `0000000005.png` 的 PNG 字节；改写这张 PNG；清空前 7 行后从头重跑。
+
+## 用户决定（metric3d 上限 200）
+
+- 日期: 2026-10-15
+- 选用: 只把 `P99_CAP_MS["metric3d_512"]` 从 150.0 改为 200.0。测试图仍是已另存的 `demo_data/model_test_input/mono_depth_estimation/0000000005.jpg`。`P99_CAP_MS["realesrgan"]` 仍是 400.0，`P99_CAP_MS["superpoint"]` 仍是 40.0。不改 `pick_w_star`，不改 `assess_point` 的判定结构，不改并发、60 秒和 5 秒 warmup，不改解码路径，不改 16 张投票网格，不手填，不放宽落点。不改 `0000000005.png` 的字节，不重新编码这张 JPEG。保留清单已有 8 行，从 `metric3d_512` 续跑。不再开第三版确认。状态改为 running，继续第 4 步。
+- 决定原文: 按照你的建议继续完成这一轮工作。
+- 做法: 在问题 worktree 的 `scripts/calibrate_pack.py` 里把 `P99_CAP_MS["metric3d_512"]` 改为 200.0。`realesrgan` 保持 400.0，`superpoint` 保持 40.0。`0000000005.jpg` 仍是 `SOF0` 一次扫描 JPEG，无 EXIF、无方向标记，宽 1242、高 375，147444 字节。calibrate 仍设置 `MORTRED_DEMO_IMAGE` 指向它，官方压测仍传 `--image` 指向同一文件。然后执行 `python3 scripts/coverage_http_report.py --from metric3d_512`。该入口保留 `mobilenetv2`、`yolov8s`、`libface`、`pphuman_mobile`、`dbnet`、`dinov2_vits14`、`superpoint`、`realesrgan`。
+- 未选用: 保持 150.0；改成 180；改 `pick_w_star` 让 w=1 超限仍写入；重写深度后处理；改 400.0 或 40.0；更换测试图；清空前 8 行后从头重跑。
