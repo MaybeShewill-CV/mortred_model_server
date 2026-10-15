@@ -83,7 +83,7 @@ Authorization: Bearer <token>
   "status": 0,
   "status_str": "OK",
   "task_id": "client-provided-or-server-generated",
-  "model": { "name": "MOBILENETV2", "version": "" },
+  "model": { "name": "mobilenetv2", "version": "" },
   "results": [
     {
       "status": 0,
