@@ -2,7 +2,9 @@
 """Decide the inference-paths check from cpu-profile and gpu-pr-gate results.
 
 Exit 2 means cpu-profile succeeded and gpu-pr-gate was skipped: there is no
-TensorRT or CUDA proof. Exit 0 means both succeeded. Exit 1 means cpu-profile
+TensorRT or CUDA proof. Exit 0 means cpu-profile succeeded and gpu-pr-gate
+succeeded; TRT_PROOF=yes only when --product-trt yes (this job ran product
+type=tensorrt cases). Otherwise print TRT_PROOF=no. Exit 1 means cpu-profile
 did not succeed, or the GPU smoke actually failed or was cancelled, or the
 GPU result is anything else. cpu-profile is judged before the skipped case.
 """
@@ -27,6 +29,7 @@ CPU_MUST_SUCCEED = (
 )
 NOT_A_TRT_PROOF = "NOT_A_TRT_PROOF"
 TRT_PROOF_YES = "TRT_PROOF=yes"
+TRT_PROOF_NO = "TRT_PROOF=no"
 NOT_A_PROOF_SENTENCE = "This result is not a TensorRT or CUDA proof."
 INLINE_SKIP_AS_SUCCESS = re.compile(
     r"success[\s\S]*skipped[\s\S]*exit 0|skipped[\s\S]*success[\s\S]*exit 0"
@@ -51,8 +54,14 @@ def tier_summary(cpu: str, gpu: str) -> str:
     )
 
 
-def evaluate(cpu: str, gpu: str) -> int:
-    """Return the inference-paths exit code. cpu is judged before skipped."""
+def evaluate(cpu: str, gpu: str, product_trt: str = "no") -> int:
+    """Return the inference-paths exit code. cpu is judged before skipped.
+
+    product_trt must be "yes" for TRT_PROOF=yes: the GPU job actually ran at
+    least one product type=tensorrt case. Default "no" covers the current
+    ONNX-only MORTRED_GPU_SMOKE_FILTER (P2-20). Parsing gtest XML to set this
+    is out of scope here (P2-21).
+    """
     sys.stdout.write(tier_summary(cpu, gpu))
     if cpu != "success":
         print(CPU_MUST_SUCCEED, file=sys.stderr)
@@ -62,7 +71,10 @@ def evaluate(cpu: str, gpu: str) -> int:
         print(NOT_A_PROOF_SENTENCE)
         return 2
     if gpu == "success":
-        print(TRT_PROOF_YES)
+        if product_trt == "yes":
+            print(TRT_PROOF_YES)
+            return 0
+        print(TRT_PROOF_NO)
         return 0
     print(gpu_ended_as(gpu), file=sys.stderr)
     return 1
@@ -139,27 +151,32 @@ def self_test() -> int:
     import io
 
     cases = [
-        ("success", "skipped", 2),
-        ("success", "success", 0),
-        ("success", "failure", 1),
-        ("success", "cancelled", 1),
-        ("failure", "skipped", 1),
-        ("failure", "success", 1),
-        ("success", "neutral", 1),
+        # cpu, gpu, product_trt, expect_code
+        ("success", "skipped", "no", 2),
+        ("success", "success", "no", 0),
+        ("success", "success", "yes", 0),
+        ("success", "failure", "no", 1),
+        ("success", "cancelled", "no", 1),
+        ("failure", "skipped", "no", 1),
+        ("failure", "success", "no", 1),
+        ("success", "neutral", "no", 1),
     ]
-    for cpu, gpu, expect in cases:
+    for cpu, gpu, product_trt, expect in cases:
         out_buf = io.StringIO()
         err_buf = io.StringIO()
         with contextlib.redirect_stdout(out_buf), contextlib.redirect_stderr(err_buf):
-            code = evaluate(cpu, gpu)
+            code = evaluate(cpu, gpu, product_trt=product_trt)
         stdout = out_buf.getvalue()
         stderr = err_buf.getvalue()
         if code != expect:
-            return _fail(f"--cpu {cpu} --gpu {gpu} exited {code}, expected {expect}")
+            return _fail(
+                f"--cpu {cpu} --gpu {gpu} --product-trt {product_trt} "
+                f"exited {code}, expected {expect}"
+            )
         if cpu != "success":
             if "cpu-profile must succeed" not in stderr:
                 return _fail("cpu failure must mention cpu-profile must succeed")
-            if NOT_A_TRT_PROOF in stdout or TRT_PROOF_YES in stdout:
+            if NOT_A_TRT_PROOF in stdout or TRT_PROOF_YES in stdout or TRT_PROOF_NO in stdout:
                 return _fail("cpu failure must be decided before the skipped proof path")
             continue
         if gpu == "skipped":
@@ -175,10 +192,20 @@ def self_test() -> int:
                 return _fail("skipped stdout must not contain TRT_PROOF=yes")
             continue
         if gpu == "success":
-            if TRT_PROOF_YES not in stdout or "RAN" not in stdout:
-                return _fail("success stdout missing TRT_PROOF=yes or RAN")
-            if NOT_A_TRT_PROOF in stdout:
-                return _fail("success stdout must not contain NOT_A_TRT_PROOF")
+            if "RAN" not in stdout:
+                return _fail("success stdout missing RAN")
+            if product_trt == "yes":
+                if TRT_PROOF_YES not in stdout:
+                    return _fail("product-trt yes stdout missing TRT_PROOF=yes")
+                if TRT_PROOF_NO in stdout or NOT_A_TRT_PROOF in stdout:
+                    return _fail("product-trt yes must not print TRT_PROOF=no or NOT_A_TRT_PROOF")
+            else:
+                if TRT_PROOF_NO not in stdout:
+                    return _fail("default success stdout missing TRT_PROOF=no")
+                if TRT_PROOF_YES in stdout:
+                    return _fail("ONNX-only success must not contain TRT_PROOF=yes")
+                if NOT_A_TRT_PROOF in stdout:
+                    return _fail("ONNX-only success must not use NOT_A_TRT_PROOF")
             continue
         if gpu in ("failure", "cancelled"):
             if code == 2:
@@ -186,9 +213,8 @@ def self_test() -> int:
             if "gpu-pr-gate ended as" not in stderr:
                 return _fail("failure/cancelled stderr missing gpu-pr-gate ended as")
             continue
-        if TRT_PROOF_YES in stdout or NOT_A_TRT_PROOF in stdout:
-            return _fail(f"gpu={gpu} must not claim a TRT proof")
-    # Same workflow-source assertions as --check-workflow.
+        if TRT_PROOF_YES in stdout or NOT_A_TRT_PROOF in stdout or TRT_PROOF_NO in stdout:
+            return _fail(f"gpu={gpu} must not claim a TRT proof line")
     workflow_rc = check_workflow()
     if workflow_rc != 0:
         return workflow_rc
@@ -200,6 +226,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cpu", default=None, help="needs.cpu-profile.result")
     parser.add_argument("--gpu", default=None, help="needs.gpu-pr-gate.result")
+    parser.add_argument(
+        "--product-trt",
+        choices=("yes", "no"),
+        default="no",
+        help="yes only if this GPU job ran product type=tensorrt cases",
+    )
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--check-workflow", action="store_true")
     args = parser.parse_args(argv)
@@ -210,7 +242,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cpu is None or args.gpu is None:
         print("usage: --cpu RESULT --gpu RESULT", file=sys.stderr)
         return 1
-    return evaluate(args.cpu, args.gpu)
+    return evaluate(args.cpu, args.gpu, product_trt=args.product_trt)
 
 
 if __name__ == "__main__":
