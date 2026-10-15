@@ -11,7 +11,7 @@
 - 记录目录: cowork/ledger/round-002/
 - 运行环境: 本机 WSL Ubuntu（/mnt/g/Codex/mortred_model_server）
 - 状态: running
-- 续跑: P2-17 已关闭。下一步是 P2-19 的方案。未关闭且未阻塞的是 P2-19、P2-20、P2-21。完成标准 27 行仍是已满足，终态继续。工作树 `G:\Codex\mortred_wt_r2_p2_17` 已删除。
+- 续跑: P2-19 方案 v1 三方同意，下一步是在问题分支实现。未关闭且未阻塞的是 P2-19、P2-20、P2-21。完成标准 27 行仍是已满足，终态继续。工作树 `G:\Codex\mortred_wt_r2_p2_17` 已删除。
 
 ## 轮次
 
