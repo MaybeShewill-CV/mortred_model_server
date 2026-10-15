@@ -3,16 +3,19 @@
 
 Exit 2 means cpu-profile succeeded and gpu-pr-gate was skipped: there is no
 TensorRT or CUDA proof. Exit 0 means cpu-profile succeeded and gpu-pr-gate
-succeeded; TRT_PROOF=yes only when --product-trt yes (this job ran product
-type=tensorrt cases). Otherwise print TRT_PROOF=no. Exit 1 means cpu-profile
-did not succeed, or the GPU smoke actually failed or was cancelled, or the
-GPU result is anything else. cpu-profile is judged before the skipped case.
+succeeded; TRT_PROOF=yes only when --product-trt yes AND --gtest-xml proves
+at least one product type=tensorrt case ran without skip (suites
+Yolov8TrtDetection / TrtProductGolden). Otherwise print TRT_PROOF=no.
+Exit 1 means cpu-profile did not succeed, or the GPU smoke actually failed
+or was cancelled, or the GPU result is anything else. cpu-profile is judged
+before the skipped case.
 """
 from __future__ import annotations
 
 import argparse
 import re
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -35,6 +38,9 @@ INLINE_SKIP_AS_SUCCESS = re.compile(
     r"success[\s\S]*skipped[\s\S]*exit 0|skipped[\s\S]*success[\s\S]*exit 0"
 )
 
+# Product type=tensorrt gtest suites from test/model_golden_test.cc.
+PRODUCT_TRT_SUITES = frozenset({"Yolov8TrtDetection", "TrtProductGolden"})
+
 
 def gpu_ended_as(gpu: str) -> str:
     return f"::error::gpu-pr-gate ended as {gpu} (maintainer GPU smoke)"
@@ -54,13 +60,53 @@ def tier_summary(cpu: str, gpu: str) -> str:
     )
 
 
-def evaluate(cpu: str, gpu: str, product_trt: str = "no") -> int:
+def _case_is_skipped(case: ET.Element) -> bool:
+    result = (case.get("result") or "").lower()
+    status = (case.get("status") or "").lower()
+    if result == "skipped" or status == "notrun":
+        return True
+    return case.find("skipped") is not None
+
+
+def xml_has_ran_product_trt(path: Path | str | None) -> bool:
+    """True if gtest XML has >=1 non-skipped product type=tensorrt case."""
+    if path is None:
+        return False
+    p = Path(path)
+    if not p.is_file():
+        return False
+    try:
+        tree = ET.parse(p)
+    except ET.ParseError:
+        return False
+    root = tree.getroot()
+    if root.tag == "testsuites":
+        suites = list(root.findall("testsuite"))
+    elif root.tag == "testsuite":
+        suites = [root]
+    else:
+        suites = list(root.iter("testsuite"))
+    for suite in suites:
+        suite_name = suite.get("name") or ""
+        if suite_name not in PRODUCT_TRT_SUITES:
+            continue
+        for case in suite.findall("testcase"):
+            if not _case_is_skipped(case):
+                return True
+    return False
+
+
+def evaluate(
+    cpu: str,
+    gpu: str,
+    product_trt: str = "no",
+    gtest_xml: Path | str | None = None,
+) -> int:
     """Return the inference-paths exit code. cpu is judged before skipped.
 
-    product_trt must be "yes" for TRT_PROOF=yes: the GPU job actually ran at
-    least one product type=tensorrt case. Default "no" covers the current
-    ONNX-only MORTRED_GPU_SMOKE_FILTER (P2-20). Parsing gtest XML to set this
-    is out of scope here (P2-21).
+    TRT_PROOF=yes only when product_trt is "yes" and gtest_xml proves at least
+    one product type=tensorrt case ran without skip (P2-21). Default product_trt
+    "no" covers the current ONNX-only MORTRED_GPU_SMOKE_FILTER (P2-20).
     """
     sys.stdout.write(tier_summary(cpu, gpu))
     if cpu != "success":
@@ -71,7 +117,7 @@ def evaluate(cpu: str, gpu: str, product_trt: str = "no") -> int:
         print(NOT_A_PROOF_SENTENCE)
         return 2
     if gpu == "success":
-        if product_trt == "yes":
+        if product_trt == "yes" and xml_has_ran_product_trt(gtest_xml):
             print(TRT_PROOF_YES)
             return 0
         print(TRT_PROOF_NO)
@@ -146,15 +192,20 @@ def _fail(msg: str) -> int:
     return 1
 
 
+def _write_fixture(path: Path, body: str) -> None:
+    path.write_text(body, encoding="utf-8")
+
+
 def self_test() -> int:
     import contextlib
     import io
+    import tempfile
 
     cases = [
         # cpu, gpu, product_trt, expect_code
         ("success", "skipped", "no", 2),
         ("success", "success", "no", 0),
-        ("success", "success", "yes", 0),
+        ("success", "success", "yes", 0),  # yes without XML => TRT_PROOF=no
         ("success", "failure", "no", 1),
         ("success", "cancelled", "no", 1),
         ("failure", "skipped", "no", 1),
@@ -194,18 +245,13 @@ def self_test() -> int:
         if gpu == "success":
             if "RAN" not in stdout:
                 return _fail("success stdout missing RAN")
-            if product_trt == "yes":
-                if TRT_PROOF_YES not in stdout:
-                    return _fail("product-trt yes stdout missing TRT_PROOF=yes")
-                if TRT_PROOF_NO in stdout or NOT_A_TRT_PROOF in stdout:
-                    return _fail("product-trt yes must not print TRT_PROOF=no or NOT_A_TRT_PROOF")
-            else:
-                if TRT_PROOF_NO not in stdout:
-                    return _fail("default success stdout missing TRT_PROOF=no")
-                if TRT_PROOF_YES in stdout:
-                    return _fail("ONNX-only success must not contain TRT_PROOF=yes")
-                if NOT_A_TRT_PROOF in stdout:
-                    return _fail("ONNX-only success must not use NOT_A_TRT_PROOF")
+            # Without XML, even product_trt=yes must not print yes (P2-21).
+            if TRT_PROOF_NO not in stdout:
+                return _fail("success without proving XML must print TRT_PROOF=no")
+            if TRT_PROOF_YES in stdout:
+                return _fail("success without proving XML must not contain TRT_PROOF=yes")
+            if NOT_A_TRT_PROOF in stdout:
+                return _fail("success must not use NOT_A_TRT_PROOF")
             continue
         if gpu in ("failure", "cancelled"):
             if code == 2:
@@ -215,6 +261,84 @@ def self_test() -> int:
             continue
         if TRT_PROOF_YES in stdout or NOT_A_TRT_PROOF in stdout or TRT_PROOF_NO in stdout:
             return _fail(f"gpu={gpu} must not claim a TRT proof line")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        onnx_xml = tmp_path / "onnx-only.xml"
+        trt_xml = tmp_path / "product-trt.xml"
+        trt_skip_xml = tmp_path / "product-trt-skipped.xml"
+        _write_fixture(
+            onnx_xml,
+            """<?xml version='1.0'?>
+<testsuites tests='1' failures='0' disabled='0' skipped='0'>
+  <testsuite name='model_golden' tests='1' failures='0' skipped='0'>
+    <testcase name='yolov8_detection' status='run' result='completed'/>
+  </testsuite>
+</testsuites>
+""",
+        )
+        _write_fixture(
+            trt_xml,
+            """<?xml version='1.0'?>
+<testsuites tests='1' failures='0' disabled='0' skipped='0'>
+  <testsuite name='TrtProductGolden' tests='1' failures='0' skipped='0'>
+    <testcase name='mobilenetv2' status='run' result='completed'/>
+  </testsuite>
+</testsuites>
+""",
+        )
+        _write_fixture(
+            trt_skip_xml,
+            """<?xml version='1.0'?>
+<testsuites tests='1' failures='0' disabled='0' skipped='1'>
+  <testsuite name='TrtProductGolden' tests='1' failures='0' skipped='1'>
+    <testcase name='mobilenetv2' status='notrun' result='skipped'>
+      <skipped message='engine missing'/>
+    </testcase>
+  </testsuite>
+</testsuites>
+""",
+        )
+
+        if xml_has_ran_product_trt(onnx_xml):
+            return _fail("onnx-only XML must not count as product TRT")
+        if not xml_has_ran_product_trt(trt_xml):
+            return _fail("TrtProductGolden completed case must count as product TRT")
+        if xml_has_ran_product_trt(trt_skip_xml):
+            return _fail("skipped product TRT case must not count")
+
+        xml_cases = [
+            ("yes", onnx_xml, TRT_PROOF_NO, True),
+            ("yes", trt_xml, TRT_PROOF_YES, False),
+            ("yes", trt_skip_xml, TRT_PROOF_NO, True),
+            ("no", trt_xml, TRT_PROOF_NO, True),
+        ]
+        for product_trt, xml_path, expect_line, forbid_yes in xml_cases:
+            out_buf = io.StringIO()
+            err_buf = io.StringIO()
+            with contextlib.redirect_stdout(out_buf), contextlib.redirect_stderr(err_buf):
+                code = evaluate(
+                    "success", "success", product_trt=product_trt, gtest_xml=xml_path
+                )
+            stdout = out_buf.getvalue()
+            if code != 0:
+                return _fail(
+                    f"xml case product_trt={product_trt} xml={xml_path.name} "
+                    f"exited {code}"
+                )
+            if expect_line not in stdout:
+                return _fail(
+                    f"xml case product_trt={product_trt} xml={xml_path.name} "
+                    f"missing {expect_line}: {stdout}"
+                )
+            if forbid_yes and TRT_PROOF_YES in stdout:
+                return _fail(
+                    f"xml case product_trt={product_trt} xml={xml_path.name} "
+                    f"must not contain TRT_PROOF=yes"
+                )
+            if expect_line == TRT_PROOF_YES and TRT_PROOF_NO in stdout:
+                return _fail("product TRT proof must not also print TRT_PROOF=no")
+
     workflow_rc = check_workflow()
     if workflow_rc != 0:
         return workflow_rc
@@ -230,7 +354,12 @@ def main(argv: list[str] | None = None) -> int:
         "--product-trt",
         choices=("yes", "no"),
         default="no",
-        help="yes only if this GPU job ran product type=tensorrt cases",
+        help="yes only if this GPU job claims product type=tensorrt cases",
+    )
+    parser.add_argument(
+        "--gtest-xml",
+        default=None,
+        help="path to same gpu-pr-gate gtest XML (required evidence for TRT_PROOF=yes)",
     )
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--check-workflow", action="store_true")
@@ -242,7 +371,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.cpu is None or args.gpu is None:
         print("usage: --cpu RESULT --gpu RESULT", file=sys.stderr)
         return 1
-    return evaluate(args.cpu, args.gpu, product_trt=args.product_trt)
+    return evaluate(
+        args.cpu,
+        args.gpu,
+        product_trt=args.product_trt,
+        gtest_xml=args.gtest_xml,
+    )
 
 
 if __name__ == "__main__":
