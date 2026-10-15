@@ -1,4 +1,16 @@
+# Demo autostart pack: the gpu TensorRT product with SEED occupancy only.
+# Seed MiB is the conservative fixture shared by scripts/pack_occupancy.py
+# --self-test and test/occupancy_gate_unittest.cc (1800) — not a live
+# nvidia-smi reading. Overwrite it on every host:
+#   cp conf/packs/demo.toml /tmp/machine-pack.toml
+#   mortredctl calibrate --pack /tmp/machine-pack.toml --write-pack
+# The repo ships no default cpu product: on cpu-only machines this pack's id
+# is simply not in the MORTRED_PROFILE=cpu catalog — build your cpu pack with
+# docs/deployment.md "Running CPU-only" instead.
 
 [pack.mobilenetv2]
 worker_nums = 1
-model_config = "conf/model/classification/mobilenetv2/mobilenetv2_cpu.toml"
+model_config = "conf/model/classification/mobilenetv2/mobilenetv2.toml"
+gpu_mem_mib = 1800
+gpu_mem_at_workers = 1
+gpu_mem_source = "seed"

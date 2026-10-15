@@ -7,8 +7,9 @@
         "gtest": "model_golden.mobilenetv2_classification",
         "family": "classification",
         "catalog_id": "mobilenetv2",
-        "config": "conf/model/classification/mobilenetv2/mobilenetv2_cpu.toml",
+        "config": "conf/ci/mobilenetv2_onnx_hosted.toml",
         "weights": [
+          "weights/classification/mobilenetv2/mobilenetv2.static_bs1.onnx",
           "weights/classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn"
         ]
       },

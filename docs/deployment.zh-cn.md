@@ -408,6 +408,9 @@ export MORTRED_PROFILE=cpu     # supervisor 与 gateway 都读它；缺省 = gpu
 5. 跑 `gen_weights_manifest.py` 重新生成 manifest；
 6. 补充该模型的 cpu 冒烟验证，CHANGELOG 记录。
 
+TensorRT 产品没有可指向的共享 mnn toml——cpu 上改用机器 pack 的
+`model_config` 覆盖来服务它（见 §10.7）。
+
 > 精选集刻意**随版本冻结**：扩充是发布决策（要为它背性能与验收），不是随手改配置。
 
 ---
@@ -481,15 +484,21 @@ mortredctl doctor
 带 **seed** 占用样本（`gpu_mem_source="seed"`）。Seed MiB 只是可复用的起始样本，
 换机 **必须** 用 `calibrate --write-pack` 覆盖。不要把校准后的 `worker_nums`、
 非 seed 的 `gpu_mem_mib`，或 `[pack]` 的 `gpu_name` / `gpu_memory_total_mib`
-提交进仓库。demo pack 仍是 MNN CPU，不需要 stamp。`--write-pack` 拒绝直接写
-`conf/packs/`，必须先拷贝。
+提交进仓库。demo pack 是带 seed 的 TensorRT MobilenetV2 产品：像任何 TRT
+pack 一样每台机器要重校准；在纯 CPU 机器上它不拉起任何模型（见 §10.7）。
+`--write-pack` 拒绝直接写 `conf/packs/`，必须先拷贝。
 
 ### 10.1 Pack 文件
 
 ```toml
-# conf/packs/demo.toml — 仓库示例，git 里保持 worker_nums=1
-[pack.MOBILENETV2]
+# conf/packs/demo.toml — 仓库示例：带 seed 的 TRT MobilenetV2
+# （git 里保持 worker_nums=1 与 seed stamp；每台机器都要重校准）
+[pack.mobilenetv2]
 worker_nums = 1
+model_config = "conf/model/classification/mobilenetv2/mobilenetv2.toml"
+gpu_mem_mib = 1800
+gpu_mem_at_workers = 1
+gpu_mem_source = "seed"
 
 # calibrate --write-pack 之后的机器本地副本，例如 /tmp/machine-pack.toml
 [pack.yolov8s]
@@ -515,7 +524,7 @@ supervisor **拒绝 spawn** engine 文件缺失或为空的 TensorRT id（状态
 不 crash-loop）。`/ready` 才是真正能加载，不只是文件非空。prepare 之后 TensorRT
 id 仍需要本机占用 stamp（§10.3）才能 spawn——git 里的 seed 不够。
 
-demo pack 是 MobilenetV2（无 TensorRT）。YOLOV8 / Metric3D pack 必须在目标 GPU 上
+每个 TensorRT pack——包括 demo 的 MobilenetV2——都必须在目标 GPU 上
 prepare。`MORTRED_AUTO_BUILD_ENGINES=true` 仍会转 **整个 zoo**，且 **默认关闭**。
 
 ### 10.3 校准 `worker_nums` 与占用 stamp
@@ -592,6 +601,40 @@ ORT CUDA 以前是 `gpu_mem_limit = 0`（arena 无限涨）。现在默认 **每
 `MORTRED_ORT_GPU_MEM_LIMIT_MB`）。`worker_nums=4` 最多四份 arena。`0` 恢复不限制。
 MNN / TensorRT 没有对等旋钮。进程占用由 supervisor spawn 按 pack stamp 卡住
 （§10.3），不是把 `gpu_mem_limit_mb` 接到 TRT/MNN session。
+
+### 10.7 纯 CPU 运行（不提供默认 cpu 产品）
+
+仓库刻意**不随包发布默认 cpu 产品配置**：`conf/model/**` 下没有
+`*_cpu.toml`，`conf/server/**` 下没有 `*_cpu_config.toml`（一致性门禁会在
+它们重新出现时报错）。CPU 用法按上面的构件在每台机器上自行组装：
+
+1. **构建 / 安装 cpu 档**——`install_deps.sh --cpu`、CMake preset
+   `full-cpu`，或 `docker compose --profile cpu build`。
+2. **为想要的模型写一份 cpu 模型 toml**——`type = "mnn"` 或 `type = "onnx"`
+   且 `device = "cpu"`。权威样例是 `conf/ci/mobilenetv2_onnx_hosted.toml`
+   （由 hosted golden 门禁保持真实）。`type="tensorrt"` 的 toml 在 cpu 上
+   按设计 fail-closed 报错。
+3. **写机器 pack** 选中 catalog id，并把 `model_config` 指向你的 cpu toml
+   （cpu 后端不需要占用 stamp）：
+
+   ```toml
+   # /tmp/cpu-pack.toml
+   [pack.mobilenetv2]
+   worker_nums = 1
+   model_config = "/tmp/mobilenetv2_cpu.toml"
+   ```
+
+4. **拉取 cpu 标记的权重**（`conf/weights_manifest.json` 里
+   `profiles=["cpu","gpu"]` 的条目）：
+   `python3 scripts/fetch_weights.py --profile cpu`。
+5. **以 cpu profile 启动**——`export MORTRED_PROFILE=cpu` 与
+   `export MORTRED_PACK=/tmp/cpu-pack.toml`，再启动 supervisor
+   （compose 挂载该 pack，或 tarball / systemd 入口）。
+
+仓库自带的 `conf/packs/demo.toml` 是带 seed 的 TensorRT 产品：它的
+MobilenetV2 id **不在** `MORTRED_PROFILE=cpu` 目录里，所以用默认 pack 做
+cpu compose 启动只会拉起 supervisor + gateway。这是"不提供默认 cpu 产品"
+的预期行为，不是故障。
 
 ## 11. 认证与安全
 

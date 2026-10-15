@@ -10,7 +10,10 @@
 #
 # Two host ports: supervisor (management) 8787 + gateway (inference) 8080.
 # Both bind 127.0.0.1 on the host. Autostart uses conf/packs/demo.toml
-# (MORTRED_PACK), not every conf/server model. LAN/WAN TLS is Nginx on the
+# (MORTRED_PACK), not every conf/server model. demo.toml is the seeded
+# TensorRT gpu product: under --profile cpu it autostarts nothing (no default
+# cpu product ships; build a cpu pack per docs/deployment.md "Running CPU-only").
+# LAN/WAN TLS is Nginx on the
 # host network (mortredctl init-edge, deploy/nginx). Use "8080:8080" /
 # "8787:8787" only if you accept plaintext Bearer tokens on that interface —
 # then MORTRED_EXPOSE=unsafe and a distinct MORTRED_METRICS_TOKEN are required.

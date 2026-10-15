@@ -94,6 +94,7 @@
       "hf_path": "classification/mobilenetv2/mobilenetv2.static_bs1.onnx",
       "on_hf": true,
       "profiles": [
+        "cpu",
         "gpu"
       ],
       "kind": "onnx"

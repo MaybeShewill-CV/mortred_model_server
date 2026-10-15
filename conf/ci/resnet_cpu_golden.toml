@@ -1,3 +1,6 @@
+# CPU golden / cpu-profile config. Not the gpu TensorRT product file.
+# Kept in conf/ci/ (CI domain): the repo ships no default cpu product configs;
+# cpu usage is taught in docs/deployment.md.
 [RESNET]
 [RESNET.backend]
 type = "onnx"

@@ -13,8 +13,9 @@
 #   WEIGHTS_DIR           host weights mount (default ./weights)
 #   BOOT_TIMEOUT_S        per-wait timeout (default 180)
 #
-# Autostart uses demo pack id MOBILENETV2 with a CI-only device=cpu model toml
-# overlay (git copies stay device=gpu). This is not a GPU / TensorRT gate.
+# Autostart uses a CI-injected pack id MOBILENETV2 plus a device=cpu model
+# toml and a profile="cpu" server entry, all generated per boot (the repo
+# ships no default cpu product configs). This is not a GPU / TensorRT gate.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -50,11 +51,13 @@ if [ ! -f "$IMAGE_JPEG" ]; then
 fi
 
 echo "== fetch MOBILENETV2 weights =="
-python3 "$ROOT/scripts/fetch_weights.py" --only mobilenetv2_ilsvrc2012.mnn
-python3 "$ROOT/scripts/fetch_weights.py" --check --only mobilenetv2_ilsvrc2012.mnn
+python3 "$ROOT/scripts/fetch_weights.py" --only mobilenetv2.static_bs1.onnx
+python3 "$ROOT/scripts/fetch_weights.py" --check --only mobilenetv2.static_bs1.onnx
 
-# Git model tomls default device=gpu (MNN_FORWARD_CUDA). Hosted CPU VMs have
-# no CUDA; pack-override a cpu-device copy instead of resurrecting *_cpu_config.toml.
+# The repo ships no default cpu product configs (docs/deployment.md teaches
+# cpu usage). CI injects its own overlay: a device=cpu model toml from
+# conf/ci/ plus a profile="cpu" server entry, both mounted read-only into the
+# image so the MORTRED_PROFILE=cpu catalog contains MOBILENETV2.
 CI_BOOT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/mortred-ci-boot.XXXXXX")"
 COMPOSE=()
 booted=0
@@ -74,15 +77,41 @@ python3 - "$ROOT" "$CI_BOOT_DIR" <<'PY'
 import pathlib, sys
 root = pathlib.Path(sys.argv[1])
 out = pathlib.Path(sys.argv[2])
-src = root / "conf/model/classification/mobilenetv2/mobilenetv2_cpu.toml"
+src = root / "conf/ci/mobilenetv2_onnx_hosted.toml"
 text = src.read_text(encoding="utf-8")
-if 'type = "mnn"' not in text or 'device = "cpu"' not in text:
-    raise SystemExit("cpu mobilenet config must stay MNN on cpu: %s" % src)
+if 'type = "onnx"' not in text or 'device = "cpu"' not in text:
+    raise SystemExit("cpu mobilenet config must stay ONNX on cpu: %s" % src)
 (out / "mobilenetv2_config.toml").write_text(text, encoding="utf-8")
 (out / "ci_pack.toml").write_text(
     "[pack.mobilenetv2]\n"
     "worker_nums = 1\n"
     'model_config = "/tmp/ci_mobilenetv2.toml"\n',
+    encoding="utf-8",
+)
+# profile="cpu" catalog entry: with the shipped cpu server configs removed,
+# CI provides the only cpu-profile entry itself (docs/deployment.md teaches
+# users to write their own instead of shipping defaults).
+(out / "ci_server.toml").write_text(
+    "[MOBILENETV2_CLASSIFICATION_SERVER]\n"
+    'model="mobilenetv2"\n'
+    'profile="cpu"\n'
+    "port=9002\n"
+    'host="localhost"\n'
+    "max_connections=500\n"
+    "peer_resp_timeout=15\n"
+    "request_size_limit=64\n"
+    "compute_threads=-1\n"
+    "handler_threads=50\n"
+    "worker_nums=1\n"
+    "model_run_timeout=500\n"
+    "max_queue_depth=32\n"
+    "max_batch_size=1\n"
+    "max_batch_delay_ms=5\n"
+    'server_uri="/mortred_ai_server_v1/classification/mobilenetv2"\n'
+    'server_exe="mortred-model-server.out"\n'
+    "\n"
+    "[mobilenetv2]\n"
+    'model_config_file_path="/tmp/ci_mobilenetv2.toml"\n',
     encoding="utf-8",
 )
 (out / "compose.override.yml").write_text(
@@ -93,10 +122,15 @@ if 'type = "mnn"' not in text or 'device = "cpu"' not in text:
     "    volumes:\n"
     "      - %s:/opt/mortred/conf/packs/ci_cpu.toml:ro\n"
     "      - %s:/tmp/ci_mobilenetv2.toml:ro\n"
-    % ((out / "ci_pack.toml").as_posix(), (out / "mobilenetv2_config.toml").as_posix()),
+    "      - %s:/opt/mortred/conf/server/classification/mobilenetv2/ci_server.toml:ro\n"
+    % (
+        (out / "ci_pack.toml").as_posix(),
+        (out / "mobilenetv2_config.toml").as_posix(),
+        (out / "ci_server.toml").as_posix(),
+    ),
     encoding="utf-8",
 )
-print("[ok] cpu-device pack overlay in %s" % out)
+print("[ok] cpu overlay (model toml + profile=cpu server entry + pack) in %s" % out)
 PY
 
 COMPOSE=(docker compose --profile cpu

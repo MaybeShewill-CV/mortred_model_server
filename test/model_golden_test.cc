@@ -55,14 +55,14 @@ using namespace jinq::test::golden;
 
 // ============ golden 用例（保持迁移前的声明顺序） ============
 
-GOLDEN_CLASSIFICATION_CASE(mobilenetv2_classification, "conf/model/classification/mobilenetv2/mobilenetv2_cpu.toml",
+GOLDEN_CLASSIFICATION_CASE(mobilenetv2_classification, "conf/ci/mobilenetv2_onnx_hosted.toml",
                            "demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG",
                            jinq::factory::classification::create_mobilenetv2_classifier, std_classification_output);
 
 TEST(model_golden, mobilenetv2_batch_matches_single) {
     // batch=N must be numerically equivalent to N single runs (the batched
     // [N,H,W,3] session run is the whole point of the batching upgrade)
-    std::string conf = "conf/model/classification/mobilenetv2/mobilenetv2_cpu.toml";
+    std::string conf = "conf/ci/mobilenetv2_onnx_hosted.toml";
     if (!weights_available(conf))
         MORTRED_SKIP_OR_FAIL_WEIGHTS("weights not available");
     auto cfg = load_model_cfg(conf);
@@ -95,7 +95,7 @@ TEST(model_golden, mobilenetv2_mixed_batch_isolates_failed_items) {
     // ORIGINAL slot, silently cross-wiring results whenever one item failed
     // preprocessing (or failing the whole batch). The generic run_image_batch
     // must keep the valid items aligned with their single-run results.
-    std::string conf = "conf/model/classification/mobilenetv2/mobilenetv2_cpu.toml";
+    std::string conf = "conf/ci/mobilenetv2_onnx_hosted.toml";
     if (!weights_available(conf))
         MORTRED_SKIP_OR_FAIL_WEIGHTS("weights not available");
     auto cfg = load_model_cfg(conf);
@@ -131,7 +131,7 @@ TEST(model_golden, mobilenetv2_mixed_batch_isolates_failed_items) {
     }
 }
 
-GOLDEN_CLASSIFICATION_CASE(resnet50_classification, "conf/model/classification/resnet/resnet_cpu.toml",
+GOLDEN_CLASSIFICATION_CASE(resnet50_classification, "conf/ci/resnet_cpu_golden.toml",
                            "demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG",
                            jinq::factory::classification::create_resnet_classifier, std_classification_output);
 

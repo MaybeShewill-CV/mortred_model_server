@@ -426,6 +426,9 @@ set is active at a time).
 5. regenerate the manifest;
 6. add a cpu smoke verification for the model; record it in CHANGELOG.
 
+For a TensorRT product there is no shared mnn toml to point at — serve it on
+cpu with a machine-pack `model_config` override instead (§10.7).
+
 > The curated set is deliberately **frozen per release**: extending it is a
 > release decision (performance + acceptance ownership), not a config tweak.
 
@@ -504,16 +507,23 @@ Git TensorRT packs (`yolov8.toml`, `metric3d.toml`, `gpu_yolo_metric3d.toml`)
 ship **seed** occupancy (`gpu_mem_source="seed"`). Seed MiB is a reusable
 starting sample only — it **must** be overwritten on each host by
 `calibrate --write-pack`. Do not commit calibrated `worker_nums`, non-seed
-`gpu_mem_mib`, or `[pack]` `gpu_name` / `gpu_memory_total_mib`. Demo pack stays
-MNN CPU and needs no stamp. `--write-pack` refuses to write `conf/packs/`
+`gpu_mem_mib`, or `[pack]` `gpu_name` / `gpu_memory_total_mib`. The demo pack
+is the seeded TensorRT MobilenetV2 product: recalibrate it on every host like
+any TRT pack, and on cpu-only machines it autostarts nothing (§10.7).
+`--write-pack` refuses to write `conf/packs/`
 directly; always copy first.
 
 ### 10.1 Pack file
 
 ```toml
-# conf/packs/demo.toml — shipped example; keep worker_nums=1 in git
-[pack.MOBILENETV2]
+# conf/packs/demo.toml — shipped demo: seeded TRT MobilenetV2
+# (keep worker_nums=1 and the seed stamp in git; recalibrate on every host)
+[pack.mobilenetv2]
 worker_nums = 1
+model_config = "conf/model/classification/mobilenetv2/mobilenetv2.toml"
+gpu_mem_mib = 1800
+gpu_mem_at_workers = 1
+gpu_mem_source = "seed"
 
 # machine-local copy after calibrate --write-pack, e.g. /tmp/machine-pack.toml
 [pack.yolov8s]
@@ -541,7 +551,7 @@ or empty (status `failed`, no crash-loop). `/ready` is real loadability, not
 just a nonempty file. After prepare, TensorRT ids still need a host occupancy
 stamp (§10.3) before spawn — seed in git is not enough.
 
-Demo pack is MobilenetV2 (no TensorRT). A YOLOV8 / Metric3D pack needs prepare
+Every TensorRT pack — including the demo's MobilenetV2 — needs prepare
 on the target GPU. `MORTRED_AUTO_BUILD_ENGINES=true` still converts the
 **whole zoo** and stays **off** by default.
 
@@ -628,6 +638,42 @@ default is now **2048 MiB per session** (`gpu_mem_limit_mb` on
 up to four arenas. `0` restores unlimited. MNN and TensorRT have no equivalent
 knob. Process occupancy is gated at supervisor spawn from the pack stamp
 (§10.3), not by wiring `gpu_mem_limit_mb` into TRT/MNN sessions.
+
+### 10.7 Running CPU-only (no default cpu product)
+
+The repo deliberately ships **no default cpu product configs**: there is no
+`conf/model/**/*_cpu.toml` and no `conf/server/**/*_cpu_config.toml` (the
+consistency gate fails if one reappears). CPU usage is assembled per machine
+from the building blocks above:
+
+1. **Build / install the cpu tier** — `install_deps.sh --cpu`, CMake preset
+   `full-cpu`, or `docker compose --profile cpu build`.
+2. **Write a cpu model toml** for the model you want — `type = "mnn"` or
+   `type = "onnx"` with `device = "cpu"`. The canonical sample is
+   `conf/ci/mobilenetv2_onnx_hosted.toml` (kept honest by the hosted golden
+   gate). A `type="tensorrt"` toml on cpu fails init with a clear error by
+   design.
+3. **Write a machine pack** that selects the catalog id and points
+   `model_config` at your cpu toml (cpu backends need no occupancy stamp):
+
+   ```toml
+   # /tmp/cpu-pack.toml
+   [pack.mobilenetv2]
+   worker_nums = 1
+   model_config = "/tmp/mobilenetv2_cpu.toml"
+   ```
+
+4. **Fetch the cpu-tagged weights** (`profiles=["cpu","gpu"]` rows in
+   `conf/weights_manifest.json`):
+   `python3 scripts/fetch_weights.py --profile cpu`.
+5. **Start with the cpu profile** — `export MORTRED_PROFILE=cpu` and
+   `export MORTRED_PACK=/tmp/cpu-pack.toml`, then start the supervisor
+   (compose with the pack mounted, or the tarball / systemd entry).
+
+The shipped `conf/packs/demo.toml` is the seeded TensorRT product: its
+MobilenetV2 id is **not** in the `MORTRED_PROFILE=cpu` catalog, so a cpu
+compose boot with the default pack starts supervisor + gateway only. That is
+the intended "no default cpu product" behavior, not a failure.
 
 ## 11. Authentication & Security
 

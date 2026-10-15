@@ -39,6 +39,9 @@ CPU_WEIGHTS = {
     "weights/object_detection/yolov8/yolov8s.onnx",
     # Hosted cpu-profile golden set (conf/ci_hosted_golden.json). Keep these
     # tagged cpu so fetch --profile cpu and CI stay aligned after regenerate.
+    # mobilenetv2 golden runs conf/ci/mobilenetv2_onnx_hosted.toml; the .mnn
+    # stays tagged cpu for the backend_unittest MnnSession cases.
+    "weights/classification/mobilenetv2/mobilenetv2.static_bs1.onnx",
     "weights/object_detection/nanodet/nanodet_plus_m_1x5.mnn",
     "weights/object_detection/nanodet/nanodet_plus_m_1x5.static_bs1.onnx",
     "weights/ocr/db_text_detector/db_model_large.mnn",

@@ -435,14 +435,6 @@ def preserve_cpu_golden_configs() -> None:
     """CPU goldens cannot load TensorRT. Keep MNN copies before the gpu rewrite."""
     copies = [
         (
-            ROOT / "conf/model/classification/mobilenetv2/mobilenetv2.toml",
-            ROOT / "conf/model/classification/mobilenetv2/mobilenetv2_cpu.toml",
-        ),
-        (
-            ROOT / "conf/model/classification/resnet/resnet.toml",
-            ROOT / "conf/model/classification/resnet/resnet_cpu.toml",
-        ),
-        (
             ROOT / "conf/model/object_detection/yolov7/yolov7.toml",
             ROOT / "conf/ci/yolov7_cpu_golden.toml",
         ),
@@ -493,14 +485,6 @@ def apply_model_configs(rows: list[dict]) -> None:
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(render_model_toml(row), encoding="utf-8")
         point_server_at_model(ROOT / row["server_config"], row["model_config"])
-    point_server_at_model(
-        ROOT / "conf/server/classification/mobilenetv2/mobilenetv2_server_cpu_config.toml",
-        "conf/model/classification/mobilenetv2/mobilenetv2_cpu.toml",
-    )
-    point_server_at_model(
-        ROOT / "conf/server/classification/resnet/resnet_server_cpu_config.toml",
-        "conf/model/classification/resnet/resnet_cpu.toml",
-    )
 
 
 def _backend_fields(text: str) -> dict[str, str]:
@@ -616,12 +600,24 @@ def validate_product_files(rows: list[dict]) -> list[str]:
             errors.append(f"missing static_bs1 engine reference {stem}")
     if "hrnetw48_ccd_fp32.engine" in joined:
         errors.append("hrnet still references the old fp32 engine")
-    cpu_mv = ROOT / "conf/model/classification/mobilenetv2/mobilenetv2_cpu.toml"
-    cpu_rn = ROOT / "conf/model/classification/resnet/resnet_cpu.toml"
-    for path in (cpu_mv, cpu_rn):
-        body = path.read_text(encoding="utf-8") if path.is_file() else ""
-        if 'type = "mnn"' not in body or 'device = "cpu"' not in body:
-            errors.append(f"{path}: cpu profile config must stay MNN on cpu")
+    # The cpu product line is deliberately not shipped: cpu usage is taught in
+    # docs/deployment.md (pack + profile injection), CI carries its own cpu
+    # golden configs in conf/ci/. Reintroduced product-domain cpu files are
+    # drift and must fail this gate.
+    for path in (
+        ROOT / "conf/model/classification/mobilenetv2/mobilenetv2_cpu.toml",
+        ROOT / "conf/model/classification/resnet/resnet_cpu.toml",
+    ):
+        if path.exists():
+            errors.append(
+                f"{path.relative_to(ROOT)}: cpu product config must not ship; "
+                "cpu lives in conf/ci/ + docs/deployment.md"
+            )
+    for cfg in (ROOT / "conf/server").rglob("*_cpu_config.toml"):
+        errors.append(
+            f"{cfg.relative_to(ROOT)}: cpu server config must not ship; "
+            "inject a profile=\"cpu\" entry via pack/docs instead"
+        )
     for cfg in (ROOT / "conf/server").rglob("*.toml"):
         for line in cfg.read_text(encoding="utf-8").splitlines():
             stripped = line.strip()
@@ -693,19 +689,12 @@ def _replace_identity(text: str, row: dict) -> str:
 
 def apply_servers(rows: list[dict]) -> None:
     """Rename existing server identity and write sibling server files."""
-    extra_cpu = {
-        "mobilenetv2": ROOT / "conf/server/classification/mobilenetv2/mobilenetv2_server_cpu_config.toml",
-        "resnet": ROOT / "conf/server/classification/resnet/resnet_server_cpu_config.toml",
-    }
     for row in rows:
         path = ROOT / row["server_config"]
         if row.get("replaces"):
             if not path.is_file():
                 raise SystemExit(f"missing server config to rename: {path}")
             path.write_text(_replace_identity(path.read_text(encoding="utf-8"), row), encoding="utf-8")
-            cpu = extra_cpu.get(row["id"])
-            if cpu is not None:
-                cpu.write_text(_replace_identity(cpu.read_text(encoding="utf-8"), row), encoding="utf-8")
             continue
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(server_file_text(row), encoding="utf-8")

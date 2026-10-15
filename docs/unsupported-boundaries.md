@@ -75,7 +75,7 @@ target layout.
 | Supported | Not supported on cpu |
 |---|---|
 | MNN-CPU + ORT-CPU | Compiling / linking TensorRT into the cpu preset |
-| Demo pack without TRT backends | Expecting `type=tensorrt` model configs to run (init fails clearly) |
+| A machine cpu pack (mnn/onnx, `device="cpu"`) | Expecting a default cpu product to ship, or `type=tensorrt` configs to run on cpu (init fails clearly) |
 
 ## What this page is not
 
