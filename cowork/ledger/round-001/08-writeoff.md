@@ -1,13 +1,13 @@
 # 关闭记录
 
 - 轮次: 1
-- 已关闭: P0-1、P1-1、P1-2、P2-1、P2-2、P2-3、P2-4、P2-5、P2-6、P2-7、P2-9、P2-10
+- 已关闭: P0-1、P1-1、P1-2、P2-1、P2-2、P2-3、P2-4、P2-5、P2-6、P2-7、P2-9、P2-10、P2-11
 - 阻塞: 无
-- 未阻塞的开放项: 相对本轮起点减少；P2-11 合入后的关闭没有再减少
+- 未阻塞的开放项: 相对本轮起点减少，本步关闭后为无
 
 核对 `07-close.md`、`07-close-p12.md`、`07-close-p21.md`、`07-close-p22.md`、`07-close-p23.md`、`07-close-p24.md`、`07-close-p25.md`、`07-close-p26.md`、`07-close-p27.md`、`07-close-p29.md` 与 `07-close-p210.md`。P0-1、P1-1、P1-2、P2-1、P2-2、P2-3、P2-4、P2-5、P2-6、P2-7、P2-9、P2-10 的原陈述都没有留在仍开放的问题里。P2-8 没有重新入列。新入列为无。九个模块分数与 `01-modules` 正文一致。
 
-本轮起点未关闭且未阻塞的 id 共 13 条。关闭 12 条后剩 1 条。
+本轮起点未关闭且未阻塞的 id 共 13 条。P2-11 关闭后为无。
 
 ## 已关闭的问题陈述
 | id | 模块 | 问题陈述 |
@@ -25,17 +25,18 @@
 | P2-7 | src-models | 解码后宽或高不是 256 的合法 JPEG 调用 `realesrgan` 时，返回的不是写明 256×256 的输入错误。 |
 | P2-9 | test | `python3 scripts/golden_drift_check.py --check` 不能以 0 退出。 |
 | P2-10 | docs | 中文 README 第一小时命令块没有 `mortredctl next`。 |
+| P2-11 | src-server-apps、conf、ops、test、docs | 覆盖集九个 TensorRT id 没有一张按本次性能约束完成的 calibrate 与 `--raw` HTTP 报告清单（PF1、PF2、PF5、TP1）。 |
 
 ## 仍开放的问题
 | id | 模块 | 问题陈述 | 状态 |
 | --- | --- | --- | --- |
-| P2-11 | src-server-apps、conf、ops、test、docs | 覆盖集九个 TensorRT id 没有一张按本次性能约束完成的 calibrate 与 `--raw` HTTP 报告清单（PF1、PF2、PF5、TP1；压测报告尚未引用 gateway 阶段与 `server_time_ms`，PF4 的报告半边仍在此）。 | 未关闭。合入 `9f1dc0b33b2a6f778e4c305a58e3ad831f1aff32` 的九行官方压测 `-c` 都是该行 `worker_nums` 的两倍，不算按本次性能约束完成 |
+| 无 | 无 | 无 | 无 |
 
 ## 附录
 
 P0-1 在 src-models 与 conf 的两条陈述是同一条已关闭问题。
 
-P1-1 只关闭「不创建 flag 文件就读不到 gateway 阶段」。同一次压测报告仍缺失，留在 P2-11。
+P1-1 只关闭「不创建 flag 文件就读不到 gateway 阶段」。同一次压测报告后来随 P2-11 关闭。
 
 P2-1 已关闭。合入 `d5c9dffc522802a7e29292c7d8bd90f71fcaa837`。`yolov8s` 提交 2 张合法图片后 `results` 长度为 2；随后 `/metrics` 里 `mortred_batch_size` 的样本都是 1，count 与 sum 都是 2。其余八个覆盖集 id 未单独验收，不新入列。
 
@@ -59,7 +60,7 @@ P2-3 已关闭。合入 `6031d5fdbe66b217762f25ba51f9a9027cfb8e6e`。同一次�
 
 `discovered.md` 的表是无。两份 CPU toml 的 `--check` 退出码 1，以及 P1-1 外部样本没有覆盖 4096 与并列，都确认不了一次新的外部验收，不入列。
 
-核对 `07-close-p211.md`。P2-11 没有关闭。合入 `9f1dc0b33b2a6f778e4c305a58e3ad831f1aff32` 的清单九行 `-c` 都是该行 `worker_nums` 的两倍，原陈述仍留在开放项。已关闭的十二条陈述没有回到开放项。新入列为无。九个模块分数与 `01-modules` 正文一致。
+核对 `07-close-p211-2x.md`。P2-11 已关闭。合入 `9f1dc0b33b2a6f778e4c305a58e3ad831f1aff32`。当前评分标准要求官方压测并发等于已部署 `worker_nums` 的两倍。清单九行 `-c` 分别是 8、8、8、4、4、4、2、8、2，对应 pack `worker_nums` 4、4、4、2、2、2、1、4、1。原陈述已从开放项删除。已关闭的其余陈述没有回到开放项。新入列为无。九个模块分数与 `01-modules` 正文一致。本轮起点 13 条未关闭且未阻塞的 id，关闭后为无。
 
 ## 新入列
 
