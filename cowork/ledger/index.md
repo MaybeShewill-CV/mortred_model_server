@@ -2,19 +2,20 @@
 
 - 基线分支: sub-agent-co-work
 - 轮次上限: 20
-- 当前轮次: 1
-- 当前步骤: 7
+- 当前轮次: 2
+- 当前步骤: 1
 - 当前问题: 无
 - 阻塞: 无
 - 已关闭: P0-1、P1-1、P1-2、P2-1、P2-2、P2-3、P2-4、P2-5、P2-6、P2-7、P2-9、P2-10、P2-11
-- 本轮起点加权分: 7.1
-- 记录目录: cowork/ledger/round-001/
+- 本轮起点加权分: 8.9
+- 记录目录: cowork/ledger/round-002/
 - 运行环境: 本机 WSL Ubuntu（/mnt/g/Codex/mortred_model_server）
-- 状态: done
-- 续跑: 无。工作树 `G:\Codex\mortred_wt_r1_p2_11` 仍有未提交的 `scripts/coverage_http_report.py` 和 `logs/p2-11-packs/`，没有删除。基线未跟踪文件只有 `demo_data/model_test_input/scene_segmentation/face_w_mask.jpg`，不提交。
+- 状态: running
+- 续跑: 第 1 步评分复核终态是继续。完成标准 27 行已满足。新入列且未关闭的是 P2-12 至 P2-20，下一步是第 2 步评审。工作树 `G:\Codex\mortred_wt_r1_p2_11` 已删除。
 
 ## 轮次
 
 | 轮次 | 复核加权分 | 未关闭 P0 | 未关闭 P1 | 未关闭 P2 | 结果 |
 | --- | --- | --- | --- | --- | --- |
 | 1 | 7.1 | 0 | 0 | 0 | done |
+| 2 | 8.9 | 0 | 0 | 9 | running |
