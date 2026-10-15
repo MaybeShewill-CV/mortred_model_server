@@ -26,10 +26,10 @@ namespace classification {
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
         // ...已有模型...
-        Entry{"DENSENET", "densenet classification", "DENSENET_CLASSIFICATION_SERVER",
+        Entry{"densenet", "densenet classification", "DENSENET_CLASSIFICATION_SERVER",
               &create_densenet_classifier<ImageInput, Output>,
               &jinq::server::response::fill_classification,
-              classification_param_specs()},
+              classification_param_specs(), "densenet"},
     };
     return entries;
 }
@@ -49,13 +49,13 @@ inline const std::vector<Entry> &catalog() {
 catalog 里的每一行 `CvModelEntry`，因此 catalog 加一行之后即可：
 
 ```
-mortred-model-server.out --model DENSENET /path/to/densenet_server_config.toml
-mortred-model-benchmark.out --model DENSENET /path/to/densenet_config.toml [image]
+mortred-model-server.out --model densenet /path/to/densenet_server_config.toml
+mortred-model-benchmark.out --model densenet /path/to/densenet_config.toml [image]
 ```
 
 然后：
 
-1. 在 `conf/server/<task>/<model>/` 下添加配置，写上 `model = "DENSENET"` 和
+1. 在 `conf/server/<task>/<model>/` 下添加配置，写上 `model = "densenet"` 和
    `server_exe = "mortred-model-server.out"`（复制同类配置并调整
    `server_uri`、`port`、`worker_nums`）；
 2. `python3 scripts/check_consistency.py` 必须保持绿色（catalog id ↔ conf `model=`，
