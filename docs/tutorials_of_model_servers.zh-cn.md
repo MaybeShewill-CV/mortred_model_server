@@ -43,10 +43,10 @@ python3 scripts/server/test_server.py --server mobilenetv2 --mode single --times
 
 ---
 
-## 目标检测（`YOLOV5`）
+## 目标检测（`yolov5l`）
 
 ```bash
-./mortred-model-server.out --model YOLOV5 \
+./mortred-model-server.out --model yolov5l \
   ../conf/server/object_detection/yolov5/yolov5l_server_config.toml
 ```
 
@@ -60,10 +60,10 @@ python3 scripts/server/test_server.py --server yolov5 --mode single
 
 ---
 
-## 场景分割（`BISENETV2`）
+## 场景分割（`bisenetv2`）
 
 ```bash
-./mortred-model-server.out --model BISENETV2 \
+./mortred-model-server.out --model bisenetv2 \
   ../conf/server/scene_segmentation/bisenetv2/bisenetv2_server_config.toml
 ```
 
@@ -75,10 +75,10 @@ python3 scripts/server/test_server.py --server bisenetv2 --mode single
 
 ---
 
-## 图像增强（`ATTENTIVE_GAN_DERAIN`）
+## 图像增强（`attentive_gan`）
 
 ```bash
-./mortred-model-server.out --model ATTENTIVE_GAN_DERAIN \
+./mortred-model-server.out --model attentive_gan \
   ../conf/server/enhancement/attentive_gan_derain/attentive_gan_server_config.toml
 ```
 
