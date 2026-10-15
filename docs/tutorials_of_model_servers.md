@@ -47,10 +47,10 @@ Response: top-k scores under `results[0].data` (see API contract).
 
 ---
 
-## Object detection (`YOLOV5`)
+## Object detection (`yolov5l`)
 
 ```bash
-./mortred-model-server.out --model YOLOV5 \
+./mortred-model-server.out --model yolov5l \
   ../conf/server/object_detection/yolov5/yolov5l_server_config.toml
 ```
 
@@ -66,10 +66,10 @@ Screenshot: `resources/images/start_a_yolov5_server.png`.
 
 ---
 
-## Scene segmentation (`BISENETV2`)
+## Scene segmentation (`bisenetv2`)
 
 ```bash
-./mortred-model-server.out --model BISENETV2 \
+./mortred-model-server.out --model bisenetv2 \
   ../conf/server/scene_segmentation/bisenetv2/bisenetv2_server_config.toml
 ```
 
@@ -83,10 +83,10 @@ Screenshot: `resources/images/start_a_bisenetv2_server.png`.
 
 ---
 
-## Enhancement (`ATTENTIVE_GAN_DERAIN`)
+## Enhancement (`attentive_gan`)
 
 ```bash
-./mortred-model-server.out --model ATTENTIVE_GAN_DERAIN \
+./mortred-model-server.out --model attentive_gan \
   ../conf/server/enhancement/attentive_gan_derain/attentive_gan_server_config.toml
 ```
 
