@@ -265,3 +265,11 @@ v2 未经这两处读数修订的句子未被选中：进程起来之后就把�
 - 决定原文: 按照你的建议继续完成这一轮工作。
 - 做法: 在问题 worktree 的 `scripts/calibrate_pack.py` 里把 `P99_CAP_MS["metric3d_512"]` 改为 200.0。`realesrgan` 保持 400.0，`superpoint` 保持 40.0。`0000000005.jpg` 仍是 `SOF0` 一次扫描 JPEG，无 EXIF、无方向标记，宽 1242、高 375，147444 字节。calibrate 仍设置 `MORTRED_DEMO_IMAGE` 指向它，官方压测仍传 `--image` 指向同一文件。然后执行 `python3 scripts/coverage_http_report.py --from metric3d_512`。该入口保留 `mobilenetv2`、`yolov8s`、`libface`、`pphuman_mobile`、`dbnet`、`dinov2_vits14`、`superpoint`、`realesrgan`。
 - 未选用: 保持 150.0；改成 180；改 `pick_w_star` 让 w=1 超限仍写入；重写深度后处理；改 400.0 或 40.0；更换测试图；清空前 8 行后从头重跑。
+
+## 用户决定（官方压测并发等于 worker_nums）
+
+- 日期: 2026-10-15
+- 选用: 只把官方压测的 `-c` 改成等于该行已部署的 `worker_nums`。worker 数扫描仍是该点 `worker_nums` 的两倍。时长仍是 60 秒，warmup 仍是 5 秒。`P99_CAP_MS` 仍是 superpoint 40.0、realesrgan 400.0、metric3d_512 200.0。测试图、解码路径、16 张投票网格、`pick_w_star`、`assess_point` 都不改。不重新扫描 worker。九行已写出的 `worker_nums` 与 `decode_auto` 作为部署结论，按该结论重新拉起，只重跑官方压测，并重写这九行的压测字段。判定改为 `-c` 不等于该行 `worker_nums` 则不通过。不再开第三版确认。状态改为 running，继续第 4 步。
+- 决定原文: 解决stop的问题并继续完成cowork。
+- 做法: 在问题 worktree 的 `scripts/coverage_http_report.py` 里，官方压测 `-c` 和 `--check` 的并发判定都改成等于该行 `worker_nums`。自测里把两倍并发的样例改成不通过。新增 `python3 scripts/coverage_http_report.py --reload`：读取现有九行的 `worker_nums` 与 `decode_auto`，写成只含这两项的临时 pack，不调用 calibrate。按该 pack 拉起后，`http_infer_rps.py --raw` 的 `-c` 等于这个 `worker_nums`，`-d 60s`，`--warmup 5s`。九行全部成功后才覆盖 `docs/perf/coverage_set_http_rps.md`。每一行保留原来的 calibrate 命令，更新这次官方压测的命令、成功 RPS、p50、p99、错误率、429、两只直方图、JPEG 落点、gateway 五段和 `server_time_ms`。任一行失败时不覆盖清单，停住，不手填。不执行无参数的 `coverage_http_report.py`。不改 `scripts/calibrate_pack.py` 的两倍扫描。
+- 未选用: 保持官方 `-c` 为 `worker_nums` 的两倍；把 worker 扫描也改成等于 `worker_nums` 并清空清单重跑九个 calibrate。
