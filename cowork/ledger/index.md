@@ -11,7 +11,7 @@
 - 记录目录: cowork/ledger/round-002/
 - 运行环境: 本机 WSL Ubuntu（/mnt/g/Codex/mortred_model_server）
 - 状态: running
-- 续跑: P2-20 方案 v1 三方同意，下一步是在问题分支实现。未关闭且未阻塞的是 P2-20、P2-21。完成标准 27 行仍是已满足，终态继续。加权分 8.9。
+- 续跑: P2-20 实现与 QA 已完成（分支 cowork/r2-p2-20-trt-proof，commit c15b1d723658b70079d0ab84e0d7e2e76344004c），待合入。未关闭且未阻塞的是 P2-20、P2-21。完成标准 27 行仍是已满足，终态继续。加权分 8.9。工作树 G:\Codex\mortred_wt_r2_p2_20 仍保留。
 
 ## 轮次
 
