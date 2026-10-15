@@ -11,7 +11,7 @@
 - 记录目录: cowork/ledger/round-001/
 - 运行环境: 本机 WSL Ubuntu（/mnt/g/Codex/mortred_model_server）
 - 状态: running
-- 续跑: 用户决定官方压测 `-c` 等于该行已部署的 `worker_nums`。九行已有的 `worker_nums` 与 `decode_auto` 不重新扫描。进入第 4 步，在 `G:\Codex\mortred_wt_r1_p2_11` 重跑官方压测。基线未跟踪文件只有 `demo_data/model_test_input/scene_segmentation/face_w_mask.jpg`，不提交。
+- 续跑: 第 4 步实现偏差确认结论是不同意。`--reload` 停在占用门闩，退回研发改回本方案的交付。基线未跟踪文件只有 `demo_data/model_test_input/scene_segmentation/face_w_mask.jpg`，不提交。
 
 ## 轮次
 
