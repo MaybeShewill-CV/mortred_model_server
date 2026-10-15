@@ -141,11 +141,12 @@ later name in `gw_in`, `route`, `auth`, `fwd`, `upstream` wins.
 
 `mortred_gateway_stage_dominant` is that gauge. Its value is 1 and names the
 stage; it is not a millisecond reading. When the comparison does not hold,
-the scrape body does not contain `mortred_gateway_stage_dominant`. With more
-than one sample, and at most 4096, each p50 is the median of the raw samples
-(the middle value when the count is odd; the arithmetic mean of the two
-middle values when even). Past 4096 paired samples the dominant gauge is left
-out. Histogram `_count` and `_sum` stay cumulative.
+the scrape body does not contain `mortred_gateway_stage_dominant`. With one or
+more paired samples in the deque (at most the newest 4096), each p50 is the
+median of those raw samples (the middle value when the count is odd; the
+arithmetic mean of the two middle values when even). Past 4096 paired samples
+the dominant gauge still uses that newest-at-most-4096 window. Histogram
+`_count` and `_sum` stay cumulative.
 
 ### Inference (7) — "Model performance"
 
