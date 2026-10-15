@@ -10,8 +10,8 @@
 - 本轮起点加权分: 7.1
 - 记录目录: cowork/ledger/round-001/
 - 运行环境: 本机 WSL Ubuntu（/mnt/g/Codex/mortred_model_server）
-- 状态: running
-- 续跑: 用户决定把现有 `test.png` 另存为 `demo_data/model_test_input/feature_point/test.jpg`（SOF0，640×480，55892 字节），`superpoint` 的 calibrate 和官方压测改用这张 JPEG。不改 `test.png`。保留清单 6 行，从 `superpoint` 继续。`P99_CAP_MS["superpoint"]` 仍是 40.0。
+- 状态: stopped
+- 停止原因: P2-11 第 4 条未通过。技术负责人同意停住：`superpoint` 已写入清单；`realesrgan` 在 w=1、p99=306.621ms 时被已有上限 200.0 判为 `latency_budget`，pack 没有写出 `decode_auto`。`metric3d_512` 没有跑。这不是第 4 条通过，没有合入。清单现为 7 行。
 
 ## 轮次
 
