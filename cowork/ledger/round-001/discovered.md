@@ -30,3 +30,5 @@ P2-9 没有重新跑推理。方案规定 golden 数值与当前权重是否仍�
 
 P2-10 没有执行 `mortredctl`。方案规定不以执行该命令作为通过。`scripts/mortredctl_next.sh` 与改动前相同。一次外部验收确认不了脚本打印的下一条命令，不插入当前队列。
 
+P2-11 的清单已合入 `9f1dc0b33b2a6f778e4c305a58e3ad831f1aff32`。四张指定 JPEG 仍未跟踪：`face_w_mask.jpg`、`coco_text_test.jpg`、`feature_point/test.jpg`、`0000000005.jpg`。realesrgan 的 256×256 JPEG 留在已忽略的 `logs/p2-11-realesrgan-256.jpg`。文件头日期是 2026-10-14，superpoint、realesrgan、metric3d_512 三行的日期是 2026-10-15。`http_infer_rps.py` 在测量中复用连接，并由客户端先关闭。这些句子一次外部验收确认不了新的产品行为，不插入当前队列。
+
