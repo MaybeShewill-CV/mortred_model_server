@@ -44,7 +44,7 @@ git 历史里的旧轮次整段忽略：不检回工作区，不读取，不继�
 
 1. 对该 id 做 calibrate，选出本机的 `worker_nums` 和 JPEG 解码路径。命令是 `mortredctl calibrate --pack <pack> --write-pack`。worker 数扫描和 JPEG 解码投票的请求都走 `--raw`（图片原始字节）。用 base64 JSON 跑出的结论不算数。结论写在该 pack 的 `[pack.<id>]`：`worker_nums`，以及 `decode_auto` 为 `cpu` 或 `gpu`。`conf/server` 保持 `worker_nums=1`，不把结论写进那里。
 2. 按这份 pack 部署并拉起该 id。进程里的 worker 数等于 `worker_nums`，`MORTRED_DECODE_AUTO` 等于 `decode_auto`。
-3. 用 `scripts/server/http_infer_rps.py` 压测。必须带 `--raw`。并发数等于已部署的 `worker_nums`，测量时长不少于 30 秒。数据是图片原始字节，不是 base64 JSON。
+3. 用 `scripts/server/http_infer_rps.py` 压测。必须带 `--raw`。并发数等于已部署的 `worker_nums` 的两倍，测量时长不少于 30 秒。数据是图片原始字节，不是 base64 JSON。
 
 压测期间 `/metrics` 的 `mortred_jpeg_decode_total` 要落在 `decode_auto` 选出的那条路径上。`decode_auto=gpu` 时 `jpeggpu` 计数要增加；`decode_auto=cpu` 时走 CPU 解码。实际路径和结论不一致的报告不算数。
 
@@ -96,13 +96,13 @@ QA 通过并合入的 id，对应的问题陈述从开放项删除。编排方�
 
 同一类问题并成一条。已关闭的关闭范围不扩大，也不把「其余都做了」写成这一条的完成。不得用「边界写明不做」把下表的行移出完成标准。
 
-压测使用 `scripts/server/http_infer_rps.py --raw`，并发数等于该 id 已部署的 `worker_nums`，请求的是 static shape、batch=1 的 TensorRT engine。不带 `--raw`、或并发数与 `worker_nums` 不一致的结果不算数。trtexec 的 Throughput 只作 `docs/benchmark-h3/<id>.txt` 中的引擎参照，不算 HTTP 吞吐。GPU 作业被跳过时，不得把该次结果写成已满足。
+压测使用 `scripts/server/http_infer_rps.py --raw`，并发数等于该 id 已部署的 `worker_nums` 的两倍，请求的是 static shape、batch=1 的 TensorRT engine。不带 `--raw`、或并发数不等于已部署 `worker_nums` 的两倍的结果不算数。trtexec 的 Throughput 只作 `docs/benchmark-h3/<id>.txt` 中的引擎参照，不算 HTTP 吞吐。GPU 作业被跳过时，不得把该次结果写成已满足。
 
 ### 性能
 
 | 编号 | 未满足时的可观察标准 |
 | --- | --- |
-| PF1 | 覆盖集中任一 `type=tensorrt` 的 id，没有一份按「本次性能约束」完成 calibrate、按结论部署、再用 `http_infer_rps.py --raw` 压测的报告。报告须同时写明硬件、日期、pack 里的 `worker_nums` 与 `decode_auto`、压测命令、成功 RPS、p50、p99、错误率，以及 `docs/benchmark-h3/<id>.txt` 里的 Throughput 和二者比值。命令不是 `--raw`，或并发数不等于已部署的 `worker_nums`，算未满足 |
+| PF1 | 覆盖集中任一 `type=tensorrt` 的 id，没有一份按「本次性能约束」完成 calibrate、按结论部署、再用 `http_infer_rps.py --raw` 压测的报告。报告须同时写明硬件、日期、pack 里的 `worker_nums` 与 `decode_auto`、压测命令、成功 RPS、p50、p99、错误率，以及 `docs/benchmark-h3/<id>.txt` 里的 Throughput 和二者比值。命令不是 `--raw`，或并发数不等于已部署的 `worker_nums` 的两倍，算未满足 |
 | PF2 | 同一次压测读不到模型进程 `/metrics` 里分开的排队等待和推理耗时，或排队等待被算进推理耗时 |
 | PF3 | 对覆盖集中任一 TensorRT id 一次提交 N 张合法图片（N>1）时，响应不是 N 条逐项结果，或 batch 观测不是 1。单张失败拖垮同批其他成功项，或失败被报成空成功，同样算未满足。本次不要求动态 batch |
 | PF4 | 同一次压测读不到 gateway 阶段耗时，也读不到模型 `server_time_ms`。gateway 阶段 p50 大于模型 `server_time_ms` p50 的一半时，报告没有写明时间主要花在哪一段 |
@@ -124,7 +124,7 @@ QA 通过并合入的 id，对应的问题陈述从开放项删除。编排方�
 
 | 编号 | 未满足时的可观察标准 |
 | --- | --- |
-| TP1 | 覆盖集中任一 `type=tensorrt` 的 id，没有一份 static batch=1 的 HTTP 压测：先 calibrate，再按该结论部署，然后 `http_infer_rps.py --raw`，并发数等于已部署的 `worker_nums`，持续不少于 30 秒。容量内错误率高于 1%。429 没有单独计数，却被算进这 1%。未 calibrate 就固定并发、不用 `--raw`、并发数与 `worker_nums` 不一致、把 engine 改成动态 batch，或让多个 worker 共享一个 TensorRT context，都不算满足。缺 GPU 却写成已达标，同样算未满足 |
+| TP1 | 覆盖集中任一 `type=tensorrt` 的 id，没有一份 static batch=1 的 HTTP 压测：先 calibrate，再按该结论部署，然后 `http_infer_rps.py --raw`，并发数等于已部署的 `worker_nums` 的两倍，持续不少于 30 秒。容量内错误率高于 1%。429 没有单独计数，却被算进这 1%。未 calibrate 就固定并发、不用 `--raw`、并发数不等于已部署 `worker_nums` 的两倍、把 engine 改成动态 batch，或让多个 worker 共享一个 TensorRT context，都不算满足。缺 GPU 却写成已达标，同样算未满足 |
 | TP2 | 没有一次压测在 `yolov8s` 与 `libface` 同时 ready 时对两者并发请求，且两者都有成功响应。先停掉其中一个再压另一个，不算满足 |
 | TP3 | 驻留集缺 engine、缺占用戳，或占用门闩被关闭时，`mortredctl doctor --strict` 仍退出 0。失败输出里没有下一条命令，同样算未满足 |
 

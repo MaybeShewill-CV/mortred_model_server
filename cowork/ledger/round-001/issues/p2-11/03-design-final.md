@@ -273,3 +273,10 @@ v2 未经这两处读数修订的句子未被选中：进程起来之后就把�
 - 决定原文: 解决stop的问题并继续完成cowork。
 - 做法: 在问题 worktree 的 `scripts/coverage_http_report.py` 里，官方压测 `-c` 和 `--check` 的并发判定都改成等于该行 `worker_nums`。自测里把两倍并发的样例改成不通过。新增 `python3 scripts/coverage_http_report.py --reload`：读取现有九行的 `worker_nums` 与 `decode_auto`，写成只含这两项的临时 pack，不调用 calibrate。按该 pack 拉起后，`http_infer_rps.py --raw` 的 `-c` 等于这个 `worker_nums`，`-d 60s`，`--warmup 5s`。九行全部成功后才覆盖 `docs/perf/coverage_set_http_rps.md`。每一行保留原来的 calibrate 命令，更新这次官方压测的命令、成功 RPS、p50、p99、错误率、429、两只直方图、JPEG 落点、gateway 五段和 `server_time_ms`。任一行失败时不覆盖清单，停住，不手填。不执行无参数的 `coverage_http_report.py`。不改 `scripts/calibrate_pack.py` 的两倍扫描。
 - 未选用: 保持官方 `-c` 为 `worker_nums` 的两倍；把 worker 扫描也改成等于 `worker_nums` 并清空清单重跑九个 calibrate。
+
+## 用户决定（评分标准改为两倍并发，继续关闭 P2-11）
+
+- 日期: 2026-10-15
+- 选用: `cowork/ledger/rubric.md` 的官方压测并发改为已部署 `worker_nums` 的两倍。已合入 `9f1dc0b33b2a6f778e4c305a58e3ad831f1aff32` 的 `docs/perf/coverage_set_http_rps.md` 作为勾销清单。不重跑九个 id，不执行 `--reload`，不把 1.25 倍占用戳写进仓库。状态改为 running，进入第 7 步关闭。
+- 决定原文: 修改评分标准为worker_nums两倍。继续执行 P2-11。
+- 未选用: 维持并发等于 `worker_nums` 并重测；按占用门闩停住不再关闭。
