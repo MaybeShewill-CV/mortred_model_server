@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Calibrate worker_nums for a machine pack. Never writes conf/server.
 
-For each pack id, sweep worker_nums at concurrency equal to that worker count,
-POST with http_infer_rps --raw, and sample GPU memory for that server process
-(NVML compute-apps by pid, else a unique mortred-model-server name). Whole-card
-memory.used is never treated as the model; if WSL has no process row, occupancy
-is device.used minus a sample taken before spawn (gpu_mem_source=device_delta).
+For each pack id, sweep worker_nums at concurrency equal to twice that worker
+count, POST with http_infer_rps --raw (5s warmup), and sample GPU memory for
+that server process (NVML compute-apps by pid, else a unique
+mortred-model-server name). Whole-card memory.used is never treated as the
+model; if WSL has no process row, occupancy is device.used minus a sample taken
+before spawn (gpu_mem_source=device_delta).
 w* is the last worker count that still passes the error, p99, and queue gates
 and gains at least 10% RPS. With two or more eligible ids, a joint pass may
 lower a worker count so the set fits in the memory budget. It does not run a
@@ -27,6 +28,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import math
 import os
@@ -39,15 +41,13 @@ import sys
 import tempfile
 import threading
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "scripts" / "server"))
 
-from http_infer_rps import LoadConfig, parse_duration, run_load  # noqa: E402
+from http_infer_rps import LoadConfig, close_client_first, parse_duration, run_load  # noqa: E402
 from pack_trt import find_server_toml, pack_ids, pack_server_config, server_listen  # noqa: E402
 from repo_toml import load_toml  # noqa: E402
 from test_server import build_catalog, resolve_demo_image, resolve_server  # noqa: E402
@@ -68,8 +68,8 @@ P99_CAP_MS = {
     "pphuman_mobile": 40.0,
     "dbnet": 60.0,
     "dinov2_vits14": 50.0,
-    "superpoint": 25.0,
-    "realesrgan": 200.0,
+    "superpoint": 40.0,
+    "realesrgan": 400.0,
     "metric3d_512": 150.0,
 }
 _THROUGHPUT_RE = re.compile(r"Throughput:\s*([0-9]+(?:\.[0-9]+)?)\s*qps", re.IGNORECASE)
@@ -287,18 +287,38 @@ def vote_decode_auto(cases: list[dict]) -> dict:
     }
 
 
-def fetch_decode_counters(port: int, token: str) -> dict[str, int] | None:
-    req = urllib.request.Request(
-        "http://127.0.0.1:%d/metrics" % port,
-        headers={"Authorization": "Bearer %s" % token},
-    )
+def _http_get(port: int, path: str, token: str, timeout_s: float = 5.0) -> tuple[int, str] | None:
+    """GET and close this side first so TIME_WAIT stays off the listen port."""
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=timeout_s)
     try:
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            text = resp.read().decode("utf-8", errors="replace")
-    except (OSError, urllib.error.URLError, TimeoutError):
+        conn.request(
+            "GET",
+            path,
+            headers={
+                "Authorization": "Bearer %s" % token,
+                "Accept": "text/plain",
+                "Connection": "keep-alive",
+            },
+        )
+        resp = conn.getresponse()
+        body = resp.read()
+        status = resp.status
+        close_client_first(conn, drain_s=1.0)
+        conn = None
+        return status, body.decode("utf-8", errors="replace")
+    except (OSError, http.client.HTTPException, TimeoutError):
+        return None
+    finally:
+        if conn is not None:
+            close_client_first(conn, drain_s=0.0)
+
+
+def fetch_decode_counters(port: int, token: str) -> dict[str, int] | None:
+    got = _http_get(port, "/metrics", token)
+    if got is None or got[0] != 200:
         return None
     counts: dict[str, int] = {}
-    for match in re.finditer(r'mortred_jpeg_decode_total\{backend="([^"]+)"\} (\d+)', text):
+    for match in re.finditer(r'mortred_jpeg_decode_total\{backend="([^"]+)"\} (\d+)', got[1]):
         counts[match.group(1)] = int(match.group(2))
     return counts
 
@@ -554,15 +574,10 @@ def run_post_sweep(report: dict, joint_fn, decode_fn) -> dict:
 
 
 def fetch_metrics_text(port: int, token: str) -> str | None:
-    req = urllib.request.Request(
-        "http://127.0.0.1:%d/metrics" % port,
-        headers={"Authorization": "Bearer %s" % token},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            return resp.read().decode("utf-8", errors="replace")
-    except (OSError, urllib.error.URLError, TimeoutError):
+    got = _http_get(port, "/metrics", token)
+    if got is None or got[0] != 200:
         return None
+    return got[1]
 
 
 def _metric_series(text: str, name: str, model: str) -> dict | None:
@@ -1190,14 +1205,18 @@ def run_one_point(
         sampler.start()
         conc = max(1, int(concurrency))
         before_metrics = fetch_metrics_text(port, auth_token)
+        # Worker sweep only. Decode vote uses load_pinned_rps and its own warmup.
+        sweep_warmup_s = 5.0
+        # duration+10 is 70s at duration=60 and cuts off the 5s warmup.
+        sweep_timeout_s = max(30.0, duration_s + sweep_warmup_s + 45.0)
         report = run_load(
             LoadConfig(
                 url=infer_url,
                 image_path=image,
                 concurrency=conc,
                 duration_s=duration_s,
-                warmup_s=min(1.0, duration_s / 5.0),
-                timeout_s=max(30.0, duration_s + 10.0),
+                warmup_s=sweep_warmup_s,
+                timeout_s=sweep_timeout_s,
                 token=auth_token,
                 raw=True,
                 progress=False,
@@ -1217,13 +1236,20 @@ def run_one_point(
         overload = int((report.by_class or {}).get("overload", 0))
         total = int(report.requests)
         non_429 = max(0, int(report.errors) - overload)
+
+        def _before_hist(name: str) -> dict:
+            series = _metric_series(before_metrics or "", name, uri)
+            if series is None:
+                return {"buckets": [], "count": 0.0}
+            return series
+
         queue_delta = _hist_delta(
-            _metric_series(before_metrics or "", "mortred_queue_wait_duration_ms", model_id),
-            _metric_series(after_metrics or "", "mortred_queue_wait_duration_ms", model_id),
+            _before_hist("mortred_queue_wait_duration_ms"),
+            _metric_series(after_metrics or "", "mortred_queue_wait_duration_ms", uri),
         )
         infer_delta = _hist_delta(
-            _metric_series(before_metrics or "", "mortred_inference_duration_ms", model_id),
-            _metric_series(after_metrics or "", "mortred_inference_duration_ms", model_id),
+            _before_hist("mortred_inference_duration_ms"),
+            _metric_series(after_metrics or "", "mortred_inference_duration_ms", uri),
         )
         queue_p50 = histogram_p50(queue_delta)
         infer_p50 = histogram_p50(infer_delta)
@@ -1438,9 +1464,10 @@ def calibrate(
         )
         points: list[dict] = []
         for w in sweep:
-            print("  w=%d concurrency=%d ..." % (w, w), flush=True)
+            conc = w * 2
+            print("  w=%d concurrency=%d ..." % (w, conc), flush=True)
             point = run_one_point(
-                root, binary, entry, image, w, duration_s, w, override, auth_token, server_toml
+                root, binary, entry, image, w, duration_s, conc, override, auth_token, server_toml
             )
             points.append(point)
             print(
@@ -1965,6 +1992,26 @@ def self_test() -> int:
         }
     ):
         print("self-test: unfit joint wrote workers", file=sys.stderr)
+        return 1
+    uri = "/mortred_ai_server_v1/classification/mobilenetv2"
+    metrics = (
+        'mortred_queue_wait_duration_ms_bucket{model="%s",le="1"} 4\n'
+        'mortred_queue_wait_duration_ms_bucket{model="%s",le="+Inf"} 4\n'
+        'mortred_queue_wait_duration_ms_count{model="%s"} 4\n'
+    ) % (uri, uri, uri)
+    series = _metric_series(metrics, "mortred_queue_wait_duration_ms", uri)
+    if series is None or series["count"] != 4.0:
+        print("self-test: server_uri histogram", series, file=sys.stderr)
+        return 1
+    if _metric_series(metrics, "mortred_queue_wait_duration_ms", "mobilenetv2") is not None:
+        print("self-test: directory id must not match the histogram", file=sys.stderr)
+        return 1
+    delta = _hist_delta({"buckets": [], "count": 0.0}, series)
+    if delta is None or delta["count"] != series["count"]:
+        print("self-test: empty before delta", delta, file=sys.stderr)
+        return 1
+    if _hist_delta(series, None) is not None:
+        print("self-test: empty after must stay empty", file=sys.stderr)
         return 1
     print("calibrate_pack.py self-test passed")
     return 0
