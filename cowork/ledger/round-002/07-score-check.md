@@ -4,13 +4,13 @@
 - 原始分: 8.9
 - 加权分: 8.9
 - 上限规则: 无
-- 相对本轮起点: 第 2 轮起点 8.9。关闭 P2-20 不重算模块分。
-- 终态: 继续
-- 开放项: 相对本轮起点减少
+- 相对本轮起点: 第 2 轮起点 8.9。关闭 P2-21 不重算模块分。
+- 终态: 结束
+- 开放项: 无
 - 阻塞: 无
 - 与角色自评: 一致
 
-原始分仍是 (15×9.0 + 20×9.4 + 15×9.0 + 10×9.2 + 5×9.0 + 15×8.8 + 10×8.8 + 5×7.4 + 5×8.0) / 100 = 8.9。没有未关闭且未阻塞的 P0 或 P1，不套上限。P2-20 已从开放项删除。仍开放 P2-21。完成标准 27 行都是已满足，开放项不是空，终态不是结束。
+原始分仍是 (15×9.0 + 20×9.4 + 15×9.0 + 10×9.2 + 5×9.0 + 15×8.8 + 10×8.8 + 5×7.4 + 5×8.0) / 100 = 8.9。没有未关闭且未阻塞的 P0 或 P1，不套上限。P2-21 已从开放项删除。开放项为空，阻塞为空。完成标准 27 行都是已满足，终态结束。
 
 ## 完成标准
 
@@ -33,7 +33,7 @@
 | TP3 | 已满足 | `scripts/mortredctl_doctor.sh` 与 `scripts/pack_occupancy.py`：缺 engine、缺占用戳，或占用门闩关闭时非 0 退出，并打印下一条命令 |
 | UX1 | 已满足 | 中英文 README 与两份 deployment 的构建命令与 `CMakePresets.json` 的 `full` / `full-cpu` 一致 |
 | UX2 | 已满足 | 第一小时从 `mortredctl next` 走到 `doctor --strict`。`scripts/mortredctl_next.sh` 最后一条是该命令 |
-| UX3 | 已满足 | `quality-gates` 与 `cpu-profile` 检查 OpenAPI 与仓库一致。GPU 作业被跳过时 `inference-paths` 打印 `NOT_A_TRT_PROOF` 并返回 2。P2-20 已关闭：四个 ONNX smoke 成功时打印 `TRT_PROOF=no` 而非 `TRT_PROOF=yes`。P2-21 是 success 路径在声明 `TRT_PROOF=yes` 时不核对 gtest XML，不把跳过路径改成未满足 |
+| UX3 | 已满足 | `quality-gates` 与 `cpu-profile` 检查 OpenAPI 与仓库一致。GPU 作业被跳过时 `inference-paths` 打印 `NOT_A_TRT_PROOF` 并返回 2。P2-20 已关闭：四个 ONNX smoke 成功时打印 `TRT_PROOF=no` 而非 `TRT_PROOF=yes`。P2-21 已关闭：`TRT_PROOF=yes` 仅当 `--product-trt yes` 且同一次 gtest XML 含未 skip 的产品 `type=tensorrt` 用例 |
 | UX4 | 已满足 | `docs/openapi.json` 为覆盖集九个 id 各有请求和响应示例。`img_data` 的 422 与迁移说明在 `docs/api-contract.md` 和 `legacy_img_data_returns_422_with_migration_hint` |
 | OP1 | 已满足 | `mortredctl prepare --id` 经 `scripts/prepare_pack.sh` 为覆盖集每个 id 生成 static batch=1 engine |
 | OP2 | 已满足 | `/api/v1/status` 按 id 返回 `state`，有退出记录时写入 `last_exit_status` |
