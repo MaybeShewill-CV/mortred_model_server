@@ -249,8 +249,9 @@ curl -fs -H "Authorization: Bearer $MORTRED_API_TOKEN" \
     http://localhost:8787/api/v1/catalog | python3 -m json.tool | head -20
 ```
 
-**Expected**: `/api/v1/health` returns OK; the catalog lists exactly the profile's
-models (cpu: the two `*_cpu` entries - mobilenetv2 / resnet).
+**Expected**: `/api/v1/health` returns OK; the catalog lists models for the current
+profile and pack. With the shipped demo pack under cpu, expect supervisor + gateway
+only (no shipped `*_cpu` product entries; self-build a cpu pack per §10.7 — demo is a TRT seed).
 
 ### 5.3 Day-2 operations
 
@@ -843,7 +844,7 @@ mortredctl doctor          # or: verify_deployment.sh --live
 |---|---|---|
 | refuses to start, log says so | non-loopback listener without token | set both tokens (§11.1) |
 | `401` with `WWW-Authenticate` | wrong/missing token | check `Authorization: Bearer ...` |
-| empty catalog | `MORTRED_PROFILE` mismatch | check the env var; cpu needs the `*_cpu` configs |
+| empty catalog | `MORTRED_PROFILE` / pack mismatch, or cpu + demo TRT seed | check env var and pack; cpu needs a self-built pack (§10.7), not shipped `*_cpu` products |
 | model server crash-loops | missing weights / missing engine / bad config | `mortredctl status`, `mortredctl logs <id>`; TRT: `mortredctl prepare` |
 | calibrate `Cannot start server` / port busy | supervisor or leftover model still listening | stop systemd/compose/supervisor first, then `ss -ltnp` on the catalog port (§10.3) |
 | weight download 404/timeout | HF unreachable | offline flow (§9.4) or a mirror |

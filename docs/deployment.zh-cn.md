@@ -242,7 +242,7 @@ curl -fs -H "Authorization: Bearer $MORTRED_API_TOKEN" \
     http://localhost:8787/api/v1/catalog | python3 -m json.tool | head -20
 ```
 
-**预期**：`/api/v1/health` 返回 OK；catalog 只列出当前 profile 的模型（cpu profile 应恰好看到 mobilenetv2 / resnet50 两个 `*_cpu` 条目）。
+**预期**：`/api/v1/health` 返回 OK；catalog 列出当前 profile 与 pack 选中的模型。默认 demo pack 在 cpu 下通常只有 supervisor + gateway（无随包 `*_cpu` 产品；自建 cpu pack 见 §10.7，demo 为 TRT 种子）。
 
 ### 5.3 常用操作
 
@@ -787,7 +787,7 @@ mortredctl doctor          # 或 verify_deployment.sh --live
 |---|---|---|
 | 服务起不来，日志见 `refuse to start` | 非环回监听但缺 token | 配好两个 token 再启动（§11.1） |
 | `401` 且带 `WWW-Authenticate` | token 错/缺 | 核对 `Authorization: Bearer ...` 与对应 token |
-| catalog 是空的 | `MORTRED_PROFILE` 与配置不匹配 | 确认环境变量；cpu 下确认存在 `*_cpu` 配置 |
+| catalog 是空的 | `MORTRED_PROFILE` / pack 不匹配，或 cpu + demo TRT 种子 | 确认环境变量与 pack；cpu 需自建 pack（§10.7），不要求随包 `*_cpu` 产品 |
 | 模型进程反复重启 | 权重缺失 / engine 缺失 / 配置错 | `mortredctl status`、`mortredctl logs <id>`；TRT 先 `mortredctl prepare` |
 | calibrate `Cannot start server` / 端口占用 | supervisor 或残留模型仍在听 | 先停 systemd/compose/supervisor，再 `ss -ltnp` 看目录端口（§10.3） |
 | 下载权重 404/超时 | HF 不可达 | 离线流程（§9.4）或配置镜像 |
