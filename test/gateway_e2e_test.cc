@@ -603,6 +603,51 @@ TEST_F(GatewayE2ETest, StageMetricsDominantNamesTheLargestStage) {
     EXPECT_NE(metrics.body.find(gauge), std::string::npos) << gauge << "\n" << metrics.body;
 }
 
+TEST_F(GatewayE2ETest, StageMetricsDominantSurvivesPastSampleCap) {
+    ASSERT_TRUE(restart_fake({"--mode", "envelope", "--server-time-ms", "0.125"}));
+    constexpr int k_past_cap = 4097;
+    for (int i = 0; i < k_past_cap; ++i) {
+        const auto infer =
+            send_request(gateway_port_, "POST", "/v1/models/FAKE/infer", "{}", "ext-token");
+        ASSERT_EQ(infer.status, 200) << "iter=" << i << "\n" << infer.body;
+        double server_time_ms = -1.0;
+        ASSERT_TRUE(read_server_time_ms(infer.body, &server_time_ms)) << infer.body;
+        EXPECT_DOUBLE_EQ(server_time_ms, 0.125) << "iter=" << i;
+    }
+
+    const auto metrics = send_request(gateway_port_, "GET", "/metrics", "", "scrape-token");
+    ASSERT_EQ(metrics.status, 200);
+    for (const char* name : k_stage_names) {
+        double count = -1.0;
+        double sum = 0.0;
+        ASSERT_TRUE(read_stage_sample(metrics.body, name, &count, &sum)) << name << "\n" << metrics.body;
+        EXPECT_DOUBLE_EQ(count, static_cast<double>(k_past_cap)) << name;
+        EXPECT_NE(metrics.body.find(
+                      std::string("mortred_gateway_stage_duration_ms_bucket{model=\"gateway\",stage=\"") +
+                      name + "\""),
+                  std::string::npos)
+            << name << "\n" << metrics.body;
+    }
+    const std::string marker = "mortred_gateway_stage_dominant";
+    EXPECT_EQ(count_substr(metrics.body, marker), 3) << metrics.body;
+    EXPECT_NE(metrics.body.find(
+                  "# HELP mortred_gateway_stage_dominant Time is mainly spent in this gateway stage"),
+              std::string::npos)
+        << metrics.body;
+    EXPECT_NE(metrics.body.find("# TYPE mortred_gateway_stage_dominant gauge"), std::string::npos)
+        << metrics.body;
+    bool found_gauge = false;
+    for (const char* name : k_stage_names) {
+        const std::string gauge =
+            marker + "{model=\"gateway\",stage=\"" + name + "\"} 1";
+        if (metrics.body.find(gauge) != std::string::npos) {
+            found_gauge = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found_gauge) << metrics.body;
+}
+
 TEST_F(GatewayE2ETest, StageMetricsSkippedOnUnknownRoute) {
     const auto missed = send_request(gateway_port_, "POST", "/no/such/route", "{}", "ext-token");
     EXPECT_EQ(missed.status, 404);

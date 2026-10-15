@@ -529,7 +529,7 @@ std::string GatewayApp::render_stage_metrics() const {
         ss << "mortred_gateway_stage_duration_ms_count{model=\"gateway\",stage=\""
            << k_stage_names[i] << "\"} " << stage_observed_ << "\n";
     }
-    if (stage_observed_ <= k_stage_sample_cap) {
+    if (!stage_samples_.empty()) {
         double stage_p50[k_stage_count];
         for (int i = 0; i < k_stage_count; ++i) {
             std::vector<double> values;
