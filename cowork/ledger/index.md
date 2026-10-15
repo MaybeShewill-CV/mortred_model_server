@@ -10,8 +10,8 @@
 - 本轮起点加权分: 7.1
 - 记录目录: cowork/ledger/round-001/
 - 运行环境: 本机 WSL Ubuntu（/mnt/g/Codex/mortred_model_server）
-- 状态: stopped
-- 停止原因: P2-11 第 4 条未通过。技术负责人同意停住：官方 `--raw` 字节是 `demo_data/model_test_input/feature_point/test.png`，进不了 `jpeggpu`，而 `decode_auto` 已写成 `gpu`。在不得改 demo、解码路径、16 张投票网格、手填或放宽落点的限制里，第 4 条到不了退出码 0。这不是第 4 条通过，没有合入。清单仍为 6 行。`realesrgan` 与 `metric3d_512` 没有跑。
+- 状态: running
+- 续跑: 用户决定把现有 `test.png` 另存为 `demo_data/model_test_input/feature_point/test.jpg`（SOF0，640×480，55892 字节），`superpoint` 的 calibrate 和官方压测改用这张 JPEG。不改 `test.png`。保留清单 6 行，从 `superpoint` 继续。`P99_CAP_MS["superpoint"]` 仍是 40.0。
 
 ## 轮次
 
