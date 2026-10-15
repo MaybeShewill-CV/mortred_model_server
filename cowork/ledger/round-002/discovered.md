@@ -8,3 +8,6 @@
 | 来源 | 陈述 |
 | --- | --- |
 | QA 残余风险，P2-12 | 没有用一次真实启动确认进程接受 `--model mobilenetv2` 和 `--model superpoint`。方案 v1 写明不启动 `mortred-model-server.out`。不插入当前队列。 |
+
+## P2-14
+无
