@@ -32,6 +32,7 @@ import json
 import math
 import os
 import queue
+import socket
 import sys
 import threading
 import time
@@ -139,6 +140,7 @@ class LoadReport:
     latency_ms: dict[str, float] = field(default_factory=dict)
     payload_bytes: int = 0
     image_bytes: int = 0
+    server_time_ms_p50: float | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -155,6 +157,9 @@ class LoadReport:
             "latency_ms": {k: round(v, 3) for k, v in self.latency_ms.items()},
             "payload_bytes": self.payload_bytes,
             "image_bytes": self.image_bytes,
+            "server_time_ms_p50": (
+                None if self.server_time_ms_p50 is None else round(self.server_time_ms_p50, 3)
+            ),
         }
 
 
@@ -165,6 +170,7 @@ class _Stats:
         self.http: Counter[int] = Counter()
         self.classes: Counter[str] = Counter()
         self.transport = 0
+        self.server_times: list[float] = []
 
     def add(self, latency_ms: float, status: int | None, kind: str) -> None:
         with self._lock:
@@ -174,6 +180,10 @@ class _Stats:
                 self.transport += 1
             else:
                 self.http[status] += 1
+
+    def add_server_time(self, value: float) -> None:
+        with self._lock:
+            self.server_times.append(value)
 
     def snapshot_counts(self) -> tuple[int, int]:
         with self._lock:
@@ -187,6 +197,50 @@ class _Stats:
 # ---------------------------------------------------------------------------
 
 
+def server_time_ms_from_body(body: bytes) -> float | None:
+    """Top-level numeric server_time_ms. Missing or non-numeric stays out of the p50."""
+    if not body:
+        return None
+    try:
+        doc = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(doc, dict) or "server_time_ms" not in doc:
+        return None
+    value = doc["server_time_ms"]
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
+def close_client_first(conn: http.client.HTTPConnection | None, drain_s: float = 1.0) -> None:
+    """After the response is read, this side sends FIN.
+
+    The active closer owns TIME_WAIT. Doing it here puts TIME_WAIT on the
+    ephemeral port. Connection: close would leave it on the listen port, and
+    the next bind fails inside the 15s wait.
+    """
+    if conn is None:
+        return
+    sock = getattr(conn, "sock", None)
+    if sock is not None:
+        try:
+            sock.shutdown(socket.SHUT_WR)
+        except OSError:
+            pass
+        if drain_s > 0:
+            try:
+                sock.settimeout(drain_s)
+                while sock.recv(4096):
+                    pass
+            except OSError:
+                pass
+    try:
+        conn.close()
+    except OSError:
+        pass
+
+
 def wait_ready(url: str, timeout_s: float) -> None:
     parsed = urllib.parse.urlparse(url)
     deadline = time.monotonic() + timeout_s
@@ -195,20 +249,24 @@ def wait_ready(url: str, timeout_s: float) -> None:
         conn = None
         try:
             conn = _connect(parsed, timeout=min(2.0, timeout_s))
-            conn.request("GET", parsed.path or "/ready")
+            conn.request(
+                "GET",
+                parsed.path or "/ready",
+                headers={"Connection": "keep-alive", "Accept": "*/*"},
+            )
             resp = conn.getresponse()
             resp.read()
-            if 200 <= resp.status < 300:
+            status = resp.status
+            close_client_first(conn, drain_s=1.0)
+            conn = None
+            if 200 <= status < 300:
                 return
-            last = "HTTP %d" % resp.status
+            last = "HTTP %d" % status
         except OSError as exc:
             last = str(exc)
         finally:
             if conn is not None:
-                try:
-                    conn.close()
-                except OSError:
-                    pass
+                close_client_first(conn, drain_s=0.0)
         time.sleep(0.1)
     raise TimeoutError("ready probe failed for %s (%s)" % (url, last))
 
@@ -353,15 +411,6 @@ def run_load(cfg: LoadConfig) -> LoadReport:
     def worker() -> None:
         conn: http.client.HTTPConnection | None = None
 
-        def close_conn() -> None:
-            nonlocal conn
-            if conn is not None:
-                try:
-                    conn.close()
-                except OSError:
-                    pass
-                conn = None
-
         while True:
             proceed, record = take_work()
             if not proceed:
@@ -382,23 +431,34 @@ def run_load(cfg: LoadConfig) -> LoadReport:
                     conn = _connect(parsed, cfg.timeout_s)
                 conn.request("POST", path, body=body, headers=headers)
                 resp = conn.getresponse()
-                resp.read()
+                resp_body = resp.read()
                 status = resp.status
                 kind = classify_status(status)
+                if record and status == 200:
+                    server_ms = server_time_ms_from_body(resp_body)
+                    if server_ms is not None:
+                        stats.add_server_time(server_ms)
                 if cfg.follow_retry_after and status == 429:
                     nap = _retry_after_seconds(resp)
                     if nap > 0:
                         time.sleep(nap)
+                # Keep the connection for the next request. If the server
+                # already asked to close, FIN from this side now so TIME_WAIT
+                # stays on the ephemeral port instead of the listen port.
+                if "close" in (resp.getheader("Connection") or "").lower():
+                    close_client_first(conn, drain_s=0.05)
+                    conn = None
             except (OSError, http.client.HTTPException, TimeoutError):
                 kind = "transport"
                 status = None
-                close_conn()
+                close_client_first(conn, drain_s=0.0)
+                conn = None
             latency_ms = (time.perf_counter() - started) * 1000.0
             if record:
                 stats.add(latency_ms, status, kind)
             if stop.is_set():
                 break
-        close_conn()
+        close_client_first(conn, drain_s=1.0)
 
     threads = [threading.Thread(target=worker, name="load-%d" % i, daemon=True)
                for i in range(cfg.concurrency)]
@@ -461,6 +521,7 @@ def run_load(cfg: LoadConfig) -> LoadReport:
         },
         payload_bytes=payload_bytes,
         image_bytes=len(image_bytes),
+        server_time_ms_p50=percentile(sorted(stats.server_times), 0.50) if stats.server_times else None,
     )
     return report
 
@@ -481,6 +542,10 @@ def print_report(report: LoadReport) -> None:
     if report.by_class:
         print("class        : " + ", ".join("%s=%d" % item for item in sorted(report.by_class.items())))
     print("payload      : %d bytes/req (image %d)" % (report.payload_bytes, report.image_bytes))
+    if report.server_time_ms_p50 is None:
+        print("server_time_ms: p50=n/a")
+    else:
+        print("server_time_ms: p50=%.3f" % report.server_time_ms_p50)
 
 
 # ---------------------------------------------------------------------------
@@ -508,7 +573,10 @@ class _SelfTestHandler(BaseHTTPRequestHandler):
             payload = b'{"status":50,"status_str":"bad"}'
             self.send_response(400)
         else:
-            payload = b'{"status":0,"status_str":"OK","results":[{"status":0,"data":{}}]}'
+            payload = (
+                b'{"status":0,"status_str":"OK","server_time_ms":12.5,'
+                b'"results":[{"status":0,"data":{}}]}'
+            )
             self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(payload)))
@@ -572,6 +640,16 @@ def _self_test() -> int:
         if raw_report.payload_bytes != image.stat().st_size:
             print("FAIL: raw payload_bytes %d != image size %d"
                   % (raw_report.payload_bytes, image.stat().st_size), file=sys.stderr)
+            failed += 1
+        if report.server_time_ms_p50 != 12.5 or raw_report.server_time_ms_p50 != 12.5:
+            print(
+                "FAIL: server_time_ms p50 %s %s"
+                % (report.server_time_ms_p50, raw_report.server_time_ms_p50),
+                file=sys.stderr,
+            )
+            failed += 1
+        if server_time_ms_from_body(b'{"status":0}') is not None:
+            print("FAIL: missing server_time_ms entered the p50", file=sys.stderr)
             failed += 1
         try:
             build_model_target("YOLOV8", "", ROOT)
