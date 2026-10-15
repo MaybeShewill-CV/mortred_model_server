@@ -3,7 +3,7 @@
 - 轮次: 1
 - 已关闭: P0-1、P1-1、P1-2、P2-1、P2-2、P2-3、P2-4、P2-5、P2-6、P2-7、P2-9、P2-10
 - 阻塞: 无
-- 未阻塞的开放项: 相对本轮起点减少
+- 未阻塞的开放项: 相对本轮起点减少；P2-11 合入后的关闭没有再减少
 
 核对 `07-close.md`、`07-close-p12.md`、`07-close-p21.md`、`07-close-p22.md`、`07-close-p23.md`、`07-close-p24.md`、`07-close-p25.md`、`07-close-p26.md`、`07-close-p27.md`、`07-close-p29.md` 与 `07-close-p210.md`。P0-1、P1-1、P1-2、P2-1、P2-2、P2-3、P2-4、P2-5、P2-6、P2-7、P2-9、P2-10 的原陈述都没有留在仍开放的问题里。P2-8 没有重新入列。新入列为无。九个模块分数与 `01-modules` 正文一致。
 
@@ -29,7 +29,7 @@
 ## 仍开放的问题
 | id | 模块 | 问题陈述 | 状态 |
 | --- | --- | --- | --- |
-| P2-11 | src-server-apps、conf、ops、test、docs | 覆盖集九个 TensorRT id 没有一张按本次性能约束完成的 calibrate 与 `--raw` HTTP 报告清单（PF1、PF2、PF5、TP1；压测报告尚未引用 gateway 阶段与 `server_time_ms`，PF4 的报告半边仍在此）。 | 未做 |
+| P2-11 | src-server-apps、conf、ops、test、docs | 覆盖集九个 TensorRT id 没有一张按本次性能约束完成的 calibrate 与 `--raw` HTTP 报告清单（PF1、PF2、PF5、TP1；压测报告尚未引用 gateway 阶段与 `server_time_ms`，PF4 的报告半边仍在此）。 | 未关闭。合入 `9f1dc0b33b2a6f778e4c305a58e3ad831f1aff32` 的九行官方压测 `-c` 都是该行 `worker_nums` 的两倍，不算按本次性能约束完成 |
 
 ## 附录
 
@@ -58,6 +58,8 @@ P2-6 已关闭。合入 `1175a0cab213499034f33b3af376f6b108fadc68`。一次外�
 P2-3 已关闭。合入 `6031d5fdbe66b217762f25ba51f9a9027cfb8e6e`。同一次启动的库函数跟踪里，libface 在关掉 fd 3 及以上之后写下绝对路径 `execve` 终点，`inh=closed`，终点前没有 `prctl`、`execvp`、`setenv`。进程 `state=running`，采样日志为 `gpu sampler online`。父进程退出后是否收到 `SIGINT`、跟踪不在 CI、终点之后那一条跟踪，留在 `discovered.md` 附录，不新入列。
 
 `discovered.md` 的表是无。两份 CPU toml 的 `--check` 退出码 1，以及 P1-1 外部样本没有覆盖 4096 与并列，都确认不了一次新的外部验收，不入列。
+
+核对 `07-close-p211.md`。P2-11 没有关闭。合入 `9f1dc0b33b2a6f778e4c305a58e3ad831f1aff32` 的清单九行 `-c` 都是该行 `worker_nums` 的两倍，原陈述仍留在开放项。已关闭的十二条陈述没有回到开放项。新入列为无。九个模块分数与 `01-modules` 正文一致。
 
 ## 新入列
 
