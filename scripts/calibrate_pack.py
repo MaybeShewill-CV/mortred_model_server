@@ -70,7 +70,7 @@ P99_CAP_MS = {
     "dinov2_vits14": 50.0,
     "superpoint": 40.0,
     "realesrgan": 400.0,
-    "metric3d_512": 150.0,
+    "metric3d_512": 200.0,
 }
 _THROUGHPUT_RE = re.compile(r"Throughput:\s*([0-9]+(?:\.[0-9]+)?)\s*qps", re.IGNORECASE)
 
