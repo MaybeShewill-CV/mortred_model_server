@@ -274,6 +274,65 @@ inline int jpeg_reduce_factor_for(const cv::Size &full, const ImageInputLimits &
     return factor;
 }
 
+
+/*** PNG IHDR width/height (network byte order) when signature matches. */
+inline bool png_ihdr_dimensions(const std::string &bytes, cv::Size *size) {
+    static constexpr unsigned char kSig[8] = {137, 80, 78, 71, 13, 10, 26, 10};
+    if (bytes.size() < 24) return false;
+    for (int i = 0; i < 8; ++i) {
+        if (static_cast<unsigned char>(bytes[static_cast<size_t>(i)]) != kSig[i]) return false;
+    }
+    // chunk len(4) + type IHDR(4) at offset 8; width/height at 16..23
+    if (bytes[12] != 'I' || bytes[13] != 'H' || bytes[14] != 'D' || bytes[15] != 'R') return false;
+    const auto be32 = [&](size_t off) -> int {
+        return (static_cast<unsigned char>(bytes[off]) << 24) |
+               (static_cast<unsigned char>(bytes[off + 1]) << 16) |
+               (static_cast<unsigned char>(bytes[off + 2]) << 8) |
+               static_cast<unsigned char>(bytes[off + 3]);
+    };
+    const int w = be32(16);
+    const int h = be32(20);
+    if (w <= 0 || h <= 0) return false;
+    if (size != nullptr) *size = cv::Size(w, h);
+    return true;
+}
+
+inline bool size_within_limits(const cv::Size &full, const ImageInputLimits &limits, std::string *error) {
+    if (full.width <= 0 || full.height <= 0) {
+        if (error) *error = "input image has invalid dimensions";
+        return false;
+    }
+    if (full.height > limits.max_side || full.width > limits.max_side) {
+        if (error) {
+            *error = "input image side exceeds limit: " + std::to_string(full.width) + "x" +
+                     std::to_string(full.height) + ", max_side=" + std::to_string(limits.max_side);
+        }
+        return false;
+    }
+    const int64_t pixels = static_cast<int64_t>(full.width) * full.height;
+    if (pixels > limits.max_pixels) {
+        if (error) {
+            *error = "input image has " + std::to_string(pixels) +
+                     " pixels, max_pixels=" + std::to_string(limits.max_pixels);
+        }
+        return false;
+    }
+    return true;
+}
+
+/*** Header probe before full decode. Unknown formats return true (defer to imdecode). */
+inline bool encoded_image_within_limits(const std::string &bytes, const ImageInputLimits &limits,
+                                        std::string *error) {
+    cv::Size full;
+    if (jpeg_full_dimensions(bytes, &full)) {
+        return size_within_limits(full, limits, error);
+    }
+    if (png_ihdr_dimensions(bytes, &full)) {
+        return size_within_limits(full, limits, error);
+    }
+    return true;
+}
+
 inline int jpeg_reduce_factor(const std::string &bytes, const ImageInputLimits &limits) {
     cv::Size full;
     if (!jpeg_full_dimensions(bytes, &full)) {
@@ -348,6 +407,12 @@ inline cv::Mat load_image(const io_define::common_io::base64_input &in, const Im
         }
         return {};
     }
+    if (!encoded_image_within_limits(decoded, limits, error)) {
+        if (status != nullptr) {
+            *status = status_for_image_load(error == nullptr ? "" : *error);
+        }
+        return {};
+    }
     std::vector<unsigned char> bytes(decoded.begin(), decoded.end());
     cv::Mat image = cv::imdecode(bytes, cv::IMREAD_COLOR);
     if (!image_within_limits(image, limits, error)) {
@@ -388,6 +453,12 @@ inline cv::Mat load_image(const io_define::common_io::image_input &in, const Ima
         }
         if (status != nullptr) {
             *status = StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+        }
+        return {};
+    }
+    if (!encoded_image_within_limits(bytes, limits, error)) {
+        if (status != nullptr) {
+            *status = status_for_image_load(error == nullptr ? "" : *error);
         }
         return {};
     }
