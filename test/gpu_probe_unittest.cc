@@ -50,11 +50,36 @@ TEST(GpuProbe, chain_prefers_first_available) {
     EXPECT_EQ(s.name, "second");
 }
 
-TEST(GpuProbe, nvml_without_lib_fail_closed) {
+TEST(GpuProbe, nvml_probe_honest_backend_tag) {
+    // When libnvidia-ml.so.1 is present and a device answers, available=true.
+    // When absent or queries fail, available=false. Either way backend stays "nvml".
     NvmlGpuProbe nvml;
     auto s = nvml.sample(0);
-    EXPECT_FALSE(s.available);
     EXPECT_EQ(s.backend, "nvml");
+    if (s.available) {
+        EXPECT_FALSE(s.name.empty());
+        EXPECT_GT(s.mem_total_mib, 0);
+    }
+}
+
+
+TEST(GpuProbe, shared_probe_can_be_replaced_for_test) {
+    GpuProbeSample canned;
+    canned.available = true;
+    canned.name = "SharedFake";
+    canned.mem_total_mib = 1024;
+    canned.mem_free_mib = 512;
+    canned.backend = "fake";
+    mortred::control::set_shared_gpu_probe_for_test(std::make_unique<FakeGpuProbe>(canned));
+    auto s = mortred::control::shared_gpu_probe().sample(0);
+    EXPECT_TRUE(s.available);
+    EXPECT_EQ(s.name, "SharedFake");
+    auto live = mortred::control::live_snapshot_from_probe(s);
+    EXPECT_TRUE(live.available);
+    EXPECT_EQ(live.total_mib, 1024);
+    EXPECT_EQ(live.free_mib, 512);
+    // restore default chain for other tests
+    mortred::control::set_shared_gpu_probe_for_test(mortred::control::default_gpu_probe());
 }
 
 int main(int argc, char** argv) {

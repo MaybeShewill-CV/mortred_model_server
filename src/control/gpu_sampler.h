@@ -6,8 +6,8 @@
 ************************************************/
 
 // Background GPU sampler for the supervisor HUD.
-// Round 6 P1-3: prefers shared GpuProbe (NVML primary, nvidia-smi
-// fallback). Direct smi path retained as fallback; never waitpid(-1).
+// Round 7 P1-1: shared_gpu_probe() is the primary metrics source
+// (NVML dlopen → smi chain). Local smi fork is fallback-only; never waitpid(-1).
 // dedicated thread (never on the HTTP handler path) at a configurable
 // interval, stores a bounded ring buffer of full-field samples, and serves
 // them to /api/v1/gpu as JSON. The probe's fork/poll/deadline discipline
@@ -240,12 +240,34 @@ class GpuSampler {
         bool first = true;
         int backoff_ms = interval_ms_;
         while (running_.load()) {
+            // Prefer shared GpuProbe (NVML→smi). Avoid a second smi fork on the
+            // happy path; probe_nvidia_smi remains as a local fallback only if
+            // the shared probe returns unavailable.
+            const GpuProbeSample probed = shared_gpu_probe().sample(3000);
+            bool got = false;
+            GpuSample sample;
             std::string name;
-            const std::string csv = probe_nvidia_smi(3000, &name);
-            if (!csv.empty()) {
-                std::string util_col;
-                const GpuSample sample = parse_sample(csv, 0, &util_col);
-                const bool util_na = util_col == "N/A" || util_col == "[N/A]";
+            bool util_na = false;
+            if (probed.available) {
+                sample.t_unix_ms = unix_ms();
+                sample.util = probed.util;
+                sample.mem_used_mib = probed.mem_used_mib;
+                sample.mem_total_mib = probed.mem_total_mib;
+                sample.temp_c = probed.temp_c;
+                sample.power_w = probed.power_w;
+                name = probed.name;
+                util_na = probed.util < 0;
+                got = true;
+            } else {
+                const std::string csv = probe_nvidia_smi(3000, &name);
+                if (!csv.empty()) {
+                    std::string util_col;
+                    sample = parse_sample(csv, 0, &util_col);
+                    util_na = util_col == "N/A" || util_col == "[N/A]";
+                    got = true;
+                }
+            }
+            if (got) {
                 {
                     std::lock_guard<std::mutex> lock(mu_);
                     available_ = !util_na;
@@ -270,7 +292,7 @@ class GpuSampler {
                     available_ = false;
                 }
                 if (first) {
-                    std::fprintf(stderr, "mortred-supervisor: gpu sampler offline (no nvidia-smi / no GPU)\n");
+                    std::fprintf(stderr, "mortred-supervisor: gpu sampler offline (no probe / no GPU)\n");
                     first = false;
                 }
                 backoff_ms = std::min(backoff_ms * 2, 30000);

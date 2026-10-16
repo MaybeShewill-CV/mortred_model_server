@@ -7,8 +7,9 @@
 
 // Fail-closed spawn check: TensorRT ids in an active pack need a calibrated
 // gpu_mem_mib stamp. Joint budget and GPU fingerprint apply when those pack
-// fields are present. Round 6 P1-3: prefer GpuProbe (NVML→smi). Live free/name
-// still obtainable via query_nvidia_smi; shared metrics source is gpu_probe.h
+// fields are present. Round 7 P1-1: prefer shared_gpu_probe (NVML→smi).
+// query_nvidia_smi remains the SmiGpuProbe backend; callers should use
+// query_live_gpu_via_shared_probe() for a single metrics source.
 // or an injected snapshot. occupancy_policy=off / MORTRED_OCCUPANCY_ENFORCE=0
 // skip the gate (unsafe; doctor --strict still fails).
 

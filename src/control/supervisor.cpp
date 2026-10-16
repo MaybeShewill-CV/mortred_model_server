@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "control/occupancy_gate.h"
+#include "control/gpu_probe.h"
 #include "control/ready_probe.h"
 #include "control/trust_tokens.h"
 #include "control/trt_spawn_gate.h"
@@ -288,7 +289,7 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err,
                 occ.running_siblings.push_back(sib);
             }
         }
-        occ.live = query_nvidia_smi();
+        occ.live = query_live_gpu_via_shared_probe();
         if (!occupancy_ready_for_spawn(occ, err)) {
             return false;
         }
