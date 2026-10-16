@@ -62,6 +62,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import py_compile
 import re
 import subprocess
@@ -258,26 +259,68 @@ def check_openapi_covers_server_uris() -> list[str]:
                         "is missing from docs/openapi.json paths; "
                         "run: python scripts/gen_openapi.py "
                         "(required after a section name or server_uri change) "
-                        "and commit docs/openapi.json and src/server/openapi_doc.h"
+                        "and commit docs/openapi.json (openapi_doc.h is a thin runtime loader)"
                     )
     return errors
 
 
 def check_openapi_doc_header_sync() -> list[str]:
-    """src/server/openapi_doc.h must embed the exact docs/openapi.json content."""
+    """src/server/openapi_doc.h must be the thin runtime loader (not an embed).
+
+    Round 8 P0-1: docs/openapi.json is the single generated artifact.
+    openapi_doc.h loads it at runtime; consistency must not require the JSON
+    body to appear inside the header. Align with scripts/gen_openapi.py --check.
+    """
     errors: list[str] = []
     json_path = ROOT / "docs" / "openapi.json"
     header_path = ROOT / "src" / "server" / "openapi_doc.h"
     if not json_path.exists() or not header_path.exists():
         errors.append("docs/openapi.json or src/server/openapi_doc.h is missing")
         return errors
-    json_text = json_path.read_text(encoding="utf-8")
     header_text = header_path.read_text(encoding="utf-8")
-    if json_text not in header_text:
+    if "load_openapi_json" not in header_text:
         errors.append(
-            "src/server/openapi_doc.h is out of sync with docs/openapi.json; "
-            "run: python scripts/gen_openapi.py"
+            "src/server/openapi_doc.h must be the thin runtime loader "
+            "(expected load_openapi_json); see scripts/gen_openapi.py --check"
         )
+    if "k_openapi_doc_json_ref" not in header_text:
+        errors.append(
+            "src/server/openapi_doc.h must expose k_openapi_doc_json_ref() loader entry"
+        )
+    # Anti-embed guard: reject the historical raw-string embed of the full document.
+    if "R\"MORTRED_OPENAPI(" in header_text:
+        errors.append(
+            "src/server/openapi_doc.h must not embed docs/openapi.json "
+            "(found R\"MORTRED_OPENAPI( raw-string); keep the thin loader"
+        )
+    # Large JSON blob inside the header is also an embed smell (loader is small).
+    if header_text.count("{") > 40 and "\"openapi\"" in header_text and "\"paths\"" in header_text:
+        errors.append(
+            "src/server/openapi_doc.h looks like an embedded OpenAPI document; "
+            "keep the thin runtime loader and regenerate only docs/openapi.json"
+        )
+    return errors
+
+
+def check_openapi_gen_check() -> list[str]:
+    """Delegate freshness/schema example checks to gen_openapi.py --check."""
+    errors: list[str] = []
+    script = ROOT / "scripts" / "gen_openapi.py"
+    if not script.exists():
+        errors.append("scripts/gen_openapi.py is missing")
+        return errors
+    import subprocess
+
+    proc = subprocess.run(
+        [sys.executable, str(script), "--check"],
+        cwd=str(ROOT),
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        detail = ((proc.stdout or "") + (proc.stderr or "")).strip()
+        detail = detail or ("exit %s" % proc.returncode)
+        errors.append("scripts/gen_openapi.py --check failed: %s" % detail)
     return errors
 
 
