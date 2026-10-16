@@ -359,3 +359,46 @@ TEST_F(OccupancyGateTest, query_nvidia_smi_survives_process_wide_reaper) {
     EXPECT_EQ(available_count, k_probes)
         << "every probe must survive the process-wide reaper";
 }
+
+TEST_F(OccupancyGateTest, host_ram_budget_rejects_overflow) {
+    OccupancyCheckInput in = trt_base();
+    in.has_gpu_mem_mib = true;
+    in.gpu_mem_mib = 100;
+    in.gpu_memory_total_mib = 8192;
+    in.has_rss_mib = true;
+    in.rss_mib = 900;
+    in.host_memory_total_mib = 1024;
+    in.ram_reserve_pct = 15;
+    OccupancySibling sib;
+    sib.id = "OTHER";
+    sib.rss_mib = 100;
+    in.running_siblings.push_back(sib);
+    std::string err;
+    EXPECT_FALSE(occupancy_ready_for_spawn(in, &err));
+    EXPECT_NE(err.find("host RAM"), std::string::npos) << err;
+}
+
+TEST_F(OccupancyGateTest, host_ram_budget_allows_fit) {
+    OccupancyCheckInput in = trt_base();
+    in.has_gpu_mem_mib = true;
+    in.gpu_mem_mib = 100;
+    in.gpu_memory_total_mib = 8192;
+    in.has_rss_mib = true;
+    in.rss_mib = 200;
+    in.host_memory_total_mib = 4096;
+    in.ram_reserve_pct = 15;
+    std::string err;
+    EXPECT_TRUE(occupancy_ready_for_spawn(in, &err)) << err;
+}
+
+TEST_F(OccupancyGateTest, live_mem_available_rejects) {
+    OccupancyCheckInput in = trt_base();
+    in.has_gpu_mem_mib = true;
+    in.gpu_mem_mib = 100;
+    in.has_rss_mib = true;
+    in.rss_mib = 512;
+    in.live_mem_available_mib = 128;
+    std::string err;
+    EXPECT_FALSE(occupancy_ready_for_spawn(in, &err));
+    EXPECT_NE(err.find("MemAvailable"), std::string::npos) << err;
+}

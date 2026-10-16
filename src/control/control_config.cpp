@@ -102,6 +102,12 @@ bool parse_pack_occupancy(const mini_toml::Table& kv, PackOccupancy* out, std::s
     if (!read_int(kv, "gpu_memory_total_mib", &out->gpu_memory_total_mib, 1, 1048576, ctx, err)) {
         return false;
     }
+    if (!read_int(kv, "host_memory_total_mib", &out->host_memory_total_mib, 1, 1048576, ctx, err)) {
+        return false;
+    }
+    if (!read_int(kv, "ram_reserve_pct", &out->ram_reserve_pct, 0, 90, ctx, err)) {
+        return false;
+    }
     return true;
 }
 
@@ -343,6 +349,37 @@ bool ControlConfig::apply_pack(const std::string& pack_path, const std::vector<s
                 return false;
             }
             p.decode_auto = v;
+        }
+        if (kv.count("rss_mib") != 0) {
+            const int mib = mini_toml::to_int(kv.at("rss_mib"), 0);
+            if (mib < 1 || mib > 1048576) {
+                if (err != nullptr) {
+                    *err = "[" + section + "]: rss_mib must be in [1, 1048576]";
+                }
+                return false;
+            }
+            p.has_rss_mib = true;
+            p.rss_mib = mib;
+        }
+        if (kv.count("thread_count") != 0) {
+            const int n = mini_toml::to_int(kv.at("thread_count"), 0);
+            if (n < 1 || n > 100000) {
+                if (err != nullptr) {
+                    *err = "[" + section + "]: thread_count must be in [1, 100000]";
+                }
+                return false;
+            }
+            p.thread_count = n;
+        }
+        if (kv.count("fd_count") != 0) {
+            const int n = mini_toml::to_int(kv.at("fd_count"), 0);
+            if (n < 1 || n > 1000000) {
+                if (err != nullptr) {
+                    *err = "[" + section + "]: fd_count must be in [1, 1000000]";
+                }
+                return false;
+            }
+            p.fd_count = n;
         }
     }
     if (!any) {
