@@ -2,16 +2,16 @@
 
 - 基线分支: sub-agent-co-work
 - 轮次上限: 20
-- 当前轮次: 7
-- 当前步骤: 8
+- 当前轮次: 8
+- 当前步骤: 2
 - 当前问题: 无
 - 阻塞: 无
-- 已关闭: P0-1、P0-2、P1-1、P1-2、P1-3、P1-4
-- 本轮起点加权分: 8.6
-- 记录目录: cowork/ledger/round-007/
+- 已关闭: 第 8 轮尚无关闭项（第 7 轮已关闭 P0-1、P0-2、P1-1、P1-2、P1-3、P1-4）
+- 本轮起点加权分: 8.3（第 7 轮停止记录；第 7 轮未产出 07-score-check，需第 8 轮第 1 步重新评分）
+- 记录目录: cowork/ledger/round-008/
 - 运行环境: 本机 WSL Ubuntu（/mnt/g/Codex/mortred_model_server）
-- 状态: done
-- 续跑: 第 7 轮 P0/P1 已全部合入；看板 100% 停刷。发现项：check_consistency 仍期望 openapi_doc.h 嵌入同步（与 runtime loader 冲突）未入列。
+- 状态: running
+- 续跑: 第 8 轮队列 v1 已写入 `round-008/02-p0-p1-final.md`（6 P0 / 7 P1 / 9 P2），来源为外部只读源码审计，基线 `10d3a764`。**队列未锁定**：第 1 步九份模块记录、第 2 步 cv-pm / cv-tech-lead / cv-cto 三方确认尚未跑。确认通过或用户直接锁定后，从 P0-1 进入第 3 步。看板 0/22，watcher 未启动。
 
 ## 轮次
 
@@ -24,3 +24,4 @@
 | 5 | 8.9 | 0 | 0 | 0 | done |
 | 6 | 8.9 | 0 | 0 | 0 | done |
 | 7 | — | 0 | 0 | 0 | done |
+| 8 | 待第 1 步复核 | 6 | 7 | 9 | running |
