@@ -24,5 +24,8 @@ python3 scripts/emit_gpu_gate_evidence.py --version 1.0.0 \
   --out evidence/gpu_gate_evidence.json
 ```
 
-CI quality gates should run `check_version_single_source.py`. GPU jobs remain
-opt-in via `MORTRED_HAS_GPU_RUNNER`; skipped GPU is never claimed as TensorRT green.
+CI and release quality gates run `check_version_single_source.py` (fail-closed)
+and `verify_gpu_gate_evidence.py --manifest docs/ci/gpu_gate_evidence.example.json
+--allow-missing-artifacts` so forks without downloaded GPU artifacts still validate
+schema + version + digest shape. GPU jobs remain opt-in via `MORTRED_HAS_GPU_RUNNER`;
+skipped GPU is never claimed as TensorRT green.

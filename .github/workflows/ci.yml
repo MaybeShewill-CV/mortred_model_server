@@ -265,6 +265,9 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/check_version_single_source.py
+          python3 scripts/verify_gpu_gate_evidence.py \
+            --manifest docs/ci/gpu_gate_evidence.example.json \
+            --allow-missing-artifacts
           python3 scripts/check_consistency.py
           python3 scripts/gen_openapi.py --check
           CHECK_ALLOW_GENERATED=1 ./scripts/check_repo_clean.sh
@@ -567,7 +570,7 @@ jobs:
           done
           python3 -m py_compile \
             scripts/fetch_weights.py scripts/gen_weights_manifest.py \
-            scripts/check_consistency.py scripts/check_base_image_digests.py scripts/check_hosted_golden.py \
+            scripts/check_consistency.py scripts/check_version_single_source.py scripts/verify_gpu_gate_evidence.py scripts/check_base_image_digests.py scripts/check_hosted_golden.py \
             scripts/golden_drift_check.py \
             scripts/gen_openapi.py scripts/repo_toml.py \
             scripts/ci_assert_gtest_xml.py \
