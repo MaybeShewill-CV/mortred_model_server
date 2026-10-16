@@ -7,6 +7,7 @@ peer_resp_timeout=600
 request_size_limit=64
 compute_threads=-1
 handler_threads=10
+max_queue_depth=32
 worker_nums=1
 max_batch_size=1
 server_uri="/mortred_ai_server_v1/diffusion/cls_cond_ddim"

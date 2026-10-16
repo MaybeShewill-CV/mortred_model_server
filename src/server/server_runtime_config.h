@@ -51,7 +51,7 @@ struct ServerRuntimeConfig {
     int stuck_worker_threshold_times = 3;
     std::string auth_token;
     int rate_limit_qps = 0;
-    int max_queue_depth = 0;
+    int max_queue_depth = 32;
     int max_batch_size = 1;
     int max_batch_delay_ms = 5;
     size_t max_request_items = 16;
@@ -173,8 +173,9 @@ inline StatusCode parse_server_runtime_config(const toml::table& server_section,
     }
     cfg.max_queue_depth = static_cast<int>(
         server_section["max_queue_depth"].value_or<int64_t>(defaults.max_queue_depth));
-    if (cfg.max_queue_depth < 0) {
-        LOG(WARNING) << "max_queue_depth < 0: queue depth limit disabled";
+    if (cfg.max_queue_depth <= 0) {
+        LOG(WARNING) << "max_queue_depth <= 0: clamping to positive default "
+                     << defaults.max_queue_depth;
         cfg.max_queue_depth = defaults.max_queue_depth;
     }
     cfg.max_batch_size = static_cast<int>(
