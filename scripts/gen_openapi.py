@@ -6,7 +6,7 @@ Contract generation chain (single direction, never hand-edited):
   C++ catalogs (param_spec.h + factory/*_task.h)
       -> scripts/contract_dump.cc  -> docs/contract_dump.json   (committed)
       -> this script              -> docs/openapi.json          (committed)
-                                   -> src/server/openapi_doc.h  (committed)
+                                   (openapi_doc.h is a committed thin loader, not rewritten)
 
 The document describes the UNIFIED request envelope (images/params/options,
 results[] with per-item status). The legacy img_data field is gone; clients
@@ -1187,10 +1187,9 @@ def main() -> int:
         return 0
 
     OPENAPI_PATH.write_text(json_text, encoding="utf-8")
-    # P1-3: keep thin openapi_doc.h; only refresh docs/openapi.json
-    if False: HEADER_PATH.write_text(header_text, encoding="utf-8")
+    # Round 8 P0-1: never rewrite the thin openapi_doc.h loader.
     print("wrote %s" % OPENAPI_PATH.relative_to(ROOT))
-    print("wrote %s" % HEADER_PATH.relative_to(ROOT))
+    print("kept thin loader %s" % HEADER_PATH.relative_to(ROOT))
     return 0
 
 
