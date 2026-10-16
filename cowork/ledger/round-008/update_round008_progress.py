@@ -115,7 +115,7 @@ def render_html(data: dict) -> str:
     gen = data["generated_at"]
     current = data.get("current") or "—"
     refresh_meta = (
-        '<meta http-equiv="refresh" content="0"/>'
+        ''
         if status == "done"
         else '<meta http-equiv="refresh" content="60"/>'
     )
@@ -333,7 +333,7 @@ showFromHash();
 def render_issue_html(data: dict) -> str:
     payload = json.dumps(data, ensure_ascii=False)
     refresh = (
-        '<meta http-equiv="refresh" content="0"/>'
+        ''
         if data["round_status"] == "done"
         else '<meta http-equiv="refresh" content="60"/>'
     )
