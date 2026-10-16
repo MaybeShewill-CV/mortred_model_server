@@ -51,7 +51,6 @@
 #include "server/output_options.h"
 #include "server/parsed_request.h"
 #include "server/prometheus_metrics.h"
-#include "server/rate_limiter.h"
 #include "server/request_admission.h"
 #include "server/server_runtime_config.h"
 #include "server/worker_pool.h"
@@ -125,8 +124,8 @@ protected:
     int _m_model_run_timeout = 500;
     std::string _m_server_uri;
     std::string _m_auth_token;
+    // rate_limit_qps retained from config for metrics/compat only (gateway is sole limiter).
     int _m_rate_limit_qps = 0;
-    FixedWindowRateLimiter _m_rate_limiter{0};
     PrometheusMetrics _m_metrics;
     int _m_max_queue_depth = 0;
     int _m_max_batch_size = 1;
@@ -207,8 +206,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::apply_runtime_config(const ServerRu
     _m_model_run_timeout = cfg.model_run_timeout;
     _m_auth_token = cfg.auth_token;
     _m_rate_limit_qps = cfg.rate_limit_qps;
-    // Product path no longer meters via FixedWindow; keep limiter cleared.
-    _m_rate_limiter.set_max_qps(0);
     _m_max_queue_depth = cfg.max_queue_depth;
     _m_max_batch_size = cfg.max_batch_size;
     _m_max_request_items = cfg.max_request_items;
@@ -340,10 +337,9 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         reply_unauthorized(task, _m_model_name);
         return;
     }
-    // Round 6 P1-1: model peer FixedWindow product path removed. Gateway is the
-    // sole public limiter (GCRA). rate_limit_qps in model toml is ignored for
-    // admission (retained in config parse for compatibility / metrics only).
-    (void)_m_rate_limiter;
+    // Gateway is the sole public limiter (GCRA). Model toml rate_limit_qps is
+    // ignored for admission (retained for compatibility / metrics only).
+    (void)_m_rate_limit_qps;
 
     if (is_async_endpoint) {
         _m_async_eps.handle(task);
