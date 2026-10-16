@@ -1,6 +1,6 @@
 {
   "round": 7,
-  "generated_at": "2026-10-16 14:42:52 CST",
+  "generated_at": "2026-10-16 14:44:06 CST",
   "round_status": "done",
   "current": null,
   "done": 6,
@@ -108,8 +108,8 @@
       "snippets": {
         "design": "# 技术方案\n- 问题: P1-3\n- 版本: v1\n## 目标\nGateway e2e queue residency + worker_budget 429/layer\n## 边界\n- 不改 packing/Docker。\n## 实现要点\n见问题分支 diff。\n## 确认\n| 角色 | 结论 | 条件 | 方案版本 | 记录 |\n| --- | --- | --- | --- | --- |",
         "rd": "# 实现\n- 问题: P1-3\n- 分支: cowork/r8-p1-3-gateway-e2e\n- worktree: /mnt/g/Codex/mortred_wt_r8_p1_3\n- 实现偏差: 无\n## 自测\nQA=pass\n## 新增问题\n无",
-        "qa": "# QA\n- 问题: P1-3\n- 结论: pass\n- 方案版本: v1\n## 验收\n| 编号 | 标准 | 结果 | 命令/观察 |\n| --- | --- | --- | --- |\n| A1 | 方案目标可观察 | pass | issue pipeline QA cmds |\n## 残余风险\n无",
-        "merge": "# 合入\n- 问题: P1-3\n- 分支: cowork/r8-p1-3-gateway-e2e\n- worktree: /mnt/g/Codex/mortred_wt_r8_p1_3\n- 问题分支提交: a81e4316c4d19247db6f3ed1cc1d276efe3f9133\n- QA 结论: pass\n- 重跑: see pipeline\n- 命令: pipeline\n- merge commit: 0b2184069783ed8a6781931855a2b65f8ed5bc71"
+        "qa": "# QA\n- 问题: P1-3\n- 结论: pass\n- 方案版本: v1\n## 验收\n| 编号 | 标准 | 结果 | 命令/观察 |\n| --- | --- | --- | --- |\n| A1 | worker_budget + max_inflight=0 → 429 + layer | pass | gateway_e2e_test --gtest_filter=GatewayAuthTest.WorkerBudgetRejectsWhenMaxInflightZero |\n| A2 | max_queue residency → 429 + layer | pass | gateway_e2e_test --gtest_filter=GatewayAuthTest.MaxQueueResidencyRejectsWhileHeld |\n## 残余风险\n无",
+        "merge": "# 合入\n- 问题: P1-3\n- 分支: cowork/r8-p1-3-gateway-e2e\n- worktree: /mnt/g/Codex/mortred_wt_r8_p1_3\n- 问题分支提交: a81e4316c4d19247db6f3ed1cc1d276efe3f9133\n- QA 结论: pass\n- 重跑: exit 0 (2/2 PASSED)\n- 命令: _bin/gateway_e2e_test --gtest_filter=GatewayAuthTest.WorkerBudgetRejectsWhenMaxInflightZero:GatewayAuthTest.MaxQueueResidencyRejectsWhileHeld (PASSED 2/2)\n- merge commit: 0b2184069783ed8a6781931855a2b65f8ed5bc71"
       },
       "step_text": "已合入 · merge 0b2184069783ed8a6781931855a2b65f8ed5bc71"
     },
