@@ -1,13 +1,13 @@
 {
   "round": 7,
-  "generated_at": "2026-10-16 20:38:41 CST",
+  "generated_at": "2026-10-16 20:39:21 CST",
   "round_status": "running",
-  "current": "P1-2",
-  "done": 2,
+  "current": "P1-4",
+  "done": 3,
   "total": 4,
-  "percent": 50,
+  "percent": 75,
   "open_p0": 0,
-  "open_p1": 2,
+  "open_p1": 1,
   "issues": [
     {
       "id": "P1-1",
@@ -40,13 +40,13 @@
       "issue_id": "p1-2",
       "title": "Default check / CI TSan structurally fragile",
       "priority": "P1",
-      "status": "designed",
-      "merge_sha": null,
-      "branch_sha": null,
+      "status": "done",
+      "merge_sha": "f4c6c60e",
+      "branch_sha": "5b14b358",
       "has_design": true,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
       "paths": {
         "design": "cowork/ledger/round-012/issues/p1-2/03-design-final.md",
         "rd": "cowork/ledger/round-012/issues/p1-2/04-rd.md",
@@ -55,11 +55,11 @@
       },
       "snippets": {
         "design": "# Design P1-2 v1 (user-locked)\n## Goal\ncheck and CI TSan structurally green.\n## Bounds\nNo packing/Docker; do not widen sanitizer label set.\n## Root cause\n1. packed_batch_nvi_unittest / cv_image_input_unittest subclass BackendCvModel needing GpuDecodeSlot but must not link libmodels (own InferenceSession::create).\n2. TSan builds 6 targets; ctest -L sanitizer also selects unbuilt rate_limit_gcra_unittest.\n## Fix\n1. EXTRA_SRCS gpu_jpeg_decoder.cpp for those two unittests.\n2. Add rate_limit_gcra_unittest to CI TSan --target list.",
-        "rd": "",
-        "qa": "",
-        "merge": ""
+        "rd": "# RD\n- issue: P1-2\n- 问题分支提交: 5b14b358\n## changes\n- EXTRA_SRCS gpu_jpeg_decoder.cpp\n- TSan target + rate_limit_gcra_unittest",
+        "qa": "# QA\n- issue: P1-2\n- result: pass\n## residual\nFull CI not re-run locally.",
+        "merge": "# merge\n- issue: P1-2\n- 问题分支提交: 5b14b358\n- merge commit: f4c6c60e"
       },
-      "step_text": "方案已锁 · 待实现"
+      "step_text": "已合入 · merge f4c6c60e"
     },
     {
       "id": "P1-3",

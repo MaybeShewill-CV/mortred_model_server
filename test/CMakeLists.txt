@@ -121,6 +121,7 @@ endif()
 
 if(MORTRED_BUILD_FULL)
     list(APPEND TEST_LIST gateway_e2e_test)
+    list(APPEND TEST_LIST gateway_dual_upstream_isolation_test)
     list(APPEND TEST_LIST supervisor_malformed_e2e_test)
     list(APPEND TEST_LIST object_detection_output_contract_unittest)
     list(APPEND TEST_LIST model_output_contract_unittest)
@@ -298,6 +299,13 @@ foreach(src ${TEST_LIST})
         # the auth fixture hashes keys via ApiKeyManager::sha256_hex (OpenSSL
         # SHA-256 inlined from the header), same link need as api_key_manager_unittest
         set(EXTRA_LIBS control OpenSSL::Crypto pthread)
+    elseif(${src} STREQUAL "gateway_dual_upstream_isolation_test")
+        set(EXTRA_LIBS control OpenSSL::Crypto pthread)
+    elseif(${src} STREQUAL "gateway_dual_upstream_isolation_test")
+        target_compile_definitions(${src} PRIVATE
+            MORTRED_FAKE_BIN_DEFAULT="$<TARGET_FILE:fake_model_server>"
+            MORTRED_GATEWAY_BIN_DEFAULT="$<TARGET_FILE:mortred-gateway.out>")
+        add_dependencies(${src} fake_model_server)
     elseif(${src} STREQUAL "supervisor_malformed_e2e_test")
         set(EXTRA_LIBS pthread)
     elseif(${src} STREQUAL "gateway_multiinstance_test")
