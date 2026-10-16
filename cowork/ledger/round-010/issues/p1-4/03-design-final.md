@@ -73,3 +73,9 @@ grep -rn 'CHECK(checked_shape_nbytes\|CHECK_EQ(dtype' src/ ; echo $?   # 期望 
 ## RD 不得自行决定
 
 - 是否额外提供不抛的 `try_*` 变体；异常类型（须为 `std::invalid_argument`，不得用 `std::runtime_error`）；是否把 `data<T>()` 标 `[[nodiscard]]`。
+
+## 实施后的事实更正（编排方，第 5 步 QA 实测）
+
+- 本文件原先写 "`Tensor::make` 24 个调用点 / `data<T>()` 12 个调用点"。QA 实测：`make` = **24**（正确），`data<T>()` = **23** 处（`.data<T>()` 与 `.template data<T>()` 合计，`src/` 内排除 `tensor.h`，分布在本文点名的同 9 个文件：lightglue 8、sam_prompt_decoder 3、cls_cond_ddpm_unet 2、ddpm_unet 2、msocrnet 2、sam_amg_decoder 2、superpoint 2、hrnet_segmentation 1、sam_vit_encoder 1）。数字更正只加强"否决 log + nullptr 方案"的理由（漏判空的代价更大），不改变验收结论。
+- 本文「自测命令」里的 `cd /mnt/g/Codex/mortred_wt_r10b` 是复制笔误，本项实际在 `/mnt/g/Codex/mortred_wt_r10d` 执行。
+- QA 另发现 `packed_batch_nvi_unittest` 因 `link.txt` 只链 `libcommon.so`（符号在 `libmodels.so`）而在两个构建目录都无法链接，故 `BackendCvModel::run_batch` 那道 packed 栅栏只有代码走查；该二进制在本次操作前即不存在，与本项无关。已记入 `discovered.md` 与 `05-qa.md` 残余风险。
