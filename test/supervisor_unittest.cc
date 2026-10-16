@@ -16,6 +16,7 @@
 #include <signal.h>
 
 #include <chrono>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -55,6 +56,38 @@ int count_open_fds() {
         ++count;
     }
     ::closedir(d);
+    return count;
+}
+
+// /proc/<pid>/environ is a NUL-separated copy of the child's initial envp,
+// taken by the kernel at execve, so it proves exactly what spawn_locked handed
+// to execve rather than what the child later mutated.
+std::string read_child_environ(pid_t pid) {
+    std::ifstream in("/proc/" + std::to_string(static_cast<long long>(pid)) + "/environ",
+                     std::ios::in | std::ios::binary);
+    if (!in.good()) {
+        return std::string();
+    }
+    return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+}
+
+// Exact key match on the NUL-separated block: a substring search would also hit
+// keys that merely start with the same text.
+int count_env_key(const std::string& environ_block, const std::string& key) {
+    const std::string needle = key + "=";
+    int count = 0;
+    size_t pos = 0;
+    while (pos < environ_block.size()) {
+        size_t end = environ_block.find('\0', pos);
+        if (end == std::string::npos) {
+            end = environ_block.size();
+        }
+        const size_t len = end - pos;
+        if (len >= needle.size() && environ_block.compare(pos, needle.size(), needle) == 0) {
+            ++count;
+        }
+        pos = end + 1;
+    }
     return count;
 }
 
@@ -770,6 +803,86 @@ TEST_F(SupervisorTest, gateway_identical_infer_and_admin_is_permanent_failure) {
     const auto s = sup->status(kGatewayId);
     EXPECT_EQ(s.state, "failed") << s.error;
     EXPECT_NE(s.state, "backoff");
+}
+
+// P1-2: the operator's shell / systemd EnvironmentFile may export management
+// and scrape credentials into the supervisor's own environment. spawn_locked
+// copies environ, so without the drop these keys ride into every managed child.
+// The invariant: a model child receives NONE of the four credential keys, and
+// the gateway child receives only the two its role needs, each exactly once.
+TEST_F(SupervisorTest, managed_children_do_not_inherit_management_credentials) {
+    // long-lived child: the environ file must still exist at assert time
+    write_fake_config("ready", 60000);
+
+    auto sup = make_supervisor();
+    sup->set_gateway_trust("scrape-token", "infer-token", "admin-token");
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    // poison the supervisor's environment AFTER construction so the injected
+    // internal token stays distinct from the inherited MORTRED_INTERNAL_TOKEN
+    ::setenv("MORTRED_API_TOKEN", "poison-api", 1);
+    ::setenv("MORTRED_METRICS_TOKEN", "poison-metrics", 1);
+    ::setenv("MORTRED_GATEWAY_AUTH_TOKEN", "poison-gateway-auth", 1);
+    ::setenv("MORTRED_INTERNAL_TOKEN", "poison-internal", 1);
+
+    std::string err;
+    ASSERT_TRUE(sup->start_server("fake_model_server", &err)) << err;
+    ASSERT_TRUE(wait_for([&sup]() {
+        const auto s = sup->status("fake_model_server");
+        return s.state == "running" && s.ready;
+    }, 10000)) << "fake server did not become ready";
+
+    const auto model_status = sup->status("fake_model_server");
+    ASSERT_GT(model_status.pid, 0);
+    const std::string model_env = read_child_environ(model_status.pid);
+    ASSERT_FALSE(model_env.empty()) << "/proc/<pid>/environ unreadable for model child";
+
+    for (const char* key : {"MORTRED_API_TOKEN", "MORTRED_METRICS_TOKEN",
+                            "MORTRED_GATEWAY_AUTH_TOKEN", "MORTRED_INTERNAL_TOKEN"}) {
+        EXPECT_EQ(count_env_key(model_env, key), 0)
+            << "model child inherited " << key << " from the supervisor environment";
+    }
+    // the model's own credential still arrives, and is not the poisoned value
+    EXPECT_EQ(count_env_key(model_env, "MORTRED_AUTH_TOKEN"), 1);
+    EXPECT_EQ(model_env.find("poison-"), std::string::npos)
+        << "a poisoned credential value reached the model child";
+
+    // gateway child: role-appropriate credentials are re-injected exactly once.
+    // The stub answers /healthz through the same fake binary, so readiness (and
+    // therefore state=="running") is reached the normal way.
+    install_gateway_stub("ready");
+
+    ASSERT_TRUE(sup->start_server(kGatewayId, &err)) << err;
+    ASSERT_TRUE(wait_for([&sup]() {
+        const auto s = sup->status(kGatewayId);
+        return s.state == "running" && s.pid > 0;
+    }, 10000)) << "gateway child did not start: state=" << sup->status(kGatewayId).state
+                << " pid=" << sup->status(kGatewayId).pid
+                << " restarts=" << sup->status(kGatewayId).restart_count
+                << " last_exit=" << sup->status(kGatewayId).last_exit_status
+                << " error=" << sup->status(kGatewayId).error;
+
+    const auto gw_status = sup->status(kGatewayId);
+    ASSERT_GT(gw_status.pid, 0);
+    const std::string gw_env = read_child_environ(gw_status.pid);
+    ASSERT_FALSE(gw_env.empty()) << "/proc/<pid>/environ unreadable for gateway child";
+
+    EXPECT_EQ(count_env_key(gw_env, "MORTRED_METRICS_TOKEN"), 1)
+        << "gateway lost its scrape token";
+    EXPECT_EQ(count_env_key(gw_env, "MORTRED_GATEWAY_AUTH_TOKEN"), 1)
+        << "gateway lost its inference token";
+    EXPECT_EQ(count_env_key(gw_env, "MORTRED_API_TOKEN"), 1)
+        << "gateway lost its management token";
+    EXPECT_EQ(count_env_key(gw_env, "MORTRED_INTERNAL_TOKEN"), 1)
+        << "gateway lost its internal token";
+    EXPECT_EQ(gw_env.find("poison-"), std::string::npos)
+        << "a poisoned credential value reached the gateway child";
+
+    ::unsetenv("MORTRED_API_TOKEN");
+    ::unsetenv("MORTRED_METRICS_TOKEN");
+    ::unsetenv("MORTRED_GATEWAY_AUTH_TOKEN");
+    ::unsetenv("MORTRED_INTERNAL_TOKEN");
 }
 
 int main(int argc, char** argv) {

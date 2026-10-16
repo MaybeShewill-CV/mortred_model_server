@@ -962,13 +962,14 @@ int SupervisorApp::run() {
         return 1;
     }
 
-    // Gateway reads these at startup. Inject before autostart so the child
-    // inherits them: management token is a valid data-plane credential for UI
-    // / mortredctl infer, and CORS origins let the :8787 UI call :8080.
-    // (The process environment is deliberately global: children inherit it.)
-    if (!auth_token_.empty()) {
-        ::setenv("MORTRED_API_TOKEN", auth_token_.c_str(), 1);
-    }
+    // Gateway reads MORTRED_GATEWAY_CORS_ORIGINS at startup. Inject before
+    // autostart so the child inherits it: the origins let the :8787 UI call
+    // :8080. This key is gateway-only and harmless if a model process sees it,
+    // so it stays a plain inherited variable. Credentials do NOT go through the
+    // process environment: ProcessSupervisor::spawn_locked scrubs
+    // MORTRED_API_TOKEN / MORTRED_METRICS_TOKEN / MORTRED_GATEWAY_AUTH_TOKEN /
+    // MORTRED_INTERNAL_TOKEN and re-injects per role, and the management token
+    // reaches the gateway via set_gateway_trust() above instead.
     {
         const std::string port = std::to_string(cfg_.supervisor.api_port);
         std::string origins = "http://127.0.0.1:" + port + ",http://localhost:" + port;
