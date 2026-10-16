@@ -351,7 +351,10 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         return;
     }
     if (strcmp(request_uri, "/ready") == 0) {
-        const bool ready = _m_successfully_initialized && _m_workers.available_approx() > 0;
+        // LB-safe: ready means init succeeded. Saturation is exposed via
+        // mortred_workers_available / mortred_workers_busy gauges, not by
+        // flipping mortred_ready (available_approx()>0 would 503 under load).
+        const bool ready = _m_successfully_initialized;
         _m_metrics.set_ready(ready);
         reply_status(task, ready ? StatusCode::OK : StatusCode::NOT_READY, _m_model_name);
         return;

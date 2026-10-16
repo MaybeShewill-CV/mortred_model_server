@@ -123,6 +123,20 @@ TEST(prometheus_metrics, concurrent_updates_are_safe) {
     EXPECT_NE(text.find("mortred_http_requests_total{model=\"resnet\",method=\"POST\",status=\"200\"} 4000"), std::string::npos);
 }
 
+
+TEST(prometheus_metrics, ready_independent_of_workers_available) {
+    // P0-1: LB probes use mortred_ready; saturation uses worker gauges.
+    PrometheusMetrics m;
+    m.set_model("yolov8");
+    m.set_ready(true);
+    m.set_workers_available(0);
+    m.set_workers_busy(4);
+    auto text = m.render();
+    EXPECT_NE(text.find("mortred_ready 1"), std::string::npos);
+    EXPECT_NE(text.find("mortred_workers_available{model=\"yolov8\"} 0"), std::string::npos);
+    EXPECT_NE(text.find("mortred_workers_busy{model=\"yolov8\"} 4"), std::string::npos);
+}
+
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
