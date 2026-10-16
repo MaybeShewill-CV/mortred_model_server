@@ -39,6 +39,8 @@
 
 - `server_config_schema.h` 的键白名单（该键只做类型校验，无下界，无需改）
 - `base_server_impl.h` 的超时/定时器代码（它本来就按 `> 0` 工作）
+
+  编排方已核实两处消费点，确认"夹值即可修好、无需改 `base_server_impl.h`"：`_m_model_run_timeout` 只在 `base_server_impl.h:208` 从 `cfg.model_run_timeout` 赋值（默认 500，`:125`），消费点是 ① `:478-480` 的 `if (_m_model_run_timeout > 0)` 才设 deadline，② 请求级定时器 `:571-580` —— 其中 **`:571-573` 正是 `<= 0` 时"不建定时器直接返回"的早退分支**。夹值后该字段恒 > 0，于是死代码化（保留即可，属防御性分支；字段只有这一个赋值来源），`:576-580` 的定时器必然建立，`:569-570` 注释所述的"计算完成与 deadline 赛跑，先到者赢得唯一回复"才真正生效 → 超时得到 504。`ewma_seed_ms`（`server_runtime_config.h:191`）与 `_m_batch.configure`（`:220`）同样从"可能为 0"回到有界语义。
 - `stuck_worker_action`、`receive_timeout`、packing/max_batch_size
 
 ## 契约
