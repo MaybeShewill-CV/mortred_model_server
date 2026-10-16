@@ -1,0 +1,299 @@
+{
+  "round": 13,
+  "generated_at": "2026-10-16 21:46:01 CST",
+  "round_status": "done",
+  "current": null,
+  "done": 11,
+  "total": 11,
+  "percent": 100,
+  "open_p0": 0,
+  "open_p1": 0,
+  "issues": [
+    {
+      "id": "P0-2",
+      "issue_id": "p0-2",
+      "title": "TRT StagingSlotGuard/D2HSlotGuard error-path release",
+      "priority": "P0",
+      "status": "done",
+      "merge_sha": "514b044d",
+      "branch_sha": "8453c81a",
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
+      "paths": {
+        "design": "cowork/ledger/round-013/issues/p0-2/03-design-final.md",
+        "rd": "cowork/ledger/round-013/issues/p0-2/04-rd.md",
+        "qa": "cowork/ledger/round-013/issues/p0-2/05-qa.md",
+        "merge": "cowork/ledger/round-013/issues/p0-2/05-merge.md"
+      },
+      "snippets": {
+        "design": "# Design P0-2 v1 (user-locked)\n## Goal\nTRT H2D/D2H pinned staging slots must not be pool-released while the session stream may still touch them on error returns.\n## Bounds\nNo packing/Docker. TensorRT path only.\n## Root cause\nStagingSlotGuard.abandon never set; D2HSlotGuard had no abandon; cudaFreeHost-without-sync also unsafe.\n## Fix\nBoth guards hold cudaStream_t; abandon => sync-then-release to pool. Error returns set abandon before matching successful sync.",
+        "rd": "# RD\n- issue: P0-2\n- branch: cowork/r13-p0-2-trt-slot-guard\n- 问题分支提交: 8453c81a\n## changes\n- trt_session.cpp StagingSlotGuard + D2HSlotGuard sync-then-release; abandon on error returns",
+        "qa": "# QA\n- issue: P0-2\n- result: pass\n- 问题分支提交: 8453c81a\n## checks\n- abandon sites present for H2D and D2H; destructor sync-then-release; cudaFreeHost-on-abandon removed\n## residual\nGPU live fault-injection not run here.",
+        "merge": "# merge\n- issue: P0-2\n- branch: cowork/r13-p0-2-trt-slot-guard\n- worktree: /mnt/g/Codex/mortred_wt/r13-p0-2\n- 问题分支提交: 8453c81a\n- QA: pass\n- cmd: git merge --no-ff\n- merge commit: 514b044d"
+      },
+      "step_text": "已合入 · merge 514b044d"
+    },
+    {
+      "id": "P1-5",
+      "issue_id": "p1-5",
+      "title": "superpoint sort strict weak ordering",
+      "priority": "P1",
+      "status": "done",
+      "merge_sha": "f0bfef79",
+      "branch_sha": "0a36f1c7",
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
+      "paths": {
+        "design": "cowork/ledger/round-013/issues/p1-5/03-design-final.md",
+        "rd": "cowork/ledger/round-013/issues/p1-5/04-rd.md",
+        "qa": "cowork/ledger/round-013/issues/p1-5/05-qa.md",
+        "merge": "cowork/ledger/round-013/issues/p1-5/05-merge.md"
+      },
+      "snippets": {
+        "design": "# Design P1-5 v1 (user-locked)\n## Goal\nSuperPoint keypoint sort uses a strict weak ordering.\n## Bounds\nOne-line comparator; no score-threshold semantics change.\n## Root cause\n`return pt1.score >= pt2.score` is reflexive → UB for std::sort.\n## Fix\nUse `>` (descending by score).",
+        "rd": "# RD\n- issue: P1-5\n- branch: cowork/r13-p1-5-superpoint-sort\n- 问题分支提交: 0a36f1c7\n## changes\n- superpoint.inl sort comparator >= -> >",
+        "qa": "# QA\n- issue: P1-5\n- result: pass\n- 问题分支提交: 0a36f1c7\n## checks\n- comparator is `>`; no remaining `>=` in sort lambda",
+        "merge": "# merge\n- issue: P1-5\n- branch: cowork/r13-p1-5-superpoint-sort\n- worktree: /mnt/g/Codex/mortred_wt/r13-p1-5\n- 问题分支提交: 0a36f1c7\n- QA: pass\n- cmd: git merge --no-ff\n- merge commit: f0bfef79"
+      },
+      "step_text": "已合入 · merge f0bfef79"
+    },
+    {
+      "id": "P0-3",
+      "issue_id": "p0-3",
+      "title": "http_infer_rps.py default warmup workable",
+      "priority": "P0",
+      "status": "done",
+      "merge_sha": "e1550d2f",
+      "branch_sha": "aad2bc46",
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
+      "paths": {
+        "design": "cowork/ledger/round-013/issues/p0-3/03-design-final.md",
+        "rd": "cowork/ledger/round-013/issues/p0-3/04-rd.md",
+        "qa": "cowork/ledger/round-013/issues/p0-3/05-qa.md",
+        "merge": "cowork/ledger/round-013/issues/p0-3/05-merge.md"
+      },
+      "snippets": {
+        "design": "# Design P0-3 v1 (user-locked)\n## Goal\nhttp_infer_rps.py default warmup works; self-test after parse; smoke covers default path.\n## Fix\nparse_duration allows >=0; parse before --self-test; assert 0s==0.",
+        "rd": "# RD\n- issue: P0-3\n- branch: cowork/r13-p0-3-http-infer-rps-warmup\n- 问题分支提交: aad2bc46\n## changes\n- http_infer_rps.py allow >=0; parse before self-test",
+        "qa": "# QA\n- issue: P0-3\n- result: pass\n- 问题分支提交: aad2bc46\n## checks\n- python3 scripts/server/http_infer_rps.py --self-test exit 0",
+        "merge": "# merge\n- issue: P0-3\n- branch: cowork/r13-p0-3-http-infer-rps-warmup\n- worktree: /mnt/g/Codex/mortred_wt/r13-p0-3\n- 问题分支提交: aad2bc46\n- QA: pass\n- cmd: git merge --no-ff\n- merge commit: e1550d2f"
+      },
+      "step_text": "已合入 · merge e1550d2f"
+    },
+    {
+      "id": "P1-1",
+      "issue_id": "p1-1",
+      "title": "positive max_queue_depth + 429 Retry-After",
+      "priority": "P1",
+      "status": "done",
+      "merge_sha": "a9ac51c2",
+      "branch_sha": "f915f595",
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
+      "paths": {
+        "design": "cowork/ledger/round-013/issues/p1-1/03-design-final.md",
+        "rd": "cowork/ledger/round-013/issues/p1-1/04-rd.md",
+        "qa": "cowork/ledger/round-013/issues/p1-1/05-qa.md",
+        "merge": "cowork/ledger/round-013/issues/p1-1/05-merge.md"
+      },
+      "snippets": {
+        "design": "# Design P1-1 v1 (user-locked)\n## Goal\nPositive max_queue_depth by default; five missing tomls filled; full queue still 429+Retry-After.\n## Fix\n1. In-class default 0 → 32.\n2. Load clamp: <=0 → default (WARNING), no silent unbounded.\n3. Add max_queue_depth=32 to 4 diffusion + sam_amg server tomls.\n4. 429+Retry-After path already in base_server_impl (unchanged).",
+        "rd": "# RD\n- issue: P1-1\n- branch: cowork/r13-p1-1-max-queue-depth\n- 问题分支提交: f915f595\n## changes\n- server_runtime_config.h default 32 + clamp\n- 5 server tomls max_queue_depth=32",
+        "qa": "# QA\n- issue: P1-1\n- result: pass\n- 问题分支提交: f915f595\n## checks\n- default 32; clamp <=0; 5 tomls filled; Retry-After path present",
+        "merge": "# merge\n- issue: P1-1\n- branch: cowork/r13-p1-1-max-queue-depth\n- worktree: /mnt/g/Codex/mortred_wt/r13-p1-1\n- 问题分支提交: f915f595\n- QA: pass\n- cmd: git merge --no-ff\n- merge commit: a9ac51c2"
+      },
+      "step_text": "已合入 · merge a9ac51c2"
+    },
+    {
+      "id": "P1-4",
+      "issue_id": "p1-4",
+      "title": "relative MORTRED_CONTROL_CONFIG via project_root",
+      "priority": "P1",
+      "status": "done",
+      "merge_sha": "e804f862",
+      "branch_sha": "ab777c17",
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
+      "paths": {
+        "design": "cowork/ledger/round-013/issues/p1-4/03-design-final.md",
+        "rd": "cowork/ledger/round-013/issues/p1-4/04-rd.md",
+        "qa": "cowork/ledger/round-013/issues/p1-4/05-qa.md",
+        "merge": "cowork/ledger/round-013/issues/p1-4/05-merge.md"
+      },
+      "snippets": {
+        "design": "# Design P1-4 v1 (user-locked)\n## Goal\nRelative MORTRED_CONTROL_CONFIG resolves against project_root before child inject/chdir.\n## Fix\n1. supervisor_app: if env path is relative, absolutize via project_root.\n2. supervisor spawn: absolutize control_config against project_root before inject.\n3. gateway_app: if env path relative, resolve via MORTRED_PROJECT_ROOT / resolve_project_root.",
+        "rd": "# RD\n- issue: P1-4\n- branch: cowork/r13-p1-4-control-config-path\n- 问题分支提交: ab777c17\n## changes\n- supervisor_app/gateway_app/supervisor.cpp path resolve",
+        "qa": "# QA\n- issue: P1-4\n- result: pass\n- 问题分支提交: ab777c17\n## checks\n- source review + scripted asserts in fixer",
+        "merge": "# merge\n- issue: P1-4\n- branch: cowork/r13-p1-4-control-config-path\n- worktree: /mnt/g/Codex/mortred_wt/r13-p1-4\n- 问题分支提交: ab777c17\n- QA: pass\n- cmd: git merge --no-ff\n- merge commit: e804f862"
+      },
+      "step_text": "已合入 · merge e804f862"
+    },
+    {
+      "id": "P1-6",
+      "issue_id": "p1-6",
+      "title": "header probe before full imdecode",
+      "priority": "P1",
+      "status": "done",
+      "merge_sha": "c14255a9",
+      "branch_sha": "0409d986",
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
+      "paths": {
+        "design": "cowork/ledger/round-013/issues/p1-6/03-design-final.md",
+        "rd": "cowork/ledger/round-013/issues/p1-6/04-rd.md",
+        "qa": "cowork/ledger/round-013/issues/p1-6/05-qa.md",
+        "merge": "cowork/ledger/round-013/issues/p1-6/05-merge.md"
+      },
+      "snippets": {
+        "design": "# Design P1-6 v1 (user-locked)\n## Goal\nReject oversize encoded images from JPEG SOF / PNG IHDR before full imdecode.\n## Fix\nAdd encoded_image_within_limits (JPEG via existing jpeg_full_dimensions + new PNG IHDR probe). Call before imdecode in image_input and base64 load paths.",
+        "rd": "# RD\n- issue: P1-6\n- branch: cowork/r13-p1-6-decode-size-probe\n- 问题分支提交: 0409d986\n## changes\n- cv_image_input.h PNG IHDR + encoded_image_within_limits",
+        "qa": "# QA\n- issue: P1-6\n- result: pass\n- 问题分支提交: 0409d986\n## checks\n- source review + scripted asserts in fixer",
+        "merge": "# merge\n- issue: P1-6\n- branch: cowork/r13-p1-6-decode-size-probe\n- worktree: /mnt/g/Codex/mortred_wt/r13-p1-6\n- 问题分支提交: 0409d986\n- QA: pass\n- cmd: git merge --no-ff\n- merge commit: c14255a9"
+      },
+      "step_text": "已合入 · merge c14255a9"
+    },
+    {
+      "id": "P1-7",
+      "issue_id": "p1-7",
+      "title": "systemd KillMode=control-group + orphan exit",
+      "priority": "P1",
+      "status": "done",
+      "merge_sha": "7bf9755a",
+      "branch_sha": "11bf407f",
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
+      "paths": {
+        "design": "cowork/ledger/round-013/issues/p1-7/03-design-final.md",
+        "rd": "cowork/ledger/round-013/issues/p1-7/04-rd.md",
+        "qa": "cowork/ledger/round-013/issues/p1-7/05-qa.md",
+        "merge": "cowork/ledger/round-013/issues/p1-7/05-merge.md"
+      },
+      "snippets": {
+        "design": "# Design P1-7 v1 (user-locked)\n## Goal\nSIGKILL of supervisor reaps GPU children; orphans self-exit.\n## Fix\n1. deploy/mortred-supervisor.service KillMode=control-group (systemd kills whole cgroup).\n2. Keep PR_SET_PDEATHSIG(SIGINT); document that control-group is the hard-kill path.\n3. Optional: children already in supervisor PG — note in unit comment.",
+        "rd": "# RD\n- issue: P1-7\n- branch: cowork/r13-p1-7-killmode-cgroup\n- 问题分支提交: 11bf407f\n## changes\n- deploy/mortred-supervisor.service; PDEATHSIG comment",
+        "qa": "# QA\n- issue: P1-7\n- result: pass\n- 问题分支提交: 11bf407f\n## checks\n- source review + scripted asserts in fixer",
+        "merge": "# merge\n- issue: P1-7\n- branch: cowork/r13-p1-7-killmode-cgroup\n- worktree: /mnt/g/Codex/mortred_wt/r13-p1-7\n- 问题分支提交: 11bf407f\n- QA: pass\n- cmd: git merge --no-ff\n- merge commit: 7bf9755a"
+      },
+      "step_text": "已合入 · merge 7bf9755a"
+    },
+    {
+      "id": "P0-4",
+      "issue_id": "p0-4",
+      "title": "capacity: lower handler_threads + sheet",
+      "priority": "P0",
+      "status": "done",
+      "merge_sha": "2a1f070d",
+      "branch_sha": "0ede69ea",
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
+      "paths": {
+        "design": "cowork/ledger/round-013/issues/p0-4/03-design-final.md",
+        "rd": "cowork/ledger/round-013/issues/p0-4/04-rd.md",
+        "qa": "cowork/ledger/round-013/issues/p0-4/05-qa.md",
+        "merge": "cowork/ledger/round-013/issues/p0-4/05-merge.md"
+      },
+      "snippets": {
+        "design": "# Design P0-4 v1 (user-locked)\n## Goal\nLower handler_threads defaults tied to workers; capacity sheet; RSS note in occupancy if feasible.\n## Fix\n1. In-class default handler_threads 50 → 8 (single-GPU friendly).\n2. After load: if handler_threads > max(8, worker_nums*8), WARNING clamp? Prefer: if omitted use default 8; leave explicit 50 alone but rewrite shipped tomls that still say 50 down to 16 when worker_nums==1.\n3. Add docs/capacity-single-gpu.md sheet (threads/RSS/GPU sketch).\n4. Occupancy: document optional measured RSS residual — add comment in occupancy_gate that process RSS is out-of-band via pack_occupancy measured-json (already has measured_gpu_mem); no fake RSS sampler.",
+        "rd": "# RD\n- issue: P0-4\n- branch: cowork/r13-p0-4-capacity-threads\n- 问题分支提交: 0ede69ea\n## changes\n- server_runtime_config.h; conf/server tomls; docs/capacity-single-gpu.md",
+        "qa": "# QA\n- issue: P0-4\n- result: pass\n- 问题分支提交: 0ede69ea\n## checks\n- source asserts in fixer",
+        "merge": "# merge\n- issue: P0-4\n- branch: cowork/r13-p0-4-capacity-threads\n- worktree: /mnt/g/Codex/mortred_wt/r13-p0-4\n- 问题分支提交: 0ede69ea\n- QA: pass\n- cmd: git merge --no-ff\n- merge commit: 2a1f070d"
+      },
+      "step_text": "已合入 · merge 2a1f070d"
+    },
+    {
+      "id": "P1-2",
+      "issue_id": "p1-2",
+      "title": "unify YOLO unmap↔NMS order",
+      "priority": "P1",
+      "status": "done",
+      "merge_sha": "fec578f3",
+      "branch_sha": "09b0ed2b",
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
+      "paths": {
+        "design": "cowork/ledger/round-013/issues/p1-2/03-design-final.md",
+        "rd": "cowork/ledger/round-013/issues/p1-2/04-rd.md",
+        "qa": "cowork/ledger/round-013/issues/p1-2/05-qa.md",
+        "merge": "cowork/ledger/round-013/issues/p1-2/05-merge.md"
+      },
+      "snippets": {
+        "design": "# Design P1-2 v1 (user-locked)\n## Goal\nUnify YOLO unmap↔NMS order: unmap letterbox then finalize/NMS (v5/v6/v7 order).\n## Fix\nChange yolov8 from NMS-then-unmap to unmap-then-NMS.\n## Residual\nBroader matting/seg/libface family audit parked — not in this change.",
+        "rd": "# RD\n- issue: P1-2\n- branch: cowork/r13-p1-2-yolo-unmap-nms\n- 问题分支提交: 09b0ed2b\n## changes\n- yolov8_detector.inl order; residual note in ledger",
+        "qa": "# QA\n- issue: P1-2\n- result: pass\n- 问题分支提交: 09b0ed2b\n## checks\n- source asserts in fixer",
+        "merge": "# merge\n- issue: P1-2\n- branch: cowork/r13-p1-2-yolo-unmap-nms\n- worktree: /mnt/g/Codex/mortred_wt/r13-p1-2\n- 问题分支提交: 09b0ed2b\n- QA: pass\n- cmd: git merge --no-ff\n- merge commit: fec578f3"
+      },
+      "step_text": "已合入 · merge fec578f3"
+    },
+    {
+      "id": "P1-3",
+      "issue_id": "p1-3",
+      "title": "MORTRED_METRICS_TOKEN on model /metrics",
+      "priority": "P1",
+      "status": "done",
+      "merge_sha": "cf322469",
+      "branch_sha": "cc3a8ff8",
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
+      "paths": {
+        "design": "cowork/ledger/round-013/issues/p1-3/03-design-final.md",
+        "rd": "cowork/ledger/round-013/issues/p1-3/04-rd.md",
+        "qa": "cowork/ledger/round-013/issues/p1-3/05-qa.md",
+        "merge": "cowork/ledger/round-013/issues/p1-3/05-merge.md"
+      },
+      "snippets": {
+        "design": "# Design P1-3 v1 (user-locked)\n## Goal\nModel /metrics accepts MORTRED_METRICS_TOKEN (in addition to internal auth token).\n## Fix\n1. Supervisor injects MORTRED_METRICS_TOKEN into model children when available (still scrubbed then re-injected).\n2. base_server_impl: /metrics authorized if bearer matches auth_token OR metrics scrape token from env.",
+        "rd": "# RD\n- issue: P1-3\n- branch: cowork/r13-p1-3-metrics-token-model\n- 问题分支提交: cc3a8ff8\n## changes\n- supervisor.cpp inject; base_server_impl.h /metrics auth",
+        "qa": "# QA\n- issue: P1-3\n- result: pass\n- 问题分支提交: cc3a8ff8\n## checks\n- source asserts in fixer",
+        "merge": "# merge\n- issue: P1-3\n- branch: cowork/r13-p1-3-metrics-token-model\n- worktree: /mnt/g/Codex/mortred_wt/r13-p1-3\n- 问题分支提交: cc3a8ff8\n- QA: pass\n- cmd: git merge --no-ff\n- merge commit: cf322469"
+      },
+      "step_text": "已合入 · merge cf322469"
+    },
+    {
+      "id": "P1-8",
+      "issue_id": "p1-8",
+      "title": "golden skip exit 77; presets/labels SSOT",
+      "priority": "P1",
+      "status": "done",
+      "merge_sha": "e200ab99",
+      "branch_sha": "c363ea97",
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
+      "paths": {
+        "design": "cowork/ledger/round-013/issues/p1-8/03-design-final.md",
+        "rd": "cowork/ledger/round-013/issues/p1-8/04-rd.md",
+        "qa": "cowork/ledger/round-013/issues/p1-8/05-qa.md",
+        "merge": "cowork/ledger/round-013/issues/p1-8/05-merge.md"
+      },
+      "snippets": {
+        "design": "# Design P1-8 v1 (user-locked)\n## Goal\nGolden skip is not a silent pass locally (exit 77); presets/labels SSOT if needed.\n## Fix\n1. TSan presets vs labels already aligned in R12 — verify and note SSOT comment in CMakeLists near sanitizer LABELS.\n2. model_golden_test already returns 77 when all selected cases skip for missing weights; ensure SKIP_RETURN_CODE 77 remains and add a one-line README/test comment that local ctest without weights must show skip not pass.",
+        "rd": "# RD\n- issue: P1-8\n- branch: cowork/r13-p1-8-golden-skip\n- 问题分支提交: c363ea97\n## changes\n- test/CMakeLists.txt comments; test/GOLDEN_SKIP.md",
+        "qa": "# QA\n- issue: P1-8\n- result: pass\n- 问题分支提交: c363ea97\n## checks\n- source asserts in fixer",
+        "merge": "# merge\n- issue: P1-8\n- branch: cowork/r13-p1-8-golden-skip\n- worktree: /mnt/g/Codex/mortred_wt/r13-p1-8\n- 问题分支提交: c363ea97\n- QA: pass\n- cmd: git merge --no-ff\n- merge commit: e200ab99"
+      },
+      "step_text": "已合入 · merge e200ab99"
+    }
+  ]
+}

@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"/><title>Round 13 issue</title>
+<style>
+  :root { --bg:#0b1220; --panel:#121a2b; --line:#243049; --text:#e8eefc; --muted:#93a0b8; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,sans-serif; }
+  .wrap { max-width:900px; margin:0 auto; padding:24px; }
+  .detail { background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:18px; }
+  .detail-head { display:flex; gap:12px; align-items:center; margin-bottom:14px; }
+  .back { background:#0e1626; color:var(--text); border:1px solid var(--line); border-radius:999px; padding:6px 12px; cursor:pointer; }
+  .meta-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:14px; }
+  .t { color:var(--muted); font-size:11px; } .v { margin-top:4px; font-size:13px; }
+  .mono { font-family:ui-monospace,Menlo,Consolas,monospace; word-break:break-all; }
+  .snip { background:#0e1626; border:1px solid var(--line); border-radius:12px; padding:12px; overflow:auto; font-size:12px; color:#c9d4ea; white-space:pre-wrap; }
+</style></head><body><div class="wrap"><section class="detail" id="p0-2" hidden><div class="detail-head"><button class="back" onclick="location.href='progress.html'">← 看板</button><h3>P0-2 · TRT StagingSlotGuard/D2HSlotGuard error-path release</h3></div><div class="meta-grid"><div><div class="t">status</div><div class="v">done</div></div><div><div class="t">merge</div><div class="v mono">514b044d</div></div><div><div class="t">branch</div><div class="v mono">8453c81a</div></div><div><div class="t">step</div><div class="v">已合入 · merge 514b044d</div></div></div><h4>design</h4><pre class="snip"># Design P0-2 v1 (user-locked)
+## Goal
+TRT H2D/D2H pinned staging slots must not be pool-released while the session stream may still touch them on error returns.
+## Bounds
+No packing/Docker. TensorRT path only.
+## Root cause
+StagingSlotGuard.abandon never set; D2HSlotGuard had no abandon; cudaFreeHost-without-sync also unsafe.
+## Fix
+Both guards hold cudaStream_t; abandon =&gt; sync-then-release to pool. Error returns set abandon before matching successful sync.</pre><h4>RD</h4><pre class="snip"># RD
+- issue: P0-2
+- branch: cowork/r13-p0-2-trt-slot-guard
+- 问题分支提交: 8453c81a
+## changes
+- trt_session.cpp StagingSlotGuard + D2HSlotGuard sync-then-release; abandon on error returns</pre><h4>QA</h4><pre class="snip"># QA
+- issue: P0-2
+- result: pass
+- 问题分支提交: 8453c81a
+## checks
+- abandon sites present for H2D and D2H; destructor sync-then-release; cudaFreeHost-on-abandon removed
+## residual
+GPU live fault-injection not run here.</pre><h4>merge</h4><pre class="snip"># merge
+- issue: P0-2
+- branch: cowork/r13-p0-2-trt-slot-guard
+- worktree: /mnt/g/Codex/mortred_wt/r13-p0-2
+- 问题分支提交: 8453c81a
+- QA: pass
+- cmd: git merge --no-ff
+- merge commit: 514b044d</pre></section>
+<section class="detail" id="p1-5" hidden><div class="detail-head"><button class="back" onclick="location.href='progress.html'">← 看板</button><h3>P1-5 · superpoint sort strict weak ordering</h3></div><div class="meta-grid"><div><div class="t">status</div><div class="v">done</div></div><div><div class="t">merge</div><div class="v mono">f0bfef79</div></div><div><div class="t">branch</div><div class="v mono">0a36f1c7</div></div><div><div class="t">step</div><div class="v">已合入 · merge f0bfef79</div></div></div><h4>design</h4><pre class="snip"># Design P1-5 v1 (user-locked)
+## Goal
+SuperPoint keypoint sort uses a strict weak ordering.
+## Bounds
+One-line comparator; no score-threshold semantics change.
+## Root cause
+`return pt1.score &gt;= pt2.score` is reflexive → UB for std::sort.
+## Fix
+Use `&gt;` (descending by score).</pre><h4>RD</h4><pre class="snip"># RD
+- issue: P1-5
+- branch: cowork/r13-p1-5-superpoint-sort
+- 问题分支提交: 0a36f1c7
+## changes
+- superpoint.inl sort comparator &gt;= -&gt; &gt;</pre><h4>QA</h4><pre class="snip"># QA
+- issue: P1-5
+- result: pass
+- 问题分支提交: 0a36f1c7
+## checks
+- comparator is `&gt;`; no remaining `&gt;=` in sort lambda</pre><h4>merge</h4><pre class="snip"># merge
+- issue: P1-5
+- branch: cowork/r13-p1-5-superpoint-sort
+- worktree: /mnt/g/Codex/mortred_wt/r13-p1-5
+- 问题分支提交: 0a36f1c7
+- QA: pass
+- cmd: git merge --no-ff
+- merge commit: f0bfef79</pre></section>
+<section class="detail" id="p0-3" hidden><div class="detail-head"><button class="back" onclick="location.href='progress.html'">← 看板</button><h3>P0-3 · http_infer_rps.py default warmup workable</h3></div><div class="meta-grid"><div><div class="t">status</div><div class="v">done</div></div><div><div class="t">merge</div><div class="v mono">e1550d2f</div></div><div><div class="t">branch</div><div class="v mono">aad2bc46</div></div><div><div class="t">step</div><div class="v">已合入 · merge e1550d2f</div></div></div><h4>design</h4><pre class="snip"># Design P0-3 v1 (user-locked)
+## Goal
+http_infer_rps.py default warmup works; self-test after parse; smoke covers default path.
+## Fix
+parse_duration allows &gt;=0; parse before --self-test; assert 0s==0.</pre><h4>RD</h4><pre class="snip"># RD
+- issue: P0-3
+- branch: cowork/r13-p0-3-http-infer-rps-warmup
+- 问题分支提交: aad2bc46
+## changes
+- http_infer_rps.py allow &gt;=0; parse before self-test</pre><h4>QA</h4><pre class="snip"># QA
+- issue: P0-3
+- result: pass
+- 问题分支提交: aad2bc46
+## checks
+- python3 scripts/server/http_infer_rps.py --self-test exit 0</pre><h4>merge</h4><pre class="snip"># merge
+- issue: P0-3
+- branch: cowork/r13-p0-3-http-infer-rps-warmup
+- worktree: /mnt/g/Codex/mortred_wt/r13-p0-3
+- 问题分支提交: aad2bc46
+- QA: pass
+- cmd: git merge --no-ff
+- merge commit: e1550d2f</pre></section>
+<section class="detail" id="p1-1" hidden><div class="detail-head"><button class="back" onclick="location.href='progress.html'">← 看板</button><h3>P1-1 · positive max_queue_depth + 429 Retry-After</h3></div><div class="meta-grid"><div><div class="t">status</div><div class="v">done</div></div><div><div class="t">merge</div><div class="v mono">a9ac51c2</div></div><div><div class="t">branch</div><div class="v mono">f915f595</div></div><div><div class="t">step</div><div class="v">已合入 · merge a9ac51c2</div></div></div><h4>design</h4><pre class="snip"># Design P1-1 v1 (user-locked)
+## Goal
+Positive max_queue_depth by default; five missing tomls filled; full queue still 429+Retry-After.
+## Fix
+1. In-class default 0 → 32.
+2. Load clamp: &lt;=0 → default (WARNING), no silent unbounded.
+3. Add max_queue_depth=32 to 4 diffusion + sam_amg server tomls.
+4. 429+Retry-After path already in base_server_impl (unchanged).</pre><h4>RD</h4><pre class="snip"># RD
+- issue: P1-1
+- branch: cowork/r13-p1-1-max-queue-depth
+- 问题分支提交: f915f595
+## changes
+- server_runtime_config.h default 32 + clamp
+- 5 server tomls max_queue_depth=32</pre><h4>QA</h4><pre class="snip"># QA
+- issue: P1-1
+- result: pass
+- 问题分支提交: f915f595
+## checks
+- default 32; clamp &lt;=0; 5 tomls filled; Retry-After path present</pre><h4>merge</h4><pre class="snip"># merge
+- issue: P1-1
+- branch: cowork/r13-p1-1-max-queue-depth
+- worktree: /mnt/g/Codex/mortred_wt/r13-p1-1
+- 问题分支提交: f915f595
+- QA: pass
+- cmd: git merge --no-ff
+- merge commit: a9ac51c2</pre></section>
+<section class="detail" id="p1-4" hidden><div class="detail-head"><button class="back" onclick="location.href='progress.html'">← 看板</button><h3>P1-4 · relative MORTRED_CONTROL_CONFIG via project_root</h3></div><div class="meta-grid"><div><div class="t">status</div><div class="v">done</div></div><div><div class="t">merge</div><div class="v mono">e804f862</div></div><div><div class="t">branch</div><div class="v mono">ab777c17</div></div><div><div class="t">step</div><div class="v">已合入 · merge e804f862</div></div></div><h4>design</h4><pre class="snip"># Design P1-4 v1 (user-locked)
+## Goal
+Relative MORTRED_CONTROL_CONFIG resolves against project_root before child inject/chdir.
+## Fix
+1. supervisor_app: if env path is relative, absolutize via project_root.
+2. supervisor spawn: absolutize control_config against project_root before inject.
+3. gateway_app: if env path relative, resolve via MORTRED_PROJECT_ROOT / resolve_project_root.</pre><h4>RD</h4><pre class="snip"># RD
+- issue: P1-4
+- branch: cowork/r13-p1-4-control-config-path
+- 问题分支提交: ab777c17
+## changes
+- supervisor_app/gateway_app/supervisor.cpp path resolve</pre><h4>QA</h4><pre class="snip"># QA
+- issue: P1-4
+- result: pass
+- 问题分支提交: ab777c17
+## checks
+- source review + scripted asserts in fixer</pre><h4>merge</h4><pre class="snip"># merge
+- issue: P1-4
+- branch: cowork/r13-p1-4-control-config-path
+- worktree: /mnt/g/Codex/mortred_wt/r13-p1-4
+- 问题分支提交: ab777c17
+- QA: pass
+- cmd: git merge --no-ff
+- merge commit: e804f862</pre></section>
+<section class="detail" id="p1-6" hidden><div class="detail-head"><button class="back" onclick="location.href='progress.html'">← 看板</button><h3>P1-6 · header probe before full imdecode</h3></div><div class="meta-grid"><div><div class="t">status</div><div class="v">done</div></div><div><div class="t">merge</div><div class="v mono">c14255a9</div></div><div><div class="t">branch</div><div class="v mono">0409d986</div></div><div><div class="t">step</div><div class="v">已合入 · merge c14255a9</div></div></div><h4>design</h4><pre class="snip"># Design P1-6 v1 (user-locked)
+## Goal
+Reject oversize encoded images from JPEG SOF / PNG IHDR before full imdecode.
+## Fix
+Add encoded_image_within_limits (JPEG via existing jpeg_full_dimensions + new PNG IHDR probe). Call before imdecode in image_input and base64 load paths.</pre><h4>RD</h4><pre class="snip"># RD
+- issue: P1-6
+- branch: cowork/r13-p1-6-decode-size-probe
+- 问题分支提交: 0409d986
+## changes
+- cv_image_input.h PNG IHDR + encoded_image_within_limits</pre><h4>QA</h4><pre class="snip"># QA
+- issue: P1-6
+- result: pass
+- 问题分支提交: 0409d986
+## checks
+- source review + scripted asserts in fixer</pre><h4>merge</h4><pre class="snip"># merge
+- issue: P1-6
+- branch: cowork/r13-p1-6-decode-size-probe
+- worktree: /mnt/g/Codex/mortred_wt/r13-p1-6
+- 问题分支提交: 0409d986
+- QA: pass
+- cmd: git merge --no-ff
+- merge commit: c14255a9</pre></section>
+<section class="detail" id="p1-7" hidden><div class="detail-head"><button class="back" onclick="location.href='progress.html'">← 看板</button><h3>P1-7 · systemd KillMode=control-group + orphan exit</h3></div><div class="meta-grid"><div><div class="t">status</div><div class="v">done</div></div><div><div class="t">merge</div><div class="v mono">7bf9755a</div></div><div><div class="t">branch</div><div class="v mono">11bf407f</div></div><div><div class="t">step</div><div class="v">已合入 · merge 7bf9755a</div></div></div><h4>design</h4><pre class="snip"># Design P1-7 v1 (user-locked)
+## Goal
+SIGKILL of supervisor reaps GPU children; orphans self-exit.
+## Fix
+1. deploy/mortred-supervisor.service KillMode=control-group (systemd kills whole cgroup).
+2. Keep PR_SET_PDEATHSIG(SIGINT); document that control-group is the hard-kill path.
+3. Optional: children already in supervisor PG — note in unit comment.</pre><h4>RD</h4><pre class="snip"># RD
+- issue: P1-7
+- branch: cowork/r13-p1-7-killmode-cgroup
+- 问题分支提交: 11bf407f
+## changes
+- deploy/mortred-supervisor.service; PDEATHSIG comment</pre><h4>QA</h4><pre class="snip"># QA
+- issue: P1-7
+- result: pass
+- 问题分支提交: 11bf407f
+## checks
+- source review + scripted asserts in fixer</pre><h4>merge</h4><pre class="snip"># merge
+- issue: P1-7
+- branch: cowork/r13-p1-7-killmode-cgroup
+- worktree: /mnt/g/Codex/mortred_wt/r13-p1-7
+- 问题分支提交: 11bf407f
+- QA: pass
+- cmd: git merge --no-ff
+- merge commit: 7bf9755a</pre></section>
+<section class="detail" id="p0-4" hidden><div class="detail-head"><button class="back" onclick="location.href='progress.html'">← 看板</button><h3>P0-4 · capacity: lower handler_threads + sheet</h3></div><div class="meta-grid"><div><div class="t">status</div><div class="v">done</div></div><div><div class="t">merge</div><div class="v mono">2a1f070d</div></div><div><div class="t">branch</div><div class="v mono">0ede69ea</div></div><div><div class="t">step</div><div class="v">已合入 · merge 2a1f070d</div></div></div><h4>design</h4><pre class="snip"># Design P0-4 v1 (user-locked)
+## Goal
+Lower handler_threads defaults tied to workers; capacity sheet; RSS note in occupancy if feasible.
+## Fix
+1. In-class default handler_threads 50 → 8 (single-GPU friendly).
+2. After load: if handler_threads &gt; max(8, worker_nums*8), WARNING clamp? Prefer: if omitted use default 8; leave explicit 50 alone but rewrite shipped tomls that still say 50 down to 16 when worker_nums==1.
+3. Add docs/capacity-single-gpu.md sheet (threads/RSS/GPU sketch).
+4. Occupancy: document optional measured RSS residual — add comment in occupancy_gate that process RSS is out-of-band via pack_occupancy measured-json (already has measured_gpu_mem); no fake RSS sampler.</pre><h4>RD</h4><pre class="snip"># RD
+- issue: P0-4
+- branch: cowork/r13-p0-4-capacity-threads
+- 问题分支提交: 0ede69ea
+## changes
+- server_runtime_config.h; conf/server tomls; docs/capacity-single-gpu.md</pre><h4>QA</h4><pre class="snip"># QA
+- issue: P0-4
+- result: pass
+- 问题分支提交: 0ede69ea
+## checks
+- source asserts in fixer</pre><h4>merge</h4><pre class="snip"># merge
+- issue: P0-4
+- branch: cowork/r13-p0-4-capacity-threads
+- worktree: /mnt/g/Codex/mortred_wt/r13-p0-4
+- 问题分支提交: 0ede69ea
+- QA: pass
+- cmd: git merge --no-ff
+- merge commit: 2a1f070d</pre></section>
+<section class="detail" id="p1-2" hidden><div class="detail-head"><button class="back" onclick="location.href='progress.html'">← 看板</button><h3>P1-2 · unify YOLO unmap↔NMS order</h3></div><div class="meta-grid"><div><div class="t">status</div><div class="v">done</div></div><div><div class="t">merge</div><div class="v mono">fec578f3</div></div><div><div class="t">branch</div><div class="v mono">09b0ed2b</div></div><div><div class="t">step</div><div class="v">已合入 · merge fec578f3</div></div></div><h4>design</h4><pre class="snip"># Design P1-2 v1 (user-locked)
+## Goal
+Unify YOLO unmap↔NMS order: unmap letterbox then finalize/NMS (v5/v6/v7 order).
+## Fix
+Change yolov8 from NMS-then-unmap to unmap-then-NMS.
+## Residual
+Broader matting/seg/libface family audit parked — not in this change.</pre><h4>RD</h4><pre class="snip"># RD
+- issue: P1-2
+- branch: cowork/r13-p1-2-yolo-unmap-nms
+- 问题分支提交: 09b0ed2b
+## changes
+- yolov8_detector.inl order; residual note in ledger</pre><h4>QA</h4><pre class="snip"># QA
+- issue: P1-2
+- result: pass
+- 问题分支提交: 09b0ed2b
+## checks
+- source asserts in fixer</pre><h4>merge</h4><pre class="snip"># merge
+- issue: P1-2
+- branch: cowork/r13-p1-2-yolo-unmap-nms
+- worktree: /mnt/g/Codex/mortred_wt/r13-p1-2
+- 问题分支提交: 09b0ed2b
+- QA: pass
+- cmd: git merge --no-ff
+- merge commit: fec578f3</pre></section>
+<section class="detail" id="p1-3" hidden><div class="detail-head"><button class="back" onclick="location.href='progress.html'">← 看板</button><h3>P1-3 · MORTRED_METRICS_TOKEN on model /metrics</h3></div><div class="meta-grid"><div><div class="t">status</div><div class="v">done</div></div><div><div class="t">merge</div><div class="v mono">cf322469</div></div><div><div class="t">branch</div><div class="v mono">cc3a8ff8</div></div><div><div class="t">step</div><div class="v">已合入 · merge cf322469</div></div></div><h4>design</h4><pre class="snip"># Design P1-3 v1 (user-locked)
+## Goal
+Model /metrics accepts MORTRED_METRICS_TOKEN (in addition to internal auth token).
+## Fix
+1. Supervisor injects MORTRED_METRICS_TOKEN into model children when available (still scrubbed then re-injected).
+2. base_server_impl: /metrics authorized if bearer matches auth_token OR metrics scrape token from env.</pre><h4>RD</h4><pre class="snip"># RD
+- issue: P1-3
+- branch: cowork/r13-p1-3-metrics-token-model
+- 问题分支提交: cc3a8ff8
+## changes
+- supervisor.cpp inject; base_server_impl.h /metrics auth</pre><h4>QA</h4><pre class="snip"># QA
+- issue: P1-3
+- result: pass
+- 问题分支提交: cc3a8ff8
+## checks
+- source asserts in fixer</pre><h4>merge</h4><pre class="snip"># merge
+- issue: P1-3
+- branch: cowork/r13-p1-3-metrics-token-model
+- worktree: /mnt/g/Codex/mortred_wt/r13-p1-3
+- 问题分支提交: cc3a8ff8
+- QA: pass
+- cmd: git merge --no-ff
+- merge commit: cf322469</pre></section>
+<section class="detail" id="p1-8" hidden><div class="detail-head"><button class="back" onclick="location.href='progress.html'">← 看板</button><h3>P1-8 · golden skip exit 77; presets/labels SSOT</h3></div><div class="meta-grid"><div><div class="t">status</div><div class="v">done</div></div><div><div class="t">merge</div><div class="v mono">e200ab99</div></div><div><div class="t">branch</div><div class="v mono">c363ea97</div></div><div><div class="t">step</div><div class="v">已合入 · merge e200ab99</div></div></div><h4>design</h4><pre class="snip"># Design P1-8 v1 (user-locked)
+## Goal
+Golden skip is not a silent pass locally (exit 77); presets/labels SSOT if needed.
+## Fix
+1. TSan presets vs labels already aligned in R12 — verify and note SSOT comment in CMakeLists near sanitizer LABELS.
+2. model_golden_test already returns 77 when all selected cases skip for missing weights; ensure SKIP_RETURN_CODE 77 remains and add a one-line README/test comment that local ctest without weights must show skip not pass.</pre><h4>RD</h4><pre class="snip"># RD
+- issue: P1-8
+- branch: cowork/r13-p1-8-golden-skip
+- 问题分支提交: c363ea97
+## changes
+- test/CMakeLists.txt comments; test/GOLDEN_SKIP.md</pre><h4>QA</h4><pre class="snip"># QA
+- issue: P1-8
+- result: pass
+- 问题分支提交: c363ea97
+## checks
+- source asserts in fixer</pre><h4>merge</h4><pre class="snip"># merge
+- issue: P1-8
+- branch: cowork/r13-p1-8-golden-skip
+- worktree: /mnt/g/Codex/mortred_wt/r13-p1-8
+- 问题分支提交: c363ea97
+- QA: pass
+- cmd: git merge --no-ff
+- merge commit: e200ab99</pre></section></div>
+<script>
+  const id = new URLSearchParams(location.search).get('id');
+  document.querySelectorAll('.detail').forEach(el => {
+    el.hidden = el.id !== id;
+  });
+  if (!id || !document.getElementById(id)) {
+    document.querySelector('.wrap').innerHTML = '<p>missing id — <a href="progress.html" style="color:#9db7ff">back</a></p>';
+  }
+</script></body></html>
