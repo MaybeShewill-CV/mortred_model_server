@@ -12,6 +12,9 @@
 //   --delay-ms N   sleep before POST response (gateway quota e2e)
 //   --exit-after-ms N --exit-code N
 //   --server-time-ms N   required with --mode envelope
+//   --spawn-grandchild   fork a helper that stays in this process group
+//   --grandchild-ignores-sigint   that helper survives the group's SIGINT, so
+//                                 only the SIGKILL escalation can collect it
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -88,6 +91,33 @@ std::string json_escape(const std::string& s) {
         }
     }
     return out;
+}
+
+// P1-3: fork one helper that deliberately stays in *this* process group (it
+// never calls setpgid), so the supervisor can only reach it through group
+// delivery. The helper announces its pid/pgid on stderr first and then drops
+// stdout/stderr: this mode tests process-group reaping, and holding the
+// supervisor's log pipe open would instead delay its reader threads.
+void spawn_grandchild_process(bool ignore_sigint) {
+    const pid_t pid = ::fork();
+    if (pid < 0) {
+        std::fprintf(stderr, "fake_model_server: cannot fork grandchild\n");
+        return;
+    }
+    if (pid > 0) {
+        return;
+    }
+    if (ignore_sigint) {
+        ::signal(SIGINT, SIG_IGN);  // only the SIGKILL escalation can collect it
+    }
+    std::fprintf(stderr, "fake grandchild pid=%d pgid=%d ignore_sigint=%d\n",
+                 static_cast<int>(::getpid()), static_cast<int>(::getpgid(0)),
+                 ignore_sigint ? 1 : 0);
+    ::close(STDOUT_FILENO);
+    ::close(STDERR_FILENO);
+    while (true) {
+        ::sleep(3600);
+    }
 }
 
 void handle_client(int fd, const std::string& mode, double server_time_ms, int delay_ms) {
@@ -218,6 +248,8 @@ int main(int argc, char** argv) {
     int exit_code = 0;
     bool server_time_set = false;
     double server_time_ms = 0.0;
+    bool spawn_grandchild = false;
+    bool grandchild_ignores_sigint = false;
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -231,6 +263,11 @@ int main(int argc, char** argv) {
             exit_after_ms = std::atoi(argv[++i]);
         } else if (arg == "--exit-code" && i + 1 < argc) {
             exit_code = std::atoi(argv[++i]);
+        } else if (arg == "--spawn-grandchild") {
+            spawn_grandchild = true;
+        } else if (arg == "--grandchild-ignores-sigint") {
+            spawn_grandchild = true;
+            grandchild_ignores_sigint = true;
         } else if (arg == "--server-time-ms" && i + 1 < argc) {
             const char* text = argv[++i];
             char* end = nullptr;
@@ -263,6 +300,16 @@ int main(int argc, char** argv) {
     if (cfg.count("fake_exit_code") != 0 && exit_code == 0) {
         exit_code = std::atoi(cfg["fake_exit_code"].c_str());
     }
+    // config keys, because the supervisor picks argv and a test cannot add flags
+    if (cfg.count("fake_spawn_grandchild") != 0 &&
+        std::atoi(cfg["fake_spawn_grandchild"].c_str()) != 0) {
+        spawn_grandchild = true;
+    }
+    if (cfg.count("fake_grandchild_ignores_sigint") != 0 &&
+        std::atoi(cfg["fake_grandchild_ignores_sigint"].c_str()) != 0) {
+        spawn_grandchild = true;
+        grandchild_ignores_sigint = true;
+    }
     if (mode == "envelope" && !server_time_set) {
         std::fprintf(stderr, "fake_model_server: --mode envelope requires --server-time-ms\n");
         return 2;
@@ -273,6 +320,11 @@ int main(int argc, char** argv) {
     }
     if (mode == "exit-now") {
         return exit_code;
+    }
+    if (spawn_grandchild) {
+        // before the listen socket exists, so the helper inherits only the
+        // stdout/stderr it immediately drops
+        spawn_grandchild_process(grandchild_ignores_sigint);
     }
 
     const int fd = ::socket(AF_INET, SOCK_STREAM, 0);

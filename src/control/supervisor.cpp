@@ -24,6 +24,7 @@
 #include <filesystem>
 #include <random>
 #include <sstream>
+#include <thread>
 #include <vector>
 
 #include "control/occupancy_gate.h"
@@ -36,6 +37,13 @@ extern "C" char** environ;
 
 namespace mortred {
 namespace control {
+
+bool process_group_gone(pid_t pgid) {
+    if (pgid <= 0) {
+        return true;  // no group was ever recorded: nothing to wait for
+    }
+    return ::killpg(pgid, 0) == -1 && errno == ESRCH;
+}
 
 namespace {
 
@@ -67,6 +75,33 @@ void drop_env_entry(std::vector<std::string>& block, const char* key) {
             ++it;
         }
     }
+}
+
+// Deliver sig to a managed child's whole process group so that a grandchild
+// dies with its leader. pgid <= 0 means no group was recorded (a genuine
+// setpgid failure): fall back to the single pid, never to the supervisor's own
+// group.
+void signal_process_group(pid_t pgid, pid_t pid, int sig) {
+    if (pgid > 0) {
+        ::killpg(pgid, sig);
+        return;
+    }
+    if (pid > 0) {
+        ::kill(pid, sig);
+    }
+}
+
+// Bounded poll of process_group_gone: no busy spin, no lock held.
+bool wait_process_group_gone(pid_t pgid, int timeout_ms) {
+    const auto deadline = std::chrono::steady_clock::now() +
+                          std::chrono::milliseconds(timeout_ms > 0 ? timeout_ms : 0);
+    while (!process_group_gone(pgid)) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    return true;
 }
 
 void read_pipe_loop(int fd, LogBuffer* buffer) {
@@ -470,6 +505,21 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err,
         }
         return false;
     }
+    pid_t child_pgid = -1;
+    if (pid > 0) {
+        // Parent side of the process-group handshake: the child leads its own
+        // group (pgid == pid) so the stop/restart/shutdown sites can reach a
+        // grandchild that the leader would otherwise orphan. Both sides call
+        // setpgid, so no ordering can leave the child in our group. EACCES =
+        // the child already exec'd (its own call ran), EPERM/ESRCH = already a
+        // group leader or already gone; in every tolerated case pgid == pid is
+        // still the truth.
+        if (::setpgid(pid, pid) != 0 && errno != EACCES && errno != EPERM && errno != ESRCH) {
+            child_pgid = -1;  // no group: delivery falls back to the single pid
+        } else {
+            child_pgid = pid;
+        }
+    }
     if (pid == 0) {
         ::dup2(out_pipe[1], STDOUT_FILENO);
         ::dup2(err_pipe[1], STDERR_FILENO);
@@ -480,6 +530,11 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err,
         for (int fd = 3; fd < max_fd; ++fd) {
             ::close(fd);
         }
+        // Child side of the same handshake. It must stay inside this
+        // post-fork/pre-exec block: setpgid(2) is async-signal-safe (integer
+        // arguments only, no libc state), so completion-standard row ST5 still
+        // holds - nothing non-async-signal-safe runs between fork and execve.
+        ::setpgid(0, 0);
         // die with the supervisor (graceful SIGINT path) instead of orphaning.
         // syscall, not libc prctl: this stays after the fd close and before execve.
         ::syscall(SYS_prctl, PR_SET_PDEATHSIG, SIGINT);
@@ -521,6 +576,7 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err,
     }
     child->log->append("[supervisor] spawn pid " + std::to_string(pid));
     child->pid = pid;
+    child->pgid = child_pgid;
     child->ready = false;
     child->started_at_unix_ms = unix_ms();
     child->last_probe_ms = 0;
@@ -590,6 +646,40 @@ bool ProcessSupervisor::wait_child_exit(const std::string& id, int timeout_ms) {
     });
 }
 
+bool ProcessSupervisor::reap_group_with_grace(const std::string& id) {
+    pid_t pgid = -1;
+    {
+        std::lock_guard<std::mutex> lock(_mu);
+        Child* child = find_locked(id);
+        if (child != nullptr) {
+            pgid = child->pgid;
+        }
+    }
+    // One grace budget for the leader *and* its group. The leader's exit alone
+    // does not end the stop: a grandchild that ignores SIGINT keeps the group
+    // alive after the leader is reaped, so the rest of the budget is spent on
+    // the group and whatever is left is SIGKILLed as a group. The leader's own
+    // timeout still escalates on its own, which keeps the pgid <= 0 fallback
+    // (setpgid failed, so there is no group to inspect) as safe as before.
+    const int64_t deadline = monotonic_ms() + kStopGraceMs;
+    const bool leader_exited = wait_child_exit(id, kStopGraceMs);
+    const int64_t remaining = deadline - monotonic_ms();
+    const bool group_gone =
+        wait_process_group_gone(pgid, remaining > 0 ? static_cast<int>(remaining) : 0);
+    if (!leader_exited || !group_gone) {
+        {
+            std::lock_guard<std::mutex> lock(_mu);
+            Child* child = find_locked(id);
+            if (child != nullptr) {
+                signal_process_group(child->pgid, child->pid, SIGKILL);
+            }
+        }
+        wait_child_exit(id, 2000);
+        return wait_process_group_gone(pgid, 2000);
+    }
+    return true;
+}
+
 bool ProcessSupervisor::stop_server(const std::string& id, std::string* err) {
     {
         std::lock_guard<std::mutex> lock(_mu);
@@ -618,17 +708,16 @@ bool ProcessSupervisor::stop_server(const std::string& id, std::string* err) {
         child->wanted = false;
         child->stopping = true;
         child->backoff_due_ms = 0;
-        ::kill(child->pid, SIGINT);
+        // whole group: helpers a child forked must not outlive the child
+        signal_process_group(child->pgid, child->pid, SIGINT);
     }
-    if (!wait_child_exit(id, kStopGraceMs)) {
-        std::lock_guard<std::mutex> lock(_mu);
-        Child* child = find_locked(id);
-        if (child != nullptr && child->pid > 0) {
-            ::kill(child->pid, SIGKILL);
-        }
-        wait_child_exit(id, 2000);
-    }
+    const bool group_gone = reap_group_with_grace(id);
     log_line(id, "stop requested via api");
+    if (!group_gone) {
+        // process_group_gone could not confirm an empty group: report it rather
+        // than pretend the whole tree stopped.
+        log_line(id, "stop: process group survived grace+2s; check for surviving descendants");
+    }
     return true;
 }
 
@@ -746,10 +835,9 @@ void ProcessSupervisor::fail_missing_server_uri_locked(Child* child) {
     if (_autostart_models_active.load()) {
         mark_models_failed_locked("model failed: " + child->id + ": " + reason);
     }
-    // Drop the process without stopping=true so note_exit keeps Failed.
-    if (child->pid > 0) {
-        ::kill(child->pid, SIGKILL);
-    }
+    // Drop the whole process group without stopping=true so note_exit keeps
+    // Failed: the child may already have forked helpers of its own.
+    signal_process_group(child->pgid, child->pid, SIGKILL);
 }
 
 int ProcessSupervisor::probe_port_of(const Child& child) const {
@@ -919,19 +1007,15 @@ void ProcessSupervisor::perform_ordered_shutdown() {
                 child->engine.note_cancel();
             } else {
                 child->stopping = true;
-                ::kill(child->pid, SIGINT);
+                // whole group, models first (unchanged order)
+                signal_process_group(child->pgid, child->pid, SIGINT);
             }
         }
     }
     for (const auto& id : model_ids) {
-        if (!wait_child_exit(id, kStopGraceMs)) {
-            std::lock_guard<std::mutex> lock(_mu);
-            Child* child = find_locked(id);
-            if (child != nullptr && child->pid > 0) {
-                ::kill(child->pid, SIGKILL);
-            }
+        if (!reap_group_with_grace(id)) {
+            log_line(id, "shutdown: process group survived grace+2s");
         }
-        wait_child_exit(id, 2000);
     }
     // phase 2: gateway last
     {
@@ -944,18 +1028,14 @@ void ProcessSupervisor::perform_ordered_shutdown() {
                 gateway->engine.note_cancel();
             } else {
                 gateway->stopping = true;
-                ::kill(gateway->pid, SIGINT);
+                // whole group, gateway last (unchanged order)
+                signal_process_group(gateway->pgid, gateway->pid, SIGINT);
             }
         }
     }
-    if (!wait_child_exit(kGatewayId, kStopGraceMs)) {
-        std::lock_guard<std::mutex> lock(_mu);
-        Child* gateway = find_locked(kGatewayId);
-        if (gateway != nullptr && gateway->pid > 0) {
-            ::kill(gateway->pid, SIGKILL);
-        }
+    if (!reap_group_with_grace(kGatewayId)) {
+        log_line(kGatewayId, "shutdown: process group survived grace+2s");
     }
-    wait_child_exit(kGatewayId, 2000);
 
     std::lock_guard<std::mutex> lock(_mu);
     _shutdown_done = true;
