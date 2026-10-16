@@ -55,6 +55,8 @@
 - A1 `./_bin/server_runtime_config_unittest` 退出 0，含 `=0` 与 `=-1` → 300000、缺键 → 500 三态用例。
 - A2 `./_bin/server_e2e_contract_test` 退出 0，含新用例：`model_run_timeout=0` + `fake_delay_ms=1000` → 504，且服务**正常启动**（不是拒绝启动）。
 - A3 `grep -rn 'model_run_timeout=0' conf/server | wc -l` = 0，且 `grep -rn 'model_run_timeout' conf/server | wc -l` 仍为 5 份配置均显式有界。
+
+  编排方已核实的精确落点（本轮基线 `4ebbcb7d`）：5 份配置全部在第 17 行写 `model_run_timeout=0` —— `conf/server/diffusion/{cls_cond_ddim,ddim,ddpm,ldm}/*_server_config.toml` 与 `conf/server/segment_anything/sam_amg/sam_amg_server_config.toml`。文档两侧都存在：`docs/about_model_server_configuration.md`（2954 B）与 `.zh-cn.md`（3087 B）；其中**中文版第 22 行**明文写"`-1代表该值无限大`"——这句在当前实现下就是错的（`<=0` 实为关闭超时），本项必须改掉；英文版第 22 行未作无限大声明，但应补上"`<=0` 会被夹到 300000ms 并告警"。
 - A4 请求超时后 `/metrics` 的 `mortred_waiting_jobs` 回落到 0（不残留）。
 - A5 提交只含上述 6 类文件；不含 `cowork/ledger/`、构建产物、`src/common/mortred_version.h`。
 
