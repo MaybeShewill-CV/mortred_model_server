@@ -544,7 +544,7 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err,
         ::setpgid(0, 0);
         // die with the supervisor (graceful SIGINT path) instead of orphaning.
         // syscall, not libc prctl: this stays after the fd close and before execve.
-        ::syscall(SYS_prctl, PR_SET_PDEATHSIG, SIGINT);
+        ::syscall(SYS_prctl, PR_SET_PDEATHSIG /* orphan self-exit when supervisor dies */, SIGINT);
         if (::getppid() != parent_pid) {
             ::_exit(0);
         }
