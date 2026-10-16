@@ -18,6 +18,7 @@
 
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -819,6 +820,24 @@ class GatewayAuthTest : public ::testing::Test {
     pid_t fake_pid_ = -1;
     pid_t gateway_pid_ = -1;
     const std::string valid_key_ = "valid-api-key-0001";
+    bool RestartFakeWithDelay(int delay_ms) {
+        stop(fake_pid_);
+        fake_pid_ = -1;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        const std::string fake_bin =
+            env_or_default("MORTRED_FAKE_BIN", MORTRED_FAKE_BIN_DEFAULT);
+        fake_pid_ = spawn(fake_bin,
+                          {"--port", std::to_string(model_port_), "--mode", "ready",
+                           "--delay-ms", std::to_string(delay_ms)},
+                          {});
+        for (int i = 0; i < 50; ++i) {
+            if (mortred::control::endpoint_ready(model_port_, "/ready", 500)) {
+                return true;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        return false;
+    }
     static int seq_;
 };
 
@@ -998,6 +1017,64 @@ TEST_F(GatewayAuthTest, NonLoopbackWithDistinctMetricsTokenStarts) {
     EXPECT_EQ(r.status, 200);
     r = send_request(gateway_port_, "GET", "/healthz", "");
     EXPECT_EQ(r.status, 200);
+}
+
+
+TEST_F(GatewayAuthTest, WorkerBudgetRejectsWhenMaxInflightZero) {
+    // Round 8 P1-3 / P1-1: worker_budget hard gate must work with max_inflight=0.
+    const std::string toml =
+        std::string("[keys.tenant]\nhash = \"") +
+        mortred::control::ApiKeyManager::sha256_hex(valid_key_) +
+        "\"\nscope = \"inference\"\nenabled = true\n"
+        "max_inflight = 0\nworker_budget = 1\nmax_queue = 8\n";
+    ASSERT_TRUE(StartGateway("127.0.0.1", "ext-token", toml,
+                             {{"MORTRED_API_TOKEN", "mgmt-token"}}));
+    ASSERT_TRUE(RestartFakeWithDelay(800));
+    std::atomic<int> ok{0}, limited{0};
+    int st2 = 0;
+    std::map<std::string, std::string> hdr2;
+    std::thread t1([&] {
+        auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}", valid_key_);
+        if (r.status == 200) ok.fetch_add(1);
+        if (r.status == 429) limited.fetch_add(1);
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(80));
+    auto r2 = send_request(gateway_port_, "POST", kAuthRoute, "{}", valid_key_);
+    t1.join();
+    st2 = r2.status;
+    hdr2 = r2.headers;
+    if (st2 == 200) ok.fetch_add(1);
+    if (st2 == 429) limited.fetch_add(1);
+    EXPECT_GE(limited.load(), 1) << "expected worker_budget 429; r2=" << st2;
+    if (st2 == 429) {
+        ASSERT_NE(hdr2.find("x-mortred-ratelimit-layer"), hdr2.end());
+        EXPECT_EQ(hdr2.at("x-mortred-ratelimit-layer"), "api-key-worker-budget");
+    }
+}
+
+TEST_F(GatewayAuthTest, MaxQueueResidencyRejectsWhileHeld) {
+    // Round 8 P1-3: queue slot held until upstream callback; concurrent excess -> 429 + layer.
+    const std::string toml =
+        std::string("[keys.tenant]\nhash = \"") +
+        mortred::control::ApiKeyManager::sha256_hex(valid_key_) +
+        "\"\nscope = \"inference\"\nenabled = true\n"
+        "max_queue = 1\nworker_budget = 0\nmax_inflight = 0\n";
+    ASSERT_TRUE(StartGateway("127.0.0.1", "ext-token", toml,
+                             {{"MORTRED_API_TOKEN", "mgmt-token"}}));
+    ASSERT_TRUE(RestartFakeWithDelay(800));
+    std::atomic<int> limited{0};
+    std::thread t1([&] {
+        send_request(gateway_port_, "POST", kAuthRoute, "{}", valid_key_);
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(80));
+    auto r2 = send_request(gateway_port_, "POST", kAuthRoute, "{}", valid_key_);
+    t1.join();
+    if (r2.status == 429) {
+        limited.fetch_add(1);
+        ASSERT_NE(r2.headers.find("x-mortred-ratelimit-layer"), r2.headers.end()) << r2.body;
+        EXPECT_EQ(r2.headers.at("x-mortred-ratelimit-layer"), "api-key-max-queue");
+    }
+    EXPECT_GE(limited.load(), 1) << "expected max_queue residency 429, got " << r2.status;
 }
 
 int main(int argc, char** argv) {

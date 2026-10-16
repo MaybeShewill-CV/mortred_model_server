@@ -9,6 +9,7 @@
 // Behaviour comes from the config file (the supervisor always passes the
 // server config as argv[1]) and can be overridden by flags:
 //   --port N --mode ready|never-ready|exit-now|overloaded|envelope
+//   --delay-ms N   sleep before POST response (gateway quota e2e)
 //   --exit-after-ms N --exit-code N
 //   --server-time-ms N   required with --mode envelope
 
@@ -89,7 +90,7 @@ std::string json_escape(const std::string& s) {
     return out;
 }
 
-void handle_client(int fd, const std::string& mode, double server_time_ms) {
+void handle_client(int fd, const std::string& mode, double server_time_ms, int delay_ms) {
     std::string req;
     char buf[2048];
     while (req.find("\r\n\r\n") == std::string::npos) {
@@ -117,6 +118,9 @@ void handle_client(int fd, const std::string& mode, double server_time_ms) {
     std::string status = "200 OK";
     std::string body = "{\"code\":0,\"msg\":\"success\",\"data\":{\"fake\":true}}";
     std::string extra_headers;
+    if (delay_ms > 0 && method == "POST") {
+        std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+    }
     if (mode == "overloaded" && method == "POST") {
         status = "429 Too Many Requests";
         body = "{\"code\":429}";
@@ -209,6 +213,7 @@ int main(int argc, char** argv) {
     std::map<std::string, std::string> cfg;
     int port = 0;
     std::string mode = "ready";
+    int delay_ms = 0;
     int exit_after_ms = -1;
     int exit_code = 0;
     bool server_time_set = false;
@@ -220,6 +225,8 @@ int main(int argc, char** argv) {
             port = std::atoi(argv[++i]);
         } else if (arg == "--mode" && i + 1 < argc) {
             mode = argv[++i];
+        } else if (arg == "--delay-ms" && i + 1 < argc) {
+            delay_ms = std::atoi(argv[++i]);
         } else if (arg == "--exit-after-ms" && i + 1 < argc) {
             exit_after_ms = std::atoi(argv[++i]);
         } else if (arg == "--exit-code" && i + 1 < argc) {
@@ -301,7 +308,7 @@ int main(int argc, char** argv) {
             }
             continue;
         }
-        handle_client(client, mode, server_time_ms);
+        handle_client(client, mode, server_time_ms, delay_ms);
     }
     return exit_code;
 }
