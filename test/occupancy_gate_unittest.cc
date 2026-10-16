@@ -259,3 +259,15 @@ TEST_F(OccupancyGateTest, query_nvidia_smi_times_out_on_hang) {
     EXPECT_GE(ms, 250) << "probe returned without running the PATH script, took " << ms << "ms";
     EXPECT_LT(ms, 2000) << "probe must return within timeout, took " << ms << "ms";
 }
+
+TEST(OccupancyEnforcementDisable, soft_off_alone_does_not_disable) {
+    unsetenv("MORTRED_OCCUPANCY_ENFORCE");
+    unsetenv("MORTRED_OCCUPANCY_ALLOW_DISABLE");
+    EXPECT_FALSE(mortred::control::occupancy_enforcement_disabled("off"));
+    setenv("MORTRED_OCCUPANCY_ENFORCE", "0", 1);
+    EXPECT_FALSE(mortred::control::occupancy_enforcement_disabled("enforce"));
+    setenv("MORTRED_OCCUPANCY_ALLOW_DISABLE", "1", 1);
+    EXPECT_TRUE(mortred::control::occupancy_enforcement_disabled("off"));
+    unsetenv("MORTRED_OCCUPANCY_ENFORCE");
+    unsetenv("MORTRED_OCCUPANCY_ALLOW_DISABLE");
+}

@@ -135,7 +135,7 @@ def check_occupancy(
         ]
     if occupancy_disabled(policy):
         return [
-            "occupancy_policy=off (or MORTRED_OCCUPANCY_ENFORCE=0) is unsafe; "
+            "occupancy_policy=off (or MORTRED_OCCUPANCY_ENFORCE=0) is unsafe without MORTRED_OCCUPANCY_ALLOW_DISABLE=1; "
             "set occupancy_policy=enforce, unset MORTRED_OCCUPANCY_ENFORCE, then: "
             "mortredctl calibrate --pack %s --write-pack" % pack
         ]
