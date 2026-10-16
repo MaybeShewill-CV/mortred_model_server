@@ -930,7 +930,7 @@ TEST_F(SupervisorTest, gateway_identical_infer_and_admin_is_permanent_failure) {
 // P1-2: the operator's shell / systemd EnvironmentFile may export management
 // and scrape credentials into the supervisor's own environment. spawn_locked
 // copies environ, so without the drop these keys ride into every managed child.
-// The invariant: a model child receives NONE of the four credential keys, and
+// The invariant: a model child receives no management credentials (metrics scrape token is injected), and
 // the gateway child receives only the two its role needs, each exactly once.
 TEST_F(SupervisorTest, managed_children_do_not_inherit_management_credentials) {
     // long-lived child: the environ file must still exist at assert time
@@ -960,11 +960,16 @@ TEST_F(SupervisorTest, managed_children_do_not_inherit_management_credentials) {
     const std::string model_env = read_child_environ(model_status.pid);
     ASSERT_FALSE(model_env.empty()) << "/proc/<pid>/environ unreadable for model child";
 
-    for (const char* key : {"MORTRED_API_TOKEN", "MORTRED_METRICS_TOKEN",
-                            "MORTRED_GATEWAY_AUTH_TOKEN", "MORTRED_INTERNAL_TOKEN"}) {
+    // Allowlist: model must NOT inherit poison credentials. MORTRED_METRICS_TOKEN
+    // is re-injected from gateway trust (scrape-token), never the poison value.
+    for (const char* key : {"MORTRED_API_TOKEN", "MORTRED_GATEWAY_AUTH_TOKEN",
+                            "MORTRED_INTERNAL_TOKEN"}) {
         EXPECT_EQ(count_env_key(model_env, key), 0)
             << "model child inherited " << key << " from the supervisor environment";
     }
+    EXPECT_EQ(count_env_key(model_env, "MORTRED_METRICS_TOKEN"), 1)
+        << "model child should receive injected scrape metrics token";
+    EXPECT_NE(model_env.find("MORTRED_METRICS_TOKEN=scrape-token"), std::string::npos);
     // the model's own credential still arrives, and is not the poisoned value
     EXPECT_EQ(count_env_key(model_env, "MORTRED_AUTH_TOKEN"), 1);
     EXPECT_EQ(model_env.find("poison-"), std::string::npos)

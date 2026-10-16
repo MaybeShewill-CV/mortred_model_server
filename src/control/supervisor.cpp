@@ -434,26 +434,42 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err,
         }
     }
 
+    // Allowlist child environ (Round 14): never copy the supervisor's full
+    // environ. Only pass a fixed set of process/runtime keys, then inject
+    // the role-specific MORTRED_* credentials below. A drop-list cannot
+    // keep up with new secret names; an allowlist can.
+    static const char* kChildEnvAllow[] = {
+        "PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "LC_CTYPE",
+        "TZ", "TERM", "TMPDIR", "TMP", "TEMP",
+        "LD_LIBRARY_PATH", "LD_PRELOAD",
+        "CUDA_VISIBLE_DEVICES", "CUDA_DEVICE_ORDER", "NVIDIA_VISIBLE_DEVICES",
+        "NVIDIA_DRIVER_CAPABILITIES", "CUDA_MODULE_LOADING",
+        nullptr,
+    };
     std::vector<std::string> env_storage;
     if (environ != nullptr) {
         for (char** ep = environ; *ep != nullptr; ++ep) {
-            env_storage.emplace_back(*ep);
+            const char* entry = *ep;
+            const char* eq = std::strchr(entry, '=');
+            if (eq == nullptr) {
+                continue;
+            }
+            const size_t key_len = static_cast<size_t>(eq - entry);
+            bool allowed = false;
+            for (const char** a = kChildEnvAllow; *a != nullptr; ++a) {
+                if (std::strlen(*a) == key_len && std::strncmp(entry, *a, key_len) == 0) {
+                    allowed = true;
+                    break;
+                }
+            }
+            if (allowed) {
+                env_storage.emplace_back(entry);
+            }
         }
     }
     override_env_entry(env_storage, "LD_LIBRARY_PATH", ld_path);
     override_env_entry(env_storage, "MORTRED_PROJECT_ROOT", project_root);
     override_env_entry(env_storage, "MORTRED_CONTROL_CONFIG", control_config);
-    // Invariant: a managed child only gets the credentials its role needs, and
-    // never inherits whatever the operator's shell / systemd EnvironmentFile put
-    // in the supervisor's environment. Scrub the four credential keys here -
-    // after the environ copy, before the fork - then let the per-branch
-    // injection below re-add exactly what the role requires. The management
-    // token therefore never reaches a model process, and model children hold no
-    // credential except the internal MORTRED_AUTH_TOKEN injected right below.
-    drop_env_entry(env_storage, "MORTRED_API_TOKEN");
-    drop_env_entry(env_storage, "MORTRED_METRICS_TOKEN");
-    drop_env_entry(env_storage, "MORTRED_GATEWAY_AUTH_TOKEN");
-    drop_env_entry(env_storage, "MORTRED_INTERNAL_TOKEN");
     if (is_gateway) {
         override_env_entry(env_storage, "MORTRED_INTERNAL_TOKEN", internal_token);
         override_env_entry(env_storage, "MORTRED_GATEWAY_HOST", gateway_host);
