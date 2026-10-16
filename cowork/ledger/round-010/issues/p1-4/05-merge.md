@@ -43,3 +43,12 @@
 ## 清理
 
 合入记录写完后删除该 worktree（先移除 `3rd_party`/`weights` 目录联接，再 `git worktree remove --force`，避免递归删除波及主仓库依赖树）。
+
+## 合入后完整性复核（编排方，`19c649fa` 之后）
+
+为确认"`src/models` 里不再有请求路径上的 abort"，编排方在合入后的基线上对**整个 `src/models`** 做了穷举检索：
+
+- `grep -rn 'CHECK(\|CHECK_EQ(\|LOG(FATAL)\|std::abort' src/models` → **0 命中**。P1-4 修掉的 3 处是 `src/models` 内**唯一**的运行时 abort 断言，模块内已无同类残留。
+- 仅存的断言类构造是：① 3 处 **编译期** `static_assert`（`backend/gpu_preprocess_desc.h:89`、`backend/tensor.h:134` 的"unsupported tensor element type"、`backend/trt_session.cpp:23` 的 TensorRT 版本要求）——编译期失败不构成运行期 abort；② `mot/byte_tracker/lapjv.{h,cpp}` 的 `ASSERT` 宏族，其 `#define ASSERT(cond) assert(cond)` 分支被 `#if 0` 关掉，生效的是 `#else` 里的 `#define ASSERT(cond)`（**展开为空**）。
+- 由此对 `lapjv.cpp:324-327` 的准确描述（**观察，非新增条目**）：`if (k >= n) { ASSERT(FALSE); }` 在生效宏下**分支体为空**，于是该"不应发生"的守卫既不中止也不报错，循环继续、函数在 `:330` 返回 0。它不是崩溃，也不能据此断定结果错误，但那个安全网在编译产物里是惰性的。MOT 属 `rubric.md` 明文范围外（`:37`），故只作记录，不入列。
+
