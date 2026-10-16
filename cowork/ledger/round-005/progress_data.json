@@ -1,13 +1,13 @@
 {
   "round": 5,
-  "generated_at": "2026-10-16 13:08:42 CST",
-  "round_status": "running",
-  "current": "P1-5",
-  "done": 4,
+  "generated_at": "2026-10-16 13:10:24 CST",
+  "round_status": "done",
+  "current": null,
+  "done": 5,
   "total": 5,
-  "percent": 80,
+  "percent": 100,
   "open_p0": 0,
-  "open_p1": 1,
+  "open_p1": 0,
   "issues": [
     {
       "id": "P1-1",
@@ -66,13 +66,13 @@
       "issue_id": "p1-5",
       "title": "Occupancy test drift",
       "priority": "P1",
-      "status": "designed",
-      "merge_sha": null,
-      "branch_sha": null,
+      "status": "done",
+      "merge_sha": "f17992218c0d8f03709084dc0cadae1e41725f96",
+      "branch_sha": "06adf1cd0b70a3d36bdb86e1cc46f12f353a4766",
       "has_design": true,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true
     }
   ]
 }
