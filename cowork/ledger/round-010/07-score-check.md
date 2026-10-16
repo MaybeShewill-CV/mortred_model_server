@@ -9,6 +9,15 @@
 
 判据来自 `cowork/ledger/rubric.md:95`：未满足的行必须进入 P0/P1/P2 并写出出处、现在的行为和一次外部验收即可确认的变化；阻塞仅用于环境跑不了的验收，且只阻塞性能、吞吐、engine 和占用行（`rubric.md:91`）。
 
+### 扩展
+
+| 编号 | 判定 | 证据 |
+| --- | --- | --- |
+| EX1（`model-developer-guide.md` / `how_to_add_new_server.md` 不得要求为每个模型单独做服务器二进制，且步骤须与 `catalog()`、`--list` 一致） | **已满足** | `docs/how_to_add_new_server.md:3` 明写"Since the registry-driven refactor, adding a served model is **one `CvModelEntry` row in the family `catalog()`**… `ProductIndex` projects that row onto both unified CLIs"；`:25` 给出步骤"Open the task header of the model's family (`src/factory/classification_task.h`) and add a `CvModelEntry` to `catalog()`"；`:40` 更直接声明"`ProductIndex` iterates every family `catalog()` at startup. **There is no second product table and no `create_densenet_cls_server` wrapper.**"；`docs/model-developer-guide.md:78`（`catalog()` / `face_catalog()`）、`:100`、`:132`（`./_bin/mortred-model-server.out --list`）与之口径一致；三份文档都只使用同一个 `mortred-model-server.out`（`:64` 的 `server_exe` 指的是 server TOML 里指向该二进制，不是新建二进制） |
+| EX2（在已有家族的 `catalog()` 增加一个 id 后 `--list` 出现该 id，且 gateway 不需改路由代码） | **已满足** | 编排方活体实测：`./_bin/mortred-model-server.out --list` 退出 0，输出带表头（`id`/`family`/`surface`/`display_name`）共 **44** 个 id；网关按 `/v1/models/{id}` 泛化路由（`gateway_app.cpp:288` 的 `kPrefix`、`:297` "Exact catalog id"），`src/control/` 内 grep 具体 id 只命中一处注释（`catalog.h:41` 的举例）。详见 `07-modules/src-factory-common.md` |
+| EX3（产品 toml 不得被改成 `type=onnx` 直接服务；已是 ONNX 的 id 与 LIBFACE 除外；cpu profile 上 `type=tensorrt` 初始化成功或进入 ready 同样算未满足） | **前半已满足，后半待复核** | 前半：实测产品 toml 的 `type=` 分布为 tensorrt 50 / mnn 5 / onnx 4，本轮无人改 `type=`（P1-5 只改 5 个 timeout 值，`--numstat` 均 `1 1`）。后半：需要一次 cpu profile 下带 `type=tensorrt` 的初始化实测（`conf/ci`、`conf/trt_profiles` 提供了夹具），本轮未做。详见 `07-modules/conf.md` 的 EX3 行 |
+
+
 ### 稳定
 
 | 编号 | 判定 | 证据 |
@@ -20,14 +29,12 @@
 | ST6 | **已满足** | 采样链是"NVML 优先、nvidia-smi 兜底、否则 fail-closed"：`src/control/gpu_probe.h:226`（"Prefer NVML, then nvidia-smi. First available sample wins; else fail-closed"），`backend` 字段记录 `nvml`/`nvidia-smi`/`fake`（`:36`）；`src/control/gpu_sampler.h:62,67` 把空串/`[N/A]`/`N/A` 一律当无效读数走 fallback（**不会把 N/A 当 0% 利用率**），`:14` 注明"proven against hung drivers"、`:111` 用带硬 deadline 的非阻塞 probe；面板侧 `src/control/cli/cli_app.cpp:251` 渲染 `n/a`，`supervisor_app.cpp:849` 注明 HUD 采样线程"graceful offline"。**测试**：`test/gpu_probe_unittest.cc` 用 `FakeGpuProbe`/`ChainGpuProbe` 覆盖 `fake_probe_returns_canned_fail_closed_when_unavailable`（`:11`）、`fake_probe_available_sample`（`:21`）、`chain_prefers_first_available`（`:37`），即"不可用时 fail-closed"有专门用例 |
 | ST4 | **未满足（第二半缺可复现证据）** | 第一半（停掉一个模型后 gateway 对该 id 不是 503 = 未满足）**已有证据**：`gateway_app.cpp:371` 把 `ECONNREFUSED` 映射为 503，`test/gateway_e2e_test.cc:497` `dead_upstream_maps_to_503` 实证（停掉 fake upstream 后请求得到 503 + 体内 `"status":65`）。第二半（**驻留集里另一个 id 的合法请求仍成功**）**没有可复现证据**：`GatewayE2ETest` 夹具只起**一个** upstream（`fake_pid_` 单实例，`server_exe="fake_model_server.out"`），`test/process_stop_unittest.cc` 只验证 `ProcessStop` 的信号语义（5 个用例均为 WaitGroup/析构级），`scripts/resident_pair_record.py` 覆盖的是 TP2 的"两边同时 ready 且重叠推理"而非"停一个、另一个仍可用"。按 `rubric.md:91`，阻塞只允许用于性能/吞吐/engine/占用行，**ST4 属稳定性行，不得判阻塞**，故按未满足处理。**入列建议（P1）**：出处 = 上述夹具与脚本的覆盖缺口；现在的行为 = 网关把上游拒连映射为 503 且路由按 id 独立（`gateway_app.cpp:371`、`:288` 的 `/v1/models/` 前缀路由），但没有任何测试或脚本同时持有"一个活 id + 一个死 id"；一次外部验收即可确认的变化 = 起驻留集两个 id，停其中一个，断言 gateway 对该 id 返回 503、对另一个 id 仍返回 200，并把该场景固化成脚本或用例 |
 | TP2 | **阻塞** | 覆盖标准要求"`yolov8s` 与 `libface` 同时 ready 时对两者并发请求且都有成功响应"。仓库里有专用程序 `scripts/resident_pair_record.py`（live 与 `--check` 共用同一 `judge()`：要求时间重叠、两边 before 均 ready、after pid 一致、两条 HTTP 均为 200 且 `status==0`）。**但本树没有已记录的真盘产物**（`logs/resident_pair_yolov8s_libface.json` 不存在），而 `--check` 按设计**不读也不写**该 json——它只是对内置样例跑一遍 judge。编排方实跑确认：`python3 scripts/resident_pair_record.py --check` **退出 0**，同时打印 `no recorded resident-pair json`，即**该退出码不能作为 TP2 的已满足证据**（这一点很容易被误读，特此写明）。TP2 属吞吐行，判阻塞；**恢复条件**：在有 weights/engine 且 8787/8080 空闲时跑 live 形式生成记录，再以 `--check` 复核 |
-| ST4 | 待补 | 需要一份"驻留集里停掉一个模型 → gateway 对该 id 返回 503、其它 id 仍可用"的活体证据；收口时用既有 e2e/活体记录判定 |
-
 ### 运维
 
 | 编号 | 判定 | 证据 |
 | --- | --- | --- |
 | OP4 | **已满足** | 三类凭据缺失或彼此相同时 gateway 拒绝启动，且**有 e2e 用例**：缺 metrics token → `test/gateway_e2e_test.cc:969` `MetricsTokenUnsetRefusesToStart`、`:1012` `NonLoopbackWithoutMetricsTokenRefusesToStart`；metrics token 与推理/管理 token 相同 → `:1020` `MetricsTokenMatchingInferenceRefusesToStart`；单元层由 `test/trust_tokens_unittest.cc:38,44` 两处 `EXPECT_STREQ(st.reason, kScrapeTokenCollision)` 钉住（`reason` 定义在 `src/control/trust_tokens.h:22`、判据在 `:37`），网关侧据此在 `src/control/gateway/gateway_app.cpp:941-946` 打印 "refusing to start: MORTRED_METRICS_TOKEN matches an inference or management token" |
-| OP5 | **部分**：gateway 先于模型退出、模型进程不残留这一半已由 P1-1 轮次前的有序停机用例覆盖（`supervisor_unittest` 的 `shutdown_is_ordered_and_complete`），但"模型进程先退出"整条链要等 **P1-3（进程组）合入后**按 `process_group_gone` 重判；本行在 P1-3 关闭后补最终判定 | 待补 |
+| OP5 | **已满足（P1-3 合入后补齐后半）** | 有序停机：`supervisor_unittest.shutdown_is_ordered_and_complete`（models 先、gateway 后）；整组回收：P1-3 新增的 `stop_signals_the_whole_process_group`（先自证拓扑 `getpgid(leader)==leader`、`getpgid(leader)!=getpgid(getpid())`、`getpgid(grandchild)==leader`，再断言 `stop_ms < 4000`、`process_group_gone(leader)`、`kill(grandchild,0)==-1`、`state=="stopped"`）与反例 `stop_reaps_grandchild_that_ignores_sigint`（走 SIGKILL 升级路径）；`supervisor_unittest` 26/26。**已知边界**：supervisor 自身被外部 SIGKILL 时孙进程仍可能存活（PDEATHSIG 只覆盖直接子进程，`KillMode=control-group` 被方案否决），该边界不影响本行在"收到停止信号"这一前提下成立 |
 
 ## 仍待判定的行
 
