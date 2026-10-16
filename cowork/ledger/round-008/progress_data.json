@@ -1,13 +1,13 @@
 {
   "round": 7,
-  "generated_at": "2026-10-16 14:41:41 CST",
+  "generated_at": "2026-10-16 14:42:31 CST",
   "round_status": "running",
   "current": "P1-3",
-  "done": 4,
+  "done": 5,
   "total": 6,
-  "percent": 67,
+  "percent": 83,
   "open_p0": 0,
-  "open_p1": 2,
+  "open_p1": 1,
   "issues": [
     {
       "id": "P0-1",
@@ -144,13 +144,13 @@
       "issue_id": "p1-5",
       "title": "CI evidence path improve + headers.h layer nit",
       "priority": "P1",
-      "status": "todo",
-      "merge_sha": null,
-      "branch_sha": null,
-      "has_design": false,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
+      "status": "done",
+      "merge_sha": "639e7b9155abc05dec63f78c48f89f999ad44080",
+      "branch_sha": "49507251aa7bba1985b2b87dd0b9b3522ef2522d",
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
       "paths": {
         "design": "cowork/ledger/round-008/issues/p1-5/03-design-final.md",
         "rd": "cowork/ledger/round-008/issues/p1-5/04-rd.md",
@@ -158,12 +158,12 @@
         "merge": "cowork/ledger/round-008/issues/p1-5/05-merge.md"
       },
       "snippets": {
-        "design": "",
-        "rd": "",
-        "qa": "",
-        "merge": ""
+        "design": "# 技术方案\n- 问题: P1-5\n- 版本: v1\n## 目标\nCI evidence path improve + headers.h layer nit\n## 边界\n- 不改 packing/Docker。\n## 实现要点\n见问题分支 diff。\n## 确认\n| 角色 | 结论 | 条件 | 方案版本 | 记录 |\n| --- | --- | --- | --- | --- |",
+        "rd": "# 实现\n- 问题: P1-5\n- 分支: cowork/r8-p1-5-ci-evidence\n- worktree: /mnt/g/Codex/mortred_wt_r8_p1_5\n- 实现偏差: 无\n## 自测\nQA=pass\n## 新增问题\n无",
+        "qa": "# QA\n- 问题: P1-5\n- 结论: pass\n- 方案版本: v1\n## 验收\n| 编号 | 标准 | 结果 | 命令/观察 |\n| --- | --- | --- | --- |\n| A1 | 方案目标可观察 | pass | issue pipeline QA cmds |\n## 残余风险\n无",
+        "merge": "# 合入\n- 问题: P1-5\n- 分支: cowork/r8-p1-5-ci-evidence\n- worktree: /mnt/g/Codex/mortred_wt_r8_p1_5\n- 问题分支提交: 49507251aa7bba1985b2b87dd0b9b3522ef2522d\n- QA 结论: pass\n- 重跑: see pipeline\n- 命令: pipeline\n- merge commit: 639e7b9155abc05dec63f78c48f89f999ad44080"
       },
-      "step_text": "待开始 · Step 3 方案"
+      "step_text": "已合入 · merge 639e7b9155abc05dec63f78c48f89f999ad44080"
     }
   ]
 }

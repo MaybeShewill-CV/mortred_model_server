@@ -43,7 +43,7 @@
   .kpi .v { font-size:26px; font-weight:700; margin-top:4px; }
   .kpi .t { color:var(--muted); font-size:12px; }
   .bar { height:12px; background:#0a1220; border-radius:999px; overflow:hidden; border:1px solid var(--line); margin-top:14px; }
-  .bar > i { display:block; height:100%; width:67%; background:linear-gradient(90deg,#3dd68c,#5b8cff); }
+  .bar > i { display:block; height:100%; width:83%; background:linear-gradient(90deg,#3dd68c,#5b8cff); }
   .bar-meta { display:flex; justify-content:space-between; color:var(--muted); font-size:12px; margin-top:8px; }
   h2 { font-size:15px; letter-spacing:.4px; text-transform:uppercase; color:var(--muted); margin:22px 0 10px; }
   .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
@@ -92,13 +92,13 @@
       <div class="hero">
         <section class="panel">
           <div class="kpis">
-            <div class="kpi"><div class="t">完成</div><div class="v">4/6</div></div>
-            <div class="kpi"><div class="t">进度</div><div class="v">67%</div></div>
+            <div class="kpi"><div class="t">完成</div><div class="v">5/6</div></div>
+            <div class="kpi"><div class="t">进度</div><div class="v">83%</div></div>
             <div class="kpi"><div class="t">P0 未关</div><div class="v">0</div></div>
-            <div class="kpi"><div class="t">P1 未关</div><div class="v">2</div></div>
+            <div class="kpi"><div class="t">P1 未关</div><div class="v">1</div></div>
           </div>
           <div class="bar"><i></i></div>
-          <div class="bar-meta"><span>已合入 P0-1, P1-1, P1-2, P1-4</span><span>生成 2026-10-16 14:41:41 CST</span></div>
+          <div class="bar-meta"><span>已合入 P0-1, P1-1, P1-2, P1-4, P1-5</span><span>生成 2026-10-16 14:42:31 CST</span></div>
         </section>
         <section class="panel">
           <div style="color:var(--muted);font-size:12px;margin-bottom:8px;">数据源</div>
@@ -155,13 +155,13 @@
       <div class="sha">4f009cbf2c395d76b586550cb3ed32348c8ab1e4</div>
       <div class="hint">点击查看详情 →</div>
     </article>
-    <article class="card p1" role="button" tabindex="0"
+    <article class="card p1 done" role="button" tabindex="0"
       data-id="p1-5" onclick="location.hash='#issue/p1-5'"
       onkeydown="if(event.key==='Enter')location.hash='#issue/p1-5'">
-      <div class="top"><span class="badge">P1-5</span><span class="state">待开始</span></div>
+      <div class="top"><span class="badge">P1-5</span><span class="state">已合入</span></div>
       <div class="title">CI evidence path improve + headers.h layer nit</div>
-      <div class="step">待开始 · Step 3 方案</div>
-      <div class="sha">—</div>
+      <div class="step">已合入 · merge 639e7b9155abc05dec63f78c48f89f999ad44080</div>
+      <div class="sha">639e7b9155abc05dec63f78c48f89f999ad44080</div>
       <div class="hint">点击查看详情 →</div>
     </article>
       </div>
@@ -318,13 +318,13 @@
       <div class="detail-head">
         <button type="button" class="back" onclick="location.hash=''">← 返回</button>
         <h3>P1-5 · CI evidence path improve + headers.h layer nit</h3>
-        <span class="state">待开始</span>
+        <span class="state">已合入</span>
       </div>
       <div class="meta-grid">
-        <div><div class="t">当前步骤</div><div class="v">待开始 · Step 3 方案</div></div>
-        <div><div class="t">产物状态</div><div class="v">design=. rd=. qa=. merge=.</div></div>
-        <div><div class="t">merge SHA</div><div class="v mono">—</div></div>
-        <div><div class="t">branch SHA</div><div class="v mono">—</div></div>
+        <div><div class="t">当前步骤</div><div class="v">已合入 · merge 639e7b9155abc05dec63f78c48f89f999ad44080</div></div>
+        <div><div class="t">产物状态</div><div class="v">design=Y rd=Y qa=Y merge=Y</div></div>
+        <div><div class="t">merge SHA</div><div class="v mono">639e7b9155abc05dec63f78c48f89f999ad44080</div></div>
+        <div><div class="t">branch SHA</div><div class="v mono">49507251aa7bba1985b2b87dd0b9b3522ef2522d</div></div>
       </div>
       <h4>产物路径</h4>
       <ul class="paths">
@@ -335,7 +335,15 @@
         <li><code>cowork/ledger/round-008/issues/p1-5/05-merge.md</code></li>
       </ul>
       <h4>Ledger 摘录</h4>
-      <pre class="snip">（尚无产物）</pre>
+      <pre class="snip"># 合入
+- 问题: P1-5
+- 分支: cowork/r8-p1-5-ci-evidence
+- worktree: /mnt/g/Codex/mortred_wt_r8_p1_5
+- 问题分支提交: 49507251aa7bba1985b2b87dd0b9b3522ef2522d
+- QA 结论: pass
+- 重跑: see pipeline
+- 命令: pipeline
+- merge commit: 639e7b9155abc05dec63f78c48f89f999ad44080</pre>
     </section>
     </div>
     <footer>
