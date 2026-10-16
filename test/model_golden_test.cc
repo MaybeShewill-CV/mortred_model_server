@@ -709,7 +709,10 @@ int golden_process_exit(int gtest_result) {
     }
 
     if (selected == 0) {
-        return gtest_result;
+        // filter matched nothing (e.g. a TRT-only alias on a cpu build):
+        // nothing was validated, so this is a skip, never a pass
+        std::cout << "NUMERICAL_NOT_RUN" << std::endl;
+        return 77;
     }
     if (failed > 0) {
         return 1;
@@ -722,7 +725,12 @@ int golden_process_exit(int gtest_result) {
         std::cout << "NUMERICAL_PASSED" << std::endl;
         return 0;
     }
-    return 0;
+    // mixed: some cases skipped (missing weights or engine) with no failure.
+    // A partial run is not a validation — skip, so local ctest never shows a
+    // green pass for a run where numbers were not all compared (CI paths
+    // that require weights turn skips into failures before reaching here).
+    std::cout << "NUMERICAL_PARTIAL" << std::endl;
+    return 77;
 }
 
 } // namespace

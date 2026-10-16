@@ -123,7 +123,8 @@
         "api_key_manager_unittest",
         "do_work_lifetime_unittest",
         "worker_pool_unittest",
-        "batch_collector_unittest"
+        "batch_collector_unittest",
+        "rate_limit_gcra_unittest"
       ]
     },
     {

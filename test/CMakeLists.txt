@@ -353,7 +353,8 @@ foreach(src ${TEST_LIST})
     endif()
     add_test(NAME ${src} COMMAND $<TARGET_FILE:${src}> WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
     if(${src} STREQUAL "model_golden_test")
-        set_tests_properties(${src} PROPERTIES SKIP_RETURN_CODE 77  # local/ctest without weights: skip≠pass (exit 77))
+        # local/ctest without weights: skip≠pass (exit 77)
+        set_tests_properties(${src} PROPERTIES SKIP_RETURN_CODE 77)
     endif()
     add_dependencies(check ${src})
     if((${src} STREQUAL "async_job_unittest") OR (${src} STREQUAL "async_job_stress_test") OR
@@ -361,7 +362,8 @@ foreach(src ${TEST_LIST})
        (${src} STREQUAL "worker_pool_unittest") OR (${src} STREQUAL "batch_collector_unittest") OR
        (${src} STREQUAL "rate_limit_gcra_unittest"))
         # the sanitizer CI gate runs exactly these under -fsanitize=thread
-        set_tests_properties(${src} PROPERTIES LABELS "sanitizer"  # SSOT: CI TSan --target list must match these labels)
+        # SSOT: CI TSan --target list must match these labels (enforced by scripts/check_tsan_targets.py)
+        set_tests_properties(${src} PROPERTIES LABELS "sanitizer")
     endif()
 endforeach()
 
@@ -435,12 +437,15 @@ if(TARGET model_golden_test)
         NAME Yolov8TrtDetection
         COMMAND $<TARGET_FILE:model_golden_test> --gtest_filter=Yolov8TrtDetection.*
         WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
+    # empty filter match (cpu profile) or partial skips must not read as pass
+    set_tests_properties(Yolov8TrtDetection PROPERTIES SKIP_RETURN_CODE 77)
     # ctest -R matches the CTest name. The CPU case lives inside model_golden_test,
     # so list it under a name that contains yolov8_detection.
     add_test(
         NAME yolov8_detection
         COMMAND $<TARGET_FILE:model_golden_test> --gtest_filter=model_golden.yolov8_detection
         WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
+    set_tests_properties(yolov8_detection PROPERTIES SKIP_RETURN_CODE 77)
     add_dependencies(check model_golden_test)
 endif()
 
