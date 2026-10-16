@@ -64,6 +64,24 @@ inline bool declared_body_exceeds(const std::string& content_length_str, size_t 
     return declared > limit_mb * 1024ULL * 1024ULL;
 }
 
+
+/***
+ * True when the request body exceeds limit_mb.
+ * - Non-empty parseable Content-Length above the limit rejects early.
+ * - Empty / invalid Content-Length cannot bypass: actual_body_bytes is checked.
+ * Callers pass get_parsed_body size (0 if unavailable) so chunked / missing CL
+ * still hit the bound before JSON/raw parse.
+ */
+inline bool body_exceeds_limit(const std::string& content_length_str,
+                               size_t actual_body_bytes,
+                               size_t limit_mb) {
+    const size_t limit_bytes = limit_mb * 1024ULL * 1024ULL;
+    if (!content_length_str.empty() && declared_body_exceeds(content_length_str, limit_mb)) {
+        return true;
+    }
+    return actual_body_bytes > limit_bytes;
+}
+
 inline bool item_count_exceeds(size_t n_items, size_t max_request_items) {
     return n_items > max_request_items;
 }

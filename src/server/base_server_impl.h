@@ -221,7 +221,8 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::apply_runtime_config(const ServerRu
     async_cfg.job_ttl_ms = cfg.async_job_ttl_ms;
     async_cfg.max_completed = cfg.async_max_completed;
     _m_async_table.configure(async_cfg);
-    _m_async_eps.configure(_m_async_enabled, _m_async_timeout, _m_max_request_items);
+    _m_async_eps.configure(_m_async_enabled, _m_async_timeout, _m_max_request_items,
+                             _m_request_size_limit);
 }
 
 template<typename WORKER, typename MODEL_OUTPUT>
@@ -394,6 +395,19 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
             stage_trace->mark("srv_in");
         }
         const std::string content_type = header_value_of(req, "content-type");
+        // Enforce body size BEFORE json/raw parse so empty Content-Length and
+        // chunked bodies cannot bypass the limit via late declared_body_exceeds.
+        {
+            const void* raw_body = nullptr;
+            size_t raw_body_size = 0;
+            (void)req->get_parsed_body(&raw_body, &raw_body_size);
+            if (body_exceeds_limit(header_value_of(req, "content-length"), raw_body_size,
+                                   _m_request_size_limit)) {
+                _m_metrics.inc_http_requests(request_method, "413");
+                reply_status(task, StatusCode::REQUEST_ENTITY_TOO_LARGE, _m_model_name);
+                return;
+            }
+        }
         std::string request_encoding = "json";
         jinq::server::ParsedRequest parsed;
         const auto kind = content_type_kind(content_type);
@@ -414,11 +428,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         _m_metrics.inc_request_encoding(request_encoding);
         if (stage_trace != nullptr) {
             stage_trace->mark("envelope");
-        }
-        if (declared_body_exceeds(header_value_of(req, "content-length"), _m_request_size_limit)) {
-            _m_metrics.inc_http_requests(request_method, "413");
-            reply_status(task, StatusCode::REQUEST_ENTITY_TOO_LARGE, _m_model_name);
-            return;
         }
 
         const std::string task_id = parsed.req_id.empty() ? generate_req_id() : parsed.req_id;
