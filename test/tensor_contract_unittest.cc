@@ -1,8 +1,11 @@
 #include <gtest/gtest.h>
 
 #include <limits>
+#include <stdexcept>
 #include <string>
 #include <vector>
+
+#include <opencv2/core.hpp>
 
 #include "models/backend/tensor_contract.h"
 
@@ -142,5 +145,87 @@ TEST(TensorContract, CheckedElementCountOverflowPath) {
     std::string err;
     EXPECT_FALSE(jinq::models::backend::checked_element_count(tensor, &bytes, &err));
     EXPECT_NE(err.find("overflow"), std::string::npos) << err;
+}
+
+// A shape that is not concrete, has a zero dim, or overflows size_t used to be a
+// CHECK abort (process death, every other in-flight request killed). It is now a
+// std::invalid_argument that the model-layer fence (invoke_nothrow) converts into
+// MODEL_RUN_SESSION_FAILED. Exact type match is required: no EXPECT_ANY_THROW.
+TEST(TensorContract, MakeThrowsOnNonConcreteOrOverflowingShape) {
+    EXPECT_THROW(Tensor::make(DType::F32, {-1, 3}), std::invalid_argument);
+    EXPECT_THROW(Tensor::make(DType::F32, {0, 4}), std::invalid_argument);
+    EXPECT_THROW(Tensor::make(DType::F32, {1LL << 40, 1LL << 40}), std::invalid_argument);
+    EXPECT_THROW(Tensor::make(DType::I32, {std::numeric_limits<int64_t>::max(), 2}), std::invalid_argument);
+
+    // the message carries the offending shape (shape_to_string)
+    const std::vector<int64_t> bad_shape = {-1, 3};
+    try {
+        (void)Tensor::make(DType::F32, bad_shape);
+        FAIL() << "Tensor::make accepted a non-concrete shape";
+    } catch (const std::invalid_argument &e) {
+        EXPECT_NE(std::string(e.what()).find(jinq::models::backend::shape_to_string(bad_shape)),
+                  std::string::npos)
+            << e.what();
+    } catch (...) {
+        FAIL() << "Tensor::make threw something other than std::invalid_argument";
+    }
+
+    // liveness proof: if any throw above had aborted the process this case would
+    // never reach here; the happy path must still work after the failures.
+    auto good = Tensor::make(DType::F32, {2, 3});
+    EXPECT_EQ(good.byte_size(), 2u * 3u * sizeof(float));
+    EXPECT_EQ(good.element_count(), 6);
+    EXPECT_EQ(good.dtype, DType::F32);
+}
+
+TEST(TensorContract, DataThrowsOnDtypeMismatch) {
+    auto f32 = Tensor::make(DType::F32, {1, 3});
+    const Tensor &const_f32 = f32;
+
+    EXPECT_THROW((void)f32.data<int32_t>(), std::invalid_argument);
+    EXPECT_THROW((void)const_f32.data<int32_t>(), std::invalid_argument);
+    EXPECT_THROW((void)const_f32.data<int64_t>(), std::invalid_argument);
+
+    // the message names both the actual and the requested dtype
+    try {
+        (void)f32.data<int32_t>();
+        FAIL() << "data<int32_t>() on an F32 tensor did not throw";
+    } catch (const std::invalid_argument &e) {
+        const std::string message = e.what();
+        EXPECT_NE(message.find("f32"), std::string::npos) << message;
+        EXPECT_NE(message.find("i32"), std::string::npos) << message;
+    } catch (...) {
+        FAIL() << "data<int32_t>() threw something other than std::invalid_argument";
+    }
+
+    // liveness proof: the matched access still works in the same process
+    float *mutable_values = f32.data<float>();
+    ASSERT_NE(mutable_values, nullptr);
+    mutable_values[0] = 1.5f;
+    const float *values = const_f32.data<float>();
+    ASSERT_NE(values, nullptr);
+    EXPECT_FLOAT_EQ(values[0], 1.5f);
+
+    auto i32 = Tensor::make(DType::I32, {1, 3});
+    EXPECT_THROW((void)i32.data<float>(), std::invalid_argument);
+}
+
+// from_mat keeps its existing ok-flag convention; it must not be turned into a throw
+TEST(TensorContract, FromMatContractUnchanged) {
+    cv::Mat image(4, 5, CV_8UC3, cv::Scalar(7, 8, 9));
+    bool ok = false;
+    auto tensor = Tensor::from_mat(image, &ok);
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(tensor.dtype, DType::U8);
+    EXPECT_EQ(tensor.shape, (std::vector<int64_t>{1, 4, 5, 3}));
+    EXPECT_EQ(tensor.byte_size(), 4u * 5u * 3u);
+    EXPECT_EQ(tensor.layout, TensorLayout::Nhwc);
+    ASSERT_NE(tensor.data<uint8_t>(), nullptr);
+    EXPECT_EQ(tensor.data<uint8_t>()[0], 7);
+
+    bool empty_ok = true;
+    auto empty = Tensor::from_mat(cv::Mat(), &empty_ok);
+    EXPECT_FALSE(empty_ok);
+    EXPECT_EQ(empty.byte_size(), 0u);
 }
 
