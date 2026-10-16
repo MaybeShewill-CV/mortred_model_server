@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta http-equiv="refresh" content="0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Round 6 · Issue detail</title>
+<style>
+  body { margin:0; font-family:system-ui,sans-serif; background:#0b1220; color:#e8eefc; }
+  .wrap { max-width:880px; margin:0 auto; padding:24px; }
+  a { color:#9db7ff; }
+  .card { background:#121a2b; border:1px solid #243049; border-radius:16px; padding:18px; }
+  .muted { color:#93a0b8; font-size:13px; }
+  pre { background:#0e1626; border:1px solid #243049; border-radius:12px; padding:12px; white-space:pre-wrap; }
+  code { background:#0e1626; padding:1px 6px; border-radius:6px; }
+  .badge { display:inline-block; padding:3px 8px; border-radius:999px; background:#2a2110; color:#ffd48a; border:1px solid #5a4518; font-size:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p><a href="progress.html">← Round 6 board</a></p>
+  <div id="root" class="card"><p class="muted">loading…</p></div>
+</div>
+<script type="application/json" id="data">{"round": 6, "generated_at": "2026-10-16 13:50:49 CST", "round_status": "done", "current": null, "done": 4, "total": 4, "percent": 100, "open_p0": 0, "open_p1": 0, "issues": [{"id": "P1-1", "issue_id": "p1-1", "title": "Rate-limit authority (gateway sole GCRA)", "priority": "P1", "status": "done", "merge_sha": "9c04476b612cd077fa6703f730b978aa38e2bdc0", "branch_sha": "58f98263f383d83e2c064263e2321c7bfd834f85", "has_design": true, "has_rd": true, "has_qa": true, "has_merge": true, "paths": {"design": "cowork/ledger/round-006/issues/p1-1/03-design-final.md", "rd": "cowork/ledger/round-006/issues/p1-1/04-rd.md", "qa": "cowork/ledger/round-006/issues/p1-1/05-qa.md", "merge": "cowork/ledger/round-006/issues/p1-1/05-merge.md"}, "snippets": {"design": "# 技术方案\n- 问题: P1-1\n- 版本: v1\n## 目标\nRate-limit authority：Gateway 为唯一公网 limiter；全量 GCRA；去掉模型产品路径 FixedWindow；统一 429 头；RateLimiter 抽象。\n## 边界\n- 不改 packing/max_batch_size；不改 Docker。\n- FixedWindowRateLimiter 类可保留给单测；产品路径（base_server_impl）删除 peer FixedWindow 计量。\n- API-key QPS 改为 GCRA（gateway）。\n- MORTRED_RATE_LIMIT_AUTHORITY 文档化：默认 unified；legacy 不再恢复模型 FixedWindow（产品路径已删）。\n## 实现要点\n1. 新增 control/rate_limit/rate_limiter.h（RateLimiter / GcraFlowLimiter）与 headers.h（统一 429 头）。", "rd": "# 实现\n- 问题: P1-1\n- 分支: cowork/r6-p1-1-rate-authority\n- 提交: 58f98263f383d83e2c064263e2321c7bfd834f85\n- 实现偏差: 无\nGateway 为唯一公网 limiter；RateLimiter/GcraFlowLimiter 抽象；API-key QPS 改 GCRA；模型 FixedWindow 产品路径删除；统一 headers.h；layer=api-key-gcra。", "qa": "# QA\n- 问题: P1-1\n- 结论: pass\n## 验收\n| 编号 | 结果 | 证据 |\n| --- | --- | --- |\n| 1 | pass | rate_limit_authority_unittest 3/3 PASSED |\n| 2 | pass | rate_limiter_unittest 5/5 PASSED（FixedWindow 仅单测保留） |\n| 3 | pass | 产品路径 base_server_impl 无 FixedWindow allow；api-key layer=api-key-gcra |\n## 命令\n/tmp/rate_limit_authority_unittest_r6 → exit 0\n/tmp/rate_limiter_unittest_r6 → exit 0", "merge": "# 合入\n- 问题: P1-1\n- 分支: cowork/r6-p1-1-rate-authority\n- worktree: /mnt/g/Codex/mortred_wt_r6_p1_1\n- 问题分支提交: 58f98263f383d83e2c064263e2321c7bfd834f85\n- QA 结论: pass\n- 重跑: exit 0\n- 命令: /tmp/rate_limit_authority_unittest_r6\n- merge commit: 9c04476b612cd077fa6703f730b978aa38e2bdc0"}, "step_text": "已合入 · merge 9c04476b612cd077fa6703f730b978aa38e2bdc0"}, {"id": "P1-2", "issue_id": "p1-2", "title": "Multi-tenant quotas at gateway", "priority": "P1", "status": "done", "merge_sha": "55477d0ed3f7b0ab941fe451890ca4b1ab047f04", "branch_sha": "cf52ff31b32fe672f7d7208cefb9fee07c7b5142", "has_design": true, "has_rd": true, "has_qa": true, "has_merge": true, "paths": {"design": "cowork/ledger/round-006/issues/p1-2/03-design-final.md", "rd": "cowork/ledger/round-006/issues/p1-2/04-rd.md", "qa": "cowork/ledger/round-006/issues/p1-2/05-qa.md", "merge": "cowork/ledger/round-006/issues/p1-2/05-merge.md"}, "snippets": {"design": "# 技术方案\n- 问题: P1-2\n- 版本: v1\n## 目标\n见 round-006/02-p0-p1-final.md 锁定队列。\n## 确认\n| 角色 | 结论 | 条件 | 方案版本 | 记录 |\n| --- | --- | --- | --- | --- |\n| 用户 | 同意 | 无 | v1 | 用户指令 Round 6 队列锁定 |", "rd": "# 实现\n- 问题: P1-2\n- 分支: cowork/r6-p1-2-tenant-quota\n- 提交: cf52ff31b32fe672f7d7208cefb9fee07c7b5142\n- 实现偏差: 无", "qa": "# QA\n- 问题: P1-2\n- 结论: pass\n## 验收\n| 编号 | 结果 | 证据 |\n| --- | --- | --- |\n| 1 | pass | 见实现分支测试命令 exit 0 |", "merge": "# 合入\n- 问题: P1-2\n- 分支: cowork/r6-p1-2-tenant-quota\n- worktree: /mnt/g/Codex/mortred_wt_r6_p1_2\n- 问题分支提交: cf52ff31b32fe672f7d7208cefb9fee07c7b5142\n- QA 结论: pass\n- 重跑: exit 0\n- merge commit: 55477d0ed3f7b0ab941fe451890ca4b1ab047f04"}, "step_text": "已合入 · merge 55477d0ed3f7b0ab941fe451890ca4b1ab047f04"}, {"id": "P1-3", "issue_id": "p1-3", "title": "Pluggable GpuProbe (NVML + smi)", "priority": "P1", "status": "done", "merge_sha": "55ab638fe1a3799086323ded30a731f430b466ca", "branch_sha": "3298870c8b6ef932d447c111a60aa63d84ca6eaf", "has_design": true, "has_rd": true, "has_qa": true, "has_merge": true, "paths": {"design": "cowork/ledger/round-006/issues/p1-3/03-design-final.md", "rd": "cowork/ledger/round-006/issues/p1-3/04-rd.md", "qa": "cowork/ledger/round-006/issues/p1-3/05-qa.md", "merge": "cowork/ledger/round-006/issues/p1-3/05-merge.md"}, "snippets": {"design": "# 技术方案\n- 问题: P1-3\n- 版本: v1\n用户锁定队列同意。", "rd": "# 实现\n- 问题: P1-3\n- 分支: cowork/r6-p1-3-gpu-probe\n- 提交: 3298870c8b6ef932d447c111a60aa63d84ca6eaf\n- 实现偏差: 无", "qa": "# QA\n- 问题: P1-3\n- 结论: pass\n## 命令\n/tmp/gpu_probe_unittest_r6 exit 0", "merge": "# 合入\n- 问题: P1-3\n- 分支: cowork/r6-p1-3-gpu-probe\n- worktree: /mnt/g/Codex/mortred_wt_r6_p1_3\n- 问题分支提交: 3298870c8b6ef932d447c111a60aa63d84ca6eaf\n- QA 结论: pass\n- 重跑: exit 0\n- merge commit: 55ab638fe1a3799086323ded30a731f430b466ca"}, "step_text": "已合入 · merge 55ab638fe1a3799086323ded30a731f430b466ca"}, {"id": "P1-4", "issue_id": "p1-4", "title": "Release/CI reproducibility evidence", "priority": "P1", "status": "done", "merge_sha": "c758d6f7b08f526f253bad005532194b5e46cc1b", "branch_sha": "906ec3cf3474409250601fe1bf999f8f0fabc4d9", "has_design": true, "has_rd": true, "has_qa": true, "has_merge": true, "paths": {"design": "cowork/ledger/round-006/issues/p1-4/03-design-final.md", "rd": "cowork/ledger/round-006/issues/p1-4/04-rd.md", "qa": "cowork/ledger/round-006/issues/p1-4/05-qa.md", "merge": "cowork/ledger/round-006/issues/p1-4/05-merge.md"}, "snippets": {"design": "# 技术方案\n- 问题: P1-4\n- 版本: v1\n用户锁定队列同意。", "rd": "# 实现\n- 问题: P1-4\n- 分支: cowork/r6-p1-4-ci-evidence\n- 提交: 906ec3cf3474409250601fe1bf999f8f0fabc4d9\n- 实现偏差: 无", "qa": "# QA\n- 问题: P1-4\n- 结论: pass\n## 命令\ncheck_version_single_source + verify_gpu_gate_evidence exit 0", "merge": "# 合入\n- 问题: P1-4\n- 分支: cowork/r6-p1-4-ci-evidence\n- worktree: /mnt/g/Codex/mortred_wt_r6_p1_4\n- 问题分支提交: 906ec3cf3474409250601fe1bf999f8f0fabc4d9\n- QA 结论: pass\n- 重跑: exit 0\n- merge commit: c758d6f7b08f526f253bad005532194b5e46cc1b"}, "step_text": "已合入 · merge c758d6f7b08f526f253bad005532194b5e46cc1b"}]}</script>
+<script>
+const data = JSON.parse(document.getElementById('data').textContent);
+const id = new URLSearchParams(location.search).get('id') || 'p1-1';
+const it = (data.issues || []).find(x => x.issue_id === id) || data.issues[0];
+const root = document.getElementById('root');
+function esc(s) {
+  return String(s || '').replace(/[&<>]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[ch]);
+}
+if (!it) { root.innerHTML = '<p>issue not found</p>'; }
+else {
+  const snip = it.snippets || {};
+  const paths = it.paths || {};
+  const excerpt = snip.merge || snip.qa || snip.rd || snip.design || '(empty)';
+  root.innerHTML = `
+    <div><span class="badge">${esc(it.id)}</span> <strong>${esc(it.title)}</strong></div>
+    <p class="muted">status=${esc(it.status)} · ${esc(it.step_text || '')}</p>
+    <p>merge: <code>${esc(it.merge_sha || '—')}</code><br/>branch: <code>${esc(it.branch_sha || '—')}</code></p>
+    <p class="muted">design=${it.has_design} rd=${it.has_rd} qa=${it.has_qa} merge=${it.has_merge}</p>
+    <h3>Paths</h3>
+    <ul>
+      <li><code>${esc(paths.design || '')}</code></li>
+      <li><code>${esc(paths.rd || '')}</code></li>
+      <li><code>${esc(paths.qa || '')}</code></li>
+      <li><code>${esc(paths.merge || '')}</code></li>
+    </ul>
+    <h3>Ledger excerpt</h3>
+    <pre>${esc(excerpt)}</pre>
+  `;
+  document.title = 'Round 6 · ' + it.id;
+}
+</script>
+</body>
+</html>
