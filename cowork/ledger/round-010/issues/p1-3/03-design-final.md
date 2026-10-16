@@ -58,6 +58,8 @@
 - A2 外部验收：起服后取目标 id 的 pid/pgid → `POST /api/v1/servers/<id>/stop` 返回 200 → 10s 内 `kill -0 -<pgid>` 返回非 0 且 `pgrep -g <pgid>` 无输出。
 - A3 gateway 组同样消失，且 models-先-gateway-后 的顺序未变（由 A1 的有序停机用例承担）。
 - A4 `python3 scripts/stop_order_record.py --check` 退出 0（单元规则与样例轨迹未被改坏）。
+
+  编排方已在基线 `ec07cfc9` 实跑核实：该命令**当前退出 0**，输出为 4 行"为通过"（`KillMode=process`、`KillSignal=SIGTERM`、`TimeoutStopSec=120`、模型 SIGINT 后等待才向 gateway 发 SIGINT）**加 3 行"不通过"**。那 3 行"不通过"是该脚本的**负例自检**（它用固定样例轨迹验证自己能识别违规：gateway 的 SIGINT 早于模型退出、未等两个模型退出就发 SIGINT、gateway 退出后模型 pid 再次出现），属**预期通过**的一部分，不是失败。判据是**退出码 0**，不是输出里没有"不通过"字样——QA 不要据此误判。
 - A5 提交只含上述 4 个文件；不含 `cowork/ledger/`、构建产物、`src/common/mortred_version.h`。
 
 ## 测试义务
