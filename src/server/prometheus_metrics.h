@@ -14,6 +14,7 @@
 #include <cctype>
 #include <cstdint>
 #include <map>
+#include <atomic>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -171,6 +172,11 @@ class PrometheusMetrics {
         waiting_jobs_ = n;
     }
 
+    void bind_waiting_depth(const std::atomic<size_t> *src) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        waiting_depth_src_ = src;
+    }
+
     void inc_received_jobs(size_t n = 1) {
         std::lock_guard<std::mutex> lock(mutex_);
         received_jobs_ += n;
@@ -272,13 +278,17 @@ class PrometheusMetrics {
         ss << "# TYPE mortred_workers_busy gauge\n";
         ss << "mortred_workers_busy{model=\"" << model_ << "\"} " << workers_busy_ << "\n";
 
+        const size_t live_waiting =
+            waiting_depth_src_ != nullptr ? waiting_depth_src_->load() : waiting_jobs_;
+        const size_t live_depth =
+            waiting_depth_src_ != nullptr ? waiting_depth_src_->load() : queue_depth_;
         ss << "# HELP mortred_queue_depth Current queue depth\n";
         ss << "# TYPE mortred_queue_depth gauge\n";
-        ss << "mortred_queue_depth{model=\"" << model_ << "\"} " << queue_depth_ << "\n";
+        ss << "mortred_queue_depth{model=\"" << model_ << "\"} " << live_depth << "\n";
 
         ss << "# HELP mortred_waiting_jobs Current waiting jobs\n";
         ss << "# TYPE mortred_waiting_jobs gauge\n";
-        ss << "mortred_waiting_jobs{model=\"" << model_ << "\"} " << waiting_jobs_ << "\n";
+        ss << "mortred_waiting_jobs{model=\"" << model_ << "\"} " << live_waiting << "\n";
 
         ss << "# HELP mortred_received_jobs_total Total received jobs\n";
         ss << "# TYPE mortred_received_jobs_total counter\n";
@@ -382,6 +392,7 @@ class PrometheusMetrics {
     size_t workers_busy_ = 0;
     size_t queue_depth_ = 0;
     size_t waiting_jobs_ = 0;
+    const std::atomic<size_t> *waiting_depth_src_ = nullptr;
     uint64_t received_jobs_ = 0;
     uint64_t finished_jobs_ = 0;
     bool ready_ = false;

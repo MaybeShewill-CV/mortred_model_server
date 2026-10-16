@@ -316,6 +316,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::async_run_job(const std::string& jo
 template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
     _m_metrics.set_model(_m_server_uri);
+    _m_metrics.bind_waiting_depth(&_m_waiting_jobs);
     const char* request_uri = task->get_req()->get_request_uri();
     const char* request_method = task->get_req()->get_method();
     if (request_uri == nullptr) {
@@ -481,6 +482,8 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         }
 
         _m_waiting_jobs += n_items;
+        _m_metrics.set_queue_depth(_m_waiting_jobs.load());
+        _m_metrics.set_waiting_jobs(_m_waiting_jobs.load());
         _m_received_jobs += n_items;
         _m_metrics.inc_received_jobs(n_items);
         task_req.trace = stage_trace;
@@ -558,6 +561,8 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::schedule_sync_request(
         _m_finished_jobs += n_items;
         _m_metrics.inc_finished_jobs(n_items);
         _m_waiting_jobs -= n_items;
+        _m_metrics.set_queue_depth(_m_waiting_jobs.load());
+        _m_metrics.set_waiting_jobs(_m_waiting_jobs.load());
     });
 
     if (_m_max_batch_size > 1) {

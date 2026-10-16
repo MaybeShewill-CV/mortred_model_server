@@ -9,6 +9,7 @@
 #include <thread>
 #include <vector>
 
+#include <atomic>
 #include <gtest/gtest.h>
 
 #include "common/status_code.h"
@@ -259,4 +260,20 @@ TEST(prometheus_metrics, histogram_method_label_normalizes_like_the_counter) {
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
+}
+
+TEST(PrometheusMetricsTest, waiting_depth_bound_to_atomic_shows_live_value) {
+    jinq::server::PrometheusMetrics m;
+    m.set_model("demo");
+    m.set_queue_depth(7);
+    m.set_waiting_jobs(7);
+    std::atomic<size_t> live{0};
+    m.bind_waiting_depth(&live);
+    const std::string idle = m.render();
+    EXPECT_NE(idle.find("mortred_waiting_jobs{model=\"demo\"} 0"), std::string::npos);
+    EXPECT_NE(idle.find("mortred_queue_depth{model=\"demo\"} 0"), std::string::npos);
+    live.store(3);
+    const std::string busy = m.render();
+    EXPECT_NE(busy.find("mortred_waiting_jobs{model=\"demo\"} 3"), std::string::npos);
+    EXPECT_NE(busy.find("mortred_queue_depth{model=\"demo\"} 3"), std::string::npos);
 }
