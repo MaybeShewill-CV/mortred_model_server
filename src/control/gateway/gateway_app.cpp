@@ -798,26 +798,25 @@ void GatewayApp::process(WFHttpTask* task) {
                                 "api key max_queue exceeded");
             return;
         }
-        // Hard worker_budget: reject before inflight when already at budget.
-        if (api_key_held->worker_budget > 0 &&
-            api_key_held->inflight.load(std::memory_order_relaxed) >= api_key_held->worker_budget) {
-            ApiKeyManager::release_queue(api_key_held.get());
-            metrics_.inc_http_requests(method, "429");
-            auto* resp = task->get_resp();
-            mortred::control::ratelimit::apply_rate_limit_headers(
-                resp, 1000, api_key_held->worker_budget, "api-key-worker-budget", 0);
-            reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED,
-                                "api key worker_budget exceeded");
-            return;
-        }
+        // Inflight + worker_budget enforced atomically in try_acquire_inflight CAS
+        // (Round 9: no check-then-act on inflight — avoids TOCTOU under concurrency).
         if (!ApiKeyManager::try_acquire_inflight(api_key_held.get())) {
             ApiKeyManager::release_queue(api_key_held.get());
             metrics_.inc_http_requests(method, "429");
             auto* resp = task->get_resp();
-            mortred::control::ratelimit::apply_rate_limit_headers(
-                resp, 1000, api_key_held->max_inflight, "api-key-max-inflight", 0);
-            reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED,
-                                "api key max_inflight exceeded");
+            const int cur = api_key_held->inflight.load(std::memory_order_relaxed);
+            // Prefer worker-budget layer when that limit is binding (incl. max_inflight<=0).
+            if (api_key_held->worker_budget > 0 && cur >= api_key_held->worker_budget) {
+                mortred::control::ratelimit::apply_rate_limit_headers(
+                    resp, 1000, api_key_held->worker_budget, "api-key-worker-budget", 0);
+                reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED,
+                                    "api key worker_budget exceeded");
+            } else {
+                mortred::control::ratelimit::apply_rate_limit_headers(
+                    resp, 1000, api_key_held->max_inflight, "api-key-max-inflight", 0);
+                reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED,
+                                    "api key max_inflight exceeded");
+            }
             return;
         }
         // max_queue residency: hold queue slot until upstream callback (QueueGuard).

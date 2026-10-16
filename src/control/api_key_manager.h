@@ -322,19 +322,24 @@ inline bool ApiKeyManager::has_scope(const std::shared_ptr<const ApiKey>& key,
 
 
 inline bool ApiKeyManager::try_acquire_inflight(const ApiKey* key) {
-    // Round 8 P1-1: always track when worker_budget>0 so the hard budget gate
-    // in gateway_app.cpp can observe occupancy even if max_inflight<=0.
+    // Round 8 P1-1: track when worker_budget>0 even if max_inflight<=0.
+    // Round 9: enforce worker_budget inside this CAS (same loop as max_inflight)
+    // so gateway no longer check-then-act on inflight (TOCTOU-safe).
     if (key == nullptr) {
         return true;
     }
     const bool enforce_inflight = key->max_inflight > 0;
-    const bool track_for_budget = key->worker_budget > 0;
-    if (!enforce_inflight && !track_for_budget) {
+    const bool enforce_budget = key->worker_budget > 0;
+    if (!enforce_inflight && !enforce_budget) {
         return true;
     }
     int cur = key->inflight.load(std::memory_order_relaxed);
     while (true) {
         if (enforce_inflight && cur >= key->max_inflight) {
+            key->reject_inflight.fetch_add(1, std::memory_order_relaxed);
+            return false;
+        }
+        if (enforce_budget && cur >= key->worker_budget) {
             key->reject_inflight.fetch_add(1, std::memory_order_relaxed);
             return false;
         }
