@@ -1,10 +1,10 @@
 # 关闭记录
 
 - 轮次: 10
-- 已关闭: P1-7、P1-1、P1-6、P1-4、P1-2（5/7）
+- 已关闭: P1-7、P1-1、P1-6、P1-4、P1-2、P1-5（6/7）
 - 阻塞: 无（7 个条目无一因环境阻塞；被阻塞的是完成标准里的 engine/吞吐类行，见"完成标准行进展"）
-- 未阻塞的开放项: **相对本轮起点减少** —— 起点 7 条 P1（P0 为无），当前 2 条仍未关闭（P1-5 在 QA、P1-3 在实现），其余 5 条已合入
-- 状态: **进行中**（本文件在收口过程中补齐；P1-5、P1-3 关闭后本文件为最终版）
+- 未阻塞的开放项: **相对本轮起点减少** —— 起点 7 条 P1（P0 为无），当前 1 条仍未关闭（P1-3 在实现），其余 6 条已合入
+- 状态: **进行中**（本文件在收口过程中补齐；P1-3 关闭后本文件为最终版）
 
 ## 已关闭的问题陈述
 
@@ -15,20 +15,21 @@
 | P1-6 | src-server-apps | `/metrics` 的 method 标签取自未鉴权的原始请求方法，标签基数无界 | `7453b1e2` | `issues/p1-6/{03-design-final,04-rd,05-qa,05-merge}.md` |
 | P1-4 | src-models | 请求路径上的 `CHECK` 断言会杀掉整个模型进程 | `19c649fa` | `issues/p1-4/{03-design-final,04-rd,05-qa,05-merge}.md` |
 | P1-2 | src-control | 管理/抓取凭据泄漏到每个被监管的模型进程 | `19eb0cb2` | `issues/p1-2/{03-design-final,04-rd,05-qa,05-merge}.md` |
+| P1-5 | src-server-apps（+ conf、docs） | 无界等待与配置矛盾：`model_run_timeout<=0` 时请求永不回复 | `7558abdf` | `issues/p1-5/{03-design-final,04-rd,05-qa,05-merge}.md` |
 
-五条都已按队列的"改完后能观察到的变化"验收，且由**编排方在 worktree 重跑**确认退出码与 QA 报告一致（逐条记录在各自的 `05-merge.md`）：
+六条都已按队列的"改完后能观察到的变化"验收，且由**编排方在 worktree 重跑**确认退出码与 QA 报告一致（逐条记录在各自的 `05-merge.md`）：
 
 - P1-7：`request_envelope_unittest` 17/17、`server_e2e_contract_test` 45/45、`gateway_e2e_test` 49/49，三者退出码 0。
 - P1-1：`detection_params_unittest` 8/8、`detector_common_unittest` 15/15、`object_detection_output_contract_unittest` 13/13；`grep -rn clip_boxes src/ test/ conf/ docs/openapi.json` 只余拒绝分支与新用例，出货 TOML 0 命中。
 - P1-6：`prometheus_metrics_test` 11/11（含 4 条新用例，原 `method="POST"` 断言 0 删除行）、`server_e2e_contract_test` 45/45；QA 另用自编探针证明 13 个未知 method 只折叠成一个 `method="other"`，且 `GET|500` 无法伪造标签对。
-- P1-4：`tensor_contract_unittest` 14/14、`http_contract_test` 6/6、`model_output_contract_unittest` 10/10、`object_detection_output_contract_unittest` 13/13、`backend_unittest` 3 passed/5 skipped；`grep -rn 'CHECK(checked_shape_nbytes\|CHECK_EQ(dtype' src/` 无输出；QA 另在 `/tmp` 编 `fence_proof` 证明"坏 shape → code=2、正常 → 0、进程存活"。
+- P1-4：`tensor_contract_unittest` 14/14、`http_contract_test` 6/6、`model_output_contract_unittest` 10/10、`object_detection_output_contract_unittest` 13/13、`backend_unittest` 3 passed/5 skipped；`grep -rn 'CHECK(checked_shape_nbytes\|CHECK_EQ(dtype' src/` 无输出；QA 另在 `/tmp` 编 `fence_proof` 证明"坏 shape → code=2、正常 → 0、进程存活"；**合入后编排方穷举复核整个 `src/models`：运行时 abort 构造 0 命中**。
 - P1-2：`supervisor_unittest` 24/24、`supervisor_malformed_e2e_test` 1/1，且**真盘**重跑 QA 的 live 脚本得到 `SUMMARY FAILS=0`、`leftovers: none`（真 supervisor + 真 gateway + 真 mortredctl；模型子进程四键计数 0、gateway 子进程四键各 1、`mortredctl status` 退出 0）。
+- P1-5：带断言脚本重跑 `SUMMARY FAILS=0`——提交面 `files=10 forbidden=0`、`base_server_impl.h diff_lines=0`、`server_runtime_config_unittest` 6/6、`server_e2e_contract_test` **47/47**（含 `model_timeout_returns_504` 与新的 `model_timeout_zero_is_clamped_to_a_bounded_budget`）、`conf/server` 内 `model_run_timeout=0` 计数 0、显式 300000 恰 5 份、中文文档"无限"0 命中。
 
 ## 仍开放的问题
 
 | id | 模块 | 问题陈述 | 状态 |
 | --- | --- | --- | --- |
-| P1-5 | src-server-apps（+ conf、docs） | 无界等待与配置矛盾：`model_run_timeout<=0` 时请求永不回复 | 未做（实现已提交 `d86e2216`，QA 进行中） |
 | P1-3 | src-control | 停止/重启只 kill 单 pid，没有进程组，孙进程存活 | 未做（实现进行中，分支 `cowork/r10-p1-3-process-group`） |
 
 ## 附录
