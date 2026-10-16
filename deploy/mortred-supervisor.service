@@ -40,7 +40,10 @@ LimitNOFILE=65536
 # ordered shutdown (models first, gateway last) may take a while
 TimeoutStopSec=120
 KillSignal=SIGTERM
-KillMode=process
+# control-group: SIGKILL/stop reaps gateway+model children holding VRAM
+# (KillMode=process left orphans after hard kill). Children also set
+# PR_SET_PDEATHSIG(SIGINT) for orderly parent-death self-exit.
+KillMode=control-group
 NoNewPrivileges=true
 OOMPolicy=continue
 
