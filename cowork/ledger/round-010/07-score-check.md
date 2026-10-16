@@ -1,0 +1,43 @@
+# 评分复核
+
+- 轮次: 10
+- 评分人: 编排方（单一执行方模式）
+- 基线: `sub-agent-co-work`
+- 状态: **进行中** —— 本文件在收口过程中逐行补齐；九份模块记录完成后，本文件的"完成标准行"与"加权分"两节即为最终判定。
+
+## 完成标准行（逐行：已满足 / 未满足 / 阻塞）
+
+判据来自 `cowork/ledger/rubric.md:95`：未满足的行必须进入 P0/P1/P2 并写出出处、现在的行为和一次外部验收即可确认的变化；阻塞仅用于环境跑不了的验收，且只阻塞性能、吞吐、engine 和占用行（`rubric.md:91`）。
+
+### 稳定
+
+| 编号 | 判定 | 证据 |
+| --- | --- | --- |
+| ST5 | **已满足** | supervisor 在 `fork` 之后、`execve` 之前只调用 async-signal-safe 原语：`src/control/supervisor.cpp:455-482` 依次为 `::close`（fd 循环）、`::syscall(SYS_prctl, PR_SET_PDEATHSIG, SIGINT)`（注释明写"syscall, not libc prctl"）、`::getppid`、`::sigemptyset`/`::sigaction`（SIGINT/SIGQUIT 复位 SIG_DFL）、`::sigprocmask`、`::chdir`、`::execve`、`::_exit`。无 `setenv`/`malloc`/`printf`/`std::string` 等非 async-signal-safe 调用。**P1-2 的 `drop_env_entry` 在 fork 之前执行、P1-3 计划插入的 `::setpgid` 亦为 async-signal-safe**，两项落地后本行仍成立（合入后需复跑本行的核对命令确认） |
+
+### 运维
+
+| 编号 | 判定 | 证据 |
+| --- | --- | --- |
+| OP4 | **已满足** | 三类凭据缺失或彼此相同时 gateway 拒绝启动，且**有 e2e 用例**：缺 metrics token → `test/gateway_e2e_test.cc:969` `MetricsTokenUnsetRefusesToStart`、`:1012` `NonLoopbackWithoutMetricsTokenRefusesToStart`；metrics token 与推理/管理 token 相同 → `:1020` `MetricsTokenMatchingInferenceRefusesToStart`；单元层由 `test/trust_tokens_unittest.cc:38,44` 两处 `EXPECT_STREQ(st.reason, kScrapeTokenCollision)` 钉住（`reason` 定义在 `src/control/trust_tokens.h:22`、判据在 `:37`），网关侧据此在 `src/control/gateway/gateway_app.cpp:941-946` 打印 "refusing to start: MORTRED_METRICS_TOKEN matches an inference or management token" |
+| OP5 | **部分**：gateway 先于模型退出、模型进程不残留这一半已由 P1-1 轮次前的有序停机用例覆盖（`supervisor_unittest` 的 `shutdown_is_ordered_and_complete`），但"模型进程先退出"整条链要等 **P1-3（进程组）合入后**按 `process_group_gone` 重判；本行在 P1-3 关闭后补最终判定 | 待补 |
+
+## 仍待判定的行
+
+下列各行的判定依赖尚在合入中的条目或需要 GPU/压测证据，收口时逐行补齐：
+
+- **PF1–PF5、TP1–TP2**：需要 TensorRT engine 的 calibrate + `http_infer_rps.py --raw` 压测（并发 = 已部署 `worker_nums` × 2、≥30s）、`docs/benchmark-h3/<id>.txt` 的 trtexec 对照、gateway 与模型分段耗时、以及 85%/150% 的复测阈值。本轮 7 个 P1 均不产出这类证据 → 收口时按 `rubric.md:91` 判"阻塞"（engine/性能行）或"未满足"，并写明缺的环境与恢复后要重跑的验收。
+- **PF3**：N>1 张图片一次提交要返回 N 条逐项结果且 batch 观测为 1 —— 属服务行为而非纯性能，收口时用既有 e2e 证据判定（`server_e2e_contract_test` 的多图用例）。
+- **AV1**：`type=mnn`/`type=onnx` 的已服务 id 能单独拉起并完成一次合法推理 —— 本机缺 MNN/ONNX 权重时相关用例 SKIPPED（P1-4 QA 已记录 `backend_unittest` 5 例 SKIPPED），收口时按"阻塞"或"未满足"据实判定。
+- **ST1–ST4、ST6、TP3、UX1–UX4、OP1–OP3、EX1–EX3**：收口时逐行给出证据或未满足理由；其中 `UX3`（CI 检查 OpenAPI 一致性、GPU 作业被跳过不得写成 TensorRT 证明）与 `OP1–OP3`、`TP3` 的相关证据正在由 `07-modules/ci.md`、`07-modules/ops.md` 的评分调用收集。
+
+## 加权分
+
+- 模块分与权重见 `07-modules/*.md`（本文件只做复核与上限套用）。
+- 计算规则（`rubric.md:69`）：原始分 = Σ(模块分 × 权重) / 100，保留一位小数；再套上限（`rubric.md:182`）：有未关闭且未阻塞的 P0 → ≤7.9；只有 P1 → ≤8.9；阻塞项不触发上限。
+- 本轮起点队列：P0 = 无，P1 = 7 条（P1-1…P1-7），P2 = 见 `02-p0-p1-final.md`。
+- 收口时按"已关闭 / 未关闭且未阻塞 / 阻塞"三类逐条归位后套用上限。
+
+## 终态
+
+按 `rubric.md:186`，`done` 需三件同时成立：完成标准每一行"已满足" + 九份模块开放项均为"无" + 阻塞项为空。就当前证据看，PF1–PF5/TP1–TP2 这类需要 GPU 压测的行本轮不可能满足或只能判阻塞，因此**终态不会是 `done`**；收口时按 `rubric.md:188-190` 在 `running` 与 `awaiting-env` 之间据实选择，并写明恢复后要重跑哪些行。
