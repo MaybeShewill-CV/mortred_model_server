@@ -41,7 +41,14 @@ struct ApiKey {
     // Complements rate_limit_qps (GCRA). Callers acquire before work and
     // release in all exit paths; gateway wiring is the admission point.
     int max_inflight = 0;
+    // Round 6 P1-2 tenant quota object (enforced once at gateway).
+    int max_queue = 0;
+    int worker_budget = 0;
     mutable std::atomic<int> inflight{0};
+    mutable std::atomic<int> queued{0};
+    mutable std::atomic<uint64_t> reject_queue{0};
+    mutable std::atomic<uint64_t> reject_inflight{0};
+    mutable std::atomic<uint64_t> reject_qps{0};
     bool enabled = true;
     // runtime state (not persisted). mutable on purpose: authenticate()
     // hands out const keys (shared_ptr<const ApiKey>) that must still count
@@ -128,6 +135,8 @@ class ApiKeyManager {
     /*** P1-4 first slice: per-tenant in-flight budget helpers. */
     static bool try_acquire_inflight(const ApiKey* key);
     static void release_inflight(const ApiKey* key);
+    static bool try_acquire_queue(const ApiKey* key);
+    static void release_queue(const ApiKey* key);
 
 
     /*** check scope (key ownership is held by the shared_ptr) */
@@ -259,6 +268,7 @@ inline AuthResult ApiKeyManager::consume_rate_limit(const std::shared_ptr<const 
     }
     if (!allow_rate_limit(key.get())) {
         key->total_rejected.fetch_add(1);
+        key->reject_qps.fetch_add(1, std::memory_order_relaxed);
         out.reason = AuthReason::RATE_LIMITED;
         // GCRA retry: TAT - sigma - now (recompute without mutating on reject path
         // already performed by allow_rate_limit). Approximate with one interval.
@@ -310,6 +320,7 @@ inline bool ApiKeyManager::try_acquire_inflight(const ApiKey* key) {
     int cur = key->inflight.load(std::memory_order_relaxed);
     while (true) {
         if (cur >= key->max_inflight) {
+            key->reject_inflight.fetch_add(1, std::memory_order_relaxed);
             return false;
         }
         if (key->inflight.compare_exchange_weak(cur, cur + 1, std::memory_order_acq_rel)) {
@@ -323,6 +334,29 @@ inline void ApiKeyManager::release_inflight(const ApiKey* key) {
         return;
     }
     key->inflight.fetch_sub(1, std::memory_order_acq_rel);
+}
+
+inline bool ApiKeyManager::try_acquire_queue(const ApiKey* key) {
+    if (key == nullptr || key->max_queue <= 0) {
+        return true;
+    }
+    int cur = key->queued.load(std::memory_order_relaxed);
+    while (true) {
+        if (cur >= key->max_queue) {
+            key->reject_queue.fetch_add(1, std::memory_order_relaxed);
+            return false;
+        }
+        if (key->queued.compare_exchange_weak(cur, cur + 1, std::memory_order_acq_rel)) {
+            return true;
+        }
+    }
+}
+
+inline void ApiKeyManager::release_queue(const ApiKey* key) {
+    if (key == nullptr || key->max_queue <= 0) {
+        return;
+    }
+    key->queued.fetch_sub(1, std::memory_order_acq_rel);
 }
 
 inline bool ApiKeyManager::allow_rate_limit(const ApiKey* key) {
