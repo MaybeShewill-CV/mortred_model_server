@@ -464,6 +464,11 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err,
         // token regardless of what their TOML declares
         override_env_entry(env_storage, "MORTRED_LISTEN_HOST", "127.0.0.1");
         override_env_entry(env_storage, "MORTRED_AUTH_TOKEN", internal_token);
+        // Allow Prometheus scrapers to use the same MORTRED_METRICS_TOKEN on
+        // model :port/metrics (not only gateway). Still distinct from infer token.
+        if (!gateway_metrics_token.empty()) {
+            override_env_entry(env_storage, "MORTRED_METRICS_TOKEN", gateway_metrics_token);
+        }
         if (inject_workers) {
             override_env_entry(env_storage, "MORTRED_WORKER_NUMS", worker_str);
         }

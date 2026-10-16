@@ -12,6 +12,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <functional>
 #include <memory>
@@ -334,9 +335,16 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
     const bool is_async_endpoint = _m_async_enabled &&
                                    strncmp(request_uri, "/jobs", 5) == 0 &&
                                    (request_uri[5] == '\0' || request_uri[5] == '/');
-    if (!is_health_endpoint &&
-        !jinq::common::is_bearer_authorized(
-            authorization_header_of(task->get_req()), _m_auth_token)) {
+    const bool is_metrics_endpoint = strcmp(request_uri, "/metrics") == 0;
+    const auto auth_header = authorization_header_of(task->get_req());
+    bool authorized = jinq::common::is_bearer_authorized(auth_header, _m_auth_token);
+    if (!authorized && is_metrics_endpoint) {
+        const char* metrics_env = std::getenv("MORTRED_METRICS_TOKEN");
+        if (metrics_env != nullptr && *metrics_env != '\0') {
+            authorized = jinq::common::is_bearer_authorized(auth_header, std::string(metrics_env));
+        }
+    }
+    if (!is_health_endpoint && !authorized) {
         _m_metrics.inc_http_requests(request_method, "401");
         reply_unauthorized(task, _m_model_name);
         return;
