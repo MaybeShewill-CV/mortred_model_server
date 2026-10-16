@@ -1,0 +1,78 @@
+{
+  "round": 5,
+  "generated_at": "2026-10-16 12:58:01 CST",
+  "round_status": "running",
+  "current": "P1-1",
+  "done": 0,
+  "total": 5,
+  "percent": 0,
+  "open_p0": 0,
+  "open_p1": 5,
+  "issues": [
+    {
+      "id": "P1-1",
+      "issue_id": "p1-1",
+      "title": "FixedWindow vs GCRA dual semantics",
+      "priority": "P1",
+      "status": "designed",
+      "merge_sha": null,
+      "branch_sha": null,
+      "has_design": true,
+      "has_rd": false,
+      "has_qa": false,
+      "has_merge": false
+    },
+    {
+      "id": "P1-2",
+      "issue_id": "p1-2",
+      "title": "gpu_sampler nvidia-smi waitpid harden",
+      "priority": "P1",
+      "status": "designed",
+      "merge_sha": null,
+      "branch_sha": null,
+      "has_design": true,
+      "has_rd": false,
+      "has_qa": false,
+      "has_merge": false
+    },
+    {
+      "id": "P1-3",
+      "issue_id": "p1-3",
+      "title": "max_inflight gateway wiring",
+      "priority": "P1",
+      "status": "designed",
+      "merge_sha": null,
+      "branch_sha": null,
+      "has_design": true,
+      "has_rd": false,
+      "has_qa": false,
+      "has_merge": false
+    },
+    {
+      "id": "P1-4",
+      "issue_id": "p1-4",
+      "title": "VERSION honesty 1.0.0",
+      "priority": "P1",
+      "status": "designed",
+      "merge_sha": null,
+      "branch_sha": null,
+      "has_design": true,
+      "has_rd": false,
+      "has_qa": false,
+      "has_merge": false
+    },
+    {
+      "id": "P1-5",
+      "issue_id": "p1-5",
+      "title": "Occupancy test drift",
+      "priority": "P1",
+      "status": "designed",
+      "merge_sha": null,
+      "branch_sha": null,
+      "has_design": true,
+      "has_rd": false,
+      "has_qa": false,
+      "has_merge": false
+    }
+  ]
+}
