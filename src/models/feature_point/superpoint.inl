@@ -140,7 +140,7 @@ void SuperPoint<INPUT, OUTPUT>::decode_fp_location_and_score(const NamedTensor &
     // nms interest points
     std::sort(key_points.begin(), key_points.end(),
               [](const jinq::models::io_define::feature_point::fp &pt1, const jinq::models::io_define::feature_point::fp &pt2) {
-                  return pt1.score >= pt2.score;
+                  return pt1.score > pt2.score;
               });
     auto iter = key_points.begin();
     while (iter != key_points.end()) {
