@@ -94,9 +94,12 @@ StatusCode PPMatting<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> 
     const auto *host_data = output_view.data;
 
     cv::Mat result_image(context.network_size, CV_32FC1, const_cast<float *>(host_data));
-    cv::resize(result_image, result_image, context.source_size, 0.0, 0.0, cv::INTER_NEAREST);
+    // family tail: bilinear resize then CV_8UC1 matte, matching modnet (the
+    // old NEAREST + CV_32SC1 made the two matting ids return different dtypes
+    // for the same task)
+    cv::resize(result_image, result_image, context.source_size, 0.0, 0.0, cv::INTER_LINEAR);
     result_image *= 255.0;
-    result_image.convertTo(result_image, CV_32SC1);
+    result_image.convertTo(result_image, CV_8UC1);
 
     MattingOutput internal_out;
     internal_out.matting_result = std::move(result_image);

@@ -3,6 +3,17 @@
 // Reads jpeggpu's device-resident YCbCr planes and writes the TRT input
 // tensor — zero host round-trips.
 //
+// KNOWN NUMERIC DIVERGENCE (deliberate, documented): spatial sampling here is
+// nearest-neighbor (luma and chroma, step 2 below), while the CPU fallback
+// path resizes with OpenCV INTER_LINEAR (fixed-point bilinear on 8U). The two
+// paths therefore produce systematically different tensors for the same
+// image; bit-exact parity is not achievable by rewriting this kernel in
+// float (OpenCV's 8U bilinear is fixed-point). Aligning them requires a GPU
+// numeric harness first; until then this divergence is a property of the
+// decode fork, not a bug in either path. Deployment keeps it bounded: the
+// pack pins decode_auto per id, and only SOF-gated JPEGs (progressive /
+// EXIF-rotated) fall back to CPU within a GPU-pinned id.
+//
 // All geometric/photometric parameters come from GpuPreprocessDescriptor
 // (value-passed to the kernel, no pointers to host memory).
 

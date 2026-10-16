@@ -106,6 +106,8 @@ StatusCode NanoDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTenso
     }
 
     DetectionOutput result;
+    // hoisted out of the candidate loop: one param lookup per request
+    const float decode_threshold = decode_score_threshold(_m_detection_params, context);
 
     for (int idx = 0; idx < num_points; idx++) {
         const int ct_x = _m_center_priors[idx].x;
@@ -117,7 +119,7 @@ StatusCode NanoDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTenso
         const float score = *max_score_iter;
         const int cur_label = static_cast<int>(std::distance(scores, max_score_iter));
 
-        if (score > _m_detection_params.score_threshold) {
+        if (score > decode_threshold) {
             const float *bbox_pred = tensor_preds_host + idx * num_channels + _m_detection_params.class_nums;
             const auto obj_box_coords = refine_bbox_coords(bbox_pred, ct_x, ct_y, stride, context, geometry_scale);
             jinq::models::io_define::object_detection::bbox obj_box;

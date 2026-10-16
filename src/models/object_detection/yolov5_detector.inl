@@ -85,7 +85,7 @@ StatusCode YoloV5Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
 
     DetectionOutput decode_result;
     collect_yolo_cxcywh_obj_candidates(output_tensordata, batch_nums, raw_pred_bbox_nums, _m_detection_params.class_nums,
-                                       _m_detection_params.score_threshold, _m_detection_params.min_box_area_px, &decode_result);
+                                       decode_score_threshold(_m_detection_params, context), _m_detection_params.min_box_area_px, &decode_result);
     unmap_letterbox_detections(decode_result, letterbox, context.source_size);
 
     DetectionOutput nms_result = finalize_detections(std::move(decode_result), _m_detection_params, context);
