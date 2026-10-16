@@ -710,17 +710,23 @@ TEST(server_e2e_contract, wrong_content_type_returns_415) {
     expect_process_envelope(doc, 60);
 }
 
-TEST(server_e2e_contract, rate_limited_returns_429) {
+TEST(server_e2e_contract, model_side_rate_limit_qps_is_ignored_so_admission_stays_200) {
+    // the model toml key rate_limit_qps no longer participates in admission:
+    // the gateway GCRA is the sole limiter, so the model process must serve
+    // consecutive requests regardless of the configured value. The real model
+    // unload path (queue full -> 429 + Retry-After) is covered by
+    // queue_limit_returns_429_with_retry_after below.
     ServerHandle handle = start_server("rate_limit_qps=1\n");
     const std::string body = "{\"images\":[\"aGVsbG8=\"]}";
     auto first = send_request(handle.port, "POST", "/test/model", body, k_json_auth_headers);
-    EXPECT_EQ(first.status, 200);
+    EXPECT_EQ(first.status, 200) << first.body;
     auto second = send_request(handle.port, "POST", "/test/model", body, k_json_auth_headers);
 
-    EXPECT_EQ(second.status, 429);
+    EXPECT_EQ(second.status, 200) << second.body;
     auto doc = parse_body(second.body);
     ASSERT_FALSE(doc.HasParseError());
-    expect_process_envelope(doc, 429);
+    EXPECT_EQ(doc["status"].GetInt(), 0);
+    ASSERT_EQ(doc["results"].Size(), 1u);
 }
 
 
@@ -739,15 +745,20 @@ TEST(server_e2e_contract, unauthenticated_stays_401_under_rate_limit) {
     EXPECT_EQ(ok.status, 200) << ok.body;
 }
 
-TEST(server_e2e_contract, healthz_exempt_from_ip_rate_limit) {
-    ServerHandle handle = start_server("rate_limit_qps=1\n");
-    const std::string body = "{\"images\":[\"aGVsbG8=\"]}";
-    ASSERT_EQ(send_request(handle.port, "POST", "/test/model", body, k_json_auth_headers).status,
-              200);
-    ASSERT_EQ(send_request(handle.port, "POST", "/test/model", body, k_json_auth_headers).status,
-              429);
-    auto health = send_request(handle.port, "GET", "/healthz", "", {});
-    EXPECT_EQ(health.status, 200) << health.body;
+TEST(server_e2e_contract, healthz_and_ready_are_exempt_from_auth_in_both_configs) {
+    // /healthz and /ready are public health endpoints in every configuration:
+    // they answer 200 without a bearer token both with the default config and
+    // with rate_limit_qps set. (The model side no longer enforces that key at
+    // all - the gateway GCRA is the sole limiter - so the exemption contract
+    // to guard here is the auth exemption, asserted identically in both modes.)
+    const std::vector<std::string> configs = {"", "rate_limit_qps=1\n"};
+    for (const auto &extra : configs) {
+        ServerHandle handle = start_server(extra);
+        auto health = send_request(handle.port, "GET", "/healthz", "", {});
+        EXPECT_EQ(health.status, 200) << "extra=" << extra << " body=" << health.body;
+        auto ready = send_request(handle.port, "GET", "/ready", "", {});
+        EXPECT_EQ(ready.status, 200) << "extra=" << extra << " body=" << ready.body;
+    }
 }
 
 

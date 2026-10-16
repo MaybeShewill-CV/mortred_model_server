@@ -77,6 +77,11 @@ inline const std::vector<std::string>& server_optional_bool_keys() {
 
 /***
  * Optional integer keys.
+ *
+ * rate_limit_qps is retained for configuration compatibility only: it no
+ * longer participates in model-side admission (base_server_impl.h ignores
+ * it), and the gateway GCRA is the sole rate-limiting authority. Setting it
+ * here does not throttle the model process.
  */
 inline const std::vector<std::string>& server_optional_int_keys() {
     static const std::vector<std::string> k = {
