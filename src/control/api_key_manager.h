@@ -98,6 +98,8 @@ class ApiKeyManager {
      *   scope = "inference"
      *   rate_limit_qps = 100   # GCRA at gateway (Round 6)
      *   max_inflight = 8   # optional per-tenant concurrency budget
+     *   max_queue = 32     # optional per-tenant queue residency budget
+     *   worker_budget = 4  # optional per-tenant hard worker budget
      *   enabled = true
      */
     bool load(const std::string& path);
@@ -195,6 +197,12 @@ inline bool ApiKeyManager::load(const std::string& path) {
         key->max_inflight = table.count("max_inflight") != 0
                                 ? mini_toml::to_int(table.at("max_inflight"), 0)
                                 : 0;
+        key->max_queue = table.count("max_queue") != 0
+                             ? mini_toml::to_int(table.at("max_queue"), 0)
+                             : 0;
+        key->worker_budget = table.count("worker_budget") != 0
+                                 ? mini_toml::to_int(table.at("worker_budget"), 0)
+                                 : 0;
         key->enabled = table.count("enabled") != 0
                             ? mini_toml::to_bool(table.at("enabled"), true)
                             : true;
