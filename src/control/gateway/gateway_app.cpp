@@ -1007,7 +1007,14 @@ int GatewayApp::run(int argc, char** argv) {
     options.project_root = resolve_project_root();
     if (const char* env = std::getenv("MORTRED_CONTROL_CONFIG");
         env != nullptr && *env != '\0') {
-        options.config_path = env;
+        std::filesystem::path cfg_path(env);
+        if (!cfg_path.is_absolute()) {
+            const char* root_env = std::getenv("MORTRED_PROJECT_ROOT");
+            if (root_env != nullptr && *root_env != '\0') {
+                cfg_path = std::filesystem::path(root_env) / cfg_path;
+            }
+        }
+        options.config_path = cfg_path.lexically_normal().string();
     }
     if (const char* env = std::getenv("MORTRED_GATEWAY_HOST"); env != nullptr && *env != '\0') {
         options.host = env;
