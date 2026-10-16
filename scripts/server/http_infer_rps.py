@@ -65,8 +65,8 @@ def parse_duration(text: str) -> float:
         value = float(raw)
     except ValueError as exc:
         raise ValueError("invalid duration %r" % text) from exc
-    if value <= 0:
-        raise ValueError("duration must be positive")
+    if value < 0:
+        raise ValueError("duration must be non-negative")
     return value * unit
 
 
@@ -621,6 +621,9 @@ def _self_test() -> int:
         if parse_duration("2m") != 120.0 or parse_duration("500ms") != 0.5:
             print("FAIL: parse_duration", file=sys.stderr)
             failed += 1
+        if parse_duration("0s") != 0.0 or parse_duration("0") != 0.0:
+            print("FAIL: parse_duration zero warmup", file=sys.stderr)
+            failed += 1
         # raw encoding: image bytes as body, trace id on X-Request-ID
         raw_report = run_load(
             LoadConfig(
@@ -733,6 +736,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--quiet", action="store_true", help="no per-second progress on stderr")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args(argv)
+    # Parse durations before self-test so default --warmup "0s" is exercised.
+    duration_s = parse_duration(args.duration) if args.duration else 0.0
+    warmup_s = parse_duration(args.warmup) if args.warmup else 0.0
     if args.self_test:
         return _self_test()
     if args.model:
@@ -747,8 +753,6 @@ def main(argv: list[str] | None = None) -> int:
             args.ready_url = args.gateway.rstrip("/") + "/healthz"
     if not args.url or not args.image:
         parser.error("--url and --image are required unless --self-test")
-    duration_s = parse_duration(args.duration) if args.duration else 0.0
-    warmup_s = parse_duration(args.warmup) if args.warmup else 0.0
     if duration_s <= 0 and args.requests <= 0:
         parser.error("set --duration and/or --requests")
     cfg = LoadConfig(
