@@ -130,10 +130,10 @@ class ProcessSupervisor {
         int64_t backoff_due_ms = 0;   // monotonic ms deadline, 0 = none
         int64_t last_probe_ms = 0;
         // Log-pipe ownership: spawn_locked creates the pipes and reader
-        // threads, then sets readers_live. handle_exit is the SOLE joiner —
-        // it joins both threads, closes the fds, clears readers_live, and
-        // notifies _cv. spawn_locked must wait for !readers_live (never join)
-        // so restart cannot double-join the same std::thread.
+        // threads, then sets readers_live. handle_exit closes fds and detaches
+        // a joiner thread (sole join site — never join on the reaper) that
+        // clears readers_live and notifies _cv. spawn_locked must wait for
+        // !readers_live (never join) so restart cannot double-join.
         int out_fd = -1;
         int err_fd = -1;
         std::thread reader_out;

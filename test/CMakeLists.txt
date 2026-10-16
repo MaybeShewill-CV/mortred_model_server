@@ -68,6 +68,7 @@ set(TEST_LIST
     cv_image_input_unittest
     worker_nums_unittest
     request_admission_unittest
+    log_buffer_unittest
     server_runtime_config_unittest
     worker_pool_unittest
     batch_collector_unittest
