@@ -353,7 +353,7 @@ foreach(src ${TEST_LIST})
     endif()
     add_test(NAME ${src} COMMAND $<TARGET_FILE:${src}> WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
     if(${src} STREQUAL "model_golden_test")
-        set_tests_properties(${src} PROPERTIES SKIP_RETURN_CODE 77)
+        set_tests_properties(${src} PROPERTIES SKIP_RETURN_CODE 77  # local/ctest without weights: skip≠pass (exit 77))
     endif()
     add_dependencies(check ${src})
     if((${src} STREQUAL "async_job_unittest") OR (${src} STREQUAL "async_job_stress_test") OR
@@ -361,7 +361,7 @@ foreach(src ${TEST_LIST})
        (${src} STREQUAL "worker_pool_unittest") OR (${src} STREQUAL "batch_collector_unittest") OR
        (${src} STREQUAL "rate_limit_gcra_unittest"))
         # the sanitizer CI gate runs exactly these under -fsanitize=thread
-        set_tests_properties(${src} PROPERTIES LABELS "sanitizer")
+        set_tests_properties(${src} PROPERTIES LABELS "sanitizer"  # SSOT: CI TSan --target list must match these labels)
     endif()
 endforeach()
 
