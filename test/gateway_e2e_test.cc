@@ -882,10 +882,13 @@ TEST_F(GatewayAuthTest, StaticTokenFallbackStillWorksWhenConfigured) {
 TEST_F(GatewayAuthTest, NonLoopbackKeysOnlyStartsAndEnforcesKeys) {
     // a non-loopback listener with API keys (no static token) is a legitimate
     // deployment: it must start, and keys must be enforced. scrape token is
-    // required on non-loopback so GET /metrics is not public.
+    // required on non-loopback so GET /metrics is not public, and the gateway
+    // fail-closed guard requires the limiter on a public listener, so the
+    // public deployment turns it on explicitly.
     ASSERT_TRUE(StartGateway("0.0.0.0", "ext-token", keys_toml(valid_key_),
                              {{"MORTRED_METRICS_TOKEN", "scrape-token"},
-                              {"MORTRED_API_TOKEN", "mgmt-token"}}));
+                              {"MORTRED_API_TOKEN", "mgmt-token"},
+                              {"MORTRED_RATE_LIMIT", "enforce"}}));
 
     auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}");
     EXPECT_EQ(r.status, 401);
@@ -895,8 +898,12 @@ TEST_F(GatewayAuthTest, NonLoopbackKeysOnlyStartsAndEnforcesKeys) {
 }
 
 TEST_F(GatewayAuthTest, NonLoopbackWithoutAnyAuthRefusesToStart) {
-    // fail-closed preserved: no auth mechanism at all on a public listener
-    EXPECT_FALSE(StartGateway("0.0.0.0", "", ""));
+    // fail-closed preserved: no auth mechanism at all on a public listener.
+    // the limiter is deliberately left off and the rate-limit guard waived, so
+    // this reaches the auth guard it exists to exercise instead of being
+    // rejected earlier by the public-listen rate-limit guard
+    EXPECT_FALSE(StartGateway("0.0.0.0", "", "",
+                              {{"MORTRED_RATE_LIMIT_ALLOW_DISABLE", "1"}}));
 }
 
 TEST_F(GatewayAuthTest, EmptyApiKeysWithoutTokenRefusesToStart) {
@@ -951,7 +958,8 @@ TEST_F(GatewayAuthTest, AdminScopeKeyMayInfer) {
 TEST_F(GatewayAuthTest, NonLoopbackWithOnlyApiTokenStarts) {
     ASSERT_TRUE(StartGateway("0.0.0.0", "ext-token", "",
                              {{"MORTRED_API_TOKEN", "mgmt-token"},
-                              {"MORTRED_METRICS_TOKEN", "scrape-token"}}));
+                              {"MORTRED_METRICS_TOKEN", "scrape-token"},
+                              {"MORTRED_RATE_LIMIT", "enforce"}}));
     auto r = send_request(gateway_port_, "POST", kAuthRoute, "{}");
     EXPECT_EQ(r.status, 401);
     r = send_request(gateway_port_, "POST", kAuthRoute, "{}", "mgmt-token");
@@ -992,14 +1000,21 @@ TEST_F(GatewayAuthTest, MetricsTokenAcceptsScrapeBearer) {
 }
 
 TEST_F(GatewayAuthTest, WildcardListenWithoutExposeRefusesToStart) {
+    // the limiter stays off and the rate-limit guard is waived so this reaches
+    // the expose guard (MORTRED_EXPOSE=loopback vs a 0.0.0.0 bind) instead of
+    // failing earlier on the public-listen rate-limit guard
     EXPECT_FALSE(StartGateway("0.0.0.0", "ext-token", "",
                               {{"MORTRED_EXPOSE", "loopback"},
-                               {"MORTRED_METRICS_TOKEN", "scrape-token"}}));
+                               {"MORTRED_METRICS_TOKEN", "scrape-token"},
+                               {"MORTRED_RATE_LIMIT_ALLOW_DISABLE", "1"}}));
 }
 
 TEST_F(GatewayAuthTest, NonLoopbackWithoutMetricsTokenRefusesToStart) {
+    // the limiter stays off and the rate-limit guard is waived so this reaches
+    // the missing-scrape-token guard it exists to exercise
     EXPECT_FALSE(StartGateway("0.0.0.0", "ext-token", "",
-                              {{"MORTRED_METRICS_TOKEN", ""}}));
+                              {{"MORTRED_METRICS_TOKEN", ""},
+                               {"MORTRED_RATE_LIMIT_ALLOW_DISABLE", "1"}}));
 }
 
 TEST_F(GatewayAuthTest, MetricsTokenMatchingInferenceRefusesToStart) {
@@ -1010,7 +1025,8 @@ TEST_F(GatewayAuthTest, MetricsTokenMatchingInferenceRefusesToStart) {
 TEST_F(GatewayAuthTest, NonLoopbackWithDistinctMetricsTokenStarts) {
     ASSERT_TRUE(StartGateway("0.0.0.0", "ext-token", "",
                              {{"MORTRED_METRICS_TOKEN", "scrape-token"},
-                              {"MORTRED_API_TOKEN", "mgmt-token"}}));
+                              {"MORTRED_API_TOKEN", "mgmt-token"},
+                              {"MORTRED_RATE_LIMIT", "enforce"}}));
     auto r = send_request(gateway_port_, "GET", "/metrics", "");
     EXPECT_EQ(r.status, 401);
     r = send_request(gateway_port_, "GET", "/metrics", "", "scrape-token");
