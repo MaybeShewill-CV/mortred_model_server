@@ -37,6 +37,7 @@
 #include "workflow/Workflow.h"
 
 #include "common/response_envelope.h"
+#include "common/request_size_limit.h"
 #include "common/status_code.h"
 #include "server/async_job_table.h"
 #include "server/http_wire.h"
@@ -76,10 +77,12 @@ public:
         _schedule = std::move(schedule);
     }
 
-    void configure(bool enabled, int timeout_ms, size_t max_request_items) {
+    void configure(bool enabled, int timeout_ms, size_t max_request_items,
+                   size_t request_size_limit_mb) {
         _enabled = enabled;
         _timeout_ms = timeout_ms;
         _max_request_items = max_request_items;
+        _request_size_limit_mb = request_size_limit_mb;
     }
 
     bool enabled() const {
@@ -273,7 +276,19 @@ private:
             return;
         }
 
-        auto parsed = _parse(task->get_req());
+        auto* req = task->get_req();
+        const void* raw_body = nullptr;
+        size_t raw_body_size = 0;
+        (void)req->get_parsed_body(&raw_body, &raw_body_size);
+        if (body_exceeds_limit(header_value_of(req, "content-length"), raw_body_size,
+                               _request_size_limit_mb)) {
+            _metrics->inc_http_requests("POST", "413");
+            reply_async_error(task, 413, "request entity too large (max " +
+                                             std::to_string(_request_size_limit_mb) + "MB)");
+            return;
+        }
+
+        auto parsed = _parse(req);
         const std::string task_id = parsed.req_id.empty() ? generate_req_id() : parsed.req_id;
         if (!parsed.is_valid) {
             std::vector<jinq::common::ResponseError> errors;
@@ -429,6 +444,7 @@ private:
     bool _enabled = false;
     int _timeout_ms = 300000;
     size_t _max_request_items = 16;
+    size_t _request_size_limit_mb = jinq::common::k_default_request_size_limit_mb;
     std::atomic<int> _inflight{0};
     std::atomic<int> _wait_inflight{0};
     std::atomic<uint64_t> _wait_seq{0};

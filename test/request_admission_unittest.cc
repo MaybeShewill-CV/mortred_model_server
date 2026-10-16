@@ -10,6 +10,7 @@
 
 using jinq::server::ContentTypeKind;
 using jinq::server::content_type_kind;
+using jinq::server::body_exceeds_limit;
 using jinq::server::declared_body_exceeds;
 using jinq::server::item_count_exceeds;
 using jinq::server::normalized_media_type;
@@ -43,6 +44,16 @@ TEST(request_admission, item_count_and_queue_predicates) {
     EXPECT_FALSE(queue_would_overflow(10, 2, -1));
     EXPECT_FALSE(queue_would_overflow(8, 2, 10));
     EXPECT_TRUE(queue_would_overflow(9, 2, 10));
+}
+
+
+TEST(request_admission, body_exceeds_limit_empty_cl_uses_actual_size) {
+    // Empty Content-Length must not bypass: actual bytes decide.
+    EXPECT_FALSE(body_exceeds_limit("", 1024, 1));
+    EXPECT_TRUE(body_exceeds_limit("", 1048577, 1));
+    EXPECT_TRUE(body_exceeds_limit("1048577", 0, 1));
+    EXPECT_FALSE(body_exceeds_limit("1024", 1024, 1));
+    EXPECT_TRUE(body_exceeds_limit("not-a-number", 2 * 1024 * 1024, 1));
 }
 
 int main(int argc, char** argv) {
