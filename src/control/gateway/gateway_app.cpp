@@ -623,6 +623,7 @@ GatewayApp::IpRateGate GatewayApp::check_ip_rate_limit(WFHttpTask* task, const s
     resp->add_header_pair("RateLimit-Limit", std::to_string(rate_limit_rate_).c_str());
     resp->add_header_pair("RateLimit-Remaining", "0");
     resp->add_header_pair("RateLimit-Reset", std::to_string(retry_s).c_str());
+    resp->add_header_pair("X-Mortred-RateLimit-Layer", "gateway-gcra");
     reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED,
                         "per-source rate limit exceeded");
     gate.proceed = false;
@@ -715,8 +716,15 @@ void GatewayApp::process(WFHttpTask* task) {
                 // client presented working credentials)
                 metrics_.inc_http_requests(method, "429");
                 const int retry_s = (limited.retry_after_ms + 999) / 1000;
-                task->get_resp()->add_header_pair("Retry-After",
-                                                  std::to_string(retry_s).c_str());
+                auto* resp = task->get_resp();
+                resp->add_header_pair("Retry-After", std::to_string(retry_s).c_str());
+                if (auth.key->rate_limit_qps > 0) {
+                    resp->add_header_pair("RateLimit-Limit",
+                                          std::to_string(auth.key->rate_limit_qps).c_str());
+                    resp->add_header_pair("RateLimit-Remaining", "0");
+                    resp->add_header_pair("RateLimit-Reset", std::to_string(retry_s).c_str());
+                }
+                resp->add_header_pair("X-Mortred-RateLimit-Layer", "api-key-fixed-window");
                 reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED,
                                     "api key rate limit exceeded");
                 return;
