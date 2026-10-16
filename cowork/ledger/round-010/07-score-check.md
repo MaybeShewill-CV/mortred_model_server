@@ -13,7 +13,12 @@
 
 | 编号 | 判定 | 证据 |
 | --- | --- | --- |
+| ST1 | **已满足** | ① 未知字段被拒：`src/common/request_envelope.h:97` 生成 `unknown request field '<key>'; allowed: ...`，e2e `test/server_e2e_contract_test.cc:505` `strict_envelope_rejects_unknown_fields_and_bad_params`、`:1116` `async_submit_unknown_field_metrics_use_http_422`，且 OpenAPI 侧 `test/openapi_consistency_test.cc:173-176` 断言 `additionalProperties == false`；② 空图被拒：`request_envelope_unittest.cc` 的 `images_shape_errors` 含 `{"images":[""]}` → `non-empty` 违规；③ 错误 token → 401（`gateway_e2e_test.cc:336` `model_route_requires_token` 等）；④ "失败被报成空成功"：契约违规映射为 HTTP 500（`src/server/http_status.h`），由 `test/http_contract_test.cc:43-44` 断言 |
+| ST2 | **已满足** | ① 鉴权失败**不消耗**限流配额：`src/control/gateway/gateway_app.cpp:767-768` 在 401 路径上 `ip_limiter_->release(ip_gate.subject)` 归还已 admit 的配额（`:589-590` 注释明写"An allowed admit is not released here: process() does that on the pre-forward 401 path, for both enforce and shadow"），`:719` 注释说明无效 key 不占 `rate_window_count` 槽位，`:722-725` 保证"合法但被限流的 key 得到 429 而非 401"；② 有端到端用例：`test/server_e2e_contract_test.cc:733` `unauthenticated_stays_401_under_rate_limit` —— 在 `rate_limit_qps=1` 配置下连发 5 次无 token 请求全部得到 **401**（而非 429），随后一次带 token 请求得到 **200**（"A subsequent authorized request still gets a full QPS budget"）；③ 未鉴权不能调推理路由：同文件 `:505`/`gateway_e2e_test.cc:336` |
+| ST3 | **已满足（其一）** | 队列打满 → 429 + `Retry-After`：`test/server_e2e_contract_test.cc:937-965` `queue_limit_returns_429_with_retry_after`（断言 429、`retry-after ∈ [1,60]`、`mortred_queue_rejected_total > 0`）；"拒绝结束后后续合法请求仍能成功、槽位可复用"：P1-5 新增用例在 `max_queue_depth=1` 下用 `wait_for_job_release` + "第二个请求不再 429" 证明（见 `issues/p1-5/04-rd.md`）；"进程按重启策略回到 ready"由 `supervisor_unittest` 的重启用例承担。**注**：本行的 `Retry-After` 取值上限受 `ewma_seed_ms` 影响，那 5 个原 `model_run_timeout=0` 的 id 已随 P1-5 由 1s 变为触顶 60s（见 `discovered.md`），属契约内的取值变化、不是未满足 |
 | ST5 | **已满足** | supervisor 在 `fork` 之后、`execve` 之前只调用 async-signal-safe 原语：`src/control/supervisor.cpp:455-482` 依次为 `::close`（fd 循环）、`::syscall(SYS_prctl, PR_SET_PDEATHSIG, SIGINT)`（注释明写"syscall, not libc prctl"）、`::getppid`、`::sigemptyset`/`::sigaction`（SIGINT/SIGQUIT 复位 SIG_DFL）、`::sigprocmask`、`::chdir`、`::execve`、`::_exit`。无 `setenv`/`malloc`/`printf`/`std::string` 等非 async-signal-safe 调用。**P1-2 的 `drop_env_entry` 在 fork 之前执行、P1-3 计划插入的 `::setpgid` 亦为 async-signal-safe**，两项落地后本行仍成立（合入后需复跑本行的核对命令确认） |
+| ST6 | 待补 | 需读 `nvidia-smi` 采样路径（`src/control/**` 的 GPU 采样与 offline 标注）后判定 |
+| ST4 | 待补 | 需要一份"驻留集里停掉一个模型 → gateway 对该 id 返回 503、其它 id 仍可用"的活体证据；收口时用既有 e2e/活体记录判定 |
 
 ### 运维
 
