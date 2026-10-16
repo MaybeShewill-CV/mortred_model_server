@@ -20,6 +20,31 @@ def main() -> int:
     args = ap.parse_args()
     root = Path(args.root).resolve()
     man = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+    # Round 8 P1-5: structural checks mirroring docs/ci/gpu_gate_evidence.schema.json
+    # (no external validator / no GPU runner required).
+    schema_path = root / "docs/ci/gpu_gate_evidence.schema.json"
+    if schema_path.is_file():
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        for key in schema.get("required") or []:
+            if key not in man:
+                print(f"FAIL schema required key missing: {key}", file=sys.stderr)
+                return 1
+        props = schema.get("properties") or {}
+        sv = props.get("schema_version") or {}
+        if sv.get("const") is not None and man.get("schema_version") != sv.get("const"):
+            print("FAIL schema_version const mismatch", file=sys.stderr); return 1
+        art_req = ((props.get("artifacts") or {}).get("items") or {}).get("required") or []
+        for i, art in enumerate(man.get("artifacts") or []):
+            for key in art_req:
+                if key not in art:
+                    print(f"FAIL artifact[{i}] missing {key}", file=sys.stderr); return 1
+        repro = man.get("reproduce")
+        min_items = ((props.get("reproduce") or {}).get("minItems") or 1)
+        if not isinstance(repro, list) or len(repro) < min_items:
+            print("FAIL reproduce must be a non-empty string list", file=sys.stderr); return 1
+        if any(not isinstance(x, str) or not str(x).strip() for x in repro):
+            print("FAIL reproduce entries must be non-empty strings", file=sys.stderr); return 1
+        print("OK schema structural checks passed")
     if man.get("schema_version") != "1":
         print("FAIL schema_version", file=sys.stderr); return 1
     if not man.get("product_version"):
