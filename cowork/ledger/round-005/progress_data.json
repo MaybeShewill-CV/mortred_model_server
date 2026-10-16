@@ -1,13 +1,13 @@
 {
   "round": 5,
-  "generated_at": "2026-10-16 13:07:42 CST",
+  "generated_at": "2026-10-16 13:08:03 CST",
   "round_status": "running",
-  "current": "P1-3",
-  "done": 2,
+  "current": "P1-4",
+  "done": 3,
   "total": 5,
-  "percent": 40,
+  "percent": 60,
   "open_p0": 0,
-  "open_p1": 3,
+  "open_p1": 2,
   "issues": [
     {
       "id": "P1-1",
@@ -40,13 +40,13 @@
       "issue_id": "p1-3",
       "title": "max_inflight gateway wiring",
       "priority": "P1",
-      "status": "designed",
-      "merge_sha": null,
-      "branch_sha": null,
+      "status": "done",
+      "merge_sha": "01875525ad96e2ce3b88d9f0acd54bce6df36f06",
+      "branch_sha": "3c9af9486d97cfe71fd32ad5140720eef4a27eb5",
       "has_design": true,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true
     },
     {
       "id": "P1-4",
