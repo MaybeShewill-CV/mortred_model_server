@@ -38,6 +38,23 @@
 - **AV1**：`type=mnn`/`type=onnx` 的已服务 id 能单独拉起并完成一次合法推理 —— 本机缺 MNN/ONNX 权重时相关用例 SKIPPED（P1-4 QA 已记录 `backend_unittest` 5 例 SKIPPED），收口时按"阻塞"或"未满足"据实判定。
 - **ST1–ST4、ST6、TP3、UX1–UX4、OP1–OP3、EX1–EX3**：收口时逐行给出证据或未满足理由；其中 `UX3`（CI 检查 OpenAPI 一致性、GPU 作业被跳过不得写成 TensorRT 证明）与 `OP1–OP3`、`TP3` 的相关证据正在由 `07-modules/ci.md`、`07-modules/ops.md` 的评分调用收集。
 
+## 测试面测量口径（写 `test` 模块记录前必读）
+
+编排方在基线 `0918361a` 上实测了注册测试数与"二进制是否存在"：
+
+| 构建目录 | 注册测试数 | 二进制存在 | 二进制缺失 |
+| --- | --- | --- | --- |
+| `build`（tests-only，主检出） | 91 | 34 | 57 |
+| `build/full-cpu`（BUILD_FULL=ON） | 96 | 35 | 61 |
+| `build/probe-cpu` | 95 | 34 | 61 |
+| `build/probe-ci`（CI tests-only 口径） | 63 | 33 | 30 |
+
+**口径警告（防止误判，也防止我自己再次over-claim）**：上表"二进制缺失"**不等于"无法构建"**。这四个目录都是**部分构建**的产物——本轮各条目的 QA 只构建并运行了各自点名的目标，从未把每个测试目标都构建一遍。因此"缺失"主要表示"在该目录里没构建过"，**不能**据此写成"57/93 个用例从未运行"这类结论。
+
+可以确证**无法构建**的只有三个具名目标：`packed_batch_nvi_unittest`（`link.txt` 缺 `libmodels.so`）、`cv_image_input_unittest`（同类链接失败）、`enlightengan_output_contract_unittest`（缺 `model_runtime.h` 的 include 链）。这三者连带使 CI 的 `check` 聚合目标中断（`test/CMakeLists.txt:348` 对 `TEST_LIST` 每一项都 `add_dependencies(check ${src})`），属用户已移出范围的问题，只作留档。
+
+本轮的**可运行**证据是另一回事，且是硬的：编排方在 7 个条目上实际跑过约 20 个不同测试二进制（`request_envelope_unittest` 17、`server_e2e_contract_test` 45→47、`gateway_e2e_test` 49、`detection_params_unittest` 8、`detector_common_unittest` 15、`object_detection_output_contract_unittest` 13、`prometheus_metrics_test` 7→11、`tensor_contract_unittest` 14、`http_contract_test` 6、`model_output_contract_unittest` 10、`backend_unittest` 3+5skip、`openai_clip_output_contract_unittest` 6、`lightglue_output_contract_unittest` 15、`server_runtime_config_unittest` 5→6、`supervisor_unittest` 24、`supervisor_malformed_e2e_test` 1、`request_admission_unittest` 5、`log_buffer_unittest` 1 等），全部退出码 0，SKIP 项均有明确原因（权重缺失）。
+
 ## 加权分
 
 - 模块分与权重见 `07-modules/*.md`（本文件只做复核与上限套用）。
