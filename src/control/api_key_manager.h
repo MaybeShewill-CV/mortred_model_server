@@ -35,6 +35,11 @@ struct ApiKey {
     std::string hash;              // SHA-256 hex of the key string
     std::string scope = "inference";  // inference | admin | all
     int rate_limit_qps = 0;        // 0 = unlimited
+    // P1-4 first slice: per-tenant concurrent in-flight budget (0 = unlimited).
+    // Complements rate_limit_qps (QPS window). Callers acquire before work and
+    // release in all exit paths; gateway wiring is the admission point.
+    int max_inflight = 0;
+    mutable std::atomic<int> inflight{0};
     bool enabled = true;
     // runtime state (not persisted). mutable on purpose: authenticate()
     // hands out const keys (shared_ptr<const ApiKey>) that must still count
@@ -84,6 +89,7 @@ class ApiKeyManager {
      *   hash = "sha256hex..."   # SHA-256 of the API key string
      *   scope = "inference"
      *   rate_limit_qps = 100
+     *   max_inflight = 8   # optional per-tenant concurrency budget (P1-4)
      *   enabled = true
      */
     bool load(const std::string& path);
@@ -171,6 +177,9 @@ inline bool ApiKeyManager::load(const std::string& path) {
         key->rate_limit_qps = table.count("rate_limit_qps") != 0
                                   ? mini_toml::to_int(table.at("rate_limit_qps"), 0)
                                   : 0;
+        key->max_inflight = table.count("max_inflight") != 0
+                                ? mini_toml::to_int(table.at("max_inflight"), 0)
+                                : 0;
         key->enabled = table.count("enabled") != 0
                             ? mini_toml::to_bool(table.at("enabled"), true)
                             : true;
@@ -281,6 +290,30 @@ inline bool ApiKeyManager::has_scope(const std::shared_ptr<const ApiKey>& key,
     }
     return key->scope == "all" || key->scope == required;
 }
+
+
+    /*** P1-4: try to take one in-flight slot for this tenant key. */
+    static bool try_acquire_inflight(const ApiKey* key) {
+        if (key == nullptr || key->max_inflight <= 0) {
+            return true;
+        }
+        int cur = key->inflight.load(std::memory_order_relaxed);
+        while (true) {
+            if (cur >= key->max_inflight) {
+                return false;
+            }
+            if (key->inflight.compare_exchange_weak(cur, cur + 1, std::memory_order_acq_rel)) {
+                return true;
+            }
+        }
+    }
+
+    static void release_inflight(const ApiKey* key) {
+        if (key == nullptr || key->max_inflight <= 0) {
+            return;
+        }
+        key->inflight.fetch_sub(1, std::memory_order_acq_rel);
+    }
 
 inline bool ApiKeyManager::allow_rate_limit(const ApiKey* key) {
     if (key == nullptr || key->rate_limit_qps <= 0) {
