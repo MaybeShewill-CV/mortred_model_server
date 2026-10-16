@@ -46,6 +46,12 @@
 #ifndef MORTRED_CONTROL_RATE_LIMIT_GCRA_H
 #define MORTRED_CONTROL_RATE_LIMIT_GCRA_H
 
+// Operator note (P1-1): gateway GCRA here is L1 per-IP. Model servers use a
+// FixedWindowRateLimiter (src/server/rate_limiter.h) per peer for process-local
+// QPS. Reject timing differs by design; tune [gateway.rate_limit] and each
+// server toml rate_limit_qps independently.
+
+
 #include <algorithm>
 #include <array>
 #include <atomic>

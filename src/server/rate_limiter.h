@@ -8,6 +8,15 @@
 #ifndef MORTRED_SERVER_RATE_LIMITER_H
 #define MORTRED_SERVER_RATE_LIMITER_H
 
+// Rate-limit semantics (P1-1 / operators):
+// - Model-server FixedWindowRateLimiter: per-peer fixed 1s window counters.
+//   Burst equals the configured QPS; unused budget does not carry across windows.
+// - Gateway L1 uses GCRA (src/control/rate_limit/gcra.h): smooth rate with burst
+//   via TAT; MORTRED_RATE_LIMIT / [gateway.rate_limit] control it.
+// These are intentionally different layers (edge vs model process). Do not assume
+// identical reject timing; configure each for its role.
+
+
 #include <chrono>
 #include <cstdint>
 #include <mutex>
