@@ -56,7 +56,10 @@ template <typename INPUT, typename OUTPUT> StatusCode NanoDetector<INPUT, OUTPUT
     this->set_image_decode_hint(_m_input_size_host, parse_image_decode_upscale(params, "nanodet"));
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
-        .norm = {.scale = 1.0f / 255.0f, .mean = {0.406f, 0.456f, 0.485f}, .std = {0.225f, 0.224f, 0.229f}},
+        // CPU chain stays BGR: register the chain arrays verbatim and let
+        // bgr_norm do the reversal (the literal once shipped them verbatim,
+        // swapping B/R means on the GPU decode path)
+        .norm = jinq::models::backend::bgr_norm(1.0f / 255.0f, {0.406f, 0.456f, 0.485f}, {0.225f, 0.224f, 0.229f}),
         .color = jinq::models::backend::GpuPreprocessDescriptor::Color::BGR,
         .pad_value = 114,
         .output_dtype = input_info.dtype,

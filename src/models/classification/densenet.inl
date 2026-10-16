@@ -71,7 +71,8 @@ template <typename INPUT, typename OUTPUT> StatusCode DenseNet<INPUT, OUTPUT>::o
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::CENTER_CROP,
         // CPU path subtracts caffe-style 0-255 means after to_float, no /255:
         // keep the same units (scale 1) so both paths are numerically equal
-        .norm = {.scale = 1.0f, .mean = {123.68f, 116.78f, 103.94f}, .std = {58.395f, 57.12f, 57.375f}},
+        // CPU chain converts to RGB first (cvtColor before subtract)
+        .norm = jinq::models::backend::rgb_norm(1.0f, {123.68f, 116.78f, 103.94f}, {58.395f, 57.12f, 57.375f}),
         .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
         .pad_value = 114,
         .output_dtype = input_info.value.dtype,

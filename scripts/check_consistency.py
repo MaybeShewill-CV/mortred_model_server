@@ -1130,6 +1130,38 @@ def check_static_bs1_product() -> list[str]:
     return errors
 
 
+
+def check_gpu_norm_literals() -> list[str]:
+    """Non-symmetric .norm literals are banned in model registrations.
+
+    The CUDA kernel applies norm.mean[0] to the RED component, while CPU
+    ImagePipeline/cv::Scalar arrays bind values[0] to the Mat's channel 0
+    (BLUE unless the chain converts to RGB first). Every non-symmetric norm
+    must therefore go through backend::rgb_norm()/bgr_norm(), which names
+    the CPU-chain order; hand-written arrays are exactly how dbnet and
+    nanodet shipped swapped B/R means on the GPU decode path.
+    """
+    errors: list[str] = []
+    for path in sorted((ROOT / "src" / "models").rglob("*.inl")):
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            stripped = line.strip()
+            if not stripped.startswith(".norm"):
+                continue
+            if "rgb_norm(" in stripped or "bgr_norm(" in stripped:
+                continue
+            for name in ("mean", "std"):
+                arr = re.search(rf"\.{name}\s*=\s*\{{([^}}]*)\}}", stripped)
+                if arr is None:
+                    continue
+                values = [v.strip() for v in arr.group(1).split(",")]
+                if len(values) == 3 and values[0] == values[1] == values[2]:
+                    continue  # symmetric: channel order cannot matter
+                errors.append(
+                    f"{path.relative_to(ROOT)}:{lineno}: non-symmetric .norm {name} literal "
+                    f"{values}: declare the CPU-chain order via backend::rgb_norm()/bgr_norm()"
+                )
+    return errors
+
 def main() -> int:
     args = parse_args()
     errors: list[str] = []
@@ -1150,6 +1182,7 @@ def main() -> int:
     errors.extend(check_scaffolder_task_metadata())
     errors.extend(check_model_todo_markers())
     errors.extend(check_model_io_split())
+    errors.extend(check_gpu_norm_literals())
     errors.extend(check_demo_client_health())
     errors.extend(check_unique_catalog_listen())
     errors.extend(check_demo_pack())

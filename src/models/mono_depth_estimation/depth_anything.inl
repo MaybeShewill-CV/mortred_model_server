@@ -41,7 +41,8 @@ template <typename INPUT, typename OUTPUT> StatusCode DepthAnything<INPUT, OUTPU
     this->set_image_decode_hint(_m_input_size_host, jinq::models::cv_input::parse_image_decode_upscale(params, "depth_anything"));
     this->set_gpu_preprocess({
         .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::KEEP_RATIO_PAD_ZERO,
-        .norm = {.scale = 1.0f / 255.0f, .mean = {0.485f, 0.456f, 0.406f}, .std = {0.229f, 0.224f, 0.225f}},
+        // CPU chain stays BGR (cv::Scalar on the unconverted mat)
+        .norm = jinq::models::backend::bgr_norm(1.0f / 255.0f, {0.406f, 0.456f, 0.485f}, {0.225f, 0.224f, 0.229f}),
         .color = jinq::models::backend::GpuPreprocessDescriptor::Color::BGR,
         .pad_value = 0,
         .output_dtype = input_info.dtype,
