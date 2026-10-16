@@ -87,6 +87,7 @@ set(TEST_LIST
     control_config_unittest
     trt_spawn_gate_unittest
     occupancy_gate_unittest
+    api_key_inflight_unittest
     trust_tokens_unittest
     supervisor_unittest
 )
