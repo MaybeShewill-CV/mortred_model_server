@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
@@ -48,6 +49,7 @@ struct LiveGpuSnapshot {
 struct OccupancySibling {
     std::string id;
     int gpu_mem_mib = 0;
+    int rss_mib = 0;
 };
 
 struct OccupancyCheckInput {
@@ -67,9 +69,13 @@ struct OccupancyCheckInput {
     // if |declared - measured| exceeds max(64, declared/100). Supervisor does
     // not sample this; production wiring is pack_occupancy.py --measured-json.
     bool has_measured_gpu_mem_mib = false;
-    // Process RSS is intentionally out-of-band (see docs/capacity-single-gpu.md);
-    // feed GPU residency via measured_gpu_mem_mib / pack_occupancy --measured-json.
     int measured_gpu_mem_mib = 0;
+    // Host RAM dimension (Round 14).
+    bool has_rss_mib = false;
+    int rss_mib = 0;
+    int host_memory_total_mib = 0;
+    int ram_reserve_pct = 15;
+    int live_mem_available_mib = -1;  // <0 = unknown
     std::vector<OccupancySibling> running_siblings;
     LiveGpuSnapshot live;
 };
@@ -420,6 +426,30 @@ inline LiveGpuSnapshot query_nvidia_smi(int timeout_ms = 3000) {
     return parse_smi_snapshot(out, snap);
 }
 
+inline int query_mem_available_mib() {
+    FILE* f = ::fopen("/proc/meminfo", "r");
+    if (f == nullptr) {
+        return -1;
+    }
+    char line[256];
+    long available_kb = -1;
+    long free_kb = -1;
+    while (::fgets(line, sizeof(line), f) != nullptr) {
+        long val = 0;
+        if (std::sscanf(line, "MemAvailable: %ld kB", &val) == 1) {
+            available_kb = val;
+        } else if (std::sscanf(line, "MemFree: %ld kB", &val) == 1) {
+            free_kb = val;
+        }
+    }
+    ::fclose(f);
+    const long kb = available_kb >= 0 ? available_kb : free_kb;
+    if (kb < 0) {
+        return -1;
+    }
+    return static_cast<int>(kb / 1024);
+}
+
 inline bool occupancy_ready_for_spawn(const OccupancyCheckInput& in, std::string* err) {
     if (!in.pack_active || occupancy_enforcement_disabled(in.occupancy_policy)) {
         return true;
@@ -495,6 +525,33 @@ inline bool occupancy_ready_for_spawn(const OccupancyCheckInput& in, std::string
         if (err != nullptr) {
             *err = "occupancy gate: GPU free memory below " + in.candidate_id + " stamp (need " +
                    std::to_string(in.gpu_mem_mib) + " MiB free); stop other GPU processes, then retry start";
+        }
+        return false;
+    }
+    if (in.host_memory_total_mib > 0 && in.has_rss_mib && in.rss_mib > 0) {
+        long long used = in.rss_mib;
+        for (const auto& sib : in.running_siblings) {
+            if (sib.rss_mib > 0) {
+                used += sib.rss_mib;
+            }
+        }
+        int reserve = in.ram_reserve_pct;
+        if (reserve < 0) { reserve = 0; }
+        if (reserve > 90) { reserve = 90; }
+        const long long cap =
+            static_cast<long long>(in.host_memory_total_mib) * (100 - reserve) / 100;
+        if (used > cap) {
+            return fail("pack host RAM occupancy exceeds budget for " + in.candidate_id +
+                        " (need " + std::to_string(used) + " MiB RSS, budget " +
+                        std::to_string(cap) + " MiB); remove other pack ids or lower handler_threads");
+        }
+    }
+    if (in.live_mem_available_mib >= 0 && in.has_rss_mib && in.rss_mib > 0 &&
+        in.live_mem_available_mib < in.rss_mib) {
+        if (err != nullptr) {
+            *err = "occupancy gate: host MemAvailable below " + in.candidate_id +
+                   " rss_mib stamp (need " + std::to_string(in.rss_mib) +
+                   " MiB); free RAM or reduce concurrent ids";
         }
         return false;
     }

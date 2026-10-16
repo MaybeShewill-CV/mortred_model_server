@@ -326,18 +326,26 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err,
         occ.has_gpu_mem_mib = child->policy.has_gpu_mem_mib;
         occ.gpu_mem_mib = child->policy.gpu_mem_mib;
         occ.gpu_mem_at_workers = child->policy.gpu_mem_at_workers;
+        occ.has_rss_mib = child->policy.has_rss_mib;
+        occ.rss_mib = child->policy.rss_mib;
+        occ.host_memory_total_mib = _cfg.occupancy.host_memory_total_mib;
+        occ.ram_reserve_pct = _cfg.occupancy.ram_reserve_pct;
         for (const auto& [id, other] : _children) {
             if (other == nullptr || other->is_gateway || other->id == child->id) {
                 continue;
             }
-            if (other->pid > 0 && other->policy.has_gpu_mem_mib && other->policy.gpu_mem_mib > 0) {
+            if (other->pid > 0 &&
+                ((other->policy.has_gpu_mem_mib && other->policy.gpu_mem_mib > 0) ||
+                 (other->policy.has_rss_mib && other->policy.rss_mib > 0))) {
                 OccupancySibling sib;
                 sib.id = other->id;
                 sib.gpu_mem_mib = other->policy.gpu_mem_mib;
+                sib.rss_mib = other->policy.rss_mib;
                 occ.running_siblings.push_back(sib);
             }
         }
         occ.live = query_live_gpu_via_shared_probe();
+        occ.live_mem_available_mib = query_mem_available_mib();
         if (!occupancy_ready_for_spawn(occ, err)) {
             return false;
         }

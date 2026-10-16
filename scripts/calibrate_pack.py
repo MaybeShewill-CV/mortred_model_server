@@ -905,6 +905,15 @@ def occupancy_fields_from_report(
             src = match.get("gpu_mem_source")
             if isinstance(src, str) and src and src != "unavailable":
                 fields["gpu_mem_source"] = src
+            rss = _ceil_positive_mib(match.get("rss_mib"))
+            if rss is not None:
+                fields["rss_mib"] = rss
+            thr = match.get("thread_count")
+            if isinstance(thr, int) and thr > 0:
+                fields["thread_count"] = thr
+            fds = match.get("fd_count")
+            if isinstance(fds, int) and fds > 0:
+                fields["fd_count"] = fds
         decode = row.get("decode")
         if isinstance(decode, dict):
             winner = decode.get("decode_auto")
@@ -920,6 +929,16 @@ def occupancy_fields_from_report(
         total = _ceil_positive_mib(gpu.get("memory_total_mib"))
         if total is not None:
             pack_fields["gpu_memory_total_mib"] = total
+    try:
+        meminfo = Path("/proc/meminfo").read_text(encoding="utf-8", errors="replace")
+        for line in meminfo.splitlines():
+            if line.startswith("MemTotal:"):
+                parts = line.split()
+                if len(parts) >= 2 and parts[1].isdigit():
+                    pack_fields["host_memory_total_mib"] = max(1, (int(parts[1]) + 1023) // 1024)
+                break
+    except OSError:
+        pass
     return id_fields, pack_fields
 
 
@@ -1098,6 +1117,33 @@ def wait_http_ready(url: str, timeout_s: float, proc: subprocess.Popen[bytes]) -
     return False
 
 
+
+def process_floors(pid: int) -> dict:
+    """Sample RSS MiB, Threads, and open fd count for a live server pid."""
+    out: dict = {"rss_mib": None, "thread_count": None, "fd_count": None}
+    if pid <= 0:
+        return out
+    status = Path(f"/proc/{pid}/status")
+    if status.is_file():
+        text = status.read_text(encoding="utf-8", errors="replace")
+        for line in text.splitlines():
+            if line.startswith("VmRSS:"):
+                parts = line.split()
+                if len(parts) >= 2 and parts[1].isdigit():
+                    out["rss_mib"] = max(1, (int(parts[1]) + 1023) // 1024)
+            elif line.startswith("Threads:"):
+                parts = line.split()
+                if len(parts) >= 2 and parts[1].isdigit():
+                    out["thread_count"] = int(parts[1])
+    fd_dir = Path(f"/proc/{pid}/fd")
+    if fd_dir.is_dir():
+        try:
+            out["fd_count"] = sum(1 for _ in fd_dir.iterdir())
+        except OSError:
+            pass
+    return out
+
+
 def sample_mem_during(
     pid: int,
     baseline: float | None,
@@ -1197,6 +1243,10 @@ def run_one_point(
         point["gpu_mem_mib_ready"] = ready_mem
         point["gpu_mem_source"] = ready_scope
         point["gpu_mem_device_used_mib"] = gpu_mem_device_mib()
+        floors = process_floors(proc.pid)
+        point["rss_mib"] = floors.get("rss_mib")
+        point["thread_count"] = floors.get("thread_count")
+        point["fd_count"] = floors.get("fd_count")
         samples: list[tuple[float, str]] = []
         stop = threading.Event()
         sampler = threading.Thread(

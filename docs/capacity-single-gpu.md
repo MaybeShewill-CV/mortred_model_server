@@ -25,7 +25,7 @@ Rule of thumb: prefer `handler_threads ≈ max(8, worker_nums * 8)` on a single 
 
 ## RSS dimension in occupancy
 
-Occupancy gate already accepts optional `measured_gpu_mem_mib` (pack_occupancy measured-json). **Process RSS is not sampled in-tree** (would need a privileged /prod sampler). Operators who need RSS should feed measured JSON out-of-band; do not disable occupancy on soft-off alone.
+Round 14: `mortredctl calibrate --write-pack` records per-id `rss_mib` / `thread_count` / `fd_count` floors and pack `host_memory_total_mib`. `occupancy_ready_for_spawn` enforces the host RAM joint budget (and live MemAvailable) when those stamps are present — not docs-only.
 
 ## How to size a host
 
