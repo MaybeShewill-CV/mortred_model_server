@@ -1205,6 +1205,7 @@ def main() -> int:
     if args.check_stale_binaries:
         errors.extend(check_stale_binaries())
 
+    errors.extend(check_no_tracked_tls_secrets())
     if errors:
         print("Repository consistency check failed:")
         for err in errors:
@@ -1214,6 +1215,29 @@ def main() -> int:
     print("Repository consistency check passed.")
     return 0
 
+
+
+def check_no_tracked_tls_secrets() -> list:
+    """Fail if git tracks conf/local TLS key/cert material (P0-1)."""
+    import subprocess
+    errors = []
+    try:
+        out = subprocess.check_output(
+            ["git", "ls-files", "-z"], cwd=str(ROOT), stderr=subprocess.DEVNULL
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return errors
+    tracked = [p.decode("utf-8", "replace") for p in out.split(b"\0") if p]
+    bad_ext = (".key", ".pem", ".crt", ".csr")
+    for path in tracked:
+        if not path.startswith("conf/local/"):
+            continue
+        if path.endswith(bad_ext):
+            errors.append(
+                "tracked secret/cert under conf/local/ (must be local-only via init-edge): "
+                + path
+            )
+    return errors
 
 if __name__ == "__main__":
     sys.exit(main())
