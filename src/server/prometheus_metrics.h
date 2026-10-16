@@ -11,11 +11,13 @@
 #define MORTRED_SERVER_PROMETHEUS_METRICS_H
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <map>
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "common/status_code.h"
@@ -38,9 +40,46 @@ class PrometheusMetrics {
         model_ = model;
     }
 
+    /*** The request method is attacker-controlled and feeds a metric label, so every value that is
+     *   not a known method collapses onto the single bounded label value "other". This also keeps a
+     *   method from injecting '|' into the "method|status" key, which the rendering step splits on. */
+    static std::string normalize_http_method(std::string_view method) {
+        for (const char ch : method) {
+            const auto byte = static_cast<unsigned char>(ch);
+            if (ch == '|' || byte < 0x20 || byte == 0x7f) {
+                return "other";
+            }
+        }
+
+        size_t begin = 0;
+        size_t end = method.size();
+        while (begin < end && std::isspace(static_cast<unsigned char>(method[begin])) != 0) {
+            ++begin;
+        }
+        while (end > begin && std::isspace(static_cast<unsigned char>(method[end - 1])) != 0) {
+            --end;
+        }
+
+        std::string normalized(method.substr(begin, end - begin));
+        for (char &ch : normalized) {
+            ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+        }
+        if (normalized.size() > 16) {
+            return "other";
+        }
+
+        static const char *const kKnownMethods[] = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"};
+        for (const char *known : kKnownMethods) {
+            if (normalized == known) {
+                return normalized;
+            }
+        }
+        return "other";
+    }
+
     void inc_http_requests(const std::string &method, const std::string &status) {
         std::lock_guard<std::mutex> lock(mutex_);
-        http_requests_[method + "|" + status]++;
+        http_requests_[normalize_http_method(method) + "|" + status]++;
     }
 
     /*** request encoding split (json | raw): two fixed label values only */
@@ -51,7 +90,7 @@ class PrometheusMetrics {
 
     void observe_http_duration_ms(const std::string &method, const std::string &status, double ms) {
         std::lock_guard<std::mutex> lock(mutex_);
-        observe_histogram_locked(http_duration_, http_duration_buckets_, method + "|" + status, ms);
+        observe_histogram_locked(http_duration_, http_duration_buckets_, normalize_http_method(method) + "|" + status, ms);
     }
 
     void inc_inference_requests(int status) {
