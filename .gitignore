@@ -78,3 +78,5 @@ conf/local/**/*.csr
 conf/api_keys.toml
 
 .DS_Store
+cowork/ledger/**/progress_watch.pid
+cowork/ledger/**/progress_watch.log
