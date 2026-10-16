@@ -1,12 +1,12 @@
 {
   "round": 7,
-  "generated_at": "2026-10-16 15:21:44 CST",
+  "generated_at": "2026-10-16 15:23:24 CST",
   "round_status": "running",
-  "current": "P0-2",
-  "done": 1,
+  "current": "P0-3",
+  "done": 2,
   "total": 4,
-  "percent": 25,
-  "open_p0": 3,
+  "percent": 50,
+  "open_p0": 2,
   "open_p1": 0,
   "issues": [
     {
@@ -40,13 +40,13 @@
       "issue_id": "p0-2",
       "title": "Enforce body size before parse; jobs bounded; empty CL cannot bypass",
       "priority": "P0",
-      "status": "designed",
-      "merge_sha": null,
-      "branch_sha": null,
+      "status": "done",
+      "merge_sha": "aab361e2",
+      "branch_sha": "724c7140",
       "has_design": true,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
       "paths": {
         "design": "cowork/ledger/round-009/issues/p0-2/03-design-final.md",
         "rd": "cowork/ledger/round-009/issues/p0-2/04-rd.md",
@@ -55,11 +55,11 @@
       },
       "snippets": {
         "design": "﻿# 技术方案\n- 问题: P0-2\n- 版本: v1\n## 目标\n在解析前强制 body 上限；空 Content-Length / chunked 不能绕过；`/jobs` POST 同样 413。\n## 边界\n- 不改 packing/Docker；不改默认 64MB 上限语义。\n## 实现要点\n1. `request_admission.h`：新增 `received_body_exceeds(req, limit_mb)`（CL 超限或 get_parsed_body size 超限）；空/非法 CL 仍用实际 body。\n2. `serve_process`：在 content-type 分支解析之前调用，超限直接 413。\n3. `async_endpoints`：configure 传入 limit；submit 路径同样检查。\n4. 单测覆盖空 CL + 超限 body、合法 CL、/jobs 路径谓词。",
-        "rd": "",
-        "qa": "",
-        "merge": ""
+        "rd": "﻿# RD 实现\n- 问题: P0-2\n- 分支: cowork/r9-p0-2-body-limit\n- 提交: 724c7140\n- 实现偏差: 无\n## 变更\n- request_admission.h: body_exceeds_limit(CL, actual_bytes, limit_mb)\n- base_server_impl.h: 413 before json/raw parse\n- async_endpoints.h: /jobs POST same check; configure takes request_size_limit_mb\n## 自测\n- request_admission_unittest 5/5 PASS\n## 新增问题",
+        "qa": "﻿# QA\n- 问题: P0-2\n- 结论: pass\n- 方案版本: v1\n## 验收\n| 编号 | 标准 | 结果 | 命令/观察 |\n| --- | --- | --- | --- |\n| A1 | 空 CL 用实际 body 判超限 | pass | body_exceeds_limit_empty_cl_uses_actual_size |\n| A2 | serve_process 在解析前 413 | pass | base_server_impl.h body_exceeds_limit 位于 parse 前 |\n| A3 | /jobs 同样受限 | pass | async handle_async_submit 413 分支 |\n## 残余风险\n128MB RSS 外部压测未实跑；workflow request_size_limit 仍在入站层。",
+        "merge": "﻿# 合入\n- 问题: P0-2\n- 分支: cowork/r9-p0-2-body-limit\n- worktree: /mnt/g/Codex/mortred_wt/r9-p0-2-body-limit\n- 问题分支提交: 724c7140\n- QA 结论: pass\n- 重跑: /tmp/request_admission_r9 → 0 (5 tests)\n- 命令: git merge --no-ff cowork/r9-p0-2-body-limit\n- merge commit: aab361e2"
       },
-      "step_text": "方案已锁 · 待实现"
+      "step_text": "已合入 · merge aab361e2"
     },
     {
       "id": "P0-3",
