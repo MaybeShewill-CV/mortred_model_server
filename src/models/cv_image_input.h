@@ -320,6 +320,131 @@ inline bool size_within_limits(const cv::Size &full, const ImageInputLimits &lim
     return true;
 }
 
+
+/*** BMP BITMAPINFOHEADER width/height (little-endian) when BM signature matches. */
+inline bool bmp_dib_dimensions(const std::string &bytes, cv::Size *size) {
+    if (bytes.size() < 26) return false;
+    if (static_cast<unsigned char>(bytes[0]) != 'B' || static_cast<unsigned char>(bytes[1]) != 'M') {
+        return false;
+    }
+    const auto le32 = [&](size_t off) -> int {
+        return static_cast<int>(static_cast<unsigned char>(bytes[off]) |
+               (static_cast<unsigned char>(bytes[off + 1]) << 8) |
+               (static_cast<unsigned char>(bytes[off + 2]) << 16) |
+               (static_cast<unsigned char>(bytes[off + 3]) << 24));
+    };
+    const int dib = le32(14);
+    if (dib < 40) return false;
+    int w = le32(18);
+    int h = le32(22);
+    if (h < 0) h = -h;
+    if (w <= 0 || h <= 0) return false;
+    if (size != nullptr) *size = cv::Size(w, h);
+    return true;
+}
+
+/*** GIF logical screen descriptor width/height (little-endian). */
+inline bool gif_lsd_dimensions(const std::string &bytes, cv::Size *size) {
+    if (bytes.size() < 10) return false;
+    if (!(bytes[0] == 'G' && bytes[1] == 'I' && bytes[2] == 'F' &&
+          bytes[3] == '8' && (bytes[4] == '7' || bytes[4] == '9') && bytes[5] == 'a')) {
+        return false;
+    }
+    const int w = static_cast<unsigned char>(bytes[6]) | (static_cast<unsigned char>(bytes[7]) << 8);
+    const int h = static_cast<unsigned char>(bytes[8]) | (static_cast<unsigned char>(bytes[9]) << 8);
+    if (w <= 0 || h <= 0) return false;
+    if (size != nullptr) *size = cv::Size(w, h);
+    return true;
+}
+
+/*** WebP: VP8X canvas / VP8 frame / VP8L bitstream dimensions. */
+inline bool webp_dimensions(const std::string &bytes, cv::Size *size) {
+    if (bytes.size() < 30) return false;
+    if (!(bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F')) return false;
+    if (!(bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P')) return false;
+    const auto at = [&](size_t i) -> unsigned char {
+        return static_cast<unsigned char>(bytes[i]);
+    };
+    size_t pos = 12;
+    while (pos + 8 <= bytes.size()) {
+        const char t0 = bytes[pos], t1 = bytes[pos + 1], t2 = bytes[pos + 2], t3 = bytes[pos + 3];
+        const size_t chunk_size = static_cast<size_t>(at(pos + 4)) |
+                                  (static_cast<size_t>(at(pos + 5)) << 8) |
+                                  (static_cast<size_t>(at(pos + 6)) << 16) |
+                                  (static_cast<size_t>(at(pos + 7)) << 24);
+        const size_t data = pos + 8;
+        if (t0 == 'V' && t1 == 'P' && t2 == '8' && t3 == 'X') {
+            if (data + 10 > bytes.size()) return false;
+            const int w = 1 + (at(data + 4) | (at(data + 5) << 8) | (at(data + 6) << 16));
+            const int h = 1 + (at(data + 7) | (at(data + 8) << 8) | (at(data + 9) << 16));
+            if (w <= 0 || h <= 0) return false;
+            if (size != nullptr) *size = cv::Size(w, h);
+            return true;
+        }
+        if (t0 == 'V' && t1 == 'P' && t2 == '8' && t3 == ' ') {
+            if (data + 10 > bytes.size()) return false;
+            const int w = at(data + 6) | ((at(data + 7) & 0x3f) << 8);
+            const int h = at(data + 8) | ((at(data + 9) & 0x3f) << 8);
+            if (w <= 0 || h <= 0) return false;
+            if (size != nullptr) *size = cv::Size(w, h);
+            return true;
+        }
+        if (t0 == 'V' && t1 == 'P' && t2 == '8' && t3 == 'L') {
+            if (data + 5 > bytes.size()) return false;
+            if (at(data) != 0x2f) return false;
+            const unsigned b0 = at(data + 1), b1 = at(data + 2), b2 = at(data + 3), b3 = at(data + 4);
+            const int w = 1 + (((b1 & 0x3f) << 8) | b0);
+            const int h = 1 + (((b3 & 0x0f) << 10) | (b2 << 2) | ((b1 & 0xc0) >> 6));
+            if (w <= 0 || h <= 0) return false;
+            if (size != nullptr) *size = cv::Size(w, h);
+            return true;
+        }
+        size_t advance = 8 + chunk_size + (chunk_size & 1);
+        if (advance < 8 || pos + advance < pos) return false;
+        pos += advance;
+    }
+    return false;
+}
+
+/*** TIFF IFD0 ImageWidth / ImageLength (tags 0x0100 / 0x0101). */
+inline bool tiff_ifd_dimensions(const std::string &bytes, cv::Size *size) {
+    if (bytes.size() < 8) return false;
+    const bool le = (static_cast<unsigned char>(bytes[0]) == 0x49 &&
+                     static_cast<unsigned char>(bytes[1]) == 0x49);
+    const bool be = (static_cast<unsigned char>(bytes[0]) == 0x4d &&
+                     static_cast<unsigned char>(bytes[1]) == 0x4d);
+    if (!le && !be) return false;
+    const auto at = [&](size_t i) -> unsigned char {
+        return static_cast<unsigned char>(bytes[i]);
+    };
+    const auto u16 = [&](size_t off) -> unsigned {
+        if (off + 2 > bytes.size()) return 0;
+        return le ? (at(off) | (at(off + 1) << 8)) : ((at(off) << 8) | at(off + 1));
+    };
+    const auto u32 = [&](size_t off) -> unsigned {
+        if (off + 4 > bytes.size()) return 0;
+        return le ? (at(off) | (at(off + 1) << 8) | (at(off + 2) << 16) | (at(off + 3) << 24))
+                  : ((at(off) << 24) | (at(off + 1) << 16) | (at(off + 2) << 8) | at(off + 3));
+    };
+    if (u16(2) != 42) return false;
+    const size_t ifd = u32(4);
+    if (ifd + 2 > bytes.size()) return false;
+    const unsigned count = u16(ifd);
+    int w = 0, h = 0;
+    for (unsigned i = 0; i < count && i < 256; ++i) {
+        const size_t entry = ifd + 2 + static_cast<size_t>(i) * 12;
+        if (entry + 12 > bytes.size()) break;
+        const unsigned tag = u16(entry);
+        const unsigned typ = u16(entry + 2);
+        const unsigned val = (typ == 3) ? u16(entry + 8) : u32(entry + 8);
+        if (tag == 0x0100) w = static_cast<int>(val);
+        if (tag == 0x0101) h = static_cast<int>(val);
+    }
+    if (w <= 0 || h <= 0) return false;
+    if (size != nullptr) *size = cv::Size(w, h);
+    return true;
+}
+
 /*** Header probe before full decode. Unknown formats return true (defer to imdecode). */
 inline bool encoded_image_within_limits(const std::string &bytes, const ImageInputLimits &limits,
                                         std::string *error) {
@@ -328,6 +453,18 @@ inline bool encoded_image_within_limits(const std::string &bytes, const ImageInp
         return size_within_limits(full, limits, error);
     }
     if (png_ihdr_dimensions(bytes, &full)) {
+        return size_within_limits(full, limits, error);
+    }
+    if (bmp_dib_dimensions(bytes, &full)) {
+        return size_within_limits(full, limits, error);
+    }
+    if (gif_lsd_dimensions(bytes, &full)) {
+        return size_within_limits(full, limits, error);
+    }
+    if (webp_dimensions(bytes, &full)) {
+        return size_within_limits(full, limits, error);
+    }
+    if (tiff_ifd_dimensions(bytes, &full)) {
         return size_within_limits(full, limits, error);
     }
     return true;
