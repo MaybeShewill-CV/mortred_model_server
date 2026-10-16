@@ -46,10 +46,10 @@
 #ifndef MORTRED_CONTROL_RATE_LIMIT_GCRA_H
 #define MORTRED_CONTROL_RATE_LIMIT_GCRA_H
 
-// Operator note (P1-1): gateway GCRA here is L1 per-IP. Model servers use a
-// FixedWindowRateLimiter (src/server/rate_limiter.h) per peer for process-local
-// QPS; API keys use FixedWindow in ApiKeyManager. Reject timing differs by
-// design; tune [gateway.rate_limit], server rate_limit_qps, and key QPS
+// Operator note (Round 6 P1-1): gateway GCRA is the sole public limiter.
+// API-key QPS uses GCRA (GcraFlowLimiter) at the gateway. Model-server
+// FixedWindow product path is removed. Tune [gateway.rate_limit] and
+// per-key rate_limit_qps; see control/rate_limit/rate_limiter.h.
 // independently. 429 responses share RateLimit-* / Retry-After and set
 // X-Mortred-RateLimit-Layer to gateway-gcra | model-fixed-window |
 // api-key-fixed-window so operators can tell which layer rejected.

@@ -12,6 +12,6 @@
 # [keys.client-a]
 # hash = "<sha256 hex of the Bearer secret>"
 # scope = "inference"
-# rate_limit_qps = 100
+# rate_limit_qps = 100   # GCRA QPS at gateway (sole public limiter)
 # max_inflight = 8   # optional per-tenant in-flight concurrency (0 = unlimited)
 # enabled = true

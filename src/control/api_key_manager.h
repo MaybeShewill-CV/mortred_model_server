@@ -21,6 +21,8 @@
 #include <vector>
 
 #include "control/mini_toml.h"
+#include "control/rate_limit/gcra.h"
+#include "control/rate_limit/rate_limiter.h"
 
 #include <openssl/sha.h>
 
@@ -34,9 +36,9 @@ struct ApiKey {
     std::string name;              // display name / tenant identifier
     std::string hash;              // SHA-256 hex of the key string
     std::string scope = "inference";  // inference | admin | all
-    int rate_limit_qps = 0;        // 0 = unlimited
-    // P1-4 first slice: per-tenant concurrent in-flight budget (0 = unlimited).
-    // Complements rate_limit_qps (QPS window). Callers acquire before work and
+    int rate_limit_qps = 0;        // 0 = unlimited; enforced as GCRA at gateway
+    // Per-tenant concurrent in-flight budget (0 = unlimited).
+    // Complements rate_limit_qps (GCRA). Callers acquire before work and
     // release in all exit paths; gateway wiring is the admission point.
     int max_inflight = 0;
     mutable std::atomic<int> inflight{0};
@@ -47,9 +49,8 @@ struct ApiKey {
     // state, never identity/config
     mutable std::atomic<uint64_t> total_requests{0};
     mutable std::atomic<uint64_t> total_rejected{0};
-    mutable std::mutex rate_mu;
-    mutable int64_t rate_window_start = 0;
-    mutable int rate_window_count = 0;
+    // Round 6 P1-1: per-key GCRA TAT (gateway sole public QPS meter).
+    mutable std::atomic<int64_t> rate_tat_ms{0};
 };
 
 /***
@@ -88,8 +89,8 @@ class ApiKeyManager {
      *   [keys.<name>]
      *   hash = "sha256hex..."   # SHA-256 of the API key string
      *   scope = "inference"
-     *   rate_limit_qps = 100
-     *   max_inflight = 8   # optional per-tenant concurrency budget (P1-4)
+     *   rate_limit_qps = 100   # GCRA at gateway (Round 6)
+     *   max_inflight = 8   # optional per-tenant concurrency budget
      *   enabled = true
      */
     bool load(const std::string& path);
@@ -259,17 +260,21 @@ inline AuthResult ApiKeyManager::consume_rate_limit(const std::shared_ptr<const 
     if (!allow_rate_limit(key.get())) {
         key->total_rejected.fetch_add(1);
         out.reason = AuthReason::RATE_LIMITED;
-        // exact budget left in this 1-second fixed window: the limiter
-        // buckets on floor(steady_ms / 1000)
+        // GCRA retry: TAT - sigma - now (recompute without mutating on reject path
+        // already performed by allow_rate_limit). Approximate with one interval.
+        const uint32_t rate = static_cast<uint32_t>(key->rate_limit_qps);
+        mortred::control::ratelimit::GcraPolicy policy{rate, rate};
         const int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                    std::chrono::steady_clock::now().time_since_epoch())
                                    .count();
-        int64_t remaining = 1000 - (now_ms % 1000);
+        const int64_t tat = key->rate_tat_ms.load(std::memory_order_relaxed);
+        const int64_t sigma = policy.burst_tolerance_ms();
+        int64_t remaining = tat - sigma - now_ms;
+        if (remaining < 1) {
+            remaining = policy.interval_ms();
+        }
         if (remaining < 1) {
             remaining = 1;
-        }
-        if (remaining > 1000) {
-            remaining = 1000;
         }
         out.retry_after_ms = static_cast<int32_t>(remaining);
         return out;
@@ -325,23 +330,17 @@ inline bool ApiKeyManager::allow_rate_limit(const ApiKey* key) {
         return true;
     }
     // Same scopes key_may_infer accepts. A rejected scope must not take a
-    // slot: the gateway answers the existing 401 and leaves the window.
+    // slot: the gateway answers the existing 401 and leaves the TAT untouched.
     if (key->scope != "all" && key->scope != "inference" && key->scope != "admin") {
         return true;
     }
-    std::lock_guard<std::mutex> lock(key->rate_mu);
-    const auto now = std::chrono::duration_cast<std::chrono::seconds>(
-                         std::chrono::steady_clock::now().time_since_epoch())
-                         .count();
-    if (key->rate_window_start != now) {
-        key->rate_window_start = now;
-        key->rate_window_count = 0;
-    }
-    if (key->rate_window_count >= key->rate_limit_qps) {
-        return false;
-    }
-    ++key->rate_window_count;
-    return true;
+    const int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                               std::chrono::steady_clock::now().time_since_epoch())
+                               .count();
+    const uint32_t rate = static_cast<uint32_t>(key->rate_limit_qps);
+    mortred::control::ratelimit::GcraPolicy policy{rate, rate};
+    const auto decision = mortred::control::ratelimit::gcra_admit(key->rate_tat_ms, policy, now_ms);
+    return decision.allowed;
 }
 
 inline std::vector<ApiKeyManager::KeyInfo> ApiKeyManager::list_keys() const {
