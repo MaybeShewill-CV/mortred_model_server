@@ -247,6 +247,38 @@ inline bool resolve_nvidia_smi_path(std::string* out) {
     return false;
 }
 
+// Strict parse of the first nvidia-smi CSV line ("name, total MiB, free
+// MiB"). Returns the snapshot with available=true only when every field is
+// present and sane; anything else keeps available=false.
+inline LiveGpuSnapshot parse_smi_snapshot(const std::string& out, LiveGpuSnapshot snap) {
+    const auto nl = out.find('
+');
+    std::string line = occupancy_detail::trim_copy(nl == std::string::npos ? out : out.substr(0, nl));
+    const auto last = line.rfind(',');
+    if (last == std::string::npos) {
+        return snap;
+    }
+    const std::string free_s = occupancy_detail::trim_copy(line.substr(last + 1));
+    line = line.substr(0, last);
+    const auto mid = line.rfind(',');
+    if (mid == std::string::npos) {
+        return snap;
+    }
+    const std::string total_s = occupancy_detail::trim_copy(line.substr(mid + 1));
+    const std::string name = occupancy_detail::trim_copy(line.substr(0, mid));
+    try {
+        snap.total_mib = std::stoi(total_s);
+        snap.free_mib = std::stoi(free_s);
+    } catch (...) {
+        return snap;
+    }
+    if (name.empty() || snap.total_mib <= 0) {
+        return snap;
+    }
+    snap.name = name;
+    snap.available = true;
+    return snap;
+}
 // Probe nvidia-smi with a hard deadline. A hung driver/tool must not block
 // supervisor spawn forever; on timeout/failure returns available=false so
 // fingerprint/free-VRAM checks are skipped (stamp budget still applies).
@@ -350,45 +382,39 @@ inline LiveGpuSnapshot query_nvidia_smi(int timeout_ms = 3000) {
         }
         return false;
     };
+    // Signal only a child that provably still belongs to this process and is
+    // still RUNNING: waitid(WNOWAIT) peeks without consuming the exit state,
+    // so a stolen (already reaped, possibly recycled) pid is never signalled
+    // and an exited child needs no signal at all.
+    const auto signal_if_running = [&pid]() {
+        siginfo_t live{};
+        if (::waitid(P_PID, static_cast<id_t>(pid), &live, WEXITED | WNOHANG | WNOWAIT) != 0) {
+            return;  // ECHILD: reaped by someone else, never signal again
+        }
+        if (live.si_pid != 0) {
+            return;  // exited but not yet reaped: nothing to signal
+        }
+        ::kill(pid, SIGKILL);
+    };
     // Always reap; kill if the probe hung, hit the read cap with the child
     // still alive, or waitpid would otherwise block past the deadline.
     if (timed_out || !eof) {
-        ::kill(pid, SIGKILL);
+        signal_if_running();
     }
     if (!reap()) {
-        ::kill(pid, SIGKILL);
-        reap();
-        return snap;
+        // The child was reaped out from under us by a process-wide reaper.
+        // Its exit status is unknowable, but a fully read (EOF) output is
+        // still trustworthy evidence: hand it to the strict parser instead
+        // of failing open to the no-nvidia-smi path.
+        if (timed_out || !eof) {
+            return snap;
+        }
+        return parse_smi_snapshot(out, snap);
     }
     if (timed_out || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
         return snap;
     }
-    const auto nl = out.find('\n');
-    std::string line = occupancy_detail::trim_copy(nl == std::string::npos ? out : out.substr(0, nl));
-    const auto last = line.rfind(',');
-    if (last == std::string::npos) {
-        return snap;
-    }
-    const std::string free_s = occupancy_detail::trim_copy(line.substr(last + 1));
-    line = line.substr(0, last);
-    const auto mid = line.rfind(',');
-    if (mid == std::string::npos) {
-        return snap;
-    }
-    const std::string total_s = occupancy_detail::trim_copy(line.substr(mid + 1));
-    const std::string name = occupancy_detail::trim_copy(line.substr(0, mid));
-    try {
-        snap.total_mib = std::stoi(total_s);
-        snap.free_mib = std::stoi(free_s);
-    } catch (...) {
-        return snap;
-    }
-    if (name.empty() || snap.total_mib <= 0) {
-        return snap;
-    }
-    snap.name = name;
-    snap.available = true;
-    return snap;
+    return parse_smi_snapshot(out, snap);
 }
 
 inline bool occupancy_ready_for_spawn(const OccupancyCheckInput& in, std::string* err) {

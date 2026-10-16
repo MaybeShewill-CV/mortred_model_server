@@ -7,12 +7,15 @@
 
 #include <gtest/gtest.h>
 
+#include <atomic>
+
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <unistd.h>
 #include <string>
+#include <thread>
 
 #include "control/occupancy_gate.h"
 
@@ -270,4 +273,61 @@ TEST(OccupancyEnforcementDisable, soft_off_alone_does_not_disable) {
     EXPECT_TRUE(mortred::control::occupancy_enforcement_disabled("off"));
     unsetenv("MORTRED_OCCUPANCY_ENFORCE");
     unsetenv("MORTRED_OCCUPANCY_ALLOW_DISABLE");
+}
+
+TEST_F(OccupancyGateTest, query_nvidia_smi_survives_process_wide_reaper) {
+    // A supervisor-style reaper (tight waitpid(-1, WNOHANG) loop) used to win
+    // the race for the probe child: the probe's own reap hit ECHILD, the
+    // occupancy gate silently degraded to the no-nvidia-smi path (fingerprint
+    // and free-VRAM checks skipped = fail open), and a defensive kill() could
+    // hit the already-reaped, possibly recycled pid. The probe must survive
+    // the thief: a fully read (EOF) output still parses.
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() /
+                         ("mortred_smi_steal_" + std::to_string(::getpid()));
+    fs::create_directories(dir);
+    const fs::path fake = dir / "nvidia-smi";
+    {
+        std::ofstream out(fake);
+        out << "#!/bin/sh\necho 'Fake Occupancy GPU, 24564, 20000'\n";
+    }
+    fs::permissions(fake, fs::perms::owner_all | fs::perms::group_exec | fs::perms::others_exec);
+    const char* old_path = std::getenv("PATH");
+    const std::string new_path = dir.string() + ":" + (old_path ? old_path : "");
+    ASSERT_EQ(::setenv("PATH", new_path.c_str(), 1), 0);
+
+    // pure busy-poll: the zombie window between child exit and the probe's
+    // own reap is only microseconds wide, so a polite 200us polling loop can
+    // miss it entirely (verified: the fix-vs-nofix difference was luck).
+    std::atomic<bool> stealing{true};
+    std::thread thief([&stealing]() {
+        while (stealing.load(std::memory_order_relaxed)) {
+            while (::waitpid(-1, nullptr, WNOHANG) > 0) {
+            }
+        }
+    });
+
+    constexpr int k_probes = 20;
+    int available_count = 0;
+    for (int i = 0; i < k_probes; ++i) {
+        const auto snap = query_nvidia_smi(/*timeout_ms=*/3000);
+        if (snap.available) {
+            ++available_count;
+            EXPECT_EQ(snap.name, "Fake Occupancy GPU");
+            EXPECT_EQ(snap.total_mib, 24564);
+            EXPECT_EQ(snap.free_mib, 20000);
+        }
+    }
+    stealing.store(false, std::memory_order_relaxed);
+    thief.join();
+
+    if (old_path) {
+        ::setenv("PATH", old_path, 1);
+    } else {
+        ::unsetenv("PATH");
+    }
+    fs::remove_all(dir);
+
+    EXPECT_EQ(available_count, k_probes)
+        << "every probe must survive the process-wide reaper";
 }
