@@ -1,13 +1,13 @@
 {
   "round": 7,
-  "generated_at": "2026-10-16 20:39:21 CST",
-  "round_status": "running",
-  "current": "P1-4",
-  "done": 3,
+  "generated_at": "2026-10-16 20:40:05 CST",
+  "round_status": "done",
+  "current": null,
+  "done": 4,
   "total": 4,
-  "percent": 75,
+  "percent": 100,
   "open_p0": 0,
-  "open_p1": 1,
+  "open_p1": 0,
   "issues": [
     {
       "id": "P1-1",
@@ -92,13 +92,13 @@
       "issue_id": "p1-4",
       "title": "No dual-upstream isolation regression",
       "priority": "P1",
-      "status": "designed",
-      "merge_sha": null,
-      "branch_sha": null,
+      "status": "done",
+      "merge_sha": "d14fff29",
+      "branch_sha": "d8be2e4e",
       "has_design": true,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
       "paths": {
         "design": "cowork/ledger/round-012/issues/p1-4/03-design-final.md",
         "rd": "cowork/ledger/round-012/issues/p1-4/04-rd.md",
@@ -107,11 +107,11 @@
       },
       "snippets": {
         "design": "# Design P1-4 v1 (user-locked)\n## Goal\nDual-upstream isolation: two model ids; stop one; other still 200; dead returns 503.\n## Bounds\nNo packing/Docker; reuse fake_model_server + gateway.\n## Fix\nExtend gateway_e2e_test with dual fake upstreams catalog; assert isolation after stop.",
-        "rd": "",
-        "qa": "",
-        "merge": ""
+        "rd": "# RD\n- issue: P1-4\n- 问题分支提交: d8be2e4e\n## changes\n- gateway_dual_upstream_isolation_test.cc",
+        "qa": "# QA\n- issue: P1-4\n- result: pass\n## residual\nNeeds fake+gateway bins to execute.",
+        "merge": "# merge\n- issue: P1-4\n- 问题分支提交: d8be2e4e\n- merge commit: d14fff29"
       },
-      "step_text": "方案已锁 · 待实现"
+      "step_text": "已合入 · merge d14fff29"
     }
   ]
 }

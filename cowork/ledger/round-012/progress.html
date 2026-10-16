@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<meta http-equiv="refresh" content="60"/>
+
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Mortred · Round 12 进度</title>
 <style>
@@ -43,7 +43,7 @@
   .kpi .v { font-size:26px; font-weight:700; margin-top:4px; }
   .kpi .t { color:var(--muted); font-size:12px; }
   .bar { height:12px; background:#0a1220; border-radius:999px; overflow:hidden; border:1px solid var(--line); margin-top:14px; }
-  .bar > i { display:block; height:100%; width:75%; background:linear-gradient(90deg,#3dd68c,#5b8cff); }
+  .bar > i { display:block; height:100%; width:100%; background:linear-gradient(90deg,#3dd68c,#5b8cff); }
   .bar-meta { display:flex; justify-content:space-between; color:var(--muted); font-size:12px; margin-top:8px; }
   h2 { font-size:15px; letter-spacing:.4px; text-transform:uppercase; color:var(--muted); margin:22px 0 10px; }
   .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
@@ -75,7 +75,7 @@
   footer { margin-top:22px; color:var(--muted); font-size:12px; line-height:1.5; }
   code { background:#0e1626; padding:1px 6px; border-radius:6px; border:1px solid var(--line); }
   #board.hidden { display:none; }
-  .done-banner { display:none; background:#123226; border:1px solid #2f6b4f; color:#b7f5d3; border-radius:14px; padding:12px 14px; margin-bottom:14px; }
+  .done-banner { display:block; background:#123226; border:1px solid #2f6b4f; color:#b7f5d3; border-radius:14px; padding:12px 14px; margin-bottom:14px; }
 </style>
 </head>
 <body>
@@ -83,22 +83,22 @@
     <header>
       <div>
         <h1>Mortred · Round 12</h1>
-        <div class="sub">cv-cowork · 基线 <code>sub-agent-co-work</code> · 外部审计汇总（门禁 / 可用性 / 正确性） · meta refresh 60s</div>
+        <div class="sub">cv-cowork · 基线 <code>sub-agent-co-work</code> · 外部审计汇总（门禁 / 可用性 / 正确性） · 已停止刷新 · 队列清空</div>
       </div>
-      <div class="pill"><span class="dot run run"></span><span>状态 running · 当前 P1-4</span></div>
+      <div class="pill"><span class="dot ok"></span><span>状态 done · 队列清空</span></div>
     </header>
     <div class="done-banner">全部 issue 已合入并关闭。监视器应已退出；本页不再自动刷新。</div>
     <div id="board">
       <div class="hero">
         <section class="panel">
           <div class="kpis">
-            <div class="kpi"><div class="t">完成</div><div class="v">3/4</div></div>
-            <div class="kpi"><div class="t">进度</div><div class="v">75%</div></div>
+            <div class="kpi"><div class="t">完成</div><div class="v">4/4</div></div>
+            <div class="kpi"><div class="t">进度</div><div class="v">100%</div></div>
             <div class="kpi"><div class="t">P0 未关</div><div class="v">0</div></div>
-            <div class="kpi"><div class="t">P1 未关</div><div class="v">1</div></div>
+            <div class="kpi"><div class="t">P1 未关</div><div class="v">0</div></div>
           </div>
           <div class="bar"><i></i></div>
-          <div class="bar-meta"><span>已合入 P1-1, P1-2, P1-3</span><span>生成 2026-10-16 20:39:21 CST</span></div>
+          <div class="bar-meta"><span>已合入 P1-1, P1-2, P1-3, P1-4</span><span>生成 2026-10-16 20:40:05 CST</span></div>
         </section>
         <section class="panel">
           <div style="color:var(--muted);font-size:12px;margin-bottom:8px;">数据源</div>
@@ -137,13 +137,13 @@
       <div class="sha">1ab49cd5</div>
       <div class="hint">点击查看详情 →</div>
     </article>
-    <article class="card p1 run" role="button" tabindex="0"
+    <article class="card p1 done" role="button" tabindex="0"
       data-id="p1-4" onclick="location.hash='#issue/p1-4'"
       onkeydown="if(event.key==='Enter')location.hash='#issue/p1-4'">
-      <div class="top"><span class="badge">P1-4</span><span class="state">方案已锁</span></div>
+      <div class="top"><span class="badge">P1-4</span><span class="state">已合入</span></div>
       <div class="title">No dual-upstream isolation regression</div>
-      <div class="step">方案已锁 · 待实现</div>
-      <div class="sha">—</div>
+      <div class="step">已合入 · merge d14fff29</div>
+      <div class="sha">d14fff29</div>
       <div class="hint">点击查看详情 →</div>
     </article>
       </div>
@@ -235,13 +235,13 @@
       <div class="detail-head">
         <button type="button" class="back" onclick="location.hash=''">← 返回</button>
         <h3>P1-4 · No dual-upstream isolation regression</h3>
-        <span class="state">方案已锁</span>
+        <span class="state">已合入</span>
       </div>
       <div class="meta-grid">
-        <div><div class="t">当前步骤</div><div class="v">方案已锁 · 待实现</div></div>
-        <div><div class="t">产物状态</div><div class="v">design=Y rd=. qa=. merge=.</div></div>
-        <div><div class="t">merge SHA</div><div class="v mono">—</div></div>
-        <div><div class="t">branch SHA</div><div class="v mono">—</div></div>
+        <div><div class="t">当前步骤</div><div class="v">已合入 · merge d14fff29</div></div>
+        <div><div class="t">产物状态</div><div class="v">design=Y rd=Y qa=Y merge=Y</div></div>
+        <div><div class="t">merge SHA</div><div class="v mono">d14fff29</div></div>
+        <div><div class="t">branch SHA</div><div class="v mono">d8be2e4e</div></div>
       </div>
       <h4>产物路径</h4>
       <ul class="paths">
@@ -252,13 +252,10 @@
         <li><code>cowork/ledger/round-012/issues/p1-4/05-merge.md</code></li>
       </ul>
       <h4>Ledger 摘录</h4>
-      <pre class="snip"># Design P1-4 v1 (user-locked)
-## Goal
-Dual-upstream isolation: two model ids; stop one; other still 200; dead returns 503.
-## Bounds
-No packing/Docker; reuse fake_model_server + gateway.
-## Fix
-Extend gateway_e2e_test with dual fake upstreams catalog; assert isolation after stop.</pre>
+      <pre class="snip"># merge
+- issue: P1-4
+- 问题分支提交: d8be2e4e
+- merge commit: d14fff29</pre>
     </section>
     </div>
     <footer>
