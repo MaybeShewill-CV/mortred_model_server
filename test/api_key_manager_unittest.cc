@@ -214,6 +214,36 @@ TEST(api_key_manager, list_keys_reports_counters_without_hash) {
     // KeyInfo has no hash field by construction (compile-time guarantee)
 }
 
+TEST(api_key_manager, loads_max_queue_and_worker_budget) {
+    const std::string secret = "quota-key-0001";
+    const auto path = write_config(
+        std::string("[keys.tenant]\nhash = \"") + ApiKeyManager::sha256_hex(secret) +
+        "\"\nscope = \"inference\"\nenabled = true\n"
+        "max_queue = 7\nworker_budget = 3\nmax_inflight = 5\n");
+    ApiKeyManager mgr;
+    ASSERT_TRUE(mgr.load(path));
+    auto auth = mgr.authenticate("Bearer " + secret);
+    ASSERT_EQ(auth.reason, mortred::control::AuthReason::OK);
+    ASSERT_NE(auth.key, nullptr);
+    EXPECT_EQ(auth.key->max_queue, 7);
+    EXPECT_EQ(auth.key->worker_budget, 3);
+    EXPECT_EQ(auth.key->max_inflight, 5);
+}
+
+TEST(api_key_manager, quota_fields_default_zero_when_absent) {
+    const std::string secret = "no-quota-key";
+    const auto path = write_config(
+        std::string("[keys.t]\nhash = \"") + ApiKeyManager::sha256_hex(secret) +
+        "\"\nscope = \"inference\"\nenabled = true\n");
+    ApiKeyManager mgr;
+    ASSERT_TRUE(mgr.load(path));
+    auto auth = mgr.authenticate("Bearer " + secret);
+    ASSERT_EQ(auth.reason, mortred::control::AuthReason::OK);
+    EXPECT_EQ(auth.key->max_queue, 0);
+    EXPECT_EQ(auth.key->worker_budget, 0);
+    EXPECT_EQ(auth.key->max_inflight, 0);
+}
+
 TEST(api_key_manager, concurrent_reload_never_dangles_authenticate) {
     // THE P0-2 regression test: authenticate() readers race a reload() loop
     // that keeps swapping the whole key set. Every successful authenticate

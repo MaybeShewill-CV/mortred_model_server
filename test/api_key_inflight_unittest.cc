@@ -21,3 +21,17 @@ TEST(ApiKeyInflight, enforces_budget) {
     ApiKeyManager::release_inflight(&k);
     EXPECT_TRUE(ApiKeyManager::try_acquire_inflight(&k));
 }
+TEST(ApiKeyInflight, tracks_when_worker_budget_set) {
+    ApiKey k;
+    k.max_inflight = 0;
+    k.worker_budget = 2;
+    EXPECT_TRUE(ApiKeyManager::try_acquire_inflight(&k));
+    EXPECT_EQ(k.inflight.load(), 1);
+    EXPECT_TRUE(ApiKeyManager::try_acquire_inflight(&k));
+    EXPECT_EQ(k.inflight.load(), 2);
+    ApiKeyManager::release_inflight(&k);
+    EXPECT_EQ(k.inflight.load(), 1);
+    ApiKeyManager::release_inflight(&k);
+    EXPECT_EQ(k.inflight.load(), 0);
+}
+
