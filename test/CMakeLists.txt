@@ -87,6 +87,7 @@ set(TEST_LIST
     control_config_unittest
     trt_spawn_gate_unittest
     occupancy_gate_unittest
+    gpu_probe_unittest
     api_key_inflight_unittest
     trust_tokens_unittest
     supervisor_unittest
@@ -282,6 +283,8 @@ foreach(src ${TEST_LIST})
     elseif(${src} STREQUAL "trt_spawn_gate_unittest")
         set(EXTRA_LIBS control pthread)
     elseif(${src} STREQUAL "occupancy_gate_unittest")
+        set(EXTRA_LIBS control pthread)
+    elseif(${src} STREQUAL "gpu_probe_unittest")
         set(EXTRA_LIBS control pthread)
     elseif(${src} STREQUAL "trust_tokens_unittest")
         set(EXTRA_LIBS control pthread)
