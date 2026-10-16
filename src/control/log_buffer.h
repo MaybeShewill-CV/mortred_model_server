@@ -57,11 +57,16 @@ class LogBuffer {
         _lines.push_back(line);
         _bytes += line.size() + 1;
         if (_file.is_open()) {
+            // Do not flush every line: a stalled log filesystem would block the
+            // pipe reader, fill the child's stdout pipe, and freeze reaping.
             _file << line << "\n";
-            _file.flush();
             _file_bytes += line.size() + 1;
+            ++_unflushed;
             if (_file_bytes >= _rotate_bytes) {
                 rotate_locked();
+            } else if (_unflushed >= k_flush_every_lines) {
+                _file.flush();
+                _unflushed = 0;
             }
         }
         while (_lines.size() > k_max_lines || _bytes > k_max_bytes) {
@@ -107,6 +112,7 @@ class LogBuffer {
             _file.flush();
             _file.close();
         }
+        _unflushed = 0;
         std::error_code ec;
         std::filesystem::rename(_path, _path + ".1", ec);  // overwrite semantics: .1 is replaced
         if (ec) {
@@ -118,6 +124,7 @@ class LogBuffer {
 
     static constexpr size_t k_max_lines = 2000;
     static constexpr size_t k_max_bytes = 1024 * 1024;
+    static constexpr size_t k_flush_every_lines = 64;
 
     mutable std::mutex _mu;
     std::string _path;
@@ -126,6 +133,7 @@ class LogBuffer {
     std::deque<std::string> _lines;
     size_t _head = 0;
     size_t _bytes = 0;
+    size_t _unflushed = 0;
     std::ofstream _file;
 };
 

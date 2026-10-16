@@ -806,22 +806,30 @@ void ProcessSupervisor::handle_exit(pid_t pid, int wait_status) {
         child->err_fd = -1;
     }
 
-    // Sole join site for log pipe readers (spawn_locked only waits on
-    // readers_live). Join without the table lock, then close fds.
-    if (child->reader_out.joinable()) {
-        child->reader_out.join();
-    }
-    if (child->reader_err.joinable()) {
-        child->reader_err.join();
-    }
+    // Close pipe fds first so readers blocked in read() wake up. Never join
+    // readers on the reaper thread: a stalled LogBuffer write must not stop
+    // SIGCHLD reaping for other children. Detach a joiner that is the sole
+    // join site; spawn_locked still waits on !readers_live.
     if (out_fd >= 0) {
         ::close(out_fd);
     }
     if (err_fd >= 0) {
         ::close(err_fd);
     }
-    child->readers_live.store(false);
-    _cv.notify_all();
+    std::thread out = std::move(child->reader_out);
+    std::thread err = std::move(child->reader_err);
+    std::atomic<bool>* live = &child->readers_live;
+    std::condition_variable* cv = &_cv;
+    std::thread([out = std::move(out), err = std::move(err), live, cv]() mutable {
+        if (out.joinable()) {
+            out.join();
+        }
+        if (err.joinable()) {
+            err.join();
+        }
+        live->store(false);
+        cv->notify_all();
+    }).detach();
 }
 
 void ProcessSupervisor::reaper_loop() {
@@ -1007,9 +1015,13 @@ void ProcessSupervisor::wait_shutdown() {
     if (!_threads_started.load()) {
         return;
     }
+    constexpr int kShutdownWaitMs = 30000;
     if (_monitor.joinable()) {
         std::unique_lock<std::mutex> lock(_mu);
-        _cv.wait(lock, [this]() { return _shutdown_done; });
+        if (!_cv.wait_for(lock, std::chrono::milliseconds(kShutdownWaitMs),
+                          [this]() { return _shutdown_done; })) {
+            // Bounded wait: continue teardown even if monitor did not signal.
+        }
     }
     _threads_stop.store(true);
     _cv.notify_all();
