@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "models/backend/gpu_preprocess_desc.h"
 #include "models/backend/model_runtime.h"
 
 using jinq::common::StatusCode;
@@ -324,4 +325,49 @@ TEST(ImagePipeline, LetterboxPadsCenterAndKeepsRatio) {
     const auto invalid_size = ImagePipeline(square).letterbox({0, 4}).mat();
     ASSERT_FALSE(invalid_size.ok());
     EXPECT_EQ(invalid_size.status, StatusCode::MODEL_EMPTY_INPUT_IMAGE);
+}
+
+TEST(GpuPreprocessNorm, BuildersDeclareCpuChainChannelOrder) {
+    // rgb_norm: the CPU chain converts to RGB first, so its arrays already
+    // match the kernel's application order (mean0 -> R)
+    const auto rgb = jinq::models::backend::rgb_norm(1.0f / 255.0f, {0.485f, 0.456f, 0.406f},
+                                                     {0.229f, 0.224f, 0.225f});
+    EXPECT_FLOAT_EQ(rgb.scale, 1.0f / 255.0f);
+    EXPECT_FLOAT_EQ(rgb.mean[0], 0.485f);
+    EXPECT_FLOAT_EQ(rgb.mean[1], 0.456f);
+    EXPECT_FLOAT_EQ(rgb.mean[2], 0.406f);
+    EXPECT_FLOAT_EQ(rgb.std[0], 0.229f);
+    EXPECT_FLOAT_EQ(rgb.std[2], 0.225f);
+
+    // bgr_norm: the CPU chain stays BGR (values[0] -> B), so the descriptor
+    // must carry the reversed arrays (kernel mean0 -> R gets values[2]).
+    // dbnet/nanodet once shipped the BGR array verbatim, swapping B/R means
+    // on the GPU decode path; this is the regression fence for that.
+    const auto bgr = jinq::models::backend::bgr_norm(1.0f / 255.0f, {0.485f, 0.456f, 0.406f},
+                                                     {0.229f, 0.224f, 0.225f});
+    EXPECT_FLOAT_EQ(bgr.mean[0], 0.406f);  // R <- CPU values[2]
+    EXPECT_FLOAT_EQ(bgr.mean[1], 0.456f);
+    EXPECT_FLOAT_EQ(bgr.mean[2], 0.485f);  // B <- CPU values[0]
+    EXPECT_FLOAT_EQ(bgr.std[0], 0.225f);
+    EXPECT_FLOAT_EQ(bgr.std[2], 0.229f);
+}
+
+TEST(GpuPreprocessNorm, PipelineSubtractAppliesValues0ToBlueOnBgrMat) {
+    // premise bgr_norm relies on: on a BGR Mat, subtract/divide values[0]
+    // bind to the BLUE channel, values[2] to RED. If this ever changes, the
+    // bgr_norm reversal silently stops being the right conversion.
+    const cv::Mat bgr(1, 1, CV_8UC3, cv::Scalar(10, 20, 30));  // B=10 G=20 R=30
+    auto result = ImagePipeline(bgr)
+                      .to_float()
+                      .scale(1.0f / 255.0f)
+                      .subtract({0.485f, 0.456f, 0.406f})
+                      .divide({0.229f, 0.224f, 0.225f})
+                      .nchw("input");
+    ASSERT_TRUE(result.ok()) << result.error;
+    ASSERT_EQ(result.value.tensor.buffer.size(), 3u * sizeof(float));
+    const auto *data = reinterpret_cast<const float *>(result.value.tensor.buffer.data());
+    // NCHW planes: channel 0 = B, channel 2 = R
+    EXPECT_NEAR(data[0], (10.0f / 255.0f - 0.485f) / 0.229f, 1e-5f);
+    EXPECT_NEAR(data[1], (20.0f / 255.0f - 0.456f) / 0.224f, 1e-5f);
+    EXPECT_NEAR(data[2], (30.0f / 255.0f - 0.406f) / 0.225f, 1e-5f);
 }

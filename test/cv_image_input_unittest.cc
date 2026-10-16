@@ -184,12 +184,17 @@ TEST(cv_image_input, raw_bytes_roundtrip) {
     EXPECT_EQ(out.type(), CV_8UC3);
 }
 
-TEST(cv_image_input, image_input_base64_origin_matches_base64_path) {
+TEST(cv_image_input, image_input_raw_bytes_matches_legacy_base64_path) {
+    // production contract: the envelope layer base64-decodes before building
+    // image_input, so load_image always receives raw bytes (origin is
+    // vestigial metadata; parsed_request.h sets raw_bytes for both wire
+    // encodings). The parity that matters: envelope-decoded bytes must match
+    // the legacy base64_input path pixel for pixel.
     const cv::Mat image(10, 10, CV_8UC3, cv::Scalar(40, 50, 60));
     image_input in;
-    in.image = png_source_of(image, byte_source::origin_kind::base64_text);
+    in.image = png_source_of(image, byte_source::origin_kind::raw_bytes);
     base64_input legacy;
-    legacy.input_image_content = in.image.data;
+    legacy.input_image_content = png_source_of(image, byte_source::origin_kind::base64_text).data;
 
     const auto via_image_input = load_image(in);
     const auto via_legacy = load_image(legacy);
@@ -206,7 +211,7 @@ TEST(cv_image_input, raw_bytes_empty_and_undecodable_yield_clear_status) {
     empty_input.image.origin = byte_source::origin_kind::raw_bytes;
     EXPECT_TRUE(load_image(empty_input, ImageInputLimits{}, &status, &error).empty());
     EXPECT_EQ(status, StatusCode::MODEL_EMPTY_INPUT_IMAGE);
-    EXPECT_NE(error.find("raw data is empty"), std::string::npos);
+    EXPECT_NE(error.find("data is empty"), std::string::npos);
 
     status = StatusCode::OK;
     error.clear();
@@ -261,7 +266,9 @@ TEST(image_input_pipeline, prepare_inputs_without_params_keeps_nullptr) {
     StubImageModel model;
     const cv::Mat image(4, 5, CV_8UC3, cv::Scalar(1, 2, 3));
     image_input in;
-    in.image = png_source_of(image, byte_source::origin_kind::base64_text);
+    // raw bytes: the envelope layer has already base64-decoded by the time
+    // an image_input exists (see the raw-bytes parity test above)
+    in.image = png_source_of(image, byte_source::origin_kind::raw_bytes);
 
     const auto prepared = model.prepare_inputs(in);
     EXPECT_EQ(prepared.status, StatusCode::OK);

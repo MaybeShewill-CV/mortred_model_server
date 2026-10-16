@@ -176,6 +176,30 @@ TEST(DetectorCommon, RequestParamsOverrideConfigDefaults) {
     EXPECT_EQ(truncated.size(), 2u);
 }
 
+TEST(DetectorCommon, ImagePostprocessContextCarriesRequestParams) {
+    // regression (P0-2): the GPU zero-copy branch used to hand-build its
+    // InferenceContext without the request-scoped parameter view, so every
+    // per-request override silently fell back to config defaults on that
+    // path. The shared builder must carry params + decode geometry together.
+    jinq::models::backend::ParamSet request_params;
+    request_params.set_f32("score_threshold", 0.5f);
+
+    jinq::models::io_define::common_io::image_input input;
+    input.params = &request_params;
+    const auto ctx = jinq::models::backend::image_postprocess_context(
+        input, cv::Size(640, 640), cv::Size(1280, 720));
+    EXPECT_EQ(ctx.params, &request_params);
+    EXPECT_EQ(ctx.network_size, cv::Size(640, 640));
+    EXPECT_EQ(ctx.source_size, cv::Size(1280, 720));
+
+    // legacy single-image requests carry no view; the builder keeps nullptr
+    jinq::models::io_define::common_io::image_input legacy;
+    const auto legacy_ctx = jinq::models::backend::image_postprocess_context(
+        legacy, cv::Size(224, 224), cv::Size(448, 448));
+    EXPECT_EQ(legacy_ctx.params, nullptr);
+    EXPECT_EQ(legacy_ctx.network_size, cv::Size(224, 224));
+}
+
 TEST(DetectorCommon, PacksCV32FC3MatAsNchwF32Tensor) {
     cv::Mat image(2, 3, CV_32FC3, cv::Scalar(1.0f, 2.0f, 3.0f));
     NamedTensor input;

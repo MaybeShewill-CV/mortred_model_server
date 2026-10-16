@@ -733,9 +733,14 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                             // request: rerun through the normal path
                             LOG_EVERY_N(WARNING, 100) << "gpu zero-copy session run rejected, falling back to cpu path";
                         } else {
-                            InferenceContext ctx;
-                            ctx.network_size = cv::Size(gpu_result.out_w, gpu_result.out_h);
-                            ctx.source_size = cv::Size(gpu_result.src_w, gpu_result.src_h);
+                            // the shared builder carries the request-scoped
+                            // params view together with the decode geometry
+                            // into postprocess (P0-2: this hand-built context
+                            // used to drop input.params, silently ignoring
+                            // every per-request override on the GPU path)
+                            const auto ctx = backend::image_postprocess_context(
+                                input, cv::Size(gpu_result.out_w, gpu_result.out_h),
+                                cv::Size(gpu_result.src_w, gpu_result.src_h));
                             const StatusCode post_status = postprocess(outputs, ctx, output);
                             jinq::common::stage_timing::mark("post");
                             return post_status;

@@ -10,6 +10,7 @@
 #include "common/status_code.h"
 #include "models/backend/param_spec.h"
 #include "models/backend/tensor.h"
+#include "models/io/common_input.h"
 
 namespace jinq {
 namespace models {
@@ -36,6 +37,21 @@ struct InferenceContext {
      */
     const ParamSet *params = nullptr;
 };
+
+/*** postprocess context for one decoded image request. Every path that
+ * hand-builds an InferenceContext for postprocess must build it here so the
+ * request-scoped parameter view travels with the decode geometry (the GPU
+ * zero-copy branch once dropped it: per-request overrides silently fell
+ * back to config defaults on that path). */
+inline InferenceContext image_postprocess_context(
+    const io_define::common_io::image_input &input, const cv::Size &network_size,
+    const cv::Size &source_size) {
+    InferenceContext context;
+    context.params = input.params;
+    context.network_size = network_size;
+    context.source_size = source_size;
+    return context;
+}
 
 /*** all data produced by preprocessing for exactly one inference request */
 struct PreparedInput {
