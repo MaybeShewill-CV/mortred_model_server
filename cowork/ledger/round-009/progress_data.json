@@ -1,12 +1,12 @@
 {
   "round": 7,
-  "generated_at": "2026-10-16 15:25:10 CST",
-  "round_status": "running",
-  "current": "P0-4",
-  "done": 3,
+  "generated_at": "2026-10-16 15:26:44 CST",
+  "round_status": "done",
+  "current": null,
+  "done": 4,
   "total": 4,
-  "percent": 75,
-  "open_p0": 1,
+  "percent": 100,
+  "open_p0": 0,
   "open_p1": 0,
   "issues": [
     {
@@ -92,13 +92,13 @@
       "issue_id": "p0-4",
       "title": "Supervisor must not hang on log I/O stall",
       "priority": "P0",
-      "status": "designed",
-      "merge_sha": null,
-      "branch_sha": null,
+      "status": "done",
+      "merge_sha": "f3eab77e",
+      "branch_sha": "65ac1a4d",
       "has_design": true,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
       "paths": {
         "design": "cowork/ledger/round-009/issues/p0-4/03-design-final.md",
         "rd": "cowork/ledger/round-009/issues/p0-4/04-rd.md",
@@ -107,11 +107,11 @@
       },
       "snippets": {
         "design": "﻿# 技术方案\n- 问题: P0-4\n- 版本: v1\n## 目标\nsupervisor 不因日志 I/O 停顿永久挂死：LogBuffer 不再每行 flush；handle_exit 先关 pipe 再 join 且不堵死 reaper；wait_shutdown 有界。\n## 边界\n- 不改 packing/Docker；不改重启策略语义。\n## 实现要点\n1. `LogBuffer::append`：去掉每行 `_file.flush()`；仅 rotate/dtor（及可选批量阈值）flush。\n2. `handle_exit`：先 close out/err fd，再 join reader；join 放到独立 joiner（reaper 不阻塞），完成后清 readers_live。\n3. `wait_shutdown`：`wait_for` 30s 上限，超时仍 `_threads_stop` 并 join。\n## 确认",
-        "rd": "",
-        "qa": "",
-        "merge": ""
+        "rd": "﻿# RD 实现\n- 问题: P0-4\n- 分支: cowork/r9-p0-4-supervisor-log\n- 提交: 65ac1a4d\n- 实现偏差: 无\n## 变更\n- LogBuffer: 去掉每行 flush；每 64 行或 rotate/dtor flush\n- handle_exit: 先 close pipe，再 detach joiner（reaper 不 join）\n- wait_shutdown: wait_for 30s 上限\n## 自测\n- log_buffer_unittest PASS\n## 新增问题",
+        "qa": "﻿# QA\n- 问题: P0-4\n- 结论: pass\n- 方案版本: v1\n## 验收\n| 编号 | 标准 | 结果 | 命令/观察 |\n| --- | --- | --- | --- |\n| A1 | append 不再每行 flush | pass | log_buffer.h；gtest log_buffer |\n| A2 | handle_exit 先关 fd 且 reaper 不 join | pass | supervisor.cpp detached joiner |\n| A3 | wait_shutdown 有 30s 界 | pass | wait_for 30000ms |\n## 残余风险\n假子进程写满 stdout e2e 未在本步实跑；依赖关 fd + 去 flush 打断链条。",
+        "merge": "﻿# 合入\n- 问题: P0-4\n- 分支: cowork/r9-p0-4-supervisor-log\n- worktree: /mnt/g/Codex/mortred_wt/r9-p0-4-supervisor-log\n- 问题分支提交: 65ac1a4d\n- QA 结论: pass\n- 重跑: /tmp/log_buffer_r9 → 0\n- 命令: git merge --no-ff cowork/r9-p0-4-supervisor-log\n- merge commit: f3eab77e"
       },
-      "step_text": "方案已锁 · 待实现"
+      "step_text": "已合入 · merge f3eab77e"
     }
   ]
 }
