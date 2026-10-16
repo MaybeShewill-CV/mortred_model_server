@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate docs/openapi.json and src/server/openapi_doc.h.
+"""Generate docs/openapi.json (P1-3: openapi_doc.h is a thin runtime loader).
 
 Contract generation chain (single direction, never hand-edited):
 
@@ -1163,8 +1163,11 @@ def main() -> int:
         stale = []
         if not OPENAPI_PATH.exists() or OPENAPI_PATH.read_text(encoding="utf-8") != json_text:
             stale.append("docs/openapi.json is out of date")
-        if not HEADER_PATH.exists() or HEADER_PATH.read_text(encoding="utf-8") != header_text:
-            stale.append("src/server/openapi_doc.h is out of date")
+        # P1-3: openapi_doc.h is a thin loader, not a generated embed of json_text.
+        if not HEADER_PATH.exists():
+            stale.append("src/server/openapi_doc.h is missing")
+        elif "load_openapi_json" not in HEADER_PATH.read_text(encoding="utf-8"):
+            stale.append("src/server/openapi_doc.h must be the thin runtime loader (P1-3)")
         example_problems = check_catalog_examples(doc)
         if stale:
             for problem in stale:
@@ -1184,7 +1187,8 @@ def main() -> int:
         return 0
 
     OPENAPI_PATH.write_text(json_text, encoding="utf-8")
-    HEADER_PATH.write_text(header_text, encoding="utf-8")
+    # P1-3: keep thin openapi_doc.h; only refresh docs/openapi.json
+    if False: HEADER_PATH.write_text(header_text, encoding="utf-8")
     print("wrote %s" % OPENAPI_PATH.relative_to(ROOT))
     print("wrote %s" % HEADER_PATH.relative_to(ROOT))
     return 0
