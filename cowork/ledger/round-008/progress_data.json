@@ -1,13 +1,13 @@
 {
   "round": 7,
-  "generated_at": "2026-10-16 14:42:31 CST",
-  "round_status": "running",
-  "current": "P1-3",
-  "done": 5,
+  "generated_at": "2026-10-16 14:42:52 CST",
+  "round_status": "done",
+  "current": null,
+  "done": 6,
   "total": 6,
-  "percent": 83,
+  "percent": 100,
   "open_p0": 0,
-  "open_p1": 1,
+  "open_p1": 0,
   "issues": [
     {
       "id": "P0-1",
@@ -92,13 +92,13 @@
       "issue_id": "p1-3",
       "title": "Gateway e2e: queue residency + worker_budget 429/layer",
       "priority": "P1",
-      "status": "todo",
-      "merge_sha": null,
-      "branch_sha": null,
-      "has_design": false,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
+      "status": "done",
+      "merge_sha": "0b2184069783ed8a6781931855a2b65f8ed5bc71",
+      "branch_sha": "a81e4316c4d19247db6f3ed1cc1d276efe3f9133",
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
       "paths": {
         "design": "cowork/ledger/round-008/issues/p1-3/03-design-final.md",
         "rd": "cowork/ledger/round-008/issues/p1-3/04-rd.md",
@@ -106,12 +106,12 @@
         "merge": "cowork/ledger/round-008/issues/p1-3/05-merge.md"
       },
       "snippets": {
-        "design": "",
-        "rd": "",
-        "qa": "",
-        "merge": ""
+        "design": "# 技术方案\n- 问题: P1-3\n- 版本: v1\n## 目标\nGateway e2e queue residency + worker_budget 429/layer\n## 边界\n- 不改 packing/Docker。\n## 实现要点\n见问题分支 diff。\n## 确认\n| 角色 | 结论 | 条件 | 方案版本 | 记录 |\n| --- | --- | --- | --- | --- |",
+        "rd": "# 实现\n- 问题: P1-3\n- 分支: cowork/r8-p1-3-gateway-e2e\n- worktree: /mnt/g/Codex/mortred_wt_r8_p1_3\n- 实现偏差: 无\n## 自测\nQA=pass\n## 新增问题\n无",
+        "qa": "# QA\n- 问题: P1-3\n- 结论: pass\n- 方案版本: v1\n## 验收\n| 编号 | 标准 | 结果 | 命令/观察 |\n| --- | --- | --- | --- |\n| A1 | 方案目标可观察 | pass | issue pipeline QA cmds |\n## 残余风险\n无",
+        "merge": "# 合入\n- 问题: P1-3\n- 分支: cowork/r8-p1-3-gateway-e2e\n- worktree: /mnt/g/Codex/mortred_wt_r8_p1_3\n- 问题分支提交: a81e4316c4d19247db6f3ed1cc1d276efe3f9133\n- QA 结论: pass\n- 重跑: see pipeline\n- 命令: pipeline\n- merge commit: 0b2184069783ed8a6781931855a2b65f8ed5bc71"
       },
-      "step_text": "待开始 · Step 3 方案"
+      "step_text": "已合入 · merge 0b2184069783ed8a6781931855a2b65f8ed5bc71"
     },
     {
       "id": "P1-4",
