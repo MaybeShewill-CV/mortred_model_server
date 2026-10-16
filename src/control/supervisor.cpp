@@ -391,7 +391,14 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err,
         (std::filesystem::path(_project_root) / _cfg.supervisor.bin_dir).string();
     const std::string internal_token = _internal_token;
     const std::string project_root = _project_root;
-    const std::string control_config = _control_config_path;
+    std::string control_config = _control_config_path;
+    {
+        std::filesystem::path cfg_path(control_config);
+        if (!control_config.empty() && !cfg_path.is_absolute()) {
+            cfg_path = std::filesystem::path(project_root) / cfg_path;
+            control_config = cfg_path.lexically_normal().string();
+        }
+    }
     const std::string gateway_host = _cfg.gateway.host;
     const int gateway_port = _cfg.gateway.port;
     const std::string gateway_metrics_token = _gateway_metrics_token;
