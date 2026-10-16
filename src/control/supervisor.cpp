@@ -56,6 +56,19 @@ void override_env_entry(std::vector<std::string>& block, const char* key,
     block.emplace_back(prefix + value);
 }
 
+// Remove every entry whose name matches key exactly. Exact match matters: a
+// prefix test would also drop unrelated keys such as MORTRED_API_TOKEN_FILE.
+void drop_env_entry(std::vector<std::string>& block, const char* key) {
+    const std::string prefix = std::string(key) + "=";
+    for (auto it = block.begin(); it != block.end();) {
+        if (it->compare(0, prefix.size(), prefix) == 0) {
+            it = block.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
 void read_pipe_loop(int fd, LogBuffer* buffer) {
     char buf[4096];
     std::string line;
@@ -380,6 +393,17 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err,
     override_env_entry(env_storage, "LD_LIBRARY_PATH", ld_path);
     override_env_entry(env_storage, "MORTRED_PROJECT_ROOT", project_root);
     override_env_entry(env_storage, "MORTRED_CONTROL_CONFIG", control_config);
+    // Invariant: a managed child only gets the credentials its role needs, and
+    // never inherits whatever the operator's shell / systemd EnvironmentFile put
+    // in the supervisor's environment. Scrub the four credential keys here -
+    // after the environ copy, before the fork - then let the per-branch
+    // injection below re-add exactly what the role requires. The management
+    // token therefore never reaches a model process, and model children hold no
+    // credential except the internal MORTRED_AUTH_TOKEN injected right below.
+    drop_env_entry(env_storage, "MORTRED_API_TOKEN");
+    drop_env_entry(env_storage, "MORTRED_METRICS_TOKEN");
+    drop_env_entry(env_storage, "MORTRED_GATEWAY_AUTH_TOKEN");
+    drop_env_entry(env_storage, "MORTRED_INTERNAL_TOKEN");
     if (is_gateway) {
         override_env_entry(env_storage, "MORTRED_INTERNAL_TOKEN", internal_token);
         override_env_entry(env_storage, "MORTRED_GATEWAY_HOST", gateway_host);
