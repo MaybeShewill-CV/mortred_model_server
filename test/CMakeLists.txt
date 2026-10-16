@@ -301,11 +301,6 @@ foreach(src ${TEST_LIST})
         set(EXTRA_LIBS control OpenSSL::Crypto pthread)
     elseif(${src} STREQUAL "gateway_dual_upstream_isolation_test")
         set(EXTRA_LIBS control OpenSSL::Crypto pthread)
-    elseif(${src} STREQUAL "gateway_dual_upstream_isolation_test")
-        target_compile_definitions(${src} PRIVATE
-            MORTRED_FAKE_BIN_DEFAULT="$<TARGET_FILE:fake_model_server>"
-            MORTRED_GATEWAY_BIN_DEFAULT="$<TARGET_FILE:mortred-gateway.out>")
-        add_dependencies(${src} fake_model_server)
     elseif(${src} STREQUAL "supervisor_malformed_e2e_test")
         set(EXTRA_LIBS pthread)
     elseif(${src} STREQUAL "gateway_multiinstance_test")
@@ -342,6 +337,10 @@ foreach(src ${TEST_LIST})
             MORTRED_FAKE_BIN_DEFAULT="$<TARGET_FILE:fake_model_server>")
         add_dependencies(${src} fake_model_server)
     elseif(${src} STREQUAL "gateway_e2e_test")
+        target_compile_definitions(${src} PRIVATE
+            MORTRED_FAKE_BIN_DEFAULT="$<TARGET_FILE:fake_model_server>"
+            MORTRED_GATEWAY_BIN_DEFAULT="$<TARGET_FILE:mortred-gateway.out>")
+    elseif(${src} STREQUAL "gateway_dual_upstream_isolation_test")
         target_compile_definitions(${src} PRIVATE
             MORTRED_FAKE_BIN_DEFAULT="$<TARGET_FILE:fake_model_server>"
             MORTRED_GATEWAY_BIN_DEFAULT="$<TARGET_FILE:mortred-gateway.out>")
@@ -481,6 +480,7 @@ target_link_libraries(rate_limit_gcra_bench common pthread)
 add_dependencies(supervisor_unittest fake_model_server)
 if(MORTRED_BUILD_FULL)
     add_dependencies(gateway_e2e_test fake_model_server mortred-gateway.out)
+    add_dependencies(gateway_dual_upstream_isolation_test fake_model_server mortred-gateway.out)
     add_dependencies(supervisor_malformed_e2e_test mortred-supervisor.out)
 endif()
 
