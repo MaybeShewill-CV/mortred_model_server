@@ -23,7 +23,6 @@ struct DetectionParams {
     // (letterboxed) pixel space, before letterbox unmap. Shared by
     // YOLOv5 / v6 / v7 / v8. 0 keeps every finite box that passed score.
     float min_box_area_px = 5.0f;
-    bool clip_boxes = false;
     std::vector<std::string> class_names;
 
     static bool parse(const toml::table &params, DetectionParams *out, std::string *error);
@@ -44,6 +43,13 @@ inline bool DetectionParams::parse(const toml::table &params, DetectionParams *o
         if (error != nullptr) {
             *error = "params key 'input_node_size' is not supported; use "
                      "'model_input_image_size = [height, width]'";
+        }
+        return false;
+    }
+    if (params.contains("clip_boxes")) {
+        if (error != nullptr) {
+            *error = "params key 'clip_boxes' is not supported; detections are always clipped to the source image "
+                     "after letterbox unmap";
         }
         return false;
     }
@@ -96,16 +102,6 @@ inline bool DetectionParams::parse(const toml::table &params, DetectionParams *o
             return false;
         }
         out->min_box_area_px = static_cast<float>(value);
-    }
-    if (params.contains("clip_boxes")) {
-        if (!params["clip_boxes"].is_boolean()) {
-            if (error != nullptr) {
-                *error = "params key 'clip_boxes' must be a boolean";
-            }
-            return false;
-        }
-        const bool value = params["clip_boxes"].value_or<bool>(false);
-        out->clip_boxes = value;
     }
     if (params.contains("class_names")) {
         const toml::array *names = params["class_names"].as_array();
