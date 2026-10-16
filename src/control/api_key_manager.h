@@ -322,12 +322,19 @@ inline bool ApiKeyManager::has_scope(const std::shared_ptr<const ApiKey>& key,
 
 
 inline bool ApiKeyManager::try_acquire_inflight(const ApiKey* key) {
-    if (key == nullptr || key->max_inflight <= 0) {
+    // Round 8 P1-1: always track when worker_budget>0 so the hard budget gate
+    // in gateway_app.cpp can observe occupancy even if max_inflight<=0.
+    if (key == nullptr) {
+        return true;
+    }
+    const bool enforce_inflight = key->max_inflight > 0;
+    const bool track_for_budget = key->worker_budget > 0;
+    if (!enforce_inflight && !track_for_budget) {
         return true;
     }
     int cur = key->inflight.load(std::memory_order_relaxed);
     while (true) {
-        if (cur >= key->max_inflight) {
+        if (enforce_inflight && cur >= key->max_inflight) {
             key->reject_inflight.fetch_add(1, std::memory_order_relaxed);
             return false;
         }
@@ -338,7 +345,10 @@ inline bool ApiKeyManager::try_acquire_inflight(const ApiKey* key) {
 }
 
 inline void ApiKeyManager::release_inflight(const ApiKey* key) {
-    if (key == nullptr || key->max_inflight <= 0) {
+    if (key == nullptr) {
+        return;
+    }
+    if (key->max_inflight <= 0 && key->worker_budget <= 0) {
         return;
     }
     key->inflight.fetch_sub(1, std::memory_order_acq_rel);
