@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  
+  <title>Round 14 · 6/6 (100%)</title>
+  <style>
+    :root { --bg:#0f1419; --card:#1a2332; --p0:#e74c3c; --p1:#f39c12; --ok:#27ae60; --run:#3498db; --fg:#ecf0f1; --muted:#95a5a6; }
+    * { box-sizing:border-box; }
+    body { margin:0; font:15px/1.45 system-ui,sans-serif; background:var(--bg); color:var(--fg); }
+    header { padding:1.25rem 1.5rem; border-bottom:1px solid #243044; }
+    h1 { margin:0 0 .35rem; font-size:1.35rem; }
+    .bar { height:10px; background:#243044; border-radius:6px; overflow:hidden; margin:.6rem 0; max-width:420px; }
+    .bar > i { display:block; height:100%; background:linear-gradient(90deg,var(--ok),#2ecc71); width:100%; }
+    .meta { color:var(--muted); font-size:.9rem; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:1rem; padding:1.25rem 1.5rem; }
+    .card { background:var(--card); border-radius:10px; padding:1rem 1.1rem; border:1px solid #2a3a50; cursor:pointer; transition:border-color .15s, transform .1s; }
+    .card:hover, .card:focus { border-color:#4a90d9; outline:none; transform:translateY(-1px); }
+    .card.done { border-color:var(--ok); }
+    .card.run { border-color:var(--run); }
+    .card.p0 .badge { background:var(--p0); }
+    .card.p1 .badge { background:var(--p1); }
+    .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:.4rem; }
+    .badge { font-size:.75rem; font-weight:700; padding:.15rem .45rem; border-radius:4px; color:#fff; }
+    .state { font-size:.8rem; color:var(--muted); }
+    .title { font-weight:600; margin-bottom:.35rem; }
+    .step,.sha,.hint { font-size:.8rem; color:var(--muted); }
+    .hint { margin-top:.5rem; color:#5dade2; }
+    .detail { padding:1.25rem 1.5rem; max-width:900px; }
+    .detail pre { background:#121a24; padding:.75rem; border-radius:6px; overflow:auto; white-space:pre-wrap; font-size:.82rem; }
+    .detail[hidden] { display:none; }
+    #board[hidden] { display:none; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Round 14 residuals · 6/6 · 100%</h1>
+    <div class="bar"><i></i></div>
+    <p class="meta">current: — · 已停止刷新 · 队列清空 · generated 2026-10-16 22:36:43 CST</p>
+  </header>
+  <div id="board" class="grid">
+    <article class="card p0 done" role="button" tabindex="0"
+      data-id="p0-1" onclick="location.hash='#issue/p0-1'"
+      onkeydown="if(event.key==='Enter')location.hash='#issue/p0-1'">
+      <div class="top"><span class="badge">P0-1</span><span class="state">已合入</span></div>
+      <div class="title">TRT buffer.ensure fail path set abandon</div>
+      <div class="step">已合入 · merge 2fc9be64</div>
+      <div class="sha">2fc9be64</div>
+      <div class="hint">点击查看详情 →</div>
+    </article>
+    <article class="card p1 done" role="button" tabindex="0"
+      data-id="p1-1" onclick="location.hash='#issue/p1-1'"
+      onkeydown="if(event.key==='Enter')location.hash='#issue/p1-1'">
+      <div class="top"><span class="badge">P1-1</span><span class="state">已合入</span></div>
+      <div class="title">Trust chain: TSan SSOT + golden skip 77</div>
+      <div class="step">已合入 · merge 65217ace</div>
+      <div class="sha">65217ace</div>
+      <div class="hint">点击查看详情 →</div>
+    </article>
+    <article class="card p0 done" role="button" tabindex="0"
+      data-id="p0-2" onclick="location.hash='#issue/p0-2'"
+      onkeydown="if(event.key==='Enter')location.hash='#issue/p0-2'">
+      <div class="top"><span class="badge">P0-2</span><span class="state">已合入</span></div>
+      <div class="title">Capacity RSS/thread/fd + occupancy RAM</div>
+      <div class="step">已合入 · merge b1eb6562</div>
+      <div class="sha">b1eb6562</div>
+      <div class="hint">点击查看详情 →</div>
+    </article>
+    <article class="card p1 done" role="button" tabindex="0"
+      data-id="p1-2" onclick="location.hash='#issue/p1-2'"
+      onkeydown="if(event.key==='Enter')location.hash='#issue/p1-2'">
+      <div class="top"><span class="badge">P1-2</span><span class="state">已合入</span></div>
+      <div class="title">Pre-decode size gate non-JPEG/PNG</div>
+      <div class="step">已合入 · merge 60d9026a</div>
+      <div class="sha">60d9026a</div>
+      <div class="hint">点击查看详情 →</div>
+    </article>
+    <article class="card p1 done" role="button" tabindex="0"
+      data-id="p1-3" onclick="location.hash='#issue/p1-3'"
+      onkeydown="if(event.key==='Enter')location.hash='#issue/p1-3'">
+      <div class="top"><span class="badge">P1-3</span><span class="state">已合入</span></div>
+      <div class="title">Same-family detection/matting/seg tail</div>
+      <div class="step">已合入 · merge ff78c485</div>
+      <div class="sha">ff78c485</div>
+      <div class="hint">点击查看详情 →</div>
+    </article>
+    <article class="card p1 done" role="button" tabindex="0"
+      data-id="p1-4" onclick="location.hash='#issue/p1-4'"
+      onkeydown="if(event.key==='Enter')location.hash='#issue/p1-4'">
+      <div class="top"><span class="badge">P1-4</span><span class="state">已合入</span></div>
+      <div class="title">Supervisor child env allowlist</div>
+      <div class="step">已合入 · merge 93787cc1</div>
+      <div class="sha">93787cc1</div>
+      <div class="hint">点击查看详情 →</div>
+    </article>
+  </div>
+    <section class="detail" id="panel-p0-1" hidden>
+      <h2>P0-1 · TRT buffer.ensure fail path set abandon</h2>
+      <p class="meta">design=Y rd=Y qa=Y merge=Y · sha 2fc9be64</p>
+      <h3>design</h3><pre># Design P0-1 v1
+## Goal
+Set abandon on both buffer.ensure fail paths.
+## Coverage
+scripts/check_trt_abandon_paths.py</pre>
+      <p class="path">cowork/ledger/round-014/issues/p0-1/03-design-final.md</p>
+      <h3>rd</h3><pre># RD
+- issue: P0-1
+- 问题分支提交: 3aee1cef
+## changes
+- trt_session.cpp
+- check_trt_abandon_paths.py + CI</pre>
+      <h3>qa</h3><pre># QA
+- issue: P0-1
+- result: pass
+- 问题分支提交: 3aee1cef
+- self-test PASS</pre>
+      <h3>merge</h3><pre># merge
+- issue: P0-1
+- branch: cowork/r14-p0-1-trt-ensure-abandon
+- worktree: /mnt/g/Codex/mortred_wt/r14-p0-1
+- 问题分支提交: 3aee1cef
+- QA: pass
+- cmd: git merge --no-ff
+- merge commit: 2fc9be64</pre>
+      <p><a href="#" onclick="location.hash='';return false">← 返回看板</a></p>
+    </section>
+    <section class="detail" id="panel-p1-1" hidden>
+      <h2>P1-1 · Trust chain: TSan SSOT + golden skip 77</h2>
+      <p class="meta">design=Y rd=Y qa=Y merge=Y · sha 65217ace</p>
+      <h3>design</h3><pre># Design P1-1 v1
+## Goal
+TSan three-way SSOT + golden empty/mixed → 77.</pre>
+      <p class="path">cowork/ledger/round-014/issues/p1-1/03-design-final.md</p>
+      <h3>rd</h3><pre># RD
+- issue: P1-1
+- 问题分支提交: d8cae7aa
+## changes
+- CMakePresets rate_limit_gcra
+- check_tsan_targets.py
+- model_golden_test exit 77
+- SKIP_RETURN_CODE aliases</pre>
+      <h3>qa</h3><pre># QA
+- issue: P1-1
+- result: pass
+- 问题分支提交: d8cae7aa
+- check_tsan_targets self-test + live PASS</pre>
+      <h3>merge</h3><pre># merge
+- issue: P1-1
+- branch: cowork/r14-p1-1-trust-chain
+- worktree: /mnt/g/Codex/mortred_wt/r14-p1-1
+- 问题分支提交: d8cae7aa
+- QA: pass
+- cmd: git merge --no-ff
+- merge commit: 65217ace</pre>
+      <p><a href="#" onclick="location.hash='';return false">← 返回看板</a></p>
+    </section>
+    <section class="detail" id="panel-p0-2" hidden>
+      <h2>P0-2 · Capacity RSS/thread/fd + occupancy RAM</h2>
+      <p class="meta">design=Y rd=Y qa=Y merge=Y · sha b1eb6562</p>
+      <h3>design</h3><pre># Design P0-2 v1
+## Goal
+Calibrate per-id RSS/thread/fd; occupancy RAM in code.</pre>
+      <p class="path">cowork/ledger/round-014/issues/p0-2/03-design-final.md</p>
+      <h3>rd</h3><pre># RD
+- issue: P0-2
+- 问题分支提交: a6edbdae</pre>
+      <h3>qa</h3><pre># QA
+- issue: P0-2
+- result: pass
+- 问题分支提交: a6edbdae</pre>
+      <h3>merge</h3><pre># merge
+- issue: P0-2
+- branch: cowork/r14-p0-2-capacity-ram
+- worktree: /mnt/g/Codex/mortred_wt/r14-p0-2
+- 问题分支提交: a6edbdae
+- QA: pass
+- cmd: git merge --no-ff
+- merge commit: b1eb6562</pre>
+      <p><a href="#" onclick="location.hash='';return false">← 返回看板</a></p>
+    </section>
+    <section class="detail" id="panel-p1-2" hidden>
+      <h2>P1-2 · Pre-decode size gate non-JPEG/PNG</h2>
+      <p class="meta">design=Y rd=Y qa=Y merge=Y · sha 60d9026a</p>
+      <h3>design</h3><pre># Design P1-2 v1
+## Goal
+Header probes for BMP/GIF/WebP/TIFF before imdecode.</pre>
+      <p class="path">cowork/ledger/round-014/issues/p1-2/03-design-final.md</p>
+      <h3>rd</h3><pre># RD
+- issue: P1-2
+- 问题分支提交: ba312dd2</pre>
+      <h3>qa</h3><pre># QA
+- issue: P1-2
+- result: pass
+- 问题分支提交: ba312dd2</pre>
+      <h3>merge</h3><pre># merge
+- issue: P1-2
+- branch: cowork/r14-p1-2-predecode-formats
+- worktree: /mnt/g/Codex/mortred_wt/r14-p1-2
+- 问题分支提交: ba312dd2
+- QA: pass
+- cmd: git merge --no-ff
+- merge commit: 60d9026a</pre>
+      <p><a href="#" onclick="location.hash='';return false">← 返回看板</a></p>
+    </section>
+    <section class="detail" id="panel-p1-3" hidden>
+      <h2>P1-3 · Same-family detection/matting/seg tail</h2>
+      <p class="meta">design=Y rd=Y qa=Y merge=Y · sha ff78c485</p>
+      <h3>design</h3><pre># Design P1-3 v1
+## Goal
+Same-family libface/score/matting/seg/GPU note.</pre>
+      <p class="path">cowork/ledger/round-014/issues/p1-3/03-design-final.md</p>
+      <h3>rd</h3><pre># RD
+- issue: P1-3
+- 问题分支提交: ac515586</pre>
+      <h3>qa</h3><pre># QA
+- issue: P1-3
+- result: pass
+- 问题分支提交: ac515586</pre>
+      <h3>merge</h3><pre># merge
+- issue: P1-3
+- branch: cowork/r14-p1-3-same-family
+- 问题分支提交: ac515586
+- QA: pass
+- cmd: git merge --no-ff
+- merge commit: ff78c485</pre>
+      <p><a href="#" onclick="location.hash='';return false">← 返回看板</a></p>
+    </section>
+    <section class="detail" id="panel-p1-4" hidden>
+      <h2>P1-4 · Supervisor child env allowlist</h2>
+      <p class="meta">design=Y rd=Y qa=Y merge=Y · sha 93787cc1</p>
+      <h3>design</h3><pre># Design P1-4 v1
+## Goal
+Allowlist child env; keep METRICS_TOKEN injection.</pre>
+      <p class="path">cowork/ledger/round-014/issues/p1-4/03-design-final.md</p>
+      <h3>rd</h3><pre># RD
+- issue: P1-4
+- 问题分支提交: 6ef9bfc8</pre>
+      <h3>qa</h3><pre># QA
+- issue: P1-4
+- result: pass
+- 问题分支提交: 6ef9bfc8</pre>
+      <h3>merge</h3><pre># merge
+- issue: P1-4
+- branch: cowork/r14-p1-4-env-allowlist
+- worktree: /mnt/g/Codex/mortred_wt/r14-p1-4
+- 问题分支提交: 6ef9bfc8
+- QA: pass
+- cmd: git merge --no-ff
+- merge commit: 93787cc1</pre>
+      <p><a href="#" onclick="location.hash='';return false">← 返回看板</a></p>
+    </section>
+  <script>
+    function show() {
+      const m = location.hash.match(/^#issue\/([\w-]+)$/);
+      const board = document.getElementById('board');
+      document.querySelectorAll('.detail').forEach(el => el.hidden = true);
+      if (m) {
+        const p = document.getElementById('panel-' + m[1]);
+        if (p) { board.hidden = true; p.hidden = false; }
+        else { board.hidden = false; }
+      } else { board.hidden = false; }
+    }
+    window.addEventListener('hashchange', show);
+    show();
+  </script>
+</body>
+</html>

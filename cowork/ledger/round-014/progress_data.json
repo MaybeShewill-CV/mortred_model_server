@@ -1,0 +1,169 @@
+{
+  "round": 14,
+  "done": 6,
+  "total": 6,
+  "percent": 100,
+  "open_p0": 0,
+  "open_p1": 0,
+  "round_status": "done",
+  "current": null,
+  "generated_at": "2026-10-16 22:36:43",
+  "issues": [
+    {
+      "id": "P0-1",
+      "issue_id": "p0-1",
+      "title": "TRT buffer.ensure fail path set abandon",
+      "priority": "P0",
+      "status": "done",
+      "merge_sha": "2fc9be64",
+      "branch_sha": "3aee1cef",
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
+      "paths": {
+        "design": "cowork/ledger/round-014/issues/p0-1/03-design-final.md",
+        "rd": "cowork/ledger/round-014/issues/p0-1/04-rd.md",
+        "qa": "cowork/ledger/round-014/issues/p0-1/05-qa.md",
+        "merge": "cowork/ledger/round-014/issues/p0-1/05-merge.md"
+      },
+      "snippets": {
+        "design": "# Design P0-1 v1\n## Goal\nSet abandon on both buffer.ensure fail paths.\n## Coverage\nscripts/check_trt_abandon_paths.py",
+        "rd": "# RD\n- issue: P0-1\n- 问题分支提交: 3aee1cef\n## changes\n- trt_session.cpp\n- check_trt_abandon_paths.py + CI",
+        "qa": "# QA\n- issue: P0-1\n- result: pass\n- 问题分支提交: 3aee1cef\n- self-test PASS",
+        "merge": "# merge\n- issue: P0-1\n- branch: cowork/r14-p0-1-trt-ensure-abandon\n- worktree: /mnt/g/Codex/mortred_wt/r14-p0-1\n- 问题分支提交: 3aee1cef\n- QA: pass\n- cmd: git merge --no-ff\n- merge commit: 2fc9be64"
+      },
+      "step_text": "已合入 · merge 2fc9be64"
+    },
+    {
+      "id": "P1-1",
+      "issue_id": "p1-1",
+      "title": "Trust chain: TSan SSOT + golden skip 77",
+      "priority": "P1",
+      "status": "done",
+      "merge_sha": "65217ace",
+      "branch_sha": "d8cae7aa",
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
+      "paths": {
+        "design": "cowork/ledger/round-014/issues/p1-1/03-design-final.md",
+        "rd": "cowork/ledger/round-014/issues/p1-1/04-rd.md",
+        "qa": "cowork/ledger/round-014/issues/p1-1/05-qa.md",
+        "merge": "cowork/ledger/round-014/issues/p1-1/05-merge.md"
+      },
+      "snippets": {
+        "design": "# Design P1-1 v1\n## Goal\nTSan three-way SSOT + golden empty/mixed → 77.",
+        "rd": "# RD\n- issue: P1-1\n- 问题分支提交: d8cae7aa\n## changes\n- CMakePresets rate_limit_gcra\n- check_tsan_targets.py\n- model_golden_test exit 77\n- SKIP_RETURN_CODE aliases",
+        "qa": "# QA\n- issue: P1-1\n- result: pass\n- 问题分支提交: d8cae7aa\n- check_tsan_targets self-test + live PASS",
+        "merge": "# merge\n- issue: P1-1\n- branch: cowork/r14-p1-1-trust-chain\n- worktree: /mnt/g/Codex/mortred_wt/r14-p1-1\n- 问题分支提交: d8cae7aa\n- QA: pass\n- cmd: git merge --no-ff\n- merge commit: 65217ace"
+      },
+      "step_text": "已合入 · merge 65217ace"
+    },
+    {
+      "id": "P0-2",
+      "issue_id": "p0-2",
+      "title": "Capacity RSS/thread/fd + occupancy RAM",
+      "priority": "P0",
+      "status": "done",
+      "merge_sha": "b1eb6562",
+      "branch_sha": "a6edbdae",
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
+      "paths": {
+        "design": "cowork/ledger/round-014/issues/p0-2/03-design-final.md",
+        "rd": "cowork/ledger/round-014/issues/p0-2/04-rd.md",
+        "qa": "cowork/ledger/round-014/issues/p0-2/05-qa.md",
+        "merge": "cowork/ledger/round-014/issues/p0-2/05-merge.md"
+      },
+      "snippets": {
+        "design": "# Design P0-2 v1\n## Goal\nCalibrate per-id RSS/thread/fd; occupancy RAM in code.",
+        "rd": "# RD\n- issue: P0-2\n- 问题分支提交: a6edbdae",
+        "qa": "# QA\n- issue: P0-2\n- result: pass\n- 问题分支提交: a6edbdae",
+        "merge": "# merge\n- issue: P0-2\n- branch: cowork/r14-p0-2-capacity-ram\n- worktree: /mnt/g/Codex/mortred_wt/r14-p0-2\n- 问题分支提交: a6edbdae\n- QA: pass\n- cmd: git merge --no-ff\n- merge commit: b1eb6562"
+      },
+      "step_text": "已合入 · merge b1eb6562"
+    },
+    {
+      "id": "P1-2",
+      "issue_id": "p1-2",
+      "title": "Pre-decode size gate non-JPEG/PNG",
+      "priority": "P1",
+      "status": "done",
+      "merge_sha": "60d9026a",
+      "branch_sha": "ba312dd2",
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
+      "paths": {
+        "design": "cowork/ledger/round-014/issues/p1-2/03-design-final.md",
+        "rd": "cowork/ledger/round-014/issues/p1-2/04-rd.md",
+        "qa": "cowork/ledger/round-014/issues/p1-2/05-qa.md",
+        "merge": "cowork/ledger/round-014/issues/p1-2/05-merge.md"
+      },
+      "snippets": {
+        "design": "# Design P1-2 v1\n## Goal\nHeader probes for BMP/GIF/WebP/TIFF before imdecode.",
+        "rd": "# RD\n- issue: P1-2\n- 问题分支提交: ba312dd2",
+        "qa": "# QA\n- issue: P1-2\n- result: pass\n- 问题分支提交: ba312dd2",
+        "merge": "# merge\n- issue: P1-2\n- branch: cowork/r14-p1-2-predecode-formats\n- worktree: /mnt/g/Codex/mortred_wt/r14-p1-2\n- 问题分支提交: ba312dd2\n- QA: pass\n- cmd: git merge --no-ff\n- merge commit: 60d9026a"
+      },
+      "step_text": "已合入 · merge 60d9026a"
+    },
+    {
+      "id": "P1-3",
+      "issue_id": "p1-3",
+      "title": "Same-family detection/matting/seg tail",
+      "priority": "P1",
+      "status": "done",
+      "merge_sha": "ff78c485",
+      "branch_sha": "ac515586",
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
+      "paths": {
+        "design": "cowork/ledger/round-014/issues/p1-3/03-design-final.md",
+        "rd": "cowork/ledger/round-014/issues/p1-3/04-rd.md",
+        "qa": "cowork/ledger/round-014/issues/p1-3/05-qa.md",
+        "merge": "cowork/ledger/round-014/issues/p1-3/05-merge.md"
+      },
+      "snippets": {
+        "design": "# Design P1-3 v1\n## Goal\nSame-family libface/score/matting/seg/GPU note.",
+        "rd": "# RD\n- issue: P1-3\n- 问题分支提交: ac515586",
+        "qa": "# QA\n- issue: P1-3\n- result: pass\n- 问题分支提交: ac515586",
+        "merge": "# merge\n- issue: P1-3\n- branch: cowork/r14-p1-3-same-family\n- 问题分支提交: ac515586\n- QA: pass\n- cmd: git merge --no-ff\n- merge commit: ff78c485"
+      },
+      "step_text": "已合入 · merge ff78c485"
+    },
+    {
+      "id": "P1-4",
+      "issue_id": "p1-4",
+      "title": "Supervisor child env allowlist",
+      "priority": "P1",
+      "status": "done",
+      "merge_sha": "93787cc1",
+      "branch_sha": "6ef9bfc8",
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
+      "paths": {
+        "design": "cowork/ledger/round-014/issues/p1-4/03-design-final.md",
+        "rd": "cowork/ledger/round-014/issues/p1-4/04-rd.md",
+        "qa": "cowork/ledger/round-014/issues/p1-4/05-qa.md",
+        "merge": "cowork/ledger/round-014/issues/p1-4/05-merge.md"
+      },
+      "snippets": {
+        "design": "# Design P1-4 v1\n## Goal\nAllowlist child env; keep METRICS_TOKEN injection.",
+        "rd": "# RD\n- issue: P1-4\n- 问题分支提交: 6ef9bfc8",
+        "qa": "# QA\n- issue: P1-4\n- result: pass\n- 问题分支提交: 6ef9bfc8",
+        "merge": "# merge\n- issue: P1-4\n- branch: cowork/r14-p1-4-env-allowlist\n- worktree: /mnt/g/Codex/mortred_wt/r14-p1-4\n- 问题分支提交: 6ef9bfc8\n- QA: pass\n- cmd: git merge --no-ff\n- merge commit: 93787cc1"
+      },
+      "step_text": "已合入 · merge 93787cc1"
+    }
+  ]
+}

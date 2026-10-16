@@ -2,15 +2,15 @@
 
 - 基线分支: sub-agent-co-work
 - 轮次上限: 20
-- 当前轮次: 13
+- 当前轮次: 14
 - 当前步骤: 7（收口完成）
-- 当前问题: 无（本轮 11 条全部关闭；P0-1 跳过）
+- 当前问题: 无（本轮 6 条全部关闭）
 - 阻塞: 无
 - 已关闭: P0-2…P1-8（第 13 轮 **11/11**）
-- 记录目录: cowork/ledger/round-013/
+- 记录目录: cowork/ledger/round-014/
 - 运行环境: 本机 WSL Ubuntu（/mnt/g/Codex/mortred_model_server）
 - 状态: done
-- HEAD: `e200ab99`
+- HEAD: `ff78c485`
 
 ## 轮次
 
@@ -21,3 +21,4 @@
 | 11 | — | — | — | — | eval-only |
 | 12 | — | 0 | 0 | 0 | done |
 | 13 | — | 0 | 0 | 0 | done |
+| 14 | — | 0 | 0 | 0 | done |
