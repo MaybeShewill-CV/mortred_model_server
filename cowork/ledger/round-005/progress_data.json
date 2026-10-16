@@ -1,26 +1,26 @@
 {
   "round": 5,
-  "generated_at": "2026-10-16 12:58:01 CST",
+  "generated_at": "2026-10-16 13:02:13 CST",
   "round_status": "running",
-  "current": "P1-1",
-  "done": 0,
+  "current": "P1-2",
+  "done": 1,
   "total": 5,
-  "percent": 0,
+  "percent": 20,
   "open_p0": 0,
-  "open_p1": 5,
+  "open_p1": 4,
   "issues": [
     {
       "id": "P1-1",
       "issue_id": "p1-1",
       "title": "FixedWindow vs GCRA dual semantics",
       "priority": "P1",
-      "status": "designed",
-      "merge_sha": null,
-      "branch_sha": null,
+      "status": "done",
+      "merge_sha": "aa80bd85d15d084b461c10f2c0a0f432fff69702",
+      "branch_sha": "3192f0ba2403b3fbe1f7cb36410a96a022c40307",
       "has_design": true,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true
     },
     {
       "id": "P1-2",
