@@ -88,13 +88,30 @@ inline std::string trim_copy(std::string s) {
 }  // namespace occupancy_detail
 
 inline bool occupancy_enforcement_disabled(const std::string& policy) {
+    // P0-3: soft off alone must not skip the gate. Also require
+    // MORTRED_OCCUPANCY_ALLOW_DISABLE=1|true|yes so production spawn cannot
+    // silently overcommit when only occupancy_policy=off / ENFORCE=0 is set.
+    bool soft_off = false;
     if (const char* env = std::getenv("MORTRED_OCCUPANCY_ENFORCE"); env != nullptr && *env != '\0') {
         const std::string v = occupancy_detail::lower_copy(env);
         if (v == "0" || v == "false" || v == "off") {
+            soft_off = true;
+        }
+    }
+    if (!soft_off) {
+        soft_off = occupancy_detail::lower_copy(policy) == "off";
+    }
+    if (!soft_off) {
+        return false;
+    }
+    if (const char* allow = std::getenv("MORTRED_OCCUPANCY_ALLOW_DISABLE");
+        allow != nullptr && *allow != '\0') {
+        const std::string v = occupancy_detail::lower_copy(allow);
+        if (v == "1" || v == "true" || v == "yes") {
             return true;
         }
     }
-    return occupancy_detail::lower_copy(policy) == "off";
+    return false;
 }
 
 inline std::string occupancy_pack_arg(const std::string& pack_path) {
