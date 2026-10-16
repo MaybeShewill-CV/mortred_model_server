@@ -53,6 +53,9 @@ PROXY="$(cat "$SNIP/proxy-to-mortred.conf")"
 SSL_PARAMS="$(cat "$SNIP/ssl-params.conf")"
 ACME="$(cat "$SNIP/acme-challenge.conf")"
 
+# TLS private keys and certs are generated ONLY into $OUT/tls for local edge
+# use. Do not commit ca.key / server.key / *.pem / *.crt — conf/local/ is
+# gitignored for this reason. Prefer --cert/--key for operator-provided material.
 mkdir -p "$OUT/tls"
 umask 077
 
