@@ -67,6 +67,8 @@ struct OccupancyCheckInput {
     // if |declared - measured| exceeds max(64, declared/100). Supervisor does
     // not sample this; production wiring is pack_occupancy.py --measured-json.
     bool has_measured_gpu_mem_mib = false;
+    // Process RSS is intentionally out-of-band (see docs/capacity-single-gpu.md);
+    // feed GPU residency via measured_gpu_mem_mib / pack_occupancy --measured-json.
     int measured_gpu_mem_mib = 0;
     std::vector<OccupancySibling> running_siblings;
     LiveGpuSnapshot live;

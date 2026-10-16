@@ -44,7 +44,7 @@ struct ServerRuntimeConfig {
     // a bounded default keeps drip/slowloris connections from filling ingress.
     int receive_timeout = 60 * 1000;
     int compute_threads = -1;
-    int handler_threads = 50;
+    int handler_threads = 8;
     size_t request_size_limit = k_default_request_size_limit_mb;
     int model_run_timeout = 500;
     std::string stuck_worker_action = "log";
