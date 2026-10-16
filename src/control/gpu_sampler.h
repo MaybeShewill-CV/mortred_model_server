@@ -5,9 +5,9 @@
 * Date: 26-9-16
 ************************************************/
 
-// Background GPU sampler for the supervisor HUD. Probes nvidia-smi on a
-// schedule. Probe waitpid is hardened like occupancy_gate (WNOWAIT /
-// ECHILD / fail-closed on stolen or incomplete output).
+// Background GPU sampler for the supervisor HUD.
+// Round 6 P1-3: prefers shared GpuProbe (NVML primary, nvidia-smi
+// fallback). Direct smi path retained as fallback; never waitpid(-1).
 // dedicated thread (never on the HTTP handler path) at a configurable
 // interval, stores a bounded ring buffer of full-field samples, and serves
 // them to /api/v1/gpu as JSON. The probe's fork/poll/deadline discipline
@@ -39,6 +39,7 @@
 #include <unistd.h>
 
 #include "control/occupancy_gate.h"
+#include "control/gpu_probe.h"
 
 namespace mortred {
 namespace control {
