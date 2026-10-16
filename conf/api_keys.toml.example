@@ -14,6 +14,6 @@
 # scope = "inference"
 # rate_limit_qps = 100   # GCRA QPS at gateway (tenant quota)
 # max_inflight = 8       # per-tenant in-flight (0 = unlimited)
-# max_queue = 32         # per-tenant queued admissions (0 = unlimited)
-# worker_budget = 4      # optional soft worker budget hint
+# max_queue = 32         # per-tenant queued admissions (0 = unlimited); parsed by ApiKeyManager::load
+# worker_budget = 4      # optional worker budget (0 = unlimited); parsed by ApiKeyManager::load
 # enabled = true
