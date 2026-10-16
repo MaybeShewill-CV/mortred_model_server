@@ -251,8 +251,7 @@ inline bool resolve_nvidia_smi_path(std::string* out) {
 // MiB"). Returns the snapshot with available=true only when every field is
 // present and sane; anything else keeps available=false.
 inline LiveGpuSnapshot parse_smi_snapshot(const std::string& out, LiveGpuSnapshot snap) {
-    const auto nl = out.find('
-');
+    const auto nl = out.find(static_cast<char>(10));
     std::string line = occupancy_detail::trim_copy(nl == std::string::npos ? out : out.substr(0, nl));
     const auto last = line.rfind(',');
     if (last == std::string::npos) {

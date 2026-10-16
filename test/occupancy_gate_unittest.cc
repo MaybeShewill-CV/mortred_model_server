@@ -87,19 +87,47 @@ TEST_F(OccupancyGateTest, cpu_or_mnn_without_stamp_passes) {
     EXPECT_TRUE(occupancy_ready_for_spawn(in, &err)) << err;
 }
 
-TEST_F(OccupancyGateTest, policy_off_allows_trt_without_stamp) {
+TEST_F(OccupancyGateTest, policy_off_alone_still_enforces_without_allow) {
+    // Dual-gate (P0-3): occupancy_policy=off alone must NOT disable enforcement.
+    unsetenv("MORTRED_OCCUPANCY_ENFORCE");
+    unsetenv("MORTRED_OCCUPANCY_ALLOW_DISABLE");
+    OccupancyCheckInput in = trt_base();
+    in.occupancy_policy = "off";
+    std::string err;
+    EXPECT_FALSE(occupancy_ready_for_spawn(in, &err));
+    EXPECT_TRUE(is_occupancy_gate_error(err)) << err;
+}
+
+TEST_F(OccupancyGateTest, policy_off_with_allow_disable_skips_gate) {
+    setenv("MORTRED_OCCUPANCY_ALLOW_DISABLE", "1", 1);
     OccupancyCheckInput in = trt_base();
     in.occupancy_policy = "off";
     std::string err;
     EXPECT_TRUE(occupancy_ready_for_spawn(in, &err)) << err;
+    unsetenv("MORTRED_OCCUPANCY_ALLOW_DISABLE");
 }
 
-TEST_F(OccupancyGateTest, env_zero_disables_enforcement) {
+TEST_F(OccupancyGateTest, env_zero_alone_does_not_disable_enforcement) {
+    // Dual-gate: MORTRED_OCCUPANCY_ENFORCE=0 alone must NOT disable.
+    unsetenv("MORTRED_OCCUPANCY_ALLOW_DISABLE");
     ::setenv("MORTRED_OCCUPANCY_ENFORCE", "0", 1);
+    EXPECT_FALSE(occupancy_enforcement_disabled("enforce"));
+    OccupancyCheckInput in = trt_base();
+    std::string err;
+    EXPECT_FALSE(occupancy_ready_for_spawn(in, &err));
+    EXPECT_TRUE(is_occupancy_gate_error(err)) << err;
+    unsetenv("MORTRED_OCCUPANCY_ENFORCE");
+}
+
+TEST_F(OccupancyGateTest, env_zero_with_allow_disable_skips_gate) {
+    ::setenv("MORTRED_OCCUPANCY_ENFORCE", "0", 1);
+    ::setenv("MORTRED_OCCUPANCY_ALLOW_DISABLE", "1", 1);
     EXPECT_TRUE(occupancy_enforcement_disabled("enforce"));
     OccupancyCheckInput in = trt_base();
     std::string err;
     EXPECT_TRUE(occupancy_ready_for_spawn(in, &err)) << err;
+    unsetenv("MORTRED_OCCUPANCY_ENFORCE");
+    unsetenv("MORTRED_OCCUPANCY_ALLOW_DISABLE");
 }
 
 TEST_F(OccupancyGateTest, stale_worker_nums_fails) {
