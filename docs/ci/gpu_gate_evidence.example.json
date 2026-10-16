@@ -1,0 +1,27 @@
+{
+  "schema_version": "1",
+  "product_version": "1.0.0",
+  "generated_at": "2026-10-16T00:00:00+08:00",
+  "runner": {
+    "label": "example-self-hosted-gpu",
+    "has_gpu": true
+  },
+  "artifacts": [
+    {
+      "name": "gpu-golden-smoke-xml",
+      "path": "evidence/gpu-smoke.xml",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "media_type": "application/xml"
+    }
+  ],
+  "reproduce": [
+    "python3 scripts/check_version_single_source.py --root .",
+    "python3 scripts/verify_gpu_gate_evidence.py --manifest docs/ci/gpu_gate_evidence.example.json --allow-missing-artifacts",
+    "# With GPU runner / local GPU:",
+    "cmake -B build-gpu -DMORTRED_BUILD_FULL=ON -DCMAKE_BUILD_TYPE=Release",
+    "cmake --build build-gpu --target model_golden_test -j\"$(nproc)\"",
+    "./build-gpu/bin/model_golden_test --gtest_filter=\"${MORTRED_GPU_SMOKE_FILTER:-model_golden.yolov8_detection}\"",
+    "python3 scripts/emit_gpu_gate_evidence.py --version 1.0.0 --artifact name=gpu-smoke,path=gpu-smoke.xml --out evidence/gpu_gate_evidence.json"
+  ],
+  "notes": "Forks without a GPU runner still validate schema + version + declared digests; they do not claim TensorRT green."
+}

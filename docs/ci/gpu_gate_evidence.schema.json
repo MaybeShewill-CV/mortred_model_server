@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Mortred GPU/gate evidence declaration",
+  "type": "object",
+  "required": ["schema_version", "product_version", "artifacts", "reproduce"],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1" },
+    "product_version": { "type": "string", "description": "Must match CMake/mortred_version.h" },
+    "generated_at": { "type": "string" },
+    "runner": { "type": "object" },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "path", "sha256"],
+        "properties": {
+          "name": { "type": "string" },
+          "path": { "type": "string" },
+          "sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+          "media_type": { "type": "string" }
+        }
+      }
+    },
+    "reproduce": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" },
+      "description": "Shell commands a fork can run (with or without GPU) to verify digests / rebuild evidence"
+    },
+    "notes": { "type": "string" }
+  }
+}
