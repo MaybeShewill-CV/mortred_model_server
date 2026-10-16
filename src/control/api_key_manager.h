@@ -81,7 +81,7 @@ enum class AuthReason { OK, UNKNOWN, DISABLED, RATE_LIMITED };
 struct AuthResult {
     std::shared_ptr<const ApiKey> key;  // non-null iff reason == OK
     AuthReason reason = AuthReason::UNKNOWN;
-    // exact ms until the per-key 1-second fixed window resets (1..1000);
+    // exact ms until the next GCRA emission is allowed (at least 1 when limited);
     // 0 unless reason == RATE_LIMITED
     int32_t retry_after_ms = 0;
 };

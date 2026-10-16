@@ -48,11 +48,12 @@
 
 // Operator note (Round 6 P1-1): gateway GCRA is the sole public limiter.
 // API-key QPS uses GCRA (GcraFlowLimiter) at the gateway. Model-server
-// FixedWindow product path is removed. Tune [gateway.rate_limit] and
+// Product limiting is GCRA-only at the gateway. Tune [gateway.rate_limit] and
 // per-key rate_limit_qps; see control/rate_limit/rate_limiter.h.
 // independently. 429 responses share RateLimit-* / Retry-After and set
-// X-Mortred-RateLimit-Layer to gateway-gcra | model-fixed-window |
-// api-key-fixed-window so operators can tell which layer rejected.
+// X-Mortred-RateLimit-Layer identifies the rejecting layer:
+// gateway-gcra | api-key-gcra | api-key-max-inflight | api-key-max-queue |
+// api-key-worker-budget (model FixedWindow product path retired).
 
 
 #include <algorithm>
