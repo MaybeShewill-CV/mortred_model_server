@@ -813,6 +813,24 @@ bool GatewayApp::init(const GatewayInitOptions& options) {
     // Count only when enabled or shadow is on, including after
     // MORTRED_RATE_LIMIT=off has cleared both flags. rate_per_sec and burst
     // stay on the config and are not applied while the limiter is unset.
+// P0-2: public/non-loopback listen must not run with rate limiting fully off
+// (neither enforce nor shadow). Operators who truly need that set
+// MORTRED_RATE_LIMIT_ALLOW_DISABLE=1.
+if (!rate_limit_enabled_) {
+    const bool public_listen = !jinq::common::is_loopback_host(cfg_.gateway.host);
+    const char* allow = std::getenv("MORTRED_RATE_LIMIT_ALLOW_DISABLE");
+    const bool allow_disable = allow != nullptr && allow[0] != '\0'
+        && (std::string(allow) == "1" || std::string(allow) == "true");
+    if (public_listen && !allow_disable) {
+        std::fprintf(stderr,
+                     "mortred-gateway: refusing to start: gateway.rate_limit is off while "
+                     "listening on non-loopback %s (set enabled=true, or MORTRED_RATE_LIMIT="
+                     "enforce|shadow, or MORTRED_RATE_LIMIT_ALLOW_DISABLE=1)\n",
+                     cfg_.gateway.host.c_str());
+        return false;
+    }
+}
+
     if (rate_limit_enabled_) {
         ip_limiter_ = std::make_unique<mortred::control::ratelimit::ShardedIpLimiter>(
             mortred::control::ratelimit::GcraPolicy{
