@@ -124,6 +124,11 @@ class ApiKeyManager {
      */
     AuthResult consume_rate_limit(const std::shared_ptr<const ApiKey>& key);
 
+    /*** P1-4 first slice: per-tenant in-flight budget helpers. */
+    static bool try_acquire_inflight(const ApiKey* key);
+    static void release_inflight(const ApiKey* key);
+
+
     /*** check scope (key ownership is held by the shared_ptr) */
     static bool has_scope(const std::shared_ptr<const ApiKey>& key,
                           const std::string& required);
@@ -292,28 +297,28 @@ inline bool ApiKeyManager::has_scope(const std::shared_ptr<const ApiKey>& key,
 }
 
 
-    /*** P1-4: try to take one in-flight slot for this tenant key. */
-    static bool try_acquire_inflight(const ApiKey* key) {
-        if (key == nullptr || key->max_inflight <= 0) {
+
+inline bool ApiKeyManager::try_acquire_inflight(const ApiKey* key) {
+    if (key == nullptr || key->max_inflight <= 0) {
+        return true;
+    }
+    int cur = key->inflight.load(std::memory_order_relaxed);
+    while (true) {
+        if (cur >= key->max_inflight) {
+            return false;
+        }
+        if (key->inflight.compare_exchange_weak(cur, cur + 1, std::memory_order_acq_rel)) {
             return true;
         }
-        int cur = key->inflight.load(std::memory_order_relaxed);
-        while (true) {
-            if (cur >= key->max_inflight) {
-                return false;
-            }
-            if (key->inflight.compare_exchange_weak(cur, cur + 1, std::memory_order_acq_rel)) {
-                return true;
-            }
-        }
     }
+}
 
-    static void release_inflight(const ApiKey* key) {
-        if (key == nullptr || key->max_inflight <= 0) {
-            return;
-        }
-        key->inflight.fetch_sub(1, std::memory_order_acq_rel);
+inline void ApiKeyManager::release_inflight(const ApiKey* key) {
+    if (key == nullptr || key->max_inflight <= 0) {
+        return;
     }
+    key->inflight.fetch_sub(1, std::memory_order_acq_rel);
+}
 
 inline bool ApiKeyManager::allow_rate_limit(const ApiKey* key) {
     if (key == nullptr || key->rate_limit_qps <= 0) {
