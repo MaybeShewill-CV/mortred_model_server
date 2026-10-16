@@ -264,7 +264,7 @@ jobs:
       - name: Repository consistency checks
         run: |
           set -euo pipefail
-          python3 scripts/check_consistency.py
+          python3 scripts/check_consistency.py scripts/check_version_single_source.py
           python3 scripts/gen_openapi.py --check
           CHECK_ALLOW_GENERATED=1 ./scripts/check_repo_clean.sh
           python3 -m py_compile scripts/server/test_server.py scripts/server/http_infer_rps.py
