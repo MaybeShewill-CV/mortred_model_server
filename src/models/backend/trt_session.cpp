@@ -527,20 +527,23 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
     // slot is owned for the whole request: the async H2D copies out of it
     // only provably executed once the request's stream sync completes
     char* pinned_h2d = pinned_h2d_total > 0 ? static_cast<char*>(pinned_h2d_stage(pinned_h2d_total)) : nullptr;
+    // Error paths may return while cudaMemcpyAsync is still pending on
+    // _m_stream. Releasing the slot into the pool (or cudaFreeHost) before
+    // the stream finishes would UAF. On abandon we sync-then-release.
     struct StagingSlotGuard {
         TrtSession* session;
         void* slot;
         size_t bytes;
+        cudaStream_t stream = nullptr;
         bool abandon = false;  // error path: queued copies may still be pending
         ~StagingSlotGuard() {
             if (session == nullptr || slot == nullptr) return;
-            if (abandon) {
-                cudaFreeHost(slot);
-            } else {
-                session->pinned_h2d_release(slot, bytes);
+            if (abandon && stream != nullptr) {
+                cudaStreamSynchronize(stream);
             }
+            session->pinned_h2d_release(slot, bytes);
         }
-    } h2d_slot_guard{this, pinned_h2d, pinned_h2d_total};
+    } h2d_slot_guard{this, pinned_h2d, pinned_h2d_total, _m_stream, false};
     size_t pinned_h2d_offset = 0;
     for (size_t idx = 0; idx < ordered_inputs.size(); ++idx) {
         const auto& named = *ordered_inputs[idx];
@@ -557,6 +560,7 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
             }
             if (!_m_context->setTensorAddress(named.name.c_str(), named.tensor.device_data)) {
                 LOG(ERROR) << "tensorrt set device input address failed: " << named.name;
+                h2d_slot_guard.abandon = true;
                 return StatusCode::MODEL_RUN_SESSION_FAILED;
             }
             continue;
@@ -577,10 +581,12 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
         if (cuda_status != cudaSuccess) {
             LOG(ERROR) << "tensorrt H2D copy failed for '" << named.name
                        << "': " << cudaGetErrorString(cuda_status);
+            h2d_slot_guard.abandon = true;
             return StatusCode::TRT_CUDA_ERROR;
         }
         if (!_m_context->setTensorAddress(named.name.c_str(), buffer.memory)) {
             LOG(ERROR) << "tensorrt set input tensor address failed: " << named.name;
+            h2d_slot_guard.abandon = true;
             return StatusCode::MODEL_RUN_SESSION_FAILED;
         }
     }
@@ -614,6 +620,7 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
         if (shape_is_dynamic(shape)) {
             LOG(ERROR) << "tensorrt output '" << info.name << "' shape unresolved after input "
                        << "shapes: " << shape_to_string(shape);
+            h2d_slot_guard.abandon = true;
             return StatusCode::TRT_ALLOC_DYNAMIC_SHAPE_MEMO;
         }
         auto& buffer = _m_device_buffers.at(info.name);
@@ -622,6 +629,7 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
             LOG(ERROR) << "tensorrt output '" << info.name
                        << "' shape byte size overflow or non-concrete: "
                        << shape_to_string(shape);
+            h2d_slot_guard.abandon = true;
             return StatusCode::MODEL_RUN_SESSION_FAILED;
         }
         const auto status = buffer.ensure(bytes);
@@ -630,6 +638,7 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
         }
         if (!_m_context->setTensorAddress(info.name.c_str(), buffer.memory)) {
             LOG(ERROR) << "tensorrt set output tensor address failed: " << info.name;
+            h2d_slot_guard.abandon = true;
             return StatusCode::MODEL_RUN_SESSION_FAILED;
         }
         resolved_outputs[idx] = {&info, std::move(shape), buffer.memory};
@@ -637,11 +646,13 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
 
     if (!_m_context->enqueueV3(_m_stream)) {
         LOG(ERROR) << "tensorrt enqueueV3 inference failed";
+        h2d_slot_guard.abandon = true;
         return StatusCode::MODEL_RUN_SESSION_FAILED;
     }
     const auto sync_status = cudaStreamSynchronize(_m_stream);
     if (sync_status != cudaSuccess) {
         LOG(ERROR) << "tensorrt stream sync failed: " << cudaGetErrorString(sync_status);
+        h2d_slot_guard.abandon = true;
         return StatusCode::TRT_CUDA_ERROR;
     }
     jinq::common::stage_timing::mark("exec");
@@ -704,18 +715,23 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
         TrtSession* session;
         void* slot;
         size_t bytes;
+        cudaStream_t stream = nullptr;
+        bool abandon = false;
         ~D2HSlotGuard() {
-            if (session != nullptr && slot != nullptr) {
-                session->pinned_d2h_release(slot, bytes);
+            if (session == nullptr || slot == nullptr) return;
+            if (abandon && stream != nullptr) {
+                cudaStreamSynchronize(stream);
             }
+            session->pinned_d2h_release(slot, bytes);
         }
-    } d2h_slot_guard{this, pinned_d2h, pinned_d2h_total};
+    } d2h_slot_guard{this, pinned_d2h, pinned_d2h_total, _m_stream, false};
     size_t pinned_d2h_offset = 0;
     std::vector<std::pair<void*, size_t>> staged_d2h_copies;
     for (const auto& item : resolved_outputs) {
         if (item.memory == nullptr) {
             LOG(ERROR) << "tensorrt output '" << item.info->name
                        << "' was not bound to device memory";
+            d2h_slot_guard.abandon = true;
             return StatusCode::MODEL_RUN_SESSION_FAILED;
         }
         const auto& info = *item.info;
@@ -730,6 +746,7 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
             LOG(ERROR) << "tensorrt output '" << info.name
                        << "' shape byte size overflow or non-concrete: "
                        << shape_to_string(shape);
+            d2h_slot_guard.abandon = true;
             return StatusCode::MODEL_RUN_SESSION_FAILED;
         }
         named.tensor.buffer.resize(bytes);
@@ -744,6 +761,7 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
         if (cuda_status != cudaSuccess) {
             LOG(ERROR) << "tensorrt D2H copy failed for '" << info.name
                        << "': " << cudaGetErrorString(cuda_status);
+            d2h_slot_guard.abandon = true;
             return StatusCode::TRT_CUDA_ERROR;
         }
         outputs.push_back(std::move(named));
@@ -751,6 +769,7 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
     const auto final_sync = cudaStreamSynchronize(_m_stream);
     if (final_sync != cudaSuccess) {
         LOG(ERROR) << "tensorrt stream sync failed: " << cudaGetErrorString(final_sync);
+        d2h_slot_guard.abandon = true;
         return StatusCode::TRT_CUDA_ERROR;
     }
     if (!staged_d2h_copies.empty()) {
