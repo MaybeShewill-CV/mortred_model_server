@@ -942,12 +942,8 @@ double metrics_bucket_le(const std::string& body, const std::string& metric,
 
 // Waits until the release counter catches up with the admission counter, i.e.
 // until the completed request gave its waiting slot back. The
-// mortred_waiting_jobs gauge cannot show that: it is a snapshot taken inside
-// the reply path (base_server_impl.h reply_sync_request), i.e. before the
-// series callback that decrements the counter, so it keeps reporting the
-// in-flight count of the last reply. mortred_received_jobs_total and
-// mortred_finished_jobs_total are written at exactly the admission and release
-// points, so their meeting proves the waiting counter went back to zero.
+// Round-12 P1-1 also publishes / derives waiting gauges from the atomic, so idle
+// scrapes show 0; received/finished totals remain the durable rendezvous here.
 bool wait_for_job_release(int port, double expected_total, int attempts = 40) {
     for (int attempt = 0; attempt < attempts; ++attempt) {
         const auto metrics = send_request(port, "GET", "/metrics", "", k_json_auth_headers);
