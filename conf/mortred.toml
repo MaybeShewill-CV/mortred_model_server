@@ -17,8 +17,9 @@ max_connections = 1000
 upstream_send_timeout_ms = 180000
 upstream_recv_timeout_ms = 180000
 
+# enterprise/edge default: per-IP GCRA on (override with MORTRED_RATE_LIMIT=off|shadow|enforce)
 [gateway.rate_limit]
-enabled = false
+enabled = true
 shadow = false
 rate_per_sec = 100000
 burst = 200000
