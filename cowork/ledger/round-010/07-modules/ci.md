@@ -19,7 +19,11 @@
 ## 问题
 
 1. **`sanitizers` job 的 TSAN 门按现状不可能通过（红门由构造决定）**：`test/CMakeLists.txt:349-355` 给**7 个**目标打上 `sanitizer` 标签（`async_job_unittest`、`async_job_stress_test`、`api_key_manager_unittest`、`do_work_lifetime_unittest`、`worker_pool_unittest`、`batch_collector_unittest`、**`rate_limit_gcra_unittest`**），注释还写着"the sanitizer CI gate runs exactly these"；但 `ci.yml:328` 只显式构建**前 6 个**，随后 `ci.yml:335` 用 `ctest --test-dir build-tsan -L sanitizer` 按**标签**选择测试。实测（编排方在三个已配置目录跑 `ctest -N -L sanitizer`）：`build`、`build/full-cpu`、`build/probe-cpu` 均登记 **7** 个带标签测试，含 `rate_limit_gcra_unittest`（Test #35/#36）。而 `rate_limit_gcra_unittest` 在**基础** `TEST_LIST`（`test/CMakeLists.txt:78`）中，故该配置下 `add_test` 一定生成、标签一定生效。后果：被选中但未构建的测试没有可执行文件，该步以失败告终——**TSAN 门是红的，数据竞争实际上没有被门控**；注释与实现不符。修法二选一：该步补建第 7 个目标，或摘掉它的标签（后者会静默缩小覆盖，须同时改注释）。
-2. **`tests` job 同样不可能通过**：`ci.yml:114` 构建 `check` 目标，而 `test/CMakeLists.txt:348` 对 `TEST_LIST` 每一项都 `add_dependencies(check ${src})`；`packed_batch_nvi_unittest`（`:54`）与 `cv_image_input_unittest`（`:68`）都在 `TEST_LIST` 内，且二者目前**无法链接**——`packed_batch_nvi_unittest` 的 `link.txt` 只链 `libcommon.so`、缺 `libmodels.so`（符号确在后者，见 `discovered.md`；P1-4 的 QA 在 `build`/`build-full` 均复现 `undefined reference to gpu_jpeg::GpuDecodeSlot::open()/~GpuDecodeSlot()`）。**注：此条即用户在本轮明确移出队列的"构建/门禁不可用"类问题（原 P0-1 移入附录），故本次不新开条目**，仅作为 `ci` 模块的问题记录在案，供后续轮次取用。
+2. **`tests` job 同样不可能通过**：`ci.yml:114` 构建 `check` 目标，而 `test/CMakeLists.txt:348` 对 `TEST_LIST` 每一项都 `add_dependencies(check ${src})`；`packed_batch_nvi_unittest`（`:54`）与 `cv_image_input_unittest`（`:68`）都在 `TEST_LIST` 内，且二者目前**无法链接**。**编排方在基线 `ae6c5bac` 上直接复现（非转述）**，主检出 `build/`（Release、`MORTRED_BUILD_FULL=ON`、`MORTRED_BUILD_PROFILE=gpu`）上三个目标均 `build_exit=2`：
+   - `packed_batch_nvi_unittest`：`undefined reference to jinq::models::backend::gpu_jpeg::GpuDecodeSlot::GpuDecodeSlot()` 与 `~GpuDecodeSlot()`（该目标的 `link.txt` 只链 `libcommon.so`，缺 `libmodels.so`，而符号在后者）；
+   - `cv_image_input_unittest`：同一组未定义引用；
+   - `enlightengan_output_contract_unittest`：**编译期**失败——`src/models/enhancement/enlightengan.inl:169,170: error: ‘named_tensor_as’ is not a member of ‘jinq::models::backend’; did you mean ‘NamedTensor’?`（缺 `model_runtime.h` 的 include 链）。
+   P1-4 的 QA 另在 worktree 的 `build` 与 `build-full` 两个配置下复现过前两者的链接失败，第 6 轮审计在 `build/probe-ci`（CI tests-only 口径）亦复现，故该失败**跨配置成立**。**注：此条即用户在本轮明确移出队列的"构建/门禁不可用"类问题（原 P0-1 移入附录），故本次不新开条目**，仅作为 `ci` 模块的问题记录在案，供后续轮次取用。
 3. 由此产生的整体信号问题：7 个 job 中至少 2 个结构性为红，团队会习惯性忽略 CI；`quality-gates` / `cpu-profile` 的门虽然内容扎实，但在一个恒红的流水线里不再具备"门"的意义。
 
 ## 完成标准行
