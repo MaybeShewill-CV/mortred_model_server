@@ -4,7 +4,9 @@
  * Date: 2026-08-31
  ************************************************/
 
+#include <algorithm>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -40,7 +42,9 @@ TEST(request_envelope, valid_single_image_with_defaults) {
     EXPECT_TRUE(request.req_id.empty());
     ASSERT_EQ(request.items.size(), 1u);
     EXPECT_EQ(request.items[0].origin, byte_source::origin_kind::base64_text);
-    EXPECT_EQ(request.items[0].data, "aGVsbG8=");
+    // the wire encoding never leaves the server layer: items carry the decoded
+    // bytes (same as the raw-body path), not the base64 text
+    EXPECT_EQ(request.items[0].data, "hello");
     EXPECT_EQ(request.params, nullptr);
 
     EXPECT_EQ(request.options.encoding, OutputOptions::ImageEncoding::PNG);
@@ -54,7 +58,7 @@ TEST(request_envelope, valid_multi_image_with_req_id_and_options) {
     EXPECT_TRUE(request.is_valid);
     EXPECT_EQ(request.req_id, "trace-42");
     ASSERT_EQ(request.items.size(), 2u);
-    EXPECT_EQ(request.items[1].data, "ieU=");
+    EXPECT_EQ(request.items[1].data, std::string("\x89\xE5"));
     ASSERT_NE(request.params, nullptr);
     EXPECT_FLOAT_EQ(request.params->get_f32("score_threshold", 0.0f), 0.4f);
     EXPECT_EQ(request.params->get_i32("top_k", 0), 50);
@@ -118,7 +122,6 @@ TEST(request_envelope, images_shape_errors) {
         {R"({"req_id":"a"})", "/images", "missing"},
         {R"({"images":"aGk="})", "/images", "must be an array"},
         {R"({"images":[]})", "/images", "at least one"},
-        {R"({"images":["ok",5]})", "/images/1", "must be a string"},
         {R"({"images":[""]})", "/images/0", "non-empty"},
     };
     for (const auto &item : cases) {
@@ -127,6 +130,30 @@ TEST(request_envelope, images_shape_errors) {
         ASSERT_EQ(request.violations.size(), 1u) << item.body;
         EXPECT_EQ(request.violations[0].pointer, item.pointer) << item.body;
         EXPECT_NE(request.violations[0].message.find(item.fragment), std::string::npos) << item.body;
+    }
+
+    // "ok" is not valid base64 (bad length + padding) and 5 is not a string, so
+    // one bad element must not mask the other: both elements are each reported
+    // once, with their own JSON pointer. The pointers are matched as a set
+    // because the append order belongs to the implementation (shape errors are
+    // collected while scanning the array, base64 errors later, when the
+    // surviving strings are decoded into items), not to the contract.
+    const auto two_bad = parse_request_envelope(R"({"images":["ok",5]})", sample_specs());
+    EXPECT_FALSE(two_bad.is_valid);
+    ASSERT_EQ(two_bad.violations.size(), 2u);
+    const std::vector<std::pair<std::string, std::string>> expected = {
+        {"/images/0", "not valid base64"},
+        {"/images/1", "must be a string"},
+    };
+    for (const auto &[expected_pointer, expected_fragment] : expected) {
+        const bool found = std::any_of(
+            two_bad.violations.begin(), two_bad.violations.end(),
+            [&](const auto &violation) {
+                return violation.pointer == expected_pointer &&
+                       violation.message.find(expected_fragment) != std::string::npos;
+            });
+        EXPECT_TRUE(found) << "no violation at " << expected_pointer << " mentioning '"
+                           << expected_fragment << "'";
     }
 }
 
