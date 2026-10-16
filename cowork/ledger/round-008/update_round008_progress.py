@@ -16,29 +16,16 @@ OUT_HTML = ROUND / "progress.html"
 OUT_ISSUE = ROUND / "issue.html"
 
 TITLES = {
-    "p0-1": ("P0-1", "Repo gates red: contract suite, consistency check, TSan labels"),
-    "p0-2": ("P0-2", "/ready returns 503 while saturated"),
-    "p0-3": ("P0-3", "Body size limit enforced after parse; /jobs unchecked"),
-    "p0-4": ("P0-4", "No whole-message timeout: slowloris fills the entry"),
-    "p0-5": ("P0-5", "Supervisor wedges on stalled log I/O and never shuts down"),
-    "p0-6": ("P0-6", "libface pad/unpad mismatch: every box and landmark offset"),
-    "p1-1": ("P1-1", "clip_boxes inert; min_box_area_px space differs per detector"),
-    "p1-2": ("P1-2", "Admin/metrics credentials inherited by model processes"),
-    "p1-3": ("P1-3", "Per-pid kill only: grandchildren survive stop/restart"),
-    "p1-4": ("P1-4", "Numeric gates skippable: partial golden run exits 0"),
-    "p1-5": ("P1-5", "CHECK abort on the request path kills the model process"),
-    "p1-6": ("P1-6", "model_run_timeout<=0: unbounded wait, request never answered"),
-    "p1-7": ("P1-7", "Unbounded /metrics label cardinality from raw method"),
-    "p2-1": ("P2-1", "Golden masks stored as raw int JSON: 533MB in git"),
-    "p2-2": ("P2-2", "rate_limit_qps accepted in 44 configs but inert"),
-    "p2-3": ("P2-3", "Dead code: do_work and unused http_wire/rate_limiter helpers"),
-    "p2-4": ("P2-4", "Async result deep-copied per poll, retained unbounded"),
-    "p2-5": ("P2-5", "Stuck-worker/checkout timeouts are log-only, no metric"),
-    "p2-6": ("P2-6", "model_config_file_path resolved against CWD"),
-    "p2-7": ("P2-7", "Accept-Encoding ignored: image responses uncompressed"),
-    "p2-8": ("P2-8", "test/contract_baseline artifacts have no consumer"),
-    "p2-9": ("P2-9", "/metrics gated by the inference token"),
+    "p0-1": ("P0-1", "Align check_consistency with thin openapi_doc.h loader"),
+    "p1-1": ("P1-1", "worker_budget hard gate when max_inflight<=0"),
+    "p1-2": ("P1-2", "TOML load regression for max_queue/worker_budget"),
+    "p1-3": ("P1-3", "Gateway e2e: queue residency + worker_budget 429/layer"),
+    "p1-4": ("P1-4", "NvmlGpuProbe process-lifetime dlopen handle"),
+    "p1-5": ("P1-5", "CI evidence path improve + headers.h layer nit"),
 }
+
+ISSUE_ORDER = ["p0-1", "p1-1", "p1-2", "p1-3", "p1-4", "p1-5"]
+
 
 MERGE_SHA_RE = re.compile(r"^\s*-\s*merge commit:\s*([0-9a-f]{7,40})", re.I | re.M)
 BRANCH_SHA_RE = re.compile(r"^\s*-\s*问题分支提交:\s*([0-9a-f]{7,40})", re.I | re.M)

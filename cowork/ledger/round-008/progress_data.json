@@ -1,18 +1,18 @@
 {
   "round": 7,
-  "generated_at": "2026-10-16 14:23:00 CST",
+  "generated_at": "2026-10-16 14:31:39 CST",
   "round_status": "running",
   "current": "P0-1",
   "done": 0,
-  "total": 22,
+  "total": 6,
   "percent": 0,
-  "open_p0": 6,
-  "open_p1": 7,
+  "open_p0": 1,
+  "open_p1": 5,
   "issues": [
     {
       "id": "P0-1",
       "issue_id": "p0-1",
-      "title": "Repo gates red: contract suite, consistency check, TSan labels",
+      "title": "Align check_consistency with thin openapi_doc.h loader",
       "priority": "P0",
       "status": "todo",
       "merge_sha": null,
@@ -36,139 +36,9 @@
       "step_text": "待开始 · Step 3 方案"
     },
     {
-      "id": "P0-2",
-      "issue_id": "p0-2",
-      "title": "/ready returns 503 while saturated",
-      "priority": "P0",
-      "status": "todo",
-      "merge_sha": null,
-      "branch_sha": null,
-      "has_design": false,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
-      "paths": {
-        "design": "cowork/ledger/round-008/issues/p0-2/03-design-final.md",
-        "rd": "cowork/ledger/round-008/issues/p0-2/04-rd.md",
-        "qa": "cowork/ledger/round-008/issues/p0-2/05-qa.md",
-        "merge": "cowork/ledger/round-008/issues/p0-2/05-merge.md"
-      },
-      "snippets": {
-        "design": "",
-        "rd": "",
-        "qa": "",
-        "merge": ""
-      },
-      "step_text": "待开始 · Step 3 方案"
-    },
-    {
-      "id": "P0-3",
-      "issue_id": "p0-3",
-      "title": "Body size limit enforced after parse; /jobs unchecked",
-      "priority": "P0",
-      "status": "todo",
-      "merge_sha": null,
-      "branch_sha": null,
-      "has_design": false,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
-      "paths": {
-        "design": "cowork/ledger/round-008/issues/p0-3/03-design-final.md",
-        "rd": "cowork/ledger/round-008/issues/p0-3/04-rd.md",
-        "qa": "cowork/ledger/round-008/issues/p0-3/05-qa.md",
-        "merge": "cowork/ledger/round-008/issues/p0-3/05-merge.md"
-      },
-      "snippets": {
-        "design": "",
-        "rd": "",
-        "qa": "",
-        "merge": ""
-      },
-      "step_text": "待开始 · Step 3 方案"
-    },
-    {
-      "id": "P0-4",
-      "issue_id": "p0-4",
-      "title": "No whole-message timeout: slowloris fills the entry",
-      "priority": "P0",
-      "status": "todo",
-      "merge_sha": null,
-      "branch_sha": null,
-      "has_design": false,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
-      "paths": {
-        "design": "cowork/ledger/round-008/issues/p0-4/03-design-final.md",
-        "rd": "cowork/ledger/round-008/issues/p0-4/04-rd.md",
-        "qa": "cowork/ledger/round-008/issues/p0-4/05-qa.md",
-        "merge": "cowork/ledger/round-008/issues/p0-4/05-merge.md"
-      },
-      "snippets": {
-        "design": "",
-        "rd": "",
-        "qa": "",
-        "merge": ""
-      },
-      "step_text": "待开始 · Step 3 方案"
-    },
-    {
-      "id": "P0-5",
-      "issue_id": "p0-5",
-      "title": "Supervisor wedges on stalled log I/O and never shuts down",
-      "priority": "P0",
-      "status": "todo",
-      "merge_sha": null,
-      "branch_sha": null,
-      "has_design": false,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
-      "paths": {
-        "design": "cowork/ledger/round-008/issues/p0-5/03-design-final.md",
-        "rd": "cowork/ledger/round-008/issues/p0-5/04-rd.md",
-        "qa": "cowork/ledger/round-008/issues/p0-5/05-qa.md",
-        "merge": "cowork/ledger/round-008/issues/p0-5/05-merge.md"
-      },
-      "snippets": {
-        "design": "",
-        "rd": "",
-        "qa": "",
-        "merge": ""
-      },
-      "step_text": "待开始 · Step 3 方案"
-    },
-    {
-      "id": "P0-6",
-      "issue_id": "p0-6",
-      "title": "libface pad/unpad mismatch: every box and landmark offset",
-      "priority": "P0",
-      "status": "todo",
-      "merge_sha": null,
-      "branch_sha": null,
-      "has_design": false,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
-      "paths": {
-        "design": "cowork/ledger/round-008/issues/p0-6/03-design-final.md",
-        "rd": "cowork/ledger/round-008/issues/p0-6/04-rd.md",
-        "qa": "cowork/ledger/round-008/issues/p0-6/05-qa.md",
-        "merge": "cowork/ledger/round-008/issues/p0-6/05-merge.md"
-      },
-      "snippets": {
-        "design": "",
-        "rd": "",
-        "qa": "",
-        "merge": ""
-      },
-      "step_text": "待开始 · Step 3 方案"
-    },
-    {
       "id": "P1-1",
       "issue_id": "p1-1",
-      "title": "clip_boxes inert; min_box_area_px space differs per detector",
+      "title": "worker_budget hard gate when max_inflight<=0",
       "priority": "P1",
       "status": "todo",
       "merge_sha": null,
@@ -194,7 +64,7 @@
     {
       "id": "P1-2",
       "issue_id": "p1-2",
-      "title": "Admin/metrics credentials inherited by model processes",
+      "title": "TOML load regression for max_queue/worker_budget",
       "priority": "P1",
       "status": "todo",
       "merge_sha": null,
@@ -220,7 +90,7 @@
     {
       "id": "P1-3",
       "issue_id": "p1-3",
-      "title": "Per-pid kill only: grandchildren survive stop/restart",
+      "title": "Gateway e2e: queue residency + worker_budget 429/layer",
       "priority": "P1",
       "status": "todo",
       "merge_sha": null,
@@ -246,7 +116,7 @@
     {
       "id": "P1-4",
       "issue_id": "p1-4",
-      "title": "Numeric gates skippable: partial golden run exits 0",
+      "title": "NvmlGpuProbe process-lifetime dlopen handle",
       "priority": "P1",
       "status": "todo",
       "merge_sha": null,
@@ -272,7 +142,7 @@
     {
       "id": "P1-5",
       "issue_id": "p1-5",
-      "title": "CHECK abort on the request path kills the model process",
+      "title": "CI evidence path improve + headers.h layer nit",
       "priority": "P1",
       "status": "todo",
       "merge_sha": null,
@@ -286,292 +156,6 @@
         "rd": "cowork/ledger/round-008/issues/p1-5/04-rd.md",
         "qa": "cowork/ledger/round-008/issues/p1-5/05-qa.md",
         "merge": "cowork/ledger/round-008/issues/p1-5/05-merge.md"
-      },
-      "snippets": {
-        "design": "",
-        "rd": "",
-        "qa": "",
-        "merge": ""
-      },
-      "step_text": "待开始 · Step 3 方案"
-    },
-    {
-      "id": "P1-6",
-      "issue_id": "p1-6",
-      "title": "model_run_timeout<=0: unbounded wait, request never answered",
-      "priority": "P1",
-      "status": "todo",
-      "merge_sha": null,
-      "branch_sha": null,
-      "has_design": false,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
-      "paths": {
-        "design": "cowork/ledger/round-008/issues/p1-6/03-design-final.md",
-        "rd": "cowork/ledger/round-008/issues/p1-6/04-rd.md",
-        "qa": "cowork/ledger/round-008/issues/p1-6/05-qa.md",
-        "merge": "cowork/ledger/round-008/issues/p1-6/05-merge.md"
-      },
-      "snippets": {
-        "design": "",
-        "rd": "",
-        "qa": "",
-        "merge": ""
-      },
-      "step_text": "待开始 · Step 3 方案"
-    },
-    {
-      "id": "P1-7",
-      "issue_id": "p1-7",
-      "title": "Unbounded /metrics label cardinality from raw method",
-      "priority": "P1",
-      "status": "todo",
-      "merge_sha": null,
-      "branch_sha": null,
-      "has_design": false,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
-      "paths": {
-        "design": "cowork/ledger/round-008/issues/p1-7/03-design-final.md",
-        "rd": "cowork/ledger/round-008/issues/p1-7/04-rd.md",
-        "qa": "cowork/ledger/round-008/issues/p1-7/05-qa.md",
-        "merge": "cowork/ledger/round-008/issues/p1-7/05-merge.md"
-      },
-      "snippets": {
-        "design": "",
-        "rd": "",
-        "qa": "",
-        "merge": ""
-      },
-      "step_text": "待开始 · Step 3 方案"
-    },
-    {
-      "id": "P2-1",
-      "issue_id": "p2-1",
-      "title": "Golden masks stored as raw int JSON: 533MB in git",
-      "priority": "P2",
-      "status": "todo",
-      "merge_sha": null,
-      "branch_sha": null,
-      "has_design": false,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
-      "paths": {
-        "design": "cowork/ledger/round-008/issues/p2-1/03-design-final.md",
-        "rd": "cowork/ledger/round-008/issues/p2-1/04-rd.md",
-        "qa": "cowork/ledger/round-008/issues/p2-1/05-qa.md",
-        "merge": "cowork/ledger/round-008/issues/p2-1/05-merge.md"
-      },
-      "snippets": {
-        "design": "",
-        "rd": "",
-        "qa": "",
-        "merge": ""
-      },
-      "step_text": "待开始 · Step 3 方案"
-    },
-    {
-      "id": "P2-2",
-      "issue_id": "p2-2",
-      "title": "rate_limit_qps accepted in 44 configs but inert",
-      "priority": "P2",
-      "status": "todo",
-      "merge_sha": null,
-      "branch_sha": null,
-      "has_design": false,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
-      "paths": {
-        "design": "cowork/ledger/round-008/issues/p2-2/03-design-final.md",
-        "rd": "cowork/ledger/round-008/issues/p2-2/04-rd.md",
-        "qa": "cowork/ledger/round-008/issues/p2-2/05-qa.md",
-        "merge": "cowork/ledger/round-008/issues/p2-2/05-merge.md"
-      },
-      "snippets": {
-        "design": "",
-        "rd": "",
-        "qa": "",
-        "merge": ""
-      },
-      "step_text": "待开始 · Step 3 方案"
-    },
-    {
-      "id": "P2-3",
-      "issue_id": "p2-3",
-      "title": "Dead code: do_work and unused http_wire/rate_limiter helpers",
-      "priority": "P2",
-      "status": "todo",
-      "merge_sha": null,
-      "branch_sha": null,
-      "has_design": false,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
-      "paths": {
-        "design": "cowork/ledger/round-008/issues/p2-3/03-design-final.md",
-        "rd": "cowork/ledger/round-008/issues/p2-3/04-rd.md",
-        "qa": "cowork/ledger/round-008/issues/p2-3/05-qa.md",
-        "merge": "cowork/ledger/round-008/issues/p2-3/05-merge.md"
-      },
-      "snippets": {
-        "design": "",
-        "rd": "",
-        "qa": "",
-        "merge": ""
-      },
-      "step_text": "待开始 · Step 3 方案"
-    },
-    {
-      "id": "P2-4",
-      "issue_id": "p2-4",
-      "title": "Async result deep-copied per poll, retained unbounded",
-      "priority": "P2",
-      "status": "todo",
-      "merge_sha": null,
-      "branch_sha": null,
-      "has_design": false,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
-      "paths": {
-        "design": "cowork/ledger/round-008/issues/p2-4/03-design-final.md",
-        "rd": "cowork/ledger/round-008/issues/p2-4/04-rd.md",
-        "qa": "cowork/ledger/round-008/issues/p2-4/05-qa.md",
-        "merge": "cowork/ledger/round-008/issues/p2-4/05-merge.md"
-      },
-      "snippets": {
-        "design": "",
-        "rd": "",
-        "qa": "",
-        "merge": ""
-      },
-      "step_text": "待开始 · Step 3 方案"
-    },
-    {
-      "id": "P2-5",
-      "issue_id": "p2-5",
-      "title": "Stuck-worker/checkout timeouts are log-only, no metric",
-      "priority": "P2",
-      "status": "todo",
-      "merge_sha": null,
-      "branch_sha": null,
-      "has_design": false,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
-      "paths": {
-        "design": "cowork/ledger/round-008/issues/p2-5/03-design-final.md",
-        "rd": "cowork/ledger/round-008/issues/p2-5/04-rd.md",
-        "qa": "cowork/ledger/round-008/issues/p2-5/05-qa.md",
-        "merge": "cowork/ledger/round-008/issues/p2-5/05-merge.md"
-      },
-      "snippets": {
-        "design": "",
-        "rd": "",
-        "qa": "",
-        "merge": ""
-      },
-      "step_text": "待开始 · Step 3 方案"
-    },
-    {
-      "id": "P2-6",
-      "issue_id": "p2-6",
-      "title": "model_config_file_path resolved against CWD",
-      "priority": "P2",
-      "status": "todo",
-      "merge_sha": null,
-      "branch_sha": null,
-      "has_design": false,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
-      "paths": {
-        "design": "cowork/ledger/round-008/issues/p2-6/03-design-final.md",
-        "rd": "cowork/ledger/round-008/issues/p2-6/04-rd.md",
-        "qa": "cowork/ledger/round-008/issues/p2-6/05-qa.md",
-        "merge": "cowork/ledger/round-008/issues/p2-6/05-merge.md"
-      },
-      "snippets": {
-        "design": "",
-        "rd": "",
-        "qa": "",
-        "merge": ""
-      },
-      "step_text": "待开始 · Step 3 方案"
-    },
-    {
-      "id": "P2-7",
-      "issue_id": "p2-7",
-      "title": "Accept-Encoding ignored: image responses uncompressed",
-      "priority": "P2",
-      "status": "todo",
-      "merge_sha": null,
-      "branch_sha": null,
-      "has_design": false,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
-      "paths": {
-        "design": "cowork/ledger/round-008/issues/p2-7/03-design-final.md",
-        "rd": "cowork/ledger/round-008/issues/p2-7/04-rd.md",
-        "qa": "cowork/ledger/round-008/issues/p2-7/05-qa.md",
-        "merge": "cowork/ledger/round-008/issues/p2-7/05-merge.md"
-      },
-      "snippets": {
-        "design": "",
-        "rd": "",
-        "qa": "",
-        "merge": ""
-      },
-      "step_text": "待开始 · Step 3 方案"
-    },
-    {
-      "id": "P2-8",
-      "issue_id": "p2-8",
-      "title": "test/contract_baseline artifacts have no consumer",
-      "priority": "P2",
-      "status": "todo",
-      "merge_sha": null,
-      "branch_sha": null,
-      "has_design": false,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
-      "paths": {
-        "design": "cowork/ledger/round-008/issues/p2-8/03-design-final.md",
-        "rd": "cowork/ledger/round-008/issues/p2-8/04-rd.md",
-        "qa": "cowork/ledger/round-008/issues/p2-8/05-qa.md",
-        "merge": "cowork/ledger/round-008/issues/p2-8/05-merge.md"
-      },
-      "snippets": {
-        "design": "",
-        "rd": "",
-        "qa": "",
-        "merge": ""
-      },
-      "step_text": "待开始 · Step 3 方案"
-    },
-    {
-      "id": "P2-9",
-      "issue_id": "p2-9",
-      "title": "/metrics gated by the inference token",
-      "priority": "P2",
-      "status": "todo",
-      "merge_sha": null,
-      "branch_sha": null,
-      "has_design": false,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
-      "paths": {
-        "design": "cowork/ledger/round-008/issues/p2-9/03-design-final.md",
-        "rd": "cowork/ledger/round-008/issues/p2-9/04-rd.md",
-        "qa": "cowork/ledger/round-008/issues/p2-9/05-qa.md",
-        "merge": "cowork/ledger/round-008/issues/p2-9/05-merge.md"
       },
       "snippets": {
         "design": "",

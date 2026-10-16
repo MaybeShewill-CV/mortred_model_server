@@ -2,7 +2,7 @@
 # Regenerate Round 8 progress board every 60s; exit when 100% done.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PY="$ROOT/update_round007_progress.py"
+PY="$ROOT/update_round008_progress.py"
 LOG="$ROOT/progress_watch.log"
 PIDFILE="$ROOT/progress_watch.pid"
 echo "[$(date '+%Y-%m-%d %H:%M:%S %Z')] progress_watch start pid=$$ root=$ROOT" | tee -a "$LOG"
