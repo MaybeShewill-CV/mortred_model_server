@@ -107,7 +107,8 @@ private:
     void forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
                           const std::string& method, const std::string& query,
                           const std::shared_ptr<jinq::common::stage_timing::StageTrace>& trace,
-                          const StageClocks& clocks);
+                          const StageClocks& clocks,
+                          std::shared_ptr<const ApiKey> inflight_key = nullptr);
     void note_upstream_stage(const StageClocks& clocks,
                              std::chrono::steady_clock::time_point t_fwd,
                              std::chrono::steady_clock::time_point t_upstream,

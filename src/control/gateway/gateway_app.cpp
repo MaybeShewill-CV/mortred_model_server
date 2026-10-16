@@ -333,7 +333,8 @@ bool GatewayApp::resolve_route(const std::string& path, ResolvedRoute* out) cons
 void GatewayApp::forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
                                   const std::string& method, const std::string& query,
                                   const std::shared_ptr<jinq::common::stage_timing::StageTrace>& stage_trace,
-                                  const StageClocks& clocks) {
+                                  const StageClocks& clocks,
+                                  std::shared_ptr<const ApiKey> inflight_key) {
     struct ForwardClock {
         StageClocks clocks;
         std::chrono::steady_clock::time_point fwd{};
@@ -356,7 +357,11 @@ void GatewayApp::forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
 
     auto* client = WFTaskFactory::create_http_task(
         url, 0, 0,
-        [this, task, model_id, method, t0, rewrite_job_urls, stage_trace, timing](WFHttpTask* t) {
+        [this, task, model_id, method, t0, rewrite_job_urls, stage_trace, timing, inflight_key](WFHttpTask* t) {
+            struct InflightGuard {
+                std::shared_ptr<const ApiKey> key;
+                ~InflightGuard() { ApiKeyManager::release_inflight(key.get()); }
+            } inflight_guard{inflight_key};
             auto* resp = task->get_resp();
             if (t->get_state() != WFT_STATE_SUCCESS) {
                 const int code = t->get_error() == ECONNREFUSED ? 503 : 502;
@@ -700,6 +705,7 @@ void GatewayApp::process(WFHttpTask* task) {
     const std::string auth_header = header_value(task->get_req(), "authorization");
     bool authorized = false;
     std::string key_name;
+    std::shared_ptr<const ApiKey> api_key_held;
 
     // try multi-key auth first (P0-4)
     if (api_keys_.key_count() > 0) {
@@ -731,6 +737,7 @@ void GatewayApp::process(WFHttpTask* task) {
             }
             authorized = true;
             key_name = auth.key->name;
+            api_key_held = auth.key;
         }
     }
 
@@ -777,7 +784,24 @@ void GatewayApp::process(WFHttpTask* task) {
     }
     const std::string query =
         route.append_query ? uri_query(task->get_req()->get_request_uri()) : "";
-    forward_to_model(task, route, method, query, stage_trace, clocks);
+    if (api_key_held) {
+        if (!ApiKeyManager::try_acquire_inflight(api_key_held.get())) {
+            metrics_.inc_http_requests(method, "429");
+            auto* resp = task->get_resp();
+            resp->add_header_pair("Retry-After", "1");
+            if (api_key_held->max_inflight > 0) {
+                resp->add_header_pair("RateLimit-Limit",
+                                      std::to_string(api_key_held->max_inflight).c_str());
+                resp->add_header_pair("RateLimit-Remaining", "0");
+                resp->add_header_pair("RateLimit-Reset", "1");
+            }
+            resp->add_header_pair("X-Mortred-RateLimit-Layer", "api-key-max-inflight");
+            reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED,
+                                "api key max_inflight exceeded");
+            return;
+        }
+    }
+    forward_to_model(task, route, method, query, stage_trace, clocks, api_key_held);
 }
 
 bool GatewayApp::init(const GatewayInitOptions& options) {

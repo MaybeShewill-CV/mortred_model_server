@@ -1,3 +1,4 @@
+// Gateway wires try_acquire_inflight/release_inflight around upstream forward (R5 P1-3).
 #include <gtest/gtest.h>
 #include "control/api_key_manager.h"
 
