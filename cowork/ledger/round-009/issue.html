@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta http-equiv="refresh" content="60"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Round 9 · Issue detail</title>
+<style>
+  body { margin:0; font-family:system-ui,sans-serif; background:#0b1220; color:#e8eefc; }
+  .wrap { max-width:880px; margin:0 auto; padding:24px; }
+  a { color:#9db7ff; }
+  .card { background:#121a2b; border:1px solid #243049; border-radius:16px; padding:18px; }
+  .muted { color:#93a0b8; font-size:13px; }
+  pre { background:#0e1626; border:1px solid #243049; border-radius:12px; padding:12px; white-space:pre-wrap; }
+  code { background:#0e1626; padding:1px 6px; border-radius:6px; }
+  .badge { display:inline-block; padding:3px 8px; border-radius:999px; background:#2a2110; color:#ffd48a; border:1px solid #5a4518; font-size:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p><a href="progress.html">← Round 9 board</a></p>
+  <div id="root" class="card"><p class="muted">loading…</p></div>
+</div>
+<script type="application/json" id="data">{"round": 7, "generated_at": "2026-10-16 15:21:44 CST", "round_status": "running", "current": "P0-2", "done": 1, "total": 4, "percent": 25, "open_p0": 3, "open_p1": 0, "issues": [{"id": "P0-1", "issue_id": "p0-1", "title": "/ready LB-safe: init and healthy, not available_approx>0", "priority": "P0", "status": "done", "merge_sha": "b7338dd0", "branch_sha": "b9bb8247", "has_design": true, "has_rd": true, "has_qa": true, "has_merge": true, "paths": {"design": "cowork/ledger/round-009/issues/p0-1/03-design-final.md", "rd": "cowork/ledger/round-009/issues/p0-1/04-rd.md", "qa": "cowork/ledger/round-009/issues/p0-1/05-qa.md", "merge": "cowork/ledger/round-009/issues/p0-1/05-merge.md"}, "snippets": {"design": "﻿# 技术方案\n- 问题: P0-1\n- 版本: v1\n## 目标\n`/ready` 仅表示进程已成功初始化且健康，不再要求 `available_approx()>0`。满载时 LB 探针仍得 200；饱和由 `mortred_workers_busy` / `mortred_workers_available` 暴露。\n## 边界\n- 不改 packing/Docker。\n- 不改 worker 调度与 429 背压语义。\n- `/healthz` 不变。\n## 实现要点\n1. `base_server_impl.h` `/ready`：`ready = _m_successfully_initialized`（去掉 available_approx 合取）。\n2. 继续 `set_ready(ready)`；worker 水位仍由既有 `set_workers_available` / `set_workers_busy` 更新。", "rd": "﻿# RD 实现\n- 问题: P0-1\n- 分支: cowork/r9-p0-1-ready\n- 提交: b9bb8247\n- 实现偏差: 无\n## 变更\n- `base_server_impl.h` `/ready`: ready = `_m_successfully_initialized` only\n- `prometheus_metrics_test.cc`: ready=1 with available=0 / busy=4\n## 自测\n- g++ prometheus_metrics_test --gtest_filter=*ready_independent* → PASS\n## 新增问题\n无", "qa": "﻿# QA\n- 问题: P0-1\n- 结论: pass\n- 方案版本: v1\n## 验收\n| 编号 | 标准 | 结果 | 命令/观察 |\n| --- | --- | --- | --- |\n| A1 | /ready 谓词不再合取 available_approx()>0 | pass | grep -n successfully_initialized src/server/base_server_impl.h（ready 分支） |\n| A2 | mortred_ready=1 可与 workers_available=0 共存 | pass | /tmp/prometheus_metrics_test_r9 --gtest_filter=*ready_independent* EXIT=0 |\n| A3 | worker busy/available gauges 仍更新 | pass | set_workers_* 调用仍在 base_server_impl.h:756+ |\n## 残余风险\n满载 e2e 压测未在本步实跑；谓词与指标单测覆盖契约。", "merge": "﻿# 合入\n- 问题: P0-1\n- 分支: cowork/r9-p0-1-ready\n- worktree: /mnt/g/Codex/mortred_wt/r9-p0-1-ready\n- 问题分支提交: b9bb8247\n- QA 结论: pass\n- 重跑: /tmp/prometheus_metrics_test_r9 --gtest_filter=*ready_independent* → 0\n- 命令: git merge --no-ff cowork/r9-p0-1-ready\n- merge commit: b7338dd0"}, "step_text": "已合入 · merge b7338dd0"}, {"id": "P0-2", "issue_id": "p0-2", "title": "Enforce body size before parse; jobs bounded; empty CL cannot bypass", "priority": "P0", "status": "designed", "merge_sha": null, "branch_sha": null, "has_design": true, "has_rd": false, "has_qa": false, "has_merge": false, "paths": {"design": "cowork/ledger/round-009/issues/p0-2/03-design-final.md", "rd": "cowork/ledger/round-009/issues/p0-2/04-rd.md", "qa": "cowork/ledger/round-009/issues/p0-2/05-qa.md", "merge": "cowork/ledger/round-009/issues/p0-2/05-merge.md"}, "snippets": {"design": "﻿# 技术方案\n- 问题: P0-2\n- 版本: v1\n## 目标\n在解析前强制 body 上限；空 Content-Length / chunked 不能绕过；`/jobs` POST 同样 413。\n## 边界\n- 不改 packing/Docker；不改默认 64MB 上限语义。\n## 实现要点\n1. `request_admission.h`：新增 `received_body_exceeds(req, limit_mb)`（CL 超限或 get_parsed_body size 超限）；空/非法 CL 仍用实际 body。\n2. `serve_process`：在 content-type 分支解析之前调用，超限直接 413。\n3. `async_endpoints`：configure 传入 limit；submit 路径同样检查。\n4. 单测覆盖空 CL + 超限 body、合法 CL、/jobs 路径谓词。", "rd": "", "qa": "", "merge": ""}, "step_text": "方案已锁 · 待实现"}, {"id": "P0-3", "issue_id": "p0-3", "title": "Whole-message receive_timeout; drip connections cannot fill ingress", "priority": "P0", "status": "designed", "merge_sha": null, "branch_sha": null, "has_design": true, "has_rd": false, "has_qa": false, "has_merge": false, "paths": {"design": "cowork/ledger/round-009/issues/p0-3/03-design-final.md", "rd": "cowork/ledger/round-009/issues/p0-3/04-rd.md", "qa": "cowork/ledger/round-009/issues/p0-3/05-qa.md", "merge": "cowork/ledger/round-009/issues/p0-3/05-merge.md"}, "snippets": {"design": "﻿# 技术方案\n- 问题: P0-3\n- 版本: v1\n## 目标\n整报文 `receive_timeout` 可配置且默认有界（非 -1）；滴流连接在 T 内被关闭。\n## 边界\n- 不改 packing/Docker。\n- peer_response_timeout 语义不变（单次读写）。\n## 实现要点\n1. `ServerRuntimeConfig::receive_timeout`（ms），默认 60000；TOML `receive_timeout`（秒，与 peer_resp_timeout 风格一致）。\n2. `init_http_server` 写入 `server_params.receive_timeout`。\n3. schema optional int；单测默认与解析。", "rd": "", "qa": "", "merge": ""}, "step_text": "方案已锁 · 待实现"}, {"id": "P0-4", "issue_id": "p0-4", "title": "Supervisor must not hang on log I/O stall", "priority": "P0", "status": "designed", "merge_sha": null, "branch_sha": null, "has_design": true, "has_rd": false, "has_qa": false, "has_merge": false, "paths": {"design": "cowork/ledger/round-009/issues/p0-4/03-design-final.md", "rd": "cowork/ledger/round-009/issues/p0-4/04-rd.md", "qa": "cowork/ledger/round-009/issues/p0-4/05-qa.md", "merge": "cowork/ledger/round-009/issues/p0-4/05-merge.md"}, "snippets": {"design": "﻿# 技术方案\n- 问题: P0-4\n- 版本: v1\n## 目标\nsupervisor 不因日志 I/O 停顿永久挂死：LogBuffer 不再每行 flush；handle_exit 先关 pipe 再 join 且不堵死 reaper；wait_shutdown 有界。\n## 边界\n- 不改 packing/Docker；不改重启策略语义。\n## 实现要点\n1. `LogBuffer::append`：去掉每行 `_file.flush()`；仅 rotate/dtor（及可选批量阈值）flush。\n2. `handle_exit`：先 close out/err fd，再 join reader；join 放到独立 joiner（reaper 不阻塞），完成后清 readers_live。\n3. `wait_shutdown`：`wait_for` 30s 上限，超时仍 `_threads_stop` 并 join。\n## 确认", "rd": "", "qa": "", "merge": ""}, "step_text": "方案已锁 · 待实现"}]}</script>
+<script>
+const data = JSON.parse(document.getElementById('data').textContent);
+const id = new URLSearchParams(location.search).get('id') || 'p1-1';
+const it = (data.issues || []).find(x => x.issue_id === id) || data.issues[0];
+const root = document.getElementById('root');
+function esc(s) {
+  return String(s || '').replace(/[&<>]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[ch]);
+}
+if (!it) { root.innerHTML = '<p>issue not found</p>'; }
+else {
+  const snip = it.snippets || {};
+  const paths = it.paths || {};
+  const excerpt = snip.merge || snip.qa || snip.rd || snip.design || '(empty)';
+  root.innerHTML = `
+    <div><span class="badge">${esc(it.id)}</span> <strong>${esc(it.title)}</strong></div>
+    <p class="muted">status=${esc(it.status)} · ${esc(it.step_text || '')}</p>
+    <p>merge: <code>${esc(it.merge_sha || '—')}</code><br/>branch: <code>${esc(it.branch_sha || '—')}</code></p>
+    <p class="muted">design=${it.has_design} rd=${it.has_rd} qa=${it.has_qa} merge=${it.has_merge}</p>
+    <h3>Paths</h3>
+    <ul>
+      <li><code>${esc(paths.design || '')}</code></li>
+      <li><code>${esc(paths.rd || '')}</code></li>
+      <li><code>${esc(paths.qa || '')}</code></li>
+      <li><code>${esc(paths.merge || '')}</code></li>
+    </ul>
+    <h3>Ledger excerpt</h3>
+    <pre>${esc(excerpt)}</pre>
+  `;
+  document.title = 'Round 9 · ' + it.id;
+}
+</script>
+</body>
+</html>
