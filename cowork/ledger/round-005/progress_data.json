@@ -1,13 +1,13 @@
 {
   "round": 5,
-  "generated_at": "2026-10-16 13:02:13 CST",
+  "generated_at": "2026-10-16 13:07:42 CST",
   "round_status": "running",
-  "current": "P1-2",
-  "done": 1,
+  "current": "P1-3",
+  "done": 2,
   "total": 5,
-  "percent": 20,
+  "percent": 40,
   "open_p0": 0,
-  "open_p1": 4,
+  "open_p1": 3,
   "issues": [
     {
       "id": "P1-1",
@@ -27,13 +27,13 @@
       "issue_id": "p1-2",
       "title": "gpu_sampler nvidia-smi waitpid harden",
       "priority": "P1",
-      "status": "designed",
-      "merge_sha": null,
-      "branch_sha": null,
+      "status": "done",
+      "merge_sha": "b4b8456b7c09db4923fb2b539ba64963756ce11c",
+      "branch_sha": "43cbea512121d928c3c8212eb63d69bae94edca4",
       "has_design": true,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true
     },
     {
       "id": "P1-3",
