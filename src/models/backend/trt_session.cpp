@@ -567,6 +567,8 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
         }
         const auto status = buffer.ensure(input_bytes);
         if (status != StatusCode::OK) {
+            // earlier inputs' H2D copies may already be queued on _m_stream
+            h2d_slot_guard.abandon = true;
             return status;
         }
         const void* host_src = named.tensor.buffer.data();
@@ -634,6 +636,9 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
         }
         const auto status = buffer.ensure(bytes);
         if (status != StatusCode::OK) {
+            // all input H2D copies are queued by now; sync before the slot
+            // goes back to the pool
+            h2d_slot_guard.abandon = true;
             return status;
         }
         if (!_m_context->setTensorAddress(info.name.c_str(), buffer.memory)) {
