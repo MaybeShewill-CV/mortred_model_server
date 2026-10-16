@@ -1,13 +1,13 @@
 {
   "round": 7,
-  "generated_at": "2026-10-16 14:39:48 CST",
+  "generated_at": "2026-10-16 14:41:41 CST",
   "round_status": "running",
   "current": "P1-3",
-  "done": 3,
+  "done": 4,
   "total": 6,
-  "percent": 50,
+  "percent": 67,
   "open_p0": 0,
-  "open_p1": 3,
+  "open_p1": 2,
   "issues": [
     {
       "id": "P0-1",
@@ -118,13 +118,13 @@
       "issue_id": "p1-4",
       "title": "NvmlGpuProbe process-lifetime dlopen handle",
       "priority": "P1",
-      "status": "todo",
-      "merge_sha": null,
-      "branch_sha": null,
-      "has_design": false,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
+      "status": "done",
+      "merge_sha": "4f009cbf2c395d76b586550cb3ed32348c8ab1e4",
+      "branch_sha": "5f23d3567009a3e1c9a0be22cb9732892671f545",
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
       "paths": {
         "design": "cowork/ledger/round-008/issues/p1-4/03-design-final.md",
         "rd": "cowork/ledger/round-008/issues/p1-4/04-rd.md",
@@ -132,12 +132,12 @@
         "merge": "cowork/ledger/round-008/issues/p1-4/05-merge.md"
       },
       "snippets": {
-        "design": "",
-        "rd": "",
-        "qa": "",
-        "merge": ""
+        "design": "# 技术方案\n- 问题: P1-4\n- 版本: v1\n## 目标\nNvmlGpuProbe process-lifetime dlopen handle\n## 边界\n- 不改 packing/Docker。\n## 实现要点\n见问题分支 diff。\n## 确认\n| 角色 | 结论 | 条件 | 方案版本 | 记录 |\n| --- | --- | --- | --- | --- |",
+        "rd": "# 实现\n- 问题: P1-4\n- 分支: cowork/r8-p1-4-nvml-lifetime\n- worktree: /mnt/g/Codex/mortred_wt_r8_p1_4\n- 实现偏差: 无\n## 自测\nQA=pass\n## 新增问题\n无",
+        "qa": "# QA\n- 问题: P1-4\n- 结论: pass\n- 方案版本: v1\n## 验收\n| 编号 | 标准 | 结果 | 命令/观察 |\n| --- | --- | --- | --- |\n| A1 | 方案目标可观察 | pass | issue pipeline QA cmds |\n## 残余风险\n无",
+        "merge": "# 合入\n- 问题: P1-4\n- 分支: cowork/r8-p1-4-nvml-lifetime\n- worktree: /mnt/g/Codex/mortred_wt_r8_p1_4\n- 问题分支提交: 5f23d3567009a3e1c9a0be22cb9732892671f545\n- QA 结论: pass\n- 重跑: see pipeline\n- 命令: pipeline\n- merge commit: 4f009cbf2c395d76b586550cb3ed32348c8ab1e4"
       },
-      "step_text": "待开始 · Step 3 方案"
+      "step_text": "已合入 · merge 4f009cbf2c395d76b586550cb3ed32348c8ab1e4"
     },
     {
       "id": "P1-5",
