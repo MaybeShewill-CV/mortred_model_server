@@ -54,6 +54,8 @@
 
 - A1 `./_bin/server_runtime_config_unittest` 退出 0，含 `=0` 与 `=-1` → 300000、缺键 → 500 三态用例。
 - A2 `./_bin/server_e2e_contract_test` 退出 0，含新用例：`model_run_timeout=0` + `fake_delay_ms=1000` → 504，且服务**正常启动**（不是拒绝启动）。
+
+  编排方已核实的锚点（本轮基线）：`fake_delay_ms` 是既有 server 配置旋钮（`server_e2e_contract_test.cc:123` 读取），同文件已有 `TEST(server_e2e_contract, model_timeout_returns_504)`（`:765-786`）用 `model_run_timeout=100` + `fake_delay_ms=1000` 断言 504 —— 即"超时为正值时走 504"已被锁定；本项的新用例应**照该用例结构**写，只把超时改成 `0`，这样它才是可判别的（改前 `0` 无 deadline、无定时器 → 200）。504 的映射本身由 `http_status.h:61`（`MODEL_RUN_TIMEOUT` → 504）与 `do_work_lifetime_unittest.cc:513,557` 覆盖，不在本项改动面内。
 - A3 `grep -rn 'model_run_timeout=0' conf/server | wc -l` = 0，且 `grep -rn 'model_run_timeout' conf/server | wc -l` 仍为 5 份配置均显式有界。
 
   编排方已核实的精确落点（本轮基线 `4ebbcb7d`）：5 份配置全部在第 17 行写 `model_run_timeout=0` —— `conf/server/diffusion/{cls_cond_ddim,ddim,ddpm,ldm}/*_server_config.toml` 与 `conf/server/segment_anything/sam_amg/sam_amg_server_config.toml`。文档两侧都存在：`docs/about_model_server_configuration.md`（2954 B）与 `.zh-cn.md`（3087 B）；其中**中文版第 22 行**明文写"`-1代表该值无限大`"——这句在当前实现下就是错的（`<=0` 实为关闭超时），本项必须改掉；英文版第 22 行未作无限大声明，但应补上"`<=0` 会被夹到 300000ms 并告警"。
