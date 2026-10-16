@@ -81,8 +81,8 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
         LOG(ERROR) << "yolov8 " << geometry_error;
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
+    unmap_letterbox_detections(candidates, letterbox, context.source_size);
     DetectionOutput nms_result = finalize_detections(std::move(candidates), _m_detection_params, context);
-    unmap_letterbox_detections(nms_result, letterbox, context.source_size);
     output = std::move(nms_result);
     return StatusCode::OK;
 }
