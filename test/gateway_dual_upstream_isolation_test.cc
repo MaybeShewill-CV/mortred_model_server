@@ -19,7 +19,7 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include "control/endpoint_ready.h"
+#include "control/ready_probe.h"
 
 #ifndef MORTRED_FAKE_BIN_DEFAULT
 #define MORTRED_FAKE_BIN_DEFAULT ""
