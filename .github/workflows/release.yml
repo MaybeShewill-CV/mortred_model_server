@@ -28,6 +28,14 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
+      - name: Version + GPU/gate evidence (fail-closed schema)
+        run: |
+          set -euo pipefail
+          python3 scripts/check_version_single_source.py
+          python3 scripts/verify_gpu_gate_evidence.py \
+            --manifest docs/ci/gpu_gate_evidence.example.json \
+            --allow-missing-artifacts
+
 
       - name: Install build tools
         run: |
