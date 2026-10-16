@@ -16,7 +16,7 @@ namespace control {
 namespace ratelimit {
 
 /*** Shared 429 RateLimit header contract for every product-path layer.
- * Layers: gateway-gcra | api-key-gcra | api-key-max-inflight | api-key-max-queue | api-key-worker-budget | api-key-max-queue
+ * Layers: gateway-gcra | api-key-gcra | api-key-max-inflight | api-key-max-queue | api-key-worker-budget
  * (model FixedWindow product path retired; tests-only FixedWindowRateLimiter remains). */
 template <typename Resp>
 inline void apply_rate_limit_headers(Resp* resp,
