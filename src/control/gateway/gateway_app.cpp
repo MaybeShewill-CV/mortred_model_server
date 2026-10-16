@@ -359,10 +359,13 @@ void GatewayApp::forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
     auto* client = WFTaskFactory::create_http_task(
         url, 0, 0,
         [this, task, model_id, method, t0, rewrite_job_urls, stage_trace, timing, inflight_key](WFHttpTask* t) {
-            struct InflightGuard {
+            struct TenantQuotaGuard {
                 std::shared_ptr<const ApiKey> key;
-                ~InflightGuard() { ApiKeyManager::release_inflight(key.get()); }
-            } inflight_guard{inflight_key};
+                ~TenantQuotaGuard() {
+                    ApiKeyManager::release_inflight(key.get());
+                    ApiKeyManager::release_queue(key.get());
+                }
+            } tenant_quota_guard{inflight_key};
             auto* resp = task->get_resp();
             if (t->get_state() != WFT_STATE_SUCCESS) {
                 const int code = t->get_error() == ECONNREFUSED ? 503 : 502;
@@ -795,6 +798,18 @@ void GatewayApp::process(WFHttpTask* task) {
                                 "api key max_queue exceeded");
             return;
         }
+        // Hard worker_budget: reject before inflight when already at budget.
+        if (api_key_held->worker_budget > 0 &&
+            api_key_held->inflight.load(std::memory_order_relaxed) >= api_key_held->worker_budget) {
+            ApiKeyManager::release_queue(api_key_held.get());
+            metrics_.inc_http_requests(method, "429");
+            auto* resp = task->get_resp();
+            mortred::control::ratelimit::apply_rate_limit_headers(
+                resp, 1000, api_key_held->worker_budget, "api-key-worker-budget", 0);
+            reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED,
+                                "api key worker_budget exceeded");
+            return;
+        }
         if (!ApiKeyManager::try_acquire_inflight(api_key_held.get())) {
             ApiKeyManager::release_queue(api_key_held.get());
             metrics_.inc_http_requests(method, "429");
@@ -805,11 +820,8 @@ void GatewayApp::process(WFHttpTask* task) {
                                 "api key max_inflight exceeded");
             return;
         }
-        ApiKeyManager::release_queue(api_key_held.get());
-        if (api_key_held->worker_budget > 0 &&
-            api_key_held->inflight.load(std::memory_order_relaxed) > api_key_held->worker_budget) {
-            metrics_.inc_http_requests(method, "tenant_worker_budget_soft");
-        }
+        // max_queue residency: hold queue slot until upstream callback (QueueGuard).
+        // Do NOT release_queue here.
     }
     forward_to_model(task, route, method, query, stage_trace, clocks, api_key_held);
 }
