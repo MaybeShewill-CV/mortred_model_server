@@ -29,6 +29,14 @@ namespace server {
 using jinq::common::StatusCode;
 using jinq::common::k_default_request_size_limit_mb;
 
+// Applied when model_run_timeout <= 0. Every request must carry a deadline and
+// own a request timer: without them a hung model keeps its worker forever,
+// _m_waiting_jobs never falls (later requests then 429) and stop() can hang.
+// Deliberately NOT the 500ms default: several slow ids (SAM AMG, diffusion)
+// asked for a long budget by configuring 0, and clamping those to 500ms would
+// turn every slow request into a 504.
+inline constexpr int k_model_run_timeout_clamp_ms = 300000;
+
 struct ServerRuntimeConfig {
     int max_connections = 200;
     int peer_resp_timeout = 15 * 1000;
@@ -151,9 +159,9 @@ inline StatusCode parse_server_runtime_config(const toml::table& server_section,
     cfg.model_run_timeout = static_cast<int>(
         server_section["model_run_timeout"].value_or<int64_t>(defaults.model_run_timeout));
     if (cfg.model_run_timeout <= 0) {
-        LOG(WARNING) << "model_run_timeout <= 0: per-request timeout disabled; a hung model "
-                     << "keeps its worker forever, subsequent requests block indefinitely and "
-                     << "clients may never receive a response";
+        LOG(WARNING) << "model_run_timeout <= 0: clamping to " << k_model_run_timeout_clamp_ms
+                     << "ms; a request always gets a deadline and a timer";
+        cfg.model_run_timeout = k_model_run_timeout_clamp_ms;
     }
     cfg.stuck_worker_action = server_section["stuck_worker_action"].value_or<std::string>(
         std::string(defaults.stuck_worker_action));

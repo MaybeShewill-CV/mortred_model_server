@@ -19,7 +19,7 @@ Use mobilenetv2's model server configuration for example
 
 **handler_threads:** thread nums for network process function and callback function
 
-**model_run_timeout:** the time limit of a model's inference process. inference process will be interruptted if cost more time.
+**model_run_timeout:** the time limit of a model's inference process, in milliseconds. inference process will be interruptted if cost more time. It must be greater than 0: a value `<= 0` is clamped to 300000ms (5 minutes) with a warning at startup, so every request always gets a deadline and a request timer (an unbounded request would hold its worker forever).
 
 **server_uri:** HTTP path on the model process (legacy gateway match). Example: `/mortred_ai_server_v1/classification/mobilenetv2`. Through the gateway prefer `POST /v1/models/{id}/infer`.
 

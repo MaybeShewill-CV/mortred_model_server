@@ -12,6 +12,7 @@
 
 using jinq::common::StatusCode;
 using jinq::server::ServerRuntimeConfig;
+using jinq::server::k_model_run_timeout_clamp_ms;
 using jinq::server::parse_server_runtime_config;
 
 namespace {
@@ -168,6 +169,50 @@ receive_timeout = 0
 )");
     ASSERT_EQ(parse_server_runtime_config(section2, cfg2), StatusCode::OK);
     EXPECT_EQ(cfg2.receive_timeout, 60 * 1000);
+}
+
+TEST(server_runtime_config, model_run_timeout_non_positive_clamps_to_the_bounded_value) {
+    // Three states of the same key: an explicit 0 and an explicit -1 are both
+    // clamped to the named bound, because every request must own a deadline and
+    // a request timer; an absent key keeps the 500ms struct default.
+    // The bound is deliberately NOT that default: the ids that configured 0
+    // (SAM AMG, diffusion) asked for a long budget, and 500ms would turn them
+    // into 504 machines.
+    EXPECT_EQ(k_model_run_timeout_clamp_ms, 300000);
+
+    ServerRuntimeConfig zero;
+    auto zero_section = parse_section(R"(
+host = "127.0.0.1"
+server_uri = "/test"
+port = 8080
+worker_nums = 1
+model_run_timeout = 0
+)");
+    ASSERT_EQ(parse_server_runtime_config(zero_section, zero), StatusCode::OK);
+    EXPECT_EQ(zero.model_run_timeout, 300000);
+    // the applied timeout also seeds the run-time EWMA (pre-existing coupling)
+    EXPECT_EQ(zero.ewma_seed_ms, 300000);
+
+    ServerRuntimeConfig negative;
+    auto negative_section = parse_section(R"(
+host = "127.0.0.1"
+server_uri = "/test"
+port = 8080
+worker_nums = 1
+model_run_timeout = -1
+)");
+    ASSERT_EQ(parse_server_runtime_config(negative_section, negative), StatusCode::OK);
+    EXPECT_EQ(negative.model_run_timeout, 300000);
+
+    ServerRuntimeConfig absent;
+    auto absent_section = parse_section(R"(
+host = "127.0.0.1"
+server_uri = "/test"
+port = 8080
+worker_nums = 1
+)");
+    ASSERT_EQ(parse_server_runtime_config(absent_section, absent), StatusCode::OK);
+    EXPECT_EQ(absent.model_run_timeout, 500);
 }
 
 int main(int argc, char** argv) {

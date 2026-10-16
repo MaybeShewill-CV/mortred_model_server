@@ -19,7 +19,7 @@
 
 **handler_threads:** 处理网络任务、回调函数的线程个数
 
-**model_run_timeout:** 模型inference的超时设置，超时的任务会被中断，-1代表该值无限大。
+**model_run_timeout:** 模型inference的超时设置（毫秒），超时的任务会被中断。必须大于 0：配置 `<=0` 时会在启动时告警并被夹到 300000ms（5 分钟），保证每个请求都有 deadline 和请求定时器（无界请求会永久占住 worker）。
 
 **server_uri:** 模型进程上的 HTTP 路径（网关遗留匹配）。例：`/mortred_ai_server_v1/classification/mobilenetv2`。走网关时优先 `POST /v1/models/{id}/infer`。
 
