@@ -1,10 +1,10 @@
 # Round 14 full report (6 residuals)
 
 - **Board:** `cowork/ledger/round-014/progress.html` (+ `progress_data.json`)
-- **Final HEAD:** `ff78c4852a1815700132d3f37c04eacc461a3f04` (`ff78c485`) on `sub-agent-co-work`
+- **Final HEAD:** `abd3fade38ddf415248ee038b5d5826bdbab62f6` (`abd3fade`) on `sub-agent-co-work`
 - **Baseline:** `50850251`
 - **Status:** 6/6 done
-- **Generated:** 2026-10-16 22:36:44 CST
+- **Generated:** 2026-10-16 22:37:01 CST
 - **User:** Yao Luo (ran)
 
 ## Merge table (locked order)
