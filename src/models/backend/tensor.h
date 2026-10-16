@@ -12,6 +12,7 @@
 #include <limits>
 #include <cstring>
 #include <ostream>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -210,6 +211,16 @@ inline std::string shape_to_string(const std::vector<int64_t>& shape) {
     return out;
 }
 
+/***
+ * Host tensor. Shape/dtype contract violations below are surfaced
+ * as std::invalid_argument, and ONLY because the model layer already owns the
+ * fence for them: BaseAiModel::run / BackendCvModel::run_batch wrap inference in
+ * invoke_nothrow (models/base_model.h), documented there as "the one boundary
+ * that keeps StatusCode as the contract", which maps any std::exception to
+ * MODEL_RUN_SESSION_FAILED (HTTP 500). Throwing keeps one malformed request from
+ * aborting the process and killing every other in-flight request. Do not copy
+ * this pattern outside a fenced boundary: an uncaught throw still terminates.
+ */
 struct Tensor {
     DType dtype = DType::F32;
     std::vector<int64_t> shape;
@@ -236,9 +247,11 @@ struct Tensor {
         tensor.shape = shape;
         tensor.layout = host_output_layout(shape);
         size_t nbytes = 0;
-        CHECK(checked_shape_nbytes(shape, dtype, &nbytes))
-            << "tensor shape must be concrete, non-empty, and fit in size_t: "
-            << shape_to_string(shape);
+        // Contract violation, not a crash: see the exception note on Tensor.
+        if (!checked_shape_nbytes(shape, dtype, &nbytes)) {
+            throw std::invalid_argument("tensor shape must be concrete, non-empty, and fit in size_t: "
+                                        + shape_to_string(shape));
+        }
         tensor.buffer.assign(nbytes, 0);
         return tensor;
     }
@@ -304,16 +317,24 @@ struct Tensor {
         return !shape.empty() && !shape_is_dynamic(shape);
     }
 
-    /*** typed view of the owned buffer; dtype mismatch is a hard error */
+    /*** typed view of the owned buffer; dtype mismatch is a hard contract error */
     template<typename T>
     T* data() {
-        CHECK_EQ(dtype, dtype_of<T>()) << "tensor dtype is " << dtype_to_string(dtype);
+        // Contract violation, not a crash: see the exception note on Tensor.
+        if (dtype != dtype_of<T>()) {
+            throw std::invalid_argument(std::string("tensor dtype is ") + dtype_to_string(dtype)
+                                        + ", requested " + dtype_to_string(dtype_of<T>()));
+        }
         return reinterpret_cast<T*>(buffer.data());
     }
 
     template<typename T>
     const T* data() const {
-        CHECK_EQ(dtype, dtype_of<T>()) << "tensor dtype is " << dtype_to_string(dtype);
+        // Contract violation, not a crash: see the exception note on Tensor.
+        if (dtype != dtype_of<T>()) {
+            throw std::invalid_argument(std::string("tensor dtype is ") + dtype_to_string(dtype)
+                                        + ", requested " + dtype_to_string(dtype_of<T>()));
+        }
         return reinterpret_cast<const T*>(buffer.data());
     }
 };
