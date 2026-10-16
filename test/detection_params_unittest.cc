@@ -91,6 +91,34 @@ TEST(DetectionParams, RejectsDeprecatedInputNodeSize) {
     EXPECT_NE(error.find("model_input_image_size"), std::string::npos);
 }
 
+TEST(DetectionParams, RejectsClipBoxesKey) {
+    // The key is gone from the contract: any presence is rejected, whatever the value type.
+    for (const std::string line : {"clip_boxes = true", "clip_boxes = false", "clip_boxes = \"yes\""}) {
+        DetectionParams result;
+        std::string error;
+        const auto params = parse_toml(line);
+        EXPECT_FALSE(DetectionParams::parse(params, &result, &error)) << line;
+        EXPECT_NE(error.find("clip_boxes"), std::string::npos) << line;
+        EXPECT_NE(error.find("not supported"), std::string::npos) << line;
+    }
+}
+
+TEST(DetectionParams, ParsesMinBoxAreaPx) {
+    // Neighbour guard: min_box_area_px keeps parsing normally.
+    EXPECT_FLOAT_EQ(DetectionParams().min_box_area_px, 5.0f);
+
+    DetectionParams result;
+    std::string error;
+    auto params = parse_toml("min_box_area_px = 12.5");
+    ASSERT_TRUE(DetectionParams::parse(params, &result, &error)) << error;
+    EXPECT_FLOAT_EQ(result.min_box_area_px, 12.5f);
+
+    result.min_box_area_px = 3.5f;
+    params = parse_toml("min_box_area_px = 0");
+    ASSERT_TRUE(DetectionParams::parse(params, &result, &error)) << error;
+    EXPECT_FLOAT_EQ(result.min_box_area_px, 0.0f);
+}
+
 TEST(DetectionParams, ParsesAndValidatesInputSize) {
     cv::Size size;
     std::string error;
