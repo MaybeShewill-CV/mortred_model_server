@@ -16,6 +16,7 @@
 #include "glog/logging.h"
 
 #include "models/backend/f32_output.h"
+#include "models/backend/model_runtime.h"
 #include "models/backend/request_geometry.h"
 
 namespace jinq {
