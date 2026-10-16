@@ -786,20 +786,29 @@ void GatewayApp::process(WFHttpTask* task) {
     const std::string query =
         route.append_query ? uri_query(task->get_req()->get_request_uri()) : "";
     if (api_key_held) {
-        if (!ApiKeyManager::try_acquire_inflight(api_key_held.get())) {
+        if (!ApiKeyManager::try_acquire_queue(api_key_held.get())) {
             metrics_.inc_http_requests(method, "429");
             auto* resp = task->get_resp();
-            resp->add_header_pair("Retry-After", "1");
-            if (api_key_held->max_inflight > 0) {
-                resp->add_header_pair("RateLimit-Limit",
-                                      std::to_string(api_key_held->max_inflight).c_str());
-                resp->add_header_pair("RateLimit-Remaining", "0");
-                resp->add_header_pair("RateLimit-Reset", "1");
-            }
-            resp->add_header_pair("X-Mortred-RateLimit-Layer", "api-key-max-inflight");
+            mortred::control::ratelimit::apply_rate_limit_headers(
+                resp, 1000, api_key_held->max_queue, "api-key-max-queue", 0);
+            reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED,
+                                "api key max_queue exceeded");
+            return;
+        }
+        if (!ApiKeyManager::try_acquire_inflight(api_key_held.get())) {
+            ApiKeyManager::release_queue(api_key_held.get());
+            metrics_.inc_http_requests(method, "429");
+            auto* resp = task->get_resp();
+            mortred::control::ratelimit::apply_rate_limit_headers(
+                resp, 1000, api_key_held->max_inflight, "api-key-max-inflight", 0);
             reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED,
                                 "api key max_inflight exceeded");
             return;
+        }
+        ApiKeyManager::release_queue(api_key_held.get());
+        if (api_key_held->worker_budget > 0 &&
+            api_key_held->inflight.load(std::memory_order_relaxed) > api_key_held->worker_budget) {
+            metrics_.inc_http_requests(method, "tenant_worker_budget_soft");
         }
     }
     forward_to_model(task, route, method, query, stage_trace, clocks, api_key_held);
