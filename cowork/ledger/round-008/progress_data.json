@@ -1,13 +1,13 @@
 {
   "round": 7,
-  "generated_at": "2026-10-16 14:35:06 CST",
+  "generated_at": "2026-10-16 14:37:10 CST",
   "round_status": "running",
-  "current": "P1-1",
-  "done": 1,
+  "current": "P1-2",
+  "done": 2,
   "total": 6,
-  "percent": 17,
+  "percent": 33,
   "open_p0": 0,
-  "open_p1": 5,
+  "open_p1": 4,
   "issues": [
     {
       "id": "P0-1",
@@ -40,13 +40,13 @@
       "issue_id": "p1-1",
       "title": "worker_budget hard gate when max_inflight<=0",
       "priority": "P1",
-      "status": "todo",
-      "merge_sha": null,
-      "branch_sha": null,
-      "has_design": false,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
+      "status": "done",
+      "merge_sha": "5d93af2d46d607fec44c3debf2ec1fbf9848ebe3",
+      "branch_sha": "08dee2e1090d0aba4b61b71ac152024d5677f218",
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
       "paths": {
         "design": "cowork/ledger/round-008/issues/p1-1/03-design-final.md",
         "rd": "cowork/ledger/round-008/issues/p1-1/04-rd.md",
@@ -54,12 +54,12 @@
         "merge": "cowork/ledger/round-008/issues/p1-1/05-merge.md"
       },
       "snippets": {
-        "design": "",
-        "rd": "",
-        "qa": "",
-        "merge": ""
+        "design": "# 技术方案\n- 问题: P1-1\n- 版本: v1\n## 目标\nworker_budget 硬门在 max_inflight<=0 时仍有效（始终 track inflight）。\n## 边界\n- 不改 packing/Docker。\n- max_inflight 语义不变。\n## 实现要点\n1. try_acquire_inflight / release_inflight 在 worker_budget>0 时始终增减 inflight。\n2. gateway 现有 worker_budget 429 + layer 分支保持。\n3. 单测 + smoke 覆盖 max_inflight=0, worker_budget=2。",
+        "rd": "# 实现\n- 问题: P1-1\n- 分支: cowork/r8-p1-1-worker-budget\n- worktree: /mnt/g/Codex/mortred_wt_r8_p1_1\n- 实现偏差: 无\n## 变更\n- src/control/api_key_manager.h\n- test/api_key_inflight_unittest.cc\n## 自测\n- /tmp/p11_smoke → p11_smoke_ok\n## 新增问题\n无",
+        "qa": "# QA\n- 问题: P1-1\n- 结论: pass\n- 方案版本: v1\n## 验收\n| 编号 | 标准 | 结果 | 命令/观察 |\n| --- | --- | --- | --- |\n| A1 | max_inflight=0 时 inflight 仍增减 | pass | g++ smoke + p11_smoke_ok |\n| A2 | worker_budget=0 且 max_inflight=0 不 track | pass | smoke z.inflight==0 |\n## 残余风险\n无",
+        "merge": "# 合入\n- 问题: P1-1\n- 分支: cowork/r8-p1-1-worker-budget\n- worktree: /mnt/g/Codex/mortred_wt_r8_p1_1\n- 问题分支提交: 08dee2e1090d0aba4b61b71ac152024d5677f218\n- QA 结论: pass\n- 重跑: exit 0\n- 命令: g++ -std=c++17 -I src /tmp/p11_smoke.cc -o /tmp/p11_smoke && /tmp/p11_smoke\n- merge commit: 5d93af2d46d607fec44c3debf2ec1fbf9848ebe3"
       },
-      "step_text": "待开始 · Step 3 方案"
+      "step_text": "已合入 · merge 5d93af2d46d607fec44c3debf2ec1fbf9848ebe3"
     },
     {
       "id": "P1-2",
