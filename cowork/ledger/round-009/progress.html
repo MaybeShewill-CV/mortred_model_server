@@ -43,7 +43,7 @@
   .kpi .v { font-size:26px; font-weight:700; margin-top:4px; }
   .kpi .t { color:var(--muted); font-size:12px; }
   .bar { height:12px; background:#0a1220; border-radius:999px; overflow:hidden; border:1px solid var(--line); margin-top:14px; }
-  .bar > i { display:block; height:100%; width:50%; background:linear-gradient(90deg,#3dd68c,#5b8cff); }
+  .bar > i { display:block; height:100%; width:75%; background:linear-gradient(90deg,#3dd68c,#5b8cff); }
   .bar-meta { display:flex; justify-content:space-between; color:var(--muted); font-size:12px; margin-top:8px; }
   h2 { font-size:15px; letter-spacing:.4px; text-transform:uppercase; color:var(--muted); margin:22px 0 10px; }
   .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
@@ -85,20 +85,20 @@
         <h1>Mortred · Round 9</h1>
         <div class="sub">cv-cowork · 基线 <code>sub-agent-co-work</code> · 外部审计汇总（门禁 / 可用性 / 正确性） · meta refresh 60s</div>
       </div>
-      <div class="pill"><span class="dot run run"></span><span>状态 running · 当前 P0-3</span></div>
+      <div class="pill"><span class="dot run run"></span><span>状态 running · 当前 P0-4</span></div>
     </header>
     <div class="done-banner">全部 issue 已合入并关闭。监视器应已退出；本页不再自动刷新。</div>
     <div id="board">
       <div class="hero">
         <section class="panel">
           <div class="kpis">
-            <div class="kpi"><div class="t">完成</div><div class="v">2/4</div></div>
-            <div class="kpi"><div class="t">进度</div><div class="v">50%</div></div>
+            <div class="kpi"><div class="t">完成</div><div class="v">3/4</div></div>
+            <div class="kpi"><div class="t">进度</div><div class="v">75%</div></div>
             <div class="kpi"><div class="t">P0 未关</div><div class="v">0</div></div>
             <div class="kpi"><div class="t">P1 未关</div><div class="v">0</div></div>
           </div>
           <div class="bar"><i></i></div>
-          <div class="bar-meta"><span>已合入 P0-1, P0-2</span><span>生成 2026-10-16 15:23:24 CST</span></div>
+          <div class="bar-meta"><span>已合入 P0-1, P0-2, P0-3</span><span>生成 2026-10-16 15:25:10 CST</span></div>
         </section>
         <section class="panel">
           <div style="color:var(--muted);font-size:12px;margin-bottom:8px;">数据源</div>
@@ -128,13 +128,13 @@
       <div class="sha">aab361e2</div>
       <div class="hint">点击查看详情 →</div>
     </article>
-    <article class="card p1 run" role="button" tabindex="0"
+    <article class="card p1 done" role="button" tabindex="0"
       data-id="p0-3" onclick="location.hash='#issue/p0-3'"
       onkeydown="if(event.key==='Enter')location.hash='#issue/p0-3'">
-      <div class="top"><span class="badge">P0-3</span><span class="state">方案已锁</span></div>
+      <div class="top"><span class="badge">P0-3</span><span class="state">已合入</span></div>
       <div class="title">Whole-message receive_timeout; drip connections cannot fill ingress</div>
-      <div class="step">方案已锁 · 待实现</div>
-      <div class="sha">—</div>
+      <div class="step">已合入 · merge d99de1c3</div>
+      <div class="sha">d99de1c3</div>
       <div class="hint">点击查看详情 →</div>
     </article>
     <article class="card p1 run" role="button" tabindex="0"
@@ -215,13 +215,13 @@
       <div class="detail-head">
         <button type="button" class="back" onclick="location.hash=''">← 返回</button>
         <h3>P0-3 · Whole-message receive_timeout; drip connections cannot fill ingress</h3>
-        <span class="state">方案已锁</span>
+        <span class="state">已合入</span>
       </div>
       <div class="meta-grid">
-        <div><div class="t">当前步骤</div><div class="v">方案已锁 · 待实现</div></div>
-        <div><div class="t">产物状态</div><div class="v">design=Y rd=. qa=. merge=.</div></div>
-        <div><div class="t">merge SHA</div><div class="v mono">—</div></div>
-        <div><div class="t">branch SHA</div><div class="v mono">—</div></div>
+        <div><div class="t">当前步骤</div><div class="v">已合入 · merge d99de1c3</div></div>
+        <div><div class="t">产物状态</div><div class="v">design=Y rd=Y qa=Y merge=Y</div></div>
+        <div><div class="t">merge SHA</div><div class="v mono">d99de1c3</div></div>
+        <div><div class="t">branch SHA</div><div class="v mono">c2f2876d</div></div>
       </div>
       <h4>产物路径</h4>
       <ul class="paths">
@@ -232,18 +232,15 @@
         <li><code>cowork/ledger/round-009/issues/p0-3/05-merge.md</code></li>
       </ul>
       <h4>Ledger 摘录</h4>
-      <pre class="snip">﻿# 技术方案
+      <pre class="snip">﻿# 合入
 - 问题: P0-3
-- 版本: v1
-## 目标
-整报文 `receive_timeout` 可配置且默认有界（非 -1）；滴流连接在 T 内被关闭。
-## 边界
-- 不改 packing/Docker。
-- peer_response_timeout 语义不变（单次读写）。
-## 实现要点
-1. `ServerRuntimeConfig::receive_timeout`（ms），默认 60000；TOML `receive_timeout`（秒，与 peer_resp_timeout 风格一致）。
-2. `init_http_server` 写入 `server_params.receive_timeout`。
-3. schema optional int；单测默认与解析。</pre>
+- 分支: cowork/r9-p0-3-receive-timeout
+- worktree: /mnt/g/Codex/mortred_wt/r9-p0-3-receive-timeout
+- 问题分支提交: c2f2876d
+- QA 结论: pass
+- 重跑: /tmp/server_runtime_config_r9 --gtest_filter=*receive_timeout* → 0
+- 命令: git merge --no-ff cowork/r9-p0-3-receive-timeout
+- merge commit: d99de1c3</pre>
     </section>
     <section class="detail" id="panel-p0-4" hidden>
       <div class="detail-head">

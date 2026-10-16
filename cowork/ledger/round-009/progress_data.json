@@ -1,12 +1,12 @@
 {
   "round": 7,
-  "generated_at": "2026-10-16 15:23:24 CST",
+  "generated_at": "2026-10-16 15:25:10 CST",
   "round_status": "running",
-  "current": "P0-3",
-  "done": 2,
+  "current": "P0-4",
+  "done": 3,
   "total": 4,
-  "percent": 50,
-  "open_p0": 2,
+  "percent": 75,
+  "open_p0": 1,
   "open_p1": 0,
   "issues": [
     {
@@ -66,13 +66,13 @@
       "issue_id": "p0-3",
       "title": "Whole-message receive_timeout; drip connections cannot fill ingress",
       "priority": "P0",
-      "status": "designed",
-      "merge_sha": null,
-      "branch_sha": null,
+      "status": "done",
+      "merge_sha": "d99de1c3",
+      "branch_sha": "c2f2876d",
       "has_design": true,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
       "paths": {
         "design": "cowork/ledger/round-009/issues/p0-3/03-design-final.md",
         "rd": "cowork/ledger/round-009/issues/p0-3/04-rd.md",
@@ -81,11 +81,11 @@
       },
       "snippets": {
         "design": "﻿# 技术方案\n- 问题: P0-3\n- 版本: v1\n## 目标\n整报文 `receive_timeout` 可配置且默认有界（非 -1）；滴流连接在 T 内被关闭。\n## 边界\n- 不改 packing/Docker。\n- peer_response_timeout 语义不变（单次读写）。\n## 实现要点\n1. `ServerRuntimeConfig::receive_timeout`（ms），默认 60000；TOML `receive_timeout`（秒，与 peer_resp_timeout 风格一致）。\n2. `init_http_server` 写入 `server_params.receive_timeout`。\n3. schema optional int；单测默认与解析。",
-        "rd": "",
-        "qa": "",
-        "merge": ""
+        "rd": "﻿# RD 实现\n- 问题: P0-3\n- 分支: cowork/r9-p0-3-receive-timeout\n- 提交: c2f2876d\n- 实现偏差: 无\n## 变更\n- ServerRuntimeConfig.receive_timeout 默认 60000ms；TOML 秒；<=0 钳到默认\n- schema + abstract_server 写入 WFServerParams.receive_timeout\n## 自测\n- receive_timeout_seconds_to_ms_and_reject_unbounded PASS\n## 新增问题\n无",
+        "qa": "﻿# QA\n- 问题: P0-3\n- 结论: pass\n- 方案版本: v1\n## 验收\n| 编号 | 标准 | 结果 | 命令/观察 |\n| --- | --- | --- | --- |\n| A1 | 默认 receive_timeout=60s 非 -1 | pass | defaults + abstract_server 赋值 |\n| A2 | TOML 秒→ms；0 钳制 | pass | gtest *receive_timeout* |\n| A3 | schema 接受 receive_timeout | pass | server_optional_int_keys |\n## 残余风险\n200 路滴流 e2e 未实跑；依赖 workflow receive_timeout 语义。",
+        "merge": "﻿# 合入\n- 问题: P0-3\n- 分支: cowork/r9-p0-3-receive-timeout\n- worktree: /mnt/g/Codex/mortred_wt/r9-p0-3-receive-timeout\n- 问题分支提交: c2f2876d\n- QA 结论: pass\n- 重跑: /tmp/server_runtime_config_r9 --gtest_filter=*receive_timeout* → 0\n- 命令: git merge --no-ff cowork/r9-p0-3-receive-timeout\n- merge commit: d99de1c3"
       },
-      "step_text": "方案已锁 · 待实现"
+      "step_text": "已合入 · merge d99de1c3"
     },
     {
       "id": "P0-4",
