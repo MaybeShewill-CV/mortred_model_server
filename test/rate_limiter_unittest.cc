@@ -46,7 +46,14 @@ TEST(rate_limiter, window_resets_after_elapse) {
     EXPECT_TRUE(limiter.allow("a"));
 }
 
+TEST(FixedWindowRateLimiter, retry_after_ms_for_window_in_bounds) {
+    const int32_t ms = jinq::server::FixedWindowRateLimiter::retry_after_ms_for_window(1000);
+    EXPECT_GE(ms, 1);
+    EXPECT_LE(ms, 1000);
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
+

@@ -13,8 +13,10 @@
 //   Burst equals the configured QPS; unused budget does not carry across windows.
 // - Gateway L1 uses GCRA (src/control/rate_limit/gcra.h): smooth rate with burst
 //   via TAT; MORTRED_RATE_LIMIT / [gateway.rate_limit] control it.
-// These are intentionally different layers (edge vs model process). Do not assume
-// identical reject timing; configure each for its role.
+// - API-key limiter (ApiKeyManager) is also FixedWindow per key.
+// Layers stay dual by design. Operator-visible consistency is the shared 429
+// header contract: Retry-After, RateLimit-Limit/Remaining/Reset, and
+// X-Mortred-RateLimit-Layer = gateway-gcra | model-fixed-window | api-key-fixed-window.
 
 
 #include <chrono>
@@ -43,6 +45,37 @@ public:
         std::lock_guard<std::mutex> lock(_m_mutex);
         _m_max_qps = max_qps;
         _m_windows.clear();
+    }
+
+    int max_qps() const {
+        std::lock_guard<std::mutex> lock(_m_mutex);
+        return _m_max_qps;
+    }
+
+    int64_t window_ms() const {
+        std::lock_guard<std::mutex> lock(_m_mutex);
+        return _m_window_ms;
+    }
+
+    /***
+     * Milliseconds left in the current fixed window (at least 1 when limited).
+     * Used for Retry-After / RateLimit-Reset on 429 responses.
+     */
+    static int32_t retry_after_ms_for_window(int64_t window_ms = 1000) {
+        if (window_ms <= 0) {
+            return 1000;
+        }
+        const int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                   std::chrono::steady_clock::now().time_since_epoch())
+                                   .count();
+        int64_t remaining = window_ms - (now_ms % window_ms);
+        if (remaining < 1) {
+            remaining = 1;
+        }
+        if (remaining > window_ms) {
+            remaining = window_ms;
+        }
+        return static_cast<int32_t>(remaining);
     }
 
     /***
@@ -98,7 +131,7 @@ private:
 
     static constexpr size_t k_max_entries = 4096;
 
-    std::mutex _m_mutex;
+    mutable std::mutex _m_mutex;
     std::unordered_map<std::string, WindowState> _m_windows;
     int _m_max_qps = 0;
     int64_t _m_window_ms = 1000;

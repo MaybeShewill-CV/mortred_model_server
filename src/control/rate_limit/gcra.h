@@ -48,8 +48,11 @@
 
 // Operator note (P1-1): gateway GCRA here is L1 per-IP. Model servers use a
 // FixedWindowRateLimiter (src/server/rate_limiter.h) per peer for process-local
-// QPS. Reject timing differs by design; tune [gateway.rate_limit] and each
-// server toml rate_limit_qps independently.
+// QPS; API keys use FixedWindow in ApiKeyManager. Reject timing differs by
+// design; tune [gateway.rate_limit], server rate_limit_qps, and key QPS
+// independently. 429 responses share RateLimit-* / Retry-After and set
+// X-Mortred-RateLimit-Layer to gateway-gcra | model-fixed-window |
+// api-key-fixed-window so operators can tell which layer rejected.
 
 
 #include <algorithm>

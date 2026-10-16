@@ -342,7 +342,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
     if (!is_health_endpoint && _m_rate_limit_qps > 0 &&
         !_m_rate_limiter.allow(peer_ip_of(task))) {
         _m_metrics.inc_http_requests(request_method, "429");
-        reply_rate_limited(task, _m_model_name);
+        reply_rate_limited(task, _m_model_name, _m_rate_limit_qps, "model-fixed-window");
         return;
     }
 

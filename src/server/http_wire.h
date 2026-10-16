@@ -34,6 +34,7 @@
 #include "common/response_envelope.h"
 #include "common/status_code.h"
 #include "server/http_status.h"
+#include "server/rate_limiter.h"
 #include "server/request_admission.h"
 
 namespace jinq {
@@ -147,7 +148,27 @@ inline void reply_unauthorized(WFHttpTask* task, const std::string& model_name) 
     reply_unified_json(task, status_envelope("", StatusCode::UNAUTHORIZED, {}, model_name));
 }
 
-inline void reply_rate_limited(WFHttpTask* task, const std::string& model_name) {
+inline void reply_rate_limited(WFHttpTask* task, const std::string& model_name,
+                               int limit_qps = 0,
+                               const char* layer = "model-fixed-window",
+                               int32_t retry_after_ms = -1) {
+    auto* resp = task->get_resp();
+    if (retry_after_ms < 0) {
+        retry_after_ms = FixedWindowRateLimiter::retry_after_ms_for_window(1000);
+    }
+    int retry_s = (retry_after_ms + 999) / 1000;
+    if (retry_s < 1) {
+        retry_s = 1;
+    }
+    resp->add_header_pair("Retry-After", std::to_string(retry_s).c_str());
+    if (limit_qps > 0) {
+        resp->add_header_pair("RateLimit-Limit", std::to_string(limit_qps).c_str());
+        resp->add_header_pair("RateLimit-Remaining", "0");
+        resp->add_header_pair("RateLimit-Reset", std::to_string(retry_s).c_str());
+    }
+    if (layer != nullptr && *layer != '\0') {
+        resp->add_header_pair("X-Mortred-RateLimit-Layer", layer);
+    }
     reply_unified_json(task, status_envelope("", StatusCode::RATE_LIMITED, {}, model_name));
 }
 
