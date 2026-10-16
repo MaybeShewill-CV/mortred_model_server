@@ -43,7 +43,7 @@
   .kpi .v { font-size:26px; font-weight:700; margin-top:4px; }
   .kpi .t { color:var(--muted); font-size:12px; }
   .bar { height:12px; background:#0a1220; border-radius:999px; overflow:hidden; border:1px solid var(--line); margin-top:14px; }
-  .bar > i { display:block; height:100%; width:0%; background:linear-gradient(90deg,#3dd68c,#5b8cff); }
+  .bar > i { display:block; height:100%; width:17%; background:linear-gradient(90deg,#3dd68c,#5b8cff); }
   .bar-meta { display:flex; justify-content:space-between; color:var(--muted); font-size:12px; margin-top:8px; }
   h2 { font-size:15px; letter-spacing:.4px; text-transform:uppercase; color:var(--muted); margin:22px 0 10px; }
   .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
@@ -85,20 +85,20 @@
         <h1>Mortred · Round 8</h1>
         <div class="sub">cv-cowork · 基线 <code>sub-agent-co-work</code> · 外部审计汇总（门禁 / 可用性 / 正确性） · meta refresh 60s</div>
       </div>
-      <div class="pill"><span class="dot run run"></span><span>状态 running · 当前 P0-1</span></div>
+      <div class="pill"><span class="dot run run"></span><span>状态 running · 当前 P1-1</span></div>
     </header>
     <div class="done-banner">全部 issue 已合入并关闭。监视器应已退出；本页不再自动刷新。</div>
     <div id="board">
       <div class="hero">
         <section class="panel">
           <div class="kpis">
-            <div class="kpi"><div class="t">完成</div><div class="v">0/6</div></div>
-            <div class="kpi"><div class="t">进度</div><div class="v">0%</div></div>
+            <div class="kpi"><div class="t">完成</div><div class="v">1/6</div></div>
+            <div class="kpi"><div class="t">进度</div><div class="v">17%</div></div>
             <div class="kpi"><div class="t">P0 未关</div><div class="v">0</div></div>
             <div class="kpi"><div class="t">P1 未关</div><div class="v">5</div></div>
           </div>
           <div class="bar"><i></i></div>
-          <div class="bar-meta"><span>已合入 无</span><span>生成 2026-10-16 14:33:39 CST</span></div>
+          <div class="bar-meta"><span>已合入 P0-1</span><span>生成 2026-10-16 14:35:06 CST</span></div>
         </section>
         <section class="panel">
           <div style="color:var(--muted);font-size:12px;margin-bottom:8px;">数据源</div>
@@ -110,13 +110,13 @@
       </div>
       <h2>Issues（点击卡片打开详情）</h2>
       <div class="grid">
-    <article class="card p1" role="button" tabindex="0"
+    <article class="card p1 done" role="button" tabindex="0"
       data-id="p0-1" onclick="location.hash='#issue/p0-1'"
       onkeydown="if(event.key==='Enter')location.hash='#issue/p0-1'">
-      <div class="top"><span class="badge">P0-1</span><span class="state">待开始</span></div>
+      <div class="top"><span class="badge">P0-1</span><span class="state">已合入</span></div>
       <div class="title">Align check_consistency with thin openapi_doc.h loader</div>
-      <div class="step">待开始 · Step 3 方案</div>
-      <div class="sha">—</div>
+      <div class="step">已合入 · merge 8e0d99c334141ec3241c8005513c158e7f1acff6</div>
+      <div class="sha">8e0d99c334141ec3241c8005513c158e7f1acff6</div>
       <div class="hint">点击查看详情 →</div>
     </article>
     <article class="card p1" role="button" tabindex="0"
@@ -171,13 +171,13 @@
       <div class="detail-head">
         <button type="button" class="back" onclick="location.hash=''">← 返回</button>
         <h3>P0-1 · Align check_consistency with thin openapi_doc.h loader</h3>
-        <span class="state">待开始</span>
+        <span class="state">已合入</span>
       </div>
       <div class="meta-grid">
-        <div><div class="t">当前步骤</div><div class="v">待开始 · Step 3 方案</div></div>
-        <div><div class="t">产物状态</div><div class="v">design=. rd=. qa=. merge=.</div></div>
-        <div><div class="t">merge SHA</div><div class="v mono">—</div></div>
-        <div><div class="t">branch SHA</div><div class="v mono">—</div></div>
+        <div><div class="t">当前步骤</div><div class="v">已合入 · merge 8e0d99c334141ec3241c8005513c158e7f1acff6</div></div>
+        <div><div class="t">产物状态</div><div class="v">design=Y rd=Y qa=Y merge=Y</div></div>
+        <div><div class="t">merge SHA</div><div class="v mono">8e0d99c334141ec3241c8005513c158e7f1acff6</div></div>
+        <div><div class="t">branch SHA</div><div class="v mono">68dc1773f5e86f03273e15deed0c515c388032c8</div></div>
       </div>
       <h4>产物路径</h4>
       <ul class="paths">
@@ -188,7 +188,15 @@
         <li><code>cowork/ledger/round-008/issues/p0-1/05-merge.md</code></li>
       </ul>
       <h4>Ledger 摘录</h4>
-      <pre class="snip">（尚无产物）</pre>
+      <pre class="snip"># 合入
+- 问题: P0-1
+- 分支: cowork/r8-p0-1-openapi-loader
+- worktree: /mnt/g/Codex/mortred_wt_r8_p0_1
+- 问题分支提交: 68dc1773f5e86f03273e15deed0c515c388032c8
+- QA 结论: pass
+- 重跑: exit 0
+- 命令: python3 scripts/check_consistency.py; python3 scripts/gen_openapi.py --check
+- merge commit: 8e0d99c334141ec3241c8005513c158e7f1acff6</pre>
     </section>
     <section class="detail" id="panel-p1-1" hidden>
       <div class="detail-head">

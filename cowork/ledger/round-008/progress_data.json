@@ -1,12 +1,12 @@
 {
   "round": 7,
-  "generated_at": "2026-10-16 14:33:39 CST",
+  "generated_at": "2026-10-16 14:35:06 CST",
   "round_status": "running",
-  "current": "P0-1",
-  "done": 0,
+  "current": "P1-1",
+  "done": 1,
   "total": 6,
-  "percent": 0,
-  "open_p0": 1,
+  "percent": 17,
+  "open_p0": 0,
   "open_p1": 5,
   "issues": [
     {
@@ -14,13 +14,13 @@
       "issue_id": "p0-1",
       "title": "Align check_consistency with thin openapi_doc.h loader",
       "priority": "P0",
-      "status": "todo",
-      "merge_sha": null,
-      "branch_sha": null,
-      "has_design": false,
-      "has_rd": false,
-      "has_qa": false,
-      "has_merge": false,
+      "status": "done",
+      "merge_sha": "8e0d99c334141ec3241c8005513c158e7f1acff6",
+      "branch_sha": "68dc1773f5e86f03273e15deed0c515c388032c8",
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
+      "has_merge": true,
       "paths": {
         "design": "cowork/ledger/round-008/issues/p0-1/03-design-final.md",
         "rd": "cowork/ledger/round-008/issues/p0-1/04-rd.md",
@@ -28,12 +28,12 @@
         "merge": "cowork/ledger/round-008/issues/p0-1/05-merge.md"
       },
       "snippets": {
-        "design": "",
-        "rd": "",
-        "qa": "",
-        "merge": ""
+        "design": "# 技术方案\n- 问题: P0-1\n- 版本: v1\n## 目标\ncheck_consistency 与薄 openapi_doc.h loader 对齐：去掉 embed 同步；断言 loader 形状；对齐 gen_openapi --check；可选 anti-embed 守卫。\n## 边界\n- 不改 packing/Docker。\n- 不把 docs/openapi.json 再写回 header。\n- 不改 /openapi.json 运行时加载语义。\n## 实现要点\n1. 重写 `check_openapi_doc_header_sync`：要求 `load_openapi_json` + `k_openapi_doc_json_ref`；拒绝 `R\"MORTRED_OPENAPI(` 嵌入。\n2. 新增 `check_openapi_gen_check`：subprocess 跑 `python3 scripts/gen_openapi.py --check`。",
+        "rd": "# 实现\n- 问题: P0-1\n- 分支: cowork/r8-p0-1-openapi-loader\n- worktree: /mnt/g/Codex/mortred_wt_r8_p0_1\n- 实现偏差: 无\n## 变更\n- scripts/check_consistency.py: loader 形状 + anti-embed + gen_openapi --check\n- scripts/gen_openapi.py: 只写 docs/openapi.json\n## 自测\n- python3 scripts/check_consistency.py → 0\n- python3 scripts/gen_openapi.py --check → 0\n## 新增问题",
+        "qa": "# QA\n- 问题: P0-1\n- 结论: pass\n- 方案版本: v1\n## 验收\n| 编号 | 标准 | 结果 | 命令/观察 |\n| --- | --- | --- | --- |\n| A1 | check_consistency 退出 0 | pass | python3 scripts/check_consistency.py |\n| A2 | gen_openapi --check 退出 0 | pass | python3 scripts/gen_openapi.py --check |\n| A3 | header 仍为 loader | pass | grep load_openapi_json src/server/openapi_doc.h |\n## 残余风险\n无",
+        "merge": "# 合入\n- 问题: P0-1\n- 分支: cowork/r8-p0-1-openapi-loader\n- worktree: /mnt/g/Codex/mortred_wt_r8_p0_1\n- 问题分支提交: 68dc1773f5e86f03273e15deed0c515c388032c8\n- QA 结论: pass\n- 重跑: exit 0\n- 命令: python3 scripts/check_consistency.py; python3 scripts/gen_openapi.py --check\n- merge commit: 8e0d99c334141ec3241c8005513c158e7f1acff6"
       },
-      "step_text": "待开始 · Step 3 方案"
+      "step_text": "已合入 · merge 8e0d99c334141ec3241c8005513c158e7f1acff6"
     },
     {
       "id": "P1-1",
