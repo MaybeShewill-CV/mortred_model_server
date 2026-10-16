@@ -3,8 +3,8 @@
 #
 # Usage (from the repo root, AFTER a successful full build with
 # MORTRED_INSTALL=ON and the wanted profile):
-#   ./scripts/make_release_tarball.sh gpu 0.1.0 [build-dir]
-#   ./scripts/make_release_tarball.sh cpu 0.1.0 [build-dir]
+#   ./scripts/make_release_tarball.sh gpu 1.0.0 [build-dir]
+#   ./scripts/make_release_tarball.sh cpu 1.0.0 [build-dir]
 #
 # Produces (into dist/):
 #   mortred_model_server-<version>-<profile>-linux-x64.tar.gz
