@@ -82,6 +82,15 @@ TEST(GpuProbe, shared_probe_can_be_replaced_for_test) {
     mortred::control::set_shared_gpu_probe_for_test(mortred::control::default_gpu_probe());
 }
 
+TEST(GpuProbe, nvml_probe_survives_repeated_sample) {
+    NvmlGpuProbe nvml;
+    auto a = nvml.sample(0);
+    auto b = nvml.sample(0);
+    EXPECT_EQ(a.backend, "nvml");
+    EXPECT_EQ(b.backend, "nvml");
+    EXPECT_EQ(a.available, b.available);
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

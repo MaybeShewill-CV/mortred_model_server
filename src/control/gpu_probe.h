@@ -80,107 +80,148 @@ class SmiGpuProbe final : public GpuProbe {
 };
 
 /*** NVML probe via dlopen("libnvidia-ml.so.1"). No hard link required.
- * Init/device query failure → available=false (honest fail-closed) so
+ * Round 8 P1-4: process-lifetime dlopen handle. Init/device query failure → available=false (honest fail-closed) so
  * ChainGpuProbe can fall back to SmiGpuProbe. */
 class NvmlGpuProbe final : public GpuProbe {
   public:
+    NvmlGpuProbe() { ensure_loaded(); }
+    ~NvmlGpuProbe() override { shutdown(); }
+
     GpuProbeSample sample(int /*timeout_ms*/) override {
         GpuProbeSample out;
         out.backend = "nvml";
-        void* handle = ::dlopen("libnvidia-ml.so.1", RTLD_LAZY);
-        if (handle == nullptr) {
-            return out;
-        }
-        using nvmlReturn_t = int;
-        using nvmlDevice_t = void*;
-        struct nvmlMemory_t { unsigned long long total, free, used; };
-        struct nvmlUtilization_t { unsigned int gpu, memory; };
-        constexpr int NVML_SUCCESS = 0;
-        constexpr int NVML_TEMPERATURE_GPU = 0;
-
-        auto sym = [&](const char* name) { return ::dlsym(handle, name); };
-        auto* nvmlInit = reinterpret_cast<nvmlReturn_t (*)()>(sym("nvmlInit_v2"));
-        if (nvmlInit == nullptr) {
-            nvmlInit = reinterpret_cast<nvmlReturn_t (*)()>(sym("nvmlInit"));
-        }
-        auto* nvmlShutdown = reinterpret_cast<nvmlReturn_t (*)()>(sym("nvmlShutdown"));
-        auto* nvmlDeviceGetHandleByIndex = reinterpret_cast<nvmlReturn_t (*)(unsigned int, nvmlDevice_t*)>(
-            sym("nvmlDeviceGetHandleByIndex_v2"));
-        if (nvmlDeviceGetHandleByIndex == nullptr) {
-            nvmlDeviceGetHandleByIndex = reinterpret_cast<nvmlReturn_t (*)(unsigned int, nvmlDevice_t*)>(
-                sym("nvmlDeviceGetHandleByIndex"));
-        }
-        auto* nvmlDeviceGetName =
-            reinterpret_cast<nvmlReturn_t (*)(nvmlDevice_t, char*, unsigned int)>(sym("nvmlDeviceGetName"));
-        auto* nvmlDeviceGetMemoryInfo =
-            reinterpret_cast<nvmlReturn_t (*)(nvmlDevice_t, nvmlMemory_t*)>(sym("nvmlDeviceGetMemoryInfo"));
-        auto* nvmlDeviceGetUtilizationRates =
-            reinterpret_cast<nvmlReturn_t (*)(nvmlDevice_t, nvmlUtilization_t*)>(
-                sym("nvmlDeviceGetUtilizationRates"));
-        auto* nvmlDeviceGetTemperature =
-            reinterpret_cast<nvmlReturn_t (*)(nvmlDevice_t, int, unsigned int*)>(
-                sym("nvmlDeviceGetTemperature"));
-        auto* nvmlDeviceGetPowerUsage =
-            reinterpret_cast<nvmlReturn_t (*)(nvmlDevice_t, unsigned int*)>(sym("nvmlDeviceGetPowerUsage"));
-
-        if (nvmlInit == nullptr || nvmlDeviceGetHandleByIndex == nullptr ||
-            nvmlDeviceGetName == nullptr || nvmlDeviceGetMemoryInfo == nullptr) {
-            ::dlclose(handle);
-            return out;
-        }
-        if (nvmlInit() != NVML_SUCCESS) {
-            ::dlclose(handle);
+        if (!ensure_loaded()) {
             return out;
         }
         nvmlDevice_t dev = nullptr;
-        if (nvmlDeviceGetHandleByIndex(0, &dev) != NVML_SUCCESS || dev == nullptr) {
-            if (nvmlShutdown) nvmlShutdown();
-            ::dlclose(handle);
+        if (nvmlDeviceGetHandleByIndex_(0, &dev) != NVML_SUCCESS || dev == nullptr) {
             return out;
         }
-        char name[96];
-        std::memset(name, 0, sizeof(name));
-        if (nvmlDeviceGetName(dev, name, sizeof(name)) != NVML_SUCCESS) {
-            if (nvmlShutdown) nvmlShutdown();
-            ::dlclose(handle);
+        char name[96] = {};
+        if (nvmlDeviceGetName_(dev, name, sizeof(name)) != NVML_SUCCESS) {
             return out;
         }
         nvmlMemory_t mem{};
-        if (nvmlDeviceGetMemoryInfo(dev, &mem) != NVML_SUCCESS) {
-            if (nvmlShutdown) nvmlShutdown();
-            ::dlclose(handle);
+        if (nvmlDeviceGetMemoryInfo_(dev, &mem) != NVML_SUCCESS) {
             return out;
         }
         out.available = true;
         out.name = name;
-        out.mem_total_mib = static_cast<int32_t>(mem.total / (1024ull * 1024ull));
-        out.mem_free_mib = static_cast<int32_t>(mem.free / (1024ull * 1024ull));
-        out.mem_used_mib = static_cast<int32_t>(mem.used / (1024ull * 1024ull));
-        if (nvmlDeviceGetUtilizationRates != nullptr) {
+        out.mem_total_mib = static_cast<int32_t>(mem.total / (1024 * 1024));
+        out.mem_free_mib = static_cast<int32_t>(mem.free / (1024 * 1024));
+        out.mem_used_mib = static_cast<int32_t>(mem.used / (1024 * 1024));
+        if (nvmlDeviceGetUtilizationRates_ != nullptr) {
             nvmlUtilization_t util{};
-            if (nvmlDeviceGetUtilizationRates(dev, &util) == NVML_SUCCESS) {
+            if (nvmlDeviceGetUtilizationRates_(dev, &util) == NVML_SUCCESS) {
                 out.util = static_cast<int32_t>(util.gpu);
             }
         }
-        if (nvmlDeviceGetTemperature != nullptr) {
+        if (nvmlDeviceGetTemperature_ != nullptr) {
             unsigned int temp = 0;
-            if (nvmlDeviceGetTemperature(dev, NVML_TEMPERATURE_GPU, &temp) == NVML_SUCCESS) {
+            if (nvmlDeviceGetTemperature_(dev, NVML_TEMPERATURE_GPU, &temp) == NVML_SUCCESS) {
                 out.temp_c = static_cast<int32_t>(temp);
             }
         }
-        if (nvmlDeviceGetPowerUsage != nullptr) {
+        if (nvmlDeviceGetPowerUsage_ != nullptr) {
             unsigned int mw = 0;
-            if (nvmlDeviceGetPowerUsage(dev, &mw) == NVML_SUCCESS) {
-                out.power_w = static_cast<double>(mw) / 1000.0;
+            if (nvmlDeviceGetPowerUsage_(dev, &mw) == NVML_SUCCESS) {
+                out.power_w = mw / 1000.0;
             }
         }
-        if (nvmlShutdown) nvmlShutdown();
-        ::dlclose(handle);
         return out;
     }
     const char* name() const override { return "nvml"; }
-};
 
+  private:
+    using nvmlReturn_t = int;
+    using nvmlDevice_t = void*;
+    struct nvmlMemory_t { unsigned long long total, free, used; };
+    struct nvmlUtilization_t { unsigned int gpu, memory; };
+    static constexpr int NVML_SUCCESS = 0;
+    static constexpr int NVML_TEMPERATURE_GPU = 0;
+
+    bool ensure_loaded() {
+        if (failed_) {
+            return false;
+        }
+        if (handle_ != nullptr) {
+            return true;
+        }
+        handle_ = ::dlopen("libnvidia-ml.so.1", RTLD_LAZY);
+        if (handle_ == nullptr) {
+            failed_ = true;
+            return false;
+        }
+        auto sym = [&](const char* n) { return ::dlsym(handle_, n); };
+        nvmlInit_ = reinterpret_cast<nvmlReturn_t (*)()>(sym("nvmlInit_v2"));
+        if (nvmlInit_ == nullptr) {
+            nvmlInit_ = reinterpret_cast<nvmlReturn_t (*)()>(sym("nvmlInit"));
+        }
+        nvmlShutdown_ = reinterpret_cast<nvmlReturn_t (*)()>(sym("nvmlShutdown"));
+        nvmlDeviceGetHandleByIndex_ = reinterpret_cast<nvmlReturn_t (*)(unsigned int, nvmlDevice_t*)>(
+            sym("nvmlDeviceGetHandleByIndex_v2"));
+        if (nvmlDeviceGetHandleByIndex_ == nullptr) {
+            nvmlDeviceGetHandleByIndex_ = reinterpret_cast<nvmlReturn_t (*)(unsigned int, nvmlDevice_t*)>(
+                sym("nvmlDeviceGetHandleByIndex"));
+        }
+        nvmlDeviceGetName_ =
+            reinterpret_cast<nvmlReturn_t (*)(nvmlDevice_t, char*, unsigned int)>(sym("nvmlDeviceGetName"));
+        nvmlDeviceGetMemoryInfo_ =
+            reinterpret_cast<nvmlReturn_t (*)(nvmlDevice_t, nvmlMemory_t*)>(sym("nvmlDeviceGetMemoryInfo"));
+        nvmlDeviceGetUtilizationRates_ =
+            reinterpret_cast<nvmlReturn_t (*)(nvmlDevice_t, nvmlUtilization_t*)>(
+                sym("nvmlDeviceGetUtilizationRates"));
+        nvmlDeviceGetTemperature_ =
+            reinterpret_cast<nvmlReturn_t (*)(nvmlDevice_t, int, unsigned int*)>(
+                sym("nvmlDeviceGetTemperature"));
+        nvmlDeviceGetPowerUsage_ =
+            reinterpret_cast<nvmlReturn_t (*)(nvmlDevice_t, unsigned int*)>(sym("nvmlDeviceGetPowerUsage"));
+        if (nvmlInit_ == nullptr || nvmlDeviceGetHandleByIndex_ == nullptr ||
+            nvmlDeviceGetName_ == nullptr || nvmlDeviceGetMemoryInfo_ == nullptr) {
+            shutdown();
+            failed_ = true;
+            return false;
+        }
+        if (nvmlInit_() != NVML_SUCCESS) {
+            shutdown();
+            failed_ = true;
+            return false;
+        }
+        inited_ = true;
+        return true;
+    }
+
+    void shutdown() {
+        if (inited_ && nvmlShutdown_ != nullptr) {
+            nvmlShutdown_();
+            inited_ = false;
+        }
+        if (handle_ != nullptr) {
+            ::dlclose(handle_);
+            handle_ = nullptr;
+        }
+        nvmlInit_ = nullptr;
+        nvmlShutdown_ = nullptr;
+        nvmlDeviceGetHandleByIndex_ = nullptr;
+        nvmlDeviceGetName_ = nullptr;
+        nvmlDeviceGetMemoryInfo_ = nullptr;
+        nvmlDeviceGetUtilizationRates_ = nullptr;
+        nvmlDeviceGetTemperature_ = nullptr;
+        nvmlDeviceGetPowerUsage_ = nullptr;
+    }
+
+    void* handle_ = nullptr;
+    bool inited_ = false;
+    bool failed_ = false;
+    nvmlReturn_t (*nvmlInit_)() = nullptr;
+    nvmlReturn_t (*nvmlShutdown_)() = nullptr;
+    nvmlReturn_t (*nvmlDeviceGetHandleByIndex_)(unsigned int, nvmlDevice_t*) = nullptr;
+    nvmlReturn_t (*nvmlDeviceGetName_)(nvmlDevice_t, char*, unsigned int) = nullptr;
+    nvmlReturn_t (*nvmlDeviceGetMemoryInfo_)(nvmlDevice_t, nvmlMemory_t*) = nullptr;
+    nvmlReturn_t (*nvmlDeviceGetUtilizationRates_)(nvmlDevice_t, nvmlUtilization_t*) = nullptr;
+    nvmlReturn_t (*nvmlDeviceGetTemperature_)(nvmlDevice_t, int, unsigned int*) = nullptr;
+    nvmlReturn_t (*nvmlDeviceGetPowerUsage_)(nvmlDevice_t, unsigned int*) = nullptr;
+};
 
 /*** Prefer NVML, then nvidia-smi. First available sample wins; else fail-closed. */
 class ChainGpuProbe final : public GpuProbe {
