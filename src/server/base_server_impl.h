@@ -111,6 +111,7 @@ public:
 public:
     int _m_max_connection_nums = 200;
     int _m_peer_resp_timeout = 15 * 1000;
+    int _m_receive_timeout = 60 * 1000;
     int _m_compute_threads = -1;
     int _m_handler_threads = 50;
     size_t _m_request_size_limit = k_default_request_size_limit_mb;
@@ -200,6 +201,7 @@ template<typename WORKER, typename MODEL_OUTPUT>
 void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::apply_runtime_config(const ServerRuntimeConfig& cfg) {
     _m_max_connection_nums = cfg.max_connections;
     _m_peer_resp_timeout = cfg.peer_resp_timeout;
+    _m_receive_timeout = cfg.receive_timeout;
     _m_compute_threads = cfg.compute_threads;
     _m_handler_threads = cfg.handler_threads;
     _m_request_size_limit = cfg.request_size_limit;

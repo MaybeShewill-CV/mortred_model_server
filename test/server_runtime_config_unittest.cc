@@ -55,6 +55,7 @@ worker_nums = 1
     const ServerRuntimeConfig expected;
     EXPECT_EQ(cfg.max_connections, expected.max_connections);
     EXPECT_EQ(cfg.peer_resp_timeout, expected.peer_resp_timeout);
+    EXPECT_EQ(cfg.receive_timeout, expected.receive_timeout);
     EXPECT_EQ(cfg.compute_threads, expected.compute_threads);
     EXPECT_EQ(cfg.handler_threads, expected.handler_threads);
     EXPECT_EQ(cfg.request_size_limit, expected.request_size_limit);
@@ -102,6 +103,7 @@ max_queue_depth = -8
     ASSERT_EQ(parse_server_runtime_config(section, cfg), StatusCode::OK);
     EXPECT_EQ(cfg.max_connections, 200);
     EXPECT_EQ(cfg.peer_resp_timeout, 15 * 1000);
+    EXPECT_EQ(cfg.receive_timeout, 60 * 1000);
     EXPECT_EQ(cfg.compute_threads, -1);
     EXPECT_EQ(cfg.handler_threads, 50);
     EXPECT_EQ(cfg.model_run_timeout, 800);
@@ -141,6 +143,31 @@ stuck_worker_action = "exit"
     EXPECT_EQ(cfg.max_batch_size, 4);
     EXPECT_EQ(cfg.max_batch_delay_ms, 11);
     EXPECT_EQ(cfg.stuck_worker_action, "exit");
+}
+
+
+TEST(server_runtime_config, receive_timeout_seconds_to_ms_and_reject_unbounded) {
+    ServerRuntimeConfig cfg;
+    auto section = parse_section(R"(
+host = "127.0.0.1"
+server_uri = "/test"
+port = 8080
+worker_nums = 1
+receive_timeout = 30
+)");
+    ASSERT_EQ(parse_server_runtime_config(section, cfg), StatusCode::OK);
+    EXPECT_EQ(cfg.receive_timeout, 30 * 1000);
+
+    ServerRuntimeConfig cfg2;
+    auto section2 = parse_section(R"(
+host = "127.0.0.1"
+server_uri = "/test"
+port = 8080
+worker_nums = 1
+receive_timeout = 0
+)");
+    ASSERT_EQ(parse_server_runtime_config(section2, cfg2), StatusCode::OK);
+    EXPECT_EQ(cfg2.receive_timeout, 60 * 1000);
 }
 
 int main(int argc, char** argv) {
