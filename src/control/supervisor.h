@@ -29,11 +29,26 @@ namespace control {
 inline constexpr const char* kGatewayId = "__gateway";
 
 /***
+ * True when pgid's process group holds no process at all (killpg(2) ESRCH).
+ * pgid <= 0 means no group was ever recorded, so there is nothing to wait for.
+ * It is the primitive stop/restart/shutdown use to confirm that a stop reaped
+ * grandchildren - not just the leader - and doubles as a test assertion and an
+ * ops self-check. A zombie member still counts: the group disappears only once
+ * its corpses are reaped.
+ */
+bool process_group_gone(pid_t pgid);
+
+/***
  * Linux process supervision core. Owns the whole managed process tree:
- * spawn (fork/exec + PDEATHSIG + env injection), SIGCHLD reaping via one
- * sigwaitinfo thread, restart policies with backoff and crash-loop give-up,
- * readiness probing, ordered autostart (gateway first) and ordered shutdown
- * (models first, gateway last).
+ * spawn (fork/exec + own process group + PDEATHSIG + env injection), SIGCHLD
+ * reaping via one sigwaitinfo thread, restart policies with backoff and
+ * crash-loop give-up, readiness probing, ordered autostart (gateway first) and
+ * ordered shutdown (models first, gateway last). Every managed child leads its
+ * own process group and every stop/restart/shutdown signal goes to that group.
+ *
+ * Semantic consequence: a child is no longer in the supervisor's foreground
+ * process group, so terminal Ctrl-C no longer reaches children directly. They
+ * are stopped only through the supervisor's ordered two-phase shutdown.
  *
  * The caller must invoke block_supervision_signals() before creating any
  * thread (main() start) and must call start_threads() after the catalog is
@@ -121,6 +136,12 @@ class ProcessSupervisor {
         ServerPolicy policy;
         RestartEngine engine{RestartPolicyKind::kOnFailure};
         pid_t pid = -1;
+        // Every managed child leads its own process group (spawn_locked calls
+        // setpgid on both sides of the fork), so pgid == pid while it owns the
+        // group. Stop/restart/shutdown deliver signals to the group so a
+        // grandchild cannot outlive its leader; pgid <= 0 means no group was
+        // recorded and the delivery sites fall back to the single pid.
+        pid_t pgid = -1;
         bool wanted = false;    // desired running
         bool stopping = false;  // stop requested; next exit is expected
         bool ready = false;
@@ -159,6 +180,11 @@ class ProcessSupervisor {
     void monitor_loop();
     void stop_child_signal_locked(Child* child);
     bool wait_child_exit(const std::string& id, int timeout_ms);
+    /*** One kStopGraceMs budget for the leader *and* its group: wait for the
+     * leader, spend the rest of the budget on the group, then SIGKILL whatever
+     * is left of the group. True when the whole group is gone. Caller must not
+     * hold _mu. */
+    bool reap_group_with_grace(const std::string& id);
     void perform_ordered_shutdown();
     void probe_readiness(Child* child, int64_t now_ms);
     bool probe_path_of(const Child& child, std::string* path) const;

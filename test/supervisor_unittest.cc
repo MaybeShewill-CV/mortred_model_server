@@ -35,6 +35,7 @@ using mortred::control::Catalog;
 using mortred::control::ControlConfig;
 using mortred::control::ProcessSupervisor;
 using mortred::control::kGatewayId;
+using mortred::control::process_group_gone;
 
 namespace {
 
@@ -122,7 +123,9 @@ class SupervisorTest : public ::testing::Test {
         fs::remove_all(root_, ec_);
     }
 
-    void write_fake_config(const std::string& mode, int exit_after_ms, int exit_code = 0) {
+    void write_fake_config(const std::string& mode, int exit_after_ms, int exit_code = 0,
+                           bool spawn_grandchild = false,
+                           bool grandchild_ignores_sigint = false) {
         std::ofstream out(root_ / "conf" / "server" / "test" / "fake.toml");
         out << "[FAKE_SERVER]\n"
             << "port=" << port_ << "\n"
@@ -132,7 +135,9 @@ class SupervisorTest : public ::testing::Test {
             << "fake_port=" << port_ << "\n"
             << "fake_mode=\"" << mode << "\"\n"
             << "fake_exit_after_ms=" << exit_after_ms << "\n"
-            << "fake_exit_code=" << exit_code << "\n";
+            << "fake_exit_code=" << exit_code << "\n"
+            << "fake_spawn_grandchild=" << (spawn_grandchild ? 1 : 0) << "\n"
+            << "fake_grandchild_ignores_sigint=" << (grandchild_ignores_sigint ? 1 : 0) << "\n";
     }
 
     void write_catalog() {
@@ -166,6 +171,64 @@ class SupervisorTest : public ::testing::Test {
         fs::permissions(stub, fs::perms::owner_all | fs::perms::group_read |
                                   fs::perms::group_exec | fs::perms::others_read |
                                   fs::perms::others_exec);
+    }
+
+    // P1-3: the fake's grandchild announces "fake grandchild pid=<n> pgid=<n>
+    // ignore_sigint=<0|1>" on stderr before dropping its log pipes; the
+    // supervisor's reader thread copies that line into the child's LogBuffer.
+    static std::string grandchild_log_line(ProcessSupervisor* sup) {
+        auto* log = sup->logs("fake_model_server");
+        if (log == nullptr) {
+            return std::string();
+        }
+        for (const auto& line : log->slice(0, 400)) {
+            if (line.find("grandchild pid=") != std::string::npos) {
+                return line;
+            }
+        }
+        return std::string();
+    }
+
+    static pid_t pid_from_grandchild_line(const std::string& line) {
+        const std::string needle = "grandchild pid=";
+        const auto pos = line.find(needle);
+        if (pos == std::string::npos) {
+            return -1;
+        }
+        return static_cast<pid_t>(std::strtol(line.c_str() + pos + needle.size(), nullptr, 10));
+    }
+
+    // P1-3 setup: start the fake with a grandchild in the same process group and
+    // prove the group topology the stop path relies on (child leads its own
+    // group; the grandchild shares it) before anyone signals anything.
+    void start_fake_with_grandchild(ProcessSupervisor* sup, bool grandchild_ignores_sigint,
+                                    pid_t* leader, pid_t* grandchild) {
+        std::string err;
+        ASSERT_TRUE(sup->start_server("fake_model_server", &err)) << err;
+        ASSERT_TRUE(wait_for([sup]() {
+            const auto s = sup->status("fake_model_server");
+            return s.state == "running" && s.ready;
+        }, 10000)) << "fake server did not become ready";
+
+        const auto st = sup->status("fake_model_server");
+        ASSERT_GT(st.pid, 0);
+        *leader = static_cast<pid_t>(st.pid);
+        ASSERT_EQ(::getpgid(*leader), *leader) << "child did not get its own process group";
+        ASSERT_NE(::getpgid(*leader), ::getpgid(::getpid()))
+            << "child is still in the supervisor's process group";
+
+        std::string line;
+        ASSERT_TRUE(wait_for([&]() {
+            line = grandchild_log_line(sup);
+            return !line.empty();
+        }, 5000)) << "grandchild never announced itself in the child log";
+        EXPECT_NE(line.find(grandchild_ignores_sigint ? "ignore_sigint=1" : "ignore_sigint=0"),
+                  std::string::npos)
+            << line;
+        *grandchild = pid_from_grandchild_line(line);
+        ASSERT_GT(*grandchild, 0) << line;
+        ASSERT_EQ(::getpgid(*grandchild), *leader)
+            << "grandchild left the child's process group: " << line;
     }
 
     ControlConfig base_cfg() {
@@ -734,6 +797,65 @@ TEST_F(SupervisorTest, shutdown_is_ordered_and_complete) {
     sup->wait_shutdown();
     EXPECT_EQ(sup->status("fake_model_server").state, "stopped");
     EXPECT_EQ(sup->status(kGatewayId).state, "stopped");
+}
+
+// P1-3: stop delivers SIGINT to the whole group, so a grandchild that does not
+// ignore SIGINT dies with its leader and the stop never needs the escalation.
+TEST_F(SupervisorTest, stop_signals_the_whole_process_group) {
+    write_fake_config("ready", 0, 0, /*spawn_grandchild=*/true,
+                      /*grandchild_ignores_sigint=*/false);
+    auto sup = make_supervisor();
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    pid_t leader = -1;
+    pid_t grandchild = -1;
+    start_fake_with_grandchild(sup.get(), /*grandchild_ignores_sigint=*/false, &leader,
+                               &grandchild);
+
+    std::string err;
+    const auto t0 = std::chrono::steady_clock::now();
+    ASSERT_TRUE(sup->stop_server("fake_model_server", &err)) << err;
+    const auto stop_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                             std::chrono::steady_clock::now() - t0)
+                             .count();
+    // grace is 5000ms: finishing well inside it proves the group SIGINT was
+    // delivered, because a surviving grandchild would force the escalation
+    EXPECT_LT(stop_ms, 4000) << "stop needed the SIGKILL escalation for a SIGINT-able group";
+    EXPECT_TRUE(process_group_gone(leader))
+        << "process group " << leader << " survived stop (took " << stop_ms << "ms)";
+    EXPECT_EQ(::kill(grandchild, 0), -1) << "grandchild " << grandchild << " survived stop";
+    EXPECT_EQ(sup->status("fake_model_server").state, "stopped");
+}
+
+// P1-3 counter-example: the grandchild ignores SIGINT, so the leader exits on
+// the group SIGINT while the group stays alive. The stop must spend its grace
+// budget on the group and then SIGKILL the survivor - a single-pid kill of the
+// (already reaped) leader would leave it running forever.
+TEST_F(SupervisorTest, stop_reaps_grandchild_that_ignores_sigint) {
+    write_fake_config("ready", 0, 0, /*spawn_grandchild=*/true,
+                      /*grandchild_ignores_sigint=*/true);
+    auto sup = make_supervisor();
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    pid_t leader = -1;
+    pid_t grandchild = -1;
+    start_fake_with_grandchild(sup.get(), /*grandchild_ignores_sigint=*/true, &leader,
+                               &grandchild);
+
+    std::string err;
+    const auto t0 = std::chrono::steady_clock::now();
+    ASSERT_TRUE(sup->stop_server("fake_model_server", &err)) << err;
+    const auto stop_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                             std::chrono::steady_clock::now() - t0)
+                             .count();
+    // grace(5000) + 2000: the whole group must be gone inside one budget
+    EXPECT_LE(stop_ms, 7000) << "stop exceeded grace+2s";
+    EXPECT_TRUE(wait_for([&]() { return process_group_gone(leader); }, 2000))
+        << "process group " << leader << " survived stop (took " << stop_ms << "ms)";
+    EXPECT_EQ(::kill(grandchild, 0), -1) << "grandchild " << grandchild << " survived stop";
+    EXPECT_EQ(sup->status("fake_model_server").state, "stopped");
 }
 
 TEST_F(SupervisorTest, gateway_missing_scrape_token_is_permanent_failure) {
