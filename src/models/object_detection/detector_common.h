@@ -1,6 +1,7 @@
 #ifndef MORTRED_MODELS_OBJECT_DETECTION_DETECTOR_COMMON_H
 #define MORTRED_MODELS_OBJECT_DETECTION_DETECTOR_COMMON_H
 
+#include <algorithm>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -73,6 +74,22 @@ inline std::vector<T> finalize_detections(std::vector<T> detections, const Detec
     effective.nms_threshold = context.params->get_f32("nms_threshold", params.nms_threshold);
     effective.keep_top_k = context.params->get_i32("top_k", params.keep_top_k);
     return finalize_detections(std::move(detections), effective);
+}
+
+/***
+ * Decode-side score threshold. Decoding pre-filters candidates at this
+ * threshold, so a request asking for a LOWER threshold than config would be a
+ * silent no-op if decode used the config value. Decode at the minimum of the
+ * two; finalize_detections applies the request threshold again at the tail,
+ * which keeps higher-than-config requests exact as well.
+ */
+inline float decode_score_threshold(const DetectionParams &params,
+                                    const backend::InferenceContext &context) {
+    if (context.params == nullptr) {
+        return params.score_threshold;
+    }
+    const float request = context.params->get_f32("score_threshold", params.score_threshold);
+    return std::min(params.score_threshold, request);
 }
 
 inline float parse_image_decode_upscale(const toml::table &params, const char *tag) {

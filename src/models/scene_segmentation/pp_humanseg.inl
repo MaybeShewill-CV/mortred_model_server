@@ -88,32 +88,24 @@ StatusCode PPHumanSeg<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>
     if (output_status != StatusCode::OK) {
         return output_status;
     }
-    const auto &tensor = *output_view.tensor;
     const auto *host_data = output_view.data;
-    const auto channels = tensor.shape[1];
 
     const auto plane_size = static_cast<int64_t>(context.network_size.area());
-    std::vector<float> hwc_host_data(static_cast<size_t>(plane_size * channels));
+    // family decode order (bisenetv2 / hrnet / msocrnet): argmax at network
+    // resolution, then NEAREST upsample to source. The old path bilinearly
+    // resized logits first, which yields different edge labels and no other
+    // family member does it. Binary output: channel 1 wins when its logit
+    // exceeds channel 0's.
+    cv::Mat result_image(context.network_size, CV_32SC1, cv::Scalar(0));
     for (auto row = 0; row < context.network_size.height; ++row) {
         for (auto col = 0; col < context.network_size.width; ++col) {
-            for (auto channel = 0; channel < channels; ++channel) {
-                hwc_host_data[static_cast<size_t>(row * context.network_size.width * channels + col * channels + channel)] =
-                    host_data[static_cast<size_t>(channel * plane_size + row * context.network_size.width + col)];
-            }
-        }
-    }
-
-    cv::Mat logits(context.network_size, CV_32FC2, hwc_host_data.data());
-    cv::resize(logits, logits, context.source_size, 0.0, 0.0, cv::INTER_LINEAR);
-    cv::Mat result_image(context.source_size, CV_32SC1, cv::Scalar(0));
-    for (auto row = 0; row < logits.rows; ++row) {
-        for (auto col = 0; col < logits.cols; ++col) {
-            const auto logit_val = logits.at<cv::Vec2f>(row, col);
-            if (logit_val[0] < logit_val[1]) {
+            const auto offset = static_cast<int64_t>(row) * context.network_size.width + col;
+            if (host_data[plane_size + offset] > host_data[offset]) {
                 result_image.at<int32_t>(row, col) = 1;
             }
         }
     }
+    cv::resize(result_image, result_image, context.source_size, 0.0, 0.0, cv::INTER_NEAREST);
 
     SegmentationOutput internal_out;
     internal_out.segmentation_result = std::move(result_image);

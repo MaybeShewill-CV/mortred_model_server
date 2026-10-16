@@ -131,6 +131,8 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTe
     }
 
     std::vector<FaceBBox> decode_result;
+    // hoisted: one param lookup per request
+    const float decode_threshold = decode_score_threshold(_m_detection_params, context);
     for (const int stride : kYuNetStrides) {
         const std::string stride_s = std::to_string(stride);
         const auto *cls = jinq::models::backend::find_output(outputs, "cls_" + stride_s);
@@ -179,7 +181,7 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTe
             for (int col = 0; col < cols; ++col) {
                 const size_t idx = static_cast<size_t>(row) * static_cast<size_t>(cols) + static_cast<size_t>(col);
                 const float score = std::sqrt(clamp01(cls_data[idx]) * clamp01(obj_data[idx]));
-                if (score < _m_detection_params.score_threshold) {
+                if (score < decode_threshold) {
                     continue;
                 }
 
@@ -203,18 +205,37 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTe
         }
     }
 
-    auto nms_result = finalize_detections(std::move(decode_result), _m_detection_params, context);
+    // Map into source space BEFORE NMS: the detection family tail runs NMS in
+    // source coordinates with bboxes clipped to the source bounds (see
+    // DetectionParams::parse rejecting clip_boxes on exactly that contract).
+    // Running NMS in the anisotropically stretched pad space distorts IoU, and
+    // scaling after NMS left bboxes unclipped.
     const float scale_x = static_cast<float>(context.source_size.width) / static_cast<float>(unpadded.width);
     const float scale_y = static_cast<float>(context.source_size.height) / static_cast<float>(unpadded.height);
-    for (auto &face_box : nms_result) {
-        face_box.bbox.x *= scale_x;
-        face_box.bbox.y *= scale_y;
-        face_box.bbox.width *= scale_x;
-        face_box.bbox.height *= scale_y;
-        for (auto &landmark : face_box.landmarks) {
+    const cv::Rect2f source_bounds(0.0f, 0.0f, static_cast<float>(context.source_size.width),
+                                   static_cast<float>(context.source_size.height));
+    std::vector<FaceBBox> source_space;
+    source_space.reserve(decode_result.size());
+    for (const auto &face_box : decode_result) {
+        FaceBBox mapped = face_box;
+        mapped.bbox.x = face_box.bbox.x * scale_x;
+        mapped.bbox.y = face_box.bbox.y * scale_y;
+        mapped.bbox.width = face_box.bbox.width * scale_x;
+        mapped.bbox.height = face_box.bbox.height * scale_y;
+        for (auto &landmark : mapped.landmarks) {
             landmark.x *= scale_x;
             landmark.y *= scale_y;
         }
+        const cv::Rect2f clipped = mapped.bbox & source_bounds;
+        if (clipped.width <= 0.0f || clipped.height <= 0.0f) {
+            continue;  // fully outside the source frame after unmap
+        }
+        mapped.bbox = clipped;
+        source_space.push_back(std::move(mapped));
+    }
+
+    auto nms_result = finalize_detections(std::move(source_space), _m_detection_params, context);
+    for (auto &face_box : nms_result) {
         face_box.category = "face";
     }
 

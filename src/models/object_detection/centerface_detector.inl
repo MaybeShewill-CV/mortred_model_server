@@ -137,11 +137,13 @@ StatusCode CenterFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<Name
     }
 
     std::vector<FaceBBox> decode_result;
+    // hoisted: one param lookup per request
+    const float decode_threshold = decode_score_threshold(_m_detection_params, context);
     for (int h = 0; h < output_height; ++h) {
         for (int w = 0; w < output_width; ++w) {
             const int index = h * output_width + w;
             const float score = heat_data[index];
-            if (score < _m_detection_params.score_threshold) {
+            if (score < decode_threshold) {
                 continue;
             }
             const float s0 = 4 * std::exp(scale_data[index]);

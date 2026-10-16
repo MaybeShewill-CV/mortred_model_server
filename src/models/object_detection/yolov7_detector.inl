@@ -133,7 +133,7 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
         }
         const int stride = strides[hi];
         collect_yolov7_head_candidates(data, anchor_nums, grid_h, grid_w, attrs, stride, anchors[hi],
-                                       _m_detection_params.score_threshold, _m_detection_params.min_box_area_px, &decode_result);
+                                       decode_score_threshold(_m_detection_params, context), _m_detection_params.min_box_area_px, &decode_result);
     }
 
     unmap_letterbox_detections(decode_result, letterbox, context.source_size);
