@@ -140,6 +140,12 @@ public:
             return StatusCode::OK;
         }
 
+        // white-box: the clamp lives in parse_server_runtime_config, so reading
+        // the applied value proves apply_runtime_config received the bounded one
+        int applied_model_run_timeout_ms() const {
+            return _m_model_run_timeout;
+        }
+
     protected:
         void fill_response_data(rapidjson::Document::AllocatorType& allocator,
                                 rapidjson::Document& data,
@@ -172,6 +178,10 @@ public:
 
     bool is_successfully_initialized() const override {
         return _m_impl->is_successfully_initialized();
+    }
+
+    int applied_model_run_timeout_ms() const {
+        return _m_impl->applied_model_run_timeout_ms();
     }
 
 private:
@@ -930,7 +940,81 @@ double metrics_bucket_le(const std::string& body, const std::string& metric,
     return -1.0;
 }
 
+// Waits until the release counter catches up with the admission counter, i.e.
+// until the completed request gave its waiting slot back. The
+// mortred_waiting_jobs gauge cannot show that: it is a snapshot taken inside
+// the reply path (base_server_impl.h reply_sync_request), i.e. before the
+// series callback that decrements the counter, so it keeps reporting the
+// in-flight count of the last reply. mortred_received_jobs_total and
+// mortred_finished_jobs_total are written at exactly the admission and release
+// points, so their meeting proves the waiting counter went back to zero.
+bool wait_for_job_release(int port, double expected_total, int attempts = 40) {
+    for (int attempt = 0; attempt < attempts; ++attempt) {
+        const auto metrics = send_request(port, "GET", "/metrics", "", k_json_auth_headers);
+        if (metrics.status != 200) {
+            return false;
+        }
+        const double received = metrics_value(metrics.body, "mortred_received_jobs_total");
+        const double finished = metrics_value(metrics.body, "mortred_finished_jobs_total");
+        if (received == expected_total && finished == expected_total) {
+            return true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    return false;
+}
+
 }  // namespace
+
+TEST(server_e2e_contract, model_timeout_zero_is_clamped_to_a_bounded_budget) {
+    // P1-5: model_run_timeout <= 0 used to leave the request without a deadline
+    // and without a request timer, so a hung model kept its worker and the
+    // waiting counter never fell. Startup must not be rejected either: the
+    // value is clamped, and apply_runtime_config has to receive the clamp.
+    ServerHandle handle =
+        start_server("model_run_timeout=0\nfake_delay_ms=1000\nmax_queue_depth=1\n");
+    ASSERT_TRUE(handle.server != nullptr) << "a <=0 timeout must not reject startup";
+    EXPECT_EQ(handle.server->applied_model_run_timeout_ms(), 300000);
+
+    // 1000ms of fake work stays far inside the 5-minute bound, so the request
+    // must still answer 200. That is the guard on the size of the bound: with
+    // the 500ms default instead, every slow id that configured 0 (SAM AMG,
+    // diffusion) would become a 504 machine.
+    auto resp = send_request(handle.port, "POST", "/test/model",
+                             "{\"images\":[\"aGVsbG8=\"]}", k_json_auth_headers);
+    EXPECT_EQ(resp.status, 200);
+    auto doc = parse_body(resp.body);
+    ASSERT_FALSE(doc.HasParseError());
+    EXPECT_EQ(doc["status"].GetInt(), 0);
+    ASSERT_TRUE(doc["results"].IsArray());
+    ASSERT_EQ(doc["results"].Size(), 1u);
+    EXPECT_EQ(doc["results"][0]["status"].GetInt(), 0);
+
+    // A4: the request must hand its queue slot back, and with a single slot a
+    // still-occupied counter would answer 429 here.
+    EXPECT_TRUE(wait_for_job_release(handle.port, 1.0))
+        << "a completed clamped-timeout request must release its waiting slot";
+    auto again = send_request(handle.port, "POST", "/test/model",
+                              "{\"images\":[\"aGVsbG8=\"]}", k_json_auth_headers);
+    EXPECT_EQ(again.status, 200) << "the released queue slot must be reusable";
+}
+
+TEST(server_e2e_contract, model_timeout_504_releases_the_queue_slot) {
+    // The same release property on the timeout path: a request killed by the
+    // deadline must give its slot back, otherwise the single slot stays
+    // occupied forever and every later request answers 429.
+    ServerHandle handle =
+        start_server("model_run_timeout=100\nfake_delay_ms=1000\nmax_queue_depth=1\n");
+    auto resp = send_request(handle.port, "POST", "/test/model",
+                             "{\"images\":[\"aGVsbG8=\"]}", k_json_auth_headers);
+    EXPECT_EQ(resp.status, 504);
+
+    EXPECT_TRUE(wait_for_job_release(handle.port, 1.0))
+        << "a timed-out request must release its waiting slot";
+    auto again = send_request(handle.port, "POST", "/test/model",
+                              "{\"images\":[\"aGVsbG8=\"]}", k_json_auth_headers);
+    EXPECT_NE(again.status, 429) << "the released queue slot must be reusable";
+}
 
 TEST(server_e2e_contract, queue_limit_returns_429_with_retry_after) {
     ServerHandle handle =
