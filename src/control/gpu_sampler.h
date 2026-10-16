@@ -6,6 +6,8 @@
 ************************************************/
 
 // Background GPU sampler for the supervisor HUD. Probes nvidia-smi on a
+// schedule. Probe waitpid is hardened like occupancy_gate (WNOWAIT /
+// ECHILD / fail-closed on stolen or incomplete output).
 // dedicated thread (never on the HTTP handler path) at a configurable
 // interval, stores a bounded ring buffer of full-field samples, and serves
 // them to /api/v1/gpu as JSON. The probe's fork/poll/deadline discipline
@@ -33,6 +35,7 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <sys/wait.h>
+#include <signal.h>
 #include <unistd.h>
 
 #include "control/occupancy_gate.h"
@@ -133,30 +136,65 @@ class GpuSampler {
         char buf[512];
         const auto deadline = std::chrono::steady_clock::now() +
                               std::chrono::milliseconds(timeout_ms);
-        for (;;) {
-            if (std::chrono::steady_clock::now() >= deadline) break;
+        bool timed_out = false;
+        bool eof = false;
+        while (!eof && out.size() <= 8192) {
+            const auto now = std::chrono::steady_clock::now();
+            if (now >= deadline) { timed_out = true; break; }
             pollfd pfd{};
             pfd.fd = fds[0]; pfd.events = POLLIN;
             const auto remain = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                    deadline - std::chrono::steady_clock::now()).count();
+                                    deadline - now).count();
             const int pr = ::poll(&pfd, 1, static_cast<int>(remain));
-            if (pr < 0) { if (errno == EINTR) continue; break; }
-            if (pr == 0) break;
+            if (pr < 0) { if (errno == EINTR) continue; timed_out = true; break; }
+            if (pr == 0) { timed_out = true; break; }
             const ssize_t n = ::read(fds[0], buf, sizeof(buf));
-            if (n <= 0) break;
-            out.append(buf, static_cast<size_t>(n));
-            if (out.size() > 8192) break;
+            if (n > 0) { out.append(buf, static_cast<size_t>(n)); continue; }
+            if (n == 0) { eof = true; break; }
+            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) continue;
+            timed_out = true;
+            break;
         }
         ::close(fds[0]);
         int status = 0;
-        ::waitpid(pid, &status, 0);
+        auto reap = [&]() -> bool {
+            for (int i = 0; i < 50; ++i) {
+                const pid_t r = ::waitpid(pid, &status, WNOHANG);
+                if (r == pid) return true;
+                if (r < 0 && errno != EINTR) return false;  // ECHILD: stolen
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            }
+            return false;
+        };
+        // Signal only a child that still belongs to this process and is RUNNING
+        // (waitid WNOWAIT peek). Never kill a stolen/recycled pid.
+        const auto signal_if_running = [&pid]() {
+            siginfo_t live{};
+            if (::waitid(P_PID, static_cast<id_t>(pid), &live, WEXITED | WNOHANG | WNOWAIT) != 0) {
+                return;  // ECHILD
+            }
+            if (live.si_pid != 0) {
+                return;  // exited, unreaped
+            }
+            ::kill(pid, SIGKILL);
+        };
+        if (timed_out || !eof) {
+            signal_if_running();
+        }
+        if (!reap()) {
+            // Stolen by process-wide reaper: trust fully-read EOF output only;
+            // otherwise fail closed (empty -> sampler offline path).
+            if (timed_out || !eof || out.empty() || out.size() > 8192) {
+                return "";
+            }
+        } else if (timed_out || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+            return "";
+        }
         if (out.size() > 8192 || out.empty()) return "";
-        // extract gpu name from the first CSV field
         if (gpu_name_out != nullptr) {
             const auto comma = out.find(',');
             if (comma != std::string::npos) {
                 *gpu_name_out = out.substr(0, comma);
-                // trim
                 auto b = gpu_name_out->find_first_not_of(" \t");
                 auto e = gpu_name_out->find_last_not_of(" \t\r\n");
                 if (b != std::string::npos) *gpu_name_out = gpu_name_out->substr(b, e - b + 1);
@@ -165,9 +203,6 @@ class GpuSampler {
         return out;
     }
 
-    // Parse the CSV line after the name field into a GpuSample.
-    // When at least 11 columns are present, util_col receives the trimmed
-    // utilization column (fields[1]) so the caller can match it exactly.
     static GpuSample parse_sample(const std::string& csv, int name_len,
                                    std::string* util_col = nullptr) {
         GpuSample s;
