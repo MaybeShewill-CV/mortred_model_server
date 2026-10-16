@@ -44,6 +44,7 @@
 #include "common/stage_timing.h"
 #include "common/process_stop.h"
 #include "control/api_key_manager.h"
+#include "control/rate_limit/headers.h"
 #include "control/catalog.h"
 #include "control/control_config.h"
 #include "control/http_reply.h"
@@ -730,7 +731,7 @@ void GatewayApp::process(WFHttpTask* task) {
                     resp->add_header_pair("RateLimit-Remaining", "0");
                     resp->add_header_pair("RateLimit-Reset", std::to_string(retry_s).c_str());
                 }
-                resp->add_header_pair("X-Mortred-RateLimit-Layer", "api-key-fixed-window");
+                resp->add_header_pair("X-Mortred-RateLimit-Layer", "api-key-gcra");
                 reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED,
                                     "api key rate limit exceeded");
                 return;

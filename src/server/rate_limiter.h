@@ -8,15 +8,13 @@
 #ifndef MORTRED_SERVER_RATE_LIMITER_H
 #define MORTRED_SERVER_RATE_LIMITER_H
 
-// Rate-limit semantics (P1-1 / operators):
-// - Model-server FixedWindowRateLimiter: per-peer fixed 1s window counters.
-//   Burst equals the configured QPS; unused budget does not carry across windows.
-// - Gateway L1 uses GCRA (src/control/rate_limit/gcra.h): smooth rate with burst
-//   via TAT; MORTRED_RATE_LIMIT / [gateway.rate_limit] control it.
-// - API-key limiter (ApiKeyManager) is also FixedWindow per key.
-// Layers stay dual by design. Operator-visible consistency is the shared 429
-// header contract: Retry-After, RateLimit-Limit/Remaining/Reset, and
-// X-Mortred-RateLimit-Layer = gateway-gcra | model-fixed-window | api-key-fixed-window.
+// Rate-limit authority (Round 6 P1-1):
+// Gateway is the sole public limiter (GCRA). API-key QPS is GCRA at the gateway.
+// This FixedWindowRateLimiter class remains for unit tests only and is NOT wired
+// on the model-server product path (base_server_impl). Prefer
+// mortred::control::ratelimit::RateLimiter / GcraFlowLimiter.
+// Unified 429 headers: Retry-After, RateLimit-Limit/Remaining/Reset,
+// X-Mortred-RateLimit-Layer = gateway-gcra | api-key-gcra | api-key-max-inflight | ...
 
 
 #include <chrono>
