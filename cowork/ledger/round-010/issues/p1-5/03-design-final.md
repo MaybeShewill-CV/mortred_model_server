@@ -55,9 +55,15 @@
 ## 验收标准
 
 - A1 `./_bin/server_runtime_config_unittest` 退出 0，含 `=0` 与 `=-1` → 300000、缺键 → 500 三态用例。
-- A2 `./_bin/server_e2e_contract_test` 退出 0，含新用例：`model_run_timeout=0` + `fake_delay_ms=1000` → 504，且服务**正常启动**（不是拒绝启动）。
+- A2 `./_bin/server_e2e_contract_test` 退出 0，含新用例**证明 `=0` 的配置已变成有界正值**。**判据在第 5 步经编排方裁决修订（原判据是错的，见下）**：
 
-  编排方已核实的锚点（本轮基线）：`fake_delay_ms` 是既有 server 配置旋钮（`server_e2e_contract_test.cc:123` 读取），同文件已有 `TEST(server_e2e_contract, model_timeout_returns_504)`（`:765-786`）用 `model_run_timeout=100` + `fake_delay_ms=1000` 断言 504 —— 即"超时为正值时走 504"已被锁定；本项的新用例应**照该用例结构**写，只把超时改成 `0`，这样它才是可判别的（改前 `0` 无 deadline、无定时器 → 200）。504 的映射本身由 `http_status.h:61`（`MODEL_RUN_TIMEOUT` → 504）与 `do_work_lifetime_unittest.cc:513,557` 覆盖，不在本项改动面内。
+  原判据"`model_run_timeout=0` + `fake_delay_ms=1000` → **504**"在 300000ms 夹值下算不出来——1 秒假推理比 5 分钟预算早 299 秒结束，必然 200；要让 `=0` 真的 504，`fake_delay_ms` 必须 > 300000，即单测耗时 ≥5 分钟，不可接受。RD 用同机同构建的探针给出三组证据（改前 `applied=0`→200；改后 `applied=300000`→200；对照 `=100`+1s→504），未改夹值、未拒绝启动，而是把用例改为钉住夹值**实际**产生的契约。**修订后的判据（编排方已接受）**：
+  1. 服务以 `model_run_timeout=0` **正常启动**（不是拒绝启动）；
+  2. 白盒读到生效值 **300000**（改前为 0 —— 这是判别点）；
+  3. 该配置下 1 秒推理仍返回 **200** —— 这是**防"夹到 500ms 默认值"回归的护栏**（若有人把常量改成 500，本行立刻变红）；
+  4. 请求的队列槽位被释放且可复用。
+
+  504 路径本身由既有的 `model_timeout_returns_504`（`:765-786`，`=100` + 1s 假延迟）与"定时器必然建立"的白盒事实共同锁定，**"缺 `=0`→504 用例"不算缺陷**。
 - A3 `grep -rn 'model_run_timeout=0' conf/server | wc -l` = 0，且 `grep -rn 'model_run_timeout' conf/server | wc -l` 仍为 5 份配置均显式有界。
 
   编排方已核实的精确落点（本轮基线 `4ebbcb7d`）：5 份配置全部在第 17 行写 `model_run_timeout=0` —— `conf/server/diffusion/{cls_cond_ddim,ddim,ddpm,ldm}/*_server_config.toml` 与 `conf/server/segment_anything/sam_amg/sam_amg_server_config.toml`。文档两侧都存在：`docs/about_model_server_configuration.md`（2954 B）与 `.zh-cn.md`（3087 B）；其中**中文版第 22 行**明文写"`-1代表该值无限大`"——这句在当前实现下就是错的（`<=0` 实为关闭超时），本项必须改掉；英文版第 22 行未作无限大声明，但应补上"`<=0` 会被夹到 300000ms 并告警"。
