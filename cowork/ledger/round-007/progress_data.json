@@ -1,6 +1,6 @@
 {
   "round": 7,
-  "generated_at": "2026-10-16 14:11:57 CST",
+  "generated_at": "2026-10-16 14:12:14 CST",
   "round_status": "done",
   "current": null,
   "done": 6,
@@ -17,9 +17,9 @@
       "status": "done",
       "merge_sha": "3e700a09805df21d2fd20d3885b723a4f0c32f28",
       "branch_sha": "b777b8d889d90aee46458f369e12161c8b7ba68c",
-      "has_design": false,
-      "has_rd": false,
-      "has_qa": false,
+      "has_design": true,
+      "has_rd": true,
+      "has_qa": true,
       "has_merge": true,
       "paths": {
         "design": "cowork/ledger/round-007/issues/p0-1/03-design-final.md",
@@ -28,9 +28,9 @@
         "merge": "cowork/ledger/round-007/issues/p0-1/05-merge.md"
       },
       "snippets": {
-        "design": "",
-        "rd": "",
-        "qa": "",
+        "design": "# 技术方案\n- 问题: P0-1\n- 版本: v1\n## 目标\nCI 将 `check_version_single_source.py` 作为独立 fail-closed 步骤运行，不再作为 `check_consistency.py` 的位置参数。\n## 边界\n- 不改 packing/Docker。\n- 不改 check_consistency 行为（仅去掉错误调用）。\n## 实现要点\n1. `.github/workflows/ci.yml` Repository consistency checks：先 `python3 scripts/check_version_single_source.py`，再 `python3 scripts/check_consistency.py`（无多余位置参数）。\n2. 版本检查失败必须使该 step 失败（set -e已有）。\n## 确认",
+        "rd": "# 实现\n- 问题: P0-1\n- 分支: cowork/r7-p0-1-ci-version\n- 提交: b777b8d889d90aee46458f369e12161c8b7ba68c\n- 实现偏差: 无\nCI Repository consistency checks 先跑 check_version_single_source，再跑 check_consistency（无位置参数）。",
+        "qa": "# QA\n- 问题: P0-1\n- 结论: pass\n## 验收\n| 编号 | 结果 | 证据 |\n| --- | --- | --- |\n| 1 | pass | python3 scripts/check_version_single_source.py → OK single version source: 1.0.0 |\n| 2 | pass | ci.yml 独立调用 version 脚本，不再作为 consistency 位置参数 |\n| 3 | pass | 旧调用会 argparse 失败；已移除 |\n## 命令\npython3 scripts/check_version_single_source.py\n## 备注",
         "merge": "# 合入\n- 问题: P0-1\n- 分支: cowork/r7-p0-1-ci-version\n- worktree: /mnt/g/Codex/mortred_wt_r7_p0_1\n- 问题分支提交: b777b8d889d90aee46458f369e12161c8b7ba68c\n- QA 结论: pass\n- 重跑: exit 0\n- 命令: python3 scripts/check_version_single_source.py\n- merge commit: 3e700a09805df21d2fd20d3885b723a4f0c32f28"
       },
       "step_text": "已合入 · merge 3e700a09805df21d2fd20d3885b723a4f0c32f28"
