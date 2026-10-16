@@ -116,6 +116,7 @@ protected:
         WFServerParams server_params = SERVER_PARAMS_DEFAULT;
         server_params.max_connections = impl->_m_max_connection_nums;
         server_params.peer_response_timeout = impl->_m_peer_resp_timeout;
+        server_params.receive_timeout = impl->_m_receive_timeout;
         server_params.request_size_limit = impl->_m_request_size_limit * 1024 * 1024;
 
         auto&& proc = [impl](auto arg) { return impl->serve_process(arg); };

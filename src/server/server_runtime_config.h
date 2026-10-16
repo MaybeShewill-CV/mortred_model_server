@@ -32,6 +32,9 @@ using jinq::common::k_default_request_size_limit_mb;
 struct ServerRuntimeConfig {
     int max_connections = 200;
     int peer_resp_timeout = 15 * 1000;
+    // Whole-message receive timeout (ms). WF default is -1 (forever);
+    // a bounded default keeps drip/slowloris connections from filling ingress.
+    int receive_timeout = 60 * 1000;
     int compute_threads = -1;
     int handler_threads = 50;
     size_t request_size_limit = k_default_request_size_limit_mb;
@@ -127,6 +130,17 @@ inline StatusCode parse_server_runtime_config(const toml::table& server_section,
         static_cast<int>(server_section["peer_resp_timeout"].value_or<int64_t>(
             defaults.peer_resp_timeout / 1000)) *
         1000;
+    // TOML unit is seconds (same as peer_resp_timeout); store ms for WFServerParams.
+    cfg.receive_timeout =
+        static_cast<int>(server_section["receive_timeout"].value_or<int64_t>(
+            defaults.receive_timeout / 1000)) *
+        1000;
+    if (cfg.receive_timeout <= 0) {
+        LOG(WARNING) << "receive_timeout <= 0: clamping to "
+                     << defaults.receive_timeout
+                     << "ms (whole-message receive must stay bounded)";
+        cfg.receive_timeout = defaults.receive_timeout;
+    }
     cfg.compute_threads = static_cast<int>(
         server_section["compute_threads"].value_or<int64_t>(defaults.compute_threads));
     cfg.handler_threads = static_cast<int>(
