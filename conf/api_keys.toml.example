@@ -7,7 +7,16 @@
 # copy is not authentication. The runtime file is gitignored; this example is
 # not loaded by the gateway.
 #
-# echo -n "your-secret-key" | sha256sum
+# Mint a key with the helper (32 random bytes; the plaintext is printed once and
+# only its hash is written here):
+#   ./scripts/mint_api_key.sh --name client-a --scope inference
+#   ./scripts/mint_api_key.sh --name client-a --scope inference --append conf/api_keys.toml
+#
+# Do NOT hash a memorable phrase. The gateway verifies the bearer secret with an
+# unsalted SHA-256 (fast by design: a bearer token, not a password), so key
+# entropy IS the security and a leaked config makes a weak key reversible.
+# scripts/check_api_keys_hashing.sh rejects a config that still carries the hash
+# of the documented example secret, and `mortredctl doctor` runs that check.
 
 # [keys.client-a]
 # hash = "<sha256 hex of the Bearer secret>"

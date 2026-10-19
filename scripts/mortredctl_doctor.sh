@@ -72,6 +72,19 @@ if [ -f "$CRED_FILE" ]; then
     fi
 fi
 
+# API key hygiene: the gateway verifies keys with an unsalted SHA-256, so a
+# config carrying the hash of a documented example secret (or a truncated hash)
+# is a working credential for anyone who can read the file.
+echo "== API keys =="
+if [ -f "$ROOT/conf/api_keys.toml" ]; then
+    if ! bash "$ROOT/scripts/check_api_keys_hashing.sh" "$ROOT/conf/api_keys.toml"; then
+        echo "next: ./scripts/mint_api_key.sh --name <client> --scope inference --append conf/api_keys.toml"
+        exit 1
+    fi
+else
+    echo "  [ok] no conf/api_keys.toml (static tokens only)"
+fi
+
 echo "== pack occupancy / identity ($PACK) =="
 if [ -f "$PACK" ]; then
     set +e

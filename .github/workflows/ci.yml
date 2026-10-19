@@ -113,6 +113,12 @@ jobs:
         run: |
           LD_LIBRARY_PATH="$MORTRED_CI_LIB_DIR" CTEST_OUTPUT_ON_FAILURE=1 cmake --build build-ci --target check -j"$(nproc)"
 
+      # SKIP_RETURN_CODE 77 makes a test that proved nothing look like a pass in
+      # ctest's summary. This job has no weights installed, so skips are expected
+      # here and are explicitly allowed — but they are now counted and printed.
+      - name: ctest summary (skips counted, expected without weights)
+        run: python3 scripts/ctest_summary.py --junit build-ci/ctest-junit.xml --allow-skips
+
       # A6: curated valgrind suite is labeled, not part of default check.
       - name: Run curated valgrind memory-check tests
         run: |
@@ -437,6 +443,13 @@ jobs:
         run: |
           LD_LIBRARY_PATH="${{ github.workspace }}/build-cpu/lib" CTEST_OUTPUT_ON_FAILURE=1 \
             cmake --build build-cpu --target check -j"$(nproc)"
+
+      # Skips are expected here (the cpu profile compiles TensorRT out), so they
+      # are explicitly allowed — but counted and printed instead of hiding in
+      # ctest's "100% tests passed". Numerical proof in this job comes from the
+      # fail-closed hosted-golden step below, not from the ctest summary.
+      - name: ctest summary (skips counted; TRT tests skip by design here)
+        run: python3 scripts/ctest_summary.py --junit build-cpu/ctest-junit.xml --allow-skips
 
       - name: MNN CPU session + hosted golden set (fail-closed)
         run: |
