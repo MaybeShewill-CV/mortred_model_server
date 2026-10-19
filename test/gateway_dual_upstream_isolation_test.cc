@@ -114,14 +114,18 @@ TEST(GatewayDualUpstreamIsolation, stop_one_keeps_other_alive) {
     ASSERT_NE(port_a, port_b);
 
     const fs::path root = fs::temp_directory_path() / ("mortred_dual_up_" + std::to_string(::getpid()));
-    fs::create_directories(root / "conf" / "servers");
-    fs::create_directories(root / "conf" / "models");
+    // The catalog reads conf/server (singular); the upstream entries are plain
+    // server configs, so they live there too. Nothing is served from
+    // conf/model in this test.
+    fs::create_directories(root / "conf" / "server");
     {
-        std::ofstream a(root / "conf" / "servers" / "model_a.toml");
-        a << "model=\"MODEL_A\"\nport=" << port_a
+        // The catalog requires exactly one [*_SERVER] section per file; bare
+        // top-level keys are not a server entry and produce "routes: 0".
+        std::ofstream a(root / "conf" / "server" / "model_a.toml");
+        a << "[MODEL_A_SERVER]\nmodel=\"MODEL_A\"\nport=" << port_a
           << "\nserver_uri=\"/mortred_ai_server_v1/test/model_a\"\nserver_exe=\"fake_model_server.out\"\n";
-        std::ofstream b(root / "conf" / "servers" / "model_b.toml");
-        b << "model=\"MODEL_B\"\nport=" << port_b
+        std::ofstream b(root / "conf" / "server" / "model_b.toml");
+        b << "[MODEL_B_SERVER]\nmodel=\"MODEL_B\"\nport=" << port_b
           << "\nserver_uri=\"/mortred_ai_server_v1/test/model_b\"\nserver_exe=\"fake_model_server.out\"\n";
         std::ofstream mortred(root / "conf" / "mortred.toml");
         mortred << "[gateway]\nport=" << gateway_port << "\n";
