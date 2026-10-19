@@ -346,6 +346,15 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err,
         }
         occ.live = query_live_gpu_via_shared_probe();
         occ.live_mem_available_mib = query_mem_available_mib();
+        // Fail closed on a missing GPU probe unless the operator opts out
+        // explicitly. Without live telemetry the fingerprint and free-memory
+        // checks cannot run, so the gate would otherwise "verify" nothing.
+        if (const char* allow = std::getenv("MORTRED_ALLOW_UNKNOWN_GPU");
+            allow != nullptr && (std::strcmp(allow, "1") == 0 || std::strcmp(allow, "true") == 0 ||
+                                 std::strcmp(allow, "TRUE") == 0 ||
+                                 std::strcmp(allow, "yes") == 0)) {
+            occ.allow_unknown_gpu = true;
+        }
         if (!occupancy_ready_for_spawn(occ, err)) {
             return false;
         }

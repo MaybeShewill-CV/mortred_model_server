@@ -15,7 +15,67 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+MODE="write"
+case "${1:-}" in
+    --check) MODE="check"; shift ;;
+    --self-test) MODE="self-test"; shift ;;
+    --help|-h)
+        cat <<'USAGE'
+usage: write_prometheus_credentials.sh [--check|--self-test] [OUT]
+  (no flag)   write OUT from $MORTRED_METRICS_TOKEN (mode 600, owner adjusted)
+  --check     verify OUT matches $MORTRED_METRICS_TOKEN (exit 1 when stale)
+  --self-test exercise --check against matching/mismatching/missing files
+USAGE
+        exit 0 ;;
+esac
 OUT="${1:-$ROOT/conf/local/mortred_metrics_token}"
+
+check_only() {
+    : "${MORTRED_METRICS_TOKEN:?set MORTRED_METRICS_TOKEN (mortredctl init-trust) before --check}"
+    if [ ! -f "$OUT" ]; then
+        echo "[ERROR] $OUT does not exist; run ./scripts/write_prometheus_credentials.sh" >&2
+        exit 1
+    fi
+    local have
+    have="$(tr -d '\r\n' < "$OUT")"
+    if [ "$have" = "$MORTRED_METRICS_TOKEN" ]; then
+        echo "metrics credentials match MORTRED_METRICS_TOKEN ($OUT)"
+        exit 0
+    fi
+    echo "[ERROR] $OUT does not match MORTRED_METRICS_TOKEN" >&2
+    echo "  the Prometheus scrape credential is stale: scrapes would get 401 with no other signal" >&2
+    echo "  fix: set -a && . conf/local/trust.env && set +a && ./scripts/write_prometheus_credentials.sh $OUT" >&2
+    exit 1
+}
+
+self_test() {
+    local fails=0 tmp f
+    tmp="$(mktemp -d)"
+    f="$tmp/metrics_token"
+    if ( MORTRED_METRICS_TOKEN=abc "$0" --check "$f" >/dev/null 2>&1 ); then
+        echo "FAIL: missing file accepted"; fails=$((fails + 1))
+    fi
+    printf 'abc\n' > "$f"
+    if ! ( MORTRED_METRICS_TOKEN=abc "$0" --check "$f" >/dev/null 2>&1 ); then
+        echo "FAIL: matching file rejected"; fails=$((fails + 1))
+    fi
+    printf 'def\n' > "$f"
+    if ( MORTRED_METRICS_TOKEN=abc "$0" --check "$f" >/dev/null 2>&1 ); then
+        echo "FAIL: stale file accepted"; fails=$((fails + 1))
+    fi
+    if ( unset MORTRED_METRICS_TOKEN; "$0" --check "$f" >/dev/null 2>&1 ); then
+        echo "FAIL: unset token accepted"; fails=$((fails + 1))
+    fi
+    rm -rf "$tmp"
+    echo "SUMMARY FAILS=$fails"
+    return "$fails"
+}
+
+case "$MODE" in
+    self-test) self_test; exit $? ;;
+    check) check_only ;;
+esac
 
 : "${MORTRED_METRICS_TOKEN:?set MORTRED_METRICS_TOKEN (mortredctl init-trust)}"
 

@@ -53,6 +53,11 @@ class OccupancyGateTest : public ::testing::Test {
         in.candidate_id = "YOLOV8";
         in.candidate_is_tensorrt = true;
         in.worker_nums = 1;
+        // Cases below target the stamp / budget / fingerprint rules, not the
+        // telemetry gate itself. Unit tests run without a GPU probe, so they
+        // opt in to the explicit unverified-start override; the dedicated
+        // telemetry tests clear it to assert the fail-closed default.
+        in.allow_unknown_gpu = true;
         return in;
     }
     const char* previous_ = nullptr;
@@ -83,6 +88,41 @@ TEST_F(OccupancyGateTest, cpu_or_mnn_without_stamp_passes) {
     OccupancyCheckInput in = trt_base();
     in.candidate_is_tensorrt = false;
     in.candidate_id = "MOBILENETV2";
+    std::string err;
+    EXPECT_TRUE(occupancy_ready_for_spawn(in, &err)) << err;
+}
+
+// P1: when the live GPU probe is unavailable the fingerprint and free-memory
+// checks cannot run, so a stamped TensorRT id must not start "verified".
+TEST_F(OccupancyGateTest, stamped_trt_fails_closed_when_gpu_telemetry_is_unavailable) {
+    OccupancyCheckInput in = trt_base();
+    in.allow_unknown_gpu = false;  // the default the supervisor uses
+    in.has_gpu_mem_mib = true;
+    in.gpu_mem_mib = 1800;
+    in.live.available = false;
+    std::string err;
+    EXPECT_FALSE(occupancy_ready_for_spawn(in, &err));
+    EXPECT_TRUE(is_occupancy_gate_error(err)) << err;
+    EXPECT_NE(err.find("GPU telemetry unavailable"), std::string::npos) << err;
+    EXPECT_NE(err.find("MORTRED_ALLOW_UNKNOWN_GPU=1"), std::string::npos) << err;
+}
+
+TEST_F(OccupancyGateTest, explicit_override_allows_unverified_start) {
+    OccupancyCheckInput in = trt_base();
+    in.has_gpu_mem_mib = true;
+    in.gpu_mem_mib = 1800;
+    in.live.available = false;
+    in.allow_unknown_gpu = true;
+    std::string err;
+    EXPECT_TRUE(occupancy_ready_for_spawn(in, &err)) << err;
+}
+
+TEST_F(OccupancyGateTest, non_trt_id_is_unaffected_by_missing_telemetry) {
+    OccupancyCheckInput in = trt_base();
+    in.allow_unknown_gpu = false;
+    in.candidate_is_tensorrt = false;
+    in.candidate_id = "MOBILENETV2";
+    in.live.available = false;
     std::string err;
     EXPECT_TRUE(occupancy_ready_for_spawn(in, &err)) << err;
 }
@@ -168,7 +208,7 @@ TEST_F(OccupancyGateTest, joint_budget_allows_fit) {
     EXPECT_TRUE(occupancy_ready_for_spawn(in, &err)) << err;
 }
 
-TEST_F(OccupancyGateTest, fingerprint_skipped_without_live_gpu) {
+TEST_F(OccupancyGateTest, fingerprint_skipped_without_live_gpu_when_override_set) {
     OccupancyCheckInput in = trt_base();
     in.has_gpu_mem_mib = true;
     in.gpu_mem_mib = 1800;

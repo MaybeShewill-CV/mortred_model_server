@@ -76,6 +76,9 @@ struct OccupancyCheckInput {
     int host_memory_total_mib = 0;
     int ram_reserve_pct = 15;
     int live_mem_available_mib = -1;  // <0 = unknown
+    // Explicit operator override: allow a TensorRT id to start even though the
+    // live GPU probe is unavailable (nothing can be verified in that state).
+    bool allow_unknown_gpu = false;
     std::vector<OccupancySibling> running_siblings;
     LiveGpuSnapshot live;
 };
@@ -462,6 +465,17 @@ inline bool occupancy_ready_for_spawn(const OccupancyCheckInput& in, std::string
     };
     if (in.candidate_is_tensorrt && (!in.has_gpu_mem_mib || in.gpu_mem_mib <= 0)) {
         return fail("stamp missing for " + in.candidate_id + " (gpu_mem_mib>0 required for TensorRT)");
+    }
+    // Live telemetry is what turns the static stamps into a real capacity gate:
+    // it supplies the GPU fingerprint and the free-memory budget. When the probe
+    // is unavailable both checks below silently disappear, so a TensorRT id used
+    // to start "verified" by a gate that verified nothing. Fail closed instead;
+    // an operator who really wants to start unverified must say so explicitly.
+    if (in.candidate_is_tensorrt && in.has_gpu_mem_mib && in.gpu_mem_mib > 0 &&
+        !in.live.available && !in.allow_unknown_gpu) {
+        return fail("GPU telemetry unavailable: cannot verify the " + in.candidate_id +
+                    " stamp (gpu_mem_mib=" + std::to_string(in.gpu_mem_mib) +
+                    " MiB); fix the GPU probe or set MORTRED_ALLOW_UNKNOWN_GPU=1 to start unverified");
     }
     if (in.has_measured_gpu_mem_mib && in.has_gpu_mem_mib && in.gpu_mem_mib > 0) {
         const int tol = occupancy_declared_measured_tol_mib(in.gpu_mem_mib);

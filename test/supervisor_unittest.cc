@@ -746,7 +746,10 @@ TEST_F(SupervisorTest, spawn_passes_model_flag_for_unified_exe) {
     fs::remove(root_ / "conf" / "server" / "test" / "fake.toml");
 
     const auto argv_file = root_ / "spawn_argv.txt";
-    ::setenv("MORTRED_ARGV_FILE", argv_file.c_str(), 1);
+    // The child env is an allowlist (r14), so a test-only variable set here
+    // would never reach the child. Hand the dump path over through the fake's
+    // own config instead.
+    ::unsetenv("MORTRED_ARGV_FILE");
 
     {
         std::ofstream out(root_ / "conf" / "server" / "test" / "yolov8.toml");
@@ -758,6 +761,7 @@ TEST_F(SupervisorTest, spawn_passes_model_flag_for_unified_exe) {
             << "server_exe=\"mortred-model-server.out\"\n"
             << "fake_port=" << port_ << "\n"
             << "fake_mode=\"ready\"\n"
+            << "fake_argv_file=\"" << argv_file.string() << "\"\n"
             << "\n"
             << "[YOLOV8]\n"
             << "model_config_file_path=\"x.toml\"\n";

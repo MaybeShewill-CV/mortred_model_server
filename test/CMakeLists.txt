@@ -475,6 +475,16 @@ add_test(
     COMMAND python3 scripts/stop_order_record.py --check
     WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
 
+# Prometheus scrape credential consistency. A rotated MORTRED_METRICS_TOKEN
+# that never reached conf/local/mortred_metrics_token (or the bind-mounted
+# copy) makes every scrape 401 with no other signal, so verify the pairing.
+# --self-test needs no live token or file: it exercises matching, stale,
+# missing and unset cases in a temp dir.
+add_test(
+    NAME prometheus_credentials_check
+    COMMAND bash scripts/write_prometheus_credentials.sh --self-test
+    WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
+
 # Manual GCRA performance baseline (PR-1 acceptance reference; NOT a CI test)
 add_executable(rate_limit_gcra_bench EXCLUDE_FROM_ALL rate_limit_gcra_bench.cc)
 # common carries the mortred_common_includes INTERFACE (src/ include root)

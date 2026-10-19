@@ -234,12 +234,6 @@ void handle_client(int fd, const std::string& mode, double server_time_ms, int d
 
 int main(int argc, char** argv) {
     ::signal(SIGPIPE, SIG_IGN);
-    if (const char* dump = std::getenv("MORTRED_ARGV_FILE"); dump != nullptr && *dump != '\0') {
-        std::ofstream out(dump);
-        for (int i = 0; i < argc; ++i) {
-            out << argv[i] << '\n';
-        }
-    }
     std::map<std::string, std::string> cfg;
     int port = 0;
     std::string mode = "ready";
@@ -285,6 +279,22 @@ int main(int argc, char** argv) {
     }
     if (cfg.count("fake_port") != 0 && port == 0) {
         port = std::atoi(cfg["fake_port"].c_str());
+    }
+    // Argv dump for the supervisor test. The child env is an allowlist, so the
+    // path must arrive through this config section; the env fallback only
+    // serves direct (non-supervisor) launches of the fake.
+    {
+        const char* dump_env = std::getenv("MORTRED_ARGV_FILE");
+        const std::string dump =
+            cfg.count("fake_argv_file") != 0 && !cfg["fake_argv_file"].empty()
+                ? cfg["fake_argv_file"]
+                : (dump_env != nullptr ? std::string(dump_env) : std::string());
+        if (!dump.empty()) {
+            std::ofstream out(dump);
+            for (int i = 0; i < argc; ++i) {
+                out << argv[i] << '\n';
+            }
+        }
     }
     if (cfg.count("fake_mode") != 0 && mode == "ready") {
         mode = cfg["fake_mode"];

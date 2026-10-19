@@ -40,10 +40,13 @@ LimitNOFILE=65536
 # ordered shutdown (models first, gateway last) may take a while
 TimeoutStopSec=120
 KillSignal=SIGTERM
-# control-group: SIGKILL/stop reaps gateway+model children holding VRAM
-# (KillMode=process left orphans after hard kill). Children also set
-# PR_SET_PDEATHSIG(SIGINT) for orderly parent-death self-exit.
-KillMode=control-group
+# mixed: the stop signal reaches only the main process, so the supervisor keeps
+# its ordered shutdown (models first, gateway last). After TimeoutStopSec the
+# final SIGKILL still covers every remaining cgroup member, so a hung
+# supervisor cannot leave gateway/model children holding VRAM behind.
+# (control-group was wrong here: it signals gateway and every model at the same
+# instant and destroys that ordering.)
+KillMode=mixed
 NoNewPrivileges=true
 OOMPolicy=continue
 

@@ -62,7 +62,7 @@ _SEED_LINES = (
 )
 
 CHECK_LINES = (
-    "KillMode=process 为通过",
+    "KillMode=mixed 为通过",
     "KillSignal=SIGTERM 为通过",
     "TimeoutStopSec=120 为通过",
     "模型 SIGINT 并等待之后才向 gateway 发 SIGINT 为通过",
@@ -125,7 +125,13 @@ def is_json_int(value) -> bool:
 
 
 def unit_ok(text: str) -> bool:
-    """[Service] before [Install] has one exact KillMode=process line."""
+    """[Service] before [Install] has one exact KillMode=mixed line.
+
+    mixed (not process, not control-group): KillSignal must reach only the main
+    process so the supervisor keeps its ordered shutdown, while the final
+    SIGKILL must still cover the remaining cgroup so a hung supervisor cannot
+    orphan gateway/model children that hold VRAM.
+    """
     if not isinstance(text, str):
         return False
     if "ExecStop=" in text:
@@ -138,13 +144,17 @@ def unit_ok(text: str) -> bool:
     if service_at >= install_at:
         return False
     span = lines[service_at + 1 : install_at]
-    if span.count("KillMode=process") != 1:
+    # Comments are documentation, not directives: a commented-out line must
+    # never satisfy (or break) the rules. Strip them before inspecting keys.
+    effective = [line.strip() for line in lines if not line.strip().startswith("#")]
+    span_effective = [line.strip() for line in span if not line.strip().startswith("#")]
+    if span_effective.count("KillMode=mixed") != 1:
         return False
-    if [line for line in lines if "KillMode" in line] != ["KillMode=process"]:
+    if [line for line in effective if "KillMode" in line] != ["KillMode=mixed"]:
         return False
-    if [line for line in lines if "KillSignal" in line] != ["KillSignal=SIGTERM"]:
+    if [line for line in effective if "KillSignal" in line] != ["KillSignal=SIGTERM"]:
         return False
-    if [line for line in lines if "TimeoutStopSec" in line] != ["TimeoutStopSec=120"]:
+    if [line for line in effective if "TimeoutStopSec" in line] != ["TimeoutStopSec=120"]:
         return False
     return True
 
@@ -154,7 +164,7 @@ def _minimal_unit() -> str:
         "[Service]\n"
         "TimeoutStopSec=120\n"
         "KillSignal=SIGTERM\n"
-        "KillMode=process\n"
+        "KillMode=mixed\n"
         "[Install]\n"
     )
 
@@ -164,19 +174,28 @@ def unit_rules_hold(real_text: str) -> bool:
         return False
     valid = _minimal_unit()
     rejected = (
-        valid.replace("KillMode=process", "KillMode=mixed"),
-        valid.replace("KillMode=process", "KillMode=control-group"),
-        valid.replace("KillMode=process", "KillMode=none"),
-        valid.replace("KillMode=process", "KillMode = process"),
+        valid.replace("KillMode=mixed", "KillMode=process"),
+        valid.replace("KillMode=mixed", "KillMode=control-group"),
+        valid.replace("KillMode=mixed", "KillMode=none"),
+        valid.replace("KillMode=mixed", "KillMode = mixed"),
         valid.replace("KillSignal=SIGTERM", "KillSignal = SIGTERM"),
         valid.replace("TimeoutStopSec=120", "TimeoutStopSec=90"),
-        valid.replace("KillMode=process\n", "KillMode=process\nKillMode=process\n"),
-        valid.replace("KillMode=process\n", ""),
+        valid.replace("KillMode=mixed\n", "KillMode=mixed\nKillMode=mixed\n"),
+        valid.replace("KillMode=mixed\n", ""),
         valid + "ExecStop=/bin/true\n",
-        "[Install]\nKillMode=process\n[Service]\n"
+        "[Install]\nKillMode=mixed\n[Service]\n"
         "TimeoutStopSec=120\nKillSignal=SIGTERM\n",
+        # a commented-out directive is documentation, never a directive
+        "# KillMode=mixed\n" + valid.replace("KillMode=mixed\n", ""),
     )
-    return all(not unit_ok(item) for item in rejected)
+    if not all(not unit_ok(item) for item in rejected):
+        return False
+    # ...and a comment mentioning a wrong value must not invalidate a good unit
+    commented = valid.replace(
+        "[Service]\n",
+        "[Service]\n# do not use KillMode=control-group or KillSignal=SIGKILL here\n",
+    )
+    return unit_ok(commented)
 
 
 def one_server(status: dict, model_id: str):
