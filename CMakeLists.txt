@@ -12,9 +12,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(PROJECT_ROOT_DIR ${CMAKE_CURRENT_LIST_DIR})
 
 # version header consumed by mortredctl/supervisor --version; single source of
-# truth = project(VERSION), which equals the git tag of the release pipeline
+# truth = project(VERSION), which equals the git tag of the release pipeline.
+# Generated into the build tree, never into src/: a committed generated header
+# makes every checkout dirty after the first configure.
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/generated/common)
 configure_file(${PROJECT_ROOT_DIR}/src/common/mortred_version.h.in
-               ${PROJECT_ROOT_DIR}/src/common/mortred_version.h @ONLY)
+               ${CMAKE_BINARY_DIR}/generated/common/mortred_version.h @ONLY)
 
 # Build type: default to Release only when unspecified; never override a user's Debug/RelWithDebInfo choice
 if(NOT CMAKE_BUILD_TYPE)
@@ -42,6 +45,33 @@ option(MORTRED_BUILD_FULL "Build full project (models/server/apps, requires CUDA
 # source of truth for the deployment story - see docs/deployment.md.
 set(MORTRED_BUILD_PROFILE "gpu" CACHE STRING "Deployment profile: gpu | cpu")
 set_property(CACHE MORTRED_BUILD_PROFILE PROPERTY STRINGS gpu cpu)
+
+# _bin/_lib default to one shared location at the repo root, so a second build
+# directory configured with a different profile silently overwrites the first
+# profile's binaries. Worse, the foreign binary is then newer than this
+# profile's objects, so a later `cmake --build` of the right profile considers
+# the target up-to-date and never relinks (observed twice: a cpu configure in
+# build-eval replaced _bin/mortred-model-server.out, after which every
+# TensorRT id failed to start with "tensorrt backend is not compiled into this
+# build (cpu profile)", and the gpu rebuild printed no Linking line at all).
+# Stamp the profile and refuse a conflicting configure in the same output dir.
+set(_mortred_profile_stamp "${MORTRED_BIN_OUTPUT_DIR}/.mortred-build-profile")
+file(MAKE_DIRECTORY "${MORTRED_BIN_OUTPUT_DIR}")
+if(EXISTS "${_mortred_profile_stamp}")
+    file(READ "${_mortred_profile_stamp}" _mortred_stamped_profile)
+    string(STRIP "${_mortred_stamped_profile}" _mortred_stamped_profile)
+    if(NOT _mortred_stamped_profile STREQUAL MORTRED_BUILD_PROFILE)
+        message(FATAL_ERROR
+            "output dir ${MORTRED_BIN_OUTPUT_DIR} already holds a ${_mortred_stamped_profile}-profile build; "
+            "configuring ${MORTRED_BUILD_PROFILE} here would overwrite those binaries.\n"
+            "Give the second profile its own output dirs, e.g.\n"
+            "  cmake -S . -B build-cpu -DMORTRED_BUILD_PROFILE=cpu "
+            "-DMORTRED_BIN_OUTPUT_DIR=<build-dir>/_bin -DMORTRED_LIB_OUTPUT_DIR=<build-dir>/_lib\n"
+            "or delete ${_mortred_profile_stamp} if this tree is meant to switch profile.")
+    endif()
+else()
+    file(WRITE "${_mortred_profile_stamp}" "${MORTRED_BUILD_PROFILE}\n")
+endif()
 option(MORTRED_INSTALL "Create the tree-style install target (bin/lib tree)" OFF)
 
 # Vendored deps: exact soname + FATAL with profile-aware fix + auto-reconfigure
@@ -73,6 +103,7 @@ find_package(Eigen3 REQUIRED)
 add_library(mortred_common_includes INTERFACE)
 target_include_directories(mortred_common_includes INTERFACE
     ${PROJECT_ROOT_DIR}/src
+    ${CMAKE_BINARY_DIR}/generated   # mortred_version.h (generated, not committed)
 )
 target_include_directories(mortred_common_includes SYSTEM INTERFACE
     ${PROJECT_ROOT_DIR}/3rd_party/include
