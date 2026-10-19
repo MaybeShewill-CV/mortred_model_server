@@ -323,7 +323,10 @@ foreach(src ${TEST_LIST})
     elseif(${src} STREQUAL "process_stop_unittest")
         set(EXTRA_LIBS vendored::workflow pthread)
     elseif(${src} STREQUAL "do_work_lifetime_unittest")
-        set(EXTRA_LIBS glog::glog vendored::workflow pthread)
+        # backend_cv_model.h inlines a call to gpu_jpeg::render_decode_metrics();
+        # compile that TU here instead of linking libmodels (own create).
+        set(EXTRA_SRCS ${PROJECT_ROOT_DIR}/src/models/backend/gpu_jpeg_decoder.cpp)
+        set(EXTRA_LIBS glog::glog vendored::workflow pthread ${OpenCV_LIBS})
     endif()
     set(THIS_GTEST_LIBS ${GTEST_LIBS})
     if(${src} STREQUAL "model_golden_test")

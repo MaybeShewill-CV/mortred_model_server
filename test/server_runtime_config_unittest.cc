@@ -106,14 +106,20 @@ max_queue_depth = -8
     EXPECT_EQ(cfg.peer_resp_timeout, 15 * 1000);
     EXPECT_EQ(cfg.receive_timeout, 60 * 1000);
     EXPECT_EQ(cfg.compute_threads, -1);
-    EXPECT_EQ(cfg.handler_threads, 50);
+    // Round 13 lowered the shipped handler-thread default from 50 to 8: 50
+    // handler threads per model process dominated the idle footprint (the
+    // capacity work). A config that omits the key must get the new default.
+    EXPECT_EQ(cfg.handler_threads, 8);
     EXPECT_EQ(cfg.model_run_timeout, 800);
     EXPECT_EQ(cfg.ewma_seed_ms, 800);
     EXPECT_EQ(cfg.max_batch_size, 1);
     EXPECT_EQ(cfg.max_batch_delay_ms, 5);
     EXPECT_EQ(cfg.max_request_items, 16);
     EXPECT_EQ(cfg.stuck_worker_threshold_times, 3);
-    EXPECT_EQ(cfg.max_queue_depth, 0);
+    // Round 14: a non-positive queue depth is clamped to the positive default
+    // instead of silently disabling the admission bound (max_queue_depth = -8
+    // in this fixture).
+    EXPECT_EQ(cfg.max_queue_depth, 32);
     EXPECT_EQ(cfg.stuck_worker_action, "log");
     EXPECT_FALSE(cfg.async_enabled);
     EXPECT_EQ(cfg.async_timeout, 300000);

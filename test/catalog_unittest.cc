@@ -234,7 +234,7 @@ const Table* server_table_of(const Doc& doc) {
     return nullptr;
 }
 
-void expect_real_conf_tree_boots(const std::string& profile) {
+void expect_real_conf_tree_boots(const std::string& profile, bool expect_non_empty) {
     const fs::path root = fs::current_path();
     const fs::path conf = root / "conf" / "server";
     ASSERT_TRUE(fs::is_directory(conf))
@@ -263,7 +263,19 @@ void expect_real_conf_tree_boots(const std::string& profile) {
     ASSERT_TRUE(catalog.init(root.string(), &err, profile)) << err;
     ASSERT_EQ(catalog.entries().size(), eligible)
         << profile << " catalog skipped or dropped files";
-    ASSERT_FALSE(catalog.entries().empty()) << profile << " catalog is empty";
+    if (expect_non_empty) {
+        ASSERT_FALSE(catalog.entries().empty()) << profile << " catalog is empty";
+    } else {
+        // Product decision (commit ea22867d "Drop shipped cpu product configs;
+        // teach cpu via pack and docs"): the tree ships no cpu-profile product
+        // entries any more, so an empty cpu catalog is the expected state.
+        // cpu filtering itself is covered by profile_cpu_filters_gpu_entries,
+        // and the cpu backend path runs in CI against conf/ci/*_cpu_golden.toml.
+        // If someone re-adds cpu product configs this assertion fires and the
+        // decision record must be updated together with it.
+        ASSERT_TRUE(catalog.entries().empty())
+            << profile << " catalog unexpectedly gained shipped product entries";
+    }
     for (const auto& e : catalog.entries()) {
         EXPECT_GT(e.port, 0) << e.id;
         ASSERT_FALSE(e.uri.empty()) << e.id;
@@ -276,7 +288,7 @@ void expect_real_conf_tree_boots(const std::string& profile) {
 }
 
 TEST(CatalogRealTree, boots_gpu_profile) {
-    ASSERT_NO_FATAL_FAILURE(expect_real_conf_tree_boots("gpu"));
+    ASSERT_NO_FATAL_FAILURE(expect_real_conf_tree_boots("gpu", /*expect_non_empty=*/true));
     Catalog catalog;
     std::string err;
     ASSERT_TRUE(catalog.init(fs::current_path().string(), &err, "gpu")) << err;
@@ -289,13 +301,19 @@ TEST(CatalogRealTree, boots_gpu_profile) {
 }
 
 TEST(CatalogRealTree, boots_cpu_profile) {
-    ASSERT_NO_FATAL_FAILURE(expect_real_conf_tree_boots("cpu"));
+    // No shipped cpu product configs since ea22867d ("Drop shipped cpu product
+    // configs; teach cpu via pack and docs"): an empty cpu catalog is the
+    // recorded expectation, not a filter bug (see the helper's comment). The
+    // cpu backend path is exercised in CI against conf/ci/*_cpu_golden.toml.
+    ASSERT_NO_FATAL_FAILURE(expect_real_conf_tree_boots("cpu", /*expect_non_empty=*/false));
     Catalog catalog;
     std::string err;
     ASSERT_TRUE(catalog.init(fs::current_path().string(), &err, "cpu")) << err;
+    // Upper-case ids are not catalog ids in any profile.
     EXPECT_EQ(catalog.find("MOBILENETV2"), nullptr);
-    EXPECT_NE(catalog.find("mobilenetv2"), nullptr);
-    EXPECT_NE(catalog.find("resnet"), nullptr);
+    // The gpu-only product ids must not leak into the cpu profile.
+    EXPECT_EQ(catalog.find("mobilenetv2"), nullptr);
+    EXPECT_EQ(catalog.find("resnet"), nullptr);
 }
 
 int main(int argc, char** argv) {
