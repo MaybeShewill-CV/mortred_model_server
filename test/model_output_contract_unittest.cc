@@ -256,7 +256,10 @@ TEST(ModelOutputContract, MattingResizesAlphaToRequestSourceSize) {
     MatOutput ppmatting_result;
     ASSERT_EQ(ppmatting.postprocess({alpha}, request, ppmatting_result), StatusCode::OK);
     EXPECT_EQ(ppmatting_result.matting_result.size(), cv::Size(12, 8));
-    EXPECT_EQ(ppmatting_result.matting_result.type(), CV_32SC1);
+    // ac515586 aligned the matting tails: pp_matting now resizes bilinearly and
+    // emits a CV_8UC1 matte, matching modnet (it used to be CV_32SC1, which made
+    // the two matting models expose different alpha semantics to callers).
+    EXPECT_EQ(ppmatting_result.matting_result.type(), CV_8UC1);
 
     alpha.tensor.shape = {1, 1, 3, 2};
     EXPECT_EQ(modnet.postprocess({alpha}, request, modnet_result), StatusCode::MODEL_OUTPUT_CONTRACT_FAILED);

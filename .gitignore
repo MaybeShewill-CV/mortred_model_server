@@ -44,14 +44,9 @@ weights_src/
 # build outputs
 _bin/
 _lib/
-build/
-build-ci/
-build-werror/
-build-gate/
-build-tidy/
-build-tsan/
-build-asan/
-build-cpu/
+build*/
+# generated from mortred_version.h.in at configure time (CMakeLists.txt)
+src/common/mortred_version.h
 .deps-build/
 Testing/
 cmake-build-debug/

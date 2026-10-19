@@ -18,7 +18,14 @@ set(memcheck_command
     --suppressions=${_mortred_valgrind_supp})
 
 # Exclude label=valgrind from default check; CI/local run those via `ctest -L valgrind`.
-add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -LE valgrind)
+# Emit a JUnit report so scripts/ctest_summary.py can make skipped tests visible
+# (SKIP_RETURN_CODE 77 otherwise looks exactly like a pass in ctest's summary).
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.21)
+    add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -LE valgrind
+        --output-junit ${CMAKE_BINARY_DIR}/ctest-junit.xml)
+else()
+    add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -LE valgrind)
+endif()
 
 find_package(GTest REQUIRED)
 
@@ -316,7 +323,10 @@ foreach(src ${TEST_LIST})
     elseif(${src} STREQUAL "process_stop_unittest")
         set(EXTRA_LIBS vendored::workflow pthread)
     elseif(${src} STREQUAL "do_work_lifetime_unittest")
-        set(EXTRA_LIBS glog::glog vendored::workflow pthread)
+        # backend_cv_model.h inlines a call to gpu_jpeg::render_decode_metrics();
+        # compile that TU here instead of linking libmodels (own create).
+        set(EXTRA_SRCS ${PROJECT_ROOT_DIR}/src/models/backend/gpu_jpeg_decoder.cpp)
+        set(EXTRA_LIBS glog::glog vendored::workflow pthread ${OpenCV_LIBS})
     endif()
     set(THIS_GTEST_LIBS ${GTEST_LIBS})
     if(${src} STREQUAL "model_golden_test")
@@ -483,6 +493,24 @@ add_test(
 add_test(
     NAME prometheus_credentials_check
     COMMAND bash scripts/write_prometheus_credentials.sh --self-test
+    WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
+
+# ctest skip visibility: SKIP_RETURN_CODE 77 must never look like a pass.
+add_test(
+    NAME ctest_summary_self_test
+    COMMAND python3 scripts/ctest_summary.py --self-test
+    WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
+
+# API key hygiene: unsalted SHA-256 at rest means the SECRET carries the
+# entropy, so minted keys must be random and the documented weak example hash
+# must never reach a config file.
+add_test(
+    NAME api_keys_hashing_check
+    COMMAND bash scripts/check_api_keys_hashing.sh --self-test
+    WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
+add_test(
+    NAME mint_api_key_self_test
+    COMMAND bash scripts/mint_api_key.sh --self-test
     WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
 
 # Manual GCRA performance baseline (PR-1 acceptance reference; NOT a CI test)
