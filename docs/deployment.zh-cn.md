@@ -659,11 +659,14 @@ openssl rand -hex 24    # 生成方式（每个 token 各用一次）
 ### 11.2 多租户 API Key（网关层）
 
 单 token 之外，网关支持按 key 管理（哈希存储、scope、限流）。没有热加载：改文件后重启 gateway 子进程。
+用 `./scripts/mint_api_key.sh --name client-a --scope inference --append conf/api_keys.toml`
+生成密钥（32 字节随机；明文只打印一次）。**不要**哈希人类可记的口令：校验用的是无盐
+SHA-256，配置一旦泄漏，弱口令可被离线还原；`mortredctl doctor` 会拒绝文档里那个示例弱口令的哈希。
 
 ```toml
 # conf/api_keys.toml
 [keys.client-a]
-hash = "sha256(...)"          # echo -n "your-secret-key" | sha256sum
+hash = "sha256(<32 字节随机密钥的 sha256>)"   # 用 scripts/mint_api_key.sh 生成
 scope = "inference"
 rate_limit_qps = 100
 enabled = true

@@ -103,4 +103,6 @@ printf '  %s\n' "$KEY"
 echo
 echo "note: verification is unsalted SHA-256 by design, so never reuse a"
 echo "memorable phrase as the key; rotate by minting a new one and removing the old"
-echo "block (the gateway hot-reloads conf/api_keys.toml)."
+echo "block. There is NO hot reload: restart the gateway child after editing"
+echo "conf/api_keys.toml (POST /api/v1/servers/__gateway/restart), otherwise the"
+echo "new key keeps returning 401."

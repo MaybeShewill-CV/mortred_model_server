@@ -704,12 +704,16 @@ Do not reuse the inference token as the scrape secret.
 
 Beyond the single static token, the gateway supports per-key management
 (hashed at rest, scopes, rate limits). There is no hot reload: restart the
-gateway child after editing the file.
+gateway child after editing the file. Mint keys with
+`./scripts/mint_api_key.sh --name client-a --scope inference --append conf/api_keys.toml`
+(32 random bytes; the plaintext is printed once). Never hash a memorable phrase:
+verification is unsalted SHA-256, so a leaked file makes a weak key reversible,
+and `mortredctl doctor` rejects the documented example secret.
 
 ```toml
 # conf/api_keys.toml
 [keys.client-a]
-hash = "sha256(...)"          # echo -n "your-secret-key" | sha256sum
+hash = "sha256(<sha256 of a 32-byte random key>)"   # use scripts/mint_api_key.sh
 scope = "inference"
 rate_limit_qps = 100
 enabled = true

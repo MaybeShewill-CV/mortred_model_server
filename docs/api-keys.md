@@ -176,8 +176,12 @@ API keys are defined in `conf/api_keys.toml`:
 
 ```toml
 [keys.tenant-a]
-# SHA-256 hash of the API key string (never store the plaintext key)
-# Generate: echo -n "your-secret-key" | sha256sum
+# SHA-256 hash of a HIGH-ENTROPY key (never store the plaintext key).
+# Generate it with the helper instead of hashing a memorable phrase —
+# verification is unsalted SHA-256, so a leaked file makes a weak key
+# reversible:
+#   ./scripts/mint_api_key.sh --name tenant-a --scope inference
+#   ./scripts/mint_api_key.sh --name tenant-a --scope inference --append conf/api_keys.toml
 hash = "a1b2c3d4..."
 scope = "inference"       # inference | admin | all
 rate_limit_qps = 100      # 0 = unlimited
@@ -196,6 +200,12 @@ enabled = true
 ### Generating an API Key for a Client
 
 When a new client (tenant) needs access:
+
+> Preferred: `./scripts/mint_api_key.sh --name new-client --scope inference --append conf/api_keys.toml`
+> prints the plaintext key once and appends the `[keys.new-client]` block (mode 600).
+> `mortredctl doctor` runs `scripts/check_api_keys_hashing.sh` and rejects a config
+> that still carries the hash of a documented example secret or a malformed hash.
+> The manual equivalent:
 
 ```bash
 # Step 1: Generate a random key (this is what you give to the client)

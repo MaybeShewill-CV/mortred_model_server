@@ -920,6 +920,13 @@ def occupancy_fields_from_report(
             if winner in ("cpu", "gpu"):
                 fields["decode_auto"] = winner
         id_fields[model_id] = fields
+    if not id_fields:
+        # No eligible row: --write-pack must leave the pack untouched (the
+        # self-test pins both the empty return and the unchanged file). The
+        # machine-level fields below (GPU identity, host RAM) are only recorded
+        # together with at least one eligible id, so an all-ineligible
+        # calibration cannot half-update a pack.
+        return id_fields, {}
     pack_fields: dict[str, object] = {}
     gpu = report.get("gpu")
     if isinstance(gpu, dict):
