@@ -277,11 +277,22 @@ TEST(ObjectDetectionOutputContract, RequestParamThresholdSweepIsMonotone) {
         return out.size();
     };
 
-    // property-based sweep: a stricter threshold can never return MORE boxes
-    EXPECT_EQ(run_with_threshold(0.0f), 3u);
-    EXPECT_EQ(run_with_threshold(0.4f), 2u);
-    EXPECT_EQ(run_with_threshold(0.6f), 1u);
-    EXPECT_EQ(run_with_threshold(0.95f), 0u);
+    // Property: a stricter threshold can never return MORE boxes. The exact
+    // counts changed when 09b0ed2b/ac515586 aligned the same-family tails on
+    // unmap-then-NMS (NMS now runs in source-image coordinates after the
+    // anisotropic letterbox unmap + clipping, so one candidate of this fixture
+    // is suppressed at each of the first two thresholds).
+    const size_t at_0 = run_with_threshold(0.0f);
+    const size_t at_04 = run_with_threshold(0.4f);
+    const size_t at_06 = run_with_threshold(0.6f);
+    const size_t at_095 = run_with_threshold(0.95f);
+    EXPECT_EQ(at_0, 2u);
+    EXPECT_EQ(at_04, 1u);
+    EXPECT_EQ(at_06, 1u);
+    EXPECT_EQ(at_095, 0u);
+    EXPECT_GE(at_0, at_04) << "threshold sweep must be monotone";
+    EXPECT_GE(at_04, at_06) << "threshold sweep must be monotone";
+    EXPECT_GE(at_06, at_095) << "threshold sweep must be monotone";
 
     // legacy path (nullptr params) keeps the pure config behavior
     {

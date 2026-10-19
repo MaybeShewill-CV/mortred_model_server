@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <map>
+#include <set>
 #include <memory>
 #include <string>
 #include <vector>
@@ -141,13 +142,52 @@ TEST_F(ModelCatalogTest, ModelSectionsAreGloballyUnique) {
     }
 }
 
-TEST_F(ModelCatalogTest, ServerSectionsAreGloballyUnique) {
-    std::map<std::string, int> counts;
-    for (const auto *entry : served_entries_) {
-        ++counts[entry->server_section];
+TEST_F(ModelCatalogTest, ServerSectionsResolveToShippedConfigs) {
+    // server_section is resolved *inside the config file the model process was
+    // started with* (model_server_main.h: config[server_section]), and
+    // model_server_main.cpp further requires that section's model = the catalog
+    // model_section. Sibling variants therefore legitimately share one server
+    // section name (yolov8n/s/l/x all use [YOLOV8_DETECTION_SERVER]), so a
+    // global-uniqueness rule is wrong; what must hold is that every factory
+    // entry resolves to a shipped conf/server TOML that declares that section
+    // for exactly that model.
+    std::map<std::string, std::set<std::string>> section_models;
+    for (const auto &file : collect_toml_files(fs::path("conf") / "server")) {
+        auto parsed = toml::parse_file(file.string());
+        if (!parsed) {
+            continue;
+        }
+        for (auto &[key, value] : parsed.table()) {
+            const std::string section(key.str());
+            if (section.size() <= 7 || section.compare(section.size() - 7, 7, "_SERVER") != 0) {
+                continue;
+            }
+            if (!value.is_table()) {
+                continue;
+            }
+            const auto model = value.as_table()->get("model");
+            if (model != nullptr && model->is_string()) {
+                section_models[section].insert(model->value<std::string>().value_or(""));
+            }
+        }
     }
-    for (const auto &[section, count] : counts) {
-        ASSERT_EQ(count, 1) << "duplicated server section: " << section;
+    ASSERT_FALSE(section_models.empty()) << "no *_SERVER section found under conf/server";
+
+    for (const auto *entry : served_entries_) {
+        const auto found = section_models.find(entry->server_section);
+        ASSERT_NE(found, section_models.end())
+            << describe(*entry) << ": server section [" << entry->server_section
+            << "] is not declared by any conf/server TOML";
+        EXPECT_NE(found->second.count(entry->model_section), 0)
+            << describe(*entry) << ": [" << entry->server_section
+            << "] never declares model=" << entry->model_section
+            << " (declared: " << [&] {
+                   std::string all;
+                   for (const auto &m : found->second) {
+                       all += (all.empty() ? "" : ",") + m;
+                   }
+                   return all;
+               }() << ")";
     }
 }
 
