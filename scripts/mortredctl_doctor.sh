@@ -48,6 +48,30 @@ if [ "$ASAN_HIT" -eq 1 ]; then
 fi
 echo "  [ok] no libasan on mortred-model-server.out (or binary not present)"
 
+# Prometheus scrape credential: a rotated MORTRED_METRICS_TOKEN that never
+# reached the credentials file leaves every scrape on 401 with no other signal
+# (the gateway and the model simply reject the stale bearer token). Checked
+# before the engine gates so an unrelated engine problem cannot mask it.
+CRED_FILE="$ROOT/conf/local/mortred_metrics_token"
+CRED_TRUST="${MORTRED_TRUST_ENV:-$ROOT/conf/local/trust.env}"
+if [ -f "$CRED_FILE" ]; then
+    echo "== Prometheus scrape credential =="
+    CRED_TOKEN="${MORTRED_METRICS_TOKEN:-}"
+    if [ -z "$CRED_TOKEN" ] && [ -f "$CRED_TRUST" ]; then
+        CRED_TOKEN="$(sed -n 's/^MORTRED_METRICS_TOKEN=//p' "$CRED_TRUST" | head -1 | tr -d '"')"
+    fi
+    if [ -z "$CRED_TOKEN" ]; then
+        echo "  [warn] $CRED_FILE exists but MORTRED_METRICS_TOKEN is unknown; cannot verify"
+    elif MORTRED_METRICS_TOKEN="$CRED_TOKEN" bash "$ROOT/scripts/write_prometheus_credentials.sh" \
+        --check "$CRED_FILE" >/dev/null 2>&1; then
+        echo "  [ok] scrape credential matches MORTRED_METRICS_TOKEN"
+    else
+        echo "  [FAIL] scrape credential is stale: Prometheus would get 401 on every scrape"
+        echo "next: set -a && . $CRED_TRUST && set +a && ./scripts/write_prometheus_credentials.sh"
+        exit 1
+    fi
+fi
+
 echo "== pack occupancy / identity ($PACK) =="
 if [ -f "$PACK" ]; then
     set +e
@@ -115,29 +139,6 @@ if [ "$GATE_FAIL" -ne 0 ]; then
 fi
 
 "$ROOT/scripts/security_warn.sh" "${STRICT_ARGS[@]}"
-
-# Prometheus scrape credential: a rotated MORTRED_METRICS_TOKEN that never
-# reached the credentials file leaves every scrape on 401 with no other signal
-# anywhere (the gateway and the model simply reject the stale bearer token).
-CRED_FILE="$ROOT/conf/local/mortred_metrics_token"
-CRED_TRUST="${MORTRED_TRUST_ENV:-$ROOT/conf/local/trust.env}"
-if [ -f "$CRED_FILE" ]; then
-    echo "== Prometheus scrape credential =="
-    CRED_TOKEN="${MORTRED_METRICS_TOKEN:-}"
-    if [ -z "$CRED_TOKEN" ] && [ -f "$CRED_TRUST" ]; then
-        CRED_TOKEN="$(sed -n 's/^MORTRED_METRICS_TOKEN=//p' "$CRED_TRUST" | head -1 | tr -d '"')"
-    fi
-    if [ -z "$CRED_TOKEN" ]; then
-        echo "  [warn] $CRED_FILE exists but MORTRED_METRICS_TOKEN is unknown; cannot verify"
-    elif MORTRED_METRICS_TOKEN="$CRED_TOKEN" bash "$ROOT/scripts/write_prometheus_credentials.sh" \
-        --check "$CRED_FILE" >/dev/null 2>&1; then
-        echo "  [ok] scrape credential matches MORTRED_METRICS_TOKEN"
-    else
-        echo "  [FAIL] scrape credential is stale: Prometheus would get 401 on every scrape"
-        echo "next: set -a && . $CRED_TRUST && set +a && ./scripts/write_prometheus_credentials.sh"
-        exit 1
-    fi
-fi
 
 if command -v curl >/dev/null 2>&1 && curl -fs --max-time 5 "$ADDR/api/v1/health" >/dev/null 2>&1; then
     echo "  supervisor: reachable ($ADDR)"
