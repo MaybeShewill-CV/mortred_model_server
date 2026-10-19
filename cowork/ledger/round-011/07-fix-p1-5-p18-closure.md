@@ -15,6 +15,8 @@
 | **P1-6** | API key 用**无盐 SHA-256**，而示例教用户哈希人类口令（`your-secret-key`）——文件泄漏即可离线爆破 | 新增 `scripts/mint_api_key.sh`（32 字节随机密钥，打印一次；`--append` 以 mode 600 写配置）与 `scripts/check_api_keys_hashing.sh`（拒绝文档示例弱口令的哈希、拒绝非 64 小写 hex）；`mortredctl doctor` 跑该守卫；示例改为"不要哈希人类口令" | 两个 `--self-test` 均 `SUMMARY FAILS=0`；含示例弱口令哈希的临时配置被判 1；`--append` 产物 mode 600、guard 接受、无明文 |
 | **P1-7** | `SKIP_RETURN_CODE 77` 让"跳过"与"通过"在汇总里不可区分 | `check` 目标产出 `--output-junit`（CMake ≥3.21）；新增 `scripts/ctest_summary.py` 打印 `CTEST SUMMARY total/passed/failed/skipped`，**未给 `--allow-skips` 时退出码 3**；CI 的 tests 与 cpu-profile 步骤显式 `--allow-skips` 并计数 | `--self-test` 绿；`build.make` 含 `output-junit`；真实 5 项子集 `total=5 passed=5 failed=0 skipped=0`；合成 1 个 skip → 严格 3、加开关 0 |
 
+> **更正（`82e70987`）**：P1-6 在合入 `636a3990` 时**只改了** `conf/api_keys.toml.example`；`docs/api-keys.md:180`、`docs/deployment.md:712`、`docs/deployment.zh-cn.md:666` 三处主文档**仍在教** `echo -n "your-secret-key" | sha256sum`，而且 `mint_api_key.sh` 在 docs 里不可发现——所以上表 P1-6 的"修法"当时并未收口。已在本轮补修，见 §6。
+
 ## 2. P1-9 的探查结论（A1–A3）——三次判定，其中一次推翻我自己的结论
 
 FULL `check` 在本机第一次跑通时暴露了 4 个测试问题 + 1 个链接失败。链接失败与 3 个陈旧断言已修（见 §3）。剩下三项判定如下：
