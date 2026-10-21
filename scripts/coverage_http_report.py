@@ -6,6 +6,10 @@ checklist. A live run with no arguments clears docs/perf/coverage_set_http_rps.m
 then for each id: prepare, calibrate --write-pack, deploy that pack alone,
 official --raw load, and append the row before the next id.
 --from <id> keeps bytes already in that file and continues at <id>.
+
+A passing row also calls pf5_retest.record_baseline. The first report creates
+docs/perf/baselines/<id>.json. A later run on the same hardware keeps that
+recorded RPS and p99. A different hardware string refuses to rewrite the file.
 """
 
 from __future__ import annotations
@@ -35,6 +39,7 @@ from calibrate_pack import (  # noqa: E402
 )
 from http_infer_rps import close_client_first  # noqa: E402
 from pack_trt import server_listen  # noqa: E402
+from pf5_retest import Pf5Error, record_baseline  # noqa: E402
 from repo_toml import load_toml  # noqa: E402
 
 import http.client  # noqa: E402
@@ -743,6 +748,25 @@ def run_check() -> int:
     for item in cases:
         if item:
             return _fail("check: %s\n" % item)
+    with tempfile.TemporaryDirectory() as tmp:
+        dest = Path(tmp)
+        sample = _sample_row("mobilenetv2")
+        if record_baseline(sample, dest) != "created":
+            return _fail("check: pf5 baseline was not created\n")
+        created = (dest / "mobilenetv2.json").read_bytes()
+        if record_baseline(dict(sample, success_rps=1.0), dest) != "kept":
+            return _fail("check: pf5 baseline was not kept\n")
+        if (dest / "mobilenetv2.json").read_bytes() != created:
+            return _fail("check: pf5 baseline numbers were rewritten\n")
+        try:
+            record_baseline(dict(sample, hardware="Different GPU, 1 MiB"), dest)
+        except Pf5Error as exc:
+            if "refusing to rewrite" not in str(exc):
+                return _fail("check: pf5 hardware mismatch message: %s\n" % exc)
+        else:
+            return _fail("check: pf5 hardware mismatch must refuse\n")
+        if (dest / "mobilenetv2.json").read_bytes() != created:
+            return _fail("check: pf5 hardware mismatch rewrote the baseline\n")
     after_bytes = REPORT.read_bytes() if REPORT.is_file() else None
     if before != after_bytes:
         return _fail("check: wrote the checklist\n")
@@ -1292,6 +1316,11 @@ def run_id(spec: dict, tokens: dict[str, str], hardware: str, today: str, ctl: P
                 return "fail", "refusing to write a token"
         if auth in rendered:
             return "fail", "refusing to write a token"
+        try:
+            baseline_status = record_baseline(row, ROOT / "docs" / "perf" / "baselines")
+        except Pf5Error as exc:
+            return "fail", str(exc)
+        sys.stderr.write("%s PF5 baseline %s\n" % (model_id, baseline_status))
         return "row", rendered
     finally:
         stop_supervisor(proc)
