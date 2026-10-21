@@ -7,6 +7,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- **Graceful draining (P0-5):** model servers and the gateway gain `begin_drain()`; `/ready` flips to 503 and new admissions are rejected before `stop()` while in-flight work finishes in the existing drain. The gateway also gains a `/ready` endpoint (the LB pull-out point); compose `stop_grace_period` now covers drain + stop grace. e2e: 20-iteration ready-503/new-503/in-flight-200 contract on both sides.
+- **Supervisor revive race (P0-3b):** the monitor re-checks `wanted`/`stopping` under the spawn lock before respawning, so a REST stop landing between candidate collection and spawn can no longer revive a stopped process.
+- **Respawn no longer destroys log evidence (P0-3a):** `LogBuffer::reset()` (truncate in place) is replaced by `rollover()` — the ended run's file is renamed to `<id>.log.run<unix_ms>` (newest 3 kept; size-rotation `.1` untouched) and a fresh log starts. Crash evidence survives restarts.
+- **Spawn never waits on log readers (P0-3c):** reader threads hold the ended run's `shared_ptr<LogBuffer>`; spawn swaps in a new buffer over the archived file. The 10 s global-mutex stall in `spawn_locked` (which blocked status/logs/stop) is gone, and `logs()` returns a `shared_ptr` (raw-pointer use-after-free window closed).
+- **Prompt stop no longer depends on pipe EOF (latent):** `handle_exit` never notified the condition variable, so stop latency silently relied on the log-reader joiner's notify; a stalled reader would have burned the whole stop grace. `handle_exit` notifies directly (supervisor suite wall time 180 s → 59 s).
+- **Diffusion sampling status is thread-safe by construction (P0-4):** `_m_sample_status` moved from instance members into run-local out-params in ddim/ddpm (`p_sample`/`p_sample_once`); no shared mutable run state remains. Server-side `indicators` progress bars (instance members mutated during inference) are deleted. `conf/ci/ddpm_onnx_fewstep.toml` pointed at a removed weight filename, so `model_golden.ddpm_celeba_hq_fewstep` had been an unreachable skip — repaired; the case now passes end-to-end (`NUMERICAL_PASSED`).
+- **`-Werror` gate green again in `src/control`:** dead `drop_env_entry` deleted, `spawn_locked`'s now-unused `lock` parameter removed, vestigial `name_len` in `gpu_sampler.h::parse_sample` silenced with the reason stated.
+
+> 模型服务器与网关新增 `begin_drain()`：停止前 `/ready` 翻 503、新请求被拒，在途请求照常跑完；网关新增 `/ready` 端点（LB 摘流点）。supervisor 修复 stop 后进程被复活的竞态。respawn 不再原地截断子进程日志（改为归档保留最近 3 份），spawn 也不再持全局锁等日志 reader（10 秒卡顿消除），`logs()` 改返回 `shared_ptr` 关闭换表 UAF 窗口。顺带修复潜伏 bug：`handle_exit` 从不 notify，停止时效一直依赖 reader EOF 时序。diffusion 采样状态改为局部传递（并发隐患清除）、删除服务端进度条、修复 ddpm golden 用例的权重路径漂移（现为 `NUMERICAL_PASSED`）。`src/control` 的 `-Werror` 门禁恢复绿色。
+
+### Changed
+- **Raw-body path single copy (P0-2b, measured):** `parse_raw_request` takes the body by value and moves it into the item; the transport copy is the only full-body copy on the raw path. The larger in-situ JSON surgery was measured (-13% envelope stage on the 1.6 MB baseline, below the ≥30% gate) and intentionally dropped; numbers recorded in `cowork/progress-card.md`.
+
+> raw 路径 `parse_raw_request` 改为按值拿 body 并 move 进 item：传输层拷贝成为该路径唯一一次整包拷贝。更大的 in-situ JSON 改造实测仅 -13%（低于 ≥30% 验收门），有意放弃，数字记录在 `cowork/progress-card.md`。
+
 ### Added
 - **SME-14:** `scripts/check_consistency.py` (and CI) runs `golden_drift_check.py --check` fail-closed against `test/golden_baseline.json`; refresh docs require `--record` in the same PR. Baseline reset to current 30 cases / 26 golden files.
 - **SME-12:** Document unsupported boundaries in `docs/unsupported-boundaries.md` (+ zh summary): Linux x64 only; RTDETR scaffold not in catalog; CUDA 12.x + TensorRT **10.x** only (8/9 out); engines must be rebuilt on this GPU/TRT; cpu profile has no TensorRT. Linked from README, oob-main-path, deployment, and rtdetr model doc.
