@@ -1,19 +1,35 @@
 #!/usr/bin/env python3
-"""One-id-at-a-time HTTP RPS checklist for the nine TensorRT coverage ids.
+"""HTTP RPS checklist for the coverage set and the full product catalog.
 
---check judges in-memory rows and does not start processes or write the
-checklist. A live run with no arguments clears docs/perf/coverage_set_http_rps.md,
+Default catalog is the nine coverage-set ids
+(docs/perf/coverage_set_http_rps.md). ``--catalog product_static`` reads all
+ids from conf/product_static_bs1.json and uses
+docs/perf/product_static_http_rps.md.
+
+--check reads the checklist and does not start processes or write it.
+Coverage-set --check requires every section to be a qualified PASS row
+(libface may be blank). Product-static --check requires the same for all 39
+ids and exits non-zero while any section is blocked/missing. It never treats
+a missing row as PASS.
+--check-skeleton checks heading order and that each section is either an
+explicit blocked/missing row or a qualified PASS row.
+--self-test runs the in-memory judge fixtures (concurrency, error rate, caps).
+A coverage-set live run with no arguments clears the coverage checklist,
 then for each id: prepare, calibrate --write-pack, deploy that pack alone,
 official --raw load, and append the row before the next id.
---from <id> keeps bytes already in that file and continues at <id>.
+--from <id> keeps rows already in that file and continues at <id>.
+--id <id> runs one id and replaces that section only.
+Product-static live runs require --id or --from so the skeleton is not wiped.
 
-A passing row also calls pf5_retest.record_baseline. The first report creates
-docs/perf/baselines/<id>.json. A later run on the same hardware keeps that
-recorded RPS and p99. A different hardware string refuses to rewrite the file.
+A passing row calls pf5_retest.record_baseline. The first report creates
+docs/perf/baselines/<id>.json (schema pf5-baseline-v1). A later run on the
+same hardware keeps that recorded RPS and p99. A different hardware string
+refuses to rewrite the file.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import re
@@ -33,8 +49,10 @@ sys.path.insert(0, str(ROOT / "scripts" / "server"))
 from calibrate_pack import (  # noqa: E402
     _hist_delta,
     _metric_series,
+    format_missing_p99_table,
     gpu_inventory,
     histogram_p50,
+    missing_p99_caps,
     pack_table,
 )
 from http_infer_rps import close_client_first  # noqa: E402
@@ -45,6 +63,9 @@ from repo_toml import load_toml  # noqa: E402
 import http.client  # noqa: E402
 
 REPORT = ROOT / "docs" / "perf" / "coverage_set_http_rps.md"
+PRODUCT_REPORT = ROOT / "docs" / "perf" / "product_static_http_rps.md"
+BASELINE_DIR = ROOT / "docs" / "perf" / "baselines"
+CATALOG_NAMES = ("coverage_set", "product_static")
 FACE_IMAGE = "demo_data/model_test_input/scene_segmentation/face_w_mask.jpg"
 DBNET_IMAGE = "demo_data/model_test_input/ocr/coco_text_test.jpg"
 SUPERPOINT_IMAGE = "demo_data/model_test_input/feature_point/test.jpg"
@@ -116,6 +137,95 @@ MODELS = (
     },
 )
 MODEL_BY_ID = {row["id"]: row for row in MODELS}
+_PRODUCT_SPECS: tuple[dict, ...] | None = None
+
+
+def product_static_specs() -> tuple[dict, ...]:
+    global _PRODUCT_SPECS
+    if _PRODUCT_SPECS is not None:
+        return _PRODUCT_SPECS
+    doc = json.loads((ROOT / "conf" / "product_static_bs1.json").read_text(encoding="utf-8"))
+    models = doc.get("models")
+    if not isinstance(models, list) or not models:
+        raise RuntimeError("conf/product_static_bs1.json has no models")
+    rows = []
+    seen = set()
+    for item in models:
+        if not isinstance(item, dict) or not item.get("id"):
+            raise RuntimeError("product catalog row is missing id")
+        model_id = str(item["id"])
+        if model_id in seen:
+            raise RuntimeError("duplicate product id %s" % model_id)
+        seen.add(model_id)
+        rows.append(
+            {
+                "id": model_id,
+                "conf_server": str(item["server_config"]),
+                "server_uri": str(item["server_uri"]),
+                "port": int(item["port"]),
+                "demo": str(item.get("demo") or ""),
+                "family": str(item.get("family") or ""),
+                "catalog": "product_static",
+            }
+        )
+    _PRODUCT_SPECS = tuple(rows)
+    return _PRODUCT_SPECS
+
+
+def specs_for(catalog: str) -> tuple[dict, ...]:
+    if catalog == "coverage_set":
+        return MODELS
+    if catalog == "product_static":
+        return product_static_specs()
+    raise RuntimeError("unknown catalog %s" % catalog)
+
+
+def report_path_for(catalog: str) -> Path:
+    if catalog == "coverage_set":
+        return REPORT
+    if catalog == "product_static":
+        return PRODUCT_REPORT
+    raise RuntimeError("unknown catalog %s" % catalog)
+
+
+def spec_map_for(specs: tuple[dict, ...] | list[dict]) -> dict[str, dict]:
+    return {row["id"]: row for row in specs}
+
+
+def load_image_rel(spec: dict) -> str:
+    model_id = spec["id"]
+    if model_id == "pphuman_mobile":
+        return FACE_IMAGE
+    if model_id == "dbnet":
+        return DBNET_IMAGE
+    if model_id == "superpoint":
+        return SUPERPOINT_IMAGE
+    if model_id == "realesrgan":
+        return REALESRGAN_IMAGE
+    if model_id == "metric3d_512":
+        return METRIC3D_IMAGE
+    if spec.get("catalog") == "product_static":
+        return str(spec.get("demo") or "")
+    return ""
+
+
+def solo_pack_text(model_id: str) -> str:
+    """One-id pack text. Prefer conf/packs/<id>.toml when that file is solo."""
+    candidate = ROOT / "conf" / "packs" / ("%s.toml" % model_id)
+    if candidate.is_file():
+        text = candidate.read_text(encoding="utf-8")
+        found = []
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("[pack.") and stripped.endswith("]"):
+                found.append(stripped[6:-1].strip())
+        if found != [model_id]:
+            raise RuntimeError(
+                "conf/packs/%s.toml is not a solo pack for %s (ids=%s); "
+                "refusing to deploy more than one id" % (model_id, model_id, found)
+            )
+        return text
+    return "[pack.%s]\nworker_nums = 1\n" % model_id
 
 
 def _fail(message: str) -> int:
@@ -164,8 +274,9 @@ def read_server_row(rel: str) -> tuple[str, int, int]:
     raise RuntimeError("no server_uri in %s" % rel)
 
 
-def contract_ok() -> str | None:
-    for row in MODELS:
+def contract_ok(specs: tuple[dict, ...] | list[dict] | None = None) -> str | None:
+    rows = MODELS if specs is None else specs
+    for row in rows:
         try:
             uri, workers, port = read_server_row(row["conf_server"])
         except (OSError, KeyError, TypeError, ValueError, RuntimeError) as exc:
@@ -282,13 +393,14 @@ def _near(left, right) -> bool:
     return abs(float(left) - float(right)) <= 1e-6
 
 
-def judge_row(row: dict) -> tuple[bool, str]:
+def judge_row(row: dict, specs: dict | None = None) -> tuple[bool, str]:
     if row.get("blank"):
         if row.get("id") != "libface":
             return False, "only libface may be blank"
         return True, "blank"
     model_id = row.get("id")
-    spec = MODEL_BY_ID.get(model_id)
+    table = MODEL_BY_ID if specs is None else specs
+    spec = table.get(model_id)
     if spec is None:
         return False, "unknown id"
     if row.get("server_uri") != spec["server_uri"]:
@@ -449,11 +561,13 @@ def judge_row(row: dict) -> tuple[bool, str]:
     return True, "ok"
 
 
-def judge_document(rows: list[dict]) -> tuple[bool, str]:
-    if [row.get("id") for row in rows] != [spec["id"] for spec in MODELS]:
+def judge_document(rows: list[dict], specs: tuple[dict, ...] | list[dict] | None = None) -> tuple[bool, str]:
+    catalog = MODELS if specs is None else specs
+    if [row.get("id") for row in rows] != [spec["id"] for spec in catalog]:
         return False, "id order"
+    table = spec_map_for(catalog)
     for row in rows:
-        ok, why = judge_row(row)
+        ok, why = judge_row(row, table)
         if not ok:
             return False, "%s: %s" % (row.get("id"), why)
     return True, "ok"
@@ -528,8 +642,8 @@ def render_row(row: dict) -> str:
     return "## %s\n%s\n" % (row["id"], " | ".join(parts))
 
 
-def _sample_row(model_id: str, **overrides) -> dict:
-    spec = MODEL_BY_ID[model_id]
+def _sample_row(model_id: str, spec: dict | None = None, **overrides) -> dict:
+    spec = MODEL_BY_ID[model_id] if spec is None else spec
     workers = 4
     throughput = YOLO_THROUGHPUT if model_id == "yolov8s" else 100.0
     rps = 50.0
@@ -616,15 +730,401 @@ def _sample_row(model_id: str, **overrides) -> dict:
     return row
 
 
-def _expect_fail(row: dict, label: str) -> str | None:
-    ok, why = judge_row(row)
+def _expect_fail(row: dict, label: str, specs: dict | None = None) -> str | None:
+    ok, _why = judge_row(row, specs)
     if ok:
         return "expected fail: %s" % label
     return None
 
 
-def run_check() -> int:
+def parse_kv_line(line: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    i = 0
+    n = len(line)
+    while i < n:
+        while i < n and line[i] in " |":
+            i += 1
+        if i >= n:
+            break
+        eq = line.find("=", i)
+        if eq < 0:
+            break
+        key = line[i:eq].strip()
+        if not key or any(ch.isspace() for ch in key):
+            break
+        i = eq + 1
+        if i < n and line[i] == '"':
+            i += 1
+            buf: list[str] = []
+            while i < n:
+                if line[i] == "\\" and i + 1 < n:
+                    buf.append(line[i + 1])
+                    i += 2
+                    continue
+                if line[i] == '"':
+                    i += 1
+                    break
+                buf.append(line[i])
+                i += 1
+            fields[key] = "".join(buf)
+            continue
+        end = line.find(" | ", i)
+        if end < 0:
+            fields[key] = line[i:].strip()
+            break
+        fields[key] = line[i:end].strip()
+        i = end
+    return fields
+
+
+def parse_report_sections(text: str) -> list[tuple[str, dict[str, str]]]:
+    matches = list(re.finditer(r"(?m)^## ([A-Za-z0-9_]+)\s*$", text))
+    sections = []
+    for index, match in enumerate(matches):
+        start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        body = text[start:end].strip()
+        line = ""
+        for raw in body.splitlines():
+            if raw.strip():
+                line = raw.strip()
+                break
+        sections.append((match.group(1), parse_kv_line(line) if line else {}))
+    return sections
+
+
+def section_kind(fields: dict[str, str]) -> str:
+    """blocked, blank, pass-claim, or invalid.
+
+    A blocked row that also carries a latency or RPS field is not blocked:
+    that would hide a number that was not judged.
+    """
+    checked = fields.get("checked", "")
+    status = fields.get("status", "")
+    evidence = fields.get("evidence", "")
+    has_metric = any(key in fields for key in ("success_rps", "p50_ms", "p99_ms", "throughput_qps"))
+    if status == "blocked" and evidence == "missing" and checked == "no" and not has_metric:
+        if fields.get("pf1", "not-pass") == "not-pass":
+            return "blocked"
+        return "invalid"
+    if checked == "no" and not has_metric and status == "" and evidence == "":
+        return "blank"
+    if checked == "yes" or status in ("pass", "PASS") or has_metric:
+        return "pass-claim"
+    return "invalid"
+
+
+def _as_int(text: str) -> int:
+    value = float(text)
+    if value != int(value):
+        raise ValueError(text)
+    return int(value)
+
+
+def _as_float(text: str) -> float:
+    return float(text)
+
+
+def row_from_fields(model_id: str, fields: dict[str, str]) -> dict:
+    required = (
+        "worktree",
+        "hardware",
+        "date",
+        "server_uri",
+        "conf_server",
+        "conf_server_worker_nums",
+        "worker_nums",
+        "decode_auto",
+        "prepare",
+        "calibrate",
+        "calibrate_raw",
+        "MORTRED_WORKER_NUMS",
+        "MORTRED_DECODE_AUTO",
+        "process_workers",
+        "process_workers_available",
+        "process_workers_busy",
+        "process_workers_source",
+        "process_workers_note",
+        "load_command",
+        "load_url",
+        "wall_s",
+        "warmup_s",
+        "success_rps",
+        "p50_ms",
+        "p99_ms",
+        "http_429",
+        "error_rate",
+        "requests",
+        "errors",
+        "throughput_qps",
+        "ratio",
+        "mortred_queue_wait_duration_ms_count_delta",
+        "mortred_queue_wait_duration_ms_model",
+        "mortred_inference_duration_ms_count_delta",
+        "mortred_inference_duration_ms_model",
+        "jpeg_jpeggpu",
+        "jpeg_cpu_reduced",
+        "jpeg_cpu_full",
+        "jpeg_landing",
+        "gateway_gw_in_p50_ms",
+        "gateway_route_p50_ms",
+        "gateway_auth_p50_ms",
+        "gateway_fwd_p50_ms",
+        "gateway_upstream_p50_ms",
+        "gateway_stage_p50_sum",
+        "server_time_ms_p50",
+        "dominant_stage",
+        "dominant_gauge",
+        "image",
+        "decoded_width",
+        "decoded_height",
+        "engine",
+    )
+    missing = [key for key in required if key not in fields]
+    if missing:
+        raise ValueError("missing " + ",".join(missing))
+    dominant = fields["dominant_stage"]
+    if dominant == "none":
+        dominant = ""
+    width = fields["decoded_width"]
+    height = fields["decoded_height"]
+    return {
+        "id": model_id,
+        "blank": False,
+        "worktree": fields["worktree"],
+        "hardware": fields["hardware"],
+        "date": fields["date"],
+        "server_uri": fields["server_uri"],
+        "conf_server": fields["conf_server"],
+        "conf_server_worker_nums": _as_int(fields["conf_server_worker_nums"]),
+        "worker_nums": _as_int(fields["worker_nums"]),
+        "decode_auto": fields["decode_auto"],
+        "prepare": fields["prepare"],
+        "calibrate": fields["calibrate"],
+        "calibrate_raw": fields["calibrate_raw"],
+        "mortred_worker_nums": _as_int(fields["MORTRED_WORKER_NUMS"]),
+        "mortred_decode_auto": fields["MORTRED_DECODE_AUTO"],
+        "process_workers": _as_float(fields["process_workers"]),
+        "process_workers_source": fields["process_workers_source"],
+        "process_workers_note": fields["process_workers_note"],
+        "workers_available_after": _as_float(fields["process_workers_available"]),
+        "workers_busy_after": _as_float(fields["process_workers_busy"]),
+        "load_command": fields["load_command"],
+        "load_url": fields["load_url"],
+        "wall_s": _as_float(fields["wall_s"]),
+        "warmup_s": _as_float(fields["warmup_s"]),
+        "success_rps": _as_float(fields["success_rps"]),
+        "p50_ms": _as_float(fields["p50_ms"]),
+        "p99_ms": _as_float(fields["p99_ms"]),
+        "http_429": _as_int(fields["http_429"]),
+        "error_rate": _as_float(fields["error_rate"]),
+        "requests": _as_int(fields["requests"]),
+        "errors": _as_int(fields["errors"]),
+        "throughput_qps": _as_float(fields["throughput_qps"]),
+        "ratio": _as_float(fields["ratio"]),
+        "queue_count_delta": _as_float(fields["mortred_queue_wait_duration_ms_count_delta"]),
+        "queue_model": fields["mortred_queue_wait_duration_ms_model"],
+        "infer_count_delta": _as_float(fields["mortred_inference_duration_ms_count_delta"]),
+        "infer_model": fields["mortred_inference_duration_ms_model"],
+        "jpeg_jpeggpu": _as_float(fields["jpeg_jpeggpu"]),
+        "jpeg_cpu_reduced": _as_float(fields["jpeg_cpu_reduced"]),
+        "jpeg_cpu_full": _as_float(fields["jpeg_cpu_full"]),
+        "jpeg_landing": fields["jpeg_landing"],
+        "stage_p50_ms": {
+            "gw_in": _as_float(fields["gateway_gw_in_p50_ms"]),
+            "route": _as_float(fields["gateway_route_p50_ms"]),
+            "auth": _as_float(fields["gateway_auth_p50_ms"]),
+            "fwd": _as_float(fields["gateway_fwd_p50_ms"]),
+            "upstream": _as_float(fields["gateway_upstream_p50_ms"]),
+        },
+        "stage_p50_sum": _as_float(fields["gateway_stage_p50_sum"]),
+        "server_time_ms_p50": _as_float(fields["server_time_ms_p50"]),
+        "dominant_stage": dominant,
+        "dominant_gauge": fields["dominant_gauge"],
+        "image": fields["image"],
+        "decoded_width": None if width == "-" else _as_int(width),
+        "decoded_height": None if height == "-" else _as_int(height),
+        "engine": fields["engine"],
+    }
+
+
+def _status_table(rows: list[tuple[str, str, str]]) -> str:
+    lines = ["id\tstatus\tdetail"]
+    for model_id, status, detail in rows:
+        lines.append("%s\t%s\t%s" % (model_id, status, detail))
+    return "\n".join(lines)
+
+
+def check_catalog(catalog: str, skeleton: bool, quiet: bool = False) -> int:
+    """Validate a checklist in place. Does not write it.
+
+    skeleton=False requires every section to be a qualified PASS row.
+    skeleton=True allows explicit blocked/missing sections and still judges
+    any section that claims PASS.
+    """
+    specs = specs_for(catalog)
+    path = report_path_for(catalog)
+    before = path.read_bytes() if path.is_file() else None
+    label = "--check-skeleton" if skeleton else "--check"
+    missing_caps = missing_p99_caps([row["id"] for row in specs])
+    if missing_caps:
+        if not quiet:
+            sys.stderr.write(format_missing_p99_table(missing_caps))
+        return _fail("%s %s: missing p99 caps\n" % (catalog, label))
+    mismatch = contract_ok(specs)
+    if mismatch:
+        return _fail("%s %s: %s\n" % (catalog, label, mismatch))
+    if not path.is_file():
+        return _fail("%s %s: %s is missing\n" % (catalog, label, path))
+    sections = parse_report_sections(path.read_text(encoding="utf-8"))
+    found = [model_id for model_id, _fields in sections]
+    expected = [row["id"] for row in specs]
+    if found != expected:
+        if not quiet:
+            sys.stderr.write(
+                "%s %s: section ids\nfound %s\nexpected %s\n" % (catalog, label, found, expected)
+            )
+        return _fail("%s %s: section ids do not match the catalog\n" % (catalog, label))
+    table = spec_map_for(specs)
+    summary: list[tuple[str, str, str]] = []
+    failures: list[tuple[str, str, str]] = []
+    for model_id, fields in sections:
+        kind = section_kind(fields)
+        if kind == "blocked":
+            summary.append((model_id, "blocked", "evidence=missing"))
+            if not skeleton:
+                failures.append((model_id, "blocked", "not PASS"))
+            continue
+        if kind == "blank":
+            if catalog == "coverage_set" and model_id == "libface":
+                ok, why = judge_row({"id": "libface", "blank": True}, table)
+                if not ok:
+                    failures.append((model_id, "blank", why))
+                else:
+                    summary.append((model_id, "blank", "libface"))
+                continue
+            failures.append((model_id, "blank", "not PASS"))
+            summary.append((model_id, "blank", "not PASS"))
+            continue
+        if kind != "pass-claim":
+            failures.append((model_id, "invalid", "not blocked and not PASS"))
+            summary.append((model_id, "invalid", "not blocked and not PASS"))
+            continue
+        try:
+            row = row_from_fields(model_id, fields)
+        except (KeyError, TypeError, ValueError) as exc:
+            failures.append((model_id, "invalid", str(exc)))
+            summary.append((model_id, "invalid", str(exc)))
+            continue
+        ok, why = judge_row(row, table)
+        if not ok:
+            failures.append((model_id, "invalid", why))
+            summary.append((model_id, "invalid", why))
+            continue
+        summary.append((model_id, "PASS", "qualified"))
+    after = path.read_bytes() if path.is_file() else None
+    if before != after:
+        return _fail("%s %s: wrote the checklist\n" % (catalog, label))
+    passed = sum(1 for _model_id, status, _detail in summary if status == "PASS")
+    blocked = sum(1 for _model_id, status, _detail in summary if status == "blocked")
+    if failures:
+        if not quiet:
+            sys.stderr.write(
+                "%s %s: %d PASS, %d blocked/missing, %d not accepted\n"
+                % (catalog, label, passed, blocked, len(failures))
+            )
+            sys.stderr.write(
+                "blocked/missing is not PASS. No HTTP RPS numbers were invented.\n"
+            )
+            sys.stderr.write(_status_table(failures) + "\n")
+        return 1
+    print(
+        "%s %s passed (%d PASS, %d blocked/missing, %d sections)"
+        % (catalog, label, passed, blocked, len(summary))
+    )
+    return 0
+
+
+def render_blocked_section(model_id: str) -> str:
+    reason = (
+        "no live GPU HTTP RPS; run "
+        "python3 scripts/coverage_http_report.py --catalog product_static --id %s "
+        "on a machine with nvidia-smi" % model_id
+    )
+    return (
+        "## %s\nstatus=blocked | evidence=missing | checked=no | pf1=not-pass | reason=%s\n"
+        % (model_id, _fmt("reason", reason).split("=", 1)[1])
+    )
+
+
+def render_product_skeleton() -> str:
+    specs = product_static_specs()
+    lines = [
+        "# product static HTTP RPS",
+        "",
+        "Catalog: `conf/product_static_bs1.json` (%d product TensorRT ids, JSON order)."
+        % len(specs),
+        "",
+        "This file is a skeleton. It is not PF1 or TP1 evidence. No success RPS,",
+        "p50, or p99 is recorded here. Each section stays `status=blocked` and",
+        "`evidence=missing` until a GPU host runs the driver and `judge_row` accepts",
+        "the row. A blocked section that also contains `success_rps`, `p50_ms`,",
+        "`p99_ms`, or `throughput_qps` is rejected.",
+        "",
+        "Policy:",
+        "",
+        "- `--catalog product_static --check` exits non-zero until all %d sections are qualified PASS rows."
+        % len(specs),
+        "- `--catalog product_static --check-skeleton` exits 0 when the headings match",
+        "  JSON order and every section is either explicit blocked/missing or a qualified PASS row.",
+        "- Coverage-set nine stay in `docs/perf/coverage_set_http_rps.md` (ops / TP2 subset).",
+        "  Those measured rows are not copied here, so this file does not claim PASS for them.",
+        "",
+        "Operator procedure on a GPU host (solo residency; do not require the other ids",
+        "to be resident). The driver does not write a PASS row unless `judge_row` accepts it:",
+        "",
+        "1. `mortredctl prepare --id <id>`",
+        "2. One-id pack. If `conf/packs/<id>.toml` exists and lists only that id, the",
+        "   driver copies it to a temp pack (those seeds include `model_config`;",
+        "   `calibrate --write-pack` refuses `conf/packs/`). Otherwise the driver writes",
+        "   `[pack.<id>] worker_nums = 1`. Git packs are not modified.",
+        "3. `mortredctl calibrate --pack <temp> --write-pack --duration 60s`",
+        "   (the calibrator posts with `http_infer_rps.py --raw`).",
+        "4. Deploy that pack alone (`MORTRED_PACK` is the temp pack).",
+        "5. `python3 scripts/server/http_infer_rps.py --raw --model <id>`",
+        "   `--gateway http://127.0.0.1:8080 -c <worker_nums×2> -d 60s --warmup 5s`",
+        "",
+        "60s meets the ≥30s bar. Concurrency is the deployed pack `worker_nums` times 2.",
+        "`conf/server` stays `worker_nums=1`.",
+        "",
+        "```bash",
+        "python3 scripts/coverage_http_report.py --catalog product_static --id yolov8n",
+        "python3 scripts/coverage_http_report.py --catalog product_static --from yolov8n",
+        "python3 scripts/coverage_http_report.py --catalog product_static --check-skeleton",
+        "python3 scripts/coverage_http_report.py --catalog product_static --check",
+        "```",
+        "",
+        "A PASS row calls `pf5_retest.record_baseline`, which writes",
+        "`docs/perf/baselines/<id>.json` (`schema` `pf5-baseline-v1`) the first time and",
+        "keeps that file when the hardware string matches. A different hardware string",
+        "refuses to rewrite it. No baseline file is written for a blocked section.",
+        "",
+        "Seed p99 caps for every product id live in `scripts/calibrate_pack.py` `P99_CAP_MS`.",
+        "A missing cap aborts calibrate with a table. The latency gate is not skipped.",
+        "",
+    ]
+    for spec in specs:
+        lines.append(render_blocked_section(spec["id"]).rstrip("\n"))
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def run_self_test() -> int:
     before = REPORT.read_bytes() if REPORT.is_file() else None
+    product_before = PRODUCT_REPORT.read_bytes() if PRODUCT_REPORT.is_file() else None
+    baseline_before = (
+        sorted(path.name for path in BASELINE_DIR.glob("*")) if BASELINE_DIR.is_dir() else None
+    )
     mismatch = contract_ok()
     if mismatch:
         return _fail("check: %s\n" % mismatch)
@@ -747,30 +1247,109 @@ def run_check() -> int:
     )
     for item in cases:
         if item:
-            return _fail("check: %s\n" % item)
+            return _fail("self-test: %s\n" % item)
+
+    pack_text = solo_pack_text("yolov8n")
+    if "[pack.yolov8n]" not in pack_text or "model_config" not in pack_text:
+        return _fail("self-test: per-id pack was not used for yolov8n\n")
+    if solo_pack_text("yolov8n").count("[pack.") != 1:
+        return _fail("self-test: yolov8n pack is not solo\n")
+
+    product_specs = product_static_specs()
+    if len(product_specs) != 39:
+        return _fail("self-test: product catalog length %s\n" % len(product_specs))
+    missing_caps = missing_p99_caps([row["id"] for row in product_specs])
+    if missing_caps:
+        sys.stderr.write(format_missing_p99_table(missing_caps))
+        return _fail("self-test: product ids missing p99 caps\n")
+    product_table = spec_map_for(product_specs)
+    yolov8n = product_table["yolov8n"]
+    synthetic = _sample_row("yolov8n", spec=yolov8n)
+    ok, why = judge_row(synthetic, product_table)
+    if not ok:
+        return _fail("self-test: synthetic yolov8n should pass (%s)\n" % why)
+    short_product = _sample_row("yolov8n", spec=yolov8n)
+    short_product["load_command"] = short_product["load_command"].replace("-c 8", "-c 4")
+    ok, why = judge_row(short_product, product_table)
+    if ok or why != "load concurrency":
+        return _fail("self-test: product concurrency should fail (%s)\n" % why)
+    # judge_row with the coverage map must reject an id outside the nine.
+    ok, why = judge_row(synthetic, MODEL_BY_ID)
+    if ok or why != "unknown id":
+        return _fail("self-test: yolov8n must be unknown to the coverage map (%s)\n" % why)
+    blocked_only = {
+        "id": "yolov8n",
+        "status": "blocked",
+        "evidence": "missing",
+        "checked": "no",
+    }
+    if section_kind(blocked_only) != "blocked":
+        return _fail("self-test: blocked section kind\n")
+    fake = dict(blocked_only)
+    fake["success_rps"] = "1"
+    if section_kind(fake) == "blocked":
+        return _fail("self-test: blocked row with success_rps must not count as blocked\n")
+    skeleton_text = PRODUCT_REPORT.read_text(encoding="utf-8") if PRODUCT_REPORT.is_file() else ""
+    for model_id, fields in parse_report_sections(skeleton_text):
+        if any(key in fields for key in ("success_rps", "p50_ms", "p99_ms", "throughput_qps")):
+            return _fail("self-test: product skeleton %s contains an RPS field\n" % model_id)
+    skeleton_code = check_catalog("product_static", skeleton=True)
+    if skeleton_code != 0:
+        return _fail("self-test: product --check-skeleton failed\n")
+    evidence_code = check_catalog("product_static", skeleton=False, quiet=True)
+    if evidence_code == 0:
+        return _fail("self-test: product --check must fail while rows are blocked\n")
+    coverage_code = check_catalog("coverage_set", skeleton=False)
+    if coverage_code != 0:
+        return _fail("self-test: coverage --check failed\n")
+
     with tempfile.TemporaryDirectory() as tmp:
         dest = Path(tmp)
         sample = _sample_row("mobilenetv2")
         if record_baseline(sample, dest) != "created":
-            return _fail("check: pf5 baseline was not created\n")
+            return _fail("self-test: pf5 baseline was not created\n")
         created = (dest / "mobilenetv2.json").read_bytes()
         if record_baseline(dict(sample, success_rps=1.0), dest) != "kept":
-            return _fail("check: pf5 baseline was not kept\n")
+            return _fail("self-test: pf5 baseline was not kept\n")
         if (dest / "mobilenetv2.json").read_bytes() != created:
-            return _fail("check: pf5 baseline numbers were rewritten\n")
+            return _fail("self-test: pf5 baseline numbers were rewritten\n")
         try:
             record_baseline(dict(sample, hardware="Different GPU, 1 MiB"), dest)
         except Pf5Error as exc:
             if "refusing to rewrite" not in str(exc):
-                return _fail("check: pf5 hardware mismatch message: %s\n" % exc)
+                return _fail("self-test: pf5 hardware mismatch message: %s\n" % exc)
         else:
-            return _fail("check: pf5 hardware mismatch must refuse\n")
+            return _fail("self-test: pf5 hardware mismatch must refuse\n")
         if (dest / "mobilenetv2.json").read_bytes() != created:
-            return _fail("check: pf5 hardware mismatch rewrote the baseline\n")
+            return _fail("self-test: pf5 hardware mismatch rewrote the baseline\n")
+        if record_baseline(synthetic, dest) != "created":
+            return _fail("self-test: product pf5 baseline was not created\n")
+        written = json.loads((dest / "yolov8n.json").read_text(encoding="utf-8"))
+        if written.get("schema") != "pf5-baseline-v1" or written.get("success_rps") != synthetic["success_rps"]:
+            return _fail("self-test: product pf5 baseline shape\n")
+        if written.get("concurrency") != synthetic["worker_nums"] * 2:
+            return _fail("self-test: product pf5 baseline concurrency\n")
+        if record_baseline(dict(synthetic, success_rps=1.0), dest) != "kept":
+            return _fail("self-test: product pf5 baseline was not kept\n")
+        if json.loads((dest / "yolov8n.json").read_text(encoding="utf-8")).get("success_rps") != synthetic["success_rps"]:
+            return _fail("self-test: product pf5 baseline numbers were rewritten\n")
     after_bytes = REPORT.read_bytes() if REPORT.is_file() else None
     if before != after_bytes:
-        return _fail("check: wrote the checklist\n")
-    print("coverage_http_report.py --check passed")
+        return _fail("self-test: wrote the coverage checklist\n")
+    product_after = PRODUCT_REPORT.read_bytes() if PRODUCT_REPORT.is_file() else None
+    if product_before != product_after:
+        return _fail("self-test: wrote the product checklist\n")
+    baseline_after = (
+        sorted(path.name for path in BASELINE_DIR.glob("*")) if BASELINE_DIR.is_dir() else None
+    )
+    if baseline_before != baseline_after:
+        return _fail("self-test: wrote docs/perf/baselines\n")
+    print("coverage_http_report.py --self-test passed")
+    print(
+        "fixtures: judge_row concurrency, error_rate fold, jpeg landing, "
+        "blank libface, yolov8s throughput, product blocked is not PASS, "
+        "missing p99 cap, pf5 baseline create/keep/refuse"
+    )
     return 0
 
 
@@ -1008,9 +1587,9 @@ def hardware_line() -> str:
     return "%s, %s MiB" % (str(gpu["name"]).strip(), shown)
 
 
-def append_text(text: str) -> None:
-    REPORT.parent.mkdir(parents=True, exist_ok=True)
-    with REPORT.open("a", encoding="utf-8") as handle:
+def append_text(text: str, report: Path = REPORT) -> None:
+    report.parent.mkdir(parents=True, exist_ok=True)
+    with report.open("a", encoding="utf-8") as handle:
         handle.write(text)
         if not text.endswith("\n"):
             handle.write("\n")
@@ -1018,8 +1597,8 @@ def append_text(text: str) -> None:
         os.fsync(handle.fileno())
 
 
-def reset_report(hardware: str, today: str) -> None:
-    REPORT.parent.mkdir(parents=True, exist_ok=True)
+def reset_report(hardware: str, today: str, report: Path = REPORT) -> None:
+    report.parent.mkdir(parents=True, exist_ok=True)
     text = (
         "# coverage set HTTP RPS\n\n"
         "worktree: %s\n"
@@ -1027,7 +1606,7 @@ def reset_report(hardware: str, today: str) -> None:
         "date: %s\n\n"
         % (ROOT, hardware, today)
     )
-    REPORT.write_text(text, encoding="utf-8")
+    report.write_text(text, encoding="utf-8")
 
 
 def _integral(value: float):
@@ -1036,7 +1615,13 @@ def _integral(value: float):
     return value
 
 
-def run_id(spec: dict, tokens: dict[str, str], hardware: str, today: str, ctl: Path):
+def run_id(
+    spec: dict,
+    tokens: dict[str, str],
+    hardware: str,
+    today: str,
+    ctl: Path,
+):
     model_id = spec["id"]
     ports = [8080, 8787, spec["port"]]
     blocked = [port_block_reason(port) for port in ports]
@@ -1046,16 +1631,9 @@ def run_id(spec: dict, tokens: dict[str, str], hardware: str, today: str, ctl: P
 
     log_path = ROOT / "logs" / ("p2-11-%s.log" % model_id)
     env = base_env()
-    if model_id == "pphuman_mobile":
-        env["MORTRED_DEMO_IMAGE"] = FACE_IMAGE
-    elif model_id == "dbnet":
-        env["MORTRED_DEMO_IMAGE"] = DBNET_IMAGE
-    elif model_id == "superpoint":
-        env["MORTRED_DEMO_IMAGE"] = SUPERPOINT_IMAGE
-    elif model_id == "realesrgan":
-        env["MORTRED_DEMO_IMAGE"] = REALESRGAN_IMAGE
-    elif model_id == "metric3d_512":
-        env["MORTRED_DEMO_IMAGE"] = METRIC3D_IMAGE
+    image_rel = load_image_rel(spec)
+    if image_rel:
+        env["MORTRED_DEMO_IMAGE"] = image_rel
 
     sys.stderr.write("== %s prepare ==\n" % model_id)
     sys.stderr.flush()
@@ -1068,9 +1646,13 @@ def run_id(spec: dict, tokens: dict[str, str], hardware: str, today: str, ctl: P
 
     tmpdir = tempfile.mkdtemp(prefix="mortred-p2-11-%s-" % model_id)
     pack = Path(tmpdir) / "pack.toml"
-    pack_text = "[pack.%s]\nworker_nums = 1\n" % model_id
-    if "model_config" in pack_text or str(ROOT.resolve()) in str(pack.resolve()):
+    try:
+        pack_text = solo_pack_text(model_id)
+    except RuntimeError as exc:
+        return "fail", str(exc)
+    if str(ROOT.resolve()) in str(pack.resolve()):
         return "fail", "temporary pack path"
+    seed_has_model_config = "model_config" in pack_text
     pack.write_text(pack_text, encoding="utf-8")
     calibrate = "mortredctl calibrate --pack %s --write-pack --duration 60s" % pack
     sys.stderr.write("== %s calibrate ==\n" % model_id)
@@ -1091,20 +1673,9 @@ def run_id(spec: dict, tokens: dict[str, str], hardware: str, today: str, ctl: P
     decode_auto = section.get("decode_auto")
     if not isinstance(workers, int) or isinstance(workers, bool) or decode_auto not in ("cpu", "gpu"):
         return "no-rps", "pack did not write worker_nums and decode_auto (%s)" % section
-    if "model_config" in section:
+    if "model_config" in section and not seed_has_model_config:
         return "fail", "pack wrote model_config"
 
-    image_rel = ""
-    if model_id == "pphuman_mobile":
-        image_rel = FACE_IMAGE
-    elif model_id == "dbnet":
-        image_rel = DBNET_IMAGE
-    elif model_id == "superpoint":
-        image_rel = SUPERPOINT_IMAGE
-    elif model_id == "realesrgan":
-        image_rel = REALESRGAN_IMAGE
-    elif model_id == "metric3d_512":
-        image_rel = METRIC3D_IMAGE
     load_cmd = [
         "python3",
         "scripts/server/http_infer_rps.py",
@@ -1307,7 +1878,7 @@ def run_id(spec: dict, tokens: dict[str, str], hardware: str, today: str, ctl: P
             "decoded_height": 256 if model_id == "realesrgan" else None,
             "engine": "static shape batch=1",
         }
-        passed, why = judge_row(row)
+        passed, why = judge_row(row, {model_id: spec})
         if not passed:
             return "fail", why
         rendered = render_row(row)
@@ -1317,7 +1888,7 @@ def run_id(spec: dict, tokens: dict[str, str], hardware: str, today: str, ctl: P
         if auth in rendered:
             return "fail", "refusing to write a token"
         try:
-            baseline_status = record_baseline(row, ROOT / "docs" / "perf" / "baselines")
+            baseline_status = record_baseline(row, BASELINE_DIR)
         except Pf5Error as exc:
             return "fail", str(exc)
         sys.stderr.write("%s PF5 baseline %s\n" % (model_id, baseline_status))
@@ -1343,14 +1914,35 @@ def require_sof0(rel: str, width: int, height: int, nbytes: int, label: str) -> 
     return None
 
 
-def report_section_ids() -> list[str]:
-    if not REPORT.is_file():
+def report_section_ids(report: Path = REPORT) -> list[str]:
+    if not report.is_file():
         return []
-    return re.findall(r"(?m)^## ([A-Za-z0-9_]+)\s*$", REPORT.read_text(encoding="utf-8"))
+    return re.findall(r"(?m)^## ([A-Za-z0-9_]+)\s*$", report.read_text(encoding="utf-8"))
+
+
+def upsert_section(text: str, model_id: str, body: str) -> str:
+    """Replace the ## model_id section, or append it."""
+    section = body if body.endswith("\n") else body + "\n"
+    if not section.endswith("\n\n"):
+        section = section.rstrip("\n") + "\n\n"
+    matches = list(re.finditer(r"(?m)^## ([A-Za-z0-9_]+)\s*$", text))
+    for index, match in enumerate(matches):
+        if match.group(1) != model_id:
+            continue
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        return text[: match.start()] + section + text[end:]
+    if text and not text.endswith("\n"):
+        text += "\n"
+    return text + section
 
 
 def live_context(specs: list[dict]):
-    mismatch = contract_ok()
+    mismatch = contract_ok(specs)
+    if mismatch is None:
+        missing_caps = missing_p99_caps([spec["id"] for spec in specs])
+        if missing_caps:
+            sys.stderr.write(format_missing_p99_table(missing_caps))
+            return _fail("missing p99 caps\n"), None
     if mismatch:
         return _fail(mismatch + "\n"), None
     ctl = ROOT / "_bin" / "mortredctl.out"
@@ -1393,65 +1985,172 @@ def live_context(specs: list[dict]):
     }
 
 
-def append_runs(specs: list[dict], tokens: dict[str, str], hardware: str, today: str, ctl: Path) -> int:
+def append_runs(
+    specs: list[dict],
+    tokens: dict[str, str],
+    hardware: str,
+    today: str,
+    ctl: Path,
+    report: Path = REPORT,
+) -> int:
     for spec in specs:
         kind, payload = run_id(spec, tokens, hardware, today, ctl)
         if kind == "row":
-            append_text(payload if isinstance(payload, str) else "")
+            append_text(payload if isinstance(payload, str) else "", report)
             sys.stderr.write("== %s wrote ==\n" % spec["id"])
             sys.stderr.flush()
             continue
-        if kind == "no-rps" and spec["id"] == "libface":
-            append_text(render_row({"id": "libface", "blank": True}))
+        if kind == "no-rps" and spec["id"] == "libface" and report == REPORT:
+            append_text(render_row({"id": "libface", "blank": True}), report)
             sys.stderr.write("== libface blank: %s ==\n" % payload)
             sys.stderr.flush()
             continue
         sys.stderr.write("%s failed: %s\n" % (spec["id"], payload))
         return 1
-    print("coverage_http_report.py wrote %s" % REPORT)
+    print("coverage_http_report.py wrote %s" % report)
     return 0
 
 
-def run_live() -> int:
-    code, ctx = live_context(list(MODELS))
-    if ctx is None:
-        return code
-    reset_report(ctx["hardware"], ctx["today"])
-    return append_runs(list(MODELS), ctx["tokens"], ctx["hardware"], ctx["today"], ctx["ctl"])
-
-
-def run_from(start_id: str) -> int:
-    ids = [spec["id"] for spec in MODELS]
-    if start_id not in ids:
-        return _fail("unknown id %s\n" % start_id)
-    index = ids.index(start_id)
-    found = report_section_ids()
-    expected = ids[:index]
-    if found != expected:
+def run_live(catalog: str = "coverage_set") -> int:
+    if catalog != "coverage_set":
         return _fail(
-            "checklist has %s; --from %s keeps existing rows and needs exactly %s\n"
-            % (found, start_id, expected)
+            "product_static live runs need --id or --from so the skeleton is not wiped\n"
         )
-    if not REPORT.is_file():
-        return _fail("checklist missing; --from does not create or clear it\n")
-    original = REPORT.read_bytes()
-    specs = list(MODELS[index:])
+    specs = list(specs_for(catalog))
     code, ctx = live_context(specs)
     if ctx is None:
         return code
-    if REPORT.read_bytes() != original:
+    report = report_path_for(catalog)
+    reset_report(ctx["hardware"], ctx["today"], report)
+    return append_runs(
+        specs,
+        ctx["tokens"],
+        ctx["hardware"],
+        ctx["today"],
+        ctx["ctl"],
+        report,
+    )
+
+
+def run_from(start_id: str, catalog: str = "coverage_set") -> int:
+    specs_all = list(specs_for(catalog))
+    ids = [spec["id"] for spec in specs_all]
+    if start_id not in ids:
+        return _fail("unknown id %s\n" % start_id)
+    index = ids.index(start_id)
+    report = report_path_for(catalog)
+    found = report_section_ids(report)
+    expected = ids[:index]
+    if catalog == "coverage_set":
+        if found != expected:
+            return _fail(
+                "checklist has %s; --from %s keeps existing rows and needs exactly %s\n"
+                % (found, start_id, expected)
+            )
+    else:
+        if found[:index] != expected or found[index:] != ids[index:]:
+            return _fail(
+                "product checklist sections are %s; --from %s needs the catalog order\n"
+                % (found, start_id)
+            )
+    if not report.is_file():
+        return _fail("checklist missing; --from does not create or clear it\n")
+    original = report.read_bytes()
+    specs = specs_all[index:]
+    code, ctx = live_context(specs)
+    if ctx is None:
+        return code
+    if report.read_bytes() != original:
         return _fail("refusing to alter rows already written\n")
-    return append_runs(specs, ctx["tokens"], ctx["hardware"], ctx["today"], ctx["ctl"])
+    if catalog == "coverage_set":
+        return append_runs(
+            specs,
+            ctx["tokens"],
+            ctx["hardware"],
+            ctx["today"],
+            ctx["ctl"],
+            report,
+        )
+    for spec in specs:
+        kind, payload = run_id(
+            spec, ctx["tokens"], ctx["hardware"], ctx["today"], ctx["ctl"]
+        )
+        if kind != "row" or not isinstance(payload, str):
+            sys.stderr.write("%s failed: %s\n" % (spec["id"], payload))
+            return 1
+        text = upsert_section(report.read_text(encoding="utf-8"), spec["id"], payload)
+        report.write_text(text, encoding="utf-8")
+        sys.stderr.write("== %s wrote ==\n" % spec["id"])
+    print("coverage_http_report.py wrote %s" % report)
+    return 0
+
+
+def run_one(model_id: str, catalog: str) -> int:
+    specs_all = list(specs_for(catalog))
+    ids = [spec["id"] for spec in specs_all]
+    if model_id not in ids:
+        return _fail("unknown id %s\n" % model_id)
+    report = report_path_for(catalog)
+    found = report_section_ids(report)
+    if model_id not in found:
+        return _fail(
+            "checklist has no ## %s; --id replaces one section and does not create the file\n"
+            % model_id
+        )
+    spec = specs_all[ids.index(model_id)]
+    original = report.read_bytes()
+    code, ctx = live_context([spec])
+    if ctx is None:
+        return code
+    if report.read_bytes() != original:
+        return _fail("refusing to alter rows already written\n")
+    kind, payload = run_id(spec, ctx["tokens"], ctx["hardware"], ctx["today"], ctx["ctl"])
+    if report.read_bytes() != original:
+        return _fail("refusing to alter rows already written\n")
+    if kind != "row" or not isinstance(payload, str):
+        sys.stderr.write("%s failed: %s\n" % (model_id, payload))
+        return 1
+    report.write_text(upsert_section(report.read_text(encoding="utf-8"), model_id, payload), encoding="utf-8")
+    print("coverage_http_report.py wrote %s" % report)
+    return 0
 
 
 def main(argv: list[str]) -> int:
-    if argv == ["--check"]:
-        return run_check()
-    if argv == []:
-        return run_live()
-    if len(argv) == 2 and argv[0] == "--from":
-        return run_from(argv[1])
-    return _fail("usage: python3 scripts/coverage_http_report.py [--check | --from <id>]\n")
+    parser = argparse.ArgumentParser(prog="coverage_http_report.py")
+    parser.add_argument(
+        "--catalog",
+        choices=CATALOG_NAMES,
+        default="coverage_set",
+        help="coverage_set (default) or product_static (conf/product_static_bs1.json)",
+    )
+    parser.add_argument("--check", action="store_true", help="require qualified PASS rows")
+    parser.add_argument(
+        "--check-skeleton",
+        action="store_true",
+        help="require catalog headings; blocked/missing sections are allowed",
+    )
+    parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--from", dest="from_id", help="live run starting at this id")
+    parser.add_argument("--id", dest="only_id", help="live run for one id")
+    args = parser.parse_args(argv)
+    modes = [args.check, args.check_skeleton, args.self_test, bool(args.from_id), bool(args.only_id)]
+    if sum(bool(item) for item in modes) > 1:
+        return _fail(
+            "usage: python3 scripts/coverage_http_report.py "
+            "[--catalog coverage_set|product_static] "
+            "[--check | --check-skeleton | --self-test | --from <id> | --id <id>]\n"
+        )
+    if args.self_test:
+        return run_self_test()
+    if args.check:
+        return check_catalog(args.catalog, skeleton=False)
+    if args.check_skeleton:
+        return check_catalog(args.catalog, skeleton=True)
+    if args.only_id:
+        return run_one(args.only_id, args.catalog)
+    if args.from_id:
+        return run_from(args.from_id, args.catalog)
+    return run_live(args.catalog)
 
 
 if __name__ == "__main__":

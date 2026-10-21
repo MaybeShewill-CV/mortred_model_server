@@ -276,6 +276,16 @@ python3 scripts/server/test_server.py --server mobilenetv2 --mode single --times
 
 ### DL模型推理基准测试
 
+覆盖集九个 id 的 HTTP RPS 在
+[docs/perf/coverage_set_http_rps.md](docs/perf/coverage_set_http_rps.md)。
+产品目录 39 个 id（`conf/product_static_bs1.json`）由
+`python3 scripts/coverage_http_report.py --catalog product_static` 驱动，清单在
+[docs/perf/product_static_http_rps.md](docs/perf/product_static_http_rps.md)。
+该文件在 GPU 主机填写前是骨架，有 id 仍为 blocked 时 `--check` 非 0。
+说明见 [docs/deployment.zh-cn.md](docs/deployment.zh-cn.md) §10.8。
+一次只 prepare / 加载一个 id（`mortredctl prepare --id`；若已有仅含该 id 的
+`conf/packs/<id>.toml` 则用作 pack 种子）。
+
 所有模型的测试过程都重复推理若干次以抵消GPU的warmup损耗，并且没有任何的io时间被算入
 
 `Benchmark 代码段`

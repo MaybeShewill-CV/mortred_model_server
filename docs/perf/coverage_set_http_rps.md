@@ -1,5 +1,7 @@
 # coverage set HTTP RPS
 
+Nine-id ops / TP2 subset (`mobilenetv2`, `yolov8s`, `libface`, `pphuman_mobile`, `dbnet`, `dinov2_vits14`, `superpoint`, `realesrgan`, `metric3d_512`). The 39-id product catalog skeleton is [product_static_http_rps.md](product_static_http_rps.md) (`python3 scripts/coverage_http_report.py --catalog product_static`). This file is not the full catalog.
+
 worktree: /mnt/g/Codex/mortred_wt_r1_p2_11
 hardware: NVIDIA GeForce RTX 2070 SUPER, 8192 MiB
 date: 2026-10-14

@@ -253,6 +253,16 @@ mortredctl calibrate --pack /tmp/pack.toml --write-pack
 python3 scripts/server/http_infer_rps.py --model yolov8s -c 8 -d 30s --raw
 ```
 
+HTTP RPS evidence for the nine coverage-set ids is
+[docs/perf/coverage_set_http_rps.md](docs/perf/coverage_set_http_rps.md). The
+full 39-id product catalog (`conf/product_static_bs1.json`) is driven by
+`python3 scripts/coverage_http_report.py --catalog product_static` and recorded
+in [docs/perf/product_static_http_rps.md](docs/perf/product_static_http_rps.md).
+That catalog file is a skeleton until a GPU host fills it; `--check` stays
+non-zero while any id is blocked. See [docs/deployment.md](docs/deployment.md) §10.8.
+One id is prepared and loaded at a time (`mortredctl prepare --id`, or
+`conf/packs/<id>.toml` when that solo pack exists).
+
 **Unsupported boundaries** (Linux-only, RTDETR scaffold, TensorRT 10.x only,
 engines must rebuild on this GPU): [docs/unsupported-boundaries.md](docs/unsupported-boundaries.md) / [中文摘要](docs/unsupported-boundaries.zh-cn.md).
 
