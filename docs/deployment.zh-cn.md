@@ -679,6 +679,18 @@ curl -X POST -H "Authorization: Bearer $MORTRED_API_TOKEN" \
 
 详见 [api-keys.md](api-keys.zh-cn.md)（含密钥轮换零停机流程）。
 
+### 11.2.1 网关限流顺序（ST2）
+
+模型路由的门闩顺序：
+
+`OPTIONS` → `/healthz` → `/metrics` → 路由 → 可选的鉴权前滥用限制 → 鉴权 → 已鉴权来源 GCRA → 按 key 的队列 / 在途 → 转发。
+
+`[gateway.rate_limit]` 是已鉴权推理配额（响应层 `gateway-gcra`），只在 Bearer 鉴权成功之后扣减。缺 token 或 token 无效是 **401**，不会准入该桶，因此未鉴权突发不会减少同一地址上后续合法客户端的剩余配额。网关不会先准入再在 401 时归还。
+
+`[gateway.abuse_limit]` 可选，缺省关闭。它是独立的鉴权前滥用限制（层 `gateway-abuse`），与已鉴权推理桶不共享。`MORTRED_RATE_LIMIT=off|shadow|enforce` 只作用于 `[gateway.rate_limit]`。
+
+按 key 的 `rate_limit_qps`（层 `api-key-gcra`）只在该 key 已被识别且允许推理之后扣减。未知、禁用或非推理 scope 的 key 不占用 per-key 窗口。
+
 ### 11.3 上线前安全检查单
 
 - [ ] 两个 token 均为 ≥ 32 字符随机值，且互不相同

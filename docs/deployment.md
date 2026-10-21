@@ -726,6 +726,27 @@ curl -X POST -H "Authorization: Bearer $MORTRED_API_TOKEN" \
 
 See [api-keys.md](api-keys.md) for the full guide incl. zero-downtime rotation.
 
+### 11.2.1 Gateway rate-limit order (ST2)
+
+Model routes are gated in this order:
+
+`OPTIONS` → `/healthz` → `/metrics` → route → optional pre-auth abuse limit → authentication → authorized per-source GCRA → per-key queue / inflight → forward.
+
+`[gateway.rate_limit]` is the authorized infer budget (response layer `gateway-gcra`). It runs only after Bearer authentication succeeds. A missing or invalid token is **401** and does not admit that bucket, so an unauthenticated burst does not reduce the remaining budget a later valid client from the same address would use. The gateway does not admit that bucket and then release it on 401.
+
+`[gateway.abuse_limit]` is optional and off unless the section is present and enabled (or `shadow = true`). It is a separate limiter (layer `gateway-abuse`) for shedding abuse before authentication. It does not share the authorized infer bucket. `MORTRED_RATE_LIMIT=off|shadow|enforce` selects only `[gateway.rate_limit]`.
+
+Per-key `rate_limit_qps` (layer `api-key-gcra`) is charged only after that key is recognized and allowed to infer. An unknown, disabled, or non-infer key does not take a per-key slot.
+
+```toml
+# optional; omit the section to leave pre-auth shedding off
+[gateway.abuse_limit]
+enabled = true
+rate_per_sec = 20
+burst = 40
+trusted_proxies = "127.0.0.1,::1"
+```
+
 ### 11.3 Pre-launch security checklist
 
 - [ ] both tokens are ≥32-char random values, distinct from each other

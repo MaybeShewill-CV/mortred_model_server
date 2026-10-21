@@ -316,11 +316,11 @@ TEST_F(GatewayMultiInstanceTest, rate_limited_key_gets_429_not_401) {
 }
 
 TEST_F(GatewayMultiInstanceTest, ip_rate_limit_sheds_and_reports_retry_after) {
-    // PR-3b L1: enabled limiter, burst=3 rate=3/s. All requests come from
-    // 127.0.0.1 WITHOUT XFF -> subject = the peer itself. Missing
-    // Authorization is 401 and does not spend the bucket. The inference
-    // token then spends it: 3 reach the dead upstream (503) and 5 are 429
-    // with Retry-After and the RateLimit-* triple.
+    // Authorized L2, burst=3 rate=3/s. All requests come from 127.0.0.1
+    // WITHOUT XFF -> subject = the peer itself. Missing Authorization is
+    // 401 and does not admit the authorized bucket (auth runs first). The
+    // inference token then spends it: 3 reach the dead upstream (503) and
+    // 5 are 429 with Retry-After and the RateLimit-* triple.
     Instance d;
     d.root = base_dir_ / "d";
     d.model_id = "MODEL_D";
@@ -392,8 +392,8 @@ TEST_F(GatewayMultiInstanceTest, ip_rate_limit_sheds_and_reports_retry_after) {
 }
 
 TEST_F(GatewayMultiInstanceTest, wrong_token_preserves_full_burst) {
-    // Wrong Bearer is 401 and does not spend the peer bucket. The inference
-    // token then has the full burst: 3 dead-upstream 503s, then 429.
+    // Wrong Bearer is 401 and does not admit the authorized bucket. The
+    // inference token then has the full burst: 3 dead-upstream 503s, then 429.
     Instance d;
     d.root = base_dir_ / "d6";
     d.model_id = "MODEL_D";
@@ -433,6 +433,219 @@ TEST_F(GatewayMultiInstanceTest, wrong_token_preserves_full_burst) {
                                    "/v1/models/MODEL_D/infer", "infer-d");
     EXPECT_EQ(shed.status, 429);
     EXPECT_NE(shed.raw.find("\r\nRetry-After:"), std::string::npos);
+
+    d.app.stop_listen();
+}
+
+TEST_F(GatewayMultiInstanceTest, st2_unauth_burst_leaves_authorized_budget) {
+    // ST2: N bad Bearers are all 401 and do not admit the authorized L2 cell
+    // (tracked stays 0 — not admit-then-release). Optional L0 is on with a
+    // wide budget so the burst is not shed as abuse. One valid Bearer then
+    // succeeds (dead upstream 503, not 429). The next valid request is 429
+    // gateway-gcra, so the unauth burst left the full burst of 1.
+    Instance d;
+    d.root = base_dir_ / "st2";
+    d.model_id = "MODEL_D";
+    d.gateway_port = find_free_port();
+    ASSERT_GT(d.gateway_port, 0);
+    write_instance_config(d, find_free_port());
+    {
+        std::ofstream rl(d.root / "conf" / "mortred.toml", std::ios::app);
+        rl << "\n[gateway.rate_limit]\n"
+           << "enabled = true\n"
+           << "rate_per_sec = 1\n"
+           << "burst = 1\n"
+           << "trusted_proxies = \"\"\n"
+           << "\n[gateway.abuse_limit]\n"
+           << "enabled = true\n"
+           << "rate_per_sec = 64\n"
+           << "burst = 64\n"
+           << "trusted_proxies = \"\"\n";
+    }
+    mortred::control::GatewayInitOptions opt;
+    opt.project_root = d.root.string();
+    opt.metrics_token = "scrape-d";
+    opt.auth_token = "infer-d";
+    opt.admin_token = "admin-d";
+    opt.internal_token = "internal-d";
+    opt.host = "127.0.0.1";
+    opt.port = d.gateway_port;
+    ASSERT_TRUE(d.app.init(opt));
+    ASSERT_TRUE(d.app.listen());
+    EXPECT_EQ(d.app.authorized_source_tracked(), 0u);
+    EXPECT_EQ(d.app.api_key_consume_calls(), 0u);
+
+    constexpr int k_bad = 16;
+    for (int i = 0; i < k_bad; ++i) {
+        const char* bearer = (i % 2 == 0) ? "wrong-d" : "";
+        const auto resp =
+            send_request(d.gateway_port, "POST", "/v1/models/MODEL_D/infer", bearer);
+        EXPECT_EQ(resp.status, 401) << i << " " << resp.raw;
+        EXPECT_EQ(resp.raw.find("\r\nX-Mortred-RateLimit-Layer:"), std::string::npos)
+            << resp.raw;
+    }
+    EXPECT_EQ(d.app.authorized_source_tracked(), 0u);
+    EXPECT_EQ(d.app.api_key_consume_calls(), 0u);
+
+    const auto ok =
+        send_request(d.gateway_port, "POST", "/v1/models/MODEL_D/infer", "infer-d");
+    EXPECT_EQ(ok.status, 503) << ok.raw;
+    EXPECT_EQ(d.app.authorized_source_tracked(), 1u);
+
+    const auto shed =
+        send_request(d.gateway_port, "POST", "/v1/models/MODEL_D/infer", "infer-d");
+    EXPECT_EQ(shed.status, 429) << shed.raw;
+    EXPECT_NE(shed.raw.find("\r\nX-Mortred-RateLimit-Layer: gateway-gcra"), std::string::npos)
+        << shed.raw;
+    EXPECT_EQ(shed.raw.find("gateway-abuse"), std::string::npos) << shed.raw;
+    EXPECT_NE(shed.raw.find("\r\nRetry-After:"), std::string::npos) << shed.raw;
+
+    d.app.stop_listen();
+}
+
+TEST_F(GatewayMultiInstanceTest, st2_invalid_api_key_does_not_call_consume_rate_limit) {
+    // Unknown, disabled, and non-infer bearers must not enter
+    // consume_rate_limit. The inference key's qps=1 budget is therefore
+    // still full: the first valid key reaches the dead upstream (503), and
+    // only the second is 429 api-key-gcra.
+    Instance d;
+    d.root = base_dir_ / "st2-key";
+    d.model_id = "MODEL_D";
+    d.gateway_port = find_free_port();
+    ASSERT_GT(d.gateway_port, 0);
+    write_instance_config(d, find_free_port());
+    {
+        std::ofstream rl(d.root / "conf" / "mortred.toml", std::ios::app);
+        rl << "\n[gateway.rate_limit]\n"
+           << "enabled = true\n"
+           << "rate_per_sec = 100\n"
+           << "burst = 100\n"
+           << "trusted_proxies = \"\"\n";
+    }
+    {
+        std::ofstream keys(d.root / "conf" / "api_keys.toml");
+        keys << "[keys.infer]\n"
+             << "hash = \"" << mortred::control::ApiKeyManager::sha256_hex("key-infer")
+             << "\"\n"
+             << "scope = \"inference\"\n"
+             << "rate_limit_qps = 1\n"
+             << "[keys.audit]\n"
+             << "hash = \"" << mortred::control::ApiKeyManager::sha256_hex("key-audit")
+             << "\"\n"
+             << "scope = \"audit\"\n"
+             << "rate_limit_qps = 1\n"
+             << "[keys.off]\n"
+             << "hash = \"" << mortred::control::ApiKeyManager::sha256_hex("key-off")
+             << "\"\n"
+             << "scope = \"inference\"\n"
+             << "enabled = false\n"
+             << "rate_limit_qps = 1\n";
+    }
+    mortred::control::GatewayInitOptions opt;
+    opt.project_root = d.root.string();
+    opt.metrics_token = "scrape-d";
+    opt.auth_token = "infer-d";
+    opt.admin_token = "admin-d";
+    opt.internal_token = "internal-d";
+    opt.host = "127.0.0.1";
+    opt.port = d.gateway_port;
+    ASSERT_TRUE(d.app.init(opt));
+    ASSERT_TRUE(d.app.listen());
+    EXPECT_EQ(d.app.api_key_consume_calls(), 0u);
+    EXPECT_EQ(d.app.authorized_source_tracked(), 0u);
+
+    for (int i = 0; i < 12; ++i) {
+        const auto resp = send_request(d.gateway_port, "POST",
+                                       "/v1/models/MODEL_D/infer", "not-a-key");
+        EXPECT_EQ(resp.status, 401) << i;
+    }
+    EXPECT_EQ(send_request(d.gateway_port, "POST", "/v1/models/MODEL_D/infer", "key-audit")
+                  .status,
+              401);
+    EXPECT_EQ(send_request(d.gateway_port, "POST", "/v1/models/MODEL_D/infer", "key-off")
+                  .status,
+              401);
+    EXPECT_EQ(d.app.api_key_consume_calls(), 0u);
+    EXPECT_EQ(d.app.authorized_source_tracked(), 0u);
+
+    const auto first =
+        send_request(d.gateway_port, "POST", "/v1/models/MODEL_D/infer", "key-infer");
+    EXPECT_EQ(first.status, 503) << first.raw;
+    EXPECT_EQ(d.app.api_key_consume_calls(), 1u);
+    EXPECT_EQ(d.app.authorized_source_tracked(), 1u);
+
+    const auto second =
+        send_request(d.gateway_port, "POST", "/v1/models/MODEL_D/infer", "key-infer");
+    EXPECT_EQ(second.status, 429) << second.raw;
+    EXPECT_NE(second.raw.find("\r\nX-Mortred-RateLimit-Layer: api-key-gcra"),
+              std::string::npos)
+        << second.raw;
+    EXPECT_EQ(d.app.api_key_consume_calls(), 2u);
+    // Key 429 returns before L2, so the rejected call does not add a cell.
+    EXPECT_EQ(d.app.authorized_source_tracked(), 1u);
+
+    d.app.stop_listen();
+}
+
+TEST_F(GatewayMultiInstanceTest, st2_abuse_limiter_does_not_share_authorized_bucket) {
+    // A tight L0 sheds the same peer with gateway-abuse. That 429 must not
+    // create an authorized L2 cell, including when the shed request carries
+    // a valid Bearer (L0 runs before auth).
+    Instance d;
+    d.root = base_dir_ / "st2-l0";
+    d.model_id = "MODEL_D";
+    d.gateway_port = find_free_port();
+    ASSERT_GT(d.gateway_port, 0);
+    write_instance_config(d, find_free_port());
+    {
+        std::ofstream rl(d.root / "conf" / "mortred.toml", std::ios::app);
+        rl << "\n[gateway.rate_limit]\n"
+           << "enabled = true\n"
+           << "rate_per_sec = 1\n"
+           << "burst = 1\n"
+           << "trusted_proxies = \"\"\n"
+           << "\n[gateway.abuse_limit]\n"
+           << "enabled = true\n"
+           << "rate_per_sec = 1\n"
+           << "burst = 2\n"
+           << "trusted_proxies = \"\"\n";
+    }
+    mortred::control::GatewayInitOptions opt;
+    opt.project_root = d.root.string();
+    opt.metrics_token = "scrape-d";
+    opt.auth_token = "infer-d";
+    opt.admin_token = "admin-d";
+    opt.internal_token = "internal-d";
+    opt.host = "127.0.0.1";
+    opt.port = d.gateway_port;
+    ASSERT_TRUE(d.app.init(opt));
+    ASSERT_TRUE(d.app.listen());
+
+    for (int i = 0; i < 2; ++i) {
+        const auto resp =
+            send_request(d.gateway_port, "POST", "/v1/models/MODEL_D/infer", "wrong-d");
+        EXPECT_EQ(resp.status, 401) << i << " " << resp.raw;
+    }
+    EXPECT_EQ(d.app.authorized_source_tracked(), 0u);
+
+    const auto abuse = send_request(d.gateway_port, "POST",
+                                    "/v1/models/MODEL_D/infer", "wrong-d");
+    EXPECT_EQ(abuse.status, 429) << abuse.raw;
+    EXPECT_NE(abuse.raw.find("\r\nX-Mortred-RateLimit-Layer: gateway-abuse"),
+              std::string::npos)
+        << abuse.raw;
+    EXPECT_EQ(abuse.raw.find("gateway-gcra"), std::string::npos) << abuse.raw;
+    EXPECT_EQ(d.app.authorized_source_tracked(), 0u);
+
+    const auto still_l0 =
+        send_request(d.gateway_port, "POST", "/v1/models/MODEL_D/infer", "infer-d");
+    EXPECT_EQ(still_l0.status, 429) << still_l0.raw;
+    EXPECT_NE(still_l0.raw.find("\r\nX-Mortred-RateLimit-Layer: gateway-abuse"),
+              std::string::npos)
+        << still_l0.raw;
+    EXPECT_EQ(still_l0.raw.find("gateway-gcra"), std::string::npos) << still_l0.raw;
+    EXPECT_EQ(d.app.authorized_source_tracked(), 0u);
+    EXPECT_EQ(d.app.api_key_consume_calls(), 0u);
 
     d.app.stop_listen();
 }
@@ -595,8 +808,8 @@ TEST_F(GatewayMultiInstanceTest, xff_from_untrusted_peer_is_ignored) {
 }
 
 TEST_F(GatewayMultiInstanceTest, shadow_mode_never_rejects) {
-    // shadow=true: identical hammering, every request passes L1 (401 at
-    // auth), the metering still runs underneath
+    // shadow=true on the authorized limiter: unauthenticated hammering is
+    // 401 and never reaches L2, so it is not rejected as 429.
     Instance d;
     d.root = base_dir_ / "d4";
     d.model_id = "MODEL_D";
