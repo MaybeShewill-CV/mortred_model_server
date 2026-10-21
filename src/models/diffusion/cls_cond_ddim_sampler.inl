@@ -15,7 +15,6 @@
 
 #include <opencv2/opencv.hpp>
 #include "glog/logging.h"
-#include "indicators/indicators.hpp"
 
 #include "common/base64.h"
 #include "common/cv_utils.h"
@@ -173,7 +172,6 @@ class ClsCondDDIMSampler<INPUT, OUTPUT>::Impl {
     int _m_timesteps = 1000;
     double _m_beta_start = 0.0;
     double _m_beta_end = 0.0;
-    std::unique_ptr<indicators::BlockProgressBar> _m_p_sample_bar;
 
     // denoise schedule
     std::unique_ptr<ClsCondDenoiseModelPtr> _m_denoise_net;
@@ -331,17 +329,6 @@ StatusCode ClsCondDDIMSampler<INPUT, OUTPUT>::Impl::init(const toml::table &conf
         return init_status;
     }
 
-    // init p-sample progress bar
-    _m_p_sample_bar = std::make_unique<indicators::BlockProgressBar>();
-    _m_p_sample_bar->set_option(indicators::option::BarWidth{80});
-    _m_p_sample_bar->set_option(indicators::option::Start{"["});
-    _m_p_sample_bar->set_option(indicators::option::End{"]"});
-    _m_p_sample_bar->set_option(indicators::option::ForegroundColor{indicators::Color::white});
-    _m_p_sample_bar->set_option(indicators::option::FontStyles{std::vector<indicators::FontStyle>{indicators::FontStyle::bold}});
-    _m_p_sample_bar->set_option(indicators::option::ShowElapsedTime{true});
-    _m_p_sample_bar->set_option(indicators::option::ShowPercentage{true});
-    _m_p_sample_bar->set_option(indicators::option::ShowRemainingTime(true));
-
     if (init_status == StatusCode::OK) {
         _m_successfully_initialized = true;
         LOG(INFO) << "Successfully load ddim sampler";
@@ -450,9 +437,7 @@ std::vector<std::tuple<std::vector<float>, std::vector<float> > > ClsCondDDIMSam
                 mid_sample_results.push_back(sample_result);
             }
         }
-        _m_p_sample_bar->set_progress((static_cast<float>(idx + 1) / static_cast<float>(steps.size())) * 100.0f);
     }
-    _m_p_sample_bar->mark_as_completed();
 
     return mid_sample_results;
 }
