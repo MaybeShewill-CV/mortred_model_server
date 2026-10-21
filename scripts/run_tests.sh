@@ -4,8 +4,10 @@
 # from 3rd_party/libs, which is not on the system library path).
 #
 # Usage: scripts/run_tests.sh [build-dir] [ctest args...]
-#   scripts/run_tests.sh build/full                      # all tests
+#   scripts/run_tests.sh build/full                      # every registered ctest
 #   scripts/run_tests.sh build/full -R model_golden_test # subset
+# Default `cmake --build <dir> --target check` is narrower: it excludes
+# labels heavy-golden and valgrind. See test/CHECK_SSOT.md.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

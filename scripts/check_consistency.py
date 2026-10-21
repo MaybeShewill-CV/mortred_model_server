@@ -57,6 +57,9 @@ Verifies a few high-signal invariants:
 23. `scripts/product_static_bs1.py --self-test` covers per-id pack emit→check
     for all 39 ids, and `scripts/compose_packs.py --self-test` covers merging
     those files into the one `--pack` file prepare accepts.
+24. `scripts/check_check_ssot.py` matches `test/CHECK_SSOT.md` to the
+    heavy-golden / valgrind labels. Default `check` must keep excluding those
+    names, and README must not claim they ran.
 
 Exit code 0 means consistent; non-zero means the repository needs attention.
 """
@@ -1106,6 +1109,27 @@ def check_model_io_split() -> list[str]:
 
 
 
+def check_check_ssot() -> list[str]:
+    """Default check exclusions must match test/CHECK_SSOT.md."""
+    script = ROOT / "scripts" / "check_check_ssot.py"
+    if not script.is_file():
+        return ["missing scripts/check_check_ssot.py"]
+    try:
+        result = subprocess.run(
+            [sys.executable, str(script)],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return [f"check_check_ssot.py could not run: {exc}"]
+    if result.returncode == 0:
+        return []
+    detail = (result.stdout + result.stderr).strip() or f"exit {result.returncode}"
+    return [f"check_check_ssot.py failed: {detail}"]
+
+
 def check_golden_zero_drift() -> list[str]:
     """Fail closed if test/golden/ or model_golden case list drifted vs baseline."""
     script = ROOT / "scripts" / "golden_drift_check.py"
@@ -1299,6 +1323,7 @@ def main() -> int:
 
     errors.extend(check_ci_inference_contract())
     errors.extend(check_golden_zero_drift())
+    errors.extend(check_check_ssot())
     if args.check_stale_binaries:
         errors.extend(check_stale_binaries())
 
