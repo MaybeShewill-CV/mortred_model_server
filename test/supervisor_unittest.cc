@@ -370,6 +370,47 @@ TEST_F(SupervisorTest, manual_stop_is_expected_and_not_restarted) {
     EXPECT_FALSE(sup->stop_server("fake_model_server", &err));
 }
 
+TEST_F(SupervisorTest, stop_during_backoff_window_never_revives_the_process) {
+    // P0-3b: the monitor collects respawn candidates under one lock hold and
+    // spawns them under a later one. A stop_server landing between the two
+    // must win: after stop returns, the process stays stopped even though a
+    // respawn was pending when the stop was issued. The pre-fix interleaving
+    // is microsecond-narrow, so this is an invariant guard looped across many
+    // kill/backoff/stop rounds rather than a deterministic red/green repro.
+    auto sup = make_supervisor();
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    for (int iter = 0; iter < 30; ++iter) {
+        std::string err;
+        ASSERT_TRUE(sup->start_server("fake_model_server", &err)) << err;
+        ASSERT_TRUE(wait_for([&sup]() { return sup->status("fake_model_server").ready; }, 10000))
+            << "iter=" << iter;
+
+        const int pid = sup->status("fake_model_server").pid;
+        ASSERT_GT(pid, 0);
+        ::kill(pid, SIGKILL);
+        // stop inside the backoff window: a respawn is pending but not yet
+        // spawned (handle_exit scheduled the retry, the monitor has not run it)
+        ASSERT_TRUE(wait_for([&sup]() {
+            return sup->status("fake_model_server").state == "backoff";
+        }, 10000)) << "iter=" << iter << ": child did not enter backoff";
+        ASSERT_TRUE(sup->stop_server("fake_model_server", &err)) << err;
+
+        // backoff delay starts at 500ms and the probe cycle is ~500ms-1s, so
+        // a buggy revive would surface as running/backoff within this window
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(3500);
+        while (std::chrono::steady_clock::now() < deadline) {
+            const auto s = sup->status("fake_model_server");
+            ASSERT_EQ(s.state, "stopped")
+                << "iter=" << iter << ": stopped server was revived (state=" << s.state << ")";
+            ASSERT_LT(s.pid, 0) << "iter=" << iter << ": stopped server has a pid again";
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+    }
+}
+
+
 TEST_F(SupervisorTest, restart_action_recovers_running_state) {
     auto sup = make_supervisor();
     sup->set_catalog(catalog_);
