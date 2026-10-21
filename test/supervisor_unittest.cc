@@ -177,7 +177,7 @@ class SupervisorTest : public ::testing::Test {
     // ignore_sigint=<0|1>" on stderr before dropping its log pipes; the
     // supervisor's reader thread copies that line into the child's LogBuffer.
     static std::string grandchild_log_line(ProcessSupervisor* sup) {
-        auto* log = sup->logs("fake_model_server");
+        auto log = sup->logs("fake_model_server");
         if (log == nullptr) {
             return std::string();
         }
@@ -268,7 +268,7 @@ class SupervisorTest : public ::testing::Test {
         ADD_FAILURE() << "fake server not ready: state=" << s.state << " pid=" << s.pid
                       << " restarts=" << s.restart_count
                       << " last_exit=" << s.last_exit_status << " error=" << s.error;
-        auto* log = sup->logs("fake_model_server");
+        auto log = sup->logs("fake_model_server");
         if (log != nullptr) {
             for (const auto& line : log->slice(0, 80)) {
                 ADD_FAILURE() << "[log] " << line;
@@ -1055,6 +1055,64 @@ TEST_F(SupervisorTest, managed_children_do_not_inherit_management_credentials) {
     ::unsetenv("MORTRED_METRICS_TOKEN");
     ::unsetenv("MORTRED_GATEWAY_AUTH_TOKEN");
     ::unsetenv("MORTRED_INTERNAL_TOKEN");
+}
+
+
+TEST_F(SupervisorTest, respawn_archives_ended_run_and_keeps_current_log_clean) {
+    // P0-3a: respawn used to truncate the child log in place, destroying the
+    // ended run's evidence. The second spawn must archive the first run's
+    // file (run-stamped) and write a fresh current log.
+    auto sup = make_supervisor();
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    std::string err;
+    ASSERT_TRUE(sup->start_server("fake_model_server", &err)) << err;
+    ASSERT_TRUE(wait_for([&sup]() { return sup->status("fake_model_server").ready; }, 10000));
+    const int first_pid = sup->status("fake_model_server").pid;
+    ASSERT_GT(first_pid, 0);
+    ASSERT_TRUE(sup->stop_server("fake_model_server", &err)) << err;
+    ASSERT_TRUE(wait_for([&sup]() {
+        return sup->status("fake_model_server").state == "stopped";
+    }, 10000));
+
+    ASSERT_TRUE(sup->start_server("fake_model_server", &err)) << err;
+    ASSERT_TRUE(wait_for([&sup]() { return sup->status("fake_model_server").ready; }, 10000));
+    const int second_pid = sup->status("fake_model_server").pid;
+    ASSERT_GT(second_pid, 0);
+    ASSERT_NE(second_pid, first_pid);
+
+    // exactly one archive exists and it carries the first run's spawn line
+    int archives = 0;
+    bool first_run_archived = false;
+    for (const auto& entry : fs::directory_iterator(root_ / "logs")) {
+        const std::string name = entry.path().filename().string();
+        if (name.find("fake_model_server.log.run") == std::string::npos) {
+            continue;
+        }
+        ++archives;
+        std::ifstream in(entry.path());
+        ASSERT_TRUE(in.good());
+        std::string content((std::istreambuf_iterator<char>(in)),
+                            std::istreambuf_iterator<char>());
+        if (content.find("spawn pid " + std::to_string(first_pid)) != std::string::npos) {
+            first_run_archived = true;
+        }
+        EXPECT_EQ(content.find("spawn pid " + std::to_string(second_pid)), std::string::npos)
+            << "second-run line leaked into the archive";
+    }
+    EXPECT_EQ(archives, 1);
+    EXPECT_TRUE(first_run_archived) << "first run's evidence was not archived";
+
+    // current log holds only the second run
+    auto log = sup->logs("fake_model_server");
+    ASSERT_NE(log, nullptr);
+    for (const auto& line : log->slice(0, 100)) {
+        EXPECT_EQ(line.find("spawn pid " + std::to_string(first_pid)), std::string::npos)
+            << "first-run line survived in the current log: " << line;
+    }
+
+    ASSERT_TRUE(sup->stop_server("fake_model_server", &err)) << err;
 }
 
 int main(int argc, char** argv) {

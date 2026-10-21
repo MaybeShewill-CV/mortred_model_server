@@ -315,7 +315,7 @@ void SupervisorApp::handle_logs(WFHttpTask* task, const std::string& id,
         reply_json(task, 404, json_error("unknown server id: " + id));
         return;
     }
-    auto* buffer = supervisor_->logs(id);
+    auto buffer = supervisor_->logs(id);
     size_t offset = parse_size(query_value(uri, "offset"), 0);
     size_t limit = parse_size(query_value(uri, "limit"), 200);
     if (limit > 1000) {

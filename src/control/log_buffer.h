@@ -9,6 +9,7 @@
 #define MORTRED_CONTROL_LOG_BUFFER_H
 
 #include <algorithm>
+#include <cstdint>
 #include <deque>
 #include <filesystem>
 #include <fstream>
@@ -22,6 +23,14 @@ namespace control {
 /***
  * Thread-safe ring buffer for one supervised process's stdout/stderr lines,
  * also persisted to a size-rotated log file (path -> path.1 on overflow).
+ *
+ * A respawned process must never destroy the ended run's evidence: rollover()
+ * renames the current file to <path>.run<unix_ms> and starts a fresh one,
+ * keeping the newest kArchiveKeep archives. The archive name is intentionally
+ * distinct from the size-rotation ".1" suffix so retention sweeping cannot
+ * touch size-rotated files. Instances are shared via shared_ptr across a
+ * respawn: a reader thread straggler holding an old instance appends into the
+ * archived inode, never into the new run's file.
  */
 class LogBuffer {
   public:
@@ -40,15 +49,27 @@ class LogBuffer {
     LogBuffer(const LogBuffer&) = delete;
     LogBuffer& operator=(const LogBuffer&) = delete;
 
-    void reset() {
+    /*** Archive the ended run and start fresh: rename the current file to
+     * <path>.run<archive_stamp>, delete archives beyond kArchiveKeep (newest
+     * kept), clear the in-memory ring, reopen the live path empty. The caller
+     * supplies the stamp (supervisor unix_ms) so tests stay deterministic. */
+    void rollover(uint64_t archive_stamp) {
         std::lock_guard<std::mutex> lock(_mu);
+        if (_file.is_open()) {
+            _file.flush();
+            _file.close();
+        }
+        const std::string archive = _path + ".run" + std::to_string(archive_stamp);
+        std::error_code ec;
+        std::filesystem::rename(_path, archive, ec);
+        // rename may fail on exotic filesystems; the truncating reopen below
+        // then loses the ended run, same as the pre-rollover behavior
+        sweep_archives_locked();
         _lines.clear();
         _head = 0;
         _bytes = 0;
         _file_bytes = 0;
-        if (_file.is_open()) {
-            _file.close();
-        }
+        _unflushed = 0;
         _file.open(_path, std::ios::trunc);
     }
 
@@ -105,6 +126,8 @@ class LogBuffer {
     }
 
     static constexpr size_t kDefaultRotateBytes = 10 * 1024 * 1024;
+    // respawn archives kept per child; disk bound = kArchiveKeep * rotate_bytes
+    static constexpr size_t kArchiveKeep = 3;
 
   private:
     void rotate_locked() {
@@ -120,6 +143,41 @@ class LogBuffer {
         }
         _file_bytes = 0;
         _file.open(_path, std::ios::trunc);
+    }
+
+    /*** delete the oldest .run<stamp> archives beyond kArchiveKeep; ignores
+     * every non-archive entry (including the size-rotation ".1") */
+    void sweep_archives_locked() {
+        std::filesystem::path live(_path);
+        const std::filesystem::path dir =
+            live.parent_path().empty() ? std::filesystem::path(".") : live.parent_path();
+        const std::string prefix = live.filename().string() + ".run";
+        struct Archive {
+            uint64_t stamp;
+            std::filesystem::path path;
+        };
+        std::vector<Archive> archives;
+        std::error_code ec;
+        for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+            const std::string name = entry.path().filename().string();
+            if (name.size() <= prefix.size() ||
+                name.compare(0, prefix.size(), prefix) != 0) {
+                continue;
+            }
+            const std::string stamp_text = name.substr(prefix.size());
+            if (stamp_text.find_first_not_of("0123456789") != std::string::npos) {
+                continue;
+            }
+            archives.push_back({std::stoull(stamp_text), entry.path()});
+        }
+        if (archives.size() <= kArchiveKeep) {
+            return;
+        }
+        std::sort(archives.begin(), archives.end(),
+                  [](const Archive& a, const Archive& b) { return a.stamp > b.stamp; });
+        for (size_t i = kArchiveKeep; i < archives.size(); ++i) {
+            std::filesystem::remove(archives[i].path, ec);
+        }
     }
 
     static constexpr size_t k_max_lines = 2000;
