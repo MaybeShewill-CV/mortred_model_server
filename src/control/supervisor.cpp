@@ -1131,6 +1131,14 @@ void ProcessSupervisor::monitor_loop() {
         if (!to_restart.empty()) {
             std::unique_lock<std::mutex> lock(_mu);
             for (Child* child : to_restart) {
+                // Re-check under the spawn lock: the collection pass above ran
+                // under an earlier lock hold, and a REST stop_server in between
+                // clears wanted/backoff without touching this list. Spawning
+                // anyway would revive a process the operator just stopped.
+                // (_children is insert-only, so the collected pointers stay valid.)
+                if (!child->wanted || child->stopping || _shutdown_requested.load()) {
+                    continue;
+                }
                 child->backoff_due_ms = 0;
                 std::string err;
                 if (!spawn_locked(child, &err, lock)) {
