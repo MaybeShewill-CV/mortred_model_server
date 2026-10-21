@@ -70,22 +70,34 @@ int main(int argc, char **argv) {
         return -1;
     }
     const auto config = std::move(parsed).table();
-    if (!config.contains(cli.model)) {
+    std::string model_alias;
+    if (jinq::apps::find_section_ci(config, cli.model, &model_alias) == nullptr) {
         std::fprintf(stderr, "--model %s does not match a [%s] table in %s\n", cli.model.c_str(),
                      cli.model.c_str(), config_path.c_str());
         return -1;
     }
-    if (!entry->server_section.empty() && !config.contains(entry->server_section)) {
-        std::fprintf(stderr, "server section [%s] missing from %s\n", entry->server_section.c_str(),
-                     config_path.c_str());
+    if (model_alias != cli.model) {
+        std::fprintf(stderr,
+                     "note: config table [%s] matches --model %s case-insensitively\n",
+                     model_alias.c_str(), cli.model.c_str());
+    }
+    std::string section_alias;
+    const auto* server_tbl =
+        jinq::apps::find_section_ci(config, entry->server_section, &section_alias);
+    if (server_tbl == nullptr) {
+        std::fprintf(stderr, "server section [%s] missing from %s\n",
+                     entry->server_section.c_str(), config_path.c_str());
         return -1;
     }
-    if (config.contains(entry->server_section)) {
-        const auto declared = config[entry->server_section]["model"].value<std::string>();
-        if (declared && *declared != cli.model) {
-            std::fprintf(stderr, "config model=\"%s\" does not match --model %s\n", declared->c_str(),
-                         cli.model.c_str());
-            return -1;
+    const auto declared = server_tbl->get("model");
+    if (declared != nullptr) {
+        if (auto declared_value = declared->as_string(); declared_value != nullptr) {
+            const std::string declared_name = declared_value->get();
+            if (declared_name != cli.model) {
+                std::fprintf(stderr, "config model=\"%s\" does not match --model %s\n",
+                             declared_name.c_str(), cli.model.c_str());
+                return -1;
+            }
         }
     }
 
