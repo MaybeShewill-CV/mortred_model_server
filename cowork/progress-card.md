@@ -42,8 +42,8 @@
 
 ## 移交清单（本轮发现、未修）
 
-1. **契约管线两层漂移（main 既有）**：`docs/contract_dump.json` 落后于目录（id 大小写迁移未再生）；再生后暴露 `scene_segmentation/msocrnet` 的 data `$ref` 是 `SegmentationResult`，校验器要求 `EnvelopeData`。需决策：改路由还是放宽校验（本次已还原 docs，保持原状）。
-2. 目录 id 小写化（`mobilenetv2`）与产品 toml 表名大写（`[MOBILENETV2]`）不一致——CLI 校验会拒绝官方 benchmark toml 直启。
+1. ~~契约管线两层漂移~~ **已修复（797e37e8）**：根因是 gen_openapi 的 `_ENVELOPE_DATA` 策略（msocrnet + dinov2 须用通用 EnvelopeData）从未在路由构建中实现——规则结构性不可通过；叠加 dump 自目录 id 迁移后从未再生（28→44 条）。现策略生效、dump/openapi 再生，`check_contract_sync` 全绿。
+2. ~~目录 id 大小写不一致~~ **已修复（f42b6ba1）**：CLI 表名查找大小写不敏感（精确优先，命中变体打提示），host/port 解析同样容错；模型表边界保持精确匹配并给出清晰错误（该表名是全链路 catalog 键，深层容错会掩盖配置错误）。
 3. `enlightengan_output_contract_unittest` segfault 与 `p0_1` AC3 doctor——main 既有，见上门禁结果。
 4. 仓库里有一个**旧 stash**（`stash@{0}: On sub-agent-co-work: r4-wip-param-occupancy-async-before-designs`），非本轮产生，原样保留；本轮曾误弹导致半应用、已 `reset --hard` 恢复，stash 本体无损。
 5. P1 清单（前次评审）：死代码清理、API key 加盐、非批路径队头阻塞、jinq→mortred 改名、mini_toml 静默吞错、gateway 重试/熔断等。
@@ -60,4 +60,5 @@ batch infer 优化 + P0-4 第 3 步（4 个 sampler 收敛迁移到 BackendCvMod
 - 2026-10-21 15:5x 阶段 2 完成（be67c034）。
 - 2026-10-21 16:1x 阶段 3 完成（084f101b，附带 notify 潜伏 bug）；阶段 6 完成（40c59824，insitu 降级）；阶段 7 完成（ed317978）。
 - 2026-10-21 16:3x 阶段 8 完成：5 分支合并（000f232b→05fed40f）、全量门禁、WERROR 清零（5d45c4ee）、活体验证、移交清单落卡。
-- 2026-10-21 17:0x 收尾：CHANGELOG [Unreleased] 条目（912d6c9f）；最终 HEAD 全量 check 97/98；合并分支清理；本地 main 领先 origin/main 14 个提交（未推送，等用户指示）。
+- 2026-10-21 17:0x 收尾：CHANGELOG [Unreleased] 条目（912d6c9f）；最终 HEAD 全量 check 97/98；合并分支清理；本地 main 领先 origin/main 15 个提交（未推送，等用户指示）。
+- 2026-10-21 23:5x 用户决策 1-3 执行完毕：main 推送 origin（9b930bc6..eb246207）；契约管线修复（797e37e8）；CLI 大小写容错（f42b6ba1）。batch 战役、enlightengan/p0_1 追查、P1 排期、旧 stash 处置按用户指示暂缓。
