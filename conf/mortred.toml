@@ -17,7 +17,10 @@ max_connections = 1000
 upstream_send_timeout_ms = 180000
 upstream_recv_timeout_ms = 180000
 
-# enterprise/edge default: per-IP GCRA on (override with MORTRED_RATE_LIMIT=off|shadow|enforce)
+# Authorized per-source GCRA (L2). Charged only after auth succeeds (ST2):
+# a 401 does not debit this bucket. Optional pre-auth abuse shedding is a
+# separate [gateway.abuse_limit] table (off when omitted) and does not share
+# this budget. MORTRED_RATE_LIMIT=off|shadow|enforce overrides this table only.
 [gateway.rate_limit]
 enabled = true
 shadow = false

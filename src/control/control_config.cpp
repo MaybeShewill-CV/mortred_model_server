@@ -111,6 +111,28 @@ bool parse_pack_occupancy(const mini_toml::Table& kv, PackOccupancy* out, std::s
     return true;
 }
 
+bool apply_gateway_limit(const mini_toml::Table& kv, const std::string& ctx,
+                         GatewayRateLimitConfig* rl, std::string* err) {
+    if (kv.count("enabled") != 0) {
+        rl->enabled = mini_toml::to_bool(kv.at("enabled"), false);
+    }
+    if (kv.count("shadow") != 0) {
+        rl->shadow = mini_toml::to_bool(kv.at("shadow"), false);
+    }
+    if (!read_int(kv, "rate_per_sec", &rl->rate_per_sec, 1, 100000, ctx, err) ||
+        !read_int(kv, "burst", &rl->burst, 1, 1000000, ctx, err) ||
+        !read_int(kv, "max_tracked", &rl->max_tracked, 0, 16777216, ctx, err)) {
+        return false;
+    }
+    // trusted_proxies is deliberately NOT read_str: the empty string is a
+    // valid configuration (trust nobody -> headers never honored), while
+    // read_str rejects empty values
+    if (kv.count("trusted_proxies") != 0) {
+        rl->trusted_proxies = mini_toml::unquote(kv.at("trusted_proxies"));
+    }
+    return true;
+}
+
 }  // namespace
 
 bool ControlConfig::load(const std::string& path, ControlConfig* out, std::string* err) {
@@ -162,28 +184,19 @@ bool ControlConfig::load(const std::string& path, ControlConfig* out, std::strin
         }
     }
 
-    // [gateway.rate_limit]: its own mini_toml section (the parser has no
-    // dotted keys); every key optional with the struct defaults standing
+    // [gateway.rate_limit] (authorized L2) and [gateway.abuse_limit] (optional
+    // pre-auth L0) are separate mini_toml sections. Every key is optional;
+    // an omitted section keeps the struct defaults (abuse limit stays off).
     if (doc.count("gateway.rate_limit") != 0) {
-        const auto& kv = doc.at("gateway.rate_limit");
-        const std::string ctx = "[gateway.rate_limit]";
-        auto& rl = cfg.gateway.rate_limit;
-        if (kv.count("enabled") != 0) {
-            rl.enabled = mini_toml::to_bool(kv.at("enabled"), false);
-        }
-        if (kv.count("shadow") != 0) {
-            rl.shadow = mini_toml::to_bool(kv.at("shadow"), false);
-        }
-        if (!read_int(kv, "rate_per_sec", &rl.rate_per_sec, 1, 100000, ctx, err) ||
-            !read_int(kv, "burst", &rl.burst, 1, 1000000, ctx, err) ||
-            !read_int(kv, "max_tracked", &rl.max_tracked, 0, 16777216, ctx, err)) {
+        if (!apply_gateway_limit(doc.at("gateway.rate_limit"), "[gateway.rate_limit]",
+                                 &cfg.gateway.rate_limit, err)) {
             return false;
         }
-        // trusted_proxies is deliberately NOT read_str: the empty string is a
-        // valid configuration (trust nobody -> headers never honored), while
-        // read_str rejects empty values
-        if (kv.count("trusted_proxies") != 0) {
-            rl.trusted_proxies = mini_toml::unquote(kv.at("trusted_proxies"));
+    }
+    if (doc.count("gateway.abuse_limit") != 0) {
+        if (!apply_gateway_limit(doc.at("gateway.abuse_limit"), "[gateway.abuse_limit]",
+                                 &cfg.gateway.abuse_limit, err)) {
+            return false;
         }
     }
 

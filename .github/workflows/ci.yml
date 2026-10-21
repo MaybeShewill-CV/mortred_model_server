@@ -107,8 +107,9 @@ jobs:
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
-      # The check target builds all tests then runs ctest; CTEST_OUTPUT_ON_FAILURE=1 gives full failure output.
-      # One build + one test run, avoiding duplicate execution.
+      # Default check excludes labels valgrind and heavy-golden (test/CHECK_SSOT.md).
+      # This tests-only configure does not register heavy-golden. Valgrind runs
+      # in the following step. CTEST_OUTPUT_ON_FAILURE=1 gives full failure output.
       - name: Build and run unit tests
         run: |
           LD_LIBRARY_PATH="$MORTRED_CI_LIB_DIR" CTEST_OUTPUT_ON_FAILURE=1 cmake --build build-ci --target check -j"$(nproc)"
@@ -277,6 +278,7 @@ jobs:
           python3 scripts/check_consistency.py
           python3 scripts/check_trt_abandon_paths.py
           python3 scripts/check_tsan_targets.py
+          python3 scripts/check_check_ssot.py
           python3 scripts/gen_openapi.py --check
           CHECK_ALLOW_GENERATED=1 ./scripts/check_repo_clean.sh
           python3 -m py_compile scripts/server/test_server.py scripts/server/http_infer_rps.py
@@ -444,10 +446,10 @@ jobs:
           LD_LIBRARY_PATH="${{ github.workspace }}/build-cpu/lib" CTEST_OUTPUT_ON_FAILURE=1 \
             cmake --build build-cpu --target check -j"$(nproc)"
 
-      # Skips are expected here (the cpu profile compiles TensorRT out), so they
-      # are explicitly allowed — but counted and printed instead of hiding in
-      # ctest's "100% tests passed". Numerical proof in this job comes from the
-      # fail-closed hosted-golden step below, not from the ctest summary.
+      # Default check excludes heavy-golden (test/CHECK_SSOT.md), so this ctest
+      # run is not the golden proof. Numerical proof is the fail-closed hosted
+      # step below (MORTRED_CI_REQUIRE_WEIGHTS=1 + ci_assert_gtest_xml.py).
+      # Other skips (cpu profile compiles TensorRT out) are counted, not hidden.
       - name: ctest summary (skips counted; TRT tests skip by design here)
         run: python3 scripts/ctest_summary.py --junit build-cpu/ctest-junit.xml --allow-skips
 
@@ -586,6 +588,7 @@ jobs:
           python3 -m py_compile \
             scripts/fetch_weights.py scripts/gen_weights_manifest.py \
             scripts/check_consistency.py scripts/check_version_single_source.py scripts/verify_gpu_gate_evidence.py scripts/check_base_image_digests.py scripts/check_hosted_golden.py \
+            scripts/check_check_ssot.py \
             scripts/golden_drift_check.py \
             scripts/gen_openapi.py scripts/repo_toml.py \
             scripts/ci_assert_gtest_xml.py \
@@ -593,6 +596,7 @@ jobs:
             scripts/ci_print_tier_summary.py \
             scripts/ci_eval_inference_paths.py
           python3 scripts/ci_assert_gtest_xml.py --self-test
+          python3 scripts/check_check_ssot.py --self-test
           python3 scripts/ci_print_tier_summary.py --self-test
           python3 scripts/ci_eval_inference_paths.py --self-test
           python3 scripts/ci_assert_container_layout.py
@@ -949,7 +953,7 @@ jobs:
           -DMORTRED_BIN_OUTPUT_DIR="$PWD/build-gpu/bin"
           -DMORTRED_LIB_OUTPUT_DIR="$PWD/build-gpu/lib"
 
-      - name: Build check target (all tests + libs)
+      - name: Build check target (excludes heavy-golden; golden binary is for the next step)
         run: cmake --build build-gpu --target check -j"$(nproc)"
 
       - name: Run smoke-8 fail-closed, then remaining goldens (skips reported)
