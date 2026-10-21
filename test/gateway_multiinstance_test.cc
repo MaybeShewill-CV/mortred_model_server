@@ -893,3 +893,34 @@ TEST_F(GatewayMultiInstanceTest, healthz_stays_public_on_both_instances) {
     EXPECT_EQ(send_request(a_.gateway_port, "GET", "/healthz").status, 200);
     EXPECT_EQ(send_request(b_.gateway_port, "GET", "/healthz").status, 200);
 }
+
+TEST_F(GatewayMultiInstanceTest, begin_drain_flips_ready_and_rejects_routes) {
+    // P0-5: /ready is the LB pull-out point. Before the drain it answers 200;
+    // begin_drain() flips it to 503 and routed inference traffic 503s before
+    // any upstream dial, while /healthz (liveness) stays 200 so the process
+    // is not mistaken for dead while it drains.
+    Instance d;
+    d.root = base_dir_ / "drain";
+    d.model_id = "MODEL_DRAIN";
+    d.gateway_port = find_free_port();
+    ASSERT_GT(d.gateway_port, 0);
+    write_instance_config(d, find_free_port());
+    mortred::control::GatewayInitOptions opt;
+    opt.project_root = d.root.string();
+    opt.metrics_token = "scrape-drain";
+    opt.auth_token = "infer-drain";
+    opt.admin_token = "admin-drain";
+    opt.internal_token = "internal-drain";
+    opt.host = "127.0.0.1";
+    opt.port = d.gateway_port;
+    ASSERT_TRUE(d.app.init(opt));
+    ASSERT_TRUE(d.app.listen());
+
+    EXPECT_EQ(send_request(d.gateway_port, "GET", "/ready").status, 200);
+    d.app.begin_drain();
+    EXPECT_EQ(send_request(d.gateway_port, "GET", "/ready").status, 503);
+    EXPECT_EQ(send_request(d.gateway_port, "GET", "/healthz").status, 200);
+    EXPECT_EQ(send_request(d.gateway_port, "POST", "/v1/models/MODEL_DRAIN/infer",
+                           "infer-drain").status, 503);
+    d.app.stop_listen();
+}

@@ -91,6 +91,9 @@ inline int run_model_server_main(
     const int rc = server->start(host.c_str(), static_cast<unsigned short>(port));
     if (rc == 0) {
         process_stop.wait();
+        // drain before stop: /ready -> 503 so the gateway/LB pulls this
+        // instance while in-flight requests finish, then cut the socket
+        server->begin_drain();
         server->stop();
         return 0;
     }

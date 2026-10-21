@@ -55,6 +55,11 @@ public:
      */
     virtual bool is_successfully_initialized() const = 0;
 
+    /*** LB-safe shutdown first step, called before stop(): flip readiness to
+     * 503 and reject new work while in-flight work drains. Default no-op for
+     * servers without a drain story. */
+    virtual void begin_drain() {}
+
     /***
      *
      * @param port
