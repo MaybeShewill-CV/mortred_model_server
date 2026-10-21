@@ -480,13 +480,53 @@ mortredctl doctor
 # 随后用该 MORTRED_PACK 启动 supervisor / compose
 ```
 
-仓库里的 TensorRT pack（`yolov8.toml`、`metric3d.toml`、`gpu_yolo_metric3d.toml`）
-带 **seed** 占用样本（`gpu_mem_source="seed"`）。Seed MiB 只是可复用的起始样本，
+仓库里的 TensorRT pack 带 **seed** 占用样本（`gpu_mem_source="seed"`）。
+逐 id 文件 `conf/packs/<id>.toml` 覆盖全部 39 个产品 id；`yolov8.toml`、
+`metric3d.toml`、`gpu_yolo_metric3d.toml` 仍是短的多 id 示例。
+Seed MiB 只是可复用的起始样本，
 换机 **必须** 用 `calibrate --write-pack` 覆盖。不要把校准后的 `worker_nums`、
 非 seed 的 `gpu_mem_mib`，或 `[pack]` 的 `gpu_name` / `gpu_memory_total_mib`
 提交进仓库。demo pack 是带 seed 的 TensorRT MobilenetV2 产品：像任何 TRT
 pack 一样每台机器要重校准；在纯 CPU 机器上它不拉起任何模型（见 §10.7）。
 `--write-pack` 拒绝直接写 `conf/packs/`，必须先拷贝。
+
+### 每个产品 id 一份 seed pack
+
+`conf/product_static_bs1.json` 里每个 static batch=1 TensorRT engine 对应一个
+catalog id（39 个）。每个 id 有一份生成的 seed pack：`conf/packs/<id>.toml`，
+里面只有一节 `[pack.<id>]`，字段为 `worker_nums = 1`、`gpu_mem_mib = 1800`、
+`gpu_mem_at_workers = 1`、`gpu_mem_source = "seed"`，以及该 id 的
+`model_config`。产品表变更后重新生成：
+
+```bash
+python3 scripts/product_static_bs1.py --emit-packs conf/packs
+python3 scripts/product_static_bs1.py --check
+```
+
+`--check` 会在这些情况下失败：某个 id 没有 pack、文件与生成器不一致、节里的
+id 与文件名不一致，或 `conf/packs/*.toml` 既不是产品 id 的 `<id>.toml`，也不是
+遗留的多 id 示例 `demo.toml`、`yolov8.toml`、`metric3d.toml`、
+`gpu_yolo_metric3d.toml`。这四份仍是短示例。产品覆盖以逐 id 文件为准。
+
+`mortredctl prepare`、`scripts/prepare_pack.sh`、`scripts/pack_trt.py` 和
+`MORTRED_PACK` 都只接受**一份** pack。要同时拉起多个 id，先把对应的逐 id
+文件合并成机器本地 pack，后续命令都用这一份路径。`scripts/compose_packs.py`
+按参数顺序抄写每一节 `[pack.<id>]`；多份文件里的 `[pack]` 表在赋值文本相同
+时合并，id 重复则拒绝。它也拒绝写入 `conf/packs/` 与 `conf/server/`。
+
+```bash
+python3 scripts/compose_packs.py \
+  conf/packs/yolov8s.toml conf/packs/libface.toml \
+  -o /tmp/yolov8s-libface.toml
+mortredctl prepare --pack /tmp/yolov8s-libface.toml
+mortredctl calibrate --pack /tmp/yolov8s-libface.toml --write-pack
+export MORTRED_PACK=/tmp/yolov8s-libface.toml
+mortredctl doctor
+```
+
+单个 id 用同一条链路：`cp conf/packs/<id>.toml /tmp/<id>.toml`（或只 compose
+这一个文件）。prepare 只转换 pack 里列出的 id。一份单 id pack 不会构建其余
+engine。是否同时驻留全部 id 取决于本机显存；compose 需要同时拉起的那个子集即可。
 
 ### 10.1 Pack 文件
 

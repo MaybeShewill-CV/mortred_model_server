@@ -1,0 +1,13 @@
+# Generated seed pack for one product_static_bs1 id. Do not hand-edit.
+# Regenerate: python3 scripts/product_static_bs1.py --emit-packs conf/packs
+# Seed MiB is the conservative fixture shared with scripts/pack_occupancy.py
+# --self-test (1800), not a live nvidia-smi reading. Copy before
+# calibrate --write-pack (that command refuses conf/packs/).
+# Co-start several ids with scripts/compose_packs.py (one --pack file).
+
+[pack.depth_vitl14]
+worker_nums = 1
+model_config = "conf/model/mono_depth_estimation/depth_anything/depth_vitl14.toml"
+gpu_mem_mib = 1800
+gpu_mem_at_workers = 1
+gpu_mem_source = "seed"

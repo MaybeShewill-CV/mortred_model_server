@@ -4,6 +4,11 @@
 Source of truth is conf/product_static_bs1.json, emitted by --emit.
 Gateway paths are /v1/models/<id>/infer. Old uppercase ids are not aliases.
 libface is one catalog id at 640x480. libface_320 is not a product size.
+
+Each product id also has a generated seed pack, conf/packs/<id>.toml, emitted
+by --emit-packs. prepare/calibrate take one --pack file; co-start several ids
+with scripts/compose_packs.py. Legacy multi-id examples (demo.toml,
+yolov8.toml, metric3d.toml, gpu_yolo_metric3d.toml) stay beside that set.
 """
 
 from __future__ import annotations
@@ -16,6 +21,20 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TABLE_PATH = ROOT / "conf" / "product_static_bs1.json"
+PACKS_DIR = ROOT / "conf" / "packs"
+# Same conservative fixture as scripts/pack_occupancy.py --self-test and
+# test/occupancy_gate_unittest.cc. Not a live nvidia-smi reading.
+SEED_GPU_MEM_MIB = 1800
+# Multi-id examples kept for short demos. They are not the product coverage set.
+LEGACY_EXAMPLE_PACKS = frozenset(
+    {
+        "demo.toml",
+        "yolov8.toml",
+        "metric3d.toml",
+        "gpu_yolo_metric3d.toml",
+    }
+)
+_PACK_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 BUS = "demo_data/model_test_input/object_detection/bus.jpg"
 FACE = "demo_data/model_test_input/object_detection/face_wo_mask.jpg"
@@ -352,6 +371,138 @@ def check_pack(pack_path: Path, rows: list[dict]) -> list[str]:
                 f"pack id {pid!r} is not a static_bs1 catalog id "
                 f"(gateway path is /v1/models/<lowercase>/infer)"
             )
+    return errors
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def render_product_pack(row: dict) -> str:
+    """One seed [pack.<id>] file. Byte-stable; --check compares this text."""
+    pid = row["id"]
+    if not _PACK_ID_RE.fullmatch(pid):
+        raise SystemExit(f"{pid}: product id cannot be a pack filename")
+    model_config = row["model_config"]
+    if (
+        not isinstance(model_config, str)
+        or not model_config
+        or '"' in model_config
+        or "\n" in model_config
+    ):
+        raise SystemExit(f"{pid}: model_config is not a single-line path")
+    return (
+        "# Generated seed pack for one product_static_bs1 id. Do not hand-edit.\n"
+        "# Regenerate: python3 scripts/product_static_bs1.py --emit-packs conf/packs\n"
+        "# Seed MiB is the conservative fixture shared with scripts/pack_occupancy.py\n"
+        f"# --self-test ({SEED_GPU_MEM_MIB}), not a live nvidia-smi reading. Copy before\n"
+        "# calibrate --write-pack (that command refuses conf/packs/).\n"
+        "# Co-start several ids with scripts/compose_packs.py (one --pack file).\n"
+        "\n"
+        f"[pack.{pid}]\n"
+        "worker_nums = 1\n"
+        f'model_config = "{model_config}"\n'
+        f"gpu_mem_mib = {SEED_GPU_MEM_MIB}\n"
+        "gpu_mem_at_workers = 1\n"
+        'gpu_mem_source = "seed"\n'
+    )
+
+
+def product_pack_path(pack_dir: Path, catalog_id: str) -> Path:
+    return pack_dir / f"{catalog_id}.toml"
+
+
+def emit_packs(pack_dir: Path, rows: list[dict]) -> list[Path]:
+    """Write one <dir>/<id>.toml per product row. Does not delete other files."""
+    pack_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for row in rows:
+        path = product_pack_path(pack_dir, row["id"])
+        path.write_text(render_product_pack(row), encoding="utf-8")
+        written.append(path)
+    return written
+
+
+def _assignment_map(text: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or stripped.startswith("["):
+            continue
+        if "=" not in stripped:
+            continue
+        key, _, raw = stripped.partition("=")
+        raw = raw.split("#", 1)[0].strip()
+        if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in ('"', "'"):
+            raw = raw[1:-1]
+        values[key.strip()] = raw
+    return values
+
+
+def _seed_pack_errors(path: Path, row: dict) -> list[str]:
+    """Schema of a per-id seed pack, independent of the generated comment header."""
+    pid = row["id"]
+    where = _display_path(path)
+    found = pack_ids(path)
+    errors: list[str] = []
+    if found != [pid]:
+        errors.append(f"{where}: expected exactly one [pack.{pid}], found {found}")
+        return errors
+    values = _assignment_map(path.read_text(encoding="utf-8"))
+    expected = {
+        "worker_nums": "1",
+        "model_config": row["model_config"],
+        "gpu_mem_mib": str(SEED_GPU_MEM_MIB),
+        "gpu_mem_at_workers": "1",
+        "gpu_mem_source": "seed",
+    }
+    for key, want in expected.items():
+        got = values.get(key)
+        if got != want:
+            errors.append(f"{where}: [pack.{pid}] {key}={got!r} (seed pack requires {want!r})")
+    return errors
+
+
+def check_product_packs(pack_dir: Path, rows: list[dict]) -> list[str]:
+    """Every product id has conf/packs/<id>.toml; no unknown product packs.
+
+    Legacy multi-id examples are allowed to sit beside the generated files.
+    Their ids must still be product ids. They are not required to match the
+    one-section seed text.
+    """
+    if not pack_dir.is_dir():
+        return [f"missing pack directory: {pack_dir}"]
+    errors: list[str] = []
+    by_id = {row["id"]: row for row in rows}
+    expected_names = {f"{pid}.toml" for pid in by_id}
+    for row in rows:
+        path = product_pack_path(pack_dir, row["id"])
+        if not path.is_file():
+            errors.append(f"missing product pack for {row['id']}: {_display_path(path)}")
+            continue
+        fresh = render_product_pack(row)
+        text = path.read_text(encoding="utf-8")
+        if text != fresh:
+            errors.append(
+                f"{_display_path(path)}: drifted from "
+                "scripts/product_static_bs1.py --emit-packs"
+            )
+        errors.extend(_seed_pack_errors(path, row))
+        errors.extend(check_pack(path, rows))
+    for path in sorted(pack_dir.glob("*.toml")):
+        if path.name in expected_names:
+            continue
+        if path.name in LEGACY_EXAMPLE_PACKS:
+            for err in check_pack(path, rows):
+                errors.append(f"{_display_path(path)}: {err}")
+            continue
+        errors.append(
+            f"orphan pack {path.name} is not a product_static_bs1 id and is not "
+            "a legacy example (%s)" % ", ".join(sorted(LEGACY_EXAMPLE_PACKS))
+        )
     return errors
 
 
@@ -775,7 +926,13 @@ def print_missing_product_engines() -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--emit", action="store_true", help="write conf/product_static_bs1.json")
-    parser.add_argument("--check", action="store_true", help="validate the committed table")
+    parser.add_argument(
+        "--emit-packs",
+        type=Path,
+        metavar="DIR",
+        help="write one DIR/<id>.toml seed pack per product id (committed set: conf/packs)",
+    )
+    parser.add_argument("--check", action="store_true", help="validate the committed table and per-id packs")
     parser.add_argument("--apply-servers", action="store_true", help="rewrite conf/server identity from the table")
     parser.add_argument("--apply-models", action="store_true", help="write TRT product model tomls and repoint servers")
     parser.add_argument("--check-pack", type=Path)
@@ -815,6 +972,11 @@ def main() -> int:
         TABLE_PATH.write_text(json.dumps(document(), indent=2) + "\n", encoding="utf-8")
         print(f"wrote {TABLE_PATH}")
 
+    if args.emit_packs is not None:
+        dest = args.emit_packs if args.emit_packs.is_absolute() else args.project_root / args.emit_packs
+        written = emit_packs(dest, rows)
+        print(f"wrote {len(written)} product packs under {dest}")
+
     if args.apply_servers:
         apply_servers(rows)
         print("updated conf/server identity")
@@ -841,7 +1003,13 @@ def main() -> int:
             for err in disk_errors:
                 print(err, file=sys.stderr)
             return 1
+        pack_errors = check_product_packs(PACKS_DIR, rows)
+        if pack_errors:
+            for err in pack_errors:
+                print(err, file=sys.stderr)
+            return 1
         print(f"product_static_bs1: {len(on_disk['models'])} ids ok")
+        print(f"product packs: {len(rows)} files ok ({PACKS_DIR})")
 
     if args.check_pack is not None:
         pack_errors = check_pack(args.check_pack, rows)
@@ -863,8 +1031,20 @@ def main() -> int:
         for token in convert_filters_for_pack(pack, args.project_root):
             print(token)
 
-    if not any((args.emit, args.check, args.apply_servers, args.apply_models, args.check_pack, args.write_manifest, args.convert_filters)):
-        parser.error("choose --emit, --check, --apply-servers, --apply-models, --check-pack, --write-manifest, or --convert-filters")
+    if not any((
+        args.emit,
+        args.emit_packs is not None,
+        args.check,
+        args.apply_servers,
+        args.apply_models,
+        args.check_pack,
+        args.write_manifest,
+        args.convert_filters,
+    )):
+        parser.error(
+            "choose --emit, --emit-packs, --check, --apply-servers, --apply-models, "
+            "--check-pack, --write-manifest, or --convert-filters"
+        )
     return 0
 
 
@@ -874,7 +1054,16 @@ def self_test() -> int:
     if errors:
         print("self-test rows invalid: " + "; ".join(errors), file=sys.stderr)
         return 1
+    if len(rows) != 39:
+        print("self-test: expected 39 product ids", file=sys.stderr)
+        return 1
     import tempfile
+    scripts = Path(__file__).resolve().parent
+    if str(scripts) not in sys.path:
+        sys.path.insert(0, str(scripts))
+    import compose_packs
+    import pack_trt
+
     with tempfile.TemporaryDirectory() as tmp:
         pack = Path(tmp) / "pack.toml"
         pack.write_text("[pack.YOLOV8]\nworker_nums=1\n", encoding="utf-8")
@@ -895,7 +1084,108 @@ def self_test() -> int:
         if not mobilenet["engine"].endswith(".fp32") or mobilenet["fp"] != 0:
             print("self-test: mobilenetv2 manifest precision", file=sys.stderr)
             return 1
-    print("product_static_bs1.py self-test passed")
+
+        dest = Path(tmp) / "packs"
+        written = emit_packs(dest, rows)
+        if len(written) != 39:
+            print(f"self-test: emit wrote {len(written)} packs", file=sys.stderr)
+            return 1
+        roundtrip = check_product_packs(dest, rows)
+        if roundtrip:
+            print("self-test: emit→check failed:", file=sys.stderr)
+            for err in roundtrip:
+                print(err, file=sys.stderr)
+            return 1
+        second = dest / "second"
+        emit_packs(second, rows)
+        for row in rows:
+            left = product_pack_path(dest, row["id"]).read_text(encoding="utf-8")
+            right = product_pack_path(second, row["id"]).read_text(encoding="utf-8")
+            if left != right:
+                print(f"self-test: {row['id']} pack is not byte-stable", file=sys.stderr)
+                return 1
+            if pack_ids(product_pack_path(dest, row["id"])) != [row["id"]]:
+                print(f"self-test: {row['id']} pack id mismatch", file=sys.stderr)
+                return 1
+
+        sample = product_pack_path(dest, "yolov8s")
+        sample.write_text(sample.read_text(encoding="utf-8").replace("worker_nums = 1", "worker_nums = 2", 1), encoding="utf-8")
+        mutated = check_product_packs(dest, rows)
+        if not any("yolov8s.toml" in err and "worker_nums" in err for err in mutated):
+            print("self-test: mutated worker_nums must fail", mutated, file=sys.stderr)
+            return 1
+        sample.write_text(render_product_pack(next(row for row in rows if row["id"] == "yolov8s")), encoding="utf-8")
+
+        missing_path = product_pack_path(dest, "libface")
+        missing_text = missing_path.read_text(encoding="utf-8")
+        missing_path.unlink()
+        missing = check_product_packs(dest, rows)
+        if not any("missing product pack for libface" in err for err in missing):
+            print("self-test: missing pack must fail", missing, file=sys.stderr)
+            return 1
+        missing_path.write_text(missing_text, encoding="utf-8")
+
+        orphan = dest / "not_a_product.toml"
+        orphan.write_text("[pack.not_a_product]\nworker_nums = 1\n", encoding="utf-8")
+        orphans = check_product_packs(dest, rows)
+        if not any("orphan pack not_a_product.toml" in err for err in orphans):
+            print("self-test: orphan pack must fail", orphans, file=sys.stderr)
+            return 1
+        orphan.unlink()
+
+        legacy = dest / "demo.toml"
+        legacy.write_text("[pack.not_in_catalog]\nworker_nums = 1\n", encoding="utf-8")
+        legacy_bad = check_product_packs(dest, rows)
+        if not any("not_in_catalog" in err for err in legacy_bad):
+            print("self-test: legacy pack with unknown id must fail", legacy_bad, file=sys.stderr)
+            return 1
+        legacy.write_text("[pack.mobilenetv2]\nworker_nums = 1\n[pack.yolov8s]\nworker_nums = 1\n", encoding="utf-8")
+        legacy_ok = check_product_packs(dest, rows)
+        if legacy_ok:
+            print("self-test: legacy multi-id example must stay allowed", legacy_ok, file=sys.stderr)
+            return 1
+        legacy.unlink()
+
+        combined = Path(tmp) / "combined.toml"
+        compose_packs.compose(written, combined)
+        composed_ids = pack_trt.pack_ids(combined)
+        if composed_ids != [row["id"] for row in rows]:
+            print("self-test: compose dropped or reordered ids", composed_ids, file=sys.stderr)
+            return 1
+        if check_pack(combined, rows):
+            print("self-test: composed pack failed catalog check", file=sys.stderr)
+            return 1
+        engines = pack_trt.pack_trt_engines(combined, ROOT)
+        if [pid for pid, _engine in engines] != [row["id"] for row in rows]:
+            print(
+                "self-test: pack_trt did not resolve every composed id",
+                [pid for pid, _engine in engines],
+                file=sys.stderr,
+            )
+            return 1
+        for row, (_pid, engine) in zip(rows, engines):
+            if not str(engine).replace("\\", "/").endswith(row["engine"]):
+                print(
+                    f"self-test: {row['id']} engine {engine} does not end with {row['engine']}",
+                    file=sys.stderr,
+                )
+                return 1
+        try:
+            compose_packs.compose_text([written[0], written[0]])
+            print("self-test: composing one id twice must fail", file=sys.stderr)
+            return 1
+        except compose_packs.ComposeError as exc:
+            if "duplicate pack id" not in str(exc):
+                print(f"self-test: unexpected compose error: {exc}", file=sys.stderr)
+                return 1
+
+    committed = check_product_packs(PACKS_DIR, rows)
+    if committed:
+        print("self-test: committed product packs drifted:", file=sys.stderr)
+        for err in committed:
+            print(err, file=sys.stderr)
+        return 1
+    print("product_static_bs1.py self-test passed (39 ids, emit→check, compose, committed packs)")
     return 0
 
 

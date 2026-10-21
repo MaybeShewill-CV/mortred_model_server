@@ -504,8 +504,10 @@ mortredctl doctor
 # then start the supervisor / compose stack with that MORTRED_PACK
 ```
 
-Git TensorRT packs (`yolov8.toml`, `metric3d.toml`, `gpu_yolo_metric3d.toml`)
-ship **seed** occupancy (`gpu_mem_source="seed"`). Seed MiB is a reusable
+Git TensorRT packs ship **seed** occupancy (`gpu_mem_source="seed"`).
+Per-id files `conf/packs/<id>.toml` cover all 39 product ids; `yolov8.toml`,
+`metric3d.toml`, and `gpu_yolo_metric3d.toml` remain short multi-id examples.
+Seed MiB is a reusable
 starting sample only — it **must** be overwritten on each host by
 `calibrate --write-pack`. Do not commit calibrated `worker_nums`, non-seed
 `gpu_mem_mib`, or `[pack]` `gpu_name` / `gpu_memory_total_mib`. The demo pack
@@ -513,6 +515,49 @@ is the seeded TensorRT MobilenetV2 product: recalibrate it on every host like
 any TRT pack, and on cpu-only machines it autostarts nothing (§10.7).
 `--write-pack` refuses to write `conf/packs/`
 directly; always copy first.
+
+### Per-id product packs
+
+`conf/product_static_bs1.json` lists one catalog id per static batch=1
+TensorRT engine (39 ids). Each id has a generated seed pack at
+`conf/packs/<id>.toml`: exactly one `[pack.<id>]` section with
+`worker_nums = 1`, `gpu_mem_mib = 1800`, `gpu_mem_at_workers = 1`,
+`gpu_mem_source = "seed"`, and that id's `model_config`. Regenerate after
+the product table changes:
+
+```bash
+python3 scripts/product_static_bs1.py --emit-packs conf/packs
+python3 scripts/product_static_bs1.py --check
+```
+
+`--check` fails when an id has no pack, the file drifted from the generator,
+the section id does not match the filename, or a `conf/packs/*.toml` file is
+neither `<id>.toml` for a product id nor one of the legacy multi-id examples
+`demo.toml`, `yolov8.toml`, `metric3d.toml`, and `gpu_yolo_metric3d.toml`.
+Those four stay as short examples. Product coverage is the per-id set.
+
+`mortredctl prepare`, `scripts/prepare_pack.sh`, `scripts/pack_trt.py`, and
+`MORTRED_PACK` each take **one** pack file. To co-start several ids, merge
+the per-id files into a machine-local pack, then use that path for the rest
+of the chain. `scripts/compose_packs.py` copies each `[pack.<id>]` in
+argument order, merges a `[pack]` table when the assignment text matches,
+and rejects a repeated id. It refuses to write `conf/packs/` or
+`conf/server/`.
+
+```bash
+python3 scripts/compose_packs.py \
+  conf/packs/yolov8s.toml conf/packs/libface.toml \
+  -o /tmp/yolov8s-libface.toml
+mortredctl prepare --pack /tmp/yolov8s-libface.toml
+mortredctl calibrate --pack /tmp/yolov8s-libface.toml --write-pack
+export MORTRED_PACK=/tmp/yolov8s-libface.toml
+mortredctl doctor
+```
+
+A single id uses the same chain with `cp conf/packs/<id>.toml /tmp/<id>.toml`
+(or compose of that one file). Prepare converts only the ids listed in the
+pack. One id's pack does not build the other engines. Co-starting every id
+at once is a host-memory choice; compose the subset that should be resident.
 
 ### 10.1 Pack file
 
