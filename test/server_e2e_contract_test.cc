@@ -180,6 +180,10 @@ public:
         return _m_impl->is_successfully_initialized();
     }
 
+    void begin_drain() override {
+        _m_impl->begin_drain();
+    }
+
     int applied_model_run_timeout_ms() const {
         return _m_impl->applied_model_run_timeout_ms();
     }
@@ -768,6 +772,37 @@ TEST(server_e2e_contract, healthz_and_ready_are_exempt_from_auth_in_both_configs
         EXPECT_EQ(health.status, 200) << "extra=" << extra << " body=" << health.body;
         auto ready = send_request(handle.port, "GET", "/ready", "", {});
         EXPECT_EQ(ready.status, 200) << "extra=" << extra << " body=" << ready.body;
+    }
+}
+
+TEST(server_e2e_contract, begin_drain_flips_ready_rejects_new_and_finishes_inflight) {
+    // P0-5 draining contract: begin_drain() is the LB pull-out point and must
+    // hold three properties at once, every time (looped because the drain
+    // races a sleeping model): /ready flips to 503, a NEW request 503s before
+    // admission, and a request already admitted still completes 200.
+    for (int iter = 0; iter < 20; ++iter) {
+        ServerHandle handle = start_server("fake_delay_ms=300\n");
+        std::thread inflight([&]() {
+            auto resp = send_request(handle.port, "POST", "/test/model",
+                                     "{\"images\":[\"aGVsbG8=\"]}", k_json_auth_headers, 20);
+            EXPECT_EQ(resp.status, 200) << "iter=" << iter << " body=" << resp.body;
+        });
+        // the in-flight request is admitted and the fake model is sleeping
+        std::this_thread::sleep_for(std::chrono::milliseconds(80));
+        handle.server->begin_drain();
+
+        auto ready = send_request(handle.port, "GET", "/ready", "", {});
+        EXPECT_EQ(ready.status, 503) << "iter=" << iter << " body=" << ready.body;
+        auto health = send_request(handle.port, "GET", "/healthz", "", {});
+        EXPECT_EQ(health.status, 200) << "iter=" << iter << " liveness must survive drain";
+        auto rejected = send_request(handle.port, "POST", "/test/model",
+                                     "{\"images\":[\"aGVsbG8=\"]}", k_json_auth_headers);
+        EXPECT_EQ(rejected.status, 503) << "iter=" << iter << " body=" << rejected.body;
+        auto doc = parse_body(rejected.body);
+        ASSERT_FALSE(doc.HasParseError());
+        EXPECT_EQ(doc["status"].GetInt(), jinq::common::to_underlying(StatusCode::NOT_READY));
+
+        inflight.join();
     }
 }
 

@@ -51,6 +51,9 @@ services:
       timeout: 5s
       retries: 3
       start_period: 60s
+    # must cover the model-server drain (kDrainTimeoutMs=3s) + supervisor stop
+    # grace (kStopGraceMs=5s) with headroom, or Docker SIGKILLs mid-drain
+    stop_grace_period: 15s
     restart: unless-stopped
 
   mortred-cpu:
@@ -79,6 +82,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+    stop_grace_period: 15s
     restart: unless-stopped
 
   # Linux host network only. Generate first:

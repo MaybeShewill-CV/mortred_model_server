@@ -108,6 +108,12 @@ public:
     virtual bool is_successfully_initialized() const {
         return _m_successfully_initialized;
     }
+    /*** LB-safe shutdown first step, called before stop(): /ready flips to 503
+     * and new work is rejected with 503 while in-flight sync/async work keeps
+     * running and is reaped by the destructor drain. */
+    void begin_drain() {
+        _m_draining.store(true, std::memory_order_release);
+    }
 
 public:
     int _m_max_connection_nums = 200;
@@ -119,6 +125,9 @@ public:
 
 protected:
     bool _m_successfully_initialized = false;
+    // begin_drain() sets this before stop(): /ready answers 503 and new
+    // admissions are rejected while in-flight work finishes in the drain
+    std::atomic<bool> _m_draining{false};
     std::atomic<size_t> _m_received_jobs{0};
     std::atomic<size_t> _m_finished_jobs{0};
     std::atomic<size_t> _m_waiting_jobs{0};
@@ -349,6 +358,14 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         reply_unauthorized(task, _m_model_name);
         return;
     }
+    // draining: health/ready/metrics stay answerable so LBs can pull this
+    // instance and operators can watch the drain; everything else 503s
+    if (_m_draining.load(std::memory_order_acquire) && !is_health_endpoint &&
+        !is_metrics_endpoint) {
+        _m_metrics.inc_http_requests(request_method, "503");
+        reply_status(task, StatusCode::NOT_READY, _m_model_name);
+        return;
+    }
     // Gateway is the sole public limiter (GCRA). Model toml rate_limit_qps is
     // ignored for admission (retained for compatibility / metrics only).
     (void)_m_rate_limit_qps;
@@ -366,7 +383,10 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         // LB-safe: ready means init succeeded. Saturation is exposed via
         // mortred_workers_available / mortred_workers_busy gauges, not by
         // flipping mortred_ready (available_approx()>0 would 503 under load).
-        const bool ready = _m_successfully_initialized;
+        // Draining is the exception: begin_drain() must flip /ready so the
+        // LB stops sending new traffic before stop() cuts the socket.
+        const bool ready = _m_successfully_initialized &&
+                           !_m_draining.load(std::memory_order_acquire);
         _m_metrics.set_ready(ready);
         reply_status(task, ready ? StatusCode::OK : StatusCode::NOT_READY, _m_model_name);
         return;

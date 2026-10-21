@@ -10,6 +10,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <atomic>
 #include <deque>
 #include <memory>
 #include <mutex>
@@ -78,6 +79,11 @@ public:
     bool init(const GatewayInitOptions& options);
     bool listen();
     void stop_listen();
+    /*** LB-safe shutdown first step, call before stop_listen(): /ready flips
+     * to 503, new inference routes 503, in-flight proxies finish. */
+    void begin_drain() {
+        draining_.store(true, std::memory_order_release);
+    }
 
     const ControlConfig& config() const { return cfg_; }
 
@@ -156,6 +162,9 @@ private:
     std::string internal_token_;
     std::vector<std::string> cors_origins_;
     std::unique_ptr<WFHttpServer> server_;
+    // begin_drain() sets this: /ready -> 503, new inference routes -> 503,
+    // while in-flight upstream proxies run to completion
+    std::atomic<bool> draining_{false};
     // Paired gateway-stage samples. The histogram sums stay cumulative; the
     // deque keeps at most the newest 4096 rows for the median.
     static constexpr int k_stage_count = 5;

@@ -654,6 +654,16 @@ void GatewayApp::process(WFHttpTask* task) {
         task->get_resp()->append_output_body("ok\n", 3);
         return;
     }
+    if (path == "/ready") {
+        // LB pull-out point: begin_drain() flips this to 503 so the LB stops
+        // sending new inference traffic before stop_listen() cuts the socket
+        const bool ready = !draining_.load(std::memory_order_acquire);
+        task->get_resp()->set_status_code(ready ? "200" : "503");
+        task->get_resp()->add_header_pair("Content-Type", "text/plain; charset=utf-8");
+        task->get_resp()->append_output_body(ready ? "ok\n" : "draining\n",
+                                             ready ? 3 : 9);
+        return;
+    }
     if (path == "/metrics") {
         const std::string auth_header = header_value(task->get_req(), "authorization");
         if (!jinq::common::is_bearer_authorized(auth_header, metrics_token_)) {
@@ -683,6 +693,14 @@ void GatewayApp::process(WFHttpTask* task) {
     clocks.gw_in = std::chrono::steady_clock::now();
     if (stage_trace != nullptr) {
         stage_trace->mark("gw_in");
+    }
+
+    // draining: healthz/ready/metrics were handled above; everything that
+    // reaches routing is inference traffic and gets 503 while draining
+    if (draining_.load(std::memory_order_acquire)) {
+        metrics_.inc_http_requests(method, "503");
+        reply_error(task, 503, "gateway is draining; retry after ready flips back");
+        return;
     }
 
     ResolvedRoute route;
@@ -1077,6 +1095,9 @@ int GatewayApp::run(int argc, char** argv) {
                  auth_mode, jinq::common::mortred_expose_mode().c_str());
 
     process_stop.wait();
+    // drain before cutting the socket: /ready -> 503 pulls this instance from
+    // the LB; in-flight proxies finish while stop_listen() stops admitting
+    begin_drain();
     stop_listen();
     return 0;
 }
