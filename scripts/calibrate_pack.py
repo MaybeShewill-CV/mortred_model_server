@@ -16,6 +16,9 @@ Optional --write-pack updates final worker_nums, occupancy stamps, and the
 per-model decode_auto vote (cpu|gpu) on [pack.<ID>] in that pack file only.
 Runs shorter than 30s are not written. Git example packs should stay
 worker_nums=1 and must not commit gpu_mem_mib.
+Every product id needs a P99_CAP_MS seed or [pack.<id>] p99_ms_cap.
+A missing cap aborts before the sweep and prints a table; the latency
+gate is not skipped.
 
 Usage:
   python3 scripts/calibrate_pack.py --pack /etc/mortred/pack.toml
@@ -60,8 +63,55 @@ LIGHT_THROUGHPUT_QPS = 500.0
 LIGHT_SWEEP = [1, 2, 4, 8, 16]
 OTHER_SWEEP = [1, 2, 4, 8]
 SCALE_NOTES = {"single_point", "approx_linear", "partial_scale"}
-# Seed latency budgets in milliseconds. Not a measured SLO.
+# Seed latency budgets in milliseconds. Not a measured HTTP SLO and not an
+# RPS figure. Coverage-set representatives keep their historical seeds.
+# Other product ids use that family's representative, scaled by the
+# docs/benchmark-h3 Throughput ratio (slower sibling, higher seed), floored
+# at the representative seed, and rounded to the nearest 10. msocrnet's
+# benchmark-h3 Throughput is 0.035 qps; its seed is a wide placeholder so
+# the gate still exists. A product id missing from this table fails closed.
 P99_CAP_MS = {
+    "yolov8n": 50.0,
+    "yolov8s": 50.0,
+    "yolov8l": 140.0,
+    "yolov8x": 200.0,
+    "yolov6s": 50.0,
+    "yolov5l": 110.0,
+    "yolov7": 100.0,
+    "yolov7x": 170.0,
+    "nanodet_1x5": 50.0,
+    "nanodet_416": 50.0,
+    "libface": 40.0,
+    "centerface": 40.0,
+    "mobilenetv2": 40.0,
+    "resnet": 140.0,
+    "densenet": 280.0,
+    "superpoint": 40.0,
+    "dbnet": 60.0,
+    "pphuman_mobile": 40.0,
+    "pphuman_lite": 40.0,
+    "pphuman_server": 290.0,
+    "bisenetv2": 440.0,
+    "hrnet": 1650.0,
+    "msocrnet": 120000.0,
+    "modnet": 290.0,
+    "ppmatting_512": 500.0,
+    "ppmatting_1024": 510.0,
+    "ppmatting_resnet34": 790.0,
+    "ppmatting_v2": 120.0,
+    "attentive_gan": 700.0,
+    "enlightengan": 400.0,
+    "realesrgan": 400.0,
+    "dinov2_vits14": 50.0,
+    "dinov2_vitb14": 50.0,
+    "dinov2_vitl14": 100.0,
+    "depth_vits14": 200.0,
+    "depth_vitb14": 200.0,
+    "depth_vitl14": 240.0,
+    "metric3d_512": 200.0,
+    "metric3d_1088": 670.0,
+}
+_COVERAGE_P99_CAP_MS = {
     "mobilenetv2": 40.0,
     "yolov8s": 50.0,
     "libface": 40.0,
@@ -545,6 +595,15 @@ def workers_for_id(
     return default_worker_sweep(root, model_id)
 
 
+def product_static_ids(root: Path | None = None) -> list[str]:
+    root = ROOT if root is None else root
+    doc = json.loads((root / "conf" / "product_static_bs1.json").read_text(encoding="utf-8"))
+    models = doc.get("models")
+    if not isinstance(models, list):
+        raise RuntimeError("conf/product_static_bs1.json has no models list")
+    return [str(row["id"]) for row in models if isinstance(row, dict) and row.get("id")]
+
+
 def p99_cap_ms(model_id: str, pack: Path | None) -> float | None:
     if pack is not None:
         raw = pack_table(pack, model_id).get("p99_ms_cap")
@@ -552,6 +611,35 @@ def p99_cap_ms(model_id: str, pack: Path | None) -> float | None:
             return float(raw)
     cap = P99_CAP_MS.get(model_id.lower())
     return None if cap is None else float(cap)
+
+
+def missing_p99_caps(ids: list[str] | None = None) -> list[str]:
+    """Product ids (or an explicit list) with no seed cap and no pack override.
+
+    Callers that pass a pack must check ``p99_cap_ms`` themselves. This helper
+    is the built-in table only.
+    """
+    if ids is None:
+        ids = product_static_ids()
+    missing = []
+    for model_id in ids:
+        if p99_cap_ms(model_id, None) is None:
+            missing.append(model_id)
+    return missing
+
+
+def format_missing_p99_table(ids: list[str]) -> str:
+    lines = [
+        "missing p99 cap (fail closed; latency gate is not skipped):",
+        "id\tp99_cap_ms\tnote",
+    ]
+    if not ids:
+        lines.append("(none)")
+    for model_id in ids:
+        lines.append(
+            "%s\tMISSING\tadd P99_CAP_MS or [pack.%s] p99_ms_cap" % (model_id, model_id)
+        )
+    return "\n".join(lines) + "\n"
 
 
 def joint_budget_mib(pack: Path, gpu: dict | None) -> float | None:
@@ -654,10 +742,11 @@ def assess_point(
         return "error_rate", None
     if overload / total >= 0.01:
         return "overload", None
-    if p99_cap is not None:
-        p99 = point.get("p99_ms")
-        if p99 is None or float(p99) > float(p99_cap):
-            return "latency_budget", None
+    if p99_cap is None:
+        return "missing_p99_cap", None
+    p99 = point.get("p99_ms")
+    if p99 is None or float(p99) > float(p99_cap):
+        return "latency_budget", None
     if point.get("metrics_missing"):
         return "metrics_missing", None
     queue_p50 = point.get("queue_p50_ms")
@@ -1503,6 +1592,10 @@ def calibrate(
         "joint": None,
     }
     by_id: dict[str, dict] = {}
+    missing_caps = [model_id for model_id in ids if p99_cap_ms(model_id, pack) is None]
+    if missing_caps:
+        sys.stderr.write(format_missing_p99_table(missing_caps))
+        raise SystemExit(1)
     for model_id in ids:
         entry = catalog_entry(root, model_id)
         image = resolve_demo_image(entry, root)
@@ -1759,14 +1852,14 @@ def self_test() -> int:
         _qualified_point(1, 5.0, ok=50, requests=50),
         {"worker_nums": 2, "started": False, "oom": True, "ok": 0, "requests": 0, "rps": 0.0},
     ]
-    w, why, eligible, _passed = pick_w_star(oom_pts)
+    w, why, eligible, _passed = pick_w_star(oom_pts, 100.0)
     if w != 1 or why != "oom_or_start_failed" or not eligible:
         print("self-test: expected w*=1 on oom, got", w, why, eligible, file=sys.stderr)
         return 1
     fail_pts = [
         {"worker_nums": 1, "started": False, "oom": False, "ok": 0, "requests": 0, "rps": 0.0},
     ]
-    w, why, eligible, _passed = pick_w_star(fail_pts)
+    w, why, eligible, _passed = pick_w_star(fail_pts, 100.0)
     if w != 1 or why != "start_failed" or eligible:
         print("self-test: expected start_failed, got", w, why, eligible, file=sys.stderr)
         return 1
@@ -1784,6 +1877,32 @@ def self_test() -> int:
         return 1
     if default_worker_sweep(ROOT, "no-such-model") != OTHER_SWEEP:
         print("self-test: missing benchmark sweep", default_worker_sweep(ROOT, "no-such-model"), file=sys.stderr)
+        return 1
+    product_ids = product_static_ids()
+    if len(product_ids) != 39 or len(set(product_ids)) != 39:
+        print("self-test: product catalog ids", len(product_ids), file=sys.stderr)
+        return 1
+    missing_caps = missing_p99_caps(product_ids)
+    if missing_caps:
+        sys.stderr.write(format_missing_p99_table(missing_caps))
+        print("self-test: product ids missing p99 caps", file=sys.stderr)
+        return 1
+    for model_id, expected in _COVERAGE_P99_CAP_MS.items():
+        if p99_cap_ms(model_id, None) != expected:
+            print("self-test: coverage seed cap changed", model_id, file=sys.stderr)
+            return 1
+    for model_id in product_ids:
+        cap = p99_cap_ms(model_id, None)
+        if cap is None or float(cap) <= 0:
+            print("self-test: non-positive p99 cap", model_id, cap, file=sys.stderr)
+            return 1
+    table = format_missing_p99_table(["not-a-real-id"])
+    if "not-a-real-id" not in table or "MISSING" not in table or "fail closed" not in table:
+        print("self-test: missing p99 table", file=sys.stderr)
+        return 1
+    w, why, eligible, _passed = pick_w_star([_qualified_point(1, 10.0)], None)
+    if w != 1 or why != "missing_p99_cap" or eligible:
+        print("self-test: expected missing_p99_cap, got", w, why, eligible, file=sys.stderr)
         return 1
     if workers_for_id(ROOT, "superpoint", [1, 2, 4], None) != [1, 2, 4]:
         print("self-test: CLI workers did not override", file=sys.stderr)
@@ -2097,11 +2216,23 @@ def main() -> int:
         help="write final worker_nums, occupancy stamps, and decode_auto into the pack file (never conf/server; skipped when duration < 30s)",
     )
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument(
+        "--check-caps",
+        action="store_true",
+        help="fail closed if any conf/product_static_bs1.json id has no P99_CAP_MS seed",
+    )
     args = parser.parse_args()
     if args.self_test:
         return self_test()
+    if args.check_caps:
+        missing_caps = missing_p99_caps()
+        if missing_caps:
+            sys.stderr.write(format_missing_p99_table(missing_caps))
+            return 1
+        print("p99 caps: %d/%d product ids" % (len(product_static_ids()), len(product_static_ids())))
+        return 0
     if args.pack is None:
-        parser.error("--pack is required unless --self-test")
+        parser.error("--pack is required unless --self-test or --check-caps")
     pack = args.pack if args.pack.is_absolute() else args.project_root / args.pack
     cli_workers = parse_worker_list(args.workers)
     duration_s = parse_duration(args.duration)

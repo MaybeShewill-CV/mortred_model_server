@@ -578,7 +578,10 @@ both. Each point runs at concurrency equal to that worker count. The sweep
 stops when a point fails to start, OOMs, has a non-429 error rate or a 429
 rate of at least 1%, exceeds `[pack.<id>] p99_ms_cap` (or the built-in seed
 cap), cannot read queue and inference histograms, has queue p50 above inference
-p50, or gains under 10% RPS. An id that fails at `worker_nums=1` stays
+p50, or gains under 10% RPS. Every id in `conf/product_static_bs1.json` has a
+seed in `scripts/calibrate_pack.py` `P99_CAP_MS`. An id with neither that seed
+nor `[pack.<id>] p99_ms_cap` aborts before the sweep and prints a missing-cap
+table; the latency gate is not skipped. An id that fails at `worker_nums=1` stays
 `eligible=false` and is not written. With two or more eligible ids, the joint
 pass only measures memory. The budget is `[pack] gpu_memory_budget_mib`, or
 85% of the card. Over budget or OOM demotes the largest id one grid step onto
@@ -675,6 +678,33 @@ The shipped `conf/packs/demo.toml` is the seeded TensorRT product: its
 MobilenetV2 id is **not** in the `MORTRED_PROFILE=cpu` catalog, so a cpu
 compose boot with the default pack starts supervisor + gateway only. That is
 the intended "no default cpu product" behavior, not a failure.
+
+### 10.8 HTTP RPS evidence (PF1 / TP1)
+
+Qualified HTTP RPS is one id at a time: `prepare` → `calibrate` (`--raw`) →
+deploy that pack alone → `scripts/server/http_infer_rps.py --raw` at
+concurrency `worker_nums×2` for at least 30s. The driver records 60s.
+
+The nine coverage-set ids (the ops / TP2 subset) are
+[docs/perf/coverage_set_http_rps.md](perf/coverage_set_http_rps.md). The full
+product catalog is the 39 ids in `conf/product_static_bs1.json`. Their
+checklist is [docs/perf/product_static_http_rps.md](perf/product_static_http_rps.md).
+That file is a skeleton until a GPU host fills it. It does not invent RPS.
+`--check` stays non-zero while any id is `blocked` / `evidence=missing`.
+`--check-skeleton` only checks headings and that a missing row is explicitly
+not PASS.
+
+```bash
+python3 scripts/coverage_http_report.py --check
+python3 scripts/coverage_http_report.py --catalog product_static --check-skeleton
+python3 scripts/coverage_http_report.py --catalog product_static --check
+python3 scripts/coverage_http_report.py --catalog product_static --id yolov8n
+```
+
+`prepare` is `mortredctl prepare --id <id>`. If `conf/packs/<id>.toml` exists
+and lists only that id, the driver uses it as the temp pack seed. Otherwise it
+writes a one-id `[pack.<id>] worker_nums = 1` pack under `/tmp`. Git packs are
+not modified, and the run never requires the other ids to be resident.
 
 ## 11. Authentication & Security
 

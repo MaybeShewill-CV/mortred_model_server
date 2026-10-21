@@ -545,7 +545,10 @@ python3 scripts/calibrate_pack.py --pack /tmp/machine-pack.toml \
 覆盖该网格，`--workers` 再覆盖二者。每一档的并发等于该档 worker 数。某一档起不来、
 OOM、非 429 错误率或 429 比例达到 1%、p99 超过 `[pack.<id>] p99_ms_cap`（或内置
 seed 上限）、读不到排队与推理直方图、排队 p50 大于推理 p50，或 RPS 涨幅不足 10%，
-扫描就停。`worker_nums=1` 自己没过门的 id 保持 `eligible=false`，不写入。两个及以上
+扫描就停。`conf/product_static_bs1.json` 里的每个 id 都在
+`scripts/calibrate_pack.py` 的 `P99_CAP_MS` 中有 seed。既没有 seed 也没有
+`[pack.<id>] p99_ms_cap` 时，校准在扫描前退出并打印缺 cap 表，不会跳过延迟门。
+`worker_nums=1` 自己没过门的 id 保持 `eligible=false`，不写入。两个及以上
 合格 id 共驻时只量显存。预算是 `[pack] gpu_memory_budget_mib`，否则为卡容量的 85%。
 超预算或 OOM 时，把显存最大的 id 沿网格降到已经过门的低一档；端口占用不降档。
 `--write-pack` 写入的是这个 `final_worker_nums`。
@@ -635,6 +638,31 @@ MNN / TensorRT 没有对等旋钮。进程占用由 supervisor spawn 按 pack st
 MobilenetV2 id **不在** `MORTRED_PROFILE=cpu` 目录里，所以用默认 pack 做
 cpu compose 启动只会拉起 supervisor + gateway。这是"不提供默认 cpu 产品"
 的预期行为，不是故障。
+
+### 10.8 HTTP RPS 证据（PF1 / TP1）
+
+合格 HTTP RPS 一次只跑一个 id：`prepare` → `calibrate`（`--raw`）→ 只部署该
+pack → `scripts/server/http_infer_rps.py --raw`，并发为 `worker_nums×2`，时长
+至少 30 秒。驱动记录的是 60 秒。
+
+覆盖集九个 id（运维 / TP2 子集）在
+[docs/perf/coverage_set_http_rps.md](perf/coverage_set_http_rps.md)。产品目录
+全量是 `conf/product_static_bs1.json` 的 39 个 id，清单在
+[docs/perf/product_static_http_rps.md](perf/product_static_http_rps.md)。
+该文件在 GPU 主机填入之前是骨架，不编造 RPS。任一 id 仍是 `blocked` /
+`evidence=missing` 时 `--check` 非 0。`--check-skeleton` 只核对标题，并要求
+缺失行明确写成非 PASS。
+
+```bash
+python3 scripts/coverage_http_report.py --check
+python3 scripts/coverage_http_report.py --catalog product_static --check-skeleton
+python3 scripts/coverage_http_report.py --catalog product_static --check
+python3 scripts/coverage_http_report.py --catalog product_static --id yolov8n
+```
+
+`prepare` 用 `mortredctl prepare --id <id>`。若 `conf/packs/<id>.toml` 存在且
+只含该 id，驱动把它当作临时 pack 的种子；否则在 `/tmp` 写单 id 的
+`[pack.<id>] worker_nums = 1`。不改 git 里的 pack，也不要求其它 id 同时驻留。
 
 ## 11. 认证与安全
 
