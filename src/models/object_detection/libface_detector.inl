@@ -18,6 +18,10 @@
 #include "models/backend/model_runtime.h"
 #include "models/object_detection/detector_common.h"
 
+#include "models/object_detection/detection_defaults.h"
+
+namespace detection_defaults = mortred::models::object_detection;
+
 namespace mortred {
 namespace models {
 namespace object_detection {
@@ -44,9 +48,9 @@ inline float clamp01(float value) { return std::min(1.0f, std::max(0.0f, value))
 } // namespace
 
 template <typename INPUT, typename OUTPUT> StatusCode LibFaceDetector<INPUT, OUTPUT>::on_init(const toml::table &params) {
-    _m_detection_params.score_threshold = 0.6f;
-    _m_detection_params.nms_threshold = 0.3f;
-    _m_detection_params.keep_top_k = 250;
+    _m_detection_params.score_threshold = detection_defaults::face_defaults.score_threshold;
+    _m_detection_params.nms_threshold = detection_defaults::face_defaults.nms_threshold;
+    _m_detection_params.keep_top_k = detection_defaults::face_defaults.keep_top_k;
     std::string param_error;
     if (!_m_detection_params.parse(params, &_m_detection_params, &param_error)) {
         LOG(ERROR) << "invalid libface detection params: " << param_error;
