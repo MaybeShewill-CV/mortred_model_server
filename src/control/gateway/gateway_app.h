@@ -81,6 +81,14 @@ public:
 
     const ControlConfig& config() const { return cfg_; }
 
+    // ST2 seams. Failed auth must leave both at the pre-request value:
+    // consume_rate_limit is not entered, and the authorized source limiter
+    // has not inserted a cell (no admit-then-release).
+    uint64_t api_key_consume_calls() const { return api_keys_.consume_calls(); }
+    size_t authorized_source_tracked() const {
+        return ip_limiter_ == nullptr ? 0 : ip_limiter_->stats().tracked;
+    }
+
 private:
     // Clocks for the gateway stage histogram. fwd and upstream are taken
     // inside forward_to_model, on the same marks as stage_trace.
@@ -96,14 +104,15 @@ private:
     };
 
     void process(WFHttpTask* task);
-    // `admitted` is set only when this call's admit was allowed. process()
-    // releases that one interval on a 401 that returns before forward.
-    struct IpRateGate {
-        bool proceed = true;
-        bool admitted = false;
-        mortred::control::ratelimit::SubjectKey subject{};
-    };
-    IpRateGate check_ip_rate_limit(WFHttpTask* task, const std::string& method);
+    // Admit one source limiter. Returns false only when enforce mode already
+    // wrote the 429. `limiter` null or `enabled` false admits nothing.
+    // Authorized L2 and optional L0 call this with different stores and
+    // layer tags; a 401 path does not call it for L2.
+    bool admit_source_limit(WFHttpTask* task, const std::string& method,
+                            mortred::control::ratelimit::ShardedIpLimiter* limiter,
+                            bool enabled, bool shadow, int limit_rate,
+                            const mortred::control::ratelimit::TrustedProxies& proxies,
+                            const char* layer, const char* limited_message);
     void forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
                           const std::string& method, const std::string& query,
                           const std::shared_ptr<jinq::common::stage_timing::StageTrace>& trace,
@@ -126,14 +135,21 @@ private:
     ControlConfig cfg_;
     ApiKeyManager api_keys_;
     jinq::server::PrometheusMetrics metrics_;
-    // L1 per-IP metering (PR-3b): disabled unless configured; shadow mode
-    // meters + counts without rejecting
-    // constructed at init() (non-copyable: sharded mutexes); null = disabled
+    // L2 authorized per-source GCRA. Constructed at init() when
+    // [gateway.rate_limit] is enabled or shadow (non-copyable: sharded
+    // mutexes). Null = disabled. Admitted only after auth succeeds.
     std::unique_ptr<mortred::control::ratelimit::ShardedIpLimiter> ip_limiter_;
     mortred::control::ratelimit::TrustedProxies trusted_proxies_;
     bool rate_limit_enabled_ = false;
     bool rate_limit_shadow_ = false;
     int rate_limit_rate_ = 0;
+    // L0 optional pre-auth abuse limiter. Separate store from L2; off unless
+    // [gateway.abuse_limit] is enabled or shadow.
+    std::unique_ptr<mortred::control::ratelimit::ShardedIpLimiter> abuse_limiter_;
+    mortred::control::ratelimit::TrustedProxies abuse_proxies_;
+    bool abuse_limit_enabled_ = false;
+    bool abuse_limit_shadow_ = false;
+    int abuse_limit_rate_ = 0;
     std::string auth_token_;
     std::string admin_token_;
     std::string metrics_token_;

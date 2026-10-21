@@ -14,7 +14,7 @@
 // on the model-server product path (base_server_impl). Prefer
 // mortred::control::ratelimit::RateLimiter / GcraFlowLimiter.
 // Unified 429 headers: Retry-After, RateLimit-Limit/Remaining/Reset,
-// X-Mortred-RateLimit-Layer = gateway-gcra | api-key-gcra | api-key-max-inflight | ...
+// X-Mortred-RateLimit-Layer = gateway-gcra | gateway-abuse | api-key-gcra | api-key-max-inflight | ...
 
 
 #include <chrono>

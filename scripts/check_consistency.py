@@ -54,7 +54,10 @@ Verifies a few high-signal invariants:
 22. `scripts/golden_drift_check.py --check` matches `test/golden_baseline.json`
     (case names + sha256 of every file under `test/golden/`). Refresh goldens
     with `--record` in the same PR (see docs/ci-golden-regression.md).
-23. `scripts/check_check_ssot.py` matches `test/CHECK_SSOT.md` to the
+23. `scripts/product_static_bs1.py --self-test` covers per-id pack emit→check
+    for all 39 ids, and `scripts/compose_packs.py --self-test` covers merging
+    those files into the one `--pack` file prepare accepts.
+24. `scripts/check_check_ssot.py` matches `test/CHECK_SSOT.md` to the
     heavy-golden / valgrind labels. Default `check` must keep excluding those
     names, and README must not claim they ran.
 
@@ -1295,6 +1298,24 @@ def main() -> int:
             errors.append(
                 "pack_occupancy.py --self-test failed: "
                 + (occ.stdout + occ.stderr).strip()
+            )
+        packs = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "product_static_bs1.py"), "--self-test"],
+            cwd=str(ROOT), capture_output=True, text=True, timeout=60,
+        )
+        if packs.returncode != 0:
+            errors.append(
+                "product_static_bs1.py --self-test failed: "
+                + (packs.stdout + packs.stderr).strip()
+            )
+        composed = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "compose_packs.py"), "--self-test"],
+            cwd=str(ROOT), capture_output=True, text=True, timeout=60,
+        )
+        if composed.returncode != 0:
+            errors.append(
+                "compose_packs.py --self-test failed: "
+                + (composed.stdout + composed.stderr).strip()
             )
     except (OSError, subprocess.TimeoutExpired) as exc:
         errors.append(f"pack_trt.py --self-test could not run: {exc}")

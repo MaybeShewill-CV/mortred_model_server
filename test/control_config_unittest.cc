@@ -183,6 +183,43 @@ TEST_F(ControlConfigTest, pack_rejects_unknown_id) {
     fs::remove(pack, ec);
 }
 
+TEST_F(ControlConfigTest, abuse_limit_is_independent_of_authorized_rate_limit) {
+    write(
+        "[gateway.rate_limit]\n"
+        "enabled = true\n"
+        "rate_per_sec = 9\n"
+        "burst = 11\n"
+        "[gateway.abuse_limit]\n"
+        "enabled = true\n"
+        "shadow = true\n"
+        "rate_per_sec = 3\n"
+        "burst = 4\n"
+        "trusted_proxies = \"\"\n");
+    ControlConfig cfg;
+    std::string err;
+    ASSERT_TRUE(ControlConfig::load(path_.string(), &cfg, &err)) << err;
+    EXPECT_TRUE(cfg.gateway.rate_limit.enabled);
+    EXPECT_FALSE(cfg.gateway.rate_limit.shadow);
+    EXPECT_EQ(cfg.gateway.rate_limit.rate_per_sec, 9);
+    EXPECT_EQ(cfg.gateway.rate_limit.burst, 11);
+    EXPECT_TRUE(cfg.gateway.abuse_limit.enabled);
+    EXPECT_TRUE(cfg.gateway.abuse_limit.shadow);
+    EXPECT_EQ(cfg.gateway.abuse_limit.rate_per_sec, 3);
+    EXPECT_EQ(cfg.gateway.abuse_limit.burst, 4);
+    EXPECT_TRUE(cfg.gateway.abuse_limit.trusted_proxies.empty());
+    EXPECT_EQ(cfg.gateway.rate_limit.trusted_proxies, "127.0.0.1,::1");
+}
+
+TEST_F(ControlConfigTest, omitted_abuse_limit_stays_off) {
+    write("[gateway.rate_limit]\nenabled = true\n");
+    ControlConfig cfg;
+    std::string err;
+    ASSERT_TRUE(ControlConfig::load(path_.string(), &cfg, &err)) << err;
+    EXPECT_TRUE(cfg.gateway.rate_limit.enabled);
+    EXPECT_FALSE(cfg.gateway.abuse_limit.enabled);
+    EXPECT_FALSE(cfg.gateway.abuse_limit.shadow);
+}
+
 TEST_F(ControlConfigTest, rejects_invalid_restart_policy) {
     write("[servers.x]\nrestart_policy = \"sometimes\"\n");
     ControlConfig cfg;

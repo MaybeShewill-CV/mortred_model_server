@@ -31,13 +31,18 @@ struct SupervisorConfig {
     std::string libs_dir = "3rd_party/libs";
 };
 
-/*** Edge per-IP rate limiting (gateway L1; [gateway.rate_limit] table).
- * Ships disabled: enabled=false keeps the gateway byte-compatible with the
- * pre-limiter behavior; shadow=true meters and counts but never rejects,
- * which is the rollout observation mode. trusted_proxies lists EXACT
- * addresses (v4 /32, v6 /128) whose Forwarded/X-Forwarded-For headers are
- * honored; loopback is trusted by default because init-edge nginx runs in
- * the host network namespace. */
+/*** Per-source GCRA parameters. Two tables use this struct and never share
+ * a bucket:
+ *   [gateway.rate_limit]  authorized infer budget (L2). The gateway admits
+ *                         it only after Bearer auth succeeds, so a 401 does
+ *                         not reduce remaining budget (ST2).
+ *   [gateway.abuse_limit] optional pre-auth abuse limiter (L0). Off when the
+ *                         section is omitted. Layer tag gateway-abuse.
+ * enabled=false keeps that limiter off; shadow=true meters and counts but
+ * never rejects. trusted_proxies lists EXACT addresses (v4 /32, v6 /128)
+ * whose Forwarded/X-Forwarded-For headers are honored; loopback is trusted
+ * by default because init-edge nginx runs in the host network namespace.
+ * MORTRED_RATE_LIMIT overrides only [gateway.rate_limit]. */
 struct GatewayRateLimitConfig {
     bool enabled = false;
     bool shadow = false;
@@ -55,7 +60,8 @@ struct GatewayConfig {
     int max_connections = 1000;
     int upstream_send_timeout_ms = 180000;
     int upstream_recv_timeout_ms = 180000;
-    GatewayRateLimitConfig rate_limit;
+    GatewayRateLimitConfig rate_limit;   // L2, after auth
+    GatewayRateLimitConfig abuse_limit;  // L0, optional, before auth
 };
 
 /*** Pack-level GPU occupancy contract from the [pack] table. Default policy
